@@ -23,3 +23,4 @@
 - When a file is saved, a file watcher detects the change.
 - The indexer intercepts the raw markdown, extracting `#tags` and `[[WikiLinks]]`.
 - It updates the local SQLite database with new relationships.
+- **Initial Load Constraint**: To handle vaults with 20,000+ files gracefully, the initial indexing must run asynchronously. The application and editor UI must open immediately, displaying a background progress indicator while the global search index is built.

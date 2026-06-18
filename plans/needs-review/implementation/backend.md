@@ -13,5 +13,5 @@
 - Tauri Commands are exposed to the frontend, but the frontend interacts with them through the shared adapter packages.
 
 ## Performance
-- Heavy operations (like full vault indexing) are offloaded to Rust background threads to avoid blocking the React UI.
-- File system watchers are run natively in Rust to reduce bridging overhead.
+- Heavy operations (like full vault indexing) are offloaded to Rust background threads to avoid blocking the React UI. The editor must be allowed to open and function instantly (allowing the user to write), while the search index builds asynchronously.
+- File system watchers are run natively in Rust to reduce bridging overhead. The File Watcher must be strictly debounced and configured to ignore anything that isn't a `.md` file or whitelisted attachment, preventing "death loops" caused by background cloud sync providers touching metadata.
