@@ -6,7 +6,7 @@ Planned
 
 ## Goal
 
-Create the initial repository scaffold for a desktop-first Tauri, React, TypeScript, and Vite application with shared packages for core logic and UI.
+Create the initial repository scaffold for a desktop-first Tauri v2, React, TypeScript, and Vite application with shared packages for core logic and UI.
 
 ## Required Reading
 
@@ -20,14 +20,17 @@ Create the initial repository scaffold for a desktop-first Tauri, React, TypeScr
 
 Implement or prepare:
 
-- package manager workspace configuration
+- `pnpm` workspace configuration
 - `apps/desktop` application folder
 - `packages/core` package
 - `packages/ui` package
 - shared TypeScript configuration
-- lint, typecheck, test, and build scripts
+- lint, typecheck, unit test, E2E test, and build scripts
 - Vite + React baseline
-- Tauri baseline if dependencies/tooling are available
+- Tauri v2 baseline if dependencies/tooling are available
+- Zustand dependency/setup for app state
+- UI package baseline with reusable components, CSS variables, and accessibility-focused primitives
+- Playwright baseline for E2E tests
 - minimal placeholder UI that proves the app boots
 
 ## Non-Goals
@@ -64,6 +67,7 @@ Establish scripts or documented equivalents for:
 pnpm lint
 pnpm typecheck
 pnpm test
+pnpm test:e2e
 pnpm build
 ```
 
@@ -72,7 +76,7 @@ pnpm build
 - [ ] Workspace layout exists.
 - [ ] Desktop app can be installed/built or has clearly documented setup blockers.
 - [ ] TypeScript config is present.
-- [ ] Test runner is present or intentionally deferred with explanation.
+- [ ] Unit test and E2E test runners are present or any blocker is documented clearly.
 - [ ] Root scripts provide stable commands for future agents.
 - [ ] No product feature scope was implemented.
 
@@ -84,6 +88,7 @@ Run available scaffold validation commands. If dependencies are installed:
 pnpm lint
 pnpm typecheck
 pnpm test
+pnpm test:e2e
 pnpm build
 ```
 

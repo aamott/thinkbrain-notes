@@ -61,6 +61,7 @@ Run the relevant available commands, such as:
 pnpm lint
 pnpm typecheck
 pnpm test
+pnpm test:e2e
 pnpm build
 cargo test
 ```

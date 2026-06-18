@@ -6,7 +6,7 @@ Planned
 
 ## Goal
 
-Create the built-in theme foundation using CSS variables and reusable UI tokens.
+Create the built-in theme and UI-component foundation using CSS variables, reusable UI tokens, and accessibility-focused primitives.
 
 ## Required Reading
 
@@ -22,12 +22,14 @@ Implement:
 - CSS variable token system
 - default light theme
 - default dark theme
+- reusable base components in `packages/ui`
+- accessibility-focused primitives, using Radix UI-style primitives where useful
 - theme selection state/setting if settings are available
 - basic styling for shell/editor/sidebar surfaces
 
 ## Non-Goals
 
-Do not implement installable themes, remote theme loading, theme marketplace, or public extension APIs.
+Do not implement installable themes, remote theme loading, theme marketplace, public extension APIs, or a heavy opinionated UI framework.
 
 ## Dependencies
 
@@ -44,6 +46,7 @@ Do not implement installable themes, remote theme loading, theme marketplace, or
 
 - [ ] App has consistent design tokens.
 - [ ] Light and dark themes are available.
+- [ ] `packages/ui` contains reusable base components.
 - [ ] Theme implementation does not require extension loading.
 - [ ] Core shell surfaces use the tokens.
 

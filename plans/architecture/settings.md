@@ -31,7 +31,9 @@ Requirements:
 
 Application settings should live in the OS application-data/config directory.
 
-Workspace settings location is a pending decision. Agents should not assume whether shareable workspace settings live inside the workspace until the policy is decided.
+Workspace settings should also live outside the workspace in the OS application-data/config directory, keyed by workspace identity/path.
+
+Do not create app-specific settings files inside the user's workspace during MVP. This keeps shared Markdown folders clean and avoids surprising collaborators or Git users.
 
 ## Migration
 

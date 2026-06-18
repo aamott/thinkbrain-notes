@@ -7,7 +7,7 @@ This document is the source of truth for cross-cutting implementation decisions.
 Decision: Build a desktop-first application using Tauri.
 
 - Frontend: React, TypeScript, Vite
-- Desktop shell/native bridge: Tauri
+- Desktop shell/native bridge: Tauri v2
 - Backend/native code: Rust
 - Mobile: deferred to Phase 2
 
@@ -32,9 +32,13 @@ Do not split `packages/core` into many packages until the codebase has enough co
 
 ## Package Manager and Build Orchestration
 
-Decision pending: choose between `pnpm` workspaces only or `pnpm` workspaces plus Turborepo.
+Decision: Use `pnpm` workspaces without Turborepo for MVP.
 
-Until decided, agents should avoid committing to Turborepo-specific assumptions in feature code.
+Reasoning:
+
+- `pnpm` is stable, widely supported, and works well with Tauri/Vite/React tooling.
+- Bun is fast, but `pnpm` is the safer default for broad dependency compatibility and future agent reliability.
+- Turborepo can be added later if build orchestration becomes painful. Do not add Turborepo during the initial scaffold unless this decision changes.
 
 ## Editor
 
@@ -53,17 +57,18 @@ Decision: Markdown files are the source of truth.
 
 ## Database and Indexes
 
-Decision: SQLite may be used as a disposable cache for indexing and search.
+Decision: Use SQLite FTS5 from the start as a disposable cache for indexing and search.
 
 - SQLite must never be the source of truth.
 - The index must be rebuildable from workspace files.
 - Database files must be stored in the OS application-data directory, not inside the workspace/vault.
+- Prefer implementing SQLite/indexing through the Tauri/Rust layer so filesystem access, app-data paths, background work, and database behavior stay native and predictable.
 
 ## Search
 
-Decision: MVP search should support Markdown text, filenames, tags, and aliases.
+Decision: MVP search should support Markdown text, filenames, tags, and aliases using SQLite FTS5.
 
-Preferred implementation: SQLite FTS5 if the project scaffold supports it cleanly. If SQLite integration blocks MVP progress, start with a simple file-backed search and preserve the indexing abstraction.
+If SQLite integration hits a temporary scaffold blocker, agents may create a narrow interface first, but the intended MVP implementation remains SQLite FTS5 rather than a long-lived in-memory search.
 
 ## Git
 
@@ -79,8 +84,10 @@ Decision: Use human-readable JSON settings.
 Settings levels:
 
 1. Application settings
-2. Workspace settings
+2. Workspace settings stored outside the workspace
 3. Extension settings, deferred until extension work exists
+
+Workspace settings must live in the OS application-data/config area, keyed by workspace identity/path. Do not place app settings files inside the user's workspace during MVP.
 
 ## Extensions
 
@@ -88,9 +95,15 @@ Decision: MVP supports internal contribution points only.
 
 Do not build third-party extension execution, install-from-URL, sandboxing, signing, or marketplace features during MVP.
 
-## Themes
+## UI Components and Themes
 
-Decision: Themes are based on CSS variables.
+Decision: Build `packages/ui` early using reusable React components, CSS variables, and accessibility-focused primitives.
+
+Recommendation:
+
+- Use custom app components backed by Radix UI-style primitives where useful.
+- Avoid a heavy, opinionated component framework that fights a desktop/editor UI.
+- Theme tokens should be CSS variables.
 
 MVP may include built-in themes and theme tokens. Third-party theme packages are deferred until the extension system exists.
 
@@ -106,8 +119,19 @@ Decision: Built-in cloud sync is deferred.
 
 The project follows Bring Your Own Sync as a future documented strategy. MVP must avoid storing app caches in the workspace so users can safely use external sync tools.
 
+## State Management
+
+Decision: Use Zustand for MVP app/UI state.
+
+Reasoning: Zustand is lightweight, simple, and appropriate for editor tabs, active workspace/document state, sidebar state, indexing status, and settings state.
+
 ## Frontmatter Mutation Policy
 
 Decision: Opening, indexing, or searching a note must not rewrite the note.
 
-The app may update app-managed frontmatter fields only during an explicit user save operation, and only if the user has opted into app-managed metadata behavior or the behavior is part of a clearly documented MVP requirement.
+The app should manage `created_at` and `updated_at` frontmatter fields during explicit note creation/save operations:
+
+- `created_at` is set when the app creates a new note if the field is missing.
+- `updated_at` is updated when the user explicitly saves a note through the app.
+- Indexing and opening a note must not update timestamps.
+- Unknown frontmatter fields must be preserved.

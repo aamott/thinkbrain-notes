@@ -48,25 +48,26 @@ Do not implement:
 
 The scaffold should establish:
 
-- package manager workspace files
+- `pnpm` workspace files
 - desktop app folder
 - shared package folders
 - TypeScript configuration
-- lint/typecheck/test/build scripts or documented equivalents
-- Tauri/Vite/React baseline if the technical decisions are confirmed
+- lint/typecheck/unit-test/E2E-test/build scripts or documented equivalents
+- Tauri v2/Vite/React baseline
+- `packages/ui` baseline with reusable components/tokens
 - minimal placeholder UI only if needed to verify the app boots
 
-## Decision Check Before Starting
+## Confirmed Scaffold Decisions
 
-Before making irreversible scaffold choices, check whether these have been decided:
+Use these decisions unless the user explicitly changes them:
 
-1. package manager: `pnpm`?
-2. build orchestration: plain `pnpm` workspaces or Turborepo?
-3. Tauri major version?
-4. React app style: Vite SPA only, no router initially?
-5. test stack: Vitest now, Playwright later?
-
-If a decision is still pending and blocks implementation, ask the user instead of guessing.
+1. package manager: `pnpm`
+2. build orchestration: plain `pnpm` workspaces; no Turborepo for MVP
+3. Tauri major version: Tauri v2
+4. React app style: Vite SPA, no router until needed
+5. test stack: Vitest and Playwright from the start
+6. app/UI state: Zustand
+7. UI foundation: `packages/ui` with reusable components, CSS variables, and accessibility-focused primitives
 
 ## Validation
 
@@ -77,6 +78,7 @@ pnpm install
 pnpm lint
 pnpm typecheck
 pnpm test
+pnpm test:e2e
 pnpm build
 ```
 

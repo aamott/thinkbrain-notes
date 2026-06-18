@@ -21,11 +21,11 @@ MVP search should support:
 - frontmatter `aliases`
 - inline `#tags`, if parser support exists
 
-## Preferred Cache
+## Search Cache
 
-Preferred implementation: SQLite with FTS5.
+Decision: Use SQLite FTS5 from the start.
 
-The cache must be stored in the OS application-data directory, never inside the workspace.
+The cache must be stored in the OS application-data directory, never inside the workspace. Prefer implementing SQLite/indexing through the Tauri/Rust layer.
 
 ## Suggested Schema
 

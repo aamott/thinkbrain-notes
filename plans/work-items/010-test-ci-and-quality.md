@@ -21,11 +21,13 @@ Implement:
 
 - stable root validation scripts
 - Vitest configuration
+- Playwright E2E configuration
 - Rust test command documentation or integration
 - lint configuration
 - typecheck configuration
 - GitHub Actions workflow if appropriate
 - minimal smoke tests for scaffold and core packages
+- minimal E2E smoke test for app boot
 
 ## Non-Goals
 
@@ -48,6 +50,7 @@ Do not rewrite product features purely for test convenience. Do not suppress err
 - [ ] `pnpm lint` exists or has a documented equivalent.
 - [ ] `pnpm typecheck` exists or has a documented equivalent.
 - [ ] `pnpm test` exists or has a documented equivalent.
+- [ ] `pnpm test:e2e` exists or has a documented equivalent.
 - [ ] `pnpm build` exists or has a documented equivalent.
 - [ ] CI runs the agreed validation commands.
 - [ ] Failures are visible and not suppressed.

@@ -33,9 +33,6 @@ Store app data in the OS application-data/config directory.
 
 ## Workspace Settings
 
-Workspace settings may exist, but their location requires a product decision:
+Workspace settings live outside the workspace in the OS application-data/config directory, keyed by workspace identity/path.
 
-- inside the workspace for shareable project settings, or
-- outside the workspace for private local preferences
-
-Agents should not invent this policy without confirming it if the implementation depends on it.
+Do not create app-specific settings files inside the user's workspace during MVP.

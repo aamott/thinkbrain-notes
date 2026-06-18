@@ -41,9 +41,9 @@ Primary targets:
 
 ## End-to-End Tests
 
-E2E testing is desirable but not required before the initial scaffold is stable.
+E2E testing should be set up from the initial scaffold.
 
-When added, use Playwright or the Tauri-compatible test approach selected by the project.
+Use Playwright for browser-level UI flows. Add Tauri-specific E2E coverage when the desktop shell is stable enough to support it reliably.
 
 Core E2E journey:
 
@@ -61,6 +61,7 @@ Once the project is scaffolded, these commands should exist or have documented e
 pnpm lint
 pnpm typecheck
 pnpm test
+pnpm test:e2e
 pnpm build
 ```
 

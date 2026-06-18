@@ -47,7 +47,7 @@ Users may add arbitrary additional fields. The app must preserve unknown fields 
 
 ## App-Managed Fields
 
-Initial app-managed fields, if enabled:
+Initial app-managed fields:
 
 - `created_at`
 - `updated_at`
@@ -58,7 +58,12 @@ Do not also use `created` or `updated`; use one timestamp convention only.
 
 Opening, indexing, or searching a note must not rewrite the file.
 
-The app may update app-managed fields only during explicit save behavior, and only after the behavior is intentionally implemented and documented.
+The app should manage timestamps during explicit note creation/save operations:
+
+- Set `created_at` when the app creates a new note and the field is missing.
+- Set `updated_at` when the user explicitly saves a note through the app.
+- Do not update timestamps during opening, indexing, or searching.
+- Preserve unknown frontmatter fields.
 
 ## Tasks
 

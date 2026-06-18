@@ -14,7 +14,7 @@ apps/
 
 packages/
   core/           # platform-agnostic application logic
-  ui/             # reusable UI components and design tokens
+  ui/             # reusable React components, primitives, and design tokens
 ```
 
 ## Runtime Responsibilities
@@ -29,7 +29,7 @@ Responsible for:
 - search UI
 - settings UI
 - Git/source-control UI
-- transient UI state
+- transient UI state using Zustand
 
 The React frontend should not directly depend on native APIs. It should call typed adapters/services.
 
@@ -55,7 +55,7 @@ Responsible for native capabilities:
 - reading/writing files
 - file watching
 - system Git commands
-- SQLite storage if implemented natively
+- SQLite FTS5 search/index storage
 - OS app-data paths
 
 The Tauri layer should fail loudly with useful typed errors rather than hiding native failures.
