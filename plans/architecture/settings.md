@@ -1,17 +1,38 @@
 # Settings
 
-Three levels
+## Goal
 
-Application
+Provide simple, human-readable settings without locking users into a proprietary data format.
 
-Workspace
+## Settings Levels
 
-Extension
+MVP settings levels:
 
-JSON format.
+1. Application settings
+2. Workspace settings
 
-Human readable.
+Future settings level:
 
-Versioned.
+3. Extension settings
 
-Migration support included.
+## Format
+
+Settings use JSON.
+
+Requirements:
+
+- human-readable
+- versioned
+- migratable
+- validated at load time
+- clear error messages for invalid settings
+
+## Storage Locations
+
+Application settings should live in the OS application-data/config directory.
+
+Workspace settings location is a pending decision. Agents should not assume whether shareable workspace settings live inside the workspace until the policy is decided.
+
+## Migration
+
+Settings should include a version field so future migrations can be explicit.

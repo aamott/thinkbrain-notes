@@ -1,53 +1,89 @@
 # Notes
 
-A note is a Markdown document.
+## Goal
+
+Define the portable Markdown note format used by the app.
+
+## Source of Truth
+
+A note is a normal Markdown file on disk.
+
+The app must not require a database, proprietary format, or hidden sidecar file to preserve note content.
+
+## Body Format
+
+The note body is Markdown only.
+
+Supported Markdown features may grow over time, but the file must remain readable in other Markdown editors.
+
+## Frontmatter
 
 Metadata uses YAML frontmatter.
 
----
-
-Schema
-
-The metadata schema strictly separates user-managed fields from app-managed fields.
-
-User-managed fields:
-title
-tags
-aliases
-status
-
-App-managed fields (automatically updated by the indexer/editor):
-created
-updated
-created_at
-updated_at
-
----
-
-# Tasks
-
-Tasks are purely represented as Markdown checkboxes.
-
 Example:
+
+```yaml
+---
+title: Example Note
+tags:
+  - project
+aliases: []
+status: draft
+created_at: 2026-06-17T12:00:00Z
+updated_at: 2026-06-17T12:30:00Z
+---
+```
+
+## User-Managed Fields
+
+Initial user-managed fields:
+
+- `title`
+- `tags`
+- `aliases`
+- `status`
+
+Users may add arbitrary additional fields. The app must preserve unknown fields when editing frontmatter.
+
+## App-Managed Fields
+
+Initial app-managed fields, if enabled:
+
+- `created_at`
+- `updated_at`
+
+Do not also use `created` or `updated`; use one timestamp convention only.
+
+## Mutation Policy
+
+Opening, indexing, or searching a note must not rewrite the file.
+
+The app may update app-managed fields only during explicit save behavior, and only after the behavior is intentionally implemented and documented.
+
+## Tasks
+
+Tasks are represented as Markdown checkboxes:
+
+```md
 - [ ] Implement UI
 - [x] Write tests
+```
 
-There is no special "Task Object" or separate task database. This ensures 100% data portability. Tasks are indexed directly from the Markdown content.
+There is no separate task database or proprietary task object in MVP.
 
----
+## Links
 
-Body
+Wiki links use Markdown text syntax compatible with Obsidian-style notes:
 
-Markdown only.
+```md
+[[Some Note]]
+[[Some Note|Display Text]]
+```
 
-No proprietary formatting.
+MVP may parse links for indexing. Graph UI is deferred.
 
-Everything remains readable in any editor.
+## Attachments
 
----
+Attachments are normal files referenced with relative paths.
 
-Attachments
-
-Stored beside notes.
-
-Referenced using relative paths.
+MVP should avoid inventing a hidden attachment database.

@@ -1,25 +1,7 @@
 # AI
 
-Provider abstraction.
+AI is deferred beyond MVP.
 
-Supported
+See `plans/deferred/ai.md` for future direction.
 
-OpenAI
-
-Anthropic
-
-Google
-
-Ollama
-
-LM Studio
-
-OpenRouter
-
-Future providers via adapters.
-
-Models are configurable.
-
-AI features degrade gracefully when disabled.
-
-No provider-specific logic inside UI.
+Do not implement AI provider abstractions, ACP integration, embeddings, model settings, chat panels, or AI editing features during MVP unless a future work item explicitly assigns them.

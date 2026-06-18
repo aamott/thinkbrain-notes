@@ -2,67 +2,53 @@
 
 ## Decision
 
-CodeMirror 6
+Use CodeMirror 6 directly for the Markdown editor.
 
-Reasons
+Reasons:
 
-- Lightweight
-- Extensible
-- Excellent Markdown support
-- Mature ecosystem
-- Easier than Monaco
-- Better mobile support
+- lightweight
+- extensible
+- strong Markdown support
+- mature ecosystem
+- better fit than Monaco for a Markdown-first notes app
 
----
+## MVP Scope
 
-## Features
+The MVP editor should support:
 
-Markdown editing
+- opening a Markdown file
+- editing Markdown text
+- saving back to disk as plain Markdown
+- syntax highlighting
+- dirty-state tracking
+- basic keyboard shortcuts
+- undo/redo through CodeMirror
+- integration with active document state
 
-Syntax highlighting
+## Near-Future Features
 
-Code blocks
+These are useful, but should be added after the basic editor is stable:
 
-Tables
+- clickable wiki links
+- clickable tags
+- task checkbox toggling
+- image rendering in editor flow
+- frontmatter folding or visual separation
+- split preview or live preview
+- find/replace
 
-Lists
+## Deferred Rich Markdown Features
 
-Images
+Do not implement in the first editor slice unless specifically assigned:
 
-Footnotes
+- Mermaid rendering
+- math rendering
+- callout rendering
+- advanced table editing
+- AI editing
+- extension-provided editor plugins
+- optional Monaco package
 
-Wiki links
+## Persistence Rule
 
-Mermaid
-
-Callouts
-
-Math
-
-Multiple cursors
-
-Search
-
-Replace
-
-Undo history
-
----
-
-## Extensions
-
-Editor functionality is implemented using internal extensions.
-
-No WebExtension architecture.
-
-No Electron plugin model.
-
-Simple API.
-
----
-
-## Future
-
-Optional Monaco editor package.
-
-Not part of MVP.
+The editor must preserve user Markdown. It should not rewrite unrelated frontmatter, formatting, or content during normal edits.

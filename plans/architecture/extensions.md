@@ -1,72 +1,41 @@
-# Extension System
+# Extensions
 
-## Philosophy
+## Goal
 
-Keep extensions simple.
+Keep the architecture extensible without letting the MVP become a full plugin platform.
 
-Avoid browser-like complexity.
+## MVP Decision
 
-Avoid security problems.
+MVP supports internal contribution points only.
 
-## Distribution
+Examples:
 
-For Version 1, there is no heavy marketplace backend server. 
-Extensions are distributed purely via:
-- Install from URL
-- Install from File (sideloading)
+- command registry for app-owned commands
+- activity/sidebar registration for built-in panels
+- editor command hooks for built-in features
+- settings schema registration for built-in modules
 
-In the future, a static extension registry will be hosted (e.g., GitHub Pages) rather than a custom backend.
+## Deferred Public Extension System
 
----
+Future extension capabilities may include:
 
-## Package Layout
+- `extension.json` manifest
+- install from file
+- install from URL
+- sandboxed execution
+- permission declarations
+- views
+- panels
+- menus
+- editor actions
+- settings contributions
+- themes
+- AI tools
+- Git tools
+- static registry
 
-extension.json
+These are not MVP features.
 
-main.ts
+## Security Principle
 
-assets/
-
-README.md
-
-LICENSE
-
----
-
-## Capabilities
-
-Commands
-
-Views
-
-Panels
-
-Menus
-
-Editor actions
-
-Settings
-
-Themes
-
-Language support
-
-AI tools
-
-Git tools
-
----
-
-## Security
-
-Permissions declared in manifest.
-
-No unrestricted filesystem access.
-
-Sandboxed execution.
-
-No native code.
-
-Signed marketplace packages.
-
-Local sideloading always allowed.
+No third-party code should receive unrestricted filesystem access. Public extension execution requires a separate security design before implementation.

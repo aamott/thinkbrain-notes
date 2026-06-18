@@ -1,51 +1,48 @@
 # Git
 
-Decision
+## Decision
 
-Use system Git.
+Use system Git for MVP.
 
-Reasons
+## Reasons
 
-Reliable
+- reliable
+- familiar to users
+- supports SSH and existing credentials
+- supports the full Git feature set
+- avoids maintaining an embedded Git implementation early
 
-Familiar
+## MVP Features
 
-Works with SSH
+- detect whether workspace is a Git repository
+- initialize repository
+- show status
+- stage files
+- unstage files
+- commit staged changes
+- list branches
+- show current branch
+- basic diff viewing if practical
 
-Works with credentials
+## Native Boundary
 
-Supports every Git feature.
+Git commands should run through the desktop/native layer so failures can be captured and reported consistently.
 
----
+## Error Handling
 
-Future
+Git integration must fail loudly with useful messages for:
 
-Optional embedded Git implementation.
+- Git not installed
+- workspace is not a repository
+- authentication failure
+- merge conflict
+- command timeout or non-zero exit
 
-Fallback only.
+## Deferred
 
----
+Not in MVP:
 
-Features
-
-Commit
-
-Push
-
-Pull
-
-Branch
-
-Merge
-
-Diff
-
-History
-
-Conflict viewer
-
-Staging
-
-Discard changes
-
-Repository initialization
+- embedded Git implementation
+- advanced conflict editor
+- push/pull UX polish
+- Git hosting provider integrations
