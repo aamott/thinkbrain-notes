@@ -4,29 +4,37 @@ This document is the source of truth for cross-cutting implementation decisions.
 
 ## Platform
 
-Decision: Build a desktop-first application using Tauri.
+Decision: Build a cross-platform application, desktop-first.
 
 - Frontend: React, TypeScript, Vite
 - Desktop shell/native bridge: Tauri v2
 - Backend/native code: Rust
-- Mobile: deferred to Phase 2
+- Mobile (Phase 2): React Native via Expo for Android/iOS
+
+Mobile implementation is deferred to Phase 2, but the shared-core architecture and platform adapter interfaces are designed from day one so that `packages/core` never couples to desktop-only APIs.
 
 ## Repository Structure
 
-Decision: Use a workspace-style repository with a desktop app and shared packages.
+Decision: Use a workspace-style repository with platform-specific apps and shared packages.
 
-Initial target structure:
+Target structure:
 
 ```text
 apps/
-  desktop/
+  desktop/          # Tauri + React (DOM) — MVP
     src/
     src-tauri/
+  mobile/           # React Native (Expo) — Phase 2, not scaffolded during MVP
+    src/
 
 packages/
-  core/
-  ui/
+  core/             # platform-agnostic logic and adapter interfaces
+  ui/               # React (DOM) components — consumed by apps/desktop only
 ```
+
+`apps/mobile/` is shown here for architectural visibility. It must NOT be scaffolded or implemented during MVP work.
+
+`packages/ui` contains React DOM components and is not directly usable by React Native. The mobile app will have its own UI layer. Shared design tokens (colors, spacing, typography scales) should live in `packages/core` so both platforms can reference them.
 
 Do not split `packages/core` into many packages until the codebase has enough complexity to justify it.
 

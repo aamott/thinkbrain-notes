@@ -37,6 +37,7 @@ Implement or prepare:
 
 Do not implement:
 
+- `apps/mobile/` — the mobile app is Phase 2; do not create the folder or any mobile code
 - editor behavior
 - workspace browser
 - file operations beyond scaffold needs
@@ -44,6 +45,8 @@ Do not implement:
 - Git integration
 - settings UI
 - AI, sync, graph, canvas, marketplace, or public extensions
+
+However, `packages/core` should remain platform-agnostic (no Tauri/DOM/Node imports) so it can be consumed by the future mobile app without refactoring.
 
 ## Dependencies
 

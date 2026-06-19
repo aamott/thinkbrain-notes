@@ -12,7 +12,7 @@ The application should be:
 - Extensible
 - AI-native
 - Git-friendly
-- Cross platform
+- Cross-platform: desktop (Tauri) and mobile (React Native/Expo), sharing core logic with platform-specific UIs
 
 Users own their files.
 
@@ -33,6 +33,9 @@ Frontend
 
 Desktop
 - Tauri
+
+Mobile (Phase 2)
+- React Native (Expo)
 
 Editor
 - CodeMirror 6

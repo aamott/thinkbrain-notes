@@ -3,7 +3,7 @@
 This file is automatically loaded by all AI agents operating in this workspace. **You MUST adhere to these architectural rules and principles at all times.**
 
 ## Vision
-Build an open, privacy-first knowledge workspace inspired by Obsidian and VS Code.
+Build an open, privacy-first knowledge workspace inspired by Obsidian and VS Code for desktop and mobile. 
 - **Fast**: Fast startup, minimal memory usage, lazy loading.
 - **Local-first**: Everything works offline. Internet features are optional.
 - **Markdown-first**: Markdown files are the single source of truth. No database lock-in.

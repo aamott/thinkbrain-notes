@@ -39,11 +39,12 @@ Use these decisions unless the user explicitly changes them:
 
   ```text
   apps/
-    desktop/
+    desktop/        # Tauri + React (DOM) — MVP
+    mobile/         # React Native (Expo) — Phase 2, do not scaffold yet
 
   packages/
-    core/
-    ui/
+    core/           # platform-agnostic logic and adapter interfaces
+    ui/             # React (DOM) components — desktop only
   ```
 
 - Keep `packages/core` together for MVP; do not split into many packages yet
@@ -211,7 +212,7 @@ Read `plans/000-agent-entrypoint.md`, then the core planning docs through `plans
 Act as the parent implementation agent. Implement only Work Item 001: Project Scaffold.
 
 Use `pnpm`, plain workspaces, Tauri v2, React, TypeScript, Vite, Zustand, Vitest, Playwright, `apps/desktop`, `packages/core`, and `packages/ui`.
-
+gl
 Do not implement product features yet. No editor, workspace explorer, search, Git, settings UI, AI, sync, graph, canvas, marketplace, or public extensions.
 
 Use sub-agents only if helpful:
