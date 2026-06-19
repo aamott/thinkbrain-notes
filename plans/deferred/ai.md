@@ -11,8 +11,12 @@ Potential capabilities:
 - cloud providers such as OpenAI, Anthropic, Google, and OpenRouter
 - user-selectable local versus cloud models
 - context-aware chat based on the active note/workspace
-- optional Agent Context Protocol compatibility, if confirmed
+- Agent Client Protocol (ACP) integration for AI agents
 - AI-assisted search and discovery
+
+## UI Integration
+
+- **Right Panel Popout:** The AI chat and ACP agent interface will be housed in a right panel popout within the desktop UI shell.
 
 ## Constraints
 

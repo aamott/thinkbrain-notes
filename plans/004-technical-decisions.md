@@ -119,7 +119,7 @@ MVP may include built-in themes and theme tokens. Third-party theme packages are
 
 Decision: AI is deferred beyond MVP.
 
-No AI provider abstraction, model configuration, ACP integration, embeddings, or AI UI should be implemented unless explicitly assigned by a future work item.
+No AI provider abstraction, model configuration, ACP (Agent Client Protocol) integration, embeddings, or AI UI should be implemented unless explicitly assigned by a future work item.
 
 ## Sync
 

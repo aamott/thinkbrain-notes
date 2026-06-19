@@ -9,17 +9,17 @@ Define the desktop layout so frontend agents do not invent incompatible navigati
 The MVP desktop shell uses a VS Code/Obsidian-inspired layout:
 
 ```text
-┌──────────────────────────────────────────────────────┐
-│ Title/menu/command area                              │
-├──────┬─────────────────────┬─────────────────────────┤
-│ Act. │ Left sidebar        │ Editor area             │
-│ bar  │                     │                         │
-│      │ - Explorer          │ - Tabs                  │
-│      │ - Search            │ - Active editor         │
-│      │ - Git               │                         │
-├──────┴─────────────────────┴─────────────────────────┤
-│ Status bar                                           │
-└──────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│ Title/menu/command area                                      │
+├──────┬─────────────────────┬─────────────────────────┬───────┤
+│ Act. │ Left sidebar        │ Editor area             │ Right │
+│ bar  │                     │                         │ Panel │
+│      │ - Explorer          │ - Tabs                  │ (ACP) │
+│      │ - Search            │ - Active editor         │       │
+│      │ - Git               │                         │       │
+├──────┴─────────────────────┴─────────────────────────┴───────┤
+│ Status bar                                                   │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 ## Core Regions
@@ -54,7 +54,8 @@ MVP document types:
 
 ## Right Panel
 
-Deferred for MVP unless needed for simple document metadata. Do not implement AI chat or advanced assistant UI.
+The right panel is a popout intended to house the ACP (Agent Client Protocol) agent interface and AI chat. 
+While deferred for MVP, the layout components should be structured to eventually accommodate this popout.
 
 ## Command Palette
 
