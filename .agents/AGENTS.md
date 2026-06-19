@@ -27,3 +27,10 @@ Build an open, privacy-first knowledge workspace inspired by Obsidian and VS Cod
 4. **Permissions**: V1 Extensions use a strict capability-based sandbox (Install from URL/File). No unrestricted filesystem access.
 
 Before implementing any feature, ensure you have read the detailed architectural blueprints in the `plans/` directory.
+
+## Styling Conventions
+
+- **No inline styles.** Do not use `style={{ ... }}` in React components or `<style>` tags embedded in JSX. Inline CSS is hard to maintain and impossible to theme consistently.
+- **Preferred approach:** use CSS Modules (`*.module.css`) alongside each component, or a co-located CSS section that is imported at the top of the component file. Vite supports CSS Modules out of the box, so this is the idiomatic equivalent of component-scoped styles in this React project.
+- **Shared tokens and themes** must be expressed as CSS variables in the design system (`packages/ui`) rather than hard-coded values in component styles.
+- For mobile/React Native (Phase 2), use `StyleSheet` from React Native as the equivalent of CSS Modules for component-scoped styles.
