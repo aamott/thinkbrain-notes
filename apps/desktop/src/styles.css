@@ -1,0 +1,248 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  background:
+    radial-gradient(circle at top left, rgb(141 162 255 / 20%), transparent 32rem),
+    var(--tn-color-background);
+  color: var(--tn-color-foreground);
+  font-family: var(--tn-font-sans);
+  margin: 0;
+}
+
+.app-shell {
+  display: grid;
+  grid-template-areas:
+    "title title title title"
+    "activity sidebar editor right"
+    "status status status status";
+  grid-template-columns: 3.5rem minmax(16rem, 22rem) minmax(0, 1fr) minmax(12rem, 16rem);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+.title-bar {
+  align-items: center;
+  background: color-mix(in srgb, var(--tn-color-surface) 92%, transparent);
+  border-bottom: 1px solid var(--tn-color-border);
+  display: flex;
+  gap: 1rem;
+  grid-area: title;
+  justify-content: space-between;
+  padding: 1rem 1.25rem;
+}
+
+.app-eyebrow {
+  color: var(--tn-color-accent);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  margin: 0 0 0.75rem;
+  text-transform: uppercase;
+}
+
+.title-bar h1,
+.workspace-panel h2,
+.editor-placeholder h2 {
+  color: var(--tn-color-foreground);
+  margin: 0;
+}
+
+.title-bar h1 {
+  font-size: 1.25rem;
+  letter-spacing: -0.05em;
+}
+
+.activity-bar {
+  align-items: center;
+  background: #0c0f16;
+  border-right: 1px solid var(--tn-color-border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  grid-area: activity;
+  padding: 0.75rem 0.5rem;
+}
+
+.activity-bar button,
+.file-list__actions button {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 0.5rem;
+  color: var(--tn-color-muted);
+  cursor: pointer;
+  font: inherit;
+  padding: 0.5rem;
+}
+
+.activity-bar button {
+  writing-mode: vertical-rl;
+}
+
+.activity-bar button[aria-current="page"],
+.activity-bar button:hover,
+.file-list__actions button:hover {
+  border-color: var(--tn-color-border);
+  color: var(--tn-color-foreground);
+}
+
+.activity-bar button:disabled,
+.file-list__actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.workspace-panel {
+  background: color-mix(in srgb, var(--tn-color-surface) 82%, transparent);
+  border-right: 1px solid var(--tn-color-border);
+  grid-area: sidebar;
+  min-width: 0;
+  overflow: auto;
+  padding: 1rem;
+}
+
+.workspace-panel__header,
+.workspace-actions,
+.file-list__item,
+.status-bar {
+  align-items: center;
+  display: flex;
+  gap: 0.75rem;
+}
+
+.workspace-panel__header,
+.status-bar {
+  justify-content: space-between;
+}
+
+.workspace-actions {
+  margin: 1rem 0;
+}
+
+.workspace-meta {
+  border: 1px solid var(--tn-color-border);
+  border-radius: var(--tn-radius-medium);
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 1rem;
+  padding: 0.75rem;
+}
+
+.workspace-meta span,
+.workspace-empty,
+.workspace-error span,
+.editor-placeholder p,
+.right-panel,
+.status-bar {
+  color: var(--tn-color-muted);
+}
+
+.workspace-meta span {
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+
+.workspace-error {
+  border: 1px solid color-mix(in srgb, #ff8d8d 55%, var(--tn-color-border));
+  border-radius: var(--tn-radius-medium);
+  color: #ffc6c6;
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 1rem;
+  padding: 0.85rem 1rem;
+}
+
+.file-list {
+  display: grid;
+  gap: 0.5rem;
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+}
+
+.file-list__item {
+  align-items: stretch;
+  border: 1px solid var(--tn-color-border);
+  border-radius: var(--tn-radius-medium);
+  justify-content: space-between;
+  padding: 0.5rem;
+}
+
+.file-list__name {
+  background: transparent;
+  border: 0;
+  color: var(--tn-color-foreground);
+  cursor: default;
+  display: grid;
+  font: inherit;
+  gap: 0.25rem;
+  min-width: 0;
+  padding: 0;
+  text-align: left;
+}
+
+.file-list__name span,
+.file-list__name small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-list__name small {
+  color: var(--tn-color-muted);
+}
+
+.file-list__actions {
+  align-items: center;
+  display: flex;
+  gap: 0.25rem;
+}
+
+.editor-area {
+  display: grid;
+  grid-area: editor;
+  min-width: 0;
+  overflow: auto;
+  padding: 1.5rem;
+  place-items: center;
+}
+
+.editor-placeholder {
+  border: 1px dashed var(--tn-color-border);
+  border-radius: 1.5rem;
+  max-width: 42rem;
+  padding: 2rem;
+  text-align: center;
+}
+
+.right-panel {
+  border-left: 1px solid var(--tn-color-border);
+  display: grid;
+  grid-area: right;
+  padding: 1rem;
+  place-items: center;
+}
+
+.status-bar {
+  background: #0c0f16;
+  border-top: 1px solid var(--tn-color-border);
+  font-size: 0.85rem;
+  grid-area: status;
+  padding: 0.5rem 0.75rem;
+}
+
+.native-status--ready {
+  color: var(--tn-color-foreground);
+}
+
+.native-status--error {
+  color: #ffc6c6;
+}
