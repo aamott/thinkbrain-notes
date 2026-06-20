@@ -1,4 +1,4 @@
-import type { MarkdownFileEntry } from "@thinkbrain/core";
+import type { MarkdownFileEntry, WorkspaceEntry } from "@thinkbrain/core";
 import { classNames } from "@thinkbrain/ui";
 import { useEffect, useRef, useState } from "react";
 import { Tree, type NodeRendererProps } from "react-arborist";
@@ -42,10 +42,12 @@ export function FileTree(props: FileTreeProps) {
           rowHeight={ROW_HEIGHT}
           width={size.width}
           onActivate={(node) => {
-            // Keyboard activation (Enter): open files, expand/collapse folders.
+            // Keyboard activation (Enter): open Markdown files, toggle folders.
             const data = node.data;
-            if (data.kind === "file" && data.file) {
-              props.onOpenNote(data.file);
+            if (data.kind === "file") {
+              if (data.isMarkdown && data.entry) {
+                props.onOpenNote(toMarkdownFileEntry(data.entry));
+              }
             } else {
               node.toggle();
             }
@@ -87,6 +89,8 @@ function FileTreeRow({
     );
   }
 
+  // Only Markdown files are openable/editable; other files are shown read-only.
+  const markdownFile = data.isMarkdown && data.entry ? toMarkdownFileEntry(data.entry) : null;
   const isActive = treeProps.activeRelativePath === data.path;
 
   return (
@@ -94,45 +98,55 @@ function FileTreeRow({
       aria-current={isActive ? "page" : undefined}
       className={classNames(
         "file-tree__row file-tree__row--file",
+        !markdownFile && "is-readonly",
         isActive && "is-active"
       )}
       style={style}
       onClick={() => {
-        if (data.file && !isBusy) {
-          treeProps.onOpenNote(data.file);
+        if (markdownFile && !isBusy) {
+          treeProps.onOpenNote(markdownFile);
         }
       }}
     >
       <span className="file-tree__twisty" aria-hidden="true" />
       <span className="file-tree__label">{data.name}</span>
-      <span className="file-tree__actions">
-        <button
-          disabled={isBusy}
-          onClick={(event) => {
-            event.stopPropagation();
-            if (data.file) {
-              treeProps.onRenameNote(data.file);
-            }
-          }}
-          type="button"
-        >
-          Rename
-        </button>
-        <button
-          disabled={isBusy}
-          onClick={(event) => {
-            event.stopPropagation();
-            if (data.file) {
-              treeProps.onDeleteNote(data.file);
-            }
-          }}
-          type="button"
-        >
-          Delete
-        </button>
-      </span>
+      {markdownFile ? (
+        <span className="file-tree__actions">
+          <button
+            disabled={isBusy}
+            onClick={(event) => {
+              event.stopPropagation();
+              treeProps.onRenameNote(markdownFile);
+            }}
+            type="button"
+          >
+            Rename
+          </button>
+          <button
+            disabled={isBusy}
+            onClick={(event) => {
+              event.stopPropagation();
+              treeProps.onDeleteNote(markdownFile);
+            }}
+            type="button"
+          >
+            Delete
+          </button>
+        </span>
+      ) : null}
     </div>
   );
+}
+
+/** Projects a workspace entry onto the Markdown file shape the handlers expect. */
+function toMarkdownFileEntry(entry: WorkspaceEntry): MarkdownFileEntry {
+  return {
+    relativePath: entry.relativePath,
+    fileName: entry.name,
+    parentPath: entry.parentPath,
+    byteSize: entry.byteSize,
+    updatedAt: entry.updatedAt
+  };
 }
 
 interface ElementSize {

@@ -97,6 +97,17 @@ describe("app store scaffold", () => {
           byteSize: 1,
           updatedAt: null
         }
+      ],
+      [
+        {
+          relativePath: "Inbox.md",
+          name: "Inbox.md",
+          parentPath: "",
+          kind: "file",
+          isMarkdown: true,
+          byteSize: 1,
+          updatedAt: null
+        }
       ]
     );
 
@@ -105,6 +116,18 @@ describe("app store scaffold", () => {
         relativePath: "Daily.md",
         fileName: "Daily.md",
         parentPath: "",
+        byteSize: 2,
+        updatedAt: "123"
+      }
+    ]);
+
+    useAppStore.getState().setWorkspaceEntries([
+      {
+        relativePath: "Daily.md",
+        name: "Daily.md",
+        parentPath: "",
+        kind: "file",
+        isMarkdown: true,
         byteSize: 2,
         updatedAt: "123"
       }
@@ -121,6 +144,17 @@ describe("app store scaffold", () => {
           relativePath: "Daily.md",
           fileName: "Daily.md",
           parentPath: "",
+          byteSize: 2,
+          updatedAt: "123"
+        }
+      ],
+      entries: [
+        {
+          relativePath: "Daily.md",
+          name: "Daily.md",
+          parentPath: "",
+          kind: "file",
+          isMarkdown: true,
           byteSize: 2,
           updatedAt: "123"
         }

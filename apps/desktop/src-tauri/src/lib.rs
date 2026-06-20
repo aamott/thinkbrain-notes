@@ -71,6 +71,22 @@ pub struct WorkspaceSnapshot {
     pub files: Vec<MarkdownFileEntry>,
 }
 
+/// A single file-manager entry: a folder or a file of any type.
+///
+/// Unlike `MarkdownFileEntry`, this includes directories (so empty folders show)
+/// and non-Markdown files, letting the explorer behave like a normal file tree.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct WorkspaceEntry {
+    pub relative_path: String,
+    pub name: String,
+    pub parent_path: String,
+    /// Either "directory" or "file".
+    pub kind: String,
+    pub is_markdown: bool,
+    pub byte_size: u64,
+    pub updated_at: Option<String>,
+}
+
 /// A single note record sent from the frontend to (re)index.
 ///
 /// The frontend extracts these fields with the shared core parser, so the
@@ -126,6 +142,16 @@ fn list_markdown_files(root_path: String) -> Result<Vec<MarkdownFileEntry>, Nati
     let root = resolve_workspace_root(&root_path)?;
 
     list_markdown_file_entries(&root)
+}
+
+#[tauri::command]
+fn list_workspace_entries(root_path: String) -> Result<Vec<WorkspaceEntry>, NativeError> {
+    let root = resolve_workspace_root(&root_path)?;
+    let mut entries = Vec::new();
+    collect_workspace_entries(&root, &root, &mut entries)?;
+    entries.sort_by(|left, right| left.relative_path.cmp(&right.relative_path));
+
+    Ok(entries)
 }
 
 #[tauri::command]
@@ -383,6 +409,7 @@ pub fn run() {
             desktop_shell_status,
             open_workspace,
             list_markdown_files,
+            list_workspace_entries,
             read_markdown_file,
             write_markdown_file,
             create_markdown_file,
@@ -583,6 +610,106 @@ fn markdown_file_entry(root: &Path, file_path: &Path) -> Result<MarkdownFileEntr
         byte_size: metadata.len(),
         updated_at,
     })
+}
+
+/// Recursively collects every visible folder and file under the workspace.
+///
+/// Hidden entries (dot-prefixed, e.g. `.git`) are skipped so the tree stays
+/// clean, matching typical file-manager defaults. Directories are emitted before
+/// their contents so callers can build a complete tree, including empty folders.
+fn collect_workspace_entries(
+    root: &Path,
+    current: &Path,
+    entries: &mut Vec<WorkspaceEntry>,
+) -> Result<(), NativeError> {
+    let dir = fs::read_dir(current).map_err(|error| {
+        NativeError::with_details(
+            "workspace.list_failed",
+            "Failed to list the workspace contents.",
+            error.to_string(),
+        )
+    })?;
+
+    for entry in dir {
+        let entry = entry.map_err(|error| {
+            NativeError::with_details(
+                "workspace.list_failed",
+                "Failed to inspect a workspace entry.",
+                error.to_string(),
+            )
+        })?;
+        let name = entry.file_name().to_string_lossy().to_string();
+
+        if is_hidden_name(&name) {
+            continue;
+        }
+
+        let path = entry.path();
+        let file_type = entry.file_type().map_err(|error| {
+            NativeError::with_details(
+                "workspace.list_failed",
+                "Failed to inspect a workspace entry type.",
+                error.to_string(),
+            )
+        })?;
+
+        if file_type.is_dir() {
+            entries.push(workspace_entry(root, &path, true)?);
+            collect_workspace_entries(root, &path, entries)?;
+        } else if file_type.is_file() {
+            entries.push(workspace_entry(root, &path, false)?);
+        }
+    }
+
+    Ok(())
+}
+
+/// Builds a `WorkspaceEntry` for a folder or file from filesystem metadata.
+fn workspace_entry(root: &Path, path: &Path, is_dir: bool) -> Result<WorkspaceEntry, NativeError> {
+    let relative_path = path
+        .strip_prefix(root)
+        .map_err(|error| {
+            NativeError::with_details(
+                "workspace.invalid_path",
+                "Entry path is outside the workspace.",
+                error.to_string(),
+            )
+        })?
+        .to_string_lossy()
+        .replace('\\', "/");
+    let metadata = fs::metadata(path).map_err(|error| {
+        NativeError::with_details(
+            "workspace.metadata_failed",
+            "Failed to read workspace entry metadata.",
+            error.to_string(),
+        )
+    })?;
+    let updated_at = metadata
+        .modified()
+        .ok()
+        .and_then(|modified| modified.duration_since(UNIX_EPOCH).ok())
+        .map(|duration| duration.as_millis().to_string());
+
+    Ok(WorkspaceEntry {
+        name: path
+            .file_name()
+            .map(|file_name| file_name.to_string_lossy().to_string())
+            .unwrap_or_else(|| relative_path.clone()),
+        parent_path: Path::new(&relative_path)
+            .parent()
+            .map(|parent| parent.to_string_lossy().replace('\\', "/"))
+            .unwrap_or_default(),
+        kind: if is_dir { "directory" } else { "file" }.to_string(),
+        is_markdown: !is_dir && is_markdown_path(path),
+        byte_size: if is_dir { 0 } else { metadata.len() },
+        updated_at,
+        relative_path,
+    })
+}
+
+/// Reports whether an entry name should be hidden (dot-prefixed, e.g. `.git`).
+fn is_hidden_name(name: &str) -> bool {
+    name.starts_with('.')
 }
 
 fn is_markdown_path(path: &Path) -> bool {
@@ -985,6 +1112,14 @@ mod tests {
         assert!(is_markdown_path(Path::new("note.md")));
         assert!(is_markdown_path(Path::new("note.MARKDOWN")));
         assert!(!is_markdown_path(Path::new("note.txt")));
+    }
+
+    #[test]
+    fn hidden_entries_are_dot_prefixed() {
+        assert!(super::is_hidden_name(".git"));
+        assert!(super::is_hidden_name(".obsidian"));
+        assert!(!super::is_hidden_name("Notes"));
+        assert!(!super::is_hidden_name("note.md"));
     }
 
     #[test]

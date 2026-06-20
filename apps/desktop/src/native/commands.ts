@@ -43,6 +43,10 @@ export interface NativeCommandMap {
     readonly args: { readonly rootPath: string };
     readonly result: readonly NativeMarkdownFileEntry[];
   };
+  readonly list_workspace_entries: {
+    readonly args: { readonly rootPath: string };
+    readonly result: readonly NativeWorkspaceEntry[];
+  };
   readonly read_markdown_file: {
     readonly args: {
       readonly rootPath: string;
@@ -148,6 +152,16 @@ export interface NativeMarkdownFileEntry {
 export interface NativeMarkdownFileContents {
   readonly relative_path: string;
   readonly contents: string;
+}
+
+export interface NativeWorkspaceEntry {
+  readonly relative_path: string;
+  readonly name: string;
+  readonly parent_path: string;
+  readonly kind: "directory" | "file";
+  readonly is_markdown: boolean;
+  readonly byte_size: number;
+  readonly updated_at: string | null;
 }
 
 export interface NativeWorkspaceSnapshot {

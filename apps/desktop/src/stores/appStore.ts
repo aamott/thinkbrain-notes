@@ -5,7 +5,8 @@ import {
   type MarkdownFileEntry,
   type ParseSettingsResult,
   type SettingsDiagnostic,
-  type WorkspaceDescriptor
+  type WorkspaceDescriptor,
+  type WorkspaceEntry
 } from "@thinkbrain/core";
 
 import type { NativeCommandErrorShape, ShellStatus } from "../native/commands";
@@ -23,7 +24,10 @@ export type WorkspaceState =
   | {
       readonly status: "ready";
       readonly workspace: WorkspaceDescriptor;
+      // Markdown-only list used by the indexer and editor.
       readonly files: readonly MarkdownFileEntry[];
+      // Full file-manager listing (folders + all file types) for the explorer.
+      readonly entries: readonly WorkspaceEntry[];
     }
   | { readonly status: "error"; readonly error: NativeCommandErrorShape };
 
@@ -97,10 +101,12 @@ export interface AppStoreState {
   readonly setWorkspaceLoading: () => void;
   readonly setWorkspaceReady: (
     workspace: WorkspaceDescriptor,
-    files: readonly MarkdownFileEntry[]
+    files: readonly MarkdownFileEntry[],
+    entries: readonly WorkspaceEntry[]
   ) => void;
   readonly setWorkspaceError: (error: NativeCommandErrorShape) => void;
   readonly setWorkspaceFiles: (files: readonly MarkdownFileEntry[]) => void;
+  readonly setWorkspaceEntries: (entries: readonly WorkspaceEntry[]) => void;
   readonly openActiveDocument: (file: ActiveDocumentFile) => void;
   readonly setActiveDocumentLoaded: (contents: string) => void;
   readonly updateActiveDocumentContents: (contents: string) => void;
@@ -190,8 +196,8 @@ export const useAppStore = create<AppStoreState>((set) => ({
   setNativeShellError: (error) =>
     set({ nativeShell: { status: "error", error } }),
   setWorkspaceLoading: () => set({ workspace: { status: "loading" } }),
-  setWorkspaceReady: (workspace, files) =>
-    set({ workspace: { status: "ready", workspace, files } }),
+  setWorkspaceReady: (workspace, files, entries) =>
+    set({ workspace: { status: "ready", workspace, files, entries } }),
   setWorkspaceError: (error) =>
     set({ workspace: { status: "error", error } }),
   setWorkspaceFiles: (files) =>
@@ -201,6 +207,17 @@ export const useAppStore = create<AppStoreState>((set) => ({
             workspace: {
               ...state.workspace,
               files
+            }
+          }
+        : state
+    ),
+  setWorkspaceEntries: (entries) =>
+    set((state) =>
+      state.workspace.status === "ready"
+        ? {
+            workspace: {
+              ...state.workspace,
+              entries
             }
           }
         : state

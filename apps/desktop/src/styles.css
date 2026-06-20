@@ -330,6 +330,12 @@ body {
   border-color: color-mix(in srgb, var(--tn-color-accent) 48%, transparent);
 }
 
+/* Non-Markdown files are visible but not editable in MVP. */
+.file-tree__row--file.is-readonly {
+  color: var(--tn-color-muted);
+  cursor: default;
+}
+
 .file-tree__twisty {
   color: var(--tn-color-muted);
   flex: 0 0 auto;

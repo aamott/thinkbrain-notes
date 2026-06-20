@@ -30,6 +30,19 @@ export interface MarkdownFileContents {
   readonly contents: string;
 }
 
+// A file-manager entry: a folder or any file type. Used by the explorer tree so
+// folders (including empty ones) and non-Markdown files are visible, while
+// Markdown-specific flows keep using MarkdownFileEntry.
+export interface WorkspaceEntry {
+  readonly relativePath: string;
+  readonly name: string;
+  readonly parentPath: string;
+  readonly kind: "directory" | "file";
+  readonly isMarkdown: boolean;
+  readonly byteSize: number;
+  readonly updatedAt: string | null;
+}
+
 export interface WorkspaceSnapshot {
   readonly workspace: WorkspaceDescriptor;
   readonly files: readonly MarkdownFileEntry[];

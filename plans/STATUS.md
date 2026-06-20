@@ -13,7 +13,7 @@ _Last updated: 2026-06-20_
 ## Current Focus
 
 - **Work Item 008** — Git integration (next up). 007 (Settings) done.
-- UI: explorer reworked into a collapsible `react-arborist` file tree (folders inferred from paths client-side; click-to-open, keep new/rename/delete).
+- UI: explorer is a `react-arborist` file tree that lists the **full vault** — real folders (incl. empty), Markdown, and non-Markdown files (read-only). Native `list_workspace_entries` walks the tree (skips dot-prefixed entries); Markdown stays editable with new/rename/delete.
 - 007 added versioned JSON app settings in core, native raw settings IO in OS app-data (never the vault), and a basic Settings panel with persisted theme/editor preferences.
 
 ## Work Items
@@ -33,8 +33,8 @@ _Last updated: 2026-06-20_
 
 ## Validation Baseline (last full pass)
 
-Latest WI-007 validation from repo root:
-`pnpm --filter @thinkbrain/core test` (14 passed) · `pnpm --filter @thinkbrain/desktop test` (27 passed) · `pnpm --filter @thinkbrain/desktop typecheck` · `pnpm --filter @thinkbrain/desktop lint` · `cargo test --manifest-path "apps\desktop\src-tauri\Cargo.toml"` (14 passed) · `pnpm --filter @thinkbrain/desktop build` · `pnpm --filter @thinkbrain/desktop test:e2e` (2 passed).
+Latest (file-tree → full file manager) from repo root:
+`pnpm typecheck` · `pnpm lint` · `pnpm test` (core 14, ui 1, desktop 34 passed) · `cargo test --manifest-path "apps\desktop\src-tauri\Cargo.toml"` (15 passed) · `pnpm build`. `tauri dev` smoke-launched clean. (e2e not re-run this pass.)
 
 ## Environment Notes
 
@@ -45,7 +45,7 @@ Latest WI-007 validation from repo root:
 
 ## Open Decisions / Blockers
 
-- No blockers. Non-blocking items in `plans/open-items.md` (OI-001..OI-005; tree uses inferred folders, no cross-folder drag yet).
+- No blockers. Non-blocking items in `plans/open-items.md` (OI-001..OI-006; non-MD files are read-only, no cross-folder drag yet).
 
 ## Next Up
 

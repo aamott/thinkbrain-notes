@@ -2,6 +2,7 @@ import type {
   MarkdownFileContents,
   MarkdownFileEntry,
   WorkspaceDescriptor,
+  WorkspaceEntry,
   WorkspaceSnapshot
 } from "@thinkbrain/core";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -11,6 +12,7 @@ import {
   type NativeMarkdownFileContents,
   type NativeMarkdownFileEntry,
   type NativeWorkspaceDescriptor,
+  type NativeWorkspaceEntry,
   type NativeWorkspaceSnapshot
 } from "../native/commands";
 
@@ -38,6 +40,17 @@ export async function listMarkdownFiles(
   const files = await invokeNativeCommand("list_markdown_files", { rootPath });
 
   return files.map(toMarkdownFileEntry);
+}
+
+/** Lists every visible folder and file so the explorer can show a full tree. */
+export async function listWorkspaceEntries(
+  rootPath: string
+): Promise<readonly WorkspaceEntry[]> {
+  const entries = await invokeNativeCommand("list_workspace_entries", {
+    rootPath
+  });
+
+  return entries.map(toWorkspaceEntry);
 }
 
 export async function readMarkdownFile(
@@ -148,5 +161,17 @@ function toMarkdownFileContents(
   return {
     relativePath: file.relative_path,
     contents: file.contents
+  };
+}
+
+function toWorkspaceEntry(entry: NativeWorkspaceEntry): WorkspaceEntry {
+  return {
+    relativePath: entry.relative_path,
+    name: entry.name,
+    parentPath: entry.parent_path,
+    kind: entry.kind,
+    isMarkdown: entry.is_markdown,
+    byteSize: entry.byte_size,
+    updatedAt: entry.updated_at
   };
 }

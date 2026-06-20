@@ -11,6 +11,7 @@ import {
   createMarkdownFile,
   deleteMarkdownFile,
   listMarkdownFiles,
+  listWorkspaceEntries,
   normalizeMarkdownInputPath,
   openWorkspace,
   readMarkdownFile,
@@ -38,6 +39,7 @@ export function WorkspaceExplorer() {
   const setWorkspaceReady = useAppStore((state) => state.setWorkspaceReady);
   const setWorkspaceError = useAppStore((state) => state.setWorkspaceError);
   const setWorkspaceFiles = useAppStore((state) => state.setWorkspaceFiles);
+  const setWorkspaceEntries = useAppStore((state) => state.setWorkspaceEntries);
   const openActiveDocument = useAppStore((state) => state.openActiveDocument);
   const setActiveDocumentLoaded = useAppStore(
     (state) => state.setActiveDocumentLoaded
@@ -57,7 +59,8 @@ export function WorkspaceExplorer() {
 
       setWorkspaceLoading();
       const snapshot = await openWorkspace(selectedFolder);
-      setWorkspaceReady(snapshot.workspace, snapshot.files);
+      const entries = await listWorkspaceEntries(snapshot.workspace.rootPath);
+      setWorkspaceReady(snapshot.workspace, snapshot.files, entries);
     } catch (error) {
       setWorkspaceError(normalizeNativeError(error));
     }
@@ -69,7 +72,13 @@ export function WorkspaceExplorer() {
     }
 
     try {
-      setWorkspaceFiles(await listMarkdownFiles(workspace.workspace.rootPath));
+      const rootPath = workspace.workspace.rootPath;
+      const [files, entries] = await Promise.all([
+        listMarkdownFiles(rootPath),
+        listWorkspaceEntries(rootPath)
+      ]);
+      setWorkspaceFiles(files);
+      setWorkspaceEntries(entries);
     } catch (error) {
       setWorkspaceError(normalizeNativeError(error));
     }
@@ -94,6 +103,9 @@ export function WorkspaceExplorer() {
         relativePath
       );
       setWorkspaceFiles(await listMarkdownFiles(workspace.workspace.rootPath));
+      setWorkspaceEntries(
+        await listWorkspaceEntries(workspace.workspace.rootPath)
+      );
       await syncIndex(() =>
         indexDocument(workspace.workspace.rootPath, created, "")
       );
@@ -156,6 +168,7 @@ export function WorkspaceExplorer() {
         newRelativePath
       );
       setWorkspaceFiles(await listMarkdownFiles(rootPath));
+      setWorkspaceEntries(await listWorkspaceEntries(rootPath));
       await syncIndex(async () => {
         await removeIndexedDocument(rootPath, file.relativePath);
         const loaded = await readMarkdownFile(rootPath, renamed.relativePath);
@@ -186,6 +199,9 @@ export function WorkspaceExplorer() {
         workspace.files.filter(
           (candidate) => candidate.relativePath !== file.relativePath
         )
+      );
+      setWorkspaceEntries(
+        await listWorkspaceEntries(workspace.workspace.rootPath)
       );
       await syncIndex(() =>
         removeIndexedDocument(workspace.workspace.rootPath, file.relativePath)
@@ -237,11 +253,11 @@ function WorkspacePanelBody({
 }) {
   const workspace = useAppStore((state) => state.workspace);
   const activeDocument = useAppStore((state) => state.activeDocument);
-  const files = workspace.status === "ready" ? workspace.files : null;
-  // Rebuild the nested tree only when the flat file list changes.
+  const entries = workspace.status === "ready" ? workspace.entries : null;
+  // Rebuild the nested tree only when the workspace entry list changes.
   const treeNodes = useMemo(
-    () => (files ? buildFileTree(files) : []),
-    [files]
+    () => (entries ? buildFileTree(entries) : []),
+    [entries]
   );
 
   if (workspace.status === "idle") {
@@ -277,8 +293,8 @@ function WorkspacePanelBody({
           Refresh
         </Button>
       </div>
-      {workspace.files.length === 0 ? (
-        <p className="workspace-empty">No Markdown files found.</p>
+      {treeNodes.length === 0 ? (
+        <p className="workspace-empty">This folder is empty.</p>
       ) : (
         <FileTree
           activeRelativePath={
