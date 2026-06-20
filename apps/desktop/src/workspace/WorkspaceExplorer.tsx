@@ -1,10 +1,12 @@
 import type { MarkdownFileEntry } from "@thinkbrain/core";
 import { Button } from "@thinkbrain/ui";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { normalizeNativeError } from "../native/commands";
 import { indexDocument, removeIndexedDocument } from "../search/searchService";
 import { useAppStore } from "../stores/appStore";
+import { FileTree } from "./FileTree";
+import { buildFileTree } from "./fileTreeModel";
 import {
   createMarkdownFile,
   deleteMarkdownFile,
@@ -235,6 +237,12 @@ function WorkspacePanelBody({
 }) {
   const workspace = useAppStore((state) => state.workspace);
   const activeDocument = useAppStore((state) => state.activeDocument);
+  const files = workspace.status === "ready" ? workspace.files : null;
+  // Rebuild the nested tree only when the flat file list changes.
+  const treeNodes = useMemo(
+    () => (files ? buildFileTree(files) : []),
+    [files]
+  );
 
   if (workspace.status === "idle") {
     return (
@@ -272,43 +280,18 @@ function WorkspacePanelBody({
       {workspace.files.length === 0 ? (
         <p className="workspace-empty">No Markdown files found.</p>
       ) : (
-        <ul className="file-list" aria-label="Markdown files">
-          {workspace.files.map((file) => (
-            <li key={file.relativePath} className="file-list__item">
-              <button
-                aria-current={
-                  activeDocument.file?.rootPath === workspace.workspace.rootPath &&
-                  activeDocument.file.relativePath === file.relativePath
-                    ? "page"
-                    : undefined
-                }
-                className="file-list__name"
-                disabled={busyPath === file.relativePath}
-                onClick={() => onOpenNote(file)}
-                type="button"
-              >
-                <span>{file.fileName}</span>
-                <small>{file.parentPath || "."}</small>
-              </button>
-              <div className="file-list__actions">
-                <button
-                  disabled={busyPath === file.relativePath}
-                  onClick={() => onRenameNote(file)}
-                  type="button"
-                >
-                  Rename
-                </button>
-                <button
-                  disabled={busyPath === file.relativePath}
-                  onClick={() => onDeleteNote(file)}
-                  type="button"
-                >
-                  Delete
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
+        <FileTree
+          activeRelativePath={
+            activeDocument.file?.rootPath === workspace.workspace.rootPath
+              ? activeDocument.file.relativePath
+              : null
+          }
+          busyPath={busyPath}
+          nodes={treeNodes}
+          onDeleteNote={onDeleteNote}
+          onOpenNote={onOpenNote}
+          onRenameNote={onRenameNote}
+        />
       )}
     </>
   );

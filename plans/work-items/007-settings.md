@@ -2,7 +2,7 @@
 
 ## Status
 
-Planned
+Done
 
 ## Goal
 
@@ -45,10 +45,10 @@ Do not implement extension settings, settings sync, marketplace settings, or a c
 
 ## Acceptance Criteria
 
-- [ ] Application settings load and save as JSON.
-- [ ] Invalid settings fail with clear errors or safe defaults.
-- [ ] Settings include a version field.
-- [ ] Tests cover load/save and migration behavior.
+- [x] Application settings load and save as JSON.
+- [x] Invalid settings fail with clear errors or safe defaults.
+- [x] Settings include a version field.
+- [x] Tests cover load/save and migration behavior.
 
 ## Validation
 

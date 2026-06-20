@@ -345,6 +345,36 @@ fn remove_index_document(
     })
 }
 
+#[tauri::command]
+fn read_app_settings(app: tauri::AppHandle) -> Result<Option<String>, NativeError> {
+    read_settings_file(&resolve_app_settings_path(&app)?)
+}
+
+#[tauri::command]
+fn write_app_settings(app: tauri::AppHandle, contents: String) -> Result<(), NativeError> {
+    write_settings_file(&resolve_app_settings_path(&app)?, &contents)
+}
+
+#[tauri::command]
+fn read_workspace_settings(
+    app: tauri::AppHandle,
+    root_path: String,
+) -> Result<Option<String>, NativeError> {
+    read_settings_file(&resolve_workspace_settings_path(&app, &root_path)?)
+}
+
+#[tauri::command]
+fn write_workspace_settings(
+    app: tauri::AppHandle,
+    root_path: String,
+    contents: String,
+) -> Result<(), NativeError> {
+    write_settings_file(
+        &resolve_workspace_settings_path(&app, &root_path)?,
+        &contents,
+    )
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -361,7 +391,11 @@ pub fn run() {
             index_documents,
             search_index,
             clear_index,
-            remove_index_document
+            remove_index_document,
+            read_app_settings,
+            write_app_settings,
+            read_workspace_settings,
+            write_workspace_settings
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Thinkbrain Notes desktop shell");
@@ -592,10 +626,7 @@ fn open_index_connection(
 ///
 /// Each workspace gets its own cache file named from a stable hash of the
 /// canonicalized workspace root, so distinct vaults never collide.
-fn resolve_index_db_path(
-    app: &tauri::AppHandle,
-    root_path: &str,
-) -> Result<PathBuf, NativeError> {
+fn resolve_index_db_path(app: &tauri::AppHandle, root_path: &str) -> Result<PathBuf, NativeError> {
     let canonical_root = resolve_workspace_root(root_path)?;
     let app_data_dir = app.path().app_data_dir().map_err(|error| {
         NativeError::with_details(
@@ -633,6 +664,85 @@ fn stable_workspace_hash(input: &str) -> u64 {
     }
 
     hash
+}
+
+fn resolve_app_settings_path(app: &tauri::AppHandle) -> Result<PathBuf, NativeError> {
+    let app_data_dir = app.path().app_data_dir().map_err(|error| {
+        NativeError::with_details(
+            "settings.app_data_unavailable",
+            "Failed to resolve the application data directory.",
+            error.to_string(),
+        )
+    })?;
+
+    Ok(app_settings_path(&app_data_dir))
+}
+
+fn resolve_workspace_settings_path(
+    app: &tauri::AppHandle,
+    root_path: &str,
+) -> Result<PathBuf, NativeError> {
+    let canonical_root = resolve_workspace_root(root_path)?;
+    let app_data_dir = app.path().app_data_dir().map_err(|error| {
+        NativeError::with_details(
+            "settings.app_data_unavailable",
+            "Failed to resolve the application data directory.",
+            error.to_string(),
+        )
+    })?;
+
+    Ok(workspace_settings_path(&app_data_dir, &canonical_root))
+}
+
+fn app_settings_path(app_data_dir: &Path) -> PathBuf {
+    settings_dir(app_data_dir).join("app.json")
+}
+
+fn workspace_settings_path(app_data_dir: &Path, canonical_root: &Path) -> PathBuf {
+    let workspace_key = stable_workspace_hash(&canonical_root.to_string_lossy());
+
+    settings_dir(app_data_dir).join(format!("workspace-{workspace_key:016x}.json"))
+}
+
+fn settings_dir(app_data_dir: &Path) -> PathBuf {
+    app_data_dir.join("settings")
+}
+
+fn read_settings_file(path: &Path) -> Result<Option<String>, NativeError> {
+    match fs::read_to_string(path) {
+        Ok(contents) => Ok(Some(contents)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(NativeError::with_details(
+            "settings.read_failed",
+            "Failed to read the settings file.",
+            error.to_string(),
+        )),
+    }
+}
+
+fn write_settings_file(path: &Path, contents: &str) -> Result<(), NativeError> {
+    let parent = path.parent().ok_or_else(|| {
+        NativeError::new(
+            "settings.invalid_path",
+            "Settings file path must include a parent directory.",
+        )
+    })?;
+
+    fs::create_dir_all(parent).map_err(|error| {
+        NativeError::with_details(
+            "settings.create_dir_failed",
+            "Failed to create the settings directory.",
+            error.to_string(),
+        )
+    })?;
+
+    fs::write(path, contents).map_err(|error| {
+        NativeError::with_details(
+            "settings.write_failed",
+            "Failed to write the settings file.",
+            error.to_string(),
+        )
+    })
 }
 
 /// Creates the FTS5 virtual table backing search. Idempotent.
@@ -778,12 +888,17 @@ fn build_fts_match_query(raw: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        build_fts_match_query, clear_documents, delete_document, desktop_shell_status,
-        index_document_records, init_index_schema, is_markdown_path, normalize_relative_path,
-        search_documents, stable_workspace_hash, DocumentRecord, NativeError,
+        app_settings_path, build_fts_match_query, clear_documents, delete_document,
+        desktop_shell_status, index_document_records, init_index_schema, is_markdown_path,
+        normalize_relative_path, read_settings_file, search_documents, stable_workspace_hash,
+        workspace_settings_path, write_settings_file, DocumentRecord, NativeError,
     };
     use rusqlite::Connection;
-    use std::path::Path;
+    use std::{
+        fs,
+        path::{Path, PathBuf},
+        time::SystemTime,
+    };
 
     fn record(
         path: &str,
@@ -815,6 +930,17 @@ mod tests {
             .into_iter()
             .map(|hit| hit.path)
             .collect()
+    }
+
+    fn temp_test_dir(name: &str) -> PathBuf {
+        let unique = SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("time is after epoch")
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!("thinkbrain-notes-{name}-{unique}"));
+
+        fs::create_dir_all(&path).expect("temp directory is created");
+        path
     }
 
     #[test]
@@ -888,15 +1014,27 @@ mod tests {
         .expect("documents index");
 
         // Filename match.
-        assert_eq!(result_paths(&connection, "roadmap"), vec!["projects/roadmap.md"]);
+        assert_eq!(
+            result_paths(&connection, "roadmap"),
+            vec!["projects/roadmap.md"]
+        );
         // Body match.
-        assert_eq!(result_paths(&connection, "kombucha"), vec!["daily/inbox.md"]);
+        assert_eq!(
+            result_paths(&connection, "kombucha"),
+            vec!["daily/inbox.md"]
+        );
         // Tag match.
-        assert_eq!(result_paths(&connection, "planning"), vec!["projects/roadmap.md"]);
+        assert_eq!(
+            result_paths(&connection, "planning"),
+            vec!["projects/roadmap.md"]
+        );
         // Alias match.
         assert_eq!(result_paths(&connection, "Q3"), vec!["projects/roadmap.md"]);
         // Title match.
-        assert_eq!(result_paths(&connection, "quarterly"), vec!["projects/roadmap.md"]);
+        assert_eq!(
+            result_paths(&connection, "quarterly"),
+            vec!["projects/roadmap.md"]
+        );
     }
 
     #[test]
@@ -930,7 +1068,14 @@ mod tests {
         let mut connection = in_memory_index();
         index_document_records(
             &mut connection,
-            &[record("old.md", "old.md", None, &[], &[], "obsolete content")],
+            &[record(
+                "old.md",
+                "old.md",
+                None,
+                &[],
+                &[],
+                "obsolete content",
+            )],
         )
         .expect("first index");
 
@@ -950,7 +1095,14 @@ mod tests {
         let mut connection = in_memory_index();
         index_document_records(
             &mut connection,
-            &[record("removable.md", "removable.md", None, &[], &[], "delete me")],
+            &[record(
+                "removable.md",
+                "removable.md",
+                None,
+                &[],
+                &[],
+                "delete me",
+            )],
         )
         .expect("document indexes");
 
@@ -964,13 +1116,22 @@ mod tests {
         let mut connection = in_memory_index();
         index_document_records(
             &mut connection,
-            &[record("safe.md", "safe.md", None, &[], &[], "harmless body text")],
+            &[record(
+                "safe.md",
+                "safe.md",
+                None,
+                &[],
+                &[],
+                "harmless body text",
+            )],
         )
         .expect("document indexes");
 
         // Empty / whitespace-only input yields no results without touching SQLite.
         assert!(build_fts_match_query("   ").is_none());
-        assert!(search_documents(&connection, "", 50).expect("empty query is safe").is_empty());
+        assert!(search_documents(&connection, "", 50)
+            .expect("empty query is safe")
+            .is_empty());
 
         // FTS5 special syntax must be neutralized rather than raising an error.
         for malformed in ["\"", "*", "AND OR", "tag:", "(unbalanced", "a -b \"c"] {
@@ -989,5 +1150,52 @@ mod tests {
             stable_workspace_hash("/home/user/vault"),
             stable_workspace_hash("/home/user/other-vault")
         );
+    }
+
+    #[test]
+    fn settings_paths_stay_under_app_data() {
+        let app_data_dir = PathBuf::from("/tmp/thinkbrain-app-data");
+        let workspace_root = PathBuf::from("/tmp/user-vault");
+
+        let app_path = app_settings_path(&app_data_dir);
+        let workspace_path = workspace_settings_path(&app_data_dir, &workspace_root);
+        let expected_workspace_file_name = format!(
+            "workspace-{:016x}.json",
+            stable_workspace_hash(&workspace_root.to_string_lossy())
+        );
+
+        assert_eq!(app_path, app_data_dir.join("settings").join("app.json"));
+        assert!(workspace_path.starts_with(app_data_dir.join("settings")));
+        assert!(!workspace_path.starts_with(&workspace_root));
+        assert_eq!(
+            workspace_path.file_name().and_then(|name| name.to_str()),
+            Some(expected_workspace_file_name.as_str())
+        );
+    }
+
+    #[test]
+    fn settings_read_returns_none_when_file_is_absent() {
+        let settings_path = temp_test_dir("missing").join("settings").join("app.json");
+
+        assert_eq!(
+            read_settings_file(&settings_path).expect("missing settings read succeeds"),
+            None
+        );
+    }
+
+    #[test]
+    fn settings_write_creates_parent_directory_and_round_trips() {
+        let temp_dir = temp_test_dir("write");
+        let settings_path = temp_dir.join("settings").join("app.json");
+        let contents = "{\n  \"version\": 1\n}\n";
+
+        write_settings_file(&settings_path, contents).expect("settings write succeeds");
+
+        assert_eq!(
+            read_settings_file(&settings_path).expect("settings read succeeds"),
+            Some(contents.to_string())
+        );
+
+        fs::remove_dir_all(temp_dir).expect("temp settings directory is cleaned up");
     }
 }

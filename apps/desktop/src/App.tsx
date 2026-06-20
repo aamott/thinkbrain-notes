@@ -7,6 +7,8 @@ import { MarkdownEditor } from "./editor/MarkdownEditor";
 import { getDesktopShellStatus, normalizeNativeError } from "./native/commands";
 import { SearchPanel } from "./search/SearchPanel";
 import { useWorkspaceIndexer } from "./search/useWorkspaceIndexer";
+import { SettingsPanel } from "./settings/SettingsPanel";
+import { loadAppSettings } from "./settings/settingsService";
 import { useAppStore } from "./stores/appStore";
 import { WorkspaceExplorer } from "./workspace/WorkspaceExplorer";
 
@@ -15,8 +17,10 @@ export function App() {
   const nativeShell = useAppStore((state) => state.nativeShell);
   const activeDocument = useAppStore((state) => state.activeDocument);
   const activePanel = useAppStore((state) => state.activePanel);
+  const settings = useAppStore((state) => state.settings.settings);
   const setActivePanel = useAppStore((state) => state.setActivePanel);
   const recordBootCheck = useAppStore((state) => state.recordBootCheck);
+  const loadSettings = useAppStore((state) => state.loadSettings);
   const setNativeShellChecking = useAppStore(
     (state) => state.setNativeShellChecking
   );
@@ -47,6 +51,14 @@ export function App() {
     };
   }, [setNativeShellChecking, setNativeShellReady, setNativeShellError]);
 
+  useEffect(() => {
+    void loadSettings(loadAppSettings);
+  }, [loadSettings]);
+
+  useEffect(() => {
+    document.documentElement.dataset.thinkbrainTheme = settings.theme;
+  }, [settings.theme]);
+
   return (
     <main className="app-shell" aria-labelledby="app-title">
       <header className="title-bar">
@@ -74,12 +86,19 @@ export function App() {
         >
           Search
         </button>
+        <button
+          aria-current={activePanel === "settings" ? "page" : undefined}
+          onClick={() => setActivePanel("settings")}
+          type="button"
+        >
+          Settings
+        </button>
         <button disabled type="button">
           Source
         </button>
       </nav>
 
-      {activePanel === "search" ? <SearchPanel /> : <WorkspaceExplorer />}
+      <ActiveSidePanel activePanel={activePanel} />
 
       <section className="editor-area" aria-labelledby="editor-area-title">
         {activeDocument.file ? (
@@ -103,6 +122,22 @@ export function App() {
       </footer>
     </main>
   );
+}
+
+function ActiveSidePanel({
+  activePanel
+}: {
+  readonly activePanel: ReturnType<typeof useAppStore.getState>["activePanel"];
+}) {
+  if (activePanel === "search") {
+    return <SearchPanel />;
+  }
+
+  if (activePanel === "settings") {
+    return <SettingsPanel />;
+  }
+
+  return <WorkspaceExplorer />;
 }
 
 function NativeShellStatus({

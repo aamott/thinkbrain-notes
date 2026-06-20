@@ -1,5 +1,12 @@
 import { create } from "zustand";
-import type { MarkdownFileEntry, WorkspaceDescriptor } from "@thinkbrain/core";
+import {
+  DEFAULT_APP_SETTINGS,
+  type AppSettings,
+  type MarkdownFileEntry,
+  type ParseSettingsResult,
+  type SettingsDiagnostic,
+  type WorkspaceDescriptor
+} from "@thinkbrain/core";
 
 import type { NativeCommandErrorShape, ShellStatus } from "../native/commands";
 import type { SearchResult } from "../search/searchService";
@@ -43,7 +50,17 @@ export interface ActiveDocumentState {
 }
 
 /** Which primary side panel the activity bar currently shows. */
-export type ActivePanel = "explorer" | "search";
+export type ActivePanel = "explorer" | "search" | "settings";
+
+export type SettingsStatus = "idle" | "loading" | "ready" | "saving" | "error";
+
+export interface SettingsState {
+  readonly status: SettingsStatus;
+  readonly settings: AppSettings;
+  readonly draft: AppSettings;
+  readonly diagnostics: readonly SettingsDiagnostic[];
+  readonly error: NativeCommandErrorShape | null;
+}
 
 export type IndexingStatus = "idle" | "indexing" | "ready" | "error";
 
@@ -69,6 +86,7 @@ export interface AppStoreState {
   readonly workspace: WorkspaceState;
   readonly activeDocument: ActiveDocumentState;
   readonly activePanel: ActivePanel;
+  readonly settings: SettingsState;
   readonly indexing: IndexingState;
   readonly search: SearchState;
   readonly recordBootCheck: () => void;
@@ -90,6 +108,24 @@ export interface AppStoreState {
   readonly markActiveDocumentSaved: (savedContents: string) => void;
   readonly setActiveDocumentError: (error: NativeCommandErrorShape) => void;
   readonly setActivePanel: (panel: ActivePanel) => void;
+  readonly setSettingsLoading: () => void;
+  readonly setSettingsReady: (
+    settings: AppSettings,
+    diagnostics: readonly SettingsDiagnostic[]
+  ) => void;
+  readonly updateSettingsDraft: (settings: AppSettings) => void;
+  readonly setSettingsSaving: () => void;
+  readonly setSettingsSaved: (
+    settings: AppSettings,
+    diagnostics: readonly SettingsDiagnostic[]
+  ) => void;
+  readonly setSettingsError: (error: NativeCommandErrorShape) => void;
+  readonly loadSettings: (
+    loader: () => Promise<ParseSettingsResult>
+  ) => Promise<void>;
+  readonly saveSettings: (
+    saver: (settings: AppSettings) => Promise<ParseSettingsResult>
+  ) => Promise<void>;
   readonly startIndexing: (total: number) => void;
   readonly setIndexingProgress: (indexed: number, total: number) => void;
   readonly finishIndexing: (indexed: number) => void;
@@ -121,6 +157,14 @@ const idleSearchState: SearchState = {
   error: null
 };
 
+const idleSettingsState: SettingsState = {
+  status: "idle",
+  settings: DEFAULT_APP_SETTINGS,
+  draft: DEFAULT_APP_SETTINGS,
+  diagnostics: [],
+  error: null
+};
+
 export const useAppStore = create<AppStoreState>((set) => ({
   bootChecks: 0,
   nativeShell: { status: "idle" },
@@ -134,6 +178,7 @@ export const useAppStore = create<AppStoreState>((set) => ({
     error: null
   },
   activePanel: "explorer",
+  settings: idleSettingsState,
   indexing: idleIndexingState,
   search: idleSearchState,
   recordBootCheck: () =>
@@ -242,6 +287,98 @@ export const useAppStore = create<AppStoreState>((set) => ({
         : state
     ),
   setActivePanel: (panel) => set({ activePanel: panel }),
+  setSettingsLoading: () =>
+    set((state) => ({
+      settings: { ...state.settings, status: "loading", error: null }
+    })),
+  setSettingsReady: (settings, diagnostics) =>
+    set({
+      settings: {
+        status: "ready",
+        settings,
+        draft: settings,
+        diagnostics,
+        error: null
+      }
+    }),
+  updateSettingsDraft: (settings) =>
+    set((state) => ({
+      settings: {
+        ...state.settings,
+        draft: settings,
+        error: null
+      }
+    })),
+  setSettingsSaving: () =>
+    set((state) => ({
+      settings: { ...state.settings, status: "saving", error: null }
+    })),
+  setSettingsSaved: (settings, diagnostics) =>
+    set({
+      settings: {
+        status: "ready",
+        settings,
+        draft: settings,
+        diagnostics,
+        error: null
+      }
+    }),
+  setSettingsError: (error) =>
+    set((state) => ({
+      settings: { ...state.settings, status: "error", error }
+    })),
+  loadSettings: async (loader) => {
+    set((state) => ({
+      settings: { ...state.settings, status: "loading", error: null }
+    }));
+
+    try {
+      const result = await loader();
+      set({
+        settings: {
+          status: "ready",
+          settings: result.settings,
+          draft: result.settings,
+          diagnostics: result.diagnostics,
+          error: null
+        }
+      });
+    } catch (error) {
+      set((state) => ({
+        settings: {
+          ...state.settings,
+          status: "error",
+          error: toNativeCommandErrorShape(error)
+        }
+      }));
+    }
+  },
+  saveSettings: async (saver) => {
+    set((state) => ({
+      settings: { ...state.settings, status: "saving", error: null }
+    }));
+
+    try {
+      const result = await saver(useAppStore.getState().settings.draft);
+      set({
+        settings: {
+          status: "ready",
+          settings: result.settings,
+          draft: result.settings,
+          diagnostics: result.diagnostics,
+          error: null
+        }
+      });
+    } catch (error) {
+      set((state) => ({
+        settings: {
+          ...state.settings,
+          status: "error",
+          error: toNativeCommandErrorShape(error)
+        }
+      }));
+    }
+  },
   startIndexing: (total) =>
     set({ indexing: { status: "indexing", indexed: 0, total, error: null } }),
   setIndexingProgress: (indexed, total) =>
@@ -291,3 +428,35 @@ export const useAppStore = create<AppStoreState>((set) => ({
         : state
     )
 }));
+
+function toNativeCommandErrorShape(error: unknown): NativeCommandErrorShape {
+  if (isNativeCommandErrorShape(error)) {
+    return error;
+  }
+
+  if (error instanceof Error) {
+    return {
+      code: "settings.operation_failed",
+      message: error.message
+    };
+  }
+
+  return {
+    code: "settings.operation_failed",
+    message: "Settings operation failed."
+  };
+}
+
+function isNativeCommandErrorShape(error: unknown): error is NativeCommandErrorShape {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const candidate = error as Record<string, unknown>;
+
+  return (
+    typeof candidate.code === "string" &&
+    typeof candidate.message === "string" &&
+    (candidate.details === undefined || typeof candidate.details === "string")
+  );
+}

@@ -107,6 +107,25 @@ export interface NativeCommandMap {
     };
     readonly result: null;
   };
+  readonly read_app_settings: {
+    readonly args: undefined;
+    readonly result: string | null;
+  };
+  readonly write_app_settings: {
+    readonly args: { readonly contents: string };
+    readonly result: null;
+  };
+  readonly read_workspace_settings: {
+    readonly args: { readonly rootPath: string };
+    readonly result: string | null;
+  };
+  readonly write_workspace_settings: {
+    readonly args: {
+      readonly rootPath: string;
+      readonly contents: string;
+    };
+    readonly result: null;
+  };
 }
 
 export type NativeCommandName = keyof NativeCommandMap;

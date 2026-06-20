@@ -51,3 +51,4 @@ export const designTokenNames: DesignTokenNames = {
 export * from "./frontmatter";
 export * from "./markdown";
 export * from "./note-model";
+export * from "./settings";

@@ -1,6 +1,15 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import {
+  CURRENT_SETTINGS_VERSION,
+  DEFAULT_APP_SETTINGS,
+  type AppSettings
+} from "@thinkbrain/core";
 
-import { type ActiveDocumentState, useAppStore } from "./appStore";
+import {
+  type ActiveDocumentState,
+  type SettingsState,
+  useAppStore
+} from "./appStore";
 
 const idleActiveDocument: ActiveDocumentState = {
   status: "idle",
@@ -11,13 +20,22 @@ const idleActiveDocument: ActiveDocumentState = {
   error: null
 };
 
+const idleSettings: SettingsState = {
+  status: "idle",
+  settings: DEFAULT_APP_SETTINGS,
+  draft: DEFAULT_APP_SETTINGS,
+  diagnostics: [],
+  error: null
+};
+
 describe("app store scaffold", () => {
   beforeEach(() => {
     useAppStore.setState({
       bootChecks: 0,
       nativeShell: { status: "idle" },
       workspace: { status: "idle" },
-      activeDocument: idleActiveDocument
+      activeDocument: idleActiveDocument,
+      settings: idleSettings
     });
   });
 
@@ -236,6 +254,10 @@ describe("indexing and search state", () => {
     useAppStore.getState().setActivePanel("search");
 
     expect(useAppStore.getState().activePanel).toBe("search");
+
+    useAppStore.getState().setActivePanel("settings");
+
+    expect(useAppStore.getState().activePanel).toBe("settings");
   });
 
   it("tracks indexing progress through completion", () => {
@@ -313,5 +335,85 @@ describe("indexing and search state", () => {
     ]);
 
     expect(useAppStore.getState().search.results).toEqual([]);
+  });
+});
+
+describe("settings state", () => {
+  beforeEach(() => {
+    useAppStore.setState({
+      settings: idleSettings
+    });
+  });
+
+  it("loads settings into the saved and draft snapshots", async () => {
+    const loadedSettings: AppSettings = {
+      version: CURRENT_SETTINGS_VERSION,
+      theme: "dark",
+      editor: {
+        fontSize: 18,
+        lineWrapping: false
+      }
+    };
+
+    await useAppStore.getState().loadSettings(async () => ({
+      settings: loadedSettings,
+      diagnostics: [{ code: "settings.test", message: "test", severity: "warning" }]
+    }));
+
+    expect(useAppStore.getState().settings).toEqual({
+      status: "ready",
+      settings: loadedSettings,
+      draft: loadedSettings,
+      diagnostics: [{ code: "settings.test", message: "test", severity: "warning" }],
+      error: null
+    });
+  });
+
+  it("saves the current settings draft", async () => {
+    const draft: AppSettings = {
+      version: CURRENT_SETTINGS_VERSION,
+      theme: "light",
+      editor: {
+        fontSize: 20,
+        lineWrapping: true
+      }
+    };
+    let savedSettings: AppSettings | null = null;
+
+    useAppStore.getState().updateSettingsDraft(draft);
+    await useAppStore.getState().saveSettings(async (settings) => {
+      savedSettings = settings;
+
+      return {
+        settings,
+        diagnostics: []
+      };
+    });
+
+    expect(savedSettings).toEqual(draft);
+    expect(useAppStore.getState().settings).toEqual({
+      status: "ready",
+      settings: draft,
+      draft,
+      diagnostics: [],
+      error: null
+    });
+  });
+
+  it("surfaces settings load failures", async () => {
+    await useAppStore.getState().loadSettings(async () => {
+      throw {
+        code: "settings.read_failed",
+        message: "Failed to read the settings file."
+      };
+    });
+
+    expect(useAppStore.getState().settings).toMatchObject({
+      status: "error",
+      error: {
+        code: "settings.read_failed",
+        message: "Failed to read the settings file."
+      }
+    });
   });
 });
