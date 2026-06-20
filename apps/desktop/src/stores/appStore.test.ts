@@ -6,7 +6,8 @@ describe("app store scaffold", () => {
   beforeEach(() => {
     useAppStore.setState({
       bootChecks: 0,
-      nativeShell: { status: "idle" }
+      nativeShell: { status: "idle" },
+      workspace: { status: "idle" }
     });
   });
 
@@ -50,6 +51,66 @@ describe("app store scaffold", () => {
       error: {
         code: "desktop.native_bridge_error",
         message: "bridge unavailable"
+      }
+    });
+  });
+
+  it("tracks a ready workspace and file list updates", () => {
+    useAppStore.getState().setWorkspaceReady(
+      {
+        rootPath: "C:/notes",
+        name: "notes"
+      },
+      [
+        {
+          relativePath: "Inbox.md",
+          fileName: "Inbox.md",
+          parentPath: "",
+          byteSize: 1,
+          updatedAt: null
+        }
+      ]
+    );
+
+    useAppStore.getState().setWorkspaceFiles([
+      {
+        relativePath: "Daily.md",
+        fileName: "Daily.md",
+        parentPath: "",
+        byteSize: 2,
+        updatedAt: "123"
+      }
+    ]);
+
+    expect(useAppStore.getState().workspace).toEqual({
+      status: "ready",
+      workspace: {
+        rootPath: "C:/notes",
+        name: "notes"
+      },
+      files: [
+        {
+          relativePath: "Daily.md",
+          fileName: "Daily.md",
+          parentPath: "",
+          byteSize: 2,
+          updatedAt: "123"
+        }
+      ]
+    });
+  });
+
+  it("tracks workspace errors", () => {
+    useAppStore.getState().setWorkspaceError({
+      code: "workspace.open_failed",
+      message: "Failed to open the workspace folder."
+    });
+
+    expect(useAppStore.getState().workspace).toEqual({
+      status: "error",
+      error: {
+        code: "workspace.open_failed",
+        message: "Failed to open the workspace folder."
       }
     });
   });

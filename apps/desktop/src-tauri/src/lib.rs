@@ -70,7 +70,7 @@ pub struct WorkspaceSnapshot {
 }
 
 #[tauri::command]
-pub fn desktop_shell_status() -> Result<ShellStatus, NativeError> {
+fn desktop_shell_status() -> Result<ShellStatus, NativeError> {
     Ok(ShellStatus {
         app_name: "Thinkbrain Notes".to_string(),
         shell_version: env!("CARGO_PKG_VERSION").to_string(),
@@ -79,7 +79,7 @@ pub fn desktop_shell_status() -> Result<ShellStatus, NativeError> {
 }
 
 #[tauri::command]
-pub fn open_workspace(root_path: String) -> Result<WorkspaceSnapshot, NativeError> {
+fn open_workspace(root_path: String) -> Result<WorkspaceSnapshot, NativeError> {
     let root = resolve_workspace_root(&root_path)?;
 
     Ok(WorkspaceSnapshot {
@@ -89,14 +89,14 @@ pub fn open_workspace(root_path: String) -> Result<WorkspaceSnapshot, NativeErro
 }
 
 #[tauri::command]
-pub fn list_markdown_files(root_path: String) -> Result<Vec<MarkdownFileEntry>, NativeError> {
+fn list_markdown_files(root_path: String) -> Result<Vec<MarkdownFileEntry>, NativeError> {
     let root = resolve_workspace_root(&root_path)?;
 
     list_markdown_file_entries(&root)
 }
 
 #[tauri::command]
-pub fn read_markdown_file(
+fn read_markdown_file(
     root_path: String,
     relative_path: String,
 ) -> Result<MarkdownFileContents, NativeError> {
@@ -117,7 +117,7 @@ pub fn read_markdown_file(
 }
 
 #[tauri::command]
-pub fn write_markdown_file(
+fn write_markdown_file(
     root_path: String,
     relative_path: String,
     contents: String,
@@ -144,7 +144,7 @@ pub fn write_markdown_file(
 }
 
 #[tauri::command]
-pub fn create_markdown_file(
+fn create_markdown_file(
     root_path: String,
     relative_path: String,
     contents: Option<String>,
@@ -181,7 +181,7 @@ pub fn create_markdown_file(
 }
 
 #[tauri::command]
-pub fn rename_markdown_file(
+fn rename_markdown_file(
     root_path: String,
     relative_path: String,
     new_relative_path: String,
@@ -226,7 +226,7 @@ pub fn rename_markdown_file(
 }
 
 #[tauri::command]
-pub fn delete_markdown_file(root_path: String, relative_path: String) -> Result<(), NativeError> {
+fn delete_markdown_file(root_path: String, relative_path: String) -> Result<(), NativeError> {
     let root = resolve_workspace_root(&root_path)?;
     let file_path = resolve_markdown_file_path(&root, &relative_path)?;
 
@@ -459,9 +459,7 @@ fn is_markdown_path(path: &Path) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        desktop_shell_status, is_markdown_path, normalize_relative_path, NativeError,
-    };
+    use super::{desktop_shell_status, is_markdown_path, normalize_relative_path, NativeError};
     use std::path::Path;
 
     #[test]
