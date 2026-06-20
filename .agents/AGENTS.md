@@ -28,6 +28,22 @@ Build an open, privacy-first knowledge workspace inspired by Obsidian and VS Cod
 
 Before implementing any feature, ensure you have read the detailed architectural blueprints in the `plans/` directory.
 
+## Project Status
+
+- The current state of the project lives in `plans/STATUS.md`. **Read it first** to know what is done, what is in progress, and what is next.
+- `plans/STATUS.md` is a living snapshot and **must never exceed 100 lines.** Keep it current after meaningful changes, and trim stale detail instead of appending — history belongs in git, not in the status file.
+- Open design decisions, deferred follow-ups, and non-blocking debt go in `plans/open-items.md` (this file may grow). Log new items there as you discover them, and link them from `STATUS.md` only while they are active.
+
+## Subagent Strategy
+
+Delegate substantial work to subagents. **Using subagents preserves the main chat's context**, so prefer offloading reading-heavy, exploratory, or self-contained implementation work rather than doing it inline.
+
+When creating a subagent, **pick the model based on the task**:
+
+- **Composer 2.5** — incredibly fast and efficient, but **only for basic tasks** (small edits, mechanical refactors, simple lookups, formatting).
+- **GPT 5.5 and Opus** — **strongly preferred for planning and implementation.** Use these as the default for real feature work.
+- **Fable 5** — expensive; reserve **only for the deepest reviews and planning** where its depth is worth the cost.
+
 ## Styling Conventions
 
 - **No inline styles.** Do not use `style={{ ... }}` in React components or `<style>` tags embedded in JSX. Inline CSS is hard to maintain and impossible to theme consistently.

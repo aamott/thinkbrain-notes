@@ -51,6 +51,7 @@ body {
 
 .title-bar h1,
 .workspace-panel h2,
+.markdown-editor__title-block h2,
 .editor-placeholder h2 {
   color: var(--tn-color-foreground);
   margin: 0;
@@ -139,6 +140,9 @@ body {
 .workspace-meta span,
 .workspace-empty,
 .workspace-error span,
+.markdown-editor__title-block p,
+.markdown-editor__status,
+.markdown-editor__loading,
 .editor-placeholder p,
 .right-panel,
 .status-bar {
@@ -178,15 +182,27 @@ body {
 
 .file-list__name {
   background: transparent;
-  border: 0;
+  border: 1px solid transparent;
+  border-radius: 0.5rem;
   color: var(--tn-color-foreground);
-  cursor: default;
+  cursor: pointer;
   display: grid;
   font: inherit;
   gap: 0.25rem;
   min-width: 0;
-  padding: 0;
+  padding: 0.25rem 0.35rem;
   text-align: left;
+}
+
+.file-list__name:hover,
+.file-list__name[aria-current="page"] {
+  background: color-mix(in srgb, var(--tn-color-accent) 14%, transparent);
+  border-color: color-mix(in srgb, var(--tn-color-accent) 48%, transparent);
+}
+
+.file-list__name:disabled {
+  cursor: progress;
+  opacity: 0.7;
 }
 
 .file-list__name span,
@@ -210,17 +226,227 @@ body {
   display: grid;
   grid-area: editor;
   min-width: 0;
-  overflow: auto;
-  padding: 1.5rem;
-  place-items: center;
+  overflow: hidden;
+  padding: 0;
+  place-items: stretch;
 }
 
 .editor-placeholder {
   border: 1px dashed var(--tn-color-border);
   border-radius: 1.5rem;
+  margin: auto;
   max-width: 42rem;
   padding: 2rem;
   text-align: center;
+}
+
+.markdown-editor {
+  background: color-mix(in srgb, var(--tn-color-background) 94%, var(--tn-color-surface));
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+}
+
+.markdown-editor__toolbar {
+  align-items: flex-start;
+  border-bottom: 1px solid var(--tn-color-border);
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  padding: 1rem 1.25rem;
+}
+
+.markdown-editor__title-block {
+  min-width: 0;
+}
+
+.markdown-editor__title-block h2 {
+  font-size: 1.1rem;
+}
+
+.markdown-editor__title-block p:last-child {
+  margin: 0.35rem 0 0;
+  overflow-wrap: anywhere;
+}
+
+.markdown-editor__actions {
+  align-items: center;
+  display: flex;
+  flex-shrink: 0;
+  gap: 0.75rem;
+}
+
+.markdown-editor__actions .tn-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.markdown-editor__status {
+  font-size: 0.85rem;
+}
+
+.markdown-editor__error {
+  border-bottom: 1px solid color-mix(in srgb, #ff8d8d 55%, var(--tn-color-border));
+  color: #ffc6c6;
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.75rem 1.25rem;
+}
+
+.markdown-editor__loading {
+  display: grid;
+  min-height: 0;
+  place-items: center;
+}
+
+.markdown-editor__surface {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.markdown-editor__surface .cm-editor {
+  background: transparent;
+  color: var(--tn-color-foreground);
+  height: 100%;
+}
+
+.markdown-editor__surface .cm-focused {
+  outline: none;
+}
+
+.markdown-editor__surface .cm-scroller {
+  font-family:
+    "Cascadia Code", "SFMono-Regular", Consolas, "Liberation Mono", Menlo,
+    monospace;
+  font-size: 0.95rem;
+  line-height: 1.65;
+}
+
+.markdown-editor__surface .cm-content {
+  caret-color: var(--tn-color-accent);
+  padding: 1.25rem;
+}
+
+.markdown-editor__surface .cm-gutters {
+  background: color-mix(in srgb, var(--tn-color-surface) 65%, transparent);
+  border-right: 1px solid var(--tn-color-border);
+  color: var(--tn-color-muted);
+}
+
+.markdown-editor__surface .cm-activeLine,
+.markdown-editor__surface .cm-activeLineGutter {
+  background: color-mix(in srgb, var(--tn-color-accent) 10%, transparent);
+}
+
+.search-panel {
+  background: color-mix(in srgb, var(--tn-color-surface) 82%, transparent);
+  border-right: 1px solid var(--tn-color-border);
+  display: grid;
+  gap: 0.75rem;
+  grid-area: sidebar;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  min-width: 0;
+  overflow: hidden;
+  padding: 1rem;
+}
+
+.search-panel__header {
+  min-width: 0;
+}
+
+.search-panel__input {
+  background: color-mix(in srgb, var(--tn-color-background) 70%, transparent);
+  border: 1px solid var(--tn-color-border);
+  border-radius: var(--tn-radius-medium);
+  color: var(--tn-color-foreground);
+  font: inherit;
+  padding: 0.55rem 0.7rem;
+  width: 100%;
+}
+
+.search-panel__input:focus-visible {
+  border-color: color-mix(in srgb, var(--tn-color-accent) 60%, transparent);
+  outline: 2px solid color-mix(in srgb, var(--tn-color-accent) 45%, transparent);
+  outline-offset: 1px;
+}
+
+.search-panel__input:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.search-panel__indexing {
+  color: var(--tn-color-muted);
+  font-size: 0.8rem;
+  margin: 0;
+}
+
+.search-panel__indexing--error {
+  color: #ffc6c6;
+}
+
+.search-empty {
+  color: var(--tn-color-muted);
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.search-results {
+  display: grid;
+  gap: 0.5rem;
+  list-style: none;
+  margin: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 0;
+}
+
+.search-results__hit {
+  background: transparent;
+  border: 1px solid var(--tn-color-border);
+  border-radius: var(--tn-radius-medium);
+  color: var(--tn-color-foreground);
+  cursor: pointer;
+  display: grid;
+  font: inherit;
+  gap: 0.25rem;
+  padding: 0.55rem 0.65rem;
+  text-align: left;
+  width: 100%;
+}
+
+.search-results__hit:hover,
+.search-results__hit:focus-visible,
+.search-results__hit[aria-current="page"] {
+  background: color-mix(in srgb, var(--tn-color-accent) 14%, transparent);
+  border-color: color-mix(in srgb, var(--tn-color-accent) 48%, transparent);
+  outline: none;
+}
+
+.search-results__name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-results__path {
+  color: var(--tn-color-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-results__snippet {
+  color: var(--tn-color-muted);
+  display: -webkit-box;
+  font-size: 0.85rem;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .right-panel {

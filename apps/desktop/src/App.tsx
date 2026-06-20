@@ -3,19 +3,27 @@ import { Button } from "@thinkbrain/ui";
 import "@thinkbrain/ui/styles.css";
 import { useEffect } from "react";
 
+import { MarkdownEditor } from "./editor/MarkdownEditor";
 import { getDesktopShellStatus, normalizeNativeError } from "./native/commands";
+import { SearchPanel } from "./search/SearchPanel";
+import { useWorkspaceIndexer } from "./search/useWorkspaceIndexer";
 import { useAppStore } from "./stores/appStore";
 import { WorkspaceExplorer } from "./workspace/WorkspaceExplorer";
 
 export function App() {
   const bootChecks = useAppStore((state) => state.bootChecks);
   const nativeShell = useAppStore((state) => state.nativeShell);
+  const activeDocument = useAppStore((state) => state.activeDocument);
+  const activePanel = useAppStore((state) => state.activePanel);
+  const setActivePanel = useAppStore((state) => state.setActivePanel);
   const recordBootCheck = useAppStore((state) => state.recordBootCheck);
   const setNativeShellChecking = useAppStore(
     (state) => state.setNativeShellChecking
   );
   const setNativeShellReady = useAppStore((state) => state.setNativeShellReady);
   const setNativeShellError = useAppStore((state) => state.setNativeShellError);
+
+  useWorkspaceIndexer();
 
   useEffect(() => {
     let cancelled = false;
@@ -52,10 +60,18 @@ export function App() {
       </header>
 
       <nav className="activity-bar" aria-label="Primary navigation">
-        <button aria-current="page" type="button">
+        <button
+          aria-current={activePanel === "explorer" ? "page" : undefined}
+          onClick={() => setActivePanel("explorer")}
+          type="button"
+        >
           Explorer
         </button>
-        <button disabled type="button">
+        <button
+          aria-current={activePanel === "search" ? "page" : undefined}
+          onClick={() => setActivePanel("search")}
+          type="button"
+        >
           Search
         </button>
         <button disabled type="button">
@@ -63,18 +79,18 @@ export function App() {
         </button>
       </nav>
 
-      <WorkspaceExplorer />
+      {activePanel === "search" ? <SearchPanel /> : <WorkspaceExplorer />}
 
-      <section className="editor-area" aria-labelledby="editor-placeholder-title">
-        <div className="editor-placeholder">
-          <p className="app-eyebrow">Editor area</p>
-          <h2 id="editor-placeholder-title">No note selected</h2>
-          <p>
-            File reading and writing services are available for future editor
-            work. Full editor behavior is intentionally left for the editor work
-            item.
-          </p>
-        </div>
+      <section className="editor-area" aria-labelledby="editor-area-title">
+        {activeDocument.file ? (
+          <MarkdownEditor />
+        ) : (
+          <div className="editor-placeholder">
+            <p className="app-eyebrow">Editor area</p>
+            <h2 id="editor-area-title">No note selected</h2>
+            <p>Open a Markdown file from the explorer to start editing.</p>
+          </div>
+        )}
       </section>
 
       <aside className="right-panel" aria-label="Deferred right panel">

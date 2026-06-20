@@ -81,6 +81,32 @@ export interface NativeCommandMap {
     };
     readonly result: null;
   };
+  readonly index_documents: {
+    readonly args: {
+      readonly rootPath: string;
+      readonly documents: readonly NativeDocumentInput[];
+    };
+    readonly result: number;
+  };
+  readonly search_index: {
+    readonly args: {
+      readonly rootPath: string;
+      readonly query: string;
+      readonly limit?: number;
+    };
+    readonly result: readonly NativeSearchHit[];
+  };
+  readonly clear_index: {
+    readonly args: { readonly rootPath: string };
+    readonly result: null;
+  };
+  readonly remove_index_document: {
+    readonly args: {
+      readonly rootPath: string;
+      readonly path: string;
+    };
+    readonly result: null;
+  };
 }
 
 export type NativeCommandName = keyof NativeCommandMap;
@@ -108,6 +134,25 @@ export interface NativeMarkdownFileContents {
 export interface NativeWorkspaceSnapshot {
   readonly workspace: NativeWorkspaceDescriptor;
   readonly files: readonly NativeMarkdownFileEntry[];
+}
+
+// Sent to `index_documents`. Field names are camelCase here and mapped to the
+// Rust struct's snake_case fields by serde's `rename_all = "camelCase"`.
+export interface NativeDocumentInput {
+  readonly path: string;
+  readonly fileName: string;
+  readonly title?: string;
+  readonly tags: readonly string[];
+  readonly aliases: readonly string[];
+  readonly body: string;
+}
+
+export interface NativeSearchHit {
+  readonly path: string;
+  readonly file_name: string;
+  readonly title?: string;
+  readonly snippet: string;
+  readonly score: number;
 }
 
 export async function invokeNativeCommand<TCommand extends NativeCommandName>(

@@ -29,7 +29,15 @@ export default defineConfig({
   server: {
     host: "127.0.0.1",
     port: 1420,
-    strictPort: true
+    strictPort: true,
+    watch: {
+      // Tauri compiles Rust into src-tauri/target. Letting Vite's file watcher
+      // descend into that tree makes it try to watch build artifacts (e.g. the
+      // libsqlite3-sys *.o files) while cargo is still writing them, which throws
+      // EBUSY on Windows and crashes the dev server. Cargo has its own watcher
+      // for the Rust side, so Vite should ignore src-tauri entirely.
+      ignored: ["**/src-tauri/**"]
+    }
   },
   test: {
     environment: "node",

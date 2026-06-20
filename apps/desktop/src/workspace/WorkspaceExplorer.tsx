@@ -3,6 +3,7 @@ import { Button } from "@thinkbrain/ui";
 import { useState } from "react";
 
 import { normalizeNativeError } from "../native/commands";
+import { indexDocument, removeIndexedDocument } from "../search/searchService";
 import { useAppStore } from "../stores/appStore";
 import {
   createMarkdownFile,
@@ -10,9 +11,24 @@ import {
   listMarkdownFiles,
   normalizeMarkdownInputPath,
   openWorkspace,
+  readMarkdownFile,
   renameMarkdownFile,
   selectWorkspaceFolder
 } from "./workspaceService";
+
+/**
+ * Runs a best-effort index update without disrupting the file operation.
+ *
+ * Index drift is recoverable (the cache is rebuildable), so failures are
+ * surfaced through the non-blocking index state rather than the workspace error.
+ */
+async function syncIndex(operation: () => Promise<void>): Promise<void> {
+  try {
+    await operation();
+  } catch (error) {
+    useAppStore.getState().setIndexingError(normalizeNativeError(error));
+  }
+}
 
 export function WorkspaceExplorer() {
   const workspace = useAppStore((state) => state.workspace);
@@ -20,6 +36,13 @@ export function WorkspaceExplorer() {
   const setWorkspaceReady = useAppStore((state) => state.setWorkspaceReady);
   const setWorkspaceError = useAppStore((state) => state.setWorkspaceError);
   const setWorkspaceFiles = useAppStore((state) => state.setWorkspaceFiles);
+  const openActiveDocument = useAppStore((state) => state.openActiveDocument);
+  const setActiveDocumentLoaded = useAppStore(
+    (state) => state.setActiveDocumentLoaded
+  );
+  const setActiveDocumentError = useAppStore(
+    (state) => state.setActiveDocumentError
+  );
   const [busyPath, setBusyPath] = useState<string | null>(null);
 
   async function handleOpenWorkspace() {
@@ -64,10 +87,47 @@ export function WorkspaceExplorer() {
 
     try {
       setBusyPath(relativePath);
-      await createMarkdownFile(workspace.workspace.rootPath, relativePath);
+      const created = await createMarkdownFile(
+        workspace.workspace.rootPath,
+        relativePath
+      );
       setWorkspaceFiles(await listMarkdownFiles(workspace.workspace.rootPath));
+      await syncIndex(() =>
+        indexDocument(workspace.workspace.rootPath, created, "")
+      );
     } catch (error) {
       setWorkspaceError(normalizeNativeError(error));
+    } finally {
+      setBusyPath(null);
+    }
+  }
+
+  async function handleOpenNote(file: MarkdownFileEntry) {
+    if (workspace.status !== "ready") {
+      return;
+    }
+
+    const documentFile = {
+      rootPath: workspace.workspace.rootPath,
+      relativePath: file.relativePath,
+      fileName: file.fileName
+    };
+
+    try {
+      setBusyPath(file.relativePath);
+      openActiveDocument(documentFile);
+      const loadedFile = await readMarkdownFile(
+        documentFile.rootPath,
+        documentFile.relativePath
+      );
+
+      if (isActiveDocument(documentFile)) {
+        setActiveDocumentLoaded(loadedFile.contents);
+      }
+    } catch (error) {
+      if (isActiveDocument(documentFile)) {
+        setActiveDocumentError(normalizeNativeError(error));
+      }
     } finally {
       setBusyPath(null);
     }
@@ -87,12 +147,18 @@ export function WorkspaceExplorer() {
 
     try {
       setBusyPath(file.relativePath);
-      await renameMarkdownFile(
-        workspace.workspace.rootPath,
+      const rootPath = workspace.workspace.rootPath;
+      const renamed = await renameMarkdownFile(
+        rootPath,
         file.relativePath,
         newRelativePath
       );
-      setWorkspaceFiles(await listMarkdownFiles(workspace.workspace.rootPath));
+      setWorkspaceFiles(await listMarkdownFiles(rootPath));
+      await syncIndex(async () => {
+        await removeIndexedDocument(rootPath, file.relativePath);
+        const loaded = await readMarkdownFile(rootPath, renamed.relativePath);
+        await indexDocument(rootPath, renamed, loaded.contents);
+      });
     } catch (error) {
       setWorkspaceError(normalizeNativeError(error));
     } finally {
@@ -119,6 +185,9 @@ export function WorkspaceExplorer() {
           (candidate) => candidate.relativePath !== file.relativePath
         )
       );
+      await syncIndex(() =>
+        removeIndexedDocument(workspace.workspace.rootPath, file.relativePath)
+      );
     } catch (error) {
       setWorkspaceError(normalizeNativeError(error));
     } finally {
@@ -141,6 +210,7 @@ export function WorkspaceExplorer() {
         busyPath={busyPath}
         onCreateNote={handleCreateNote}
         onDeleteNote={handleDeleteNote}
+        onOpenNote={handleOpenNote}
         onRefresh={handleRefresh}
         onRenameNote={handleRenameNote}
       />
@@ -152,16 +222,19 @@ function WorkspacePanelBody({
   busyPath,
   onCreateNote,
   onDeleteNote,
+  onOpenNote,
   onRefresh,
   onRenameNote
 }: {
   readonly busyPath: string | null;
   readonly onCreateNote: () => void;
   readonly onDeleteNote: (file: MarkdownFileEntry) => void;
+  readonly onOpenNote: (file: MarkdownFileEntry) => void;
   readonly onRefresh: () => void;
   readonly onRenameNote: (file: MarkdownFileEntry) => void;
 }) {
   const workspace = useAppStore((state) => state.workspace);
+  const activeDocument = useAppStore((state) => state.activeDocument);
 
   if (workspace.status === "idle") {
     return (
@@ -202,7 +275,18 @@ function WorkspacePanelBody({
         <ul className="file-list" aria-label="Markdown files">
           {workspace.files.map((file) => (
             <li key={file.relativePath} className="file-list__item">
-              <button className="file-list__name" type="button">
+              <button
+                aria-current={
+                  activeDocument.file?.rootPath === workspace.workspace.rootPath &&
+                  activeDocument.file.relativePath === file.relativePath
+                    ? "page"
+                    : undefined
+                }
+                className="file-list__name"
+                disabled={busyPath === file.relativePath}
+                onClick={() => onOpenNote(file)}
+                type="button"
+              >
                 <span>{file.fileName}</span>
                 <small>{file.parentPath || "."}</small>
               </button>
@@ -227,5 +311,17 @@ function WorkspacePanelBody({
         </ul>
       )}
     </>
+  );
+}
+
+function isActiveDocument(file: {
+  readonly rootPath: string;
+  readonly relativePath: string;
+}): boolean {
+  const activeFile = useAppStore.getState().activeDocument.file;
+
+  return (
+    activeFile?.rootPath === file.rootPath &&
+    activeFile.relativePath === file.relativePath
   );
 }
