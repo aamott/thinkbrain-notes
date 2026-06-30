@@ -30,9 +30,10 @@ Before implementing any feature, ensure you have read the detailed architectural
 
 ## Project Status
 
-- The current state of the project lives in `plans/STATUS.md`. **Read it first** to know what is done, what is in progress, and what is next.
-- `plans/STATUS.md` is a living snapshot and **must never exceed 100 lines.** Keep it current after meaningful changes, and trim stale detail instead of appending — history belongs in git, not in the status file.
-- Open design decisions, deferred follow-ups, and non-blocking debt go in `plans/open-items.md` (this file may grow). Log new items there as you discover them, and link them from `STATUS.md` only while they are active.
+Three core documents guide the app: 
+- `plans/STATUS.md` - Current state of the project. Keep it current after meaningful changes, and trim stale detail instead of appending — history belongs in git, not in the status file. **Must never exceed 300 lines.** Always update the current work items to "in progress" until they are complete.
+- `plans/open-items.md` - Open design decisions and deferred follow-ups, non-blocking debt. If a new item is discovered, log it there and link it from `STATUS.md` only while it is active.
+- `plans/xxx-<plan_name>` - Lightweight architectural blueprints. ALWAYS read before any major work. Helps keep everyone aligned on the overall architecture. Note inconsistencies in STATUS.md and to the user.
 
 ## Subagent Strategy
 
@@ -50,3 +51,14 @@ When creating a subagent, **pick the model based on the task**:
 - **Preferred approach:** use CSS Modules (`*.module.css`) alongside each component, or a co-located CSS section that is imported at the top of the component file. Vite supports CSS Modules out of the box, so this is the idiomatic equivalent of component-scoped styles in this React project.
 - **Shared tokens and themes** must be expressed as CSS variables in the design system (`packages/ui`) rather than hard-coded values in component styles.
 - For mobile/React Native (Phase 2), use `StyleSheet` from React Native as the equivalent of CSS Modules for component-scoped styles.
+
+## Development Standards
+
+### Linting
+- Run `pnpm lint` often: after non-trivial edits, before commits, and when switching files. Don't batch to the end.
+- Avoid disabling rules. Justify when needed. 
+- No `any` without an inline eslint-disable + reason; prefer `unknown`/generics.
+- Remove unused imports/vars; don't `_`-prefix to silence (except intentional adapter API boundaries).
+- No Prettier — ESLint owns formatting. `pnpm lint --fix` is fine but review the diff; never commit blind fixes to unrelated files.
+- Lint issues in untouched code → log in `plans/open-items.md`, don't fix inline in unrelated diffs.
+- `eslint.config.js` changes are architectural — flag to the user first.
