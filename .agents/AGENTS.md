@@ -59,6 +59,5 @@ When creating a subagent, **pick the model based on the task**:
 - Avoid disabling rules. Justify when needed. 
 - No `any` without an inline eslint-disable + reason; prefer `unknown`/generics.
 - Remove unused imports/vars; don't `_`-prefix to silence (except intentional adapter API boundaries).
-- No Prettier — ESLint owns formatting. `pnpm lint --fix` is fine but review the diff; never commit blind fixes to unrelated files.
 - Lint issues in untouched code → log in `plans/open-items.md`, don't fix inline in unrelated diffs.
 - `eslint.config.js` changes are architectural — flag to the user first.

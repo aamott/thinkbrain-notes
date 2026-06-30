@@ -1221,20 +1221,20 @@
     }
 
     // ---- Left panel switching (files / search) ----
-    // In overlay mode (<md) clicking the already-active left icon pops it
-    // back in (hides the overlay, revealing the editor). In docked mode
-    // (>=md) the left panel is persistent, so it just switches between
-    // files and search without a dismiss path.
+    // Clicking the already-active left icon toggles (minimizes) the
+    // sidebar in ALL modes — docked or overlay — matching VS Code.
+    // Clicking a different left icon switches to it.
     function switchLeftPanel(panel) {
         const target = 'left-' + panel;
         const isOverlay = modeForWidth(window.innerWidth) === 'sm';
         const isActive = !document.getElementById(target).classList.contains('hidden');
-        if (isOverlay && isActive) {
-            // Pop in: dismiss the overlay, no left panel active.
+        if (isActive) {
+            // Toggle off: minimize the sidebar, no left panel active.
             ['left-files', 'left-search'].forEach(hidePanel);
             setActiveAct(null);
             return;
         }
+        // Show the target, hide the other left panel.
         ['left-files', 'left-search'].forEach(hidePanel);
         showPanel(target);
         setActiveAct(panel);
@@ -1246,16 +1246,23 @@
     function toggleRightChat() {
         const chat = document.getElementById('right-chat');
         const isOpen = !chat.classList.contains('hidden');
+        const isOverlay = modeForWidth(window.innerWidth) === 'sm';
         if (isOpen) {
             hidePanel('right-chat');
-            setActiveAct('files');
+            // Restore active state: prefer whichever left panel is visible.
+            // If none is visible (user minimized it), leave active null.
+            const filesVisible = !document.getElementById('left-files').classList.contains('hidden');
+            const searchVisible = !document.getElementById('left-search').classList.contains('hidden');
+            if (filesVisible) setActiveAct('files');
+            else if (searchVisible) setActiveAct('search');
+            else setActiveAct(null);
             // In overlay mode, restore a left panel so the view isn't empty.
-            if (modeForWidth(window.innerWidth) === 'sm') showPanel('left-files');
+            if (isOverlay) showPanel('left-files');
         } else {
             showPanel('right-chat');
             setActiveAct('chat');
             // In overlay mode, hide left panels (one at a time).
-            if (modeForWidth(window.innerWidth) === 'sm') {
+            if (isOverlay) {
                 ['left-files', 'left-search'].forEach(hidePanel);
             }
         }
