@@ -1,0 +1,35 @@
+# Graph View
+
+## Goal
+
+Render a visual network of the whole vault: notes are nodes, wiki-link
+connections are edges. A force-directed layout positions nodes; users can
+pan, zoom, and click a node to open that note. The graph is derived live from
+the wiki-link index — never stored.
+
+Depends on link target resolution (`pending-link_target_resolution`).
+
+## Acceptance Criteria
+
+- [ ] Graph view renders all notes as nodes and resolved wiki links as directed
+      edges.
+- [ ] Force-directed layout is stable and performant for vaults up to a few
+      thousand notes (virtualize or sample beyond that).
+- [ ] Pan, zoom, and drag-to-rearrange (local layout only, not persisted)
+      work smoothly.
+- [ ] Clicking a node opens the note in the editor.
+- [ ] Node appearance reflects note status (e.g. `status` frontmatter field)
+      via theme tokens, not hardcoded colors.
+- [ ] Graph recomputes when the index updates (file save / reindex).
+- [ ] Graph assembly (nodes/edges) is in `packages/core` with no rendering
+      dependency; rendering is desktop-only in `apps/desktop`.
+- [ ] No inline styles; CSS Modules for any non-canvas UI chrome.
+- [ ] Vitest covers graph assembly in `packages/core`.
+
+## References
+
+- `packages/core/src/note-model.ts` — `WikiLink`, `NoteMetadata`
+- `packages/core/src/markdown.ts` — `extractWikiLinks`
+- `apps/desktop/src/search/searchService.ts` — index access pattern
+- `plans/graph.md` — this epic
+- `plans/graph/pending-link_target_resolution-low-med.md` — prerequisite
