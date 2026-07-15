@@ -21,6 +21,5 @@ deferred further — note the decision in the epic Status section.
 ## References
 
 - `plans/git-integration.md` — desktop Git epic (command surface reference)
-- `plans/archive/old-structure/deferred/mobile.md` — notes isomorphic-git option
 - `plans/technical-decisions.md` — Git section
 - `plans/mobile.md` — Platform adapter contract

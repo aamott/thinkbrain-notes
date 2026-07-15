@@ -24,7 +24,6 @@ the static registry.
 
 ## References
 
-- `plans/archive/old-structure/architecture/extensions.md` — extension capabilities list
 - `plans/technical-decisions.md` — Extensions section
 - `packages/core` — API interfaces
 - `apps/desktop/src` — adapter bindings

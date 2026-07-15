@@ -10,7 +10,7 @@ Today the index rebuilds fully on workspace open and updates only on in-app
 create/save/rename/delete. A file watcher closes that gap.
 
 Tracks open item OI-003. Matches the deferred file-watching plan in
-`plans/archive/old-structure/architecture/indexing-search.md`.
+`plans/indexing-search.md`.
 
 ## Acceptance Criteria
 
@@ -31,5 +31,4 @@ Tracks open item OI-003. Matches the deferred file-watching plan in
 - `apps/desktop/src-tauri/src/lib.rs` — native index commands, `open_index_connection`
 - `apps/desktop/src/search/searchService.ts` — `indexWorkspace`, `indexDocument`, `removeIndexedDocument`
 - `apps/desktop/src/search/useWorkspaceIndexer.ts` — open-time rebuild hook
-- `plans/archive/old-structure/architecture/indexing-search.md` — file-watching requirements
-- `plans/archive/old-structure/open-items.md` — OI-003
+- `plans/indexing-search.md` — file-watching requirements

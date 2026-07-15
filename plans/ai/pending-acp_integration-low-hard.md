@@ -29,6 +29,5 @@ spec before implementing protocol behavior.
 - `.agents/skills/acp/SKILL.md` — ACP responsibilities, host/agent boundary
 - ACP spec: https://github.com/zed-industries/agent-client-protocol
 - `plans/ai.md` — architecture decisions (ACP is the integration mechanism)
-- `plans/archive/old-structure/deferred/ai.md` — ACP integration notes
 - Prerequisite: `extensions` epic active; provider abstraction story
   recommended first.

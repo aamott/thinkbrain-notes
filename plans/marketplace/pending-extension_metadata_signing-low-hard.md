@@ -25,5 +25,3 @@ direct installs.
 
 - `plans/marketplace.md`
 - Prerequisite: `plans/extensions.md` (manifest format, capability sandbox)
-- Archived context: `plans/archive/old-structure/architecture/extensions.md`
-  (security principle: no unrestricted filesystem access)

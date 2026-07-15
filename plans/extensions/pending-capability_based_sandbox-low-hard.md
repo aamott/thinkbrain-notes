@@ -24,5 +24,4 @@ URL/file story is considered done.
 
 - `plans/technical-decisions.md` — Extensions section (V1 strict sandbox)
 - `.agents/AGENTS.md` — extension permissions rule
-- `plans/archive/old-structure/architecture/extensions.md` — security principle
 - `packages/core` — capability types and validation logic

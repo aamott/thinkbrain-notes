@@ -22,5 +22,4 @@ into the extension storage area (outside the workspace).
 ## References
 
 - `plans/technical-decisions.md` — Extensions section (install from URL)
-- `plans/archive/old-structure/architecture/extensions.md` — install from URL
 - `apps/desktop/src-tauri` — native download/install bridge

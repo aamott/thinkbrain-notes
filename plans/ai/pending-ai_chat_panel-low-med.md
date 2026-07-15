@@ -22,6 +22,5 @@ enables it and wires it to the provider abstraction and ACP host.
 ## References
 
 - `apps/desktop/src/App.tsx` — right panel placeholder (line ~115)
-- `plans/archive/old-structure/architecture/ui-shell.md` — right panel intent
 - `plans/ai.md` — architecture decisions (right panel is the desktop AI surface)
 - Depends on: provider abstraction + ACP host integration stories.

@@ -24,5 +24,4 @@ deferred when that epic becomes active.
 - `plans/app-vision.md` — `semantic-search` epic (depends on `indexing-search`,
   possibly `ai`)
 - `plans/ai.md` — scope (AI-assisted search and discovery)
-- `plans/archive/old-structure/deferred/ai.md` — AI-assisted search direction
 - Depends on: provider abstraction. Coordinates with: `semantic-search` epic.

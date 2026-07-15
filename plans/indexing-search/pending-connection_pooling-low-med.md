@@ -30,4 +30,3 @@ becomes an issue.
 
 - `apps/desktop/src-tauri/src/lib.rs` — `open_index_connection`, `init_index_schema`, index command handlers
 - `apps/desktop/src/native/commands.ts` — native command map and types
-- `plans/archive/old-structure/open-items.md` — OI-004

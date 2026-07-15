@@ -19,6 +19,5 @@ through ACP capabilities; the agent decides how to use it.
 ## References
 
 - `plans/ai.md` — scope (context-aware chat), privacy/consent decisions
-- `plans/archive/old-structure/deferred/ai.md` — context-aware chat direction
 - `plans/archive/ai-synthesized-needs-review/todos/ai.md` — context via ACP
 - Depends on: provider abstraction, ACP host integration, AI chat panel.

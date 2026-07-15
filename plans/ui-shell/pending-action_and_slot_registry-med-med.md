@@ -19,5 +19,4 @@ action registry (files, search, chat, command, settings), slot definitions
 - New: `packages/core/src/layout/actionRegistry.ts`
 - New: `packages/core/src/layout/slotRegistry.ts`
 - New: `packages/core/src/layout/types.ts`
-- Design source: `plans/archive/old-structure/007-movable-actions.md`
 - Mockup reference: `mockup2.htm` (ACTIONS, SLOT_ORIENT, DEFAULT_LAYOUT)

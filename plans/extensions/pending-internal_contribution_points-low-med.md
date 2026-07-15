@@ -24,7 +24,6 @@ settings schema registration.
 
 ## References
 
-- `plans/archive/old-structure/architecture/extensions.md` — original contribution points list
 - `plans/technical-decisions.md` — Extensions section
 - `packages/core` — contribution point interfaces should live here
 - `apps/desktop/src` — platform adapter bindings

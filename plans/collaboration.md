@@ -1,9 +1,14 @@
 # Collaboration
 
 > Real-time multi-user collaboration: co-editing, presence, and
-> conflict-aware editing. This is the farthest-future epic and a **stub** —
-> stories are sketched for scope only and are all `pending` / `low` urgency.
+> conflict-aware editing. **Bottom priority.** This is a stub epic — stories
+> are sketched for scope only and are all `pending` / `low` urgency.
 > Read `plans/app-vision.md` before starting any story here.
+>
+> **Direction (decided):** Local-first. Collaboration must not compromise the
+> core principles. It would be nice if we figure out a way to make it work
+> within the local-first/bring-your-own-sync model — but only if we can. This
+> epic is exploratory, not committed.
 
 ## Goal
 
@@ -33,35 +38,29 @@ Non-goals (out of scope even for this epic):
 
 ## Architecture Decisions
 
-> ⚠️ **Open issue — needs manager decision.** Real-time collaboration is in
-> direct tension with the app's core principles:
->
-> - **Local First** — "Everything works offline. Internet features are
->   optional." Collaboration is inherently online and stateful.
-> - **Bring your own sync** — "No cloud sync. No proprietary cloud backend
->   assumptions." Real-time co-editing requires *some* relay/coordination
->   service (even a peer-to-peer one needs signaling).
-> - **Privacy / no vendor lock-in** — A hosted collaboration backend would
->   reintroduce a central dependency the project explicitly avoids.
->
-> Collaboration therefore likely requires a **separate architectural mode**
-> distinct from the local-first MVP, rather than a feature bolted onto it.
-> Possible directions (to be decided before this epic is started):
->
-> 1. **Self-hosted / user-provided relay** — the user runs (or points at) a
->    relay/signaling server; the app never depends on a project-run cloud.
->    Consistent with "bring your own sync" extended to real-time.
-> 2. **Peer-to-peer (WebRTC + CRDT)** — no central server beyond a signaling
->    exchange; sync state via CRDTs over P2P. Most aligned with local-first,
->    hardest to build and operate.
-> 3. **Opt-in collaboration mode** — collaboration is an explicit, isolated
->    mode the user enables per-workspace; the default remains single-user
->    local-first. Single-user files never touch collaboration state.
->
-> None of these is decided. This epic should not be started until the manager
-> resolves the architectural direction and updates this section.
+### Direction: local-first, opt-in, P2P if possible
 
-### Likely shape (subject to the decision above)
+Real-time collaboration is in tension with the app's core principles (local
+first, bring your own sync, no vendor lock-in). The decided direction:
+
+- **Opt-in collaboration mode** — collaboration is an explicit, isolated mode
+  the user enables per-workspace. The default remains single-user local-first.
+  Single-user files never touch collaboration state.
+- **Peer-to-peer (WebRTC + CRDT) preferred** — no central server beyond a
+  signaling exchange. Sync state via CRDTs over P2P. Most aligned with
+  local-first and no-vendor-lock-in. Hardest to build, but this is a stub epic
+  with no timeline pressure.
+- **Self-hosted / user-provided relay as fallback** — if P2P signaling proves
+  impractical, the user runs (or points at) a relay/signaling server. The app
+  never depends on a project-run cloud. This extends "bring your own sync" to
+  real-time.
+- **Never a project-hosted collaboration cloud.** This is a hard line.
+
+Collaboration is a **separate architectural mode** distinct from the local-first
+MVP, not a feature bolted onto it. If we can't make it work within these
+constraints, the epic stays deferred.
+
+### Likely shape
 
 - A **CRDT layer** (e.g. Yjs / Automerge) over Markdown document state, so
   concurrent edits merge deterministically without a central authority.
@@ -82,7 +81,7 @@ Non-goals (out of scope even for this epic):
     way to ship collaboration as an opt-in module rather than core.
   - `note-model` — the Markdown document model and frontmatter handling must
     be stable before layering CRDT merge semantics on top.
-- This epic is blocked on the **architectural-direction decision** above.
+- This epic is **bottom priority** and exploratory — not committed to ship.
 
 ## Validation
 
@@ -94,7 +93,7 @@ Non-goals (out of scope even for this epic):
 
 ## Status
 
-- ⬜ Architectural direction decided (local-first vs. collaboration tension) — **blocked on manager decision**
+- ✅ Architectural direction decided — local-first, opt-in, P2P preferred, no project-hosted cloud
 - ⬜ CRDT / merge layer for Markdown documents
 - ⬜ Real-time co-editing in the CodeMirror 6 editor
 - ⬜ Live presence indicators (online users, cursor/selection)

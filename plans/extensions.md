@@ -3,9 +3,7 @@
 > Extension system: internal contribution points, a third-party extension API,
 > and a capability-based sandbox. This is a **future epic** (low urgency, not yet
 > started). Read `plans/app-vision.md` and `plans/technical-decisions.md`
-> (Extensions section) before starting any story here. Also see
-> `plans/archive/old-structure/architecture/extensions.md` for the original
-> design notes.
+> (Extensions section) before starting any story here.
 
 ## Goal
 

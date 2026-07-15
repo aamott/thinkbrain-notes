@@ -23,5 +23,4 @@ accidental drags. Include the edit-mode banner and visual cues.
 - Modify: `apps/desktop/src/layout/ActionButton.tsx` (Draggable wrapper)
 - Modify: `apps/desktop/src/layout/ActionSlot.tsx` (Droppable wrapper)
 - Modify: `apps/desktop/src/stores/layoutStore.ts` (edit mode state, moveAction on drop)
-- Design source: `plans/archive/old-structure/007-movable-actions.md` (Drag-and-Drop UX)
 - Mockup reference: `mockup2.htm` (toggleEditMode, wireSlotDropTargets, drag events)

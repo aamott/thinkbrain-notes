@@ -25,5 +25,4 @@ values. Ensures both platforms share one source of truth for logic and theming.
   `settings.ts` — shared logic
 - `plans/technical-decisions.md` — UI Components and Themes, Repository
   Structure sections
-- `plans/archive/old-structure/deferred/mobile.md` — shared design tokens intent
 - `.agents/AGENTS.md` — Styling rule

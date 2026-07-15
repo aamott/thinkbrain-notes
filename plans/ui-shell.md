@@ -141,4 +141,4 @@ only, not a dependency.
 - ⬜ active state tracking by action id — see `plans/ui-shell/pending-active_state_tracking-med-easy.md`
 - ⬜ command palette (⌘K, Edit Action Layout, Reset Action Layout) — see `plans/ui-shell/pending-command_palette-med-med.md`
 - ⬜ sidebar minimize toggle (VS Code-style collapse) — see `plans/ui-shell/pending-sidebar_minimize_toggle-med-med.md`
-- ❌ git log claims "implement sidebar minimize toggle" (commit 27bf273) but no collapse/minimize state exists in `appStore.ts` or any component — discrepancy to investigate
+- ❌ commit 27bf273 "implement sidebar minimize toggle" only modified `mockup2.htm` — never implemented in actual app source (`apps/desktop/src/`)

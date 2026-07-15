@@ -1,187 +1,97 @@
 You are the parent implementation agent for this project.
 
-Your first job is to read the planning docs and start implementation in a controlled, delegated way. Do not implement random features. Follow the work-item structure.
+Your job is to read the planning docs and implement work in a controlled, delegated way. Do not implement random features. Follow the epic + story structure.
 
 ## Required reading
 
 Read these files first, in order:
 
-1. `plans/000-agent-entrypoint.md`
-2. `plans/001-project-overview.md`
-3. `plans/002-core-principles.md`
-4. `plans/003-roadmap.md`
-5. `plans/004-technical-decisions.md`
-6. `plans/005-mvp-scope.md`
-7. `plans/006-testing-strategy.md`
-8. `plans/architecture/README.md`
-9. `plans/architecture/app-architecture.md`
-10. `plans/work-items/README.md`
-11. `plans/work-items/000-first-agent-instructions.md`
-12. `plans/work-items/001-project-scaffold.md`
+1. `plans/app-vision.md` — app vision, principles, stack, MVP scope, epic stream
+2. `plans/technical-decisions.md` — cross-cutting technical decisions
+3. `plans/testing-strategy.md` — testing approach and validation commands
+4. `.agents/AGENTS.md` — architecture rules, planning system, styling, linting
 
-## Primary assignment
+Then read the relevant epic file(s) for the work you're assigning.
 
-Implement:
+## Planning system
 
-`plans/work-items/001-project-scaffold.md`
+All plans live in `plans/`. The structure:
 
-This is the first implementation task. Do not start product features yet.
+- `plans/app-vision.md` — read first for context
+- `plans/technical-decisions.md` — cross-cutting decisions (reference doc)
+- `plans/testing-strategy.md` — testing approach (reference doc)
+- `plans/<epic-name>.md` — one file per epic, with a Status section
+- `plans/<epic-name>/` — story folder for that epic
+- `plans/maintenance/` — standalone stories (bugs, fixes, refactors)
 
-## Confirmed technical decisions
+Stories are named: `<status>-<description>-<urgency>-<difficulty>.md`
+- Status: `done` · `wip` · `pending` · `blocked`
+- Urgency: `high` · `med` · `low`
+- Difficulty: `easy` · `med` · `hard`
 
-Use these decisions unless the user explicitly changes them:
+Listing a story folder shows progress at a glance.
 
-- Package manager: `pnpm`
-- Build orchestration: plain `pnpm` workspaces; no Turborepo for MVP
-- Desktop shell: Tauri v2
-- Frontend: React + TypeScript + Vite
-- App structure:
+## Current epic priorities
 
-  ```text
-  apps/
-    desktop/        # Tauri + React (DOM) — MVP
-    mobile/         # React Native (Expo) — Phase 2, do not scaffold yet
+**Ready to start (high urgency):**
+- `git-integration` — system Git integration (next up)
 
-  packages/
-    core/           # platform-agnostic logic and adapter interfaces
-    ui/             # React (DOM) components — desktop only
-  ```
+**MVP-remaining (med urgency):**
+- `theme-foundation` — CSS tokens, light/dark themes, UI primitives
+- `test-ci-quality` — CI workflow, rust test script
 
-- Keep `packages/core` together for MVP; do not split into many packages yet
-- State management: Zustand
-- Unit tests: Vitest
-- E2E tests: Playwright from the start
-- UI foundation: `packages/ui` with reusable React components, CSS variables, accessibility-focused primitives, and Radix UI-style primitives where useful
-- Search/index later: SQLite FTS5 through the Tauri/Rust layer
-- Workspace settings later: stored outside the workspace in OS app-data/config
-- Notes later: app manages `created_at` and `updated_at` only during explicit create/save operations
+**Follow-ups (med/low urgency):**
+- `workspace-explorer` — non-MD file ops, drag-drop, hidden files
+- `ui-shell` — movable actions, layout slots, command palette
+- `indexing-search` — file watcher, connection pooling
+- `note-model` — frontmatter formatting preservation
 
-## Hard boundaries
-
-For this first task, do not implement:
-
-- editor behavior
-- workspace/file explorer behavior
-- note CRUD
-- search/indexing
-- Git integration
-- settings UI
-- AI
-- sync
-- graph
-- canvas
-- public extensions
-- marketplace
-
-Only scaffold the project.
-
-## Expected scaffold output
-
-Create or configure:
-
-- root `package.json`
-- `pnpm-workspace.yaml`
-- root TypeScript/lint/test/build config as appropriate
-- `apps/desktop`
-- `packages/core`
-- `packages/ui`
-- Tauri v2 + Vite + React baseline
-- Zustand dependency/setup
-- Vitest setup
-- Playwright setup
-- root scripts:
-
-  ```bash
-  pnpm lint
-  pnpm typecheck
-  pnpm test
-  pnpm test:e2e
-  pnpm build
-  ```
-
-- minimal placeholder UI only if needed to prove the app boots
+**Future (low urgency, stubs):**
+- `extensions` → `ai`, `marketplace`
+- `semantic-search`, `graph`, `canvas`, `mobile`
+- `collaboration` (bottom priority, exploratory)
 
 ## Sub-agent strategy
 
-Use sub-agents only where useful. The first work item is mostly scaffold work, so avoid over-splitting too early.
+1. Read `plans/app-vision.md` and the relevant epic file.
+2. Check the epic's story folder for `pending` and `wip` stories.
+3. Assign each sub-agent exactly one story.
+4. Give each sub-agent:
+   - the assigned story file
+   - `plans/app-vision.md` and `plans/technical-decisions.md` for context
+   - `.agents/AGENTS.md` for rules
+   - allowed edit scope (from the story's file references)
+   - explicit non-goals
+   - validation expectations
+5. When starting a story, rename its file to `wip-…`. When complete, rename to `done-…`.
+6. Update the epic's Status section when features are completed or blocked.
+7. Review sub-agent output for:
+   - scope creep
+   - conflicts with `plans/technical-decisions.md`
+   - inconsistent interfaces
+   - missing tests
+   - lint/typecheck/build failures
 
-Recommended split:
+## Confirmed technical decisions
 
-### Parent agent
+- Package manager: `pnpm`
+- Build orchestration: plain `pnpm` workspaces; no Turborepo
+- Desktop shell: Tauri v2
+- Frontend: React + TypeScript + Vite
+- State management: Zustand
+- Editor: CodeMirror 6
+- Unit tests: Vitest
+- E2E tests: Playwright
+- Search/index: SQLite FTS5 through the Tauri/Rust layer
+- Settings: JSON, stored in OS app-data (never in the vault)
+- Git: system Git via Rust layer
+- Styling: CSS Modules (`*.module.css`), no inline styles
 
-Owns final coordination and root scaffold decisions.
+## Validation
 
-The parent agent should personally handle or closely supervise:
-
-- root workspace config
-- package manager setup
-- script naming
-- final validation
-- integration of all sub-agent outputs
-
-### Sub-agent A: Frontend scaffold review/setup
-
-Assign only if useful.
-
-Scope:
-
-- `apps/desktop/src/**`
-- React/Vite baseline
-- minimal app component
-- Zustand placeholder store if needed
-- import/use `packages/ui` minimally
-
-Must not touch:
-
-- root package manager decisions unless asked
-- Tauri Rust internals
-- product features
-
-### Sub-agent B: UI package scaffold
-
-Assign only if useful.
-
-Scope:
-
-- `packages/ui/**`
-- design token structure
-- minimal reusable components
-- CSS variable foundation
-
-Must not implement full app styling or product UI.
-
-### Sub-agent C: Core package scaffold
-
-Assign only if useful.
-
-Scope:
-
-- `packages/core/**`
-- package exports
-- placeholder domain modules/types only if needed
-- no real note/search/workspace logic yet
-
-Must not implement product behavior.
-
-### Sub-agent D: Testing scaffold
-
-Assign only after basic package/app structure exists.
-
-Scope:
-
-- Vitest config
-- Playwright config
-- smoke tests
-- validation scripts
-
-Must not suppress failures to make tests pass.
-
-## After scaffolding
-
-Run the narrowest available validation first, then broader validation:
+Run the narrowest available validation first, then broader:
 
 ```bash
-pnpm install
 pnpm lint
 pnpm typecheck
 pnpm test
@@ -189,41 +99,15 @@ pnpm test:e2e
 pnpm build
 ```
 
-If Tauri/Rust files exist, also run:
+If Tauri/Rust files exist:
 
 ```bash
-cargo test
+cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml
 ```
 
 Report exactly:
-
 - what changed
 - which files were created/modified
 - which validation commands passed
 - which failed and why
-- any follow-up decisions needed before assigning `plans/work-items/002-desktop-tauri-shell.md`
-```
-
-A shorter version you can paste if you want less ceremony:
-
-```md
-Read `plans/000-agent-entrypoint.md`, then the core planning docs through `plans/006-testing-strategy.md`, then `plans/work-items/000-first-agent-instructions.md` and `plans/work-items/001-project-scaffold.md`.
-
-Act as the parent implementation agent. Implement only Work Item 001: Project Scaffold.
-
-Use `pnpm`, plain workspaces, Tauri v2, React, TypeScript, Vite, Zustand, Vitest, Playwright, `apps/desktop`, `packages/core`, and `packages/ui`.
-gl
-Do not implement product features yet. No editor, workspace explorer, search, Git, settings UI, AI, sync, graph, canvas, marketplace, or public extensions.
-
-Use sub-agents only if helpful:
-- one for `packages/ui`
-- one for `packages/core`
-- one for frontend/Vite scaffold
-- one for test/Playwright/Vitest setup after structure exists
-
-Parent agent owns integration, root scripts, and validation.
-
-Expected root commands:
-`pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:e2e`, `pnpm build`.
-
-Run validation and report what passed/failed.
+- any follow-up decisions needed

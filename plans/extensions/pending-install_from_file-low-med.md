@@ -22,5 +22,4 @@ installs it into the extension storage area (outside the workspace).
 ## References
 
 - `plans/technical-decisions.md` — Extensions section (install from file)
-- `plans/archive/old-structure/architecture/extensions.md` — install from file
 - `apps/desktop/src-tauri` — native file pick/install bridge

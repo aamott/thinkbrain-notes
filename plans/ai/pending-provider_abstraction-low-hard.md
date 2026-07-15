@@ -29,5 +29,4 @@ context-aware chat, AI-assisted search) depend on it.
 - `plans/ai.md` — epic scope and architecture decisions
 - `plans/app-vision.md` — AI Native principle, hub-and-spoke rule
 - `plans/technical-decisions.md` — AI section, Extensions section
-- `plans/archive/old-structure/deferred/ai.md` — future direction notes
 - Prerequisite: `extensions` epic must be active before provider work starts.

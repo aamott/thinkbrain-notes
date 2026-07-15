@@ -23,4 +23,3 @@ in OS app-data.
 
 - `plans/marketplace.md`
 - Prerequisite: `plans/extensions.md` (manifest format, capability sandbox)
-- Archived context: `plans/archive/old-structure/deferred/marketplace.md`

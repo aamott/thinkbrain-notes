@@ -19,5 +19,4 @@ Layout" commands. Fuzzy-filter commands by label and category.
 - New: `apps/desktop/src/layout/CommandPalette.tsx` + `.module.css`
 - New: `apps/desktop/src/layout/commandRegistry.ts`
 - Modify: `apps/desktop/src/App.tsx` (wire ⌘K handler, mount palette)
-- Design source: `plans/archive/old-structure/007-movable-actions.md` (Command Palette integration)
 - Mockup reference: `mockup2.htm` (openCommandPalette, renderCommandPalette, executeCommand, mockCommands)

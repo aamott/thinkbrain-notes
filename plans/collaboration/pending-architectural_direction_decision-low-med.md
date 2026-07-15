@@ -1,30 +1,31 @@
-# Architectural Direction: Local-First vs. Collaboration
+# Architectural Direction: Local-First Collaboration Design
 
 ## Goal
 
-Decide, before any collaboration implementation begins, how real-time
-collaboration coexists with the app's local-first / bring-your-own-sync
-principles. Real-time co-editing is in direct tension with "no cloud backend"
-and "everything works offline." This story is a **decision / design** task, not
-code.
+Flesh out the decided direction — local-first, opt-in, P2P-preferred — into a
+concrete design that can guide implementation. The direction is decided (see
+`plans/collaboration.md` Architecture Decisions). This story produces the
+detailed design document, not code.
 
 ## Acceptance Criteria
 
-- [ ] Manager-approved written decision covering: self-hosted relay vs. P2P
-      (WebRTC + CRDT) vs. opt-in collaboration mode (or a chosen combination).
-- [ ] Decision documents how collaboration state is kept out of the vault and
+- [ ] Written design covering: P2P (WebRTC + CRDT) as the primary transport,
+      self-hosted relay as fallback for signaling, opt-in per-workspace mode.
+- [ ] Design documents how collaboration state is kept out of the vault and
       SQLite cache (user-data separation).
-- [ ] Decision confirms single-user local-first mode is the default and is
+- [ ] Design confirms single-user local-first mode is the default and is
       unaffected by the collaboration feature.
-- [ ] Decision updates `plans/collaboration.md` Architecture Decisions section
-      and `plans/technical-decisions.md` if cross-cutting.
-- [ ] Any new backend/relay dependency is optional and never required for
-      single-user use.
+- [ ] Design updates `plans/collaboration.md` and `plans/technical-decisions.md`
+      if cross-cutting.
+- [ ] Any backend/relay dependency is optional and never required for single-user
+      use.
+- [ ] If the design reveals that collaboration cannot work within the
+      local-first constraints, document why and recommend deferring the epic.
 
 ## References
 
 - `plans/app-vision.md` — Core Principles (Local First, Bring your own sync,
   Privacy), "Not an epic: Sync" note
 - `.agents/AGENTS.md` — "Bring your own sync", user-data separation rules
-- `plans/collaboration.md` — Architecture Decisions (tension flagged)
+- `plans/collaboration.md` — Architecture Decisions (direction decided)
 - `plans/technical-decisions.md` — cross-cutting decisions

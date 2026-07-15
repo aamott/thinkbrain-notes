@@ -18,4 +18,3 @@
 - New: `apps/desktop/src/stores/layoutStore.ts`
 - New: `apps/desktop/src/stores/layoutStore.test.ts`
 - Existing pattern: `apps/desktop/src/stores/appStore.ts`, `apps/desktop/src/settings/settingsService.ts`
-- Design source: `plans/archive/old-structure/007-movable-actions.md` (Persistence, Production Notes)

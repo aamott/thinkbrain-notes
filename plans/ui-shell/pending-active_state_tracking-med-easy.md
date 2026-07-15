@@ -15,5 +15,4 @@ currently lives in.
 **File references:**
 - Modify: `apps/desktop/src/stores/layoutStore.ts` (activeActionId, setActiveAct)
 - Modify: `apps/desktop/src/layout/ActionButton.tsx` (active class from store)
-- Design source: `plans/archive/old-structure/007-movable-actions.md` (Active State)
 - Mockup reference: `mockup2.htm` (refreshActiveState, setActiveAct)

@@ -25,7 +25,6 @@ and the cross-platform hub-and-spoke contract described in
 ## References
 
 - `plans/technical-decisions.md` — Platform, Repository Structure sections
-- `plans/archive/old-structure/deferred/mobile.md` — adapter contract intent
 - `apps/desktop/src/native/commands.ts` — current direct-Tauri bridge
 - `packages/core/src/index.ts` — where interfaces should live
 - `plans/mobile.md` — prerequisite note

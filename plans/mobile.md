@@ -2,9 +2,7 @@
 
 > React Native (Expo) mobile app — a future epic, not yet started. Read
 > `plans/app-vision.md` and `plans/technical-decisions.md` (Platform section)
-> before starting any story here. Also read
-> `plans/archive/old-structure/deferred/mobile.md` for the original architectural
-> intent.
+> before starting any story here.
 
 ## Goal
 
@@ -68,8 +66,7 @@ these to Expo/React Native equivalents:
 
 This epic depends on the core adapter interfaces being defined in
 `packages/core`. **Note:** as of this writing those interfaces are described in
-`technical-decisions.md` and `archive/old-structure/deferred/mobile.md` but are
-not yet present in `packages/core/src/` — the desktop app currently calls Tauri
+`technical-decisions.md` but are not yet present in `packages/core/src/` — the desktop app currently calls Tauri
 directly via `invokeNativeCommand` (`apps/desktop/src/native/commands.ts`).
 Before any mobile story starts, the adapter interfaces must be introduced in
 `packages/core` and the desktop app refactored onto them. This cross-cutting

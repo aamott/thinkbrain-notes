@@ -23,6 +23,5 @@ depend on.
 
 ## References
 
-- `plans/archive/old-structure/architecture/extensions.md` — manifest fields list
 - `plans/technical-decisions.md` — Extensions section
 - `packages/core` — manifest types and parser should live here
