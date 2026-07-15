@@ -137,8 +137,8 @@ filenames. When all epic items are ✅, the epic is deleted.
 - `graph` — backlinks and graph view (depends on `indexing-search`, `note-model`)
 - `canvas` — infinite canvas editor
 - `mobile` — React Native/Expo app (depends on core adapter interfaces)
-- `marketplace` — extension discovery/install (depends on `extensions`)
-- `collaboration` — real-time collaboration
+- `marketplace` — extension discovery, signing, update flow (depends on `extensions`; install mechanism owned by `extensions`)
+- `collaboration` — real-time collaboration (bottom priority, exploratory; local-first, opt-in, P2P preferred — only if we can make it work within the core principles)
 
 **Not an epic:** Sync — "bring your own sync" is a design principle, not a
 feature. Sync conflict assistance may become a maintenance story later.
