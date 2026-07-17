@@ -2,20 +2,19 @@
 
 ## Goal
 
-Lay the foundation for AI-assisted search and discovery: semantic-ish search,
-related-note suggestions, and summarization built on the provider abstraction.
-This story is the bridge to the `semantic-search` epic and may be split or
-deferred when that epic becomes active.
+Define an opt-in boundary for AI-assisted discovery, related-note suggestions,
+and summarization. This is a bridge to `semantic-search`, not a replacement for
+the deterministic FTS5 search path.
 
 ## Acceptance Criteria
 
-- [ ] A core service can request embeddings (when supported by the selected
-      provider) behind the provider abstraction.
+- [ ] Core contracts can describe an embedding/discovery request without
+      importing a provider SDK; the native gateway owns concrete execution.
 - [ ] AI-assisted "find related notes" uses workspace context, not just FTS5
       keyword match.
-- [ ] Remote embedding calls require explicit user consent.
-- [ ] Falls back gracefully when no provider is configured or the provider
-      lacks embeddings.
+- [ ] Remote embedding or summary calls require explicit content consent.
+- [ ] Falls back gracefully when no provider is configured, consent is denied,
+      or the provider lacks the requested capability.
 - [ ] Does not break the existing SQLite FTS5 search path.
 - [ ] Tests cover the fallback (no provider) path.
 
@@ -23,5 +22,6 @@ deferred when that epic becomes active.
 
 - `plans/app-vision.md` — `semantic-search` epic (depends on `indexing-search`,
   possibly `ai`)
-- `plans/ai.md` — scope (AI-assisted search and discovery)
-- Depends on: provider abstraction. Coordinates with: `semantic-search` epic.
+- `plans/ai.md`
+- `plans/semantic-search.md`
+- Depends on: `pending-provider_configuration_and_gateway-med-hard.md`.

@@ -2,22 +2,24 @@
 
 ## Goal
 
-Give the AI chat access to the active note and workspace context so responses
-are grounded in what the user is working on. Context is supplied by the host
-through ACP capabilities; the agent decides how to use it.
+Let a user opt into sending the active note or a bounded workspace selection to
+model chat, while ACP agents obtain context only through the capabilities they
+request.
 
 ## Acceptance Criteria
 
-- [ ] Chat can include the active note's content as context.
-- [ ] Chat can include workspace-scoped context (open notes, tags, links).
-- [ ] Sending note content to a remote provider requires explicit user
-      consent per request or via an "always allow" setting.
-- [ ] Context inclusion is toggleable; user can chat with no context.
-- [ ] No note content is sent remotely without consent (privacy rule).
-- [ ] Local provider context flow works without any network call.
+- [ ] The composer shows exactly which note/selection/workspace summary will be
+      included and lets the user remove it before sending.
+- [ ] Local provider context works offline. Remote context requires a separate,
+      explicit consent decision from ACP filesystem/terminal permission.
+- [ ] Context creation is bounded, cancelable, redacts credentials/app data,
+      and produces typed failures for unavailable files/index data.
+- [ ] ACP agents receive no hidden prompt-injected workspace data; they request
+      scoped capabilities and use the ACP permission flow instead.
+- [ ] Tests prove no context is sent when toggled off or consent is denied.
 
 ## References
 
-- `plans/ai.md` — scope (context-aware chat), privacy/consent decisions
-- `plans/archive/ai-synthesized-needs-review/todos/ai.md` — context via ACP
-- Depends on: provider abstraction, ACP host integration, AI chat panel.
+- `plans/ai.md`
+- `plans/ai/pending-provider_configuration_and_gateway-med-hard.md`
+- `plans/ai/pending-acp_capabilities_and_permissions-med-hard.md`

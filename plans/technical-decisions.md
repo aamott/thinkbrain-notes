@@ -128,12 +128,62 @@ variables, and accessibility-focused primitives.
 MVP may include built-in themes and theme tokens. Third-party theme packages are
 deferred until the `extensions` epic is active.
 
+### Mockup v3 adoption
+
+Decision: `mockup_v3/` is the visual and interaction reference for the desktop
+shell, not production code or a package dependency. Translate its Tailwind v4
+classes and mock state to React components with co-located CSS Modules, shared
+`--tn-*` tokens, existing stores, and real feature boundaries. Do not restore
+the older movable-action/slot design from `mockup2.htm`.
+
+The shared token set includes chrome-specific semantic surfaces: title bar,
+activity bar, sidebar, editor, panel, status bar, and active/inactive tabs in
+both light and dark themes. Runtime panel dimensions are the sole exception to
+the no-inline-styles rule: write scoped custom properties through CSSOM on the
+shell root; do not use JSX `style` props.
+
+Browser tabs are registered as an unavailable tab kind until a separate
+security decision approves a Tauri webview strategy, navigation policy, and
+capability/CSP boundary. Do not use a raw iframe as a shortcut.
+
 ## AI
 
-Decision: AI is deferred beyond MVP.
+Decision: AI remains optional and is implemented only through the `ai` epic.
 
-No AI provider abstraction, model configuration, ACP integration, embeddings, or
-AI UI should be implemented unless the `ai` epic is active.
+- Desktop model chat uses `@assistant-ui/react`, `@assistant-ui/react-ai-sdk`,
+  `ai@^7`, and `@ai-sdk/react@^4` as one compatible UI/transport stack.
+- Tauri has no built-in HTTP chat route. Use a typed custom AI SDK
+  `ChatTransport` over Tauri IPC and native events; do not spawn an unauthenticated
+  local HTTP server merely to satisfy a `/api/chat` default.
+- The Rust/native gateway owns provider calls, cancellation, credentials, and
+  outbound network policy. Renderer code never stores or receives provider
+  secrets. Chat history is stored locally in OS app-data through an
+  assistant-ui history adapter; Assistant Cloud is off by default.
+- ACP is a distinct host-to-agent protocol, not an AI SDK replacement. Use the
+  official Rust ACP runtime crate at the native capability boundary and map
+  explicit agent sessions to UI threads. The host is deterministic and does not
+  duplicate agent reasoning or merge conflicts.
+- Cloud model use and sending note/workspace context require explicit consent.
+  ACP filesystem/terminal permission is separately requested and enforced by
+  the native host (allow once / always / deny).
+
+## Proposed Confirmations for Mockup v3
+
+These are the recommended defaults reflected in `ui-shell` and `ai`; confirm
+them before implementation begins because changing any one expands the work.
+
+1. **Styling:** keep CSS Modules and shared `--tn-*` tokens. Do not adopt
+   Tailwind in production just because the mockup uses it.
+2. **Dynamic panel widths:** use scoped CSSOM custom-property updates, not JSX
+   inline styles or a finite set of `data-*` width buckets.
+3. **Desktop chat transport:** use custom Tauri IPC/native-event transport,
+   not a local HTTP server or an assumed `/api/chat` endpoint.
+4. **AI versus ACP:** ship model chat and explicit ACP Agent sessions as
+   separate modes that share assistant-ui presentation but not a wire protocol.
+5. **Browser tabs:** retain an unavailable tab placeholder until a dedicated
+   webview security, navigation, and CSP/capability decision is approved.
+6. **Extensions panel:** render a clearly unavailable panel; do not pull
+   marketplace/installation work forward from the `extensions` epic.
 
 ## Sync
 

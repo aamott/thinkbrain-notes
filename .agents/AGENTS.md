@@ -1,69 +1,37 @@
-# Project Overview: Note App Workspace
+# Project Guidance
 
-Adhere to these rules at all times.
+## Architecture
 
-## Architecture & Non-Negotiable Rules
-- **Stack**: React + TypeScript + Vite, Zustand state. Tauri (Rust) desktop shell. React Native (Expo) mobile (Phase 2). CodeMirror 6 editor with Obsidian-like live markdown rendering.
-- **Data model**: Pure Markdown. Tasks are Markdown checkboxes (`- [ ]`) only — no proprietary task databases.
-- **Database**: SQLite + FTS5 as an *ephemeral indexer cache* only. Never the source of truth. Stored in OS `AppData`, never in the vault.
-- **User data separation**: App data (settings, index, cache) never goes in the vault. Vault = Markdown files + attachments only.
-- **Bring your own sync**: No cloud sync. Users rely on OneDrive/Syncthing/Git. No proprietary cloud backend assumptions.
-- **Hub and spoke**: `packages/` holds all business logic and must never depend on UI. `apps/desktop` and `apps/mobile` implement adapters.
-- **Extension permissions**: V1 uses a strict capability-based sandbox (Install from URL/File). No unrestricted filesystem access.
-- **Privacy**: No telemetry, no vendor lock-in. The user owns their data.
-- Read `plans/app-vision.md` and relevant epics before any major work. Note inconsistencies in the epic's Status section and to the user.
+- Stack: React + TypeScript + Vite, Zustand, Tauri/Rust desktop, Expo mobile (Phase 2), and CodeMirror 6.
+- Markdown files and Markdown checkboxes (`- [ ]`) are the source of truth. SQLite + FTS5 is a disposable index cache only.
+- Keep the vault limited to Markdown and attachments. Settings, credentials, indexes, caches, layout, and chat history belong in OS app-data, never in the vault.
+- The app is local-first: no telemetry, proprietary cloud backend, or vendor lock-in. Remote AI is opt-in and requires explicit consent before note content leaves the device.
+- `packages/core` is platform-agnostic: no React, DOM, Node, Tauri, or concrete provider dependencies. Apps implement its interfaces through adapters.
+- Keep Tauri commands and Rust capability enforcement behind desktop adapters; UI components must not call native implementations directly.
+- Extensions use a capability-based sandbox. Never grant an extension or agent unrestricted filesystem access.
 
-## Planning System
+## Plans
 
-All plans live in `plans/`. The folder structure encodes progress — listing it shows where the project stands.
+- Read `plans/app-vision.md`, the relevant epic, and its pending/wip stories before major work. Only change the vision when explicitly asked.
+- Epics live at `plans/<epic>.md`; stories live in `plans/<epic>/` and are named `<status>-<description>-<urgency>-<difficulty>.md` using underscores in descriptions.
+- Each story needs a short goal, acceptance criteria, and file references. Rename stories as their status changes; delete superseded or obsolete stories.
+- Keep each epic's `Status` section accurate with `✅ done`, `🔄 wip`, `⬜ pending`, or `❌ blocked`. Record discovered inconsistencies there rather than silently planning around them.
 
-### Files & Folders
-- **`plans/app-vision.md`** — Unifies the app vision across all devs. Read this first for context. Only changes when the user explicitly directs.
-- **`plans/<epic-name>.md`** — One file per epic at the `plans/` root. High-level and overarching: goals, scope, architecture decisions. Not implementation detail.
-- **`plans/<epic-name>/`** — Story folder for that epic. Contains individual story files.
-- **`plans/maintenance/`** — Standalone stories that don't belong to an epic: bugs, fixes, refactors, small tweaks, UI adjustments. Same naming convention as epic stories. Short-lived — knock them out one at a time.
+## UI and Styling
 
-### Epics
-- Named with kebab-case, no numbering: `markdown-editor.md`, `vault-indexing.md`.
-- Each epic ends with a **Status** section tracking specific features to implement:
-  - Each item: `[indicator] brief description — file refs if available`
-  - Indicators: `✅ done` · `🔄 wip` · `⬜ pending` · `❌ blocked`
-  - Keep each item brief.
-- Update the Status section as features are completed or blocked.
-- When all Status items are `✅`, delete the epic file and its story folder. Plans show what needs doing, not what was done — read the code for that.
+- Production desktop UI uses co-located CSS Modules (`*.module.css`) and the `--tn-*` semantic token system in `packages/ui`. Tailwind is permitted only in isolated mockups/reference apps; never copy its classes into production.
+- No JSX inline styles or `<style>` blocks. For a runtime CSS custom property, update a scoped element via CSSOM (`ref.current.style.setProperty`) and keep the property and its fallback in the component's CSS Module.
+- Use semantic HTML, keyboard support, visible focus states, and responsive layouts. Use `data-thinkbrain-theme` / CSS variables for themes; do not branch visual theme behavior in JavaScript.
+- Promote repeated values to tokens or component variants. Keep third-party style overrides narrow and co-located with the integrating component.
 
-### Stories
-- Story files live in `plans/<epic-name>/` or `plans/maintenance/` and are named: `<status>-<description>-<urgency>-<difficulty>.md`
-  - **Status**: `done` · `wip` · `pending` · `blocked`
-  - **Urgency**: `high` · `med` · `low`
-  - **Difficulty**: `easy` · `med` · `hard`
-  - **Description**: use underscores, not hyphens, to avoid ambiguity with field separators. E.g. `markdown_parser` not `markdown-parser`.
-  - Example: `pending-markdown_parser-high-med.md`
-- Listing a story folder shows progress at a glance — status, urgency, and difficulty are encoded in filenames.
-- Old stories are deleted over time once complete and no longer needed.
-- Each story file should contain: a brief goal, acceptance criteria, and relevant file references. Keep it short.
+## AI and ACP
 
-### Workflow
-1. Read `plans/app-vision.md` for app context.
-2. Read the relevant epic file(s) for scope and current status.
-3. Check the epic's story folder (or `plans/maintenance/`) for `pending` and `wip` stories.
-4. When starting a story, rename its file to `wip-…`. When complete, rename to `done-…`. If blocked, rename to `blocked-…` and note the blocker in the file.
-5. Update the epic's Status section when features are completed or blocked.
-6. Delete old completed stories when no longer needed.
-7. When all epic Status items are `✅`, delete the epic file and its story folder.
+- Desktop chat UI uses `@assistant-ui/react` with the Vercel AI SDK UI layer (`ai`, `@ai-sdk/react`, and `@assistant-ui/react-ai-sdk`). Its Tauri IPC transport is an adapter, not a `/api/chat` assumption.
+- ACP is a separate host-to-agent protocol. Prefer official ACP SDKs; the host is deterministic, exposes capabilities and permissions, and never copies an agent's reasoning, planning, or editing logic.
+- AI SDK chat sessions and ACP agent sessions have explicit, persisted IDs and lifecycle boundaries. Do not store either in the vault or use Assistant Cloud by default.
 
-## Subagent Strategy
-Delegate substantial work to subagents to preserve main-chat context. Pick model by task:
-- **Composer 2.5**: basic tasks only (small edits, mechanical refactors, lookups, formatting).
-- **GPT 5.5 / Opus**: default for planning and implementation.
-- **Fable 5**: deepest reviews/planning only (high cost).
+## Quality
 
-## Styling
-- No inline styles (`style={{}}` or `<style>` in JSX). Use CSS Modules (`*.module.css`) co-located with components. Shared tokens/themes as CSS variables in `packages/ui`. React Native (Phase 2): use `StyleSheet`.
-
-## Linting
-- Run `pnpm lint` after non-trivial edits, before commits, when switching files. Don't batch.
-- No `any` without inline eslint-disable + reason; prefer `unknown`/generics.
-- Remove unused imports/vars; don't `_`-prefix to silence.
-- Lint issues in untouched code → log in the relevant epic's Status section, don't fix in unrelated diffs.
-- `eslint.config.js` changes are architectural — flag to user first.
+- Run the narrowest relevant checks after non-trivial changes, then `pnpm lint`, `pnpm typecheck`, and targeted tests when the change is ready. Do not fix unrelated failures; record them in the relevant epic instead.
+- Avoid `any`; use `unknown`, generics, or a documented narrow exception.
+- Treat `eslint.config.*` changes and new privileged native capabilities as architectural decisions: document and surface them before implementation.

@@ -1,144 +1,113 @@
 # UI Shell
 
-> The desktop layout system (VS Code/Obsidian-inspired). The basic shell exists;
-> this epic covers the remaining work — primarily movable actions, layout slots,
-> and the command palette. Read `plans/app-vision.md` first for app context.
+> Adopt `mockup_v3/` as the desktop UI reference. It is a visual/interaction
+> specification, not production code: translate it to the established React,
+> CSS Module, Tauri, and shared-token architecture.
 
 ## Goal
 
-Make the desktop shell's action buttons user-movable between defined layout
-slots (activity bar, title bar, status bar), with persisted layout config, a
-command palette, and VS Code-style sidebar collapse — without hardcoding
-actions to specific containers.
+Deliver a desktop workspace shell with tabs, inspectable side panels, a
+command palette, persistent resizable panes, and a compact status/bottom-panel
+experience. Existing explorer, search, settings, and editor features must be
+reused rather than recreated from mock data.
 
 ## Scope
 
-**In scope:**
-- Movable actions and layout slots (from old `007-movable-actions.md` design)
-- Layout config persistence (Zustand store → OS AppData via Tauri)
-- Drag-and-drop with edit-mode gating (`@dnd-kit/core`)
-- Active state tracking by action id (not by hardcoded element)
-- Command palette with "Edit Action Layout" and "Reset Action Layout" commands
-- Sidebar minimize toggle (VS Code-style collapse/expand)
+**In scope:** mockup-v3 shell chrome; token migration; left/right popouts;
+pluggable tabs; command palette; theme control; resizable layout persistence;
+and the bottom panel.
 
-**Out of scope:**
-- Extension-registered actions (deferred to `extensions` epic)
-- AI panel / ACP chat (deferred to `ai` epic)
-- Insertion-point indicators for intra-slot reordering (v1 appends at end)
-- Mobile layout (deferred to `mobile` epic)
+**Out of scope:** moving arbitrary action buttons between slots, drag/drop
+layout editing, full Git/tags/extensions/graph/backlink implementations,
+browser embedding, terminal execution, and AI behavior. Those surfaces either
+show an intentional unavailable state or integrate their owning epic.
 
 ## Architecture
 
-### Action and Slot Model
+### Shell state and component boundaries
 
-Actions are discrete, movable buttons. Each declares `id`, `icon`, `label`,
-and optional `wide` (renders as a wide trigger instead of an icon).
+Keep domain state in the existing `appStore` and add a focused layout/tab slice
+or store for presentation state: active left/right view, bottom panel,
+command palette, tabs, active tab, and panel widths. Persist user preferences
+through the existing settings/Tauri path to OS app-data. Do not persist open
+document contents or any layout data in the vault.
 
-```ts
-interface ActionDef {
-  id: string;          // 'files' | 'search' | 'chat' | 'settings' | ...
-  icon: string;        // lucide icon name
-  label: string;       // tooltip / aria-label
-  wide?: boolean;      // render as wide trigger (command palette)
-}
+Translate the mockup into these boundaries:
+
+```text
+apps/desktop/src/
+  shell/       TitleBar, ActionBar, StatusBar, ResizeHandle, shell root
+  panels/      LeftPopout, RightPopout, BottomPanel
+  tabs/        tab types, registry, TabStrip, editor/preview/settings views
+  adapters/    Tauri/settings bridges used by shell and AI features
+  stores/      app/domain state plus layout and tab state
 ```
 
-Slots are containers holding an ordered list of actions. Each declares `id`
-and `orient` (`'vertical' | 'horizontal'`) for drag-drop hit-testing and
-rendering.
+`packages/core/src/layout/` defines platform-neutral `TabKind`, `Tab`, layout
+preferences, and registry contracts. React components are registered only in
+`apps/desktop/src/tabs/`; the core registry never imports React or desktop
+implementations. Future extensions may add tab registrations through the
+extension contribution API, not by mutating the base registry.
 
-```ts
-interface SlotDef {
-  id: string;          // 'activity-bar-top' | 'titlebar-left' | ...
-  orient: 'vertical' | 'horizontal';
-}
-```
+The first-party tab kinds are `editor`, `preview`, and `settings`; `graph` is a
+registered unavailable stub until the graph epic owns it. `browser` is also a
+registered unavailable stub—do not ship a raw iframe or give unreviewed remote
+content a Tauri webview. A browser implementation needs a separate security
+decision and capability/CSP design.
 
-Layout config is a map of `slotId → ActionId[]` (ordered). This is the
-persisted user preference.
+### Panels and dependencies
 
-```ts
-type LayoutConfig = Record<string, string[]>;
-```
+The left popout wires the existing `WorkspaceExplorer`, `SearchPanel`, and
+`SettingsPanel`; source control is a status-aware `git-integration` boundary,
+and tags/extensions remain unavailable until their epics are active. The right
+popout owns outline/properties presentation; backlinks consume index data only
+when the graph/indexing work exposes it. The assistant panel is an integration
+point for the `ai` epic, not a hand-built chat UI.
 
-### Slots
+### Tokens, styling, and dynamic dimensions
 
-| Slot ID               | Location                                   | Orient    |
-|-----------------------|--------------------------------------------|-----------|
-| `activity-bar-top`    | Far-left strip, top group                  | vertical  |
-| `activity-bar-bottom` | Far-left strip, bottom group (above cmd)   | vertical  |
-| `titlebar-left`       | Title bar, right of command-palette search | horizontal|
-| `titlebar-right`      | Title bar, left of window controls         | horizontal|
-| `statusbar-left`      | Bottom status bar, left group              | horizontal|
-| `statusbar-right`     | Bottom status bar, right group             | horizontal|
+Merge the mockup's chrome surfaces into `packages/ui/src/styles/tokens.css`
+using the `--tn-*` prefix, with light and dark values for title bar, activity
+bar, sidebar, editor, panel, status bar, and active/inactive tabs. Replace the
+monolithic `apps/desktop/src/styles.css` shell rules with co-located CSS
+Modules; keep only reset, app root, and third-party editor overrides global.
 
-The command-palette search bar is a **fixed** title-bar anchor (not movable).
-The two title-bar zones are defined relative to it.
+Panel widths are state in pixels, clamped in the resize controller and applied
+to the shell root with scoped CSSOM custom properties. This is the approved
+dynamic-value exception to the no-inline-style rule: `setProperty` updates only
+`--tn-shell-left-width` and `--tn-shell-right-width`; CSS Modules provide their
+defaults and hidden-panel values.
 
-### Default Layout
+### Interaction and accessibility
 
-```
-activity-bar-top:    [files, search, chat]
-activity-bar-bottom: [command, settings]
-titlebar-left:       []
-titlebar-right:      []
-statusbar-left:      []
-statusbar-right:     []
-```
-
-### Persistence
-
-Layout config persists to OS `AppData` (never in the vault — AGENTS.md rule).
-A Zustand `layoutStore` is hydrated from Tauri settings on startup, with
-debounced writes on change. Unknown action ids in a saved layout (e.g.
-uninstalled extension actions) are silently filtered on load.
-
-### Drag-and-Drop
-
-**Edit mode gates all DnD.** Buttons are only draggable while layout editing
-is active — normal clicks never trigger accidental drags. Edit mode is entered
-via the command palette ("Edit Action Layout") and exited via the banner "Done"
-button or Esc.
-
-- DnD library: `@dnd-kit/core` (keyboard + screen-reader accessible).
-- Slots are `Droppable`; action buttons are `Draggable`.
-- Drop position appends to end of target slot (v1; insertion indicators are
-  future work).
-- Visual cues: dashed slot outlines (including empty slots) and `grab` cursor
-  in edit mode; `drag-over` highlight on hover; `dragging` class (dimmed) on
-  the source button.
-
-### Active State
-
-The active indicator (blue bar / color) is tracked by action id, not by
-hardcoded element ids. `setActiveAct(actionId)` toggles the `active` class on
-whichever button currently renders that action, regardless of which slot it's
-in. Active state is re-applied after every slot re-render.
-
-### Command Palette
-
-A fixed overlay toggled by the title bar search or `⌘K` / `Ctrl+K`. Built
-from a registered command list. Includes "Edit Action Layout" and "Reset
-Action Layout" commands. Closes on Esc or selection.
-
-### Styling Note
-
-The mockup (`mockup2.htm`) uses Tailwind CSS v4 and CDN lucide. Production
-uses CSS Modules (`*.module.css`) co-located with components and `lucide-react`
-as an npm dependency — per AGENTS.md styling rules. The mockup is reference
-only, not a dependency.
+The command palette uses a command registry and real workspace file results;
+its keyboard contract is `Ctrl/Cmd+P`, arrows, Enter, and Escape. Closing the
+active tab chooses its nearest neighbor and prompts before discarding a dirty
+editor. Resize handles use pointer capture/window-level cleanup, keyboard
+resizing, minimum/maximum widths, and double-click reset. Theme changes update
+the persisted app setting and `data-thinkbrain-theme`.
 
 ## Status
 
-- ✅ basic shell layout (title bar, activity bar, sidebar, editor, right panel, status bar) — `apps/desktop/src/App.tsx`, `apps/desktop/src/styles.css`
-- ✅ active panel switching (explorer/search/settings) — `apps/desktop/src/stores/appStore.ts:ActivePanel`, `App.tsx:ActiveSidePanel`
-- ✅ left sidebar panels (WorkspaceExplorer, SearchPanel, SettingsPanel) — `apps/desktop/src/workspace/`, `apps/desktop/src/search/`, `apps/desktop/src/settings/`
-- ✅ right panel placeholder (deferred for AI/ACP) — `App.tsx:115`
-- ⬜ action and slot registry (ActionDef, SlotDef, default layout) — see `plans/ui-shell/pending-action_and_slot_registry-med-med.md`
-- ⬜ layout config store + OS AppData persistence — see `plans/ui-shell/pending-layout_config_store_persistence-med-med.md`
-- ⬜ slot and action button components (vertical/horizontal rendering) — see `plans/ui-shell/pending-slot_and_action_button_components-med-med.md`
-- ⬜ drag-and-drop with edit-mode gating (@dnd-kit/core) — see `plans/ui-shell/pending-dnd_edit_mode-med-hard.md`
-- ⬜ active state tracking by action id — see `plans/ui-shell/pending-active_state_tracking-med-easy.md`
-- ⬜ command palette (⌘K, Edit Action Layout, Reset Action Layout) — see `plans/ui-shell/pending-command_palette-med-med.md`
-- ⬜ sidebar minimize toggle (VS Code-style collapse) — see `plans/ui-shell/pending-sidebar_minimize_toggle-med-med.md`
-- ❌ commit 27bf273 "implement sidebar minimize toggle" only modified `mockup2.htm` — never implemented in actual app source (`apps/desktop/src/`)
+- ✅ basic shell, explorer/search/settings, and Markdown editor exist, but are
+  implemented as a single basic grid and global stylesheet — `apps/desktop/src/`
+- ⬜ shared chrome-token migration and CSS Module conversion — see
+  `plans/ui-shell/pending-shell_tokens_and_css_modules-high-hard.md`
+- ⬜ mockup-v3 desktop shell composition — see
+  `plans/ui-shell/pending-desktop_shell_composition-high-hard.md`
+- ⬜ tab model, registry, and tab strip — see
+  `plans/ui-shell/pending-tab_content_registry-high-hard.md`
+- ⬜ left popout integration — see
+  `plans/ui-shell/pending-left_popout_integration-high-med.md`
+- ⬜ inspector/right popout integration — see
+  `plans/ui-shell/pending-right_popout_inspectors-med-med.md`
+- ⬜ command palette and workspace file navigation — see
+  `plans/ui-shell/pending-command_palette_and_navigation-high-med.md`
+- ⬜ resizable layout and OS app-data persistence — see
+  `plans/ui-shell/pending-resizable_panel_persistence-med-med.md`
+- ⬜ theme control in the new shell — see
+  `plans/ui-shell/pending-shell_theme_control-high-easy.md`
+- ⬜ bottom panel framework and status integration — see
+  `plans/ui-shell/pending-bottom_panel_framework-low-med.md`
+- ❌ prior movable-action/slot and layout-editing stories described `mockup2.htm`,
+  not `mockup_v3/`; they were superseded and removed.
