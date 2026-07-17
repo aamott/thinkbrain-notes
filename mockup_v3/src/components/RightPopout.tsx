@@ -23,7 +23,10 @@ type Props = {
 /** Right popout panel — content switches based on the compact top-right menu. */
 export function RightPopout({ view }: Props) {
   return (
-    <div className="flex h-full w-72 flex-col bg-sidebar border-l border-border">
+    <div
+      className="flex h-full flex-col bg-sidebar border-l border-border"
+      style={{ width: 'var(--right-sidebar-w)' }}
+    >
       <div className="flex h-9 shrink-0 items-center px-3">
         <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           {viewLabel(view)}

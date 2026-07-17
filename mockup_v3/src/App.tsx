@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 import { ActionBar } from '@/components/ActionBar'
 import { LeftPopout } from '@/components/LeftPopout'
 import { RightPopout } from '@/components/RightPopout'
@@ -7,6 +7,7 @@ import { EditorArea } from '@/components/EditorArea'
 import { StatusBar } from '@/components/StatusBar'
 import { BottomPanel } from '@/components/BottomPanel'
 import { CommandPalette } from '@/components/CommandPalette'
+import { ResizeHandle } from '@/components/ResizeHandle'
 import { initialTabs, type LeftView, type RightView, type Tab } from '@/data/mockData'
 
 /**
@@ -26,6 +27,8 @@ export default function App() {
   const [rightView, setRightView] = useState<RightView | null>('outline')
   const [bottomOpen, setBottomOpen] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
+  const [leftWidth, setLeftWidth] = useState(256)
+  const [rightWidth, setRightWidth] = useState(288)
 
   // Global keyboard shortcuts.
   useEffect(() => {
@@ -59,15 +62,23 @@ export default function App() {
     setRightView((v) => (v === view ? null : view))
 
   const handleCloseTab = (id: string) => {
-    setTabs((prev) => {
-      const next = prev.filter((t) => t.id !== id)
-      if (id === activeTabId && next.length > 0) setActiveTabId(next[0].id)
-      return next
-    })
+    const closingActive = id === activeTabId
+    const next = tabs.filter((t) => t.id !== id)
+    setTabs(next)
+    // If we closed the active tab, pick the new neighbor (or clear).
+    if (closingActive) {
+      setActiveTabId(next.length > 0 ? next[0].id : '')
+    }
   }
 
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden bg-background text-foreground">
+    <div
+      className="flex h-screen w-screen flex-col overflow-hidden bg-background text-foreground"
+      style={{
+        '--sidebar-w': leftView ? `${leftWidth}px` : '0rem',
+        '--right-sidebar-w': rightView ? `${rightWidth}px` : '0rem',
+      } as CSSProperties}
+    >
       <TitleBar
         tabs={tabs}
         activeTabId={activeTabId}
@@ -81,19 +92,41 @@ export default function App() {
       <div className="flex min-h-0 flex-1">
         <ActionBar active={leftView} onSelect={handleSelectLeft} />
 
-        {leftView && <LeftPopout view={leftView} />}
+        {leftView && (
+          <>
+            <LeftPopout view={leftView} />
+            <ResizeHandle
+              side="left"
+              width={leftWidth}
+              onResize={setLeftWidth}
+            />
+          </>
+        )}
 
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="flex min-h-0 flex-1">
-            <EditorArea tab={activeTab} />
-            {rightView && <RightPopout view={rightView} />}
+            {activeTab ? (
+              <EditorArea tab={activeTab} />
+            ) : (
+              <EmptyEditor />
+            )}
+            {rightView && (
+              <>
+                <ResizeHandle
+                  side="right"
+                  width={rightWidth}
+                  onResize={setRightWidth}
+                />
+                <RightPopout view={rightView} />
+              </>
+            )}
           </div>
           {bottomOpen && <BottomPanel onClose={() => setBottomOpen(false)} />}
         </div>
       </div>
 
       <StatusBar
-        language={activeTab.kind === 'browser' ? 'Web' : 'Markdown'}
+        language={activeTab?.kind === 'browser' ? 'Web' : 'Markdown'}
         line={42}
         col={16}
         vaultName="thinkbrain-vault"
@@ -120,5 +153,17 @@ function ShortcutsHint({ onOpen }: { onOpen: () => void }) {
       <span>+</span>
       <kbd className="font-sans">P</kbd>
     </button>
+  )
+}
+
+/** Placeholder shown when all tabs are closed. */
+function EmptyEditor() {
+  return (
+    <div className="flex h-full flex-1 items-center justify-center bg-editor text-muted-foreground">
+      <div className="flex flex-col items-center gap-2">
+        <span className="text-sm">No tabs open</span>
+        <span className="text-xs">Press Ctrl+P to open a file</span>
+      </div>
+    </div>
   )
 }

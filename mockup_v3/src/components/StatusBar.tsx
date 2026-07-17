@@ -38,8 +38,9 @@ export function StatusBar({
         </button>
         <button className="flex items-center gap-1 hover:bg-white/15 rounded px-1 py-0.5">
           <Check className="size-3.5" />
+          0
           <AlertCircle className="size-3.5" />
-          0 2
+          2
         </button>
         <button className="flex items-center gap-1 hover:bg-white/15 rounded px-1 py-0.5">
           <Brain className="size-3.5" />

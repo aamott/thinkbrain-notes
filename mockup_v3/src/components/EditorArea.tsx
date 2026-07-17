@@ -128,8 +128,8 @@ function BrowserView({ url }: { url: string }) {
           <Star className="size-4" />
         </button>
       </div>
-      {/* Rendered page mock */}
-      <div className="flex-1 overflow-y-auto scroll-thin bg-white text-neutral-900">
+      {/* Rendered page mock — uses a fixed light surface to mimic a website */}
+      <div className="flex-1 overflow-y-auto scroll-thin bg-[#fafafa] text-neutral-900 dark:bg-[#1a1a1a] dark:text-neutral-100">
         <div className="mx-auto max-w-2xl px-8 py-10">
           <div className="mb-2 flex items-center gap-2">
             <Globe className="size-5 text-neutral-400" />
@@ -138,22 +138,22 @@ function BrowserView({ url }: { url: string }) {
             </span>
           </div>
           <h1 className="text-3xl font-bold">Introduction to the Zettelkasten Method</h1>
-          <p className="mt-4 text-neutral-600">
+          <p className="mt-4 text-neutral-600 dark:text-neutral-300">
             The Zettelkasten method is a system of taking and connecting notes. Each note is
             atomic, self-contained, and linked to related ideas — forming a personal knowledge
             graph that grows smarter over time.
           </p>
           <h2 className="mt-8 text-xl font-semibold">Core ideas</h2>
-          <ul className="mt-3 list-disc pl-6 text-neutral-600">
+          <ul className="mt-3 list-disc pl-6 text-neutral-600 dark:text-neutral-300">
             <li>Fleeting notes — quick captures, refined later.</li>
             <li>Literature notes — what you read, in your own words.</li>
             <li>Permanent notes — atomic, linked, durable.</li>
           </ul>
-          <div className="mt-8 rounded-lg border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-600">
+          <div className="mt-8 rounded-lg border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-600 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300">
             <strong>Tip:</strong> ThinkBrain supports all three note types out of the box, with
             automatic backlinking and a graph view.
           </div>
-          <p className="mt-6 text-neutral-600">
+          <p className="mt-6 text-neutral-600 dark:text-neutral-300">
             This is a mock browser tab. In the real app, any tab can host arbitrary content — a
             web view, a graph, a rendered preview, or a CodeMirror editor.
           </p>

@@ -1,35 +1,24 @@
 import {
-  FileText,
-  Search,
-  GitBranch,
-  Hash,
-  Sparkles,
   Settings,
   Brain,
-  type LucideIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import type { LeftView } from '@/data/mockData'
+import { activityItems, type LeftView } from '@/data/mockData'
 
 type Props = {
   active: LeftView | null
   onSelect: (view: LeftView) => void
 }
 
-const topItems: { id: LeftView; icon: LucideIcon; label: string }[] = [
-  { id: 'explorer', icon: FileText, label: 'Explorer' },
-  { id: 'search', icon: Search, label: 'Search' },
-  { id: 'git', icon: GitBranch, label: 'Source Control' },
-  { id: 'tags', icon: Hash, label: 'Tags' },
-  { id: 'extensions', icon: Sparkles, label: 'Extensions' },
-]
-
 /** Vertical activity bar on the far left, VS Code-style. */
 export function ActionBar({ active, onSelect }: Props) {
   return (
-    <div className="flex h-full w-12 flex-col items-center justify-between bg-activitybar border-r border-border">
+    <div
+      className="flex h-full flex-col items-center justify-between bg-activitybar border-r border-border"
+      style={{ width: 'var(--activitybar-w)' }}
+    >
       <div className="flex flex-col items-center gap-1 pt-2">
-        {topItems.map((item) => {
+        {activityItems.map((item) => {
           const isActive = active === item.id
           const Icon = item.icon
           return (

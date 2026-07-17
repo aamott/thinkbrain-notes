@@ -25,7 +25,10 @@ type Props = {
 /** Left popout panel — content switches based on the active activity-bar view. */
 export function LeftPopout({ view }: Props) {
   return (
-    <div className="flex h-full w-64 flex-col bg-sidebar border-r border-border">
+    <div
+      className="flex h-full flex-col bg-sidebar border-r border-border"
+      style={{ width: 'var(--sidebar-w)' }}
+    >
       <div className="flex h-9 shrink-0 items-center justify-between px-3">
         <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           {viewLabel(view)}
@@ -138,7 +141,7 @@ function SearchPanel() {
         />
       </div>
       <div className="text-[11px] text-muted-foreground">
-        {searchResults.length} results in {searchResults.length} files
+        {searchResults.length} results in {new Set(searchResults.map((r) => r.file)).size} files
       </div>
       <div className="flex flex-col gap-2">
         {searchResults.map((r) => (

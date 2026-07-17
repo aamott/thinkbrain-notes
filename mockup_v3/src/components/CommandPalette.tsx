@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { Search, CornerDownLeft, ChevronRight } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { Search, CornerDownLeft, ChevronRight, FileText } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 type Props = {
@@ -16,7 +16,7 @@ type Command = {
 
 const commands: Command[] = [
   { id: 'c1', label: 'Go to File…', hint: 'Ctrl+P', kind: 'command' },
-  { id: 'c2', label: 'Toggle Theme', hint: 'Ctrl+J', kind: 'command' },
+  { id: 'c2', label: 'Toggle Theme', kind: 'command' },
   { id: 'c3', label: 'New Note', hint: 'Ctrl+N', kind: 'command' },
   { id: 'c4', label: 'Search in Vault', hint: 'Ctrl+Shift+F', kind: 'command' },
   { id: 'c5', label: 'Open Graph View', kind: 'command' },
@@ -33,6 +33,12 @@ const commands: Command[] = [
 export function CommandPalette({ open, onClose }: Props) {
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState(0)
+
+  // Compute filtered list up front so it's available to the keydown effect.
+  const filtered = useMemo(
+    () => commands.filter((c) => c.label.toLowerCase().includes(query.toLowerCase())),
+    [query],
+  )
 
   useEffect(() => {
     if (open) {
@@ -60,14 +66,9 @@ export function CommandPalette({ open, onClose }: Props) {
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, query])
+  }, [open, query, filtered.length, onClose])
 
   if (!open) return null
-
-  const filtered = commands.filter((c) =>
-    c.label.toLowerCase().includes(query.toLowerCase()),
-  )
 
   return (
     <div
@@ -111,7 +112,7 @@ export function CommandPalette({ open, onClose }: Props) {
               {c.kind === 'command' ? (
                 <ChevronRight className="size-4 text-muted-foreground" />
               ) : (
-                <span className="size-4 text-center text-[10px] text-muted-foreground">📄</span>
+                <FileText className="size-4 text-muted-foreground" />
               )}
               <span className="flex-1 truncate">{c.label}</span>
               {c.hint && (

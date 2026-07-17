@@ -33,8 +33,14 @@ export function TitleBar({
 
   return (
     <div className="flex h-9 shrink-0 items-center bg-titlebar border-b border-border">
-      {/* App icon / name */}
-      <div className="flex h-full shrink-0 items-center gap-2 px-3">
+      {/* App icon / name — its min-width tracks the left inset (activity bar +
+          open sidebar) so tabs slide right to stay flush with the popout edge.
+          When the popout is closed the content (icon + label) is wider than the
+          min-width, so the block keeps its natural size and tabs don't move. */}
+      <div
+        className="flex h-full shrink-0 items-center gap-2 px-3"
+        style={{ minWidth: 'calc(var(--activitybar-w) + var(--sidebar-w))' }}
+      >
         <div className="flex size-4 items-center justify-center rounded-sm bg-primary">
           <span className="text-[9px] font-bold text-primary-foreground">T</span>
         </div>

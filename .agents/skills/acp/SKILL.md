@@ -12,18 +12,18 @@ This project uses **Agent Client Protocol (ACP)** to communicate with AI coding 
 
 ## What ACP Is
 
-ACP is a protocol that standardizes communication between a host application and an AI coding agent.
+ACP is a protocol that standardizes communication between a code editor/IDE (the **client**) and an AI coding agent — analogous to how LSP standardizes editor↔language-server communication.
 
 Think of it as:
 
 ```
 User
     │
-Host Application
+Client (editor / IDE / host application)
     │
- ACP
+ ACP  (JSON-RPC)
     │
-AI Agent (Codex, Claude Code, Gemini CLI, etc.)
+Agent (Codex, Claude Code, Gemini CLI, etc.)
 ```
 
 ACP is **not** an AI framework.
@@ -73,27 +73,11 @@ The host owns the local environment.
 
 ## Permission Model
 
-ACP separates decisions from execution.
-
-The agent requests permission when appropriate.
-
-Example:
-
-```
-session/request_permission
-```
-
-The host displays a UI.
-
-The user decides:
-
-* Allow once
-* Always allow
-* Deny
-
-The host sends the decision back to the agent.
+ACP separates decisions from execution. The agent requests permission before sensitive tool calls via `session/request_permission`; the host displays a UI and returns the user's decision.
 
 The host—not the agent—enforces permissions.
+
+The exact permission option kinds, request/response shapes, and cancellation semantics are versioned in the spec. **Do not hardcode them from memory** — query context7 (library `agentclientprotocol/agent-client-protocol`) for the current `session/request_permission` and `PermissionOption` definitions before implementing permission handling.
 
 ---
 
@@ -164,41 +148,39 @@ If functionality is outside the ACP specification:
 
 ## Documentation
 
-Read the ACP specification before implementing protocol behavior.
+Read the ACP specification before implementing protocol behavior. The spec is versioned (v1 draft, v2) and evolves — **always pull current details from context7** (library `agentclientprotocol/agent-client-protocol`) rather than relying on memory or the summaries in this skill.
 
-Primary specification:
+Authoritative spec sources (use more than one when verifying):
 
-https://github.com/zed-industries/agent-client-protocol
+* **Official docs site:** https://agentclientprotocol.com
+* **Canonical repository (spec + schemas):** https://github.com/agentclientprotocol/agent-client-protocol
+* **Python SDK:** https://github.com/agentclientprotocol/python-sdk
+* **TypeScript SDK:** https://github.com/agentclientprotocol/typescript-sdk
+* **Rust SDK:** https://github.com/agentclientprotocol/rust-sdk (crate `agent-client-protocol`)
+* **Kotlin SDK:** https://github.com/agentclientprotocol/kotlin-sdk
+* **Java SDK:** https://github.com/agentclientprotocol/java-sdk
 
-Alternative mirror:
+When querying context7, useful topics include:
 
-https://agentclientprotocol.com
-
-Search for:
-
-* capabilities
-* session lifecycle
-* filesystem
-* terminal
-* permissions
-* progress notifications
-* streaming
-* JSON-RPC
+* capabilities (session, terminal, filesystem, MCP)
+* session lifecycle (`session/new`, `session/prompt`, `session/cancel`, `session/update`)
+* filesystem methods (`fs/read_text_file`, etc. — client-mediated)
+* terminal methods
+* permissions (`session/request_permission`, `PermissionOption`)
+* progress notifications and streaming
+* JSON-RPC transport
 
 ---
 
 ## Official SDKs
 
-Prefer official ACP libraries when available instead of implementing the protocol manually.
+Prefer official ACP libraries instead of implementing the protocol manually.
+Known official SDKs (verify current status via context7 before adding a dependency):
 
-Check the ACP repository for:
-
-* SDKs
-* reference implementations
-* transport examples
-* protocol schemas
-
-If no SDK exists for the project language, implement only the transport layer and protocol messages. Do not invent protocol behavior.
+* **Python** — `agentclientprotocol/python-sdk`
+* **TypeScript** — `agentclientprotocol/typescript-sdk` (npm `@agentclientprotocol/sdk`)
+* **Rust** — `agentclientprotocol/rust-sdk` (crate `agent-client-protocol`)
+* **Reference agents** — e.g. `agentclientprotocol/claude-agent-acp`
 
 ---
 
@@ -210,7 +192,7 @@ When working in this repository:
 * Use ACP terminology consistently.
 * Do not design proprietary agent communication protocols unless explicitly requested.
 * Prefer protocol compliance over convenience.
-* If uncertain about protocol behavior, consult the ACP specification before making architectural decisions.
+* If uncertain about protocol behavior, query context7 (library `agentclientprotocol/agent-client-protocol`) for the current spec before making architectural decisions.
 
 When discussing architecture, distinguish clearly between:
 
