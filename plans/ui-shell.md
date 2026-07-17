@@ -91,8 +91,8 @@ the persisted app setting and `data-thinkbrain-theme`.
 
 - ✅ basic shell, explorer/search/settings, and Markdown editor exist, but are
   implemented as a single basic grid and global stylesheet — `apps/desktop/src/`
-- ⬜ shared chrome-token migration and CSS Module conversion — see
-  `plans/ui-shell/pending-shell_tokens_and_css_modules-high-hard.md`
+- ✅ shared chrome-token migration and CSS Module conversion — see
+  `plans/ui-shell/done-shell_tokens_and_css_modules-high-hard.md`
 - ⬜ mockup-v3 desktop shell composition — see
   `plans/ui-shell/pending-desktop_shell_composition-high-hard.md`
 - ⬜ tab model, registry, and tab strip — see

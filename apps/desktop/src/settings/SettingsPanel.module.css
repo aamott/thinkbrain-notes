@@ -1,0 +1,145 @@
+.appEyebrow {
+  color: var(--tn-color-primary);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  margin: 0 0 0.75rem;
+  text-transform: uppercase;
+}
+
+.workspaceError {
+  border: 1px solid color-mix(in srgb, var(--tn-color-danger) 55%, var(--tn-color-border));
+  border-radius: var(--tn-radius-medium);
+  color: var(--tn-color-danger);
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 1rem;
+  padding: 0.85rem 1rem;
+}
+
+.settingsPanel {
+  background: var(--tn-color-sidebar);
+  border-right: 1px solid var(--tn-color-border);
+  display: grid;
+  gap: 1rem;
+  grid-area: sidebar;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+  overflow: auto;
+  padding: 1rem;
+}
+
+.settingsPanel h2 {
+  color: var(--tn-color-foreground);
+  margin: 0;
+}
+
+.settingsPanelHeader {
+  align-items: center;
+  display: flex;
+  gap: 0.75rem;
+}
+
+.settingsForm {
+  align-content: start;
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.settingsFormGroup {
+  border: 1px solid var(--tn-color-border);
+  border-radius: var(--tn-radius-medium);
+  display: grid;
+  gap: 0.8rem;
+  margin: 0;
+  padding: 1rem;
+}
+
+.settingsFormGroup legend {
+  color: var(--tn-color-foreground);
+  font-weight: 700;
+  padding: 0 0.35rem;
+}
+
+.settingsField,
+.settingsCheckbox {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.settingsCheckbox {
+  align-items: center;
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.settingsField span,
+.settingsCheckbox span {
+  color: var(--tn-color-foreground);
+  font-weight: 600;
+}
+
+.settingsField select,
+.settingsField input {
+  background: color-mix(in srgb, var(--tn-color-background) 70%, transparent);
+  border: 1px solid var(--tn-color-border);
+  border-radius: var(--tn-radius-medium);
+  color: var(--tn-color-foreground);
+  font: inherit;
+  min-height: 2.35rem;
+  padding: 0.45rem 0.6rem;
+  width: 100%;
+}
+
+.settingsField select:focus-visible,
+.settingsField input:focus-visible,
+.settingsCheckbox input:focus-visible {
+  border-color: color-mix(in srgb, var(--tn-color-accent) 60%, transparent);
+  outline: 2px solid color-mix(in srgb, var(--tn-color-accent) 45%, transparent);
+  outline-offset: 1px;
+}
+
+.settingsHelp,
+.settingsError {
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.settingsHelp {
+  color: var(--tn-color-muted-foreground);
+}
+
+.settingsError {
+  color: var(--tn-color-danger);
+}
+
+.settingsDiagnostics {
+  border: 1px solid color-mix(in srgb, var(--tn-color-accent) 35%, var(--tn-color-border));
+  border-radius: var(--tn-radius-medium);
+  color: var(--tn-color-muted-foreground);
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.85rem 1rem;
+}
+
+.settingsDiagnostics strong {
+  color: var(--tn-color-foreground);
+}
+
+.settingsDiagnostics ul {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.settingsFormActions {
+  align-items: center;
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+}
+
+.settingsStatus {
+  color: var(--tn-color-muted-foreground);
+}

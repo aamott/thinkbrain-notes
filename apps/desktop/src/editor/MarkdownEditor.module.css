@@ -1,0 +1,116 @@
+.markdownEditor {
+  background: var(--tn-color-editor);
+  color: var(--tn-color-editor-foreground);
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+}
+
+.toolbar {
+  align-items: flex-start;
+  border-bottom: 1px solid var(--tn-color-border);
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  padding: 1rem 1.25rem;
+}
+
+.titleBlock {
+  min-width: 0;
+}
+
+.titleBlock h2 {
+  color: var(--tn-color-editor-foreground);
+  font-size: 1.1rem;
+  margin: 0;
+}
+
+.titleBlock p {
+  color: var(--tn-color-muted-foreground);
+}
+
+.titleBlock p:last-child {
+  margin: 0.35rem 0 0;
+  overflow-wrap: anywhere;
+}
+
+.actions {
+  align-items: center;
+  display: flex;
+  flex-shrink: 0;
+  gap: 0.75rem;
+}
+
+.actions :global(.tn-button):disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.status,
+.loading {
+  color: var(--tn-color-muted-foreground);
+}
+
+.status {
+  font-size: 0.85rem;
+}
+
+.error {
+  border-bottom: 1px solid color-mix(in srgb, var(--tn-color-danger) 55%, var(--tn-color-border));
+  color: var(--tn-color-danger);
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.75rem 1.25rem;
+}
+
+.loading {
+  display: grid;
+  min-height: 0;
+  place-items: center;
+}
+
+.surface {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.surface:focus-within {
+  outline: 2px solid color-mix(in srgb, var(--tn-color-ring) 65%, transparent);
+  outline-offset: -2px;
+}
+
+.surface :global(.cm-editor) {
+  background: transparent;
+  color: var(--tn-color-editor-foreground);
+  height: 100%;
+}
+
+.surface :global(.cm-focused) {
+  outline: none;
+}
+
+.surface :global(.cm-scroller) {
+  font-family:
+    "Cascadia Code", "SFMono-Regular", Consolas, "Liberation Mono", Menlo,
+    monospace;
+  font-size: 0.95rem;
+  line-height: 1.65;
+}
+
+.surface :global(.cm-content) {
+  caret-color: var(--tn-color-primary);
+  padding: 1.25rem;
+}
+
+.surface :global(.cm-gutters) {
+  background: color-mix(in srgb, var(--tn-color-surface) 65%, transparent);
+  border-right: 1px solid var(--tn-color-border);
+  color: var(--tn-color-muted-foreground);
+}
+
+.surface :global(.cm-activeLine),
+.surface :global(.cm-activeLineGutter) {
+  background: color-mix(in srgb, var(--tn-color-primary) 10%, transparent);
+}

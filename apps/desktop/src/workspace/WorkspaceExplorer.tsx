@@ -7,6 +7,7 @@ import { indexDocument, removeIndexedDocument } from "../search/searchService";
 import { useAppStore } from "../stores/appStore";
 import { FileTree } from "./FileTree";
 import { buildFileTree } from "./fileTreeModel";
+import styles from "./WorkspaceExplorer.module.css";
 import {
   createMarkdownFile,
   deleteMarkdownFile,
@@ -214,10 +215,10 @@ export function WorkspaceExplorer() {
   }
 
   return (
-    <aside className="workspace-panel" aria-labelledby="workspace-title">
-      <div className="workspace-panel__header">
+    <aside className={styles.workspacePanel} aria-labelledby="workspace-title">
+      <div className={styles.workspacePanelHeader}>
         <div>
-          <p className="app-eyebrow">Explorer</p>
+          <p className={styles.appEyebrow}>Explorer</p>
           <h2 id="workspace-title">Workspace</h2>
         </div>
         <Button variant="secondary" onClick={handleOpenWorkspace}>
@@ -262,19 +263,19 @@ function WorkspacePanelBody({
 
   if (workspace.status === "idle") {
     return (
-      <p className="workspace-empty">
+      <p className={styles.workspaceEmpty}>
         Open a folder to list and manage Markdown notes.
       </p>
     );
   }
 
   if (workspace.status === "loading") {
-    return <p className="workspace-empty">Opening workspace...</p>;
+    return <p className={styles.workspaceEmpty}>Opening workspace...</p>;
   }
 
   if (workspace.status === "error") {
     return (
-      <div className="workspace-error" role="status">
+      <div className={styles.workspaceError} role="status">
         <strong>{workspace.error.code}</strong>
         <span>{workspace.error.message}</span>
       </div>
@@ -283,18 +284,18 @@ function WorkspacePanelBody({
 
   return (
     <>
-      <div className="workspace-meta">
+      <div className={styles.workspaceMeta}>
         <strong>{workspace.workspace.name}</strong>
         <span>{workspace.workspace.rootPath}</span>
       </div>
-      <div className="workspace-actions">
+      <div className={styles.workspaceActions}>
         <Button onClick={onCreateNote}>New note</Button>
         <Button variant="secondary" onClick={onRefresh}>
           Refresh
         </Button>
       </div>
       {treeNodes.length === 0 ? (
-        <p className="workspace-empty">This folder is empty.</p>
+        <p className={styles.workspaceEmpty}>This folder is empty.</p>
       ) : (
         <FileTree
           activeRelativePath={

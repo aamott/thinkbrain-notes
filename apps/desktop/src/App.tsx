@@ -1,6 +1,5 @@
 import { appIdentity } from "@thinkbrain/core";
 import { Button } from "@thinkbrain/ui";
-import "@thinkbrain/ui/styles.css";
 import { useEffect } from "react";
 
 import { MarkdownEditor } from "./editor/MarkdownEditor";
@@ -10,6 +9,8 @@ import { useWorkspaceIndexer } from "./search/useWorkspaceIndexer";
 import { SettingsPanel } from "./settings/SettingsPanel";
 import { loadAppSettings } from "./settings/settingsService";
 import { useAppStore } from "./stores/appStore";
+import styles from "./App.module.css";
+import sharedStyles from "./styles/shared.module.css";
 import { WorkspaceExplorer } from "./workspace/WorkspaceExplorer";
 
 export function App() {
@@ -60,10 +61,10 @@ export function App() {
   }, [settings.theme]);
 
   return (
-    <main className="app-shell" aria-labelledby="app-title">
-      <header className="title-bar">
+    <main className={styles.appShell} aria-labelledby="app-title">
+      <header className={styles.titleBar}>
         <div>
-          <p className="app-eyebrow">Local Markdown workspace</p>
+          <p className={sharedStyles.eyebrow}>Local Markdown workspace</p>
           <h1 id="app-title">{appIdentity.displayName}</h1>
         </div>
         <Button variant="secondary" onClick={recordBootCheck}>
@@ -71,7 +72,7 @@ export function App() {
         </Button>
       </header>
 
-      <nav className="activity-bar" aria-label="Primary navigation">
+      <nav className={styles.activityBar} aria-label="Primary navigation">
         <button
           aria-current={activePanel === "explorer" ? "page" : undefined}
           onClick={() => setActivePanel("explorer")}
@@ -100,23 +101,23 @@ export function App() {
 
       <ActiveSidePanel activePanel={activePanel} />
 
-      <section className="editor-area" aria-labelledby="editor-area-title">
+      <section className={styles.editorArea} aria-labelledby="editor-area-title">
         {activeDocument.file ? (
           <MarkdownEditor />
         ) : (
-          <div className="editor-placeholder">
-            <p className="app-eyebrow">Editor area</p>
+          <div className={styles.editorPlaceholder}>
+            <p className={sharedStyles.eyebrow}>Editor area</p>
             <h2 id="editor-area-title">No note selected</h2>
             <p>Open a Markdown file from the explorer to start editing.</p>
           </div>
         )}
       </section>
 
-      <aside className="right-panel" aria-label="Deferred right panel">
+      <aside className={styles.rightPanel} aria-label="Deferred right panel">
         <p>Right panel deferred</p>
       </aside>
 
-      <footer className="status-bar">
+      <footer className={styles.statusBar}>
         <NativeShellStatus state={nativeShell} />
         <span>Boot checks: {bootChecks}</span>
       </footer>
@@ -151,7 +152,7 @@ function NativeShellStatus({
 
   if (state.status === "ready") {
     return (
-      <span className="native-status--ready">
+      <span className={styles.nativeStatusReady}>
         Native shell ready: {state.shell.appName} v{state.shell.shellVersion}
       </span>
     );
@@ -159,7 +160,7 @@ function NativeShellStatus({
 
   if (state.status === "error") {
     return (
-      <span className="native-status--error" role="status">
+      <span className={styles.nativeStatusError} role="status">
         Native shell unavailable ({state.error.code}): {state.error.message}
       </span>
     );

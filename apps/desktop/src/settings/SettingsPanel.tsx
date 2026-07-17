@@ -4,6 +4,7 @@ import type { FormEvent } from "react";
 
 import { useAppStore } from "../stores/appStore";
 import { saveAppSettings } from "./settingsService";
+import styles from "./SettingsPanel.module.css";
 
 const MIN_FONT_SIZE = 10;
 const MAX_FONT_SIZE = 32;
@@ -35,16 +36,16 @@ export function SettingsPanel() {
   }
 
   return (
-    <aside className="settings-panel" aria-labelledby="settings-title">
-      <div className="settings-panel__header">
-        <p className="app-eyebrow">Settings</p>
+    <aside className={styles.settingsPanel} aria-labelledby="settings-title">
+      <div className={styles.settingsPanelHeader}>
+        <p className={styles.appEyebrow}>Settings</p>
         <h2 id="settings-title">Preferences</h2>
       </div>
 
-      <form className="settings-form" onSubmit={handleSubmit}>
-        <fieldset className="settings-form__group" disabled={isSaving}>
+      <form className={styles.settingsForm} onSubmit={handleSubmit}>
+        <fieldset className={styles.settingsFormGroup} disabled={isSaving}>
           <legend>Appearance</legend>
-          <label className="settings-field">
+          <label className={styles.settingsField}>
             <span>Theme</span>
             <select
               value={settingsState.draft.theme}
@@ -62,9 +63,9 @@ export function SettingsPanel() {
           </label>
         </fieldset>
 
-        <fieldset className="settings-form__group" disabled={isSaving}>
+        <fieldset className={styles.settingsFormGroup} disabled={isSaving}>
           <legend>Editor</legend>
-          <label className="settings-field">
+          <label className={styles.settingsField}>
             <span>Font size</span>
             <input
               aria-describedby="settings-font-size-help"
@@ -87,15 +88,15 @@ export function SettingsPanel() {
               }
             />
           </label>
-          <p id="settings-font-size-help" className="settings-help">
+          <p id="settings-font-size-help" className={styles.settingsHelp}>
             Choose an editor font size from {MIN_FONT_SIZE} to {MAX_FONT_SIZE}px.
           </p>
           {fontSizeInvalid ? (
-            <p className="settings-error" role="alert">
+            <p className={styles.settingsError} role="alert">
               Font size must be between {MIN_FONT_SIZE} and {MAX_FONT_SIZE}px.
             </p>
           ) : null}
-          <label className="settings-checkbox">
+          <label className={styles.settingsCheckbox}>
             <input
               checked={settingsState.draft.editor.lineWrapping}
               onChange={(event) =>
@@ -114,7 +115,7 @@ export function SettingsPanel() {
         </fieldset>
 
         {settingsState.diagnostics.length > 0 ? (
-          <div className="settings-diagnostics" role="status">
+          <div className={styles.settingsDiagnostics} role="status">
             <strong>Settings diagnostics</strong>
             <ul>
               {settingsState.diagnostics.map((diagnostic) => (
@@ -127,14 +128,14 @@ export function SettingsPanel() {
         ) : null}
 
         {settingsState.error ? (
-          <div className="workspace-error" role="alert">
+          <div className={styles.workspaceError} role="alert">
             <strong>{settingsState.error.code}</strong>
             <span>{settingsState.error.message}</span>
           </div>
         ) : null}
 
-        <div className="settings-form__actions">
-          <span className="settings-status" role="status">
+        <div className={styles.settingsFormActions}>
+          <span className={styles.settingsStatus} role="status">
             {settingsStatusText(settingsState.status, isDirty)}
           </span>
           <Button disabled={!canSave} type="submit">

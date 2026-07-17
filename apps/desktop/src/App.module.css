@@ -1,0 +1,140 @@
+.appShell {
+  display: grid;
+  grid-template-areas:
+    "title title title title"
+    "activity sidebar editor right"
+    "status status status status";
+  grid-template-columns: 3.5rem minmax(16rem, 22rem) minmax(0, 1fr) minmax(12rem, 16rem);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+.titleBar {
+  align-items: center;
+  background: var(--tn-color-titlebar);
+  border-bottom: 1px solid var(--tn-color-border);
+  display: flex;
+  gap: 1rem;
+  grid-area: title;
+  justify-content: space-between;
+  padding: 1rem 1.25rem;
+}
+
+.titleBar h1,
+.editorPlaceholder h2 {
+  color: var(--tn-color-titlebar-foreground);
+  margin: 0;
+}
+
+.titleBar h1 {
+  font-size: 1.25rem;
+  letter-spacing: -0.05em;
+}
+
+.activityBar {
+  align-items: center;
+  background: var(--tn-color-activitybar);
+  border-right: 1px solid var(--tn-color-border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  grid-area: activity;
+  padding: 0.75rem 0.5rem;
+}
+
+.activityBar button {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--tn-radius-medium);
+  color: var(--tn-color-activitybar-foreground);
+  cursor: pointer;
+  font: inherit;
+  padding: 0.5rem;
+  writing-mode: vertical-rl;
+}
+
+.activityBar button[aria-current="page"],
+.activityBar button:hover {
+  border-color: var(--tn-color-border);
+  color: var(--tn-color-activitybar-active);
+}
+
+.activityBar button:focus-visible {
+  outline: 2px solid var(--tn-color-ring);
+  outline-offset: 2px;
+}
+
+.activityBar button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.editorArea {
+  display: grid;
+  grid-area: editor;
+  min-width: 0;
+  overflow: hidden;
+  padding: 0;
+  place-items: stretch;
+}
+
+.editorPlaceholder {
+  align-self: center;
+  border: 1px dashed var(--tn-color-border);
+  border-radius: var(--tn-radius-large);
+  justify-self: center;
+  margin: auto;
+  max-width: 42rem;
+  padding: 2rem;
+  text-align: center;
+}
+
+.editorPlaceholder p:last-child {
+  color: var(--tn-color-muted-foreground);
+}
+
+.rightPanel {
+  background: var(--tn-color-panel);
+  border-left: 1px solid var(--tn-color-border);
+  color: var(--tn-color-muted-foreground);
+  display: grid;
+  grid-area: right;
+  padding: 1rem;
+  place-items: center;
+}
+
+.statusBar {
+  align-items: center;
+  background: var(--tn-color-statusbar);
+  border-top: 1px solid var(--tn-color-border);
+  color: var(--tn-color-statusbar-foreground);
+  display: flex;
+  font-size: 0.85rem;
+  gap: 0.75rem;
+  grid-area: status;
+  justify-content: space-between;
+  padding: 0.5rem 0.75rem;
+}
+
+.nativeStatusReady {
+  color: var(--tn-color-statusbar-foreground);
+}
+
+.nativeStatusError {
+  color: var(--tn-color-danger);
+}
+
+@media (max-width: 64rem) {
+  .appShell {
+    grid-template-columns: 3.5rem minmax(14rem, 18rem) minmax(0, 1fr);
+    grid-template-areas:
+      "title title title"
+      "activity sidebar editor"
+      "status status status";
+  }
+
+  .rightPanel {
+    display: none;
+  }
+}

@@ -1,17 +1,162 @@
-:root {
-  color-scheme: dark;
-  --tn-color-background: #10131a;
-  --tn-color-surface: #181d27;
-  --tn-color-foreground: #f7f7fb;
-  --tn-color-muted: #a9b0c2;
-  --tn-color-accent: #8da2ff;
-  --tn-color-accent-foreground: #0d1020;
-  --tn-color-border: #2d3445;
-  --tn-radius-medium: 0.75rem;
-  --tn-shadow-soft: 0 18px 50px rgb(0 0 0 / 28%);
+:root,
+:root[data-thinkbrain-theme="light"] {
+  color-scheme: light;
+
+  /* Core semantic colors. */
+  --tn-color-background: hsl(0 0% 100%);
+  --tn-color-foreground: hsl(222 47% 11%);
+  --tn-color-surface: hsl(220 16% 97%);
+  --tn-color-surface-foreground: hsl(222 47% 11%);
+  --tn-color-card: hsl(0 0% 100%);
+  --tn-color-card-foreground: hsl(222 47% 11%);
+  --tn-color-popover: hsl(0 0% 100%);
+  --tn-color-popover-foreground: hsl(222 47% 11%);
+  --tn-color-primary: hsl(262 83% 58%);
+  --tn-color-primary-foreground: hsl(0 0% 100%);
+  --tn-color-secondary: hsl(220 14% 96%);
+  --tn-color-secondary-foreground: hsl(222 47% 11%);
+  --tn-color-muted: hsl(220 14% 96%);
+  --tn-color-muted-foreground: hsl(220 9% 46%);
+  --tn-color-accent: hsl(262 83% 96%);
+  --tn-color-accent-foreground: hsl(262 83% 40%);
+  --tn-color-danger: hsl(0 84% 38%);
+  --tn-color-danger-foreground: hsl(0 0% 100%);
+  --tn-color-destructive: hsl(0 84% 60%);
+  --tn-color-destructive-foreground: hsl(0 0% 100%);
+  --tn-color-success: hsl(142 71% 35%);
+  --tn-color-warning: hsl(38 92% 42%);
+  --tn-color-info: hsl(217 91% 50%);
+  --tn-color-border: hsl(220 13% 91%);
+  --tn-color-input: hsl(220 13% 91%);
+  --tn-color-ring: hsl(262 83% 58%);
+
+  /* Mockup-v3 chrome surfaces. */
+  --tn-color-titlebar: hsl(0 0% 97%);
+  --tn-color-titlebar-foreground: hsl(222 47% 11%);
+  --tn-color-activitybar: hsl(220 16% 93%);
+  --tn-color-activitybar-foreground: hsl(220 9% 40%);
+  --tn-color-activitybar-active: hsl(262 83% 58%);
+  --tn-color-sidebar: hsl(220 16% 97%);
+  --tn-color-sidebar-foreground: hsl(222 47% 11%);
+  --tn-color-editor: hsl(0 0% 100%);
+  --tn-color-editor-foreground: hsl(222 47% 11%);
+  --tn-color-panel: hsl(220 16% 96%);
+  --tn-color-panel-foreground: hsl(222 47% 11%);
+  --tn-color-statusbar: hsl(262 83% 58%);
+  --tn-color-statusbar-foreground: hsl(0 0% 100%);
+  --tn-color-tab-active: hsl(0 0% 100%);
+  --tn-color-tab-inactive: hsl(220 16% 94%);
+  --tn-color-tab-active-foreground: hsl(222 47% 11%);
+  --tn-color-tab-inactive-foreground: hsl(220 9% 46%);
+
+  --tn-radius-small: 0.25rem;
+  --tn-radius-medium: 0.5rem;
+  --tn-radius-large: 0.75rem;
+  --tn-size-activitybar-width: 3rem;
+  --tn-size-sidebar-width: 16rem;
+  --tn-size-right-sidebar-width: 18rem;
+  --tn-shadow-soft: 0 18px 50px rgb(0 0 0 / 18%);
   --tn-font-sans:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
+}
+
+:root[data-thinkbrain-theme="dark"] {
+  color-scheme: dark;
+
+  --tn-color-background: hsl(222 47% 7%);
+  --tn-color-foreground: hsl(210 40% 98%);
+  --tn-color-surface: hsl(222 40% 10%);
+  --tn-color-surface-foreground: hsl(210 40% 98%);
+  --tn-color-card: hsl(222 40% 10%);
+  --tn-color-card-foreground: hsl(210 40% 98%);
+  --tn-color-popover: hsl(222 40% 10%);
+  --tn-color-popover-foreground: hsl(210 40% 98%);
+  --tn-color-primary: hsl(262 83% 66%);
+  --tn-color-primary-foreground: hsl(0 0% 100%);
+  --tn-color-secondary: hsl(222 30% 16%);
+  --tn-color-secondary-foreground: hsl(210 40% 98%);
+  --tn-color-muted: hsl(222 30% 16%);
+  --tn-color-muted-foreground: hsl(220 14% 60%);
+  --tn-color-accent: hsl(262 50% 22%);
+  --tn-color-accent-foreground: hsl(262 83% 80%);
+  --tn-color-danger: hsl(0 72% 62%);
+  --tn-color-danger-foreground: hsl(0 0% 100%);
+  --tn-color-destructive: hsl(0 72% 51%);
+  --tn-color-destructive-foreground: hsl(0 0% 100%);
+  --tn-color-success: hsl(142 71% 45%);
+  --tn-color-warning: hsl(38 92% 50%);
+  --tn-color-info: hsl(217 91% 60%);
+  --tn-color-border: hsl(222 30% 18%);
+  --tn-color-input: hsl(222 30% 18%);
+  --tn-color-ring: hsl(262 83% 66%);
+
+  --tn-color-titlebar: hsl(222 47% 9%);
+  --tn-color-titlebar-foreground: hsl(210 40% 98%);
+  --tn-color-activitybar: hsl(222 47% 11%);
+  --tn-color-activitybar-foreground: hsl(220 14% 60%);
+  --tn-color-activitybar-active: hsl(262 83% 66%);
+  --tn-color-sidebar: hsl(222 44% 9%);
+  --tn-color-sidebar-foreground: hsl(210 40% 98%);
+  --tn-color-editor: hsl(222 47% 7%);
+  --tn-color-editor-foreground: hsl(210 40% 98%);
+  --tn-color-panel: hsl(222 44% 9%);
+  --tn-color-panel-foreground: hsl(210 40% 98%);
+  --tn-color-statusbar: hsl(262 60% 30%);
+  --tn-color-statusbar-foreground: hsl(210 40% 98%);
+  --tn-color-tab-active: hsl(222 47% 7%);
+  --tn-color-tab-inactive: hsl(222 40% 12%);
+  --tn-color-tab-active-foreground: hsl(210 40% 98%);
+  --tn-color-tab-inactive-foreground: hsl(220 14% 60%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-thinkbrain-theme="system"] {
+    color-scheme: dark;
+    --tn-color-background: hsl(222 47% 7%);
+    --tn-color-foreground: hsl(210 40% 98%);
+    --tn-color-surface: hsl(222 40% 10%);
+    --tn-color-surface-foreground: hsl(210 40% 98%);
+    --tn-color-card: hsl(222 40% 10%);
+    --tn-color-card-foreground: hsl(210 40% 98%);
+    --tn-color-popover: hsl(222 40% 10%);
+    --tn-color-popover-foreground: hsl(210 40% 98%);
+    --tn-color-primary: hsl(262 83% 66%);
+    --tn-color-primary-foreground: hsl(0 0% 100%);
+    --tn-color-secondary: hsl(222 30% 16%);
+    --tn-color-secondary-foreground: hsl(210 40% 98%);
+    --tn-color-muted: hsl(222 30% 16%);
+    --tn-color-muted-foreground: hsl(220 14% 60%);
+    --tn-color-accent: hsl(262 50% 22%);
+    --tn-color-accent-foreground: hsl(262 83% 80%);
+    --tn-color-danger: hsl(0 72% 62%);
+    --tn-color-danger-foreground: hsl(0 0% 100%);
+    --tn-color-destructive: hsl(0 72% 51%);
+    --tn-color-destructive-foreground: hsl(0 0% 100%);
+    --tn-color-success: hsl(142 71% 45%);
+    --tn-color-warning: hsl(38 92% 50%);
+    --tn-color-info: hsl(217 91% 60%);
+    --tn-color-border: hsl(222 30% 18%);
+    --tn-color-input: hsl(222 30% 18%);
+    --tn-color-ring: hsl(262 83% 66%);
+    --tn-color-titlebar: hsl(222 47% 9%);
+    --tn-color-titlebar-foreground: hsl(210 40% 98%);
+    --tn-color-activitybar: hsl(222 47% 11%);
+    --tn-color-activitybar-foreground: hsl(220 14% 60%);
+    --tn-color-activitybar-active: hsl(262 83% 66%);
+    --tn-color-sidebar: hsl(222 44% 9%);
+    --tn-color-sidebar-foreground: hsl(210 40% 98%);
+    --tn-color-editor: hsl(222 47% 7%);
+    --tn-color-editor-foreground: hsl(210 40% 98%);
+    --tn-color-panel: hsl(222 44% 9%);
+    --tn-color-panel-foreground: hsl(210 40% 98%);
+    --tn-color-statusbar: hsl(262 60% 30%);
+    --tn-color-statusbar-foreground: hsl(210 40% 98%);
+    --tn-color-tab-active: hsl(222 47% 7%);
+    --tn-color-tab-inactive: hsl(222 40% 12%);
+    --tn-color-tab-active-foreground: hsl(210 40% 98%);
+    --tn-color-tab-inactive-foreground: hsl(220 14% 60%);
+  }
 }
 
 .tn-button {
@@ -32,13 +177,13 @@
 }
 
 .tn-button:focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--tn-color-accent) 70%, transparent);
+  outline: 3px solid color-mix(in srgb, var(--tn-color-ring) 70%, transparent);
   outline-offset: 2px;
 }
 
 .tn-button--primary {
-  background: var(--tn-color-accent);
-  color: var(--tn-color-accent-foreground);
+  background: var(--tn-color-primary);
+  color: var(--tn-color-primary-foreground);
 }
 
 .tn-button--secondary {

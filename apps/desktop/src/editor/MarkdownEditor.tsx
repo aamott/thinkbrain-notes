@@ -14,6 +14,8 @@ import {
   useAppStore
 } from "../stores/appStore";
 import { writeMarkdownFile } from "../workspace/workspaceService";
+import styles from "./MarkdownEditor.module.css";
+import sharedStyles from "../styles/shared.module.css";
 
 export function MarkdownEditor() {
   const activeDocument = useAppStore((state) => state.activeDocument);
@@ -198,15 +200,15 @@ export function MarkdownEditor() {
     activeDocument.status !== "saving";
 
   return (
-    <div className="markdown-editor">
-      <header className="markdown-editor__toolbar">
-        <div className="markdown-editor__title-block">
-          <p className="app-eyebrow">Markdown editor</p>
+    <div className={styles.markdownEditor}>
+      <header className={styles.toolbar}>
+        <div className={styles.titleBlock}>
+          <p className={sharedStyles.eyebrow}>Markdown editor</p>
           <h2 id="editor-area-title">{activeDocument.file.fileName}</h2>
           <p>{activeDocument.file.relativePath}</p>
         </div>
-        <div className="markdown-editor__actions">
-          <span className="markdown-editor__status" role="status">
+        <div className={styles.actions}>
+          <span className={styles.status} role="status">
             {getDocumentStatusText(activeDocument)}
           </span>
           <Button
@@ -221,20 +223,20 @@ export function MarkdownEditor() {
       </header>
 
       {activeDocument.error ? (
-        <div className="markdown-editor__error" role="alert">
+        <div className={styles.error} role="alert">
           <strong>{activeDocument.error.code}</strong>
           <span>{activeDocument.error.message}</span>
         </div>
       ) : null}
 
       {activeDocument.status === "loading" ? (
-        <div className="markdown-editor__loading" role="status">
+        <div className={styles.loading} role="status">
           Opening note...
         </div>
       ) : (
         <div
           ref={editorHostRef}
-          className="markdown-editor__surface"
+          className={styles.surface}
           aria-label={`Markdown editor for ${activeDocument.file.fileName}`}
         />
       )}

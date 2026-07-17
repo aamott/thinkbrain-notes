@@ -8,6 +8,7 @@ import {
 } from "../stores/appStore";
 import { openNoteDocument } from "../workspace/openNote";
 import { searchWorkspace, type SearchResult } from "./searchService";
+import styles from "./SearchPanel.module.css";
 
 // Debounce keystrokes so type-ahead search does not fire a native query per key.
 const SEARCH_DEBOUNCE_MS = 160;
@@ -62,15 +63,15 @@ export function SearchPanel() {
   ]);
 
   return (
-    <aside className="search-panel" aria-labelledby="search-title">
-      <div className="search-panel__header">
-        <p className="app-eyebrow">Search</p>
+    <aside className={styles.searchPanel} aria-labelledby="search-title">
+      <div className={styles.searchPanelHeader}>
+        <p className={styles.appEyebrow}>Search</p>
         <h2 id="search-title">Find notes</h2>
       </div>
 
       <input
         aria-label="Search notes"
-        className="search-panel__input"
+        className={styles.searchPanelInput}
         disabled={!rootPath}
         onChange={(event) => setSearchQuery(event.target.value)}
         placeholder="Search names, text, tags, aliases…"
@@ -93,7 +94,7 @@ export function SearchPanel() {
 function IndexingStatus({ indexing }: { readonly indexing: IndexingState }) {
   if (indexing.status === "indexing") {
     return (
-      <p className="search-panel__indexing" role="status">
+      <p className={styles.searchPanelIndexing} role="status">
         Indexing notes… {indexing.indexed}/{indexing.total}
       </p>
     );
@@ -101,7 +102,10 @@ function IndexingStatus({ indexing }: { readonly indexing: IndexingState }) {
 
   if (indexing.status === "error" && indexing.error) {
     return (
-      <p className="search-panel__indexing search-panel__indexing--error" role="status">
+      <p
+        className={`${styles.searchPanelIndexing} ${styles.searchPanelIndexingError}`}
+        role="status"
+      >
         Indexing failed ({indexing.error.code}): {indexing.error.message}
       </p>
     );
@@ -109,7 +113,7 @@ function IndexingStatus({ indexing }: { readonly indexing: IndexingState }) {
 
   if (indexing.status === "ready") {
     return (
-      <p className="search-panel__indexing" role="status">
+      <p className={styles.searchPanelIndexing} role="status">
         Indexed {indexing.indexed} {indexing.indexed === 1 ? "note" : "notes"}.
       </p>
     );
@@ -133,13 +137,13 @@ function SearchResultsBody({
 
   if (!hasWorkspace) {
     return (
-      <p className="search-empty">Open a folder to search your notes.</p>
+      <p className={styles.searchEmpty}>Open a folder to search your notes.</p>
     );
   }
 
   if (trimmedQuery.length === 0) {
     return (
-      <p className="search-empty">
+      <p className={styles.searchEmpty}>
         Type to search across filenames, Markdown text, tags, and aliases.
       </p>
     );
@@ -147,7 +151,7 @@ function SearchResultsBody({
 
   if (search.status === "error" && search.error) {
     return (
-      <div className="workspace-error" role="status">
+      <div className={styles.workspaceError} role="status">
         <strong>{search.error.code}</strong>
         <span>{search.error.message}</span>
       </div>
@@ -155,12 +159,12 @@ function SearchResultsBody({
   }
 
   if (search.status === "searching") {
-    return <p className="search-empty">Searching…</p>;
+    return <p className={styles.searchEmpty}>Searching…</p>;
   }
 
   if (search.status === "ready" && search.results.length === 0) {
     return (
-      <p className="search-empty">No notes match “{trimmedQuery}”.</p>
+      <p className={styles.searchEmpty}>No notes match “{trimmedQuery}”.</p>
     );
   }
 
@@ -177,9 +181,9 @@ function SearchResultsBody({
   }
 
   return (
-    <ul className="search-results" aria-label="Search results">
+    <ul className={styles.searchResults} aria-label="Search results">
       {search.results.map((result) => (
-        <li key={result.path} className="search-results__item">
+        <li key={result.path} className={styles.searchResultsItem}>
           <button
             aria-current={
               activeDocument.file?.rootPath === rootPath &&
@@ -187,16 +191,16 @@ function SearchResultsBody({
                 ? "page"
                 : undefined
             }
-            className="search-results__hit"
+            className={styles.searchResultsHit}
             onClick={() => handleOpen(result)}
             type="button"
           >
-            <span className="search-results__name">
+            <span className={styles.searchResultsName}>
               {result.title ?? result.fileName}
             </span>
-            <small className="search-results__path">{result.path}</small>
+            <small className={styles.searchResultsPath}>{result.path}</small>
             {result.snippet ? (
-              <span className="search-results__snippet">{result.snippet}</span>
+              <span className={styles.searchResultsSnippet}>{result.snippet}</span>
             ) : null}
           </button>
         </li>

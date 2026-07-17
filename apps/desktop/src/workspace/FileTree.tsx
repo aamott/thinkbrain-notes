@@ -1,9 +1,11 @@
 import type { MarkdownFileEntry, WorkspaceEntry } from "@thinkbrain/core";
 import { classNames } from "@thinkbrain/ui";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import { Tree, type NodeRendererProps } from "react-arborist";
 
 import type { FileTreeNode } from "./fileTreeModel";
+import styles from "./FileTree.module.css";
 
 const ROW_HEIGHT = 28;
 const TREE_INDENT = 14;
@@ -28,10 +30,10 @@ export function FileTree(props: FileTreeProps) {
   const { ref, size } = useElementSize();
 
   return (
-    <div ref={ref} className="file-tree">
+    <div ref={ref} className={styles.fileTree}>
       {size.height > 0 ? (
         <Tree<FileTreeNode>
-          className="file-tree__list"
+          className={styles.fileTreeList}
           data={props.nodes}
           disableDrag
           disableDrop
@@ -70,6 +72,7 @@ function FileTreeRow({
   readonly treeProps: FileTreeProps;
 }) {
   const { node, style } = rendererProps;
+  const rowRef = useArboristStyle(style);
   const data = node.data;
   const isBusy = treeProps.busyPath === data.path;
 
@@ -77,14 +80,14 @@ function FileTreeRow({
     return (
       // `style` carries react-arborist's positioning + indentation; required.
       <div
-        className="file-tree__row file-tree__row--folder"
-        style={style}
+        className={classNames(styles.fileTreeRow, styles.fileTreeRowFolder)}
+        ref={rowRef}
         onClick={() => node.toggle()}
       >
-        <span className="file-tree__twisty" aria-hidden="true">
+        <span className={styles.fileTreeTwisty} aria-hidden="true">
           {node.isOpen ? "▾" : "▸"}
         </span>
-        <span className="file-tree__label">{data.name}</span>
+        <span className={styles.fileTreeLabel}>{data.name}</span>
       </div>
     );
   }
@@ -97,21 +100,22 @@ function FileTreeRow({
     <div
       aria-current={isActive ? "page" : undefined}
       className={classNames(
-        "file-tree__row file-tree__row--file",
-        !markdownFile && "is-readonly",
-        isActive && "is-active"
+        styles.fileTreeRow,
+        styles.fileTreeRowFile,
+        !markdownFile && styles.isReadonly,
+        isActive && styles.isActive
       )}
-      style={style}
+      ref={rowRef}
       onClick={() => {
         if (markdownFile && !isBusy) {
           treeProps.onOpenNote(markdownFile);
         }
       }}
     >
-      <span className="file-tree__twisty" aria-hidden="true" />
-      <span className="file-tree__label">{data.name}</span>
+      <span className={styles.fileTreeTwisty} aria-hidden="true" />
+      <span className={styles.fileTreeLabel}>{data.name}</span>
       {markdownFile ? (
-        <span className="file-tree__actions">
+        <span className={styles.fileTreeActions}>
           <button
             disabled={isBusy}
             onClick={(event) => {
@@ -186,4 +190,54 @@ function useElementSize(): {
   }, []);
 
   return { ref, size };
+}
+
+const ARBORIST_STYLE_PROPERTIES = {
+  height: "height",
+  left: "left",
+  paddingLeft: "padding-left",
+  position: "position",
+  top: "top",
+  width: "width"
+} as const;
+
+/** Applies react-arborist's virtual row geometry through scoped CSS variables. */
+function useArboristStyle(style: CSSProperties): React.RefObject<HTMLDivElement | null> {
+  const ref = useRef<HTMLDivElement | null>(null);
+
+  useLayoutEffect(() => {
+    const element = ref.current;
+    if (!element) {
+      return;
+    }
+
+    for (const [property, rawValue] of Object.entries(style)) {
+      const cssProperty =
+        ARBORIST_STYLE_PROPERTIES[property as keyof typeof ARBORIST_STYLE_PROPERTIES];
+      if (rawValue == null) {
+        continue;
+      }
+
+      if (!cssProperty) {
+        continue;
+      }
+
+      const value = typeof rawValue === "number" && rawValue !== 0
+        ? `${rawValue}px`
+        : String(rawValue);
+      element.style.setProperty(`--tn-file-tree-${cssProperty}`, value);
+    }
+
+    return () => {
+      for (const property of Object.keys(style)) {
+        const cssProperty =
+          ARBORIST_STYLE_PROPERTIES[property as keyof typeof ARBORIST_STYLE_PROPERTIES];
+        if (cssProperty) {
+          element.style.removeProperty(`--tn-file-tree-${cssProperty}`);
+        }
+      }
+    };
+  }, [style]);
+
+  return ref;
 }
