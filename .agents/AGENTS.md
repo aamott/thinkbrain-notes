@@ -36,3 +36,7 @@
 - Run the narrowest relevant checks after non-trivial changes, then `pnpm lint`, `pnpm typecheck`, and targeted tests when the change is ready. Do not fix unrelated failures; record them in the relevant epic instead.
 - Avoid `any`; use `unknown`, generics, or a documented narrow exception.
 - Treat `eslint.config.*` changes and new privileged native capabilities as architectural decisions: document and surface them before implementation.
+
+## Developer rules
+**Stay in your lane**: Stay focused. If you notice an issue unrelated to your work, note it and mention to the user. 
+**Stay green in tests and linting**: Keep tests and all linting green
