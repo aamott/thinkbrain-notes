@@ -7,8 +7,8 @@ streaming desktop chat over Tauri IPC rather than an assumed `/api/chat` route.
 
 ## Acceptance Criteria
 
-- [ ] Add a mutually compatible set of `ai@^7`, `@ai-sdk/react@^4`,
-      `@assistant-ui/react`, and `@assistant-ui/react-ai-sdk` dependencies.
+- [x] `ai@^7`, `@ai-sdk/react@^4`, `@assistant-ui/react`, and
+      `@assistant-ui/react-ai-sdk` are installed in `@thinkbrain/desktop`.
 - [ ] A typed renderer transport starts, receives, cancels, and reports one
       model-chat turn through Tauri commands/native events; event routing is
       filtered by chat session and turn IDs.

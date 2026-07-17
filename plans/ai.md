@@ -26,10 +26,9 @@ semantic search/embeddings (owned by `semantic-search`).
 ### Chat UI: assistant-ui on the AI SDK v7 UI layer
 
 Use `@assistant-ui/react`, `@assistant-ui/react-ai-sdk`, `ai@^7`, and
-`@ai-sdk/react@^4` together. The desktop dependency set has none of these yet;
-add compatible versions in the transport spike, not piecemeal. Build the
-assistant-ui `Thread`, composer, messages, tool/activity renderers, and
-approval affordances with CSS Modules themed by `--tn-*` tokens.
+`@ai-sdk/react@^4` together. These are installed in `@thinkbrain/desktop` as of
+2026-07-17. Build the assistant-ui `Thread`, composer, messages, tool/activity
+renderers, and approval affordances with CSS Modules themed by `--tn-*` tokens.
 
 Tauri does not provide `/api/chat`. A desktop `ChatTransport` implementation
 starts/cancels a turn through typed Tauri commands and turns filtered native
@@ -54,12 +53,14 @@ Session metadata links the UI thread and ACP session without assuming their
 message formats are interchangeable.
 
 Implement the ACP host in Rust next to the Tauri capability boundary using the
-official `agent-client-protocol` runtime crate. The current official ACP
-project also publishes `@agentclientprotocol/sdk`; evaluate it only for a thin
-renderer-facing protocol adapter, not as the owner of filesystem or terminal
-permissions. If a required host feature is absent, generate/consume the
-official schema and implement the minimum protocol surface—never a proprietary
-replacement.
+official `agent-client-protocol` runtime crate. The TypeScript
+`@agentclientprotocol/sdk` (v1.2.1, installed in `@thinkbrain/desktop`) provides
+the renderer-facing ACP adapter: `ClientContext`, `SessionBuilder`,
+`ActiveSession`, JSON-RPC, schema types, and protocol constants. It owns the
+renderer-side protocol surface; Rust owns filesystem/terminal permissions and
+enforcement. If a required host feature is absent in the Rust crate, consume
+the official schema and implement the minimum protocol surface—never a
+proprietary replacement.
 
 The deterministic host exposes scoped filesystem and terminal capabilities,
 session lifecycle, notifications, and permission decisions. An agent requests

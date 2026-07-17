@@ -8,9 +8,12 @@ assistant UI without conflating them with model-chat streams.
 
 ## Acceptance Criteria
 
-- [ ] Validate the official `agent-client-protocol` Rust runtime against the
-      app's Tauri/process model and record the selected version/capability
+- [ ] Integrate the official `agent-client-protocol` Rust runtime crate into
+      the Tauri process model and record the selected version/capability
       negotiation behavior; use its schema/runtime rather than hand-rolled ACP.
+      The TypeScript `@agentclientprotocol/sdk` (v1.2.1, installed) provides
+      `ClientContext`, `SessionBuilder`, `ActiveSession`, and JSON-RPC for the
+      renderer-facing adapter.
 - [ ] Host starts, initializes, prompts, cancels, resumes, and closes ACP
       sessions with negotiated protocol/capabilities and structured lifecycle
       events.
