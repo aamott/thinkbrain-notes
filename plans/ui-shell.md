@@ -93,8 +93,8 @@ the persisted app setting and `data-thinkbrain-theme`.
   implemented as a single basic grid and global stylesheet — `apps/desktop/src/`
 - ✅ shared chrome-token migration and CSS Module conversion — see
   `plans/ui-shell/done-shell_tokens_and_css_modules-high-hard.md`
-- ⬜ mockup-v3 desktop shell composition — see
-  `plans/ui-shell/pending-desktop_shell_composition-high-hard.md`
+- ✅ mockup-v3 desktop shell composition — see
+  `plans/ui-shell/done-desktop_shell_composition-high-hard.md`
 - ⬜ tab model, registry, and tab strip — see
   `plans/ui-shell/pending-tab_content_registry-high-hard.md`
 - ⬜ left popout integration — see

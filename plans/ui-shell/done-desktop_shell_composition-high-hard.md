@@ -8,16 +8,16 @@ status bar—using real application state and components.
 
 ## Acceptance Criteria
 
-- [ ] `App.tsx` becomes a small boot/theme orchestrator; shell components live
+- [x] `App.tsx` becomes a small boot/theme orchestrator; shell components live
       under `apps/desktop/src/shell/` and panels under `panels/`.
-- [ ] Title and activity bars use icon buttons with labels/tooltips and support
+- [x] Title and activity bars use icon buttons with labels/tooltips and support
       explorer, search, source control, tags, extensions, assistant, settings,
       and theme actions with clear unavailable states where an epic owns work.
-- [ ] Shell layout keeps the editor usable with either/both popouts closed and
+- [x] Shell layout keeps the editor usable with either/both popouts closed and
       preserves all existing boot, indexing, and native status feedback.
-- [ ] Keyboard focus order, landmark labels, reduced-motion behavior, and
+- [x] Keyboard focus order, landmark labels, reduced-motion behavior, and
       narrow-window overflow are tested.
-- [ ] Components use CSS Modules and shared tokens only.
+- [x] Components use CSS Modules and shared tokens only.
 
 ## References
 

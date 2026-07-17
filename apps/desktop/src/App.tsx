@@ -1,26 +1,14 @@
-import { appIdentity } from "@thinkbrain/core";
-import { Button } from "@thinkbrain/ui";
 import { useEffect } from "react";
 
-import { MarkdownEditor } from "./editor/MarkdownEditor";
 import { getDesktopShellStatus, normalizeNativeError } from "./native/commands";
-import { SearchPanel } from "./search/SearchPanel";
 import { useWorkspaceIndexer } from "./search/useWorkspaceIndexer";
-import { SettingsPanel } from "./settings/SettingsPanel";
 import { loadAppSettings } from "./settings/settingsService";
+import { DesktopShell } from "./shell/DesktopShell";
 import { useAppStore } from "./stores/appStore";
-import styles from "./App.module.css";
-import sharedStyles from "./styles/shared.module.css";
-import { WorkspaceExplorer } from "./workspace/WorkspaceExplorer";
 
+/** Boots native/settings state, then delegates all desktop UI to the shell. */
 export function App() {
-  const bootChecks = useAppStore((state) => state.bootChecks);
-  const nativeShell = useAppStore((state) => state.nativeShell);
-  const activeDocument = useAppStore((state) => state.activeDocument);
-  const activePanel = useAppStore((state) => state.activePanel);
   const settings = useAppStore((state) => state.settings.settings);
-  const setActivePanel = useAppStore((state) => state.setActivePanel);
-  const recordBootCheck = useAppStore((state) => state.recordBootCheck);
   const loadSettings = useAppStore((state) => state.loadSettings);
   const setNativeShellChecking = useAppStore(
     (state) => state.setNativeShellChecking
@@ -60,111 +48,5 @@ export function App() {
     document.documentElement.dataset.thinkbrainTheme = settings.theme;
   }, [settings.theme]);
 
-  return (
-    <main className={styles.appShell} aria-labelledby="app-title">
-      <header className={styles.titleBar}>
-        <div>
-          <p className={sharedStyles.eyebrow}>Local Markdown workspace</p>
-          <h1 id="app-title">{appIdentity.displayName}</h1>
-        </div>
-        <Button variant="secondary" onClick={recordBootCheck}>
-          Verify state wiring
-        </Button>
-      </header>
-
-      <nav className={styles.activityBar} aria-label="Primary navigation">
-        <button
-          aria-current={activePanel === "explorer" ? "page" : undefined}
-          onClick={() => setActivePanel("explorer")}
-          type="button"
-        >
-          Explorer
-        </button>
-        <button
-          aria-current={activePanel === "search" ? "page" : undefined}
-          onClick={() => setActivePanel("search")}
-          type="button"
-        >
-          Search
-        </button>
-        <button
-          aria-current={activePanel === "settings" ? "page" : undefined}
-          onClick={() => setActivePanel("settings")}
-          type="button"
-        >
-          Settings
-        </button>
-        <button disabled type="button">
-          Source
-        </button>
-      </nav>
-
-      <ActiveSidePanel activePanel={activePanel} />
-
-      <section className={styles.editorArea} aria-labelledby="editor-area-title">
-        {activeDocument.file ? (
-          <MarkdownEditor />
-        ) : (
-          <div className={styles.editorPlaceholder}>
-            <p className={sharedStyles.eyebrow}>Editor area</p>
-            <h2 id="editor-area-title">No note selected</h2>
-            <p>Open a Markdown file from the explorer to start editing.</p>
-          </div>
-        )}
-      </section>
-
-      <aside className={styles.rightPanel} aria-label="Deferred right panel">
-        <p>Right panel deferred</p>
-      </aside>
-
-      <footer className={styles.statusBar}>
-        <NativeShellStatus state={nativeShell} />
-        <span>Boot checks: {bootChecks}</span>
-      </footer>
-    </main>
-  );
-}
-
-function ActiveSidePanel({
-  activePanel
-}: {
-  readonly activePanel: ReturnType<typeof useAppStore.getState>["activePanel"];
-}) {
-  if (activePanel === "search") {
-    return <SearchPanel />;
-  }
-
-  if (activePanel === "settings") {
-    return <SettingsPanel />;
-  }
-
-  return <WorkspaceExplorer />;
-}
-
-function NativeShellStatus({
-  state
-}: {
-  readonly state: ReturnType<typeof useAppStore.getState>["nativeShell"];
-}) {
-  if (state.status === "checking") {
-    return <span>Checking desktop shell...</span>;
-  }
-
-  if (state.status === "ready") {
-    return (
-      <span className={styles.nativeStatusReady}>
-        Native shell ready: {state.shell.appName} v{state.shell.shellVersion}
-      </span>
-    );
-  }
-
-  if (state.status === "error") {
-    return (
-      <span className={styles.nativeStatusError} role="status">
-        Native shell unavailable ({state.error.code}): {state.error.message}
-      </span>
-    );
-  }
-
-  return <span>Desktop shell status pending.</span>;
+  return <DesktopShell />;
 }

@@ -1,0 +1,120 @@
+.shell {
+  background: var(--tn-color-editor);
+  color: var(--tn-color-foreground);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+.workbench {
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.leftPopout {
+  flex: 0 0 var(--tn-size-sidebar-width);
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  width: var(--tn-size-sidebar-width);
+}
+
+.leftPopout > * {
+  height: 100%;
+}
+
+.rightPopout {
+  flex: 0 0 var(--tn-size-right-sidebar-width);
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  width: var(--tn-size-right-sidebar-width);
+}
+
+.rightPopout > * {
+  height: 100%;
+}
+
+.editorWorkspace {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  place-items: stretch;
+}
+
+.editorRegion {
+  display: grid;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  place-items: stretch;
+}
+
+.editorPlaceholder {
+  align-self: center;
+  border: 1px dashed var(--tn-color-border);
+  border-radius: var(--tn-radius-large);
+  justify-self: center;
+  margin: auto;
+  max-width: 42rem;
+  padding: 2rem;
+  text-align: center;
+}
+
+.editorPlaceholder h2 {
+  color: var(--tn-color-editor-foreground);
+  margin: 0;
+}
+
+.editorPlaceholder p:last-child {
+  color: var(--tn-color-muted-foreground);
+}
+
+.eyebrow {
+  color: var(--tn-color-primary);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  margin: 0 0 0.75rem;
+  text-transform: uppercase;
+}
+
+@media (max-width: 48rem) {
+  .workbench {
+    position: relative;
+  }
+
+  .leftPopout {
+    bottom: 0;
+    box-shadow: var(--tn-shadow-soft);
+    left: var(--tn-size-activitybar-width);
+    max-width: calc(100vw - var(--tn-size-activitybar-width));
+    position: absolute;
+    top: 0;
+    width: min(var(--tn-size-sidebar-width), calc(100vw - var(--tn-size-activitybar-width)));
+    z-index: 1;
+  }
+
+  .rightPopout {
+    bottom: 0;
+    box-shadow: var(--tn-shadow-soft);
+    max-width: calc(100vw - var(--tn-size-activitybar-width));
+    position: absolute;
+    right: 0;
+    top: 0;
+    width: min(var(--tn-size-right-sidebar-width), calc(100vw - var(--tn-size-activitybar-width)));
+    z-index: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .leftPopout {
+    scroll-behavior: auto;
+  }
+}
