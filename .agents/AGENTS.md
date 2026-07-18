@@ -13,7 +13,7 @@
 ## Plans
 
 - Read `plans/app-vision.md`, the relevant epic, and its pending/wip stories before major work. Only change the vision when explicitly asked.
-- Epics live at `plans/<epic>.md`; stories live in `plans/<epic>/` and are named `<status>-<description>-<urgency>-<difficulty>.md` using underscores in descriptions.
+- Epics live at `plans/<epic>.md`; stories live in `plans/<epic>/`; both are named `<status>-<description>-<urgency>-<difficulty>.md` using underscores in descriptions.
 - Each story needs a short goal, acceptance criteria, and file references. Rename stories as their status changes; delete superseded or obsolete stories.
 - Keep each epic's `Status` section accurate with `✅ done`, `🔄 wip`, `⬜ pending`, or `❌ blocked`. Record discovered inconsistencies there rather than silently planning around them.
 - Delete epics and stories when the epic is finished. 
