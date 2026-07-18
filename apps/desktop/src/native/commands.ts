@@ -130,6 +130,22 @@ export interface NativeCommandMap {
     };
     readonly result: null;
   };
+  readonly git_availability: {
+    readonly args: undefined;
+    readonly result: NativeGitAvailability;
+  };
+  readonly detect_git_repository: {
+    readonly args: { readonly rootPath: string };
+    readonly result: NativeGitRepository;
+  };
+  readonly initialize_git_repository: {
+    readonly args: { readonly rootPath: string };
+    readonly result: NativeGitRepository;
+  };
+  readonly git_status: {
+    readonly args: { readonly rootPath: string };
+    readonly result: readonly NativeGitStatusEntry[];
+  };
 }
 
 export type NativeCommandName = keyof NativeCommandMap;
@@ -167,6 +183,25 @@ export interface NativeWorkspaceEntry {
 export interface NativeWorkspaceSnapshot {
   readonly workspace: NativeWorkspaceDescriptor;
   readonly files: readonly NativeMarkdownFileEntry[];
+}
+
+// Git command results use Rust's default snake_case serialization. The Git
+// service maps these values into frontend-friendly result unions.
+export interface NativeGitAvailability {
+  readonly available: boolean;
+  readonly version: string | null;
+}
+
+export interface NativeGitRepository {
+  readonly is_repository: boolean;
+  readonly branch: string | null;
+}
+
+/** A single porcelain-status entry already parsed by the native host. */
+export interface NativeGitStatusEntry {
+  readonly path: string;
+  readonly index_status: string;
+  readonly worktree_status: string;
 }
 
 // Sent to `index_documents`. Field names are camelCase here and mapped to the

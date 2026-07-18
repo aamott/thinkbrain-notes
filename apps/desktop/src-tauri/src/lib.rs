@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     fs,
     path::{Component, Path, PathBuf},
+    process::{Command, Output, Stdio},
     time::UNIX_EPOCH,
 };
 use tauri::Manager;
@@ -71,6 +72,35 @@ pub struct WorkspaceSnapshot {
     pub files: Vec<MarkdownFileEntry>,
 }
 
+/// The system Git installation available to the desktop app.
+///
+/// `available` is deliberately a value rather than an error: the UI needs to
+/// render a useful disabled state when Git is absent. Other Git commands use a
+/// typed `git.not_installed` error if the binary disappears after this check.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct GitAvailability {
+    pub available: bool,
+    pub version: Option<String>,
+}
+
+/// Read-only Git repository information for an opened workspace.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct GitRepository {
+    pub is_repository: bool,
+    pub branch: Option<String>,
+}
+
+/// One entry from Git's machine-readable porcelain v1 status output.
+///
+/// The status codes are the two fixed-width porcelain fields. A space means
+/// Git reports no change for that area; `?` marks an untracked path.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct GitStatusEntry {
+    pub path: String,
+    pub index_status: String,
+    pub worktree_status: String,
+}
+
 /// A single file-manager entry: a folder or a file of any type.
 ///
 /// Unlike `MarkdownFileEntry`, this includes directories (so empty folders show)
@@ -135,6 +165,52 @@ fn open_workspace(root_path: String) -> Result<WorkspaceSnapshot, NativeError> {
         workspace: describe_workspace(&root),
         files: list_markdown_file_entries(&root)?,
     })
+}
+
+/// Reports whether a usable system `git` binary is available on PATH.
+///
+/// This command never treats a missing Git binary as an exceptional result so
+/// the frontend can gate source-control affordances without error handling.
+#[tauri::command]
+fn git_availability() -> Result<GitAvailability, NativeError> {
+    git_availability_with(&SystemGitRunner)
+}
+
+/// Detects whether an opened workspace is inside a Git work tree and, when
+/// available, reports its current symbolic branch.
+///
+/// The command is read-only. It executes exact, non-shell Git subcommands in
+/// the already canonicalized workspace directory, with no stdin or pager.
+#[tauri::command]
+fn detect_git_repository(root_path: String) -> Result<GitRepository, NativeError> {
+    let root = resolve_workspace_root(&root_path)?;
+
+    detect_git_repository_with(&SystemGitRunner, &root)
+}
+
+/// Initializes the opened workspace as a Git repository when it is not
+/// already one, then returns the resulting repository state.
+///
+/// The command first uses the same read-only detection used by the source
+/// control UI. That makes repeated requests idempotent: an existing
+/// repository is returned unchanged and `git init` is not run again.
+#[tauri::command]
+fn initialize_git_repository(root_path: String) -> Result<GitRepository, NativeError> {
+    let root = resolve_workspace_root(&root_path)?;
+
+    initialize_git_repository_with(&SystemGitRunner, &root)
+}
+
+/// Returns the current Git status for an opened workspace.
+///
+/// This uses porcelain v1 with NUL delimiters so filenames are never parsed
+/// through human-oriented quoting rules. The command is read-only and uses
+/// only fixed arguments; the workspace root is the process working directory.
+#[tauri::command]
+fn git_status(root_path: String) -> Result<Vec<GitStatusEntry>, NativeError> {
+    let root = resolve_workspace_root(&root_path)?;
+
+    git_status_with(&SystemGitRunner, &root)
 }
 
 #[tauri::command]
@@ -408,6 +484,10 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             desktop_shell_status,
             open_workspace,
+            git_availability,
+            detect_git_repository,
+            initialize_git_repository,
+            git_status,
             list_markdown_files,
             list_workspace_entries,
             read_markdown_file,
@@ -525,6 +605,326 @@ fn describe_workspace(root: &Path) -> WorkspaceDescriptor {
             .file_name()
             .map(|name| name.to_string_lossy().to_string())
             .unwrap_or_else(|| root.to_string_lossy().to_string()),
+    }
+}
+
+const GIT_COMMAND_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+const MAX_GIT_DETAILS_LENGTH: usize = 4_096;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct GitCommandOutput {
+    success: bool,
+    exit_code: Option<i32>,
+    stdout: String,
+    stderr: String,
+}
+
+#[derive(Debug)]
+enum GitRunError {
+    NotFound(std::io::Error),
+    TimedOut,
+    Io(std::io::Error),
+}
+
+trait GitRunner {
+    /// Runs one fixed Git command. `working_dir` is only used as a process
+    /// current directory; workspace paths are never interpolated into shell
+    /// strings or passed as Git arguments.
+    fn run(
+        &self,
+        working_dir: Option<&Path>,
+        args: &[&str],
+    ) -> Result<GitCommandOutput, GitRunError>;
+}
+
+struct SystemGitRunner;
+
+impl GitRunner for SystemGitRunner {
+    fn run(
+        &self,
+        working_dir: Option<&Path>,
+        args: &[&str],
+    ) -> Result<GitCommandOutput, GitRunError> {
+        let mut command = Command::new("git");
+        command
+            .args(args)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            // These commands are non-interactive and read-only. The explicit
+            // environment prevents a credential prompt or pager from keeping
+            // a desktop command alive.
+            .env("GIT_TERMINAL_PROMPT", "0")
+            .env("GIT_PAGER", "cat")
+            .env("GIT_OPTIONAL_LOCKS", "0");
+
+        if let Some(directory) = working_dir {
+            command.current_dir(directory);
+        }
+
+        let mut child = command.spawn().map_err(|error| {
+            if error.kind() == std::io::ErrorKind::NotFound {
+                GitRunError::NotFound(error)
+            } else {
+                GitRunError::Io(error)
+            }
+        })?;
+        let deadline = std::time::Instant::now() + GIT_COMMAND_TIMEOUT;
+
+        loop {
+            match child.try_wait().map_err(GitRunError::Io)? {
+                Some(_) => {
+                    let output = child.wait_with_output().map_err(GitRunError::Io)?;
+                    return Ok(git_command_output(output));
+                }
+                None if std::time::Instant::now() >= deadline => {
+                    // Best-effort cleanup before reporting a typed timeout.
+                    // Ignore a raced "already exited" error, then reap it.
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err(GitRunError::TimedOut);
+                }
+                None => std::thread::sleep(std::time::Duration::from_millis(10)),
+            }
+        }
+    }
+}
+
+fn git_command_output(output: Output) -> GitCommandOutput {
+    GitCommandOutput {
+        success: output.status.success(),
+        exit_code: output.status.code(),
+        // Preserve leading whitespace: porcelain status uses the first two
+        // bytes for its index/worktree codes, including a meaningful space.
+        // Callers that consume line-oriented Git output trim it explicitly.
+        stdout: String::from_utf8_lossy(&output.stdout).to_string(),
+        stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
+    }
+}
+
+fn git_availability_with(runner: &impl GitRunner) -> Result<GitAvailability, NativeError> {
+    match runner.run(None, &["--version"]) {
+        Ok(output) if output.success => Ok(GitAvailability {
+            available: true,
+            version: non_empty_git_text(&output.stdout),
+        }),
+        Ok(output) => Err(git_command_failed(
+            "check the installed Git version",
+            &output,
+        )),
+        Err(GitRunError::NotFound(_)) => Ok(GitAvailability {
+            available: false,
+            version: None,
+        }),
+        Err(error) => Err(git_run_error("check the installed Git version", error)),
+    }
+}
+
+fn detect_git_repository_with(
+    runner: &impl GitRunner,
+    root: &Path,
+) -> Result<GitRepository, NativeError> {
+    let repository_check = runner
+        .run(Some(root), &["rev-parse", "--is-inside-work-tree"])
+        .map_err(|error| git_run_error("detect the workspace Git repository", error))?;
+
+    // `rev-parse` uses a non-zero status for ordinary non-repositories. It is
+    // the expected negative result for this detection API, not an operation
+    // failure. Any later mutation command can instead surface git.not_repo.
+    if !repository_check.success || repository_check.stdout.trim() != "true" {
+        return Ok(GitRepository {
+            is_repository: false,
+            branch: None,
+        });
+    }
+
+    let branch = runner
+        .run(Some(root), &["symbolic-ref", "--quiet", "--short", "HEAD"])
+        .map_err(|error| git_run_error("read the workspace Git branch", error))?;
+
+    if branch.success {
+        return Ok(GitRepository {
+            is_repository: true,
+            branch: non_empty_git_text(&branch.stdout),
+        });
+    }
+
+    // Exit status 1 is Git's documented detached-HEAD/no-symbolic-branch
+    // signal for `symbolic-ref --quiet`; the workspace is still a repository.
+    if branch.exit_code == Some(1) {
+        return Ok(GitRepository {
+            is_repository: true,
+            branch: None,
+        });
+    }
+
+    Err(git_command_failed("read the workspace Git branch", &branch))
+}
+
+fn initialize_git_repository_with(
+    runner: &impl GitRunner,
+    root: &Path,
+) -> Result<GitRepository, NativeError> {
+    let existing_repository = detect_git_repository_with(runner, root)?;
+
+    if existing_repository.is_repository {
+        return Ok(existing_repository);
+    }
+
+    let initialization = runner
+        .run(Some(root), &["init", "--quiet"])
+        .map_err(|error| git_run_error("initialize the workspace Git repository", error))?;
+
+    if !initialization.success {
+        return Err(git_command_failed(
+            "initialize the workspace Git repository",
+            &initialization,
+        ));
+    }
+
+    detect_git_repository_with(runner, root)
+}
+
+fn git_status_with(
+    runner: &impl GitRunner,
+    root: &Path,
+) -> Result<Vec<GitStatusEntry>, NativeError> {
+    let status = runner
+        .run(
+            Some(root),
+            &["status", "--porcelain=v1", "-z", "--untracked-files=all"],
+        )
+        .map_err(|error| git_run_error("read the workspace Git status", error))?;
+
+    if !status.success {
+        return Err(git_command_failed("read the workspace Git status", &status));
+    }
+
+    parse_git_status_porcelain_v1(&status.stdout)
+}
+
+/// Parses Git's `status --porcelain=v1 -z` output.
+///
+/// A normal record is `XY path\\0`. Rename and copy records include a second
+/// NUL-delimited source path after the destination path; this API exposes the
+/// destination path because it is the path that now exists in the workspace.
+fn parse_git_status_porcelain_v1(output: &str) -> Result<Vec<GitStatusEntry>, NativeError> {
+    let records: Vec<&str> = output
+        .split('\0')
+        .filter(|record| !record.is_empty())
+        .collect();
+    let mut entries = Vec::new();
+    let mut record_index = 0;
+
+    while record_index < records.len() {
+        let record = records[record_index];
+        let bytes = record.as_bytes();
+
+        if bytes.len() < 4 || bytes[2] != b' ' {
+            return Err(git_status_parse_error("a record did not contain `XY path`"));
+        }
+
+        let path = &record[3..];
+        if path.is_empty() {
+            return Err(git_status_parse_error("a record did not include a path"));
+        }
+
+        let index_status = record[0..1].to_string();
+        let worktree_status = record[1..2].to_string();
+        let has_source_path = matches!(index_status.as_str(), "R" | "C")
+            || matches!(worktree_status.as_str(), "R" | "C");
+
+        if has_source_path {
+            record_index += 1;
+            let Some(source_path) = records.get(record_index) else {
+                return Err(git_status_parse_error(
+                    "a rename or copy record did not include its source path",
+                ));
+            };
+
+            if source_path.is_empty() {
+                return Err(git_status_parse_error(
+                    "a rename or copy record included an empty source path",
+                ));
+            }
+        }
+
+        entries.push(GitStatusEntry {
+            path: path.to_string(),
+            index_status,
+            worktree_status,
+        });
+        record_index += 1;
+    }
+
+    entries.sort_by(|left, right| {
+        left.path
+            .cmp(&right.path)
+            .then_with(|| left.index_status.cmp(&right.index_status))
+            .then_with(|| left.worktree_status.cmp(&right.worktree_status))
+    });
+
+    Ok(entries)
+}
+
+fn git_status_parse_error(reason: &str) -> NativeError {
+    NativeError::with_details(
+        "git.command_failed",
+        "Git returned an unexpected failure.",
+        format!("read the workspace Git status; invalid porcelain v1 output: {reason}"),
+    )
+}
+
+fn git_run_error(action: &str, error: GitRunError) -> NativeError {
+    match error {
+        GitRunError::NotFound(error) => NativeError::with_details(
+            "git.not_installed",
+            "Git is not installed or is unavailable on PATH.",
+            error.to_string(),
+        ),
+        GitRunError::TimedOut => NativeError::with_details(
+            "git.command_timeout",
+            "Git did not finish before the command timeout.",
+            action,
+        ),
+        GitRunError::Io(error) => NativeError::with_details(
+            "git.command_failed",
+            "Failed to run a Git command.",
+            format!("{action}: {error}"),
+        ),
+    }
+}
+
+fn git_command_failed(action: &str, output: &GitCommandOutput) -> NativeError {
+    let stdout = bounded_git_text(&output.stdout);
+    let stderr = bounded_git_text(&output.stderr);
+    let details = match (stdout.is_empty(), stderr.is_empty()) {
+        (true, true) => format!("{action}; exit status {:?}", output.exit_code),
+        (false, true) => format!("{action}; stdout: {stdout}"),
+        (true, false) => format!("{action}; stderr: {stderr}"),
+        (false, false) => format!("{action}; stdout: {stdout}; stderr: {stderr}"),
+    };
+
+    NativeError::with_details(
+        "git.command_failed",
+        "Git returned an unexpected failure.",
+        bounded_git_text(&details),
+    )
+}
+
+fn non_empty_git_text(value: &str) -> Option<String> {
+    let value = value.trim();
+    (!value.is_empty()).then(|| bounded_git_text(value))
+}
+
+fn bounded_git_text(value: &str) -> String {
+    let mut characters = value.chars();
+    let truncated: String = characters.by_ref().take(MAX_GIT_DETAILS_LENGTH).collect();
+
+    if characters.next().is_some() {
+        format!("{truncated}…")
+    } else {
+        truncated
     }
 }
 
@@ -1019,17 +1419,97 @@ fn build_fts_match_query(raw: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        app_settings_path, build_fts_match_query, clear_documents, delete_document,
-        desktop_shell_status, index_document_records, init_index_schema, is_markdown_path,
-        normalize_relative_path, read_settings_file, search_documents, stable_workspace_hash,
-        workspace_settings_path, write_settings_file, DocumentRecord, NativeError,
+        app_settings_path, bounded_git_text, build_fts_match_query, clear_documents,
+        delete_document, desktop_shell_status, detect_git_repository_with, git_availability_with,
+        git_status_with, index_document_records, init_index_schema, initialize_git_repository_with,
+        is_markdown_path, normalize_relative_path, read_settings_file, search_documents,
+        stable_workspace_hash, workspace_settings_path, write_settings_file, DocumentRecord,
+        GitCommandOutput, GitRunError, GitRunner, GitStatusEntry, NativeError, SystemGitRunner,
     };
     use rusqlite::Connection;
     use std::{
+        cell::RefCell,
+        collections::VecDeque,
         fs,
         path::{Path, PathBuf},
+        process::Command,
         time::SystemTime,
     };
+
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    struct GitCall {
+        working_dir: Option<PathBuf>,
+        args: Vec<String>,
+    }
+
+    struct MockGitRunner {
+        results: RefCell<VecDeque<Result<GitCommandOutput, MockGitError>>>,
+        calls: RefCell<Vec<GitCall>>,
+    }
+
+    #[derive(Debug)]
+    enum MockGitError {
+        NotFound,
+        TimedOut,
+        Io,
+    }
+
+    impl MockGitRunner {
+        fn new(results: impl IntoIterator<Item = Result<GitCommandOutput, MockGitError>>) -> Self {
+            Self {
+                results: RefCell::new(results.into_iter().collect()),
+                calls: RefCell::new(Vec::new()),
+            }
+        }
+
+        fn calls(&self) -> Vec<GitCall> {
+            self.calls.borrow().clone()
+        }
+    }
+
+    impl GitRunner for MockGitRunner {
+        fn run(
+            &self,
+            working_dir: Option<&Path>,
+            args: &[&str],
+        ) -> Result<GitCommandOutput, GitRunError> {
+            self.calls.borrow_mut().push(GitCall {
+                working_dir: working_dir.map(Path::to_path_buf),
+                args: args.iter().map(ToString::to_string).collect(),
+            });
+
+            match self
+                .results
+                .borrow_mut()
+                .pop_front()
+                .expect("mock Git result is configured")
+            {
+                Ok(output) => Ok(output),
+                Err(MockGitError::NotFound) => Err(GitRunError::NotFound(std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    "git missing for test",
+                ))),
+                Err(MockGitError::TimedOut) => Err(GitRunError::TimedOut),
+                Err(MockGitError::Io) => Err(GitRunError::Io(std::io::Error::other(
+                    "Git process error for test",
+                ))),
+            }
+        }
+    }
+
+    fn git_output(
+        success: bool,
+        exit_code: Option<i32>,
+        stdout: &str,
+        stderr: &str,
+    ) -> GitCommandOutput {
+        GitCommandOutput {
+            success,
+            exit_code,
+            stdout: stdout.to_string(),
+            stderr: stderr.to_string(),
+        }
+    }
 
     fn record(
         path: &str,
@@ -1081,6 +1561,478 @@ mod tests {
         assert_eq!(status.app_name, "Thinkbrain Notes");
         assert_eq!(status.shell_version, env!("CARGO_PKG_VERSION"));
         assert!(status.ready);
+    }
+
+    #[test]
+    fn git_availability_returns_the_installed_version_from_a_bounded_command() {
+        let runner =
+            MockGitRunner::new([Ok(git_output(true, Some(0), "git version 2.47.1\n", ""))]);
+
+        let availability = git_availability_with(&runner).expect("Git check succeeds");
+
+        assert!(availability.available);
+        assert_eq!(availability.version.as_deref(), Some("git version 2.47.1"));
+        assert_eq!(
+            runner.calls(),
+            vec![GitCall {
+                working_dir: None,
+                args: vec!["--version".to_string()],
+            }]
+        );
+    }
+
+    #[test]
+    fn git_availability_returns_false_when_git_is_not_installed() {
+        let runner = MockGitRunner::new([Err(MockGitError::NotFound)]);
+
+        let availability = git_availability_with(&runner).expect("missing Git is a valid state");
+
+        assert!(!availability.available);
+        assert_eq!(availability.version, None);
+    }
+
+    #[test]
+    fn git_repository_detection_reports_a_non_repository_without_a_git_installation_assumption() {
+        let root = temp_test_dir("git-non-repository");
+        let runner = MockGitRunner::new([Ok(git_output(
+            false,
+            Some(128),
+            "",
+            "fatal: not a git repository",
+        ))]);
+
+        let repository =
+            detect_git_repository_with(&runner, &root).expect("non-repository is a valid state");
+
+        assert!(!repository.is_repository);
+        assert_eq!(repository.branch, None);
+        assert_eq!(
+            runner.calls(),
+            vec![GitCall {
+                working_dir: Some(root.clone()),
+                args: vec!["rev-parse".to_string(), "--is-inside-work-tree".to_string()],
+            }]
+        );
+        fs::remove_dir_all(root).expect("temp non-repository directory is cleaned up");
+    }
+
+    #[test]
+    fn git_repository_detection_reports_the_current_branch_with_fixed_commands() {
+        let root = temp_test_dir("git-repository");
+        let runner = MockGitRunner::new([
+            Ok(git_output(true, Some(0), "true\n", "")),
+            Ok(git_output(true, Some(0), "main\n", "")),
+        ]);
+
+        let repository =
+            detect_git_repository_with(&runner, &root).expect("repository detection succeeds");
+
+        assert!(repository.is_repository);
+        assert_eq!(repository.branch.as_deref(), Some("main"));
+        assert_eq!(
+            runner.calls(),
+            vec![
+                GitCall {
+                    working_dir: Some(root.clone()),
+                    args: vec!["rev-parse".to_string(), "--is-inside-work-tree".to_string()],
+                },
+                GitCall {
+                    working_dir: Some(root.clone()),
+                    args: vec![
+                        "symbolic-ref".to_string(),
+                        "--quiet".to_string(),
+                        "--short".to_string(),
+                        "HEAD".to_string(),
+                    ],
+                },
+            ]
+        );
+        fs::remove_dir_all(root).expect("temp repository directory is cleaned up");
+    }
+
+    #[test]
+    fn git_repository_detection_maps_missing_git_to_a_typed_error() {
+        let root = temp_test_dir("git-missing");
+        let runner = MockGitRunner::new([Err(MockGitError::NotFound)]);
+
+        let error = detect_git_repository_with(&runner, &root)
+            .expect_err("missing Git should explain why detection cannot run");
+
+        assert_eq!(error.code, "git.not_installed");
+        assert_eq!(
+            error.message,
+            "Git is not installed or is unavailable on PATH."
+        );
+        assert!(error.details.is_some());
+        fs::remove_dir_all(root).expect("temp missing-Git directory is cleaned up");
+    }
+
+    #[test]
+    fn git_repository_initialization_uses_fixed_commands_then_returns_the_repository() {
+        let root = temp_test_dir("git-initialize");
+        let runner = MockGitRunner::new([
+            // The initial repository check sees an ordinary folder.
+            Ok(git_output(false, Some(128), "", "not a repository")),
+            // Initialization succeeds without accepting workspace-controlled arguments.
+            Ok(git_output(true, Some(0), "", "")),
+            // Detection after initialization returns the new repository state.
+            Ok(git_output(true, Some(0), "true", "")),
+            Ok(git_output(true, Some(0), "main", "")),
+        ]);
+
+        let repository = initialize_git_repository_with(&runner, &root)
+            .expect("Git initialization should return the new repository");
+
+        assert!(repository.is_repository);
+        assert_eq!(repository.branch.as_deref(), Some("main"));
+        assert_eq!(
+            runner.calls(),
+            vec![
+                GitCall {
+                    working_dir: Some(root.clone()),
+                    args: vec!["rev-parse".to_string(), "--is-inside-work-tree".to_string()],
+                },
+                GitCall {
+                    working_dir: Some(root.clone()),
+                    args: vec!["init".to_string(), "--quiet".to_string()],
+                },
+                GitCall {
+                    working_dir: Some(root.clone()),
+                    args: vec!["rev-parse".to_string(), "--is-inside-work-tree".to_string()],
+                },
+                GitCall {
+                    working_dir: Some(root.clone()),
+                    args: vec![
+                        "symbolic-ref".to_string(),
+                        "--quiet".to_string(),
+                        "--short".to_string(),
+                        "HEAD".to_string(),
+                    ],
+                },
+            ]
+        );
+        fs::remove_dir_all(root).expect("temp initialization directory is cleaned up");
+    }
+
+    #[test]
+    fn git_repository_initialization_returns_existing_repositories_without_running_init() {
+        let root = temp_test_dir("git-initialize-existing");
+        let runner = MockGitRunner::new([
+            Ok(git_output(true, Some(0), "true", "")),
+            Ok(git_output(true, Some(0), "main", "")),
+        ]);
+
+        let repository = initialize_git_repository_with(&runner, &root)
+            .expect("existing repository should remain unchanged");
+
+        assert!(repository.is_repository);
+        assert_eq!(repository.branch.as_deref(), Some("main"));
+        assert_eq!(
+            runner.calls(),
+            vec![
+                GitCall {
+                    working_dir: Some(root.clone()),
+                    args: vec!["rev-parse".to_string(), "--is-inside-work-tree".to_string()],
+                },
+                GitCall {
+                    working_dir: Some(root.clone()),
+                    args: vec![
+                        "symbolic-ref".to_string(),
+                        "--quiet".to_string(),
+                        "--short".to_string(),
+                        "HEAD".to_string(),
+                    ],
+                },
+            ]
+        );
+        fs::remove_dir_all(root).expect("temp existing-repository directory is cleaned up");
+    }
+
+    #[test]
+    fn git_repository_initialization_maps_runner_and_git_failures_to_typed_errors() {
+        let root = temp_test_dir("git-initialize-errors");
+        let missing_git = MockGitRunner::new([
+            Ok(git_output(false, Some(128), "", "not a repository")),
+            Err(MockGitError::NotFound),
+        ]);
+
+        let missing_error = initialize_git_repository_with(&missing_git, &root)
+            .expect_err("missing Git while initializing should be explicit");
+        assert_eq!(missing_error.code, "git.not_installed");
+
+        let timed_out = MockGitRunner::new([
+            Ok(git_output(false, Some(128), "", "not a repository")),
+            Err(MockGitError::TimedOut),
+        ]);
+        let timeout_error = initialize_git_repository_with(&timed_out, &root)
+            .expect_err("timed out Git initialization should be explicit");
+        assert_eq!(timeout_error.code, "git.command_timeout");
+
+        let rejected = MockGitRunner::new([
+            Ok(git_output(false, Some(128), "", "not a repository")),
+            Ok(git_output(false, Some(2), "", "init rejected")),
+        ]);
+        let rejected_error = initialize_git_repository_with(&rejected, &root)
+            .expect_err("failed Git initialization should be explicit");
+        assert_eq!(rejected_error.code, "git.command_failed");
+        assert!(rejected_error
+            .details
+            .unwrap_or_default()
+            .contains("initialize the workspace Git repository"));
+
+        fs::remove_dir_all(root).expect("temp initialization-error directory is cleaned up");
+    }
+
+    #[test]
+    fn git_status_uses_fixed_nul_delimited_porcelain_and_parses_all_path_kinds() {
+        let root = temp_test_dir("git-status-mock");
+        let runner = MockGitRunner::new([Ok(git_output(
+            true,
+            Some(0),
+            // Rename and copy each include their source path after the
+            // destination in porcelain v1's NUL-delimited form.
+            " M modified.md\0A  staged.md\0?? untracked.md\0R  renamed.md\0old-name.md\0C  copied.md\0source.md\0",
+            "",
+        ))]);
+
+        let entries = git_status_with(&runner, &root).expect("status parses");
+
+        assert_eq!(
+            entries,
+            vec![
+                GitStatusEntry {
+                    path: "copied.md".to_string(),
+                    index_status: "C".to_string(),
+                    worktree_status: " ".to_string(),
+                },
+                GitStatusEntry {
+                    path: "modified.md".to_string(),
+                    index_status: " ".to_string(),
+                    worktree_status: "M".to_string(),
+                },
+                GitStatusEntry {
+                    path: "renamed.md".to_string(),
+                    index_status: "R".to_string(),
+                    worktree_status: " ".to_string(),
+                },
+                GitStatusEntry {
+                    path: "staged.md".to_string(),
+                    index_status: "A".to_string(),
+                    worktree_status: " ".to_string(),
+                },
+                GitStatusEntry {
+                    path: "untracked.md".to_string(),
+                    index_status: "?".to_string(),
+                    worktree_status: "?".to_string(),
+                },
+            ]
+        );
+        assert_eq!(
+            runner.calls(),
+            vec![GitCall {
+                working_dir: Some(root.clone()),
+                args: vec![
+                    "status".to_string(),
+                    "--porcelain=v1".to_string(),
+                    "-z".to_string(),
+                    "--untracked-files=all".to_string(),
+                ],
+            }]
+        );
+
+        fs::remove_dir_all(root).expect("temp mock status directory is cleaned up");
+    }
+
+    #[test]
+    fn git_status_rejects_malformed_porcelain_with_a_typed_error() {
+        let root = temp_test_dir("git-status-malformed");
+        let runner = MockGitRunner::new([Ok(git_output(true, Some(0), "malformed\0", ""))]);
+
+        let error = git_status_with(&runner, &root).expect_err("invalid output is rejected");
+
+        assert_eq!(error.code, "git.command_failed");
+        assert!(error
+            .details
+            .unwrap_or_default()
+            .contains("invalid porcelain v1 output"));
+        fs::remove_dir_all(root).expect("temp malformed status directory is cleaned up");
+    }
+
+    #[test]
+    fn git_runner_errors_and_details_are_typed_and_bounded() {
+        let root = temp_test_dir("git-timeout");
+        let runner = MockGitRunner::new([Err(MockGitError::TimedOut)]);
+
+        let error = detect_git_repository_with(&runner, &root)
+            .expect_err("timed out Git detection should fail loudly");
+
+        assert_eq!(error.code, "git.command_timeout");
+        assert!(error
+            .details
+            .unwrap_or_default()
+            .contains("detect the workspace"));
+        assert_eq!(bounded_git_text(&"x".repeat(4_097)).chars().count(), 4_097);
+        fs::remove_dir_all(root).expect("temp timeout directory is cleaned up");
+    }
+
+    #[test]
+    fn git_io_failures_are_reported_as_command_failures() {
+        let runner = MockGitRunner::new([Err(MockGitError::Io)]);
+
+        let error = git_availability_with(&runner).expect_err("I/O error should not be hidden");
+
+        assert_eq!(error.code, "git.command_failed");
+        assert!(error
+            .details
+            .unwrap_or_default()
+            .contains("check the installed Git version"));
+    }
+
+    #[test]
+    fn system_git_detects_a_temp_non_repo_and_repo_when_git_is_available() {
+        let runner = SystemGitRunner;
+        let availability = git_availability_with(&runner).expect("Git availability command runs");
+
+        // CI environments without Git still exercise all behavior through the
+        // injected-runner tests above. This integration assertion runs only
+        // when the host can safely create an isolated temporary repository.
+        if !availability.available {
+            return;
+        }
+
+        let root = temp_test_dir("system-git-repository");
+        let non_repository =
+            detect_git_repository_with(&runner, &root).expect("non-repository detection succeeds");
+        assert!(!non_repository.is_repository);
+
+        let initialized = Command::new("git")
+            .args(["init", "--quiet"])
+            .current_dir(&root)
+            .stdin(std::process::Stdio::null())
+            .output()
+            .expect("Git initializes the isolated temporary repository");
+        assert!(
+            initialized.status.success(),
+            "git init failed: {}",
+            String::from_utf8_lossy(&initialized.stderr)
+        );
+
+        let repository =
+            detect_git_repository_with(&runner, &root).expect("repository detection succeeds");
+        assert!(repository.is_repository);
+        assert!(repository.branch.is_some());
+
+        fs::remove_dir_all(root).expect("temporary Git repository is cleaned up");
+    }
+
+    #[test]
+    fn system_git_initializes_an_isolated_workspace_when_available() {
+        let runner = SystemGitRunner;
+        let availability = git_availability_with(&runner).expect("Git availability command runs");
+
+        if !availability.available {
+            return;
+        }
+
+        let root = temp_test_dir("system-git-initialization");
+        let repository = initialize_git_repository_with(&runner, &root)
+            .expect("Git initializes an isolated temporary workspace");
+        assert!(repository.is_repository);
+        assert!(root.join(".git").is_dir());
+
+        let repeat = initialize_git_repository_with(&runner, &root)
+            .expect("repeated initialization is idempotent");
+        assert!(repeat.is_repository);
+
+        fs::remove_dir_all(root).expect("temporary initialized repository is cleaned up");
+    }
+
+    #[test]
+    fn system_git_status_reports_staged_modified_and_untracked_paths_when_available() {
+        let runner = SystemGitRunner;
+        let availability = git_availability_with(&runner).expect("Git availability command runs");
+
+        if !availability.available {
+            return;
+        }
+
+        let root = temp_test_dir("system-git-status");
+        let initialize = Command::new("git")
+            .args(["init", "--quiet"])
+            .current_dir(&root)
+            .stdin(std::process::Stdio::null())
+            .output()
+            .expect("Git initializes the isolated temporary repository");
+        assert!(
+            initialize.status.success(),
+            "git init failed: {}",
+            String::from_utf8_lossy(&initialize.stderr)
+        );
+
+        fs::write(root.join("modified.md"), "before\n").expect("baseline file is written");
+        let add_baseline = Command::new("git")
+            .args(["add", "modified.md"])
+            .current_dir(&root)
+            .stdin(std::process::Stdio::null())
+            .output()
+            .expect("baseline file stages");
+        assert!(add_baseline.status.success());
+        let commit = Command::new("git")
+            .args([
+                "-c",
+                "user.name=Thinkbrain Tests",
+                "-c",
+                "user.email=tests@thinkbrain.invalid",
+                "commit",
+                "--quiet",
+                "-m",
+                "baseline",
+            ])
+            .current_dir(&root)
+            .stdin(std::process::Stdio::null())
+            .output()
+            .expect("baseline commit succeeds");
+        assert!(
+            commit.status.success(),
+            "git commit failed: {}",
+            String::from_utf8_lossy(&commit.stderr)
+        );
+
+        fs::write(root.join("modified.md"), "after\n").expect("tracked file is modified");
+        fs::write(root.join("staged.md"), "staged\n").expect("staged file is written");
+        let add_staged = Command::new("git")
+            .args(["add", "staged.md"])
+            .current_dir(&root)
+            .stdin(std::process::Stdio::null())
+            .output()
+            .expect("staged file stages");
+        assert!(add_staged.status.success());
+        fs::write(root.join("untracked.md"), "untracked\n").expect("untracked file is written");
+
+        let entries = git_status_with(&runner, &root).expect("Git status succeeds");
+
+        assert_eq!(
+            entries,
+            vec![
+                GitStatusEntry {
+                    path: "modified.md".to_string(),
+                    index_status: " ".to_string(),
+                    worktree_status: "M".to_string(),
+                },
+                GitStatusEntry {
+                    path: "staged.md".to_string(),
+                    index_status: "A".to_string(),
+                    worktree_status: " ".to_string(),
+                },
+                GitStatusEntry {
+                    path: "untracked.md".to_string(),
+                    index_status: "?".to_string(),
+                    worktree_status: "?".to_string(),
+                },
+            ]
+        );
+
+        fs::remove_dir_all(root).expect("temporary Git status repository is cleaned up");
     }
 
     #[test]

@@ -77,6 +77,59 @@ test("opens a workspace and restores the Explorer visibility and last workspace"
   await expect(page.getByText("welcome.md")).toBeVisible();
 });
 
+test("command palette opens workspace files, runs commands, and restores focus", async ({ page }) => {
+  await page.addInitScript(() => {
+    const appWindow = window as Window & {
+      isTauri?: boolean;
+      __TAURI_INTERNALS__?: { invoke: (command: string, args: Record<string, unknown>) => Promise<unknown> };
+    };
+    appWindow.isTauri = true;
+    appWindow.__TAURI_INTERNALS__ = {
+      async invoke(command, args) {
+        if (command === "plugin:dialog|open") return "/workspace/demo-vault";
+        if (command === "read_app_settings") return null;
+        if (command === "write_app_settings") return null;
+        if (command === "open_workspace") return {
+          workspace: { root_path: String(args.rootPath), name: "demo-vault" },
+          files: [{ relative_path: "Notes/welcome.md", file_name: "welcome.md", parent_path: "Notes", byte_size: 9, updated_at: null }]
+        };
+        if (command === "list_workspace_entries") return [
+          { relative_path: "Notes", name: "Notes", parent_path: "", kind: "directory", is_markdown: false, byte_size: 0, updated_at: null },
+          { relative_path: "Notes/welcome.md", name: "welcome.md", parent_path: "Notes", kind: "file", is_markdown: true, byte_size: 9, updated_at: null }
+        ];
+        if (command === "read_markdown_file") return { relative_path: String(args.relativePath), contents: "# Welcome" };
+        throw new Error(`Unexpected native command: ${command}`);
+      }
+    };
+  });
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "Open workspace" }).click();
+  const assistant = page.getByRole("button", { name: "Assistant", exact: true });
+  await assistant.focus();
+  await page.keyboard.press("Control+p");
+  const dialog = page.getByRole("dialog", { name: "Command palette" });
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(assistant).toBeFocused();
+
+  await page.keyboard.press("Control+p");
+  const query = page.getByRole("textbox", { name: "Search commands" });
+  await query.fill("welcome");
+  await page.keyboard.press("Enter");
+  await expect(page.locator('[aria-label="Markdown editor"]')).toBeVisible();
+
+  await page.keyboard.press("Control+p");
+  await query.fill("new note");
+  await page.keyboard.press("Enter");
+  await expect(page.getByLabel("New note")).toBeFocused();
+
+  await page.keyboard.press("Control+p");
+  await query.fill("graph");
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("Graph is unavailable until link indexing is connected.")).toBeVisible();
+});
+
 test("opens, saves, protects, and creates Markdown notes through the fresh shell", async ({ page }) => {
   await page.addInitScript(() => {
     const documentsKey = "thinkbrain-e2e-markdown-documents";
@@ -167,7 +220,74 @@ test("unavailable sections retain their owning panel", async ({ page }) => {
 
   await expect(page.getByRole("complementary", { name: "Source control panel" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Source control" })).toBeVisible();
-  await expect(page.getByText("This workspace surface is not connected yet.")).toBeVisible();
+  await expect(page.getByText("Open a workspace to view its Git repository information.")).toBeVisible();
+});
+
+test("source control reports the active workspace repository", async ({ page }) => {
+  await page.addInitScript(() => {
+    const appWindow = window as Window & {
+      isTauri?: boolean;
+      __TAURI_INTERNALS__?: { invoke: (command: string, args: Record<string, unknown>) => Promise<unknown> };
+    };
+    appWindow.isTauri = true;
+    appWindow.__TAURI_INTERNALS__ = {
+      async invoke(command, args) {
+        if (command === "plugin:dialog|open") return "/workspace/repository";
+        if (command === "read_app_settings") return null;
+        if (command === "write_app_settings") return null;
+        if (command === "open_workspace") return { workspace: { root_path: String(args.rootPath), name: "repository" }, files: [] };
+        if (command === "list_workspace_entries") return [];
+        if (command === "git_availability") return { available: true, version: "git version 2.50.0" };
+        if (command === "detect_git_repository") return { is_repository: true, branch: "main" };
+        if (command === "git_status") return [
+          { path: "staged.md", index_status: "A", worktree_status: " " },
+          { path: "changed.md", index_status: " ", worktree_status: "M" },
+          { path: "draft.md", index_status: "?", worktree_status: "?" }
+        ];
+        throw new Error(`Unexpected native command: ${command}`);
+      }
+    };
+  });
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "Open workspace" }).click();
+  await page.getByRole("button", { name: "Source control" }).click();
+  await expect(page.getByText("Repository", { exact: true })).toBeVisible();
+  await expect(page.getByText("main", { exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Staged files" })).toContainText("staged.md");
+  await expect(page.getByRole("region", { name: "Changed files" })).toContainText("changed.md");
+  await expect(page.getByRole("region", { name: "Untracked files" })).toContainText("draft.md");
+});
+
+test("source control initializes a workspace repository", async ({ page }) => {
+  await page.addInitScript(() => {
+    const appWindow = window as Window & {
+      isTauri?: boolean;
+      __TAURI_INTERNALS__?: { invoke: (command: string, args: Record<string, unknown>) => Promise<unknown> };
+    };
+    appWindow.isTauri = true;
+    appWindow.__TAURI_INTERNALS__ = {
+      async invoke(command, args) {
+        if (command === "plugin:dialog|open") return "/workspace/new-repository";
+        if (command === "read_app_settings") return null;
+        if (command === "write_app_settings") return null;
+        if (command === "open_workspace") return { workspace: { root_path: String(args.rootPath), name: "new-repository" }, files: [] };
+        if (command === "list_workspace_entries") return [];
+        if (command === "git_availability") return { available: true, version: "git version 2.50.0" };
+        if (command === "detect_git_repository") return { is_repository: false, branch: null };
+        if (command === "initialize_git_repository") return { is_repository: true, branch: null };
+        if (command === "git_status") return [];
+        throw new Error(`Unexpected native command: ${command}`);
+      }
+    };
+  });
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "Open workspace" }).click();
+  await page.getByRole("button", { name: "Source control" }).click();
+  await page.getByRole("button", { name: "Initialize repository" }).click();
+  await expect(page.getByText("Repository initialized.")).toBeVisible();
+  await expect(page.getByText("Detached HEAD", { exact: true })).toBeVisible();
 });
 
 test("assistant and bottom panel toggles preserve the editor", async ({ page }) => {

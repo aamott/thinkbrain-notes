@@ -1,8 +1,14 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { lazy, Suspense, useCallback, useEffect, useReducer, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { CommandPalette, type WorkspaceFileResult } from "../commands/CommandPalette";
+import { createDesktopCommandRegistry, type DesktopCommand } from "../commands/commandRegistry";
+import { SourceControlPanel } from "../git/SourceControlPanel";
+import { gitService } from "../git/gitService";
+import type { NativeMarkdownFileEntry, NativeWorkspaceSnapshot } from "../native/commands";
 import { DEFAULT_DESKTOP_STATE, loadDesktopState, saveDesktopState, type DesktopStateUpdate } from "../settings/desktopState";
 import {
   createEditorTab,
+  createStaticTab,
   desktopTabReducer,
   initialDesktopTabState,
   type DesktopTab
@@ -39,6 +45,7 @@ const rightActions: readonly { id: RightPanel; label: string; symbol: string }[]
 ];
 
 const desktopTabRegistry = createDesktopTabRegistry();
+const desktopCommandRegistry = createDesktopCommandRegistry();
 const AssistantPanel = lazy(async () => {
   const module = await import("../agent/AssistantPanel");
   return { default: module.AssistantPanel };
@@ -53,6 +60,7 @@ export function DesktopShell() {
   const [tabState, dispatchTabs] = useReducer(desktopTabReducer, initialDesktopTabState);
   const [documents, setDocuments] = useState<Record<string, DocumentViewState>>({});
   const documentsRef = useRef(documents);
+  const paletteRestoreFocusRef = useRef<HTMLElement | null>(null);
   const [leftPanel, setLeftPanel] = useState<LeftPanel | null>("explorer");
   const [rightPanel, setRightPanel] = useState<RightPanel | null>("outline");
   const [bottomPanel, setBottomPanel] = useState<BottomPanel | null>(null);
@@ -62,6 +70,8 @@ export function DesktopShell() {
   const [rightWidth, setRightWidth] = useState(320);
   const [restoredWorkspacePath, setRestoredWorkspacePath] = useState<string | null>(null);
   const [workspaceName, setWorkspaceName] = useState<string | null>(null);
+  const [workspaceFiles, setWorkspaceFiles] = useState<readonly NativeMarkdownFileEntry[]>([]);
+  const [newNoteFocusRequest, setNewNoteFocusRequest] = useState(0);
   const [stateRestored, setStateRestored] = useState(!isTauri());
 
   useEffect(() => {
@@ -106,16 +116,34 @@ export function DesktopShell() {
     });
   }, [persistDesktopState]);
 
-  const handleWorkspaceOpened = useCallback((rootPath: string, snapshot: { readonly workspace: { readonly name: string } }) => {
+  const handleWorkspaceOpened = useCallback((rootPath: string, snapshot: NativeWorkspaceSnapshot) => {
     setRestoredWorkspacePath(rootPath);
     setWorkspaceName(snapshot.workspace.name);
+    setWorkspaceFiles(snapshot.files);
+    void gitService.detectRepository(rootPath);
     persistDesktopState({ lastWorkspacePath: rootPath });
   }, [persistDesktopState]);
 
   const handleWorkspaceUnavailable = useCallback(() => {
     setRestoredWorkspacePath(null);
     setWorkspaceName(null);
+    setWorkspaceFiles([]);
     persistDesktopState({ lastWorkspacePath: null });
+  }, [persistDesktopState]);
+
+  const openPalette = useCallback(() => {
+    paletteRestoreFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setPaletteOpen(true);
+  }, []);
+
+  const closePalette = useCallback((restoreFocus = true) => {
+    setPaletteOpen(false);
+    if (restoreFocus) queueMicrotask(() => paletteRestoreFocusRef.current?.focus());
+  }, []);
+
+  const showExplorer = useCallback(() => {
+    setLeftPanel("explorer");
+    persistDesktopState({ explorerOpen: true });
   }, [persistDesktopState]);
 
   const openMarkdownDocument = useCallback((rootPath: string, relativePath: string) => {
@@ -136,6 +164,56 @@ export function DesktopShell() {
       }));
     });
   }, []);
+
+  const handleMarkdownFileCreated = useCallback((rootPath: string, relativePath: string) => {
+    if (rootPath !== restoredWorkspacePath) return;
+    setWorkspaceFiles((files) => files.some((file) => file.relative_path === relativePath)
+      ? files
+      : [...files, {
+        relative_path: relativePath,
+        file_name: relativePath.split("/").at(-1) ?? relativePath,
+        parent_path: relativePath.split("/").slice(0, -1).join("/"),
+        byte_size: 0,
+        updated_at: null
+      }]);
+  }, [restoredWorkspacePath]);
+
+  const handlePaletteCommand = useCallback((command: DesktopCommand) => {
+    switch (command.intent.type) {
+      case "open-file":
+        return;
+      case "new-note":
+        showExplorer();
+        setNewNoteFocusRequest((request) => request + 1);
+        closePalette(false);
+        return;
+      case "search":
+        setLeftPanel("search");
+        persistDesktopState({ explorerOpen: false });
+        closePalette(false);
+        return;
+      case "toggle-theme":
+        setTheme((value) => value === "dark" ? "light" : "dark");
+        closePalette(false);
+        return;
+      case "toggle-panel":
+        if (!("panel" in command.intent)) return;
+        if (command.intent.panel === "explorer") selectLeftPanel("explorer");
+        if (command.intent.panel === "outline") setRightPanel((panel) => panel === "outline" ? null : "outline");
+        if (command.intent.panel === "assistant") setRightPanel((panel) => panel === "assistant" ? null : "assistant");
+        if (command.intent.panel === "bottom") setBottomPanel((panel) => panel ? null : "terminal");
+        closePalette(false);
+        return;
+      case "open-settings":
+        dispatchTabs({ type: "open", tab: createStaticTab("settings", "Settings") });
+        closePalette(false);
+        return;
+      case "rebuild-index":
+        setBottomPanel("output");
+        closePalette(false);
+        return;
+    }
+  }, [closePalette, persistDesktopState, selectLeftPanel, showExplorer]);
 
   const updateDocument = useCallback((tabId: string, contents: string) => {
     setDocuments((current) => {
@@ -188,7 +266,8 @@ export function DesktopShell() {
       const modifier = event.ctrlKey || event.metaKey;
       if (modifier && event.key.toLowerCase() === "p") {
         event.preventDefault();
-        setPaletteOpen((open) => !open);
+        if (paletteOpen) closePalette();
+        else openPalette();
       }
       if (modifier && event.key.toLowerCase() === "b") {
         event.preventDefault();
@@ -204,7 +283,7 @@ export function DesktopShell() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [selectLeftPanel]);
+  }, [closePalette, openPalette, paletteOpen, selectLeftPanel]);
 
   useEffect(() => {
     rootRef.current?.style.setProperty("--tn-shell-left-width", `${leftWidth}px`);
@@ -285,9 +364,11 @@ export function DesktopShell() {
                 onWorkspaceOpened={handleWorkspaceOpened}
                 onWorkspaceUnavailable={handleWorkspaceUnavailable}
                 onMarkdownFileSelected={openMarkdownDocument}
+                onMarkdownFileCreated={handleMarkdownFileCreated}
+                newNoteFocusRequest={newNoteFocusRequest}
               />
             ) : (
-              <><PanelTitle title={leftActions.find((item) => item.id === leftPanel)?.label ?? "Panel"} /><LeftContent panel={leftPanel} /></>
+              <><PanelTitle title={leftActions.find((item) => item.id === leftPanel)?.label ?? "Panel"} /><LeftContent panel={leftPanel} rootPath={restoredWorkspacePath} /></>
             )}
           </aside>
           <ResizeHandle label="Resize left panel" onPointerDown={beginResize("left")} onKeyDown={resizeWithKeyboard("left")} />
@@ -317,7 +398,7 @@ export function DesktopShell() {
         <button className={bottomPanel ? styles.statusActive : ""} onClick={() => setBottomPanel((panel) => panel ? null : "terminal")} aria-label="Toggle bottom panel">▰</button>
       </footer>
 
-      {paletteOpen && <CommandPalette onClose={() => setPaletteOpen(false)} onAction={(id) => { if (id === "assistant") setRightPanel("assistant"); if (id === "search") selectLeftPanel("search"); }} />}
+      {paletteOpen && <CommandPalette commands={desktopCommandRegistry.entries()} files={workspaceFiles.map((file): WorkspaceFileResult => ({ rootPath: restoredWorkspacePath ?? "", relativePath: file.relative_path })).filter((file) => Boolean(file.rootPath))} onClose={closePalette} onCommand={handlePaletteCommand} onOpenFile={(file) => openMarkdownDocument(file.rootPath, file.relativePath)} />}
       {tabState.closeRequest && <DirtyCloseDialog tab={tabState.tabs.find((tab) => tab.id === tabState.closeRequest?.tabId) ?? null} onCancel={() => dispatchTabs({ type: "cancelClose", tabId: tabState.closeRequest!.tabId })} onDiscard={() => dispatchTabs({ type: "discardClose", tabId: tabState.closeRequest!.tabId })} onSave={async () => { const tab = tabState.tabs.find((candidate) => candidate.id === tabState.closeRequest?.tabId); if (tab && await saveDocument(tab)) dispatchTabs({ type: "completeSaveAndClose", tabId: tab.id }); }} />}
     </main>
   );
@@ -335,8 +416,9 @@ function PanelTitle({ title }: { title: string }) {
   return <div className={styles.panelTitle}><h2>{title}</h2><button aria-label={`More ${title} actions`}>•••</button></div>;
 }
 
-function LeftContent({ panel }: { panel: LeftPanel }) {
-  return <Unavailable title={panel === "source-control" ? "Source control" : panel} description={panel === "extensions" ? "Extensions will appear here when the capability sandbox is ready." : "This workspace surface is not connected yet."} />;
+function LeftContent({ panel, rootPath }: { panel: LeftPanel; rootPath: string | null }) {
+  if (panel === "source-control") return <SourceControlPanel rootPath={rootPath} />;
+  return <Unavailable title={panel} description={panel === "extensions" ? "Extensions will appear here when the capability sandbox is ready." : "This workspace surface is not connected yet."} />;
 }
 
 function RightContent({ panel }: { panel: RightPanel }) {
@@ -376,11 +458,6 @@ function DirtyCloseDialog({ tab, onCancel, onDiscard, onSave }: {
 
 function BottomContent({ active, onChange, onClose }: { active: BottomPanel; onChange: (panel: BottomPanel) => void; onClose: () => void }) {
   return <section className={styles.bottomPanel} aria-label="Bottom panel"><div className={styles.bottomTabs}>{(["problems", "output", "terminal", "backlinks"] as const).map((item) => <button key={item} className={active === item ? styles.bottomTabActive : ""} onClick={() => onChange(item)}>{item}</button>)}<span /><button onClick={onClose} aria-label="Close bottom panel">×</button></div><div className={styles.bottomContent}><Unavailable title={`${active} panel`} description="This panel is waiting for its backing service." /></div></section>;
-}
-
-function CommandPalette({ onClose, onAction }: { onClose: () => void; onAction: (id: string) => void }) {
-  const commands = [["Go to File…", "file"], ["Search in Vault", "search"], ["Toggle AI Assistant", "assistant"], ["New Note", "new"]] as const;
-  return <div className={styles.paletteBackdrop} role="presentation" onMouseDown={onClose}><section className={styles.palette} role="dialog" aria-modal="true" aria-label="Command palette" onMouseDown={(event) => event.stopPropagation()}><input autoFocus placeholder="Type a command or file name…" aria-label="Search commands" /><div>{commands.map(([label, id]) => <button key={id} onClick={() => { onAction(id); onClose(); }}><span>›</span>{label}</button>)}</div></section></div>;
 }
 
 function Unavailable({ title, description }: { title: string; description: string }) {
