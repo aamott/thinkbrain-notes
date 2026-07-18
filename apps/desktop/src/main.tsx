@@ -1,15 +1,16 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import "@thinkbrain/ui/styles.css";
+import "./shell/global.css";
+import App from "./App";
 
-import { App } from "./App";
+const root = document.getElementById("root");
 
-const rootElement = document.getElementById("root");
-
-if (!rootElement) {
-  throw new Error("Desktop app root element was not found.");
+if (!root) {
+  throw new Error("The desktop root element is missing.");
 }
 
-createRoot(rootElement).render(
+createRoot(root).render(
   <StrictMode>
     <App />
   </StrictMode>

@@ -471,7 +471,11 @@ fn resolve_markdown_file_path(root: &Path, relative_path: &str) -> Result<PathBu
 }
 
 fn normalize_relative_path(relative_path: &str) -> Result<String, NativeError> {
-    let path = Path::new(relative_path);
+    // Tauri receives paths from every supported desktop platform. Normalize
+    // separators before `Path::components` so Windows input is validated the
+    // same way on Unix hosts (including `..` escape attempts).
+    let normalized_input = relative_path.replace('\\', "/");
+    let path = Path::new(&normalized_input);
 
     if path.is_absolute() {
         return Err(NativeError::new(

@@ -146,6 +146,11 @@ Browser tabs are registered as an unavailable tab kind until a separate
 security decision approves a Tauri webview strategy, navigation policy, and
 capability/CSP boundary. Do not use a raw iframe as a shortcut.
 
+The standalone reference application is not part of the production workspace
+or its quality gate. Root ESLint ignores `mockup_v3/`; its separate toolchain
+may be run deliberately when the reference itself changes. Production lint
+continues to cover `apps/` and `packages/` without suppressing errors.
+
 ## AI
 
 Decision: AI remains optional and is implemented only through the `ai` epic.
@@ -166,6 +171,12 @@ Decision: AI remains optional and is implemented only through the `ai` epic.
 - Cloud model use and sending note/workspace context require explicit consent.
   ACP filesystem/terminal permission is separately requested and enforced by
   the native host (allow once / always / deny).
+
+The current SDK contracts reinforce this separation: AI SDK custom transports
+implement `sendMessages` and return UI-message chunk streams, whereas ACP
+permission requests carry the agent-provided options and tool-call update for a
+specific session. The renderer presents the information; the native ACP host
+enforces the user's answer and does not reconstruct an agent plan.
 
 ## Proposed Confirmations for Mockup v3
 

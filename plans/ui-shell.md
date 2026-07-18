@@ -89,14 +89,16 @@ the persisted app setting and `data-thinkbrain-theme`.
 
 ## Status
 
-- ✅ basic shell, explorer/search/settings, and Markdown editor exist, but are
-  implemented as a single basic grid and global stylesheet — `apps/desktop/src/`
-- ✅ shared chrome-token migration and CSS Module conversion — see
-  `plans/ui-shell/done-shell_tokens_and_css_modules-high-hard.md`
-- ✅ mockup-v3 desktop shell composition — see
-  `plans/ui-shell/done-desktop_shell_composition-high-hard.md`
-- ✅ tab model, registry, and tab strip — see
-  `plans/ui-shell/done-tab_content_registry-high-hard.md`
+- ✅ fresh-shell startup and browser-harness wiring — see
+  `plans/ui-shell/done-fresh_shell_launch_wiring-high-med.md`
+- ✅ persisted Explorer visibility and workspace restoration — see
+  `workspace-explorer/done-fresh_shell_workspace_open-high-med.md`
+- ✅ a new shell rebuild from `mockup_v3/` is complete — see
+  `plans/ui-shell/done-mockup_v3_shell_rebuild-high-hard.md`
+- ⬜ shell token and CSS Module migration — supersedes the removed desktop
+  stylesheet and must not reuse it
+- ⬜ tab model, registry, and tab strip — rebuilt from the mockup interaction
+  contract, not the deleted implementation
 - ⬜ left popout integration — see
   `plans/ui-shell/pending-left_popout_integration-high-med.md`
 - ⬜ inspector/right popout integration — see

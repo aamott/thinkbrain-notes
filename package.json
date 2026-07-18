@@ -4,13 +4,19 @@
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.8.0",
+  "engines": {
+    "node": ">=22.23.1",
+    "pnpm": "11.8.0"
+  },
   "scripts": {
     "dev": "pnpm --filter @thinkbrain/desktop dev",
     "lint": "eslint .",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
+    "test:rust": "cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml",
     "test:e2e": "pnpm --filter @thinkbrain/desktop test:e2e",
     "build": "pnpm -r build",
+    "desktop:run": "pnpm build && cargo run --manifest-path apps/desktop/src-tauri/Cargo.toml",
     "desktop:tauri": "pnpm --filter @thinkbrain/desktop tauri"
   },
   "devDependencies": {

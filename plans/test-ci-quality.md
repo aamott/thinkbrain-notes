@@ -42,6 +42,10 @@ before declaring work done. Failures must be visible and never suppressed.
   apps/desktop/src-tauri/Cargo.toml`.
 - Fail loudly: agents must not suppress failures to make CI pass
   (`plans/testing-strategy.md` → Agent Validation Rule).
+- **Runtime baseline:** pnpm 11.8 requires Node 22.13 or newer. The project
+  declares and documents the Node 22 baseline rather than downgrading pnpm or
+  bypassing Corepack; all root validation commands run under that supported
+  runtime.
 
 ## Non-Goals
 
@@ -52,6 +56,10 @@ before declaring work done. Failures must be visible and never suppressed.
 
 ## Status
 
+- ✅ regular desktop launch command and contributor README — see
+  `plans/test-ci-quality/done-regular_desktop_launch_command-high-easy.md`
+- ✅ Node 22/pnpm 11 runtime baseline and clean launch verification — see
+  `plans/test-ci-quality/done-node22_runtime_and_launch_verification-high-med.md`
 - ✅ root validation scripts (`lint`, `typecheck`, `test`, `test:e2e`, `build`) — `package.json`
 - ✅ Vitest configuration (desktop explicit; core/ui defaults) — `apps/desktop/vite.config.ts`
 - ✅ Playwright E2E configuration — `apps/desktop/playwright.config.ts`
@@ -60,5 +68,6 @@ before declaring work done. Failures must be visible and never suppressed.
 - ✅ typecheck configuration (per-package `tsc --noEmit`) — `tsconfig.base.json`, per-package `tsconfig.json`
 - ✅ smoke tests for core/ui/desktop packages — `packages/core/src/*.test.ts`, `packages/ui/src/lib/classNames.test.ts`, `apps/desktop/src/**/*.test.ts`
 - ✅ E2E smoke test for app boot — `apps/desktop/e2e/app.spec.ts`
-- ⬜ root convenience script for Rust tests (`pnpm test:rust`) — not yet in `package.json`
+- ✅ root convenience script for Rust tests (`pnpm test:rust`) — see
+  `plans/test-ci-quality/done-rust_test_root_script-med-easy.md`
 - ⬜ GitHub Actions CI workflow — no `.github/workflows/` directory exists

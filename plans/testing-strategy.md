@@ -59,15 +59,13 @@ Once the project is scaffolded, these commands should exist:
 pnpm lint
 pnpm typecheck
 pnpm test
+pnpm test:rust
 pnpm test:e2e
 pnpm build
 ```
 
-For Rust/Tauri code:
-
-```bash
-cargo test
-```
+`pnpm test:rust` invokes the explicit Tauri manifest path, so it works from
+the repository root.
 
 ## Agent Validation Rule
 

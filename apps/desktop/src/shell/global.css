@@ -1,0 +1,40 @@
+:root {
+  font-family: var(--tn-font-sans);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  block-size: 100%;
+  inline-size: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--tn-color-background);
+  color: var(--tn-color-foreground);
+  overflow: hidden;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+button {
+  color: inherit;
+}
+
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--tn-color-ring);
+  outline-offset: -2px;
+}

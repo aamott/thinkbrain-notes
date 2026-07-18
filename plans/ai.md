@@ -68,6 +68,22 @@ a capability; UI presents allow once/always/deny; Rust validates scope and
 enforces the recorded decision. The host returns stale-write conflicts/current
 content and lets the agent decide how to retry or merge.
 
+### Confirmed integration contracts
+
+Current upstream documentation confirms the selected boundaries. The desktop
+AI-SDK transport implements `ChatTransport.sendMessages` and returns a
+`ReadableStream<UIMessageChunk>`; a Tauri command/event adapter owns that
+stream instead of emulating an HTTP `/api/chat` endpoint. The assistant-ui
+panel receives an externally supplied `AssistantRuntimeProvider` runtime, so
+the static configuration state can render without inventing a fake provider.
+
+ACP agent mode follows the official session lifecycle: initialize, create or
+load a session, prompt, receive streaming updates, cancel, and close. A
+permission request carries the session ID, tool-call update, and protocol
+supplied options. The UI displays those options; the deterministic native host
+validates and enforces the selected outcome. It never selects an option or
+reasons on an agent's behalf.
+
 ### Shared contracts, configuration, and consent
 
 `packages/core/src/ai/` contains platform-neutral value types and contracts:
@@ -95,6 +111,8 @@ plain JSON.
 
 ## Status
 
+- ✅ assistant-ui panel foundation — see
+  `plans/ai/done-assistant_panel_foundation-med-med.md`
 - ⬜ AI SDK v7 desktop transport spike — see
   `plans/ai/pending-ai_sdk_tauri_transport-med-hard.md`
 - ⬜ assistant-ui desktop thread and local history — see

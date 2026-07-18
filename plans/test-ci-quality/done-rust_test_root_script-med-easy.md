@@ -1,6 +1,6 @@
 # Story: Root convenience script for Rust tests
 
-**Status:** pending · **Urgency:** med · **Difficulty:** easy
+**Status:** done · **Urgency:** med · **Difficulty:** easy
 
 ## Goal
 
@@ -9,10 +9,10 @@ without remembering the `cargo test --manifest-path ...` incantation.
 
 ## Acceptance Criteria
 
-- [ ] `package.json` (root) has a `test:rust` script invoking
+- [x] `package.json` (root) has a `test:rust` script invoking
   `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml`.
-- [ ] `pnpm test:rust` passes from the repo root.
-- [ ] Command documented in `plans/testing-strategy.md` Expected Commands
+- [x] `pnpm test:rust` passes from the repo root.
+- [x] Command documented in `plans/testing-strategy.md` Expected Commands
   section.
 
 ## References

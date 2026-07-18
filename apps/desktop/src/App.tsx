@@ -1,5 +1,5 @@
-import MockupApp from "./mockup-v3-ui/MockupApp";
+import { DesktopShell } from "./shell/DesktopShell";
 
-export function App() {
-  return <MockupApp />;
+export default function App() {
+  return <DesktopShell />;
 }

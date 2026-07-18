@@ -1,10 +1,8 @@
 # Workspace Explorer
 
-> Follow-up epic for the workspace + file explorer. The core explorer (folder
-> open, Markdown CRUD, full-vault tree listing) shipped with work item 003.
-> This epic tracks the remaining open items (OI-006) that make the explorer a
-> complete file manager: generic file operations, drag-and-drop move,
-> new-folder creation, and a show-hidden toggle.
+> The prior desktop explorer was removed with the retired UI. Rebuild the
+> essential folder-open and read-only tree flow in the fresh shell before the
+> follow-up file-manager stories below.
 
 ## Goal
 
@@ -43,13 +41,12 @@ vault contents (attachments, config files, folders) without leaving the app.
 
 ## Status
 
-- ✅ Open workspace folder + remember snapshot — `WorkspaceExplorer.tsx`,
-  `workspaceService.ts`, `lib.rs` `open_workspace`
-- ✅ Full-vault tree listing (folders + non-Markdown files, read-only) —
-  `FileTree.tsx`, `fileTreeModel.ts`, `lib.rs` `list_workspace_entries` /
-  `collect_workspace_entries`
-- ✅ Markdown CRUD (create / rename / delete / read / write) —
-  `workspaceService.ts`, `WorkspaceExplorer.tsx` handlers
+- ✅ fresh-shell workspace open, restore, and read-only explorer — see
+  `plans/workspace-explorer/done-fresh_shell_workspace_open-high-med.md`
+- ⬜ Markdown CRUD UI integration — the native commands remain available, but
+  the deleted desktop UI must not be restored to consume them
+- ⬜ Full-vault tree integration (folders + non-Markdown files, read-only) —
+  rebuild against `list_workspace_entries` in the fresh shell
 - ✅ Dot-prefixed entries hidden by default — `lib.rs` `is_hidden_name`
 - ⬜ Non-Markdown file operations (open / rename / delete) — see
   `pending-non_markdown_file_ops-med-med.md`

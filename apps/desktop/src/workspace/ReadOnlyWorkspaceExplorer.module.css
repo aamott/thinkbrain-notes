@@ -1,0 +1,201 @@
+.explorer {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  color: var(--tn-color-sidebar-foreground);
+  background: var(--tn-color-sidebar);
+  font-family: var(--tn-font-sans);
+}
+
+.header {
+  display: flex;
+  min-height: 4rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.625rem 0.75rem;
+  border-bottom: 1px solid var(--tn-color-border);
+}
+
+.eyebrow {
+  margin: 0 0 0.125rem;
+  color: var(--tn-color-muted-foreground);
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.title {
+  max-width: 11rem;
+  margin: 0;
+  overflow: hidden;
+  font-size: 0.8125rem;
+  font-weight: 650;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.openButton {
+  flex: none;
+  border: 1px solid var(--tn-color-border);
+  border-radius: var(--tn-radius-small);
+  padding: 0.375rem 0.5rem;
+  color: var(--tn-color-primary-foreground);
+  background: var(--tn-color-primary);
+  cursor: pointer;
+  font-size: 0.6875rem;
+  font-weight: 650;
+  line-height: 1;
+}
+
+.openButton:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+.openButton:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.emptyState,
+.status,
+.error {
+  margin: auto 0;
+  padding: 1.25rem;
+  color: var(--tn-color-muted-foreground);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.emptyState {
+  text-align: center;
+}
+
+.emptyState strong,
+.error strong {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: var(--tn-color-sidebar-foreground);
+  font-size: 0.8125rem;
+}
+
+.emptyState p,
+.error p {
+  margin: 0;
+}
+
+.status {
+  text-align: center;
+}
+
+.error {
+  margin: 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--tn-color-destructive) 45%, var(--tn-color-border));
+  border-radius: var(--tn-radius-small);
+  color: var(--tn-color-danger);
+  background: color-mix(in srgb, var(--tn-color-destructive) 9%, transparent);
+}
+
+.error button {
+  margin-top: 0.625rem;
+  border: 1px solid currentColor;
+  border-radius: var(--tn-radius-small);
+  padding: 0.25rem 0.4375rem;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.6875rem;
+}
+
+.error button:hover {
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.treeRegion {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.path {
+  margin: 0;
+  overflow: hidden;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--tn-color-border);
+  color: var(--tn-color-muted-foreground);
+  font-size: 0.6875rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tree {
+  min-height: 0;
+  flex: 1;
+  margin: 0;
+  overflow: auto;
+  padding: 0.375rem 0;
+  list-style: none;
+  scrollbar-color: var(--tn-color-border) transparent;
+  scrollbar-width: thin;
+}
+
+.tree ul {
+  margin: 0;
+  padding: 0 0 0 0.875rem;
+  list-style: none;
+}
+
+.treeItem {
+  margin: 0;
+  padding: 0;
+}
+
+.treeRow {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.265rem 0.75rem;
+  color: var(--tn-color-sidebar-foreground);
+  font-size: 0.75rem;
+  line-height: 1.25;
+}
+
+.treeRow:hover {
+  background: color-mix(in srgb, var(--tn-color-accent) 58%, transparent);
+}
+
+.treeIcon {
+  width: 0.625rem;
+  flex: none;
+  color: var(--tn-color-muted-foreground);
+  text-align: center;
+}
+
+.entryName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.entryKind {
+  margin-left: auto;
+  color: var(--tn-color-muted-foreground);
+  font-size: 0.625rem;
+}
+
+.readOnlyNote {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid var(--tn-color-border);
+  color: var(--tn-color-muted-foreground);
+  font-size: 0.625rem;
+  line-height: 1.35;
+}
