@@ -39,6 +39,8 @@ export interface NativeCommandMap {
     readonly args: { readonly rootPath: string };
     readonly result: NativeWorkspaceSnapshot;
   };
+  readonly open_workspace_window: { readonly args: { readonly rootPath: string }; readonly result: null };
+  readonly window_workspace_root: { readonly args: undefined; readonly result: string | null };
   readonly list_markdown_files: {
     readonly args: { readonly rootPath: string };
     readonly result: readonly NativeMarkdownFileEntry[];

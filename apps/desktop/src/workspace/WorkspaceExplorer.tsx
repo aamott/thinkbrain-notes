@@ -1,4 +1,5 @@
-import { memo, useCallback, useEffect, useMemo, useReducer, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
+import { memo, useCallback, useEffect, useId, useMemo, useReducer, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
+import { ChevronDown, Folder, FolderOpen, FolderPlus } from "lucide-react";
 import type { NativeWorkspaceEntry, NativeWorkspaceSnapshot } from "../native/commands";
 import {
   buildWorkspaceTree,
@@ -8,6 +9,7 @@ import {
   type WorkspaceTreeNode
 } from "./workspaceExplorerModel";
 import { workspaceDesktopApi, type WorkspaceDesktopApi } from "./workspaceAdapter";
+import { WorkspaceFileIcon } from "./WorkspaceFileIcon";
 import styles from "./WorkspaceExplorer.module.css";
 
 export interface WorkspaceExplorerProps {
@@ -22,6 +24,8 @@ export interface WorkspaceExplorerProps {
   /** Request that the explorer begin creating a note at the workspace root. */
   readonly newNoteFocusRequest?: number;
   readonly onNewNoteFocusHandled?: () => void;
+  readonly recentWorkspacePaths?: readonly string[];
+  readonly onWorkspaceLaunched?: (rootPath: string) => void;
 }
 
 /**
@@ -37,7 +41,9 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
   onMarkdownFileSelected,
   onMarkdownFileCreated,
   newNoteFocusRequest = 0,
-  onNewNoteFocusHandled
+  onNewNoteFocusHandled,
+  recentWorkspacePaths = [],
+  onWorkspaceLaunched
 }: WorkspaceExplorerProps) {
   const [state, dispatch] = useReducer(workspaceExplorerReducer, initialWorkspaceExplorerState);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
@@ -122,16 +128,15 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
   }, []);
 
   const openWorkspace = async () => {
-    dispatch({ type: "pick" });
     try {
       const rootPath = await api.pickWorkspaceDirectory();
       if (!rootPath) {
-        dispatch({ type: "cancel" });
         return;
       }
-      await loadWorkspace(rootPath);
+      await api.openWorkspaceWindow(rootPath);
+      onWorkspaceLaunched?.(rootPath);
     } catch (error) {
-      dispatch({ type: "failed", message: workspaceErrorMessage(error) });
+      setActionError(workspaceErrorMessage(error));
     }
   };
 
@@ -324,9 +329,6 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
           <p className={styles.eyebrow}>Workspace</p>
           <h2 className={styles.title}>{state.snapshot?.workspace.name ?? "No workspace open"}</h2>
         </div>
-        <button className={styles.openButton} type="button" onClick={openWorkspace} disabled={isBusy}>
-          {isBusy ? "Opening…" : "Open workspace"}
-        </button>
       </header>
 
       {state.phase === "empty" && <EmptyState />}
@@ -407,6 +409,12 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
           onConfirm={() => void confirmDelete()}
         />
       )}
+      <WorkspaceSelector
+        currentPath={workspaceRootPath}
+        paths={recentWorkspacePaths}
+        onAdd={() => void openWorkspace()}
+        onSelect={(rootPath) => void api.openWorkspaceWindow(rootPath).then(() => onWorkspaceLaunched?.(rootPath)).catch((error) => setActionError(workspaceErrorMessage(error)))}
+      />
     </section>
   );
 });
@@ -481,9 +489,8 @@ const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
           onContextMenu={(event) => onContextMenu(event, { kind: isDirectory ? "folder" : "file", entry: node.entry })}
           aria-label={isDirectory ? `${isExpanded ? "Collapse" : "Expand"} ${node.entry.name}` : isMarkdownFile ? `Open ${node.entry.name}` : undefined}
         >
-          <span className={styles.treeIcon} aria-hidden="true">{isDirectory ? (isExpanded ? "⌄" : "›") : "·"}</span>
+          <span className={styles.treeIcon} aria-hidden="true">{isDirectory ? (isExpanded ? <FolderOpen /> : <Folder />) : <WorkspaceFileIcon name={node.entry.name} />}</span>
           <span className={styles.entryName}>{node.entry.name}</span>
-          <EntryKind entry={node.entry} />
         </button>
       )}
       {isDirectory && isExpanded && (
@@ -821,9 +828,67 @@ function ErrorState({ message, onDismiss }: { readonly message: string; readonly
   return <div className={styles.error} role="alert"><strong>Could not open workspace</strong><p>{message}</p><button type="button" onClick={onDismiss}>Dismiss</button></div>;
 }
 
-function EntryKind({ entry }: { readonly entry: NativeWorkspaceEntry }) {
-  if (entry.kind === "directory") return <span className={styles.entryKind}>Folder</span>;
-  return <span className={styles.entryKind}>{entry.is_markdown ? "Markdown" : "File"}</span>;
+export function WorkspaceSelector({ currentPath, paths, onSelect, onAdd }: { readonly currentPath?: string; readonly paths: readonly string[]; readonly onSelect: (path: string) => void; readonly onAdd: () => void }) {
+  const [open, setOpen] = useState(false);
+  const selectorRef = useRef<HTMLDivElement>(null);
+  const menuId = useId();
+  const options = [...new Set(currentPath ? [currentPath, ...paths] : paths)];
+  useEffect(() => {
+    if (!open) return;
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (!selectorRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("pointerdown", closeOnOutsidePointer);
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      window.removeEventListener("pointerdown", closeOnOutsidePointer);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open]);
+
+  return (
+    <div ref={selectorRef} className={styles.workspaceSelector}>
+      <button
+        className={styles.workspaceSelectorTrigger}
+        type="button"
+        aria-controls={menuId}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        onClick={() => setOpen((value) => !value)}
+      >
+        <Folder aria-hidden="true" />
+        <span>{currentPath?.split(/[\\/]/).at(-1) ?? "Choose workspace"}</span>
+        <ChevronDown aria-hidden="true" />
+      </button>
+      {open && (
+        <div id={menuId} className={styles.workspaceSelectorMenu} role="menu" aria-label="Workspaces">
+          {options.map((path) => (
+            <button
+              key={path}
+              type="button"
+              role="menuitem"
+              aria-current={path === currentPath ? "true" : undefined}
+              title={path}
+              onClick={() => {
+                setOpen(false);
+                onSelect(path);
+              }}
+            >
+              <Folder aria-hidden="true" />
+              <span>{path.split(/[\\/]/).at(-1)}</span>
+            </button>
+          ))}
+          <button type="button" role="menuitem" onClick={() => { setOpen(false); onAdd(); }}>
+            <FolderPlus aria-hidden="true" />
+            <span>Add workspace</span>
+          </button>
+        </div>
+      )}
+    </div>
+  );
 }
 
 /** Joins a parent path and a name into a workspace-relative path. */

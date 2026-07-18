@@ -25,8 +25,9 @@ describe("desktop state persistence", () => {
         })
       )
     ).toEqual({
-      version: 1,
+      version: 2,
       lastWorkspacePath: "/notes/legacy",
+      recentWorkspacePaths: ["/notes/legacy"],
       explorerOpen: false
     });
 
@@ -40,8 +41,9 @@ describe("desktop state persistence", () => {
         })
       )
     ).toEqual({
-      version: 1,
+      version: 2,
       lastWorkspacePath: "/notes/v0",
+      recentWorkspacePaths: ["/notes/v0"],
       explorerOpen: false
     });
   });
@@ -84,8 +86,9 @@ describe("desktop state persistence", () => {
     );
 
     await expect(loadDesktopState(gateway)).resolves.toEqual({
-      version: 1,
+      version: 2,
       lastWorkspacePath: "/notes/current",
+      recentWorkspacePaths: ["/notes/current"],
       explorerOpen: false
     });
     expect(gateway.readAppSettings).toHaveBeenCalledTimes(1);
@@ -104,8 +107,9 @@ describe("desktop state persistence", () => {
     );
 
     await expect(saveDesktopState({ explorerOpen: true }, gateway)).resolves.toEqual({
-      version: 1,
+      version: 2,
       lastWorkspacePath: "/notes/legacy",
+      recentWorkspacePaths: ["/notes/legacy"],
       explorerOpen: true
     });
 
@@ -116,8 +120,9 @@ describe("desktop state persistence", () => {
       editor: { fontSize: 18, lineWrapping: false },
       extensionSettings: { "example.timer": { enabled: true } },
       [DESKTOP_STATE_KEY]: {
-        version: 1,
+        version: 2,
         lastWorkspacePath: "/notes/legacy",
+        recentWorkspacePaths: ["/notes/legacy"],
         explorerOpen: true
       }
     });
@@ -134,17 +139,85 @@ describe("desktop state persistence", () => {
         gateway
       )
     ).resolves.toEqual({
-      version: 1,
+      version: 2,
       lastWorkspacePath: "/notes/new",
+      recentWorkspacePaths: ["/notes/new"],
       explorerOpen: false
     });
 
     expect(getWrittenSettings(gateway)).toEqual({
       [DESKTOP_STATE_KEY]: {
-        version: 1,
+        version: 2,
         lastWorkspacePath: "/notes/new",
+        recentWorkspacePaths: ["/notes/new"],
         explorerOpen: false
       }
+    });
+  });
+
+  it("promotes the most recent workspace, removes duplicates, and keeps the MRU list bounded", async () => {
+    const paths = Array.from({ length: 13 }, (_, index) => `/notes/${index}`);
+    const gateway = createGateway(
+      JSON.stringify({
+        [DESKTOP_STATE_KEY]: {
+          version: 2,
+          lastWorkspacePath: "/notes/3",
+          recentWorkspacePaths: paths,
+          explorerOpen: true
+        }
+      })
+    );
+
+    await expect(saveDesktopState({ lastWorkspacePath: "/notes/10" }, gateway)).resolves.toMatchObject({
+      lastWorkspacePath: "/notes/10",
+      recentWorkspacePaths: [
+        "/notes/10",
+        "/notes/3",
+        "/notes/0",
+        "/notes/1",
+        "/notes/2",
+        "/notes/4",
+        "/notes/5",
+        "/notes/6",
+        "/notes/7",
+        "/notes/8",
+        "/notes/9",
+        "/notes/11"
+      ]
+    });
+    expect(getWrittenSettings(gateway)[DESKTOP_STATE_KEY]).toMatchObject({
+      recentWorkspacePaths: [
+        "/notes/10",
+        "/notes/3",
+        "/notes/0",
+        "/notes/1",
+        "/notes/2",
+        "/notes/4",
+        "/notes/5",
+        "/notes/6",
+        "/notes/7",
+        "/notes/8",
+        "/notes/9",
+        "/notes/11"
+      ]
+    });
+  });
+
+  it("keeps known recent workspaces when the current root is cleared", async () => {
+    const gateway = createGateway(
+      JSON.stringify({
+        [DESKTOP_STATE_KEY]: {
+          version: 2,
+          lastWorkspacePath: "/notes/current",
+          recentWorkspacePaths: ["/notes/current", "/notes/previous"],
+          explorerOpen: true
+        }
+      })
+    );
+
+    await expect(saveDesktopState({ lastWorkspacePath: null }, gateway)).resolves.toMatchObject({
+      lastWorkspacePath: null,
+      recentWorkspacePaths: ["/notes/current", "/notes/previous"]
     });
   });
 });

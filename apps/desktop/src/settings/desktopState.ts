@@ -1,16 +1,19 @@
 import { invokeNativeCommand } from "../native/commands";
 
-export const DESKTOP_STATE_VERSION = 1;
+export const DESKTOP_STATE_VERSION = 2;
 export const DESKTOP_STATE_KEY = "desktopState";
+const MAX_RECENT_WORKSPACES = 12;
 
 export interface DesktopState {
   readonly version: typeof DESKTOP_STATE_VERSION;
   readonly lastWorkspacePath: string | null;
+  readonly recentWorkspacePaths: readonly string[];
   readonly explorerOpen: boolean;
 }
 
 export interface DesktopStateUpdate {
   readonly lastWorkspacePath?: string | null;
+  readonly recentWorkspacePaths?: readonly string[];
   readonly explorerOpen?: boolean;
 }
 
@@ -22,6 +25,7 @@ export interface DesktopStateGateway {
 export const DEFAULT_DESKTOP_STATE: DesktopState = Object.freeze({
   version: DESKTOP_STATE_VERSION,
   lastWorkspacePath: null,
+  recentWorkspacePaths: [],
   explorerOpen: true
 });
 
@@ -99,7 +103,7 @@ function readDesktopState(appSettings: Readonly<Record<string, unknown>>): Deskt
 function readVersionedDesktopState(storedState: Readonly<Record<string, unknown>>): DesktopState {
   const version = storedState.version;
 
-  if (version !== undefined && version !== 0 && version !== DESKTOP_STATE_VERSION) {
+  if (version !== undefined && version !== 0 && version !== 1 && version !== DESKTOP_STATE_VERSION) {
     return DEFAULT_DESKTOP_STATE;
   }
 
@@ -115,14 +119,20 @@ function applyDesktopStateUpdate(
       update.lastWorkspacePath === undefined
         ? state.lastWorkspacePath
         : update.lastWorkspacePath,
+    recentWorkspacePaths:
+      update.recentWorkspacePaths === undefined
+        ? promoteRecentWorkspace(state.recentWorkspacePaths, update.lastWorkspacePath)
+        : normalizeWorkspacePaths(update.recentWorkspacePaths),
     explorerOpen: update.explorerOpen === undefined ? state.explorerOpen : update.explorerOpen
   });
 }
 
 function createDesktopState(value: Readonly<Record<string, unknown>>): DesktopState {
+  const lastWorkspacePath = readWorkspacePath(value.lastWorkspacePath);
   return {
     version: DESKTOP_STATE_VERSION,
-    lastWorkspacePath: readWorkspacePath(value.lastWorkspacePath),
+    lastWorkspacePath,
+    recentWorkspacePaths: normalizeWorkspacePaths(value.recentWorkspacePaths, lastWorkspacePath),
     explorerOpen:
       typeof value.explorerOpen === "boolean"
         ? value.explorerOpen
@@ -132,6 +142,18 @@ function createDesktopState(value: Readonly<Record<string, unknown>>): DesktopSt
 
 function readWorkspacePath(value: unknown): string | null {
   return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function normalizeWorkspacePaths(value: unknown, fallback?: string | null): readonly string[] {
+  const paths = Array.isArray(value)
+    ? value.filter((path): path is string => typeof path === "string" && path.length > 0)
+    : [];
+  return promoteRecentWorkspace(paths, fallback);
+}
+
+function promoteRecentWorkspace(paths: readonly string[], path: string | null | undefined): readonly string[] {
+  const unique = [...new Set(path ? [path, ...paths] : paths)];
+  return unique.slice(0, MAX_RECENT_WORKSPACES);
 }
 
 function serializeAppSettingsRecord(appSettings: Readonly<Record<string, unknown>>): string {

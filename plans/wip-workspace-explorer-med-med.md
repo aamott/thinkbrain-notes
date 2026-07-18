@@ -48,6 +48,9 @@ vault contents (attachments, config files, folders) without leaving the app.
 - ✅ Full-vault tree integration (folders + non-Markdown files, read-only) —
   rebuilt against `list_workspace_entries` in the fresh shell
 - ✅ Dot-prefixed entries hidden by default — `lib.rs` `is_hidden_name`
+- ✅ Explorer icons, workspace selector, and multi-window workspace sessions — see
+  `done-explorer_workspace_selector-high-hard.md` and
+  `done-multi_window_workspace_sessions-high-hard.md`
 - ⬜ Non-Markdown file operations (open / rename / delete) — see
   `pending-non_markdown_file_ops-med-med.md`
 - ⬜ Drag-and-drop move in the file tree — see

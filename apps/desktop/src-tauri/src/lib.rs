@@ -1,11 +1,15 @@
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use std::{
+    collections::HashMap,
     fs,
     io::Write,
     path::{Component, Path, PathBuf},
     process::{Command, Output, Stdio},
-    sync::Mutex,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Mutex,
+    },
     time::UNIX_EPOCH,
 };
 use tauri::Manager;
@@ -15,6 +19,42 @@ use tauri::Manager;
 // process; external filesystem mutations can still race and are reported by
 // the underlying operation where possible.
 static WORKSPACE_ENTRY_MUTATION_LOCK: Mutex<()> = Mutex::new(());
+static WORKSPACE_WINDOW_SEQUENCE: AtomicU64 = AtomicU64::new(1);
+
+#[derive(Default)]
+struct WorkspaceWindowRoots(Mutex<HashMap<String, String>>);
+
+fn next_workspace_window_label() -> String {
+    format!(
+        "workspace-{}",
+        WORKSPACE_WINDOW_SEQUENCE.fetch_add(1, Ordering::Relaxed)
+    )
+}
+
+fn register_workspace_window_root(roots: &WorkspaceWindowRoots, label: String, root_path: String) {
+    roots
+        .0
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .insert(label, root_path);
+}
+
+fn workspace_window_root(roots: &WorkspaceWindowRoots, label: &str) -> Option<String> {
+    roots
+        .0
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .get(label)
+        .cloned()
+}
+
+fn unregister_workspace_window_root(roots: &WorkspaceWindowRoots, label: &str) {
+    roots
+        .0
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .remove(label);
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct NativeError {
@@ -685,9 +725,49 @@ fn write_workspace_settings(
     )
 }
 
+#[tauri::command]
+fn open_workspace_window(app: tauri::AppHandle, root_path: String) -> Result<(), NativeError> {
+    let root = resolve_workspace_root(&root_path)?;
+    let label = next_workspace_window_label();
+    let root_path = root.to_string_lossy().to_string();
+    let roots = app.state::<WorkspaceWindowRoots>();
+    register_workspace_window_root(&roots, label.clone(), root_path);
+    let window =
+        tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::App("index.html".into()))
+            .title(describe_workspace(&root).name)
+            .build()
+            .map_err(|error| {
+                unregister_workspace_window_root(&roots, &label);
+                NativeError::with_details(
+                    "workspace.window_failed",
+                    "Failed to create a workspace window.",
+                    error.to_string(),
+                )
+            })?;
+    let app_for_cleanup = app.clone();
+    window.on_window_event(move |event| {
+        if matches!(event, tauri::WindowEvent::Destroyed) {
+            unregister_workspace_window_root(
+                &app_for_cleanup.state::<WorkspaceWindowRoots>(),
+                &label,
+            );
+        }
+    });
+    Ok(())
+}
+
+#[tauri::command]
+fn window_workspace_root(
+    window: tauri::WebviewWindow,
+    roots: tauri::State<WorkspaceWindowRoots>,
+) -> Option<String> {
+    workspace_window_root(&roots, window.label())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(WorkspaceWindowRoots::default())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             desktop_shell_status,
@@ -716,7 +796,9 @@ pub fn run() {
             read_app_settings,
             write_app_settings,
             read_workspace_settings,
-            write_workspace_settings
+            write_workspace_settings,
+            open_workspace_window,
+            window_workspace_root
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Thinkbrain Notes desktop shell");
@@ -1760,10 +1842,12 @@ mod tests {
         create_workspace_file, create_workspace_folder, delete_document, delete_workspace_entry,
         desktop_shell_status, detect_git_repository_with, git_availability_with, git_status_with,
         index_document_records, init_index_schema, initialize_git_repository_with,
-        is_markdown_path, normalize_relative_path, read_settings_file, rename_workspace_entry,
-        search_documents, stable_workspace_hash, stage_git_files_with, unstage_git_files_with,
-        workspace_settings_path, write_settings_file, DocumentRecord, GitCommandOutput,
-        GitRunError, GitRunner, GitStatusEntry, NativeError, SystemGitRunner,
+        is_markdown_path, next_workspace_window_label, normalize_relative_path, read_settings_file,
+        register_workspace_window_root, rename_workspace_entry, search_documents,
+        stable_workspace_hash, stage_git_files_with, unregister_workspace_window_root,
+        unstage_git_files_with, workspace_settings_path, workspace_window_root,
+        write_settings_file, DocumentRecord, GitCommandOutput, GitRunError, GitRunner,
+        GitStatusEntry, NativeError, SystemGitRunner, WorkspaceWindowRoots,
     };
     use rusqlite::Connection;
     use std::{
@@ -1774,6 +1858,34 @@ mod tests {
         process::Command,
         time::SystemTime,
     };
+
+    #[test]
+    fn workspace_window_roots_are_scoped_to_opaque_window_labels() {
+        let roots = WorkspaceWindowRoots::default();
+        let first = next_workspace_window_label();
+        let second = next_workspace_window_label();
+
+        assert_ne!(first, second);
+        assert!(first.starts_with("workspace-"));
+        register_workspace_window_root(&roots, first.clone(), "/notes/first".to_string());
+        register_workspace_window_root(&roots, second.clone(), "/notes/second".to_string());
+
+        assert_eq!(
+            workspace_window_root(&roots, &first),
+            Some("/notes/first".to_string())
+        );
+        assert_eq!(
+            workspace_window_root(&roots, &second),
+            Some("/notes/second".to_string())
+        );
+
+        unregister_workspace_window_root(&roots, &first);
+        assert_eq!(workspace_window_root(&roots, &first), None);
+        assert_eq!(
+            workspace_window_root(&roots, &second),
+            Some("/notes/second".to_string())
+        );
+    }
 
     #[derive(Debug, Clone, PartialEq, Eq)]
     struct GitCall {

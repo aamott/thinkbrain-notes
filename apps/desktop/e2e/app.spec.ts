@@ -6,7 +6,7 @@ test("desktop workspace shell boots in the browser harness", async ({ page }) =>
   await expect(page.getByRole("main", { name: "ThinkBrain desktop workspace" })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Open tabs" })).toBeVisible();
   await expect(page.getByRole("complementary", { name: "Explorer panel" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Open workspace" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Choose workspace" })).toBeVisible();
   await expect(page.getByText(/Welcome to ThinkBrain/)).toBeVisible();
 });
 
@@ -39,6 +39,8 @@ test("opens a workspace and restores the Explorer visibility and last workspace"
     appWindow.__TAURI_INTERNALS__ = {
       async invoke(command, args) {
         if (command === "plugin:dialog|open") return "/workspace/demo-vault";
+        if (command === "window_workspace_root") return null;
+        if (command === "open_workspace_window") return null;
         if (command === "read_app_settings") return sessionStorage.getItem(settingsKey);
         if (command === "write_app_settings") {
           sessionStorage.setItem(settingsKey, String(args.contents));
@@ -62,19 +64,14 @@ test("opens a workspace and restores the Explorer visibility and last workspace"
   });
 
   await page.goto("/");
-  await page.getByRole("button", { name: "Open workspace" }).click();
-  await expect(page.getByRole("heading", { name: "demo-vault" })).toBeVisible();
-  await expect(page.getByRole("tree", { name: "demo-vault files" })).toBeVisible();
-  await expect(page.getByText("welcome.md")).toBeVisible();
-
-  await page.getByRole("button", { name: "Explorer", exact: true }).click();
-  await expect(page.getByRole("complementary", { name: "Explorer panel" })).not.toBeVisible();
+  await page.getByRole("button", { name: "Choose workspace" }).click();
+  await page.getByRole("menuitem", { name: "Add workspace" }).click();
+  await expect(page.getByRole("heading", { name: "demo-vault" })).not.toBeVisible();
+  await expect.poll(() => page.evaluate(() => sessionStorage.getItem("thinkbrain-e2e-app-settings"))).toContain("demo-vault");
 
   await page.reload();
-  await expect(page.getByRole("complementary", { name: "Explorer panel" })).not.toBeVisible();
-  await page.getByRole("button", { name: "Explorer", exact: true }).click();
   await expect(page.getByRole("heading", { name: "demo-vault" })).toBeVisible();
-  await expect(page.getByText("welcome.md")).toBeVisible();
+  await expect(page.getByRole("treeitem", { name: /Notes/ })).toBeVisible();
 });
 
 test("command palette opens workspace files, runs commands, and restores focus", async ({ page }) => {
@@ -87,6 +84,7 @@ test("command palette opens workspace files, runs commands, and restores focus",
     appWindow.__TAURI_INTERNALS__ = {
       async invoke(command, args) {
         if (command === "plugin:dialog|open") return "/workspace/demo-vault";
+        if (command === "window_workspace_root") return "/workspace/demo-vault";
         if (command === "read_app_settings") return null;
         if (command === "write_app_settings") return null;
         if (command === "open_workspace") return {
@@ -104,7 +102,6 @@ test("command palette opens workspace files, runs commands, and restores focus",
   });
 
   await page.goto("/");
-  await page.getByRole("button", { name: "Open workspace" }).click();
   const assistant = page.getByRole("button", { name: "Assistant", exact: true });
   await assistant.focus();
   await page.keyboard.press("Control+p");
@@ -143,6 +140,7 @@ test("opens, saves, protects, and creates Markdown notes through the fresh shell
     appWindow.__TAURI_INTERNALS__ = {
       async invoke(command, args) {
         if (command === "plugin:dialog|open") return "/workspace/demo-vault";
+        if (command === "window_workspace_root") return "/workspace/demo-vault";
         if (command === "read_app_settings") return null;
         if (command === "write_app_settings") return null;
         if (command === "open_workspace") return { workspace: { root_path: String(args.rootPath), name: "demo-vault" }, files: [] };
@@ -202,7 +200,6 @@ test("opens, saves, protects, and creates Markdown notes through the fresh shell
   });
 
   await page.goto("/");
-  await page.getByRole("button", { name: "Open workspace" }).click();
   await page.getByRole("button", { name: "Open welcome.md" }).click();
   const editor = page.locator('[aria-label="Markdown editor"]');
   await expect(editor).toBeVisible();
@@ -270,6 +267,7 @@ test("source control reports the active workspace repository", async ({ page }) 
     appWindow.__TAURI_INTERNALS__ = {
       async invoke(command, args) {
         if (command === "plugin:dialog|open") return "/workspace/repository";
+        if (command === "window_workspace_root") return "/workspace/repository";
         if (command === "read_app_settings") return null;
         if (command === "write_app_settings") return null;
         if (command === "open_workspace") return { workspace: { root_path: String(args.rootPath), name: "repository" }, files: [] };
@@ -287,7 +285,6 @@ test("source control reports the active workspace repository", async ({ page }) 
   });
 
   await page.goto("/");
-  await page.getByRole("button", { name: "Open workspace" }).click();
   await page.getByRole("button", { name: "Source control" }).click();
   await expect(page.getByText("Repository", { exact: true })).toBeVisible();
   await expect(page.getByText("main", { exact: true })).toBeVisible();
@@ -306,6 +303,7 @@ test("source control initializes a workspace repository", async ({ page }) => {
     appWindow.__TAURI_INTERNALS__ = {
       async invoke(command, args) {
         if (command === "plugin:dialog|open") return "/workspace/new-repository";
+        if (command === "window_workspace_root") return "/workspace/new-repository";
         if (command === "read_app_settings") return null;
         if (command === "write_app_settings") return null;
         if (command === "open_workspace") return { workspace: { root_path: String(args.rootPath), name: "new-repository" }, files: [] };
@@ -320,7 +318,6 @@ test("source control initializes a workspace repository", async ({ page }) => {
   });
 
   await page.goto("/");
-  await page.getByRole("button", { name: "Open workspace" }).click();
   await page.getByRole("button", { name: "Source control" }).click();
   await page.getByRole("button", { name: "Initialize repository" }).click();
   await expect(page.getByText("Repository initialized.")).toBeVisible();
@@ -409,6 +406,7 @@ test("the explorer context menu creates, renames, and deletes entries", async ({
     appWindow.__TAURI_INTERNALS__ = {
       async invoke(command, args) {
         if (command === "plugin:dialog|open") return "/workspace/demo-vault";
+        if (command === "window_workspace_root") return "/workspace/demo-vault";
         if (command === "read_app_settings") return null;
         if (command === "write_app_settings") return null;
         if (command === "open_workspace") return { workspace: { root_path: String(args.rootPath), name: "demo-vault" }, files: [] };
@@ -470,7 +468,6 @@ test("the explorer context menu creates, renames, and deletes entries", async ({
   });
 
   await page.goto("/");
-  await page.getByRole("button", { name: "Open workspace" }).click();
   await expect(page.getByText("This workspace is empty. Right-click to create a new file or folder.")).toBeVisible();
 
   // Right-click the background and create a new folder.

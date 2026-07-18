@@ -212,6 +212,12 @@
   line-height: 1.35;
 }
 
+.treeIcon svg, .workspaceSelector svg { width: .9rem; height: .9rem; stroke: currentColor; }
+.workspaceSelector { position: relative; margin-top: auto; border-top: 1px solid var(--tn-color-border); }
+.workspaceSelectorTrigger, .workspaceSelectorMenu button { display: flex; width: 100%; min-width: 0; align-items: center; gap: .45rem; border: 0; color: var(--tn-color-sidebar-foreground); background: transparent; cursor: pointer; font: inherit; font-size: .75rem; text-align: left; }
+.workspaceSelectorTrigger { padding: .65rem .75rem; }.workspaceSelectorTrigger span, .workspaceSelectorMenu span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.workspaceSelectorTrigger svg:last-child { margin-left: auto; }
+.workspaceSelectorMenu { position: absolute; z-index: 20; right: .5rem; bottom: calc(100% + .35rem); left: .5rem; overflow: hidden; border: 1px solid var(--tn-color-border); border-radius: var(--tn-radius-small); background: var(--tn-color-popover); box-shadow: var(--tn-shadow-soft); padding: .25rem; }.workspaceSelectorMenu button { padding: .45rem .5rem; border-radius: var(--tn-radius-small); }.workspaceSelectorMenu button:hover, .workspaceSelectorMenu button:focus-visible { background: var(--tn-color-accent); outline: 0; }
+
 .actionError {
   margin: 0;
   padding: 0.4rem 0.75rem;

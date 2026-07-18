@@ -15,6 +15,7 @@ import {
 } from "../tabs/tabModel";
 import { createDesktopTabRegistry } from "../tabs/tabRegistry";
 import { workspaceDocumentApi } from "../workspace/workspaceDocumentAdapter";
+import { workspaceDesktopApi } from "../workspace/workspaceAdapter";
 import { loadWorkspaceDocument, saveWorkspaceDocument } from "../workspace/workspaceDocumentModel";
 import { WorkspaceExplorer } from "../workspace/WorkspaceExplorer";
 import styles from "./DesktopShell.module.css";
@@ -71,6 +72,7 @@ export function DesktopShell() {
   const [restoredWorkspacePath, setRestoredWorkspacePath] = useState<string | null>(null);
   const [workspaceName, setWorkspaceName] = useState<string | null>(null);
   const [workspaceFiles, setWorkspaceFiles] = useState<readonly NativeMarkdownFileEntry[]>([]);
+  const [recentWorkspacePaths, setRecentWorkspacePaths] = useState<readonly string[]>([]);
   const [newNoteFocusRequest, setNewNoteFocusRequest] = useState(0);
   const [stateRestored, setStateRestored] = useState(!isTauri());
 
@@ -86,9 +88,10 @@ export function DesktopShell() {
     if (!isTauri()) return;
 
     let active = true;
-    void loadDesktopState().then((desktopState) => {
+    void Promise.all([loadDesktopState(), workspaceDesktopApi.windowWorkspaceRoot()]).then(([desktopState, windowRoot]) => {
       if (!active) return;
-      setRestoredWorkspacePath(desktopState.lastWorkspacePath);
+      setRestoredWorkspacePath(windowRoot ?? desktopState.lastWorkspacePath);
+      setRecentWorkspacePaths(windowRoot ? [windowRoot, ...desktopState.recentWorkspacePaths.filter((path) => path !== windowRoot)] : desktopState.recentWorkspacePaths);
       setLeftPanel(desktopState.explorerOpen ? "explorer" : null);
     }).catch(() => {
       if (active) {
@@ -120,6 +123,7 @@ export function DesktopShell() {
     setRestoredWorkspacePath(rootPath);
     setWorkspaceName(snapshot.workspace.name);
     setWorkspaceFiles(snapshot.files);
+    setRecentWorkspacePaths((paths) => [rootPath, ...paths.filter((path) => path !== rootPath)].slice(0, 12));
     void gitService.detectRepository(rootPath);
     persistDesktopState({ lastWorkspacePath: rootPath });
   }, [persistDesktopState]);
@@ -371,6 +375,11 @@ export function DesktopShell() {
                 onMarkdownFileCreated={handleMarkdownFileCreated}
                 onNewNoteFocusHandled={acknowledgeNewNoteFocus}
                 newNoteFocusRequest={newNoteFocusRequest}
+                recentWorkspacePaths={recentWorkspacePaths}
+                onWorkspaceLaunched={(rootPath) => {
+                  setRecentWorkspacePaths((paths) => [rootPath, ...paths.filter((path) => path !== rootPath)].slice(0, 12));
+                  persistDesktopState({ lastWorkspacePath: rootPath });
+                }}
               />
             ) : (
               <><PanelTitle title={leftActions.find((item) => item.id === leftPanel)?.label ?? "Panel"} /><LeftContent panel={leftPanel} rootPath={restoredWorkspacePath} /></>
