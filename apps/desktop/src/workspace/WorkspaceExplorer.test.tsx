@@ -85,6 +85,7 @@ describe("WorkspaceExplorer presentation", () => {
       window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
     });
     expect(container?.querySelector("[role='menu']")).toBeNull();
+    expect(document.activeElement).toBe(trigger);
 
     await click(trigger);
     const actions = Array.from(container?.querySelectorAll<HTMLButtonElement>("[role='menuitem']") ?? []);
@@ -93,6 +94,28 @@ describe("WorkspaceExplorer presentation", () => {
 
     expect(onAdd).toHaveBeenCalledOnce();
     expect(container?.querySelector("[role='menu']")).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it("focuses the current workspace and supports menu keyboard navigation", async () => {
+    await renderSelector();
+    const trigger = container?.querySelector<HTMLButtonElement>("button");
+    if (!trigger) throw new Error("Workspace selector trigger was not rendered.");
+    await click(trigger);
+
+    const items = Array.from(container?.querySelectorAll<HTMLButtonElement>("[role='menuitem']") ?? []);
+    expect(document.activeElement).toBe(items[0]);
+
+    await act(async () => {
+      items[0]?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true }));
+    });
+    expect(document.activeElement).toBe(items[1]);
+
+    await act(async () => {
+      items[1]?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    });
+    expect(container?.querySelector("[role='menu']")).toBeNull();
+    expect(document.activeElement).toBe(trigger);
   });
 });
 

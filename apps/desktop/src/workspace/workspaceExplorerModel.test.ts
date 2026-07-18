@@ -19,11 +19,10 @@ const entries: readonly NativeWorkspaceEntry[] = [
 ];
 
 describe("workspaceExplorerReducer", () => {
-  it("keeps cancellation distinct from an open failure", () => {
-    const picking = workspaceExplorerReducer(initialWorkspaceExplorerState, { type: "pick" });
-    expect(picking.phase).toBe("picking");
-    expect(workspaceExplorerReducer(picking, { type: "cancel" }).phase).toBe("cancelled");
-    expect(workspaceExplorerReducer(picking, { type: "failed", message: "Unavailable" }).error).toBe("Unavailable");
+  it("reports an open failure", () => {
+    const opening = workspaceExplorerReducer(initialWorkspaceExplorerState, { type: "open" });
+    expect(opening.phase).toBe("opening");
+    expect(workspaceExplorerReducer(opening, { type: "failed", message: "Unavailable" }).error).toBe("Unavailable");
   });
 
   it("clears stale data when an error is dismissed", () => {

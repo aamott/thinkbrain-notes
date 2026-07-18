@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useId, useMemo, useReducer, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
+import { memo, useCallback, useEffect, useId, useMemo, useReducer, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { ChevronDown, Folder, FolderOpen, FolderPlus } from "lucide-react";
 import type { NativeWorkspaceEntry, NativeWorkspaceSnapshot } from "../native/commands";
 import {
@@ -63,14 +63,14 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
   const stateRef = useRef(state);
   const rootPathRef = useRef(workspaceRootPath);
   const apiRef = useRef(api);
-  const callbacksRef = useRef({ onMarkdownFileCreated, onMarkdownFileSelected });
+  const callbacksRef = useRef({ onMarkdownFileCreated, onMarkdownFileSelected, onWorkspaceLaunched });
   // Refs are updated in an effect (not during render) per the react-hooks/refs
   // rule. Async helpers read `*.current` after each `await`.
   useEffect(() => {
     stateRef.current = state;
     rootPathRef.current = workspaceRootPath;
     apiRef.current = api;
-    callbacksRef.current = { onMarkdownFileCreated, onMarkdownFileSelected };
+    callbacksRef.current = { onMarkdownFileCreated, onMarkdownFileSelected, onWorkspaceLaunched };
   });
 
   // In-flight operation counter so overlapping CRUD calls do not clobber the
@@ -127,18 +127,23 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
     }
   }, []);
 
-  const openWorkspace = async () => {
+  const launchWorkspace = useCallback(async (rootPath: string) => {
     try {
-      const rootPath = await api.pickWorkspaceDirectory();
-      if (!rootPath) {
-        return;
-      }
-      await api.openWorkspaceWindow(rootPath);
-      onWorkspaceLaunched?.(rootPath);
+      await apiRef.current.openWorkspaceWindow(rootPath);
+      callbacksRef.current.onWorkspaceLaunched?.(rootPath);
     } catch (error) {
       setActionError(workspaceErrorMessage(error));
     }
-  };
+  }, []);
+
+  const openWorkspace = useCallback(async () => {
+    try {
+      const rootPath = await apiRef.current.pickWorkspaceDirectory();
+      if (rootPath) await launchWorkspace(rootPath);
+    } catch (error) {
+      setActionError(workspaceErrorMessage(error));
+    }
+  }, [launchWorkspace]);
 
   useEffect(() => {
     if (initialWorkspacePath) {
@@ -319,7 +324,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
     setPendingDelete(entry);
   }, [closeContextMenu]);
 
-  const isBusy = state.phase === "picking" || state.phase === "opening" || busy;
+  const isBusy = state.phase === "opening" || busy;
   const rootClassName = [styles.explorer, className].filter(Boolean).join(" ");
 
   return (
@@ -332,9 +337,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
       </header>
 
       {state.phase === "empty" && <EmptyState />}
-      {state.phase === "picking" && <StatusState message="Waiting for a folder selection…" />}
       {state.phase === "opening" && <StatusState message="Reading workspace entries…" />}
-      {state.phase === "cancelled" && <StatusState message="Folder selection cancelled." />}
       {state.phase === "error" && <ErrorState message={state.error ?? "The workspace could not be opened."} onDismiss={() => dispatch({ type: "dismiss" })} />}
       {state.phase === "ready" && (
         <div
@@ -355,7 +358,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
               {creating && creating.parentPath === "" && (
                 <InlineNameInput
                   depth={0}
-                  icon={creating.kind === "folder" ? "›" : "·"}
+                  icon={creating.kind === "folder" ? <Folder /> : <WorkspaceFileIcon name="" />}
                   placeholder={creating.kind === "folder" ? "New folder name…" : "New file name…"}
                   ariaLabel={creating.kind === "folder" ? "New folder name" : "New file name"}
                   focusRequest={creating.focusRequest}
@@ -413,7 +416,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
         currentPath={workspaceRootPath}
         paths={recentWorkspacePaths}
         onAdd={() => void openWorkspace()}
-        onSelect={(rootPath) => void api.openWorkspaceWindow(rootPath).then(() => onWorkspaceLaunched?.(rootPath)).catch((error) => setActionError(workspaceErrorMessage(error)))}
+        onSelect={(rootPath) => void launchWorkspace(rootPath)}
       />
     </section>
   );
@@ -467,7 +470,7 @@ const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
       {isRenaming ? (
         <InlineNameInput
           depth={depth}
-          icon={isDirectory ? (isExpanded ? "⌄" : "›") : "·"}
+          icon={isDirectory ? (isExpanded ? <FolderOpen /> : <Folder />) : <WorkspaceFileIcon name={node.entry.name} />}
           initialValue={node.entry.name}
           placeholder={`Rename ${node.entry.name}…`}
           ariaLabel={`Rename ${node.entry.name}`}
@@ -499,7 +502,7 @@ const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
             <ul role="group">
               <InlineNameInput
                 depth={depth + 1}
-                icon={creating!.kind === "folder" ? "›" : "·"}
+                icon={creating!.kind === "folder" ? <Folder /> : <WorkspaceFileIcon name="" />}
                 placeholder={creating!.kind === "folder" ? "New folder name…" : "New file name…"}
                 ariaLabel={creating!.kind === "folder" ? "New folder name" : "New file name"}
                 focusRequest={creating!.focusRequest}
@@ -564,7 +567,7 @@ function InlineNameInput({
   onCancel
 }: {
   readonly depth: number;
-  readonly icon: string;
+  readonly icon: ReactNode;
   readonly initialValue?: string;
   readonly placeholder?: string;
   readonly ariaLabel?: string;
@@ -831,15 +834,29 @@ function ErrorState({ message, onDismiss }: { readonly message: string; readonly
 export function WorkspaceSelector({ currentPath, paths, onSelect, onAdd }: { readonly currentPath?: string; readonly paths: readonly string[]; readonly onSelect: (path: string) => void; readonly onAdd: () => void }) {
   const [open, setOpen] = useState(false);
   const selectorRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
   const options = [...new Set(currentPath ? [currentPath, ...paths] : paths)];
+  const closeMenu = useCallback((restoreFocus = false) => {
+    setOpen(false);
+    if (restoreFocus) triggerRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const items = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>("button[role='menuitem']") ?? []);
+    const currentItem = items.find((item) => item.getAttribute("aria-current") === "true");
+    (currentItem ?? items[0])?.focus();
+  }, [open]);
+
   useEffect(() => {
     if (!open) return;
     const closeOnOutsidePointer = (event: PointerEvent) => {
-      if (!selectorRef.current?.contains(event.target as Node)) setOpen(false);
+      if (!selectorRef.current?.contains(event.target as Node)) closeMenu();
     };
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Escape") closeMenu(true);
     };
     window.addEventListener("pointerdown", closeOnOutsidePointer);
     window.addEventListener("keydown", closeOnEscape);
@@ -847,11 +864,40 @@ export function WorkspaceSelector({ currentPath, paths, onSelect, onAdd }: { rea
       window.removeEventListener("pointerdown", closeOnOutsidePointer);
       window.removeEventListener("keydown", closeOnEscape);
     };
-  }, [open]);
+  }, [closeMenu, open]);
+
+  const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    const items = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>("button[role='menuitem']") ?? []);
+    if (!items.length) return;
+    const index = items.indexOf(document.activeElement as HTMLButtonElement);
+    switch (event.key) {
+      case "ArrowDown":
+        event.preventDefault();
+        items[(index + 1) % items.length]?.focus();
+        break;
+      case "ArrowUp":
+        event.preventDefault();
+        items[(index - 1 + items.length) % items.length]?.focus();
+        break;
+      case "Home":
+        event.preventDefault();
+        items[0]?.focus();
+        break;
+      case "End":
+        event.preventDefault();
+        items[items.length - 1]?.focus();
+        break;
+      case "Escape":
+        event.preventDefault();
+        closeMenu(true);
+        break;
+    }
+  };
 
   return (
     <div ref={selectorRef} className={styles.workspaceSelector}>
       <button
+        ref={triggerRef}
         className={styles.workspaceSelectorTrigger}
         type="button"
         aria-controls={menuId}
@@ -864,7 +910,7 @@ export function WorkspaceSelector({ currentPath, paths, onSelect, onAdd }: { rea
         <ChevronDown aria-hidden="true" />
       </button>
       {open && (
-        <div id={menuId} className={styles.workspaceSelectorMenu} role="menu" aria-label="Workspaces">
+        <div ref={menuRef} id={menuId} className={styles.workspaceSelectorMenu} role="menu" aria-label="Workspaces" onKeyDown={handleKeyDown}>
           {options.map((path) => (
             <button
               key={path}
@@ -873,7 +919,7 @@ export function WorkspaceSelector({ currentPath, paths, onSelect, onAdd }: { rea
               aria-current={path === currentPath ? "true" : undefined}
               title={path}
               onClick={() => {
-                setOpen(false);
+                closeMenu(true);
                 onSelect(path);
               }}
             >
@@ -881,7 +927,7 @@ export function WorkspaceSelector({ currentPath, paths, onSelect, onAdd }: { rea
               <span>{path.split(/[\\/]/).at(-1)}</span>
             </button>
           ))}
-          <button type="button" role="menuitem" onClick={() => { setOpen(false); onAdd(); }}>
+          <button type="button" role="menuitem" onClick={() => { closeMenu(true); onAdd(); }}>
             <FolderPlus aria-hidden="true" />
             <span>Add workspace</span>
           </button>

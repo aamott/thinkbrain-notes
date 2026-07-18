@@ -1,5 +1,6 @@
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
 use std::{
     collections::HashMap,
     fs,
@@ -19,7 +20,11 @@ use tauri::Manager;
 // process; external filesystem mutations can still race and are reported by
 // the underlying operation where possible.
 static WORKSPACE_ENTRY_MUTATION_LOCK: Mutex<()> = Mutex::new(());
+static APP_SETTINGS_MUTATION_LOCK: Mutex<()> = Mutex::new(());
 static WORKSPACE_WINDOW_SEQUENCE: AtomicU64 = AtomicU64::new(1);
+const DESKTOP_STATE_KEY: &str = "desktopState";
+const DESKTOP_STATE_VERSION: u64 = 2;
+const MAX_RECENT_WORKSPACES: usize = 12;
 
 #[derive(Default)]
 struct WorkspaceWindowRoots(Mutex<HashMap<String, String>>);
@@ -62,6 +67,24 @@ pub struct NativeError {
     pub message: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub details: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DesktopStateUpdate {
+    #[serde(default)]
+    last_workspace_path: Option<Option<String>>,
+    #[serde(default)]
+    recent_workspace_paths: Option<Vec<String>>,
+    #[serde(default)]
+    explorer_open: Option<bool>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct DesktopState {
+    last_workspace_path: Option<String>,
+    recent_workspace_paths: Vec<String>,
+    explorer_open: bool,
 }
 
 impl NativeError {
@@ -702,7 +725,26 @@ fn read_app_settings(app: tauri::AppHandle) -> Result<Option<String>, NativeErro
 
 #[tauri::command]
 fn write_app_settings(app: tauri::AppHandle, contents: String) -> Result<(), NativeError> {
+    let _settings_lock = APP_SETTINGS_MUTATION_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     write_settings_file(&resolve_app_settings_path(&app)?, &contents)
+}
+
+#[tauri::command]
+fn update_desktop_state(
+    app: tauri::AppHandle,
+    update: DesktopStateUpdate,
+) -> Result<String, NativeError> {
+    let _settings_lock = APP_SETTINGS_MUTATION_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let settings_path = resolve_app_settings_path(&app)?;
+    let contents =
+        update_desktop_state_contents(read_settings_file(&settings_path)?.as_deref(), update)?;
+
+    write_settings_file(&settings_path, &contents)?;
+    Ok(contents)
 }
 
 #[tauri::command]
@@ -730,14 +772,11 @@ fn open_workspace_window(app: tauri::AppHandle, root_path: String) -> Result<(),
     let root = resolve_workspace_root(&root_path)?;
     let label = next_workspace_window_label();
     let root_path = root.to_string_lossy().to_string();
-    let roots = app.state::<WorkspaceWindowRoots>();
-    register_workspace_window_root(&roots, label.clone(), root_path);
     let window =
         tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::App("index.html".into()))
             .title(describe_workspace(&root).name)
             .build()
             .map_err(|error| {
-                unregister_workspace_window_root(&roots, &label);
                 NativeError::with_details(
                     "workspace.window_failed",
                     "Failed to create a workspace window.",
@@ -745,14 +784,16 @@ fn open_workspace_window(app: tauri::AppHandle, root_path: String) -> Result<(),
                 )
             })?;
     let app_for_cleanup = app.clone();
+    let label_for_cleanup = label.clone();
     window.on_window_event(move |event| {
         if matches!(event, tauri::WindowEvent::Destroyed) {
             unregister_workspace_window_root(
                 &app_for_cleanup.state::<WorkspaceWindowRoots>(),
-                &label,
+                &label_for_cleanup,
             );
         }
     });
+    register_workspace_window_root(&app.state::<WorkspaceWindowRoots>(), label, root_path);
     Ok(())
 }
 
@@ -795,6 +836,7 @@ pub fn run() {
             remove_index_document,
             read_app_settings,
             write_app_settings,
+            update_desktop_state,
             read_workspace_settings,
             write_workspace_settings,
             open_workspace_window,
@@ -1658,6 +1700,188 @@ fn settings_dir(app_data_dir: &Path) -> PathBuf {
     app_data_dir.join("settings")
 }
 
+fn update_desktop_state_contents(
+    contents: Option<&str>,
+    update: DesktopStateUpdate,
+) -> Result<String, NativeError> {
+    let mut app_settings = parse_app_settings_record(contents);
+    let current = read_desktop_state(&app_settings);
+    let next = apply_desktop_state_update(current, update);
+
+    app_settings.insert(DESKTOP_STATE_KEY.to_string(), serialize_desktop_state(next));
+    app_settings.remove("lastWorkspacePath");
+    app_settings.remove("explorerOpen");
+
+    serde_json::to_string_pretty(&Value::Object(app_settings))
+        .map(|contents| format!("{contents}\n"))
+        .map_err(|error| {
+            NativeError::with_details(
+                "settings.serialize_failed",
+                "Failed to serialize the application settings.",
+                error.to_string(),
+            )
+        })
+}
+
+fn parse_app_settings_record(contents: Option<&str>) -> Map<String, Value> {
+    contents
+        .and_then(|contents| serde_json::from_str::<Value>(contents).ok())
+        .and_then(|value| value.as_object().cloned())
+        .unwrap_or_default()
+}
+
+fn read_desktop_state(app_settings: &Map<String, Value>) -> DesktopState {
+    app_settings
+        .get(DESKTOP_STATE_KEY)
+        .and_then(Value::as_object)
+        .map(read_versioned_desktop_state)
+        .unwrap_or_else(|| {
+            create_desktop_state(
+                app_settings.get("lastWorkspacePath"),
+                None,
+                app_settings.get("explorerOpen"),
+            )
+        })
+}
+
+fn read_versioned_desktop_state(state: &Map<String, Value>) -> DesktopState {
+    let supported_version = match state.get("version") {
+        Some(Value::Number(version)) => version.as_u64().is_some_and(|version| {
+            version == 0 || version == 1 || version == DESKTOP_STATE_VERSION
+        }),
+        None => true,
+        _ => false,
+    };
+
+    if !supported_version {
+        return default_desktop_state();
+    }
+
+    create_desktop_state(
+        state.get("lastWorkspacePath"),
+        state.get("recentWorkspacePaths"),
+        state.get("explorerOpen"),
+    )
+}
+
+fn apply_desktop_state_update(current: DesktopState, update: DesktopStateUpdate) -> DesktopState {
+    let recent_path = update
+        .last_workspace_path
+        .as_ref()
+        .and_then(|path| path.as_deref())
+        .map(str::to_owned);
+    let last_workspace_path = match update.last_workspace_path {
+        Some(path) => path.as_deref().and_then(nonempty_workspace_path),
+        None => current.last_workspace_path.clone(),
+    };
+    let recent_workspace_paths = match update.recent_workspace_paths {
+        Some(paths) => merge_recent_workspace_paths(
+            &current.recent_workspace_paths,
+            normalize_workspace_paths(paths, None),
+        ),
+        None => promote_recent_workspace(current.recent_workspace_paths, recent_path.as_deref()),
+    };
+
+    DesktopState {
+        last_workspace_path,
+        recent_workspace_paths,
+        explorer_open: update.explorer_open.unwrap_or(current.explorer_open),
+    }
+}
+
+fn create_desktop_state(
+    last_workspace_path: Option<&Value>,
+    recent_workspace_paths: Option<&Value>,
+    explorer_open: Option<&Value>,
+) -> DesktopState {
+    let last_workspace_path = last_workspace_path
+        .and_then(Value::as_str)
+        .and_then(nonempty_workspace_path);
+    let recent_workspace_paths = recent_workspace_paths
+        .and_then(Value::as_array)
+        .map(|paths| {
+            normalize_workspace_paths(
+                paths
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(str::to_owned)
+                    .collect(),
+                last_workspace_path.as_deref(),
+            )
+        })
+        .unwrap_or_else(|| promote_recent_workspace(Vec::new(), last_workspace_path.as_deref()));
+
+    DesktopState {
+        last_workspace_path,
+        recent_workspace_paths,
+        explorer_open: explorer_open.and_then(Value::as_bool).unwrap_or(true),
+    }
+}
+
+fn default_desktop_state() -> DesktopState {
+    DesktopState {
+        last_workspace_path: None,
+        recent_workspace_paths: Vec::new(),
+        explorer_open: true,
+    }
+}
+
+fn nonempty_workspace_path(path: &str) -> Option<String> {
+    (!path.is_empty()).then(|| path.to_string())
+}
+
+fn normalize_workspace_paths(paths: Vec<String>, fallback: Option<&str>) -> Vec<String> {
+    promote_recent_workspace(paths, fallback)
+}
+
+fn merge_recent_workspace_paths(current: &[String], incoming: Vec<String>) -> Vec<String> {
+    let mut merged = incoming;
+    merged.extend(current.iter().cloned());
+    promote_recent_workspace(merged, None)
+}
+
+fn promote_recent_workspace(paths: Vec<String>, path: Option<&str>) -> Vec<String> {
+    let mut recent = Vec::with_capacity(MAX_RECENT_WORKSPACES);
+    if let Some(path) = path.filter(|path| !path.is_empty()) {
+        recent.push(path.to_string());
+    }
+
+    for path in paths {
+        if !path.is_empty() && !recent.contains(&path) {
+            recent.push(path);
+            if recent.len() == MAX_RECENT_WORKSPACES {
+                break;
+            }
+        }
+    }
+
+    recent
+}
+
+fn serialize_desktop_state(state: DesktopState) -> Value {
+    let mut serialized = Map::new();
+    serialized.insert("version".to_string(), Value::from(DESKTOP_STATE_VERSION));
+    serialized.insert(
+        "lastWorkspacePath".to_string(),
+        state
+            .last_workspace_path
+            .map(Value::String)
+            .unwrap_or(Value::Null),
+    );
+    serialized.insert(
+        "recentWorkspacePaths".to_string(),
+        Value::Array(
+            state
+                .recent_workspace_paths
+                .into_iter()
+                .map(Value::String)
+                .collect(),
+        ),
+    );
+    serialized.insert("explorerOpen".to_string(), Value::Bool(state.explorer_open));
+    Value::Object(serialized)
+}
+
 fn read_settings_file(path: &Path) -> Result<Option<String>, NativeError> {
     match fs::read_to_string(path) {
         Ok(contents) => Ok(Some(contents)),
@@ -1845,11 +2069,13 @@ mod tests {
         is_markdown_path, next_workspace_window_label, normalize_relative_path, read_settings_file,
         register_workspace_window_root, rename_workspace_entry, search_documents,
         stable_workspace_hash, stage_git_files_with, unregister_workspace_window_root,
-        unstage_git_files_with, workspace_settings_path, workspace_window_root,
-        write_settings_file, DocumentRecord, GitCommandOutput, GitRunError, GitRunner,
-        GitStatusEntry, NativeError, SystemGitRunner, WorkspaceWindowRoots,
+        unstage_git_files_with, update_desktop_state_contents, workspace_settings_path,
+        workspace_window_root, write_settings_file, DesktopStateUpdate, DocumentRecord,
+        GitCommandOutput, GitRunError, GitRunner, GitStatusEntry, NativeError, SystemGitRunner,
+        WorkspaceWindowRoots,
     };
     use rusqlite::Connection;
+    use serde_json::{json, Value};
     use std::{
         cell::RefCell,
         collections::VecDeque,
@@ -2823,6 +3049,59 @@ mod tests {
         );
 
         fs::remove_dir_all(temp_dir).expect("temp settings directory is cleaned up");
+    }
+
+    #[test]
+    fn desktop_state_update_merges_concurrent_mrus_and_preserves_app_settings() {
+        let first = update_desktop_state_contents(
+            Some(
+                r#"{
+                  "theme": "dark",
+                  "extensionSettings": { "timer": { "enabled": true } },
+                  "lastWorkspacePath": "/notes/legacy",
+                  "explorerOpen": false
+                }"#,
+            ),
+            DesktopStateUpdate {
+                last_workspace_path: Some(Some("/notes/one".to_string())),
+                recent_workspace_paths: Some(vec![
+                    "/notes/one".to_string(),
+                    "/notes/legacy".to_string(),
+                ]),
+                explorer_open: None,
+            },
+        )
+        .expect("first desktop-state update succeeds");
+        let second = update_desktop_state_contents(
+            Some(&first),
+            DesktopStateUpdate {
+                last_workspace_path: None,
+                recent_workspace_paths: Some(vec![
+                    "/notes/two".to_string(),
+                    "/notes/legacy".to_string(),
+                ]),
+                explorer_open: Some(true),
+            },
+        )
+        .expect("second desktop-state update succeeds");
+
+        let settings: Value = serde_json::from_str(&second).expect("serialized settings are valid");
+        assert_eq!(settings["theme"], json!("dark"));
+        assert_eq!(
+            settings["extensionSettings"]["timer"]["enabled"],
+            json!(true)
+        );
+        assert!(settings.get("lastWorkspacePath").is_none());
+        assert!(settings.get("explorerOpen").is_none());
+        assert_eq!(
+            settings["desktopState"],
+            json!({
+                "version": 2,
+                "lastWorkspacePath": "/notes/one",
+                "recentWorkspacePaths": ["/notes/two", "/notes/legacy", "/notes/one"],
+                "explorerOpen": true
+            })
+        );
     }
 
     #[test]

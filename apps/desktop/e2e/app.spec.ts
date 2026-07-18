@@ -28,7 +28,7 @@ test("activity bar toggles between the explorer and search panels", async ({ pag
   await expect(page.getByRole("complementary", { name: "Explorer panel" })).toBeVisible();
 });
 
-test("opens a workspace and restores the Explorer visibility and last workspace", async ({ page }) => {
+test("opens a workspace in a new window and restores the last workspace on reload", async ({ page }) => {
   await page.addInitScript(() => {
     const settingsKey = "thinkbrain-e2e-app-settings";
     const appWindow = window as Window & {
@@ -66,7 +66,8 @@ test("opens a workspace and restores the Explorer visibility and last workspace"
   await page.goto("/");
   await page.getByRole("button", { name: "Choose workspace" }).click();
   await page.getByRole("menuitem", { name: "Add workspace" }).click();
-  await expect(page.getByRole("heading", { name: "demo-vault" })).not.toBeVisible();
+  await expect(page.getByRole("heading", { name: "No workspace open" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Choose workspace" })).toHaveText("Choose workspace");
   await expect.poll(() => page.evaluate(() => sessionStorage.getItem("thinkbrain-e2e-app-settings"))).toContain("demo-vault");
 
   await page.reload();

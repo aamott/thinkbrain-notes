@@ -48,7 +48,7 @@ describe("desktop state persistence", () => {
     });
   });
 
-  it("uses defaults for unsupported state versions and invalid field values", () => {
+  it("uses defaults for unsupported state versions", () => {
     expect(
       parseDesktopState(
         JSON.stringify({
@@ -60,7 +60,9 @@ describe("desktop state persistence", () => {
         })
       )
     ).toEqual(DEFAULT_DESKTOP_STATE);
+  });
 
+  it("coerces invalid field values in a supported v1 document to defaults", () => {
     expect(
       parseDesktopState(
         JSON.stringify({

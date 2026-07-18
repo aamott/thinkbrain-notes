@@ -1,6 +1,6 @@
 import type { NativeWorkspaceEntry, NativeWorkspaceSnapshot } from "../native/commands";
 
-export type ExplorerPhase = "empty" | "picking" | "opening" | "ready" | "cancelled" | "error";
+export type ExplorerPhase = "empty" | "opening" | "ready" | "error";
 
 export interface WorkspaceExplorerState {
   readonly phase: ExplorerPhase;
@@ -10,8 +10,6 @@ export interface WorkspaceExplorerState {
 }
 
 export type WorkspaceExplorerAction =
-  | { readonly type: "pick" }
-  | { readonly type: "cancel" }
   | { readonly type: "open" }
   | {
       readonly type: "opened";
@@ -33,10 +31,6 @@ export function workspaceExplorerReducer(
   action: WorkspaceExplorerAction
 ): WorkspaceExplorerState {
   switch (action.type) {
-    case "pick":
-      return { ...state, phase: "picking", error: null };
-    case "cancel":
-      return { ...state, phase: "cancelled", error: null };
     case "open":
       return { ...state, phase: "opening", error: null };
     case "opened":

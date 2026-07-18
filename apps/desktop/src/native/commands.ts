@@ -151,6 +151,10 @@ export interface NativeCommandMap {
     readonly args: { readonly contents: string };
     readonly result: null;
   };
+  readonly update_desktop_state: {
+    readonly args: { readonly update: NativeDesktopStateUpdate };
+    readonly result: string;
+  };
   readonly read_workspace_settings: {
     readonly args: { readonly rootPath: string };
     readonly result: string | null;
@@ -195,6 +199,12 @@ type ShellStatusInvoker = () => Promise<NativeShellStatus>;
 export interface NativeWorkspaceDescriptor {
   readonly root_path: string;
   readonly name: string;
+}
+
+export interface NativeDesktopStateUpdate {
+  readonly lastWorkspacePath?: string | null;
+  readonly recentWorkspacePaths?: readonly string[];
+  readonly explorerOpen?: boolean;
 }
 
 export interface NativeMarkdownFileEntry {

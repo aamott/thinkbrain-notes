@@ -2,7 +2,7 @@ import { invokeNativeCommand } from "../native/commands";
 
 export const DESKTOP_STATE_VERSION = 2;
 export const DESKTOP_STATE_KEY = "desktopState";
-const MAX_RECENT_WORKSPACES = 12;
+export const MAX_RECENT_WORKSPACES = 12;
 
 export interface DesktopState {
   readonly version: typeof DESKTOP_STATE_VERSION;
@@ -20,6 +20,7 @@ export interface DesktopStateUpdate {
 export interface DesktopStateGateway {
   readAppSettings(): Promise<string | null>;
   writeAppSettings(contents: string): Promise<void>;
+  updateDesktopState?(update: DesktopStateUpdate): Promise<string>;
 }
 
 export const DEFAULT_DESKTOP_STATE: DesktopState = Object.freeze({
@@ -33,6 +34,9 @@ const nativeDesktopStateGateway: DesktopStateGateway = {
   readAppSettings: () => invokeNativeCommand("read_app_settings"),
   async writeAppSettings(contents) {
     await invokeNativeCommand("write_app_settings", { contents });
+  },
+  updateDesktopState(update) {
+    return invokeNativeCommand("update_desktop_state", { update });
   }
 };
 
@@ -54,6 +58,10 @@ export async function saveDesktopState(
   update: DesktopStateUpdate,
   gateway: DesktopStateGateway = nativeDesktopStateGateway
 ): Promise<DesktopState> {
+  if (gateway.updateDesktopState) {
+    return parseDesktopState(await gateway.updateDesktopState(update));
+  }
+
   const appSettings = parseAppSettingsRecord(await gateway.readAppSettings());
   const current = readDesktopState(appSettings);
   const next = applyDesktopStateUpdate(current, update);
@@ -151,7 +159,7 @@ function normalizeWorkspacePaths(value: unknown, fallback?: string | null): read
   return promoteRecentWorkspace(paths, fallback);
 }
 
-function promoteRecentWorkspace(paths: readonly string[], path: string | null | undefined): readonly string[] {
+export function promoteRecentWorkspace(paths: readonly string[], path: string | null | undefined): readonly string[] {
   const unique = [...new Set(path ? [path, ...paths] : paths)];
   return unique.slice(0, MAX_RECENT_WORKSPACES);
 }

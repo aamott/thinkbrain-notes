@@ -5,7 +5,7 @@ import { createDesktopCommandRegistry, type DesktopCommand } from "../commands/c
 import { SourceControlPanel } from "../git/SourceControlPanel";
 import { gitService } from "../git/gitService";
 import type { NativeMarkdownFileEntry, NativeWorkspaceSnapshot } from "../native/commands";
-import { DEFAULT_DESKTOP_STATE, loadDesktopState, saveDesktopState, type DesktopStateUpdate } from "../settings/desktopState";
+import { DEFAULT_DESKTOP_STATE, loadDesktopState, promoteRecentWorkspace, saveDesktopState, type DesktopStateUpdate } from "../settings/desktopState";
 import {
   createEditorTab,
   createStaticTab,
@@ -73,6 +73,7 @@ export function DesktopShell() {
   const [workspaceName, setWorkspaceName] = useState<string | null>(null);
   const [workspaceFiles, setWorkspaceFiles] = useState<readonly NativeMarkdownFileEntry[]>([]);
   const [recentWorkspacePaths, setRecentWorkspacePaths] = useState<readonly string[]>([]);
+  const recentWorkspacePathsRef = useRef<readonly string[]>([]);
   const [newNoteFocusRequest, setNewNoteFocusRequest] = useState(0);
   const [stateRestored, setStateRestored] = useState(!isTauri());
 
@@ -84,25 +85,53 @@ export function DesktopShell() {
     documentsRef.current = documents;
   }, [documents]);
 
+  const updateRecentWorkspacePaths = useCallback((rootPath: string): readonly string[] => {
+    const next = promoteRecentWorkspace(recentWorkspacePathsRef.current, rootPath);
+    recentWorkspacePathsRef.current = next;
+    setRecentWorkspacePaths(next);
+    return next;
+  }, []);
+
   useEffect(() => {
     if (!isTauri()) return;
 
     let active = true;
-    void Promise.all([loadDesktopState(), workspaceDesktopApi.windowWorkspaceRoot()]).then(([desktopState, windowRoot]) => {
+    void Promise.allSettled([loadDesktopState(), workspaceDesktopApi.windowWorkspaceRoot()]).then(([desktopResult, rootResult]) => {
       if (!active) return;
+      const desktopState = desktopResult.status === "fulfilled" ? desktopResult.value : DEFAULT_DESKTOP_STATE;
+      const windowRoot = rootResult.status === "fulfilled" ? rootResult.value : null;
+      const recentPaths = windowRoot
+        ? promoteRecentWorkspace(desktopState.recentWorkspacePaths, windowRoot)
+        : desktopState.recentWorkspacePaths;
       setRestoredWorkspacePath(windowRoot ?? desktopState.lastWorkspacePath);
-      setRecentWorkspacePaths(windowRoot ? [windowRoot, ...desktopState.recentWorkspacePaths.filter((path) => path !== windowRoot)] : desktopState.recentWorkspacePaths);
+      recentWorkspacePathsRef.current = recentPaths;
+      setRecentWorkspacePaths(recentPaths);
       setLeftPanel(desktopState.explorerOpen ? "explorer" : null);
-    }).catch(() => {
-      if (active) {
-        setRestoredWorkspacePath(DEFAULT_DESKTOP_STATE.lastWorkspacePath);
-      }
     }).finally(() => {
       if (active) setStateRestored(true);
     });
 
     return () => {
       active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isTauri()) return;
+
+    let active = true;
+    const refreshRecentWorkspacePaths = () => {
+      void loadDesktopState().then((desktopState) => {
+        if (!active) return;
+        recentWorkspacePathsRef.current = desktopState.recentWorkspacePaths;
+        setRecentWorkspacePaths(desktopState.recentWorkspacePaths);
+      }).catch(() => undefined);
+    };
+
+    window.addEventListener("focus", refreshRecentWorkspacePaths);
+    return () => {
+      active = false;
+      window.removeEventListener("focus", refreshRecentWorkspacePaths);
     };
   }, []);
 
@@ -123,10 +152,10 @@ export function DesktopShell() {
     setRestoredWorkspacePath(rootPath);
     setWorkspaceName(snapshot.workspace.name);
     setWorkspaceFiles(snapshot.files);
-    setRecentWorkspacePaths((paths) => [rootPath, ...paths.filter((path) => path !== rootPath)].slice(0, 12));
+    const recentPaths = updateRecentWorkspacePaths(rootPath);
     void gitService.detectRepository(rootPath);
-    persistDesktopState({ lastWorkspacePath: rootPath });
-  }, [persistDesktopState]);
+    persistDesktopState({ lastWorkspacePath: rootPath, recentWorkspacePaths: recentPaths });
+  }, [persistDesktopState, updateRecentWorkspacePaths]);
 
   const handleWorkspaceUnavailable = useCallback(() => {
     setRestoredWorkspacePath(null);
@@ -134,6 +163,11 @@ export function DesktopShell() {
     setWorkspaceFiles([]);
     persistDesktopState({ lastWorkspacePath: null });
   }, [persistDesktopState]);
+
+  const handleWorkspaceLaunched = useCallback((rootPath: string) => {
+    const recentPaths = updateRecentWorkspacePaths(rootPath);
+    persistDesktopState({ recentWorkspacePaths: recentPaths });
+  }, [persistDesktopState, updateRecentWorkspacePaths]);
 
   const openPalette = useCallback(() => {
     paletteRestoreFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -376,10 +410,7 @@ export function DesktopShell() {
                 onNewNoteFocusHandled={acknowledgeNewNoteFocus}
                 newNoteFocusRequest={newNoteFocusRequest}
                 recentWorkspacePaths={recentWorkspacePaths}
-                onWorkspaceLaunched={(rootPath) => {
-                  setRecentWorkspacePaths((paths) => [rootPath, ...paths.filter((path) => path !== rootPath)].slice(0, 12));
-                  persistDesktopState({ lastWorkspacePath: rootPath });
-                }}
+                onWorkspaceLaunched={handleWorkspaceLaunched}
               />
             ) : (
               <><PanelTitle title={leftActions.find((item) => item.id === leftPanel)?.label ?? "Panel"} /><LeftContent panel={leftPanel} rootPath={restoredWorkspacePath} /></>
