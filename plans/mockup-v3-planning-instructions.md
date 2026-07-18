@@ -71,13 +71,13 @@ these — extend `packages/ui` tokens, not create a parallel system.
 
 The planning agent should create/update these per the AGENTS.md planning system:
 
-1. **Update `plans/ui-shell.md`** — the existing epic. Its Status section
+1. **Update `plans/wip-ui-shell-med-hard.md`** — the existing epic. Its Status section
    already tracks the basic shell as done and has pending stories for movable
    actions, layout slots, command palette, sidebar minimize. The mockup_v3
    adoption supersedes some of these and adds new ones. Reconcile the Status
    section.
 
-2. **Update `plans/ai.md`** — the AI epic stub. The mockup's right-panel AI
+2. **Update `plans/wip-ai-low-hard.md`** — the AI epic stub. The mockup's right-panel AI
    assistant and the Vercel AI SDK + assistant-ui + ACP requirements change the
    architecture decisions. Update the epic to reflect the chosen stack.
 
@@ -295,8 +295,8 @@ In order:
 1. `.agents/AGENTS.md` — architecture rules, planning system, styling, linting
 2. `plans/app-vision.md` — app vision, principles, stack, MVP scope
 3. `plans/technical-decisions.md` — cross-cutting decisions
-4. `plans/ui-shell.md` — existing UI shell epic (current status, pending stories)
-5. `plans/ai.md` — AI epic stub (ACP, provider abstraction, chat panel)
+4. `plans/wip-ui-shell-med-hard.md` — existing UI shell epic (current status, pending stories)
+5. `plans/wip-ai-low-hard.md` — AI epic stub (ACP, provider abstraction, chat panel)
 6. `.agents/skills/acp/SKILL.md` — ACP responsibilities, host/agent boundary
 7. This file (`plans/mockup-v3-planning-instructions.md`)
 
@@ -318,8 +318,8 @@ writing stories that reference them.
 ## Output
 
 Produce:
-1. Updated `plans/ui-shell.md` Status section (reconcile with mockup_v3 adoption)
-2. Updated `plans/ai.md` (architecture decisions for AI SDK + assistant-ui + ACP)
+1. Updated `plans/wip-ui-shell-med-hard.md` Status section (reconcile with mockup_v3 adoption)
+2. Updated `plans/wip-ai-low-hard.md` (architecture decisions for AI SDK + assistant-ui + ACP)
 3. Updated `plans/technical-decisions.md` (new cross-cutting decisions)
 4. New/updated story files in `plans/ui-shell/` and `plans/ai/`
 5. A summary of decisions that need user confirmation (the 6 items above, or

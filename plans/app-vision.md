@@ -115,30 +115,31 @@ settings, and perform basic Git operations.
 ## Epic Stream
 
 The project is organized as a flat stream of epics — no phase buckets.
-Each epic is a feature area at `plans/<epic-name>.md` with a Status section.
-Stories live in `plans/<epic-name>/` with status/urgency/difficulty encoded in
-filenames. When all epic items are ✅, the epic is deleted.
+Each epic is a feature area at `plans/<status>-<epic>-<urgency>-<difficulty>.md`
+with a Status section. Stories live in `plans/<epic-name>/` with
+status/urgency/difficulty encoded in filenames. When all epic items are ✅, the
+epic is deleted.
 
 **MVP-remaining (high/med urgency):**
-- `git-integration` — system Git integration (next up)
-- `theme-foundation` — CSS variable tokens, light/dark themes, UI primitives
-- `test-ci-quality` — validation scripts, Vitest, Playwright, CI
+- [`git-integration`](wip-git-integration-high-hard.md) — system Git integration (next up)
+- [`theme-foundation`](wip-theme-foundation-high-hard.md) — CSS variable tokens, light/dark themes, UI primitives
+- [`test-ci-quality`](wip-test-ci-quality-high-med.md) — validation scripts, Vitest, Playwright, CI
 
-**Follow-ups from completed MVP work (med/low urgency):**
-- `workspace-explorer` — non-Markdown file ops, drag-and-drop, hidden files
-- `indexing-search` — file watcher, connection pooling
-- `note-model` — frontmatter formatting preservation
-- `ui-shell` — movable actions, layout slots, command palette
+**MVP follow-ups (med/low urgency):**
+- [`workspace-explorer`](wip-workspace-explorer-med-med.md) — non-Markdown file ops, drag-and-drop, hidden files
+- [`indexing-search`](wip-indexing-search-med-med.md) — file watcher, connection pooling
+- [`note-model`](wip-note-model-low-hard.md) — frontmatter formatting preservation
+- [`ui-shell`](wip-ui-shell-med-hard.md) — movable actions, layout slots, command palette
 
 **Future epics (low urgency, stub with prerequisites noted):**
-- `extensions` — extension API + capability sandbox (prerequisite for AI, marketplace)
-- `ai` — local/remote provider abstraction, ACP integration (depends on `extensions`)
-- `semantic-search` — embeddings-based search (depends on `indexing-search`, possibly `ai`)
-- `graph` — backlinks and graph view (depends on `indexing-search`, `note-model`)
-- `canvas` — infinite canvas editor
-- `mobile` — React Native/Expo app (depends on core adapter interfaces)
-- `marketplace` — extension discovery, signing, update flow (depends on `extensions`; install mechanism owned by `extensions`)
-- `collaboration` — real-time collaboration (bottom priority, exploratory; local-first, opt-in, P2P preferred — only if we can make it work within the core principles)
+- [`extensions`](pending-extensions-low-hard.md) — extension API + capability sandbox (prerequisite for AI, marketplace)
+- [`ai`](wip-ai-low-hard.md) — local/remote provider abstraction, ACP integration (depends on `extensions`)
+- [`semantic-search`](pending-semantic-search-low-hard.md) — embeddings-based search (depends on `indexing-search`, possibly `ai`)
+- [`graph`](pending-graph-low-hard.md) — backlinks and graph view (depends on `indexing-search`, `note-model`)
+- [`canvas`](pending-canvas-low-hard.md) — infinite canvas editor
+- [`mobile`](pending-mobile-low-hard.md) — React Native/Expo app (depends on core adapter interfaces)
+- [`marketplace`](pending-marketplace-low-med.md) — extension discovery, signing, update flow (depends on `extensions`; install mechanism owned by `extensions`)
+- [`collaboration`](wip-collaboration-low-hard.md) — real-time collaboration (bottom priority, exploratory; local-first, opt-in, P2P preferred — only if we can make it work within the core principles)
 
 **Not an epic:** Sync — "bring your own sync" is a design principle, not a
 feature. Sync conflict assistance may become a maintenance story later.

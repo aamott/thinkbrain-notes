@@ -22,5 +22,5 @@ desktop adapter's contract.
 
 - `packages/core/src/index.ts` — `MarkdownFileEntry`, `WorkspaceEntry`,
   `MarkdownFileContents` types
-- `plans/mobile.md` — Platform adapter contract
+- `plans/pending-mobile-low-hard.md` — Platform adapter contract
 - `plans/technical-decisions.md` — Storage, Repository Structure sections

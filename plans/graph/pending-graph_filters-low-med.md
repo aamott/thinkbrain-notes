@@ -25,5 +25,5 @@ Depends on the graph view story (`pending-graph_view`).
 ## References
 
 - `packages/core/src/note-model.ts` — `NoteMetadata` (`tags`, `status`)
-- `plans/graph.md` — this epic
+- `plans/pending-graph-low-hard.md` — this epic
 - `plans/graph/pending-graph_view-low-hard.md` — prerequisite

@@ -23,4 +23,4 @@ with keyword hits.
 - `apps/desktop/src/search/SearchPanel.tsx` — search panel to extend
 - `apps/desktop/src/stores/appStore.ts` — `SearchState`, `IndexingState` slices
 - `apps/desktop/src/search/useWorkspaceIndexer.ts` — indexing progress pattern
-- `plans/semantic-search.md` — Scope (semantic search UI)
+- `plans/pending-semantic-search-low-hard.md` — Scope (semantic search UI)

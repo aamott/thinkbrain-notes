@@ -20,6 +20,6 @@ request.
 
 ## References
 
-- `plans/ai.md`
+- `plans/wip-ai-low-hard.md`
 - `plans/ai/pending-provider_configuration_and_gateway-med-hard.md`
 - `plans/ai/pending-acp_capabilities_and_permissions-med-hard.md`

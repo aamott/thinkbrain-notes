@@ -22,5 +22,5 @@ local history and clear provider/configuration states.
 ## References
 
 - `plans/ui-shell/pending-right_popout_inspectors-med-med.md`
-- `plans/ai.md`
+- `plans/wip-ai-low-hard.md`
 - assistant-ui history docs: https://www.assistant-ui.com/docs/runtimes/ai-sdk/v7

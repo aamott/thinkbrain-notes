@@ -20,5 +20,5 @@ separation rule: app data never lives inside the workspace/vault.
 
 - `plans/technical-decisions.md` — Settings, Database and Indexes sections
 - `apps/desktop/src-tauri/src/lib.rs` — `resolve_index_db_path` (reference)
-- `plans/mobile.md` — Platform adapter contract
+- `plans/pending-mobile-low-hard.md` — Platform adapter contract
 - `plans/app-vision.md` — User data separation

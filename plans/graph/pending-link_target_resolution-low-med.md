@@ -31,5 +31,5 @@ view.
 - `packages/core/src/note-model.ts` — `WikiLink` (`target`, `displayText?`),
   `NoteMetadata` (`title`, `aliases`)
 - `packages/core/src/markdown.ts` — `extractWikiLinks`
-- `plans/note-model.md` — wiki-link syntax and parsing
-- `plans/graph.md` — this epic
+- `plans/wip-note-model-low-hard.md` — wiki-link syntax and parsing
+- `plans/pending-graph-low-hard.md` — this epic

@@ -22,6 +22,6 @@ extensions. Lives in the app shell alongside the existing activity-bar panels
 
 ## References
 
-- `plans/marketplace.md`
-- Prerequisite: `plans/extensions.md` (capability sandbox, install mechanism)
+- `plans/pending-marketplace-low-med.md`
+- Prerequisite: `plans/pending-extensions-low-hard.md` (capability sandbox, install mechanism)
 - UI pattern: `apps/desktop/src/search/SearchPanel.tsx`, activity bar in `App.tsx`

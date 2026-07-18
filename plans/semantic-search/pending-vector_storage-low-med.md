@@ -24,4 +24,4 @@ existing index policy.
 
 - `apps/desktop/src-tauri/src/lib.rs` — `resolve_index_db_path`, `open_index_connection`, `init_index_schema`
 - `apps/desktop/src/search/searchService.ts` — `indexWorkspace`, `indexDocument`, `removeIndexedDocument`
-- `plans/semantic-search.md` — Architecture Decisions (ephemeral cache)
+- `plans/pending-semantic-search-low-hard.md` — Architecture Decisions (ephemeral cache)

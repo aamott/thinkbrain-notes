@@ -24,4 +24,4 @@ file is the source of truth — no database or sidecar.
 
 - `packages/core/src/` — canvas persistence (e.g. `canvas-io.ts`)
 - `packages/core/src/note-model.ts` — note path resolution patterns
-- `plans/canvas.md` — persistence architecture decision
+- `plans/pending-canvas-low-hard.md` — persistence architecture decision

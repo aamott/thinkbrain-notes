@@ -20,7 +20,7 @@ interaction.
 
 ## References
 
-- `plans/mobile.md` — epic, Separate UI layer decision
+- `plans/pending-mobile-low-hard.md` — epic, Separate UI layer decision
 - `plans/app-vision.md` — architecture, MVP scope (feature surface)
 - `apps/desktop/src/App.tsx` — desktop feature surface reference (do not port
   layout directly)

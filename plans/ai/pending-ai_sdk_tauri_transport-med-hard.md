@@ -21,7 +21,7 @@ streaming desktop chat over Tauri IPC rather than an assumed `/api/chat` route.
 
 ## References
 
-- `plans/ai.md` — Chat UI decision
+- `plans/wip-ai-low-hard.md` — Chat UI decision
 - `apps/desktop/src/native/commands.ts`
 - AI SDK transport docs: https://ai-sdk.dev/docs/ai-sdk-ui/transport
 - assistant-ui runtime docs: https://www.assistant-ui.com/docs/runtimes/ai-sdk/overview

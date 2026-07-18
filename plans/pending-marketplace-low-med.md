@@ -41,7 +41,7 @@ install mechanism. It does not redefine sandboxing, manifest format, or
 permission declarations — those are owned by `extensions`. Marketplace work
 must not weaken the capability sandbox or introduce unrestricted filesystem
 access (per AGENTS.md and the security principle in the archived
-`extensions.md`: no third-party code receives unrestricted filesystem access).
+`pending-extensions-low-hard.md`: no third-party code receives unrestricted filesystem access).
 
 ### Boundary with `extensions`
 

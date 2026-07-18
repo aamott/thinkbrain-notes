@@ -24,4 +24,4 @@ while keeping user consent, enforcement, and agent decision-making separate.
 - `.agents/skills/acp/SKILL.md`
 - `apps/desktop/src/native/commands.ts`
 - `apps/desktop/src-tauri/capabilities/default.json`
-- `plans/ai.md`
+- `plans/wip-ai-low-hard.md`

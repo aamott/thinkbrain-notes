@@ -22,4 +22,4 @@ must not block the editor.
 - `apps/desktop/src/search/searchService.ts` — `indexDocument`, `removeIndexedDocument`, `indexWorkspace`
 - `apps/desktop/src/search/useWorkspaceIndexer.ts` — abortable background index hook
 - `apps/desktop/src-tauri/src/lib.rs` — `upsert_document`, `delete_document`
-- `plans/semantic-search.md` — Architecture Decisions (indexing stays non-blocking)
+- `plans/pending-semantic-search-low-hard.md` — Architecture Decisions (indexing stays non-blocking)

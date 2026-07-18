@@ -20,4 +20,4 @@ terminal, diagnostics, or backlinks features before their data providers exist.
 
 - `mockup_v3/src/components/{BottomPanel,StatusBar}.tsx`
 - `apps/desktop/src/stores/appStore.ts`
-- `plans/ai.md`
+- `plans/wip-ai-low-hard.md`

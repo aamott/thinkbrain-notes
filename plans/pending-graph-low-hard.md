@@ -1,7 +1,7 @@
 # Graph
 
 > Future epic (low urgency, stub). Backlinks and graph view built on top of the
-> wiki-link index. Read `plans/app-vision.md` and `plans/note-model.md` before
+> wiki-link index. Read `plans/app-vision.md` and `plans/wip-note-model-low-hard.md` before
 > starting any story here.
 
 ## Goal
@@ -56,7 +56,7 @@ Non-goals (out of scope for this epic):
   graph edges are derived from. Note: `plans/indexing-search/` still has
   pending follow-up stories (file watcher, connection pooling); those are
   enhancements and do not block this epic, but the epic file
-  `plans/indexing-search.md` appears to be missing despite the folder existing
+  `plans/wip-indexing-search-med-med.md` appears to be missing despite the folder existing
   — see Inconsistencies below.
 
 No other epic blocks this one. `semantic-search` and `ai` are independent
@@ -73,7 +73,7 @@ future epics; this epic uses only explicit wiki-link edges.
 
 ## Inconsistencies
 
-- `plans/indexing-search.md` epic file is missing while `plans/indexing-search/`
+- `plans/wip-indexing-search-med-med.md` epic file is missing while `plans/indexing-search/`
   still contains pending stories. Per the planning rules the epic file should
   exist until all Status items are done. Flagged for the manager to resolve
   (restore the epic file or confirm the follow-ups were re-homed).

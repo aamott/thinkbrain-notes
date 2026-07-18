@@ -24,4 +24,4 @@ with many cards by using a transform layer rather than scaling the DOM tree.
 
 - `apps/desktop/src/` — new canvas view component
 - `packages/ui/` — shared UI primitives if needed
-- `plans/canvas.md` — rendering architecture decision
+- `plans/pending-canvas-low-hard.md` — rendering architecture decision

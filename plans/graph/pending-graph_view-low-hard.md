@@ -31,5 +31,5 @@ Depends on link target resolution (`pending-link_target_resolution`).
 - `packages/core/src/note-model.ts` — `WikiLink`, `NoteMetadata`
 - `packages/core/src/markdown.ts` — `extractWikiLinks`
 - `apps/desktop/src/search/searchService.ts` — index access pattern
-- `plans/graph.md` — this epic
+- `plans/pending-graph-low-hard.md` — this epic
 - `plans/graph/pending-link_target_resolution-low-med.md` — prerequisite

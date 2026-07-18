@@ -21,4 +21,4 @@ and a dedicated entry point.
 
 - `apps/desktop/src/` — file explorer, tab system
 - `packages/core/src/` — file operations, canvas persistence
-- `plans/workspace-explorer.md` — explorer integration
+- `plans/wip-workspace-explorer-med-med.md` — explorer integration

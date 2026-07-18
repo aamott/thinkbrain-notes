@@ -29,4 +29,4 @@ assistant UI without conflating them with model-chat streams.
 - `.agents/skills/acp/SKILL.md`
 - ACP project: https://github.com/agentclientprotocol/agent-client-protocol
 - `apps/desktop/src-tauri/src/`
-- `plans/ai.md`
+- `plans/wip-ai-low-hard.md`

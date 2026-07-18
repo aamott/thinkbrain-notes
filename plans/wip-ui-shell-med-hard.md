@@ -105,8 +105,8 @@ the persisted app setting and `data-thinkbrain-theme`.
   `plans/ui-shell/pending-left_popout_integration-high-med.md`
 - ⬜ inspector/right popout integration — see
   `plans/ui-shell/pending-right_popout_inspectors-med-med.md`
-- ⬜ command palette and workspace file navigation — see
-  `plans/ui-shell/pending-command_palette_and_navigation-high-med.md`
+- ✅ command palette and workspace file navigation — see
+  `plans/ui-shell/done-command_palette_and_navigation-high-med.md`
 - ⬜ resizable layout and OS app-data persistence — see
   `plans/ui-shell/pending-resizable_panel_persistence-med-med.md`
 - ⬜ theme control in the new shell — see
@@ -115,7 +115,3 @@ the persisted app setting and `data-thinkbrain-theme`.
   `plans/ui-shell/pending-bottom_panel_framework-low-med.md`
 - ❌ prior movable-action/slot and layout-editing stories described `mockup2.htm`,
   not `mockup_v3/`; they were superseded and removed.
-- ❌ workspace `pnpm` validation remains blocked before scripts begin: Corepack's
-  pnpm 11 launcher crashes under Node 20. Direct desktop checks also remain
-  blocked from fully resolving `packages/core/src/frontmatter.ts` because its
-  declared `yaml` dependency is absent from the installed workspace.

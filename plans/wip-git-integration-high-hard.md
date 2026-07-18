@@ -52,8 +52,8 @@ matching entry in `NativeCommandMap` so the frontend stays type-safe.
 
 ### Operates on the active workspace
 
-Git commands operate on the active workspace root path only. The workspace root
-is already tracked in `appStore` (`WorkspaceState`). No Git state is stored
+Git commands operate on the active workspace root path only. The fresh shell
+owns the active root through its workspace adapter. No Git state is stored
 inside the workspace by the app — the app only reads/writes the user's normal
 Git repository data (`.git`, working tree). App caches/settings never go in the
 workspace (user-data separation rule).
@@ -72,12 +72,9 @@ Common failure cases get dedicated error codes:
 
 ### UI
 
-The source-control panel lives in the left sidebar, selected from the activity
-bar — matching the layout in the old `ui-shell.md` architecture (Explorer,
-Search, Source Control). `App.tsx` already has a disabled "Source" activity-bar
-button as a placeholder; this epic enables it and adds a `source` value to the
-`ActivePanel` union in `appStore`. State (status, staged set, branch, commit
-message draft) lives in a Zustand slice, following the existing store pattern.
+The source-control panel lives in the fresh shell's left popout, selected from
+the existing Source Control activity action. The panel and its state must be
+rebuilt against the native adapter; no retired desktop store or UI is reused.
 
 ## Dependencies
 
@@ -99,10 +96,13 @@ No other epic blocks this one.
 
 ## Status
 
-- ⬜ Git availability check — detect whether system `git` is installed
-- ⬜ Repository detection — detect whether the active workspace is a Git repo
-- ⬜ Repository initialization — `git init` from the UI
-- ⬜ Git status — changed/staged/untracked file list
+- ✅ Git availability check — see
+  `plans/git-integration/done-git_availability_check-high-easy.md`
+- ✅ Repository detection — see
+  `plans/git-integration/done-repo_detection-high-easy.md`
+- ✅ Repository initialization — see
+  `plans/git-integration/done-repo_init-high-easy.md`
+- ✅ Git status — see `plans/git-integration/done-git_status-high-med.md`
 - ⬜ Stage / unstage files
 - ⬜ Commit staged files
 - ⬜ Branch list + current branch

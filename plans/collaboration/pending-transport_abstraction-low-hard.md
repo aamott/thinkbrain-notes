@@ -18,5 +18,5 @@ so the UI and CRDT layer never depend on a specific transport.
 ## References
 
 - `packages/core/` — platform-agnostic logic (hub and spoke)
-- `plans/collaboration.md` — transport abstraction
+- `plans/wip-collaboration-low-hard.md` — transport abstraction
 - `plans/collaboration/pending-architectural_direction_decision-low-med.md`

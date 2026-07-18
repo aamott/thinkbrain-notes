@@ -24,5 +24,5 @@ refactor later.
 - `apps/desktop/src/search/searchService.ts` — `buildDocumentRecord` (content to embed)
 - `apps/desktop/src/native/commands.ts` — `NativeCommandMap`, native command pattern
 - `apps/desktop/src-tauri/src/lib.rs` — native command bridge, `NativeError`
-- `plans/semantic-search.md` — Architecture Decisions (provider abstraction)
+- `plans/pending-semantic-search-low-hard.md` — Architecture Decisions (provider abstraction)
 - `plans/app-vision.md` — AI Native principle (local first, cloud optional)

@@ -17,4 +17,4 @@ spans of a note's content, visible to other session participants.
 ## References
 
 - `apps/desktop/src/editor/` — CodeMirror 6 editor decorations
-- `plans/collaboration.md` — comments / inline annotations
+- `plans/wip-collaboration-low-hard.md` — comments / inline annotations

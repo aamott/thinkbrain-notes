@@ -22,5 +22,5 @@ popout without replacing live data with mock trees or results.
 
 - `mockup_v3/src/components/LeftPopout.tsx`
 - `apps/desktop/src/{workspace,search,settings}/`
-- `plans/git-integration.md`
-- `plans/extensions.md`
+- `plans/pending-git-integration-high-hard.md`
+- `plans/pending-extensions-low-hard.md`
