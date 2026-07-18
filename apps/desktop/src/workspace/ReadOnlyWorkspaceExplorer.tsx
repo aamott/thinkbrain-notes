@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useState, type FormEvent } from "react";
 import type { NativeWorkspaceEntry, NativeWorkspaceSnapshot } from "../native/commands";
 import {
   buildWorkspaceTree,
@@ -8,6 +8,8 @@ import {
   type WorkspaceTreeNode
 } from "./workspaceExplorerModel";
 import { workspaceDesktopApi, type WorkspaceDesktopApi } from "./workspaceAdapter";
+import { workspaceDocumentApi, type WorkspaceDocumentApi } from "./workspaceDocumentAdapter";
+import { createWorkspaceDocument } from "./workspaceDocumentModel";
 import styles from "./ReadOnlyWorkspaceExplorer.module.css";
 
 export interface ReadOnlyWorkspaceExplorerProps {
@@ -16,6 +18,8 @@ export interface ReadOnlyWorkspaceExplorerProps {
   readonly initialWorkspacePath?: string | null;
   readonly onWorkspaceOpened?: (rootPath: string, snapshot: NativeWorkspaceSnapshot) => void;
   readonly onWorkspaceUnavailable?: (rootPath: string) => void;
+  readonly onMarkdownFileSelected?: (rootPath: string, relativePath: string) => void;
+  readonly documentApi?: WorkspaceDocumentApi;
 }
 
 /**
@@ -27,9 +31,14 @@ export function ReadOnlyWorkspaceExplorer({
   className,
   initialWorkspacePath = null,
   onWorkspaceOpened,
-  onWorkspaceUnavailable
+  onWorkspaceUnavailable,
+  onMarkdownFileSelected,
+  documentApi = workspaceDocumentApi
 }: ReadOnlyWorkspaceExplorerProps) {
   const [state, dispatch] = useReducer(workspaceExplorerReducer, initialWorkspaceExplorerState);
+  const [newNotePath, setNewNotePath] = useState("");
+  const [isCreatingNote, setIsCreatingNote] = useState(false);
+  const [newNoteError, setNewNoteError] = useState<string | null>(null);
   const tree = useMemo(() => buildWorkspaceTree(state.entries), [state.entries]);
 
   const loadWorkspace = useCallback(async (rootPath: string, restoring = false) => {
@@ -57,6 +66,33 @@ export function ReadOnlyWorkspaceExplorer({
       await loadWorkspace(rootPath);
     } catch (error) {
       dispatch({ type: "failed", message: workspaceErrorMessage(error) });
+    }
+  };
+
+  const createNote = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const rootPath = state.snapshot?.workspace.root_path;
+    const relativePath = newNotePath.trim();
+    if (!rootPath || !relativePath) return;
+
+    setIsCreatingNote(true);
+    setNewNoteError(null);
+    const result = await createWorkspaceDocument(documentApi, { rootPath, relativePath });
+    if (!result.ok) {
+      setNewNoteError(result.message);
+      setIsCreatingNote(false);
+      return;
+    }
+
+    try {
+      const entries = await api.listWorkspaceEntries(rootPath);
+      dispatch({ type: "opened", snapshot: state.snapshot!, entries });
+      setNewNotePath("");
+      onMarkdownFileSelected?.(rootPath, result.document.relative_path);
+    } catch (error) {
+      setNewNoteError(workspaceErrorMessage(error));
+    } finally {
+      setIsCreatingNote(false);
     }
   };
 
@@ -94,11 +130,19 @@ export function ReadOnlyWorkspaceExplorer({
           {tree.length === 0 ? (
             <StatusState message="This workspace is empty." />
           ) : (
-            <ul className={styles.tree} role="tree" aria-label={`${state.snapshot?.workspace.name} files`}>
-              {tree.map((node) => <WorkspaceTreeItem key={node.entry.relative_path} node={node} level={1} />)}
+          <ul className={styles.tree} role="tree" aria-label={`${state.snapshot?.workspace.name} files`}>
+              {tree.map((node) => <WorkspaceTreeItem key={node.entry.relative_path} node={node} level={1} onMarkdownFileSelected={(relativePath) => onMarkdownFileSelected?.(state.snapshot!.workspace.root_path, relativePath)} />)}
             </ul>
           )}
-          <p className={styles.readOnlyNote}>Read-only explorer. File actions will appear when their workspace capabilities are available.</p>
+          <form className={styles.newNoteForm} onSubmit={createNote}>
+            <label htmlFor="new-markdown-note">New note</label>
+            <div>
+              <input id="new-markdown-note" value={newNotePath} onChange={(event) => setNewNotePath(event.target.value)} placeholder="Notes/untitled.md" disabled={isCreatingNote} />
+              <button type="submit" disabled={isCreatingNote || !newNotePath.trim()}>{isCreatingNote ? "Creating…" : "Create"}</button>
+            </div>
+            {newNoteError && <p role="alert">{newNoteError}</p>}
+          </form>
+          <p className={styles.readOnlyNote}>Markdown notes can be opened or created here. Other workspace entries remain read-only.</p>
         </div>
       )}
     </section>
@@ -117,16 +161,17 @@ function ErrorState({ message, onDismiss }: { readonly message: string; readonly
   return <div className={styles.error} role="alert"><strong>Could not open workspace</strong><p>{message}</p><button type="button" onClick={onDismiss}>Dismiss</button></div>;
 }
 
-function WorkspaceTreeItem({ node, level }: { readonly node: WorkspaceTreeNode; readonly level: number }) {
+function WorkspaceTreeItem({ node, level, onMarkdownFileSelected }: { readonly node: WorkspaceTreeNode; readonly level: number; readonly onMarkdownFileSelected: (relativePath: string) => void }) {
   const isDirectory = node.entry.kind === "directory";
+  const isMarkdownFile = node.entry.kind === "file" && node.entry.is_markdown;
   return (
     <li className={styles.treeItem} role="treeitem" aria-level={level} aria-expanded={isDirectory ? true : undefined}>
-      <div className={styles.treeRow}>
+      <button className={styles.treeRow} type="button" disabled={!isMarkdownFile} onClick={() => { if (isMarkdownFile) onMarkdownFileSelected(node.entry.relative_path); }} aria-label={isMarkdownFile ? `Open ${node.entry.name}` : undefined}>
         <span className={styles.treeIcon} aria-hidden="true">{isDirectory ? "⌄" : "·"}</span>
         <span className={styles.entryName}>{node.entry.name}</span>
         <EntryKind entry={node.entry} />
-      </div>
-      {node.children.length > 0 && <ul role="group">{node.children.map((child) => <WorkspaceTreeItem key={child.entry.relative_path} node={child} level={level + 1} />)}</ul>}
+      </button>
+      {node.children.length > 0 && <ul role="group">{node.children.map((child) => <WorkspaceTreeItem key={child.entry.relative_path} node={child} level={level + 1} onMarkdownFileSelected={onMarkdownFileSelected} />)}</ul>}
     </li>
   );
 }

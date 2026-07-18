@@ -1,7 +1,15 @@
 import { isTauri } from "@tauri-apps/api/core";
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
-import { AssistantPanel } from "../agent/AssistantPanel";
+import { lazy, Suspense, useCallback, useEffect, useReducer, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { DEFAULT_DESKTOP_STATE, loadDesktopState, saveDesktopState, type DesktopStateUpdate } from "../settings/desktopState";
+import {
+  createEditorTab,
+  desktopTabReducer,
+  initialDesktopTabState,
+  type DesktopTab
+} from "../tabs/tabModel";
+import { createDesktopTabRegistry } from "../tabs/tabRegistry";
+import { workspaceDocumentApi } from "../workspace/workspaceDocumentAdapter";
+import { loadWorkspaceDocument, saveWorkspaceDocument } from "../workspace/workspaceDocumentModel";
 import { ReadOnlyWorkspaceExplorer } from "../workspace/ReadOnlyWorkspaceExplorer";
 import styles from "./DesktopShell.module.css";
 
@@ -9,20 +17,11 @@ type LeftPanel = "explorer" | "search" | "source-control" | "tags" | "extensions
 type RightPanel = "outline" | "backlinks" | "properties" | "assistant";
 type BottomPanel = "terminal" | "problems" | "output" | "backlinks";
 
-type Tab = {
-  id: string;
-  label: string;
-  kind: "note" | "browser" | "graph" | "preview";
-  dirty?: boolean;
+type DocumentViewState = {
+  readonly contents: string;
+  readonly phase: "loading" | "ready" | "saving" | "error";
+  readonly error: string | null;
 };
-
-const tabs: readonly Tab[] = [
-  { id: "welcome", label: "Welcome", kind: "note" },
-  { id: "roadmap", label: "Preview", kind: "preview" },
-  { id: "browser", label: "Browser", kind: "browser" },
-  { id: "graph", label: "Graph", kind: "graph" },
-  { id: "welcome-copy", label: "Getting started", kind: "note" }
-];
 
 const leftActions: readonly { id: LeftPanel; label: string; symbol: string }[] = [
   { id: "explorer", label: "Explorer", symbol: "▱" },
@@ -39,9 +38,21 @@ const rightActions: readonly { id: RightPanel; label: string; symbol: string }[]
   { id: "assistant", label: "Assistant", symbol: "✦" }
 ];
 
+const desktopTabRegistry = createDesktopTabRegistry();
+const AssistantPanel = lazy(async () => {
+  const module = await import("../agent/AssistantPanel");
+  return { default: module.AssistantPanel };
+});
+const MarkdownEditor = lazy(async () => {
+  const module = await import("../tabs/MarkdownEditor");
+  return { default: module.MarkdownEditor };
+});
+
 export function DesktopShell() {
   const rootRef = useRef<HTMLElement>(null);
-  const [activeTab, setActiveTab] = useState("welcome");
+  const [tabState, dispatchTabs] = useReducer(desktopTabReducer, initialDesktopTabState);
+  const [documents, setDocuments] = useState<Record<string, DocumentViewState>>({});
+  const documentsRef = useRef(documents);
   const [leftPanel, setLeftPanel] = useState<LeftPanel | null>("explorer");
   const [rightPanel, setRightPanel] = useState<RightPanel | null>("outline");
   const [bottomPanel, setBottomPanel] = useState<BottomPanel | null>(null);
@@ -56,6 +67,10 @@ export function DesktopShell() {
   useEffect(() => {
     document.documentElement.dataset.thinkbrainTheme = theme;
   }, [theme]);
+
+  useEffect(() => {
+    documentsRef.current = documents;
+  }, [documents]);
 
   useEffect(() => {
     if (!isTauri()) return;
@@ -102,6 +117,71 @@ export function DesktopShell() {
     setWorkspaceName(null);
     persistDesktopState({ lastWorkspacePath: null });
   }, [persistDesktopState]);
+
+  const openMarkdownDocument = useCallback((rootPath: string, relativePath: string) => {
+    const tab = createEditorTab({ rootPath, relativePath });
+    dispatchTabs({ type: "open", tab });
+
+    if (documentsRef.current[tab.id]) return;
+    setDocuments((current) => ({
+      ...current,
+      [tab.id]: { phase: "loading", contents: "", error: null }
+    }));
+    void loadWorkspaceDocument(workspaceDocumentApi, { rootPath, relativePath }).then((result) => {
+      setDocuments((current) => ({
+        ...current,
+        [tab.id]: result.ok
+          ? { phase: "ready", contents: result.document.contents, error: null }
+          : { phase: "error", contents: "", error: result.message }
+      }));
+    });
+  }, []);
+
+  const updateDocument = useCallback((tabId: string, contents: string) => {
+    setDocuments((current) => {
+      const document = current[tabId];
+      return document ? { ...current, [tabId]: { ...document, contents, error: null } } : current;
+    });
+    dispatchTabs({ type: "setDirty", tabId, isDirty: true });
+  }, []);
+
+  const saveDocument = useCallback(async (tab: DesktopTab): Promise<boolean> => {
+    const document = documentsRef.current[tab.id];
+    const rootPath = tab.resource?.rootPath;
+    const relativePath = tab.resource?.relativePath;
+    if (!document || !rootPath || !relativePath || document.phase === "loading") return false;
+
+    setDocuments((current) => ({
+      ...current,
+      [tab.id]: { ...document, phase: "saving", error: null }
+    }));
+    const result = await saveWorkspaceDocument(workspaceDocumentApi, {
+      rootPath,
+      relativePath,
+      contents: document.contents
+    });
+    if (!result.ok) {
+      setDocuments((current) => ({
+        ...current,
+        [tab.id]: { ...(current[tab.id] ?? document), phase: "error", error: result.message }
+      }));
+      return false;
+    }
+
+    const hasNewerEdits = documentsRef.current[tab.id]?.contents !== document.contents;
+    setDocuments((current) => ({
+      ...current,
+      [tab.id]: {
+        phase: "ready",
+        contents: current[tab.id]?.contents ?? result.document.contents,
+        error: null
+      }
+    }));
+    if (!hasNewerEdits) dispatchTabs({ type: "setDirty", tabId: tab.id, isDirty: false });
+    return true;
+  }, []);
+
+  const activeTab = tabState.tabs.find((tab) => tab.id === tabState.activeTabId) ?? null;
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -164,8 +244,6 @@ export function DesktopShell() {
     else setRightWidth((width) => clampPanelWidth(width + applyDelta));
   };
 
-  const selectedTab = tabs.find((tab) => tab.id === activeTab) ?? tabs[0]!;
-
   return (
     <main className={styles.shell} ref={rootRef} aria-label="ThinkBrain desktop workspace">
       <header className={styles.titleBar}>
@@ -174,13 +252,15 @@ export function DesktopShell() {
           <span className={styles.brandName}>ThinkBrain</span>
         </div>
         <nav className={styles.tabs} aria-label="Open tabs">
-          {tabs.map((tab) => (
-            <button key={tab.id} className={`${styles.tab} ${tab.id === activeTab ? styles.tabActive : ""}`} onClick={() => setActiveTab(tab.id)}>
-              <span aria-hidden="true">{tab.kind === "browser" ? "◉" : tab.kind === "graph" ? "◌" : "▤"}</span>
-              <span className={styles.tabLabel}>{tab.label}</span>
-              {tab.dirty && <span className={styles.dirty} aria-label="Unsaved changes" />}
-              <span className={styles.tabClose} aria-hidden="true">×</span>
-            </button>
+          {tabState.tabs.map((tab) => (
+            <div key={tab.id} className={`${styles.tab} ${tab.id === activeTab?.id ? styles.tabActive : ""}`}>
+              <button type="button" className={styles.tabSelect} onClick={() => dispatchTabs({ type: "activate", tabId: tab.id })} aria-current={tab.id === activeTab?.id ? "page" : undefined}>
+                <span aria-hidden="true">{tab.kind === "browser" ? "◉" : tab.kind === "graph" ? "◌" : "▤"}</span>
+                <span className={styles.tabLabel}>{tab.title}</span>
+                {tab.isDirty && <span className={styles.dirty} aria-label="Unsaved changes" />}
+              </button>
+              <button type="button" className={styles.tabClose} aria-label={`Close ${tab.title}`} onClick={() => dispatchTabs({ type: "requestClose", tabId: tab.id })}>×</button>
+            </div>
           ))}
           <button className={styles.newTab} aria-label="Open a new tab">+</button>
         </nav>
@@ -204,6 +284,7 @@ export function DesktopShell() {
                 initialWorkspacePath={stateRestored ? restoredWorkspacePath : null}
                 onWorkspaceOpened={handleWorkspaceOpened}
                 onWorkspaceUnavailable={handleWorkspaceUnavailable}
+                onMarkdownFileSelected={openMarkdownDocument}
               />
             ) : (
               <><PanelTitle title={leftActions.find((item) => item.id === leftPanel)?.label ?? "Panel"} /><LeftContent panel={leftPanel} /></>
@@ -214,8 +295,8 @@ export function DesktopShell() {
 
         <section className={styles.center} aria-label="Note workspace">
           <article className={styles.editor}>
-            <div className={styles.breadcrumbs}>{workspaceName ?? "Workspace"} <span>›</span> {selectedTab.label}</div>
-            <TabContent tab={selectedTab} />
+            <div className={styles.breadcrumbs}>{workspaceName ?? "Workspace"} {activeTab && <><span>›</span> {activeTab.title}</>}</div>
+            <TabContent tab={activeTab} document={activeTab ? documents[activeTab.id] : undefined} onChange={updateDocument} onSave={saveDocument} />
           </article>
           {bottomPanel && <BottomContent active={bottomPanel} onChange={setBottomPanel} onClose={() => setBottomPanel(null)} />}
         </section>
@@ -237,6 +318,7 @@ export function DesktopShell() {
       </footer>
 
       {paletteOpen && <CommandPalette onClose={() => setPaletteOpen(false)} onAction={(id) => { if (id === "assistant") setRightPanel("assistant"); if (id === "search") selectLeftPanel("search"); }} />}
+      {tabState.closeRequest && <DirtyCloseDialog tab={tabState.tabs.find((tab) => tab.id === tabState.closeRequest?.tabId) ?? null} onCancel={() => dispatchTabs({ type: "cancelClose", tabId: tabState.closeRequest!.tabId })} onDiscard={() => dispatchTabs({ type: "discardClose", tabId: tabState.closeRequest!.tabId })} onSave={async () => { const tab = tabState.tabs.find((candidate) => candidate.id === tabState.closeRequest?.tabId); if (tab && await saveDocument(tab)) dispatchTabs({ type: "completeSaveAndClose", tabId: tab.id }); }} />}
     </main>
   );
 }
@@ -258,17 +340,38 @@ function LeftContent({ panel }: { panel: LeftPanel }) {
 }
 
 function RightContent({ panel }: { panel: RightPanel }) {
-  if (panel === "assistant") return <AssistantPanel />;
+  if (panel === "assistant") return <Suspense fallback={<Unavailable title="Loading assistant" description="Preparing the assistant panel…" />}><AssistantPanel /></Suspense>;
   if (panel === "outline") return <Unavailable title="No note selected" description="Headings from the active Markdown note will appear here." />;
   if (panel === "backlinks") return <Unavailable title="Backlinks unavailable" description="This inspector activates after the workspace link index is available." />;
   return <Unavailable title="No note selected" description="Read-only frontmatter properties will appear here." />;
 }
 
-function TabContent({ tab }: { tab: Tab }) {
+function TabContent({ tab, document, onChange, onSave }: {
+  readonly tab: DesktopTab | null;
+  readonly document: DocumentViewState | undefined;
+  readonly onChange: (tabId: string, contents: string) => void;
+  readonly onSave: (tab: DesktopTab) => Promise<boolean>;
+}) {
+  if (!tab) return <div className={styles.note}><span>1</span><pre>{`# Welcome to ThinkBrain\n\nOpen a workspace, then select a Markdown file to start editing it.`}</pre></div>;
+  const view = desktopTabRegistry.get(tab.kind);
+  if (!view?.isAvailable) return <Unavailable title={view?.label ?? tab.title} description={view?.unavailableMessage ?? "This tab type is unavailable."} />;
   if (tab.kind === "browser") return <Unavailable title="Browser tab" description="External page rendering is unavailable until the Tauri browser view is connected." />;
   if (tab.kind === "graph") return <Unavailable title="Graph view" description="Graph visualization is planned after link indexing is available." />;
   if (tab.kind === "preview") return <div className={styles.preview}><h1>Preview unavailable</h1><p>Open a Markdown note to view its rendered preview.</p></div>;
-  return <div className={styles.note}><span>1</span><pre>{`# Welcome to ThinkBrain\n\nOpen a workspace to start browsing and editing your Markdown notes.\n\n## Desktop shell\n\nTabs, inspectors, the command palette, and the assistant panel are ready for their backing services.\n\n## Your notes stay local\n\nThinkBrain reads and writes ordinary Markdown files in the workspace you choose.`}</pre></div>;
+  if (tab.kind === "settings") return <Unavailable title="Settings" description="Settings controls will appear here as their owning story is implemented." />;
+  if (!document || document.phase === "loading") return <Unavailable title="Loading note" description="Reading the Markdown document from the workspace…" />;
+  if (document.phase === "error" && !document.contents) return <Unavailable title="Could not open note" description={document.error ?? "The Markdown document could not be read."} />;
+  return <Suspense fallback={<Unavailable title="Loading editor" description="Preparing the Markdown editor…" />}><MarkdownEditor key={tab.id} value={document.contents} isSaving={document.phase === "saving"} error={document.error} onChange={(contents) => onChange(tab.id, contents)} onSave={() => { void onSave(tab); }} /></Suspense>;
+}
+
+function DirtyCloseDialog({ tab, onCancel, onDiscard, onSave }: {
+  readonly tab: DesktopTab | null;
+  readonly onCancel: () => void;
+  readonly onDiscard: () => void;
+  readonly onSave: () => void;
+}) {
+  if (!tab) return null;
+  return <div className={styles.paletteBackdrop} role="presentation"><section className={styles.closeDialog} role="dialog" aria-modal="true" aria-label="Unsaved changes"><h2>Save changes to {tab.title}?</h2><p>Closing this tab without saving will discard your edits.</p><div><button type="button" onClick={onCancel}>Cancel</button><button type="button" onClick={onDiscard}>Discard</button><button type="button" onClick={onSave}>Save and close</button></div></section></div>;
 }
 
 function BottomContent({ active, onChange, onClose }: { active: BottomPanel; onChange: (panel: BottomPanel) => void; onClose: () => void }) {

@@ -43,10 +43,10 @@ vault contents (attachments, config files, folders) without leaving the app.
 
 - ✅ fresh-shell workspace open, restore, and read-only explorer — see
   `plans/workspace-explorer/done-fresh_shell_workspace_open-high-med.md`
-- ⬜ Markdown CRUD UI integration — the native commands remain available, but
-  the deleted desktop UI must not be restored to consume them
-- ⬜ Full-vault tree integration (folders + non-Markdown files, read-only) —
-  rebuild against `list_workspace_entries` in the fresh shell
+- ✅ Markdown CRUD UI integration in the fresh shell — see
+  `plans/workspace-explorer/done-fresh_markdown_crud_ui-high-hard.md`
+- ✅ Full-vault tree integration (folders + non-Markdown files, read-only) —
+  rebuilt against `list_workspace_entries` in the fresh shell
 - ✅ Dot-prefixed entries hidden by default — `lib.rs` `is_hidden_name`
 - ⬜ Non-Markdown file operations (open / rename / delete) — see
   `pending-non_markdown_file_ops-med-med.md`

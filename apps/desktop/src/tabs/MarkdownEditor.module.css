@@ -1,0 +1,67 @@
+.editor {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.toolbar {
+  display: flex;
+  min-height: 2rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0 0.9rem;
+  border-bottom: 1px solid var(--tn-color-border);
+  color: var(--tn-color-muted-foreground);
+  font-size: 0.6875rem;
+}
+
+.toolbar button {
+  border: 1px solid var(--tn-color-border);
+  border-radius: var(--tn-radius-small);
+  padding: 0.25rem 0.5rem;
+  color: var(--tn-color-primary-foreground);
+  background: var(--tn-color-primary);
+  cursor: pointer;
+  font: inherit;
+}
+
+.toolbar button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.error {
+  margin: 0;
+  padding: 0.5rem 0.9rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--tn-color-destructive) 50%, var(--tn-color-border));
+  color: var(--tn-color-danger);
+  background: color-mix(in srgb, var(--tn-color-destructive) 8%, transparent);
+  font-size: 0.75rem;
+}
+
+.host {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+}
+
+.host :global(.cm-editor) {
+  min-height: 100%;
+  color: var(--tn-color-foreground);
+  background: var(--tn-color-editor);
+  font: 0.875rem/1.65 var(--tn-font-mono);
+}
+
+.host :global(.cm-scroller) {
+  overflow: auto;
+}
+
+.host :global(.cm-content) {
+  padding: 1rem 1.25rem 4rem;
+}
+
+.host :global(.cm-focused) {
+  outline: none;
+}

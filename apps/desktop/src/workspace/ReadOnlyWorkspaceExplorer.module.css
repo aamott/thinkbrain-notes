@@ -158,17 +158,29 @@
 
 .treeRow {
   display: flex;
+  width: 100%;
   min-width: 0;
   align-items: center;
   gap: 0.375rem;
   padding: 0.265rem 0.75rem;
+  border: 0;
   color: var(--tn-color-sidebar-foreground);
+  background: transparent;
+  cursor: default;
+  font: inherit;
   font-size: 0.75rem;
   line-height: 1.25;
+  text-align: left;
 }
 
-.treeRow:hover {
+.treeRow:not(:disabled) {
+  cursor: pointer;
+}
+
+.treeRow:not(:disabled):hover,
+.treeRow:not(:disabled):focus-visible {
   background: color-mix(in srgb, var(--tn-color-accent) 58%, transparent);
+  outline: none;
 }
 
 .treeIcon {
@@ -198,4 +210,49 @@
   color: var(--tn-color-muted-foreground);
   font-size: 0.625rem;
   line-height: 1.35;
+}
+
+.newNoteForm {
+  display: grid;
+  gap: 0.375rem;
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid var(--tn-color-border);
+  color: var(--tn-color-muted-foreground);
+  font-size: 0.6875rem;
+}
+
+.newNoteForm > div {
+  display: flex;
+  gap: 0.375rem;
+}
+
+.newNoteForm input {
+  min-width: 0;
+  flex: 1;
+  border: 1px solid var(--tn-color-input);
+  border-radius: var(--tn-radius-small);
+  padding: 0.375rem 0.4375rem;
+  color: var(--tn-color-foreground);
+  background: var(--tn-color-background);
+  font: inherit;
+}
+
+.newNoteForm button {
+  border: 1px solid var(--tn-color-border);
+  border-radius: var(--tn-radius-small);
+  padding: 0.375rem 0.5rem;
+  color: var(--tn-color-primary-foreground);
+  background: var(--tn-color-primary);
+  cursor: pointer;
+  font: inherit;
+}
+
+.newNoteForm button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.newNoteForm p {
+  margin: 0;
+  color: var(--tn-color-danger);
 }

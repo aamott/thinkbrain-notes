@@ -99,9 +99,8 @@ the persisted app setting and `data-thinkbrain-theme`.
   `plans/ui-shell/done-shell_tokens_and_css_modules-high-hard.md`
 - ⬜ desktop shell composition (panel separation) — rolled back by `b2124ee "UI
   Cleanup"`; see `plans/ui-shell/pending-desktop_shell_composition-high-hard.md`
-- ⬜ tab model, registry, and tab strip — desktop integration rolled back by
-  `b2124ee "UI Cleanup"` (core contract in `packages/core/src/layout/` remains);
-  see `plans/ui-shell/pending-tab_content_registry-high-hard.md`
+- ✅ tab model, registry, and tab strip — see
+  `plans/ui-shell/done-tab_content_registry-high-hard.md`
 - ⬜ left popout integration — see
   `plans/ui-shell/pending-left_popout_integration-high-med.md`
 - ⬜ inspector/right popout integration — see

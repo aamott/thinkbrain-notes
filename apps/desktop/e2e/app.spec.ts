@@ -77,6 +77,71 @@ test("opens a workspace and restores the Explorer visibility and last workspace"
   await expect(page.getByText("welcome.md")).toBeVisible();
 });
 
+test("opens, saves, protects, and creates Markdown notes through the fresh shell", async ({ page }) => {
+  await page.addInitScript(() => {
+    const documentsKey = "thinkbrain-e2e-markdown-documents";
+    const appWindow = window as Window & {
+      isTauri?: boolean;
+      __TAURI_INTERNALS__?: { invoke: (command: string, args: Record<string, unknown>) => Promise<unknown> };
+    };
+    const readDocuments = (): Record<string, string> => JSON.parse(sessionStorage.getItem(documentsKey) ?? "{\"Notes/welcome.md\":\"# Welcome\"}");
+    const writeDocuments = (documents: Record<string, string>) => sessionStorage.setItem(documentsKey, JSON.stringify(documents));
+    appWindow.isTauri = true;
+    appWindow.__TAURI_INTERNALS__ = {
+      async invoke(command, args) {
+        if (command === "plugin:dialog|open") return "/workspace/demo-vault";
+        if (command === "read_app_settings") return null;
+        if (command === "write_app_settings") return null;
+        if (command === "open_workspace") return { workspace: { root_path: String(args.rootPath), name: "demo-vault" }, files: [] };
+        if (command === "list_workspace_entries") return Object.keys(readDocuments()).flatMap((relativePath) => [
+          { relative_path: "Notes", name: "Notes", parent_path: "", kind: "directory", is_markdown: false, byte_size: 0, updated_at: null },
+          { relative_path: relativePath, name: relativePath.split("/").at(-1), parent_path: "Notes", kind: "file", is_markdown: true, byte_size: 0, updated_at: null }
+        ]).filter((entry, index, entries) => entry.relative_path !== "Notes" || index === entries.findIndex((candidate) => candidate.relative_path === "Notes"));
+        if (command === "read_markdown_file") {
+          const relativePath = String(args.relativePath);
+          return { relative_path: relativePath, contents: readDocuments()[relativePath] ?? "" };
+        }
+        if (command === "write_markdown_file") {
+          const documents = readDocuments();
+          documents[String(args.relativePath)] = String(args.contents);
+          writeDocuments(documents);
+          return { relative_path: String(args.relativePath), file_name: String(args.relativePath).split("/").at(-1), parent_path: "Notes", byte_size: String(args.contents).length, updated_at: null };
+        }
+        if (command === "create_markdown_file") {
+          const documents = readDocuments();
+          documents[String(args.relativePath)] = String(args.contents ?? "");
+          writeDocuments(documents);
+          return { relative_path: String(args.relativePath), file_name: String(args.relativePath).split("/").at(-1), parent_path: "Notes", byte_size: 0, updated_at: null };
+        }
+        throw new Error(`Unexpected native command: ${command}`);
+      }
+    };
+  });
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "Open workspace" }).click();
+  await page.getByRole("button", { name: "Open welcome.md" }).click();
+  const editor = page.locator('[aria-label="Markdown editor"]');
+  await expect(editor).toBeVisible();
+  await editor.click();
+  await page.keyboard.press("Control+a");
+  await page.keyboard.type("# Updated welcome");
+  await expect(page.getByLabel("Unsaved changes")).toBeVisible();
+
+  await page.getByRole("button", { name: "Close welcome.md" }).click();
+  await expect(page.getByRole("dialog", { name: "Unsaved changes" })).toBeVisible();
+  await page.getByRole("button", { name: "Cancel" }).click();
+  await expect(editor).toBeVisible();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByLabel("Unsaved changes")).not.toBeVisible();
+  await expect.poll(() => page.evaluate(() => sessionStorage.getItem("thinkbrain-e2e-markdown-documents"))).toContain("# Updated welcome");
+
+  await page.getByLabel("New note").fill("Notes/new-note.md");
+  await page.getByRole("button", { name: "Create" }).click();
+  await expect(page.getByRole("button", { name: "Close new-note.md" })).toBeVisible();
+  await expect(editor).toBeVisible();
+});
+
 test("shell exposes labelled landmarks and keyboard-accessible controls", async ({ page }) => {
   await page.goto("/");
 
