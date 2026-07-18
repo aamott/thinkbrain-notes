@@ -10,6 +10,7 @@ import {
   type SettingsState,
   useAppStore
 } from "./appStore";
+import { emptyTabState } from "../tabs/tabReducer";
 
 const idleActiveDocument: ActiveDocumentState = {
   status: "idle",
@@ -35,6 +36,8 @@ describe("app store scaffold", () => {
       nativeShell: { status: "idle" },
       workspace: { status: "idle" },
       activeDocument: idleActiveDocument,
+      editorDocuments: {},
+      tabState: emptyTabState,
       settings: idleSettings
     });
   });
@@ -272,6 +275,62 @@ describe("app store scaffold", () => {
       editorContents: "third",
       isDirty: true
     });
+  });
+
+  it("preserves an unsaved editor buffer when switching between note tabs", () => {
+    useAppStore.getState().openActiveDocument({
+      rootPath: "C:/notes",
+      relativePath: "Inbox.md",
+      fileName: "Inbox.md"
+    });
+    useAppStore.getState().setActiveDocumentLoaded("inbox");
+    useAppStore.getState().updateActiveDocumentContents("dirty inbox");
+    const inboxTabId = useAppStore.getState().tabState.activeTabId;
+
+    useAppStore.getState().openActiveDocument({
+      rootPath: "C:/notes",
+      relativePath: "Daily.md",
+      fileName: "Daily.md"
+    });
+    useAppStore.getState().setActiveDocumentLoaded("daily");
+    const dailyTabId = useAppStore.getState().tabState.activeTabId;
+
+    useAppStore.getState().activateTab(inboxTabId ?? "");
+
+    expect(useAppStore.getState().activeDocument).toMatchObject({
+      file: { relativePath: "Inbox.md" },
+      editorContents: "dirty inbox",
+      isDirty: true
+    });
+    expect(useAppStore.getState().tabState.tabs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: inboxTabId, isDirty: true }),
+        expect.objectContaining({ id: dailyTabId, isDirty: false })
+      ])
+    );
+  });
+
+  it("selects the next editor tab after discarding a closed dirty tab", () => {
+    useAppStore.getState().openActiveDocument({
+      rootPath: "C:/notes",
+      relativePath: "Inbox.md",
+      fileName: "Inbox.md"
+    });
+    useAppStore.getState().setActiveDocumentLoaded("inbox");
+    useAppStore.getState().updateActiveDocumentContents("dirty inbox");
+    const inboxTabId = useAppStore.getState().tabState.activeTabId;
+
+    useAppStore.getState().openActiveDocument({
+      rootPath: "C:/notes",
+      relativePath: "Daily.md",
+      fileName: "Daily.md"
+    });
+    const dailyTabId = useAppStore.getState().tabState.activeTabId;
+    useAppStore.getState().activateTab(inboxTabId ?? "");
+    useAppStore.getState().closeTab(inboxTabId ?? "");
+
+    expect(useAppStore.getState().tabState.activeTabId).toBe(dailyTabId);
+    expect(useAppStore.getState().editorDocuments[inboxTabId ?? ""]).toBeUndefined();
   });
 });
 

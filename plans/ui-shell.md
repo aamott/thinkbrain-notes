@@ -95,8 +95,8 @@ the persisted app setting and `data-thinkbrain-theme`.
   `plans/ui-shell/done-shell_tokens_and_css_modules-high-hard.md`
 - ✅ mockup-v3 desktop shell composition — see
   `plans/ui-shell/done-desktop_shell_composition-high-hard.md`
-- ⬜ tab model, registry, and tab strip — see
-  `plans/ui-shell/pending-tab_content_registry-high-hard.md`
+- ✅ tab model, registry, and tab strip — see
+  `plans/ui-shell/done-tab_content_registry-high-hard.md`
 - ⬜ left popout integration — see
   `plans/ui-shell/pending-left_popout_integration-high-med.md`
 - ⬜ inspector/right popout integration — see
@@ -111,3 +111,7 @@ the persisted app setting and `data-thinkbrain-theme`.
   `plans/ui-shell/pending-bottom_panel_framework-low-med.md`
 - ❌ prior movable-action/slot and layout-editing stories described `mockup2.htm`,
   not `mockup_v3/`; they were superseded and removed.
+- ❌ workspace `pnpm` validation remains blocked before scripts begin: Corepack's
+  pnpm 11 launcher crashes under Node 20. Direct desktop checks also remain
+  blocked from fully resolving `packages/core/src/frontmatter.ts` because its
+  declared `yaml` dependency is absent from the installed workspace.

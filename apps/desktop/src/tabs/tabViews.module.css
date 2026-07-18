@@ -1,0 +1,48 @@
+.preview,
+.unavailable {
+  box-sizing: border-box;
+  color: var(--tn-color-editor-foreground);
+  height: 100%;
+  overflow: auto;
+  padding: 1.5rem;
+}
+
+.viewHeader {
+  border-bottom: 1px solid var(--tn-color-border);
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+}
+
+.viewHeader p,
+.eyebrow {
+  color: var(--tn-color-muted-foreground);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  margin: 0 0 0.4rem;
+  text-transform: uppercase;
+}
+
+.viewHeader h2,
+.unavailable h2 {
+  margin: 0;
+}
+
+.previewContents {
+  font: 0.9rem/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.unavailable {
+  align-content: center;
+  display: grid;
+  justify-items: center;
+  text-align: center;
+}
+
+.unavailable > p:last-child {
+  color: var(--tn-color-muted-foreground);
+  max-width: 30rem;
+}

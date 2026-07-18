@@ -21,7 +21,7 @@
 }
 
 .identity {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
 }
 
 .logo {
@@ -44,6 +44,12 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+@media (max-width: 38rem) {
+  .title {
+    display: none;
+  }
 }
 
 .context {

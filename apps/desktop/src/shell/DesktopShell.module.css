@@ -56,6 +56,12 @@
   place-items: stretch;
 }
 
+.tabContent {
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
 .editorPlaceholder {
   align-self: center;
   border: 1px dashed var(--tn-color-border);

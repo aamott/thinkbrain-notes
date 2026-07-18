@@ -7,6 +7,7 @@ import { indexDocument, removeIndexedDocument } from "../search/searchService";
 import { useAppStore } from "../stores/appStore";
 import { FileTree } from "./FileTree";
 import { buildFileTree } from "./fileTreeModel";
+import { openNoteDocument } from "./openNote";
 import styles from "./WorkspaceExplorer.module.css";
 import {
   createMarkdownFile,
@@ -41,13 +42,6 @@ export function WorkspaceExplorer() {
   const setWorkspaceError = useAppStore((state) => state.setWorkspaceError);
   const setWorkspaceFiles = useAppStore((state) => state.setWorkspaceFiles);
   const setWorkspaceEntries = useAppStore((state) => state.setWorkspaceEntries);
-  const openActiveDocument = useAppStore((state) => state.openActiveDocument);
-  const setActiveDocumentLoaded = useAppStore(
-    (state) => state.setActiveDocumentLoaded
-  );
-  const setActiveDocumentError = useAppStore(
-    (state) => state.setActiveDocumentError
-  );
   const [busyPath, setBusyPath] = useState<string | null>(null);
 
   async function handleOpenWorkspace() {
@@ -130,19 +124,9 @@ export function WorkspaceExplorer() {
 
     try {
       setBusyPath(file.relativePath);
-      openActiveDocument(documentFile);
-      const loadedFile = await readMarkdownFile(
-        documentFile.rootPath,
-        documentFile.relativePath
-      );
-
-      if (isActiveDocument(documentFile)) {
-        setActiveDocumentLoaded(loadedFile.contents);
-      }
+      await openNoteDocument(documentFile);
     } catch (error) {
-      if (isActiveDocument(documentFile)) {
-        setActiveDocumentError(normalizeNativeError(error));
-      }
+      useAppStore.getState().setWorkspaceError(normalizeNativeError(error));
     } finally {
       setBusyPath(null);
     }
@@ -311,17 +295,5 @@ function WorkspacePanelBody({
         />
       )}
     </>
-  );
-}
-
-function isActiveDocument(file: {
-  readonly rootPath: string;
-  readonly relativePath: string;
-}): boolean {
-  const activeFile = useAppStore.getState().activeDocument.file;
-
-  return (
-    activeFile?.rootPath === file.rootPath &&
-    activeFile.relativePath === file.relativePath
   );
 }

@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import {
   DEFAULT_APP_SETTINGS,
+  type Tab,
   type AppSettings,
   type MarkdownFileEntry,
   type ParseSettingsResult,
@@ -11,6 +12,11 @@ import {
 
 import type { NativeCommandErrorShape, ShellStatus } from "../native/commands";
 import type { SearchResult } from "../search/searchService";
+import {
+  emptyTabState,
+  tabReducer,
+  type TabState
+} from "../tabs/tabReducer";
 
 export type NativeShellState =
   | { readonly status: "idle" }
@@ -89,6 +95,9 @@ export interface AppStoreState {
   readonly nativeShell: NativeShellState;
   readonly workspace: WorkspaceState;
   readonly activeDocument: ActiveDocumentState;
+  /** In-memory only: document buffers are never written to layout preferences. */
+  readonly editorDocuments: Readonly<Record<string, ActiveDocumentState>>;
+  readonly tabState: TabState;
   readonly activePanel: ActivePanel;
   readonly settings: SettingsState;
   readonly indexing: IndexingState;
@@ -108,6 +117,15 @@ export interface AppStoreState {
   readonly setWorkspaceFiles: (files: readonly MarkdownFileEntry[]) => void;
   readonly setWorkspaceEntries: (entries: readonly WorkspaceEntry[]) => void;
   readonly openActiveDocument: (file: ActiveDocumentFile) => void;
+  readonly activateTab: (tabId: string) => void;
+  readonly closeTab: (tabId: string) => void;
+  readonly setDocumentLoaded: (tabId: string, contents: string) => void;
+  readonly setDocumentError: (
+    tabId: string,
+    error: NativeCommandErrorShape
+  ) => void;
+  readonly setDocumentSaving: (tabId: string) => void;
+  readonly markDocumentSaved: (tabId: string, savedContents: string) => void;
   readonly setActiveDocumentLoaded: (contents: string) => void;
   readonly updateActiveDocumentContents: (contents: string) => void;
   readonly setActiveDocumentSaving: () => void;
@@ -156,6 +174,92 @@ const idleIndexingState: IndexingState = {
   error: null
 };
 
+const idleActiveDocument: ActiveDocumentState = {
+  status: "idle",
+  file: null,
+  savedContents: "",
+  editorContents: "",
+  isDirty: false,
+  error: null
+};
+
+function createEditorTab(file: ActiveDocumentFile): Tab {
+  const id = `editor:${file.rootPath}:${file.relativePath}`;
+
+  return {
+    id,
+    title: file.fileName,
+    kind: "editor",
+    resource: { rootPath: file.rootPath, relativePath: file.relativePath }
+  };
+}
+
+function getActiveDocumentForTab(
+  tabState: TabState,
+  editorDocuments: Readonly<Record<string, ActiveDocumentState>>
+): ActiveDocumentState {
+  const activeTab = tabState.tabs.find((tab) => tab.id === tabState.activeTabId);
+
+  return activeTab?.kind === "editor"
+    ? editorDocuments[activeTab.id] ?? idleActiveDocument
+    : idleActiveDocument;
+}
+
+function replaceActiveEditorDocument(
+  state: Pick<AppStoreState, "activeDocument" | "editorDocuments" | "tabState">,
+  document: ActiveDocumentState
+) {
+  const activeTabId = state.tabState.activeTabId;
+  const activeTab = state.tabState.tabs.find((tab) => tab.id === activeTabId);
+
+  if (!activeTabId || activeTab?.kind !== "editor") {
+    return state;
+  }
+
+  return {
+    activeDocument: document,
+    editorDocuments: { ...state.editorDocuments, [activeTabId]: document },
+    tabState: tabReducer(state.tabState, {
+      type: "set-dirty",
+      tabId: activeTabId,
+      isDirty: document.isDirty
+    })
+  };
+}
+
+function replaceEditorDocument(
+  state: Pick<AppStoreState, "activeDocument" | "editorDocuments" | "tabState">,
+  tabId: string,
+  document: ActiveDocumentState
+) {
+  const tab = state.tabState.tabs.find((candidate) => candidate.id === tabId);
+
+  if (tab?.kind !== "editor") {
+    return state;
+  }
+
+  return {
+    activeDocument:
+      state.tabState.activeTabId === tabId ? document : state.activeDocument,
+    editorDocuments: { ...state.editorDocuments, [tabId]: document },
+    tabState: tabReducer(state.tabState, {
+      type: "set-dirty",
+      tabId,
+      isDirty: document.isDirty
+    })
+  };
+}
+
+function omitEditorDocument(
+  documents: Readonly<Record<string, ActiveDocumentState>>,
+  tabId: string
+): Readonly<Record<string, ActiveDocumentState>> {
+  const remaining = { ...documents };
+  delete remaining[tabId];
+
+  return remaining;
+}
+
 const idleSearchState: SearchState = {
   query: "",
   status: "idle",
@@ -176,13 +280,10 @@ export const useAppStore = create<AppStoreState>((set) => ({
   nativeShell: { status: "idle" },
   workspace: { status: "idle" },
   activeDocument: {
-    status: "idle",
-    file: null,
-    savedContents: "",
-    editorContents: "",
-    isDirty: false,
-    error: null
+    ...idleActiveDocument
   },
+  editorDocuments: {},
+  tabState: emptyTabState,
   activePanel: "explorer",
   settings: idleSettingsState,
   indexing: idleIndexingState,
@@ -223,36 +324,120 @@ export const useAppStore = create<AppStoreState>((set) => ({
         : state
     ),
   openActiveDocument: (file) =>
-    set({
-      activeDocument: {
+    set((state) => {
+      const tab = createEditorTab(file);
+      const tabState = tabReducer(state.tabState, { type: "open", tab });
+      const existingDocument = state.editorDocuments[tab.id];
+
+      if (existingDocument) {
+        return { tabState, activeDocument: existingDocument };
+      }
+
+      const activeDocument: ActiveDocumentState = {
         status: "loading",
         file,
         savedContents: "",
         editorContents: "",
         isDirty: false,
         error: null
-      }
+      };
+
+      return {
+        tabState,
+        activeDocument,
+        editorDocuments: { ...state.editorDocuments, [tab.id]: activeDocument }
+      };
+    }),
+  activateTab: (tabId) =>
+    set((state) => {
+      const tabState = tabReducer(state.tabState, { type: "activate", tabId });
+
+      return {
+        tabState,
+        activeDocument: getActiveDocumentForTab(tabState, state.editorDocuments)
+      };
+    }),
+  closeTab: (tabId) =>
+    set((state) => {
+      const tabState = tabReducer(state.tabState, { type: "close", tabId });
+      const editorDocuments = omitEditorDocument(state.editorDocuments, tabId);
+
+      return {
+        tabState,
+        editorDocuments,
+        activeDocument: getActiveDocumentForTab(tabState, editorDocuments)
+      };
+    }),
+  setDocumentLoaded: (tabId, contents) =>
+    set((state) => {
+      const document = state.editorDocuments[tabId];
+
+      return document?.file
+        ? replaceEditorDocument(state, tabId, {
+            ...document,
+            status: "ready",
+            savedContents: contents,
+            editorContents: contents,
+            isDirty: false,
+            error: null
+          })
+        : state;
+    }),
+  setDocumentError: (tabId, error) =>
+    set((state) => {
+      const document = state.editorDocuments[tabId];
+
+      return document?.file
+        ? replaceEditorDocument(state, tabId, {
+            ...document,
+            status: "error",
+            error
+          })
+        : state;
+    }),
+  setDocumentSaving: (tabId) =>
+    set((state) => {
+      const document = state.editorDocuments[tabId];
+
+      return document?.file
+        ? replaceEditorDocument(state, tabId, {
+            ...document,
+            status: "saving",
+            error: null
+          })
+        : state;
+    }),
+  markDocumentSaved: (tabId, savedContents) =>
+    set((state) => {
+      const document = state.editorDocuments[tabId];
+
+      return document?.file
+        ? replaceEditorDocument(state, tabId, {
+            ...document,
+            status: "ready",
+            savedContents,
+            isDirty: document.editorContents !== savedContents,
+            error: null
+          })
+        : state;
     }),
   setActiveDocumentLoaded: (contents) =>
     set((state) =>
       state.activeDocument.file
-        ? {
-            activeDocument: {
+        ? replaceActiveEditorDocument(state, {
               ...state.activeDocument,
               status: "ready",
               savedContents: contents,
               editorContents: contents,
               isDirty: false,
               error: null
-            }
-          }
+            })
         : state
     ),
   updateActiveDocumentContents: (contents) =>
     set((state) =>
       state.activeDocument.file
-        ? {
-            activeDocument: {
+        ? replaceActiveEditorDocument(state, {
               ...state.activeDocument,
               status:
                 state.activeDocument.status === "loading" ||
@@ -261,46 +446,39 @@ export const useAppStore = create<AppStoreState>((set) => ({
                   : "ready",
               editorContents: contents,
               isDirty: contents !== state.activeDocument.savedContents
-            }
-          }
+            })
         : state
     ),
   setActiveDocumentSaving: () =>
     set((state) =>
       state.activeDocument.file
-        ? {
-            activeDocument: {
+        ? replaceActiveEditorDocument(state, {
               ...state.activeDocument,
               status: "saving",
               error: null
-            }
-          }
+            })
         : state
     ),
   markActiveDocumentSaved: (savedContents) =>
     set((state) =>
       state.activeDocument.file
-        ? {
-            activeDocument: {
+        ? replaceActiveEditorDocument(state, {
               ...state.activeDocument,
               status: "ready",
               savedContents,
               isDirty: state.activeDocument.editorContents !== savedContents,
               error: null
-            }
-          }
+            })
         : state
     ),
   setActiveDocumentError: (error) =>
     set((state) =>
       state.activeDocument.file
-        ? {
-            activeDocument: {
+        ? replaceActiveEditorDocument(state, {
               ...state.activeDocument,
               status: "error",
               error
-            }
-          }
+            })
         : state
     ),
   setActivePanel: (panel) => set({ activePanel: panel }),

@@ -5,15 +5,13 @@ import { EditorState } from "@codemirror/state";
 import { keymap } from "@codemirror/view";
 import { Button } from "@thinkbrain/ui";
 import { EditorView } from "codemirror";
-import { useCallback, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 
-import { normalizeNativeError } from "../native/commands";
-import { indexDocument } from "../search/searchService";
 import {
   type ActiveDocumentState,
   useAppStore
 } from "../stores/appStore";
-import { writeMarkdownFile } from "../workspace/workspaceService";
+import { saveActiveDocument } from "./saveDocument";
 import styles from "./MarkdownEditor.module.css";
 import sharedStyles from "../styles/shared.module.css";
 
@@ -22,16 +20,6 @@ export function MarkdownEditor() {
   const updateActiveDocumentContents = useAppStore(
     (state) => state.updateActiveDocumentContents
   );
-  const setActiveDocumentSaving = useAppStore(
-    (state) => state.setActiveDocumentSaving
-  );
-  const markActiveDocumentSaved = useAppStore(
-    (state) => state.markActiveDocumentSaved
-  );
-  const setActiveDocumentError = useAppStore(
-    (state) => state.setActiveDocumentError
-  );
-  const setWorkspaceFiles = useAppStore((state) => state.setWorkspaceFiles);
   const editorHostRef = useRef<HTMLDivElement | null>(null);
   const editorViewRef = useRef<EditorView | null>(null);
   const latestEditorContentsRef = useRef("");
@@ -42,75 +30,11 @@ export function MarkdownEditor() {
   const activeFileRelativePath = activeFile?.relativePath ?? null;
   const isLoading = activeDocument.status === "loading";
 
-  /**
-   * Saves the latest active-document snapshot without parsing or serializing it.
-   *
-   * The editor may update after the button renders, so this reads from the store
-   * at save time and marks that exact text as the saved baseline on success.
-   */
-  const saveActiveDocument = useCallback(async () => {
-    const documentSnapshot = useAppStore.getState().activeDocument;
-
-    if (
-      !documentSnapshot.file ||
-      !documentSnapshot.isDirty ||
-      documentSnapshot.status === "loading" ||
-      documentSnapshot.status === "saving"
-    ) {
-      return;
-    }
-
-    const file = documentSnapshot.file;
-    const contentsToSave = documentSnapshot.editorContents;
-
-    try {
-      setActiveDocumentSaving();
-      const updatedFile = await writeMarkdownFile(
-        file.rootPath,
-        file.relativePath,
-        contentsToSave
-      );
-
-      markActiveDocumentSaved(contentsToSave);
-
-      const workspaceSnapshot = useAppStore.getState().workspace;
-      if (
-        workspaceSnapshot.status === "ready" &&
-        workspaceSnapshot.workspace.rootPath === file.rootPath
-      ) {
-        setWorkspaceFiles(
-          workspaceSnapshot.files.map((candidate) =>
-            candidate.relativePath === updatedFile.relativePath
-              ? updatedFile
-              : candidate
-          )
-        );
-      }
-
-      // Keep search fresh by upserting just the saved note. A failure here must
-      // not fail the save, so surface it through the (non-blocking) index state.
-      try {
-        await indexDocument(file.rootPath, updatedFile, contentsToSave);
-      } catch (indexError) {
-        useAppStore
-          .getState()
-          .setIndexingError(normalizeNativeError(indexError));
-      }
-    } catch (error) {
-      setActiveDocumentError(normalizeNativeError(error));
-    }
-  }, [
-    markActiveDocumentSaved,
-    setActiveDocumentError,
-    setActiveDocumentSaving,
-    setWorkspaceFiles
-  ]);
-
   useEffect(() => {
     saveRef.current = () => {
       void saveActiveDocument();
     };
-  }, [saveActiveDocument]);
+  }, []);
 
   useEffect(() => {
     latestEditorContentsRef.current = activeDocument.editorContents;
