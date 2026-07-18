@@ -17,6 +17,7 @@
     "noFallthroughCasesInSwitch": true,
     "jsx": "react-jsx",
     "paths": {
+      "@/*": ["./apps/desktop/src/*"],
       "@thinkbrain/core": ["./packages/core/src/index.ts"],
       "@thinkbrain/ui": ["./packages/ui/src/index.ts"],
       "@thinkbrain/ui/styles.css": ["./packages/ui/src/styles/tokens.css"]

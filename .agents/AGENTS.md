@@ -3,26 +3,34 @@
 ## Architecture
 
 - Stack: React + TypeScript + Vite, Zustand, Tauri/Rust desktop, Expo mobile (Phase 2), and CodeMirror 6.
-- Markdown files and Markdown checkboxes (`- [ ]`) are the source of truth. SQLite + FTS5 is a disposable index cache only.
-- Keep the vault limited to Markdown and attachments. Settings, credentials, indexes, caches, layout, and chat history belong in OS app-data, never in the vault.
-- The app is local-first: no telemetry, proprietary cloud backend, or vendor lock-in. Remote AI is opt-in and requires explicit consent before note content leaves the device.
-- `packages/core` is platform-agnostic: no React, DOM, Node, Tauri, or concrete provider dependencies. Apps implement its interfaces through adapters.
+- Editor-specific data defaults to being stored outside of the vault to keep it clean. 
+- Local first
+- Cross platform: `packages/core` is platform-agnostic: no React, DOM, Node, Tauri, or concrete provider dependencies. Apps implement its interfaces through adapters.
 - Keep Tauri commands and Rust capability enforcement behind desktop adapters; UI components must not call native implementations directly.
-- Extensions use a capability-based sandbox. Never grant an extension or agent unrestricted filesystem access.
+- Extensions use a capability-based sandbox for maximum security, permissions granted per extension.
 
 ## Plans
+List relevant folder to see task status. Review after milestones. Delete task files after review. Add action items from review as stories unless they are immediately fixable. 
 
-- Read `plans/app-vision.md`, the relevant epic, and its pending/wip stories before major work. Only change the vision when explicitly asked.
-- Epics live at `plans/<epic>.md`; stories live in `plans/<epic>/`; both are named `<status>-<description>-<urgency>-<difficulty>.md` using underscores in descriptions.
-- Each story needs a short goal, acceptance criteria, and file references. Rename stories as their status changes; delete superseded or obsolete stories.
-- Keep each epic's `Status` section accurate with `✅ done`, `🔄 wip`, `⬜ pending`, or `❌ blocked`. Record discovered inconsistencies there rather than silently planning around them.
-- Delete epics and stories when the epic is finished. 
+**Folder hierarchy**
+```
+docs/plans/
+├── Blueprint.md  # summary of the app. Ignore for now - needs updating. 
+├── status-epic-difficulty.md
+├── epic/
+│   └── status-story-difficulty.md
+└── other_tasks/ # bugs, chores, etc.
+    └── status-task-difficulty-urgency.md
+```
+
 
 ## UI and Styling
 
-- Production desktop UI uses co-located CSS Modules (`*.module.css`) and the `--tn-*` semantic token system in `packages/ui`. Tailwind is permitted only in isolated mockups/reference apps; never copy its classes into production.
-- No JSX inline styles or `<style>` blocks. For a runtime CSS custom property, update a scoped element via CSSOM (`ref.current.style.setProperty`) and keep the property and its fallback in the component's CSS Module.
-- Use semantic HTML, keyboard support, visible focus states, and responsive layouts. Use `data-thinkbrain-theme` / CSS variables for themes; do not branch visual theme behavior in JavaScript.
+- Desktop UI uses Tailwind CSS v4 (`@tailwindcss/vite`). Semantic tokens (`--tn-*`) are defined in `packages/ui/src/styles/tokens.css` and mapped into Tailwind utilities via `@theme inline` in `apps/desktop/src/index.css`.
+- Use Tailwind utility classes in JSX; merge conditional classes with `cn()` (`@/lib/utils`).
+- CSS Modules (`*.module.css`) are legacy and being replaced. Do not mix Tailwind and CSS Modules in the same component.
+- Theme via the `data-thinkbrain-theme` attribute and CSS variables only; never branch visual theme behavior in JavaScript.
+- Use semantic HTML, keyboard support, visible focus states, and responsive layouts.
 - Promote repeated values to tokens or component variants. Keep third-party style overrides narrow and co-located with the integrating component.
 
 ## AI and ACP
@@ -33,10 +41,6 @@
 
 ## Quality
 
-- Run the narrowest relevant checks after non-trivial changes, then `pnpm lint`, `pnpm typecheck`, and targeted tests when the change is ready. Do not fix unrelated failures; record them in the relevant epic instead.
+- Run tests, `pnpm lint`, `pnpm typecheck`, and targeted tests when the change is ready. Report unrelated failures or bugs rather than getting off track. 
 - Avoid `any`; use `unknown`, generics, or a documented narrow exception.
 - Treat `eslint.config.*` changes and new privileged native capabilities as architectural decisions: document and surface them before implementation.
-
-## Developer rules
-**Stay in your lane**: Stay focused. If you notice an issue unrelated to your work, note it and mention to the user. 
-**Stay green in tests and linting**: Keep tests and all linting green

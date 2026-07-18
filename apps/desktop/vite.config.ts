@@ -1,11 +1,16 @@
 import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
 import { fileURLToPath, URL } from "node:url";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
   resolve: {
     alias: [
+      {
+        find: "@/",
+        replacement: fileURLToPath(new URL("./src/", import.meta.url))
+      },
       {
         find: "@thinkbrain/ui/styles.css",
         replacement: fileURLToPath(

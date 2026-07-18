@@ -1,0 +1,111 @@
+/* Tailwind v4 entry for the desktop app.
+   - Imports tailwindcss.
+   - Maps the existing --tn-* semantic tokens (defined in
+     packages/ui/src/styles/tokens.css and switched via
+     [data-thinkbrain-theme]) into Tailwind utilities through @theme inline,
+     so classes like bg-panel / text-muted-foreground / border-border resolve
+     to the active theme automatically.
+   - Keeps the small set of global base rules that previously lived in
+     shell/global.css (font, box-sizing, full-height root, focus ring). */
+
+@import "tailwindcss";
+
+@theme inline {
+  /* Core semantic colors → bg-*, text-*, border-*, etc. */
+  --color-background: var(--tn-color-background);
+  --color-foreground: var(--tn-color-foreground);
+  --color-surface: var(--tn-color-surface);
+  --color-surface-foreground: var(--tn-color-surface-foreground);
+  --color-card: var(--tn-color-card);
+  --color-card-foreground: var(--tn-color-card-foreground);
+  --color-popover: var(--tn-color-popover);
+  --color-popover-foreground: var(--tn-color-popover-foreground);
+  --color-primary: var(--tn-color-primary);
+  --color-primary-foreground: var(--tn-color-primary-foreground);
+  --color-secondary: var(--tn-color-secondary);
+  --color-secondary-foreground: var(--tn-color-secondary-foreground);
+  --color-muted: var(--tn-color-muted);
+  --color-muted-foreground: var(--tn-color-muted-foreground);
+  --color-accent: var(--tn-color-accent);
+  --color-accent-foreground: var(--tn-color-accent-foreground);
+  --color-danger: var(--tn-color-danger);
+  --color-danger-foreground: var(--tn-color-danger-foreground);
+  --color-destructive: var(--tn-color-destructive);
+  --color-destructive-foreground: var(--tn-color-destructive-foreground);
+  --color-success: var(--tn-color-success);
+  --color-warning: var(--tn-color-warning);
+  --color-info: var(--tn-color-info);
+  --color-border: var(--tn-color-border);
+  --color-input: var(--tn-color-input);
+  --color-ring: var(--tn-color-ring);
+  --color-overlay: var(--tn-color-overlay);
+
+  /* App chrome surfaces. */
+  --color-titlebar: var(--tn-color-titlebar);
+  --color-titlebar-foreground: var(--tn-color-titlebar-foreground);
+  --color-activitybar: var(--tn-color-activitybar);
+  --color-activitybar-foreground: var(--tn-color-activitybar-foreground);
+  --color-activitybar-active: var(--tn-color-activitybar-active);
+  --color-sidebar: var(--tn-color-sidebar);
+  --color-sidebar-foreground: var(--tn-color-sidebar-foreground);
+  --color-editor: var(--tn-color-editor);
+  --color-editor-foreground: var(--tn-color-editor-foreground);
+  --color-panel: var(--tn-color-panel);
+  --color-panel-foreground: var(--tn-color-panel-foreground);
+  --color-statusbar: var(--tn-color-statusbar);
+  --color-statusbar-foreground: var(--tn-color-statusbar-foreground);
+  --color-tab-active: var(--tn-color-tab-active);
+  --color-tab-inactive: var(--tn-color-tab-inactive);
+  --color-tab-active-foreground: var(--tn-color-tab-active-foreground);
+  --color-tab-inactive-foreground: var(--tn-color-tab-inactive-foreground);
+
+  /* Radii + font + shadow tokens. */
+  --radius-small: var(--tn-radius-small);
+  --radius-medium: var(--tn-radius-medium);
+  --radius-large: var(--tn-radius-large);
+  --font-sans: var(--tn-font-sans);
+  --shadow-soft: var(--tn-shadow-soft);
+}
+
+@layer base {
+  :root {
+    font-family: var(--tn-font-sans);
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html,
+  body,
+  #root {
+    block-size: 100%;
+    inline-size: 100%;
+    margin: 0;
+  }
+
+  body {
+    background: var(--tn-color-background);
+    color: var(--tn-color-foreground);
+    overflow: hidden;
+  }
+
+  button,
+  input,
+  textarea {
+    font: inherit;
+  }
+
+  button {
+    color: inherit;
+  }
+
+  button:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible {
+    outline: 2px solid var(--tn-color-ring);
+    outline-offset: -2px;
+  }
+}
