@@ -79,7 +79,22 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
     if (inFlightRef.current === 0) setBusy(false);
   }, []);
 
+  const clearWorkspaceState = useCallback(() => {
+    setContextMenu(null);
+    setRenaming(null);
+    setCreating(null);
+    setPendingDelete(null);
+    setActionError(null);
+    setExpandedFolders(new Set());
+  }, []);
+
   const loadWorkspace = useCallback(async (rootPath: string, restoring = false) => {
+    // Invalidate operations and transient UI associated with the previous
+    // workspace before the new one begins loading. In particular, this keeps
+    // a pending delete from being applied to a same-named entry in the new root.
+    const isWorkspaceSwitch = rootPathRef.current !== rootPath;
+    rootPathRef.current = rootPath;
+    if (isWorkspaceSwitch) clearWorkspaceState();
     dispatch({ type: "open" });
     try {
       const snapshot = await api.openWorkspace(rootPath);
@@ -90,7 +105,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
       dispatch({ type: "failed", message: workspaceErrorMessage(error) });
       if (restoring) onWorkspaceUnavailable?.(rootPath);
     }
-  }, [api, onWorkspaceOpened, onWorkspaceUnavailable]);
+  }, [api, clearWorkspaceState, onWorkspaceOpened, onWorkspaceUnavailable]);
 
   const refreshEntries = useCallback(async () => {
     const rootPath = rootPathRef.current;
@@ -181,50 +196,50 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
     }
   }, [endOperation, startOperation]);
 
-  const submitCreate = useCallback((target: CreateState, name: string) => {
+  const submitCreate = useCallback(async (target: CreateState, name: string): Promise<boolean> => {
     const rootPath = stateRef.current.snapshot?.workspace.root_path;
-    if (!rootPath) return;
+    if (!rootPath) return false;
     const trimmed = name.trim();
     if (!trimmed) {
       setCreating(null);
-      return;
+      return true;
     }
     if (!isValidName(trimmed)) {
       setActionError("Names cannot contain path separators (/ or \\).");
-      return;
+      return false;
     }
     const relativePath = joinPath(target.parentPath, trimmed);
-    void runWithRefresh(async () => {
+    const ok = await runWithRefresh(async () => {
       if (target.kind === "file") {
         await apiRef.current.createWorkspaceFile(rootPath, relativePath);
       } else {
         await apiRef.current.createWorkspaceFolder(rootPath, relativePath);
       }
-    }, { selectMarkdown: target.kind === "file" && isMarkdownName(trimmed) ? relativePath : undefined }).then((ok) => {
-      // Clear the inline input only on success; keep it open on failure so
-      // the user can correct the name and retry.
-      if (ok) setCreating(null);
-    });
+    }, { selectMarkdown: target.kind === "file" && isMarkdownName(trimmed) ? relativePath : undefined });
+    // Clear the inline input only on success; keep it open on failure so
+    // the user can correct the name and retry.
+    if (ok) setCreating(null);
+    return ok;
   }, [runWithRefresh]);
 
-  const submitRename = useCallback((target: RenameState, newName: string) => {
+  const submitRename = useCallback(async (target: RenameState, newName: string): Promise<boolean> => {
     const rootPath = stateRef.current.snapshot?.workspace.root_path;
-    if (!rootPath) return;
+    if (!rootPath) return false;
     const trimmed = newName.trim();
     if (!trimmed || trimmed === target.entry.name) {
       setRenaming(null);
-      return;
+      return true;
     }
     if (!isValidName(trimmed)) {
       setActionError("Names cannot contain path separators (/ or \\).");
-      return;
+      return false;
     }
     const newRelativePath = joinPath(target.entry.parent_path, trimmed);
-    void runWithRefresh(async () => {
+    const ok = await runWithRefresh(async () => {
       await apiRef.current.renameWorkspaceEntry(rootPath, target.entry.relative_path, newRelativePath);
-    }).then((ok) => {
-      if (ok) setRenaming(null);
     });
+    if (ok) setRenaming(null);
+    return ok;
   }, [runWithRefresh]);
 
   const confirmDelete = useCallback(async () => {
@@ -343,6 +358,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
                   ariaLabel={creating.kind === "folder" ? "New folder name" : "New file name"}
                   focusRequest={creating.focusRequest}
                   wrapInListItem
+                  disabled={busy}
                   onSubmit={(name) => submitCreate(creating, name)}
                   onCancel={() => setCreating(null)}
                 />
@@ -422,8 +438,8 @@ const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
   readonly creating: CreateState | null;
   readonly expandedFolders: ReadonlySet<string>;
   readonly onToggleFolder: (relativePath: string) => void;
-  readonly onSubmitRename: (target: RenameState, newName: string) => void;
-  readonly onSubmitCreate: (target: CreateState, name: string) => void;
+  readonly onSubmitRename: (target: RenameState, newName: string) => Promise<boolean>;
+  readonly onSubmitCreate: (target: CreateState, name: string) => Promise<boolean>;
   readonly onCancelRename: () => void;
   readonly onCancelCreate: () => void;
   readonly onStartRename: (entry: NativeWorkspaceEntry) => void;
@@ -445,6 +461,8 @@ const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
           depth={depth}
           icon={isDirectory ? (isExpanded ? "⌄" : "›") : "·"}
           initialValue={node.entry.name}
+          placeholder={`Rename ${node.entry.name}…`}
+          ariaLabel={`Rename ${node.entry.name}`}
           focusRequest={renaming!.focusRequest}
           selectOnFocus
           onSubmit={(name) => onSubmitRename(renaming!, name)}
@@ -534,6 +552,7 @@ function InlineNameInput({
   focusRequest,
   selectOnFocus = false,
   wrapInListItem = false,
+  disabled = false,
   onSubmit,
   onCancel
 }: {
@@ -545,10 +564,12 @@ function InlineNameInput({
   readonly focusRequest: number;
   readonly selectOnFocus?: boolean;
   readonly wrapInListItem?: boolean;
-  readonly onSubmit: (value: string) => void;
+  readonly disabled?: boolean;
+  readonly onSubmit: (value: string) => Promise<boolean>;
   readonly onCancel: () => void;
 }) {
   const [value, setValue] = useState(initialValue);
+  const [submitting, setSubmitting] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   // Track whether the user committed via Enter so the blur handler does not
   // also fire onCancel. Without this, Enter -> submit -> blur -> cancel would
@@ -570,8 +591,12 @@ function InlineNameInput({
   };
 
   const handleSubmit = () => {
+    if (disabled || submitting) return;
     committedRef.current = true;
-    onSubmit(value);
+    setSubmitting(true);
+    void onSubmit(value).then((ok) => {
+      if (!ok) committedRef.current = false;
+    }).finally(() => setSubmitting(false));
   };
 
   const form = (
@@ -588,6 +613,7 @@ function InlineNameInput({
         ref={inputRef}
         className={styles.renameInput}
         value={value}
+        disabled={disabled || submitting}
         placeholder={placeholder}
         aria-label={ariaLabel}
         onChange={(event) => setValue(event.target.value)}
@@ -647,15 +673,40 @@ function WorkspaceContextMenu({ menu, onClose, onStartCreate, onStartRename, onR
   }, []);
 
   const target = menu.target;
-  const isBackground = target.kind === "background";
-  const isFolder = target.kind === "folder";
-  const isFile = target.kind === "file";
   // Create actions target the folder itself (for folders) or the parent (for files).
-  const createParentPath = isBackground ? "" : isFolder ? target.entry.relative_path : target.entry.parent_path;
+  const createParentPath = target.kind === "folder" ? target.entry.relative_path : target.kind === "file" ? target.entry.parent_path : "";
 
   const handle = (action: () => void) => (event: ReactMouseEvent) => {
     event.stopPropagation();
     action();
+  };
+
+  const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    const items = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>("button[role='menuitem']") ?? []);
+    if (!items.length) return;
+    const index = items.indexOf(document.activeElement as HTMLButtonElement);
+    switch (event.key) {
+      case "ArrowDown":
+        event.preventDefault();
+        items[(index + 1) % items.length]?.focus();
+        break;
+      case "ArrowUp":
+        event.preventDefault();
+        items[(index - 1 + items.length) % items.length]?.focus();
+        break;
+      case "Home":
+        event.preventDefault();
+        items[0]?.focus();
+        break;
+      case "End":
+        event.preventDefault();
+        items[items.length - 1]?.focus();
+        break;
+      case "Escape":
+        event.preventDefault();
+        onClose();
+        break;
+    }
   };
 
   return (
@@ -665,18 +716,19 @@ function WorkspaceContextMenu({ menu, onClose, onStartCreate, onStartRename, onR
       role="menu"
       aria-label="Workspace actions"
       style={{ left: `${position.x}px`, top: `${position.y}px` }}
+      onKeyDown={handleKeyDown}
       onClick={(event) => event.stopPropagation()}
     >
-      {isFolder && <MenuButton label="New file" onClick={handle(() => onStartCreate(createParentPath, "file"))} />}
-      {isFolder && <MenuButton label="New folder" onClick={handle(() => onStartCreate(createParentPath, "folder"))} />}
-      {isBackground && <MenuButton label="New file" onClick={handle(() => onStartCreate("", "file"))} />}
-      {isBackground && <MenuButton label="New folder" onClick={handle(() => onStartCreate("", "folder"))} />}
-      {(isFolder || isFile) && <hr className={styles.menuSeparator} />}
-      {(isFolder || isFile) && <MenuButton label="Rename" onClick={handle(() => onStartRename(target.entry!))} />}
-      {(isFolder || isFile) && <MenuButton label="Delete" danger onClick={handle(() => onRequestDelete(target.entry!))} />}
-      {isBackground && <hr className={styles.menuSeparator} />}
-      {isBackground && <MenuButton label="Refresh" onClick={handle(() => { onRefresh(); onClose(); })} />}
-      {isBackground && <MenuButton label="Open workspace…" onClick={handle(() => { onOpenWorkspace(); onClose(); })} />}
+      {target.kind === "folder" && <MenuButton label="New file" onClick={handle(() => onStartCreate(createParentPath, "file"))} />}
+      {target.kind === "folder" && <MenuButton label="New folder" onClick={handle(() => onStartCreate(createParentPath, "folder"))} />}
+      {target.kind === "background" && <MenuButton label="New file" onClick={handle(() => onStartCreate("", "file"))} />}
+      {target.kind === "background" && <MenuButton label="New folder" onClick={handle(() => onStartCreate("", "folder"))} />}
+      {target.kind !== "background" && <hr className={styles.menuSeparator} />}
+      {target.kind !== "background" && <MenuButton label="Rename" onClick={handle(() => onStartRename(target.entry))} />}
+      {target.kind !== "background" && <MenuButton label="Delete" danger onClick={handle(() => onRequestDelete(target.entry))} />}
+      {target.kind === "background" && <hr className={styles.menuSeparator} />}
+      {target.kind === "background" && <MenuButton label="Refresh" onClick={handle(() => { onRefresh(); onClose(); })} />}
+      {target.kind === "background" && <MenuButton label="Open workspace…" onClick={handle(() => { onOpenWorkspace(); onClose(); })} />}
     </div>
   );
 }
@@ -706,23 +758,48 @@ function DeleteConfirmDialog({ entry, onCancel, onConfirm }: {
   readonly onConfirm: () => void;
 }) {
   const isFolder = entry.kind === "directory";
+  const dialogRef = useRef<HTMLElement>(null);
+  const cancelButtonRef = useRef<HTMLButtonElement>(null);
+  const descriptionId = "delete-dialog-description";
+
+  useEffect(() => {
+    cancelButtonRef.current?.focus();
+  }, []);
+
+  const handleKeyDown = (event: ReactKeyboardEvent<HTMLElement>) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      onCancel();
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const focusable = Array.from(dialogRef.current?.querySelectorAll<HTMLButtonElement>("button:not([disabled])") ?? []);
+    const index = focusable.indexOf(document.activeElement as HTMLButtonElement);
+    event.preventDefault();
+    focusable[(index + (event.shiftKey ? focusable.length - 1 : 1)) % focusable.length]?.focus();
+  };
+
   return (
     <div className={styles.deleteBackdrop} role="presentation" onMouseDown={onCancel}>
       <section
+        ref={dialogRef}
+        tabIndex={-1}
         className={styles.deleteDialog}
         role="dialog"
         aria-modal="true"
         aria-label="Confirm deletion"
+        aria-describedby={descriptionId}
+        onKeyDown={handleKeyDown}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <h2>Delete {isFolder ? "folder" : "file"}?</h2>
-        <p>
+        <p id={descriptionId}>
           {isFolder
             ? `"${entry.name}" and all of its contents will be permanently removed.`
             : `"${entry.name}" will be permanently removed.`}
         </p>
         <div>
-          <button type="button" onClick={onCancel}>Cancel</button>
+          <button ref={cancelButtonRef} type="button" onClick={onCancel}>Cancel</button>
           <button type="button" onClick={onConfirm}>Delete</button>
         </div>
       </section>

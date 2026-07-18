@@ -116,6 +116,24 @@ describe("SourceControlPanel content", () => {
     expect(markup).toContain('aria-label="Stage new.md"');
   });
 
+  it("keeps repository actions available when a stage or unstage action fails", () => {
+    const state: SourceControlPanelState = {
+      kind: "repository",
+      actionError: "Git rejected this change.",
+      branch: "main",
+      status: { staged: [], changed: [{ path: "draft.md", indexStatus: " ", worktreeStatus: "M" }], untracked: [] }
+    };
+
+    const markup = renderToStaticMarkup(
+      <SourceControlPanelContent onRefresh={() => undefined} onStage={() => undefined} state={state} />
+    );
+
+    expect(markup).toContain('role="alert"');
+    expect(markup).toContain("Git rejected this change.");
+    expect(markup).toContain('aria-label="Refresh Git changes"');
+    expect(markup).toContain('aria-label="Stage draft.md"');
+  });
+
   it("does not allow stale async work to replace a newer source-control request", () => {
     const gate = createSourceControlRequestGate();
     const first = gate.begin();

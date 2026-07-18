@@ -30,11 +30,11 @@
     "ai": "^7.0.30",
     "codemirror": "^6.0.2",
     "react": "^19.2.7",
-    "react-arborist": "^3.10.5",
     "react-dom": "^19.2.7",
     "zustand": "^5.0.14"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.11.2"
+    "@tauri-apps/cli": "^2.11.2",
+    "happy-dom": "^20.10.6"
   }
 }

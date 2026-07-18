@@ -2,11 +2,19 @@ use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
+    io::Write,
     path::{Component, Path, PathBuf},
     process::{Command, Output, Stdio},
+    sync::Mutex,
     time::UNIX_EPOCH,
 };
 use tauri::Manager;
+
+// Explorer entry commands do a small amount of check-then-act filesystem work
+// (notably rename). Keep that sequence serialized for calls handled by this
+// process; external filesystem mutations can still race and are reported by
+// the underlying operation where possible.
+static WORKSPACE_ENTRY_MUTATION_LOCK: Mutex<()> = Mutex::new(());
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct NativeError {
@@ -410,14 +418,10 @@ fn create_workspace_file(
     contents: Option<String>,
 ) -> Result<WorkspaceEntry, NativeError> {
     let root = resolve_workspace_root(&root_path)?;
+    let _mutation_lock = WORKSPACE_ENTRY_MUTATION_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     let file_path = resolve_workspace_entry_path(&root, &relative_path)?;
-
-    if file_path.exists() {
-        return Err(NativeError::new(
-            "workspace.file_exists",
-            "A file already exists at that path.",
-        ));
-    }
 
     if let Some(parent) = file_path.parent() {
         fs::create_dir_all(parent).map_err(|error| {
@@ -429,13 +433,32 @@ fn create_workspace_file(
         })?;
     }
 
-    fs::write(&file_path, contents.unwrap_or_default()).map_err(|error| {
-        NativeError::with_details(
-            "workspace.create_failed",
-            "Failed to create the file.",
-            error.to_string(),
-        )
-    })?;
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&file_path)
+        .map_err(|error| {
+            if error.kind() == std::io::ErrorKind::AlreadyExists {
+                NativeError::new(
+                    "workspace.file_exists",
+                    "A file already exists at that path.",
+                )
+            } else {
+                NativeError::with_details(
+                    "workspace.create_failed",
+                    "Failed to create the file.",
+                    error.to_string(),
+                )
+            }
+        })?;
+    file.write_all(contents.unwrap_or_default().as_bytes())
+        .map_err(|error| {
+            NativeError::with_details(
+                "workspace.create_failed",
+                "Failed to create the file.",
+                error.to_string(),
+            )
+        })?;
 
     workspace_entry(&root, &file_path, false)
 }
@@ -448,6 +471,9 @@ fn create_workspace_folder(
     relative_path: String,
 ) -> Result<WorkspaceEntry, NativeError> {
     let root = resolve_workspace_root(&root_path)?;
+    let _mutation_lock = WORKSPACE_ENTRY_MUTATION_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     let folder_path = resolve_workspace_entry_path(&root, &relative_path)?;
 
     if folder_path.exists() {
@@ -479,6 +505,9 @@ fn rename_workspace_entry(
     new_relative_path: String,
 ) -> Result<WorkspaceEntry, NativeError> {
     let root = resolve_workspace_root(&root_path)?;
+    let _mutation_lock = WORKSPACE_ENTRY_MUTATION_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     let source_path = resolve_workspace_entry_path(&root, &relative_path)?;
     let destination_path = resolve_workspace_entry_path(&root, &new_relative_path)?;
 
@@ -531,11 +560,11 @@ fn rename_workspace_entry(
 /// are not separately resolved, so this is safe for trusted local workspaces
 /// but should not be exposed to untrusted remote roots.
 #[tauri::command]
-fn delete_workspace_entry(
-    root_path: String,
-    relative_path: String,
-) -> Result<(), NativeError> {
+fn delete_workspace_entry(root_path: String, relative_path: String) -> Result<(), NativeError> {
     let root = resolve_workspace_root(&root_path)?;
+    let _mutation_lock = WORKSPACE_ENTRY_MUTATION_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     let entry_path = resolve_workspace_entry_path(&root, &relative_path)?;
 
     if !entry_path.exists() {
@@ -1729,8 +1758,8 @@ mod tests {
     use super::{
         app_settings_path, bounded_git_text, build_fts_match_query, clear_documents,
         create_workspace_file, create_workspace_folder, delete_document, delete_workspace_entry,
-        desktop_shell_status, detect_git_repository_with, git_availability_with,
-        git_status_with, index_document_records, init_index_schema, initialize_git_repository_with,
+        desktop_shell_status, detect_git_repository_with, git_availability_with, git_status_with,
+        index_document_records, init_index_schema, initialize_git_repository_with,
         is_markdown_path, normalize_relative_path, read_settings_file, rename_workspace_entry,
         search_documents, stable_workspace_hash, stage_git_files_with, unstage_git_files_with,
         workspace_settings_path, write_settings_file, DocumentRecord, GitCommandOutput,
@@ -2710,9 +2739,11 @@ mod tests {
             None,
         );
         assert!(conflict.is_err());
+        assert_eq!(conflict.unwrap_err().code, "workspace.file_exists");
         assert_eq!(
-            conflict.unwrap_err().code,
-            "workspace.file_exists"
+            fs::read_to_string(root.join("Notes").join("welcome.md"))
+                .expect("existing file is unchanged"),
+            "# Hello"
         );
 
         fs::remove_dir_all(root).expect("temp create-file directory is cleaned up");
@@ -2799,18 +2830,13 @@ mod tests {
         )
         .expect("nested file is created");
 
-        delete_workspace_entry(
-            root.to_string_lossy().to_string(),
-            "Folder".to_string(),
-        )
-        .expect("folder is deleted recursively");
+        delete_workspace_entry(root.to_string_lossy().to_string(), "Folder".to_string())
+            .expect("folder is deleted recursively");
 
         assert!(!root.join("Folder").exists());
 
-        let missing = delete_workspace_entry(
-            root.to_string_lossy().to_string(),
-            "Folder".to_string(),
-        );
+        let missing =
+            delete_workspace_entry(root.to_string_lossy().to_string(), "Folder".to_string());
         assert!(missing.is_err());
         assert_eq!(missing.unwrap_err().code, "workspace.file_missing");
 
@@ -2821,13 +2847,55 @@ mod tests {
     fn workspace_entry_commands_reject_paths_that_escape_the_workspace_root() {
         let root = temp_test_dir("entry-escape");
 
-        let escape = create_workspace_file(
+        let create_file_escape = create_workspace_file(
             root.to_string_lossy().to_string(),
             "../outside.md".to_string(),
             None,
         );
-        assert!(escape.is_err());
-        assert_eq!(escape.unwrap_err().code, "workspace.invalid_path");
+        assert!(create_file_escape.is_err());
+        assert_eq!(
+            create_file_escape.unwrap_err().code,
+            "workspace.invalid_path"
+        );
+
+        let create_folder_escape =
+            create_workspace_folder(root.to_string_lossy().to_string(), "../outside".to_string());
+        assert!(create_folder_escape.is_err());
+        assert_eq!(
+            create_folder_escape.unwrap_err().code,
+            "workspace.invalid_path"
+        );
+
+        let rename_source_escape = rename_workspace_entry(
+            root.to_string_lossy().to_string(),
+            "../outside.md".to_string(),
+            "renamed.md".to_string(),
+        );
+        assert!(rename_source_escape.is_err());
+        assert_eq!(
+            rename_source_escape.unwrap_err().code,
+            "workspace.invalid_path"
+        );
+
+        fs::write(root.join("source.md"), "body").expect("rename source is created");
+        let rename_destination_escape = rename_workspace_entry(
+            root.to_string_lossy().to_string(),
+            "source.md".to_string(),
+            "../outside.md".to_string(),
+        );
+        assert!(rename_destination_escape.is_err());
+        assert_eq!(
+            rename_destination_escape.unwrap_err().code,
+            "workspace.invalid_path"
+        );
+        assert!(root.join("source.md").exists());
+
+        let delete_escape = delete_workspace_entry(
+            root.to_string_lossy().to_string(),
+            "../outside.md".to_string(),
+        );
+        assert!(delete_escape.is_err());
+        assert_eq!(delete_escape.unwrap_err().code, "workspace.invalid_path");
 
         fs::remove_dir_all(root).expect("temp entry-escape directory is cleaned up");
     }

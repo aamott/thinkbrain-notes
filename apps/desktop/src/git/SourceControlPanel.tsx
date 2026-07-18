@@ -29,6 +29,7 @@ export type SourceControlPanelState =
       readonly status: GitStatus;
       readonly initialized?: boolean;
       readonly isRefreshing?: boolean;
+      readonly actionError?: string;
     };
 
 export function SourceControlPanel({ rootPath, service = gitService }: SourceControlPanelProps) {
@@ -77,7 +78,7 @@ export function SourceControlPanel({ rootPath, service = gitService }: SourceCon
     if (!rootPath || state.kind !== "repository" || state.isRefreshing) return;
 
     const operation = requestGate.begin();
-    setResolved({ rootPath, state: { ...state, isRefreshing: true } });
+    setResolved({ rootPath, state: { ...state, actionError: undefined, isRefreshing: true } });
     service.invalidateStatus(rootPath);
 
     void service.getStatus(rootPath).then((result) => {
@@ -102,7 +103,7 @@ export function SourceControlPanel({ rootPath, service = gitService }: SourceCon
     void update(rootPath, paths).then(async (result) => {
       if (!requestGate.isCurrent(operation)) return;
       if (result.kind !== "success") {
-        setResolved({ rootPath, state: { kind: "error", message: result.message } });
+        setResolved({ rootPath, state: { ...state, actionError: result.message, isRefreshing: false } });
         return;
       }
 
@@ -114,7 +115,11 @@ export function SourceControlPanel({ rootPath, service = gitService }: SourceCon
       if (requestGate.isCurrent(operation)) {
         setResolved({
           rootPath,
-          state: { kind: "error", message: "Git changes could not be updated. Please try again." }
+          state: {
+            ...state,
+            actionError: "Git changes could not be updated. Please try again.",
+            isRefreshing: false
+          }
         });
       }
     });
@@ -193,7 +198,9 @@ function refreshedRepositoryState(
   state: Extract<SourceControlPanelState, { kind: "repository" }>,
   result: GitStatusResult
 ): SourceControlPanelState {
-  if (result.kind === "status") return { ...state, status: result.status, isRefreshing: false };
+  if (result.kind === "status") {
+    return { ...state, actionError: undefined, status: result.status, isRefreshing: false };
+  }
   return result.kind === "git-unavailable"
     ? { kind: "git-missing", message: result.message }
     : { kind: "error", message: result.message };
@@ -272,6 +279,7 @@ export function SourceControlPanelContent({
             </div>
           </div>
           {state.initialized && <p aria-live="polite" role="status">Repository initialized.</p>}
+          {state.actionError && <p className={styles.actionError} role="alert">{state.actionError}</p>}
           <dl>
             <div>
               <dt>Branch</dt>
@@ -309,26 +317,27 @@ function GitStatusGroups({
 
   return (
     <div className={styles.changeGroups}>
-      <ChangeGroup entries={status.staged} isUpdating={isUpdating} onAction={onUnstage} title="Staged" />
-      <ChangeGroup entries={status.changed} isUpdating={isUpdating} onAction={onStage} title="Changed" />
-      <ChangeGroup entries={status.untracked} isUpdating={isUpdating} onAction={onStage} title="Untracked" />
+      <ChangeGroup actionLabel="Unstage" entries={status.staged} isUpdating={isUpdating} onAction={onUnstage} title="Staged" />
+      <ChangeGroup actionLabel="Stage" entries={status.changed} isUpdating={isUpdating} onAction={onStage} title="Changed" />
+      <ChangeGroup actionLabel="Stage" entries={status.untracked} isUpdating={isUpdating} onAction={onStage} title="Untracked" />
     </div>
   );
 }
 
 function ChangeGroup({
+  actionLabel,
   entries,
   title,
   onAction,
   isUpdating
 }: {
+  readonly actionLabel: "Stage" | "Unstage";
   readonly entries: readonly GitStatusEntry[];
   readonly title: string;
   readonly onAction?: (paths: readonly string[]) => void;
   readonly isUpdating: boolean;
 }) {
   if (!entries.length) return null;
-  const action = title === "Staged" ? "Unstage" : "Stage";
 
   return (
     <section aria-label={`${title} files`} className={styles.changeGroup}>
@@ -340,13 +349,13 @@ function ChangeGroup({
             <span className={styles.fileActions}>
               <code aria-label={`${entry.path} Git status`}>{entry.indexStatus}{entry.worktreeStatus}</code>
               {onAction && <button
-                aria-label={`${action} ${entry.path}`}
+                aria-label={`${actionLabel} ${entry.path}`}
                 className={styles.fileAction}
                 disabled={isUpdating}
                 onClick={() => onAction([entry.path])}
                 type="button"
               >
-                {action}
+                {actionLabel}
               </button>}
             </span>
           </li>

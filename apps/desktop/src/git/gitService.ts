@@ -84,8 +84,8 @@ export type GitStatusResult =
   | {
       readonly kind: "git-unavailable" | "error";
       readonly status: null;
-    readonly message: string;
-  };
+      readonly message: string;
+    };
 
 export type GitMutationResult =
   | { readonly kind: "success"; readonly message: null }

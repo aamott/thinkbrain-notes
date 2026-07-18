@@ -85,6 +85,11 @@
   background: var(--tn-color-accent);
 }
 
+.option[data-unavailable],
+.activeOption[data-unavailable] {
+  opacity: 0.55;
+}
+
 .option span,
 .activeOption span {
   overflow: hidden;

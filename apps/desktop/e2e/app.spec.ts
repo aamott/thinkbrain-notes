@@ -495,7 +495,7 @@ test("the explorer context menu creates, renames, and deletes entries", async ({
   // Right-click the file and rename it.
   await page.getByRole("button", { name: "Open welcome.md" }).click({ button: "right" });
   await page.getByRole("menuitem", { name: "Rename" }).click();
-  const renameInput = page.getByRole("textbox").first();
+  const renameInput = page.getByLabel("Rename welcome.md");
   await expect(renameInput).toBeFocused();
   await renameInput.fill("intro.md");
   await renameInput.press("Enter");
