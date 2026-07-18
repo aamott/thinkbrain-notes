@@ -23,36 +23,27 @@ day one and avoids throwaway renderer-side protocol code.
 The `@agentclientprotocol/sdk@1.2.1` dependency in `apps/desktop/package.json`
 becomes unused by this story; remove it once the Rust side is wired.
 
-### Runtime path: useExternalStoreRuntime (not the Vercel AI SDK)
+### Runtime path: useExternalStoreRuntime
 
 The renderer uses assistant-ui's `useExternalStoreRuntime` directly. The
 adapter owns `messages` state, `onNew(message)` sends a Tauri command to
 prompt the agent, and incoming Tauri events (`agent://session-update`) append
-to / update the assistant message. No `useChat`, no `ChatTransport`, no
-`UIMessageChunk` conversion.
+to / update the assistant message.
 
-Chose this over the AI SDK transport because:
+Rationale:
 
 1. ACP in Rust means the renderer talks to an agent process, not an LLM
-   provider. The AI SDK's value (HTTP/SSE transport, `streamText`, provider
-   abstraction, `UIMessage`/`UIMessageChunk` streaming) assumes the renderer
-   talks to a model gateway — none of it applies here.
+   provider. There is no transport/provider-abstraction layer in the
+   renderer.
 2. ACP `session/update` has `Plan`, `AvailableCommandsUpdate`,
    `CurrentModeUpdate`, `ConfigOptionUpdate`, `SessionInfoUpdate`,
-   `UsageUpdate`, `ToolCallUpdate`, and `request_permission`. These have no
-   natural `UIMessageChunk` target and would get stuffed into `metadata`/
-   `annotations`. `useExternalStoreRuntime` lets us model ACP semantics as
-   first-class `ThreadMessageLike` parts.
-3. `useChat` owns message state and assumes it's the source of truth. An ACP
-   session is server-side state owned by the agent. Regeneration, editing,
-   branching — assistant-ui features `useChat` drives — conflict with ACP's
-   session model.
-4. Fewer layers: ACP event → Tauri event → `ThreadMessageLike` directly,
-   instead of ACP event → Tauri event → `UIMessageChunk` → `UIMessage` →
-   `ThreadMessage`.
-
-The `ai`, `@ai-sdk/react`, and `@assistant-ui/react-ai-sdk` dependencies
-become unused; remove them from `apps/desktop/package.json`.
+   `UsageUpdate`, `ToolCallUpdate`, and `request_permission`.
+   `useExternalStoreRuntime` models these as first-class `ThreadMessageLike`
+   parts.
+3. An ACP session is server-side state owned by the agent.
+   `useExternalStoreRuntime` lets the renderer reflect that state without
+   claiming ownership of message history.
+4. Fewer layers: ACP event → Tauri event → `ThreadMessageLike` directly.
 
 ### Process spawning: custom Rust commands (not tauri-plugin-shell)
 
@@ -88,8 +79,7 @@ failing. Detection is best-effort and non-blocking.
       Incoming `agent://session-update` events update the assistant message
       in place. `AgentMessageChunk` text appends to a text part;
       `session/update` stop ends the run. Non-text update types ignored in
-      MVP (logged, not rendered). Does NOT import `@agentclientprotocol/sdk`,
-      `ai`, `@ai-sdk/react`, or `@assistant-ui/react-ai-sdk`.
+      MVP (logged, not rendered). Does NOT import `@agentclientprotocol/sdk`.
 - [ ] `AssistantPanel.tsx` uses the `useExternalStoreRuntime` adapter →
       `AssistantRuntimeProvider`. Composer input enabled when an agent is
       detected; disabled with a clear message when none is found. Existing
@@ -98,8 +88,7 @@ failing. Detection is best-effort and non-blocking.
       UI thread maps to one ACP session.
 - [ ] No provider credentials reach the renderer. The agent process owns its
       own auth; the host only transports NDJSON.
-- [ ] `@agentclientprotocol/sdk`, `ai`, `@ai-sdk/react`, and
-      `@assistant-ui/react-ai-sdk` removed from `apps/desktop/package.json`
+- [ ] `@agentclientprotocol/sdk` removed from `apps/desktop/package.json`
       once the Rust side is wired.
 - [ ] Tests cover: agent registry detection, adapter text streaming
       (normal/cancel/error), session filtering. Mock agent in tests — no

@@ -11,9 +11,11 @@ assistant UI without conflating them with model-chat streams.
 - [ ] Integrate the official `agent-client-protocol` Rust runtime crate into
       the Tauri process model and record the selected version/capability
       negotiation behavior; use its schema/runtime rather than hand-rolled ACP.
-      The TypeScript `@agentclientprotocol/sdk` (v1.2.1, installed) provides
-      `ClientContext`, `SessionBuilder`, `ActiveSession`, and JSON-RPC for the
-      renderer-facing adapter.
+      The renderer consumes typed Tauri events (`agent://session-update`,
+      `agent://error`) filtered by session ID — it does not import
+      `@agentclientprotocol/sdk`. See
+      `plans/ai/pending-agent_chat_text_streaming_mvp-high-hard.md` for the
+      renderer-side command/event contract.
 - [ ] Host starts, initializes, prompts, cancels, resumes, and closes ACP
       sessions with negotiated protocol/capabilities and structured lifecycle
       events.

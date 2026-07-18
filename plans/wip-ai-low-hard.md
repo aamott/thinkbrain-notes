@@ -1,8 +1,8 @@
 # AI
 
-> Optional, privacy-preserving desktop AI. The UI uses assistant-ui and the
-> Vercel AI SDK UI layer; ACP remains the host-to-coding-agent protocol. Read
-> `plans/app-vision.md`, `plans/technical-decisions.md`, and the ACP skill
+> Optional, privacy-preserving desktop AI. The UI uses assistant-ui with
+> `useExternalStoreRuntime`; ACP is the host-to-agent protocol, owned in Rust.
+> Read `plans/app-vision.md`, `plans/technical-decisions.md`, and the ACP skill
 > before implementing a story.
 
 ## Goal
@@ -26,24 +26,17 @@ semantic search/embeddings (owned by `semantic-search`).
 ### Chat UI: assistant-ui with useExternalStoreRuntime
 
 Use `@assistant-ui/react` with `useExternalStoreRuntime` for the assistant
-panel. The renderer owns message state and consumes Tauri events directly;
-there is no AI SDK transport layer. Build the `Thread`, composer, messages,
-tool/activity renderers, and approval affordances with Tailwind v4 utilities
-themed by `--tn-*` tokens (see AGENTS.md UI section, updated 2026-07-18).
+panel. The renderer owns message state and consumes Tauri events directly.
+Build the `Thread`, composer, messages, tool/activity renderers, and approval
+affordances with Tailwind v4 utilities themed by `--tn-*` tokens (see
+AGENTS.md UI section, updated 2026-07-18).
 
-The desktop previously prescribed the Vercel AI SDK UI layer (`ai@^7`,
-`@ai-sdk/react@^4`, `@assistant-ui/react-ai-sdk`, `useChat` +
-`useAISDKRuntime`, a custom `ChatTransport` returning
-`ReadableStream<UIMessageChunk>`). That was revised on 2026-07-18 after the
-ACP-in-Rust decision: the renderer talks to an agent process, not an LLM
-provider, so the AI SDK's transport, provider abstraction, `streamText`, and
-`UIMessage`/`UIMessageChunk` schema do not apply. ACP `session/update`
-variants (`Plan`, `AvailableCommandsUpdate`, `CurrentModeUpdate`,
-`ConfigOptionUpdate`, `SessionInfoUpdate`, `UsageUpdate`, `ToolCallUpdate`,
-`request_permission`) have no natural `UIMessageChunk` target and would be
-stuffed into `metadata`/`annotations`. `useExternalStoreRuntime` models ACP
-semantics as first-class `ThreadMessageLike` parts instead. The `ai`,
-`@ai-sdk/react`, and `@assistant-ui/react-ai-sdk` dependencies are removed.
+The renderer talks to an agent process via ACP, not an LLM provider, so there
+is no transport/provider-abstraction layer in the renderer. ACP
+`session/update` variants (`Plan`, `AvailableCommandsUpdate`,
+`CurrentModeUpdate`, `ConfigOptionUpdate`, `SessionInfoUpdate`,
+`UsageUpdate`, `ToolCallUpdate`, `request_permission`) are modeled as
+first-class `ThreadMessageLike` parts via `useExternalStoreRuntime`.
 
 Persist `ThreadMessageLike` history, thread metadata, and session links in OS
 app-data through a local `ThreadHistoryAdapter`/Tauri adapter. Do not enable
@@ -122,18 +115,8 @@ plain JSON.
   `plans/ai/done-assistant_panel_foundation-med-med.md`
 - ✅ Tailwind v4 switch for desktop UI (2026-07-18) — recorded in AGENTS.md;
       agent chat components use Tailwind utilities mapped to `--tn-*` tokens
-- ✅ AI SDK removal (2026-07-18) — `ai`, `@ai-sdk/react`,
-      `@assistant-ui/react-ai-sdk` removed from `@thinkbrain/desktop`;
-      `@agentclientprotocol/sdk` removed once Rust ACP is wired. Renderer uses
-      `useExternalStoreRuntime` directly. See the Architecture Decisions
-      section above for rationale.
 - 🔄 agent chat text streaming MVP — see
   `plans/ai/pending-agent_chat_text_streaming_mvp-high-hard.md`
-- ❌ AI SDK v7 desktop transport spike — superseded 2026-07-18 by the
-      `useExternalStoreRuntime` decision; see
-      `plans/ai/pending-agent_chat_text_streaming_mvp-high-hard.md`. The
-      `pending-ai_sdk_tauri_transport-med-hard.md` story is obsolete and
-      should be deleted.
 - ⬜ assistant-ui desktop thread and local history — see
   `plans/ai/pending-assistant_ui_desktop_thread-med-med.md`
 - ⬜ provider/model configuration and native gateway — see
@@ -146,5 +129,5 @@ plain JSON.
   `plans/ai/pending-context_aware_chat-low-med.md`
 - ⬜ AI-assisted discovery bridge — see
   `plans/ai/pending-ai_assisted_search-low-hard.md`
-- ❌ prior generic provider/chat stories predated assistant-ui, AI SDK transport,
-  and the separate ACP session model; they were superseded and removed.
+- ❌ prior generic provider/chat stories predated assistant-ui and the
+      separate ACP session model; they were superseded and removed.

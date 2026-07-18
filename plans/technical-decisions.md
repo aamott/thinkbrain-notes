@@ -155,28 +155,28 @@ continues to cover `apps/` and `packages/` without suppressing errors.
 
 Decision: AI remains optional and is implemented only through the `ai` epic.
 
-- Desktop model chat uses `@assistant-ui/react`, `@assistant-ui/react-ai-sdk`,
-  `ai@^7`, and `@ai-sdk/react@^4` as one compatible UI/transport stack.
-- Tauri has no built-in HTTP chat route. Use a typed custom AI SDK
-  `ChatTransport` over Tauri IPC and native events; do not spawn an unauthenticated
-  local HTTP server merely to satisfy a `/api/chat` default.
+- Desktop agent chat uses `@assistant-ui/react` with
+  `useExternalStoreRuntime`. The renderer owns message state and consumes
+  typed Tauri events directly; there is no transport/provider-abstraction
+  layer in the renderer.
+- ACP is the host-to-agent protocol and lives in Rust, using the official
+  `agent-client-protocol` Rust crate. Rust owns the full ACP client lifecycle
+  (`initialize`, `session/new`, `session/prompt`, `session/update`,
+  `session/cancel`, later `session/request_permission`) and emits typed Tauri
+  events filtered by session ID. The renderer never imports
+  `@agentclientprotocol/sdk`.
 - The Rust/native gateway owns provider calls, cancellation, credentials, and
   outbound network policy. Renderer code never stores or receives provider
   secrets. Chat history is stored locally in OS app-data through an
   assistant-ui history adapter; Assistant Cloud is off by default.
-- ACP is a distinct host-to-agent protocol, not an AI SDK replacement. Use the
-  official Rust ACP runtime crate at the native capability boundary and map
-  explicit agent sessions to UI threads. The host is deterministic and does not
-  duplicate agent reasoning or merge conflicts.
+- The host is deterministic and does not duplicate agent reasoning or merge
+  conflicts. ACP filesystem/terminal permission is separately requested and
+  enforced by the native host (allow once / always / deny).
 - Cloud model use and sending note/workspace context require explicit consent.
-  ACP filesystem/terminal permission is separately requested and enforced by
-  the native host (allow once / always / deny).
 
-The current SDK contracts reinforce this separation: AI SDK custom transports
-implement `sendMessages` and return UI-message chunk streams, whereas ACP
-permission requests carry the agent-provided options and tool-call update for a
-specific session. The renderer presents the information; the native ACP host
-enforces the user's answer and does not reconstruct an agent plan.
+ACP permission requests carry the agent-provided options and tool-call update
+for a specific session. The renderer presents the information; the native ACP
+host enforces the user's answer and does not reconstruct an agent plan.
 
 ## Proposed Confirmations for Mockup v3
 
