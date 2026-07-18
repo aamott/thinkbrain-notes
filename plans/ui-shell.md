@@ -95,10 +95,13 @@ the persisted app setting and `data-thinkbrain-theme`.
   `workspace-explorer/done-fresh_shell_workspace_open-high-med.md`
 - ✅ a new shell rebuild from `mockup_v3/` is complete — see
   `plans/ui-shell/done-mockup_v3_shell_rebuild-high-hard.md`
-- ⬜ shell token and CSS Module migration — supersedes the removed desktop
-  stylesheet and must not reuse it
-- ⬜ tab model, registry, and tab strip — rebuilt from the mockup interaction
-  contract, not the deleted implementation
+- ✅ shell token and CSS Module migration — see
+  `plans/ui-shell/done-shell_tokens_and_css_modules-high-hard.md`
+- ⬜ desktop shell composition (panel separation) — rolled back by `b2124ee "UI
+  Cleanup"`; see `plans/ui-shell/pending-desktop_shell_composition-high-hard.md`
+- ⬜ tab model, registry, and tab strip — desktop integration rolled back by
+  `b2124ee "UI Cleanup"` (core contract in `packages/core/src/layout/` remains);
+  see `plans/ui-shell/pending-tab_content_registry-high-hard.md`
 - ⬜ left popout integration — see
   `plans/ui-shell/pending-left_popout_integration-high-med.md`
 - ⬜ inspector/right popout integration — see
