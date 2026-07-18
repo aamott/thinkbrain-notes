@@ -23,44 +23,51 @@ semantic search/embeddings (owned by `semantic-search`).
 
 ## Architecture Decisions
 
-### Chat UI: assistant-ui on the AI SDK v7 UI layer
+### Chat UI: assistant-ui with useExternalStoreRuntime
 
-Use `@assistant-ui/react`, `@assistant-ui/react-ai-sdk`, `ai@^7`, and
-`@ai-sdk/react@^4` together. These are installed in `@thinkbrain/desktop` as of
-2026-07-17. Build the assistant-ui `Thread`, composer, messages, tool/activity
-renderers, and approval affordances with CSS Modules themed by `--tn-*` tokens.
+Use `@assistant-ui/react` with `useExternalStoreRuntime` for the assistant
+panel. The renderer owns message state and consumes Tauri events directly;
+there is no AI SDK transport layer. Build the `Thread`, composer, messages,
+tool/activity renderers, and approval affordances with Tailwind v4 utilities
+themed by `--tn-*` tokens (see AGENTS.md UI section, updated 2026-07-18).
 
-Tauri does not provide `/api/chat`. A desktop `ChatTransport` implementation
-starts/cancels a turn through typed Tauri commands and turns filtered native
-events into the AI SDK UI-message stream. Use `useChat` plus
-`useAISDKRuntime` because it owns the non-HTTP transport; do not pretend an
-ACP event stream is an AI SDK endpoint. The Rust/native model gateway owns
-provider requests, cancellation, credentials, and outbound network policy.
-The renderer never receives provider credentials.
+The desktop previously prescribed the Vercel AI SDK UI layer (`ai@^7`,
+`@ai-sdk/react@^4`, `@assistant-ui/react-ai-sdk`, `useChat` +
+`useAISDKRuntime`, a custom `ChatTransport` returning
+`ReadableStream<UIMessageChunk>`). That was revised on 2026-07-18 after the
+ACP-in-Rust decision: the renderer talks to an agent process, not an LLM
+provider, so the AI SDK's transport, provider abstraction, `streamText`, and
+`UIMessage`/`UIMessageChunk` schema do not apply. ACP `session/update`
+variants (`Plan`, `AvailableCommandsUpdate`, `CurrentModeUpdate`,
+`ConfigOptionUpdate`, `SessionInfoUpdate`, `UsageUpdate`, `ToolCallUpdate`,
+`request_permission`) have no natural `UIMessageChunk` target and would be
+stuffed into `metadata`/`annotations`. `useExternalStoreRuntime` models ACP
+semantics as first-class `ThreadMessageLike` parts instead. The `ai`,
+`@ai-sdk/react`, and `@assistant-ui/react-ai-sdk` dependencies are removed.
 
-Persist AI-SDK-compatible `UIMessage` history, thread metadata, and session
-links in OS app-data through a local `ThreadHistoryAdapter`/Tauri adapter. Do
-not enable Assistant Cloud by default. Persist only completed/explicitly saved
-turns and redact secret values from logs, errors, and event payloads.
+Persist `ThreadMessageLike` history, thread metadata, and session links in OS
+app-data through a local `ThreadHistoryAdapter`/Tauri adapter. Do not enable
+Assistant Cloud by default. Persist only completed/explicitly saved turns and
+redact secret values from logs, errors, and event payloads.
 
-### ACP is a separate agent mode
+### ACP is the agent protocol (host-owned in Rust)
 
-ACP does not replace model chat. A normal model-chat thread uses the AI SDK
-transport above. An explicit **Agent** session uses ACP and maps one user-made
-agent session to one ACP session; it can render through assistant-ui's external
-runtime/state adapter but must preserve ACP lifecycle and permission events.
-Session metadata links the UI thread and ACP session without assuming their
-message formats are interchangeable.
+ACP is the agent protocol. An explicit **Agent** session maps one user-made
+agent session to one ACP session and renders through assistant-ui's
+`useExternalStoreRuntime` adapter while preserving ACP lifecycle and
+permission events. Session metadata links the UI thread and ACP session
+without assuming their message formats are interchangeable.
 
 Implement the ACP host in Rust next to the Tauri capability boundary using the
-official `agent-client-protocol` runtime crate. The TypeScript
-`@agentclientprotocol/sdk` (v1.2.1, installed in `@thinkbrain/desktop`) provides
-the renderer-facing ACP adapter: `ClientContext`, `SessionBuilder`,
-`ActiveSession`, JSON-RPC, schema types, and protocol constants. It owns the
-renderer-side protocol surface; Rust owns filesystem/terminal permissions and
-enforcement. If a required host feature is absent in the Rust crate, consume
-the official schema and implement the minimum protocol surface—never a
-proprietary replacement.
+official `agent-client-protocol` Rust crate. Rust owns the full ACP client
+lifecycle: `initialize`, `session/new`, `session/prompt`, `session/update`
+reading, `session/cancel`, and later `session/request_permission` enforcement.
+It emits typed Tauri events filtered by session ID. The renderer never imports
+`@agentclientprotocol/sdk` — it only calls Tauri commands and listens for
+events. The `@agentclientprotocol/sdk@1.2.1` TypeScript dependency is removed
+once the Rust side is wired. If a required host feature is absent in the Rust
+crate, consume the official schema and implement the minimum protocol
+surface—never a proprietary replacement.
 
 The deterministic host exposes scoped filesystem and terminal capabilities,
 session lifecycle, notifications, and permission decisions. An agent requests
@@ -70,12 +77,12 @@ content and lets the agent decide how to retry or merge.
 
 ### Confirmed integration contracts
 
-Current upstream documentation confirms the selected boundaries. The desktop
-AI-SDK transport implements `ChatTransport.sendMessages` and returns a
-`ReadableStream<UIMessageChunk>`; a Tauri command/event adapter owns that
-stream instead of emulating an HTTP `/api/chat` endpoint. The assistant-ui
-panel receives an externally supplied `AssistantRuntimeProvider` runtime, so
-the static configuration state can render without inventing a fake provider.
+The renderer's `useExternalStoreRuntime` adapter consumes Tauri events
+(`agent://session-update`) and produces `ThreadMessageLike` objects directly.
+`onNew` calls a Tauri `agent_prompt` command; `abortSignal` maps to
+`agent_cancel`. The assistant-ui panel receives an externally supplied
+`AssistantRuntimeProvider` runtime, so the static configuration state can
+render without inventing a fake provider.
 
 ACP agent mode follows the official session lifecycle: initialize, create or
 load a session, prompt, receive streaming updates, cancel, and close. A
@@ -113,8 +120,20 @@ plain JSON.
 
 - ✅ assistant-ui panel foundation — see
   `plans/ai/done-assistant_panel_foundation-med-med.md`
-- ⬜ AI SDK v7 desktop transport spike — see
-  `plans/ai/pending-ai_sdk_tauri_transport-med-hard.md`
+- ✅ Tailwind v4 switch for desktop UI (2026-07-18) — recorded in AGENTS.md;
+      agent chat components use Tailwind utilities mapped to `--tn-*` tokens
+- ✅ AI SDK removal (2026-07-18) — `ai`, `@ai-sdk/react`,
+      `@assistant-ui/react-ai-sdk` removed from `@thinkbrain/desktop`;
+      `@agentclientprotocol/sdk` removed once Rust ACP is wired. Renderer uses
+      `useExternalStoreRuntime` directly. See the Architecture Decisions
+      section above for rationale.
+- 🔄 agent chat text streaming MVP — see
+  `plans/ai/pending-agent_chat_text_streaming_mvp-high-hard.md`
+- ❌ AI SDK v7 desktop transport spike — superseded 2026-07-18 by the
+      `useExternalStoreRuntime` decision; see
+      `plans/ai/pending-agent_chat_text_streaming_mvp-high-hard.md`. The
+      `pending-ai_sdk_tauri_transport-med-hard.md` story is obsolete and
+      should be deleted.
 - ⬜ assistant-ui desktop thread and local history — see
   `plans/ai/pending-assistant_ui_desktop_thread-med-med.md`
 - ⬜ provider/model configuration and native gateway — see

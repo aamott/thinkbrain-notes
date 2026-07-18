@@ -35,8 +35,8 @@ docs/plans/
 
 ## AI and ACP
 
-- Desktop chat UI uses `@assistant-ui/react` with the Vercel AI SDK UI layer (`ai`, `@ai-sdk/react`, and `@assistant-ui/react-ai-sdk`). Its Tauri IPC transport is an adapter, not a `/api/chat` assumption.
-- ACP is a separate host-to-agent protocol. Prefer official ACP SDKs; the host is deterministic, exposes capabilities and permissions, and never copies an agent's reasoning, planning, or editing logic.
+- Desktop chat UI uses `@assistant-ui/react` with `useExternalStoreRuntime`. The renderer owns message state and consumes Tauri events directly; there is no AI SDK transport layer. The Vercel AI SDK (`ai`, `@ai-sdk/react`, `@assistant-ui/react-ai-sdk`) was removed on 2026-07-18 because the renderer talks to an agent process via ACP, not an LLM provider — the AI SDK's transport, provider abstraction, and `UIMessage`/`UIMessageChunk` schema do not apply.
+- ACP is the host-to-agent protocol and lives in Rust, using the official `agent-client-protocol` Rust crate. Rust owns the full ACP client lifecycle (`initialize`, `session/new`, `session/prompt`, `session/update`, `session/cancel`, later `session/request_permission`) and emits typed Tauri events filtered by session ID. The renderer never imports `@agentclientprotocol/sdk` — it only calls Tauri commands and listens for events. The host is deterministic, exposes capabilities and permissions, and never copies an agent's reasoning, planning, or editing logic.
 - AI SDK chat sessions and ACP agent sessions have explicit, persisted IDs and lifecycle boundaries. Do not store either in the vault or use Assistant Cloud by default.
 
 ## Quality
