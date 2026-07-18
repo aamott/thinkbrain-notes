@@ -103,7 +103,8 @@ No other epic blocks this one.
 - ✅ Repository initialization — see
   `plans/git-integration/done-repo_init-high-easy.md`
 - ✅ Git status — see `plans/git-integration/done-git_status-high-med.md`
-- ⬜ Stage / unstage files
+- ✅ Stage / unstage files — see
+  `plans/git-integration/done-stage_unstage-high-med.md`
 - ⬜ Commit staged files
 - ⬜ Branch list + current branch
 - ⬜ Source-control sidebar panel — activity bar entry + left sidebar panel

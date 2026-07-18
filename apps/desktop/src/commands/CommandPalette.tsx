@@ -77,10 +77,16 @@ export function CommandPalette({ commands, files, onClose, onCommand, onOpenFile
     setState((current) => ({ ...current, activeIndex: nextIndex }));
   };
 
+  const trapFocus = (event: KeyboardEvent<HTMLElement>) => {
+    if (event.key !== "Tab") return;
+    event.preventDefault();
+    inputRef.current?.focus();
+  };
+
   return (
     <div className={styles.backdrop} role="presentation" onMouseDown={() => onClose()}>
-      <section className={styles.palette} role="dialog" aria-modal="true" aria-label="Command palette" onMouseDown={(event) => event.stopPropagation()}>
-        <input ref={inputRef} value={state.query} onChange={(event) => { setState(setCommandPaletteQuery(event.target.value)); setNotice(null); }} onKeyDown={handleKeyDown} placeholder="Type a command or file name…" aria-label="Search commands" aria-controls="command-palette-results" aria-activedescendant={items[activeIndex]?.id} />
+      <section className={styles.palette} role="dialog" aria-modal="true" aria-label="Command palette" onKeyDown={trapFocus} onMouseDown={(event) => event.stopPropagation()}>
+        <input ref={inputRef} value={state.query} onChange={(event) => { setState(setCommandPaletteQuery(event.target.value)); setNotice(null); }} onKeyDown={handleKeyDown} placeholder="Type a command or file name…" aria-label="Search commands" role="combobox" aria-expanded aria-controls="command-palette-results" aria-activedescendant={items[activeIndex]?.id} />
         {notice && <p className={styles.notice} role="status">{notice}</p>}
         <div id="command-palette-results" className={styles.results} role="listbox" aria-label="Palette results">
           {commandResults.length > 0 && <p className={styles.groupLabel}>Commands</p>}
@@ -101,7 +107,7 @@ function PaletteOption({ id, active, disabled = false, onClick, children }: {
   readonly onClick: () => void;
   readonly children: React.ReactNode;
 }) {
-  return <button id={id} className={active ? styles.activeOption : styles.option} type="button" role="option" aria-selected={active} aria-disabled={disabled} onClick={onClick}>{children}</button>;
+  return <button id={id} className={active ? styles.activeOption : styles.option} type="button" role="option" aria-selected={active} data-unavailable={disabled || undefined} onClick={onClick} tabIndex={-1}>{children}</button>;
 }
 
 function filterWorkspaceFiles(files: readonly WorkspaceFileResult[], query: string): readonly WorkspaceFileResult[] {

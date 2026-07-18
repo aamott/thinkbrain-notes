@@ -9,6 +9,22 @@ export interface WorkspaceDesktopApi {
   pickWorkspaceDirectory(): Promise<string | null>;
   openWorkspace(rootPath: string): Promise<NativeWorkspaceSnapshot>;
   listWorkspaceEntries(rootPath: string): Promise<readonly NativeWorkspaceEntry[]>;
+  /** Creates a workspace file (any extension) and missing parent folders. */
+  createWorkspaceFile(
+    rootPath: string,
+    relativePath: string,
+    contents?: string
+  ): Promise<NativeWorkspaceEntry>;
+  /** Creates a workspace folder (and any missing parents). */
+  createWorkspaceFolder(rootPath: string, relativePath: string): Promise<NativeWorkspaceEntry>;
+  /** Renames or moves any workspace file or folder. */
+  renameWorkspaceEntry(
+    rootPath: string,
+    relativePath: string,
+    newRelativePath: string
+  ): Promise<NativeWorkspaceEntry>;
+  /** Deletes any workspace file or folder (folders are removed recursively). */
+  deleteWorkspaceEntry(rootPath: string, relativePath: string): Promise<null>;
 }
 
 export const workspaceDesktopApi: WorkspaceDesktopApi = {
@@ -26,5 +42,17 @@ export const workspaceDesktopApi: WorkspaceDesktopApi = {
   },
   listWorkspaceEntries(rootPath) {
     return invokeNativeCommand("list_workspace_entries", { rootPath });
+  },
+  createWorkspaceFile(rootPath, relativePath, contents) {
+    return invokeNativeCommand("create_workspace_file", { rootPath, relativePath, contents });
+  },
+  createWorkspaceFolder(rootPath, relativePath) {
+    return invokeNativeCommand("create_workspace_folder", { rootPath, relativePath });
+  },
+  renameWorkspaceEntry(rootPath, relativePath, newRelativePath) {
+    return invokeNativeCommand("rename_workspace_entry", { rootPath, relativePath, newRelativePath });
+  },
+  deleteWorkspaceEntry(rootPath, relativePath) {
+    return invokeNativeCommand("delete_workspace_entry", { rootPath, relativePath });
   }
 };

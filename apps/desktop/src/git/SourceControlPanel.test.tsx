@@ -22,6 +22,7 @@ describe("SourceControlPanel content", () => {
     expect(markup).toContain("This workspace is not a Git repository.");
     expect(markup).toContain(">Initialize repository</button>");
     expect(markup).not.toContain("disabled");
+    expect(markup).not.toContain("<p><span>This workspace is not a Git repository.</span><button");
   });
 
   it("announces loading and errors", () => {
@@ -88,6 +89,31 @@ describe("SourceControlPanel content", () => {
     expect(markup).toContain("Untracked");
     expect(markup).toContain("notes/ready.md");
     expect(markup).toContain('aria-label="Refresh Git changes"');
+  });
+
+  it("offers stage and unstage actions for the matching file states", () => {
+    const state: SourceControlPanelState = {
+      kind: "repository",
+      branch: "main",
+      status: {
+        staged: [{ path: "staged.md", indexStatus: "A", worktreeStatus: " " }],
+        changed: [{ path: "changed.md", indexStatus: " ", worktreeStatus: "M" }],
+        untracked: [{ path: "new.md", indexStatus: "?", worktreeStatus: "?" }]
+      }
+    };
+
+    const markup = renderToStaticMarkup(
+      <SourceControlPanelContent
+        onStage={() => undefined}
+        onUnstage={() => undefined}
+        state={state}
+      />
+    );
+
+    expect(markup).toContain(">Stage all</button>");
+    expect(markup).toContain('aria-label="Unstage staged.md"');
+    expect(markup).toContain('aria-label="Stage changed.md"');
+    expect(markup).toContain('aria-label="Stage new.md"');
   });
 
   it("does not allow stale async work to replace a newer source-control request", () => {

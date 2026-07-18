@@ -10,7 +10,9 @@ type GitCommandName =
   | "git_availability"
   | "detect_git_repository"
   | "initialize_git_repository"
-  | "git_status";
+  | "git_status"
+  | "stage_git_files"
+  | "unstage_git_files";
 
 export interface GitCommandInvoker {
   <TCommand extends GitCommandName>(
@@ -24,6 +26,8 @@ export interface GitDesktopApi {
   detectRepository(rootPath: string): Promise<NativeGitRepository>;
   initializeRepository(rootPath: string): Promise<NativeGitRepository>;
   getStatus(rootPath: string): Promise<readonly NativeGitStatusEntry[]>;
+  stageFiles(rootPath: string, paths: readonly string[]): Promise<void>;
+  unstageFiles(rootPath: string, paths: readonly string[]): Promise<void>;
 }
 
 export interface GitRepository {
@@ -80,14 +84,20 @@ export type GitStatusResult =
   | {
       readonly kind: "git-unavailable" | "error";
       readonly status: null;
-      readonly message: string;
-    };
+    readonly message: string;
+  };
+
+export type GitMutationResult =
+  | { readonly kind: "success"; readonly message: null }
+  | { readonly kind: "git-unavailable" | "error"; readonly message: string };
 
 export interface GitService {
   checkAvailability(): Promise<GitAvailabilityResult>;
   detectRepository(rootPath: string): Promise<GitRepositoryResult>;
   initializeRepository(rootPath: string): Promise<GitRepositoryResult>;
   getStatus(rootPath: string): Promise<GitStatusResult>;
+  stageFiles(rootPath: string, paths: readonly string[]): Promise<GitMutationResult>;
+  unstageFiles(rootPath: string, paths: readonly string[]): Promise<GitMutationResult>;
   invalidateRepository(rootPath?: string): void;
   invalidateStatus(rootPath?: string): void;
   reset(): void;
@@ -102,7 +112,9 @@ export function createGitDesktopApi(
       commandInvoker("detect_git_repository", { rootPath }),
     initializeRepository: (rootPath) =>
       commandInvoker("initialize_git_repository", { rootPath }),
-    getStatus: (rootPath) => commandInvoker("git_status", { rootPath })
+    getStatus: (rootPath) => commandInvoker("git_status", { rootPath }),
+    stageFiles: (rootPath, paths) => commandInvoker("stage_git_files", { rootPath, paths }).then(() => undefined),
+    unstageFiles: (rootPath, paths) => commandInvoker("unstage_git_files", { rootPath, paths }).then(() => undefined)
   };
 }
 
@@ -197,11 +209,34 @@ export function createGitService(api: GitDesktopApi = createGitDesktopApi()): Gi
     return result;
   };
 
+  const mutateFiles = async (
+    rootPath: string,
+    paths: readonly string[],
+    mutate: (root: string, filePaths: readonly string[]) => Promise<void>
+  ): Promise<GitMutationResult> => {
+    const git = await checkAvailability();
+    if (!git.available) return { kind: "git-unavailable", message: git.message };
+
+    try {
+      await mutate(rootPath, paths);
+      statuses.delete(rootPath);
+      return { kind: "success", message: null };
+    } catch {
+      return { kind: "error", message: "Git changes could not be updated. Please try again." };
+    }
+  };
+
   return {
     checkAvailability,
     detectRepository,
     initializeRepository,
     getStatus,
+    stageFiles(rootPath, paths) {
+      return mutateFiles(rootPath, paths, api.stageFiles);
+    },
+    unstageFiles(rootPath, paths) {
+      return mutateFiles(rootPath, paths, api.unstageFiles);
+    },
     invalidateRepository(rootPath) {
       if (rootPath) {
         repositories.delete(rootPath);

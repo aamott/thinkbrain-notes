@@ -213,6 +213,25 @@ fn git_status(root_path: String) -> Result<Vec<GitStatusEntry>, NativeError> {
     git_status_with(&SystemGitRunner, &root)
 }
 
+/// Stages the supplied workspace-relative paths with Git.
+///
+/// Every path is normalized before it is passed to Git, and `--` terminates
+/// fixed Git options so a filename can never be interpreted as an argument.
+#[tauri::command]
+fn stage_git_files(root_path: String, paths: Vec<String>) -> Result<(), NativeError> {
+    let root = resolve_workspace_root(&root_path)?;
+
+    stage_git_files_with(&SystemGitRunner, &root, &paths)
+}
+
+/// Removes the supplied workspace-relative paths from Git's staging area.
+#[tauri::command]
+fn unstage_git_files(root_path: String, paths: Vec<String>) -> Result<(), NativeError> {
+    let root = resolve_workspace_root(&root_path)?;
+
+    unstage_git_files_with(&SystemGitRunner, &root, &paths)
+}
+
 #[tauri::command]
 fn list_markdown_files(root_path: String) -> Result<Vec<MarkdownFileEntry>, NativeError> {
     let root = resolve_workspace_root(&root_path)?;
@@ -381,6 +400,166 @@ fn delete_markdown_file(root_path: String, relative_path: String) -> Result<(), 
     })
 }
 
+/// Creates a workspace file of any type. Unlike `create_markdown_file`, this
+/// powers the explorer's "New file" context action on arbitrary folders and
+/// accepts non-Markdown extensions. Parent folders are created on demand.
+#[tauri::command]
+fn create_workspace_file(
+    root_path: String,
+    relative_path: String,
+    contents: Option<String>,
+) -> Result<WorkspaceEntry, NativeError> {
+    let root = resolve_workspace_root(&root_path)?;
+    let file_path = resolve_workspace_entry_path(&root, &relative_path)?;
+
+    if file_path.exists() {
+        return Err(NativeError::new(
+            "workspace.file_exists",
+            "A file already exists at that path.",
+        ));
+    }
+
+    if let Some(parent) = file_path.parent() {
+        fs::create_dir_all(parent).map_err(|error| {
+            NativeError::with_details(
+                "workspace.create_parent_failed",
+                "Failed to create the destination folder.",
+                error.to_string(),
+            )
+        })?;
+    }
+
+    fs::write(&file_path, contents.unwrap_or_default()).map_err(|error| {
+        NativeError::with_details(
+            "workspace.create_failed",
+            "Failed to create the file.",
+            error.to_string(),
+        )
+    })?;
+
+    workspace_entry(&root, &file_path, false)
+}
+
+/// Creates a workspace folder (including any missing parents). Refuses to
+/// overwrite an existing entry so the explorer can surface a clear conflict.
+#[tauri::command]
+fn create_workspace_folder(
+    root_path: String,
+    relative_path: String,
+) -> Result<WorkspaceEntry, NativeError> {
+    let root = resolve_workspace_root(&root_path)?;
+    let folder_path = resolve_workspace_entry_path(&root, &relative_path)?;
+
+    if folder_path.exists() {
+        return Err(NativeError::new(
+            "workspace.file_exists",
+            "A folder already exists at that path.",
+        ));
+    }
+
+    fs::create_dir_all(&folder_path).map_err(|error| {
+        NativeError::with_details(
+            "workspace.create_failed",
+            "Failed to create the folder.",
+            error.to_string(),
+        )
+    })?;
+
+    workspace_entry(&root, &folder_path, true)
+}
+
+/// Renames or moves any workspace file or folder. The destination path is
+/// normalized the same way as the source, and missing parent folders are
+/// created so a drag-into-collapsed-folder style move succeeds. A no-op rename
+/// (source == destination) succeeds without touching the filesystem.
+#[tauri::command]
+fn rename_workspace_entry(
+    root_path: String,
+    relative_path: String,
+    new_relative_path: String,
+) -> Result<WorkspaceEntry, NativeError> {
+    let root = resolve_workspace_root(&root_path)?;
+    let source_path = resolve_workspace_entry_path(&root, &relative_path)?;
+    let destination_path = resolve_workspace_entry_path(&root, &new_relative_path)?;
+
+    if !source_path.exists() {
+        return Err(NativeError::new(
+            "workspace.file_missing",
+            "Cannot rename an entry that does not exist.",
+        ));
+    }
+
+    // A no-op rename returns the entry unchanged instead of failing with
+    // `file_exists` (the destination is the source).
+    if source_path == destination_path {
+        return workspace_entry(&root, &source_path, source_path.is_dir());
+    }
+
+    if destination_path.exists() {
+        return Err(NativeError::new(
+            "workspace.file_exists",
+            "An entry already exists at the new path.",
+        ));
+    }
+
+    if let Some(parent) = destination_path.parent() {
+        fs::create_dir_all(parent).map_err(|error| {
+            NativeError::with_details(
+                "workspace.create_parent_failed",
+                "Failed to create the destination folder.",
+                error.to_string(),
+            )
+        })?;
+    }
+
+    let is_dir = source_path.is_dir();
+    fs::rename(&source_path, &destination_path).map_err(|error| {
+        NativeError::with_details(
+            "workspace.rename_failed",
+            "Failed to rename the workspace entry.",
+            error.to_string(),
+        )
+    })?;
+
+    workspace_entry(&root, &destination_path, is_dir)
+}
+
+/// Deletes any workspace file or folder. Folders are removed recursively so
+/// the explorer can delete a populated folder in one action. The path is
+/// normalized and verified to stay inside the workspace root for literal
+/// traversal (`..`, absolute paths); symlinked components inside the workspace
+/// are not separately resolved, so this is safe for trusted local workspaces
+/// but should not be exposed to untrusted remote roots.
+#[tauri::command]
+fn delete_workspace_entry(
+    root_path: String,
+    relative_path: String,
+) -> Result<(), NativeError> {
+    let root = resolve_workspace_root(&root_path)?;
+    let entry_path = resolve_workspace_entry_path(&root, &relative_path)?;
+
+    if !entry_path.exists() {
+        return Err(NativeError::new(
+            "workspace.file_missing",
+            "Cannot delete an entry that does not exist.",
+        ));
+    }
+
+    let remove_result = if entry_path.is_dir() {
+        fs::remove_dir_all(&entry_path)
+    } else {
+        fs::remove_file(&entry_path)
+    };
+
+    remove_result.map_err(|error| {
+        NativeError::with_details(
+            "workspace.delete_failed",
+            "Failed to delete the workspace entry.",
+            error.to_string(),
+        )
+    })
+}
+
 #[tauri::command]
 fn index_documents(
     app: tauri::AppHandle,
@@ -488,6 +667,8 @@ pub fn run() {
             detect_git_repository,
             initialize_git_repository,
             git_status,
+            stage_git_files,
+            unstage_git_files,
             list_markdown_files,
             list_workspace_entries,
             read_markdown_file,
@@ -495,6 +676,10 @@ pub fn run() {
             create_markdown_file,
             rename_markdown_file,
             delete_markdown_file,
+            create_workspace_file,
+            create_workspace_folder,
+            rename_workspace_entry,
+            delete_workspace_entry,
             index_documents,
             search_index,
             clear_index,
@@ -548,6 +733,75 @@ fn resolve_markdown_file_path(root: &Path, relative_path: &str) -> Result<PathBu
     }
 
     Ok(path)
+}
+
+/// Resolves an arbitrary workspace entry path (file or folder) and validates
+/// that it stays inside the workspace root. Unlike
+/// [`resolve_markdown_file_path`], this accepts any extension and is used by
+/// the explorer's generic file/folder context actions.
+///
+/// For paths that already exist on disk, the resolved path is canonicalized
+/// and verified to remain inside the canonical workspace root, so symlinked
+/// components cannot redirect an operation outside the workspace. For
+/// not-yet-existing targets (e.g. a `create_workspace_file` destination), the
+/// deepest existing ancestor is canonicalized and prefix-checked instead,
+/// because `canonicalize` requires the path to exist.
+fn resolve_workspace_entry_path(root: &Path, relative_path: &str) -> Result<PathBuf, NativeError> {
+    let normalized = normalize_relative_path(relative_path)?;
+    let path = root.join(normalized);
+
+    // For existing entries, canonicalize the full path and verify it stays
+    // inside the (already canonical) workspace root.
+    if path.exists() {
+        let canonical = path.canonicalize().map_err(|error| {
+            NativeError::with_details(
+                "workspace.invalid_path",
+                "Failed to resolve the workspace entry.",
+                error.to_string(),
+            )
+        })?;
+        if !canonical.starts_with(root) {
+            return Err(NativeError::new(
+                "workspace.invalid_path",
+                "File path must stay inside the workspace.",
+            ));
+        }
+        return Ok(canonical);
+    }
+
+    // For not-yet-existing targets, canonicalize the deepest existing ancestor
+    // and ensure that ancestor is inside the workspace root. The remaining
+    // (non-existent) tail is appended literally; `fs::create_dir_all` and
+    // `fs::write` will create those components inside the verified ancestor.
+    let mut ancestor = path.clone();
+    while !ancestor.exists() {
+        if !ancestor.pop() {
+            return Err(NativeError::new(
+                "workspace.invalid_path",
+                "File path must stay inside the workspace.",
+            ));
+        }
+    }
+    let canonical_ancestor = ancestor.canonicalize().map_err(|error| {
+        NativeError::with_details(
+            "workspace.invalid_path",
+            "Failed to resolve the workspace entry.",
+            error.to_string(),
+        )
+    })?;
+    if !canonical_ancestor.starts_with(root) {
+        return Err(NativeError::new(
+            "workspace.invalid_path",
+            "File path must stay inside the workspace.",
+        ));
+    }
+    let tail = path.strip_prefix(&ancestor).map_err(|_| {
+        NativeError::new(
+            "workspace.invalid_path",
+            "File path must stay inside the workspace.",
+        )
+    })?;
+    Ok(canonical_ancestor.join(tail))
 }
 
 fn normalize_relative_path(relative_path: &str) -> Result<String, NativeError> {
@@ -651,9 +905,9 @@ impl GitRunner for SystemGitRunner {
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            // These commands are non-interactive and read-only. The explicit
-            // environment prevents a credential prompt or pager from keeping
-            // a desktop command alive.
+            // These commands are non-interactive. The explicit environment
+            // prevents a credential prompt or pager from keeping a desktop
+            // command alive.
             .env("GIT_TERMINAL_PROMPT", "0")
             .env("GIT_PAGER", "cat")
             .env("GIT_OPTIONAL_LOCKS", "0");
@@ -801,6 +1055,60 @@ fn git_status_with(
     }
 
     parse_git_status_porcelain_v1(&status.stdout)
+}
+
+fn stage_git_files_with(
+    runner: &impl GitRunner,
+    root: &Path,
+    paths: &[String],
+) -> Result<(), NativeError> {
+    update_git_index_with(runner, root, paths, "stage", &["add"])
+}
+
+fn unstage_git_files_with(
+    runner: &impl GitRunner,
+    root: &Path,
+    paths: &[String],
+) -> Result<(), NativeError> {
+    // `git reset -- <paths>` works for both an initialized repository and an
+    // unborn branch, unlike an explicit `HEAD` pathspec.
+    update_git_index_with(runner, root, paths, "unstage", &["reset"])
+}
+
+fn update_git_index_with(
+    runner: &impl GitRunner,
+    root: &Path,
+    paths: &[String],
+    action: &str,
+    command: &[&str],
+) -> Result<(), NativeError> {
+    if paths.is_empty() {
+        return Err(NativeError::new(
+            "git.no_paths",
+            "Select at least one workspace file.",
+        ));
+    }
+
+    let paths = paths
+        .iter()
+        .map(|path| normalize_relative_path(path))
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut args = command.to_vec();
+    args.push("--");
+    args.extend(paths.iter().map(String::as_str));
+
+    let output = runner
+        .run(Some(root), &args)
+        .map_err(|error| git_run_error(&format!("{action} workspace files"), error))?;
+
+    if output.success {
+        Ok(())
+    } else {
+        Err(git_command_failed(
+            &format!("{action} workspace files"),
+            &output,
+        ))
+    }
 }
 
 /// Parses Git's `status --porcelain=v1 -z` output.
@@ -1420,11 +1728,13 @@ fn build_fts_match_query(raw: &str) -> Option<String> {
 mod tests {
     use super::{
         app_settings_path, bounded_git_text, build_fts_match_query, clear_documents,
-        delete_document, desktop_shell_status, detect_git_repository_with, git_availability_with,
+        create_workspace_file, create_workspace_folder, delete_document, delete_workspace_entry,
+        desktop_shell_status, detect_git_repository_with, git_availability_with,
         git_status_with, index_document_records, init_index_schema, initialize_git_repository_with,
-        is_markdown_path, normalize_relative_path, read_settings_file, search_documents,
-        stable_workspace_hash, workspace_settings_path, write_settings_file, DocumentRecord,
-        GitCommandOutput, GitRunError, GitRunner, GitStatusEntry, NativeError, SystemGitRunner,
+        is_markdown_path, normalize_relative_path, read_settings_file, rename_workspace_entry,
+        search_documents, stable_workspace_hash, stage_git_files_with, unstage_git_files_with,
+        workspace_settings_path, write_settings_file, DocumentRecord, GitCommandOutput,
+        GitRunError, GitRunner, GitStatusEntry, NativeError, SystemGitRunner,
     };
     use rusqlite::Connection;
     use std::{
@@ -1859,6 +2169,51 @@ mod tests {
     }
 
     #[test]
+    fn git_index_updates_use_validated_paths_and_fixed_commands() {
+        let root = temp_test_dir("git-index-mock");
+        let runner = MockGitRunner::new([
+            Ok(git_output(true, Some(0), "", "")),
+            Ok(git_output(true, Some(0), "", "")),
+        ]);
+        let paths = vec!["Notes\\draft.md".to_string(), "todo.md".to_string()];
+
+        stage_git_files_with(&runner, &root, &paths).expect("files stage");
+        unstage_git_files_with(&runner, &root, &paths).expect("files unstage");
+
+        assert_eq!(
+            runner.calls(),
+            vec![
+                GitCall {
+                    working_dir: Some(root.clone()),
+                    args: vec![
+                        "add".to_string(),
+                        "--".to_string(),
+                        "Notes/draft.md".to_string(),
+                        "todo.md".to_string(),
+                    ],
+                },
+                GitCall {
+                    working_dir: Some(root.clone()),
+                    args: vec![
+                        "reset".to_string(),
+                        "--".to_string(),
+                        "Notes/draft.md".to_string(),
+                        "todo.md".to_string(),
+                    ],
+                },
+            ]
+        );
+
+        let invalid = MockGitRunner::new([]);
+        let error = stage_git_files_with(&invalid, &root, &["../outside.md".to_string()])
+            .expect_err("paths outside the workspace are rejected");
+        assert_eq!(error.code, "workspace.invalid_path");
+        assert!(invalid.calls().is_empty());
+
+        fs::remove_dir_all(root).expect("temp index workspace is cleaned up");
+    }
+
+    #[test]
     fn git_runner_errors_and_details_are_typed_and_bounded() {
         let root = temp_test_dir("git-timeout");
         let runner = MockGitRunner::new([Err(MockGitError::TimedOut)]);
@@ -1945,6 +2300,45 @@ mod tests {
         assert!(repeat.is_repository);
 
         fs::remove_dir_all(root).expect("temporary initialized repository is cleaned up");
+    }
+
+    #[test]
+    fn system_git_stages_and_unstages_an_unborn_repository_when_available() {
+        let runner = SystemGitRunner;
+        let availability = git_availability_with(&runner).expect("Git availability command runs");
+
+        if !availability.available {
+            return;
+        }
+
+        let root = temp_test_dir("system-git-stage-unstage");
+        initialize_git_repository_with(&runner, &root).expect("Git initializes the workspace");
+        fs::write(root.join("draft.md"), "draft\n").expect("draft file is written");
+
+        stage_git_files_with(&runner, &root, &["draft.md".to_string()]).expect("new file stages");
+        let staged = git_status_with(&runner, &root).expect("staged status is available");
+        assert_eq!(
+            staged,
+            vec![GitStatusEntry {
+                path: "draft.md".to_string(),
+                index_status: "A".to_string(),
+                worktree_status: " ".to_string(),
+            }]
+        );
+
+        unstage_git_files_with(&runner, &root, &["draft.md".to_string()])
+            .expect("new file unstages without a HEAD commit");
+        let unstaged = git_status_with(&runner, &root).expect("unstaged status is available");
+        assert_eq!(
+            unstaged,
+            vec![GitStatusEntry {
+                path: "draft.md".to_string(),
+                index_status: "?".to_string(),
+                worktree_status: "?".to_string(),
+            }]
+        );
+
+        fs::remove_dir_all(root).expect("temporary stage workspace is cleaned up");
     }
 
     #[test]
@@ -2288,5 +2682,212 @@ mod tests {
         );
 
         fs::remove_dir_all(temp_dir).expect("temp settings directory is cleaned up");
+    }
+
+    #[test]
+    fn create_workspace_file_creates_missing_parents_and_writes_contents() {
+        let root = temp_test_dir("create-file");
+        let entry = create_workspace_file(
+            root.to_string_lossy().to_string(),
+            "Notes/welcome.md".to_string(),
+            Some("# Hello".to_string()),
+        )
+        .expect("workspace file is created");
+
+        assert_eq!(entry.name, "welcome.md");
+        assert_eq!(entry.parent_path, "Notes");
+        assert_eq!(entry.kind, "file");
+        assert!(entry.is_markdown);
+        assert_eq!(
+            fs::read_to_string(root.join("Notes").join("welcome.md")).expect("file is readable"),
+            "# Hello"
+        );
+
+        // A second create at the same path fails loudly so the UI can surface it.
+        let conflict = create_workspace_file(
+            root.to_string_lossy().to_string(),
+            "Notes/welcome.md".to_string(),
+            None,
+        );
+        assert!(conflict.is_err());
+        assert_eq!(
+            conflict.unwrap_err().code,
+            "workspace.file_exists"
+        );
+
+        fs::remove_dir_all(root).expect("temp create-file directory is cleaned up");
+    }
+
+    #[test]
+    fn create_workspace_folder_creates_nested_directories() {
+        let root = temp_test_dir("create-folder");
+        let entry = create_workspace_folder(
+            root.to_string_lossy().to_string(),
+            "Archive/2024/January".to_string(),
+        )
+        .expect("workspace folder is created");
+
+        assert_eq!(entry.kind, "directory");
+        assert_eq!(entry.relative_path, "Archive/2024/January");
+        assert!(root.join("Archive").join("2024").join("January").is_dir());
+
+        let conflict = create_workspace_folder(
+            root.to_string_lossy().to_string(),
+            "Archive/2024/January".to_string(),
+        );
+        assert!(conflict.is_err());
+        assert_eq!(conflict.unwrap_err().code, "workspace.file_exists");
+
+        fs::remove_dir_all(root).expect("temp create-folder directory is cleaned up");
+    }
+
+    #[test]
+    fn rename_workspace_entry_moves_files_and_creates_destination_parents() {
+        let root = temp_test_dir("rename-entry");
+        create_workspace_file(
+            root.to_string_lossy().to_string(),
+            "draft.md".to_string(),
+            Some("body".to_string()),
+        )
+        .expect("source file is created");
+
+        let renamed = rename_workspace_entry(
+            root.to_string_lossy().to_string(),
+            "draft.md".to_string(),
+            "Archive/draft.md".to_string(),
+        )
+        .expect("rename succeeds");
+
+        assert_eq!(renamed.relative_path, "Archive/draft.md");
+        assert!(!root.join("draft.md").exists());
+        assert!(root.join("Archive").join("draft.md").is_file());
+
+        // Renaming a missing entry fails loudly.
+        let missing = rename_workspace_entry(
+            root.to_string_lossy().to_string(),
+            "ghost.md".to_string(),
+            "Archive/ghost.md".to_string(),
+        );
+        assert!(missing.is_err());
+        assert_eq!(missing.unwrap_err().code, "workspace.file_missing");
+
+        // Renaming onto an existing entry fails loudly.
+        create_workspace_file(
+            root.to_string_lossy().to_string(),
+            "other.md".to_string(),
+            None,
+        )
+        .expect("destination file is created");
+        let collision = rename_workspace_entry(
+            root.to_string_lossy().to_string(),
+            "Archive/draft.md".to_string(),
+            "other.md".to_string(),
+        );
+        assert!(collision.is_err());
+        assert_eq!(collision.unwrap_err().code, "workspace.file_exists");
+
+        fs::remove_dir_all(root).expect("temp rename-entry directory is cleaned up");
+    }
+
+    #[test]
+    fn delete_workspace_entry_removes_files_and_folders_recursively() {
+        let root = temp_test_dir("delete-entry");
+        create_workspace_file(
+            root.to_string_lossy().to_string(),
+            "Folder/nested.md".to_string(),
+            Some("body".to_string()),
+        )
+        .expect("nested file is created");
+
+        delete_workspace_entry(
+            root.to_string_lossy().to_string(),
+            "Folder".to_string(),
+        )
+        .expect("folder is deleted recursively");
+
+        assert!(!root.join("Folder").exists());
+
+        let missing = delete_workspace_entry(
+            root.to_string_lossy().to_string(),
+            "Folder".to_string(),
+        );
+        assert!(missing.is_err());
+        assert_eq!(missing.unwrap_err().code, "workspace.file_missing");
+
+        fs::remove_dir_all(root).expect("temp delete-entry directory is cleaned up");
+    }
+
+    #[test]
+    fn workspace_entry_commands_reject_paths_that_escape_the_workspace_root() {
+        let root = temp_test_dir("entry-escape");
+
+        let escape = create_workspace_file(
+            root.to_string_lossy().to_string(),
+            "../outside.md".to_string(),
+            None,
+        );
+        assert!(escape.is_err());
+        assert_eq!(escape.unwrap_err().code, "workspace.invalid_path");
+
+        fs::remove_dir_all(root).expect("temp entry-escape directory is cleaned up");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn workspace_entry_commands_reject_symlink_escapes_via_canonicalization() {
+        use std::os::unix::fs::symlink;
+
+        let root = temp_test_dir("entry-symlink");
+        let outside = temp_test_dir("entry-symlink-outside");
+        symlink(&outside, root.join("escape")).expect("symlink is created");
+
+        // Creating a file through the symlink would write outside the workspace.
+        let attempt = create_workspace_file(
+            root.to_string_lossy().to_string(),
+            "escape/stolen.md".to_string(),
+            None,
+        );
+        assert!(attempt.is_err());
+        assert_eq!(attempt.unwrap_err().code, "workspace.invalid_path");
+        assert!(!outside.join("stolen.md").exists());
+
+        // Deleting through the symlink would delete outside the workspace.
+        fs::write(outside.join("target.md"), "body").expect("outside file is created");
+        let delete_attempt = delete_workspace_entry(
+            root.to_string_lossy().to_string(),
+            "escape/target.md".to_string(),
+        );
+        assert!(delete_attempt.is_err());
+        assert_eq!(delete_attempt.unwrap_err().code, "workspace.invalid_path");
+        assert!(outside.join("target.md").exists());
+
+        fs::remove_dir_all(root).expect("temp symlink root is cleaned up");
+        fs::remove_dir_all(outside).expect("temp symlink outside directory is cleaned up");
+    }
+
+    #[test]
+    fn rename_workspace_entry_treats_source_equal_destination_as_a_noop() {
+        let root = temp_test_dir("rename-noop");
+        create_workspace_file(
+            root.to_string_lossy().to_string(),
+            "draft.md".to_string(),
+            Some("body".to_string()),
+        )
+        .expect("source file is created");
+
+        // Same relative path on both sides: succeed without touching the file.
+        let result = rename_workspace_entry(
+            root.to_string_lossy().to_string(),
+            "draft.md".to_string(),
+            "draft.md".to_string(),
+        )
+        .expect("no-op rename succeeds");
+        assert_eq!(result.relative_path, "draft.md");
+        assert_eq!(
+            fs::read_to_string(root.join("draft.md")).expect("file is unchanged"),
+            "body"
+        );
+
+        fs::remove_dir_all(root).expect("temp rename-noop directory is cleaned up");
     }
 }

@@ -7,15 +7,15 @@ from the source-control panel.
 
 ## Acceptance Criteria
 
-- [ ] Native commands run `git add <path>` and `git reset <path>` (or
+- [x] Native commands run `git add <path>` and `git reset <path>` (or
       `git restore --staged`) at the workspace root, scoped to the workspace.
-- [ ] Frontend service exposes `stageFiles(rootPath, paths)` and
+- [x] Frontend service exposes `stageFiles(rootPath, paths)` and
       `unstageFiles(rootPath, paths)`.
-- [ ] UI provides per-file stage/unstage actions and a "stage all" action.
-- [ ] After stage/unstage, status is refreshed.
-- [ ] Paths are validated to stay within the workspace root (no path escape).
-- [ ] Rust unit tests cover staging and unstaging in a temp repo.
-- [ ] Failures surface typed `NativeError`s.
+- [x] UI provides per-file stage/unstage actions and a "stage all" action.
+- [x] After stage/unstage, status is refreshed.
+- [x] Paths are validated to stay within the workspace root (no path escape).
+- [x] Rust unit tests cover staging and unstaging in a temp repo.
+- [x] Failures surface typed `NativeError`s.
 
 ## Relevant Files
 

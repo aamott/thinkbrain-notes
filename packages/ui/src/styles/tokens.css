@@ -29,6 +29,7 @@
   --tn-color-border: hsl(220 13% 91%);
   --tn-color-input: hsl(220 13% 91%);
   --tn-color-ring: hsl(262 83% 58%);
+  --tn-color-overlay: rgb(0 0 0 / 42%);
 
   /* Mockup-v3 chrome surfaces. */
   --tn-color-titlebar: hsl(0 0% 97%);
@@ -90,6 +91,7 @@
   --tn-color-border: hsl(222 30% 18%);
   --tn-color-input: hsl(222 30% 18%);
   --tn-color-ring: hsl(262 83% 66%);
+  --tn-color-overlay: rgb(0 0 0 / 42%);
 
   --tn-color-titlebar: hsl(222 47% 9%);
   --tn-color-titlebar-foreground: hsl(210 40% 98%);
@@ -139,6 +141,7 @@
     --tn-color-border: hsl(222 30% 18%);
     --tn-color-input: hsl(222 30% 18%);
     --tn-color-ring: hsl(262 83% 66%);
+    --tn-color-overlay: rgb(0 0 0 / 42%);
     --tn-color-titlebar: hsl(222 47% 9%);
     --tn-color-titlebar-foreground: hsl(210 40% 98%);
     --tn-color-activitybar: hsl(222 47% 11%);

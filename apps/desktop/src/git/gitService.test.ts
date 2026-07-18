@@ -22,6 +22,8 @@ function createApi(overrides: Partial<GitDesktopApi> = {}): GitDesktopApi {
       branch: "main"
     }),
     getStatus: vi.fn().mockResolvedValue([]),
+    stageFiles: vi.fn().mockResolvedValue(undefined),
+    unstageFiles: vi.fn().mockResolvedValue(undefined),
     ...overrides
   };
 }
@@ -37,6 +39,10 @@ describe("Git desktop API", () => {
         return [];
       }
 
+      if (command === "stage_git_files" || command === "unstage_git_files") {
+        return null;
+      }
+
       return { is_repository: true, branch: "main" };
     }) as GitCommandInvoker;
     const api = createGitDesktopApi(commandInvoker);
@@ -49,6 +55,8 @@ describe("Git desktop API", () => {
       is_repository: true
     });
     await expect(api.getStatus("/notes")).resolves.toEqual([]);
+    await expect(api.stageFiles("/notes", ["draft.md"])).resolves.toBeUndefined();
+    await expect(api.unstageFiles("/notes", ["draft.md"])).resolves.toBeUndefined();
 
     expect(commandInvoker).toHaveBeenNthCalledWith(1, "git_availability");
     expect(commandInvoker).toHaveBeenNthCalledWith(2, "detect_git_repository", {
@@ -58,6 +66,14 @@ describe("Git desktop API", () => {
       rootPath: "/notes"
     });
     expect(commandInvoker).toHaveBeenNthCalledWith(4, "git_status", { rootPath: "/notes" });
+    expect(commandInvoker).toHaveBeenNthCalledWith(5, "stage_git_files", {
+      rootPath: "/notes",
+      paths: ["draft.md"]
+    });
+    expect(commandInvoker).toHaveBeenNthCalledWith(6, "unstage_git_files", {
+      rootPath: "/notes",
+      paths: ["draft.md"]
+    });
   });
 });
 
@@ -214,6 +230,36 @@ describe("Git service", () => {
     service.invalidateStatus("/notes");
     await service.getStatus("/notes");
     expect(api.getStatus).toHaveBeenCalledTimes(2);
+  });
+
+  it("updates Git paths and invalidates cached status only after a successful mutation", async () => {
+    const api = createApi({
+      getStatus: vi.fn().mockResolvedValue([])
+    });
+    const service = createGitService(api);
+
+    await service.getStatus("/notes");
+    await expect(service.stageFiles("/notes", ["draft.md"])).resolves.toEqual({
+      kind: "success",
+      message: null
+    });
+    await service.getStatus("/notes");
+    await expect(service.unstageFiles("/notes", ["draft.md"])).resolves.toEqual({
+      kind: "success",
+      message: null
+    });
+
+    expect(api.stageFiles).toHaveBeenCalledWith("/notes", ["draft.md"]);
+    expect(api.unstageFiles).toHaveBeenCalledWith("/notes", ["draft.md"]);
+    expect(api.getStatus).toHaveBeenCalledTimes(2);
+
+    const failed = createGitService(createApi({
+      stageFiles: vi.fn().mockRejectedValue(new Error("native details stay private"))
+    }));
+    await expect(failed.stageFiles("/notes", ["draft.md"])).resolves.toEqual({
+      kind: "error",
+      message: "Git changes could not be updated. Please try again."
+    });
   });
 
   it("keeps porcelain mapping deterministic for an empty or untracked-only result", () => {

@@ -93,10 +93,47 @@ export function SourceControlPanel({ rootPath, service = gitService }: SourceCon
     });
   }, [requestGate, rootPath, service, state]);
 
+  const updateFiles = useCallback((paths: readonly string[], update: (root: string, filePaths: readonly string[]) => ReturnType<GitService["stageFiles"]>) => {
+    if (!rootPath || state.kind !== "repository" || state.isRefreshing || !paths.length) return;
+
+    const operation = requestGate.begin();
+    setResolved({ rootPath, state: { ...state, isRefreshing: true } });
+
+    void update(rootPath, paths).then(async (result) => {
+      if (!requestGate.isCurrent(operation)) return;
+      if (result.kind !== "success") {
+        setResolved({ rootPath, state: { kind: "error", message: result.message } });
+        return;
+      }
+
+      const refreshed = await service.getStatus(rootPath);
+      if (requestGate.isCurrent(operation)) {
+        setResolved({ rootPath, state: refreshedRepositoryState(state, refreshed) });
+      }
+    }).catch(() => {
+      if (requestGate.isCurrent(operation)) {
+        setResolved({
+          rootPath,
+          state: { kind: "error", message: "Git changes could not be updated. Please try again." }
+        });
+      }
+    });
+  }, [requestGate, rootPath, service, state]);
+
+  const stageFiles = useCallback((paths: readonly string[]) => {
+    updateFiles(paths, (root, filePaths) => service.stageFiles(root, filePaths));
+  }, [service, updateFiles]);
+
+  const unstageFiles = useCallback((paths: readonly string[]) => {
+    updateFiles(paths, (root, filePaths) => service.unstageFiles(root, filePaths));
+  }, [service, updateFiles]);
+
   return (
     <SourceControlPanelContent
       onInitialize={initializeRepository}
       onRefresh={refreshStatus}
+      onStage={stageFiles}
+      onUnstage={unstageFiles}
       state={state}
     />
   );
@@ -165,11 +202,15 @@ function refreshedRepositoryState(
 export function SourceControlPanelContent({
   state,
   onInitialize,
-  onRefresh
+  onRefresh,
+  onStage,
+  onUnstage
 }: {
   readonly state: SourceControlPanelState;
   readonly onInitialize?: () => void;
   readonly onRefresh?: () => void;
+  readonly onStage?: (paths: readonly string[]) => void;
+  readonly onUnstage?: (paths: readonly string[]) => void;
 }) {
   return (
     <section aria-label="Source control" className={styles.panel}>
@@ -210,15 +251,25 @@ export function SourceControlPanelContent({
         <div className={styles.repository}>
           <div className={styles.repositoryHeader}>
             <h2>Repository</h2>
-            <button
-              aria-label="Refresh Git changes"
-              className={styles.refreshButton}
-              disabled={state.isRefreshing || !onRefresh}
-              onClick={onRefresh}
-              type="button"
-            >
-              {state.isRefreshing ? "Refreshing…" : "Refresh"}
-            </button>
+            <div className={styles.repositoryActions}>
+              <button
+                className={styles.refreshButton}
+                disabled={state.isRefreshing || !onStage || stageablePaths(state.status).length === 0}
+                onClick={() => onStage?.(stageablePaths(state.status))}
+                type="button"
+              >
+                Stage all
+              </button>
+              <button
+                aria-label="Refresh Git changes"
+                className={styles.refreshButton}
+                disabled={state.isRefreshing || !onRefresh}
+                onClick={onRefresh}
+                type="button"
+              >
+                {state.isRefreshing ? "Refreshing…" : "Refresh"}
+              </button>
+            </div>
           </div>
           {state.initialized && <p aria-live="polite" role="status">Repository initialized.</p>}
           <dl>
@@ -227,14 +278,29 @@ export function SourceControlPanelContent({
               <dd>{state.branch ?? "Detached HEAD"}</dd>
             </div>
           </dl>
-          <GitStatusGroups status={state.status} />
+          <GitStatusGroups
+            isUpdating={state.isRefreshing}
+            onStage={onStage}
+            onUnstage={onUnstage}
+            status={state.status}
+          />
         </div>
       )}
     </section>
   );
 }
 
-function GitStatusGroups({ status }: { readonly status: GitStatus }) {
+function GitStatusGroups({
+  status,
+  onStage,
+  onUnstage,
+  isUpdating = false
+}: {
+  readonly status: GitStatus;
+  readonly onStage?: (paths: readonly string[]) => void;
+  readonly onUnstage?: (paths: readonly string[]) => void;
+  readonly isUpdating?: boolean;
+}) {
   const changeCount = status.staged.length + status.changed.length + status.untracked.length;
 
   if (!changeCount) {
@@ -243,15 +309,26 @@ function GitStatusGroups({ status }: { readonly status: GitStatus }) {
 
   return (
     <div className={styles.changeGroups}>
-      <ChangeGroup entries={status.staged} title="Staged" />
-      <ChangeGroup entries={status.changed} title="Changed" />
-      <ChangeGroup entries={status.untracked} title="Untracked" />
+      <ChangeGroup entries={status.staged} isUpdating={isUpdating} onAction={onUnstage} title="Staged" />
+      <ChangeGroup entries={status.changed} isUpdating={isUpdating} onAction={onStage} title="Changed" />
+      <ChangeGroup entries={status.untracked} isUpdating={isUpdating} onAction={onStage} title="Untracked" />
     </div>
   );
 }
 
-function ChangeGroup({ entries, title }: { readonly entries: readonly GitStatusEntry[]; readonly title: string }) {
+function ChangeGroup({
+  entries,
+  title,
+  onAction,
+  isUpdating
+}: {
+  readonly entries: readonly GitStatusEntry[];
+  readonly title: string;
+  readonly onAction?: (paths: readonly string[]) => void;
+  readonly isUpdating: boolean;
+}) {
   if (!entries.length) return null;
+  const action = title === "Staged" ? "Unstage" : "Stage";
 
   return (
     <section aria-label={`${title} files`} className={styles.changeGroup}>
@@ -260,12 +337,27 @@ function ChangeGroup({ entries, title }: { readonly entries: readonly GitStatusE
         {entries.map((entry) => (
           <li key={`${entry.path}:${entry.indexStatus}:${entry.worktreeStatus}`}>
             <span title={entry.path}>{entry.path}</span>
-            <code aria-label={`${entry.path} Git status`}>{entry.indexStatus}{entry.worktreeStatus}</code>
+            <span className={styles.fileActions}>
+              <code aria-label={`${entry.path} Git status`}>{entry.indexStatus}{entry.worktreeStatus}</code>
+              {onAction && <button
+                aria-label={`${action} ${entry.path}`}
+                className={styles.fileAction}
+                disabled={isUpdating}
+                onClick={() => onAction([entry.path])}
+                type="button"
+              >
+                {action}
+              </button>}
+            </span>
           </li>
         ))}
       </ul>
     </section>
   );
+}
+
+function stageablePaths(status: GitStatus): readonly string[] {
+  return [...new Set([...status.changed, ...status.untracked].map((entry) => entry.path))];
 }
 
 function EmptyState({
@@ -280,7 +372,7 @@ function EmptyState({
   return (
     <div className={styles.emptyState}>
       <h2>{title}</h2>
-      <p role={alert ? "alert" : undefined}>{children}</p>
+      <div role={alert ? "alert" : undefined}>{children}</div>
     </div>
   );
 }

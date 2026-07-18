@@ -6,7 +6,7 @@
   align-items: flex-start;
   justify-content: center;
   padding-top: 15vh;
-  background: rgb(0 0 0 / 42%);
+  background: var(--tn-color-overlay);
 }
 
 .palette {
@@ -28,6 +28,11 @@
   font: inherit;
   font-size: 0.9rem;
   outline: 0;
+}
+
+.palette input:focus-visible {
+  outline: 2px solid var(--tn-color-ring);
+  outline-offset: -2px;
 }
 
 .results {

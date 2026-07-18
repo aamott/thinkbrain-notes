@@ -85,6 +85,36 @@ export interface NativeCommandMap {
     };
     readonly result: null;
   };
+  readonly create_workspace_file: {
+    readonly args: {
+      readonly rootPath: string;
+      readonly relativePath: string;
+      readonly contents?: string;
+    };
+    readonly result: NativeWorkspaceEntry;
+  };
+  readonly create_workspace_folder: {
+    readonly args: {
+      readonly rootPath: string;
+      readonly relativePath: string;
+    };
+    readonly result: NativeWorkspaceEntry;
+  };
+  readonly rename_workspace_entry: {
+    readonly args: {
+      readonly rootPath: string;
+      readonly relativePath: string;
+      readonly newRelativePath: string;
+    };
+    readonly result: NativeWorkspaceEntry;
+  };
+  readonly delete_workspace_entry: {
+    readonly args: {
+      readonly rootPath: string;
+      readonly relativePath: string;
+    };
+    readonly result: null;
+  };
   readonly index_documents: {
     readonly args: {
       readonly rootPath: string;
@@ -145,6 +175,14 @@ export interface NativeCommandMap {
   readonly git_status: {
     readonly args: { readonly rootPath: string };
     readonly result: readonly NativeGitStatusEntry[];
+  };
+  readonly stage_git_files: {
+    readonly args: { readonly rootPath: string; readonly paths: readonly string[] };
+    readonly result: null;
+  };
+  readonly unstage_git_files: {
+    readonly args: { readonly rootPath: string; readonly paths: readonly string[] };
+    readonly result: null;
   };
 }
 

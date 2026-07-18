@@ -16,7 +16,7 @@ import {
 import { createDesktopTabRegistry } from "../tabs/tabRegistry";
 import { workspaceDocumentApi } from "../workspace/workspaceDocumentAdapter";
 import { loadWorkspaceDocument, saveWorkspaceDocument } from "../workspace/workspaceDocumentModel";
-import { ReadOnlyWorkspaceExplorer } from "../workspace/ReadOnlyWorkspaceExplorer";
+import { WorkspaceExplorer } from "../workspace/WorkspaceExplorer";
 import styles from "./DesktopShell.module.css";
 
 type LeftPanel = "explorer" | "search" | "source-control" | "tags" | "extensions";
@@ -146,6 +146,10 @@ export function DesktopShell() {
     persistDesktopState({ explorerOpen: true });
   }, [persistDesktopState]);
 
+  const acknowledgeNewNoteFocus = useCallback(() => {
+    setNewNoteFocusRequest(0);
+  }, []);
+
   const openMarkdownDocument = useCallback((rootPath: string, relativePath: string) => {
     const tab = createEditorTab({ rootPath, relativePath });
     dispatchTabs({ type: "open", tab });
@@ -190,11 +194,11 @@ export function DesktopShell() {
       case "search":
         setLeftPanel("search");
         persistDesktopState({ explorerOpen: false });
-        closePalette(false);
+        closePalette();
         return;
       case "toggle-theme":
         setTheme((value) => value === "dark" ? "light" : "dark");
-        closePalette(false);
+        closePalette();
         return;
       case "toggle-panel":
         if (!("panel" in command.intent)) return;
@@ -202,15 +206,15 @@ export function DesktopShell() {
         if (command.intent.panel === "outline") setRightPanel((panel) => panel === "outline" ? null : "outline");
         if (command.intent.panel === "assistant") setRightPanel((panel) => panel === "assistant" ? null : "assistant");
         if (command.intent.panel === "bottom") setBottomPanel((panel) => panel ? null : "terminal");
-        closePalette(false);
+        closePalette();
         return;
       case "open-settings":
         dispatchTabs({ type: "open", tab: createStaticTab("settings", "Settings") });
-        closePalette(false);
+        closePalette();
         return;
       case "rebuild-index":
         setBottomPanel("output");
-        closePalette(false);
+        closePalette();
         return;
     }
   }, [closePalette, persistDesktopState, selectLeftPanel, showExplorer]);
@@ -278,7 +282,7 @@ export function DesktopShell() {
         setBottomPanel((panel) => panel ? null : "terminal");
       }
       if (event.key === "Escape") {
-        setPaletteOpen(false);
+        if (!event.defaultPrevented && paletteOpen) closePalette();
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -359,12 +363,13 @@ export function DesktopShell() {
         {leftPanel && <>
           <aside className={styles.popout} aria-label={`${leftActions.find((item) => item.id === leftPanel)?.label} panel`}>
             {leftPanel === "explorer" ? (
-              <ReadOnlyWorkspaceExplorer
+              <WorkspaceExplorer
                 initialWorkspacePath={stateRestored ? restoredWorkspacePath : null}
                 onWorkspaceOpened={handleWorkspaceOpened}
                 onWorkspaceUnavailable={handleWorkspaceUnavailable}
                 onMarkdownFileSelected={openMarkdownDocument}
                 onMarkdownFileCreated={handleMarkdownFileCreated}
+                onNewNoteFocusHandled={acknowledgeNewNoteFocus}
                 newNoteFocusRequest={newNoteFocusRequest}
               />
             ) : (
