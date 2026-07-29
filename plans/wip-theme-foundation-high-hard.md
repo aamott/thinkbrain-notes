@@ -59,11 +59,11 @@ shell surfaces without a heavy opinionated UI framework.
 ## Status
 
 - ✅ Theme selection setting persisted — `packages/core/src/settings.ts`, `apps/desktop/src/settings/SettingsPanel.tsx`
-- ⬜ CSS variable token system consolidated in `packages/ui` — currently split: `packages/ui/src/styles/tokens.css` (dark `:root`), `apps/desktop/src/styles.css` (light overrides)
-- ⬜ Default light theme token set — `apps/desktop/src/styles.css:24-34` (partial, should move to `packages/ui`)
-- ⬜ Default dark theme token set — `packages/ui/src/styles/tokens.css:1-15` (partial, no explicit `[data-thinkbrain-theme="dark"]` block)
-- ⬜ System theme resolves to OS preference — `apps/desktop/src/App.tsx:58-60` sets `data-thinkbrain-theme="system"` but no CSS rule matches `"system"`
-- ⬜ Reusable base components in `packages/ui` — only `Button` exists (`packages/ui/src/components/Button.tsx`)
-- ⬜ Accessibility-focused primitives (Radix UI-style) — none yet
-- ⬜ Shell/editor/sidebar surfaces use tokens + CSS Modules — `apps/desktop/src/styles.css` is a single global stylesheet with hardcoded colors (e.g. `#0c0f16` at lines 88, 608)
+- ✅ CSS variable token system consolidated in `packages/ui` — defined in `packages/ui/src/styles/tokens.css` and mapped to Tailwind v4 in `apps/desktop/src/index.css`.
+- ✅ Default light theme token set — implemented in `:root, :root[data-thinkbrain-theme="light"]`.
+- ✅ Default dark theme token set — implemented in `:root[data-thinkbrain-theme="dark"]`.
+- ✅ System theme resolves to OS preference — implemented via `@media (prefers-color-scheme: dark)` mapping `[data-thinkbrain-theme="system"]` to dark colors.
+- ✅ Reusable base components in `packages/ui` — `shadcn/ui` initialized and `Button` component added.
+- ✅ Accessibility-focused primitives (Radix UI-style) — implemented via `shadcn/ui` (Radix UI under the hood).
+- ✅ Shell/editor/sidebar surfaces use tokens + CSS Modules — Legacy CSS Modules deleted, fully migrated to Tailwind v4 utility classes.
 - ⬜ Importable themes — load user-supplied theme files (JSON/CSS token overrides) from disk and apply them via `data-thinkbrain-theme`

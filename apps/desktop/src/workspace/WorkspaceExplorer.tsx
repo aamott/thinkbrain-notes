@@ -10,7 +10,7 @@ import {
 } from "./workspaceExplorerModel";
 import { workspaceDesktopApi, type WorkspaceDesktopApi } from "./workspaceAdapter";
 import { WorkspaceFileIcon } from "./WorkspaceFileIcon";
-import styles from "./WorkspaceExplorer.module.css";
+import { cn } from "../lib/utils";
 
 export interface WorkspaceExplorerProps {
   readonly api?: WorkspaceDesktopApi;
@@ -378,14 +378,13 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
   }, [closeContextMenu]);
 
   const isBusy = state.phase === "opening" || busy;
-  const rootClassName = [styles.explorer, className].filter(Boolean).join(" ");
 
   return (
-    <section className={rootClassName} aria-label="Workspace explorer" aria-busy={isBusy}>
-      <header className={styles.header}>
+    <section className={cn("flex min-h-0 flex-1 flex-col text-sidebar-foreground bg-sidebar font-sans", className)} aria-label="Workspace explorer" aria-busy={isBusy}>
+      <header className="flex min-h-16 items-center justify-between gap-3 px-3 py-[0.625rem] border-b border-border">
         <div>
-          <p className={styles.eyebrow}>Workspace</p>
-          <h2 className={styles.title}>{state.snapshot?.workspace.name ?? "No workspace open"}</h2>
+          <p className="mb-[0.125rem] text-muted-foreground text-[0.625rem] font-bold tracking-[0.08em] leading-none uppercase">Workspace</p>
+          <h2 className="max-w-[11rem] m-0 overflow-hidden text-[0.8125rem] font-[650] leading-tight truncate">{state.snapshot?.workspace.name ?? "No workspace open"}</h2>
         </div>
       </header>
 
@@ -394,21 +393,21 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
       {state.phase === "error" && <ErrorState message={state.error ?? "The workspace could not be opened."} onDismiss={() => dispatch({ type: "dismiss" })} />}
       {state.phase === "ready" && (
         <div
-          className={styles.treeRegion}
+          className="flex min-h-0 flex-1 flex-col"
           aria-label={`${state.snapshot?.workspace.name} explorer`}
           onContextMenu={(event) => showContextMenu(event, { kind: "background" })}
         >
-          <p className={styles.path} title={state.snapshot?.workspace.root_path}>
+          <p className="m-0 overflow-hidden px-3 py-2 border-b border-border text-muted-foreground text-[0.6875rem] truncate" title={state.snapshot?.workspace.root_path}>
             {state.snapshot?.workspace.root_path}
           </p>
           {actionError && (
-            <p className={styles.actionError} role="alert">{actionError}</p>
+            <p className="m-0 px-3 py-[0.4rem] border-b border-[color-mix(in_srgb,var(--color-destructive)_45%,var(--color-border))] text-danger bg-[color-mix(in_srgb,var(--color-destructive)_9%,transparent)] text-[0.6875rem] leading-[1.4]" role="alert">{actionError}</p>
           )}
           {tree.length === 0 && !creating ? (
             <StatusState message="This workspace is empty. Right-click to create a new file or folder." />
           ) : (
             <ul
-              className={styles.tree}
+              className="min-h-0 flex-1 m-0 overflow-auto py-[0.375rem] list-none [scrollbar-color:var(--color-border)_transparent] [scrollbar-width:thin]"
               role="tree"
               aria-label={`${state.snapshot?.workspace.name} files`}
               onKeyDown={handleTreeKeyDown}
@@ -451,7 +450,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
               ))}
             </ul>
           )}
-          <p className={styles.readOnlyNote}>Right-click files, folders, or the background for actions.</p>
+          <p className="m-0 px-3 py-2 border-t border-border text-muted-foreground text-[0.625rem] leading-[1.35]">Right-click files, folders, or the background for actions.</p>
         </div>
       )}
 
@@ -584,7 +583,7 @@ const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
   }, [isDirectory, isExpanded, isMarkdownFile, node, onToggleFolder, onCollapseFolder, setActivePath, onMarkdownFileSelected]);
 
   return (
-    <li className={styles.treeItem} role="treeitem" aria-level={depth + 1} aria-expanded={isDirectory ? isExpanded : undefined}>
+    <li className="m-0 p-0" role="treeitem" aria-level={depth + 1} aria-expanded={isDirectory ? isExpanded : undefined}>
       {isRenaming ? (
         <InlineNameInput
           depth={depth}
@@ -600,7 +599,7 @@ const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
       ) : (
         <button
           ref={buttonRef}
-          className={styles.treeRow}
+          className="flex w-full min-w-0 items-center gap-1.5 py-[0.265rem] pr-3 border-0 text-sidebar-foreground bg-transparent font-inherit text-xs leading-tight text-left aria-disabled:cursor-default not-aria-disabled:cursor-pointer not-aria-disabled:hover:bg-[color-mix(in_srgb,var(--color-accent)_58%,transparent)] not-aria-disabled:focus-visible:bg-[color-mix(in_srgb,var(--color-accent)_58%,transparent)] focus-visible:outline-none"
           type="button"
           style={{ paddingLeft: `${0.75 + depth * 0.875}rem` }}
           aria-disabled={!isDirectory && !isMarkdownFile ? true : undefined}
@@ -617,14 +616,14 @@ const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
           }}
           aria-label={isDirectory ? `${isExpanded ? "Collapse" : "Expand"} ${node.entry.name}` : isMarkdownFile ? `Open ${node.entry.name}` : undefined}
         >
-          <span className={styles.treeIcon} aria-hidden="true">{isDirectory ? (isExpanded ? <FolderOpen /> : <Folder />) : <WorkspaceFileIcon name={node.entry.name} />}</span>
-          <span className={styles.entryName}>{node.entry.name}</span>
+          <span className="w-[0.625rem] flex-none text-muted-foreground text-center [&>svg]:w-[0.9rem] [&>svg]:h-[0.9rem] [&>svg]:stroke-current" aria-hidden="true">{isDirectory ? (isExpanded ? <FolderOpen /> : <Folder />) : <WorkspaceFileIcon name={node.entry.name} />}</span>
+          <span className="min-w-0 truncate">{node.entry.name}</span>
         </button>
       )}
       {isDirectory && isExpanded && (
         <>
           {isCreatingHere && (
-            <ul role="group">
+            <ul role="group" className="m-0 pl-[0.875rem] list-none">
               <InlineNameInput
                 depth={depth + 1}
                 icon={creating!.kind === "folder" ? <Folder /> : <WorkspaceFileIcon name="" />}
@@ -638,7 +637,7 @@ const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
             </ul>
           )}
           {node.children.length > 0 && (
-            <ul role="group">
+            <ul role="group" className="m-0 pl-[0.875rem] list-none">
               {node.children.map((child) => (
                 <WorkspaceTreeItem
                   key={child.entry.relative_path}
@@ -740,17 +739,17 @@ function InlineNameInput({
 
   const form = (
     <form
-      className={styles.treeRow}
+      className="flex w-full min-w-0 items-center gap-1.5 py-[0.265rem] pr-3 border-0 text-sidebar-foreground bg-transparent font-inherit text-xs leading-tight text-left"
       style={{ paddingLeft: `${0.75 + depth * 0.875}rem` }}
       onSubmit={(event: FormEvent) => {
         event.preventDefault();
         handleSubmit();
       }}
     >
-      <span className={styles.treeIcon} aria-hidden="true">{icon}</span>
+      <span className="w-[0.625rem] flex-none text-muted-foreground text-center [&>svg]:w-[0.9rem] [&>svg]:h-[0.9rem] [&>svg]:stroke-current" aria-hidden="true">{icon}</span>
       <input
         ref={inputRef}
-        className={styles.renameInput}
+        className="min-w-0 flex-1 border border-input rounded-small px-[0.3rem] py-[0.125rem] text-foreground bg-background font-inherit text-xs focus-visible:outline-2 focus-visible:outline-ring focus-visible:-outline-offset-1"
         value={value}
         disabled={disabled || submitting}
         placeholder={placeholder}
@@ -768,7 +767,7 @@ function InlineNameInput({
     </form>
   );
 
-  return wrapInListItem ? <li className={styles.treeItem}>{form}</li> : form;
+  return wrapInListItem ? <li className="m-0 p-0">{form}</li> : form;
 }
 
 // ---- Context menu ----
@@ -851,7 +850,7 @@ function WorkspaceContextMenu({ menu, onClose, onStartCreate, onStartRename, onR
   return (
     <div
       ref={menuRef}
-      className={styles.menu}
+      className="fixed z-20 min-w-[11rem] border border-border rounded-small bg-popover shadow-soft py-1 text-xs"
       role="menu"
       aria-label="Workspace actions"
       style={{ left: `${position.x}px`, top: `${position.y}px` }}
@@ -862,10 +861,10 @@ function WorkspaceContextMenu({ menu, onClose, onStartCreate, onStartRename, onR
       {target.kind === "folder" && <MenuButton label="New folder" onClick={handle(() => onStartCreate(createParentPath, "folder"))} />}
       {target.kind === "background" && <MenuButton label="New file" onClick={handle(() => onStartCreate("", "file"))} />}
       {target.kind === "background" && <MenuButton label="New folder" onClick={handle(() => onStartCreate("", "folder"))} />}
-      {target.kind !== "background" && <hr className={styles.menuSeparator} />}
+      {target.kind !== "background" && <hr className="my-1 border-0 border-t border-border" />}
       {target.kind !== "background" && <MenuButton label="Rename" onClick={handle(() => onStartRename(target.entry))} />}
       {target.kind !== "background" && <MenuButton label="Delete" danger onClick={handle(() => onRequestDelete(target.entry))} />}
-      {target.kind === "background" && <hr className={styles.menuSeparator} />}
+      {target.kind === "background" && <hr className="my-1 border-0 border-t border-border" />}
       {target.kind === "background" && <MenuButton label="Refresh" onClick={handle(() => { onRefresh(); onClose(); })} />}
       {target.kind === "background" && <MenuButton label="Open workspace…" onClick={handle(() => { onOpenWorkspace(); onClose(); })} />}
     </div>
@@ -880,7 +879,10 @@ function MenuButton({ label, danger = false, onClick }: {
   return (
     <button
       type="button"
-      className={danger ? styles.menuItemDanger : styles.menuItem}
+      className={cn(
+        "flex w-full items-center gap-2 border-0 px-3 py-[0.4rem] bg-transparent cursor-pointer font-inherit text-xs text-left hover:bg-accent focus-visible:bg-accent focus-visible:outline-none",
+        danger ? "text-danger" : "text-foreground"
+      )}
       role="menuitem"
       onClick={onClick}
     >
@@ -919,11 +921,11 @@ function DeleteConfirmDialog({ entry, onCancel, onConfirm }: {
   };
 
   return (
-    <div className={styles.deleteBackdrop} role="presentation" onMouseDown={onCancel}>
+    <div className="fixed z-30 inset-0 flex items-start justify-center pt-[18vh] bg-overlay" role="presentation" onMouseDown={onCancel}>
       <section
         ref={dialogRef}
         tabIndex={-1}
-        className={styles.deleteDialog}
+        className="grid gap-3 w-[min(25rem,calc(100vw-2rem))] p-[1.15rem] border border-border rounded-medium text-foreground bg-popover shadow-soft"
         role="dialog"
         aria-modal="true"
         aria-label="Confirm deletion"
@@ -931,15 +933,15 @@ function DeleteConfirmDialog({ entry, onCancel, onConfirm }: {
         onKeyDown={handleKeyDown}
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <h2>Delete {isFolder ? "folder" : "file"}?</h2>
-        <p id={descriptionId}>
+        <h2 className="m-0 text-base font-semibold">Delete {isFolder ? "folder" : "file"}?</h2>
+        <p id={descriptionId} className="m-0 text-muted-foreground text-[0.8rem] leading-[1.45]">
           {isFolder
             ? `"${entry.name}" and all of its contents will be permanently removed.`
             : `"${entry.name}" will be permanently removed.`}
         </p>
-        <div>
-          <button ref={cancelButtonRef} type="button" onClick={onCancel}>Cancel</button>
-          <button type="button" onClick={onConfirm}>Delete</button>
+        <div className="flex flex-wrap justify-end gap-[0.45rem]">
+          <button ref={cancelButtonRef} type="button" className="border border-border rounded-small px-[0.6rem] py-[0.4rem] text-foreground bg-surface cursor-pointer font-inherit text-xs" onClick={onCancel}>Cancel</button>
+          <button type="button" className="border border-border rounded-small px-[0.6rem] py-[0.4rem] text-destructive-foreground bg-destructive cursor-pointer font-inherit text-xs" onClick={onConfirm}>Delete</button>
         </div>
       </section>
     </div>
@@ -949,15 +951,26 @@ function DeleteConfirmDialog({ entry, onCancel, onConfirm }: {
 // ---- Helpers and small presentational components ----
 
 function EmptyState() {
-  return <div className={styles.emptyState}><strong>Choose a folder to begin</strong><p>ThinkBrain will show the current folder hierarchy without changing any files.</p></div>;
+  return (
+    <div className="my-auto p-5 text-muted-foreground text-xs leading-normal text-center">
+      <strong className="block mb-1 text-sidebar-foreground text-[0.8125rem]">Choose a folder to begin</strong>
+      <p className="m-0">ThinkBrain will show the current folder hierarchy without changing any files.</p>
+    </div>
+  );
 }
 
 function StatusState({ message }: { readonly message: string }) {
-  return <p className={styles.status} role="status">{message}</p>;
+  return <p className="my-auto p-5 text-muted-foreground text-xs leading-normal text-center" role="status">{message}</p>;
 }
 
 function ErrorState({ message, onDismiss }: { readonly message: string; readonly onDismiss: () => void }) {
-  return <div className={styles.error} role="alert"><strong>Could not open workspace</strong><p>{message}</p><button type="button" onClick={onDismiss}>Dismiss</button></div>;
+  return (
+    <div className="m-3 p-5 border border-[color-mix(in_srgb,var(--color-destructive)_45%,var(--color-border))] rounded-small text-danger bg-[color-mix(in_srgb,var(--color-destructive)_9%,transparent)] text-xs leading-normal" role="alert">
+      <strong className="block mb-1 text-sidebar-foreground text-[0.8125rem]">Could not open workspace</strong>
+      <p className="m-0">{message}</p>
+      <button type="button" className="mt-[0.625rem] border border-current rounded-small px-[0.4375rem] py-1 text-inherit bg-transparent cursor-pointer font-inherit text-[0.6875rem] hover:bg-[color-mix(in_srgb,currentColor_12%,transparent)]" onClick={onDismiss}>Dismiss</button>
+    </div>
+  );
 }
 
 export function WorkspaceSelector({ currentPath, paths, onSelect, onAdd }: { readonly currentPath?: string; readonly paths: readonly string[]; readonly onSelect: (path: string) => void; readonly onAdd: () => void }) {
@@ -1024,10 +1037,10 @@ export function WorkspaceSelector({ currentPath, paths, onSelect, onAdd }: { rea
   };
 
   return (
-    <div ref={selectorRef} className={styles.workspaceSelector}>
+    <div ref={selectorRef} className="relative mt-auto border-t border-border">
       <button
         ref={triggerRef}
-        className={styles.workspaceSelectorTrigger}
+        className="flex w-full min-w-0 items-center gap-[0.45rem] border-0 text-sidebar-foreground bg-transparent cursor-pointer font-inherit text-xs text-left px-3 py-[0.65rem] [&>svg]:w-[0.9rem] [&>svg]:h-[0.9rem] [&>svg]:stroke-current [&>svg:last-child]:ml-auto"
         type="button"
         aria-controls={menuId}
         aria-expanded={open}
@@ -1035,15 +1048,16 @@ export function WorkspaceSelector({ currentPath, paths, onSelect, onAdd }: { rea
         onClick={() => setOpen((value) => !value)}
       >
         <Folder aria-hidden="true" />
-        <span>{currentPath?.split(/[\\/]/).at(-1) ?? "Choose workspace"}</span>
+        <span className="truncate">{currentPath?.split(/[\\/]/).at(-1) ?? "Choose workspace"}</span>
         <ChevronDown aria-hidden="true" />
       </button>
       {open && (
-        <div ref={menuRef} id={menuId} className={styles.workspaceSelectorMenu} role="menu" aria-label="Workspaces" onKeyDown={handleKeyDown}>
+        <div ref={menuRef} id={menuId} className="absolute z-20 right-2 bottom-[calc(100%+0.35rem)] left-2 overflow-hidden border border-border rounded-small bg-popover shadow-soft p-1" role="menu" aria-label="Workspaces" onKeyDown={handleKeyDown}>
           {options.map((path) => (
             <button
               key={path}
               type="button"
+              className="flex w-full min-w-0 items-center gap-[0.45rem] border-0 text-sidebar-foreground bg-transparent cursor-pointer font-inherit text-xs text-left px-2 py-[0.45rem] rounded-small hover:bg-accent focus-visible:bg-accent focus-visible:outline-none [&>svg]:w-[0.9rem] [&>svg]:h-[0.9rem] [&>svg]:stroke-current"
               role="menuitem"
               aria-current={path === currentPath ? "true" : undefined}
               title={path}
@@ -1053,10 +1067,15 @@ export function WorkspaceSelector({ currentPath, paths, onSelect, onAdd }: { rea
               }}
             >
               <Folder aria-hidden="true" />
-              <span>{path.split(/[\\/]/).at(-1)}</span>
+              <span className="truncate">{path.split(/[\\/]/).at(-1)}</span>
             </button>
           ))}
-          <button type="button" role="menuitem" onClick={() => { closeMenu(true); onAdd(); }}>
+          <button
+            type="button"
+            className="flex w-full min-w-0 items-center gap-[0.45rem] border-0 text-sidebar-foreground bg-transparent cursor-pointer font-inherit text-xs text-left px-2 py-[0.45rem] rounded-small hover:bg-accent focus-visible:bg-accent focus-visible:outline-none [&>svg]:w-[0.9rem] [&>svg]:h-[0.9rem] [&>svg]:stroke-current"
+            role="menuitem"
+            onClick={() => { closeMenu(true); onAdd(); }}
+          >
             <FolderPlus aria-hidden="true" />
             <span>Add workspace</span>
           </button>

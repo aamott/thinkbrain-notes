@@ -1,5 +1,10 @@
 import { DesktopShell } from "./shell/DesktopShell";
+import { ThemeProvider } from "./settings/ThemeProvider";
 
 export default function App() {
-  return <DesktopShell />;
+  return (
+    <ThemeProvider>
+      <DesktopShell />
+    </ThemeProvider>
+  );
 }

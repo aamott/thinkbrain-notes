@@ -10,12 +10,26 @@ Open, local-first knowledge workspace (Obsidian/VS Code inspired). Standard Mark
 - **Modularity**: Files < 500 lines (max 1000). Prefer small, focused modules.
 
 ## File Map
-- `apps/desktop/src/`: `agent/` (AI), `commands/` (Palette), `git/` (Source control), `native/` (Tauri wrappers), `settings/` (Window), `shell/` (Layout), `tabs/` (Editor), `workspace/` (File tree).
-- `apps/desktop/src-tauri/src/`: Tauri entry, FS, git, ACP.
-- `packages/core/src/`: Parsing, notes.
-- `packages/ui/src/`: Components, tokens.
-- `plans/`: Tasks (`status-epic-urgency-difficulty.md`). Delete after review. 
-- `scripts/qa.sh`: Unified lint/test runner.
+**`apps/desktop/`** - React/Tauri App *(See `apps/desktop/src/AGENTS.md` and `apps/desktop/src-tauri/AGENTS.md`)*
+- `src/agent/`: AI logic & Assistant UI
+- `src/commands/`: Command palette
+- `src/git/`: Source control
+- `src/native/`: Tauri bridge adapters (isolate Rust calls here)
+- `src/shell/`: Layout, sidebars, panels
+- `src/tabs/`: Editor & tab management
+- `src/workspace/`: File explorer
+- `src-tauri/src/`: Rust backend (FS, Git, ACP host)
+- `src-tauri/capabilities/`: Tauri permissions
+
+**`packages/`** - Shared Libraries *(See `packages/core/AGENTS.md` and `packages/ui/AGENTS.md`)*
+- `core/src/`: Platform-agnostic models & parsing
+- `ui/src/components/`: Reusable components (shadcn)
+- `ui/src/styles/`: Tailwind v4 tokens/theme
+
+**Project Root**
+- `plans/`: Categorized tasks/epics
+- `docs/reviews/`: Subagent code review outputs
+- `scripts/qa.sh`: Unified lint/test runner
 
 ## UI & Styling
 - **Tailwind v4**: Tokens (`--tn-*`) in `packages/ui/src/styles/tokens.css`, mapped via `@theme inline` in `apps/desktop/src/index.css`. Use `cn()`.
