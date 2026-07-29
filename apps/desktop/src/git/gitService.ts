@@ -146,6 +146,13 @@ class LruCache<K, V> {
     return this.map.delete(key);
   }
 
+  deleteIfMatch(key: K, value: V): boolean {
+    if (this.map.get(key) === value) {
+      return this.map.delete(key);
+    }
+    return false;
+  }
+
   clear(): void {
     this.map.clear();
   }
@@ -163,10 +170,18 @@ export function createGitService(api: GitDesktopApi = createGitDesktopApi()): Gi
   const statuses = new LruCache<string, Promise<GitStatusResult>>(10);
 
   const checkAvailability = () => {
-    availability ??= api
-      .getAvailability()
-      .then(toAvailabilityResult)
-      .catch(toAvailabilityError);
+    if (!availability) {
+      const promise = api
+        .getAvailability()
+        .then(toAvailabilityResult)
+        .catch(() => {
+          if (availability === promise) {
+            availability = undefined;
+          }
+          return toAvailabilityError();
+        });
+      availability = promise;
+    }
 
     return availability;
   };
@@ -191,6 +206,12 @@ export function createGitService(api: GitDesktopApi = createGitDesktopApi()): Gi
         .then((native) => toRepositoryResult(rootPath, native))
         .catch(toRepositoryError);
     });
+
+    result.then((res) => {
+      if (res.kind === "error") {
+        repositories.deleteIfMatch(rootPath, result);
+      }
+    }).catch(() => {});
 
     repositories.set(rootPath, result);
     return result;
@@ -237,6 +258,12 @@ export function createGitService(api: GitDesktopApi = createGitDesktopApi()): Gi
 
       return api.getStatus(rootPath).then(toGitStatusResult).catch(toGitStatusError);
     });
+
+    result.then((res) => {
+      if (res.kind === "error") {
+        statuses.deleteIfMatch(rootPath, result);
+      }
+    }).catch(() => {});
 
     statuses.set(rootPath, result);
     return result;

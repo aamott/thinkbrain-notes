@@ -27,7 +27,7 @@ export function parseNote(markdown: string): ParsedNote {
     tags,
     aliases: frontmatterResult.metadata.aliases,
     wikiLinks: extractWikiLinks(maskedMarkdown),
-    tasks: extractMarkdownTasks(maskedMarkdown)
+    tasks: extractMarkdownTasks(maskedMarkdown, markdown)
   };
 }
 
@@ -104,21 +104,24 @@ export function extractWikiLinks(markdownBody: string): WikiLink[] {
   return links;
 }
 
-export function extractMarkdownTasks(markdownBody: string): MarkdownTask[] {
+export function extractMarkdownTasks(markdownBody: string, originalBody?: string): MarkdownTask[] {
   const tasks: MarkdownTask[] = [];
   const lines = markdownBody.split(/(\r?\n)/);
+  const origLines = originalBody ? originalBody.split(/(\r?\n)/) : lines;
 
   let currentOffset = 0;
   for (let i = 0; i < lines.length; i += 2) {
     const line = lines[i] ?? "";
+    const origLine = origLines[i] ?? "";
     const match = TASK_PATTERN.exec(line);
 
     if (match) {
+      const origMatch = TASK_PATTERN.exec(origLine);
       const startOffset = currentOffset + match.index;
       const endOffset = startOffset + match[0].length;
       tasks.push({
         checked: match[1]?.toLowerCase() === "x",
-        text: match[2]?.trim() ?? "",
+        text: origMatch?.[2]?.trim() ?? match[2]?.trim() ?? "",
         line: (i / 2) + 1,
         startOffset,
         endOffset
@@ -165,12 +168,12 @@ function maskMarkdown(markdown: string, frontmatter: { raw: string; endOffset: n
   }
 
   // Mask fenced code blocks (e.g., ```lang ... ``` or ~~~ ... ~~~)
-  masked = masked.replace(/^( {0,3})(`{3,}|~{3,})[^\n]*\n([^]*?)\n[ \t]*\2[ \t]*$/gm, (match) => {
+  masked = masked.replace(/^( {0,3})(`{3,}|~{3,})[^\n]*(?:\n([^]*?))?(?:\n[ \t]*\2[ \t]*$|(?![^]))/gm, (match) => {
     return match.replace(/[^\r\n]/g, " ");
   });
 
   // Mask inline code snippets
-  masked = masked.replace(/(`+)([^`\n]+?)\1/g, (match) => {
+  masked = masked.replace(/(`+)((?:[^`\n]|\n(?!\n))+?)\1/g, (match) => {
     return match.replace(/[^\r\n]/g, " ");
   });
 

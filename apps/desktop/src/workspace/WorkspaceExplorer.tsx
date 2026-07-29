@@ -570,8 +570,18 @@ const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
           setActivePath(node.entry.parent_path);
         }
         break;
+      case "Enter":
+      case " ":
+        event.preventDefault();
+        event.stopPropagation();
+        if (isDirectory) {
+          onToggleFolder(node.entry.relative_path);
+        } else if (isMarkdownFile) {
+          onMarkdownFileSelected(node.entry.relative_path);
+        }
+        break;
     }
-  }, [isDirectory, isExpanded, node, onToggleFolder, onCollapseFolder, setActivePath]);
+  }, [isDirectory, isExpanded, isMarkdownFile, node, onToggleFolder, onCollapseFolder, setActivePath, onMarkdownFileSelected]);
 
   return (
     <li className={styles.treeItem} role="treeitem" aria-level={depth + 1} aria-expanded={isDirectory ? isExpanded : undefined}>
