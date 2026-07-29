@@ -1,7 +1,7 @@
 ---
 name: comprehensive-review
-description: Parallel subagent code review. Subagents read files, analyze, and immediately write actionable markdown findings as they work.
-argument-hint: "[base-ref]  (default: HEAD)"
+description: Parallel subagent code review — splits the surface area into groups, dispatches up to 3 subagents per batch, each writes markdown files per action item to docs/reviews/<date>/
+argument-hint: "[base-ref]  (default: HEAD — reviews all uncommitted changes)"
 allowed-tools:
   - read
   - grep
@@ -16,80 +16,43 @@ allowed-tools:
   - find_file_by_name
 ---
 
-# Continuous Parallel Review
+# Comprehensive Review
 
-Review uncommitted changes by dispatching parallel subagents. Subagents analyze files sequentially, evaluate cross-file connections, and write actionable findings immediately as they work.
+Review a code surface area using parallel `small` subagents (max 3 concurrent). Subagents analyze assigned files sequentially and write grouped action items to finding files.
 
-## 1. Scope & Plan
+## Workflow
 
-* **Identify changes:** `git status --short`, `git diff --stat` (unstaged), `git diff --cached --stat` (staged). Diff against `<base>` if provided. Stop if no changes.
-* **Group files:** Divide changed files into logical units (e.g., Backend, Frontend, Docs/Config).
-* **Create Plan:** Use `todo_write` to map out batches (max 4 subagents per batch) and the final summary.
+### 1. Identify Surface Area & Group Files
+Run `git status` and `git diff --stat` (against `<base-ref>` if provided) to map changed files. Split files into logical groups for subagents.
 
-## 2. Dispatch Subagents
+### 2. Dispatch Subagents (Max 3 Concurrent)
+Dispatch up to **3 `small` subagents in parallel** (`is_background: true`). 
 
-Run up to **4 `small` subagents in parallel** (`is_background: true`). Pass these strict instructions to every subagent:
+**Instructions to include in every subagent prompt:**
+- Do NOT run build or test commands. Use only reading and diffing tools.
+- Follow this exact sequence for assigned files:
+  1. Read the file.
+  2. Summarize its architecture.
+  3. Summarize action items.
+  4. Write each action item into `docs/reviews/<YYYY-MM-DD>/<slug>,<difficulty>,<urgency>.md`. Combine action items meant to be fixed in the same go into the same file.
+  5. Repeat steps 1–4 for the next file.
+  6. Summarize connections between all files reviewed so far.
+  7. Summarize new action items derived from cross-file interactions (written using the same file naming format).
+  8. Repeat the entire process until all assigned files are completed.
 
-**Subagent Workflow:**
+### 3. Monitor & Throttle
+- Collect subagent outputs.
+- **Stop dispatching new subagents** if too many findings pile up—especially large-scale refactors—so they can be addressed first.
+- If findings are manageable, dispatch the next batch (max 3 at a time) until the entire review is complete.
 
-1. **Read** a file from your assigned list.
-2. **Consider** the code against the issue categories.
-3. **Write** a markdown file immediately if you find an actionable item. (Skip if clean).
-4. **Repeat** for the next file.
-5. **Consider connections** between all assigned files and write any cross-file findings.
-6. **Rule:** Write *only* action items.
+## Finding File Format
 
-**Constraints:**
-
-* NO long-running/background commands. NO build/test commands (`go test`, `npm build`, etc.). Use only `read`, `grep`, and `git diff`.
-
-**Issue Categories:**
-
-* **Backend (Go):** Leaks, race conditions, security gaps, missing locks, test validity, API breaks.
-* **Frontend (React/TS):** Stale closures, missing effect deps, memory leaks, accessibility, TS type gaps, Tailwind violations.
-* **Docs/Config:** Stale info, broken cross-references, unused/unpinned dependencies.
-
-## 3. Subagent File Writing Protocol
-
-Subagents must write each finding to `docs/reviews/<YYYY-MM-DD>/<slug>,<difficulty>,<urgency>.md`.
-
-* **Slug:** kebab-case descriptive name.
-* **Difficulty:** `trivial`, `easy`, `medium`, `hard`
-* **Urgency:** `low`, `medium`, `high`, `critical`
-
-**File Template:**
+**Filename**: `<slug>,<difficulty>,<urgency>.md` (e.g., `refactor-session-auth,medium,high.md`)
 
 ```markdown
-# <Finding Title>
-
-- **Difficulty:** <level>
-- **Urgency:** <level>
-- **File:** `<path>`
-- **Lines:** <range>
-
-## Description
-<What the issue is and why it matters>
-
-## Recommendation
-<Actionable fix>
-
-## Verification
-<How you confirmed the issue>
-
+- name: short descriptive title
+- file: absolute path
+- lines: line range
+- description: issue details and code references
+- verification: how this was confirmed
 ```
-
-## 4. Monitor Batches
-
-* Wait for the batch of 4 to finish (`read_subagent` with `block: true`).
-* If a subagent hangs, use `kill_shell` and re-dispatch with stricter limits.
-* Mark todos complete as batches finish.
-
-## 5. Final Summary
-
-Once all batches finish, create `docs/reviews/<YYYY-MM-DD>/README.md`:
-
-* Summary of the reviewed scope.
-* Total finding count.
-* Tables grouping findings by urgency, with file links and difficulty.
-
-Output a brief summary to the user highlighting the highest-urgency findings and linking to the index README.

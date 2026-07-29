@@ -1,7 +1,7 @@
 ---
 name: resolve-reviews
-description: Triage, fix, and delete review finding files. Dispatches parallel, non-overlapping subagents.
-argument-hint: "[reviews-folder] (default: most recent docs/reviews/<date>/)"
+description: Subagent-driven review fixer — processes action item finding files in batches, delegates fixes to subagents, and validates via parent-level tests, linting, and formatting before suggesting commits.
+argument-hint: "[dir] (default: docs/reviews/<YYYY-MM-DD> or latest review dir)"
 allowed-tools:
   - read
   - grep
@@ -11,41 +11,47 @@ allowed-tools:
   - edit
   - run_subagent
   - read_subagent
-  - kill_shell
   - todo_write
-  - find_file_by_name
 ---
 
-# Resolve Review Backlog
+# Fix Reviews
 
-Process a folder of review finding files (formatted as `<slug>,<difficulty>,<urgency>.md`). For each finding: **validate → plan → implement → verify → delete**. 
+Batch-fix review action items using parallel `small` subagents, validate changes centrally at the parent level, and recommend git commit messages per resolved batch.
 
-**CRITICAL RULE:** After a review action item is fixed and verified, you MUST **delete** its corresponding file. 
+## Workflow
 
-## 1. Backlog & Grouping
-- Target the requested folder (default: most recent `docs/reviews/<YYYY-MM-DD>/` containing pending `.md` files). Ignore `README.md` and already-resolved files (`*wontfix.md`, `*deferred.md`).
-- **Group tasks to prevent conflicts:** 
-  - **Parallel:** Group `trivial`/`easy`/`medium` items by primary file. Dispatch up to 4 concurrent subagents, ensuring **no two active subagents can touch the same file**.
-  - **Serial:** Run cross-cutting, multi-file, or `hard` difficulty items strictly one at a time.
+### 1. Collect & Group Action Items
+1. Locate finding files in `docs/reviews/<YYYY-MM-DD>/` (or passed path).
+2. Read files and group related findings into logical batches (max 3 concurrent fixes per batch). Focus on tightly coupled files or individual `<slug>,<difficulty>,<urgency>.md` units meant to be fixed together.
 
-## 2. Subagent Dispatch
-Dispatch subagents with an explicit list of allowed files and include these instructions:
-1. **Validate:** Confirm the issue is real and worth fixing. If the churn/risk outweighs the benefit, do not fix it.
-2. **Execute & Verify:** Implement the minimal fix. Run localized, package-scoped tests and linters only.
-3. **Report:** Output exactly one status per finding:
-   - `DONE — <summary>`
-   - `WONTFIX — <reason>`
-   - `DEFER — <reason>`
-   - `NEEDS-SCOPE — <file/dependency> — <why>`
+### 2. Dispatch Fix Subagents (Max 3 Concurrent)
+Dispatch up to **3 `small` subagents in parallel** (`is_background: true`).
 
-## 3. Process Results
-Process subagent reports immediately:
-- **DONE:** Spot-check the diff, run targeted tests, and **DELETE the review file**. 
-- **WONTFIX:** Append `## Resolution - WONTFIX` + reasoning to the bottom of the file, then rename it to `...,wontfix.md` to prevent re-review.
-- **DEFER:** Add the issue to `docs/known-issues.md`, then rename the review file to `...,deferred.md`.
-- **NEEDS-SCOPE:** Widen the subagent's allowed files and re-run the item serially so it cannot conflict with parallel work.
+**Instructions to include in every subagent prompt:**
+1. Read the assigned finding file(s) and target code files.
+2. Apply the required code modifications using `edit` or `write`.
+3. Do NOT run tests, linters, or git operations—leave validation to the parent.
+4. Report completed changes and any unexpected edge cases encountered.
 
-## 4. Final Verification
-After the queue is clear:
-1. Run a single project-wide verification step (e.g., global tests, builds, and linters).
-2. Print a short summary of the session: items deleted (done), items marked wontfix/deferred, and anything still pending.
+### 3. Validate Changes (Parent Level)
+Once a batch finishes, run project checks at the parent level:
+```sh
+# Run relevant formatters, linters, and test suites
+npm run format / cargo fmt / ruff format
+npm run lint / cargo clippy / ruff check
+npm test / cargo test / pytest
+```
+- **If checks fail**: Dispatch a targeted subagent or fix directly using check errors.
+- **If checks pass**: Mark the corresponding finding files with the `,done` suffix (or move/delete according to your workflow).
+
+### 4. Recommend Commit Message
+After each successfully validated batch, provide a clean, descriptive commit message recommendation:
+
+> **Suggested Commit:**
+> `fix(scope): brief summary of fixed action items`
+>
+> - Resolved `<slug-1>`
+> - Resolved `<slug-2>`
+
+### 5. Repeat
+Proceed to the next batch until all targeted finding files are resolved.
