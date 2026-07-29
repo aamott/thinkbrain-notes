@@ -137,23 +137,18 @@ export function extractMarkdownTasks(markdownBody: string): MarkdownTask[] {
 function collectMatches(
   markdownBody: string,
   pattern: RegExp,
-  pickValue: (match: RegExpExecArray) => string | undefined
+  pickValue: (match: RegExpMatchArray) => string | undefined
 ): string[] {
   const values: string[] = [];
-  pattern.lastIndex = 0;
-  let match = pattern.exec(markdownBody);
 
-  while (match) {
+  for (const match of markdownBody.matchAll(pattern)) {
     const value = pickValue(match)?.trim();
 
     if (value) {
       values.push(value);
     }
-
-    match = pattern.exec(markdownBody);
   }
 
-  pattern.lastIndex = 0;
   return uniqueStrings(values);
 }
 

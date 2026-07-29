@@ -24,7 +24,12 @@ export interface CommandPaletteResults {
   readonly status: "results" | "empty";
 }
 
-export type CommandPaletteKey = "ArrowUp" | "ArrowDown" | "Home" | "End" | "Enter" | "Escape";
+export const COMMAND_PALETTE_KEYS = ["ArrowUp", "ArrowDown", "Home", "End", "Enter", "Escape"] as const;
+export type CommandPaletteKey = typeof COMMAND_PALETTE_KEYS[number];
+
+export function isCommandPaletteKey(key: string): key is CommandPaletteKey {
+  return (COMMAND_PALETTE_KEYS as readonly string[]).includes(key);
+}
 
 export interface CommandPaletteKeyDecision {
   readonly state: CommandPaletteState;

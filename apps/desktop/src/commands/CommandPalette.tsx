@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { cn } from "@/lib/utils";
 import {
-  type CommandPaletteKey,
   type PaletteItem,
   type WorkspaceFileResult,
   getCommandPaletteResults,
   handleCommandPaletteKey,
   initialCommandPaletteState,
-  setCommandPaletteQuery
+  setCommandPaletteQuery,
+  isCommandPaletteKey
 } from "./commandPaletteModel";
 import type { DesktopCommand } from "./commandRegistry";
 
@@ -52,11 +52,11 @@ export function CommandPalette({ commands, files, onClose, onCommand, onOpenFile
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (!["Escape", "Enter", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) {
+    if (!isCommandPaletteKey(event.key)) {
       return;
     }
     event.preventDefault();
-    const decision = handleCommandPaletteKey(state, commands, files, event.key as CommandPaletteKey);
+    const decision = handleCommandPaletteKey(state, commands, files, event.key);
     setState(decision.state);
     if (decision.type === "close") {
       onClose();
