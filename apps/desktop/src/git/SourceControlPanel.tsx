@@ -8,7 +8,6 @@ import {
   type GitStatusResult
 } from "./gitService";
 import { createSourceControlRequestGate } from "./sourceControlRequestGate";
-import styles from "./SourceControlPanel.module.css";
 
 export interface SourceControlPanelProps {
   readonly rootPath: string | null;
@@ -220,8 +219,8 @@ export function SourceControlPanelContent({
   readonly onUnstage?: (paths: readonly string[]) => void;
 }) {
   return (
-    <section aria-label="Source control" className={styles.panel}>
-      {state.kind === "loading" && <p aria-live="polite" className={styles.message} role="status">Checking Git…</p>}
+    <section aria-label="Source control" className="text-foreground flex flex-1 flex-col text-[.8rem] min-h-0 overflow-auto">
+      {state.kind === "loading" && <p aria-live="polite" className="items-center text-muted-foreground flex flex-1 flex-col justify-center leading-normal m-0 p-6 text-center" role="status">Checking Git…</p>}
       {state.kind === "no-workspace" && (
         <EmptyState title="Open a workspace">
           Open a workspace to view its Git repository information.
@@ -255,12 +254,12 @@ export function SourceControlPanelContent({
         </EmptyState>
       )}
       {state.kind === "repository" && (
-        <div className={styles.repository}>
-          <div className={styles.repositoryHeader}>
-            <h2>Repository</h2>
-            <div className={styles.repositoryActions}>
+        <div className="flex flex-1 flex-col gap-[.8rem] py-[.85rem] px-[.75rem]">
+          <div className="items-center flex gap-2 justify-between">
+            <h2 className="text-foreground text-[.82rem] m-0 mb-[.45rem] tracking-[.06em] uppercase">Repository</h2>
+            <div className="items-center flex gap-2">
               <button
-                className={styles.refreshButton}
+                className="bg-transparent border border-border rounded-small text-foreground cursor-pointer font-inherit text-[.72rem] py-[.3rem] px-[.45rem] focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 disabled:cursor-wait disabled:opacity-65"
                 disabled={state.isRefreshing || !onStage || stageablePaths(state.status).length === 0}
                 onClick={() => onStage?.(stageablePaths(state.status))}
                 type="button"
@@ -269,7 +268,7 @@ export function SourceControlPanelContent({
               </button>
               <button
                 aria-label="Refresh Git changes"
-                className={styles.refreshButton}
+                className="bg-transparent border border-border rounded-small text-foreground cursor-pointer font-inherit text-[.72rem] py-[.3rem] px-[.45rem] focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 disabled:cursor-wait disabled:opacity-65"
                 disabled={state.isRefreshing || !onRefresh}
                 onClick={onRefresh}
                 type="button"
@@ -278,12 +277,12 @@ export function SourceControlPanelContent({
               </button>
             </div>
           </div>
-          {state.initialized && <p aria-live="polite" role="status">Repository initialized.</p>}
-          {state.actionError && <p className={styles.actionError} role="alert">{state.actionError}</p>}
-          <dl>
-            <div>
-              <dt>Branch</dt>
-              <dd>{state.branch ?? "Detached HEAD"}</dd>
+          {state.initialized && <p aria-live="polite" role="status" className="m-0 max-w-[18rem] text-muted-foreground text-[.72rem]">Repository initialized.</p>}
+          {state.actionError && <p className="bg-[color-mix(in_srgb,var(--tn-color-destructive)_9%,transparent)] border border-[color-mix(in_srgb,var(--tn-color-destructive)_45%,var(--tn-color-border))] rounded-small text-danger text-[.72rem] m-0 py-2 px-[.6rem]" role="alert">{state.actionError}</p>}
+          <dl className="border border-border rounded-small m-0">
+            <div className="grid grid-cols-[5rem_minmax(0,1fr)]">
+              <dt className="m-0 py-2 px-[.6rem] text-muted-foreground">Branch</dt>
+              <dd className="m-0 py-2 px-[.6rem] font-mono overflow-hidden text-ellipsis whitespace-nowrap">{state.branch ?? "Detached HEAD"}</dd>
             </div>
           </dl>
           <GitStatusGroups
@@ -312,11 +311,11 @@ function GitStatusGroups({
   const changeCount = status.staged.length + status.changed.length + status.untracked.length;
 
   if (!changeCount) {
-    return <p className={styles.cleanState}>No uncommitted changes.</p>;
+    return <p className="border border-dashed border-border rounded-small p-[.65rem]">No uncommitted changes.</p>;
   }
 
   return (
-    <div className={styles.changeGroups}>
+    <div className="flex flex-col gap-[.8rem]">
       <ChangeGroup actionLabel="Unstage" entries={status.staged} isUpdating={isUpdating} onAction={onUnstage} title="Staged" />
       <ChangeGroup actionLabel="Stage" entries={status.changed} isUpdating={isUpdating} onAction={onStage} title="Changed" />
       <ChangeGroup actionLabel="Stage" entries={status.untracked} isUpdating={isUpdating} onAction={onStage} title="Untracked" />
@@ -340,17 +339,17 @@ function ChangeGroup({
   if (!entries.length) return null;
 
   return (
-    <section aria-label={`${title} files`} className={styles.changeGroup}>
-      <h3>{title} <span>{entries.length}</span></h3>
-      <ul>
+    <section aria-label={`${title} files`} className="border border-border rounded-small overflow-hidden">
+      <h3 className="items-center bg-accent text-foreground flex text-[.72rem] justify-between tracking-[.04em] m-0 py-[.42rem] px-[.6rem] uppercase">{title} <span className="text-muted-foreground tabular-nums">{entries.length}</span></h3>
+      <ul className="list-none m-0 p-0">
         {entries.map((entry) => (
-          <li key={`${entry.path}:${entry.indexStatus}:${entry.worktreeStatus}`}>
-            <span title={entry.path}>{entry.path}</span>
-            <span className={styles.fileActions}>
-              <code aria-label={`${entry.path} Git status`}>{entry.indexStatus}{entry.worktreeStatus}</code>
+          <li key={`${entry.path}:${entry.indexStatus}:${entry.worktreeStatus}`} className="items-center border-t border-border flex gap-2 justify-between min-w-0 py-[.4rem] px-[.6rem]">
+            <span title={entry.path} className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">{entry.path}</span>
+            <span className="items-center flex flex-none gap-[.4rem]">
+              <code aria-label={`${entry.path} Git status`} className="text-muted-foreground flex-none font-mono text-[.68rem]">{entry.indexStatus}{entry.worktreeStatus}</code>
               {onAction && <button
                 aria-label={`${actionLabel} ${entry.path}`}
-                className={styles.fileAction}
+                className="bg-transparent border border-border rounded-small text-foreground cursor-pointer font-inherit text-[.72rem] py-[.3rem] px-[.45rem] focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 disabled:cursor-wait disabled:opacity-65"
                 disabled={isUpdating}
                 onClick={() => onAction([entry.path])}
                 type="button"
@@ -379,15 +378,15 @@ function EmptyState({
   readonly title: string;
 }) {
   return (
-    <div className={styles.emptyState}>
-      <h2>{title}</h2>
-      <div role={alert ? "alert" : undefined}>{children}</div>
+    <div className="items-center text-muted-foreground flex flex-1 flex-col justify-center leading-normal m-0 p-6 text-center">
+      <h2 className="text-foreground text-[.82rem] m-0 mb-[.45rem]">{title}</h2>
+      <div className="m-0 max-w-[18rem]" role={alert ? "alert" : undefined}>{children}</div>
     </div>
   );
 }
 
 function InitializeButton({ onInitialize }: { readonly onInitialize?: () => void }) {
-  return <button className={styles.initializeButton} disabled={!onInitialize} onClick={onInitialize} type="button">Initialize repository</button>;
+  return <button className="bg-accent border border-border rounded-small text-foreground cursor-pointer font-inherit mt-[.9rem] py-[.42rem] px-[.65rem] focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 disabled:cursor-wait disabled:opacity-65" disabled={!onInitialize} onClick={onInitialize} type="button">Initialize repository</button>;
 }
 
 function initializationFailureState(result: GitRepositoryResult): SourceControlPanelState {

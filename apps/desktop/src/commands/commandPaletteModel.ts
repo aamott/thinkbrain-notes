@@ -1,5 +1,14 @@
 import type { DesktopCommand } from "./commandRegistry";
 
+export interface WorkspaceFileResult {
+  readonly rootPath: string;
+  readonly relativePath: string;
+}
+
+export type PaletteItem =
+  | { readonly id: string; readonly kind: "command"; readonly command: DesktopCommand }
+  | { readonly id: string; readonly kind: "file"; readonly file: WorkspaceFileResult };
+
 export interface CommandPaletteState {
   readonly query: string;
   /** Index into the current filtered result set, never an absolute registry index. */
@@ -7,9 +16,11 @@ export interface CommandPaletteState {
 }
 
 export interface CommandPaletteResults {
-  readonly commands: readonly DesktopCommand[];
+  readonly commandResults: readonly DesktopCommand[];
+  readonly fileResults: readonly WorkspaceFileResult[];
+  readonly items: readonly PaletteItem[];
   readonly activeIndex: number;
-  readonly activeCommand: DesktopCommand | null;
+  readonly activeItem: PaletteItem | null;
   readonly status: "results" | "empty";
 }
 
@@ -18,7 +29,7 @@ export type CommandPaletteKey = "ArrowUp" | "ArrowDown" | "Home" | "End" | "Ente
 export interface CommandPaletteKeyDecision {
   readonly state: CommandPaletteState;
   readonly type: "none" | "close" | "execute";
-  readonly command?: DesktopCommand;
+  readonly item?: PaletteItem;
 }
 
 export const initialCommandPaletteState: CommandPaletteState = {
@@ -44,17 +55,34 @@ export function filterDesktopCommands(
     .map(({ command }) => command);
 }
 
+export function filterWorkspaceFiles(
+  files: readonly WorkspaceFileResult[],
+  query: string
+): readonly WorkspaceFileResult[] {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return [];
+  return files.filter((file) => file.relativePath.toLowerCase().includes(needle));
+}
+
 export function getCommandPaletteResults(
   state: CommandPaletteState,
-  commands: readonly DesktopCommand[]
+  commands: readonly DesktopCommand[],
+  files: readonly WorkspaceFileResult[]
 ): CommandPaletteResults {
-  const filtered = filterDesktopCommands(commands, state.query);
-  const activeIndex = clampActiveIndex(state.activeIndex, filtered.length);
+  const commandResults = filterDesktopCommands(commands, state.query);
+  const fileResults = filterWorkspaceFiles(files, state.query);
+  const items: readonly PaletteItem[] = [
+    ...commandResults.map((command) => ({ id: `command-${command.id}`, kind: "command" as const, command })),
+    ...fileResults.map((file) => ({ id: `file-${file.relativePath}`, kind: "file" as const, file }))
+  ];
+  const activeIndex = clampActiveIndex(state.activeIndex, items.length);
   return {
-    commands: filtered,
+    commandResults,
+    fileResults,
+    items,
     activeIndex,
-    activeCommand: filtered[activeIndex] ?? null,
-    status: filtered.length ? "results" : "empty"
+    activeItem: items[activeIndex] ?? null,
+    status: items.length ? "results" : "empty"
   };
 }
 
@@ -70,15 +98,16 @@ export function setCommandPaletteQuery(query: string): CommandPaletteState {
 export function handleCommandPaletteKey(
   state: CommandPaletteState,
   commands: readonly DesktopCommand[],
+  files: readonly WorkspaceFileResult[],
   key: CommandPaletteKey
 ): CommandPaletteKeyDecision {
-  const results = getCommandPaletteResults(state, commands);
-  const count = results.commands.length;
+  const results = getCommandPaletteResults(state, commands, files);
+  const count = results.items.length;
 
   if (key === "Escape") return { state: { ...state, activeIndex: results.activeIndex }, type: "close" };
   if (key === "Enter") {
-    return results.activeCommand
-      ? { state: { ...state, activeIndex: results.activeIndex }, type: "execute", command: results.activeCommand }
+    return results.activeItem
+      ? { state: { ...state, activeIndex: results.activeIndex }, type: "execute", item: results.activeItem }
       : { state: { ...state, activeIndex: results.activeIndex }, type: "none" };
   }
   if (!count) return { state: { ...state, activeIndex: 0 }, type: "none" };

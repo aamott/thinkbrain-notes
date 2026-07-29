@@ -4,8 +4,7 @@ import type {
   FrontmatterParseResult,
   NoteDiagnostic,
   NoteMetadata,
-  ParsedFrontmatterBlock,
-  SerializableNote
+  ParsedFrontmatterBlock
 } from "./note-model";
 
 const FRONTMATTER_OPEN_PATTERN = /^(?:\uFEFF)?---[ \t]*(?:\r?\n|$)/;
@@ -97,33 +96,30 @@ export function parseFrontmatter(markdown: string): FrontmatterParseResult {
  *   A fenced YAML frontmatter block.
  */
 export function serializeFrontmatter(metadata: Readonly<Record<string, unknown>>): string {
-  const yamlText = stringify(metadata, { lineWidth: 0 }).trimEnd();
+  const cleanMetadata = { ...metadata };
+
+  if (Array.isArray(cleanMetadata.tags) && cleanMetadata.tags.length === 0) {
+    delete cleanMetadata.tags;
+  }
+
+  if (Array.isArray(cleanMetadata.aliases) && cleanMetadata.aliases.length === 0) {
+    delete cleanMetadata.aliases;
+  }
+
+  if (Object.keys(cleanMetadata).length === 0) {
+    return "";
+  }
+
+  const yamlText = stringify(cleanMetadata, { lineWidth: 0 }).trimEnd();
 
   if (yamlText.length === 0) {
-    return "---\n---";
+    return "";
   }
 
   return `---\n${yamlText}\n---`;
 }
 
-/**
- * Serializes a complete Markdown note when a caller explicitly chooses to save.
- *
- * Args:
- *   note: Metadata and Markdown body to serialize.
- *
- * Returns:
- *   Markdown contents with YAML frontmatter followed by the body.
- */
-export function serializeNote(note: SerializableNote): string {
-  const frontmatter = serializeFrontmatter(note.metadata);
 
-  if (note.body.length === 0) {
-    return frontmatter;
-  }
-
-  return `${frontmatter}\n${note.body}`;
-}
 
 export function normalizeNoteMetadata(
   fields: Readonly<Record<string, unknown>>,

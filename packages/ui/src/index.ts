@@ -1,3 +1,3 @@
 export { Button } from "./components/Button";
 export type { ButtonProps, ButtonVariant } from "./components/Button";
-export { classNames } from "./lib/classNames";
+export { cn } from "./lib/utils";

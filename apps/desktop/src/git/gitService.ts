@@ -16,8 +16,9 @@ type GitCommandName =
 
 export interface GitCommandInvoker {
   <TCommand extends GitCommandName>(
-    command: TCommand,
-    args?: NativeCommandMap[TCommand]["args"]
+    ...[command, args]: NativeCommandMap[TCommand]["args"] extends undefined
+      ? [command: TCommand]
+      : [command: TCommand, args: NativeCommandMap[TCommand]["args"]]
   ): Promise<NativeCommandMap[TCommand]["result"]>;
 }
 
@@ -118,6 +119,38 @@ export function createGitDesktopApi(
   };
 }
 
+class LruCache<K, V> {
+  private map = new Map<K, V>();
+  constructor(private maxSize: number) {}
+
+  get(key: K): V | undefined {
+    if (!this.map.has(key)) return undefined;
+    const value = this.map.get(key)!;
+    this.map.delete(key);
+    this.map.set(key, value);
+    return value;
+  }
+
+  set(key: K, value: V): this {
+    if (this.map.has(key)) {
+      this.map.delete(key);
+    } else if (this.map.size >= this.maxSize) {
+      const firstKey = this.map.keys().next().value;
+      if (firstKey !== undefined) this.map.delete(firstKey);
+    }
+    this.map.set(key, value);
+    return this;
+  }
+
+  delete(key: K): boolean {
+    return this.map.delete(key);
+  }
+
+  clear(): void {
+    this.map.clear();
+  }
+}
+
 /**
  * Native Git is optional. This service deliberately returns user-safe states
  * instead of bridge errors so each Git UI can render a useful empty state.
@@ -126,8 +159,8 @@ export function createGitDesktopApi(
  */
 export function createGitService(api: GitDesktopApi = createGitDesktopApi()): GitService {
   let availability: Promise<GitAvailabilityResult> | undefined;
-  const repositories = new Map<string, Promise<GitRepositoryResult>>();
-  const statuses = new Map<string, Promise<GitStatusResult>>();
+  const repositories = new LruCache<string, Promise<GitRepositoryResult>>(10);
+  const statuses = new LruCache<string, Promise<GitStatusResult>>(10);
 
   const checkAvailability = () => {
     availability ??= api

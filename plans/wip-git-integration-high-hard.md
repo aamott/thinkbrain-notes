@@ -24,6 +24,7 @@ In scope:
 - commit staged files
 - branch list + current branch
 - source-control sidebar panel (activity bar + left sidebar)
+- VS Code-style inline diff viewer (side-by-side or unified)
 - useful errors for common Git failures
 
 Non-goals (deferred or out of scope):
@@ -109,3 +110,4 @@ No other epic blocks this one.
 - ⬜ Branch list + current branch
 - ⬜ Source-control sidebar panel — activity bar entry + left sidebar panel
 - ⬜ Git error handling — useful typed errors for common Git failures
+- ⬜ VS Code-style diff viewer — side-by-side or unified inline diff for changed files

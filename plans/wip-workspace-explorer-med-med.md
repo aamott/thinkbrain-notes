@@ -6,8 +6,11 @@
 
 ## Goal
 
-Extend the file explorer beyond Markdown-only editing so users can manage all
-vault contents (attachments, config files, folders) without leaving the app.
+Extend the file explorer beyond Markdown-only editing so users can manage and
+open all vault contents — text/code files, images, audio, video, attachments,
+config files, and folders — without leaving the app. Supported file types open
+in-app with dedicated viewers; unsupported binary formats fall back to the OS
+default application.
 
 ## Scope
 
@@ -58,3 +61,7 @@ vault contents (attachments, config files, folders) without leaving the app.
 - ⬜ New-folder action — see `pending-new_folder_action-med-med.md`
 - ⬜ Show-hidden toggle for dot-prefixed entries — see
   `pending-show_hidden_toggle-med-med.md`
+- ⬜ Native file watcher (external changes sync) — see
+  `pending-file_watcher-med-hard.md`
+- ⬜ SQLite FTS5 full-text search backend — see
+  `pending-fts5_search_backend-low-hard.md`

@@ -1,0 +1,5 @@
+- name: Unwanted Frontmatter Injection on Serialization
+- file: /media/adam/extex/projects/thinkbrain-notes/packages/core/src/frontmatter.ts
+- lines: 99-121
+- description: `serializeFrontmatter` will inject a YAML block if `cleanMetadata.tags` or `cleanMetadata.aliases` are not empty. However, if a note contains inline tags (e.g. `#tag`), `parseNote` populates `metadata.tags` with them. If this note is then serialized, those inline tags will be incorrectly injected into a new frontmatter YAML block, removing the note's original body-only nature. We need to distinguish between explicit frontmatter metadata and derived metadata, or filter out inline tags before serialization.
+- verification: Verified by inspecting `packages/core/src/frontmatter.ts` and `markdown.ts`.

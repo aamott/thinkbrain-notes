@@ -350,9 +350,11 @@ export function DesktopShell() {
     const finish = () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", finish);
+      window.removeEventListener("pointercancel", finish);
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", finish);
+    window.addEventListener("pointercancel", finish);
   };
 
   const resizeWithKeyboard = (side: "left" | "right") => (event: ReactKeyboardEvent<HTMLButtonElement>) => {

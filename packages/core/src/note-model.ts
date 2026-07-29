@@ -34,12 +34,16 @@ export interface WikiLink {
   readonly target: string;
   readonly displayText?: string;
   readonly position: number;
+  readonly startOffset: number;
+  readonly endOffset: number;
 }
 
 export interface MarkdownTask {
   readonly checked: boolean;
   readonly text: string;
   readonly line: number;
+  readonly startOffset: number;
+  readonly endOffset: number;
 }
 
 export interface ParsedNote extends FrontmatterParseResult {

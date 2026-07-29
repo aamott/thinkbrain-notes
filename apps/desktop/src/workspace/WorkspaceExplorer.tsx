@@ -276,6 +276,59 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
       return next;
     });
   }, []);
+  const collapseFolder = useCallback((relativePath: string) => {
+    setExpandedFolders((current) => {
+      if (!current.has(relativePath)) return current;
+      const next = new Set(current);
+      next.delete(relativePath);
+      return next;
+    });
+  }, []);
+
+  const [activePath, setActivePath] = useState<string | null>(null);
+
+  const visiblePaths = useMemo(() => {
+    const paths: string[] = [];
+    const traverse = (nodes: readonly WorkspaceTreeNode[]) => {
+      for (const n of nodes) {
+        paths.push(n.entry.relative_path);
+        if (n.entry.kind === "directory" && expandedFolders.has(n.entry.relative_path)) {
+          traverse(n.children);
+        }
+      }
+    };
+    traverse(tree);
+    return paths;
+  }, [tree, expandedFolders]);
+
+  const handleTreeKeyDown = useCallback((event: ReactKeyboardEvent<HTMLUListElement>) => {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      if (visiblePaths.length === 0) return;
+      const currentPath = activePath ?? visiblePaths[0];
+      if (!currentPath) return;
+      const currentIndex = visiblePaths.indexOf(currentPath);
+      if (currentIndex === -1) return;
+
+      if (event.key === "ArrowDown") {
+        const nextIndex = Math.min(currentIndex + 1, visiblePaths.length - 1);
+        const nextPath = visiblePaths[nextIndex];
+        if (nextPath) setActivePath(nextPath);
+      } else {
+        const prevIndex = Math.max(currentIndex - 1, 0);
+        const prevPath = visiblePaths[prevIndex];
+        if (prevPath) setActivePath(prevPath);
+      }
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      const firstPath = visiblePaths[0];
+      if (firstPath) setActivePath(firstPath);
+    } else if (event.key === "End") {
+      event.preventDefault();
+      const lastPath = visiblePaths[visiblePaths.length - 1];
+      if (lastPath) setActivePath(lastPath);
+    }
+  }, [visiblePaths, activePath]);
 
   // ---- Context menu ----
 
@@ -354,7 +407,12 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
           {tree.length === 0 && !creating ? (
             <StatusState message="This workspace is empty. Right-click to create a new file or folder." />
           ) : (
-            <ul className={styles.tree} role="tree" aria-label={`${state.snapshot?.workspace.name} files`}>
+            <ul
+              className={styles.tree}
+              role="tree"
+              aria-label={`${state.snapshot?.workspace.name} files`}
+              onKeyDown={handleTreeKeyDown}
+            >
               {creating && creating.parentPath === "" && (
                 <InlineNameInput
                   depth={0}
@@ -368,16 +426,20 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
                   onCancel={() => setCreating(null)}
                 />
               )}
-              {tree.map((node) => (
+              {tree.map((node, index) => (
                 <WorkspaceTreeItem
                   key={node.entry.relative_path}
                   node={node}
+                  isFirst={index === 0}
+                  activePath={activePath}
+                  setActivePath={setActivePath}
                   onMarkdownFileSelected={handleMarkdownFileSelected}
                   onContextMenu={showContextMenu}
                   renaming={renaming}
                   creating={creating}
                   expandedFolders={expandedFolders}
                   onToggleFolder={toggleFolder}
+                  onCollapseFolder={collapseFolder}
                   onSubmitRename={submitRename}
                   onSubmitCreate={submitCreate}
                   onCancelRename={() => setRenaming(null)}
@@ -427,12 +489,16 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
 const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
   node,
   depth = 0,
+  isFirst = false,
+  activePath,
+  setActivePath,
   onMarkdownFileSelected,
   onContextMenu,
   renaming,
   creating,
   expandedFolders,
   onToggleFolder,
+  onCollapseFolder,
   onSubmitRename,
   onSubmitCreate,
   onCancelRename,
@@ -443,12 +509,16 @@ const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
 }: {
   readonly node: WorkspaceTreeNode;
   readonly depth?: number;
+  readonly isFirst?: boolean;
+  readonly activePath: string | null;
+  readonly setActivePath: (path: string) => void;
   readonly onMarkdownFileSelected: (relativePath: string) => void;
   readonly onContextMenu: (event: ReactMouseEvent, target: ContextMenuTarget) => void;
   readonly renaming: RenameState | null;
   readonly creating: CreateState | null;
   readonly expandedFolders: ReadonlySet<string>;
   readonly onToggleFolder: (relativePath: string) => void;
+  readonly onCollapseFolder: (relativePath: string) => void;
   readonly onSubmitRename: (target: RenameState, newName: string) => Promise<boolean>;
   readonly onSubmitCreate: (target: CreateState, name: string) => Promise<boolean>;
   readonly onCancelRename: () => void;
@@ -464,6 +534,44 @@ const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
   const isExpanded = expandedFolders.has(node.entry.relative_path);
   const isRenaming = renaming?.entry.relative_path === node.entry.relative_path;
   const isCreatingHere = creating?.parentPath === node.entry.relative_path;
+
+  const isActive = activePath === node.entry.relative_path;
+  const isFocusable = isActive || (activePath === null && isFirst);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (isActive && document.activeElement !== buttonRef.current) {
+      buttonRef.current?.focus();
+    }
+  }, [isActive]);
+
+  const handleKeyDown = useCallback((event: ReactKeyboardEvent<HTMLButtonElement>) => {
+    switch (event.key) {
+      case "ArrowRight":
+        event.preventDefault();
+        event.stopPropagation();
+        if (isDirectory) {
+          if (!isExpanded) {
+            onToggleFolder(node.entry.relative_path);
+          } else {
+            const firstChild = node.children[0];
+            if (firstChild) {
+              setActivePath(firstChild.entry.relative_path);
+            }
+          }
+        }
+        break;
+      case "ArrowLeft":
+        event.preventDefault();
+        event.stopPropagation();
+        if (isDirectory && isExpanded) {
+          onCollapseFolder(node.entry.relative_path);
+        } else if (node.entry.parent_path) {
+          setActivePath(node.entry.parent_path);
+        }
+        break;
+    }
+  }, [isDirectory, isExpanded, node, onToggleFolder, onCollapseFolder, setActivePath]);
 
   return (
     <li className={styles.treeItem} role="treeitem" aria-level={depth + 1} aria-expanded={isDirectory ? isExpanded : undefined}>
@@ -481,15 +589,22 @@ const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
         />
       ) : (
         <button
+          ref={buttonRef}
           className={styles.treeRow}
           type="button"
           style={{ paddingLeft: `${0.75 + depth * 0.875}rem` }}
-          disabled={!isDirectory && !isMarkdownFile}
+          aria-disabled={!isDirectory && !isMarkdownFile ? true : undefined}
+          tabIndex={isFocusable ? 0 : -1}
+          onKeyDown={handleKeyDown}
           onClick={() => {
+            setActivePath(node.entry.relative_path);
             if (isDirectory) onToggleFolder(node.entry.relative_path);
             else if (isMarkdownFile) onMarkdownFileSelected(node.entry.relative_path);
           }}
-          onContextMenu={(event) => onContextMenu(event, { kind: isDirectory ? "folder" : "file", entry: node.entry })}
+          onContextMenu={(event) => {
+            setActivePath(node.entry.relative_path);
+            onContextMenu(event, { kind: isDirectory ? "folder" : "file", entry: node.entry });
+          }}
           aria-label={isDirectory ? `${isExpanded ? "Collapse" : "Expand"} ${node.entry.name}` : isMarkdownFile ? `Open ${node.entry.name}` : undefined}
         >
           <span className={styles.treeIcon} aria-hidden="true">{isDirectory ? (isExpanded ? <FolderOpen /> : <Folder />) : <WorkspaceFileIcon name={node.entry.name} />}</span>
@@ -519,12 +634,16 @@ const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
                   key={child.entry.relative_path}
                   node={child}
                   depth={depth + 1}
+                  isFirst={false}
+                  activePath={activePath}
+                  setActivePath={setActivePath}
                   onMarkdownFileSelected={onMarkdownFileSelected}
                   onContextMenu={onContextMenu}
                   renaming={renaming}
                   creating={creating}
                   expandedFolders={expandedFolders}
                   onToggleFolder={onToggleFolder}
+                  onCollapseFolder={onCollapseFolder}
                   onSubmitRename={onSubmitRename}
                   onSubmitCreate={onSubmitCreate}
                   onCancelRename={onCancelRename}

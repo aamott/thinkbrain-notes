@@ -173,12 +173,12 @@
   text-align: left;
 }
 
-.treeRow:not(:disabled) {
+.treeRow:not([aria-disabled="true"]) {
   cursor: pointer;
 }
 
-.treeRow:not(:disabled):hover,
-.treeRow:not(:disabled):focus-visible {
+.treeRow:not([aria-disabled="true"]):hover,
+.treeRow:not([aria-disabled="true"]):focus-visible {
   background: color-mix(in srgb, var(--tn-color-accent) 58%, transparent);
   outline: none;
 }

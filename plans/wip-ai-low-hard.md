@@ -115,7 +115,7 @@ plain JSON.
   `plans/ai/done-assistant_panel_foundation-med-med.md`
 - ✅ Tailwind v4 switch for desktop UI (2026-07-18) — recorded in AGENTS.md;
       agent chat components use Tailwind utilities mapped to `--tn-*` tokens
-- 🔄 agent chat text streaming MVP — see
+- ⬜ agent chat text streaming MVP — see
   `plans/ai/pending-agent_chat_text_streaming_mvp-high-hard.md`
 - ⬜ assistant-ui desktop thread and local history — see
   `plans/ai/pending-assistant_ui_desktop_thread-med-med.md`

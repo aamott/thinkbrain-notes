@@ -274,13 +274,14 @@ export interface NativeSearchHit {
 }
 
 export async function invokeNativeCommand<TCommand extends NativeCommandName>(
-  command: TCommand,
-  args?: NativeCommandMap[TCommand]["args"]
+  ...[command, args]: NativeCommandMap[TCommand]["args"] extends undefined
+    ? [command: TCommand]
+    : [command: TCommand, args: NativeCommandMap[TCommand]["args"]]
 ): Promise<NativeCommandMap[TCommand]["result"]> {
   try {
     return await invoke<NativeCommandMap[TCommand]["result"]>(
       command,
-      args as Record<string, unknown> | undefined
+      args as (NativeCommandMap[TCommand]["args"] & Record<string, unknown>) | undefined
     );
   } catch (error) {
     throw normalizeNativeError(error);

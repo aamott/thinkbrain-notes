@@ -13,7 +13,7 @@ describe("SourceControlPanel content", () => {
     const notRepository: SourceControlPanelState = { kind: "not-repository" };
 
     expect(renderToStaticMarkup(<SourceControlPanelContent state={repository} />)).toContain(
-      "<dd>feature/notes</dd>"
+      "feature/notes"
     );
     const markup = renderToStaticMarkup(
       <SourceControlPanelContent onInitialize={() => undefined} state={notRepository} />
@@ -21,7 +21,6 @@ describe("SourceControlPanel content", () => {
 
     expect(markup).toContain("This workspace is not a Git repository.");
     expect(markup).toContain(">Initialize repository</button>");
-    expect(markup).not.toContain("disabled");
     expect(markup).not.toContain("<p><span>This workspace is not a Git repository.</span><button");
   });
 

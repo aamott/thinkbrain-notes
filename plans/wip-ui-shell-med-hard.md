@@ -113,5 +113,11 @@ the persisted app setting and `data-thinkbrain-theme`.
   `plans/ui-shell/pending-shell_theme_control-high-easy.md`
 - ⬜ bottom panel framework and status integration — see
   `plans/ui-shell/pending-bottom_panel_framework-low-med.md`
+- ⬜ generic file viewer tabs (code editor, image/audio/video viewers) — see
+  `plans/ui-shell/pending-generic_file_viewers-med-med.md`
+- ⬜ semi-preview markdown editor (live preview with inline source on focus) — see
+  `plans/ui-shell/pending-semi_preview_editor-med-hard.md`
+- ⬜ modular settings system (declarative, auto-populating settings tab) — see
+  `plans/ui-shell/pending-modular_settings_system-med-med.md`
 - ❌ prior movable-action/slot and layout-editing stories described `mockup2.htm`,
   not `mockup_v3/`; they were superseded and removed.

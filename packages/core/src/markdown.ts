@@ -1,5 +1,5 @@
-import { parseFrontmatter } from "./frontmatter";
-import type { MarkdownTask, ParsedNote, WikiLink } from "./note-model";
+import { parseFrontmatter, serializeFrontmatter } from "./frontmatter";
+import type { MarkdownTask, ParsedNote, SerializableNote, WikiLink } from "./note-model";
 
 const INLINE_TAG_PATTERN = /(^|[^A-Za-z0-9_/-])#([A-Za-z0-9][A-Za-z0-9_/-]*)/g;
 const WIKI_LINK_PATTERN = /\[\[([^\]|]+?)(?:\|([^\]]+?))?\]\]/g;
@@ -16,7 +16,9 @@ const TASK_PATTERN = /^\s*-\s+\[([ xX])\](?:\s+(.*))?$/;
  */
 export function parseNote(markdown: string): ParsedNote {
   const frontmatterResult = parseFrontmatter(markdown);
-  const inlineTags = extractInlineTags(frontmatterResult.body);
+  const maskedMarkdown = maskMarkdown(markdown, frontmatterResult.frontmatter);
+
+  const inlineTags = extractInlineTags(maskedMarkdown);
   const tags = uniqueStrings([...frontmatterResult.metadata.tags, ...inlineTags]);
 
   return {
@@ -24,9 +26,42 @@ export function parseNote(markdown: string): ParsedNote {
     inlineTags,
     tags,
     aliases: frontmatterResult.metadata.aliases,
-    wikiLinks: extractWikiLinks(frontmatterResult.body),
-    tasks: extractMarkdownTasks(frontmatterResult.body)
+    wikiLinks: extractWikiLinks(maskedMarkdown),
+    tasks: extractMarkdownTasks(maskedMarkdown)
   };
+}
+
+/**
+ * Serializes a complete Markdown note when a caller explicitly chooses to save.
+ * Extracts inline tags from the body and removes them from frontmatter tags to
+ * preserve the note's body-only nature for inline tags.
+ *
+ * Args:
+ *   note: Metadata and Markdown body to serialize.
+ *
+ * Returns:
+ *   Markdown contents with YAML frontmatter followed by the body.
+ */
+export function serializeNote(note: SerializableNote): string {
+  const maskedBody = maskMarkdown(note.body, null);
+  const inlineTags = new Set(extractInlineTags(maskedBody));
+  const metadata = { ...note.metadata };
+
+  if (Array.isArray(metadata.tags)) {
+    metadata.tags = metadata.tags.filter((tag) => typeof tag === "string" && !inlineTags.has(tag));
+  }
+
+  const frontmatter = serializeFrontmatter(metadata);
+
+  if (frontmatter.length === 0) {
+    return note.body;
+  }
+
+  if (note.body.length === 0) {
+    return frontmatter;
+  }
+
+  return `${frontmatter}\n${note.body}`;
 }
 
 export function extractInlineTags(markdownBody: string): string[] {
@@ -45,17 +80,23 @@ export function extractWikiLinks(markdownBody: string): WikiLink[] {
 
     const displayText = match[2]?.trim();
     const position = match.index ?? 0;
+    const startOffset = position;
+    const endOffset = position + match[0].length;
 
     links.push(
       displayText
         ? {
             target,
             displayText,
-            position
+            position,
+            startOffset,
+            endOffset
           }
         : {
             target,
-            position
+            position,
+            startOffset,
+            endOffset
           }
     );
   }
@@ -65,21 +106,30 @@ export function extractWikiLinks(markdownBody: string): WikiLink[] {
 
 export function extractMarkdownTasks(markdownBody: string): MarkdownTask[] {
   const tasks: MarkdownTask[] = [];
-  const lines = markdownBody.split(/\r?\n/);
+  const lines = markdownBody.split(/(\r?\n)/);
 
-  lines.forEach((line, index) => {
+  let currentOffset = 0;
+  for (let i = 0; i < lines.length; i += 2) {
+    const line = lines[i] ?? "";
     const match = TASK_PATTERN.exec(line);
 
-    if (!match) {
-      return;
+    if (match) {
+      const startOffset = currentOffset + match.index;
+      const endOffset = startOffset + match[0].length;
+      tasks.push({
+        checked: match[1]?.toLowerCase() === "x",
+        text: match[2]?.trim() ?? "",
+        line: (i / 2) + 1,
+        startOffset,
+        endOffset
+      });
     }
 
-    tasks.push({
-      checked: match[1]?.toLowerCase() === "x",
-      text: match[2]?.trim() ?? "",
-      line: index + 1
-    });
-  });
+    currentOffset += line.length;
+    if (i + 1 < lines.length) {
+      currentOffset += (lines[i + 1] ?? "").length;
+    }
+  }
 
   return tasks;
 }
@@ -90,6 +140,7 @@ function collectMatches(
   pickValue: (match: RegExpExecArray) => string | undefined
 ): string[] {
   const values: string[] = [];
+  pattern.lastIndex = 0;
   let match = pattern.exec(markdownBody);
 
   while (match) {
@@ -108,4 +159,25 @@ function collectMatches(
 
 function uniqueStrings(values: readonly string[]): string[] {
   return Array.from(new Set(values));
+}
+
+function maskMarkdown(markdown: string, frontmatter: { raw: string; endOffset: number } | null): string {
+  let masked = markdown;
+
+  if (frontmatter) {
+    const replacement = frontmatter.raw.replace(/[^\r\n]/g, " ");
+    masked = replacement + masked.slice(frontmatter.endOffset);
+  }
+
+  // Mask fenced code blocks (e.g., ```lang ... ``` or ~~~ ... ~~~)
+  masked = masked.replace(/^( {0,3})(`{3,}|~{3,})[^\n]*\n([^]*?)\n[ \t]*\2[ \t]*$/gm, (match) => {
+    return match.replace(/[^\r\n]/g, " ");
+  });
+
+  // Mask inline code snippets
+  masked = masked.replace(/(`+)([^`\n]+?)\1/g, (match) => {
+    return match.replace(/[^\r\n]/g, " ");
+  });
+
+  return masked;
 }

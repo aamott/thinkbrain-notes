@@ -30,8 +30,9 @@ type WorkspaceDocumentCommand =
   | "create_markdown_file";
 
 type WorkspaceDocumentCommandInvoker = <TCommand extends WorkspaceDocumentCommand>(
-  command: TCommand,
-  args: NativeCommandMap[TCommand]["args"]
+  ...[command, args]: NativeCommandMap[TCommand]["args"] extends undefined
+    ? [command: TCommand]
+    : [command: TCommand, args: NativeCommandMap[TCommand]["args"]]
 ) => Promise<NativeCommandMap[TCommand]["result"]>;
 
 /**

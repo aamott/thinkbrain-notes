@@ -1,16 +1,17 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { cn } from "@/lib/utils";
 import {
-  filterDesktopCommands,
+  type CommandPaletteKey,
+  type PaletteItem,
+  type WorkspaceFileResult,
+  getCommandPaletteResults,
+  handleCommandPaletteKey,
   initialCommandPaletteState,
   setCommandPaletteQuery
 } from "./commandPaletteModel";
 import type { DesktopCommand } from "./commandRegistry";
-import styles from "./CommandPalette.module.css";
 
-export interface WorkspaceFileResult {
-  readonly rootPath: string;
-  readonly relativePath: string;
-}
+export type { WorkspaceFileResult } from "./commandPaletteModel";
 
 export interface CommandPaletteProps {
   readonly commands: readonly DesktopCommand[];
@@ -20,22 +21,17 @@ export interface CommandPaletteProps {
   readonly onOpenFile: (file: WorkspaceFileResult) => void;
 }
 
-type PaletteItem =
-  | { readonly id: string; readonly kind: "command"; readonly command: DesktopCommand }
-  | { readonly id: string; readonly kind: "file"; readonly file: WorkspaceFileResult };
-
 /** Accessible palette renderer over the typed command registry and workspace files. */
 export function CommandPalette({ commands, files, onClose, onCommand, onOpenFile }: CommandPaletteProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [state, setState] = useState(initialCommandPaletteState);
   const [notice, setNotice] = useState<string | null>(null);
-  const commandResults = useMemo(() => filterDesktopCommands(commands, state.query), [commands, state.query]);
-  const fileResults = useMemo(() => filterWorkspaceFiles(files, state.query), [files, state.query]);
-  const items = useMemo<readonly PaletteItem[]>(() => [
-    ...commandResults.map((command) => ({ id: `command-${command.id}`, kind: "command" as const, command })),
-    ...fileResults.map((file) => ({ id: `file-${file.relativePath}`, kind: "file" as const, file }))
-  ], [commandResults, fileResults]);
-  const activeIndex = Math.min(state.activeIndex, Math.max(items.length - 1, 0));
+
+  const results = useMemo(
+    () => getCommandPaletteResults(state, commands, files),
+    [state, commands, files]
+  );
+  const { commandResults, fileResults, items, activeIndex } = results;
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -56,25 +52,17 @@ export function CommandPalette({ commands, files, onClose, onCommand, onOpenFile
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      onClose();
+    if (!["Escape", "Enter", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) {
       return;
     }
-    if (!items.length || !["ArrowUp", "ArrowDown", "Home", "End", "Enter"].includes(event.key)) return;
     event.preventDefault();
-    if (event.key === "Enter") {
-      execute(items[activeIndex]);
-      return;
+    const decision = handleCommandPaletteKey(state, commands, files, event.key as CommandPaletteKey);
+    setState(decision.state);
+    if (decision.type === "close") {
+      onClose();
+    } else if (decision.type === "execute") {
+      execute(decision.item);
     }
-    const nextIndex = event.key === "Home"
-      ? 0
-      : event.key === "End"
-        ? items.length - 1
-        : event.key === "ArrowDown"
-          ? (activeIndex + 1) % items.length
-          : (activeIndex + items.length - 1) % items.length;
-    setState((current) => ({ ...current, activeIndex: nextIndex }));
   };
 
   const trapFocus = (event: KeyboardEvent<HTMLElement>) => {
@@ -84,16 +72,16 @@ export function CommandPalette({ commands, files, onClose, onCommand, onOpenFile
   };
 
   return (
-    <div className={styles.backdrop} role="presentation" onMouseDown={() => onClose()}>
-      <section className={styles.palette} role="dialog" aria-modal="true" aria-label="Command palette" onKeyDown={trapFocus} onMouseDown={(event) => event.stopPropagation()}>
-        <input ref={inputRef} value={state.query} onChange={(event) => { setState(setCommandPaletteQuery(event.target.value)); setNotice(null); }} onKeyDown={handleKeyDown} placeholder="Type a command or file name…" aria-label="Search commands" role="combobox" aria-expanded aria-controls="command-palette-results" aria-activedescendant={items[activeIndex]?.id} />
-        {notice && <p className={styles.notice} role="status">{notice}</p>}
-        <div id="command-palette-results" className={styles.results} role="listbox" aria-label="Palette results">
-          {commandResults.length > 0 && <p className={styles.groupLabel}>Commands</p>}
-          {commandResults.map((command, index) => <PaletteOption key={command.id} id={`command-${command.id}`} active={index === activeIndex} disabled={command.availability === "unavailable"} onClick={() => execute({ id: `command-${command.id}`, kind: "command", command })}><span>{command.title}</span><em>{command.availability === "unavailable" ? "Unavailable" : command.shortcut}</em></PaletteOption>)}
-          {fileResults.length > 0 && <p className={styles.groupLabel}>Files</p>}
-          {fileResults.map((file, index) => <PaletteOption key={file.relativePath} id={`file-${file.relativePath}`} active={commandResults.length + index === activeIndex} onClick={() => execute({ id: `file-${file.relativePath}`, kind: "file", file })}><span>{file.relativePath}</span><em>Markdown</em></PaletteOption>)}
-          {!items.length && <p className={styles.empty} role="status">No commands or Markdown files match “{state.query}”.</p>}
+    <div className="fixed inset-0 z-10 flex items-start justify-center pt-[15vh] bg-overlay" role="presentation" onMouseDown={() => onClose()}>
+      <section className="w-[min(38rem,calc(100vw-2rem))] overflow-hidden rounded-medium border border-border bg-popover shadow-soft" role="dialog" aria-modal="true" aria-label="Command palette" onKeyDown={trapFocus} onMouseDown={(event) => event.stopPropagation()}>
+        <input ref={inputRef} className="w-full border-0 border-b border-border bg-transparent px-4 py-[0.85rem] text-[0.9rem] text-inherit outline-none focus-visible:-outline-offset-2 focus-visible:outline-2 focus-visible:outline-ring" value={state.query} onChange={(event) => { setState(setCommandPaletteQuery(event.target.value)); setNotice(null); }} onKeyDown={handleKeyDown} placeholder="Type a command or file name…" aria-label="Search commands" role="combobox" aria-expanded aria-controls="command-palette-results" aria-activedescendant={items[activeIndex]?.id} />
+        {notice && <p className="m-0 border-b border-border bg-[color-mix(in_srgb,var(--tn-color-destructive)_8%,transparent)] px-[0.65rem] py-[0.45rem] text-[0.6875rem] text-danger" role="status">{notice}</p>}
+        <div id="command-palette-results" className="max-h-[min(22rem,55vh)] overflow-auto p-[0.35rem]" role="listbox" aria-label="Palette results">
+          {commandResults.length > 0 && <p className="m-0 px-[0.65rem] py-[0.45rem] text-[0.6875rem] font-bold uppercase tracking-[0.07em] text-muted-foreground">Commands</p>}
+          {commandResults.map((command, index) => <PaletteOption key={command.id} id={`command-${command.id}`} active={index === activeIndex} disabled={command.availability === "unavailable"} onClick={() => execute({ id: `command-${command.id}`, kind: "command", command })}><span className="truncate">{command.title}</span><em className="flex-none text-[0.6875rem] not-italic text-muted-foreground">{command.availability === "unavailable" ? "Unavailable" : command.shortcut}</em></PaletteOption>)}
+          {fileResults.length > 0 && <p className="m-0 px-[0.65rem] py-[0.45rem] text-[0.6875rem] font-bold uppercase tracking-[0.07em] text-muted-foreground">Files</p>}
+          {fileResults.map((file, index) => <PaletteOption key={file.relativePath} id={`file-${file.relativePath}`} active={commandResults.length + index === activeIndex} onClick={() => execute({ id: `file-${file.relativePath}`, kind: "file", file })}><span className="truncate">{file.relativePath}</span><em className="flex-none text-[0.6875rem] not-italic text-muted-foreground">Markdown</em></PaletteOption>)}
+          {!items.length && <p className="m-0 px-[0.65rem] py-[0.45rem] text-[0.6875rem] text-muted-foreground" role="status">No commands or Markdown files match “{state.query}”.</p>}
         </div>
       </section>
     </div>
@@ -107,11 +95,5 @@ function PaletteOption({ id, active, disabled = false, onClick, children }: {
   readonly onClick: () => void;
   readonly children: React.ReactNode;
 }) {
-  return <button id={id} className={active ? styles.activeOption : styles.option} type="button" role="option" aria-selected={active} data-unavailable={disabled || undefined} onClick={onClick} tabIndex={-1}>{children}</button>;
-}
-
-function filterWorkspaceFiles(files: readonly WorkspaceFileResult[], query: string): readonly WorkspaceFileResult[] {
-  const needle = query.trim().toLowerCase();
-  if (!needle) return [];
-  return files.filter((file) => file.relativePath.toLowerCase().includes(needle));
+  return <button id={id} className={cn("flex w-full cursor-pointer items-center justify-between gap-4 rounded-small border-0 px-[0.65rem] py-[0.58rem] text-left text-[0.8125rem] text-foreground hover:bg-accent", active ? "bg-accent" : "bg-transparent", disabled && "opacity-[0.55]")} type="button" role="option" aria-selected={active} data-unavailable={disabled || undefined} onClick={onClick} tabIndex={-1}>{children}</button>;
 }

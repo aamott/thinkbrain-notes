@@ -50,6 +50,8 @@ export async function loadDesktopState(
   return parseDesktopState(await gateway.readAppSettings());
 }
 
+let fallbackUpdateQueue: Promise<unknown> = Promise.resolve();
+
 /**
  * Updates desktop-only state without rewriting theme, extension, or other app
  * settings. The write always uses the current desktop-state schema.
@@ -62,16 +64,27 @@ export async function saveDesktopState(
     return parseDesktopState(await gateway.updateDesktopState(update));
   }
 
-  const appSettings = parseAppSettingsRecord(await gateway.readAppSettings());
-  const current = readDesktopState(appSettings);
-  const next = applyDesktopStateUpdate(current, update);
+  console.warn(
+    "Using fallback desktop state update. " +
+    "This may cause race conditions if multiple windows modify settings concurrently."
+  );
 
-  appSettings[DESKTOP_STATE_KEY] = next;
-  delete appSettings.lastWorkspacePath;
-  delete appSettings.explorerOpen;
+  const performUpdate = async () => {
+    const appSettings = parseAppSettingsRecord(await gateway.readAppSettings());
+    const current = readDesktopState(appSettings);
+    const next = applyDesktopStateUpdate(current, update);
 
-  await gateway.writeAppSettings(serializeAppSettingsRecord(appSettings));
-  return next;
+    appSettings[DESKTOP_STATE_KEY] = next;
+    delete appSettings.lastWorkspacePath;
+    delete appSettings.explorerOpen;
+
+    await gateway.writeAppSettings(serializeAppSettingsRecord(appSettings));
+    return next;
+  };
+
+  const result = fallbackUpdateQueue.then(performUpdate, performUpdate);
+  fallbackUpdateQueue = result.catch(() => {});
+  return result;
 }
 
 /**

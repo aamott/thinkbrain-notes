@@ -1,0 +1,5 @@
+- name: Native Commands Args Type Safety
+- file: /media/adam/extex/projects/thinkbrain-notes/apps/desktop/src/native/commands.ts
+- lines: 284-285
+- description: The `invokeNativeCommand` function casts the `args` parameter to `Record<string, unknown> | undefined` before passing it to Tauri's `invoke`. This bypasses TypeScript's strict type checking for the arguments object payload. We should ensure the `args` parameter is correctly typed according to `NativeCommandMap[TCommand]["args"]` without the loose `Record<string, unknown>` cast, or use a more precise type mapping.
+- verification: Verified by inspecting the `invokeNativeCommand` function in `apps/desktop/src/native/commands.ts`.

@@ -38,9 +38,11 @@ shell surfaces without a heavy opinionated UI framework.
 - **Custom components over framework.** Build app components backed by Radix
   UI-style primitives where useful. Avoid a heavy, opinionated component
   framework that fights a desktop/editor UI.
-- **No third-party theme loading in MVP.** Installable themes, remote theme
-  loading, theme marketplace, and public extension APIs are deferred to the
-  `extensions` epic.
+- **Importable themes.** Users can import theme files (CSS variable overrides)
+  from disk. Themes are JSON or CSS files that override `--tn-*` tokens. A
+  theme file provides a display name, a base (light/dark), and token
+  overrides. The app loads and applies them without requiring the extensions
+  epic. A remote theme marketplace is deferred to `extensions`.
 
 ## Dependencies
 
@@ -49,9 +51,8 @@ shell surfaces without a heavy opinionated UI framework.
 
 ## Non-Goals
 
-- Installable theme packages or theme marketplace.
-- Remote/arbitrary theme loading.
-- Public theme extension API.
+- Theme marketplace or remote theme registry.
+- Public theme extension API (deferred to `extensions` epic).
 - Heavy opinionated UI framework (Material UI, Ant Design, etc.).
 - React Native `StyleSheet` theming (Phase 2 / `mobile` epic).
 
@@ -65,3 +66,4 @@ shell surfaces without a heavy opinionated UI framework.
 - ⬜ Reusable base components in `packages/ui` — only `Button` exists (`packages/ui/src/components/Button.tsx`)
 - ⬜ Accessibility-focused primitives (Radix UI-style) — none yet
 - ⬜ Shell/editor/sidebar surfaces use tokens + CSS Modules — `apps/desktop/src/styles.css` is a single global stylesheet with hardcoded colors (e.g. `#0c0f16` at lines 88, 608)
+- ⬜ Importable themes — load user-supplied theme files (JSON/CSS token overrides) from disk and apply them via `data-thinkbrain-theme`
