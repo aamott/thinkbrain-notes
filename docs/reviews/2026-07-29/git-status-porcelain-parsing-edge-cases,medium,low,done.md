@@ -1,0 +1,5 @@
+- name: Harden git status porcelain v1 parsing logic against NUL delimiter edge cases
+- file: /media/adam/extex/projects/thinkbrain-notes/apps/desktop/src-tauri/src/commands/git.rs
+- lines: 379-436
+- description: 1) `parse_git_status_porcelain_v1` (lines 379-436) uses `.split('\0').filter(|record| !record.is_empty())` to tokenize NUL-delimited output. Pre-filtering non-empty strings before processing rename/copy records (which require consuming the next NUL-delimited record as source path) risks misaligning index offsets if any record or path component is empty. Remove pre-filtering and handle NUL boundaries strictly in-sequence. 2) Ensure proper error handling and fallback when encountering malformed status output.
+- verification: Code inspection of git.rs lines 379-436.

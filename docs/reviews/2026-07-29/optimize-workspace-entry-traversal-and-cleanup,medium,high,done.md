@@ -1,0 +1,5 @@
+- name: Optimize workspace directory traversal, ignore build output folders, and remove unused macro
+- file: /media/adam/extex/projects/thinkbrain-notes/apps/desktop/src-tauri/src/commands/workspace.rs
+- lines: 1, 517-562
+- description: 1) Line 1 contains `#![allow(unused)]` which suppresses compiler warnings across workspace.rs. Remove `#![allow(unused)]` and clean up unused imports. 2) `collect_workspace_entries` (lines 517-562) recursively reads workspace directories synchronously. While it ignores hidden files starting with '.', it does not filter out heavy dependency/build output folders (such as `node_modules`, `target`, `dist`, `vendor`), nor does it enforce traversal depth or max entry limits. Large workspaces will cause high latency, memory consumption, or stack overflow. Add configurable ignored folder patterns and a safety max entry cap.
+- verification: Code inspection of workspace.rs lines 1, 517-562.
