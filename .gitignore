@@ -149,3 +149,92 @@ apps/desktop/src-tauri/gen/schemas/
 # Playwright output
 test-results/
 playwright-report/
+
+# IDE and Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swo
+
+# macOS filesystem metadata
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Python cache and artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Local development and temporary files
+blocks.txt
+mockup*.htm
+mockup*/
+*.tmp
+parse.py
+split.py
+
+# Local environment files
+.nvmrc
+
+# Additional build and cache directories
+dist/
+build/
+.out/
+output/
+
+# Test and coverage files
+test-results/
+coverage/
+*.lcov
+
+# Miscellaneous
+temp/
+tmp/
+*.bak
+*.backup
+*.orig
+*.old
+*.bkp
+*.tmp
+*.temp
+
+# OS generated files
+*.crdownload
+*.part
+
+# Database files
+*.sqlite
+*.sqlite-journal
+*.db
+*.db-journal
+
+# Environment files
+.env.local
+.env.*.local
+
+# Debug log files
+*.log
+*.log.*
+log/
+logs/
+
+# Profiler output
+*.prof
+
+# Compiled Python files
+*.pyc
+*.pyo
+*.pyd
+
+# Jupyter notebook checkpoint files
+.checkpoint
+*.ipynb_checkpoints
+
+# VS Code workspace files
+*.code-workspace
