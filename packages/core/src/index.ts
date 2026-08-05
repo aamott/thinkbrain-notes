@@ -70,3 +70,6 @@ export * from "./settings";
 // legacy ./settings.ts persistence layer). Re-exported explicitly to avoid
 // ambiguity between the file and directory sharing the basename "settings".
 export * from "./settings/index";
+
+// Theme file (.tbtheme.json) parser, validator, and serializer.
+export * from "./theme";

@@ -37,6 +37,7 @@ import { writeTextFileNative, readTextFileNative } from "../native/fs";
 /** Default app values seeded into the store for most tests. */
 const SEEDED_APP_VALUES: Record<string, unknown> = {
   "appearance.theme": "system",
+  "appearance.themeFile": null,
   "editor.fontSize": 16,
   "editor.lineWrapping": true
 };
@@ -122,10 +123,11 @@ describe("buildExportPayload", () => {
     const keys = Object.keys(parsed.settings);
 
     expect(keys).toContain("appearance.theme");
+    expect(keys).toContain("appearance.themeFile");
     expect(keys).toContain("editor.fontSize");
     expect(keys).toContain("editor.lineWrapping");
     // No workspace-scoped keys exist in the built-in modules.
-    expect(keys).toHaveLength(3);
+    expect(keys).toHaveLength(4);
   });
 });
 

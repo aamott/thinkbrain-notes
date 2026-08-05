@@ -41,6 +41,7 @@ let container: HTMLDivElement | null = null;
 /** Default app values seeded into the store for most tests. */
 const SEEDED_APP_VALUES: Record<string, unknown> = {
   "appearance.theme": "system",
+  "appearance.themeFile": null,
   "editor.fontSize": 16,
   "editor.lineWrapping": true
 };

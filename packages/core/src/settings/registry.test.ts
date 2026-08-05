@@ -73,7 +73,10 @@ describe("settings registry", () => {
     ]);
 
     const themeDefs = registry.getDefinitionsForSection("appearance.theme");
-    expect(themeDefs.map((def) => def.key)).toEqual(["appearance.theme"]);
+    expect(themeDefs.map((def) => def.key)).toEqual([
+      "appearance.theme",
+      "appearance.themeFile"
+    ]);
 
     expect(registry.getDefinitionsForSection("nope")).toEqual([]);
   });
@@ -108,6 +111,7 @@ describe("extractDefaults", () => {
 
     expect(extractDefaults(registry, "app")).toEqual({
       "appearance.theme": "system",
+      "appearance.themeFile": null,
       "editor.fontSize": 16,
       "editor.lineWrapping": true
     });
@@ -166,6 +170,22 @@ describe("validateSettings", () => {
   it("ignores missing keys (defaults fill them)", () => {
     const registry = registryWithBuiltIns();
     expect(validateSettings(registry, {})).toEqual([]);
+  });
+
+  it("accepts null for path-type settings (the 'no path set' sentinel)", () => {
+    // appearance.themeFile is a path setting with default null. A null value
+    // must validate so the store's defaults-merged appValues pass saveSettings.
+    const registry = registryWithBuiltIns();
+    expect(validateSettings(registry, { "appearance.themeFile": null })).toEqual([]);
+  });
+
+  it("flags a non-string, non-null value for a path-type setting", () => {
+    const registry = registryWithBuiltIns();
+    const diagnostics = validateSettings(registry, { "appearance.themeFile": 42 });
+
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]!.code).toBe("settings.type.mismatch");
+    expect(diagnostics[0]!.path).toBe("appearance.themeFile");
   });
 
   it("flags a type mismatch (string where number expected)", () => {
@@ -283,6 +303,20 @@ describe("built-in module structure", () => {
       type: "boolean",
       default: true,
       scope: "app"
+    });
+  });
+
+  it("exposes appearance.themeFile as a non-portable path setting", () => {
+    const registry = registryWithBuiltIns();
+    const def = registry.getDefinition("appearance.themeFile");
+
+    expect(def).toMatchObject({
+      key: "appearance.themeFile",
+      type: "path",
+      default: null,
+      scope: "app",
+      section: "appearance.theme",
+      portable: false
     });
   });
 

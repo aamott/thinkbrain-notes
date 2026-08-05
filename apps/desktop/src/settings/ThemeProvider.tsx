@@ -1,8 +1,11 @@
 import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { isTauri } from "@tauri-apps/api/core";
+import { parseThemeFile } from "@thinkbrain/core";
 import { type AppTheme, ThemeProviderContext, type ThemeProviderState } from "./theme-context";
 import { useSettingsStore } from "./settingsStore";
+import { readTextFileNative } from "../native/fs";
+import { injectThemeOverrides, removeThemeOverrides } from "./themeInjection";
 
 export interface ThemeProviderProps {
   readonly children: ReactNode;
@@ -27,6 +30,16 @@ export interface ThemeProviderProps {
  * The theme is applied via the `data-thinkbrain-theme` attribute on the root
  * element so CSS can branch on light/dark/system without JS resolution. The
  * "system" value is handled in CSS through `@media (prefers-color-scheme)`.
+ *
+ * Custom theme files (`appearance.themeFile`): when set to a non-null path,
+ * the provider reads the file via the native fs bridge, parses it with
+ * `parseThemeFile`, and injects its token overrides via `injectThemeOverrides`.
+ * The theme file's `base` field takes precedence over the user's `theme`
+ * dropdown — the `data-thinkbrain-theme` attribute is forced to the file's
+ * base so the scoped override selector matches. If parsing fails, diagnostics
+ * are logged loudly and overrides are removed. When `themeFile` is cleared,
+ * overrides are removed and the user's selected theme drives the attribute
+ * again.
  */
 export function ThemeProvider({
   children,
@@ -60,6 +73,20 @@ export function ThemeProvider({
     ? (themeFromStore as AppTheme)
     : defaultTheme;
 
+  // Resolve the effective themeFile path with the same staged > appValues >
+  // default pattern. Default is null (no custom theme). A staged non-string
+  // value (e.g. null) clears the file.
+  const themeFileFromStore =
+    "appearance.themeFile" in staged
+      ? staged["appearance.themeFile"]
+      : "appearance.themeFile" in appValues
+        ? appValues["appearance.themeFile"]
+        : null;
+  const themeFile: string | null =
+    loaded && typeof themeFileFromStore === "string" && themeFileFromStore.length > 0
+      ? themeFileFromStore
+      : null;
+
   // Load settings from native storage on mount (Tauri only). The ref guard
   // prevents double-load in StrictMode or fast re-mounts.
   const loadStartedRef = useRef(false);
@@ -74,10 +101,94 @@ export function ThemeProvider({
   }, [loadSettings]);
 
   // Apply the theme attribute whenever it changes. CSS handles light/dark/system.
+  // When a custom themeFile is active, the themeFile effect below overrides
+  // this attribute with the file's base palette (and logs an info message if
+  // there's a conflict with the user's selected theme). The two effects are
+  // ordered so the themeFile effect runs after this one on initial mount, but
+  // React does not guarantee effect ordering across re-renders — instead, the
+  // themeFile effect re-applies the attribute after injecting overrides, so
+  // the final DOM state is always consistent.
   useEffect(() => {
     const root = window.document.documentElement;
     root.dataset.thinkbrainTheme = theme;
   }, [theme]);
+
+  // Apply (or clear) custom theme overrides from `appearance.themeFile`.
+  //
+  // When themeFile is set: read the file via the native fs bridge, parse it,
+  // and inject the overrides. The file's `base` field forces the
+  // `data-thinkbrain-theme` attribute so the scoped override selector matches.
+  // When themeFile is null/empty: remove any injected overrides and let the
+  // theme effect above drive the attribute.
+  //
+  // The effect re-runs whenever `themeFile` or `theme` (the user's selection)
+  // changes. `theme` is included so we can log a clear conflict message when
+  // the user's selected base differs from the file's base.
+  useEffect(() => {
+    // No custom theme file: clear overrides and let the theme effect own the
+    // attribute. The theme effect already ran (or will run) for this render.
+    if (themeFile === null) {
+      removeThemeOverrides();
+      return;
+    }
+
+    // Capture the path at effect time so a fast change mid-read doesn't write
+    // stale overrides. The cleanup-on-rerun pattern below handles cancellation.
+    let cancelled = false;
+    const root = window.document.documentElement;
+
+    readTextFileNative(themeFile)
+      .then((raw): void => {
+        if (cancelled) return;
+        // Non-Tauri contexts (tests, web preview) resolve to null — no-op.
+        if (raw === null) return;
+
+        const result = parseThemeFile(raw);
+        if (result.theme === null) {
+          // Fail loudly: surface every diagnostic so the user can fix the file.
+          for (const diag of result.diagnostics) {
+            console.error(
+              `[ThemeProvider] Theme file "${themeFile}" failed to parse: ` +
+                `[${diag.severity}] ${diag.code}: ${diag.message}` +
+                (diag.path ? ` (at "${diag.path}")` : "")
+            );
+          }
+          removeThemeOverrides();
+          return;
+        }
+
+        // Inject the overrides scoped to the file's base palette.
+        injectThemeOverrides(result.theme);
+
+        // Force the root attribute to the file's base so the scoped selector
+        // matches. Log an info message when this overrides the user's choice
+        // so the behavior is discoverable, not magical.
+        if (root.dataset.thinkbrainTheme !== result.theme.base) {
+          console.info(
+            `[ThemeProvider] Custom theme file "${themeFile}" uses base ` +
+              `"${result.theme.base}"; overriding user-selected theme "${theme}".`
+          );
+          root.dataset.thinkbrainTheme = result.theme.base;
+        }
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        // Fail loudly: a thrown read/parse error should be visible, not silent.
+        console.error(
+          `[ThemeProvider] Failed to load custom theme file "${themeFile}":`,
+          error
+        );
+        removeThemeOverrides();
+      });
+
+    return () => {
+      // Mark this run as superseded so a slow file read doesn't write stale
+      // overrides after the user changed the path. We do NOT remove the
+      // overrides here — the next effect run (or the null branch above)
+      // handles cleanup, so a re-render with the same path doesn't flicker.
+      cancelled = true;
+    };
+  }, [themeFile, theme]);
 
   const value: ThemeProviderState = {
     theme,

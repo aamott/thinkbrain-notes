@@ -101,6 +101,12 @@ function checkType(
     case "enum":
     case "path":
       // enum membership is checked separately; path is a string subtype.
+      // A `path` setting may legitimately be `null` (the "no path set"
+      // sentinel used when `default: null`), so null is accepted here. Non-
+      // string, non-null values still fail loudly.
+      if (def.type === "path" && value === null) {
+        return undefined;
+      }
       if (typeof value !== "string") {
         return mismatch(def, `Expected string, received ${typeof value}.`);
       }

@@ -46,6 +46,21 @@ export const appearanceModule: SettingsModule = {
               ? null
               : `Theme must be one of: ${THEME_OPTIONS.join(", ")}.`;
           }
+        },
+        {
+          // Optional path to a .tbtheme.json file. When set, the desktop layer
+          // parses the file and injects its token overrides on top of the base
+          // palette. `portable: false` because absolute paths are machine-
+          // specific — the export flow warns the user before bundling them.
+          key: "themeFile",
+          type: "path",
+          default: null,
+          scope: "app",
+          section: "appearance.theme",
+          label: "Custom theme file",
+          description:
+            "Path to a .tbtheme.json file. Overrides the base theme's color tokens.",
+          portable: false
         }
       ]
     }
