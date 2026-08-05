@@ -32,6 +32,9 @@ const PRESET_THEME_FILES: &[&str] = &[
     "forest-dark.tbtheme.json",
     "solarized-light.tbtheme.json",
     "one-dark-pro.tbtheme.json",
+    "gruvbox-light.tbtheme.json",
+    "nord-light.tbtheme.json",
+    "catppuccin-latte.tbtheme.json",
 ];
 
 /// One discovered theme file returned by `list_themes`.

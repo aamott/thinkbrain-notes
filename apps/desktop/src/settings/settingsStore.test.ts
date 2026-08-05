@@ -228,6 +228,115 @@ describe("settingsStore", () => {
     });
   });
 
+  describe("stageChange autosave", () => {
+    it("triggers a debounced save when settings.autosave is enabled", async () => {
+      // Use fake timers so we can control the 300ms debounce window.
+      vi.useFakeTimers();
+      try {
+        const gateway = createMockGateway(null);
+        const store = createSettingsStore(gateway);
+        await store.getState().loadSettings(null);
+
+        // Enable autosave in appValues so stageChange sees the effective flag.
+        store.setState({
+          appValues: {
+            ...store.getState().appValues,
+            "settings.autosave": true
+          }
+        });
+
+        // Stage a change — should schedule (not immediately call) a write.
+        store.getState().stageChange("appearance.theme", "dark");
+        expect(gateway.writeAppSettings).not.toHaveBeenCalled();
+
+        // Advance past the debounce window; the autosave write should fire once.
+        await vi.advanceTimersByTimeAsync(300);
+        expect(gateway.writeAppSettings).toHaveBeenCalledTimes(1);
+
+        // The staged change should be cleared after the successful save.
+        expect(store.getState().stagedChanges).toEqual({});
+        expect(store.getState().appValues["appearance.theme"]).toBe("dark");
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("does NOT schedule a save when autosave is disabled (default)", async () => {
+      vi.useFakeTimers();
+      try {
+        const gateway = createMockGateway(null);
+        const store = createSettingsStore(gateway);
+        await store.getState().loadSettings(null);
+
+        // autosave defaults to false — no override.
+        store.getState().stageChange("appearance.theme", "dark");
+        await vi.advanceTimersByTimeAsync(300);
+
+        expect(gateway.writeAppSettings).not.toHaveBeenCalled();
+        expect(store.getState().isDirty).toBe(true);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("coalesces rapid edits into a single save", async () => {
+      vi.useFakeTimers();
+      try {
+        const gateway = createMockGateway(null);
+        const store = createSettingsStore(gateway);
+        await store.getState().loadSettings(null);
+        store.setState({
+          appValues: {
+            ...store.getState().appValues,
+            "settings.autosave": true
+          }
+        });
+
+        // Three rapid edits within the debounce window.
+        store.getState().stageChange("appearance.theme", "dark");
+        await vi.advanceTimersByTimeAsync(100);
+        store.getState().stageChange("editor.fontSize", 20);
+        await vi.advanceTimersByTimeAsync(100);
+        store.getState().stageChange("editor.lineWrapping", false);
+        await vi.advanceTimersByTimeAsync(100);
+        expect(gateway.writeAppSettings).not.toHaveBeenCalled();
+
+        // Cross the debounce threshold — exactly one save fires with all three
+        // staged values persisted together.
+        await vi.advanceTimersByTimeAsync(300);
+        expect(gateway.writeAppSettings).toHaveBeenCalledTimes(1);
+        const written = JSON.parse(gateway.writtenAppSettings[0] as string);
+        expect(written["appearance.theme"]).toBe("dark");
+        expect(written["editor.fontSize"]).toBe(20);
+        expect(written["editor.lineWrapping"]).toBe(false);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("a just-staged autosave toggle itself triggers autosave", async () => {
+      vi.useFakeTimers();
+      try {
+        const gateway = createMockGateway(null);
+        const store = createSettingsStore(gateway);
+        await store.getState().loadSettings(null);
+
+        // Toggle autosave on via stageChange. The effective-value check inside
+        // stageChange special-cases `settings.autosave` so the new value (true)
+        // is seen immediately, scheduling a save for its own enablement.
+        store.getState().stageChange("settings.autosave", true);
+        expect(gateway.writeAppSettings).not.toHaveBeenCalled();
+
+        await vi.advanceTimersByTimeAsync(300);
+        expect(gateway.writeAppSettings).toHaveBeenCalledTimes(1);
+        const written = JSON.parse(gateway.writtenAppSettings[0] as string);
+        expect(written["settings.autosave"]).toBe(true);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
   describe("resetStaged", () => {
     it("clears all staged changes", async () => {
       const gateway = createMockGateway(null);

@@ -41,6 +41,12 @@ export function SettingsSaveBar() {
   const isDirty = useSettingsStore((s) => s.isDirty);
   const dirtyCount = useSettingsStore((s) => s.dirtyCount);
   const saveError = useSettingsStore((s) => s.saveError);
+  // Effective autosave flag: staged > appValues > default. When true, the
+  // Save/Reset buttons are hidden and an "Autosave enabled" label is shown
+  // instead (changes persist via the store's debounced autosave path).
+  const autosave = useSettingsStore((s) =>
+    s.stagedChanges["settings.autosave"] ?? s.appValues["settings.autosave"] ?? false
+  );
 
   // Transient status message from import/export actions (cleared after a few
   // seconds). Rendered inline in the bar so the user gets immediate feedback.
@@ -170,30 +176,44 @@ export function SettingsSaveBar() {
       {/* Spacer pushes Save/Reset to the right when no error is shown. */}
       {!saveError && <span className="mr-auto" />}
 
-      <button
-        type="button"
-        disabled={!isDirty}
-        onClick={handleReset}
-        className={cn(
-          "border border-border rounded-small py-[0.4rem] px-[0.6rem] text-xs font-inherit",
-          "text-foreground bg-surface cursor-pointer",
-          !isDirty && "cursor-not-allowed opacity-50"
-        )}
-      >
-        Reset
-      </button>
-      <button
-        type="button"
-        disabled={!isDirty}
-        onClick={handleSave}
-        className={cn(
-          "border border-border rounded-small py-[0.4rem] px-[0.6rem] text-xs font-inherit",
-          "text-primary-foreground bg-primary cursor-pointer",
-          !isDirty && "cursor-not-allowed opacity-50"
-        )}
-      >
-        {saveLabel}
-      </button>
+      {autosave ? (
+        // Autosave mode: hide Save/Reset and show an unobtrusive label. The
+        // store's debounced autosave path persists changes; the Save/Reset
+        // flow is unnecessary (and Reset would fight the autosave debounce).
+        <span
+          className="text-xs text-muted-foreground"
+          title="Changes are saved automatically."
+        >
+          Autosave enabled
+        </span>
+      ) : (
+        <>
+          <button
+            type="button"
+            disabled={!isDirty}
+            onClick={handleReset}
+            className={cn(
+              "border border-border rounded-small py-[0.4rem] px-[0.6rem] text-xs font-inherit",
+              "text-foreground bg-surface cursor-pointer",
+              !isDirty && "cursor-not-allowed opacity-50"
+            )}
+          >
+            Reset
+          </button>
+          <button
+            type="button"
+            disabled={!isDirty}
+            onClick={handleSave}
+            className={cn(
+              "border border-border rounded-small py-[0.4rem] px-[0.6rem] text-xs font-inherit",
+              "text-primary-foreground bg-primary cursor-pointer",
+              !isDirty && "cursor-not-allowed opacity-50"
+            )}
+          >
+            {saveLabel}
+          </button>
+        </>
+      )}
     </div>
   );
 }

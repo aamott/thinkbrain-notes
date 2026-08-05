@@ -39,7 +39,8 @@ const SEEDED_APP_VALUES: Record<string, unknown> = {
   "appearance.theme": "system",
   "appearance.themeFile": null,
   "editor.fontSize": 16,
-  "editor.lineWrapping": true
+  "editor.lineWrapping": true,
+  "settings.autosave": false
 };
 
 beforeEach(() => {
@@ -127,7 +128,7 @@ describe("buildExportPayload", () => {
     expect(keys).toContain("editor.fontSize");
     expect(keys).toContain("editor.lineWrapping");
     // No workspace-scoped keys exist in the built-in modules.
-    expect(keys).toHaveLength(4);
+    expect(keys).toHaveLength(5);
   });
 });
 

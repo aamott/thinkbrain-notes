@@ -18,9 +18,7 @@ import {
   appearanceModule,
   createSettingsRegistry,
   editorModule,
-  extractDefaults,
-  getModuleIdFromKey,
-  isRecord,
+  settingsModule,
   validateSettings,
   type SettingsDiagnostic,
   type SettingsRegistry,
@@ -28,16 +26,21 @@ import {
 } from "@thinkbrain/core";
 import {
   parseDynamicAppSettings,
-  serializeDynamicAppSettings,
-  CURRENT_SETTINGS_VERSION
+  serializeDynamicAppSettings
 } from "@thinkbrain/core";
+import { scheduleAutosave } from "./autosaveScheduler";
+import {
+  parseDynamicWorkspaceSettings,
+  serializeDynamicWorkspaceSettings
+} from "./workspaceSettingsSerialization";
 
 // ---------------------------------------------------------------------------
 // Registry instance with built-in modules registered.
 // ---------------------------------------------------------------------------
 
 /**
- * Module-scoped registry with the built-in Appearance and Editor modules.
+ * Module-scoped registry with the built-in Appearance, Editor, and Settings
+ * modules.
  *
  * Exported so UI components (Story 3+) can look up definitions, sections, and
  * modules for rendering. Extensions will register additional modules here in a
@@ -46,6 +49,7 @@ import {
 export const appSettingsRegistry: SettingsRegistry = createSettingsRegistry();
 appSettingsRegistry.register(appearanceModule);
 appSettingsRegistry.register(editorModule);
+appSettingsRegistry.register(settingsModule);
 
 // ---------------------------------------------------------------------------
 // Gateway: abstraction over native settings I/O (for testability).
@@ -148,79 +152,6 @@ function scopeOfKey(registry: SettingsRegistry, key: string): SettingScope | und
 function computeDirty(staged: Record<string, unknown>): { isDirty: boolean; dirtyCount: number } {
   const keys = Object.keys(staged);
   return { isDirty: keys.length > 0, dirtyCount: keys.length };
-}
-
-/**
- * Parses raw workspace settings JSON into a flat key-value map merged with
- * registry defaults for the workspace scope.
- *
- * Workspace settings use the same dynamic key-value model as app settings but
- * only include workspace-scoped definitions. Unknown keys are ignored.
- */
-function parseDynamicWorkspaceSettings(
-  rawJson: string | null,
-  registry: SettingsRegistry
-): Record<string, unknown> {
-  const defaults = extractDefaults(registry, "workspace");
-
-  if (rawJson === null) return defaults;
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(rawJson) as unknown;
-  } catch {
-    return defaults;
-  }
-
-  if (!isRecord(parsed)) return defaults;
-
-  const values: Record<string, unknown> = { ...defaults };
-  for (const def of registry.getAllDefinitions()) {
-    const module = registry.getModule(getModuleIdFromKey(def.key));
-    if (!module || module.scope !== "workspace") continue;
-    if (def.key in parsed) {
-      values[def.key] = (parsed as Record<string, unknown>)[def.key];
-    }
-  }
-  return values;
-}
-
-/**
- * Serializes workspace settings back to JSON, preserving non-setting keys from
- * the existing raw document (e.g. `version`, extension keys).
- */
-function serializeDynamicWorkspaceSettings(
-  values: Record<string, unknown>,
-  registry: SettingsRegistry,
-  existingRawJson: string | null
-): string {
-  const base: Record<string, unknown> = {};
-  if (existingRawJson !== null) {
-    try {
-      const parsed: unknown = JSON.parse(existingRawJson);
-      if (isRecord(parsed)) Object.assign(base, parsed);
-    } catch {
-      // Malformed: start fresh.
-    }
-  }
-
-  const knownSettingKeys = new Set<string>();
-  for (const def of registry.getAllDefinitions()) {
-    const module = registry.getModule(getModuleIdFromKey(def.key));
-    if (module && module.scope === "workspace") {
-      knownSettingKeys.add(def.key);
-    }
-  }
-
-  for (const key of Object.keys(base)) {
-    if (knownSettingKeys.has(key)) delete base[key];
-  }
-  for (const [key, value] of Object.entries(values)) {
-    if (knownSettingKeys.has(key)) base[key] = value;
-  }
-  base.version = CURRENT_SETTINGS_VERSION;
-
-  return `${JSON.stringify(base, null, 2)}\n`;
 }
 
 // ---------------------------------------------------------------------------
@@ -326,6 +257,11 @@ export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettin
     /**
      * Stages a setting change (does NOT persist). Recomputes dirty state and
      * clears any validation diagnostic for the changed key.
+     *
+     * When `settings.autosave` is enabled (effective value), schedules a
+     * debounced save via {@link scheduleAutosave} so changes persist without an
+     * explicit Save click. A just-staged autosave toggle itself triggers
+     * autosave (saving its own enablement).
      */
     stageChange(key: string, value: unknown): void {
       const staged = { ...get().stagedChanges, [key]: value };
@@ -335,6 +271,15 @@ export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettin
         (d) => d.path !== key
       );
       set({ stagedChanges: staged, ...dirty, validationDiagnostics: remainingDiagnostics });
+
+      // Effective autosave flag: staged > appValues > default. The special-case
+      // for `settings.autosave` itself makes a just-staged enable toggle fire.
+      const autosaveEnabled = key === "settings.autosave"
+        ? value === true
+        : (get().stagedChanges["settings.autosave"] ?? get().appValues["settings.autosave"] ?? false);
+      if (autosaveEnabled && Object.keys(staged).length > 0) {
+        scheduleAutosave(() => get().saveSettings());
+      }
     },
 
     /**

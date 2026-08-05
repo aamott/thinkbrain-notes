@@ -10,13 +10,14 @@ import type {
   SettingMigration
 } from "./types";
 import { validateSettings } from "./validation";
-import { appearanceModule, editorModule } from "./modules";
+import { appearanceModule, editorModule, settingsModule } from "./modules";
 
-/** Registers both built-in modules into a fresh registry. */
+/** Registers all built-in modules into a fresh registry. */
 function registryWithBuiltIns(): SettingsRegistry {
   const registry = createSettingsRegistry();
   registry.register(appearanceModule);
   registry.register(editorModule);
+  registry.register(settingsModule);
   return registry;
 }
 
@@ -26,10 +27,12 @@ describe("settings registry", () => {
 
     expect(registry.getAllModules().map((module) => module.id)).toEqual([
       "appearance",
-      "editor"
+      "editor",
+      "settings"
     ]);
     expect(registry.getModule("appearance")?.label).toBe("Appearance");
     expect(registry.getModule("editor")?.label).toBe("Editor");
+    expect(registry.getModule("settings")?.label).toBe("Settings");
     expect(registry.getModule("missing")).toBeUndefined();
   });
 
@@ -86,7 +89,8 @@ describe("settings registry", () => {
 
     expect(registry.getModulesByScope("app").map((module) => module.id)).toEqual([
       "appearance",
-      "editor"
+      "editor",
+      "settings"
     ]);
     expect(registry.getModulesByScope("workspace")).toEqual([]);
   });
@@ -113,7 +117,8 @@ describe("extractDefaults", () => {
       "appearance.theme": "system",
       "appearance.themeFile": null,
       "editor.fontSize": 16,
-      "editor.lineWrapping": true
+      "editor.lineWrapping": true,
+      "settings.autosave": false
     });
   });
 

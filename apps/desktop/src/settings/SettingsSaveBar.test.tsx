@@ -43,7 +43,8 @@ const SEEDED_APP_VALUES: Record<string, unknown> = {
   "appearance.theme": "system",
   "appearance.themeFile": null,
   "editor.fontSize": 16,
-  "editor.lineWrapping": true
+  "editor.lineWrapping": true,
+  "settings.autosave": false
 };
 
 beforeEach(() => {
@@ -185,6 +186,48 @@ describe("SettingsSaveBar export/import buttons", () => {
     const importBtn = el.querySelector<HTMLButtonElement>('button[title="Import settings"]');
     expect(importBtn).not.toBeNull();
     expect(importBtn!.getAttribute("aria-label")).toBe("Import settings");
+  });
+});
+
+describe("SettingsSaveBar autosave mode", () => {
+  it("hides Save/Reset buttons and shows 'Autosave enabled' when autosave is on", async () => {
+    // Enable autosave via appValues (effective value resolves staged > app > default).
+    useSettingsStore.setState({
+      appValues: { ...SEEDED_APP_VALUES, "settings.autosave": true },
+      isDirty: true,
+      dirtyCount: 1
+    });
+    const el = await render(<SettingsSaveBar />);
+
+    // Export/Import remain; Save/Reset are hidden.
+    const buttons = Array.from(el.querySelectorAll<HTMLButtonElement>("button"));
+    const labels = buttons.map((b) => b.getAttribute("aria-label"));
+    expect(labels).toContain("Export settings");
+    expect(labels).toContain("Import settings");
+    // No Save or Reset buttons (their text content would be "Save"/"Reset").
+    const texts = buttons.map((b) => b.textContent);
+    expect(texts).not.toContain("Reset");
+    expect(texts.some((t) => t?.startsWith("Save"))).toBe(false);
+
+    // The autosave label is rendered.
+    expect(el.textContent).toContain("Autosave enabled");
+  });
+
+  it("honors a staged autosave toggle over the app value", async () => {
+    // appValues has autosave=false, but a staged toggle to true wins.
+    useSettingsStore.setState({
+      appValues: { ...SEEDED_APP_VALUES, "settings.autosave": false },
+      stagedChanges: { "settings.autosave": true },
+      isDirty: true,
+      dirtyCount: 1
+    });
+    const el = await render(<SettingsSaveBar />);
+
+    expect(el.textContent).toContain("Autosave enabled");
+    const texts = Array.from(el.querySelectorAll<HTMLButtonElement>("button")).map(
+      (b) => b.textContent
+    );
+    expect(texts).not.toContain("Reset");
   });
 });
 

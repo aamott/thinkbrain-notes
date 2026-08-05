@@ -46,7 +46,8 @@ const SEEDED_APP_VALUES: Record<string, unknown> = {
   "appearance.theme": "system",
   "appearance.themeFile": null,
   "editor.fontSize": 16,
-  "editor.lineWrapping": true
+  "editor.lineWrapping": true,
+  "settings.autosave": false
 };
 
 /** A small representative token map used by export tests. */

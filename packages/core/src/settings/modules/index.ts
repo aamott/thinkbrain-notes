@@ -2,3 +2,4 @@
 
 export { appearanceModule } from "./appearance";
 export { editorModule } from "./editor";
+export { settingsModule } from "./settings";
