@@ -1,0 +1,26 @@
+# Cargo build configuration for ThinkBrain Notes.
+#
+# Optimizes compile times and link times across dev and release builds.
+# Tooling requirements (Linux x86_64 dev):
+#   - sccache: caches compiled crate artifacts across builds/checkouts.
+#   - mold:    high-speed GNU-ld-compatible linker (invoked via clang).
+#   - clang:   reliable frontend used to pass `-fuse-ld=mold` to the linker.
+#
+# Install on Ubuntu: `sudo apt install sccache mold clang`.
+# sccache is auto-started on first use; stats via `sccache --show-stats`.
+#
+# Note: `rustc-wrapper = "sccache"` will emit a benign warning on machines
+# without sccache installed. Override per-invocation with `RUSTC_WRAPPER=`
+# (empty) if needed. The mold linker flags are gated to Linux targets only.
+
+[build]
+# Cache compiled crate artifacts across builds, clean checkouts, and CI runs.
+# Big win for Tauri's large dependency tree (tauri, rusqlite/bundled SQLite,
+# agent-client-protocol, serde) which rarely changes between local edits.
+rustc-wrapper = "sccache"
+
+# Use mold for fast linking on Linux x86_64. clang is used as the linker
+# frontend because it reliably forwards `-fuse-ld=mold`; passing `mold`
+# directly as `linker` can mis-handle rustc's flag passing.
+[target.x86_64-unknown-linux-gnu]
+rustflags = ["-C", "linker=clang", "-C", "link-arg=-fuse-ld=mold"]

@@ -25,3 +25,11 @@ Open, local-first knowledge workspace inspired by Obsidian & VS Code. Standard M
 
 ## Development & Launching
 - To run the Tauri desktop app in development mode, use `pnpm desktop:tauri dev` in the project root. Note: `pnpm dev` only launches the web UI, so always use `pnpm desktop:tauri dev` to test native functionality.
+
+## Build Tooling (Linux)
+- The Rust backend is configured for fast builds via `.cargo/config.toml`:
+  - **sccache** caches compiled crate artifacts across builds/checkouts. Install: `sudo apt install sccache`.
+  - **mold** is a high-speed linker invoked via clang (`-fuse-ld=mold`). Install: `sudo apt install mold clang`.
+- Both are required for optimal Linux dev/release compile times. If unavailable, sccache emits a benign warning (override with `RUSTC_WRAPPER=` empty); mold flags are gated to `x86_64-unknown-linux-gnu`.
+- Profiles: `[profile.dev]` prioritizes compile speed (`line-tables-only` debuginfo, incremental); `[profile.release]` prioritizes runtime speed and small binaries (thin LTO, `codegen-units=1`, symbol stripping).
+- Check sccache hit rate with `sccache --show-stats`.
