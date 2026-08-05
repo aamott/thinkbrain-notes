@@ -16,7 +16,7 @@ test("activity bar toggles between the explorer and search panels", async ({ pag
   await page.getByRole("button", { name: "Search" }).click();
 
   await expect(page.getByRole("complementary", { name: "Search panel" })).toBeVisible();
-  await expect(page.getByText("This workspace surface is not connected yet.")).toBeVisible();
+  await expect(page.getByText("Open a workspace to search its notes.")).toBeVisible();
 
   await page.getByRole("button", { name: "Explorer" }).click();
   await expect(page.getByRole("complementary", { name: "Explorer panel" })).toBeVisible();
@@ -45,6 +45,27 @@ test("opens a workspace in a new window and restores the last workspace on reloa
         if (command === "write_app_settings") {
           sessionStorage.setItem(settingsKey, String(args.contents));
           return null;
+        }
+        // The host's `update_desktop_state` command returns the full serialized
+        // settings document after merging the partial update into `desktopState`.
+        // The mock mirrors that contract so `loadDesktopState` can read it back.
+        if (command === "update_desktop_state") {
+          const current = JSON.parse(sessionStorage.getItem(settingsKey) ?? "{}") as Record<string, unknown>;
+          const previousDesktopState = (current.desktopState ?? {}) as Record<string, unknown>;
+          const update = (args.update ?? {}) as Record<string, unknown>;
+          const merged = {
+            version: 3,
+            lastWorkspacePath: update.lastWorkspacePath ?? previousDesktopState.lastWorkspacePath ?? null,
+            recentWorkspacePaths: update.recentWorkspacePaths ?? previousDesktopState.recentWorkspacePaths ?? [],
+            explorerOpen: update.explorerOpen ?? previousDesktopState.explorerOpen ?? true,
+            leftPanelWidth: update.leftPanelWidth ?? previousDesktopState.leftPanelWidth ?? 288,
+            rightPanelWidth: update.rightPanelWidth ?? previousDesktopState.rightPanelWidth ?? 320,
+            bottomPanelOpen: update.bottomPanelOpen ?? previousDesktopState.bottomPanelOpen ?? false
+          };
+          const next = { ...current, desktopState: merged };
+          const serialized = JSON.stringify(next);
+          sessionStorage.setItem(settingsKey, serialized);
+          return serialized;
         }
         if (command === "open_workspace") {
           return {
@@ -201,6 +222,9 @@ test("opens, saves, protects, and creates Markdown notes through the fresh shell
   });
 
   await page.goto("/");
+  // The explorer tree starts collapsed; expand the "Notes" folder before
+  // opening the welcome note inside it.
+  await page.getByRole("button", { name: "Expand Notes" }).click();
   await page.getByRole("button", { name: "Open welcome.md" }).click();
   const editor = page.locator('[aria-label="Markdown editor"]');
   await expect(editor).toBeVisible();
@@ -218,13 +242,14 @@ test("opens, saves, protects, and creates Markdown notes through the fresh shell
   await expect.poll(() => page.evaluate(() => sessionStorage.getItem("thinkbrain-e2e-markdown-documents"))).toContain("# Updated welcome");
 
   // Create a new note via the command palette "New note" action, which opens
-  // an inline create-file input at the workspace root.
+  // an inline create-file input at the workspace root. The name field rejects
+  // path separators by design, so a flat name is used.
   await page.keyboard.press("Control+p");
   await page.getByRole("combobox", { name: "Search commands" }).fill("new note");
   await page.keyboard.press("Enter");
   const newFileInput = page.getByLabel("New file name");
   await expect(newFileInput).toBeFocused();
-  await newFileInput.fill("Notes/new-note.md");
+  await newFileInput.fill("new-note.md");
   await newFileInput.press("Enter");
   await expect(page.getByRole("button", { name: "Close new-note.md" })).toBeVisible();
   await expect(editor).toBeVisible();
@@ -336,9 +361,12 @@ test("assistant and bottom panel toggles preserve the editor", async ({ page }) 
   await page.getByRole("button", { name: "Assistant", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Assistant" })).not.toBeVisible();
 
-  await page.getByRole("button", { name: "Toggle bottom panel" }).click();
+  // The bottom panel is toggled via the Ctrl/Cmd+J shortcut (there is no
+  // dedicated "Toggle bottom panel" button in the chrome — the status bar
+  // toggle was removed in favor of the shortcut + command palette).
+  await page.keyboard.press("Control+j");
   await expect(page.getByRole("region", { name: "Bottom panel" })).toBeVisible();
-  await expect(page.getByText("terminal panel")).toBeVisible();
+  await expect(page.getByRole("tab", { name: "terminal" })).toBeVisible();
   await page.getByRole("button", { name: "Close bottom panel" }).click();
   await expect(page.getByRole("region", { name: "Bottom panel" })).not.toBeVisible();
   await expect(page.getByRole("main", { name: "ThinkBrain desktop workspace" })).toBeVisible();

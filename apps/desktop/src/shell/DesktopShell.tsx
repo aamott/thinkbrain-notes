@@ -241,7 +241,11 @@ export function DesktopShell() {
 
   const handleWorkspaceLaunched = useCallback((rootPath: string) => {
     const recentPaths = updateRecentWorkspacePaths(rootPath);
-    persistDesktopState({ recentWorkspacePaths: recentPaths });
+    // Persist `lastWorkspacePath` so a fresh window (or a window whose native
+    // root query returns null) can restore to the most recently launched
+    // workspace. In multi-window Tauri sessions, `window_workspace_root`
+    // takes precedence over this fallback on reload.
+    persistDesktopState({ lastWorkspacePath: rootPath, recentWorkspacePaths: recentPaths });
   }, [persistDesktopState, updateRecentWorkspacePaths]);
 
   const openPalette = useCallback(() => {
