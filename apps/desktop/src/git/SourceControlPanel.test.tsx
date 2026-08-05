@@ -86,7 +86,10 @@ describe("SourceControlPanel content", () => {
     expect(markup).toContain("Staged");
     expect(markup).toContain("Changed");
     expect(markup).toContain("Untracked");
-    expect(markup).toContain("notes/ready.md");
+    expect(markup).toContain(">ready.md</span>");
+    expect(markup).toContain(">notes</span>");
+    expect(markup).toContain('aria-label="notes/ready.md Git status: M"');
+    expect(markup).toContain('aria-label="notes/new.md Git status: U"');
     expect(markup).toContain('aria-label="Refresh Git changes"');
   });
 

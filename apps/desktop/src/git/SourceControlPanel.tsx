@@ -8,6 +8,7 @@ import {
   type GitStatusResult
 } from "./gitService";
 import { createSourceControlRequestGate } from "./sourceControlRequestGate";
+import { WorkspaceFileIcon } from "../workspace/WorkspaceFileIcon";
 
 export interface SourceControlPanelProps {
   readonly rootPath: string | null;
@@ -342,26 +343,89 @@ function ChangeGroup({
     <section aria-label={`${title} files`} className="border border-border rounded-small overflow-hidden">
       <h3 className="items-center bg-accent text-foreground flex text-[.72rem] justify-between tracking-[.04em] m-0 py-[.42rem] px-[.6rem] uppercase">{title} <span className="text-muted-foreground tabular-nums">{entries.length}</span></h3>
       <ul className="list-none m-0 p-0">
-        {entries.map((entry) => (
-          <li key={`${entry.path}:${entry.indexStatus}:${entry.worktreeStatus}`} className="items-center border-t border-border flex gap-2 justify-between min-w-0 py-[.4rem] px-[.6rem]">
-            <span title={entry.path} className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">{entry.path}</span>
-            <span className="items-center flex flex-none gap-[.4rem]">
-              <code aria-label={`${entry.path} Git status`} className="text-muted-foreground flex-none font-mono text-[.68rem]">{entry.indexStatus}{entry.worktreeStatus}</code>
-              {onAction && <button
-                aria-label={`${actionLabel} ${entry.path}`}
-                className="bg-transparent border border-border rounded-small text-foreground cursor-pointer font-inherit text-[.72rem] py-[.3rem] px-[.45rem] focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 disabled:cursor-wait disabled:opacity-65"
-                disabled={isUpdating}
-                onClick={() => onAction([entry.path])}
-                type="button"
-              >
-                {actionLabel}
-              </button>}
-            </span>
-          </li>
-        ))}
+        {entries.map((entry) => {
+          const { fileName, dirPath } = splitFilePath(entry.path);
+          const { letter, className: statusColorClass } = getGitStatusBadge(entry, title);
+
+          return (
+            <li key={`${entry.path}:${entry.indexStatus}:${entry.worktreeStatus}`} className="items-center border-t border-border flex gap-2 justify-between min-w-0 py-[.4rem] px-[.6rem]">
+              <div className="items-center flex gap-1.5 min-w-0 flex-1 overflow-hidden" title={entry.path}>
+                <WorkspaceFileIcon
+                  name={fileName}
+                  className="w-[0.9rem] h-[0.9rem] flex-none text-muted-foreground stroke-current"
+                  aria-hidden="true"
+                />
+                <span className="text-foreground flex-none max-w-full truncate">{fileName}</span>
+                {dirPath && (
+                  <span className="text-muted-foreground text-[.72rem] min-w-0 flex-1 truncate font-normal">
+                    {dirPath}
+                  </span>
+                )}
+              </div>
+              <span className="items-center flex flex-none gap-2">
+                {onAction && (
+                  <button
+                    aria-label={`${actionLabel} ${entry.path}`}
+                    className="bg-transparent border border-border rounded-small text-foreground cursor-pointer font-inherit text-[.72rem] py-[.3rem] px-[.45rem] focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 disabled:cursor-wait disabled:opacity-65"
+                    disabled={isUpdating}
+                    onClick={() => onAction([entry.path])}
+                    type="button"
+                  >
+                    {actionLabel}
+                  </button>
+                )}
+                <span
+                  aria-label={`${entry.path} Git status: ${letter}`}
+                  className={`font-semibold font-mono text-[.75rem] flex-none ${statusColorClass}`}
+                >
+                  {letter}
+                </span>
+              </span>
+            </li>
+          );
+        })}
       </ul>
     </section>
   );
+}
+
+function splitFilePath(path: string): { fileName: string; dirPath: string } {
+  const normalized = path.replace(/\\/g, "/");
+  const lastSlashIndex = normalized.lastIndexOf("/");
+  if (lastSlashIndex === -1) {
+    return { fileName: normalized, dirPath: "" };
+  }
+  return {
+    fileName: normalized.substring(lastSlashIndex + 1),
+    dirPath: normalized.substring(0, lastSlashIndex)
+  };
+}
+
+function getGitStatusBadge(entry: GitStatusEntry, groupTitle?: string): { letter: string; className: string } {
+  if (entry.indexStatus === "?" || entry.worktreeStatus === "?") {
+    return { letter: "U", className: "text-success" };
+  }
+
+  const code =
+    groupTitle === "Staged"
+      ? entry.indexStatus.trim() || entry.worktreeStatus.trim() || "M"
+      : entry.worktreeStatus.trim() || entry.indexStatus.trim() || "M";
+
+  switch (code) {
+    case "A":
+      return { letter: "A", className: "text-success" };
+    case "D":
+      return { letter: "D", className: "text-destructive" };
+    case "R":
+      return { letter: "R", className: "text-info" };
+    case "C":
+      return { letter: "C", className: "text-info" };
+    case "U":
+      return { letter: "U", className: "text-success" };
+    case "M":
+    default:
+      return { letter: code || "M", className: "text-warning" };
+  }
 }
 
 function stageablePaths(status: GitStatus): readonly string[] {

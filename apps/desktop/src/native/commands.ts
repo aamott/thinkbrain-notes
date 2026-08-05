@@ -227,7 +227,7 @@ export interface NativeWorkspaceEntry {
   readonly kind: "directory" | "file";
   readonly is_markdown: boolean;
   readonly byte_size: number;
-  readonly updated_at: string | null;
+  readonly updated_at: number | null;
 }
 
 export interface NativeWorkspaceSnapshot {
