@@ -4,7 +4,7 @@ import { isTauri } from "@tauri-apps/api/core";
 import { parseThemeFile, type ThemeBase } from "@thinkbrain/core";
 import { type AppTheme, ThemeProviderContext, type ThemeProviderState } from "./theme-context";
 import { useSettingsStore } from "./settingsStore";
-import { readTextFileNative } from "../native/fs";
+import { readThemeFile } from "./themeAdapter";
 import { injectThemeOverrides, removeThemeOverrides } from "./themeInjection";
 
 export interface ThemeProviderProps {
@@ -169,7 +169,7 @@ export function ThemeProvider({
     // stale overrides. The cleanup-on-rerun pattern below handles cancellation.
     let cancelled = false;
 
-    readTextFileNative(themeFile)
+    readThemeFile(themeFile)
       .then((raw): void => {
         if (cancelled) return;
         // Non-Tauri contexts (tests, web preview) resolve to null — no-op.

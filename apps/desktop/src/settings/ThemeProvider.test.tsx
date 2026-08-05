@@ -18,7 +18,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  * is active does not flap the attribute.
  *
  * Mocks:
- *   - `../native/fs`: `readTextFileNative` returns a configurable string (or
+ *   - `./themeAdapter`: `readThemeFile` returns a configurable string (or
  *     null) so the async file-read effect can be driven deterministically.
  *   - `@tauri-apps/api/core`: `isTauri` returns `false` so the mount-time
  *     `loadSettings` call is skipped (the store is seeded directly via
@@ -28,10 +28,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  * queries (no @testing-library/react dependency is available).
  */
 
-// Mock the native fs bridge so the async theme-file read is controllable.
-// `readTextFileNative` is overridden per-test via `vi.mocked(...).mockResolvedValue`.
-vi.mock("../native/fs", () => ({
-  readTextFileNative: vi.fn<(path: string) => Promise<string | null>>()
+// Mock the theme adapter so the async theme-file read is controllable.
+// `readThemeFile` is overridden per-test via `vi.mocked(...).mockResolvedValue`.
+vi.mock("./themeAdapter", () => ({
+  readThemeFile: vi.fn<(path: string) => Promise<string | null>>()
 }));
 
 // Mock the Tauri core `isTauri` check so the provider's mount-time
@@ -41,7 +41,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 }));
 
 import { isTauri } from "@tauri-apps/api/core";
-import { readTextFileNative } from "../native/fs";
+import { readThemeFile } from "./themeAdapter";
 import { ThemeProvider } from "./ThemeProvider";
 import { useSettingsStore } from "./settingsStore";
 
@@ -63,7 +63,7 @@ beforeEach(() => {
   vi.mocked(isTauri).mockReturnValue(false);
   // Default: the fs bridge resolves to null (no file content). Individual
   // tests override this to return a theme JSON string.
-  vi.mocked(readTextFileNative).mockResolvedValue(null);
+  vi.mocked(readThemeFile).mockResolvedValue(null);
 
   // Reset the singleton store to a clean, unloaded state. Each test seeds the
   // exact fields it needs via `setState` to keep cases isolated.
@@ -95,7 +95,7 @@ afterEach(async () => {
   root = null;
   container = null;
   document.documentElement.removeAttribute("data-thinkbrain-theme");
-  vi.mocked(readTextFileNative).mockReset();
+  vi.mocked(readThemeFile).mockReset();
   vi.mocked(isTauri).mockReset();
 });
 
@@ -136,7 +136,7 @@ async function renderProvider(
  */
 async function flushAsyncFileRead(): Promise<void> {
   await act(async () => {
-    // Drain microtasks so the mocked `readTextFileNative` promise settles and
+    // Drain microtasks so the mocked `readThemeFile` promise settles and
     // the `.then` callback runs within the act scope.
     await Promise.resolve();
     await Promise.resolve();
@@ -167,7 +167,7 @@ describe("ThemeProvider", () => {
   it("forces the theme file's base over the user's selection once parsed", async () => {
     // The user picked "light", but a theme file is active whose base is "dark".
     // The file's base must take precedence once the async read settles.
-    vi.mocked(readTextFileNative).mockResolvedValue(DARK_THEME_JSON);
+    vi.mocked(readThemeFile).mockResolvedValue(DARK_THEME_JSON);
     useSettingsStore.setState({
       loaded: true,
       appValues: {
@@ -186,7 +186,7 @@ describe("ThemeProvider", () => {
   it("reverts to the user's theme when the theme file fails to parse", async () => {
     // Malformed JSON: `parseThemeFile` returns `theme: null`, so the provider
     // resets `themeFileBase` and the user's selection drives the attribute.
-    vi.mocked(readTextFileNative).mockResolvedValue("not valid json {{{");
+    vi.mocked(readThemeFile).mockResolvedValue("not valid json {{{");
     useSettingsStore.setState({
       loaded: true,
       appValues: {
@@ -204,7 +204,7 @@ describe("ThemeProvider", () => {
 
   it("reverts to the user's theme when the themeFile is cleared", async () => {
     // Start with an active dark-base theme file.
-    vi.mocked(readTextFileNative).mockResolvedValue(DARK_THEME_JSON);
+    vi.mocked(readThemeFile).mockResolvedValue(DARK_THEME_JSON);
     useSettingsStore.setState({
       loaded: true,
       appValues: {
@@ -239,7 +239,7 @@ describe("ThemeProvider", () => {
     // `appearance.theme` value. Because the file's base takes precedence and
     // the file-read effect depends only on `themeFile` (not `theme`), the
     // attribute must stay at the file's base — no re-read, no flap.
-    vi.mocked(readTextFileNative).mockResolvedValue(DARK_THEME_JSON);
+    vi.mocked(readThemeFile).mockResolvedValue(DARK_THEME_JSON);
     useSettingsStore.setState({
       loaded: true,
       appValues: {
@@ -255,7 +255,7 @@ describe("ThemeProvider", () => {
 
     // The initial read for the active themeFile should have happened exactly
     // once at this point (the file path was set on mount).
-    expect(readTextFileNative).toHaveBeenCalledTimes(1);
+    expect(readThemeFile).toHaveBeenCalledTimes(1);
 
     // User stages a different theme. The file is still active, so the
     // effective base must remain "dark" — the cached/reparsed file base wins
@@ -271,8 +271,8 @@ describe("ThemeProvider", () => {
     expect(document.documentElement.dataset.thinkbrainTheme).toBe("dark");
 
     // The theme toggle must NOT trigger a redundant disk re-read: the file
-    // path and contents haven't changed, so `readTextFileNative` should still
+    // path and contents haven't changed, so `readThemeFile` should still
     // have been called only once.
-    expect(readTextFileNative).toHaveBeenCalledTimes(1);
+    expect(readThemeFile).toHaveBeenCalledTimes(1);
   });
 });

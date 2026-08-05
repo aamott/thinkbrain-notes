@@ -213,6 +213,34 @@ pub fn list_theme_entries(themes_dir: &Path) -> Result<Vec<ThemeEntry>, NativeEr
     Ok(entries)
 }
 
+/// Reads the contents of a theme file at the given absolute path.
+///
+/// This bypasses the Tauri FS plugin's scope restrictions (which prevent
+/// reading from the app-data directory) by using `std::fs` directly, matching
+/// how `read_app_settings` reads settings files.
+///
+/// Args:
+///   path: Absolute filesystem path to a `.tbtheme.json` file.
+///
+/// Returns:
+///   The file contents as a string, or `None` if the file does not exist.
+#[tauri::command]
+pub fn read_theme_file(path: String) -> Result<Option<String>, NativeError> {
+    let path = Path::new(&path);
+    if !path.exists() {
+        return Ok(None);
+    }
+    fs::read_to_string(path)
+        .map(Some)
+        .map_err(|error| {
+            NativeError::with_details(
+                "themes.read_failed",
+                "Failed to read the theme file.",
+                error.to_string(),
+            )
+        })
+}
+
 /// Returns true if the path has the `.tbtheme.json` extension (case-sensitive).
 fn is_theme_file(path: &Path) -> bool {
     // `Path::extension` only returns the last component (`.json`), so compare

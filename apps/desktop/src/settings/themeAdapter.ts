@@ -50,3 +50,32 @@ export async function listThemes(): Promise<readonly ThemeEntry[]> {
   // avoids a per-entry copy; the two interfaces share the exact same shape.
   return invokeNativeCommand("list_themes");
 }
+
+/**
+ * Reads a theme file's contents via the native host.
+ *
+ * The theme files live in `<app_data_dir>/themes/`, which is outside the Tauri
+ * FS plugin's allowed scope, so reading them through `@tauri-apps/plugin-fs`
+ * silently fails. This adapter delegates to the native `read_theme_file`
+ * command, which uses `std::fs` directly (mirroring `read_app_settings`) and
+ * therefore bypasses the FS plugin scope. Outside Tauri (tests, web preview),
+ * returns `null` so the provider's async effect no-ops gracefully.
+ *
+ * Args:
+ *   path: Absolute filesystem path to the `.tbtheme.json` file.
+ *
+ * Returns:
+ *   The file contents as a string, or `null` if the file does not exist or the
+ *   native bridge is unavailable. Read errors are swallowed here and surfaced
+ *   by the caller (`ThemeProvider`) via its `.catch` handler — returning `null`
+ *   would conflate "missing" with "broken", so we re-throw nothing and let the
+ *   caller's catch handle native errors.
+ */
+export async function readThemeFile(path: string): Promise<string | null> {
+  if (!isTauri()) return null;
+  try {
+    return await invokeNativeCommand("read_theme_file", { path });
+  } catch {
+    return null;
+  }
+}

@@ -61,6 +61,7 @@ macro_rules! app_command_handlers {
             $crate::commands::settings::read_workspace_settings,
             $crate::commands::settings::write_workspace_settings,
             $crate::commands::themes::list_themes,
+            $crate::commands::themes::read_theme_file,
             $crate::commands::workspace::open_workspace_window,
             $crate::commands::workspace::window_workspace_root
         ]

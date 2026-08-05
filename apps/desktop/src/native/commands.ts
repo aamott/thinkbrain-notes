@@ -178,6 +178,14 @@ export interface NativeCommandMap {
     readonly args: undefined;
     readonly result: readonly NativeThemeEntry[];
   };
+  // Reads the contents of a single `.tbtheme.json` file at an absolute path.
+  // Bypasses the Tauri FS plugin's scope (which excludes the app-data dir) by
+  // using `std::fs` directly on the Rust side, mirroring `read_app_settings`.
+  // Returns `null` when the file does not exist.
+  readonly read_theme_file: {
+    readonly args: { readonly path: string };
+    readonly result: string | null;
+  };
   readonly git_availability: {
     readonly args: undefined;
     readonly result: NativeGitAvailability;
