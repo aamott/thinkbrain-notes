@@ -11,77 +11,41 @@ type BottomPanelProps = {
   readonly onClose: () => void;
 };
 
-/** Bottom dock tab ids, in display order. */
-const bottomPanelItems = ["problems", "output", "terminal", "backlinks"] as const satisfies readonly BottomPanelId[];
+/** Bottom dock tab ids, in display order. Terminal is the only wired surface. */
+const bottomPanelItems = ["terminal"] as const satisfies readonly BottomPanelId[];
 
 /**
- * Capability declarations for bottom-panel backing services.
+ * Capability declaration for the terminal backing service.
  *
- * Problems and output can truthfully render their empty state without a
- * provider. Terminal and backlinks remain unavailable until their native and
- * workspace-index providers are implemented.
+ * Native terminal execution is gated on Agent Client Protocol capability work,
+ * so the panel renders an honest unavailable boundary rather than exposing
+ * execution controls that aren't backed by anything yet.
  */
 const bottomPanelProviders: Record<BottomPanelId, BottomPanelProvider> = {
-  problems: {
-    id: "problems",
-    isAvailable: true,
-    unavailableMessage: "Diagnostics are unavailable until a diagnostics provider is connected."
-  },
-  output: {
-    id: "output",
-    isAvailable: true,
-    unavailableMessage: "Output is unavailable until an indexer provider is connected."
-  },
   terminal: {
     id: "terminal",
     isAvailable: false,
     unavailableMessage: "Terminal unavailable. Native terminal execution requires ACP capability work."
-  },
-  backlinks: {
-    id: "backlinks",
-    isAvailable: false,
-    unavailableMessage: "Backlinks preview unavailable. This requires the workspace link index."
   }
 };
-
-/** Renders the empty diagnostics state until a diagnostics provider exists. */
-function ProblemsPanel() {
-  return <p className="m-0 text-muted-foreground">No problems detected</p>;
-}
-
-/** Renders the output log's empty state until the indexer publishes output. */
-function OutputPanel() {
-  return <p className="m-0 text-muted-foreground">No output yet. Indexer status will appear here.</p>;
-}
 
 /** Renders an honest terminal capability boundary without exposing execution controls. */
 function TerminalPanel({ provider }: { readonly provider: BottomPanelProvider }) {
   return <Unavailable className="items-start justify-start p-0 text-left" title="Terminal" description={provider.unavailableMessage} />;
 }
 
-/** Renders an honest workspace-link-index capability boundary. */
-function BacklinksPreviewPanel({ provider }: { readonly provider: BottomPanelProvider }) {
-  return <Unavailable className="items-start justify-start p-0 text-left" title="Backlinks preview" description={provider.unavailableMessage} />;
-}
-
 /**
  * Renders content for the selected provider while honoring its availability.
  */
 function BottomPanelContent({ provider }: { readonly provider: BottomPanelProvider }) {
-  if (!provider.isAvailable) {
-    return provider.id === "terminal"
-      ? <TerminalPanel provider={provider} />
-      : <BacklinksPreviewPanel provider={provider} />;
-  }
-
-  return provider.id === "problems" ? <ProblemsPanel /> : <OutputPanel />;
+  return <TerminalPanel provider={provider} />;
 }
 
 /**
  * Bottom dock surface extracted from DesktopShell.
  *
- * Renders a tab strip (problems / output / terminal / backlinks), a close
- * button, and provider-bounded content for the selected surface.
+ * Renders a tab strip (terminal only today, kept for future extensibility), a
+ * close button, and provider-bounded content for the selected surface.
  */
 export function BottomPanel({ active, onChange, onClose }: BottomPanelProps) {
   const provider = bottomPanelProviders[active];

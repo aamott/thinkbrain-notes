@@ -68,12 +68,12 @@ describe("DesktopShell composition", () => {
 
     expect(markup).toContain("No workspace open");
     expect(markup).toContain("Open a workspace to begin");
-    expect(markup).toContain('aria-label="Toggle bottom panel"');
+    expect(markup).toContain('aria-label="Notifications"');
   });
 
   it("shows the workspace name in the status bar once a workspace is open", () => {
     const markup = renderToStaticMarkup(
-      <StatusBar workspaceName="Field Notes" bottomPanel={null} onToggleBottomPanel={() => undefined} />
+      <StatusBar workspaceName="Field Notes" />
     );
 
     expect(markup).toContain(">Field Notes</span>");
@@ -81,16 +81,14 @@ describe("DesktopShell composition", () => {
     expect(markup).not.toContain("No workspace open");
   });
 
-  it("exposes the bottom-panel toggle's visibility state to assistive technology", () => {
+  it("exposes the notifications bell's popover state to assistive technology", () => {
     const closed = renderToStaticMarkup(
-      <StatusBar workspaceName={null} bottomPanel={null} onToggleBottomPanel={() => undefined} />
-    );
-    const open = renderToStaticMarkup(
-      <StatusBar workspaceName={null} bottomPanel="terminal" onToggleBottomPanel={() => undefined} />
+      <StatusBar workspaceName={null} />
     );
 
-    expect(closed).toContain('aria-pressed="false"');
-    expect(open).toContain('aria-pressed="true"');
+    // The bell button is collapsed by default.
+    expect(closed).toContain('aria-label="Notifications"');
+    expect(closed).toContain('aria-expanded="false"');
   });
 
   it("renders the explorer panel by default with aria-current on its activity button", () => {

@@ -316,7 +316,7 @@ export function DesktopShell() {
         closePalette();
         return;
       case "rebuild-index":
-        updateBottomPanel("output");
+        updateBottomPanel("terminal");
         closePalette();
         return;
     }
@@ -567,11 +567,7 @@ export function DesktopShell() {
         )}
       </div>
 
-      <StatusBar
-        workspaceName={workspaceName}
-        bottomPanel={bottomPanel}
-        onToggleBottomPanel={toggleBottomPanel}
-      />
+      <StatusBar workspaceName={workspaceName} />
 
       {paletteOpen && (
         <CommandPalette

@@ -13,7 +13,7 @@ let container: HTMLDivElement | null = null;
 
 /** Keeps the controlled panel selection interactive for tab-content assertions. */
 function BottomPanelHarness() {
-  const [active, setActive] = useState<BottomPanelId>("problems");
+  const [active, setActive] = useState<BottomPanelId>("terminal");
 
   return <BottomPanel active={active} onChange={setActive} onClose={() => undefined} />;
 }
@@ -45,21 +45,28 @@ async function selectTab(panel: BottomPanelId) {
 }
 
 describe("BottomPanel", () => {
-  it("shows each tab's honest empty or unavailable state when activated", async () => {
+  it("renders the terminal tab and its honest unavailable state", async () => {
     await renderBottomPanel();
 
-    const states: readonly [BottomPanelId, string][] = [
-      ["problems", "No problems detected"],
-      ["output", "No output yet. Indexer status will appear here."],
-      ["terminal", "Terminal unavailable. Native terminal execution requires ACP capability work."],
-      ["backlinks", "Backlinks preview unavailable. This requires the workspace link index."]
-    ];
+    // The terminal tab is the only tab and is selected by default.
+    expect(container?.querySelector(`#bottom-panel-tab-terminal`)?.getAttribute("aria-selected")).toBe("true");
+    expect(container?.textContent).toContain("Terminal unavailable. Native terminal execution requires ACP capability work.");
+  });
 
-    for (const [panel, message] of states) {
-      await selectTab(panel);
+  it("keeps the terminal tab selected when re-clicked", async () => {
+    await renderBottomPanel();
 
-      expect(container?.textContent).toContain(message);
-      expect(container?.querySelector(`#bottom-panel-tab-${panel}`)?.getAttribute("aria-selected")).toBe("true");
-    }
+    await selectTab("terminal");
+
+    expect(container?.querySelector(`#bottom-panel-tab-terminal`)?.getAttribute("aria-selected")).toBe("true");
+    expect(container?.textContent).toContain("Terminal unavailable. Native terminal execution requires ACP capability work.");
+  });
+
+  it("does not render removed problems, output, or backlinks tabs", async () => {
+    await renderBottomPanel();
+
+    expect(container?.querySelector(`#bottom-panel-tab-problems`)).toBeNull();
+    expect(container?.querySelector(`#bottom-panel-tab-output`)).toBeNull();
+    expect(container?.querySelector(`#bottom-panel-tab-backlinks`)).toBeNull();
   });
 });
