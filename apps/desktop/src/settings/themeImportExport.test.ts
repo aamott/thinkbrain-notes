@@ -97,11 +97,22 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  // Remove any stubbed globals (e.g. matchMedia) added during the test.
+  vi.unstubAllGlobals();
   // Clean up the dataset attribute so it doesn't leak between tests.
   delete document.documentElement.dataset.thinkbrainTheme;
 });
 
 describe("readCurrentThemeBase", () => {
+  /**
+   * Stub `window.matchMedia` so the system→OS-resolution branch of
+   * `readCurrentThemeBase` can be exercised deterministically. Only the
+   * `matches` field is consulted by the implementation.
+   */
+  function stubMatchMedia(matches: boolean): void {
+    vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches }));
+  }
+
   it("returns 'dark' when the data-thinkbrain-theme attribute is 'dark'", () => {
     document.documentElement.dataset.thinkbrainTheme = "dark";
     expect(readCurrentThemeBase()).toBe("dark");
@@ -112,13 +123,21 @@ describe("readCurrentThemeBase", () => {
     expect(readCurrentThemeBase()).toBe("light");
   });
 
-  it("defaults to 'light' for 'system' (custom themes cannot use system)", () => {
+  it("returns 'dark' for 'system' when OS prefers dark", () => {
     document.documentElement.dataset.thinkbrainTheme = "system";
+    stubMatchMedia(true);
+    expect(readCurrentThemeBase()).toBe("dark");
+  });
+
+  it("returns 'light' for 'system' when OS prefers light", () => {
+    document.documentElement.dataset.thinkbrainTheme = "system";
+    stubMatchMedia(false);
     expect(readCurrentThemeBase()).toBe("light");
   });
 
   it("defaults to 'light' when the attribute is missing", () => {
     delete document.documentElement.dataset.thinkbrainTheme;
+    stubMatchMedia(false);
     expect(readCurrentThemeBase()).toBe("light");
   });
 });

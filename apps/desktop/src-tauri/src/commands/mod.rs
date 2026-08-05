@@ -9,6 +9,7 @@
 //! - `markdown`: Content reading, writing, creation, renaming, and listing of markdown files.
 //! - `search`: Full-text document indexing and search query execution.
 //! - `settings`: Application-level and workspace-level configuration reading and writing.
+//! - `themes`: Discovery and listing of `.tbtheme.json` theme files in the app-data themes directory.
 //!
 //! Security Guarantees & Safety Invariants:
 //! - Path Scoping: File and directory operations must validate paths to prevent directory traversal outside workspace boundaries.
@@ -20,6 +21,7 @@ pub mod workspace;
 pub mod markdown;
 pub mod search;
 pub mod settings;
+pub mod themes;
 
 /// Macro aggregating all Tauri IPC invoke handlers for registration in `tauri::Builder`.
 ///
@@ -58,6 +60,7 @@ macro_rules! app_command_handlers {
             $crate::commands::settings::update_app_theme,
             $crate::commands::settings::read_workspace_settings,
             $crate::commands::settings::write_workspace_settings,
+            $crate::commands::themes::list_themes,
             $crate::commands::workspace::open_workspace_window,
             $crate::commands::workspace::window_workspace_root
         ]

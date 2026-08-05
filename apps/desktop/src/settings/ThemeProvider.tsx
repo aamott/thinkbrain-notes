@@ -1,7 +1,7 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { isTauri } from "@tauri-apps/api/core";
-import { parseThemeFile } from "@thinkbrain/core";
+import { parseThemeFile, type ThemeBase } from "@thinkbrain/core";
 import { type AppTheme, ThemeProviderContext, type ThemeProviderState } from "./theme-context";
 import { useSettingsStore } from "./settingsStore";
 import { readTextFileNative } from "../native/fs";
@@ -35,11 +35,19 @@ export interface ThemeProviderProps {
  * the provider reads the file via the native fs bridge, parses it with
  * `parseThemeFile`, and injects its token overrides via `injectThemeOverrides`.
  * The theme file's `base` field takes precedence over the user's `theme`
- * dropdown — the `data-thinkbrain-theme` attribute is forced to the file's
- * base so the scoped override selector matches. If parsing fails, diagnostics
- * are logged loudly and overrides are removed. When `themeFile` is cleared,
- * overrides are removed and the user's selected theme drives the attribute
- * again.
+ * dropdown — the effective base is computed synchronously from the cached
+ * file base, and a single effect writes the `data-thinkbrain-theme` attribute.
+ * If parsing fails, diagnostics are logged loudly, overrides are removed, and
+ * the user's selected theme drives the attribute again. When `themeFile` is
+ * cleared, overrides are removed and the user's selected theme drives the
+ * attribute.
+ *
+ * **Single source of truth:** The effective base is computed in one place
+ * (`effectiveTheme` below) from `{ userTheme, themeFileBase }`. One effect
+ * writes the DOM attribute. A separate effect handles the async file
+ * read/parse and updates `themeFileBase` state — it never touches the DOM
+ * attribute directly. This eliminates the effect-race and stale-base bugs
+ * that arise when two effects both write the same attribute.
  */
 export function ThemeProvider({
   children,
@@ -87,6 +95,25 @@ export function ThemeProvider({
       ? themeFileFromStore
       : null;
 
+  // The parsed theme file's base, cached from the last successful async read.
+  // When non-null, it takes precedence over the user's `theme` selection — the
+  // custom theme commits to a base palette, and the scoped override selector
+  // only matches when `data-thinkbrain-theme` equals the file's base.
+  // When null (no file, parse failure, or still loading), the user's `theme`
+  // selection drives the attribute. This is the single source of truth for the
+  // effective base — no other code path writes the attribute.
+  const [themeFileBase, setThemeFileBase] = useState<ThemeBase | null>(null);
+
+  // The effective theme: when a themeFile is active, its cached base takes
+  // precedence over the user's selection. When no file is active (or it hasn't
+  // loaded yet), the user's selection drives. Computed synchronously so the
+  // DOM attribute is always consistent with the React tree — no async gap.
+  // The `themeFile !== null` guard short-circuits stale `themeFileBase` values
+  // when the file is cleared, so the effect doesn't need to call
+  // `setThemeFileBase(null)` synchronously (which would trip the
+  // `react-hooks/set-state-in-effect` lint rule).
+  const effectiveTheme: AppTheme = themeFile !== null ? (themeFileBase ?? theme) : theme;
+
   // Load settings from native storage on mount (Tauri only). The ref guard
   // prevents double-load in StrictMode or fast re-mounts.
   const loadStartedRef = useRef(false);
@@ -100,33 +127,31 @@ export function ThemeProvider({
     });
   }, [loadSettings]);
 
-  // Apply the theme attribute whenever it changes. CSS handles light/dark/system.
-  // When a custom themeFile is active, the themeFile effect below overrides
-  // this attribute with the file's base palette (and logs an info message if
-  // there's a conflict with the user's selected theme). The two effects are
-  // ordered so the themeFile effect runs after this one on initial mount, but
-  // React does not guarantee effect ordering across re-renders — instead, the
-  // themeFile effect re-applies the attribute after injecting overrides, so
-  // the final DOM state is always consistent.
+  // Single effect that writes the `data-thinkbrain-theme` attribute. This is
+  // the ONLY place the attribute is written — no race, no stale base. The
+  // effective theme is computed synchronously above, so the DOM always matches
+  // the React state.
   useEffect(() => {
     const root = window.document.documentElement;
-    root.dataset.thinkbrainTheme = theme;
-  }, [theme]);
+    root.dataset.thinkbrainTheme = effectiveTheme;
+  }, [effectiveTheme]);
 
-  // Apply (or clear) custom theme overrides from `appearance.themeFile`.
+  // Async effect: read and parse the theme file, inject/remove overrides, and
+  // update `themeFileBase` state. This effect does NOT touch the DOM attribute
+  // — the attribute effect above picks up `themeFileBase` changes via the
+  // synchronous `effectiveTheme` computation. This separation eliminates the
+  // race where two effects both write the attribute.
   //
-  // When themeFile is set: read the file via the native fs bridge, parse it,
-  // and inject the overrides. The file's `base` field forces the
-  // `data-thinkbrain-theme` attribute so the scoped override selector matches.
-  // When themeFile is null/empty: remove any injected overrides and let the
-  // theme effect above drive the attribute.
-  //
-  // The effect re-runs whenever `themeFile` or `theme` (the user's selection)
-  // changes. `theme` is included so we can log a clear conflict message when
-  // the user's selected base differs from the file's base.
+  // Depends only on `themeFile` — not `theme`. A user theme toggle while a
+  // themeFile is active does NOT re-read the file from disk; the effective
+  // base stays at the file's base (the file takes precedence). When the file
+  // is cleared or changes, the effect re-runs to load/clear overrides.
   useEffect(() => {
-    // No custom theme file: clear overrides and let the theme effect own the
-    // attribute. The theme effect already ran (or will run) for this render.
+    // No custom theme file: clear overrides. The `effectiveTheme` computation
+    // above already short-circuits to the user's `theme` when `themeFile` is
+    // null, so we don't need to reset `themeFileBase` here — the stale value
+    // is ignored. This avoids calling `setThemeFileBase` synchronously in the
+    // effect body (which would trip `react-hooks/set-state-in-effect`).
     if (themeFile === null) {
       removeThemeOverrides();
       return;
@@ -135,7 +160,6 @@ export function ThemeProvider({
     // Capture the path at effect time so a fast change mid-read doesn't write
     // stale overrides. The cleanup-on-rerun pattern below handles cancellation.
     let cancelled = false;
-    const root = window.document.documentElement;
 
     readTextFileNative(themeFile)
       .then((raw): void => {
@@ -154,22 +178,22 @@ export function ThemeProvider({
             );
           }
           removeThemeOverrides();
+          // Reset the base so the user's theme drives the attribute again.
+          setThemeFileBase(null);
           return;
         }
 
         // Inject the overrides scoped to the file's base palette.
         injectThemeOverrides(result.theme);
-
-        // Force the root attribute to the file's base so the scoped selector
-        // matches. Log an info message when this overrides the user's choice
-        // so the behavior is discoverable, not magical.
-        if (root.dataset.thinkbrainTheme !== result.theme.base) {
+        // Cache the file's base so `effectiveTheme` picks it up synchronously.
+        // The attribute effect will write the new base on the next render.
+        if (result.theme.base !== theme) {
           console.info(
             `[ThemeProvider] Custom theme file "${themeFile}" uses base ` +
               `"${result.theme.base}"; overriding user-selected theme "${theme}".`
           );
-          root.dataset.thinkbrainTheme = result.theme.base;
         }
+        setThemeFileBase(result.theme.base);
       })
       .catch((error: unknown) => {
         if (cancelled) return;
@@ -179,6 +203,7 @@ export function ThemeProvider({
           error
         );
         removeThemeOverrides();
+        setThemeFileBase(null);
       });
 
     return () => {

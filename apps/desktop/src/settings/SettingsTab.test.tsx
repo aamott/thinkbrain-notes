@@ -194,8 +194,10 @@ describe("SettingsTab", () => {
     useSettingsStore.setState({ activeSection: "appearance.theme" });
     const el = await renderSettingsTab();
 
-    // Enum (theme) renders a <select>.
-    const select = el.querySelector<HTMLSelectElement>("select");
+    // Enum (theme) renders a <select>. Target it by id (the auto-generated
+    // SelectControl uses the setting key as its id) so the query does not pick
+    // up the ThemePicker's <select> that also renders in this section.
+    const select = el.querySelector<HTMLSelectElement>("select#appearance\\.theme");
     expect(select).not.toBeNull();
     const options = select?.querySelectorAll("option");
     expect(options?.length).toBe(3); // system, light, dark

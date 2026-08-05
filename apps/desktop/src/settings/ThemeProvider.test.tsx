@@ -2,77 +2,267 @@
 
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { renderToStaticMarkup } from "react-dom/server";
-import { afterEach, describe, expect, it } from "vitest";
-import { ThemeProvider } from "./ThemeProvider";
-import { useTheme } from "./theme-context";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * Static-markup helper.
+ * ThemeProvider tests.
  *
- * `renderToStaticMarkup` skips effects and DOM APIs, and `isTauri()` is false
- * under Node, so the provider renders in its pre-hydration state: the default
- * theme is exposed through context and no native load is attempted.
+ * The provider was refactored to use a single source of truth for the effective
+ * theme base: `effectiveTheme = themeFileBase ?? theme`, computed synchronously.
+ * One effect writes `data-thinkbrain-theme` to `document.documentElement`; a
+ * separate async effect reads/parses the theme file and updates `themeFileBase`
+ * state (it never touches the DOM attribute directly). These tests pin that
+ * contract: the attribute always reflects the resolved base, the file's base
+ * takes precedence over the user's dropdown selection, parse failures and
+ * cleared files revert to the user's selection, and a user toggle while a file
+ * is active does not flap the attribute.
+ *
+ * Mocks:
+ *   - `../native/fs`: `readTextFileNative` returns a configurable string (or
+ *     null) so the async file-read effect can be driven deterministically.
+ *   - `@tauri-apps/api/core`: `isTauri` returns `false` so the mount-time
+ *     `loadSettings` call is skipped (the store is seeded directly via
+ *     `setState` instead).
+ *
+ * Rendering follows the codebase convention: `createRoot` + `act` + DOM
+ * queries (no @testing-library/react dependency is available).
  */
-function themeMarkup(
-  children: React.ReactNode,
-  defaultTheme?: "system" | "light" | "dark"
-): string {
-  return renderToStaticMarkup(
-    <ThemeProvider defaultTheme={defaultTheme}>{children}</ThemeProvider>
-  );
-}
 
-/** Renders the current theme value via `useTheme` for assertion. */
-function ThemeProbe(): React.ReactElement {
-  const { theme } = useTheme();
-  return <span data-testid="theme">{theme}</span>;
-}
+// Mock the native fs bridge so the async theme-file read is controllable.
+// `readTextFileNative` is overridden per-test via `vi.mocked(...).mockResolvedValue`.
+vi.mock("../native/fs", () => ({
+  readTextFileNative: vi.fn<(path: string) => Promise<string | null>>()
+}));
+
+// Mock the Tauri core `isTauri` check so the provider's mount-time
+// `loadSettings` effect is a no-op under Node (non-Tauri).
+vi.mock("@tauri-apps/api/core", () => ({
+  isTauri: vi.fn<() => boolean>()
+}));
+
+import { isTauri } from "@tauri-apps/api/core";
+import { readTextFileNative } from "../native/fs";
+import { ThemeProvider } from "./ThemeProvider";
+import { useSettingsStore } from "./settingsStore";
+
+/** A minimal valid dark-base theme file payload used across tests. */
+const DARK_THEME_JSON = JSON.stringify({
+  name: "Test Dark",
+  base: "dark",
+  version: 1,
+  tokens: {
+    "--tn-color-primary": "hsl(152 60% 38%)"
+  }
+});
 
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
 
+beforeEach(() => {
+  // `isTauri` is false for every test so the mount effect skips `loadSettings`.
+  vi.mocked(isTauri).mockReturnValue(false);
+  // Default: the fs bridge resolves to null (no file content). Individual
+  // tests override this to return a theme JSON string.
+  vi.mocked(readTextFileNative).mockResolvedValue(null);
+
+  // Reset the singleton store to a clean, unloaded state. Each test seeds the
+  // exact fields it needs via `setState` to keep cases isolated.
+  useSettingsStore.setState({
+    appValues: {},
+    workspaceValues: null,
+    workspaceRootPath: null,
+    rawAppSettingsJson: null,
+    rawWorkspaceSettingsJson: null,
+    stagedChanges: {},
+    isDirty: false,
+    dirtyCount: 0,
+    activeSection: null,
+    searchQuery: "",
+    loadError: null,
+    saveError: null,
+    validationDiagnostics: [],
+    loaded: false
+  });
+
+  // Ensure no leftover attribute from a prior test.
+  document.documentElement.removeAttribute("data-thinkbrain-theme");
+});
+
 afterEach(async () => {
+  // Unmount and tear down the container so effects clean up between tests.
   await act(async () => root?.unmount());
   container?.remove();
   root = null;
   container = null;
   document.documentElement.removeAttribute("data-thinkbrain-theme");
+  vi.mocked(readTextFileNative).mockReset();
+  vi.mocked(isTauri).mockReset();
 });
 
+/**
+ * Renders the ThemeProvider into a fresh container and flushes effects.
+ *
+ * Args:
+ *   defaultTheme: The fallback theme passed via props (defaults to "system").
+ *
+ * Returns:
+ *   The container element for DOM queries (rarely needed since assertions
+ *   target `document.documentElement`).
+ */
+async function renderProvider(
+  defaultTheme: "system" | "light" | "dark" = "system"
+): Promise<HTMLDivElement> {
+  container = document.createElement("div");
+  document.body.append(container);
+  root = createRoot(container);
+  await act(async () => {
+    root?.render(
+      <ThemeProvider defaultTheme={defaultTheme}>
+        <span>probe</span>
+      </ThemeProvider>
+    );
+  });
+  return container;
+}
+
+/**
+ * Flushes pending microtasks (the async theme-file read resolves on a
+ * microtask) and any resulting React state updates.
+ *
+ * The provider's file-read effect chains `.then` on a mocked promise that
+ * resolves synchronously when awaited; wrapping an empty async `act` callback
+ * flushes both the microtask and the subsequent `setThemeFileBase` re-render.
+ * A small `waitFor` guards against scheduling jitter.
+ */
+async function flushAsyncFileRead(): Promise<void> {
+  await act(async () => {
+    // Drain microtasks so the mocked `readTextFileNative` promise settles and
+    // the `.then` callback runs within the act scope.
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+}
+
 describe("ThemeProvider", () => {
-  it("renders its children", () => {
-    const markup = themeMarkup(<p>child content</p>);
+  it("uses the default theme when the store is not loaded", async () => {
+    // Store stays `loaded: false`; the prop default should drive the attribute.
+    await renderProvider("system");
 
-    expect(markup).toContain("child content");
+    expect(document.documentElement.dataset.thinkbrainTheme).toBe("system");
   });
 
-  it("exposes the default theme through useTheme before native hydration", () => {
-    const markup = themeMarkup(<ThemeProbe />, "dark");
-
-    expect(markup).toContain('data-testid="theme"');
-    expect(markup).toContain(">dark</span>");
-  });
-
-  it("defaults to the system theme when no defaultTheme is provided", () => {
-    const markup = themeMarkup(<ThemeProbe />);
-
-    expect(markup).toContain(">system</span>");
-  });
-
-  it("sets data-thinkbrain-theme on the document root when effects run", async () => {
-    container = document.createElement("div");
-    document.body.append(container);
-    root = createRoot(container);
-    document.documentElement.removeAttribute("data-thinkbrain-theme");
-
-    await act(async () => {
-      root?.render(
-        <ThemeProvider defaultTheme="dark">
-          <ThemeProbe />
-        </ThemeProvider>
-      );
+  it("sets the attribute to the store's appearance.theme once loaded", async () => {
+    // Seed a loaded store with an explicit user theme and no theme file.
+    useSettingsStore.setState({
+      loaded: true,
+      appValues: { "appearance.theme": "dark", "appearance.themeFile": null }
     });
+
+    await renderProvider("system");
+
+    // The user's selection wins because no theme file is active.
+    expect(document.documentElement.dataset.thinkbrainTheme).toBe("dark");
+  });
+
+  it("forces the theme file's base over the user's selection once parsed", async () => {
+    // The user picked "light", but a theme file is active whose base is "dark".
+    // The file's base must take precedence once the async read settles.
+    vi.mocked(readTextFileNative).mockResolvedValue(DARK_THEME_JSON);
+    useSettingsStore.setState({
+      loaded: true,
+      appValues: {
+        "appearance.theme": "light",
+        "appearance.themeFile": "/tmp/dark.tbtheme.json"
+      }
+    });
+
+    await renderProvider("system");
+    await flushAsyncFileRead();
+
+    // The file's base ("dark") overrides the user's "light" selection.
+    expect(document.documentElement.dataset.thinkbrainTheme).toBe("dark");
+  });
+
+  it("reverts to the user's theme when the theme file fails to parse", async () => {
+    // Malformed JSON: `parseThemeFile` returns `theme: null`, so the provider
+    // resets `themeFileBase` and the user's selection drives the attribute.
+    vi.mocked(readTextFileNative).mockResolvedValue("not valid json {{{");
+    useSettingsStore.setState({
+      loaded: true,
+      appValues: {
+        "appearance.theme": "light",
+        "appearance.themeFile": "/tmp/broken.tbtheme.json"
+      }
+    });
+
+    await renderProvider("system");
+    await flushAsyncFileRead();
+
+    // Parse failure reverts to the user's selection.
+    expect(document.documentElement.dataset.thinkbrainTheme).toBe("light");
+  });
+
+  it("reverts to the user's theme when the themeFile is cleared", async () => {
+    // Start with an active dark-base theme file.
+    vi.mocked(readTextFileNative).mockResolvedValue(DARK_THEME_JSON);
+    useSettingsStore.setState({
+      loaded: true,
+      appValues: {
+        "appearance.theme": "light",
+        "appearance.themeFile": "/tmp/dark.tbtheme.json"
+      }
+    });
+
+    await renderProvider("system");
+    await flushAsyncFileRead();
+    // Sanity check: the file's base took precedence initially.
+    expect(document.documentElement.dataset.thinkbrainTheme).toBe("dark");
+
+    // Now clear the themeFile path. The provider's file effect re-runs with
+    // `themeFile === null`, removes overrides, and resets `themeFileBase` so
+    // the user's "light" selection drives the attribute again.
+    await act(async () => {
+      useSettingsStore.setState({
+        appValues: {
+          "appearance.theme": "light",
+          "appearance.themeFile": null
+        }
+      });
+    });
+    await flushAsyncFileRead();
+
+    expect(document.documentElement.dataset.thinkbrainTheme).toBe("light");
+  });
+
+  it("does not flap the attribute when the user toggles theme while a themeFile is active", async () => {
+    // A dark-base theme file is active. The user then stages a different
+    // `appearance.theme` value. Because the file's base takes precedence and
+    // the file-read effect depends only on `themeFile` (not `theme`), the
+    // attribute must stay at the file's base — no re-read, no flap.
+    vi.mocked(readTextFileNative).mockResolvedValue(DARK_THEME_JSON);
+    useSettingsStore.setState({
+      loaded: true,
+      appValues: {
+        "appearance.theme": "dark",
+        "appearance.themeFile": "/tmp/dark.tbtheme.json"
+      }
+    });
+
+    await renderProvider("system");
+    await flushAsyncFileRead();
+    // The file's base is "dark".
+    expect(document.documentElement.dataset.thinkbrainTheme).toBe("dark");
+
+    // User stages a different theme. The file is still active, so the
+    // effective base must remain "dark" — the cached/reparsed file base wins
+    // over the user's staged selection, so the attribute does not flap to
+    // "light" even momentarily after the toggle settles.
+    await act(async () => {
+      useSettingsStore.setState({
+        stagedChanges: { "appearance.theme": "light" }
+      });
+    });
+    await flushAsyncFileRead();
 
     expect(document.documentElement.dataset.thinkbrainTheme).toBe("dark");
   });

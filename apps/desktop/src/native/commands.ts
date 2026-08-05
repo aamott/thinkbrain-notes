@@ -171,6 +171,13 @@ export interface NativeCommandMap {
     };
     readonly result: null;
   };
+  // Lists every .tbtheme.json file discovered in the app-data themes directory.
+  // Each entry carries the theme's display name (parsed from the JSON `name`
+  // field, falling back to the filename stem) and its absolute filesystem path.
+  readonly list_themes: {
+    readonly args: undefined;
+    readonly result: readonly NativeThemeEntry[];
+  };
   readonly git_availability: {
     readonly args: undefined;
     readonly result: NativeGitAvailability;
@@ -241,6 +248,17 @@ export interface NativeWorkspaceEntry {
 export interface NativeWorkspaceSnapshot {
   readonly workspace: NativeWorkspaceDescriptor;
   readonly files: readonly NativeMarkdownFileEntry[];
+}
+
+/**
+ * One discovered `.tbtheme.json` theme file, returned by the `list_themes`
+ * native command. The `name` is parsed from the JSON `name` field (falling
+ * back to the filename stem when the file is unparseable); `path` is the
+ * absolute filesystem path to the file.
+ */
+export interface NativeThemeEntry {
+  readonly name: string;
+  readonly path: string;
 }
 
 // Git command results use Rust's default snake_case serialization. The Git

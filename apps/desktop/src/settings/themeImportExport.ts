@@ -80,18 +80,30 @@ export function readCurrentTokenValues(): Record<string, string> {
  *
  * The ThemeProvider sets this attribute to `"light"`, `"dark"`, or `"system"`.
  * Custom theme files force it to the file's base, so reading it here captures
- * the effective base even when a custom theme is active. `"system"` is mapped to
- * `"light"` because a `.tbtheme.json` `base` must be a concrete palette (per
- * `ThemeBase`); exporting "system" would be invalid.
+ * the effective base even when a custom theme is active. A `.tbtheme.json`
+ * `base` must be a concrete palette (per `ThemeBase`), so `"system"` cannot be
+ * exported directly. Instead, `"system"` (and any missing/unexpected value) is
+ * resolved against the OS color-scheme preference via `matchMedia` so the
+ * exported base matches the palette the user actually sees. Without this, a
+ * dark-OS user on "system" would export a file with dark token values but
+ * `base: "light"` — a self-contradictory theme that fails to round-trip.
  *
  * Returns:
  *   The active base palette (`"light"` or `"dark"`).
  */
 export function readCurrentThemeBase(): ThemeBase {
   const raw = document.documentElement.dataset.thinkbrainTheme;
+  if (raw === "light") return "light";
   if (raw === "dark") return "dark";
-  // Default to "light" for "system", missing, or any unexpected value. The
-  // ThemeBase union only allows "light" | "dark", so this is sound.
+  // "system", missing, or unexpected: resolve via the OS color-scheme
+  // preference so the exported base matches the palette the user actually
+  // sees. Without this, a dark-OS user on "system" would export a file with
+  // dark token values but base "light" — a self-contradictory theme.
+  if (typeof window !== "undefined" && window.matchMedia) {
+    return window.matchMedia("(prefers-color-scheme: dark)").matches
+      ? "dark"
+      : "light";
+  }
   return "light";
 }
 
