@@ -18,6 +18,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage(WorkspaceWindowRoots::default())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
         .invoke_handler(app_command_handlers!())
         .run(tauri::generate_context!())
         .expect("failed to run Thinkbrain Notes desktop shell");

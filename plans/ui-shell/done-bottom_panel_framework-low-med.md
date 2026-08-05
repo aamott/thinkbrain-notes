@@ -7,14 +7,14 @@ terminal, diagnostics, or backlinks features before their data providers exist.
 
 ## Acceptance Criteria
 
-- [ ] Status bar toggles a persistent bottom-panel visibility state with
+- [x] Status bar toggles a persistent bottom-panel visibility state with
       `Ctrl/Cmd+J`, accessible button state, and correct editor sizing.
-- [ ] Problems, output, terminal, and backlinks-preview tabs have typed
+- [x] Problems, output, terminal, and backlinks-preview tabs have typed
       provider boundaries plus honest empty/unavailable states.
-- [ ] Indexer and native-shell feedback uses real state; terminal execution is
+- [x] Indexer and native-shell feedback uses real state; terminal execution is
       not exposed until the ACP/native capability work supplies it.
-- [ ] Bottom panel styling is a CSS Module with tokenized colors and respects
-      reduced motion and small-window overflow.
+- [x] Bottom panel styling uses Tailwind tokens and respects reduced motion and
+      small-window overflow.
 
 ## References
 

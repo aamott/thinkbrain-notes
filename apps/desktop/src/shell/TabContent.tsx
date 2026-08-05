@@ -3,6 +3,7 @@ import { cn } from "../lib/utils";
 import { createDesktopTabRegistry } from "../tabs/tabRegistry";
 import type { DesktopTab } from "../tabs/tabModel";
 import type { DocumentViewState } from "./shellTypes";
+import { SettingsTab } from "../settings/SettingsTab";
 import { Unavailable } from "./Unavailable";
 
 /**
@@ -81,12 +82,7 @@ export function TabContent({ tab, document, onChange, onSave }: TabContentProps)
   }
 
   if (tab.kind === "settings") {
-    return (
-      <Unavailable
-        title="Settings"
-        description="Settings controls will appear here as their owning story is implemented."
-      />
-    );
+    return <SettingsTab />;
   }
 
   if (!document || document.phase === "loading") {

@@ -1,20 +1,31 @@
 import { invokeNativeCommand } from "../native/commands";
+import { isRecord } from "@thinkbrain/core";
 
-export const DESKTOP_STATE_VERSION = 2;
+export const DESKTOP_STATE_VERSION = 3;
 export const DESKTOP_STATE_KEY = "desktopState";
 export const MAX_RECENT_WORKSPACES = 12;
+export const MIN_PANEL_WIDTH = 224;
+export const MAX_PANEL_WIDTH = 480;
+export const DEFAULT_LEFT_PANEL_WIDTH = 288;
+export const DEFAULT_RIGHT_PANEL_WIDTH = 320;
 
 export interface DesktopState {
   readonly version: typeof DESKTOP_STATE_VERSION;
   readonly lastWorkspacePath: string | null;
   readonly recentWorkspacePaths: readonly string[];
   readonly explorerOpen: boolean;
+  readonly leftPanelWidth: number;
+  readonly rightPanelWidth: number;
+  readonly bottomPanelOpen: boolean;
 }
 
 export interface DesktopStateUpdate {
   readonly lastWorkspacePath?: string | null;
   readonly recentWorkspacePaths?: readonly string[];
   readonly explorerOpen?: boolean;
+  readonly leftPanelWidth?: number;
+  readonly rightPanelWidth?: number;
+  readonly bottomPanelOpen?: boolean;
 }
 
 export interface DesktopStateGateway {
@@ -27,7 +38,10 @@ export const DEFAULT_DESKTOP_STATE: DesktopState = Object.freeze({
   version: DESKTOP_STATE_VERSION,
   lastWorkspacePath: null,
   recentWorkspacePaths: [],
-  explorerOpen: true
+  explorerOpen: true,
+  leftPanelWidth: DEFAULT_LEFT_PANEL_WIDTH,
+  rightPanelWidth: DEFAULT_RIGHT_PANEL_WIDTH,
+  bottomPanelOpen: false
 });
 
 const nativeDesktopStateGateway: DesktopStateGateway = {
@@ -124,7 +138,13 @@ function readDesktopState(appSettings: Readonly<Record<string, unknown>>): Deskt
 function readVersionedDesktopState(storedState: Readonly<Record<string, unknown>>): DesktopState {
   const version = storedState.version;
 
-  if (version !== undefined && version !== 0 && version !== 1 && version !== DESKTOP_STATE_VERSION) {
+  if (
+    version !== undefined &&
+    version !== 0 &&
+    version !== 1 &&
+    version !== 2 &&
+    version !== DESKTOP_STATE_VERSION
+  ) {
     return DEFAULT_DESKTOP_STATE;
   }
 
@@ -144,7 +164,13 @@ function applyDesktopStateUpdate(
       update.recentWorkspacePaths === undefined
         ? promoteRecentWorkspace(state.recentWorkspacePaths, update.lastWorkspacePath)
         : normalizeWorkspacePaths(update.recentWorkspacePaths),
-    explorerOpen: update.explorerOpen === undefined ? state.explorerOpen : update.explorerOpen
+    explorerOpen: update.explorerOpen === undefined ? state.explorerOpen : update.explorerOpen,
+    leftPanelWidth:
+      update.leftPanelWidth === undefined ? state.leftPanelWidth : update.leftPanelWidth,
+    rightPanelWidth:
+      update.rightPanelWidth === undefined ? state.rightPanelWidth : update.rightPanelWidth,
+    bottomPanelOpen:
+      update.bottomPanelOpen === undefined ? state.bottomPanelOpen : update.bottomPanelOpen
   });
 }
 
@@ -157,12 +183,29 @@ function createDesktopState(value: Readonly<Record<string, unknown>>): DesktopSt
     explorerOpen:
       typeof value.explorerOpen === "boolean"
         ? value.explorerOpen
-        : DEFAULT_DESKTOP_STATE.explorerOpen
+        : DEFAULT_DESKTOP_STATE.explorerOpen,
+    leftPanelWidth: readPanelWidth(value.leftPanelWidth, DEFAULT_LEFT_PANEL_WIDTH),
+    rightPanelWidth: readPanelWidth(value.rightPanelWidth, DEFAULT_RIGHT_PANEL_WIDTH),
+    bottomPanelOpen:
+      typeof value.bottomPanelOpen === "boolean"
+        ? value.bottomPanelOpen
+        : DEFAULT_DESKTOP_STATE.bottomPanelOpen
   };
 }
 
 function readWorkspacePath(value: unknown): string | null {
   return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+/** Clamps a dock width to the range that keeps the shell usable. */
+export function clampPanelWidth(width: number): number {
+  return Math.max(MIN_PANEL_WIDTH, Math.min(MAX_PANEL_WIDTH, width));
+}
+
+function readPanelWidth(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value)
+    ? clampPanelWidth(value)
+    : fallback;
 }
 
 function normalizeWorkspacePaths(value: unknown, fallback?: string | null): readonly string[] {
@@ -179,8 +222,4 @@ export function promoteRecentWorkspace(paths: readonly string[], path: string | 
 
 function serializeAppSettingsRecord(appSettings: Readonly<Record<string, unknown>>): string {
   return `${JSON.stringify(appSettings, null, 2)}\n`;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }

@@ -13,8 +13,12 @@ static APP_SETTINGS_MUTATION_LOCK: Mutex<()> = Mutex::new(());
 const APP_THEME_KEY: &str = "theme";
 const SUPPORTED_APP_THEMES: [&str; 3] = ["system", "light", "dark"];
 const DESKTOP_STATE_KEY: &str = "desktopState";
-const DESKTOP_STATE_VERSION: u64 = 2;
+const DESKTOP_STATE_VERSION: u64 = 3;
 const MAX_RECENT_WORKSPACES: usize = 12;
+const MIN_PANEL_WIDTH: f64 = 224.0;
+const MAX_PANEL_WIDTH: f64 = 480.0;
+const DEFAULT_LEFT_PANEL_WIDTH: f64 = 288.0;
+const DEFAULT_RIGHT_PANEL_WIDTH: f64 = 320.0;
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -25,14 +29,23 @@ pub struct DesktopStateUpdate {
     pub recent_workspace_paths: Option<Vec<String>>,
     #[serde(default)]
     pub explorer_open: Option<bool>,
+    #[serde(default)]
+    pub left_panel_width: Option<f64>,
+    #[serde(default)]
+    pub right_panel_width: Option<f64>,
+    #[serde(default)]
+    pub bottom_panel_open: Option<bool>,
 }
 
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct DesktopState {
     last_workspace_path: Option<String>,
     recent_workspace_paths: Vec<String>,
     explorer_open: bool,
+    left_panel_width: f64,
+    right_panel_width: f64,
+    bottom_panel_open: bool,
 }
 
 
@@ -246,6 +259,9 @@ pub fn read_desktop_state(app_settings: &Map<String, Value>) -> DesktopState {
                 app_settings.get("lastWorkspacePath"),
                 None,
                 app_settings.get("explorerOpen"),
+                None,
+                None,
+                None,
             )
         })
 }
@@ -254,7 +270,7 @@ pub fn read_desktop_state(app_settings: &Map<String, Value>) -> DesktopState {
 pub fn read_versioned_desktop_state(state: &Map<String, Value>) -> DesktopState {
     let supported_version = match state.get("version") {
         Some(Value::Number(version)) => version.as_u64().is_some_and(|version| {
-            version == 0 || version == 1 || version == DESKTOP_STATE_VERSION
+            version == 0 || version == 1 || version == 2 || version == DESKTOP_STATE_VERSION
         }),
         None => true,
         _ => false,
@@ -268,6 +284,9 @@ pub fn read_versioned_desktop_state(state: &Map<String, Value>) -> DesktopState 
         state.get("lastWorkspacePath"),
         state.get("recentWorkspacePaths"),
         state.get("explorerOpen"),
+        state.get("leftPanelWidth"),
+        state.get("rightPanelWidth"),
+        state.get("bottomPanelOpen"),
     )
 }
 
@@ -294,6 +313,15 @@ pub fn apply_desktop_state_update(current: DesktopState, update: DesktopStateUpd
         last_workspace_path,
         recent_workspace_paths,
         explorer_open: update.explorer_open.unwrap_or(current.explorer_open),
+        left_panel_width: update
+            .left_panel_width
+            .map(clamp_panel_width)
+            .unwrap_or(current.left_panel_width),
+        right_panel_width: update
+            .right_panel_width
+            .map(clamp_panel_width)
+            .unwrap_or(current.right_panel_width),
+        bottom_panel_open: update.bottom_panel_open.unwrap_or(current.bottom_panel_open),
     }
 }
 
@@ -302,6 +330,9 @@ pub fn create_desktop_state(
     last_workspace_path: Option<&Value>,
     recent_workspace_paths: Option<&Value>,
     explorer_open: Option<&Value>,
+    left_panel_width: Option<&Value>,
+    right_panel_width: Option<&Value>,
+    bottom_panel_open: Option<&Value>,
 ) -> DesktopState {
     let last_workspace_path = last_workspace_path
         .and_then(Value::as_str)
@@ -324,6 +355,9 @@ pub fn create_desktop_state(
         last_workspace_path,
         recent_workspace_paths,
         explorer_open: explorer_open.and_then(Value::as_bool).unwrap_or(true),
+        left_panel_width: read_panel_width(left_panel_width, DEFAULT_LEFT_PANEL_WIDTH),
+        right_panel_width: read_panel_width(right_panel_width, DEFAULT_RIGHT_PANEL_WIDTH),
+        bottom_panel_open: bottom_panel_open.and_then(Value::as_bool).unwrap_or(false),
     }
 }
 
@@ -333,6 +367,9 @@ pub fn default_desktop_state() -> DesktopState {
         last_workspace_path: None,
         recent_workspace_paths: Vec::new(),
         explorer_open: true,
+        left_panel_width: DEFAULT_LEFT_PANEL_WIDTH,
+        right_panel_width: DEFAULT_RIGHT_PANEL_WIDTH,
+        bottom_panel_open: false,
     }
 }
 
@@ -342,6 +379,20 @@ pub fn nonempty_workspace_path(path: &str) -> Option<String> {
         return None;
     }
     resolve_workspace_root(path).map(|p| p.to_string_lossy().to_string()).ok()
+}
+
+
+pub fn clamp_panel_width(width: f64) -> f64 {
+    width.clamp(MIN_PANEL_WIDTH, MAX_PANEL_WIDTH)
+}
+
+
+pub fn read_panel_width(value: Option<&Value>, fallback: f64) -> f64 {
+    value
+        .and_then(Value::as_f64)
+        .filter(|width| width.is_finite())
+        .map(clamp_panel_width)
+        .unwrap_or(fallback)
 }
 
 
@@ -399,6 +450,9 @@ pub fn serialize_desktop_state(state: DesktopState) -> Value {
         ),
     );
     serialized.insert("explorerOpen".to_string(), Value::Bool(state.explorer_open));
+    serialized.insert("leftPanelWidth".to_string(), Value::from(state.left_panel_width));
+    serialized.insert("rightPanelWidth".to_string(), Value::from(state.right_panel_width));
+    serialized.insert("bottomPanelOpen".to_string(), Value::Bool(state.bottom_panel_open));
     Value::Object(serialized)
 }
 
@@ -457,5 +511,4 @@ pub fn write_settings_file(path: &Path, contents: &str) -> Result<(), NativeErro
 
     Ok(())
 }
-
 
