@@ -46,7 +46,7 @@ export interface NativeCommandMap {
     readonly result: readonly NativeMarkdownFileEntry[];
   };
   readonly list_workspace_entries: {
-    readonly args: { readonly rootPath: string };
+    readonly args: { readonly rootPath: string; readonly includeHidden: boolean };
     readonly result: readonly NativeWorkspaceEntry[];
   };
   readonly read_markdown_file: {

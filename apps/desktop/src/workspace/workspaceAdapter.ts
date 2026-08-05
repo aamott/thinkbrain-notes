@@ -8,7 +8,7 @@ import {
 export interface WorkspaceDesktopApi {
   pickWorkspaceDirectory(): Promise<string | null>;
   openWorkspace(rootPath: string): Promise<NativeWorkspaceSnapshot>;
-  listWorkspaceEntries(rootPath: string): Promise<readonly NativeWorkspaceEntry[]>;
+  listWorkspaceEntries(rootPath: string, includeHidden: boolean): Promise<readonly NativeWorkspaceEntry[]>;
   openWorkspaceWindow(rootPath: string): Promise<void>;
   windowWorkspaceRoot(): Promise<string | null>;
   /** Creates a workspace file (any extension) and missing parent folders. */
@@ -42,8 +42,8 @@ export const workspaceDesktopApi: WorkspaceDesktopApi = {
   openWorkspace(rootPath) {
     return invokeNativeCommand("open_workspace", { rootPath });
   },
-  listWorkspaceEntries(rootPath) {
-    return invokeNativeCommand("list_workspace_entries", { rootPath });
+  listWorkspaceEntries(rootPath, includeHidden) {
+    return invokeNativeCommand("list_workspace_entries", { rootPath, includeHidden });
   },
   openWorkspaceWindow(rootPath) {
     return invokeNativeCommand("open_workspace_window", { rootPath }).then(() => undefined);

@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useId, useMemo, useReducer, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
-import { ChevronDown, Folder, FolderOpen, FolderPlus } from "lucide-react";
+import { ChevronDown, Eye, EyeOff, Folder, FolderOpen, FolderPlus } from "lucide-react";
 import type { NativeWorkspaceEntry, NativeWorkspaceSnapshot } from "../native/commands";
 import {
   buildWorkspaceTree,
@@ -9,6 +9,11 @@ import {
   type WorkspaceTreeNode
 } from "./workspaceExplorerModel";
 import { workspaceDesktopApi, type WorkspaceDesktopApi } from "./workspaceAdapter";
+import {
+  DEFAULT_WORKSPACE_SETTINGS,
+  readWorkspaceSettings,
+  writeWorkspaceSettings
+} from "./workspaceSettings";
 import { WorkspaceFileIcon } from "./WorkspaceFileIcon";
 import { cn } from "../lib/utils";
 
@@ -53,6 +58,10 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
   const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [expandedFolders, setExpandedFolders] = useState<ReadonlySet<string>>(new Set());
+  // Whether dot-prefixed entries (`.git`, `.obsidian`, …) are listed in the
+  // tree. Persisted per-workspace via `readWorkspaceSettings`/`writeWorkspaceSettings`
+  // and restored when a workspace opens.
+  const [showHidden, setShowHidden] = useState<boolean>(DEFAULT_WORKSPACE_SETTINGS.showHidden);
   const tree = useMemo(() => buildWorkspaceTree(state.entries), [state.entries]);
   const workspaceRootPath = state.snapshot?.workspace.root_path;
 
@@ -63,6 +72,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
   const stateRef = useRef(state);
   const rootPathRef = useRef(workspaceRootPath);
   const apiRef = useRef(api);
+  const showHiddenRef = useRef(showHidden);
   const callbacksRef = useRef({ onMarkdownFileCreated, onMarkdownFileSelected, onWorkspaceLaunched });
   // Refs are updated in an effect (not during render) per the react-hooks/refs
   // rule. Async helpers read `*.current` after each `await`.
@@ -70,6 +80,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
     stateRef.current = state;
     rootPathRef.current = workspaceRootPath;
     apiRef.current = api;
+    showHiddenRef.current = showHidden;
     callbacksRef.current = { onMarkdownFileCreated, onMarkdownFileSelected, onWorkspaceLaunched };
   });
 
@@ -92,6 +103,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
     setPendingDelete(null);
     setActionError(null);
     setExpandedFolders(new Set());
+    setShowHidden(DEFAULT_WORKSPACE_SETTINGS.showHidden);
   }, []);
 
   const loadWorkspace = useCallback(async (rootPath: string, restoring = false) => {
@@ -103,8 +115,20 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
     if (isWorkspaceSwitch) clearWorkspaceState();
     dispatch({ type: "open" });
     try {
+      // Restore the per-workspace "show hidden" preference before listing so
+      // the first tree build already reflects the persisted value. A failed
+      // read falls back to defaults rather than blocking workspace opening.
+      let includeHidden = showHiddenRef.current;
+      try {
+        const settings = await readWorkspaceSettings(rootPath);
+        includeHidden = settings.showHidden;
+        setShowHidden(settings.showHidden);
+        showHiddenRef.current = settings.showHidden;
+      } catch {
+        // Keep the in-memory default; the toggle still works for this session.
+      }
       const snapshot = await api.openWorkspace(rootPath);
-      const entries = await api.listWorkspaceEntries(rootPath);
+      const entries = await api.listWorkspaceEntries(rootPath, includeHidden);
       dispatch({ type: "opened", snapshot, entries });
       onWorkspaceOpened?.(rootPath, snapshot);
     } catch (error) {
@@ -118,7 +142,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
     const snapshot = stateRef.current.snapshot;
     if (!rootPath || !snapshot) return;
     try {
-      const entries = await apiRef.current.listWorkspaceEntries(rootPath);
+      const entries = await apiRef.current.listWorkspaceEntries(rootPath, showHiddenRef.current);
       // Abort if the workspace changed while listing.
       if (rootPathRef.current !== rootPath) return;
       dispatch({ type: "opened", snapshot, entries });
@@ -136,6 +160,28 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
     }
   }, []);
 
+  /**
+   * Toggles the "show hidden entries" preference, persists it to the current
+   * workspace's settings, and re-lists entries so the tree updates without
+   * reopening the workspace. Persistence failures are surfaced as action
+   * errors but do not revert the in-memory toggle: the user can still see the
+   * effect for this session and retry the toggle to write again.
+   */
+  const toggleShowHidden = useCallback(async () => {
+    const rootPath = rootPathRef.current;
+    const next = !showHiddenRef.current;
+    setShowHidden(next);
+    showHiddenRef.current = next;
+    if (rootPath) {
+      try {
+        await writeWorkspaceSettings(rootPath, { showHidden: next });
+      } catch (error) {
+        setActionError(workspaceErrorMessage(error));
+      }
+    }
+    await refreshEntries();
+  }, [refreshEntries]);
+
   const openWorkspace = useCallback(async () => {
     try {
       const rootPath = await apiRef.current.pickWorkspaceDirectory();
@@ -147,6 +193,12 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
 
   useEffect(() => {
     if (initialWorkspacePath) {
+      // Legitimate "load workspace when the path prop changes" effect: the
+      // async loader intentionally flips the explorer into its "opening" phase
+      // synchronously before the first await so the UI reflects the switch
+      // immediately. The set-state-in-effect rule cannot model this lifecycle,
+      // so the call is suppressed here rather than restructuring the load.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       void loadWorkspace(initialWorkspacePath, true);
     }
   }, [initialWorkspacePath, loadWorkspace]);
@@ -190,7 +242,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
     try {
       await operation();
       if (rootPathRef.current !== rootPath) return true;
-      const entries = await apiRef.current.listWorkspaceEntries(rootPath);
+      const entries = await apiRef.current.listWorkspaceEntries(rootPath, showHiddenRef.current);
       if (rootPathRef.current !== rootPath) return true;
       dispatch({ type: "opened", snapshot, entries });
       if (options?.selectMarkdown) {
@@ -382,10 +434,25 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
   return (
     <section className={cn("flex min-h-0 flex-1 flex-col text-sidebar-foreground bg-sidebar font-sans", className)} aria-label="Workspace explorer" aria-busy={isBusy}>
       <header className="flex min-h-16 items-center justify-between gap-3 px-3 py-[0.625rem] border-b border-border">
-        <div>
+        <div className="min-w-0">
           <p className="mb-[0.125rem] text-muted-foreground text-[0.625rem] font-bold tracking-[0.08em] leading-none uppercase">Workspace</p>
           <h2 className="max-w-[11rem] m-0 overflow-hidden text-[0.8125rem] font-[650] leading-tight truncate">{state.snapshot?.workspace.name ?? "No workspace open"}</h2>
         </div>
+        <button
+          type="button"
+          className={cn(
+            "flex flex-none items-center justify-center w-[1.6rem] h-[1.6rem] border-0 rounded-small text-muted-foreground bg-transparent cursor-pointer font-inherit focus-visible:outline-2 focus-visible:outline-ring focus-visible:-outline-offset-1 [&>svg]:w-[0.95rem] [&>svg]:h-[0.95rem] [&>svg]:stroke-current",
+            "not-aria-disabled:hover:bg-[color-mix(in_srgb,var(--color-accent)_58%,transparent)]",
+            showHidden && "text-sidebar-foreground"
+          )}
+          aria-pressed={showHidden}
+          aria-label={showHidden ? "Hide hidden entries" : "Show hidden entries"}
+          title={showHidden ? "Hide hidden entries" : "Show hidden entries"}
+          disabled={state.phase !== "ready"}
+          onClick={() => void toggleShowHidden()}
+        >
+          {showHidden ? <Eye aria-hidden="true" /> : <EyeOff aria-hidden="true" />}
+        </button>
       </header>
 
       {state.phase === "empty" && <EmptyState />}
@@ -528,6 +595,10 @@ const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
 }) {
   const isDirectory = node.entry.kind === "directory";
   const isMarkdownFile = node.entry.kind === "file" && node.entry.is_markdown;
+  // Dot-prefixed entries (e.g. `.git`, `.obsidian`) are visually dimmed when
+  // the user has chosen to reveal them, so they remain distinguishable from
+  // regular workspace content.
+  const isHiddenEntry = node.entry.name.startsWith(".");
   // Folder expansion is lifted to the explorer so `startCreate` can expand a
   // folder before opening the inline input inside it.
   const isExpanded = expandedFolders.has(node.entry.relative_path);
@@ -599,7 +670,10 @@ const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
       ) : (
         <button
           ref={buttonRef}
-          className="flex w-full min-w-0 items-center gap-1.5 py-[0.265rem] pr-3 border-0 text-sidebar-foreground bg-transparent font-inherit text-xs leading-tight text-left aria-disabled:cursor-default not-aria-disabled:cursor-pointer not-aria-disabled:hover:bg-[color-mix(in_srgb,var(--color-accent)_58%,transparent)] not-aria-disabled:focus-visible:bg-[color-mix(in_srgb,var(--color-accent)_58%,transparent)] focus-visible:outline-none"
+          className={cn(
+            "flex w-full min-w-0 items-center gap-1.5 py-[0.265rem] pr-3 border-0 text-sidebar-foreground bg-transparent font-inherit text-xs leading-tight text-left aria-disabled:cursor-default not-aria-disabled:cursor-pointer not-aria-disabled:hover:bg-[color-mix(in_srgb,var(--color-accent)_58%,transparent)] not-aria-disabled:focus-visible:bg-[color-mix(in_srgb,var(--color-accent)_58%,transparent)] focus-visible:outline-none",
+            isHiddenEntry && "opacity-60"
+          )}
           type="button"
           style={{ paddingLeft: `${0.75 + depth * 0.875}rem` }}
           aria-disabled={!isDirectory && !isMarkdownFile ? true : undefined}
