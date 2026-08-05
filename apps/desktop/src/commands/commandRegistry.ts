@@ -1,8 +1,10 @@
-/**
- * Renderer-neutral command metadata. The shell owns effects: a command only
- * describes the user intent it emits when selected from a palette, shortcut,
- * or future menu surface.
- */
+import {
+  createContributionRegistry,
+  type CommandContribution,
+  type ContributionRegistry
+} from "@thinkbrain/core";
+
+/** Stable command identifiers owned by the desktop shell or an extension. */
 export type DesktopCommandId =
   | "open-file"
   | "new-note"
@@ -19,6 +21,7 @@ export type DesktopCommandId =
   | "open-extensions"
   | (string & {});
 
+/** Retained metadata for integrations that still inspect the old command intent. */
 export type DesktopCommandIntent =
   | { readonly type: "open-file" }
   | { readonly type: "new-note" }
@@ -30,15 +33,33 @@ export type DesktopCommandIntent =
   | { readonly type: "open-feature"; readonly feature: "graph" | "source-control" | "extensions" }
   | { readonly type: string };
 
+/** Effects supplied by the shell to a registered command handler. */
+export interface DesktopCommandContext {
+  readonly showExplorer: () => void;
+  readonly focusNewNote: () => void;
+  readonly openSearch: () => void;
+  readonly toggleTheme: () => void;
+  readonly toggleExplorer: () => void;
+  readonly toggleOutline: () => void;
+  readonly toggleAssistant: () => void;
+  readonly toggleBottomPanel: () => void;
+  readonly openSettings: () => void;
+  readonly rebuildIndex: () => void;
+  readonly closePalette: (restoreFocus?: boolean) => void;
+}
+
 export type CommandAvailability = "available" | "unavailable";
 
-export interface DesktopCommand {
+/** Desktop specialization of the platform-agnostic command contribution. */
+export interface DesktopCommand
+  extends CommandContribution<DesktopCommandContext> {
   readonly id: DesktopCommandId;
-  readonly title: string;
   /** Extra searchable terms; these are never shown as renderer copy. */
   readonly keywords?: readonly string[];
+  /** Legacy palette display name; `keybinding` is the canonical field. */
   readonly shortcut?: string;
-  readonly intent: DesktopCommandIntent;
+  /** Optional compatibility metadata; execution always uses `handler`. */
+  readonly intent?: DesktopCommandIntent;
   readonly availability: CommandAvailability;
   /** User-facing explanation for a command deliberately not yet wired. */
   readonly unavailableMessage?: string;
@@ -46,19 +67,19 @@ export interface DesktopCommand {
   readonly prerequisite?: string;
 }
 
-export interface DesktopCommandRegistry {
-  register(command: DesktopCommand): void;
-  get(id: DesktopCommandId): DesktopCommand | undefined;
-  entries(): readonly DesktopCommand[];
-}
+export type DesktopCommandRegistry = ContributionRegistry<DesktopCommand>;
 
-const available = <T extends Omit<DesktopCommand, "availability">>(command: T): T & {
-  readonly availability: "available";
-} => ({ ...command, availability: "available" });
+type DesktopCommandDefinition = Omit<DesktopCommand, "availability">;
 
-const unavailable = <T extends Omit<DesktopCommand, "availability">>(command: T): T & {
-  readonly availability: "unavailable";
-} => ({ ...command, availability: "unavailable" });
+const available = (command: DesktopCommandDefinition): DesktopCommand => ({
+  ...command,
+  availability: "available"
+});
+
+const unavailable = (command: DesktopCommandDefinition): DesktopCommand => ({
+  ...command,
+  availability: "unavailable"
+});
 
 /** First-party command ownership and availability are explicit and testable. */
 export const builtInDesktopCommands: readonly DesktopCommand[] = [
@@ -66,63 +87,103 @@ export const builtInDesktopCommands: readonly DesktopCommand[] = [
     id: "open-file",
     title: "Open file",
     keywords: ["file", "note", "workspace"],
+    keybinding: "Ctrl/Cmd+P",
     shortcut: "Ctrl/Cmd+P",
-    intent: { type: "open-file" }
+    intent: { type: "open-file" },
+    handler: () => undefined
   }),
   available({
     id: "new-note",
     title: "New note",
     keywords: ["create", "markdown", "file"],
-    intent: { type: "new-note" }
+    intent: { type: "new-note" },
+    handler: ({ showExplorer, focusNewNote, closePalette }) => {
+      showExplorer();
+      focusNewNote();
+      closePalette(false);
+    }
   }),
   available({
     id: "search",
     title: "Search workspace",
     keywords: ["find", "full text"],
+    keybinding: "Ctrl/Cmd+Shift+F",
     shortcut: "Ctrl/Cmd+Shift+F",
-    intent: { type: "search" }
+    intent: { type: "search" },
+    handler: ({ openSearch, closePalette }) => {
+      openSearch();
+      closePalette();
+    }
   }),
   available({
     id: "toggle-theme",
     title: "Toggle theme",
     keywords: ["dark", "light", "appearance"],
-    intent: { type: "toggle-theme" }
+    intent: { type: "toggle-theme" },
+    handler: ({ toggleTheme, closePalette }) => {
+      toggleTheme();
+      closePalette();
+    }
   }),
   available({
     id: "toggle-explorer",
     title: "Toggle Explorer",
     keywords: ["sidebar", "files"],
-    intent: { type: "toggle-panel", panel: "explorer" }
+    intent: { type: "toggle-panel", panel: "explorer" },
+    handler: ({ toggleExplorer, closePalette }) => {
+      toggleExplorer();
+      closePalette();
+    }
   }),
   available({
     id: "toggle-outline",
     title: "Toggle Outline",
     keywords: ["sidebar", "headings"],
-    intent: { type: "toggle-panel", panel: "outline" }
+    intent: { type: "toggle-panel", panel: "outline" },
+    handler: ({ toggleOutline, closePalette }) => {
+      toggleOutline();
+      closePalette();
+    }
   }),
   available({
     id: "toggle-assistant",
     title: "Toggle Assistant",
     keywords: ["chat", "agent", "ai"],
-    intent: { type: "toggle-panel", panel: "assistant" }
+    intent: { type: "toggle-panel", panel: "assistant" },
+    handler: ({ toggleAssistant, closePalette }) => {
+      toggleAssistant();
+      closePalette();
+    }
   }),
   available({
     id: "toggle-bottom-panel",
     title: "Toggle bottom panel",
     keywords: ["terminal", "dock"],
-    intent: { type: "toggle-panel", panel: "bottom" }
+    intent: { type: "toggle-panel", panel: "bottom" },
+    handler: ({ toggleBottomPanel, closePalette }) => {
+      toggleBottomPanel();
+      closePalette();
+    }
   }),
   available({
     id: "open-settings",
     title: "Open settings",
     keywords: ["preferences", "configuration"],
-    intent: { type: "open-settings" }
+    intent: { type: "open-settings" },
+    handler: ({ openSettings, closePalette }) => {
+      openSettings();
+      closePalette();
+    }
   }),
   available({
     id: "rebuild-index",
     title: "Rebuild workspace index",
     keywords: ["search", "index", "refresh"],
-    intent: { type: "rebuild-index" }
+    intent: { type: "rebuild-index" },
+    handler: ({ rebuildIndex, closePalette }) => {
+      rebuildIndex();
+      closePalette();
+    }
   }),
   unavailable({
     id: "open-graph",
@@ -130,7 +191,8 @@ export const builtInDesktopCommands: readonly DesktopCommand[] = [
     keywords: ["connections", "links"],
     intent: { type: "open-feature", feature: "graph" },
     prerequisite: "link indexing",
-    unavailableMessage: "Graph is unavailable until link indexing is connected."
+    unavailableMessage: "Graph is unavailable until link indexing is connected.",
+    handler: () => undefined
   }),
   unavailable({
     id: "open-source-control",
@@ -138,7 +200,8 @@ export const builtInDesktopCommands: readonly DesktopCommand[] = [
     keywords: ["git", "changes", "commit"],
     intent: { type: "open-feature", feature: "source-control" },
     prerequisite: "source-control integration",
-    unavailableMessage: "Source control is unavailable until Git integration is connected."
+    unavailableMessage: "Source control is unavailable until Git integration is connected.",
+    handler: () => undefined
   }),
   unavailable({
     id: "open-extensions",
@@ -146,30 +209,16 @@ export const builtInDesktopCommands: readonly DesktopCommand[] = [
     keywords: ["plugins", "add-ons"],
     intent: { type: "open-feature", feature: "extensions" },
     prerequisite: "extension host",
-    unavailableMessage: "Extensions are unavailable until the extension host is connected."
+    unavailableMessage: "Extensions are unavailable until the extension host is connected.",
+    handler: () => undefined
   })
 ];
 
 export function createDesktopCommandRegistry(
   initialCommands: readonly DesktopCommand[] = builtInDesktopCommands
 ): DesktopCommandRegistry {
-  const commands = new Map<DesktopCommandId, DesktopCommand>();
-
-  const registry: DesktopCommandRegistry = {
-    register(command) {
-      if (commands.has(command.id)) {
-        throw new Error(`Command '${command.id}' is already registered.`);
-      }
-      commands.set(command.id, command);
-    },
-    get(id) {
-      return commands.get(id);
-    },
-    entries() {
-      return [...commands.values()];
-    }
-  };
-
-  initialCommands.forEach((command) => registry.register(command));
-  return registry;
+  return createContributionRegistry<DesktopCommand>(initialCommands);
 }
+
+/** Shared command registry consumed by the desktop shell and extension bootstrap. */
+export const desktopCommandRegistry = createDesktopCommandRegistry();

@@ -1,7 +1,11 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useReducer, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { CommandPalette, type WorkspaceFileResult } from "../commands/CommandPalette";
-import { createDesktopCommandRegistry, type DesktopCommand } from "../commands/commandRegistry";
+import {
+  desktopCommandRegistry,
+  type DesktopCommand,
+  type DesktopCommandContext
+} from "../commands/commandRegistry";
 import { gitService } from "../git/gitService";
 import { BottomPanel as BottomPanelContent } from "../panels/BottomPanel";
 import { LeftPopout } from "../panels/LeftPopout";
@@ -36,9 +40,6 @@ import type { BottomPanel, DocumentViewState, LeftPanel, RightPanel } from "./sh
 import { StatusBar } from "./StatusBar";
 import { TabContent } from "./TabContent";
 import { TitleBar } from "./TitleBar";
-
-/** Command palette entries available across the desktop shell. */
-const desktopCommandRegistry = createDesktopCommandRegistry();
 
 type PanelSide = "left" | "right";
 
@@ -303,41 +304,29 @@ export function DesktopShell() {
       }]);
   }, [restoredWorkspacePath]);
 
+  /** Executes a registered command with shell effects, keeping the registry canonical. */
   const handlePaletteCommand = useCallback((command: DesktopCommand) => {
-    switch (command.intent.type) {
-      case "open-file":
-        return;
-      case "new-note":
-        showExplorer();
-        setNewNoteFocusRequest((request) => request + 1);
-        closePalette(false);
-        return;
-      case "search":
+    const context: DesktopCommandContext = {
+      showExplorer,
+      focusNewNote: () => setNewNoteFocusRequest((request) => request + 1),
+      openSearch: () => {
         setLeftPanel("search");
         persistDesktopState({ explorerOpen: false });
-        closePalette();
-        return;
-      case "toggle-theme":
-        setTheme(theme === "dark" ? "light" : "dark");
-        closePalette();
-        return;
-      case "toggle-panel":
-        if (!("panel" in command.intent)) return;
-        if (command.intent.panel === "explorer") selectLeftPanel("explorer");
-        if (command.intent.panel === "outline") setRightPanel((panel) => panel === "outline" ? null : "outline");
-        if (command.intent.panel === "assistant") setRightPanel((panel) => panel === "assistant" ? null : "assistant");
-        if (command.intent.panel === "bottom") toggleBottomPanel();
-        closePalette();
-        return;
-      case "open-settings":
-        openSettingsTab();
-        closePalette();
-        return;
-      case "rebuild-index":
-        updateBottomPanel("terminal");
-        closePalette();
-        return;
-    }
+      },
+      toggleTheme: () => setTheme(theme === "dark" ? "light" : "dark"),
+      toggleExplorer: () => selectLeftPanel("explorer"),
+      toggleOutline: () => setRightPanel((panel) => panel === "outline" ? null : "outline"),
+      toggleAssistant: () => setRightPanel((panel) => panel === "assistant" ? null : "assistant"),
+      toggleBottomPanel,
+      openSettings: openSettingsTab,
+      rebuildIndex: () => updateBottomPanel("terminal"),
+      closePalette
+    };
+    void Promise.resolve()
+      .then(() => command.handler(context))
+      .catch((error: unknown) => {
+        console.error(`[commandRegistry] Command "${command.id}" failed.`, error);
+      });
   }, [closePalette, openSettingsTab, persistDesktopState, selectLeftPanel, setTheme, showExplorer, theme, toggleBottomPanel, updateBottomPanel]);
 
   const updateDocument = useCallback((tabId: string, contents: string) => {
@@ -577,6 +566,7 @@ export function DesktopShell() {
             />
             <RightPopout
               panel={rightPanel}
+              rootPath={restoredWorkspacePath}
               documentContents={activeDocument?.phase === "ready"
                 ? activeDocument.contents
                 : null}

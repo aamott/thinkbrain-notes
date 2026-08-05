@@ -1,10 +1,10 @@
 /**
- * Settings registry: collects modules, composes full keys, and answers lookups.
+ * Canonical registry for the platform-agnostic settings schema.
  *
- * The registry is the single source of truth for the settings schema. It stores
- * a *resolved* copy of each definition with `key` set to the full
- * `moduleId.key` form so consumers never have to re-compose keys themselves.
- * Module IDs are unique namespaces; duplicate registration throws loudly.
+ * Registration order is stable. Each definition is stored with its full
+ * `moduleId.key` key, so consumers can use lookup and section APIs without
+ * re-composing keys. Duplicate modules, settings, migrations, and conflicting
+ * cross-module section IDs fail loudly during registration.
  */
 
 import type {
@@ -34,19 +34,23 @@ interface RegisteredModule {
 }
 
 export interface SettingsRegistry {
-  /** Collects a module, composing full keys and enforcing ID uniqueness. */
+  /** Registers a module and resolves each relative key into `moduleId.key`. */
   register(module: SettingsModule): void;
-  /** Collects a migration step. */
+  /** Registers one persistence migration, keyed by its source version. */
   registerMigration(migration: SettingMigration): void;
+  /** Returns migrations in registration order. */
   getMigrations(): readonly SettingMigration[];
+  /** Looks up a module by its stable namespace ID. */
   getModule(id: string): SettingsModule | undefined;
+  /** Returns registered modules in registration order. */
   getAllModules(): readonly SettingsModule[];
-  /** Returns the definition with its key resolved to the full `moduleId.key`. */
+  /** Returns a resolved definition by its full `moduleId.key` key. */
   getDefinition(fullKey: string): SettingDefinition | undefined;
-  /** Returns all definitions (resolved full keys) for a section id. */
+  /** Returns resolved definitions in declaration order for a section. */
   getDefinitionsForSection(sectionId: string): readonly SettingDefinition[];
+  /** Returns modules matching an app or workspace scope. */
   getModulesByScope(scope: SettingScope): readonly SettingsModule[];
-  /** All resolved definitions across every module, in registration order. */
+  /** Returns all resolved definitions in module and declaration order. */
   getAllDefinitions(): readonly SettingDefinition[];
 }
 

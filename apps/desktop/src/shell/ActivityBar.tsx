@@ -1,5 +1,6 @@
+import { getLeftPanelContributions } from "../panels/panelRegistry";
 import { IconButton } from "./IconButton";
-import { type LeftPanel, leftActions } from "./shellTypes";
+import { type LeftPanel } from "./shellTypes";
 
 /**
  * Vertical activity bar rendered on the far left of the desktop shell.
@@ -28,11 +29,11 @@ export function ActivityBar({
       aria-label="Workspace sections"
     >
       <div>
-        {leftActions.map((action) => (
+        {getLeftPanelContributions().map((action) => (
           <IconButton
             key={action.id}
             label={action.label}
-            symbol={action.symbol}
+            symbol={action.icon}
             active={leftPanel === action.id}
             onClick={() => onSelectLeftPanel(action.id)}
           />

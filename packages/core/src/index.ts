@@ -61,6 +61,7 @@ export const designTokenNames: DesignTokenNames = {
   radiusMedium: "--tn-radius-medium"
 };
 
+export * from "./contributions";
 export * from "./frontmatter";
 export * from "./layout";
 export * from "./markdown";

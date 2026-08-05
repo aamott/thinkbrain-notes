@@ -1,8 +1,9 @@
 import { cn } from "../lib/utils";
 import type { AppTheme } from "../settings/theme-context";
 import type { DesktopTab } from "../tabs/tabModel";
+import { getRightPanelContributions } from "../panels/panelRegistry";
 import { IconButton } from "./IconButton";
-import { rightActions, type RightPanel } from "./shellTypes";
+import { type RightPanel } from "./shellTypes";
 
 /**
  * Props for the {@link TitleBar} component.
@@ -42,8 +43,8 @@ type TitleBarProps = {
  *  2. The tab strip — a horizontally scrolling `<nav>` mapping each open
  *     {@link DesktopTab} to a tab chip with active styling, a dirty indicator,
  *     and a close button, followed by a "+" new-tab affordance.
- *  3. The right action group — the {@link rightActions} mapped to
- *     {@link IconButton} toggles, a divider, and a theme switcher.
+ *  3. The right action group — the registered right-panel contributions mapped
+ *     to {@link IconButton} toggles, a divider, and a theme switcher.
  *
  * The component keeps the exact Tailwind classes used by the original
  * inline implementation in `DesktopShell.tsx`; only the event wiring is
@@ -111,11 +112,11 @@ export function TitleBar({
 
       {/* Right action group — panel toggles, divider, theme switcher. */}
       <div className="flex items-center border-l border-border gap-[0.125rem] h-full px-1">
-        {rightActions.map((action) => (
+        {getRightPanelContributions().map((action) => (
           <IconButton
             key={action.id}
             label={action.label}
-            symbol={action.symbol}
+            symbol={action.icon}
             active={rightPanel === action.id}
             className="max-[760px]:hidden"
             onClick={() => onToggleRightPanel(action.id)}

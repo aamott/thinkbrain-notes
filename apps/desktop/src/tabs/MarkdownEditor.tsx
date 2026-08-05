@@ -1,9 +1,11 @@
-import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
-import { markdown } from "@codemirror/lang-markdown";
 import { EditorState } from "@codemirror/state";
-import { keymap } from "@codemirror/view";
-import { EditorView } from "@codemirror/view";
+import { keymap, EditorView } from "@codemirror/view";
 import { useEffect, useRef } from "react";
+
+import {
+  markdownEditorHookRegistry,
+  type MarkdownEditorHookPayload
+} from "./markdownEditorHooks";
 
 export interface MarkdownEditorProps {
   readonly value: string;
@@ -14,7 +16,13 @@ export interface MarkdownEditorProps {
 }
 
 /** CodeMirror 6 is isolated behind this controlled, document-value boundary. */
-export function MarkdownEditor({ value, isSaving = false, error, onChange, onSave }: MarkdownEditorProps) {
+export function MarkdownEditor({
+  value,
+  isSaving = false,
+  error,
+  onChange,
+  onSave
+}: MarkdownEditorProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const valueRef = useRef(value);
@@ -29,42 +37,17 @@ export function MarkdownEditor({ value, isSaving = false, error, onChange, onSav
   useEffect(() => {
     if (!hostRef.current) return;
 
+    const payload: MarkdownEditorHookPayload = {
+      onChange: (nextValue) => onChangeRef.current(nextValue),
+      onSave: () => onSaveRef.current()
+    };
+    const extensions = markdownEditorHookRegistry.getExtensions(payload, undefined);
+    const keybindings = markdownEditorHookRegistry.getKeybindings(payload, undefined);
     const view = new EditorView({
       parent: hostRef.current,
       state: EditorState.create({
         doc: valueRef.current,
-        extensions: [
-          history(),
-          markdown(),
-          EditorView.lineWrapping,
-          // CodeMirror 6 uses two cursor mechanisms: the native caret
-          // (caret-color on .cm-content) and a drawn cursor (borderLeftColor
-          // on .cm-cursor, shown only when focused). The default drawn cursor
-          // is `border-left: 1.2px solid black` — invisible on a dark editor
-          // background. This theme extension overrides both, and { dark: true }
-          // enables CodeMirror's dark-mode selectors so the &dark rules apply.
-          EditorView.theme({
-            ".cm-content": { caretColor: "var(--tn-color-foreground)" },
-            ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--tn-color-foreground)" },
-            "&.cm-focused .cm-cursor": { borderLeftColor: "var(--tn-color-foreground)" }
-          }, { dark: true }),
-          EditorView.contentAttributes.of({ "aria-label": "Markdown editor" }),
-          keymap.of([
-            ...defaultKeymap,
-            ...historyKeymap,
-            indentWithTab,
-            {
-              key: "Mod-s",
-              run: () => {
-                onSaveRef.current();
-                return true;
-              }
-            }
-          ]),
-          EditorView.updateListener.of((update) => {
-            if (update.docChanged) onChangeRef.current(update.state.doc.toString());
-          })
-        ]
+        extensions: [...extensions, keymap.of(keybindings)]
       })
     });
     viewRef.current = view;

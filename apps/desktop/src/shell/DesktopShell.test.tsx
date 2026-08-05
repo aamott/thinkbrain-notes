@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { ThemeProvider } from "../settings/ThemeProvider";
 import { DesktopShell } from "./DesktopShell";
 import { StatusBar } from "./StatusBar";
-import { leftActions } from "./shellTypes";
+import { getLeftPanelContributions } from "../panels/panelRegistry";
 
 /**
  * Renders the shell to static markup.
@@ -44,11 +44,11 @@ describe("DesktopShell composition", () => {
     expect(markup).toContain('aria-label="Workspace sections"');
     // Active buttons emit aria-current between aria-label and title, so assert
     // each attribute independently rather than as a contiguous substring.
-    for (const action of leftActions) {
+    for (const action of getLeftPanelContributions()) {
       expect(markup).toContain(`aria-label="${action.label}"`);
       expect(markup).toContain(`title="${action.label}"`);
     }
-    expect(leftActions).toHaveLength(5);
+    expect(getLeftPanelContributions()).toHaveLength(5);
     expect(markup).toContain('aria-label="Settings"');
     expect(markup).toContain('title="Settings"');
   });

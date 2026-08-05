@@ -11,7 +11,8 @@ const availableCommand: DesktopCommand = {
   title: "Open settings",
   intent: { type: "open-settings" },
   availability: "available",
-  shortcut: "⌘,"
+  shortcut: "⌘,",
+  handler: () => undefined
 };
 
 const unavailableCommand: DesktopCommand = {
@@ -19,7 +20,8 @@ const unavailableCommand: DesktopCommand = {
   title: "Unavailable command",
   intent: { type: "rebuild-index" },
   availability: "unavailable",
-  unavailableMessage: "Unavailable for this workspace."
+  unavailableMessage: "Unavailable for this workspace.",
+  handler: () => undefined
 };
 
 let root: Root | null = null;
