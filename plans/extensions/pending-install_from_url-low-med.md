@@ -9,10 +9,12 @@ into the extension storage area (outside the workspace).
 ## Acceptance Criteria
 
 - [ ] User can paste a URL and trigger install from the extensions UI.
-- [ ] Downloaded package is validated (manifest parse, capability check) before
-      activation.
+- [ ] Downloaded zip is extracted and validated (manifest parse, capability
+      check) before activation. Packaging format is defined in the packaging
+      format story.
 - [ ] Install fails loudly with useful errors for bad URLs, invalid packages,
       or missing manifests.
+- [ ] HTTPS is required for URL installs (no plain HTTP).
 - [ ] Installed extension is stored outside the workspace (OS app-data area).
 - [ ] Sandbox is enforced for the installed extension (depends on
       capability-based sandbox story).

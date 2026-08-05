@@ -10,16 +10,21 @@ depend on.
 ## Acceptance Criteria
 
 - [ ] `extension.json` schema is documented (id, version, name, description,
-      capabilities, contributes, entry points, engines/app compatibility).
+      capabilities, contributes, entry points, engines/app compatibility,
+      activationEvents, apiVersion).
 - [ ] A manifest parser validates structure and reports typed errors for
       missing/invalid fields.
 - [ ] Capability declarations in the manifest are parsed into a typed
       capability list used by the sandbox.
 - [ ] Contribution point declarations map to the internal contribution points
-      (commands, panels, menus, editor actions, settings schemas, themes).
+      (commands, panels, menus, context menus, editor actions, settings
+      schemas, themes).
+- [ ] Activation events are parsed into a typed list used by the extension
+      runtime for lazy activation.
+- [ ] `apiVersion` is parsed and validated against the app's supported range.
 - [ ] Duplicate or malformed manifests fail loudly with useful diagnostics.
-- [ ] Unit tests cover valid manifests, missing fields, unknown fields, and
-      capability parsing.
+- [ ] Unit tests cover valid manifests, missing fields, unknown fields,
+      capability parsing, and activation event parsing.
 
 ## References
 

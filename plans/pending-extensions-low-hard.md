@@ -19,13 +19,24 @@ In scope:
 
 - internal contribution points: command registry, activity/sidebar panel
   registration, editor command hooks, settings schema registration
-- `extension.json` manifest format
+- extension execution model: same-context JS modules with capability-gated
+  Tauri commands (no iframe/process isolation in V1)
+- extension activation lifecycle: lazy activation via declared events
+  (onStartup, onCommand, onView, onLanguage)
+- extension event system: typed pub/sub for app events (note.opened,
+  file.saved, workspace.switched) and extension-emitted events
+- `extension.json` manifest format (with activation events, apiVersion,
+  packaging format)
+- extension packaging format: directory with `extension.json` + JS entry;
+  zip for distribution; dev mode loads from local directory
 - capability-based sandbox (V1: strict, no unrestricted filesystem access)
 - permission declarations in the manifest
 - install from URL and install from file
 - extension settings (stored outside the workspace, keyed by extension id)
-- third-party extension API surface: views, panels, menus, editor actions,
-  settings contributions, themes, AI tools, Git tools, static registry
+- third-party extension API surface: views, panels, menus, context menus,
+  editor actions, settings contributions, themes, AI tools, Git tools,
+  static registry
+- API versioning: manifest declares `apiVersion`; app supports a semver range
 
 Non-goals (deferred or out of scope for V1):
 
@@ -33,6 +44,9 @@ Non-goals (deferred or out of scope for V1):
 - extension signing / trust model (may be revisited before V1 ships)
 - unrestricted filesystem access for extensions (explicitly rejected for V1)
 - remote/code-server extension hosting
+- iframe or process isolation for extension execution (deferred to V2 if
+  the threat model demands it; V1 uses same-context + capabilities)
+- extension-to-extension direct communication (V1: indirect via commands)
 
 ## Architecture Decisions
 
@@ -70,6 +84,28 @@ Extension contribution points and the extension runtime live in
 native bridge capabilities) is implemented via adapters in `apps/desktop` (and
 later `apps/mobile`), matching the existing hub-and-spoke rule.
 
+### Execution model: same-context JS modules
+
+Extensions run as JavaScript modules in the Tauri webview (same context as the
+app). Security is provided by the capability system — extensions can only
+invoke Tauri commands they have capabilities for. No iframe or process
+isolation in V1. This gives extensions full React access for UI contributions
+and keeps the architecture simple. Iframe/process isolation is deferred to V2
+if the threat model demands it.
+
+### Lazy activation
+
+Extensions declare activation events in their manifest (e.g. `onCommand`,
+`onView`, `onLanguage`, `onStartup`). The extension runtime only loads and
+activates an extension when one of its declared events fires. This prevents
+all extensions from loading on startup and keeps the app fast.
+
+### API versioning
+
+The manifest declares an `apiVersion` (semver). The app supports a range of
+API versions. Breaking API changes require a major version bump. Outdated
+extensions get a deprecation warning, not a silent failure.
+
 ## Prerequisites / Dependencies
 
 This epic is a **prerequisite** for:
@@ -95,9 +131,11 @@ are not yet formalized, the first story here should establish them.
 ## Status
 
 - ⬜ Internal contribution points — command registry, panel registration, editor hooks, settings schema registration
-- ⬜ Extension manifest format — `extension.json` schema and parser
+- ⬜ Extension execution model — same-context JS modules, runtime lifecycle, capability-gated commands
+- ⬜ Extension manifest format — `extension.json` schema, parser, activation events, apiVersion
+- ⬜ Extension packaging format — directory structure, zip distribution, dev mode
 - ⬜ Capability-based sandbox — V1 strict sandbox, deny-by-default, no unrestricted filesystem access
-- ⬜ Extension API surface — views, panels, menus, editor actions, themes, AI/Git tool hooks, static registry
+- ⬜ Extension API surface — views, panels, menus, context menus, editor actions, themes, AI/Git tool hooks, event system, static registry
 - ⬜ Install from URL — download and install an extension from a URL
 - ⬜ Install from file — install an extension from a local file
 - ⬜ Extension settings — per-extension settings stored outside the workspace

@@ -8,9 +8,9 @@ installs it into the extension storage area (outside the workspace).
 
 ## Acceptance Criteria
 
-- [ ] User can pick a local file and trigger install from the extensions UI.
-- [ ] Selected package is validated (manifest parse, capability check) before
-      activation.
+- [ ] User can pick a local zip file and trigger install from the extensions UI.
+- [ ] Zip is extracted and validated (manifest parse, capability check) before
+      activation. Packaging format is defined in the packaging format story.
 - [ ] Install fails loudly with useful errors for invalid packages or missing
       manifests.
 - [ ] Installed extension is stored outside the workspace (OS app-data area).

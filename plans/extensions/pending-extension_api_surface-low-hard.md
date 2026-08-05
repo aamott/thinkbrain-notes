@@ -10,17 +10,23 @@ the static registry.
 ## Acceptance Criteria
 
 - [ ] Extension API exposes typed methods for each contribution point.
-- [ ] Extensions activate via declared entry points and receive a scoped API
-      object bound to their granted capabilities.
+- [ ] Extensions activate via declared activation events and receive a scoped
+      API object bound to their granted capabilities.
 - [ ] Static registry populates commands, panels, menus, etc. from parsed
       manifests.
 - [ ] Extensions can contribute themes and settings schemas.
+- [ ] Context menu contribution point: extensions declare context menu items
+      with placement (editor, explorer, panel) and receive callbacks.
+- [ ] Event system: extensions subscribe to typed app events (note.opened,
+      file.saved, workspace.switched) and emit custom events.
 - [ ] AI tool and Git tool hooks are defined (actual AI/Git features are
       delivered by the `ai` and `git-integration` epics; this story only
       provides the hooks).
+- [ ] Extension lifecycle: activate, deactivate, and cleanup hooks. Registered
+      resources are auto-cleaned on deactivate.
 - [ ] API lives in `packages/core`; platform-specific activation via adapters.
-- [ ] Unit/integration tests cover activation, contribution registration, and
-      capability-scoped API access.
+- [ ] Unit/integration tests cover activation, contribution registration,
+      capability-scoped API access, event subscription, and lifecycle cleanup.
 
 ## References
 
