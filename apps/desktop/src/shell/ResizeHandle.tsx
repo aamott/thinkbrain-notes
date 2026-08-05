@@ -10,18 +10,24 @@ import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerE
 export function ResizeHandle({
   label,
   onPointerDown,
+  onPointerCancel,
+  onDoubleClick,
   onKeyDown
 }: {
   label: string;
   onPointerDown: (event: ReactPointerEvent<HTMLButtonElement>) => void;
+  onPointerCancel?: (event: ReactPointerEvent<HTMLButtonElement>) => void;
+  onDoubleClick: () => void;
   onKeyDown: (event: ReactKeyboardEvent<HTMLButtonElement>) => void;
 }) {
   return (
     <button
       type="button"
-      className="relative flex-[0_0_1px] p-0 border-0 bg-border cursor-col-resize hover:bg-primary focus-visible:bg-primary focus-visible:outline-none max-[760px]:hidden"
+      className="relative flex-[0_0_1px] select-none touch-none p-0 border-0 bg-border cursor-col-resize hover:bg-primary focus-visible:bg-primary focus-visible:outline-none max-[760px]:hidden"
       aria-label={`${label}. Use arrow keys to resize.`}
       onPointerDown={onPointerDown}
+      onPointerCancel={onPointerCancel}
+      onDoubleClick={onDoubleClick}
       onKeyDown={onKeyDown}
     />
   );

@@ -9,7 +9,7 @@ Frontend user interface application built with React, Vite, and Zustand.
 - **`native/`**: Tauri bridge adapters (`commands.ts`). **Isolate all Rust calls here.**
 - **`search/`**: Workspace search panel UI and state (`SearchPanel.tsx`).
 - **`settings/`**: Desktop settings state & theme (`desktopState.ts`, `ThemeProvider.tsx`).
-- **`panels/`**: Dock popout surfaces (`LeftPopout.tsx`, `RightPopout.tsx`, `BottomPanel.tsx`, `PanelTitle.tsx`).
+- **`panels/`**: Dock popout surfaces (`LeftPopout.tsx`, `RightPopout.tsx`, `OutlinePanel.tsx`, `PropertiesPanel.tsx`, `BottomPanel.tsx`, `PanelTitle.tsx`).
 - **`shell/`**: Layout frame and chrome. `DesktopShell.tsx` is a slim composition orchestrator (state/effects/callbacks only); chrome lives in `TitleBar.tsx`, `ActivityBar.tsx`, `StatusBar.tsx`, `TabContent.tsx`, and shared primitives (`IconButton`, `ResizeHandle`, `Unavailable`, `DirtyCloseDialog`, `shellTypes.ts`).
 - **`tabs/`**: Editor tabs, workspace tabs, & tab state (`MarkdownEditor.tsx`, `tabRegistry.ts`, `tabModel.ts`).
 - **`workspace/`**: File explorer & workspace tree components (`WorkspaceExplorer.tsx`, `workspaceAdapter.ts`, `workspaceDocumentModel.ts`).

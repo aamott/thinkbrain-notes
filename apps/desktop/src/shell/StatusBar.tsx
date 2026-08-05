@@ -5,20 +5,19 @@
  * story (plans/ui-shell/pending-desktop_shell_composition-high-hard.md).
  *
  * Renders workspace metadata, problem counters, indexer status, cursor
- * position, encoding, language, and the bottom-panel toggle button.
+ * position, encoding, language, and a notifications bell that opens a small
+ * toast popover. The bottom-panel toggle is no longer surfaced here — the
+ * panel is opened via the activity bar / command palette / Ctrl+J shortcut.
  */
 
+import { useState } from "react";
+import { Bell } from "lucide-react";
 import { cn } from "../lib/utils";
-import type { BottomPanel } from "./shellTypes";
 
 /** Props for the {@link StatusBar} component. */
 type StatusBarProps = {
   /** Currently open workspace display name, or null when no workspace is open. */
   readonly workspaceName: string | null;
-  /** Currently open bottom panel, or null when the bottom panel is closed. */
-  readonly bottomPanel: BottomPanel | null;
-  /** Callback invoked when the user clicks the bottom-panel toggle button. */
-  readonly onToggleBottomPanel: () => void;
 };
 
 /**
@@ -28,9 +27,11 @@ type StatusBarProps = {
  * - Left: workspace name, problem counters (✓ 0 ⚠ 0), indexer status.
  * - Spacer.
  * - Right: workspace status, cursor position, indentation, encoding, language.
- * - Far right: bottom-panel toggle button (▰) with active-state styling.
+ * - Far right: notifications bell button opening a small toast popover.
  */
-export function StatusBar({ workspaceName, bottomPanel, onToggleBottomPanel }: StatusBarProps) {
+export function StatusBar({ workspaceName }: StatusBarProps) {
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+
   return (
     <footer className="flex items-center gap-[0.8rem] px-2 bg-statusbar text-statusbar-foreground text-[0.68rem] overflow-hidden whitespace-nowrap">
       <span className="max-[760px]:hidden">{workspaceName ?? "No workspace open"}</span>
@@ -42,16 +43,52 @@ export function StatusBar({ workspaceName, bottomPanel, onToggleBottomPanel }: S
       <span className="max-[760px]:hidden">Spaces: —</span>
       <span className="max-[760px]:hidden">UTF-8</span>
       <span className="max-[760px]:hidden">Markdown</span>
-      <button
-        className={cn(
-          "bg-transparent border-0 text-inherit cursor-pointer h-full px-1 hover:bg-[color-mix(in_srgb,white_18%,transparent)]",
-          bottomPanel && "bg-[color-mix(in_srgb,white_18%,transparent)]"
+
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => setNotificationsOpen((open) => !open)}
+          className={cn(
+            "flex size-5 items-center justify-center rounded text-inherit hover:bg-accent",
+            notificationsOpen && "bg-accent"
+          )}
+          aria-label="Notifications"
+          aria-expanded={notificationsOpen}
+        >
+          <Bell className="size-3.5" />
+        </button>
+
+        {notificationsOpen && (
+          <>
+            {/* Click-away backdrop. */}
+            <button
+              type="button"
+              className="fixed inset-0 z-40 cursor-default"
+              aria-hidden="true"
+              tabIndex={-1}
+              onClick={() => setNotificationsOpen(false)}
+            />
+            <div
+              role="dialog"
+              aria-label="Notifications"
+              className="absolute bottom-full right-0 mb-2 w-64 rounded-lg border border-border bg-popover p-4 text-popover-foreground shadow-soft z-50"
+            >
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-xs font-semibold">Notifications</span>
+                <button
+                  type="button"
+                  onClick={() => setNotificationsOpen(false)}
+                  aria-label="Close notifications"
+                  className="flex size-5 items-center justify-center rounded text-muted-foreground hover:text-foreground"
+                >
+                  ×
+                </button>
+              </div>
+              <p className="m-0 text-xs text-muted-foreground">No notifications</p>
+            </div>
+          </>
         )}
-        onClick={onToggleBottomPanel}
-        aria-label="Toggle bottom panel"
-      >
-        ▰
-      </button>
+      </div>
     </footer>
   );
 }

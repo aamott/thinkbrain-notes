@@ -25,7 +25,7 @@ describe("desktop state persistence", () => {
         })
       )
     ).toEqual({
-      version: 2,
+      ...DEFAULT_DESKTOP_STATE,
       lastWorkspacePath: "/notes/legacy",
       recentWorkspacePaths: ["/notes/legacy"],
       explorerOpen: false
@@ -41,7 +41,7 @@ describe("desktop state persistence", () => {
         })
       )
     ).toEqual({
-      version: 2,
+      ...DEFAULT_DESKTOP_STATE,
       lastWorkspacePath: "/notes/v0",
       recentWorkspacePaths: ["/notes/v0"],
       explorerOpen: false
@@ -76,6 +76,41 @@ describe("desktop state persistence", () => {
     ).toEqual(DEFAULT_DESKTOP_STATE);
   });
 
+  it("hydrates v3 panel layout and clamps stale saved widths", () => {
+    expect(
+      parseDesktopState(
+        JSON.stringify({
+          [DESKTOP_STATE_KEY]: {
+            version: 3,
+            leftPanelWidth: 128,
+            rightPanelWidth: 768,
+            bottomPanelOpen: true
+          }
+        })
+      )
+    ).toEqual({
+      ...DEFAULT_DESKTOP_STATE,
+      leftPanelWidth: 224,
+      rightPanelWidth: 480,
+      bottomPanelOpen: true
+    });
+  });
+
+  it("falls back to default layout values when v3 widths are missing or invalid", () => {
+    expect(
+      parseDesktopState(
+        JSON.stringify({
+          [DESKTOP_STATE_KEY]: {
+            version: 3,
+            leftPanelWidth: "wide",
+            rightPanelWidth: null,
+            bottomPanelOpen: "open"
+          }
+        })
+      )
+    ).toEqual(DEFAULT_DESKTOP_STATE);
+  });
+
   it("loads through an injected gateway", async () => {
     const gateway = createGateway(
       JSON.stringify({
@@ -88,7 +123,7 @@ describe("desktop state persistence", () => {
     );
 
     await expect(loadDesktopState(gateway)).resolves.toEqual({
-      version: 2,
+      ...DEFAULT_DESKTOP_STATE,
       lastWorkspacePath: "/notes/current",
       recentWorkspacePaths: ["/notes/current"],
       explorerOpen: false
@@ -109,7 +144,7 @@ describe("desktop state persistence", () => {
     );
 
     await expect(saveDesktopState({ explorerOpen: true }, gateway)).resolves.toEqual({
-      version: 2,
+      ...DEFAULT_DESKTOP_STATE,
       lastWorkspacePath: "/notes/legacy",
       recentWorkspacePaths: ["/notes/legacy"],
       explorerOpen: true
@@ -122,10 +157,13 @@ describe("desktop state persistence", () => {
       editor: { fontSize: 18, lineWrapping: false },
       extensionSettings: { "example.timer": { enabled: true } },
       [DESKTOP_STATE_KEY]: {
-        version: 2,
+        version: 3,
         lastWorkspacePath: "/notes/legacy",
         recentWorkspacePaths: ["/notes/legacy"],
-        explorerOpen: true
+        explorerOpen: true,
+        leftPanelWidth: 288,
+        rightPanelWidth: 320,
+        bottomPanelOpen: false
       }
     });
     expect(written).not.toHaveProperty("lastWorkspacePath");
@@ -141,7 +179,7 @@ describe("desktop state persistence", () => {
         gateway
       )
     ).resolves.toEqual({
-      version: 2,
+      ...DEFAULT_DESKTOP_STATE,
       lastWorkspacePath: "/notes/new",
       recentWorkspacePaths: ["/notes/new"],
       explorerOpen: false
@@ -149,10 +187,13 @@ describe("desktop state persistence", () => {
 
     expect(getWrittenSettings(gateway)).toEqual({
       [DESKTOP_STATE_KEY]: {
-        version: 2,
+        version: 3,
         lastWorkspacePath: "/notes/new",
         recentWorkspacePaths: ["/notes/new"],
-        explorerOpen: false
+        explorerOpen: false,
+        leftPanelWidth: 288,
+        rightPanelWidth: 320,
+        bottomPanelOpen: false
       }
     });
   });
@@ -220,6 +261,38 @@ describe("desktop state persistence", () => {
     await expect(saveDesktopState({ lastWorkspacePath: null }, gateway)).resolves.toMatchObject({
       lastWorkspacePath: null,
       recentWorkspacePaths: ["/notes/current", "/notes/previous"]
+    });
+  });
+
+  it("saves panel widths and bottom panel visibility through the desktop-state gateway", async () => {
+    const updateDesktopState = vi.fn(async () => JSON.stringify({
+      [DESKTOP_STATE_KEY]: {
+        version: 3,
+        leftPanelWidth: 352,
+        rightPanelWidth: 304,
+        bottomPanelOpen: true
+      }
+    }));
+    const gateway = {
+      ...createGateway(null),
+      updateDesktopState
+    };
+
+    await expect(
+      saveDesktopState(
+        { leftPanelWidth: 352, rightPanelWidth: 304, bottomPanelOpen: true },
+        gateway
+      )
+    ).resolves.toEqual({
+      ...DEFAULT_DESKTOP_STATE,
+      leftPanelWidth: 352,
+      rightPanelWidth: 304,
+      bottomPanelOpen: true
+    });
+    expect(updateDesktopState).toHaveBeenCalledWith({
+      leftPanelWidth: 352,
+      rightPanelWidth: 304,
+      bottomPanelOpen: true
     });
   });
 });

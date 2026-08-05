@@ -1,5 +1,5 @@
 import { cn } from "../lib/utils";
-import type { BottomPanel as BottomPanelId } from "../shell/shellTypes";
+import type { BottomPanel as BottomPanelId, BottomPanelProvider } from "../shell/shellTypes";
 import { Unavailable } from "../shell/Unavailable";
 
 /**
@@ -11,27 +11,62 @@ type BottomPanelProps = {
   readonly onClose: () => void;
 };
 
-/** Bottom dock tab ids, in display order. */
-const bottomPanelItems = ["problems", "output", "terminal", "backlinks"] as const;
+/** Bottom dock tab ids, in display order. Terminal is the only wired surface. */
+const bottomPanelItems = ["terminal"] as const satisfies readonly BottomPanelId[];
+
+/**
+ * Capability declaration for the terminal backing service.
+ *
+ * Native terminal execution is gated on Agent Client Protocol capability work,
+ * so the panel renders an honest unavailable boundary rather than exposing
+ * execution controls that aren't backed by anything yet.
+ */
+const bottomPanelProviders: Record<BottomPanelId, BottomPanelProvider> = {
+  terminal: {
+    id: "terminal",
+    isAvailable: false,
+    unavailableMessage: "Terminal unavailable. Native terminal execution requires ACP capability work."
+  }
+};
+
+/** Renders an honest terminal capability boundary without exposing execution controls. */
+function TerminalPanel({ provider }: { readonly provider: BottomPanelProvider }) {
+  return <Unavailable className="items-start justify-start p-0 text-left" title="Terminal" description={provider.unavailableMessage} />;
+}
+
+/**
+ * Renders content for the selected provider while honoring its availability.
+ */
+function BottomPanelContent({ provider }: { readonly provider: BottomPanelProvider }) {
+  return <TerminalPanel provider={provider} />;
+}
 
 /**
  * Bottom dock surface extracted from DesktopShell.
  *
- * Renders a tab strip (problems / output / terminal / backlinks), a close
- * button, and a content area. The content currently shows an `Unavailable`
- * placeholder until each panel's backing service is wired up.
+ * Renders a tab strip (terminal only today, kept for future extensibility), a
+ * close button, and provider-bounded content for the selected surface.
  */
 export function BottomPanel({ active, onChange, onClose }: BottomPanelProps) {
+  const provider = bottomPanelProviders[active];
+  const tabId = `bottom-panel-tab-${active}`;
+  const contentId = `bottom-panel-content-${active}`;
+
   return (
-    <section className="flex-[0_0_12rem] min-h-[7rem] bg-panel border-t border-border" aria-label="Bottom panel">
-      <div className="flex items-center h-8 border-b border-border">
+    <section className="flex-[0_0_12rem] min-h-[7rem] min-w-0 overflow-hidden border-t border-border bg-panel motion-reduce:transition-none" aria-label="Bottom panel">
+      <div className="flex h-8 min-w-0 items-center overflow-x-auto border-b border-border" role="tablist" aria-label="Bottom panel tabs">
         {bottomPanelItems.map((item) => (
           <button
             key={item}
+            id={`bottom-panel-tab-${item}`}
             className={cn(
-              "bg-transparent border-0 cursor-pointer text-[0.65rem] h-full tracking-[0.05em] px-[0.7rem] uppercase text-muted-foreground hover:border-b-2 hover:border-b-primary hover:text-foreground",
-              active === item && "border-b-2 border-b-primary text-foreground"
+              "h-full shrink-0 cursor-pointer border-0 border-b-2 border-b-transparent bg-transparent px-[0.7rem] text-[0.65rem] tracking-[0.05em] text-muted-foreground uppercase hover:border-b-primary hover:text-foreground",
+              active === item && "border-b-primary text-foreground"
             )}
+            type="button"
+            role="tab"
+            aria-controls={`bottom-panel-content-${item}`}
+            aria-selected={active === item}
             onClick={() => onChange(item)}
           >
             {item}
@@ -39,19 +74,16 @@ export function BottomPanel({ active, onChange, onClose }: BottomPanelProps) {
         ))}
         <span className="flex-1" />
         <button
-          className="bg-transparent border-0 cursor-pointer text-muted-foreground text-sm px-2 hover:text-foreground"
+          className="shrink-0 cursor-pointer border-0 bg-transparent px-2 text-sm text-muted-foreground hover:text-foreground"
+          type="button"
           onClick={onClose}
           aria-label="Close bottom panel"
         >
           ×
         </button>
       </div>
-      <div className="h-[calc(100%-2rem)] overflow-auto p-[0.65rem_0.85rem] font-mono text-xs leading-[1.6]">
-        <Unavailable
-          className="items-start justify-start p-0 text-left"
-          title={`${active} panel`}
-          description="This panel is waiting for its backing service."
-        />
+      <div id={contentId} className="h-[calc(100%-2rem)] overflow-auto p-[0.65rem_0.85rem] font-mono text-xs leading-[1.6]" role="tabpanel" aria-labelledby={tabId}>
+        <BottomPanelContent provider={provider} />
       </div>
     </section>
   );

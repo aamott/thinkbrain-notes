@@ -109,7 +109,7 @@ export const builtInDesktopCommands: readonly DesktopCommand[] = [
   available({
     id: "toggle-bottom-panel",
     title: "Toggle bottom panel",
-    keywords: ["terminal", "problems", "output"],
+    keywords: ["terminal", "dock"],
     intent: { type: "toggle-panel", panel: "bottom" }
   }),
   available({
