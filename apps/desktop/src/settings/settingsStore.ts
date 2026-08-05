@@ -244,6 +244,15 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  *   A Zustand store creator (use as a hook in React components).
  */
 export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettingsGateway) {
+  // Load-generation token used to deduplicate concurrent `loadSettings` calls.
+  // Each call increments the counter and captures its own generation; after its
+  // awaits complete, it checks whether a newer load has superseded it. If so, the
+  // stale load aborts (returns without calling `set()`) so the newer load's
+  // state wins. This prevents the ThemeProvider mount-load and SettingsTab
+  // mount-load race where the last writer clobbered workspaceValues / stagedChanges.
+  // Scoped inside the factory closure so each store instance has its own counter.
+  let loadGeneration = 0;
+
   return create<SettingsStoreState>((set, get) => ({
     // --- Loaded values ---
     appValues: {},
@@ -275,6 +284,10 @@ export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettin
      * Clears any prior staged changes and errors. Failures set `loadError`.
      */
     async loadSettings(rootPath: string | null): Promise<void> {
+      // Capture this call's generation. A newer `loadSettings` call increments
+      // the counter; if our generation is no longer the latest after the awaits,
+      // we abort so the newer load's `set()` is the one that wins.
+      const myGeneration = ++loadGeneration;
       try {
         const rawAppJson = await gateway.readAppSettings();
         const appResult = parseDynamicAppSettings(rawAppJson, appSettingsRegistry);
@@ -285,6 +298,10 @@ export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettin
           rawWorkspaceJson = await gateway.readWorkspaceSettings(rootPath);
           workspaceValues = parseDynamicWorkspaceSettings(rawWorkspaceJson, appSettingsRegistry);
         }
+
+        // A newer load superseded us while we were awaiting — abort so we don't
+        // clobber the fresher state the newer load will (or already did) set.
+        if (myGeneration !== loadGeneration) return;
 
         set({
           appValues: appResult.values,
@@ -300,6 +317,9 @@ export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettin
           loaded: true
         });
       } catch (error) {
+        // Only record the error if we're still the latest load; a superseded
+        // load's error is not representative of the current state.
+        if (myGeneration !== loadGeneration) return;
         const message = error instanceof Error ? error.message : String(error);
         console.error("[settingsStore] Failed to load settings:", error);
         set({ loadError: `Failed to load settings: ${message}`, loaded: true });

@@ -21,7 +21,7 @@ import type { ControlProps } from "../controlRegistry";
  * inside Tauri and resolves to `null` outside Tauri. When not in Tauri,
  * the button renders disabled with a tooltip explaining why.
  */
-export function PathControl({ value, onChange, disabled }: ControlProps) {
+export function PathControl({ definition, value, onChange, disabled }: ControlProps) {
   // Cache the Tauri check once; it never changes during a session.
   const [nativeAvailable] = useState(() => isTauri());
   const pathValue = typeof value === "string" ? value : String(value ?? "");
@@ -35,6 +35,7 @@ export function PathControl({ value, onChange, disabled }: ControlProps) {
     <div className="flex w-full max-w-[24rem] items-center gap-2">
       <input
         type="text"
+        id={definition.key}
         value={pathValue}
         disabled={disabled}
         onChange={(e) => onChange(e.target.value)}

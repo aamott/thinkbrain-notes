@@ -16,6 +16,7 @@ export function SelectControl({ definition, value, onChange, disabled }: Control
 
   return (
     <select
+      id={definition.key}
       value={selected}
       disabled={disabled}
       onChange={(e) => onChange(e.target.value)}

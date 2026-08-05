@@ -20,6 +20,7 @@ export function NumberControl({ definition, value, onChange, disabled }: Control
   return (
     <input
       type="number"
+      id={definition.key}
       value={Number.isNaN(numericValue) ? "" : numericValue}
       min={definition.min}
       max={definition.max}

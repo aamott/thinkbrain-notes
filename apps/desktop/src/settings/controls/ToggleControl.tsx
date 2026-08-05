@@ -15,13 +15,14 @@ import type { ControlProps } from "../controlRegistry";
  * Clicking flips the value and calls `onChange(!value)`. Uses ARIA
  * `role="switch"` + `aria-checked` for screen-reader compatibility.
  */
-export function ToggleControl({ value, onChange, disabled }: ControlProps) {
+export function ToggleControl({ definition, value, onChange, disabled }: ControlProps) {
   const checked = Boolean(value);
 
   return (
     <button
       type="button"
       role="switch"
+      id={definition.key}
       aria-checked={checked}
       disabled={disabled}
       onClick={() => onChange(!checked)}

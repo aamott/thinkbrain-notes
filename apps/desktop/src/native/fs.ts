@@ -20,7 +20,10 @@ import { writeTextFile, readTextFile } from "@tauri-apps/plugin-fs";
  *   contents: String contents to write.
  *
  * Returns:
- *   `true` if the file was written, `false` if the runtime is not Tauri.
+ *   `true` if the file was written, `false` if the runtime is not Tauri or
+ *   the write failed. Write failures are logged loudly via `console.error` to
+ *   match the read side's error-handling pattern and the documented boolean
+ *   contract.
  */
 export async function writeTextFileNative(
   path: string,
@@ -29,8 +32,15 @@ export async function writeTextFileNative(
   // Guard non-Tauri contexts (tests, web-only dev) so callers don't crash.
   if (!isTauri()) return false;
 
-  await writeTextFile(path, contents);
-  return true;
+  try {
+    await writeTextFile(path, contents);
+    return true;
+  } catch (error) {
+    // Fail loudly: log the failure so it surfaces, and return false to match
+    // the read side's `null`-on-error pattern and the boolean contract.
+    console.error("[native/fs] Failed to write file:", error);
+    return false;
+  }
 }
 
 /**
