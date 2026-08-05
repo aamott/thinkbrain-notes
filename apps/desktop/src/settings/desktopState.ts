@@ -1,4 +1,5 @@
 import { invokeNativeCommand } from "../native/commands";
+import { isRecord } from "@thinkbrain/core";
 
 export const DESKTOP_STATE_VERSION = 3;
 export const DESKTOP_STATE_KEY = "desktopState";
@@ -221,8 +222,4 @@ export function promoteRecentWorkspace(paths: readonly string[], path: string | 
 
 function serializeAppSettingsRecord(appSettings: Readonly<Record<string, unknown>>): string {
   return `${JSON.stringify(appSettings, null, 2)}\n`;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }

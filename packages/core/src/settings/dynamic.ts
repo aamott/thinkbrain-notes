@@ -11,8 +11,13 @@
 
 import type { SettingsRegistry } from "./registry";
 import { extractDefaults } from "./defaults";
+import { getModuleIdFromKey } from "./registry";
 import type { SettingsDiagnostic } from "../settings";
-import { CURRENT_SETTINGS_VERSION } from "../settings";
+import {
+  CURRENT_SETTINGS_VERSION,
+  getErrorMessage,
+  isRecord
+} from "./internal";
 
 /** Result of parsing the dynamic app settings document. */
 export interface ParseDynamicAppSettingsResult {
@@ -130,7 +135,7 @@ export function parseDynamicAppSettings(
   // are ignored so stale/misspelled entries don't leak into the settings model.
   const values: Record<string, unknown> = { ...defaults };
   for (const def of registry.getAllDefinitions()) {
-    const module = registry.getModule(def.key.slice(0, def.key.indexOf(".")));
+    const module = registry.getModule(getModuleIdFromKey(def.key));
     if (!module || module.scope !== "app") continue;
     if (def.key in record) {
       values[def.key] = record[def.key];
@@ -180,7 +185,7 @@ export function serializeDynamicAppSettings(
   // setting keys from the base before writing the new values.
   const knownSettingKeys = new Set<string>();
   for (const def of registry.getAllDefinitions()) {
-    const module = registry.getModule(def.key.slice(0, def.key.indexOf(".")));
+    const module = registry.getModule(getModuleIdFromKey(def.key));
     if (module && module.scope === "app") {
       knownSettingKeys.add(def.key);
     }
@@ -315,14 +320,4 @@ function readDynamicSettingsVersion(
   }
 
   return { version };
-}
-
-/** Type guard for a plain JSON object record. */
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-/** Extracts a human-readable message from an unknown error. */
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

@@ -24,6 +24,7 @@
 
 import {
   CURRENT_SETTINGS_VERSION,
+  isRecord,
   type SettingDefinition,
   type SettingType
 } from "@thinkbrain/core";
@@ -120,11 +121,6 @@ export interface ImportResult {
   readonly ignored: number;
   /** Number of keys whose value type didn't match the definition. */
   readonly typeMismatches: number;
-}
-
-/** Type guard for a plain JSON object record. */
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 /**

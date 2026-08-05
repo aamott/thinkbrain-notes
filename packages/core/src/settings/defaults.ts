@@ -7,6 +7,7 @@
  */
 
 import type { SettingsRegistry } from "./registry";
+import { getModuleIdFromKey } from "./registry";
 import type { SettingScope } from "./types";
 
 /**
@@ -28,7 +29,7 @@ export function extractDefaults(
 
   // Walk resolved definitions and keep only those whose module matches scope.
   for (const def of registry.getAllDefinitions()) {
-    const moduleId = def.key.slice(0, def.key.indexOf("."));
+    const moduleId = getModuleIdFromKey(def.key);
     const module = registry.getModule(moduleId);
     if (module && module.scope === scope) {
       defaults[def.key] = def.default;

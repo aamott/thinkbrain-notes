@@ -100,7 +100,7 @@ class SettingsRegistryImpl implements SettingsRegistry {
   }
 
   getDefinition(fullKey: string): SettingDefinition | undefined {
-    const { moduleId } = splitFullKey(fullKey);
+    const moduleId = getModuleIdFromKey(fullKey);
     const registered = this.modules.get(moduleId);
     if (!registered) return undefined;
     // The definitions map is keyed by the full `moduleId.key` form.
@@ -184,8 +184,13 @@ function resolveDefinition(
   };
 }
 
-/** Extracts the module id (the segment before the first dot) from a full key. */
-function splitFullKey(fullKey: string): { moduleId: string } {
+/**
+ * Extracts the module id (the segment before the first dot) from a full key.
+ *
+ * Returns the full key unchanged when it contains no dot, so callers can safely
+ * use this on partially-resolved keys without slicing into an empty string.
+ */
+export function getModuleIdFromKey(fullKey: string): string {
   const dot = fullKey.indexOf(".");
-  return { moduleId: dot === -1 ? fullKey : fullKey.slice(0, dot) };
+  return dot === -1 ? fullKey : fullKey.slice(0, dot);
 }

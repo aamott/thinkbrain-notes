@@ -24,6 +24,7 @@ import type {
 import { cn } from "../lib/utils";
 import { appSettingsRegistry, useSettingsStore } from "./settingsStore";
 import { requestSettingHighlight } from "./settingHighlight";
+import { findSectionLabelInSection } from "./sectionUtils";
 
 /**
  * Recursively renders a section and its subsections as tree items.
@@ -141,32 +142,6 @@ function ModuleGroup({
 }
 
 /**
- * Recursively searches a section tree for a section matching `sectionId` and
- * returns its label. Used to build the "Module > Section" path for search
- * results.
- *
- * Args:
- *   sections: The sections (and their subsections) to search.
- *   sectionId: The section id to find.
- *
- * Returns:
- *   The matching section's label, or undefined if not found.
- */
-function findSectionLabel(
-  sections: readonly SettingSection[],
-  sectionId: string
-): string | undefined {
-  for (const section of sections) {
-    if (section.id === sectionId) return section.label;
-    if (section.subsections) {
-      const found = findSectionLabel(section.subsections, sectionId);
-      if (found) return found;
-    }
-  }
-  return undefined;
-}
-
-/**
  * Builds the "Module > Section" path label for a setting definition.
  *
  * The module id is the segment before the first dot of the full key. The
@@ -185,7 +160,7 @@ function buildSectionPath(definition: SettingDefinition): string {
   const module = appSettingsRegistry.getModule(moduleId);
   const moduleLabel = module?.label ?? moduleId;
   const sectionLabel = module
-    ? findSectionLabel(module.sections, definition.section) ?? definition.section
+    ? findSectionLabelInSection(module.sections, definition.section) ?? definition.section
     : definition.section;
   return `${moduleLabel} > ${sectionLabel}`;
 }

@@ -21,6 +21,7 @@ import { cn } from "../lib/utils";
 import { appSettingsRegistry, useSettingsStore } from "./settingsStore";
 import { getControlForDefinition } from "./controlRegistry";
 import { subscribeSettingHighlight } from "./settingHighlight";
+import { findSectionLabelAcrossModules } from "./sectionUtils";
 
 /**
  * Computes the effective value for a setting key from the raw store fields.
@@ -40,38 +41,6 @@ function computeEffectiveValue(
   if (key in appValues) return appValues[key];
   if (workspaceValues && key in workspaceValues) return workspaceValues[key];
   return defaultValue;
-}
-
-/**
- * Looks up the label for a section id by scanning all registered modules.
- *
- * Section ids are globally unique by convention (e.g. "editor.display"), so
- * the first match wins. Returns the id itself as a fallback.
- */
-function findSectionLabel(sectionId: string): string {
-  for (const module of appSettingsRegistry.getAllModules()) {
-    const label = searchSections(module.sections, sectionId);
-    if (label) return label;
-  }
-  return sectionId;
-}
-
-/** Recursively searches a section tree for a matching section id. */
-function searchSections(
-  sections: readonly { id: string; label: string; subsections?: readonly unknown[] }[],
-  sectionId: string
-): string | undefined {
-  for (const section of sections) {
-    if (section.id === sectionId) return section.label;
-    if (section.subsections) {
-      const found = searchSections(
-        section.subsections as readonly { id: string; label: string; subsections?: readonly unknown[] }[],
-        sectionId
-      );
-      if (found) return found;
-    }
-  }
-  return undefined;
 }
 
 /**
@@ -172,7 +141,7 @@ export function SettingsContent() {
   }
 
   const definitions = appSettingsRegistry.getDefinitionsForSection(activeSection);
-  const sectionLabel = findSectionLabel(activeSection);
+  const sectionLabel = findSectionLabelAcrossModules(appSettingsRegistry, activeSection);
 
   // Determine whether any staged change belongs to the active section so the
   // per-section reset button can be enabled/disabled. `resetSection` only

@@ -7,7 +7,20 @@ export {
   type ParseDynamicAppSettingsResult
 } from "./settings/dynamic";
 
-export const CURRENT_SETTINGS_VERSION = 1;
+// `CURRENT_SETTINGS_VERSION` lives in `./settings/internal` (a leaf module) so
+// that `./settings/dynamic.ts` can import it without creating a runtime cycle
+// back through this file. It is imported here for local use and re-exported
+// for backward compatibility with consumers that import it from
+// "@thinkbrain/core" via this module.
+import {
+  CURRENT_SETTINGS_VERSION,
+  getErrorMessage,
+  isRecord
+} from "./settings/internal";
+export { CURRENT_SETTINGS_VERSION };
+
+// Shared helpers (`isRecord`, `getErrorMessage`) are also sourced from the
+// `./settings/internal` leaf module to eliminate duplication.
 
 export type SettingsDiagnosticSeverity = "error" | "warning";
 
@@ -384,12 +397,4 @@ function readEditorLineWrapping(
   }
 
   return DEFAULT_APP_SETTINGS.editor.lineWrapping;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

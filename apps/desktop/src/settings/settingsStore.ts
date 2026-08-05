@@ -19,6 +19,8 @@ import {
   createSettingsRegistry,
   editorModule,
   extractDefaults,
+  getModuleIdFromKey,
+  isRecord,
   validateSettings,
   type SettingsDiagnostic,
   type SettingsRegistry,
@@ -174,7 +176,7 @@ function parseDynamicWorkspaceSettings(
 
   const values: Record<string, unknown> = { ...defaults };
   for (const def of registry.getAllDefinitions()) {
-    const module = registry.getModule(def.key.slice(0, def.key.indexOf(".")));
+    const module = registry.getModule(getModuleIdFromKey(def.key));
     if (!module || module.scope !== "workspace") continue;
     if (def.key in parsed) {
       values[def.key] = (parsed as Record<string, unknown>)[def.key];
@@ -204,7 +206,7 @@ function serializeDynamicWorkspaceSettings(
 
   const knownSettingKeys = new Set<string>();
   for (const def of registry.getAllDefinitions()) {
-    const module = registry.getModule(def.key.slice(0, def.key.indexOf(".")));
+    const module = registry.getModule(getModuleIdFromKey(def.key));
     if (module && module.scope === "workspace") {
       knownSettingKeys.add(def.key);
     }
@@ -219,11 +221,6 @@ function serializeDynamicWorkspaceSettings(
   base.version = CURRENT_SETTINGS_VERSION;
 
   return `${JSON.stringify(base, null, 2)}\n`;
-}
-
-/** Type guard for a plain JSON object record. */
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 // ---------------------------------------------------------------------------

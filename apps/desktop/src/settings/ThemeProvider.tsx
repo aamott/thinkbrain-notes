@@ -14,8 +14,8 @@ export interface ThemeProviderProps {
  * A React context provider that applies the selected theme to the root element.
  *
  * Theme is read from the Zustand settings store (`appearance.theme` effective
- * value) instead of the legacy `themeService`. On mount (inside Tauri), the
- * provider triggers `loadSettings` so the store hydrates from the native app
+ * value). On mount (inside Tauri), the provider triggers `loadSettings` so
+ * the store hydrates from the native app
  * settings file. Theme changes are **staged** into the store via `stageChange`
  * (per epic design decision #4: single Save button); the DOM attribute updates
  * immediately because the provider re-renders on store change, but persistence
