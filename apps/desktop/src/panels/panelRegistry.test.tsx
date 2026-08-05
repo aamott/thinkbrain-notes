@@ -6,6 +6,8 @@ import {
   builtInDesktopPanels,
   createDesktopPanelRegistry,
   desktopPanelRegistry,
+  getDesktopPanel,
+  getDesktopPanelOrUndefined,
   getLeftPanelContributions,
   getRightPanelContributions,
   renderDesktopPanel,
@@ -118,5 +120,29 @@ describe("desktop panel registry", () => {
     expect(leftMarkup).toContain("Tags will appear here once note indexing is available.");
     expect(rightMarkup).toContain("Backlinks unavailable");
     expect(rightMarkup).toContain("This inspector activates after the workspace link index is available.");
+  });
+
+  it("throws a pinned error shape for an unknown id via getDesktopPanel", () => {
+    expect(() => getDesktopPanel("missing")).toThrow(
+      "Desktop panel 'missing' is not registered."
+    );
+  });
+
+  it("returns undefined for an unknown id via the render-safe lookup", () => {
+    expect(getDesktopPanelOrUndefined("missing")).toBeUndefined();
+    expect(getDesktopPanelOrUndefined("outline")?.label).toBe("Outline");
+  });
+
+  it("filters entriesBySide so each side excludes the other", () => {
+    const registry = createDesktopPanelRegistry([
+      { ...contribution("left-a"), side: "left" },
+      { ...contribution("left-b"), side: "left" },
+      { ...contribution("right-a"), side: "right" },
+      { ...contribution("right-b"), side: "right" }
+    ]);
+    expect(registry.entriesBySide("left").map((p) => p.id)).toEqual(["left-a", "left-b"]);
+    expect(registry.entriesBySide("right").map((p) => p.id)).toEqual(["right-a", "right-b"]);
+    expect(registry.entriesBySide("left").every((p) => p.side === "left")).toBe(true);
+    expect(registry.entriesBySide("right").every((p) => p.side === "right")).toBe(true);
   });
 });

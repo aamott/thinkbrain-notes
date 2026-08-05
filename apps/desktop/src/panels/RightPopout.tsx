@@ -1,8 +1,9 @@
 import { cn } from "../lib/utils";
 import { type RightPanel } from "../shell/shellTypes";
+import { Unavailable } from "../shell/Unavailable";
 import { PanelTitle } from "./PanelTitle";
 import {
-  getDesktopPanel,
+  getDesktopPanelOrUndefined,
   getRightPanelContributions,
   renderDesktopPanel,
   type DesktopPanelContext
@@ -25,7 +26,7 @@ type RightPopoutProps = {
  * fixed-width dock and responsive overlay behavior.
  */
 export function RightPopout({ panel, rootPath, documentContents }: RightPopoutProps) {
-  const contribution = getDesktopPanel(panel);
+  const contribution = getDesktopPanelOrUndefined(panel);
   const context: DesktopPanelContext = {
     rootPath,
     documentContents,
@@ -42,6 +43,20 @@ export function RightPopout({ panel, rootPath, documentContents }: RightPopoutPr
     },
     onOpenSearchResult: () => undefined
   };
+
+  if (!contribution) {
+    return (
+      <aside
+        className="flex flex-col min-w-0 overflow-hidden bg-sidebar border-l border-border flex-[0_0_var(--tn-shell-right-width)] max-[760px]:absolute max-[760px]:z-[2]"
+        aria-label="Panel not available"
+      >
+        <Unavailable
+          title="Panel not available"
+          description={`Panel '${panel}' is not registered.`}
+        />
+      </aside>
+    );
+  }
 
   return (
     <aside

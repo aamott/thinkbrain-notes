@@ -1,7 +1,9 @@
 import { type LeftPanel } from "../shell/shellTypes";
+import { Unavailable } from "../shell/Unavailable";
 import type { WorkspaceExplorerProps } from "../workspace/WorkspaceExplorer";
+import { PanelTitle } from "./PanelTitle";
 import {
-  getDesktopPanel,
+  getDesktopPanelOrUndefined,
   getLeftPanelContributions,
   renderDesktopPanel,
   type DesktopPanelContext
@@ -29,24 +31,39 @@ export function LeftPopout({ panel, rootPath, explorerProps, onOpenSearchResult 
     explorerProps,
     onOpenSearchResult
   };
-  const label = getDesktopPanel(panel).label;
+  const contribution = getDesktopPanelOrUndefined(panel);
+
+  if (!contribution) {
+    return (
+      <aside
+        className="flex flex-col min-w-0 overflow-hidden bg-sidebar border-r border-border flex-[0_0_var(--tn-shell-left-width)] max-[760px]:absolute max-[760px]:z-[2]"
+        aria-label="Panel not available"
+      >
+        <Unavailable
+          title="Panel not available"
+          description={`Panel '${panel}' is not registered.`}
+        />
+      </aside>
+    );
+  }
 
   return (
     <aside
       className="flex flex-col min-w-0 overflow-hidden bg-sidebar border-r border-border flex-[0_0_var(--tn-shell-left-width)] max-[760px]:absolute max-[760px]:z-[2]"
-      aria-label={`${label} panel`}
+      aria-label={`${contribution.label} panel`}
     >
-      {getLeftPanelContributions().map((contribution) => {
-        const isActive = contribution.id === panel;
-        if (!isActive && !contribution.keepMounted) return null;
-        const isAvailable = contribution.availability?.(context) ?? true;
+      <PanelTitle title={contribution.label} />
+      {getLeftPanelContributions().map((panelContribution) => {
+        const isActive = panelContribution.id === panel;
+        if (!isActive && !panelContribution.keepMounted) return null;
+        const isAvailable = panelContribution.availability?.(context) ?? true;
         return (
           <div
-            key={contribution.id}
+            key={panelContribution.id}
             className={isActive ? "flex flex-col flex-1 min-h-0" : "hidden"}
             data-panel-available={isAvailable}
           >
-            {renderDesktopPanel(contribution, context)}
+            {renderDesktopPanel(panelContribution, context)}
           </div>
         );
       })}

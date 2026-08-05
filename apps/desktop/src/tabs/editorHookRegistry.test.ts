@@ -1,3 +1,4 @@
+import type { Extension } from "@codemirror/state";
 import type { KeyBinding } from "@codemirror/view";
 import { describe, expect, it } from "vitest";
 
@@ -14,6 +15,10 @@ function binding(key: string): KeyBinding {
   return { key, run: () => true };
 }
 
+function extension(id: string): Extension {
+  return { id } as unknown as Extension;
+}
+
 function contribution(
   id: string,
   order: number
@@ -22,6 +27,17 @@ function contribution(
     id,
     order,
     keybindings: (payload) => [binding(`${payload.label}-${id}`)]
+  };
+}
+
+function extensionContribution(
+  id: string,
+  order: number
+): DesktopEditorHookContribution<TestPayload, undefined> {
+  return {
+    id,
+    order,
+    extensions: (payload) => [extension(`${payload.label}-${id}`)]
   };
 }
 
@@ -55,6 +71,44 @@ describe("desktop editor hook registry", () => {
       "hook-tie-a",
       "hook-tie-b",
       "hook-late"
+    ]);
+  });
+
+  it("assembles extensions from an extensions-only contribution and no keybindings", () => {
+    const extOnly = extensionContribution("ext-only", 10);
+    const registry = createDesktopEditorHookRegistry<TestPayload, undefined>([extOnly]);
+
+    expect(registry.getExtensions({ label: "hook" }, undefined)).toEqual([
+      extension("hook-ext-only")
+    ]);
+    expect(registry.getKeybindings({ label: "hook" }, undefined)).toEqual([]);
+  });
+
+  it("assembles keybindings from a keybindings-only contribution and no extensions", () => {
+    const keyOnly = contribution("key-only", 20);
+    const registry = createDesktopEditorHookRegistry<TestPayload, undefined>([keyOnly]);
+
+    expect(
+      registry
+        .getKeybindings({ label: "hook" }, undefined)
+        .map((entry) => entry.key)
+    ).toEqual(["hook-key-only"]);
+    expect(registry.getExtensions({ label: "hook" }, undefined)).toEqual([]);
+  });
+
+  it("assembles extensions by order and retains registration order for ties", () => {
+    const registry = createDesktopEditorHookRegistry<TestPayload, undefined>([
+      extensionContribution("late", 20),
+      extensionContribution("tie-a", 10),
+      extensionContribution("tie-b", 10),
+      extensionContribution("early", 0)
+    ]);
+
+    expect(registry.getExtensions({ label: "hook" }, undefined)).toEqual([
+      extension("hook-early"),
+      extension("hook-tie-a"),
+      extension("hook-tie-b"),
+      extension("hook-late")
     ]);
   });
 

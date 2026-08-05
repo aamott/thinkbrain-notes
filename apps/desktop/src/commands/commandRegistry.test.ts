@@ -29,7 +29,7 @@ describe("desktop command registry", () => {
       "toggle-outline", "toggle-assistant", "toggle-bottom-panel", "open-settings",
       "rebuild-index", "open-graph", "open-source-control", "open-extensions"
     ]);
-    expect(registry.get("toggle-explorer")?.intent).toEqual({ type: "toggle-panel", panel: "explorer" });
+    expect(registry.get("toggle-explorer")?.title).toBe("Toggle Explorer");
     expect(registry.get("open-file")?.keybinding).toBe("Ctrl/Cmd+P");
     expect(registry.get("rebuild-index")?.availability).toBe("available");
   });
@@ -37,8 +37,9 @@ describe("desktop command registry", () => {
   it("makes feature-owned commands explicitly unavailable with their prerequisite", () => {
     const unavailable = builtInDesktopCommands.filter((command) => command.availability === "unavailable");
 
-    expect(unavailable).toHaveLength(3);
+    expect(unavailable).toHaveLength(4);
     expect(unavailable).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "open-file", prerequisite: "native file picker" }),
       expect.objectContaining({ id: "open-graph", prerequisite: "link indexing" }),
       expect.objectContaining({ id: "open-source-control", prerequisite: "source-control integration" }),
       expect.objectContaining({ id: "open-extensions", prerequisite: "extension host" })
@@ -52,7 +53,6 @@ describe("desktop command registry", () => {
     const command = {
       id: "extension.calendar",
       title: "Open calendar",
-      intent: { type: "open-calendar" },
       availability: "available" as const,
       handler
     };
@@ -68,14 +68,12 @@ describe("desktop command registry", () => {
     const first = {
       id: "extension.first",
       title: "First",
-      intent: { type: "first" },
       availability: "available" as const,
       handler: () => undefined
     };
     const second = {
       id: "extension.second",
       title: "Second",
-      intent: { type: "second" },
       availability: "available" as const,
       handler: () => undefined
     };

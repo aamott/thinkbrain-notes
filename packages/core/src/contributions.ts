@@ -94,7 +94,7 @@ export interface CommandContribution<Payload = void>
   extends IdentifiedContribution {
   /** Human-readable command name. */
   readonly title: string;
-  /** Optional platform-specific keybinding expression. */
+  /** Optional platform-specific keybinding expression. Display + future global binding; not yet bound globally by the host. */
   readonly keybinding?: string;
   /** Invoked by the host after it supplies the command payload. */
   readonly handler: CommandHandler<Payload>;
@@ -114,7 +114,7 @@ export interface PanelContribution<View, Context = unknown>
   readonly side: "left" | "right";
   /** Creates the host-specific panel view. */
   readonly factory: PanelFactory<View, Context>;
-  /** Determines whether the panel's backing capability is currently usable. */
+  /** Determines whether the panel's backing capability is currently usable. Advisory metadata emitted as `data-panel-available`; factories own their unavailable-state rendering. */
   readonly availability?: (context: Context) => boolean;
 }
 

@@ -35,7 +35,10 @@ export function MarkdownEditor({
   }, [onChange, onSave]);
 
   useEffect(() => {
-    if (!hostRef.current) return;
+    if (!hostRef.current) {
+      console.error("[MarkdownEditor] host element missing; cannot mount CodeMirror.");
+      return;
+    }
 
     const payload: MarkdownEditorHookPayload = {
       onChange: (nextValue) => onChangeRef.current(nextValue),

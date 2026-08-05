@@ -183,6 +183,134 @@ describe("settings registry", () => {
 
     expect(registry.getMigrations()).toEqual([migration]);
   });
+
+  it("throws when two modules register the same section id", () => {
+    const registry = createSettingsRegistry();
+    const moduleA: SettingsModule = {
+      id: "module-a",
+      label: "A",
+      scope: "app",
+      sections: [{ id: "shared.section", label: "Shared" }]
+    };
+    const moduleB: SettingsModule = {
+      id: "module-b",
+      label: "B",
+      scope: "app",
+      sections: [{ id: "shared.section", label: "Shared" }]
+    };
+    registry.register(moduleA);
+
+    expect(() => registry.register(moduleB)).toThrow(
+      "already registered by another"
+    );
+  });
+
+  it("throws when one module has two settings resolving to the same full key", () => {
+    const registry = createSettingsRegistry();
+    const module: SettingsModule = {
+      id: "dup-keys",
+      label: "Dup",
+      scope: "app",
+      sections: [{
+        id: "dup-keys.section",
+        label: "Section",
+        settings: [
+          {
+            key: "value",
+            type: "string",
+            default: "first",
+            scope: "app",
+            section: "dup-keys.section",
+            label: "First",
+            description: "First value"
+          },
+          {
+            key: "value",
+            type: "string",
+            default: "second",
+            scope: "app",
+            section: "dup-keys.section",
+            label: "Second",
+            description: "Second value"
+          }
+        ]
+      }]
+    };
+
+    expect(() => registry.register(module)).toThrow("Duplicate setting key");
+  });
+
+  it("rejects migrations with negative fromVersion or toVersion", () => {
+    const registry = createSettingsRegistry();
+
+    expect(() =>
+      registry.registerMigration({
+        fromVersion: -1,
+        toVersion: 1,
+        migrate: (value) => value
+      })
+    ).toThrow("non-negative");
+    expect(() =>
+      registry.registerMigration({
+        fromVersion: 0,
+        toVersion: -1,
+        migrate: (value) => value
+      })
+    ).toThrow("non-negative");
+  });
+
+  it("rejects migrations where fromVersion >= toVersion", () => {
+    const registry = createSettingsRegistry();
+
+    expect(() =>
+      registry.registerMigration({
+        fromVersion: 2,
+        toVersion: 2,
+        migrate: (value) => value
+      })
+    ).toThrow("must be less than");
+    expect(() =>
+      registry.registerMigration({
+        fromVersion: 3,
+        toVersion: 1,
+        migrate: (value) => value
+      })
+    ).toThrow("must be less than");
+  });
+
+  it("rejects migrations with a duplicate fromVersion", () => {
+    const registry = createSettingsRegistry();
+    registry.registerMigration({
+      fromVersion: 0,
+      toVersion: 1,
+      migrate: (value) => value
+    });
+
+    expect(() =>
+      registry.registerMigration({
+        fromVersion: 0,
+        toVersion: 2,
+        migrate: (value) => value
+      })
+    ).toThrow("already registered");
+  });
+
+  it("rejects migrations whose range overlaps an existing migration range", () => {
+    const registry = createSettingsRegistry();
+    registry.registerMigration({
+      fromVersion: 0,
+      toVersion: 2,
+      migrate: (value) => value
+    });
+
+    expect(() =>
+      registry.registerMigration({
+        fromVersion: 1,
+        toVersion: 3,
+        migrate: (value) => value
+      })
+    ).toThrow("overlaps existing range [0, 2)");
+  });
 });
 
 describe("extractDefaults", () => {

@@ -9,7 +9,6 @@ import { SearchPanel } from "../search/SearchPanel";
 import { Unavailable } from "../shell/Unavailable";
 import { AssistantPanelSurface } from "./AssistantPanelSurface";
 import { OutlinePanel } from "./OutlinePanel";
-import { PanelTitle } from "./PanelTitle";
 import { PropertiesPanel } from "./PropertiesPanel";
 import { WorkspaceExplorer, type WorkspaceExplorerProps } from "../workspace/WorkspaceExplorer";
 
@@ -81,10 +80,7 @@ export const builtInDesktopPanels: readonly DesktopPanelContribution[] = [
     side: "left",
     availability: () => true,
     factory: ({ onOpenSearchResult, rootPath }) => (
-      <>
-        <PanelTitle title="Search" />
-        <SearchPanel rootPath={rootPath} onOpenFile={onOpenSearchResult} />
-      </>
+      <SearchPanel rootPath={rootPath} onOpenFile={onOpenSearchResult} />
     )
   },
   {
@@ -94,12 +90,7 @@ export const builtInDesktopPanels: readonly DesktopPanelContribution[] = [
     side: "left",
     keepMounted: true,
     availability: () => true,
-    factory: ({ rootPath }) => (
-      <>
-        <PanelTitle title="Source control" />
-        <SourceControlPanel rootPath={rootPath} />
-      </>
-    )
+    factory: ({ rootPath }) => <SourceControlPanel rootPath={rootPath} />
   },
   {
     id: "tags",
@@ -108,10 +99,7 @@ export const builtInDesktopPanels: readonly DesktopPanelContribution[] = [
     side: "left",
     availability: () => false,
     factory: () => (
-      <>
-        <PanelTitle title="Tags" />
-        <Unavailable title="tags" description="Tags will appear here once note indexing is available." />
-      </>
+      <Unavailable title="tags" description="Tags will appear here once note indexing is available." />
     )
   },
   {
@@ -121,10 +109,7 @@ export const builtInDesktopPanels: readonly DesktopPanelContribution[] = [
     side: "left",
     availability: () => false,
     factory: () => (
-      <>
-        <PanelTitle title="Extensions" />
-        <Unavailable title="extensions" description="Extensions will appear here when the capability sandbox is ready." />
-      </>
+      <Unavailable title="extensions" description="Extensions will appear here when the capability sandbox is ready." />
     )
   },
   {
@@ -226,6 +211,17 @@ export function getDesktopPanel(id: DesktopPanelId): DesktopPanelContribution {
   const panel = desktopPanelRegistry.get(id);
   if (!panel) throw new Error(`Desktop panel '${id}' is not registered.`);
   return panel;
+}
+
+/**
+ * Render-safe lookup that returns the contribution or `undefined` instead of
+ * throwing. Use this in React render paths so an unregistered id degrades to a
+ * fallback instead of unmounting the shell.
+ */
+export function getDesktopPanelOrUndefined(
+  id: DesktopPanelId
+): DesktopPanelContribution | undefined {
+  return desktopPanelRegistry.get(id);
 }
 
 /** Returns the registered left-side panels for activity-bar rendering. */

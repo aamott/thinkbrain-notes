@@ -45,6 +45,27 @@ describe("contribution registry", () => {
     expect(registry.entries()).toEqual([first, second]);
   });
 
+  it("round-trips the optional keybinding field through the registry", () => {
+    const withKeybinding: CommandContribution = {
+      id: "cmd.with-keybinding",
+      title: "With keybinding",
+      keybinding: "Ctrl/Cmd+Shift+F",
+      handler: () => undefined
+    };
+    const withoutKeybinding: CommandContribution = {
+      id: "cmd.without-keybinding",
+      title: "Without keybinding",
+      handler: () => undefined
+    };
+    const registry = createContributionRegistry<CommandContribution>([
+      withKeybinding,
+      withoutKeybinding
+    ]);
+
+    expect(registry.get("cmd.with-keybinding")?.keybinding).toBe("Ctrl/Cmd+Shift+F");
+    expect(registry.get("cmd.without-keybinding")?.keybinding).toBeUndefined();
+  });
+
   it("registers initial contributions in their supplied order", () => {
     const commands: readonly CommandContribution[] = [
       { id: "one", title: "One", handler: () => undefined },
