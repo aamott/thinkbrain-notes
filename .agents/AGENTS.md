@@ -1,6 +1,6 @@
 # ThinkBrain Notes Project Guidance
 
-Open, local-first knowledge workspace inspired by Obsidian & VS Code. Standard Markdown files with zero database lock-in. Fast, extensible, Git-compatible with optional AI integration and Agent Client Protocol (ACP) support.
+Open, local-first knowledge workspace inspired by Obsidian & VS Code. Standard Markdown files with zero database lock-in. Fast, extensible, Git-compatible with optional AI integration and Agent Client Protocol (ACP) support. Ultimate goal: Cross platform support, most components adaptable between smartphone and desktop. Note when a refactor would be needed to do this. 
 
 ## File Map
 **`apps/desktop/`** - React UI & Tauri Rust Host *(See [apps/desktop/AGENTS.md](./apps/desktop/AGENTS.md))*

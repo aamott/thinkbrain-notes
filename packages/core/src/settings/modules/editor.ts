@@ -28,9 +28,12 @@ export const editorModule: SettingsModule = {
           label: "Font size",
           description: "Editor font size in pixels.",
           validation: (value) =>
-            typeof value === "number" && value >= 10 && value <= 32
+            typeof value === "number" &&
+            Number.isInteger(value) &&
+            value >= 10 &&
+            value <= 32
               ? null
-              : "Font size must be between 10 and 32."
+              : "Font size must be an integer between 10 and 32."
         },
         {
           key: "lineWrapping",

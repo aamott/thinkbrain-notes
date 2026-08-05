@@ -9,7 +9,8 @@
  */
 
 import type { SettingsRegistry } from "./registry";
-import type { SettingsDiagnostic, SettingDefinition } from "./types";
+import type { SettingDefinition } from "./types";
+import type { SettingsDiagnostic } from "../settings";
 
 /**
  * Validates a flat `fullKey -> value` map against the registry's definitions.
@@ -115,6 +116,19 @@ function checkRange(
   value: unknown
 ): SettingsDiagnostic | undefined {
   if (def.type !== "number" || typeof value !== "number") return undefined;
+
+  // `Infinity`/`-Infinity` pass `typeof === "number"` and would slip past the
+  // min/max comparisons below (e.g. `Infinity > max` is true but `-Infinity <
+  // min` is also true, and either way the value is not a usable setting).
+  // Reject non-finite numbers explicitly; NaN is already caught by checkType.
+  if (!Number.isFinite(value)) {
+    return {
+      code: "settings.range.invalid",
+      message: `Value ${value} is not a finite number.`,
+      severity: "error",
+      path: def.key
+    };
+  }
 
   if (def.min !== undefined && value < def.min) {
     return {

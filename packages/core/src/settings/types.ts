@@ -7,12 +7,6 @@
  * the full key as `moduleId.key` so module IDs act as a namespace.
  */
 
-import type { SettingsDiagnostic } from "../settings";
-
-// Re-export so consumers can import the diagnostic shape from one place without
-// duplicating the interface defined by the persistence layer.
-export type { SettingsDiagnostic };
-
 /** Primitive value kinds a setting can hold. */
 export type SettingType = "boolean" | "string" | "number" | "enum" | "path";
 
