@@ -261,14 +261,12 @@ describe("importSettings", () => {
     expect(result!.ignored).toBe(0);
   });
 
-  it("returns zero counts for malformed JSON", async () => {
+  it("returns null for malformed JSON (fail-loud)", async () => {
     vi.mocked(pickFilePath).mockResolvedValue("/tmp/import.json");
     vi.mocked(readTextFileNative).mockResolvedValue("not valid json {{{");
 
     const result = await importSettings();
 
-    expect(result!.imported).toBe(0);
-    expect(result!.ignored).toBe(0);
-    expect(result!.typeMismatches).toBe(0);
+    expect(result).toBeNull();
   });
 });

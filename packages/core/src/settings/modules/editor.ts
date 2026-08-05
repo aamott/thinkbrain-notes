@@ -1,9 +1,7 @@
 /**
  * Built-in Editor settings module.
  *
- * Migrates the legacy fixed-shape `editor.fontSize` and `editor.lineWrapping`
- * settings into the registry-based system. Scope is `"app"` for now; workspace-
- * scoped editor defaults are a follow-up.
+ * Scope is `"app"` for now; workspace-scoped editor defaults are a follow-up.
  */
 
 import type { SettingsModule } from "../types";
@@ -27,13 +25,13 @@ export const editorModule: SettingsModule = {
           section: "editor.display",
           label: "Font size",
           description: "Editor font size in pixels.",
+          // Range bounds (min/max) are enforced by `checkRange` in
+          // validation.ts; the validator here only adds the integer constraint
+          // so the bounds stay defined in one place (the definition itself).
           validation: (value) =>
-            typeof value === "number" &&
-            Number.isInteger(value) &&
-            value >= 10 &&
-            value <= 32
+            typeof value === "number" && Number.isInteger(value)
               ? null
-              : "Font size must be an integer between 10 and 32."
+              : "Font size must be an integer."
         },
         {
           key: "lineWrapping",

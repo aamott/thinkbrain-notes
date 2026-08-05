@@ -1,8 +1,7 @@
 /**
  * Built-in Appearance settings module.
  *
- * Migrates the legacy fixed-shape `theme` setting into the registry-based
- * system. Scope is `"app"` since the theme applies globally across workspaces.
+ * Scope is `"app"` since the theme applies globally across workspaces.
  */
 
 import type { SettingsModule } from "../types";
@@ -36,10 +35,17 @@ export const appearanceModule: SettingsModule = {
           label: "Theme",
           description:
             "Application color theme. System follows your OS preference.",
-          validation: (value) =>
-            typeof value === "string" && THEME_OPTIONS.includes(value as never)
+          // Belt-and-suspenders on top of the registry's built-in enum check.
+          // Cast to the union type only for the membership test; the value is
+          // already narrowed to string above, so this is sound.
+          validation: (value): string | null => {
+            if (typeof value !== "string") {
+              return `Theme must be one of: ${THEME_OPTIONS.join(", ")}.`;
+            }
+            return (THEME_OPTIONS as readonly string[]).includes(value)
               ? null
-              : `Theme must be one of: ${THEME_OPTIONS.join(", ")}.`
+              : `Theme must be one of: ${THEME_OPTIONS.join(", ")}.`;
+          }
         }
       ]
     }

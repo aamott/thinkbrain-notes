@@ -64,6 +64,11 @@ class SettingsRegistryImpl implements SettingsRegistry {
   private readonly modules = new Map<string, RegisteredModule>();
   private readonly moduleOrder: string[] = [];
   private readonly migrations: SettingMigration[] = [];
+  /**
+   * Global index of section id -> module id that registered it. Used to enforce
+   * global uniqueness of section ids across modules at registration time.
+   */
+  private readonly sectionOwners = new Map<string, string>();
 
   register(module: SettingsModule): void {
     if (this.modules.has(module.id)) {
@@ -84,6 +89,25 @@ class SettingsRegistryImpl implements SettingsRegistry {
   }
 
   registerMigration(migration: SettingMigration): void {
+    // Guard against clearly malformed migration steps at registration time so
+    // they fail loudly instead of silently corrupting the migration chain.
+    if (migration.fromVersion < 0 || migration.toVersion < 0) {
+      throw new Error(
+        `Migration versions must be non-negative: fromVersion=${migration.fromVersion}, toVersion=${migration.toVersion}.`
+      );
+    }
+    if (migration.fromVersion >= migration.toVersion) {
+      throw new Error(
+        `Migration fromVersion (${migration.fromVersion}) must be less than toVersion (${migration.toVersion}).`
+      );
+    }
+    for (const existing of this.migrations) {
+      if (existing.fromVersion === migration.fromVersion) {
+        throw new Error(
+          `A migration from version ${migration.fromVersion} is already registered.`
+        );
+      }
+    }
     this.migrations.push(migration);
   }
 
@@ -157,6 +181,16 @@ class SettingsRegistryImpl implements SettingsRegistry {
         bucket.push(resolved);
       }
       if (bucket.length > 0) {
+        // Enforce global uniqueness of section ids across modules. A duplicate
+        // id from a different module would otherwise silently shadow the first
+        // registration in `getDefinitionsForSection`, losing data. Fail loudly.
+        const existingOwner = this.sectionOwners.get(section.id);
+        if (existingOwner !== undefined && existingOwner !== moduleId) {
+          throw new Error(
+            `Section id "${section.id}" is already registered by another module.`
+          );
+        }
+        this.sectionOwners.set(section.id, moduleId);
         bySection.set(section.id, bucket);
       }
     }

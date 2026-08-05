@@ -103,6 +103,10 @@ export function SettingsSaveBar() {
     const { json, portableWarnings } = buildExportPayload();
 
     if (portableWarnings.length > 0) {
+      // NOTE: window.confirm is used here intentionally for simplicity. The
+      // rest of the app uses the native dialog bridge (DirtyCloseDialog), and
+      // replacing this with a styled modal for consistency is a tracked
+      // follow-up rather than a correctness issue.
       const proceed = window.confirm(
         `${portableWarnings.length} setting(s) may not work on another machine. Export anyway?`
       );

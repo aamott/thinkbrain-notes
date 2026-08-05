@@ -127,15 +127,16 @@ export interface ImportResult {
  * Checks whether an imported value matches the setting's declared type.
  *
  * For `enum` settings, the value must be one of the declared `options`. For
- * `number`, the value must be a finite number. For `path` and `string`, the
- * value must be a string. For `boolean`, the value must be a boolean.
+ * `number`, the value must be a finite number within the definition's `min`/
+ * `max` range (if declared). For `path` and `string`, the value must be a
+ * string. For `boolean`, the value must be a boolean.
  *
  * Args:
  *   def: The setting definition to validate against.
  *   value: The imported value to check.
  *
  * Returns:
- *   `true` if the value is valid for the definition's type.
+ *   `true` if the value is valid for the definition's type and constraints.
  */
 function isValueTypeValid(def: SettingDefinition, value: unknown): boolean {
   const type: SettingType = def.type;
@@ -143,7 +144,12 @@ function isValueTypeValid(def: SettingDefinition, value: unknown): boolean {
     case "boolean":
       return typeof value === "boolean";
     case "number":
-      return typeof value === "number" && Number.isFinite(value);
+      if (typeof value !== "number" || !Number.isFinite(value)) return false;
+      // Enforce declared min/max range so obviously out-of-range values are
+      // not staged. Unbounded sides default to ±Infinity.
+      return (
+        value >= (def.min ?? -Infinity) && value <= (def.max ?? Infinity)
+      );
     case "string":
       return typeof value === "string";
     case "path":
@@ -213,13 +219,16 @@ export async function importSettings(): Promise<ImportResult | null> {
   try {
     parsed = JSON.parse(raw);
   } catch {
-    // Malformed JSON — treat as an empty import with all keys ignored.
-    return { imported: 0, ignored: 0, typeMismatches: 0 };
+    // Malformed JSON — fail loudly. Returning a zero-count success would
+    // silently mask an unreadable/corrupt file as "nothing to import".
+    return null;
   }
 
   const settingsMap = extractSettingsMap(parsed);
   if (settingsMap === null) {
-    return { imported: 0, ignored: 0, typeMismatches: 0 };
+    // Malformed document structure (e.g. canonical wrapper without a
+    // `settings` field). Fail loudly rather than reporting an empty import.
+    return null;
   }
 
   const store = useSettingsStore.getState();

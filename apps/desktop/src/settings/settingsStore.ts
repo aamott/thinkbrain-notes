@@ -388,37 +388,69 @@ export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettin
           }
         }
 
+        // Compute the serialized payloads and merged values BEFORE issuing any
+        // gateway write. We do not call `set()` until BOTH writes succeed, so a
+        // failure of either write leaves the store consistent with the
+        // last-known-good state (the disk may be partially updated, but the
+        // store's stagedChanges / loaded values stay intact and the user can
+        // retry). This avoids the partial-commit inconsistency where the app
+        // write succeeded and `appValues` was updated but `stagedChanges` was
+        // never cleared because the workspace write threw afterwards.
+        let appMerged: Record<string, unknown> | null = null;
+        let appSerialized: string | null = null;
         if (Object.keys(appStaged).length > 0) {
-          const merged = { ...state.appValues, ...appStaged };
-          const serialized = serializeDynamicAppSettings(
-            merged,
+          appMerged = { ...state.appValues, ...appStaged };
+          appSerialized = serializeDynamicAppSettings(
+            appMerged,
             appSettingsRegistry,
             state.rawAppSettingsJson
           );
-          await gateway.writeAppSettings(serialized);
-          set({ appValues: merged, rawAppSettingsJson: serialized });
         }
 
+        let workspaceMerged: Record<string, unknown> | null = null;
+        let workspaceSerialized: string | null = null;
         if (Object.keys(workspaceStaged).length > 0 && state.workspaceRootPath !== null) {
-          const merged = { ...(state.workspaceValues ?? {}), ...workspaceStaged };
-          const serialized = serializeDynamicWorkspaceSettings(
-            merged,
+          workspaceMerged = { ...(state.workspaceValues ?? {}), ...workspaceStaged };
+          workspaceSerialized = serializeDynamicWorkspaceSettings(
+            workspaceMerged,
             appSettingsRegistry,
             state.rawWorkspaceSettingsJson
           );
-          await gateway.writeWorkspaceSettings(state.workspaceRootPath, serialized);
-          set({ workspaceValues: merged, rawWorkspaceSettingsJson: serialized });
         }
 
-        set({
+        // Issue both gateway writes first. If either throws, we skip ALL
+        // `set()` calls below and surface a clear saveError to the caller.
+        if (appSerialized !== null) {
+          await gateway.writeAppSettings(appSerialized);
+        }
+        if (workspaceSerialized !== null && state.workspaceRootPath !== null) {
+          await gateway.writeWorkspaceSettings(state.workspaceRootPath, workspaceSerialized);
+        }
+
+        // Both writes succeeded — now commit the new state atomically.
+        const next: Partial<SettingsStoreState> = {
           stagedChanges: {},
           isDirty: false,
           dirtyCount: 0,
           validationDiagnostics: [],
           saveError: null
-        });
+        };
+        if (appMerged !== null && appSerialized !== null) {
+          next.appValues = appMerged;
+          next.rawAppSettingsJson = appSerialized;
+        }
+        if (workspaceMerged !== null && workspaceSerialized !== null) {
+          next.workspaceValues = workspaceMerged;
+          next.rawWorkspaceSettingsJson = workspaceSerialized;
+        }
+        set(next);
         return { success: true, diagnostics: [] };
       } catch (error) {
+        // Either gateway write failed. Do NOT commit any in-memory state: the
+        // store stays consistent with the last-known-good values, and the
+        // stagedChanges remain so the user can retry. The disk may be in a
+        // partial state (e.g. app settings written but workspace not), but
+        // that will be reconciled on the next successful save or reload.
         const message = error instanceof Error ? error.message : String(error);
         console.error("[settingsStore] Failed to save settings:", error);
         set({ saveError: `Failed to save settings: ${message}` });

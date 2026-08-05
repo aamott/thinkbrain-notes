@@ -32,13 +32,26 @@ export function ThemeProvider({
   children,
   defaultTheme = "system",
 }: ThemeProviderProps) {
-  // Read the effective theme from the store. Before load, `getEffectiveValue`
-  // falls back to the registry default ("system"), so the prop default is only
-  // relevant in non-Tauri contexts where the store never loads.
-  const themeFromStore = useSettingsStore((s) => s.getEffectiveValue("appearance.theme"));
+  // Subscribe to the raw state fields that determine the effective theme, then
+  // compute it inline. Calling `getEffectiveValue` inside a selector does NOT
+  // reliably trigger re-renders: Zustand compares the selector's returned
+  // value (a primitive string) and the method only reads current state at
+  // selection time, so subsequent mutations to `stagedChanges`/`appValues`
+  // wouldn't necessarily re-run the selector with the new state. Subscribing
+  // to the underlying fields guarantees re-renders whenever any of them
+  // change. Resolution order mirrors `getEffectiveValue`: staged > appValues > default.
+  const staged = useSettingsStore((s) => s.stagedChanges);
+  const appValues = useSettingsStore((s) => s.appValues);
   const loaded = useSettingsStore((s) => s.loaded);
   const loadSettings = useSettingsStore((s) => s.loadSettings);
   const stageChange = useSettingsStore((s) => s.stageChange);
+
+  const themeFromStore =
+    "appearance.theme" in staged
+      ? staged["appearance.theme"]
+      : "appearance.theme" in appValues
+        ? appValues["appearance.theme"]
+        : "system";
 
   // Resolve the display theme: use the store value once loaded, else the prop
   // default. The store value is `unknown` (typed as the registry default), so

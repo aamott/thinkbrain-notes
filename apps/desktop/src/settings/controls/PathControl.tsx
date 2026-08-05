@@ -48,7 +48,7 @@ export function PathControl({ definition, value, onChange, disabled }: ControlPr
         title={nativeAvailable ? "Browse for file" : "File browser not yet available"}
         className="flex shrink-0 items-center gap-1 rounded-small border border-border bg-surface px-2 py-1 text-xs text-foreground hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring disabled:opacity-50"
       >
-        <FolderOpen className="size-3.5" />
+        <FolderOpen className="size-3.5" aria-hidden="true" />
         <span>Browse</span>
       </button>
     </div>

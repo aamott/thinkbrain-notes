@@ -60,7 +60,19 @@ function SectionTreeItem({
 
   return (
     <li role="none" className="list-none">
-      <div role="treeitem" className="flex items-center" style={{ paddingLeft: `${indent}rem` }}>
+      <div
+        role="treeitem"
+        // aria-level: module group is level 1, so sections within it start at
+        // level 2 and increase with each nesting depth. `level` is 0-based
+        // within a module, hence `level + 2`.
+        aria-level={level + 2}
+        // aria-expanded is only meaningful for items with subsections; omit it
+        // for leaf sections so screen readers don't announce a toggleable
+        // state that doesn't exist.
+        aria-expanded={hasSubsections ? expanded : undefined}
+        className="flex items-center"
+        style={{ paddingLeft: `${indent}rem` }}
+      >
         {hasSubsections && (
           <button
             type="button"

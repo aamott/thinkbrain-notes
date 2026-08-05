@@ -154,7 +154,20 @@ function checkEnum(
   def: SettingDefinition,
   value: unknown
 ): SettingsDiagnostic | undefined {
-  if (def.type !== "enum" || !def.options) return undefined;
+  if (def.type !== "enum") return undefined;
+
+  // An enum with no declared options is a schema error: any string would
+  // otherwise be silently accepted. Fail loudly so the misconfiguration is
+  // surfaced rather than masked.
+  if (!def.options) {
+    return {
+      code: "settings.enum.no_options",
+      message: "Enum setting has no declared options.",
+      severity: "error",
+      path: def.key
+    };
+  }
+
   if (typeof value !== "string") return undefined; // already flagged by checkType
 
   if (!def.options.includes(value)) {

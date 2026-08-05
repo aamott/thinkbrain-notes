@@ -12,6 +12,7 @@
 import type { SettingsRegistry } from "./registry";
 import { extractDefaults } from "./defaults";
 import { getModuleIdFromKey } from "./registry";
+import { validateSettings } from "./validation";
 import type { SettingsDiagnostic } from "../settings";
 import {
   CURRENT_SETTINGS_VERSION,
@@ -142,7 +143,16 @@ export function parseDynamicAppSettings(
     }
   }
 
-  return { values, diagnostics: migrationDiagnostics };
+  // Validate the merged values against the registry so invalid persisted values
+  // (e.g. out-of-range numbers, stale enum strings) surface as diagnostics
+  // instead of silently passing through. Validation runs after defaults merge so
+  // missing keys (filled by defaults) are not flagged.
+  const validationDiagnostics = validateSettings(registry, values);
+
+  return {
+    values,
+    diagnostics: [...migrationDiagnostics, ...validationDiagnostics]
+  };
 }
 
 /**

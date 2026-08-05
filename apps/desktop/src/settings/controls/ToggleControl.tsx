@@ -16,7 +16,12 @@ import type { ControlProps } from "../controlRegistry";
  * `role="switch"` + `aria-checked` for screen-reader compatibility.
  */
 export function ToggleControl({ definition, value, onChange, disabled }: ControlProps) {
-  const checked = Boolean(value);
+  // Treat only true booleans as checked; any non-boolean (corrupted state,
+  // stale value, undefined) defaults to false rather than coercing truthy
+  // non-booleans (e.g. the string "false", the number 1) to true. This keeps
+  // the toggle's state honest and surfaces corruption as "off" instead of
+  // silently appearing enabled.
+  const checked = typeof value === "boolean" ? value : false;
 
   return (
     <button

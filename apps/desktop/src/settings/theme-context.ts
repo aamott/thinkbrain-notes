@@ -14,13 +14,17 @@ export interface ThemeProviderState {
 
 export const ThemeProviderContext = createContext<ThemeProviderState>({
   theme: "system",
-  setTheme: () => null,
+  // Fail loudly if `useTheme` is consumed outside a `ThemeProvider`. A silent
+  // no-op here would mask the missing-provider bug (theme changes would
+  // appear to do nothing). Throwing surfaces it immediately at the call site.
+  setTheme: () => {
+    throw new Error("useTheme must be used within a ThemeProvider");
+  }
 });
 
 export function useTheme(): ThemeProviderState {
-  const context = useContext(ThemeProviderContext);
-  if (context === undefined) {
-    throw new Error("useTheme must be used within a ThemeProvider");
-  }
-  return context;
+  // The context always has a default value (with a throwing `setTheme`), so
+  // `useContext` never returns `undefined` here — the missing-provider case is
+  // surfaced by the throwing default setter when the consumer calls it.
+  return useContext(ThemeProviderContext);
 }

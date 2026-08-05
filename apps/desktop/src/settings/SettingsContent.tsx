@@ -13,7 +13,7 @@
  * any of them change, and compute the effective value inline.
  */
 
-import { createElement, useEffect, useState } from "react";
+import { createElement, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { RotateCcw } from "lucide-react";
 import type { SettingDefinition, SettingsDiagnostic } from "@thinkbrain/core";
 import { Unavailable } from "../shell/Unavailable";
@@ -127,9 +127,26 @@ export function SettingsContent() {
   // Track the currently highlighted setting key (from search-result clicks).
   // The highlight bus notifies with a key to highlight, then null to clear.
   const [highlightKey, setHighlightKey] = useState<string | null>(null);
+  // Ref on the scrollable content container so the highlight effect can query
+  // for the highlighted row and scroll it into view.
+  const containerRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     return subscribeSettingHighlight((key) => setHighlightKey(key));
   }, []);
+
+  // When a setting is highlighted (from a search-result click), scroll its row
+  // into view so the user can actually see it even if it's below the fold.
+  // Uses useLayoutEffect so the scroll happens before paint, avoiding a flash.
+  // The selector targets the `data-setting-key` attribute set by SettingRow.
+  useLayoutEffect(() => {
+    if (highlightKey === null) return;
+    const container = containerRef.current;
+    if (container === null) return;
+    const row = container.querySelector<HTMLElement>(
+      `[data-setting-key="${CSS.escape(highlightKey)}"]`
+    );
+    row?.scrollIntoView({ block: "center" });
+  }, [highlightKey]);
 
   if (activeSection === null) {
     return (
@@ -157,7 +174,7 @@ export function SettingsContent() {
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+    <div ref={containerRef} className="flex min-h-0 flex-1 flex-col overflow-y-auto">
       <div className="mx-auto w-full max-w-[40rem] px-6 py-4">
         <div className="mb-2 flex items-center gap-2">
           <h2 className="text-base font-semibold text-foreground">{sectionLabel}</h2>
