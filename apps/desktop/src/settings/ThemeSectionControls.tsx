@@ -2,11 +2,11 @@
  * Theme-specific controls rendered in the Appearance section of the settings UI.
  *
  * These components are only mounted when the active settings section is
- * `appearance.theme`. `ThemePicker` is a dropdown of discovered theme files
- * (loaded from the native themes directory); `ThemeToolbar` provides the
- * Export/Import theme actions. They were extracted from `SettingsContent` to
- * keep that file focused on the generic settings-row rendering and under the
- * 500-line preference.
+ * `appearance.theme`. `ThemePicker` is a unified dropdown that combines the
+ * base theme options (System/Light/Dark) with the discovered `.tbtheme.json`
+ * preset files; `ThemeToolbar` provides the Export/Import theme actions. They
+ * were extracted from `SettingsContent` to keep that file focused on the
+ * generic settings-row rendering and under the 500-line preference.
  */
 
 import { useCallback, useEffect, useState, type ChangeEvent } from "react";
@@ -24,30 +24,58 @@ import { computeEffectiveValue } from "./SettingsContent";
 import { useTransientStatus } from "./useTransientStatus";
 
 /**
- * A dropdown picker for selecting a discovered theme file.
+ * The base theme option values exposed by the unified picker.
  *
- * Loads the list of `.tbtheme.json` files from the app-data themes directory
- * (via the native `list_themes` command) on mount, and renders a `<select>`
- * whose options are the discovered themes. The select's value tracks the
- * effective `appearance.themeFile` setting; changing it stages the selected
- * path (or `null` for the "None" option) so the ThemeProvider picks it up on
- * the next save.
+ * These map directly to the `appearance.theme` enum (`system`/`light`/`dark`).
+ * Selecting one clears `appearance.themeFile` so the base palette takes effect.
+ */
+const BASE_THEME_OPTIONS = ["system", "light", "dark"] as const;
+type BaseThemeOption = (typeof BASE_THEME_OPTIONS)[number];
+
+/**
+ * Type guard narrowing a string to a {@link BaseThemeOption}.
  *
- * The "None (use base theme)" option is always present and selected when no
- * custom theme file is active. The existing Browse button (PathControl) and
- * Export/Import buttons remain available alongside the picker so users can
- * still load external files not in the themes directory.
+ * Used by `handleChange` to distinguish the base options (which stage
+ * `appearance.theme` and clear `themeFile`) from a theme-file path (which
+ * stages `appearance.themeFile` and leaves `theme` untouched).
+ */
+function isBaseThemeOption(value: string): value is BaseThemeOption {
+  return (BASE_THEME_OPTIONS as readonly string[]).includes(value);
+}
+
+/**
+ * A unified dropdown picker for selecting the application theme.
+ *
+ * Combines the base theme options (System/Light/Dark) with the list of
+ * discovered `.tbtheme.json` preset files (loaded from the native themes
+ * directory via the `list_themes` command) into a single `<select>` with two
+ * `<optgroup>` sections: "Base" and "Themes".
+ *
+ * The select's value is determined by:
+ *   - If `appearance.themeFile` is set to a non-null string → that path.
+ *   - Otherwise → the effective `appearance.theme` value
+ *     ("system"/"light"/"dark").
+ *
+ * Selecting a base option stages `appearance.theme` to that value AND stages
+ * `appearance.themeFile` to `null` (clearing any active preset). Selecting a
+ * theme file stages `appearance.themeFile` to the path; `appearance.theme` is
+ * left untouched since the file's `base` field drives the actual palette while
+ * a file is active.
+ *
+ * The Export/Import buttons in {@link ThemeToolbar} remain available alongside
+ * the picker so users can still load external files not in the themes
+ * directory.
  */
 export function ThemePicker() {
   // Discovered themes loaded from the native themes directory.
   const [themes, setThemes] = useState<readonly ThemeEntry[]>([]);
-  // Load error message shown inline if the native list call fails. Empty string
-  // means "no error" (null would also work, but a string keeps the render branch
-  // simple and avoids an extra null-check).
+  // Load error message shown inline if the native list call fails. null means
+  // "no error" — kept as null (rather than an empty string) so the render
+  // branch is a single null-check.
   const [loadError, setLoadError] = useState<string | null>(null);
 
   // Subscribe to the raw value maps so the select re-renders when the user
-  // stages a new theme file path (or reverts). Only the three fields the
+  // stages a new theme (or theme file path). Only the three fields the
   // effective-value computation reads are selected, matching SettingRow.
   const stagedChanges = useSettingsStore((s) => s.stagedChanges);
   const appValues = useSettingsStore((s) => s.appValues);
@@ -55,8 +83,8 @@ export function ThemePicker() {
   const stageChange = useSettingsStore((s) => s.stageChange);
 
   // Load the theme list on mount. The adapter returns an empty array outside
-  // Tauri (tests, web preview), so the picker renders with just the "None"
-  // option and no error in those contexts.
+  // Tauri (tests, web preview), so the picker renders with just the base
+  // options and no error in those contexts.
   useEffect(() => {
     let cancelled = false;
     void listThemes()
@@ -68,7 +96,7 @@ export function ThemePicker() {
       .catch((error: unknown) => {
         if (cancelled) return;
         // Fail loudly: surface the error message so the user knows why the
-        // picker is empty. The "None" option remains usable.
+        // Themes group is empty. The base options remain usable.
         const message =
           error instanceof Error ? error.message : "Failed to load themes.";
         setLoadError(message);
@@ -87,20 +115,44 @@ export function ThemePicker() {
     appValues,
     workspaceValues
   );
-  // Normalize to a string for the <select> value. `null` maps to the empty
-  // string (the "None" option's value). Non-string values are coerced to "" so
-  // the select never has an unmatched value.
+
+  // The unified select's value: if a theme file is active (non-null string),
+  // use its path; otherwise fall back to the effective base `appearance.theme`
+  // value (defaulting to "system" if somehow not a string).
+  const themeValue = computeEffectiveValue(
+    "appearance.theme",
+    "system",
+    stagedChanges,
+    appValues,
+    workspaceValues
+  );
   const selectValue =
-    typeof themeFileValue === "string" ? themeFileValue : "";
+    typeof themeFileValue === "string" && themeFileValue !== ""
+      ? themeFileValue
+      : typeof themeValue === "string" && isBaseThemeOption(themeValue)
+        ? themeValue
+        : "system";
 
   /**
-   * Stages the selected theme file path (or null for "None").
+   * Stages the selected option.
+   *
+   * Base options ("system"/"light"/"dark") stage `appearance.theme` and clear
+   * `appearance.themeFile` to `null`. A theme-file path stages
+   * `appearance.themeFile` and leaves `appearance.theme` untouched (the file's
+   * `base` field drives the palette while a file is active).
    */
   const handleChange = useCallback(
     (event: ChangeEvent<HTMLSelectElement>) => {
       const value = event.target.value;
-      // Empty string === "None" option === null themeFile.
-      stageChange("appearance.themeFile", value === "" ? null : value);
+      if (isBaseThemeOption(value)) {
+        stageChange("appearance.theme", value);
+        stageChange("appearance.themeFile", null);
+      } else {
+        // A theme-file path. Don't touch `appearance.theme` — it stays as
+        // whatever it was, and the ThemeProvider uses the file's `base` field
+        // while a file is active.
+        stageChange("appearance.themeFile", value);
+      }
     },
     [stageChange]
   );
@@ -111,11 +163,11 @@ export function ThemePicker() {
         className="text-sm font-semibold text-foreground"
         htmlFor="theme-picker-select"
       >
-        Theme File
+        Theme
       </label>
       <p className="text-xs leading-relaxed text-muted-foreground">
-        Choose a discovered theme, or use Browse/Import below to load an external
-        file.
+        Choose a base theme or a preset. Custom .tbtheme.json files can be
+        imported below.
       </p>
       <select
         id="theme-picker-select"
@@ -123,12 +175,18 @@ export function ThemePicker() {
         onChange={handleChange}
         className="mt-1 max-w-[24rem] rounded-small border border-border bg-surface px-2 py-1 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <option value="">None (use base theme)</option>
-        {themes.map((entry) => (
-          <option key={entry.path} value={entry.path}>
-            {entry.name}
-          </option>
-        ))}
+        <optgroup label="Base">
+          <option value="system">System</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </optgroup>
+        <optgroup label="Themes">
+          {themes.map((entry) => (
+            <option key={entry.path} value={entry.path}>
+              {entry.name}
+            </option>
+          ))}
+        </optgroup>
       </select>
       {loadError !== null && (
         <p role="alert" className="text-xs text-destructive">

@@ -65,7 +65,7 @@ pub fn list_themes(app: tauri::AppHandle) -> Result<Vec<ThemeEntry>, NativeError
     let themes_dir = themes_dir(&app)?;
     // Ensure the directory exists, then seed presets on first run.
     ensure_themes_directory(&themes_dir)?;
-    seed_presets_if_empty(&app, &themes_dir)?;
+    seed_missing_presets(&app, &themes_dir)?;
     // List and parse the discovered files.
     let entries = list_theme_entries(&themes_dir)?;
     Ok(entries)
@@ -109,33 +109,27 @@ pub fn ensure_themes_directory(themes_dir: &Path) -> Result<(), NativeError> {
     })
 }
 
-/// Copies the bundled preset themes into the themes directory on first run.
+/// Copies any missing bundled preset themes into the themes directory.
 ///
-/// "First run" is defined as the directory containing no `.tbtheme.json` files.
-/// Each preset is copied only if a file with the same name does not already
-/// exist in the destination, so user edits to a preset are never overwritten on
-/// subsequent launches. Missing preset resources (e.g. dev mode before bundling)
-/// are logged and skipped rather than failing the whole command — the picker
-/// still works, just without presets.
+/// On every launch, each preset that does not already exist in the destination
+/// is copied in. User edits to a preset are never overwritten (the per-file
+/// `exists()` check guards this), and user-added themes are untouched. This
+/// ensures new presets shipped in an app update appear without requiring the
+/// user to wipe their themes directory. Missing preset resources (e.g. dev mode
+/// before bundling) are logged and skipped rather than failing the whole
+/// command — the picker still works, just without those presets.
 ///
 /// Args:
 ///   app: Tauri handle used to resolve bundled resource paths.
 ///   themes_dir: Destination directory (already created).
-pub fn seed_presets_if_empty(
+pub fn seed_missing_presets(
     app: &tauri::AppHandle,
     themes_dir: &Path,
 ) -> Result<(), NativeError> {
-    // Only seed when the directory has no theme files yet. This preserves any
-    // user-added or user-edited themes across launches.
-    if directory_has_theme_files(themes_dir) {
-        return Ok(());
-    }
-
     for preset_file_name in PRESET_THEME_FILES {
         let destination = themes_dir.join(preset_file_name);
-        // Never overwrite an existing file (defensive: the empty check above
-        // should already guarantee absence, but a race or partial copy could
-        // leave a file behind).
+        // Never overwrite an existing file — preserves user edits to a preset
+        // and user-added themes that happen to share a preset filename.
         if destination.exists() {
             continue;
         }
@@ -148,9 +142,11 @@ pub fn seed_presets_if_empty(
         let Ok(resource_path) = resource_path else {
             // Resource not bundled (typical in `cargo test` and dev runs without
             // a built bundle). Skip — the picker still lists user-added themes.
+            eprintln!("[themes] resource resolution failed for {preset_file_name}");
             continue;
         };
         if !resource_path.exists() {
+            eprintln!("[themes] resource path does not exist: {}", resource_path.display());
             continue;
         }
 
@@ -163,22 +159,6 @@ pub fn seed_presets_if_empty(
     }
 
     Ok(())
-}
-
-/// Returns true if the directory already contains at least one theme file.
-///
-/// Treats read errors as "empty" so a transiently-unreadable directory does not
-/// block the seed step (which would then re-create files).
-fn directory_has_theme_files(themes_dir: &Path) -> bool {
-    let Ok(entries) = fs::read_dir(themes_dir) else {
-        return false;
-    };
-    entries
-        .filter_map(|entry| entry.ok())
-        .any(|entry| {
-            let path = entry.path();
-            path.is_file() && is_theme_file(&path)
-        })
 }
 
 /// Lists and parses every `.tbtheme.json` file in the directory.

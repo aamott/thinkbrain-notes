@@ -164,13 +164,29 @@ export function SettingsContent() {
     );
   }
 
-  const definitions = appSettingsRegistry.getDefinitionsForSection(activeSection);
+  const allDefinitions = appSettingsRegistry.getDefinitionsForSection(activeSection);
   const sectionLabel = findSectionLabelAcrossModules(appSettingsRegistry, activeSection);
+
+  // The `appearance.theme` section is rendered via the unified `ThemePicker`
+  // (which stages both `appearance.theme` and `appearance.themeFile`) plus the
+  // `ThemeToolbar` (Export/Import). The standalone generic rows for those two
+  // keys are redundant — filter them out so they don't render twice. The
+  // registry definitions stay so the settings system still knows about them.
+  const HIDDEN_KEYS_IN_THEME_SECTION = new Set([
+    "appearance.theme",
+    "appearance.themeFile"
+  ]);
+  const definitions =
+    activeSection === "appearance.theme"
+      ? allDefinitions.filter((d) => !HIDDEN_KEYS_IN_THEME_SECTION.has(d.key))
+      : allDefinitions;
 
   // Determine whether any staged change belongs to the active section so the
   // per-section reset button can be enabled/disabled. `resetSection` only
-  // clears staged entries for the section — it does NOT write to disk.
-  const sectionKeys = new Set(definitions.map((d) => d.key));
+  // clears staged entries for the section — it does NOT write to disk. Note:
+  // use the full set of section keys (including hidden ones) so staging a
+  // theme via the unified picker still enables the Reset button.
+  const sectionKeys = new Set(allDefinitions.map((d) => d.key));
   const hasStagedForSection = Object.keys(stagedChanges).some((k) =>
     sectionKeys.has(k)
   );
@@ -202,17 +218,19 @@ export function SettingsContent() {
             <span>Reset</span>
           </button>
         </div>
-        {definitions.length === 0 ? (
+        {allDefinitions.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             This section has no settings yet.
           </p>
         ) : (
           <>
-            {/* Theme picker + export/import toolbar — only for the
-                appearance.theme section. The picker lets users select from
-                discovered theme files; the toolbar keeps the Browse/Export/
-                Import actions. Both render above the setting rows so they are
-                discoverable when browsing theme settings. */}
+            {/* Unified theme picker + export/import toolbar — only for the
+                appearance.theme section. The picker combines the base
+                System/Light/Dark options with discovered preset files into a
+                single dropdown; the toolbar keeps the Export/Import actions.
+                Both render above the setting rows (the standalone
+                appearance.theme and appearance.themeFile rows are filtered out
+                above to avoid duplication). */}
             {activeSection === "appearance.theme" && (
               <>
                 <ThemePicker />

@@ -195,14 +195,20 @@ describe("SettingsTab", () => {
     useSettingsStore.setState({ activeSection: "appearance.theme" });
     const el = await renderSettingsTab();
 
-    // Enum (theme) renders a <select>. Target it by id (the auto-generated
-    // SelectControl uses the setting key as its id) so the query does not pick
-    // up the ThemePicker's <select> that also renders in this section.
-    const select = el.querySelector<HTMLSelectElement>("select#appearance\\.theme");
+    // The appearance.theme section uses the unified ThemePicker instead of the
+    // auto-generated enum control. The picker's <select> is targeted by its
+    // stable id and exposes the three base options (System/Light/Dark) under a
+    // "Base" optgroup. The standalone appearance.theme/appearance.themeFile
+    // rows are filtered out of the generic row rendering.
+    const select = el.querySelector<HTMLSelectElement>("select#theme-picker-select");
     expect(select).not.toBeNull();
     const options = select?.querySelectorAll("option");
     expect(options?.length).toBe(3); // system, light, dark
     expect(select?.value).toBe("system");
+
+    // The standalone appearance.theme enum row should NOT render (it's now
+    // folded into the unified picker).
+    expect(el.querySelector("select#appearance\\.theme")).toBeNull();
 
     // Now switch to editor.display for number + boolean.
     useSettingsStore.setState({ activeSection: "editor.display" });
