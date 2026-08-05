@@ -37,6 +37,17 @@ export function MarkdownEditor({ value, isSaving = false, error, onChange, onSav
           history(),
           markdown(),
           EditorView.lineWrapping,
+          // CodeMirror 6 uses two cursor mechanisms: the native caret
+          // (caret-color on .cm-content) and a drawn cursor (borderLeftColor
+          // on .cm-cursor, shown only when focused). The default drawn cursor
+          // is `border-left: 1.2px solid black` — invisible on a dark editor
+          // background. This theme extension overrides both, and { dark: true }
+          // enables CodeMirror's dark-mode selectors so the &dark rules apply.
+          EditorView.theme({
+            ".cm-content": { caretColor: "var(--tn-color-foreground)" },
+            ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--tn-color-foreground)" },
+            "&.cm-focused .cm-cursor": { borderLeftColor: "var(--tn-color-foreground)" }
+          }, { dark: true }),
           EditorView.contentAttributes.of({ "aria-label": "Markdown editor" }),
           keymap.of([
             ...defaultKeymap,

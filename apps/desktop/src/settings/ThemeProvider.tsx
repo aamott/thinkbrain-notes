@@ -1,49 +1,72 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
-
-// Support system, light, dark, and potentially custom imported themes later.
-export type AppTheme = "system" | "light" | "dark" | (string & {});
-
-interface ThemeProviderState {
-  readonly theme: AppTheme;
-  readonly setTheme: (theme: AppTheme) => void;
-}
-
-const ThemeProviderContext = createContext<ThemeProviderState>({
-  theme: "system",
-  setTheme: () => null,
-});
+import { isTauri } from "@tauri-apps/api/core";
+import { themeService } from "./themeService";
+import type { AppThemeSetting } from "@thinkbrain/core";
+import { type AppTheme, ThemeProviderContext, type ThemeProviderState } from "./theme-context";
 
 export interface ThemeProviderProps {
   readonly children: ReactNode;
+  /** Theme used until native settings finish hydrating (defaults to "system"). */
   readonly defaultTheme?: AppTheme;
-  readonly storageKey?: string;
 }
 
 /**
  * A React context provider that applies the selected theme to the root element.
- * It uses the `data-thinkbrain-theme` attribute to avoid JS branching and
- * allow CSS variables to handle light/dark/system natively.
+ *
+ * Theme persistence flows through the native settings commands
+ * (`themeService` -> `read_app_settings` / `update_app_theme`) rather than
+ * `localStorage`, so the host owns a single source of truth. In non-Tauri
+ * contexts (tests, plain browser previews) the load/save steps are skipped.
+ *
+ * The theme is applied via the `data-thinkbrain-theme` attribute on the root
+ * element so CSS can branch on light/dark/system without JS resolution. The
+ * "system" value is handled in CSS through `@media (prefers-color-scheme)`.
  */
 export function ThemeProvider({
   children,
   defaultTheme = "system",
-  storageKey = "thinkbrain-ui-theme",
 }: ThemeProviderProps) {
-  const [theme, setTheme] = useState<AppTheme>(() => {
-    return (localStorage.getItem(storageKey) as AppTheme) || defaultTheme;
-  });
+  // Start from the prop default; native settings hydrate in the effect below.
+  const [theme, setThemeState] = useState<AppTheme>(defaultTheme);
 
+  // Hydrate the persisted theme from native settings on mount. Skipped outside
+  // Tauri (e.g. Node test environment) where `themeService` has no host to call.
+  useEffect(() => {
+    if (!isTauri()) return;
+    let cancelled = false;
+    themeService
+      .loadTheme()
+      .then((persisted) => {
+        if (!cancelled) setThemeState(persisted);
+      })
+      .catch((error: unknown) => {
+        // Fail loudly: a theme read failure should be visible, not silent.
+        console.error("[ThemeProvider] Failed to load theme from native settings:", error);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Apply the theme attribute whenever it changes. CSS handles light/dark/system.
   useEffect(() => {
     const root = window.document.documentElement;
     root.dataset.thinkbrainTheme = theme;
   }, [theme]);
 
-  const value = {
+  const value: ThemeProviderState = {
     theme,
     setTheme: (newTheme: AppTheme) => {
-      localStorage.setItem(storageKey, newTheme);
-      setTheme(newTheme);
+      setThemeState(newTheme);
+      // Only persist inside the Tauri host; elsewhere there is no settings store.
+      if (!isTauri()) return;
+      themeService
+        .saveTheme(newTheme as AppThemeSetting)
+        .catch((error: unknown) => {
+          // Fail loudly per project rules: surface persistence failures.
+          console.error("[ThemeProvider] Failed to save theme to native settings:", error);
+        });
     },
   };
 
@@ -52,12 +75,4 @@ export function ThemeProvider({
       {children}
     </ThemeProviderContext.Provider>
   );
-}
-
-export function useTheme(): ThemeProviderState {
-  const context = useContext(ThemeProviderContext);
-  if (context === undefined) {
-    throw new Error("useTheme must be used within a ThemeProvider");
-  }
-  return context;
 }

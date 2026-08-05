@@ -14,4 +14,4 @@ These are random issues or shortcomings users have noted. They may or may not be
 
 ## Themes
 - [ ] Themes should be modular and stored in a single file. Importing and exporting themes involves only that one file. It should be easy to improve the UI and have themes automatically applied, using system colors rather than hard rgb values for example. Account for anything I might be missing here. 
-- [ ] Current dark theme leaves the editor cursor dark and impossible to see. 
+- [x] Current dark theme leaves the editor cursor dark and impossible to see. _Fixed: EditorView.theme with { dark: true } + caret-color on .cm-content + borderLeftColor on .cm-cursor._ 
