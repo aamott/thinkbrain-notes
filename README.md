@@ -1,8 +1,14 @@
 # ThinkBrain Notes
 
-A local-first desktop knowledge workspace for Markdown notes. ThinkBrain keeps
-notes as normal files, with the desktop interface built using React, Tauri, and
-CodeMirror.
+A local-first, cross platform desktop and mobile knowledge workspace for Markdown notes. ThinkBrain keeps notes as normal files, with the desktop interface built using React, Tauri, and CodeMirror. Will include a desktop app, mobile app, and Mac/Windows/Linux support, extensions (including automatic git syncing and conflict resolution), and stores metadata separate from the repo to avoid syncing issues with OneDrive and SyncThing. 
+
+Future extensions include: 
+- ACP Agent Chat
+- Git sync (manual and automatic)
+- Automatic conflict resolution for
+  - OneDrive
+  - SyncThing
+  - Other cloud drives?
 
 ## Getting started
 

@@ -2,11 +2,17 @@
 
 ## Goal
 
-Define the platform adapter interfaces in `packages/core` that both
-`apps/desktop` and `apps/mobile` implement: `FileSystemAdapter`,
-`SearchAdapter`, `AppPathsAdapter`, `GitAdapter`, `SettingsAdapter`. These are
-the prerequisite for the mobile epic and for refactoring the desktop app onto
-the adapter contract.
+Define the platform adapter interfaces in `packages/core` that `apps/desktop`
+implements: `FileSystemAdapter`, `SearchAdapter`, `AppPathsAdapter`,
+`GitAdapter`, `SettingsAdapter`. These are the prerequisite for clean
+separation and testability, and for refactoring the desktop app onto the
+adapter contract.
+
+Note: mobile is now a Tauri Mobile build target of `apps/desktop/` (same
+webview, same codebase), not a separate app. Mobile reuses the same Tauri
+adapters as desktop — there are no separate Expo/native adapter implementations
+to write. The adapter interfaces are still needed for clean separation between
+`packages/core` and the Tauri layer.
 
 This story is the bridge between the current desktop-direct-Tauri architecture
 and the cross-platform hub-and-spoke contract described in

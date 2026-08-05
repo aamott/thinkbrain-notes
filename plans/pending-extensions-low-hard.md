@@ -13,6 +13,20 @@ points (already partially designed), then add a manifest format, a
 capability-based sandbox, and install flows so third-party extensions can run
 safely. Extension settings integrate with the existing JSON settings system.
 
+Target extension use cases that shape the API design:
+
+- **Git sync** (manual and automatic): file watching, background sync tasks,
+  conflict detection, merge UI. Includes autosync with conflict resolution for
+  OneDrive, SyncThing, and other cloud drives that create duplicate files.
+- **ACP Agent Chat**: network access, streaming chat UI, credential storage,
+  panel registration. Built-in ACP host runtime in Rust; provider/model
+  configuration and chat UI delivered as an extension.
+- **Journal/calendar**: activity bar entries, popout panels, note templates,
+  workspace-scoped settings.
+
+These use cases drive the capability set, event types, and API surface. The
+extension system must support them without special-casing.
+
 ## Scope
 
 In scope:
@@ -35,8 +49,11 @@ In scope:
 - extension settings (stored outside the workspace, keyed by extension id)
 - third-party extension API surface: views, panels, menus, context menus,
   editor actions, settings contributions, themes, AI tools, Git tools,
-  static registry
+  background tasks, extension data storage, event system, static registry
 - API versioning: manifest declares `apiVersion`; app supports a semver range
+- platform-aware capabilities: desktop-only capabilities (terminal,
+  process-spawn) are silently unavailable on mobile; manifests can declare
+  platform requirements
 
 Non-goals (deferred or out of scope for V1):
 
@@ -81,8 +98,10 @@ settings decision in `plans/technical-decisions.md`.
 
 Extension contribution points and the extension runtime live in
 `packages/core` (platform-agnostic). Platform-specific activation (e.g. Tauri
-native bridge capabilities) is implemented via adapters in `apps/desktop` (and
-later `apps/mobile`), matching the existing hub-and-spoke rule.
+native bridge capabilities) is implemented via adapters in `apps/desktop`,
+matching the existing hub-and-spoke rule. Mobile is a Tauri Mobile build target
+of `apps/desktop/` (same webview, same adapters) — there is no separate
+`apps/mobile/` directory.
 
 ### Execution model: same-context JS modules
 
@@ -92,6 +111,11 @@ invoke Tauri commands they have capabilities for. No iframe or process
 isolation in V1. This gives extensions full React access for UI contributions
 and keeps the architecture simple. Iframe/process isolation is deferred to V2
 if the threat model demands it.
+
+Same model applies on mobile (Tauri mobile is also a webview). The capability
+set is platform-aware: some capabilities (e.g. `terminal`, `process-spawn`)
+are desktop-only and silently unavailable on mobile. Extension manifests can
+declare platform requirements via `engines.platform`.
 
 ### Lazy activation
 
@@ -135,7 +159,7 @@ are not yet formalized, the first story here should establish them.
 - ⬜ Extension manifest format — `extension.json` schema, parser, activation events, apiVersion
 - ⬜ Extension packaging format — directory structure, zip distribution, dev mode
 - ⬜ Capability-based sandbox — V1 strict sandbox, deny-by-default, no unrestricted filesystem access
-- ⬜ Extension API surface — views, panels, menus, context menus, editor actions, themes, AI/Git tool hooks, event system, static registry
+- ⬜ Extension API surface — views, panels, menus, context menus, editor actions, themes, AI/Git tool hooks, background tasks, data storage, event system, static registry
 - ⬜ Install from URL — download and install an extension from a URL
 - ⬜ Install from file — install an extension from a local file
 - ⬜ Extension settings — per-extension settings stored outside the workspace

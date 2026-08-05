@@ -1,77 +1,92 @@
 # Mobile
 
-> React Native (Expo) mobile app — a future epic, not yet started. Read
-> `plans/app-vision.md` and `plans/technical-decisions.md` (Platform section)
-> before starting any story here.
+> Tauri Mobile — a future epic, not yet started. Mobile is a responsive variant
+> of the desktop app, not a separate app. Read `plans/app-vision.md` and
+> `plans/technical-decisions.md` (Platform section) before starting any story
+> here.
 
 ## Goal
 
-Ship a privacy-first mobile companion app (Android/iOS) that reuses the
-platform-agnostic business logic in `packages/core` and provides mobile-native
-screens for browsing, editing, and searching Markdown workspaces. The mobile app
-is a peer to `apps/desktop`, not a port of it: it has its own React Native UI and
-its own platform adapters, sharing only `packages/core`.
+Ship Android and iOS builds of the existing desktop app via Tauri v2's mobile
+support. Tauri Mobile uses the same webview stack as desktop, so the entire
+React frontend, `packages/ui`, CodeMirror 6, and the adapter pattern are reused
+as-is. Mobile is a responsive layout of the same codebase — phone-first on
+small screens, multi-panel on large screens — not a separate app, separate UI
+layer, or separate adapter set.
 
 ## Scope
 
 In scope:
 
-- `apps/mobile` scaffold (React Native via Expo)
-- Platform adapter implementations for mobile against the core adapter
-  interfaces: FileSystem, Search, AppPaths, Git, Settings
-- Mobile-specific screens and navigation (stack/tab — do not force desktop
-  panels onto phone layouts)
-- Shared core logic wiring via `packages/core`
-- Mobile-native editor surface for Markdown notes
+- `tauri android init` / `tauri ios init` scaffolding for the Android and iOS
+  targets
+- Responsive layout breakpoints (Tailwind) so the desktop shell adapts to phone
+  screens
+- Touch-friendly navigation (bottom tabs, swipe gestures, 44px touch targets)
+- Mobile capability gating — desktop-only Tauri commands (terminal,
+  process-spawn) are excluded from mobile builds via platform-aware capabilities
+- Mobile-specific Tauri config (`tauri.android.conf.json`, `tauri.ios.conf.json`
+  if needed)
+- CodeMirror 6 mobile testing and fixes (scrolling, IME, touch selection)
 
 Non-goals (deferred or out of scope for this epic):
 
-- feature parity with every desktop panel
+- A separate UI layer or separate app — there is no `apps/mobile/` directory
+- Separate platform adapters — mobile reuses the same Tauri adapters as desktop
+- React Native / Expo — not used; Tauri Mobile is webview-based
+- feature parity with every desktop panel on phone screens
 - cloud sync / built-in sync service (Bring Your Own Sync applies)
-- tablet-specific layouts (phone-first; tablet later)
+- tablet-specific layouts (phone-first; tablet falls out of responsive design)
 - publishing to app stores (build/ship pipeline is a later concern)
 
 ## Architecture Decisions
 
-### Hub and spoke, same as desktop
+### Same codebase as desktop
 
-`packages/core` holds all platform-agnostic logic and must never depend on React
-Native, DOM, or Node-only APIs. `apps/mobile` implements platform adapters
-against the interfaces defined in `packages/core`, exactly as `apps/desktop`
-does. This is the same hub-and-spoke contract described in `app-vision.md` and
-`technical-decisions.md`.
+Tauri v2 Mobile uses the same webview as desktop, so the entire React frontend,
+`packages/ui`, CodeMirror 6, and the adapter pattern are reused without
+duplication. Mobile is a build target of `apps/desktop/`, not a separate app.
+No `apps/mobile/` directory is created. The hub-and-spoke contract from
+`app-vision.md` and `technical-decisions.md` is unchanged — `packages/core`
+stays platform-agnostic, and `apps/desktop` provides the Tauri adapters that
+both desktop and mobile builds use.
 
-### Separate UI layer
+### Responsive layout
 
-`packages/ui` is React DOM and is consumed only by `apps/desktop`. The mobile
-app has its own React Native UI in `apps/mobile/src/`. Shared design tokens
-(colors, spacing, typography) live in `packages/core` so both platforms can
-reference them; mobile maps them to `StyleSheet` values rather than CSS
-variables (per the Styling rule in `AGENTS.md`).
+Mobile uses CSS breakpoints (Tailwind) to switch between desktop and mobile
+layouts within the same shell. Phone-first on small screens (single panel,
+bottom tab navigation), multi-panel on large screens (current desktop layout).
+There is no separate screen tree or navigation stack — the same React
+components reflow based on viewport width.
 
-### Platform adapter contract
+### Capability gating
 
-`packages/core` defines TypeScript interfaces that abstract native capabilities:
-`FileSystemAdapter`, `SearchAdapter`, `AppPathsAdapter`, `GitAdapter`,
-`SettingsAdapter`. Each platform provides its own implementation. Mobile maps
-these to Expo/React Native equivalents:
+Some Tauri commands are desktop-only (terminal, process-spawn). The extension
+system's capability model handles this via platform-aware capabilities (already
+in the `extensions` plan): mobile builds declare a more restrictive capability
+set and exclude desktop-only commands. Mobile capabilities are enforced at the
+Tauri layer, not duplicated in the renderer.
 
-- FileSystem → `expo-file-system`
-- Search → `expo-sqlite` (FTS5 cache, same ephemeral-cache discipline as desktop)
-- AppPaths → Expo app-data directories
-- Git → `isomorphic-git` or deferred further (see story)
-- Settings → `AsyncStorage` / Expo SecureStore
+### Known limitations
 
-### Prerequisite: core adapter interfaces must exist first
+- **Android keyboard / `visualViewport` issue** (critical for text editing,
+  tracked at tauri-apps/tauri#10631): the webview viewport does not resize
+  correctly when the soft keyboard opens, which breaks CodeMirror cursor
+  positioning and scrolling. Must be verified and worked around before mobile
+  editing ships.
+- **CodeMirror 6 mobile quirks**: scrolling on Android, IME composition
+  (Gboard), and touch-based text selection on iOS need explicit testing and
+  likely fixes. `EditorView.EDIT_CONTEXT = false` may be required on Android.
+- **Single webview only**: Tauri Mobile supports a single webview. This is not
+  a problem for us — the desktop app is already single-webview.
 
-This epic depends on the core adapter interfaces being defined in
-`packages/core`. **Note:** as of this writing those interfaces are described in
-`technical-decisions.md` but are not yet present in `packages/core/src/` — the desktop app currently calls Tauri
-directly via `invokeNativeCommand` (`apps/desktop/src/native/commands.ts`).
-Before any mobile story starts, the adapter interfaces must be introduced in
-`packages/core` and the desktop app refactored onto them. This cross-cutting
-refactor is tracked as a maintenance story:
-`plans/maintenance/pending-core_adapter_interfaces-low-hard.md`.
+### Prerequisite: core adapter interfaces still apply
+
+The core adapter interfaces in `packages/core` (from the maintenance epic) are
+still a prerequisite, but the rationale has changed: it is now about clean
+separation and testability, not about mobile-specific adapter implementations.
+Mobile reuses the same Tauri adapters as desktop — there are no separate Expo
+adapters to write.
 
 ### Bring Your Own Sync
 
@@ -81,22 +96,21 @@ No cloud sync. Mobile users rely on the same external sync tools
 ## Dependencies
 
 - Core adapter interfaces defined in `packages/core` (see prerequisite note
-  above — not yet satisfied).
+  above — tracked in `plans/maintenance/`).
 - `packages/core` business logic (note model, frontmatter, markdown parsing,
   settings shapes) — already present and platform-agnostic.
+- `packages/ui` and the React frontend — already shared, no mobile-specific
+  work needed beyond responsive layout.
 
 No other epic blocks this one, but it should not start until the adapter
 interface prerequisite is resolved.
 
 ## Status
 
-- ⬜ Core adapter interfaces in `packages/core` (prerequisite — tracked in `plans/maintenance/`)
-- ⬜ `apps/mobile` scaffold (Expo + React Native) — `apps/mobile/`
-- ⬜ Mobile FileSystem adapter (`expo-file-system`)
-- ⬜ Mobile Search adapter (`expo-sqlite` FTS5 cache)
-- ⬜ Mobile AppPaths adapter (Expo app-data directories)
-- ⬜ Mobile Git adapter (`isomorphic-git` or deferred)
-- ⬜ Mobile Settings adapter (`AsyncStorage` / Expo SecureStore)
-- ⬜ Mobile screens and navigation (stack/tab, phone-first)
-- ⬜ Mobile Markdown editor surface
-- ⬜ Shared `packages/core` wiring and design-token mapping
+- ⬜ Responsive layout breakpoints (Tailwind, phone-first on small screens)
+- ⬜ Touch-friendly navigation (bottom tabs, swipe gestures, 44px touch targets)
+- ⬜ `tauri android init` — scaffold Android target
+- ⬜ `tauri ios init` — scaffold iOS target (requires macOS)
+- ⬜ Mobile Tauri config (permissions, capabilities, no desktop-only commands)
+- ⬜ CodeMirror mobile testing and fixes (scrolling, IME, touch selection)
+- ⬜ Core adapter interfaces in `packages/core` (prerequisite — tracked in maintenance)

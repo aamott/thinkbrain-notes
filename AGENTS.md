@@ -1,6 +1,14 @@
 # ThinkBrain Notes Project Guidance
 
-Open, local-first knowledge workspace inspired by Obsidian & VS Code. Standard Markdown files with zero database lock-in. Fast, extensible, Git-compatible with optional AI integration and Agent Client Protocol (ACP) support.
+Open, local-first knowledge workspace inspired by Obsidian & VS Code. Standard Markdown files with zero database lock-in. Fast, extensible, including extensions. Supports Mac, Windows, Linux, ios, and Android. Stores metadata separate from the repo to avoid syncing issues with OneDrive and SyncThing. 
+
+Future extensions include: 
+- ACP Agent Chat
+- Git sync (manual and automatic)
+- Automatic conflict resolution for
+  - OneDrive
+  - SyncThing
+  - Other
 
 ## File Map
 - **`apps/desktop/`** - Desktop Application (React UI & Tauri Rust Host). See [apps/desktop/AGENTS.md](file:///media/adam/extex/projects/thinkbrain-notes/apps/desktop/AGENTS.md).

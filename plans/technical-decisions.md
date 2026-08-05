@@ -10,11 +10,27 @@ Decision: Build a cross-platform application, desktop-first.
 - Frontend: React, TypeScript, Vite
 - Desktop shell/native bridge: Tauri v2
 - Backend/native code: Rust
-- Mobile (Phase 2): React Native via Expo for Android/iOS
+- Mobile (Phase 2): Tauri Mobile for Android/iOS — same webview stack as
+  desktop, not a separate app
 
-Mobile implementation is deferred, but the shared-core architecture and
+Mobile is a responsive variant of the desktop app, not a separate codebase.
+Tauri v2 Mobile uses the same webview as desktop, so the entire React frontend,
+`packages/ui`, CodeMirror 6, and the adapter pattern are reused. Mobile is a
+build target of `apps/desktop/` (via `tauri android init` / `tauri ios init`),
+not a separate `apps/mobile/` directory. The shared-core architecture and
 platform adapter interfaces are designed from day one so that `packages/core`
-never couples to desktop-only APIs.
+never couples to desktop-only APIs; mobile reuses the same Tauri adapters as
+desktop (no separate Expo/native adapters).
+
+### Known Tauri Mobile limitations
+
+- Android keyboard / `visualViewport` issue (tauri-apps/tauri#10631) affects
+  text editing — the webview viewport does not resize correctly when the soft
+  keyboard opens. Must be verified and worked around before mobile editing
+  ships.
+- CodeMirror 6 mobile quirks (Android scrolling, IME/Gboard, iOS touch
+  selection) need explicit testing and likely fixes.
+- Single webview only — not a problem for this app.
 
 ## Repository Structure
 
@@ -23,21 +39,20 @@ shared packages.
 
 ```text
 apps/
-  desktop/          # Tauri + React (DOM) — MVP
-    src/
-    src-tauri/
-  mobile/           # React Native (Expo) — Phase 2, not scaffolded during MVP
-    src/
+  desktop/          # Tauri + React (DOM) — MVP, also the mobile build target
+    src/            # React UI and frontend state (shared with mobile)
+    src-tauri/      # Rust/Tauri native bridge (desktop + mobile targets)
 
 packages/
   core/             # platform-agnostic logic and adapter interfaces
-  ui/               # React (DOM) components — consumed by apps/desktop only
+  ui/               # React (DOM) components — shared by desktop and mobile
 ```
 
-`apps/mobile/` must NOT be scaffolded or implemented until the `mobile` epic is
-active. `packages/ui` contains React DOM components and is not directly usable
-by React Native. Shared design tokens (colors, spacing, typography scales) live
-in `packages/core` so both platforms can reference them.
+There is no `apps/mobile/` directory. Mobile is a Tauri Mobile build target of
+`apps/desktop/` (via `tauri android init` / `tauri ios init`), using the same
+webview, the same React frontend, the same `packages/ui`, and the same Tauri
+adapters. Mobile uses the same CSS design tokens as desktop — there is no
+separate token mapping or `StyleSheet` layer.
 
 Do not split `packages/core` into many packages until the codebase has enough
 complexity to justify it.
@@ -123,7 +138,8 @@ variables, and accessibility-focused primitives.
 - Theme tokens should be CSS variables.
 - No inline styles (`style={{}}` or `<style>` in JSX). Use CSS Modules
   (`*.module.css`) co-located with components. Shared tokens/themes as CSS
-  variables in `packages/ui`. React Native (Phase 2): use `StyleSheet`.
+  variables in `packages/ui`. Mobile uses the same CSS tokens as desktop
+  (same webview, no `StyleSheet` layer).
 
 MVP may include built-in themes and theme tokens. Third-party theme packages are
 deferred until the `extensions` epic is active.

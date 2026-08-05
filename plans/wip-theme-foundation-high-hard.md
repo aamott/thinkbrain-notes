@@ -54,7 +54,8 @@ shell surfaces without a heavy opinionated UI framework.
 - Theme marketplace or remote theme registry.
 - Public theme extension API (deferred to `extensions` epic).
 - Heavy opinionated UI framework (Material UI, Ant Design, etc.).
-- React Native `StyleSheet` theming (Phase 2 / `mobile` epic).
+- Mobile-specific theming work (Phase 2 / `mobile` epic) — mobile reuses the
+  same CSS tokens as desktop via Tauri Mobile's shared webview.
 
 ## Status
 

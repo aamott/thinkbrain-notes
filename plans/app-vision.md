@@ -40,7 +40,7 @@ fully supported. Cloud providers are optional.
 | Frontend | React + TypeScript + Vite |
 | State | Zustand |
 | Desktop shell | Tauri v2 (Rust) |
-| Mobile (Phase 2) | React Native (Expo) |
+| Mobile (Phase 2) | Tauri Mobile (same webview as desktop) |
 | Editor | CodeMirror 6 |
 | Native backend | Rust |
 | Storage | Markdown files + JSON config |
@@ -54,19 +54,21 @@ fully supported. Cloud providers are optional.
 ```text
 apps/
   desktop/          # Tauri + React (DOM) — MVP
-    src/            # React UI and desktop frontend state
-    src-tauri/      # Rust/Tauri native bridge
-  mobile/           # React Native (Expo) — Phase 2
-    src/            # mobile-specific screens and adapters
+    src/            # React UI and frontend state (shared with mobile)
+    src-tauri/      # Rust/Tauri native bridge (desktop + mobile targets)
 
 packages/
   core/             # platform-agnostic logic (no React, no DOM, no Node)
   ui/               # reusable React (DOM) components and design tokens
+                    # (shared by desktop and mobile — same webview)
 ```
 
 **Hub and spoke**: `packages/core` holds all business logic and must never
-depend on UI. `apps/desktop` and `apps/mobile` implement platform adapters
-against interfaces defined in `packages/core`.
+depend on UI. `apps/desktop` implements platform adapters against interfaces
+defined in `packages/core`. Mobile is a responsive variant of the desktop app,
+not a separate app — it is a Tauri Mobile build target of `apps/desktop/` using
+the same webview, the same React frontend, the same `packages/ui`, and the same
+Tauri adapters. There is no `apps/mobile/` directory.
 
 **Data flow**: Markdown files → parser → indexer → disposable SQLite cache →
 search UI / backlinks / future graph. The index is always rebuildable from disk.

@@ -19,9 +19,13 @@ lifecycle (load → activate → deactivate → unload) is implemented.
       deactivate.
 - [ ] Capability enforcement: extensions cannot invoke Tauri commands they lack
       capabilities for. Violations fail loudly with typed errors.
+- [ ] Platform-aware capabilities: some capabilities (e.g. `terminal`,
+      `process-spawn`) are desktop-only and silently unavailable on mobile.
+      Extensions can declare platform requirements in the manifest.
 - [ ] Development mode: extensions load from a local directory without
       installation (hot-reload friendly).
-- [ ] Unit tests cover lifecycle, capability enforcement, and cleanup.
+- [ ] Unit tests cover lifecycle, capability enforcement, platform gating,
+      and cleanup.
 
 ## References
 

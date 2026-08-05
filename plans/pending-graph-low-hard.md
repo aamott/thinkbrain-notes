@@ -42,8 +42,8 @@ Non-goals (out of scope for this epic):
   resolution, and filtering are platform-agnostic and must not depend on React
   or a rendering library. The desktop app provides the rendering adapter.
 - **Rendering is desktop-only for now.** The graph view uses a force-directed
-  layout rendered in the desktop app (`apps/desktop`). Mobile (`apps/mobile`,
-  Phase 2) is out of scope until core adapter interfaces exist.
+  layout rendered in the desktop app (`apps/desktop`). Mobile (Tauri Mobile
+  build target, Phase 2) is out of scope until core adapter interfaces exist.
 - **No inline styles.** Graph UI uses CSS Modules co-located with components,
   per the styling rule.
 
