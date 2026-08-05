@@ -114,6 +114,14 @@ export function ThemeProvider({
   // `react-hooks/set-state-in-effect` lint rule).
   const effectiveTheme: AppTheme = themeFile !== null ? (themeFileBase ?? theme) : theme;
 
+  // Track the user's theme selection in a ref so the async file-read effect can
+  // reference it in log messages without depending on it (which would trigger a
+  // redundant disk re-read on every theme toggle).
+  const themeRef = useRef(theme);
+  useEffect(() => {
+    themeRef.current = theme;
+  }, [theme]);
+
   // Load settings from native storage on mount (Tauri only). The ref guard
   // prevents double-load in StrictMode or fast re-mounts.
   const loadStartedRef = useRef(false);
@@ -187,10 +195,12 @@ export function ThemeProvider({
         injectThemeOverrides(result.theme);
         // Cache the file's base so `effectiveTheme` picks it up synchronously.
         // The attribute effect will write the new base on the next render.
-        if (result.theme.base !== theme) {
+        // Read `theme` from the ref (not a dep) so this effect doesn't re-run
+        // on every theme toggle — the file path/contents haven't changed.
+        if (result.theme.base !== themeRef.current) {
           console.info(
             `[ThemeProvider] Custom theme file "${themeFile}" uses base ` +
-              `"${result.theme.base}"; overriding user-selected theme "${theme}".`
+              `"${result.theme.base}"; overriding user-selected theme "${themeRef.current}".`
           );
         }
         setThemeFileBase(result.theme.base);
@@ -213,7 +223,7 @@ export function ThemeProvider({
       // handles cleanup, so a re-render with the same path doesn't flicker.
       cancelled = true;
     };
-  }, [themeFile, theme]);
+  }, [themeFile]);
 
   const value: ThemeProviderState = {
     theme,

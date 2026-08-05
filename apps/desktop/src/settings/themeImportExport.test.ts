@@ -18,7 +18,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // Mock the native dialogs module so we can control save/open dialog results.
 vi.mock("../native/dialogs", () => ({
   saveFilePath: vi.fn<(title: string, defaultName: string) => Promise<string | null>>(),
-  pickFilePath: vi.fn<(title?: string) => Promise<string | null>>()
+  pickFilePath: vi.fn<
+    (title?: string, extensions?: readonly string[]) => Promise<string | null>
+  >()
 }));
 
 // Mock the native fs module so we can control read/write results.
@@ -237,13 +239,13 @@ describe("writeThemeExportFile", () => {
     expect(writeTextFileNative).not.toHaveBeenCalled();
   });
 
-  it("returns false when the write fails", async () => {
+  it("throws when the write fails (fail-loud)", async () => {
     vi.mocked(saveFilePath).mockResolvedValue("/tmp/theme.tbtheme.json");
     vi.mocked(writeTextFileNative).mockResolvedValue(false);
 
-    const result = await writeThemeExportFile('{"name":"x"}');
-
-    expect(result).toBe(false);
+    // Write failures now throw instead of returning false, so the caller can
+    // surface a destructive status message. Cancel (above) still returns false.
+    await expect(writeThemeExportFile('{"name":"x"}')).rejects.toThrow();
   });
 });
 
@@ -277,6 +279,9 @@ describe("importTheme", () => {
     expect(result).not.toBeNull();
     expect(result!.themeName).toBe("My Custom Theme");
     expect(result!.diagnostics).toHaveLength(0);
+
+    // The open dialog should be filtered to `.tbtheme.json` files.
+    expect(pickFilePath).toHaveBeenCalledWith("Import theme", ["tbtheme.json"]);
 
     // The file path should be staged under appearance.themeFile.
     expect(stageChangeSpy).toHaveBeenCalledWith(
@@ -318,16 +323,16 @@ describe("importTheme", () => {
     expect(readTextFileNative).not.toHaveBeenCalled();
   });
 
-  it("returns null when the file cannot be read", async () => {
+  it("throws when the file cannot be read (fail-loud)", async () => {
     vi.mocked(pickFilePath).mockResolvedValue("/tmp/missing.tbtheme.json");
     vi.mocked(readTextFileNative).mockResolvedValue(null);
 
     const stageChangeSpy = vi.fn();
     useSettingsStore.setState({ stageChange: stageChangeSpy });
 
-    const result = await importTheme();
-
-    expect(result).toBeNull();
+    // Read failures now throw instead of returning null, so the caller can
+    // surface a destructive status message. Cancel (above) still returns null.
+    await expect(importTheme()).rejects.toThrow();
     expect(stageChangeSpy).not.toHaveBeenCalled();
   });
 
@@ -342,7 +347,7 @@ describe("importTheme", () => {
 
     // parseThemeFile returns a structured result with diagnostics for bad JSON
     // (it does not throw), so importTheme returns the diagnostics rather than
-    // null. null is reserved for cancel/unreadable-file.
+    // null. null is reserved for cancel; read failures throw.
     expect(result).not.toBeNull();
     expect(result!.themeName).toBeNull();
     expect(result!.diagnostics.length).toBeGreaterThan(0);

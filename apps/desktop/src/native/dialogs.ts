@@ -17,18 +17,31 @@ import { open, save } from "@tauri-apps/plugin-dialog";
  *
  * Args:
  *   title: Optional dialog title (defaults to "Select file").
+ *   extensions: Optional readonly list of file extensions (without the leading
+ *     dot) used to filter the dialog. When provided, only files matching one of
+ *     the extensions (plus directories) are selectable. When omitted, no filter
+ *     is applied and all files are shown.
  *
  * Returns:
  *   The absolute path string, or `null` if cancelled / unavailable.
  */
-export async function pickFilePath(title = "Select file"): Promise<string | null> {
+export async function pickFilePath(
+  title = "Select file",
+  extensions?: readonly string[]
+): Promise<string | null> {
   // Guard non-Tauri contexts (tests, web-only dev) so callers don't crash.
   if (!isTauri()) return null;
 
   const selection = await open({
     title,
     directory: false,
-    multiple: false
+    multiple: false,
+    // Tauri's `open` accepts a `filters` array of `{ name, extensions }`
+    // objects. Spread the readonly input into a mutable array to satisfy the
+    // dialog plugin's typed contract.
+    filters: extensions
+      ? [{ name: "Theme files", extensions: [...extensions] }]
+      : undefined
   });
 
   // `open` returns `string | null` when multiple is false.

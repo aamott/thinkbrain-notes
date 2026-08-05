@@ -9,7 +9,7 @@
  * 500-line preference.
  */
 
-import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useState, type ChangeEvent } from "react";
 import { Download, Upload } from "lucide-react";
 import { cn } from "../lib/utils";
 import { useSettingsStore } from "./settingsStore";
@@ -21,6 +21,7 @@ import {
   type ImportThemeResult
 } from "./themeImportExport";
 import { computeEffectiveValue } from "./SettingsContent";
+import { useTransientStatus } from "./useTransientStatus";
 
 /**
  * A dropdown picker for selecting a discovered theme file.
@@ -155,43 +156,7 @@ export function ThemePicker() {
  */
 export function ThemeToolbar() {
   // Transient status message from export/import (cleared after a few seconds).
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
-  const statusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  /** Clears the transient status message (cancels any pending timeout). */
-  const clearStatus = useCallback((): void => {
-    if (statusTimeoutRef.current !== null) {
-      clearTimeout(statusTimeoutRef.current);
-      statusTimeoutRef.current = null;
-    }
-    setStatusMessage(null);
-  }, []);
-
-  /**
-   * Shows a transient status message for a few seconds, then auto-clears it.
-   * Replaces any previously scheduled clear timeout.
-   */
-  const showStatus = useCallback(
-    (message: string): void => {
-      clearStatus();
-      setStatusMessage(message);
-      statusTimeoutRef.current = setTimeout(() => {
-        setStatusMessage(null);
-        statusTimeoutRef.current = null;
-      }, 4000);
-    },
-    [clearStatus]
-  );
-
-  // Clear the timeout on unmount so we don't set state on an unmounted component.
-  useEffect(() => {
-    return () => {
-      if (statusTimeoutRef.current !== null) {
-        clearTimeout(statusTimeoutRef.current);
-        statusTimeoutRef.current = null;
-      }
-    };
-  }, []);
+  const status = useTransientStatus();
 
   /**
    * Builds the theme export payload and writes it via a native save dialog.
@@ -199,45 +164,55 @@ export function ThemeToolbar() {
    */
   const handleExport = useCallback((): void => {
     const { json } = buildThemeExportPayload();
-    void writeThemeExportFile(json).then((written) => {
-      if (written) {
-        showStatus("Theme exported.");
-      }
-      // On cancel/failure, no message — the user already saw the dialog dismiss.
-    });
-  }, [showStatus]);
+    void writeThemeExportFile(json)
+      .then((written) => {
+        if (written) {
+          status.show("Theme exported.");
+        }
+        // false = cancelled, no message (user dismissed the dialog)
+      })
+      .catch(() => {
+        // Write failure (disk full, permission denied) — fail loudly.
+        status.show("Export failed: could not write file.");
+      });
+  }, [status]);
 
   /**
    * Opens a native open dialog, reads and parses the theme file, and stages the
    * path. Shows a status message with the theme name or diagnostics.
    */
   const handleImport = useCallback((): void => {
-    void importTheme().then((result: ImportThemeResult | null) => {
-      // User cancelled the dialog or the file couldn't be read — no message.
-      if (result === null) return;
+    void importTheme()
+      .then((result: ImportThemeResult | null) => {
+        // User cancelled the dialog — no message.
+        if (result === null) return;
 
-      if (result.themeName !== null) {
-        // Successful parse: report the theme name. Diagnostics (warnings) are
-        // appended so the user is aware of any dropped tokens.
-        const diagCount = result.diagnostics.length;
-        const msg =
-          diagCount > 0
-            ? `Imported theme "${result.themeName}" (${diagCount} warning(s)).`
-            : `Imported theme "${result.themeName}".`;
-        showStatus(msg);
-        return;
-      }
+        if (result.themeName !== null) {
+          // Successful parse: report the theme name. Diagnostics (warnings) are
+          // appended so the user is aware of any dropped tokens.
+          const diagCount = result.diagnostics.length;
+          const msg =
+            diagCount > 0
+              ? `Imported theme "${result.themeName}" (${diagCount} warning(s)).`
+              : `Imported theme "${result.themeName}".`;
+          status.show(msg);
+          return;
+        }
 
-      // Parse failed: surface the first error message so the user can fix the
-      // file. Full diagnostics are logged by the ThemeProvider when it loads.
-      const firstError = result.diagnostics.find((d) => d.severity === "error");
-      showStatus(
-        firstError
-          ? `Import failed: ${firstError.message}`
-          : "Import failed: theme file is invalid."
-      );
-    });
-  }, [showStatus]);
+        // Parse failed: surface the first error message so the user can fix the
+        // file. Full diagnostics are logged by the ThemeProvider when it loads.
+        const firstError = result.diagnostics.find((d) => d.severity === "error");
+        status.show(
+          firstError
+            ? `Import failed: ${firstError.message}`
+            : "Import failed: theme file is invalid."
+        );
+      })
+      .catch(() => {
+        // Read failure (file missing, permission denied) — fail loudly.
+        status.show("Import failed: could not read file.");
+      });
+  }, [status]);
 
   return (
     <div
@@ -273,13 +248,13 @@ export function ThemeToolbar() {
         <Upload className="size-3" aria-hidden="true" />
         <span>Import Theme</span>
       </button>
-      {statusMessage && (
+      {status.message && (
         <span
           className="ml-2 text-xs text-muted-foreground"
           role="status"
-          title={statusMessage}
+          title={status.message}
         >
-          {statusMessage}
+          {status.message}
         </span>
       )}
     </div>

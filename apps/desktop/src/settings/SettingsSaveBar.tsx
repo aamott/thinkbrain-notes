@@ -18,7 +18,7 @@
  * the bar using the `text-destructive` token.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback } from "react";
 import { Download, Upload } from "lucide-react";
 import { cn } from "../lib/utils";
 import { useSettingsStore } from "./settingsStore";
@@ -28,6 +28,7 @@ import {
   importSettings,
   type ImportResult
 } from "./settingsImportExport";
+import { useTransientStatus } from "./useTransientStatus";
 
 /**
  * The settings save/reset bar with export/import actions.
@@ -43,43 +44,7 @@ export function SettingsSaveBar() {
 
   // Transient status message from import/export actions (cleared after a few
   // seconds). Rendered inline in the bar so the user gets immediate feedback.
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
-  const statusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  /** Clears the transient status message (cancels any pending timeout). */
-  const clearStatus = useCallback((): void => {
-    if (statusTimeoutRef.current !== null) {
-      clearTimeout(statusTimeoutRef.current);
-      statusTimeoutRef.current = null;
-    }
-    setStatusMessage(null);
-  }, []);
-
-  /**
-   * Shows a transient status message for a few seconds, then auto-clears it.
-   * Replaces any previously scheduled clear timeout.
-   */
-  const showStatus = useCallback(
-    (message: string): void => {
-      clearStatus();
-      setStatusMessage(message);
-      statusTimeoutRef.current = setTimeout(() => {
-        setStatusMessage(null);
-        statusTimeoutRef.current = null;
-      }, 4000);
-    },
-    [clearStatus]
-  );
-
-  // Clear the timeout on unmount so we don't set state on an unmounted component.
-  useEffect(() => {
-    return () => {
-      if (statusTimeoutRef.current !== null) {
-        clearTimeout(statusTimeoutRef.current);
-        statusTimeoutRef.current = null;
-      }
-    };
-  }, []);
+  const status = useTransientStatus();
 
   /**
    * Persists all staged changes. On success the store clears staged changes and
@@ -115,10 +80,10 @@ export function SettingsSaveBar() {
 
     void writeExportFile(json).then((written) => {
       if (written) {
-        showStatus("Settings exported.");
+        status.show("Settings exported.");
       }
     });
-  }, [showStatus]);
+  }, [status]);
 
   /**
    * Opens a native open dialog, reads the JSON file, validates and stages the
@@ -135,9 +100,9 @@ export function SettingsSaveBar() {
       if (result.typeMismatches > 0) {
         parts.push(`${result.typeMismatches} type mismatch(es)`);
       }
-      showStatus(parts.join(", ") + ".");
+      status.show(parts.join(", ") + ".");
     });
-  }, [showStatus]);
+  }, [status]);
 
   const saveLabel = dirtyCount > 0 ? `Save (${dirtyCount})` : "Save";
 
@@ -181,13 +146,13 @@ export function SettingsSaveBar() {
       </div>
 
       {/* Transient status message from import/export. */}
-      {statusMessage && (
+      {status.message && (
         <span
           className="ml-2 text-xs text-muted-foreground"
           role="status"
-          title={statusMessage}
+          title={status.message}
         >
-          {statusMessage}
+          {status.message}
         </span>
       )}
 

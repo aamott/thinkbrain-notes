@@ -253,6 +253,10 @@ describe("ThemeProvider", () => {
     // The file's base is "dark".
     expect(document.documentElement.dataset.thinkbrainTheme).toBe("dark");
 
+    // The initial read for the active themeFile should have happened exactly
+    // once at this point (the file path was set on mount).
+    expect(readTextFileNative).toHaveBeenCalledTimes(1);
+
     // User stages a different theme. The file is still active, so the
     // effective base must remain "dark" — the cached/reparsed file base wins
     // over the user's staged selection, so the attribute does not flap to
@@ -265,5 +269,10 @@ describe("ThemeProvider", () => {
     await flushAsyncFileRead();
 
     expect(document.documentElement.dataset.thinkbrainTheme).toBe("dark");
+
+    // The theme toggle must NOT trigger a redundant disk re-read: the file
+    // path and contents haven't changed, so `readTextFileNative` should still
+    // have been called only once.
+    expect(readTextFileNative).toHaveBeenCalledTimes(1);
   });
 });

@@ -16,7 +16,9 @@
  *      captures exactly what the user sees — a useful starting point for
  *      customization.
  *   2. `writeThemeExportFile(json)` — opens a native save dialog and writes the
- *      JSON to the chosen path. Returns `true` if written, `false` if cancelled.
+ *      JSON to the chosen path. Returns `true` if written, `false` if the user
+ *      cancelled the dialog, and throws on write failure (disk full, permission
+ *      denied, etc.) so the caller can surface a status message.
  *
  * Import flow:
  *   `importTheme()` — opens a native open dialog, reads the file, parses it with
@@ -153,14 +155,25 @@ export function buildThemeExportPayload(): ThemeExportPayload {
  *   json: The `.tbtheme.json` string to write (from `buildThemeExportPayload`).
  *
  * Returns:
- *   `true` if the file was written, `false` if the user cancelled the dialog
- *   or the write failed.
+ *   `true` if the file was written, `false` if the user cancelled the dialog.
+ *
+ * Throws:
+ *   Error if the write itself failed (disk full, permission denied, etc.) so
+ *   the caller can surface a status message. Cancel (above) returns `false` —
+ *   a non-event the caller can ignore.
  */
 export async function writeThemeExportFile(json: string): Promise<boolean> {
   const path = await saveFilePath("Export theme", "theme.tbtheme.json");
-  if (path === null) return false;
+  if (path === null) return false; // user cancelled
 
-  return writeTextFileNative(path, json);
+  const written = await writeTextFileNative(path, json);
+  if (!written) {
+    // Fail loudly: surface write failures (disk full, permission denied) as
+    // thrown errors so the caller can show a status message. Cancel (above)
+    // returns false — a non-event the caller can ignore.
+    throw new Error("Failed to write theme file.");
+  }
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -185,20 +198,25 @@ export interface ImportThemeResult {
  * settings import pattern.
  *
  * On parse failure, returns the diagnostics so the UI can surface them and does
- * NOT stage anything. Returns `null` if the user cancelled the dialog or the
- * file couldn't be read (fail-loud: an unreadable file is distinct from a
- * parseable-but-invalid one).
+ * NOT stage anything. Returns `null` if the user cancelled the dialog. Throws if
+ * the file couldn't be read (fail-loud: an unreadable file is a distinct,
+ * surfaceable failure from a parseable-but-invalid one or a user cancel).
  *
  * Returns:
  *   The {@link ImportThemeResult} with the theme name and diagnostics, or
- *   `null` if the user cancelled or the file was unreadable.
+ *   `null` if the user cancelled the dialog. Throws on read failure.
  */
 export async function importTheme(): Promise<ImportThemeResult | null> {
-  const path = await pickFilePath("Import theme");
-  if (path === null) return null;
+  // Filter to `.tbtheme.json` files so the dialog only shows theme files.
+  const path = await pickFilePath("Import theme", ["tbtheme.json"]);
+  if (path === null) return null; // user cancelled
 
   const raw = await readTextFileNative(path);
-  if (raw === null) return null;
+  if (raw === null) {
+    // Fail loudly: surface read failures as thrown errors so the caller can
+    // show a status message. Cancel (above) returns null — a non-event.
+    throw new Error("Failed to read theme file.");
+  }
 
   const result = parseThemeFile(raw);
 
