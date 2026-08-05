@@ -14,6 +14,7 @@
  */
 
 import { createElement, useEffect, useState } from "react";
+import { RotateCcw } from "lucide-react";
 import type { SettingDefinition, SettingsDiagnostic } from "@thinkbrain/core";
 import { Unavailable } from "../shell/Unavailable";
 import { cn } from "../lib/utils";
@@ -141,7 +142,8 @@ function SettingRow({
  *
  * Reads `activeSection` and the raw value maps from the store. When no
  * section is selected, shows an empty-state prompt. Otherwise renders the
- * section header and one row per setting definition.
+ * section header (with a per-section "Reset to defaults" button) and one row
+ * per setting definition.
  */
 export function SettingsContent() {
   const activeSection = useSettingsStore((s) => s.activeSection);
@@ -172,10 +174,41 @@ export function SettingsContent() {
   const definitions = appSettingsRegistry.getDefinitionsForSection(activeSection);
   const sectionLabel = findSectionLabel(activeSection);
 
+  // Determine whether any staged change belongs to the active section so the
+  // per-section reset button can be enabled/disabled. `resetSection` only
+  // clears staged entries for the section — it does NOT write to disk.
+  const sectionKeys = new Set(definitions.map((d) => d.key));
+  const hasStagedForSection = Object.keys(stagedChanges).some((k) =>
+    sectionKeys.has(k)
+  );
+
+  /** Reverts staged changes for the active section to the last-saved values. */
+  const handleResetSection = (): void => {
+    useSettingsStore.getState().resetSection(activeSection);
+  };
+
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
       <div className="mx-auto w-full max-w-[40rem] px-6 py-4">
-        <h2 className="mb-2 text-base font-semibold text-foreground">{sectionLabel}</h2>
+        <div className="mb-2 flex items-center gap-2">
+          <h2 className="text-base font-semibold text-foreground">{sectionLabel}</h2>
+          <button
+            type="button"
+            disabled={!hasStagedForSection}
+            onClick={handleResetSection}
+            title="Reset this section to defaults"
+            aria-label="Reset this section to defaults"
+            className={cn(
+              "flex items-center gap-1 rounded-small px-1.5 py-0.5 text-xs",
+              "text-muted-foreground bg-surface cursor-pointer",
+              "hover:text-foreground hover:bg-accent transition-colors",
+              !hasStagedForSection && "cursor-not-allowed opacity-40"
+            )}
+          >
+            <RotateCcw className="size-3" aria-hidden="true" />
+            <span>Reset</span>
+          </button>
+        </div>
         {definitions.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             This section has no settings yet.

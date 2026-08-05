@@ -9,7 +9,7 @@
  */
 
 import { isTauri } from "@tauri-apps/api/core";
-import { open } from "@tauri-apps/plugin-dialog";
+import { open, save } from "@tauri-apps/plugin-dialog";
 
 /**
  * Opens a native single-file picker and returns the selected path, or `null`
@@ -32,5 +32,28 @@ export async function pickFilePath(title = "Select file"): Promise<string | null
   });
 
   // `open` returns `string | null` when multiple is false.
+  return typeof selection === "string" ? selection : null;
+}
+
+/**
+ * Opens a native save-file dialog and returns the user-chosen path, or `null`
+ * when the user cancels or the runtime is not Tauri.
+ *
+ * Args:
+ *   title: Dialog window title.
+ *   defaultName: Suggested file name (shown in the dialog's name field).
+ *
+ * Returns:
+ *   The absolute path string the user confirmed, or `null` if cancelled /
+ *   unavailable.
+ */
+export async function saveFilePath(
+  title: string,
+  defaultName: string
+): Promise<string | null> {
+  // Guard non-Tauri contexts (tests, web-only dev) so callers don't crash.
+  if (!isTauri()) return null;
+
+  const selection = await save({ title, defaultPath: defaultName });
   return typeof selection === "string" ? selection : null;
 }

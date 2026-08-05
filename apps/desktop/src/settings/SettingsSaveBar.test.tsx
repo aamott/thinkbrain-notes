@@ -17,9 +17,23 @@ import { useSettingsStore } from "./settingsStore";
  * gateway (which is unavailable under Node). After each test, the store is
  * reset to its initial state.
  *
+ * The save bar now has 4 buttons (left-to-right): Export, Import, Reset, Save.
+ * Export and Import are always enabled; Reset and Save are disabled when not
+ * dirty.
+ *
  * Rendering follows the codebase convention: `createRoot` + `act` + DOM
  * queries (no @testing-library/react dependency is available).
  */
+
+// Mock the native dialogs/fs modules so export/import don't hit Tauri.
+vi.mock("../native/dialogs", () => ({
+  saveFilePath: vi.fn<(title: string, defaultName: string) => Promise<string | null>>(),
+  pickFilePath: vi.fn<(title?: string) => Promise<string | null>>()
+}));
+vi.mock("../native/fs", () => ({
+  writeTextFileNative: vi.fn<(path: string, contents: string) => Promise<boolean>>(),
+  readTextFileNative: vi.fn<(path: string) => Promise<string | null>>()
+}));
 
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
@@ -33,8 +47,8 @@ const SEEDED_APP_VALUES: Record<string, unknown> = {
 
 beforeEach(() => {
   // Reset the singleton store to a clean, loaded state before each test.
-  // Replace saveSettings/resetStaged with spies so we can assert calls and
-  // control the outcome without hitting the native gateway.
+  // Replace saveSettings/resetStaged/resetSection with spies so we can assert
+  // calls and control the outcome without hitting the native gateway.
   useSettingsStore.setState({
     appValues: { ...SEEDED_APP_VALUES },
     workspaceValues: null,
@@ -49,7 +63,8 @@ beforeEach(() => {
     validationDiagnostics: [],
     loaded: true,
     saveSettings: vi.fn(async () => ({ success: true, diagnostics: [] })),
-    resetStaged: vi.fn(() => undefined)
+    resetStaged: vi.fn(() => undefined),
+    resetSection: vi.fn(() => undefined)
   });
 });
 
@@ -82,37 +97,41 @@ async function click(element: Element): Promise<void> {
 }
 
 describe("SettingsSaveBar", () => {
-  it("disables Save and Reset buttons when not dirty", async () => {
+  it("renders Export, Import, Reset, and Save buttons", async () => {
     const el = await render(<SettingsSaveBar />);
 
     const buttons = Array.from(el.querySelectorAll<HTMLButtonElement>("button"));
-    expect(buttons).toHaveLength(2);
+    // Export, Import, Reset, Save = 4 buttons.
+    expect(buttons).toHaveLength(4);
 
-    const resetBtn = buttons[0]!;
-    const saveBtn = buttons[1]!;
+    const [exportBtn, importBtn, resetBtn, saveBtn] = buttons;
 
-    expect(resetBtn.disabled).toBe(true);
-    expect(saveBtn.disabled).toBe(true);
-    expect(saveBtn.textContent).toBe("Save");
+    // Export and Import are always enabled.
+    expect(exportBtn!.disabled).toBe(false);
+    expect(importBtn!.disabled).toBe(false);
+    // Reset and Save are disabled when not dirty.
+    expect(resetBtn!.disabled).toBe(true);
+    expect(saveBtn!.disabled).toBe(true);
+    expect(saveBtn!.textContent).toBe("Save");
   });
 
-  it("enables buttons and shows dirty count when dirty", async () => {
+  it("enables Reset and Save when dirty and shows dirty count", async () => {
     useSettingsStore.setState({ isDirty: true, dirtyCount: 3 });
     const el = await render(<SettingsSaveBar />);
 
     const buttons = Array.from(el.querySelectorAll<HTMLButtonElement>("button"));
-    const saveBtn = buttons[1]!;
+    const [, , resetBtn, saveBtn] = buttons;
 
-    expect(saveBtn.disabled).toBe(false);
-    expect(saveBtn.textContent).toBe("Save (3)");
-    expect(buttons[0]!.disabled).toBe(false);
+    expect(resetBtn!.disabled).toBe(false);
+    expect(saveBtn!.disabled).toBe(false);
+    expect(saveBtn!.textContent).toBe("Save (3)");
   });
 
   it("clicking Save calls saveSettings from the store", async () => {
     useSettingsStore.setState({ isDirty: true, dirtyCount: 1 });
     const el = await render(<SettingsSaveBar />);
 
-    const saveBtn = Array.from(el.querySelectorAll<HTMLButtonElement>("button"))[1]!;
+    const saveBtn = Array.from(el.querySelectorAll<HTMLButtonElement>("button"))[3]!;
     await click(saveBtn);
 
     const { saveSettings } = useSettingsStore.getState();
@@ -123,7 +142,7 @@ describe("SettingsSaveBar", () => {
     useSettingsStore.setState({ isDirty: true, dirtyCount: 1 });
     const el = await render(<SettingsSaveBar />);
 
-    const resetBtn = Array.from(el.querySelectorAll<HTMLButtonElement>("button"))[0]!;
+    const resetBtn = Array.from(el.querySelectorAll<HTMLButtonElement>("button"))[2]!;
     await click(resetBtn);
 
     const { resetStaged } = useSettingsStore.getState();
@@ -149,6 +168,22 @@ describe("SettingsSaveBar", () => {
 
     // The toolbar itself has role="toolbar"; no role="alert" should exist.
     expect(el.querySelector('[role="alert"]')).toBeNull();
+  });
+});
+
+describe("SettingsSaveBar export/import buttons", () => {
+  it("Export button has title and aria-label for accessibility", async () => {
+    const el = await render(<SettingsSaveBar />);
+    const exportBtn = el.querySelector<HTMLButtonElement>('button[title="Export settings"]');
+    expect(exportBtn).not.toBeNull();
+    expect(exportBtn!.getAttribute("aria-label")).toBe("Export settings");
+  });
+
+  it("Import button has title and aria-label for accessibility", async () => {
+    const el = await render(<SettingsSaveBar />);
+    const importBtn = el.querySelector<HTMLButtonElement>('button[title="Import settings"]');
+    expect(importBtn).not.toBeNull();
+    expect(importBtn!.getAttribute("aria-label")).toBe("Import settings");
   });
 });
 
@@ -212,5 +247,59 @@ describe("SettingsContent inline validation errors", () => {
 
     // editor.fontSize is not in the appearance.theme section, so no alert.
     expect(el.querySelectorAll('[role="alert"]').length).toBe(0);
+  });
+});
+
+describe("SettingsContent per-section reset button", () => {
+  it("renders a reset button in the section header", async () => {
+    useSettingsStore.setState({ activeSection: "editor.display" });
+    const el = await render(<SettingsContent />);
+
+    const resetBtn = el.querySelector<HTMLButtonElement>(
+      'button[title="Reset this section to defaults"]'
+    );
+    expect(resetBtn).not.toBeNull();
+  });
+
+  it("disables the reset button when there are no staged changes for the section", async () => {
+    useSettingsStore.setState({
+      activeSection: "editor.display",
+      stagedChanges: {}
+    });
+    const el = await render(<SettingsContent />);
+
+    const resetBtn = el.querySelector<HTMLButtonElement>(
+      'button[title="Reset this section to defaults"]'
+    );
+    expect(resetBtn!.disabled).toBe(true);
+  });
+
+  it("enables the reset button when there are staged changes for the section", async () => {
+    useSettingsStore.setState({
+      activeSection: "editor.display",
+      stagedChanges: { "editor.fontSize": 20 }
+    });
+    const el = await render(<SettingsContent />);
+
+    const resetBtn = el.querySelector<HTMLButtonElement>(
+      'button[title="Reset this section to defaults"]'
+    );
+    expect(resetBtn!.disabled).toBe(false);
+  });
+
+  it("clicking the reset button calls resetSection with the active section", async () => {
+    useSettingsStore.setState({
+      activeSection: "editor.display",
+      stagedChanges: { "editor.fontSize": 20 }
+    });
+    const el = await render(<SettingsContent />);
+
+    const resetBtn = el.querySelector<HTMLButtonElement>(
+      'button[title="Reset this section to defaults"]'
+    )!;
+    await click(resetBtn);
+
+    const { resetSection } = useSettingsStore.getState();
+    expect(resetSection).toHaveBeenCalledWith("editor.display");
   });
 });
