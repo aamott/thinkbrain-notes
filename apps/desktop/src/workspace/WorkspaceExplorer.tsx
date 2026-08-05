@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useId, useMemo, useReducer, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
-import { ChevronDown, Eye, EyeOff, Folder, FolderOpen, FolderPlus } from "lucide-react";
+import { Check, ChevronDown, Folder, FolderOpen, FolderPlus, MoreHorizontal } from "lucide-react";
 import type { NativeWorkspaceEntry, NativeWorkspaceSnapshot } from "../native/commands";
 import {
   buildWorkspaceTree,
@@ -62,6 +62,8 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
   // tree. Persisted per-workspace via `readWorkspaceSettings`/`writeWorkspaceSettings`
   // and restored when a workspace opens.
   const [showHidden, setShowHidden] = useState<boolean>(DEFAULT_WORKSPACE_SETTINGS.showHidden);
+  // Open state for the header "..." (more actions) dropdown popover.
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const tree = useMemo(() => buildWorkspaceTree(state.entries), [state.entries]);
   const workspaceRootPath = state.snapshot?.workspace.root_path;
 
@@ -266,7 +268,15 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
       setCreating(null);
       return true;
     }
-    if (!isValidName(trimmed)) {
+    // Folders may use forward-slash-separated nested paths (e.g. `a/b/c`)
+    // since the backend creates intermediate directories via `create_dir_all`.
+    // Files still reject path separators so a single leaf entry is produced.
+    if (target.kind === "folder") {
+      if (!isValidFolderPath(trimmed)) {
+        setActionError("Folder paths cannot contain '\\' or empty/`.`/`..` segments.");
+        return false;
+      }
+    } else if (!isValidName(trimmed)) {
       setActionError("Names cannot contain path separators (/ or \\).");
       return false;
     }
@@ -438,21 +448,74 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
           <p className="mb-[0.125rem] text-muted-foreground text-[0.625rem] font-bold tracking-[0.08em] leading-none uppercase">Workspace</p>
           <h2 className="max-w-[11rem] m-0 overflow-hidden text-[0.8125rem] font-[650] leading-tight truncate">{state.snapshot?.workspace.name ?? "No workspace open"}</h2>
         </div>
-        <button
-          type="button"
-          className={cn(
-            "flex flex-none items-center justify-center w-[1.6rem] h-[1.6rem] border-0 rounded-small text-muted-foreground bg-transparent cursor-pointer font-inherit focus-visible:outline-2 focus-visible:outline-ring focus-visible:-outline-offset-1 [&>svg]:w-[0.95rem] [&>svg]:h-[0.95rem] [&>svg]:stroke-current",
-            "not-aria-disabled:hover:bg-[color-mix(in_srgb,var(--color-accent)_58%,transparent)]",
-            showHidden && "text-sidebar-foreground"
+        <div className="relative">
+          <button
+            type="button"
+            className={cn(
+              "flex flex-none items-center justify-center w-[1.6rem] h-[1.6rem] border-0 rounded-small text-muted-foreground bg-transparent cursor-pointer font-inherit focus-visible:outline-2 focus-visible:outline-ring focus-visible:-outline-offset-1 [&>svg]:w-[0.95rem] [&>svg]:h-[0.95rem] [&>svg]:stroke-current",
+              "not-aria-disabled:hover:bg-[color-mix(in_srgb,var(--color-accent)_58%,transparent)]",
+              moreMenuOpen && "text-sidebar-foreground"
+            )}
+            aria-label="More actions"
+            aria-expanded={moreMenuOpen}
+            disabled={state.phase !== "ready"}
+            onClick={() => setMoreMenuOpen((v) => !v)}
+          >
+            <MoreHorizontal aria-hidden="true" />
+          </button>
+          {moreMenuOpen && (
+            <>
+              {/* Click-away backdrop. */}
+              <button
+                type="button"
+                className="fixed inset-0 z-40 cursor-default"
+                aria-hidden="true"
+                tabIndex={-1}
+                onClick={() => setMoreMenuOpen(false)}
+              />
+              <div
+                className="absolute right-0 top-full mt-1 z-50 min-w-[11rem] border border-border rounded-small bg-popover py-1 text-popover-foreground shadow-soft"
+                role="menu"
+                aria-label="More actions"
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") {
+                    event.preventDefault();
+                    setMoreMenuOpen(false);
+                  }
+                }}
+              >
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="flex w-full items-center justify-between gap-2 border-0 px-3 py-[0.4rem] bg-transparent cursor-pointer font-inherit text-xs text-left text-foreground hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
+                  // The "show hidden" toggle keeps the menu open so the user
+                  // can see the checkmark flip and the tree update beneath it.
+                  onClick={() => void toggleShowHidden()}
+                >
+                  <span>Show hidden files</span>
+                  {showHidden && <Check className="size-3.5" aria-hidden="true" />}
+                </button>
+                <hr className="my-1 border-0 border-t border-border" />
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="flex w-full items-center gap-2 border-0 px-3 py-[0.4rem] bg-transparent cursor-pointer font-inherit text-xs text-left text-foreground hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
+                  onClick={() => { setMoreMenuOpen(false); startCreate("", "folder"); }}
+                >
+                  <span>New folder</span>
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="flex w-full items-center gap-2 border-0 px-3 py-[0.4rem] bg-transparent cursor-pointer font-inherit text-xs text-left text-foreground hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
+                  onClick={() => { setMoreMenuOpen(false); startCreate("", "file"); }}
+                >
+                  <span>New file</span>
+                </button>
+              </div>
+            </>
           )}
-          aria-pressed={showHidden}
-          aria-label={showHidden ? "Hide hidden entries" : "Show hidden entries"}
-          title={showHidden ? "Hide hidden entries" : "Show hidden entries"}
-          disabled={state.phase !== "ready"}
-          onClick={() => void toggleShowHidden()}
-        >
-          {showHidden ? <Eye aria-hidden="true" /> : <EyeOff aria-hidden="true" />}
-        </button>
+        </div>
       </header>
 
       {state.phase === "empty" && <EmptyState />}
@@ -1176,6 +1239,21 @@ function isMarkdownName(name: string): boolean {
  */
 function isValidName(name: string): boolean {
   return !/[\\/]/.test(name);
+}
+
+/**
+ * Validates an inline folder create path. Forward-slash-separated nested
+ * paths (e.g. `a/b/c`) are allowed so the backend's `create_dir_all` can
+ * build intermediate directories. Backslashes and empty/`.`/`..` segments
+ * are rejected to keep paths workspace-relative and predictable.
+ */
+function isValidFolderPath(name: string): boolean {
+  if (name.includes("\\")) return false;
+  const segments = name.split("/");
+  for (const seg of segments) {
+    if (seg === "" || seg === "." || seg === "..") return false;
+  }
+  return true;
 }
 
 // State shapes used by the explorer for inline editing.
