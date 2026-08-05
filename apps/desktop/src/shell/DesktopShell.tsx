@@ -176,6 +176,10 @@ export function DesktopShell() {
     persistDesktopState({ explorerOpen: true });
   }, [persistDesktopState]);
 
+  const openSettingsTab = useCallback(() => {
+    dispatchTabs({ type: "open", tab: createStaticTab("settings", "Settings") });
+  }, []);
+
   const acknowledgeNewNoteFocus = useCallback(() => {
     setNewNoteFocusRequest(0);
   }, []);
@@ -239,7 +243,7 @@ export function DesktopShell() {
         closePalette();
         return;
       case "open-settings":
-        dispatchTabs({ type: "open", tab: createStaticTab("settings", "Settings") });
+        openSettingsTab();
         closePalette();
         return;
       case "rebuild-index":
@@ -247,7 +251,7 @@ export function DesktopShell() {
         closePalette();
         return;
     }
-  }, [closePalette, persistDesktopState, selectLeftPanel, setTheme, showExplorer, theme]);
+  }, [closePalette, openSettingsTab, persistDesktopState, selectLeftPanel, setTheme, showExplorer, theme]);
 
   const updateDocument = useCallback((tabId: string, contents: string) => {
     setDocuments((current) => {
@@ -402,7 +406,7 @@ export function DesktopShell() {
         <ActivityBar
           leftPanel={leftPanel}
           onSelectLeftPanel={selectLeftPanel}
-          onOpenSettings={() => selectLeftPanel("extensions")}
+          onOpenSettings={openSettingsTab}
         />
 
         {leftPanel && (
@@ -420,6 +424,9 @@ export function DesktopShell() {
                 newNoteFocusRequest,
                 recentWorkspacePaths,
                 onWorkspaceLaunched: handleWorkspaceLaunched
+              }}
+              onOpenSearchResult={(relativePath) => {
+                if (restoredWorkspacePath) openMarkdownDocument(restoredWorkspacePath, relativePath);
               }}
             />
             <ResizeHandle label="Resize left panel" onPointerDown={beginResize("left")} onKeyDown={resizeWithKeyboard("left")} />

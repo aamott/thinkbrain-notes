@@ -1,5 +1,6 @@
 import type { NativeWorkspaceSnapshot } from "../native/commands";
 import { SourceControlPanel } from "../git/SourceControlPanel";
+import { SearchPanel } from "../search/SearchPanel";
 import { Unavailable } from "../shell/Unavailable";
 import { WorkspaceExplorer } from "../workspace/WorkspaceExplorer";
 import { type LeftPanel, leftActions } from "../shell/shellTypes";
@@ -25,16 +26,18 @@ type LeftPopoutProps = {
   readonly panel: LeftPanel;
   readonly rootPath: string | null;
   readonly explorerProps: ExplorerProps;
+  /** Called when a search result is activated. */
+  readonly onOpenSearchResult: (relativePath: string) => void;
 };
 
 /**
  * Left dock popout for the desktop shell.
  *
- * Renders the workspace explorer when the active panel is `explorer`, otherwise
- * renders a panel title header followed by the panel-specific content
- * (source control or an unavailable placeholder).
+ * Heavy panels (explorer, source control) are kept mounted at all times and
+ * toggled via `hidden` so their loaded state survives panel switches. Lightweight
+ * panels (search, tags, extensions) are rendered conditionally.
  */
-export function LeftPopout({ panel, rootPath, explorerProps }: LeftPopoutProps) {
+export function LeftPopout({ panel, rootPath, explorerProps, onOpenSearchResult }: LeftPopoutProps) {
   const label = leftActions.find((item) => item.id === panel)?.label ?? "Panel";
 
   return (
@@ -42,34 +45,49 @@ export function LeftPopout({ panel, rootPath, explorerProps }: LeftPopoutProps) 
       className="flex flex-col min-w-0 overflow-hidden bg-sidebar border-r border-border flex-[0_0_var(--tn-shell-left-width)] max-[760px]:absolute max-[760px]:z-[2]"
       aria-label={`${label} panel`}
     >
-      {panel === "explorer" ? (
+      {/*
+       * Explorer: kept mounted to preserve loaded files, expanded folders, and
+       * scroll position when the user switches to another activity bar panel.
+       * The wrapper fills the aside when visible and collapses when hidden.
+       */}
+      <div className={panel === "explorer" ? "flex flex-col flex-1 min-h-0" : "hidden"}>
         <WorkspaceExplorer {...explorerProps} />
-      ) : (
+      </div>
+
+      {/*
+       * Source control: kept mounted to preserve loaded git status across panel
+       * switches. Renders its own PanelTitle header inside the keep-alive wrapper.
+       */}
+      <div className={panel === "source-control" ? "flex flex-col flex-1 min-h-0" : "hidden"}>
+        <PanelTitle title="Source control" />
+        <SourceControlPanel rootPath={rootPath} />
+      </div>
+
+      {/*
+       * Lightweight panels: rendered only when active. Search has minimal state
+       * (a query string); tags and extensions are unavailable placeholders.
+       */}
+      {panel === "search" && (
         <>
           <PanelTitle title={label} />
-          <LeftContent panel={panel} rootPath={rootPath} />
+          <SearchPanel rootPath={rootPath} onOpenFile={onOpenSearchResult} />
+        </>
+      )}
+      {(panel === "tags" || panel === "extensions") && (
+        <>
+          <PanelTitle title={label} />
+          <Unavailable
+            title={panel}
+            description={
+              panel === "tags"
+                ? "Tags will appear here once note indexing is available."
+                : panel === "extensions"
+                  ? "Extensions will appear here when the capability sandbox is ready."
+                  : "This workspace surface is not connected yet."
+            }
+          />
         </>
       )}
     </aside>
-  );
-}
-
-/**
- * Body content for non-explorer left panels.
- *
- * Source control renders its dedicated panel; every other surface falls back to
- * an unavailable placeholder with a contextual description.
- */
-function LeftContent({ panel, rootPath }: { panel: LeftPanel; rootPath: string | null }) {
-  if (panel === "source-control") return <SourceControlPanel rootPath={rootPath} />;
-  return (
-    <Unavailable
-      title={panel}
-      description={
-        panel === "extensions"
-          ? "Extensions will appear here when the capability sandbox is ready."
-          : "This workspace surface is not connected yet."
-      }
-    />
   );
 }

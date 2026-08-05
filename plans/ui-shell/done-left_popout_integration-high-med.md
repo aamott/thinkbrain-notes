@@ -7,15 +7,15 @@ popout without replacing live data with mock trees or results.
 
 ## Acceptance Criteria
 
-- [ ] Explorer hosts `WorkspaceExplorer`/react-arborist; selecting Markdown
+- [x] Explorer hosts `WorkspaceExplorer`/react-arborist; selecting Markdown
       files opens the editor tab and non-Markdown behavior is unchanged.
-- [ ] Search hosts `SearchPanel`, maintains indexing/error states, and opens
+- [x] Search hosts `SearchPanel`, maintains indexing/error states, and opens
       matched files through the tab model.
-- [ ] Settings opens in its registered settings tab; the left-panel action can
+- [x] Settings opens in its registered settings tab; the left-panel action can
       focus that tab rather than duplicating the settings form.
-- [ ] Git, tags, and extensions show correctly labeled unavailable/loading
+- [x] Git, tags, and extensions show correctly labeled unavailable/loading
       states until their owning epics expose their data and actions.
-- [ ] Selecting the active activity item toggles the popout; shortcuts and
+- [x] Selecting the active activity item toggles the popout; shortcuts and
       aria-current state remain correct.
 
 ## References

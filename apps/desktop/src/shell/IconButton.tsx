@@ -29,6 +29,7 @@ export function IconButton({
       )}
       onClick={onClick}
       aria-label={label}
+      aria-current={active ? "true" : undefined}
       title={label}
     >
       <span aria-hidden="true">{symbol}</span>
