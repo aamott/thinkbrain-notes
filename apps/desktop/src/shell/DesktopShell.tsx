@@ -7,7 +7,16 @@ import { BottomPanel as BottomPanelContent } from "../panels/BottomPanel";
 import { LeftPopout } from "../panels/LeftPopout";
 import { RightPopout } from "../panels/RightPopout";
 import type { NativeMarkdownFileEntry, NativeWorkspaceSnapshot } from "../native/commands";
-import { DEFAULT_DESKTOP_STATE, loadDesktopState, promoteRecentWorkspace, saveDesktopState, type DesktopStateUpdate } from "../settings/desktopState";
+import {
+  clampPanelWidth,
+  DEFAULT_DESKTOP_STATE,
+  DEFAULT_LEFT_PANEL_WIDTH,
+  DEFAULT_RIGHT_PANEL_WIDTH,
+  loadDesktopState,
+  promoteRecentWorkspace,
+  saveDesktopState,
+  type DesktopStateUpdate
+} from "../settings/desktopState";
 import { useTheme } from "../settings/theme-context";
 import {
   createEditorTab,
@@ -30,12 +39,7 @@ import { TitleBar } from "./TitleBar";
 /** Command palette entries available across the desktop shell. */
 const desktopCommandRegistry = createDesktopCommandRegistry();
 
-/** Minimum and maximum widths (px) allowed for the left/right dock popouts. */
-const MIN_PANEL_WIDTH = 224;
-const MAX_PANEL_WIDTH = 480;
-
-/** Clamps a requested dock width into the supported range. */
-const clampPanelWidth = (width: number) => Math.max(MIN_PANEL_WIDTH, Math.min(MAX_PANEL_WIDTH, width));
+type PanelSide = "left" | "right";
 
 /**
  * Root desktop shell composition.
@@ -59,8 +63,15 @@ export function DesktopShell() {
   const [bottomPanel, setBottomPanel] = useState<BottomPanel | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const { theme, setTheme } = useTheme();
-  const [leftWidth, setLeftWidth] = useState(288);
-  const [rightWidth, setRightWidth] = useState(320);
+  const [leftWidth, setLeftWidth] = useState(DEFAULT_LEFT_PANEL_WIDTH);
+  const [rightWidth, setRightWidth] = useState(DEFAULT_RIGHT_PANEL_WIDTH);
+  const leftWidthRef = useRef(leftWidth);
+  const rightWidthRef = useRef(rightWidth);
+  const resizeCleanupRef = useRef<(() => void) | null>(null);
+  const panelWidthSaveTimersRef = useRef<Record<PanelSide, ReturnType<typeof setTimeout> | null>>({
+    left: null,
+    right: null
+  });
   const [restoredWorkspacePath, setRestoredWorkspacePath] = useState<string | null>(null);
   const [workspaceName, setWorkspaceName] = useState<string | null>(null);
   const [workspaceFiles, setWorkspaceFiles] = useState<readonly NativeMarkdownFileEntry[]>([]);
@@ -97,6 +108,11 @@ export function DesktopShell() {
       recentWorkspacePathsRef.current = recentPaths;
       setRecentWorkspacePaths(recentPaths);
       setLeftPanel(desktopState.explorerOpen ? "explorer" : null);
+      leftWidthRef.current = desktopState.leftPanelWidth;
+      rightWidthRef.current = desktopState.rightPanelWidth;
+      setLeftWidth(desktopState.leftPanelWidth);
+      setRightWidth(desktopState.rightPanelWidth);
+      setBottomPanel(desktopState.bottomPanelOpen ? "terminal" : null);
     }).finally(() => {
       if (active) setStateRestored(true);
     });
@@ -130,6 +146,59 @@ export function DesktopShell() {
   const persistDesktopState = useCallback((update: DesktopStateUpdate) => {
     if (!isTauri()) return;
     void saveDesktopState(update).catch(() => undefined);
+  }, []);
+
+  /**
+   * Coalesces rapid resize updates so a drag writes its final width once rather
+   * than rewriting the app-settings file for every pointer movement.
+   */
+  const schedulePanelWidthPersistence = useCallback((side: PanelSide, width: number) => {
+    const pendingTimer = panelWidthSaveTimersRef.current[side];
+    if (pendingTimer !== null) clearTimeout(pendingTimer);
+
+    panelWidthSaveTimersRef.current[side] = setTimeout(() => {
+      panelWidthSaveTimersRef.current[side] = null;
+      persistDesktopState(side === "left" ? { leftPanelWidth: width } : { rightPanelWidth: width });
+    }, 300);
+  }, [persistDesktopState]);
+
+  /** Applies and schedules persistence for a safe dock width. */
+  const updatePanelWidth = useCallback((side: PanelSide, requestedWidth: number) => {
+    const width = clampPanelWidth(requestedWidth);
+    if (side === "left") {
+      leftWidthRef.current = width;
+      setLeftWidth(width);
+    } else {
+      rightWidthRef.current = width;
+      setRightWidth(width);
+    }
+    schedulePanelWidthPersistence(side, width);
+  }, [schedulePanelWidthPersistence]);
+
+  /** Restores the side-specific dock width used by a double-clicked divider. */
+  const resetPanelWidth = useCallback((side: PanelSide) => {
+    updatePanelWidth(
+      side,
+      side === "left" ? DEFAULT_LEFT_PANEL_WIDTH : DEFAULT_RIGHT_PANEL_WIDTH
+    );
+  }, [updatePanelWidth]);
+
+  const updateBottomPanel = useCallback((panel: BottomPanel | null) => {
+    setBottomPanel(panel);
+    persistDesktopState({ bottomPanelOpen: panel !== null });
+  }, [persistDesktopState]);
+
+  const toggleBottomPanel = useCallback(() => {
+    updateBottomPanel(bottomPanel ? null : "terminal");
+  }, [bottomPanel, updateBottomPanel]);
+
+  // Cancel deferred writes and an active drag if the shell unmounts.
+  useEffect(() => () => {
+    for (const side of ["left", "right"] as const) {
+      const pendingTimer = panelWidthSaveTimersRef.current[side];
+      if (pendingTimer !== null) clearTimeout(pendingTimer);
+    }
+    resizeCleanupRef.current?.();
   }, []);
 
   const selectLeftPanel = useCallback((target: LeftPanel) => {
@@ -239,7 +308,7 @@ export function DesktopShell() {
         if (command.intent.panel === "explorer") selectLeftPanel("explorer");
         if (command.intent.panel === "outline") setRightPanel((panel) => panel === "outline" ? null : "outline");
         if (command.intent.panel === "assistant") setRightPanel((panel) => panel === "assistant" ? null : "assistant");
-        if (command.intent.panel === "bottom") setBottomPanel((panel) => panel ? null : "terminal");
+        if (command.intent.panel === "bottom") toggleBottomPanel();
         closePalette();
         return;
       case "open-settings":
@@ -247,11 +316,11 @@ export function DesktopShell() {
         closePalette();
         return;
       case "rebuild-index":
-        setBottomPanel("output");
+        updateBottomPanel("output");
         closePalette();
         return;
     }
-  }, [closePalette, openSettingsTab, persistDesktopState, selectLeftPanel, setTheme, showExplorer, theme]);
+  }, [closePalette, openSettingsTab, persistDesktopState, selectLeftPanel, setTheme, showExplorer, theme, toggleBottomPanel, updateBottomPanel]);
 
   const updateDocument = useCallback((tabId: string, contents: string) => {
     setDocuments((current) => {
@@ -306,6 +375,7 @@ export function DesktopShell() {
   }, []);
 
   const activeTab = tabState.tabs.find((tab) => tab.id === tabState.activeTabId) ?? null;
+  const activeDocument = activeTab ? documents[activeTab.id] : undefined;
 
   // Global shortcuts: command palette (Ctrl/Cmd+P), explorer (Ctrl/Cmd+B),
   // bottom dock (Ctrl/Cmd+J), and Escape to dismiss the palette.
@@ -323,7 +393,7 @@ export function DesktopShell() {
       }
       if (modifier && event.key.toLowerCase() === "j") {
         event.preventDefault();
-        setBottomPanel((panel) => panel ? null : "terminal");
+        toggleBottomPanel();
       }
       if (event.key === "Escape") {
         if (!event.defaultPrevented && paletteOpen) closePalette();
@@ -331,15 +401,17 @@ export function DesktopShell() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [closePalette, openPalette, paletteOpen, selectLeftPanel]);
+  }, [closePalette, openPalette, paletteOpen, selectLeftPanel, toggleBottomPanel]);
 
   // Dock widths are published as CSS custom properties so the popouts can size
   // themselves from tokens instead of inline styles.
   useEffect(() => {
+    leftWidthRef.current = leftWidth;
     rootRef.current?.style.setProperty("--tn-shell-left-width", `${leftWidth}px`);
   }, [leftWidth]);
 
   useEffect(() => {
+    rightWidthRef.current = rightWidth;
     rootRef.current?.style.setProperty("--tn-shell-right-width", `${rightWidth}px`);
   }, [rightWidth]);
 
@@ -350,40 +422,56 @@ export function DesktopShell() {
    * pointer is released or cancelled. Right-side drags are inverted so dragging
    * inward always shrinks the dock.
    */
-  const beginResize = (side: "left" | "right") => (event: ReactPointerEvent<HTMLButtonElement>) => {
-    event.currentTarget.setPointerCapture(event.pointerId);
-    const start = event.clientX;
-    const original = side === "left" ? leftWidth : rightWidth;
-    const move = (moveEvent: PointerEvent) => {
-      const delta = moveEvent.clientX - start;
-      const next = clampPanelWidth(original + (side === "left" ? delta : -delta));
-      if (side === "left") setLeftWidth(next);
-      else setRightWidth(next);
-    };
-    const finish = () => {
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", finish);
-      window.removeEventListener("pointercancel", finish);
-    };
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", finish);
-    window.addEventListener("pointercancel", finish);
-  };
+  const beginResize = useCallback(
+    (side: PanelSide) => (event: ReactPointerEvent<HTMLButtonElement>) => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      resizeCleanupRef.current?.();
+
+      const handle = event.currentTarget;
+      handle.setPointerCapture(event.pointerId);
+      const start = event.clientX;
+      const original = side === "left" ? leftWidthRef.current : rightWidthRef.current;
+      const previousUserSelect = document.body.style.userSelect;
+      document.body.style.userSelect = "none";
+      const move = (moveEvent: PointerEvent) => {
+        const delta = moveEvent.clientX - start;
+        const next = clampPanelWidth(original + (side === "left" ? delta : -delta));
+        updatePanelWidth(side, next);
+      };
+      const finish = () => {
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", finish);
+        window.removeEventListener("pointercancel", finish);
+        if (handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId);
+        document.body.style.userSelect = previousUserSelect;
+        if (resizeCleanupRef.current === finish) resizeCleanupRef.current = null;
+      };
+      resizeCleanupRef.current = finish;
+      window.addEventListener("pointermove", move);
+      window.addEventListener("pointerup", finish);
+      window.addEventListener("pointercancel", finish);
+    },
+    [updatePanelWidth],
+  );
 
   /**
    * Keyboard alternative to dragging a resize handle.
    *
    * Left/Right arrows nudge the dock by 8px, or 24px while Shift is held.
    */
-  const resizeWithKeyboard = (side: "left" | "right") => (event: ReactKeyboardEvent<HTMLButtonElement>) => {
-    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-    event.preventDefault();
-    const amount = event.shiftKey ? 24 : 8;
-    const direction = event.key === "ArrowRight" ? 1 : -1;
-    const applyDelta = side === "left" ? direction * amount : -direction * amount;
-    if (side === "left") setLeftWidth((width) => clampPanelWidth(width + applyDelta));
-    else setRightWidth((width) => clampPanelWidth(width + applyDelta));
-  };
+  const resizeWithKeyboard = useCallback(
+    (side: PanelSide) => (event: ReactKeyboardEvent<HTMLButtonElement>) => {
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+      event.preventDefault();
+      const amount = event.shiftKey ? 24 : 8;
+      const direction = event.key === "ArrowRight" ? 1 : -1;
+      const applyDelta = side === "left" ? direction * amount : -direction * amount;
+      const currentWidth = side === "left" ? leftWidthRef.current : rightWidthRef.current;
+      updatePanelWidth(side, currentWidth + applyDelta);
+    },
+    [updatePanelWidth],
+  );
 
   return (
     <main
@@ -429,7 +517,13 @@ export function DesktopShell() {
                 if (restoredWorkspacePath) openMarkdownDocument(restoredWorkspacePath, relativePath);
               }}
             />
-            <ResizeHandle label="Resize left panel" onPointerDown={beginResize("left")} onKeyDown={resizeWithKeyboard("left")} />
+            <ResizeHandle
+              label="Resize left panel"
+              onPointerDown={beginResize("left")}
+              onPointerCancel={() => resizeCleanupRef.current?.()}
+              onDoubleClick={() => resetPanelWidth("left")}
+              onKeyDown={resizeWithKeyboard("left")}
+            />
           </>
         )}
 
@@ -443,15 +537,32 @@ export function DesktopShell() {
                 </>
               )}
             </div>
-            <TabContent tab={activeTab} document={activeTab ? documents[activeTab.id] : undefined} onChange={updateDocument} onSave={saveDocument} />
+            <TabContent tab={activeTab} document={activeDocument} onChange={updateDocument} onSave={saveDocument} />
           </article>
-          {bottomPanel && <BottomPanelContent active={bottomPanel} onChange={setBottomPanel} onClose={() => setBottomPanel(null)} />}
+          {bottomPanel && (
+            <BottomPanelContent
+              active={bottomPanel}
+              onChange={updateBottomPanel}
+              onClose={() => updateBottomPanel(null)}
+            />
+          )}
         </section>
 
         {rightPanel && (
           <>
-            <ResizeHandle label="Resize right panel" onPointerDown={beginResize("right")} onKeyDown={resizeWithKeyboard("right")} />
-            <RightPopout panel={rightPanel} />
+            <ResizeHandle
+              label="Resize right panel"
+              onPointerDown={beginResize("right")}
+              onPointerCancel={() => resizeCleanupRef.current?.()}
+              onDoubleClick={() => resetPanelWidth("right")}
+              onKeyDown={resizeWithKeyboard("right")}
+            />
+            <RightPopout
+              panel={rightPanel}
+              documentContents={activeDocument?.phase === "ready"
+                ? activeDocument.contents
+                : null}
+            />
           </>
         )}
       </div>
@@ -459,7 +570,7 @@ export function DesktopShell() {
       <StatusBar
         workspaceName={workspaceName}
         bottomPanel={bottomPanel}
-        onToggleBottomPanel={() => setBottomPanel((panel) => panel ? null : "terminal")}
+        onToggleBottomPanel={toggleBottomPanel}
       />
 
       {paletteOpen && (

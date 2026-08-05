@@ -1007,6 +1007,9 @@ fn desktop_state_update_merges_concurrent_mrus_and_preserves_app_settings() {
                 legacy_path.clone(),
             ]),
             explorer_open: None,
+            left_panel_width: Some(352.0),
+            right_panel_width: None,
+            bottom_panel_open: Some(true),
         },
     )
     .expect("first desktop-state update succeeds");
@@ -1020,6 +1023,9 @@ fn desktop_state_update_merges_concurrent_mrus_and_preserves_app_settings() {
                 legacy_path.clone(),
             ]),
             explorer_open: Some(true),
+            left_panel_width: None,
+            right_panel_width: Some(512.0),
+            bottom_panel_open: None,
         },
     )
     .expect("second desktop-state update succeeds");
@@ -1035,10 +1041,13 @@ fn desktop_state_update_merges_concurrent_mrus_and_preserves_app_settings() {
     assert_eq!(
         settings["desktopState"],
         serde_json::json!({
-            "version": 2,
+            "version": 3,
             "lastWorkspacePath": one_path,
             "recentWorkspacePaths": [two_path, legacy_path, one_path],
-            "explorerOpen": true
+            "explorerOpen": true,
+            "leftPanelWidth": 352.0,
+            "rightPanelWidth": 480.0,
+            "bottomPanelOpen": true
         })
     );
 }

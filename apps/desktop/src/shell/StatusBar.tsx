@@ -44,11 +44,13 @@ export function StatusBar({ workspaceName, bottomPanel, onToggleBottomPanel }: S
       <span className="max-[760px]:hidden">Markdown</span>
       <button
         className={cn(
-          "bg-transparent border-0 text-inherit cursor-pointer h-full px-1 hover:bg-[color-mix(in_srgb,white_18%,transparent)]",
-          bottomPanel && "bg-[color-mix(in_srgb,white_18%,transparent)]"
+          "h-full cursor-pointer border-0 bg-transparent px-1 text-inherit hover:bg-accent",
+          bottomPanel && "bg-accent"
         )}
+        type="button"
         onClick={onToggleBottomPanel}
         aria-label="Toggle bottom panel"
+        aria-pressed={Boolean(bottomPanel)}
       >
         ▰
       </button>

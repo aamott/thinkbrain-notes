@@ -7,15 +7,15 @@ the assistant integration point while respecting data-owning epics.
 
 ## Acceptance Criteria
 
-- [ ] Outline derives headings from the active document without rewriting it
+- [x] Outline derives headings from the active document without rewriting it
       and supports accessible navigation to an editor location.
-- [ ] Properties displays parsed frontmatter read-only and handles missing or
+- [x] Properties displays parsed frontmatter read-only and handles missing or
       malformed frontmatter clearly.
-- [ ] Backlinks renders a linked empty/loading state until indexing/graph APIs
+- [x] Backlinks renders a linked empty/loading state until indexing/graph APIs
       exist; it does not invent a second link index.
-- [ ] Assistant panel mounts only the `ai` epic integration component and has
+- [x] Assistant panel mounts only the `ai` epic integration component and has
       a useful unavailable/configuration state before it is enabled.
-- [ ] Opening/closing the active right view updates layout state and does not
+- [x] Opening/closing the active right view updates layout state and does not
       unmount an active editor or lose unsaved changes.
 
 ## References

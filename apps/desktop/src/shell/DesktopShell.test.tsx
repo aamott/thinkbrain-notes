@@ -81,6 +81,18 @@ describe("DesktopShell composition", () => {
     expect(markup).not.toContain("No workspace open");
   });
 
+  it("exposes the bottom-panel toggle's visibility state to assistive technology", () => {
+    const closed = renderToStaticMarkup(
+      <StatusBar workspaceName={null} bottomPanel={null} onToggleBottomPanel={() => undefined} />
+    );
+    const open = renderToStaticMarkup(
+      <StatusBar workspaceName={null} bottomPanel="terminal" onToggleBottomPanel={() => undefined} />
+    );
+
+    expect(closed).toContain('aria-pressed="false"');
+    expect(open).toContain('aria-pressed="true"');
+  });
+
   it("renders the explorer panel by default with aria-current on its activity button", () => {
     const markup = shellMarkup();
 

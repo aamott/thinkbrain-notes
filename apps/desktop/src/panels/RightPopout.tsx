@@ -1,13 +1,16 @@
 import { lazy, Suspense } from "react";
+import { cn } from "../lib/utils";
 import { PanelTitle } from "./PanelTitle";
+import { OutlinePanel } from "./OutlinePanel";
+import { PropertiesPanel } from "./PropertiesPanel";
 import { Unavailable } from "../shell/Unavailable";
 import { rightActions, type RightPanel } from "../shell/shellTypes";
 
 /**
  * Lazy-loaded AI assistant panel.
  *
- * Code-split so the agent UI bundle is only fetched when the assistant panel
- * is opened for the first time.
+ * The AI epic owns this integration component. It remains code-split from the
+ * shell, then stays mounted with the other stateful right inspectors.
  */
 const AssistantPanel = lazy(async () => {
   const module = await import("../agent/AssistantPanel");
@@ -17,6 +20,8 @@ const AssistantPanel = lazy(async () => {
 type RightPopoutProps = {
   /** Currently active right activity bar panel. */
   readonly panel: RightPanel;
+  /** Markdown contents of the active editor tab, when its document is ready. */
+  readonly documentContents: string | null;
 };
 
 /**
@@ -27,7 +32,7 @@ type RightPopoutProps = {
  * `--tn-shell-right-width` token and the surface collapses to an overlay on
  * viewports narrower than 760px.
  */
-export function RightPopout({ panel }: RightPopoutProps) {
+export function RightPopout({ panel, documentContents }: RightPopoutProps) {
   const label = rightActions.find((item) => item.id === panel)?.label ?? "Panel";
 
   return (
@@ -36,32 +41,28 @@ export function RightPopout({ panel }: RightPopoutProps) {
       aria-label={`${label} panel`}
     >
       <PanelTitle title={label} />
-      <RightContent panel={panel} />
+      {/*
+       * Inspector panels remain mounted through activity-bar switches so
+       * presentation state (such as scrolling) survives without affecting the
+       * active editor or its unsaved document contents.
+       */}
+      <div className={cn("flex min-h-0 flex-1 flex-col", panel !== "outline" && "hidden")}>
+        <OutlinePanel contents={documentContents} />
+      </div>
+      <div className={cn("flex min-h-0 flex-1 flex-col", panel !== "properties" && "hidden")}>
+        <PropertiesPanel contents={documentContents} />
+      </div>
+      <div className={cn("flex min-h-0 flex-1 flex-col", panel !== "assistant" && "hidden")}>
+        <Suspense fallback={<Unavailable title="Loading assistant" description="Preparing the assistant panel…" />}>
+          <AssistantPanel />
+        </Suspense>
+      </div>
+      {panel === "backlinks" && (
+        <Unavailable
+          title="Backlinks unavailable"
+          description="This inspector activates after the workspace link index is available."
+        />
+      )}
     </aside>
   );
-}
-
-/**
- * Selects the body content for a given right panel id.
- *
- * The assistant panel is wrapped in a Suspense boundary so its lazy chunk
- * shows a loading placeholder while it loads. The remaining inspectors are
- * not yet wired to live data and render an {@link Unavailable} empty state.
- */
-function RightContent({ panel }: { panel: RightPanel }) {
-  if (panel === "assistant") {
-    return (
-      <Suspense fallback={<Unavailable title="Loading assistant" description="Preparing the assistant panel…" />}>
-        <AssistantPanel />
-      </Suspense>
-    );
-  }
-  if (panel === "outline") {
-    return <Unavailable title="No note selected" description="Headings from the active Markdown note will appear here." />;
-  }
-  if (panel === "backlinks") {
-    return <Unavailable title="Backlinks unavailable" description="This inspector activates after the workspace link index is available." />;
-  }
-  // panel === "properties"
-  return <Unavailable title="No note selected" description="Read-only frontmatter properties will appear here." />;
 }

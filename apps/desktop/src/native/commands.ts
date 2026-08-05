@@ -210,6 +210,9 @@ export interface NativeDesktopStateUpdate {
   readonly lastWorkspacePath?: string | null;
   readonly recentWorkspacePaths?: readonly string[];
   readonly explorerOpen?: boolean;
+  readonly leftPanelWidth?: number;
+  readonly rightPanelWidth?: number;
+  readonly bottomPanelOpen?: boolean;
 }
 
 export interface NativeMarkdownFileEntry {
