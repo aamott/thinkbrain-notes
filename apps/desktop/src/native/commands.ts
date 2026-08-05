@@ -155,6 +155,11 @@ export interface NativeCommandMap {
     readonly args: { readonly update: NativeDesktopStateUpdate };
     readonly result: string;
   };
+  // Resolves to the full serialized settings document written by the host.
+  readonly update_app_theme: {
+    readonly args: { readonly theme: string };
+    readonly result: string;
+  };
   readonly read_workspace_settings: {
     readonly args: { readonly rootPath: string };
     readonly result: string | null;

@@ -1,4 +1,5 @@
 import { cn } from "../lib/utils";
+import type { AppTheme } from "../settings/ThemeProvider";
 import type { DesktopTab } from "../tabs/tabModel";
 import { IconButton } from "./IconButton";
 import { rightActions, type RightPanel } from "./shellTypes";
@@ -20,7 +21,7 @@ type TitleBarProps = {
   /** Currently open right panel, or `null` when the right dock is collapsed. */
   readonly rightPanel: RightPanel | null;
   /** Active color theme, used to label and symbol the theme toggle. */
-  readonly theme: "light" | "dark";
+  readonly theme: AppTheme;
   /** Called when the user clicks a tab to activate it. */
   readonly onSelectTab: (tabId: string) => void;
   /** Called when the user clicks a tab's close affordance. */

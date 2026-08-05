@@ -8,6 +8,7 @@ import { LeftPopout } from "../panels/LeftPopout";
 import { RightPopout } from "../panels/RightPopout";
 import type { NativeMarkdownFileEntry, NativeWorkspaceSnapshot } from "../native/commands";
 import { DEFAULT_DESKTOP_STATE, loadDesktopState, promoteRecentWorkspace, saveDesktopState, type DesktopStateUpdate } from "../settings/desktopState";
+import { useTheme } from "../settings/ThemeProvider";
 import {
   createEditorTab,
   createStaticTab,
@@ -57,7 +58,7 @@ export function DesktopShell() {
   const [rightPanel, setRightPanel] = useState<RightPanel | null>("outline");
   const [bottomPanel, setBottomPanel] = useState<BottomPanel | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [theme, setTheme] = useState<"light" | "dark">("dark");
+  const { theme, setTheme } = useTheme();
   const [leftWidth, setLeftWidth] = useState(288);
   const [rightWidth, setRightWidth] = useState(320);
   const [restoredWorkspacePath, setRestoredWorkspacePath] = useState<string | null>(null);
@@ -67,10 +68,6 @@ export function DesktopShell() {
   const recentWorkspacePathsRef = useRef<readonly string[]>([]);
   const [newNoteFocusRequest, setNewNoteFocusRequest] = useState(0);
   const [stateRestored, setStateRestored] = useState(!isTauri());
-
-  useEffect(() => {
-    document.documentElement.dataset.thinkbrainTheme = theme;
-  }, [theme]);
 
   useEffect(() => {
     documentsRef.current = documents;
@@ -230,7 +227,7 @@ export function DesktopShell() {
         closePalette();
         return;
       case "toggle-theme":
-        setTheme((value) => value === "dark" ? "light" : "dark");
+        setTheme(theme === "dark" ? "light" : "dark");
         closePalette();
         return;
       case "toggle-panel":
@@ -250,7 +247,7 @@ export function DesktopShell() {
         closePalette();
         return;
     }
-  }, [closePalette, persistDesktopState, selectLeftPanel, showExplorer]);
+  }, [closePalette, persistDesktopState, selectLeftPanel, setTheme, showExplorer, theme]);
 
   const updateDocument = useCallback((tabId: string, contents: string) => {
     setDocuments((current) => {
@@ -398,7 +395,7 @@ export function DesktopShell() {
         onSelectTab={(tabId) => dispatchTabs({ type: "activate", tabId })}
         onRequestCloseTab={(tabId) => dispatchTabs({ type: "requestClose", tabId })}
         onToggleRightPanel={(panel) => setRightPanel((current) => current === panel ? null : panel)}
-        onToggleTheme={() => setTheme((value) => value === "dark" ? "light" : "dark")}
+        onToggleTheme={() => setTheme(theme === "dark" ? "light" : "dark")}
       />
 
       <div className="flex min-h-0 max-[760px]:relative">

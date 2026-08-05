@@ -55,6 +55,7 @@ macro_rules! app_command_handlers {
             $crate::commands::settings::read_app_settings,
             $crate::commands::settings::write_app_settings,
             $crate::commands::settings::update_desktop_state,
+            $crate::commands::settings::update_app_theme,
             $crate::commands::settings::read_workspace_settings,
             $crate::commands::settings::write_workspace_settings,
             $crate::commands::workspace::open_workspace_window,

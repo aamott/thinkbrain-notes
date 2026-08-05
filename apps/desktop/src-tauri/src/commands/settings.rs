@@ -10,6 +10,8 @@ use serde_json::{Map, Value};
 use crate::commands::workspace::{resolve_workspace_root, stable_workspace_hash};
 
 static APP_SETTINGS_MUTATION_LOCK: Mutex<()> = Mutex::new(());
+const APP_THEME_KEY: &str = "theme";
+const SUPPORTED_APP_THEMES: [&str; 3] = ["system", "light", "dark"];
 const DESKTOP_STATE_KEY: &str = "desktopState";
 const DESKTOP_STATE_VERSION: u64 = 2;
 const MAX_RECENT_WORKSPACES: usize = 12;
@@ -66,6 +68,31 @@ pub fn update_desktop_state(
 
     write_settings_file(&settings_path, &contents)?;
     Ok(contents)
+}
+
+
+/// Persists the application theme without rewriting unrelated settings.
+///
+/// The read-modify-write runs under `APP_SETTINGS_MUTATION_LOCK` so concurrent
+/// windows cannot clobber each other's `desktopState` or editor preferences.
+///
+/// Args:
+///   app: Tauri handle used to resolve the OS app-data settings path.
+///   theme: Requested theme; must be one of `system`, `light`, or `dark`.
+///
+/// Returns:
+///   The full serialized settings document that was written to disk.
+#[tauri::command]
+pub fn update_app_theme(app: tauri::AppHandle, theme: String) -> Result<String, NativeError> {
+    let _settings_lock = APP_SETTINGS_MUTATION_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let settings_path = resolve_app_settings_path(&app)?;
+    let contents = read_settings_file(&settings_path)?;
+    let updated = update_app_theme_contents(contents.as_deref(), &theme)?;
+
+    write_settings_file(&settings_path, &updated)?;
+    Ok(updated)
 }
 
 
@@ -150,6 +177,45 @@ pub fn update_desktop_state_contents(
     app_settings.remove("lastWorkspacePath");
     app_settings.remove("explorerOpen");
 
+    serialize_app_settings_record(app_settings)
+}
+
+
+/// Replaces only the top-level `theme` field of an app-settings document.
+///
+/// Unknown and unrelated keys (`editor`, `desktopState`, extension settings) are
+/// carried through untouched so a theme toggle never drops other preferences.
+///
+/// Args:
+///   contents: Existing settings JSON, or `None` when the file does not exist.
+///   theme: Requested theme; must be one of `system`, `light`, or `dark`.
+///
+/// Returns:
+///   The updated settings document, or `NativeError` when `theme` is unsupported.
+pub fn update_app_theme_contents(
+    contents: Option<&str>,
+    theme: &str,
+) -> Result<String, NativeError> {
+    if !SUPPORTED_APP_THEMES.contains(&theme) {
+        return Err(NativeError::with_details(
+            "settings.invalid_theme",
+            "Theme must be one of system, light, or dark.",
+            format!("Received unsupported theme \"{theme}\"."),
+        ));
+    }
+
+    let mut app_settings = parse_app_settings_record(contents);
+    app_settings.insert(APP_THEME_KEY.to_string(), Value::String(theme.to_string()));
+
+    serialize_app_settings_record(app_settings)
+}
+
+
+/// Serializes an app-settings record using the canonical on-disk shape:
+/// pretty-printed JSON terminated by a single trailing newline.
+pub fn serialize_app_settings_record(
+    app_settings: Map<String, Value>,
+) -> Result<String, NativeError> {
     serde_json::to_string_pretty(&Value::Object(app_settings))
         .map(|contents| format!("{contents}\n"))
         .map_err(|error| {

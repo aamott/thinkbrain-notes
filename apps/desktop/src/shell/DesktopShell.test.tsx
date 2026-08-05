@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { ThemeProvider } from "../settings/ThemeProvider";
 import { DesktopShell } from "./DesktopShell";
 import { StatusBar } from "./StatusBar";
 import { leftActions } from "./shellTypes";
@@ -10,9 +11,16 @@ import { leftActions } from "./shellTypes";
  * `renderToStaticMarkup` skips effects and DOM APIs, so the shell renders in
  * its pre-boot, non-Tauri state (`isTauri()` is false under Node). That is
  * exactly the composition we want to assert: chrome present, no workspace.
+ *
+ * The shell consumes `useTheme()` from {@link ThemeProvider}, so it must be
+ * wrapped in the provider — otherwise the hook throws outside its context.
  */
 function shellMarkup(): string {
-  return renderToStaticMarkup(<DesktopShell />);
+  return renderToStaticMarkup(
+    <ThemeProvider>
+      <DesktopShell />
+    </ThemeProvider>
+  );
 }
 
 describe("DesktopShell composition", () => {
