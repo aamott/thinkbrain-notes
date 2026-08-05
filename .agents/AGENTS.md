@@ -26,6 +26,7 @@ Open, local-first knowledge workspace inspired by Obsidian & VS Code. Standard M
 - Run `./scripts/qa.sh` or `pnpm lint` and `pnpm typecheck` before completing tasks.
 - Avoid `any` types; prefer strict types or `unknown`.
 - Fail loudly: log errors clearly and return typed results.
+- Avoid overcomplicated tests, but ensure all critical paths are tested.
 
 ## Development & Launching
 - To run the Tauri desktop app in development mode, use `pnpm desktop:tauri dev` in the project root. Note: `pnpm dev` only launches the web UI, so always use `pnpm desktop:tauri dev` to test native functionality.

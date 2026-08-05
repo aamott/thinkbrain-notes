@@ -18,6 +18,7 @@ import {
   type DesktopStateUpdate
 } from "../settings/desktopState";
 import { useTheme } from "../settings/theme-context";
+import { useSettingsStore } from "../settings/settingsStore";
 import {
   createEditorTab,
   createStaticTab,
@@ -80,9 +81,22 @@ export function DesktopShell() {
   const [newNoteFocusRequest, setNewNoteFocusRequest] = useState(0);
   const [stateRestored, setStateRestored] = useState(!isTauri());
 
+  // Subscribe to the settings store's dirty flag so the settings tab shows the
+  // dirty dot when staged changes exist. This re-renders DesktopShell when
+  // isDirty changes, which is acceptable (infrequent, boolean toggle).
+  const settingsIsDirty = useSettingsStore((s) => s.isDirty);
+
   useEffect(() => {
     documentsRef.current = documents;
   }, [documents]);
+
+  // Mirror the settings store's dirty flag into the tab system so the settings
+  // tab shows the dirty dot and triggers DirtyCloseDialog on close. Only
+  // dispatches when a settings tab is actually open to avoid spurious actions.
+  useEffect(() => {
+    if (!tabState.tabs.some((t) => t.id === "settings")) return;
+    dispatchTabs({ type: "setDirty", tabId: "settings", isDirty: settingsIsDirty });
+  }, [settingsIsDirty, tabState.tabs]);
 
   const updateRecentWorkspacePaths = useCallback((rootPath: string): readonly string[] => {
     const next = promoteRecentWorkspace(recentWorkspacePathsRef.current, rootPath);
@@ -584,10 +598,32 @@ export function DesktopShell() {
         <DirtyCloseDialog
           tab={tabState.tabs.find((tab) => tab.id === tabState.closeRequest?.tabId) ?? null}
           onCancel={() => dispatchTabs({ type: "cancelClose", tabId: tabState.closeRequest!.tabId })}
-          onDiscard={() => dispatchTabs({ type: "discardClose", tabId: tabState.closeRequest!.tabId })}
+          onDiscard={() => {
+            const tab = tabState.tabs.find((candidate) => candidate.id === tabState.closeRequest?.tabId);
+            // For settings tabs, clear staged changes so the store doesn't stay
+            // dirty after discarding. Editor tabs have no staged settings state.
+            if (tab?.kind === "settings") {
+              useSettingsStore.getState().resetStaged();
+            }
+            dispatchTabs({ type: "discardClose", tabId: tabState.closeRequest!.tabId });
+          }}
           onSave={async () => {
             const tab = tabState.tabs.find((candidate) => candidate.id === tabState.closeRequest?.tabId);
-            if (tab && (await saveDocument(tab))) dispatchTabs({ type: "completeSaveAndClose", tabId: tab.id });
+            if (!tab) return;
+            // Settings tabs save through the settings store, not saveDocument.
+            if (tab.kind === "settings") {
+              const result = await useSettingsStore.getState().saveSettings();
+              // On success, close the tab. On validation failure, leave the
+              // dialog open so the user sees inline errors in the settings tab.
+              if (result.success) {
+                dispatchTabs({ type: "completeSaveAndClose", tabId: tab.id });
+              }
+              return;
+            }
+            // Editor tabs save through the document persistence layer.
+            if (await saveDocument(tab)) {
+              dispatchTabs({ type: "completeSaveAndClose", tabId: tab.id });
+            }
           }}
         />
       )}

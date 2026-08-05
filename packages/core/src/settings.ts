@@ -1,3 +1,12 @@
+// Dynamic settings persistence functions live in ./settings/dynamic.ts to keep
+// this file under 500 lines. They are re-exported here so the public API stays
+// unchanged (consumers import from "@thinkbrain/core" which sources from here).
+export {
+  parseDynamicAppSettings,
+  serializeDynamicAppSettings,
+  type ParseDynamicAppSettingsResult
+} from "./settings/dynamic";
+
 export const CURRENT_SETTINGS_VERSION = 1;
 
 export type SettingsDiagnosticSeverity = "error" | "warning";

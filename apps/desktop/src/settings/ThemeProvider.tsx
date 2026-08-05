@@ -1,23 +1,28 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { isTauri } from "@tauri-apps/api/core";
-import { themeService } from "./themeService";
-import type { AppThemeSetting } from "@thinkbrain/core";
 import { type AppTheme, ThemeProviderContext, type ThemeProviderState } from "./theme-context";
+import { useSettingsStore } from "./settingsStore";
 
 export interface ThemeProviderProps {
   readonly children: ReactNode;
-  /** Theme used until native settings finish hydrating (defaults to "system"). */
+  /** Theme used until the settings store finishes loading (defaults to "system"). */
   readonly defaultTheme?: AppTheme;
 }
 
 /**
  * A React context provider that applies the selected theme to the root element.
  *
- * Theme persistence flows through the native settings commands
- * (`themeService` -> `read_app_settings` / `update_app_theme`) rather than
- * `localStorage`, so the host owns a single source of truth. In non-Tauri
- * contexts (tests, plain browser previews) the load/save steps are skipped.
+ * Theme is read from the Zustand settings store (`appearance.theme` effective
+ * value) instead of the legacy `themeService`. On mount (inside Tauri), the
+ * provider triggers `loadSettings` so the store hydrates from the native app
+ * settings file. Theme changes are **staged** into the store via `stageChange`
+ * (per epic design decision #4: single Save button); the DOM attribute updates
+ * immediately because the provider re-renders on store change, but persistence
+ * is deferred to `saveSettings()` in the settings tab.
+ *
+ * In non-Tauri contexts (tests, plain browser previews) the native load is
+ * skipped and the `defaultTheme` prop is used.
  *
  * The theme is applied via the `data-thinkbrain-theme` attribute on the root
  * element so CSS can branch on light/dark/system without JS resolution. The
@@ -27,27 +32,33 @@ export function ThemeProvider({
   children,
   defaultTheme = "system",
 }: ThemeProviderProps) {
-  // Start from the prop default; native settings hydrate in the effect below.
-  const [theme, setThemeState] = useState<AppTheme>(defaultTheme);
+  // Read the effective theme from the store. Before load, `getEffectiveValue`
+  // falls back to the registry default ("system"), so the prop default is only
+  // relevant in non-Tauri contexts where the store never loads.
+  const themeFromStore = useSettingsStore((s) => s.getEffectiveValue("appearance.theme"));
+  const loaded = useSettingsStore((s) => s.loaded);
+  const loadSettings = useSettingsStore((s) => s.loadSettings);
+  const stageChange = useSettingsStore((s) => s.stageChange);
 
-  // Hydrate the persisted theme from native settings on mount. Skipped outside
-  // Tauri (e.g. Node test environment) where `themeService` has no host to call.
+  // Resolve the display theme: use the store value once loaded, else the prop
+  // default. The store value is `unknown` (typed as the registry default), so
+  // coerce to the AppTheme string union.
+  const theme: AppTheme = loaded && typeof themeFromStore === "string"
+    ? (themeFromStore as AppTheme)
+    : defaultTheme;
+
+  // Load settings from native storage on mount (Tauri only). The ref guard
+  // prevents double-load in StrictMode or fast re-mounts.
+  const loadStartedRef = useRef(false);
   useEffect(() => {
     if (!isTauri()) return;
-    let cancelled = false;
-    themeService
-      .loadTheme()
-      .then((persisted) => {
-        if (!cancelled) setThemeState(persisted);
-      })
-      .catch((error: unknown) => {
-        // Fail loudly: a theme read failure should be visible, not silent.
-        console.error("[ThemeProvider] Failed to load theme from native settings:", error);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    if (loadStartedRef.current) return;
+    loadStartedRef.current = true;
+    loadSettings(null).catch((error: unknown) => {
+      // Fail loudly: a settings load failure should be visible, not silent.
+      console.error("[ThemeProvider] Failed to load settings from native store:", error);
+    });
+  }, [loadSettings]);
 
   // Apply the theme attribute whenever it changes. CSS handles light/dark/system.
   useEffect(() => {
@@ -58,15 +69,10 @@ export function ThemeProvider({
   const value: ThemeProviderState = {
     theme,
     setTheme: (newTheme: AppTheme) => {
-      setThemeState(newTheme);
-      // Only persist inside the Tauri host; elsewhere there is no settings store.
-      if (!isTauri()) return;
-      themeService
-        .saveTheme(newTheme as AppThemeSetting)
-        .catch((error: unknown) => {
-          // Fail loudly per project rules: surface persistence failures.
-          console.error("[ThemeProvider] Failed to save theme to native settings:", error);
-        });
+      // Stage the change into the settings store. The DOM updates immediately
+      // (this component re-renders on store change), but persistence is deferred
+      // to `saveSettings()` in the settings tab per the single-Save design.
+      stageChange("appearance.theme", newTheme);
     },
   };
 
