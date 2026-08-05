@@ -8,7 +8,7 @@ import { LeftPopout } from "../panels/LeftPopout";
 import { RightPopout } from "../panels/RightPopout";
 import type { NativeMarkdownFileEntry, NativeWorkspaceSnapshot } from "../native/commands";
 import { DEFAULT_DESKTOP_STATE, loadDesktopState, promoteRecentWorkspace, saveDesktopState, type DesktopStateUpdate } from "../settings/desktopState";
-import { useTheme } from "../settings/ThemeProvider";
+import { useTheme } from "../settings/theme-context";
 import {
   createEditorTab,
   createStaticTab,

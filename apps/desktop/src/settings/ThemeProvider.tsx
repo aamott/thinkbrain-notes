@@ -1,24 +1,9 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { themeService } from "./themeService";
 import type { AppThemeSetting } from "@thinkbrain/core";
-
-// Support system, light, dark, and potentially custom imported themes later.
-// `AppTheme` extends `AppThemeSetting` with the `(string & {})` escape hatch so
-// future custom themes can flow through the same context without a breaking
-// change, while persistence still uses the strict `AppThemeSetting` union.
-export type AppTheme = AppThemeSetting | (string & {});
-
-interface ThemeProviderState {
-  readonly theme: AppTheme;
-  readonly setTheme: (theme: AppTheme) => void;
-}
-
-const ThemeProviderContext = createContext<ThemeProviderState>({
-  theme: "system",
-  setTheme: () => null,
-});
+import { type AppTheme, ThemeProviderContext, type ThemeProviderState } from "./theme-context";
 
 export interface ThemeProviderProps {
   readonly children: ReactNode;
@@ -90,12 +75,4 @@ export function ThemeProvider({
       {children}
     </ThemeProviderContext.Provider>
   );
-}
-
-export function useTheme(): ThemeProviderState {
-  const context = useContext(ThemeProviderContext);
-  if (context === undefined) {
-    throw new Error("useTheme must be used within a ThemeProvider");
-  }
-  return context;
 }

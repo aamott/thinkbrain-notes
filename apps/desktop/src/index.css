@@ -109,3 +109,17 @@
     outline-offset: -2px;
   }
 }
+
+/* CodeMirror cursor: override the default black border so the cursor tracks
+   the theme foreground and stays visible in dark mode. Kept outside @layer
+   base and scoped under .cm-editor for enough specificity to beat
+   CodeMirror's runtime-injected scoped class styles. Also set caret-color
+   on the contenteditable for the native cursor fallback. */
+.cm-editor .cm-content {
+  caret-color: var(--tn-color-foreground);
+}
+.cm-editor .cm-cursor,
+.cm-editor.cm-focused .cm-cursor,
+.cm-editor .cm-dropCursor {
+  border-left-color: var(--tn-color-foreground) !important;
+}

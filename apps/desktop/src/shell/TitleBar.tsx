@@ -1,5 +1,5 @@
 import { cn } from "../lib/utils";
-import type { AppTheme } from "../settings/ThemeProvider";
+import type { AppTheme } from "../settings/theme-context";
 import type { DesktopTab } from "../tabs/tabModel";
 import { IconButton } from "./IconButton";
 import { rightActions, type RightPanel } from "./shellTypes";
