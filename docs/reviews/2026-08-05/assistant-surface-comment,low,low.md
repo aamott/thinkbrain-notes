@@ -1,0 +1,5 @@
+- name: Misleading doc comment in AssistantPanelSurface says it is "kept outside the registry"
+- file: /media/adam/extex/projects/thinkbrain-notes/apps/desktop/src/panels/AssistantPanelSurface.tsx
+- lines: 5-9
+- description: The comment on `LazyAssistantPanel` reads "Lazy-loaded assistant panel kept outside the registry for fast refresh." But the `assistant` contribution in `panelRegistry.tsx` (line 168) references `AssistantPanelSurface` directly in its `factory`, so the surface IS part of the registry. What is actually kept outside the registry is the *lazy dynamic import boundary* (`import("../agent/AssistantPanel")`), not the surface component. The comment should say "Lazy-loaded assistant panel kept behind a dynamic import boundary for fast refresh; the registry references this surface, not the heavy agent module directly." Minor, but the current wording confuses the registry architecture this story introduces.
+- verification: Read `AssistantPanelSurface.tsx` lines 5-9 and `panelRegistry.tsx` line 168 (`factory: () => <AssistantPanelSurface />`).
