@@ -117,10 +117,13 @@ pub fn open_workspace(root_path: String) -> Result<WorkspaceSnapshot, NativeErro
 
 
 #[tauri::command]
-pub fn list_workspace_entries(root_path: String) -> Result<Vec<WorkspaceEntry>, NativeError> {
+pub fn list_workspace_entries(
+    root_path: String,
+    include_hidden: bool,
+) -> Result<Vec<WorkspaceEntry>, NativeError> {
     let root = resolve_workspace_root(&root_path)?;
     let mut entries = Vec::new();
-    collect_workspace_entries(&root, &root, &mut entries)?;
+    collect_workspace_entries(&root, &root, &mut entries, include_hidden)?;
     entries.sort_by(|left, right| left.relative_path.cmp(&right.relative_path));
 
     Ok(entries)
@@ -513,13 +516,15 @@ pub fn describe_workspace(root: &Path) -> WorkspaceDescriptor {
 
 /// Recursively collects every visible folder and file under the workspace.
 ///
-/// Hidden entries (dot-prefixed, e.g. `.git`) are skipped so the tree stays
-/// clean, matching typical file-manager defaults. Directories are emitted before
-/// their contents so callers can build a complete tree, including empty folders.
+/// Hidden entries (dot-prefixed, e.g. `.git`) are skipped unless
+/// `include_hidden` is set, so the tree stays clean by default and matches
+/// typical file-manager defaults. Directories are emitted before their
+/// contents so callers can build a complete tree, including empty folders.
 pub fn collect_workspace_entries(
     root: &Path,
     current: &Path,
     entries: &mut Vec<WorkspaceEntry>,
+    include_hidden: bool,
 ) -> Result<(), NativeError> {
     if entries.len() >= MAX_WORKSPACE_ENTRIES {
         return Ok(());
@@ -547,7 +552,7 @@ pub fn collect_workspace_entries(
         })?;
         let name = entry.file_name().to_string_lossy().to_string();
 
-        if is_hidden_name(&name) {
+        if !include_hidden && is_hidden_name(&name) {
             continue;
         }
 
@@ -566,7 +571,7 @@ pub fn collect_workspace_entries(
 
         if file_type.is_dir() {
             entries.push(workspace_entry(root, &path, true)?);
-            collect_workspace_entries(root, &path, entries)?;
+            collect_workspace_entries(root, &path, entries, include_hidden)?;
         } else if file_type.is_file() {
             entries.push(workspace_entry(root, &path, false)?);
         }
