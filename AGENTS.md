@@ -35,10 +35,26 @@ Future extensions include:
 ## Development & Launching
 - To run the Tauri desktop app in development mode, use `pnpm desktop:tauri dev` in the project root. Note: `pnpm dev` only launches the web UI, so always use `pnpm desktop:tauri dev` to test native functionality.
 
-## Build Tooling (Linux)
-- The Rust backend is configured for fast builds via `.cargo/config.toml`:
-  - **sccache** caches compiled crate artifacts across builds/checkouts. Install: `sudo apt install sccache`.
-  - **mold** is a high-speed linker invoked via clang (`-fuse-ld=mold`). Install: `sudo apt install mold clang`.
-- Both are required for optimal Linux dev/release compile times. If unavailable, sccache emits a benign warning (override with `RUSTC_WRAPPER=` empty); mold flags are gated to `x86_64-unknown-linux-gnu`.
-- Profiles: `[profile.dev]` prioritizes compile speed (`line-tables-only` debuginfo, incremental); `[profile.release]` prioritizes runtime speed and small binaries (thin LTO, `codegen-units=1`, symbol stripping).
-- Check sccache hit rate with `sccache --show-stats`.
+
+## Plans
+List relevant folder to see task status. Review after milestones. Task reviewer deletes tasks after review, or updates status if work is not complete. Add action items from review as stories unless they are immediately fixable. 
+
+**Plan Folder**
+```
+docs/plans/
+├── Blueprint.md  # summary of the app. Ignore for now - needs updating. 
+├── status-epic-difficulty.md
+├── epic/
+│   └── status-story-difficulty.md
+└── other_tasks/ # bugs, chores, etc.
+    └── status-task-difficulty-urgency.md
+```
+
+## Build Tooling (Linux, optional)
+- Rust builds auto-enable `sccache`/`mold`/`clang` if installed (no setup). Suggested: `sudo apt install sccache mold clang`. Details in `scripts/rust-env.sh`.
+- Build profiles live in `apps/desktop/src-tauri/Cargo.toml`: `[profile.dev]` favors compile speed, `[profile.release]` favors runtime speed + small binaries.
+
+
+## Rules
+- Never commit/push without explicit user approval.
+- Never change AGENTS.md (this file) without explicit user direction and approval. (Exception: `## File Map`)

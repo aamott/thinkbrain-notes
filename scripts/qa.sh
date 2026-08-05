@@ -5,6 +5,14 @@
 
 set -euo pipefail
 
+# Auto-enable sccache/mold for the Rust test step if available. Sourcing is
+# optional and silently skips missing tools, so this never breaks QA.
+# shellcheck source=./rust-env.sh
+if [ -f "$(dirname "$0")/rust-env.sh" ]; then
+  # shellcheck disable=SC1091
+  source "$(dirname "$0")/rust-env.sh" >/dev/null
+fi
+
 VERBOSE=false
 for arg in "$@"; do
   case "$arg" in

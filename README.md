@@ -49,6 +49,10 @@ limit is exhausted. Close watcher-heavy programs or ask an administrator to
 raise `fs.inotify.max_user_instances`; this is a host setting, not an app
 configuration. `pnpm desktop:run` remains the non-live-reload alternative.
 
+### Build Tooling (Linux, optional)
+
+Rust builds auto-enable `sccache`/`mold`/`clang` if installed (no setup). Suggested: `sudo apt install sccache mold clang`. See [AGENTS.md](AGENTS.md#build-tooling-linux-optional) for details.
+
 ## Validation
 
 Run these before opening a change:
