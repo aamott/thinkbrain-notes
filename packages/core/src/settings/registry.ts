@@ -7,6 +7,7 @@
  * cross-module section IDs fail loudly during registration.
  */
 
+import type { Disposable } from "../lifecycle";
 import type {
   SettingDefinition,
   SettingMigration,
@@ -31,11 +32,13 @@ interface RegisteredModule {
   readonly definitions: Map<string, ResolvedDefinition>;
   /** Section id -> resolved definitions in declaration order. */
   readonly bySection: Map<string, ResolvedDefinition[]>;
+  /** Section IDs claimed by this module, for precise release on disposal. */
+  readonly sectionIds: readonly string[];
 }
 
 export interface SettingsRegistry {
   /** Registers a module and resolves each relative key into `moduleId.key`. */
-  register(module: SettingsModule): void;
+  register(module: SettingsModule): Disposable;
   /** Registers one persistence migration, keyed by its source version. */
   registerMigration(migration: SettingMigration): void;
   /** Returns migrations in registration order. */
@@ -74,7 +77,8 @@ class SettingsRegistryImpl implements SettingsRegistry {
    */
   private readonly sectionOwners = new Map<string, string>();
 
-  register(module: SettingsModule): void {
+  register(module: SettingsModule): Disposable {
+    assertValidModuleId(module.id);
     if (this.modules.has(module.id)) {
       throw new Error(
         `A settings module is already registered for id "${module.id}".`
@@ -83,13 +87,45 @@ class SettingsRegistryImpl implements SettingsRegistry {
 
     const definitions = new Map<string, ResolvedDefinition>();
     const bySection = new Map<string, ResolvedDefinition[]>();
-
+    const sectionIds = new Set<string>();
     for (const section of module.sections) {
-      this.collectSection(module.id, section, definitions, bySection);
+      this.collectSection(module.id, section, definitions, bySection, sectionIds);
     }
 
-    this.modules.set(module.id, { module, definitions, bySection });
+    const registered: RegisteredModule = {
+      module,
+      definitions,
+      bySection,
+      sectionIds: [...sectionIds]
+    };
+    this.modules.set(module.id, registered);
     this.moduleOrder.push(module.id);
+    for (const sectionId of sectionIds) {
+      this.sectionOwners.set(sectionId, module.id);
+    }
+
+    let disposed = false;
+    return {
+      dispose: (): void => {
+        if (disposed) {
+          return;
+        }
+        disposed = true;
+        if (this.modules.get(module.id) !== registered) {
+          return;
+        }
+        this.modules.delete(module.id);
+        const index = this.moduleOrder.indexOf(module.id);
+        if (index >= 0) {
+          this.moduleOrder.splice(index, 1);
+        }
+        for (const sectionId of registered.sectionIds) {
+          if (this.sectionOwners.get(sectionId) === module.id) {
+            this.sectionOwners.delete(sectionId);
+          }
+        }
+      }
+    };
   }
 
   registerMigration(migration: SettingMigration): void {
@@ -170,8 +206,22 @@ class SettingsRegistryImpl implements SettingsRegistry {
     moduleId: string,
     section: SettingSection,
     definitions: Map<string, ResolvedDefinition>,
-    bySection: Map<string, ResolvedDefinition[]>
+    bySection: Map<string, ResolvedDefinition[]>,
+    sectionIds: Set<string>
   ): void {
+    if (sectionIds.has(section.id)) {
+      throw new Error(
+        `Duplicate section id "${section.id}" in module "${moduleId}".`
+      );
+    }
+    const existingOwner = this.sectionOwners.get(section.id);
+    if (existingOwner !== undefined && existingOwner !== moduleId) {
+      throw new Error(
+        `Section id "${section.id}" is already registered by another module.`
+      );
+    }
+    sectionIds.add(section.id);
+
     if (section.settings) {
       const bucket: ResolvedDefinition[] = [];
       for (const def of section.settings) {
@@ -185,25 +235,25 @@ class SettingsRegistryImpl implements SettingsRegistry {
         bucket.push(resolved);
       }
       if (bucket.length > 0) {
-        // Enforce global uniqueness of section ids across modules. A duplicate
-        // id from a different module would otherwise silently shadow the first
-        // registration in `getDefinitionsForSection`, losing data. Fail loudly.
-        const existingOwner = this.sectionOwners.get(section.id);
-        if (existingOwner !== undefined && existingOwner !== moduleId) {
-          throw new Error(
-            `Section id "${section.id}" is already registered by another module.`
-          );
-        }
-        this.sectionOwners.set(section.id, moduleId);
         bySection.set(section.id, bucket);
       }
     }
 
     if (section.subsections) {
       for (const sub of section.subsections) {
-        this.collectSection(moduleId, sub, definitions, bySection);
+        this.collectSection(moduleId, sub, definitions, bySection, sectionIds);
       }
     }
+  }
+}
+
+const MODULE_ID_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
+
+function assertValidModuleId(moduleId: string): void {
+  if (typeof moduleId !== "string" || !MODULE_ID_PATTERN.test(moduleId)) {
+    throw new Error(
+      `Invalid settings module id "${moduleId}". IDs must be lowercase kebab-case.`
+    );
   }
 }
 

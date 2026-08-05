@@ -2,22 +2,26 @@
 
 ## Goal
 
-Allow users to install an extension from a local file. The app reads the
-extension package, validates its manifest, checks declared capabilities, and
-installs it into the extension storage area (outside the workspace).
+Allow users to install an extension from a local file later in beta. The app
+reads the package, validates its manifest and compatibility declarations, and
+installs it outside the workspace. Because extensions are trusted same-context
+modules, the UI must warn clearly that installed code runs with app privileges;
+this is not a sandboxed install.
 
 ## Acceptance Criteria
 
 - [ ] User can pick a local zip file and trigger install from the extensions UI.
-- [ ] Zip is extracted and validated (manifest parse, capability check) before
-      activation. Packaging format is defined in the packaging format story.
+- [ ] Zip is extracted and validated (manifest parse, compatibility-gate check)
+      before activation. Packaging format is defined in the packaging format
+      story.
 - [ ] Install fails loudly with useful errors for invalid packages or missing
       manifests.
 - [ ] Installed extension is stored outside the workspace (OS app-data area).
-- [ ] Sandbox is enforced for the installed extension (depends on
-      capability-based sandbox story).
-- [ ] Manual/E2E test: install a sample extension from file and verify it loads
-      with granted capabilities only.
+- [ ] UI presents and records the explicit warning that installed code runs with
+      app privileges; no sandbox guarantee is made.
+- [ ] Manual/E2E test: install a sample extension from file, verify warnings,
+      compatibility behavior, and disposable cleanup. URL installation and
+      signing are not prerequisites.
 
 ## References
 

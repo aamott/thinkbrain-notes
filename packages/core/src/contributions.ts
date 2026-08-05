@@ -6,6 +6,8 @@
  * of a UI toolkit, editor implementation, or host platform.
  */
 
+import type { Disposable } from "./lifecycle";
+
 /** A contribution with the identifier used for registry lookup. */
 export interface IdentifiedContribution {
   /** Stable identifier unique within a registry. */
@@ -20,8 +22,8 @@ export interface IdentifiedContribution {
  * replacing the earlier contribution.
  */
 export interface ContributionRegistry<T extends IdentifiedContribution> {
-  /** Registers a contribution, throwing when its identifier is already used. */
-  register(contribution: T): void;
+  /** Registers a contribution and returns a handle that unregisters that contribution. */
+  register(contribution: T): Disposable;
   /** Returns the contribution for an identifier, or `undefined` when absent. */
   get(id: string): T | undefined;
   /** Returns a defensive copy of contributions in registration order. */
@@ -43,7 +45,7 @@ export function createContributionRegistry<T extends IdentifiedContribution>(
   const contributions = new Map<string, T>();
   const order: string[] = [];
 
-  const register = (contribution: T): void => {
+  const register = (contribution: T): Disposable => {
     if (contributions.has(contribution.id)) {
       throw new Error(
         `A contribution is already registered for id "${contribution.id}".`
@@ -52,6 +54,23 @@ export function createContributionRegistry<T extends IdentifiedContribution>(
 
     contributions.set(contribution.id, contribution);
     order.push(contribution.id);
+    let disposed = false;
+
+    return {
+      dispose: (): void => {
+        if (disposed) {
+          return;
+        }
+        disposed = true;
+        if (contributions.get(contribution.id) === contribution) {
+          contributions.delete(contribution.id);
+          const index = order.indexOf(contribution.id);
+          if (index >= 0) {
+            order.splice(index, 1);
+          }
+        }
+      }
+    };
   };
 
   for (const contribution of initialContributions) {

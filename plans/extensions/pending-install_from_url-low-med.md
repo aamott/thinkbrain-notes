@@ -1,27 +1,25 @@
-# Install from URL
+# Install from URL (Deferred)
 
 ## Goal
 
-Allow users to install an extension from a URL. The app downloads the extension
-package, validates its manifest, checks declared capabilities, and installs it
-into the extension storage area (outside the workspace).
+Defer URL-based extension installation. The foreseeable beta uses trusted
+built-ins and local-directory development loading; URL download, remote code
+trust, signing, and marketplace distribution are intentionally not part of the
+beta decision.
 
 ## Acceptance Criteria
 
-- [ ] User can paste a URL and trigger install from the extensions UI.
-- [ ] Downloaded zip is extracted and validated (manifest parse, capability
-      check) before activation. Packaging format is defined in the packaging
-      format story.
-- [ ] Install fails loudly with useful errors for bad URLs, invalid packages,
-      or missing manifests.
-- [ ] HTTPS is required for URL installs (no plain HTTP).
-- [ ] Installed extension is stored outside the workspace (OS app-data area).
-- [ ] Sandbox is enforced for the installed extension (depends on
-      capability-based sandbox story).
-- [ ] Manual/E2E test: install a sample extension from URL and verify it loads
-      with granted capabilities only.
+- [x] The beta explicitly does not expose URL installation.
+- [x] Documentation states that URL installation requires a future trust,
+      signing, update, and remote-code review; HTTPS alone is insufficient.
+- [ ] A future design may define download, package validation, user consent,
+      rollback, and compatibility handling once that trust decision is made.
+- [ ] URL-installed code must not be described as sandboxed unless a separate
+      strong-isolation decision is approved.
+- [ ] This story remains for future planning and is not a prerequisite for
+      built-in or local-directory extensions.
 
 ## References
 
-- `plans/technical-decisions.md` — Extensions section (install from URL)
+- `plans/technical-decisions.md` — Extensions section (URL install deferred)
 - `apps/desktop/src-tauri` — native download/install bridge

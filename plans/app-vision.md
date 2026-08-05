@@ -43,11 +43,11 @@ fully supported. Cloud providers are optional.
 | Mobile (Phase 2) | Tauri Mobile (same webview as desktop) |
 | Editor | CodeMirror 6 |
 | Native backend | Rust |
-| Storage | Markdown files + JSON config |
+| Storage | Markdown files + JSON config; secrets via native OS store |
 | Search index | SQLite FTS5 (ephemeral cache, never source of truth) |
 | Git | System Git (invoked via Rust) |
 | AI | Local and remote providers (deferred) |
-| Extensions | Internal API (V1); capability-based sandbox |
+| Extensions | Trusted local same-context modules (beta); soft capability gates |
 
 ## Architecture
 

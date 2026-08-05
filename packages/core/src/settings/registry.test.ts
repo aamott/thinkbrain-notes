@@ -66,6 +66,82 @@ describe("settings registry", () => {
     );
   });
 
+  it("rejects empty and non-lowercase kebab-case module ids", () => {
+    const registry = createSettingsRegistry();
+    for (const id of ["", "Editor", "editor.foo", "-editor", "editor-", "editor__view"]) {
+      expect(() => registry.register({
+        id,
+        label: "Invalid",
+        scope: "app",
+        sections: []
+      })).toThrow("Invalid settings module id");
+    }
+  });
+
+  it("disposes exactly one module, releases its sections, and allows re-registration", () => {
+    const registry = createSettingsRegistry();
+    const firstModule: SettingsModule = {
+      id: "first-module",
+      label: "First",
+      scope: "app",
+      sections: [{
+        id: "shared.section",
+        label: "Shared",
+        settings: [{
+          key: "value",
+          type: "string",
+          label: "Value",
+          description: "First value",
+          default: "first",
+          scope: "app",
+          section: "shared.section"
+        }]
+      }]
+    };
+    const secondModule: SettingsModule = {
+      id: "second-module",
+      label: "Second",
+      scope: "app",
+      sections: [{
+        id: "second.section",
+        label: "Second",
+        settings: []
+      }]
+    };
+    const firstRegistration = registry.register(firstModule);
+    registry.register(secondModule);
+
+    firstRegistration.dispose();
+    firstRegistration.dispose();
+    expect(registry.getAllModules().map((module) => module.id)).toEqual(["second-module"]);
+    expect(registry.getDefinitionsForSection("shared.section")).toEqual([]);
+    expect(registry.getModule("second-module")).toBe(secondModule);
+
+    const replacementRegistration = registry.register(firstModule);
+    expect(registry.getAllModules().map((module) => module.id)).toEqual([
+      "second-module",
+      "first-module"
+    ]);
+    expect(registry.getDefinition("first-module.value")?.default).toBe("first");
+    replacementRegistration.dispose();
+  });
+
+  it("rejects duplicate section ids, including empty sections", () => {
+    const registry = createSettingsRegistry();
+    const module: SettingsModule = {
+      id: "duplicate-sections",
+      label: "Duplicate",
+      scope: "app",
+      sections: [
+        { id: "empty", label: "Empty" },
+        { id: "empty", label: "Again" }
+      ]
+    };
+
+    expect(() => registry.register(module)).toThrow('Duplicate section id "empty"');
+    expect(registry.getModule("duplicate-sections")).toBeUndefined();
+  });
+
   it("returns definitions for a section id", () => {
     const registry = registryWithBuiltIns();
 

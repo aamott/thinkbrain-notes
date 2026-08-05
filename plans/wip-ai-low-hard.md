@@ -105,7 +105,11 @@ plain JSON.
   the panel container before AI behavior is enabled.
 - The `extensions` epic remains prerequisite for third-party providers/agents.
   Built-in local chat and the host transport may be planned independently but
-  must not create an extension bypass.
+  must not create an extension bypass. Registration wiring is tracked in
+  `plans/extensions/pending-beta_builtin_extensions-med-med.md`.
+- Native credential storage for ACP/provider callers is tracked in
+  `plans/extensions/pending-extension_secret_storage-med-hard.md`; the
+  encrypted app-data fallback remains a separate deferred decision.
 - `semantic-search` consumes approved AI contracts later; it does not block
   chat or ACP.
 

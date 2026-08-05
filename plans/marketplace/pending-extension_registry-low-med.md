@@ -16,10 +16,10 @@ in OS app-data.
   cache is used when the fetch fails).
 - Index entries expose the fields needed by the marketplace UI (id, name,
   description, version, author, download URL, signature ref).
-- No proprietary cloud backend; direct URL/file install remains available
-  independent of the registry.
+- No proprietary cloud backend; direct URL discovery/install is deferred, and
+  later local-file install remains independent of the registry.
 
 ## References
 
 - `plans/pending-marketplace-low-med.md`
-- Prerequisite: `plans/pending-extensions-low-hard.md` (manifest format, capability sandbox)
+- Prerequisite: `plans/pending-extensions-low-hard.md` (manifest format and trusted local loading; remote discovery remains deferred)

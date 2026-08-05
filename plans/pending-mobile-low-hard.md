@@ -61,11 +61,11 @@ components reflow based on viewport width.
 
 ### Capability gating
 
-Some Tauri commands are desktop-only (terminal, process-spawn). The extension
-system's capability model handles this via platform-aware capabilities (already
-in the `extensions` plan): mobile builds declare a more restrictive capability
-set and exclude desktop-only commands. Mobile capabilities are enforced at the
-Tauri layer, not duplicated in the renderer.
+Some Tauri commands are desktop-only (terminal, process-spawn). The trusted
+extension system uses platform-aware capability declarations as compatibility
+gates (already in the `extensions` plan): mobile builds may declare a more
+restrictive set and warn/disable desktop-only features. These gates are not a
+security sandbox or hostile-extension boundary.
 
 ### Known limitations
 

@@ -112,7 +112,9 @@ Decision: Use human-readable JSON settings.
 Settings levels:
 1. Application settings
 2. Workspace settings stored outside the workspace
-3. Extension settings, deferred until the `extensions` epic is active
+3. Extension settings, deferred until the `extensions` epic is active; when
+   implemented, non-secret values reuse the registry through extension-scoped
+   namespaces
 
 Workspace settings must live in the OS application-data/config area, keyed by
 workspace identity/path. Do not place app settings files inside the user's
@@ -120,13 +122,30 @@ workspace.
 
 ## Extensions
 
-Decision: MVP supports internal contribution points only.
+Decision: For the foreseeable beta, extensions are trusted local, same-context
+JavaScript modules. Maintainability and easy development take priority over
+hostile-extension isolation. Built-ins ship first; local-directory development
+loading is the primary development path, and later install-from-file may warn
+that an extension runs with app privileges.
 
-Do not build third-party extension execution, install-from-URL, sandboxing,
-signing, or marketplace features until the `extensions` epic is active.
+Capabilities are soft declarations and compatibility gates, not a security
+sandbox. They document intended access, allow the app to disable or warn about
+unsupported features (including platform-specific features), and must not be
+presented as adversarial isolation. Defer install-from-URL, signing,
+marketplace/discovery, and strong process/iframe isolation.
 
-V1 extension permissions: strict capability-based sandbox. No unrestricted
-filesystem access.
+Non-secret extension settings reuse the existing JSON settings registry through
+extension-scoped, namespaced APIs and remain outside the workspace. Credentials
+never live in JSON: the Rust/native layer uses the OS secret store through
+platform adapters. An encrypted app-data fallback is an explicitly deferred
+security decision, not an assumed or current storage path. APIs return scoped
+operations and never bulk/raw cross-extension secrets. See
+`plans/extensions/pending-extension_secret_storage-med-hard.md`.
+
+Every extension activation owns a disposable resource scope. Commands, panels,
+event subscriptions, timers, file watchers, background tasks, and other
+registered resources must be disposed automatically on deactivation, unload, and
+failed activation.
 
 ## UI Components and Themes
 

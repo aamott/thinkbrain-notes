@@ -47,11 +47,12 @@ Rationale:
 
 ### Process spawning: custom Rust commands (not tauri-plugin-shell)
 
-`tauri-plugin-shell` grants arbitrary command execution — the opposite of
-AGENTS.md's capability-based sandbox. Custom `agent_spawn`/`agent_prompt`/
+`tauri-plugin-shell` grants arbitrary command execution, so the native ACP
+boundary must remain explicit and typed. Custom `agent_spawn`/`agent_prompt`/
 `agent_cancel` commands only spawn preconfigured agent binaries from the
-registry. This is a new privileged native capability, surfaced here per the
-"architectural decisions" rule.
+registry. This is a privileged native operation, surfaced here per the
+"architectural decisions" rule; it is separate from the extensions epic's soft
+compatibility declarations.
 
 ### Agent autodetection
 

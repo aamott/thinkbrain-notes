@@ -8,10 +8,10 @@ back to a previous version when an update breaks something. Builds on the
 
 ## Acceptance Criteria
 
-- User can check for updates across installed extensions (against the registry
-  and/or a direct URL).
-- Update path reuses the same verification (metadata + signature) and sandbox
-  consent flow as a fresh install.
+- User can eventually check for updates across installed extensions against a
+  future registry; direct URL updates remain deferred.
+- Update path reuses future metadata/signature verification and explicit trusted-
+  code consent; soft capability gates are compatibility checks, not a sandbox.
 - Previous version is retained so a failed/bad update can be rolled back.
 - Update state (last-checked, available update, installed history) lives in OS
   app-data, never in the vault.
@@ -21,6 +21,6 @@ back to a previous version when an update breaks something. Builds on the
 ## References
 
 - `plans/pending-marketplace-low-med.md`
-- Prerequisite: `plans/pending-extensions-low-hard.md` (install mechanism, capability sandbox)
+- Prerequisite: `plans/pending-extensions-low-hard.md` (trusted local loading and lifecycle; remote updates are deferred)
 - Depends on: `pending-extension_registry-low-med.md`,
   `pending-extension_metadata_signing-low-hard.md`

@@ -62,6 +62,7 @@ export const designTokenNames: DesignTokenNames = {
 };
 
 export * from "./contributions";
+export * from "./lifecycle";
 export * from "./frontmatter";
 export * from "./layout";
 export * from "./markdown";

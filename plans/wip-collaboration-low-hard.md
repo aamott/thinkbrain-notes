@@ -77,8 +77,9 @@ constraints, the epic stays deferred.
 ## Dependencies
 
 - No hard dependencies on other epics, but strongly informed by:
-  - `extensions` — a capability-sandboxed extension API may be the cleanest
-    way to ship collaboration as an opt-in module rather than core.
+  - `extensions` — a trusted local extension API may be the cleanest way to
+    ship collaboration as an opt-in module rather than core; soft capability
+    declarations are compatibility gates, not isolation.
   - `note-model` — the Markdown document model and frontmatter handling must
     be stable before layering CRDT merge semantics on top.
 - This epic is **bottom priority** and exploratory — not committed to ship.

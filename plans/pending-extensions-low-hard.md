@@ -1,17 +1,20 @@
 # Extensions
 
-> Extension system: internal contribution points, a third-party extension API,
-> and a capability-based sandbox. This is a **future epic** (low urgency, not yet
-> started). Read `plans/app-vision.md` and `plans/technical-decisions.md`
-> (Extensions section) before starting any story here.
+> Extension system: internal contribution points and trusted local modules. This is
+> a **future epic** (low urgency; implementation is in progress, with internal
+> contribution points partially complete). Read `plans/app-vision.md` and
+> `plans/technical-decisions.md` (Extensions section) before starting any story
+> here. The foreseeable beta favors maintainability and easy development over
+> hostile-extension isolation.
 
 ## Goal
 
 Make the app extensible without compromising the local-first, privacy-first, and
 "your files stay plain Markdown" principles. Start with internal contribution
-points (already partially designed), then add a manifest format, a
-capability-based sandbox, and install flows so third-party extensions can run
-safely. Extension settings integrate with the existing JSON settings system.
+points (already partially designed), then add a manifest format, trusted
+same-context module loading, and lifecycle management. Built-ins ship first;
+third-party extension safety is not the beta goal. Extension settings integrate
+with the existing JSON settings registry through namespaced APIs.
 
 Target extension use cases that shape the API design:
 
@@ -24,8 +27,29 @@ Target extension use cases that shape the API design:
 - **Journal/calendar**: activity bar entries, popout panels, note templates,
   workspace-scoped settings.
 
-These use cases drive the capability set, event types, and API surface. The
-extension system must support them without special-casing.
+These use cases drive the capability declarations, compatibility gates, event
+types, and API surface. The extension system must support them without
+special-casing.
+
+## Beta built-in extensions
+
+Built-ins ship before any third-party distribution story and use the same
+contribution/lifecycle APIs as future local extensions. This epic owns only the
+extension boundary and registration; feature behavior remains in the existing
+epics:
+
+- **Journal/calendar** — built-in activity-bar entries, panels, templates, and
+  namespaced settings. Journal/calendar behavior and Markdown storage remain in
+  its existing feature epic.
+- **Git sync** — built-in sync/background-task contributions. Git operations,
+  file watching, conflict handling, and sync UX remain owned by
+  `plans/wip-git-integration-high-hard.md` and its child stories.
+- **ACP Agent Chat** — built-in assistant contribution and scoped credential/API
+  boundary. ACP host lifecycle, chat UI, permissions, and provider behavior
+  remain owned by `plans/wip-ai-low-hard.md` and `plans/ai/`.
+
+No beta built-in receives a third-party-install path or a separate privilege
+model; each runs as trusted app code in the same context.
 
 ## Scope
 
@@ -33,20 +57,25 @@ In scope:
 
 - internal contribution points: command registry, activity/sidebar panel
   registration, editor command hooks, settings schema registration
-- extension execution model: same-context JS modules with capability-gated
-  Tauri commands (no iframe/process isolation in V1)
-- extension activation lifecycle: lazy activation via declared events
+- extension execution model: trusted same-context JS modules (no
+  iframe/process isolation in beta)
+- extension activation lifecycle: lazy activation via declared events, with
+  disposable ownership and automatic cleanup on deactivate/unload/failure
   (onStartup, onCommand, onView, onLanguage)
 - extension event system: typed pub/sub for app events (note.opened,
   file.saved, workspace.switched) and extension-emitted events
 - `extension.json` manifest format (with activation events, apiVersion,
-  packaging format)
+  packaging format, and soft capability declarations)
 - extension packaging format: directory with `extension.json` + JS entry;
-  zip for distribution; dev mode loads from local directory
-- capability-based sandbox (V1: strict, no unrestricted filesystem access)
-- permission declarations in the manifest
-- install from URL and install from file
-- extension settings (stored outside the workspace, keyed by extension id)
+  local-directory dev loading first; install-from-file later with an app-
+  privileges warning
+- compatibility gates for declared capabilities and platform requirements (not
+  a security sandbox)
+- extension-scoped, namespaced non-secret settings through the existing JSON
+  registry; secret storage through Rust/native OS credential-store adapters with
+  no raw/bulk cross-extension reads. An encrypted app-data fallback decision is
+  deferred.
+- install from file (later, with a trusted-code warning)
 - third-party extension API surface: views, panels, menus, context menus,
   editor actions, settings contributions, themes, AI tools, Git tools,
   background tasks, extension data storage, event system, static registry
@@ -57,13 +86,14 @@ In scope:
 
 Non-goals (deferred or out of scope for V1):
 
-- extension marketplace / discovery (separate `marketplace` epic)
-- extension signing / trust model (may be revisited before V1 ships)
-- unrestricted filesystem access for extensions (explicitly rejected for V1)
+- install-from-URL (deferred)
+- extension signing, marketplace/discovery, and a stronger trust model (separate
+  future work; not beta prerequisites)
+- hostile-extension isolation via iframe/process sandboxing (deferred unless the
+  threat model changes)
 - remote/code-server extension hosting
-- iframe or process isolation for extension execution (deferred to V2 if
-  the threat model demands it; V1 uses same-context + capabilities)
-- extension-to-extension direct communication (V1: indirect via commands)
+- extension-to-extension direct communication (indirect APIs only unless a
+  later decision adds a broker)
 
 ## Architecture Decisions
 
@@ -74,25 +104,31 @@ them (command registry, panel registration, editor hooks, settings schema
 registration) as the same surface third-party extensions will later use, so
 built-in features and extensions share one contribution model.
 
-### Capability-based sandbox
+### Soft capability declarations
 
-V1 uses a strict capability-based sandbox. Extensions declare the capabilities
-they need in their manifest; the app grants only those. No unrestricted
-filesystem access. Third-party extension execution requires the sandbox to be
-in place before any install-from-URL/file story is considered done.
+Capabilities are typed, manifest-declared compatibility gates and documentation,
+not a security sandbox. The runtime may disable unsupported commands or warn
+when a capability is unavailable, including on mobile, but a loaded extension is
+trusted local code with app privileges. Do not claim that capability checks
+provide hostile-extension isolation.
 
 ### Manifest-driven
 
 Each extension ships an `extension.json` manifest declaring id, version,
-capabilities, contribution points, and entry points. The static registry reads
-manifests to populate commands, panels, menus, etc.
+capabilities, contribution points, and entry points. Extension ids are canonical
+lowercase kebab-case values matching `[a-z][a-z0-9]*(?:-[a-z0-9]+)*`; dotted,
+uppercase, and underscore forms are invalid. The static registry reads manifests
+to populate commands, panels, menus, etc.
 
-### Settings integration
+### Settings and credentials integration
 
-Extension settings are the third settings level (after application and
-workspace settings). They live in the OS application-data/config area, keyed by
-extension id, and never inside the workspace. This aligns with the existing
-settings decision in `plans/technical-decisions.md`.
+Non-secret extension settings reuse the existing JSON settings registry through
+extension-scoped, namespaced APIs. Values live in the OS application-data/config
+area, never inside the workspace, and an extension can read/write only its own
+namespace. Credentials never live in JSON: Rust/native code uses OS credential-
+store adapters. An encrypted app-data fallback requires a separate security
+decision and is explicitly deferred. APIs expose scoped operations and never
+bulk/raw cross-extension secrets.
 
 ### Hub and spoke
 
@@ -103,19 +139,23 @@ matching the existing hub-and-spoke rule. Mobile is a Tauri Mobile build target
 of `apps/desktop/` (same webview, same adapters) — there is no separate
 `apps/mobile/` directory.
 
-### Execution model: same-context JS modules
+### Execution model: trusted same-context JS modules
 
-Extensions run as JavaScript modules in the Tauri webview (same context as the
-app). Security is provided by the capability system — extensions can only
-invoke Tauri commands they have capabilities for. No iframe or process
-isolation in V1. This gives extensions full React access for UI contributions
-and keeps the architecture simple. Iframe/process isolation is deferred to V2
-if the threat model demands it.
+Extensions run as trusted JavaScript modules in the Tauri webview (same context
+as the app). This is intentionally not a security boundary: extensions run
+with app privileges, and local-directory development loading should be easy to
+use. No iframe or process isolation is planned for the beta. Later
+install-from-file must warn clearly that the package runs with app privileges.
 
-Same model applies on mobile (Tauri mobile is also a webview). The capability
-set is platform-aware: some capabilities (e.g. `terminal`, `process-spawn`)
-are desktop-only and silently unavailable on mobile. Extension manifests can
-declare platform requirements via `engines.platform`.
+The same model applies on mobile (Tauri mobile is also a webview). Manifest
+capabilities and `engines.platform` declarations are compatibility gates; the
+runtime may disable or warn about desktop-only features such as `terminal` and
+`process-spawn`, but must not describe that as adversarial isolation.
+
+Each activation receives a disposable ownership scope. Registrations, event
+subscriptions, timers, file watchers, background tasks, and native handles are
+owned by that scope and automatically cleaned up on deactivate, unload, or
+failed activation.
 
 ### Lazy activation
 
@@ -132,12 +172,31 @@ extensions get a deprecation warning, not a silent failure.
 
 ## Prerequisites / Dependencies
 
-This epic is a **prerequisite** for:
+This epic provides the extension boundary for:
 
-- `ai` — the AI provider abstraction depends on the extension API to register
-  AI tools/providers as extensions.
-- `marketplace` — extension discovery and install depends on the manifest
-  format, sandbox, and install flows defined here.
+- `ai` — third-party providers/agents may later register through this API, while
+  built-in ACP Agent Chat remains owned and deliverable in `wip-ai`/`plans/ai/`.
+- `marketplace` — future discovery and signing work may consume the manifest and
+  packaging decisions, but marketplace and URL-install work are explicitly
+  deferred from the beta.
+
+Built-in journal/calendar and Git sync features likewise keep their behavior in
+their existing epics; this epic owns only their extension registrations.
+
+Focused follow-up stories:
+
+- `plans/extensions/pending-extension_secret_storage-med-hard.md` — Rust/native
+  secret storage and OS credential-store adapters. The encrypted app-data
+  fallback remains an explicit decision to make later; it is not assumed by the
+  current implementation.
+- `plans/extensions/pending-beta_builtin_extensions-med-med.md` — beta
+  registration wiring for journal/calendar, Git sync, and ACP Agent Chat. Feature
+  behavior stays in the existing journal/calendar, Git, and AI epics.
+
+The internal contribution implementation and lifecycle/scoped-settings work are
+usable prerequisites for these stories. Secret storage also depends on the
+native gateway boundaries in `plans/wip-ai-low-hard.md`; built-in registrations
+consume the existing feature epics rather than blocking their behavior work.
 
 This epic itself has no hard blocking prerequisites, but it assumes the
 internal contribution points (command registry, panel registration, editor
@@ -146,20 +205,36 @@ are not yet formalized, the first story here should establish them.
 
 ## Validation
 
-- Unit tests for manifest parsing and capability validation.
-- Unit tests for the sandbox permission checks (deny-by-default).
+- Unit tests for manifest parsing, compatibility-gate evaluation, lifecycle
+  ownership, and automatic cleanup.
+- Tests for namespaced settings and OS secret-store adapters; no test may expose
+  bulk/raw cross-extension secrets. Encrypted fallback behavior is not tested
+  until its separate security decision is approved.
 - `pnpm lint`, `pnpm typecheck`, `pnpm build`.
-- Manual: install a sample extension from file and URL, verify it only accesses
-  granted capabilities, verify settings persist outside the workspace.
+- Manual: load a sample local-directory extension, verify built-in contributions
+  and cleanup, and verify that later file installation presents the app-
+  privileges warning. URL installation is deferred.
 
 ## Status
 
-- ⬜ Internal contribution points — command registry, panel registration, editor hooks, settings schema registration
-- ⬜ Extension execution model — same-context JS modules, runtime lifecycle, capability-gated commands
-- ⬜ Extension manifest format — `extension.json` schema, parser, activation events, apiVersion
-- ⬜ Extension packaging format — directory structure, zip distribution, dev mode
-- ⬜ Capability-based sandbox — V1 strict sandbox, deny-by-default, no unrestricted filesystem access
-- ⬜ Extension API surface — views, panels, menus, context menus, editor actions, themes, AI/Git tool hooks, background tasks, data storage, event system, static registry
-- ⬜ Install from URL — download and install an extension from a URL
-- ⬜ Install from file — install an extension from a local file
-- ⬜ Extension settings — per-extension settings stored outside the workspace
+- ✅ Internal contribution points — core command, panel, editor-hook, and
+  settings-schema contracts/bridges are implemented and tested; follow-up review
+  notes remain in `plans/extensions/pending-internal_contribution_points-low-med.md`
+- ⬜ Extension execution model — lifecycle/disposable ownership and tested
+  cleanup are implemented; module loading, manifests, capability/platform gates,
+  and local-directory loading remain pending (see
+  `plans/extensions/pending-extension_execution_model-low-med.md`)
+- ⬜ Extension manifest format — `extension.json` schema, parser, activation events, apiVersion, soft capability declarations
+- ⬜ Extension packaging format — directory structure and local-directory dev loading; file packaging remains later
+- ⬜ Soft capability gates — compatibility checks and warnings, not a security sandbox
+- ⬜ Extension API surface — views, panels, menus, context menus, editor actions, themes, AI/Git tool hooks, background tasks, namespaced settings/data, event system, and cleanup
+- ⬜ Install from URL — deferred; do not implement in beta
+- ⬜ Install from file — later trusted-package install with an explicit app-privileges warning
+- ⬜ Extension settings and credentials — scoped namespace/read-write/change subscriptions are implemented and tested; manifest schemas, settings UI/E2E, native secrets, encrypted-fallback decision, and uninstall cleanup remain pending (see
+  `plans/extensions/pending-extension_settings-low-med.md`)
+- ⬜ Rust/native secret storage — OS credential-store adapters and the explicitly
+  deferred encrypted-fallback decision (see
+  `plans/extensions/pending-extension_secret_storage-med-hard.md`)
+- ⬜ Beta built-in extensions integration — journal/calendar, Git sync, and ACP
+  Agent Chat registration wiring; feature behavior remains in existing epics
+  (see `plans/extensions/pending-beta_builtin_extensions-med-med.md`)

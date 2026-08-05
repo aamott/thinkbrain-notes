@@ -94,6 +94,35 @@ describe("contribution registry", () => {
     );
   });
 
+  it("returns an idempotent unregister handle and permits re-registration", () => {
+    const first: CommandContribution = {
+      id: "reusable",
+      title: "First",
+      handler: () => undefined
+    };
+    const second: CommandContribution = {
+      id: "second",
+      title: "Second",
+      handler: () => undefined
+    };
+    const replacement: CommandContribution = {
+      id: "reusable",
+      title: "Replacement",
+      handler: () => undefined
+    };
+    const registry = createContributionRegistry<CommandContribution>();
+    const registration = registry.register(first);
+    registry.register(second);
+
+    registration.dispose();
+    registration.dispose();
+    expect(registry.entries()).toEqual([second]);
+
+    const replacementRegistration = registry.register(replacement);
+    expect(registry.entries()).toEqual([second, replacement]);
+    replacementRegistration.dispose();
+  });
+
   it("returns a defensive entries snapshot", () => {
     const command: CommandContribution = {
       id: "snapshot",

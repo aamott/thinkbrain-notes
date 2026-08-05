@@ -85,7 +85,10 @@ rebuilt against the native adapter; no retired desktop store or UI is reused.
   `NativeCommandMap`, `NativeError`, activity bar, and sidebar layout all
   exist.
 
-No other epic blocks this one.
+No other epic blocks this one. The extensions epic may later provide the
+registration seam for built-in Git sync contributions; registration wiring is
+tracked in `plans/extensions/pending-beta_builtin_extensions-med-med.md` and does
+not transfer ownership of Git behavior from this epic.
 
 ## Validation
 
