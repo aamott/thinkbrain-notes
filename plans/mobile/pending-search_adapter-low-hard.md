@@ -20,8 +20,8 @@ in OS app-data — never in the vault.
 
 ## References
 
-- `plans/indexing-search.md` — desktop indexing architecture and FTS5 schema
+- `plans/wip-indexing-search-med-med.md` — desktop indexing architecture and FTS5 schema
 - `apps/desktop/src-tauri/src/lib.rs` — `resolve_index_db_path`,
   `stable_workspace_hash` (reference implementation)
 - `plans/technical-decisions.md` — Database and Indexes, Search sections
-- `plans/mobile.md` — Platform adapter contract
+- `plans/pending-mobile-low-hard.md` — Platform adapter contract

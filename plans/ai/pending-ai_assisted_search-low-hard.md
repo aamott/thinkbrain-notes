@@ -22,6 +22,6 @@ the deterministic FTS5 search path.
 
 - `plans/app-vision.md` — `semantic-search` epic (depends on `indexing-search`,
   possibly `ai`)
-- `plans/ai.md`
-- `plans/semantic-search.md`
+- `plans/wip-ai-low-hard.md`
+- `plans/pending-semantic-search-low-hard.md`
 - Depends on: `pending-provider_configuration_and_gateway-med-hard.md`.

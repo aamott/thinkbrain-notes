@@ -8,6 +8,7 @@ export default tseslint.config(
   {
     ignores: [
       ".agents/**",
+      "mockup_v3/**",
       "**/dist/**",
       "**/node_modules/**",
       "apps/desktop/src-tauri/target/**"

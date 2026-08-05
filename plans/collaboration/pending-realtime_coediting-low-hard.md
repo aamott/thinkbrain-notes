@@ -19,4 +19,4 @@ the same note simultaneously and see each other's changes live.
 
 - `apps/desktop/src/editor/` — CodeMirror 6 editor integration
 - `plans/collaboration/pending-crdt_merge_layer-low-hard.md`
-- `plans/collaboration.md` — CodeMirror 6 collaboration bindings
+- `plans/wip-collaboration-low-hard.md` — CodeMirror 6 collaboration bindings

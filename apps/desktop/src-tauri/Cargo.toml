@@ -19,3 +19,29 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
+
+# ---------------------------------------------------------------------------
+# Build profiles
+# ---------------------------------------------------------------------------
+
+# Dev: prioritize fast compile/test iteration. Line-tables-only debuginfo
+# keeps panics/backtraces useful while cutting compile time and artifact size.
+[profile.dev]
+debug = "line-tables-only"
+incremental = true
+
+# Dev dependencies (tauri, rusqlite, serde, etc.): leave at opt-level 0 so
+# they compile fast. Override here only if a dep is a runtime hotspot in dev.
+[profile.dev.package."*"]
+opt-level = 0
+
+# Release: optimized, small binary. Thin LTO gives most of fat LTO's benefit
+# at a fraction of the link-time cost (mold further accelerates it).
+# codegen-units = 1 maximizes inlining/optimization across the crate.
+# strip removes symbol tables for a smaller shipped binary.
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
+incremental = false

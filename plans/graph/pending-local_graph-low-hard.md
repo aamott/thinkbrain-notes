@@ -28,6 +28,6 @@ resolution (`pending-link_target_resolution`).
 
 - `packages/core/src/note-model.ts` — `WikiLink`, `NoteMetadata`
 - `packages/core/src/markdown.ts` — `extractWikiLinks`
-- `plans/graph.md` — this epic
+- `plans/pending-graph-low-hard.md` — this epic
 - `plans/graph/pending-graph_view-low-hard.md` — prerequisite
 - `plans/graph/pending-link_target_resolution-low-med.md` — prerequisite

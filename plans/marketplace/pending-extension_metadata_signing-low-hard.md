@@ -23,5 +23,5 @@ direct installs.
 
 ## References
 
-- `plans/marketplace.md`
-- Prerequisite: `plans/extensions.md` (manifest format, capability sandbox)
+- `plans/pending-marketplace-low-med.md`
+- Prerequisite: `plans/pending-extensions-low-hard.md` (manifest format, capability sandbox)

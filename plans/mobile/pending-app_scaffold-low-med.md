@@ -19,6 +19,6 @@ dev build. This is the first story for the mobile epic and unblocks all others.
 
 ## References
 
-- `plans/mobile.md` — epic
+- `plans/pending-mobile-low-hard.md` — epic
 - `plans/app-vision.md` — architecture (`apps/mobile`, `packages/core`)
 - `plans/technical-decisions.md` — Platform, Repository Structure sections

@@ -1,0 +1,5 @@
+- name: Button component uses legacy classes instead of Tailwind v4
+- file: /media/adam/extex/projects/thinkbrain-notes/packages/ui/src/components/Button.tsx
+- lines: 24-25
+- description: The Button component uses `rounded-[var(--radius-medium)]` which is a legacy/raw CSS variable usage. With the Tailwind v4 migration (`@theme inline`), this should be updated to use the native Tailwind class `rounded-medium` (or similar depending on the exact token name mapping).
+- verification: Verified by inspecting `packages/ui/src/components/Button.tsx`.

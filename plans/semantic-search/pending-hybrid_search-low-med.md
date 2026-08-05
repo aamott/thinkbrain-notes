@@ -23,4 +23,4 @@ hybrid rank balances exact-match strength with meaning similarity.
 
 - `apps/desktop/src/search/searchService.ts` — `searchWorkspace`, `SearchResult`
 - `apps/desktop/src-tauri/src/lib.rs` — `documents_fts` FTS5 query path
-- `plans/semantic-search.md` — Architecture Decisions (hybrid ranking)
+- `plans/pending-semantic-search-low-hard.md` — Architecture Decisions (hybrid ranking)

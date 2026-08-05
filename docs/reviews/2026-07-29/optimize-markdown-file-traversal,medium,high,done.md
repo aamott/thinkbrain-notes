@@ -1,0 +1,5 @@
+- name: Optimize workspace markdown file listing and cleanup unused code
+- file: /media/adam/extex/projects/thinkbrain-notes/apps/desktop/src-tauri/src/commands/markdown.rs
+- lines: 1-307
+- description: 1) `#![allow(unused)]` at line 1 suppresses compiler warnings globally in markdown.rs, masking unused imports like `serde::Deserialize`. Remove `#![allow(unused)]` and unused imports. 2) `collect_markdown_file_entries` (lines 215-253) recursively traverses all subdirectories synchronously without skipping hidden directories like `.git` or setting depth/file limits, which can block the main IPC thread or freeze UI on large vaults. Add ignore filters for hidden folders and consider bounded/iterative traversal. 3) `updated_at` (lines 275-279) serializes UNIX epoch milliseconds as `Option<String>` instead of numeric timestamps or standard ISO-8601 strings.
+- verification: Code inspection of markdown.rs lines 1-3, 215-253, and 275-279.

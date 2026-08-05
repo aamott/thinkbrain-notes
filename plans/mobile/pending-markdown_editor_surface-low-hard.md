@@ -23,5 +23,5 @@ wrapped native editor). Decide the approach in this story.
 - `packages/core/src/markdown.ts` — shared Markdown parsing
 - `packages/core/src/note-model.ts` — note metadata and serialization
 - `plans/technical-decisions.md` — Editor section (CodeMirror is desktop-only)
-- `plans/note-model.md` — frontmatter mutation policy
-- `plans/mobile.md` — epic
+- `plans/wip-note-model-low-hard.md` — frontmatter mutation policy
+- `plans/pending-mobile-low-hard.md` — epic

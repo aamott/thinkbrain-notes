@@ -21,4 +21,4 @@ by workspace identity, mirroring desktop.
 - `packages/core/src/settings.ts` — shared settings types and shapes
 - `plans/technical-decisions.md` — Settings section
 - `apps/desktop/src/settings/settingsService.ts` — reference implementation
-- `plans/mobile.md` — Platform adapter contract
+- `plans/pending-mobile-low-hard.md` — Platform adapter contract

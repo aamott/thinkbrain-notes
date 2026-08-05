@@ -18,5 +18,5 @@ resume, end) is defined.
 
 ## References
 
-- `plans/collaboration.md` — session lifecycle, transport abstraction
+- `plans/wip-collaboration-low-hard.md` — session lifecycle, transport abstraction
 - `plans/collaboration/pending-architectural_direction_decision-low-med.md`

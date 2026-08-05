@@ -23,5 +23,5 @@ model.
 
 - `packages/core/src/note-model.ts` — `NoteMetadata`, `SerializableNote`
 - `packages/core/src/frontmatter.ts` — document serialization
-- `plans/collaboration.md` — Architecture Decisions
-- `plans/note-model.md` — document model stability
+- `plans/wip-collaboration-low-hard.md` — Architecture Decisions
+- `plans/wip-note-model-low-hard.md` — document model stability

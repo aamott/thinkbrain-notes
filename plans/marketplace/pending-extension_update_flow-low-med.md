@@ -20,7 +20,7 @@ back to a previous version when an update breaks something. Builds on the
 
 ## References
 
-- `plans/marketplace.md`
-- Prerequisite: `plans/extensions.md` (install mechanism, capability sandbox)
+- `plans/pending-marketplace-low-med.md`
+- Prerequisite: `plans/pending-extensions-low-hard.md` (install mechanism, capability sandbox)
 - Depends on: `pending-extension_registry-low-med.md`,
   `pending-extension_metadata_signing-low-hard.md`

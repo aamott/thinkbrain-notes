@@ -1,0 +1,67 @@
+# Workspace Explorer
+
+> The prior desktop explorer was removed with the retired UI. Rebuild the
+> essential folder-open and read-only tree flow in the fresh shell before the
+> follow-up file-manager stories below.
+
+## Goal
+
+Extend the file explorer beyond Markdown-only editing so users can manage and
+open all vault contents — text/code files, images, audio, video, attachments,
+config files, and folders — without leaving the app. Supported file types open
+in-app with dedicated viewers; unsupported binary formats fall back to the OS
+default application.
+
+## Scope
+
+- Generic (non-Markdown) file operations: open, rename, delete
+- Drag-and-drop move for files and folders in the tree
+- New-folder action
+- Show-hidden toggle for dot-prefixed entries (`.git`, `.obsidian`, …)
+
+## Architecture Decisions
+
+- **Generic file ops reuse the existing native bridge.** The current Rust
+  commands are Markdown-specific (`create_markdown_file`,
+  `rename_markdown_file`, `delete_markdown_file`). Generic operations should
+  be added as new commands (e.g. `rename_workspace_entry`,
+  `delete_workspace_entry`) that accept any path, keeping the Markdown-specific
+  commands intact for the editor/index flows that depend on them.
+- **Move = rename across directories.** A drag-and-drop move is a rename to a
+  new relative path; no separate "move" command is needed. Folders must move
+  recursively.
+- **Show-hidden is a listing parameter, not a post-filter.** The
+  `list_workspace_entries` command should accept an `includeHidden` flag so
+  dot-prefixed entries are returned by the native layer rather than filtered
+  client-side. This keeps the tree consistent with disk.
+- **Show-hidden preference is workspace-scoped.** Persist the toggle in
+  workspace settings (already stored outside the vault via
+  `read_workspace_settings` / `write_workspace_settings`), not in global app
+  settings.
+- **Tree stays virtualized.** react-arborist is already in use; drag-and-drop
+  should use its built-in DnD (currently disabled via `disableDrag`/
+  `disableDrop`) rather than a separate DnD library.
+
+## Status
+
+- ✅ fresh-shell workspace open, restore, and read-only explorer — see
+  `plans/workspace-explorer/done-fresh_shell_workspace_open-high-med.md`
+- ✅ Markdown CRUD UI integration in the fresh shell — see
+  `plans/workspace-explorer/done-fresh_markdown_crud_ui-high-hard.md`
+- ✅ Full-vault tree integration (folders + non-Markdown files, read-only) —
+  rebuilt against `list_workspace_entries` in the fresh shell
+- ✅ Dot-prefixed entries hidden by default — `lib.rs` `is_hidden_name`
+- ✅ Explorer icons, workspace selector, and multi-window workspace sessions — see
+  `plans/workspace-explorer/done-explorer_workspace_selector-high-hard.md` and
+  `plans/workspace-explorer/done-multi_window_workspace_sessions-high-hard.md`
+- ⬜ Non-Markdown file operations (open / rename / delete) — see
+  `pending-non_markdown_file_ops-med-med.md`
+- ⬜ Drag-and-drop move in the file tree — see
+  `pending-drag_and_drop_move-med-hard.md`
+- ⬜ New-folder action — see `pending-new_folder_action-med-med.md`
+- ⬜ Show-hidden toggle for dot-prefixed entries — see
+  `pending-show_hidden_toggle-med-med.md`
+- ⬜ Native file watcher (external changes sync) — see
+  `pending-file_watcher-med-hard.md`
+- ⬜ SQLite FTS5 full-text search backend — see
+  `pending-fts5_search_backend-low-hard.md`

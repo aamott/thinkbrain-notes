@@ -49,24 +49,32 @@ Body with #inline-tag and [[Some Note]] plus [[Other Note|Display Text]].
     expect(parsed.wikiLinks).toEqual([
       {
         target: "Some Note",
-        position: expect.any(Number)
+        position: expect.any(Number),
+        startOffset: expect.any(Number),
+        endOffset: expect.any(Number)
       },
       {
         target: "Other Note",
         displayText: "Display Text",
-        position: expect.any(Number)
+        position: expect.any(Number),
+        startOffset: expect.any(Number),
+        endOffset: expect.any(Number)
       }
     ]);
     expect(parsed.tasks).toEqual([
       {
         checked: false,
         text: "Write parser",
-        line: 5
+        line: 16,
+        startOffset: expect.any(Number),
+        endOffset: expect.any(Number)
       },
       {
         checked: true,
         text: "Add tests",
-        line: 6
+        line: 17,
+        startOffset: expect.any(Number),
+        endOffset: expect.any(Number)
       }
     ]);
   });

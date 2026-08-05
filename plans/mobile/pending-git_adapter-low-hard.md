@@ -20,6 +20,6 @@ deferred further — note the decision in the epic Status section.
 
 ## References
 
-- `plans/git-integration.md` — desktop Git epic (command surface reference)
+- `plans/pending-git-integration-high-hard.md` — desktop Git epic (command surface reference)
 - `plans/technical-decisions.md` — Git section
-- `plans/mobile.md` — Platform adapter contract
+- `plans/pending-mobile-low-hard.md` — Platform adapter contract

@@ -39,6 +39,8 @@ export interface NativeCommandMap {
     readonly args: { readonly rootPath: string };
     readonly result: NativeWorkspaceSnapshot;
   };
+  readonly open_workspace_window: { readonly args: { readonly rootPath: string }; readonly result: null };
+  readonly window_workspace_root: { readonly args: undefined; readonly result: string | null };
   readonly list_markdown_files: {
     readonly args: { readonly rootPath: string };
     readonly result: readonly NativeMarkdownFileEntry[];
@@ -85,6 +87,36 @@ export interface NativeCommandMap {
     };
     readonly result: null;
   };
+  readonly create_workspace_file: {
+    readonly args: {
+      readonly rootPath: string;
+      readonly relativePath: string;
+      readonly contents?: string;
+    };
+    readonly result: NativeWorkspaceEntry;
+  };
+  readonly create_workspace_folder: {
+    readonly args: {
+      readonly rootPath: string;
+      readonly relativePath: string;
+    };
+    readonly result: NativeWorkspaceEntry;
+  };
+  readonly rename_workspace_entry: {
+    readonly args: {
+      readonly rootPath: string;
+      readonly relativePath: string;
+      readonly newRelativePath: string;
+    };
+    readonly result: NativeWorkspaceEntry;
+  };
+  readonly delete_workspace_entry: {
+    readonly args: {
+      readonly rootPath: string;
+      readonly relativePath: string;
+    };
+    readonly result: null;
+  };
   readonly index_documents: {
     readonly args: {
       readonly rootPath: string;
@@ -119,6 +151,10 @@ export interface NativeCommandMap {
     readonly args: { readonly contents: string };
     readonly result: null;
   };
+  readonly update_desktop_state: {
+    readonly args: { readonly update: NativeDesktopStateUpdate };
+    readonly result: string;
+  };
   readonly read_workspace_settings: {
     readonly args: { readonly rootPath: string };
     readonly result: string | null;
@@ -130,6 +166,30 @@ export interface NativeCommandMap {
     };
     readonly result: null;
   };
+  readonly git_availability: {
+    readonly args: undefined;
+    readonly result: NativeGitAvailability;
+  };
+  readonly detect_git_repository: {
+    readonly args: { readonly rootPath: string };
+    readonly result: NativeGitRepository;
+  };
+  readonly initialize_git_repository: {
+    readonly args: { readonly rootPath: string };
+    readonly result: NativeGitRepository;
+  };
+  readonly git_status: {
+    readonly args: { readonly rootPath: string };
+    readonly result: readonly NativeGitStatusEntry[];
+  };
+  readonly stage_git_files: {
+    readonly args: { readonly rootPath: string; readonly paths: readonly string[] };
+    readonly result: null;
+  };
+  readonly unstage_git_files: {
+    readonly args: { readonly rootPath: string; readonly paths: readonly string[] };
+    readonly result: null;
+  };
 }
 
 export type NativeCommandName = keyof NativeCommandMap;
@@ -139,6 +199,12 @@ type ShellStatusInvoker = () => Promise<NativeShellStatus>;
 export interface NativeWorkspaceDescriptor {
   readonly root_path: string;
   readonly name: string;
+}
+
+export interface NativeDesktopStateUpdate {
+  readonly lastWorkspacePath?: string | null;
+  readonly recentWorkspacePaths?: readonly string[];
+  readonly explorerOpen?: boolean;
 }
 
 export interface NativeMarkdownFileEntry {
@@ -161,12 +227,31 @@ export interface NativeWorkspaceEntry {
   readonly kind: "directory" | "file";
   readonly is_markdown: boolean;
   readonly byte_size: number;
-  readonly updated_at: string | null;
+  readonly updated_at: number | null;
 }
 
 export interface NativeWorkspaceSnapshot {
   readonly workspace: NativeWorkspaceDescriptor;
   readonly files: readonly NativeMarkdownFileEntry[];
+}
+
+// Git command results use Rust's default snake_case serialization. The Git
+// service maps these values into frontend-friendly result unions.
+export interface NativeGitAvailability {
+  readonly available: boolean;
+  readonly version: string | null;
+}
+
+export interface NativeGitRepository {
+  readonly is_repository: boolean;
+  readonly branch: string | null;
+}
+
+/** A single porcelain-status entry already parsed by the native host. */
+export interface NativeGitStatusEntry {
+  readonly path: string;
+  readonly index_status: string;
+  readonly worktree_status: string;
 }
 
 // Sent to `index_documents`. Field names are camelCase here and mapped to the
@@ -189,13 +274,14 @@ export interface NativeSearchHit {
 }
 
 export async function invokeNativeCommand<TCommand extends NativeCommandName>(
-  command: TCommand,
-  args?: NativeCommandMap[TCommand]["args"]
+  ...[command, args]: NativeCommandMap[TCommand]["args"] extends undefined
+    ? [command: TCommand]
+    : [command: TCommand, args: NativeCommandMap[TCommand]["args"]]
 ): Promise<NativeCommandMap[TCommand]["result"]> {
   try {
     return await invoke<NativeCommandMap[TCommand]["result"]>(
       command,
-      args as Record<string, unknown> | undefined
+      args as (NativeCommandMap[TCommand]["args"] & Record<string, unknown>) | undefined
     );
   } catch (error) {
     throw normalizeNativeError(error);

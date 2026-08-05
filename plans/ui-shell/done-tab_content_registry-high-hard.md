@@ -5,6 +5,13 @@
 Implement persistent tab state and a pluggable desktop tab registry so the
 title bar can host editor, preview, settings, and future feature views.
 
+## Status
+
+The prior desktop-side implementation was retired with the old UI. The
+platform-neutral contract in `packages/core/src/layout/index.ts` remains the
+base, and a fresh `apps/desktop/src/tabs/` implementation now provides the
+desktop reducer, registry metadata, CodeMirror editor surface, and tests.
+
 ## Acceptance Criteria
 
 - [x] `packages/core/src/layout/` exports platform-neutral `TabKind`, `Tab`,
@@ -23,5 +30,11 @@ title bar can host editor, preview, settings, and future feature views.
 
 - `mockup_v3/src/components/{TitleBar,EditorArea}.tsx`
 - `mockup_v3/src/data/mockData.ts`
-- `apps/desktop/src/editor/MarkdownEditor.tsx`
-- `packages/core/src/index.ts`
+- `packages/core/src/layout/index.ts` (still present)
+- `apps/desktop/src/shell/DesktopShell.tsx` (currently uses a hardcoded tab array)
+
+## Implementation
+
+`tabModel.ts` and `tabRegistry.ts` are deliberately renderer-neutral. The
+shell binds registered kinds to fresh desktop surfaces, lazily loading the
+CodeMirror editor and assistant panel to keep the startup chunk compact.

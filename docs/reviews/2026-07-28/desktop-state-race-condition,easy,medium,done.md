@@ -1,0 +1,5 @@
+- name: Race condition in fallback saveDesktopState logic
+- file: /media/adam/extex/projects/thinkbrain-notes/apps/desktop/src/settings/desktopState.ts
+- lines: 67-82
+- description: In `saveDesktopState`, the fallback update logic reads the entire `appSettings` document, modifies the `desktopState` key, and writes it back. While `fallbackUpdateQueue` serializes these calls within a single process/window, it does not protect against race conditions across multiple windows or if the host modifies settings concurrently. The native bridge command `update_desktop_state` is the preferred path, but if fallback is used, we should add a warning or implement a more robust atomic file update.
+- verification: Verified by inspecting `saveDesktopState` in `apps/desktop/src/settings/desktopState.ts`.

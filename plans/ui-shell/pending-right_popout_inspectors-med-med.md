@@ -22,5 +22,5 @@ the assistant integration point while respecting data-owning epics.
 
 - `mockup_v3/src/components/RightPopout.tsx`
 - `packages/core/src/{frontmatter,markdown}.ts`
-- `plans/graph.md`
-- `plans/ai.md`
+- `plans/pending-graph-low-hard.md`
+- `plans/wip-ai-low-hard.md`

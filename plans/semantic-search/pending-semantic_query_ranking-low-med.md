@@ -22,4 +22,4 @@ query path that hybrid search builds on.
 - `apps/desktop/src/search/searchService.ts` — `searchWorkspace`, `SearchResult`
 - `apps/desktop/src/native/commands.ts` — `NativeSearchHit`, `NativeCommandMap`
 - `apps/desktop/src-tauri/src/lib.rs` — native command pattern, `NativeError`
-- `plans/semantic-search.md` — Scope (semantic similarity query and ranking)
+- `plans/pending-semantic-search-low-hard.md` — Scope (semantic similarity query and ranking)

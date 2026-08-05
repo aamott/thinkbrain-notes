@@ -15,5 +15,5 @@ read-only, scoped per-workspace or per-file as appropriate.
 
 ## References
 
-- `plans/collaboration.md` — permission model
+- `plans/wip-collaboration-low-hard.md` — permission model
 - `plans/collaboration/pending-shared_workspace_sessions-low-med.md`

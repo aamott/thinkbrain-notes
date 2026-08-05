@@ -18,4 +18,4 @@ collaborator's cursor/selection is within the active note.
 
 - `apps/desktop/src/editor/` — CodeMirror 6 editor
 - `packages/ui/src/components/` — presence list component (new)
-- `plans/collaboration.md` — Presence as ephemeral state
+- `plans/wip-collaboration-low-hard.md` — Presence as ephemeral state

@@ -18,4 +18,4 @@ canvases grow.
 ## References
 
 - `apps/desktop/src/` — canvas view, minimap component
-- `plans/canvas.md` — scope (navigation aids)
+- `plans/pending-canvas-low-hard.md` — scope (navigation aids)
