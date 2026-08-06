@@ -100,8 +100,8 @@ The journal extension creates a journal folder — named `journal` by default,
 changeable in the extension's settings — and writes Markdown files named by date
 into it. Nesting is bounded: at the flattest, all files sit directly in the
 journal folder; at the deepest, `year/month/day`. Layouts deeper than
-year/month/day are out of scope. The exact default (flat versus nested) and the
-exact filename pattern are NOT yet decided and are asked in Batch 2.
+year/month/day are out of scope. The default nesting and filename pattern are
+settled in D17.
 
 ### Batch 2 — recorded 2026-08-05
 
@@ -246,16 +246,63 @@ not a style choice.
 16. **Calendar tab on mobile.** The canvas/tab model on phone widths is not
     described; D12 only covers the popout going full screen.
 
+### Batch 4 — recorded 2026-08-05
+
+**D17. Default path and filename: `journal/YYYY/MM/YYYY-MM-DD-HHmm.md`.**
+Year and zero-padded month folders, with the file named by ISO date plus a
+24-hour time **to the minute**. Example: `journal/2026/08/2026-08-05-1307.md`.
+The `journal` root remains configurable per D7; the nesting and filename pattern
+above are the defaults.
+
+**The time component is always present** — it is not a collision fallback. Every
+new entry appends the current time.
+
+**D18. "New entry" always creates a new file.** It never reopens or appends to an
+existing entry, even when one already exists for today. Opening a past entry
+happens through the popout list (D9), not through the create action.
+
+**D19. Dates use local device time; backfilling is allowed.**
+"Today" is decided by the device clock. The user may create or adjust entries for
+past dates. No workspace-pinned timezone and no configurable day-start offset in
+the first slice.
+
+### Analyst notes — gaps raised by Batch 4
+
+17. **Date authority is undefined and is the highest-risk open item.** With dates
+    encoded in the filename *and* backfill allowed, it is unspecified whether the
+    filename, a frontmatter date field, or the filesystem timestamp is the source
+    of truth for grouping, calendar placement, and ordering. Renaming a file or
+    editing a date field would then disagree. The frontmatter contract story
+    cannot proceed without this.
+18. **Same-minute collision.** Two entries created inside the same minute produce
+    the same filename. A collision rule is required.
+19. **No "open today" action.** D18 makes create always-new, and D1 described
+    resuming today's entry — so the popout menu likely needs a distinct "today"
+    affordance separate from "new entry". The top-menu item list is still
+    unspecified.
+20. **Backfill mechanics.** Whether backfilling means choosing a date in a create
+    dialog, editing a date field afterwards, renaming the file, or all three — and
+    what time component a backfilled entry receives.
+21. **Timezone drift.** Filenames record local wall-clock time with no offset, so
+    entries written across timezones or a DST boundary may order or group
+    surprisingly. Acceptable for a local-first journal, but worth stating rather
+    than discovering.
+22. **Folder creation on backfill.** Backfilling into a past year or month implies
+    creating `YYYY/MM` folders that do not exist yet.
+
 ### Open questions carried forward
 
+- **Date authority: filename versus frontmatter date field versus file mtime**
+  (analyst note 17) — blocks the frontmatter contract story.
+- Same-minute filename collision rule.
+- The popout top-menu item list, including whether a distinct "today" action
+  exists alongside "new entry".
+- Backfill mechanics and the time component of a backfilled entry.
 - Whether a separate calendar activity-bar button still exists (D14 residual).
 - Per-day aggregation policy for the calendar (D8 provisional).
 - Day-click behavior, dot semantics, calendar tab identity, cross-surface filter
   scope, clear-filters affordance, calendar on mobile (analyst notes 11-16).
-- Same-day filename pattern; default folder nesting; exact filename pattern.
-- Whether "new entry for today" creates another file or reopens the existing one.
 - Whether metadata field definitions are app-global or per-workspace.
-- Date/time semantics (timezone, backfill, editing past dates).
 - Template handling.
 - Entry-state affordances: missing, empty, malformed, read-only, unsaved.
 - Field-definition drift and orphaned metadata display.
