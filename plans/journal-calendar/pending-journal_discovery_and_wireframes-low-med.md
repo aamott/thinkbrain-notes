@@ -128,9 +128,7 @@ Creating a new entry or opening a past one opens that file in the **main editor
 area** as a normal editor tab with a pre-named file. The popout is a navigator,
 not a writing surface.
 
-*Undecided (product owner raised it):* whether the popout body should default to
-a **calendar** rather than a list, with a button that opens a full calendar view
-in a tab. Asked in Batch 3; do not assume either.
+*Resolved in Batch 3 (D15):* the popout body is a grouped list, not a calendar.
 
 **D10. Required controls in the journal popout.**
 
@@ -138,7 +136,7 @@ in a tab. Asked in Batch 3; do not assume either.
 |---|---|
 | Open calendar | Opens a calendar view in a tab |
 | Filter by metadata | Filter entries by the user-defined fields from D4; filter options are **automatically populated** from values actually present in entries |
-| Search entries | Search across entries (scope asked in Batch 3) |
+| Search entries | Full-text search across entries; see D16 |
 | Group by | `none`, `day`, `week`, `month`, `year` — default `week` per D9 |
 
 Ordering is always chronological and is not user-configurable; no sort control is
@@ -195,17 +193,73 @@ decisions.
 10. **Deletion and rename.** Whether the popout offers delete/rename of entries,
     or defers to the file explorer.
 
+### Batch 3 — recorded 2026-08-05
+
+**D14. Calendar surfaces: a grouped list in the popout, a full calendar in a
+canvas tab.** *(supersedes the calendar half of D6)*
+There is no calendar grid in the left popout. A **full calendar opens from a
+button in the journal popout** into a tab on the canvas. The full calendar:
+
+- offers **week** and **month** views;
+- can surface per-day metadata such as activity and mood;
+- **in the first release shows only a dot on days that have an entry** — richer
+  metadata encodings come later;
+- exposes its view/display options in a control strip at the **top of the
+  calendar tab**.
+
+*Residual question:* D6 gave the calendar its own activity-bar entry. With the
+calendar now reached via a button in the journal popout, it is unclear whether a
+separate calendar activity-bar button still exists. Confirm before any activity-bar
+work; do not assume it was removed.
+
+**D15. The journal popout body is a "calendar list", not a calendar widget.**
+Literally a list of entries grouped by day, week, month, or year — the grouping
+control from D10. No date grid, no month cells, no mini-calendar in the popout.
+Anything resembling a real calendar visualization belongs to the full calendar
+tab (D14) and must not be pulled into the popout.
+
+**D16. Search is full text over entries and may reuse the existing search
+infrastructure, scoped to journal entries.**
+This confirms the dependency flagged in Batch 2 analyst note 2: journal search
+builds on the app's existing search rather than a journal-private mechanism.
+
+**Filter/search interaction:** when filters are already active (for example a
+date range), search runs **within** the filtered set and the UI must
+**emphasize the active filters** so the user does not mistake a filtered result
+set for the whole journal. A muted or easily-missed filter indicator is a defect,
+not a style choice.
+
+### Analyst notes — gaps raised by Batch 3
+
+11. **Day-click behavior in the full calendar** is undefined: open that day's
+    entry, filter the popout list to that day, or something else — and what
+    happens when the day holds several entries (D8).
+12. **Dot semantics with multiple entries.** One dot per day regardless of count,
+    or a count/intensity indication.
+13. **Calendar tab identity.** Whether the calendar reuses a single tab or can be
+    opened multiple times, and whether its view options persist across sessions
+    and per workspace.
+14. **Filter scope between surfaces.** Whether the full calendar inherits the
+    popout's active filters or maintains its own.
+15. **Clearing filters.** D16 requires emphasizing active filters; a discoverable
+    "clear filters" affordance is implied but not specified.
+16. **Calendar tab on mobile.** The canvas/tab model on phone widths is not
+    described; D12 only covers the popout going full screen.
+
 ### Open questions carried forward
 
-- Calendar surface: activity-bar panel, tab, or both (contradiction 1 above).
-- Popout body default: list versus calendar.
-- Search scope: entry body text, or dates and first lines only.
+- Whether a separate calendar activity-bar button still exists (D14 residual).
 - Per-day aggregation policy for the calendar (D8 provisional).
+- Day-click behavior, dot semantics, calendar tab identity, cross-surface filter
+  scope, clear-filters affordance, calendar on mobile (analyst notes 11-16).
 - Same-day filename pattern; default folder nesting; exact filename pattern.
+- Whether "new entry for today" creates another file or reopens the existing one.
 - Whether metadata field definitions are app-global or per-workspace.
 - Date/time semantics (timezone, backfill, editing past dates).
 - Template handling.
 - Entry-state affordances: missing, empty, malformed, read-only, unsaved.
+- Field-definition drift and orphaned metadata display.
+- Form-widget scope and malformed-frontmatter behavior.
 - Accessibility requirements.
 - Mockup approval cadence.
 
