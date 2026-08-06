@@ -103,19 +103,111 @@ journal folder; at the deepest, `year/month/day`. Layouts deeper than
 year/month/day are out of scope. The exact default (flat versus nested) and the
 exact filename pattern are NOT yet decided and are asked in Batch 2.
 
+### Batch 2 — recorded 2026-08-05
+
+**D8. Multiple entries per day are allowed; metadata is stored per file.**
+The user may write several entries in one day, so each file carries its own
+metadata block. There is no day-level metadata record separate from the files.
+
+*Provisional:* where the calendar needs a single value for a day (for example a
+mood swatch), the last entry of that day wins. This is a placeholder to unblock
+discovery, not a settled rule — the real per-day aggregation policy is deferred
+to `pending-calendar_data_model-med-med.md` and must be revisited there.
+
+**D9. The journal activity-bar button opens the left popout containing a journal
+menu; entries open in the main editor.**
+Clicking the journal entry in the activity bar opens the left popout. The popout
+has two regions:
+
+- **Top:** menu items / actions.
+- **Body:** a browser of entries. Default presentation is a **list grouped by
+  week**, each row showing the date with the entry's **first line** rendered
+  underneath it.
+
+Creating a new entry or opening a past one opens that file in the **main editor
+area** as a normal editor tab with a pre-named file. The popout is a navigator,
+not a writing surface.
+
+*Undecided (product owner raised it):* whether the popout body should default to
+a **calendar** rather than a list, with a button that opens a full calendar view
+in a tab. Asked in Batch 3; do not assume either.
+
+**D10. Required controls in the journal popout.**
+
+| Control | Behavior |
+|---|---|
+| Open calendar | Opens a calendar view in a tab |
+| Filter by metadata | Filter entries by the user-defined fields from D4; filter options are **automatically populated** from values actually present in entries |
+| Search entries | Search across entries (scope asked in Batch 3) |
+| Group by | `none`, `day`, `week`, `month`, `year` — default `week` per D9 |
+
+Ordering is always chronological and is not user-configurable; no sort control is
+offered.
+
+**D11. Day metadata is edited through a form widget above the editor body.**
+The user fills a form rendered above the Markdown body rather than hand-writing
+frontmatter. The form writes the metadata block described in D3, which must
+remain legible as plain text. Behavior for notes with absent or malformed
+metadata, and whether the widget appears outside the journal folder, is open.
+
+**D12. Mobile: the left popout renders full screen.**
+On phone widths the journal popout takes the whole screen rather than sitting
+beside the editor. Both desktop and mobile layouts are in scope for the wireframe
+set; mobile is not deferred to a later story.
+
+**D13. Scale target: thousands of entries.**
+Every list, group-by, filter, search, and calendar interaction must stay usable
+at that volume. This has architectural consequences flagged below.
+
+### Analyst notes — gaps and risks raised by Batch 2
+
+Recorded so downstream authors do not rediscover them. None of these are
+decisions.
+
+1. **Surface contradiction.** D6 puts journal and calendar on separate
+   activity-bar entries; D10 also opens a calendar in a tab. Whether the calendar
+   exists as an activity-bar panel, a tab, or both is unresolved (Batch 3).
+2. **Index dependency.** Auto-populated filter values, search, and group-by over
+   thousands of entries cannot be served by reading files on demand. This implies
+   a dependency on the indexing/search epic's SQLite FTS5 cache, which per
+   `plans/technical-decisions.md` is a disposable, rebuildable cache and never
+   the source of truth. The journal epic currently declares no such dependency —
+   the epic's dependency list needs updating once confirmed.
+3. **List virtualization.** Group-by `none` over thousands of entries produces an
+   unbounded list; the popout body needs windowing/virtualization. Worth stating
+   explicitly in the panel story so it is not discovered during implementation.
+4. **First-line previews at scale.** Rendering each row's first line requires
+   reading into every file. This is the same index concern as (2).
+5. **Same-day file naming.** With multiple entries per day (D8), the naming rule
+   for the second and later entries of a day is undefined, as is whether "new
+   entry for today" creates another file or reopens the existing one.
+6. **Field-definition drift.** If the user renames a field or removes a
+   select option in settings, existing files keep the old keys and values. The
+   read/display behavior for orphaned metadata is undefined.
+7. **Widget scope.** Whether the D11 form appears for every note in the journal
+   folder, only for app-created entries, or for any note carrying the fields.
+8. **Malformed metadata.** What the form widget shows when frontmatter is invalid
+   YAML, and whether it may rewrite the file to repair it — noting the frontmatter
+   mutation policy in `plans/technical-decisions.md` forbids rewrites on open.
+9. **Explorer overlap.** Journal files are ordinary Markdown, so they also appear
+   in the normal file explorer. Whether that is acceptable or the journal folder
+   should be visually distinguished is undecided.
+10. **Deletion and rename.** Whether the popout offers delete/rename of entries,
+    or defers to the file explorer.
+
 ### Open questions carried forward
 
-- Whether "date and time" in filenames means one entry per day or multiple
-  timestamped entries per day (D7 mentions both date and time).
-- Default folder nesting and exact filename pattern.
-- Whether day-level metadata fields are per-workspace or global to the app.
-- Everything in the Batch 2+ list below.
-
-### Not yet asked
-
-Date/time semantics and backfill rules; folder/filename defaults; template
-handling; entry-state affordances; calendar default view; settings scope;
-accessibility requirements; mobile navigation model; mockup approval cadence.
+- Calendar surface: activity-bar panel, tab, or both (contradiction 1 above).
+- Popout body default: list versus calendar.
+- Search scope: entry body text, or dates and first lines only.
+- Per-day aggregation policy for the calendar (D8 provisional).
+- Same-day filename pattern; default folder nesting; exact filename pattern.
+- Whether metadata field definitions are app-global or per-workspace.
+- Date/time semantics (timezone, backfill, editing past dates).
+- Template handling.
+- Entry-state affordances: missing, empty, malformed, read-only, unsaved.
+- Accessibility requirements.
+- Mockup approval cadence.
 
 ## Acceptance criteria
 
@@ -137,3 +229,5 @@ accessibility requirements; mobile navigation model; mockup approval cadence.
 - No React/CSS/Tailwind implementation, no production assets, no frontmatter parser changes, no settings schema, and no extension registration.
 - Do not select a mood scale, activity taxonomy, folder hierarchy, filename format, icon, color meaning, or calendar visualization without explicit approval.
 - Do not ship a built-in mood or activity vocabulary; D4 makes these user-defined.
+- Do not settle the calendar's per-day aggregation rule here; D8's "last one wins"
+  is a provisional placeholder owned by the calendar data-model story.
