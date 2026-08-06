@@ -1,40 +1,59 @@
-# Extension Execution Model
+# Extension Execution Model (Superseded Rollup)
+
+## Status
+
+🟨 Partial implementation only. Existing in-memory lifecycle/disposable ownership is implemented and tested; manifest loading, compatibility, local-directory loading, lazy activation, and bootstrap are split into canonical focused stories.
 
 ## Goal
 
-Define how trusted local extension code is loaded and executed. The beta uses
-same-context JS modules in the Tauri webview for maintainability and easy
-development. Capabilities are soft declarations/compatibility gates, not a
-security layer; extensions run with app privileges. The runtime lifecycle
-(load → activate → deactivate → unload) owns disposables and automatic cleanup.
+Record the execution boundary: trusted same-context JS modules, explicit app-privileges warning, disposable ownership, and lazy activation. This file is a rollup for older references, not a second implementation checklist.
 
-## Acceptance Criteria
+## Discovery questions
 
-- [ ] Extension runtime loads extension JS modules from the installed extension
-      directory.
-- [ ] Extensions receive a scoped API object on activation, with capability
-      compatibility results and an explicit app-privileges warning.
-- [x] Extension lifecycle hooks: `activate()` and `deactivate()`. Registered
-      resources (including contribution registrations and returned disposables)
-      are owned by a disposable scope and auto-cleaned on deactivate, unload,
-      host disposal, and failed activation. Lifecycle and cleanup behavior is
-      covered by core and desktop tests.
-- [ ] Capability compatibility checks disable unsupported operations or warn;
-      they are not treated as security enforcement.
-- [ ] Platform-aware capabilities: some capabilities (e.g. `terminal`,
-      `process-spawn`) are unavailable on mobile and produce a compatibility
-      result. Extensions can declare platform requirements in the manifest.
-- [ ] Development mode: extensions load from a local directory without
-      installation (hot-reload friendly).
-- [ ] Later file installation warns that the extension runs with app privileges;
-      URL installation and strong isolation are deferred.
-- [x] Unit tests cover lifecycle, disposable ownership, and automatic cleanup.
-- [ ] Capability enforcement and platform-gating tests remain pending with the
-      manifest/runtime compatibility work.
+Use the canonical lifecycle/bootstrap and local-loader stories for activation timing, module format, hot reload, failure policy, and shutdown behavior.
+
+**Stop-and-ask gate:** Do not implement missing execution behavior in this rollup. Use the canonical focused story and obtain its product/runtime decisions first.
+
+## Prerequisites
+
+- `packages/core/src/lifecycle.ts` existing tested lifecycle.
+- Canonical manifest, compatibility, loader, and bootstrap stories below.
+
+## Exact likely file areas
+
+Canonical implementation areas are listed in the focused stories; this rollup owns no code location.
+
+## Implementation tasks
+
+1. Keep this rollup synchronized with canonical story status.
+2. Route new work to manifest, compatibility, local-loader, and lifecycle/bootstrap stories.
+3. Preserve trusted same-context/app-privileges wording in references.
+
+## Acceptance criteria
+
+- [ ] No missing execution work is claimed complete here.
+- [ ] Canonical focused stories are referenced by parent epic.
+- [ ] Existing lifecycle tests remain attributed only to implemented behavior.
+
+## Automated validation
+
+Run canonical story tests and normal repository QA; no separate implementation test target.
+
+## Manual desktop/mobile checks
+
+Use canonical loader/bootstrap checks; confirm same webview/trusted behavior on desktop and mobile.
+
+## Non-goals
+
+Sandboxing, manifest parser, capability evaluator, loader, installer, marketplace, and feature behavior.
+
+## Handoff artifacts
+
+Status synchronization note and links to canonical stories.
 
 ## References
 
-- `plans/technical-decisions.md` — Extensions section
-- `plans/pending-extensions-low-hard.md` — trusted beta boundary
-- `packages/core` — runtime interfaces, compatibility results, and lifecycle types
-- `apps/desktop/src` — runtime adapter and disposable ownership
+- `plans/extensions/pending-extension_manifest_format-low-med.md`
+- `plans/extensions/pending-extension_capability_compatibility-low-med.md`
+- `plans/extensions/pending-extension_local_directory_loader-low-med.md`
+- `plans/extensions/pending-extension_lifecycle_bootstrap-low-med.md`

@@ -2,28 +2,74 @@
 
 ## Goal
 
-List local branches and show the current branch in the source-control panel
-header.
+Expose read-only local branch metadata and show it in Source Control. This is
+branch discovery for the MVP, not branch management or sync.
 
-## Acceptance Criteria
+## Discovery questions — answer before UI work
 
-- [ ] Native command runs `git branch` (or `git for-each-ref`) at the workspace
-      root and returns the branch list plus the current branch name.
-- [ ] Frontend service exposes `getBranches(rootPath)` returning a typed result
-      (`current: string | null`, `branches: readonly string[]`).
-- [ ] Current branch is shown in the panel header.
-- [ ] Handles the no-commits-yet case (no branches) gracefully.
-- [ ] Rust unit test covers a temp repo with multiple branches and the
-      fresh-init (no commits) case.
+- Should the panel show only local branches or include detached HEAD and remote
+  refs as explicit non-selectable labels? The MVP default is local branches only.
+- Where should a long branch list live on narrow/mobile layouts: compact header,
+  scrollable list, or a separate view? Define truncation and full-name tooltip rules.
+- What copy should an unborn repository, detached HEAD, and a repository with no
+  local refs use?
 
-## Relevant Files
+**STOP gate:** Do not create branch mockups or JSX/CSS until these questions are
+answered and the narrow/mobile behavior is agreed.
 
-- `apps/desktop/src-tauri/src/lib.rs` — new command + registration
-- `apps/desktop/src/native/commands.ts` — `NativeCommandMap` entry + types
-- `apps/desktop/src/git/gitService.ts` — frontend helper
-- `apps/desktop/src/git/SourceControlPanel.tsx` — branch display
+## Implementation-ready acceptance criteria
 
-## Notes
+- [ ] Add serializable Rust `GitBranches { current: Option<String>, branches: Vec<String> }` and `list_git_branches(root_path: String) -> Result<GitBranches, NativeError>` in `apps/desktop/src-tauri/src/commands/git.rs`.
+- [ ] Use fixed non-shell commands: `symbolic-ref --quiet --short HEAD` (exit 1 means detached/unborn) and `for-each-ref --format=%(refname:short) refs/heads`; sort/deduplicate deterministically and reject malformed output only as a typed error.
+- [ ] Register `list_git_branches` in `apps/desktop/src-tauri/src/commands/mod.rs`; update `apps/desktop/src/native/commands.ts` with `NativeCommandMap` args `{ rootPath: string }`, `NativeGitBranches`, and snake_case fields.
+- [ ] Extend `GitCommandName`, `GitDesktopApi.getBranches`, and `GitService.getBranches` in `apps/desktop/src/git/gitService.ts`, with per-root cache invalidated after commit/init and a typed result preserving `NativeCommandError` codes.
+- [ ] `SourceControlPanel.tsx` loads branch metadata with status, renders current branch or explicit detached/unborn copy, and renders a bounded scrollable local-branch list. Never imply that clicking a branch switches it.
 
-Depends on `repo_detection`. Branch switching/creation is out of scope for this
-epic (list + current only).
+## Likely files and boundaries
+
+Rust/native: `apps/desktop/src-tauri/src/commands/git.rs`, `commands/mod.rs`,
+and `src/tests.rs`; use the existing `GitRunner`, workspace root resolver, and
+same timeout/environment. Bridge: `apps/desktop/src/native/commands.ts`.
+Frontend adapter/state: `apps/desktop/src/git/gitService.ts` and
+`gitService.test.ts`; panel: `SourceControlPanel.tsx` and
+`SourceControlPanel.test.tsx`. Shell registry integration is
+`apps/desktop/src/panels/panelRegistry.tsx`; do not add a legacy store or `App.tsx`
+activity-button path.
+
+## Tests and manual repository setup
+
+- Rust mocked-runner tests assert exact commands, sorting, detached/unborn handling,
+  empty branch output, malformed output, non-repo, timeout, and bounded stderr.
+  Temp-repo test: `git init`, configure identity, make one commit, create a local
+  branch, assert current plus all local names; separately assert `git init` before
+  the first commit has no branch ref.
+- Vitest tests cover adapter invocation, cache hits/invalidation, loading/error
+  states, detached/unborn markup, long names, and mobile-width list behavior.
+- Manual setup: use the commit story's temp repository, then `git switch -c
+  feature/branch-list` (or `git checkout -b` on older Git), return to the default
+  branch, and verify only local branches are listed and current changes after a
+  commit refresh the current branch.
+
+## Automated validation
+
+Run Rust mocked/temp-repository and Vitest adapter/panel tests, `pnpm lint`, `pnpm typecheck`, and `cargo test`.
+
+## Manual desktop/mobile checks
+
+Desktop: verify branch list/current/detached/unborn behavior on Windows/Linux/macOS. Mobile: show approved read-only/unavailable state without process-spawn or writable-Git assumptions.
+
+## Handoff expectations
+
+Deliver command/DTO contract, cache invalidation report, UI decision/mockup record, test matrix, and unresolved product questions; concrete file paths remain likely until implementation confirms them.
+
+## Platform, non-goals, and dependency order
+
+- Windows: normalize `\\` only for display and handle localized Git output by
+  relying on machine-readable formats; Linux/macOS: test detached HEAD and branch
+  names containing hyphens/slashes. Mobile: render read-only/unavailable state and
+  do not assume process spawning or writable `.git` access.
+- Non-goals: branch create/delete/rename/switch, remote branches, upstream status,
+  push/pull, auto-sync, watchers, or conflict resolution.
+- Order: availability → repository detection → status → branch command and typed
+  errors → commit/stage mutations → panel completion. This story can be developed
+  before the commit command but must not enable branch switching.

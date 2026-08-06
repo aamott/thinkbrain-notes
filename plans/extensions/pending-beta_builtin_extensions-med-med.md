@@ -1,58 +1,77 @@
-# Beta Built-in Extensions Integration
+# Beta Built-in Extension Registration Boundaries
+
+## Status
+
+⬜ Not implemented. No bootstrap currently registers journal/calendar, Git sync, or ACP Agent Chat through the extension host. Existing feature behavior remains in its owning epics.
 
 ## Goal
 
-Wire the beta built-in features through the trusted extension contribution and
-lifecycle APIs. This story covers registration and ownership boundaries only:
-journal/calendar, Git sync, and ACP Agent Chat should register through the same
-surfaces that future local extensions use. Feature behavior stays in the existing
-feature epics; this story must not duplicate their domain logic, storage, sync,
-chat, or provider work.
+Register beta built-ins through shared contribution/lifecycle APIs with canonical namespaces and disposable ownership, without moving domain behavior into this story. Built-ins are trusted app code; there is no third-party install path or separate privilege model.
 
-## Acceptance Criteria
+## Discovery questions
 
-- [ ] A desktop bootstrap/integration module registers the beta built-ins through
-      the shared extension host and disposes the registrations on shutdown.
-- [ ] Journal/calendar registers its activity-bar entry, panel/view, commands,
-      note-template contribution, and namespaced settings schema. Journal and
-      calendar behavior plus Markdown storage remain in the existing feature
-      work.
-- [ ] Git sync registers its source-control/panel and command contributions plus
-      the lifecycle seam for future background sync tasks. Git operations, file
-      watching, conflict handling, and sync UX remain in
-      `plans/wip-git-integration-high-hard.md` and its child stories.
-- [ ] ACP Agent Chat registers its assistant contribution and scoped provider/
-      credential API boundary. ACP host lifecycle, chat UI, permissions, and
-      provider behavior remain in `plans/wip-ai-low-hard.md` and `plans/ai/`;
-      credential storage is delegated to the native secret-storage story.
-- [ ] Each built-in uses canonical contribution namespaces and receives a
-      disposable activation scope; deactivation removes its registrations
-      without affecting other built-ins.
-- [ ] Integration tests cover registration, namespace collision handling,
-      activation/deactivation cleanup, and the boundary that keeps feature
-      behavior in its owning epic.
-- [ ] No third-party install path, manifest loader, separate privilege model, or
-      feature-specific behavior is added by this story.
+- What final built-in ids and contribution ids should journal/calendar, Git sync, and ACP Agent Chat use?
+- Which registrations are real now versus placeholders until the owning feature epic lands?
+- Which panel/activity-bar/menu layouts are approved, and should mobile expose compact alternatives?
+- What activation events should each use, and what happens when an owning feature is unavailable?
+- Which ACP credential and Git/background-task seams are stable enough to register without claiming behavior exists?
 
-## Dependencies and boundaries
+**Stop-and-ask gate:** Do not add UI mockups, registration code, or placeholders until owning epics confirm boundaries and product approves desktop/mobile placement. A registration is not feature implementation.
 
-- Depends on the implemented core contribution registries, lifecycle/disposable
-  ownership, and desktop scoped settings APIs.
-- Depends on the extension boundary in `plans/pending-extensions-low-hard.md`.
-- Coordinates with `plans/wip-git-integration-high-hard.md`,
-  `plans/wip-ai-low-hard.md`, and the existing journal/calendar feature work;
-  those epics remain owners of feature behavior.
-- ACP credential consumers depend on
-  `plans/extensions/pending-extension_secret_storage-med-hard.md`; the
-  encrypted app-data fallback decision remains deferred there.
+## Prerequisites
+
+- Lifecycle/bootstrap, compatibility, and API contribution contracts.
+- Existing internal registries and scoped settings bridge.
+- `plans/wip-git-integration-high-hard.md`, `plans/wip-ai-low-hard.md`, and journal/calendar plan if present.
+- Native secret story for ACP credential consumers.
+
+## Exact likely file areas
+
+- Add `apps/desktop/src/extensions/builtins/` registration-only modules/tests.
+- Wire from `apps/desktop/src/extensions/bootstrap.ts` / runtime; do not put domain logic in `DesktopShell.tsx`.
+- Consume `commands/`, `panels/`, `tabs/`, `settings/`, `git/`, and `agent/` seams only after owner confirmation.
+
+## Implementation tasks
+
+1. Collect owner-approved ids, contributions, activation events, capability requirements, unavailable behavior, and mobile placement before coding.
+2. Implement journal/calendar registration-only module for approved panels/commands/templates/settings, delegating behavior/storage to its epic.
+3. Implement Git sync registration-only module for approved source-control/background-task seams, delegating Git/watch/conflict UX to Git epic.
+4. Implement ACP registration-only module for assistant/provider/credential seams, delegating ACP/chat/permission/provider behavior to AI and secret stories.
+5. Register all three through one bootstrap; test collision/disposal/failed activation and assert no feature implementation is imported.
+
+## Acceptance criteria
+
+- [ ] Each built-in uses approved ids, metadata, activation events, and disposable scope.
+- [ ] Failures are typed and do not strand other built-ins.
+- [ ] Journal/Git/AI behavior stays in existing epics.
+- [ ] ACP credentials route to native secret storage; no JSON secret path.
+- [ ] Desktop/mobile status and unavailable behavior are approved/tested.
+- [ ] No installer, manifest loader, privilege model, or marketplace path is added.
+
+## Automated validation
+
+- Desktop integration tests for bootstrap registration, collisions, activation/deactivation, failure isolation, and unavailable states.
+- Owning-epic tests remain behavior source of truth.
+- `pnpm --filter @thinkbrain/desktop test -- extension`; `pnpm lint`; `pnpm typecheck`; `pnpm build`.
+
+## Manual desktop/mobile checks
+
+- Desktop Tauri: verify approved commands/panels appear, activate/deactivate cleanly, and actions delegate to owners.
+- Mobile Tauri: verify compact/unavailable registrations, no terminal/process-spawn calls, and no broken activity-bar layout.
+
+## Non-goals
+
+No journal/calendar, Git sync/conflict, ACP host/chat/provider, secret-store, installer, marketplace, or UI mockup before approval.
+
+## Handoff artifacts
+
+- Owner-approved registration matrix and boundary decision, modules/tests, bootstrap wiring, namespace/disposal report, and explicit deferred behavior list.
 
 ## References
 
-- `plans/pending-extensions-low-hard.md` — beta boundary and status
-- `plans/extensions/pending-internal_contribution_points-low-med.md` — shared
-  contribution contracts
-- `plans/extensions/pending-extension_execution_model-low-med.md` — lifecycle
-  ownership and cleanup
-- `plans/extensions/pending-extension_settings-low-med.md` — scoped settings
-- `plans/wip-git-integration-high-hard.md` — Git behavior owner
-- `plans/wip-ai-low-hard.md` — ACP/agent behavior owner
+- `plans/pending-extensions-low-hard.md`
+- `plans/extensions/pending-extension_lifecycle_bootstrap-low-med.md`
+- `plans/extensions/pending-extension_api_surface-low-hard.md`
+- `plans/extensions/pending-extension_secret_storage-med-hard.md`
+- `plans/wip-git-integration-high-hard.md`
+- `plans/wip-ai-low-hard.md`

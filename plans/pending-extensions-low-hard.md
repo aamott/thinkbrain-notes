@@ -41,7 +41,7 @@ epics:
 - **Journal/calendar** — built-in activity-bar entries, panels, templates, and
   namespaced settings. Journal/calendar behavior and Markdown storage remain in
   its existing feature epic.
-- **Git sync** — built-in sync/background-task contributions. Git operations,
+- **Git sync** — built-in sync/background-task registration only. Git operations,
   file watching, conflict handling, and sync UX remain owned by
   `plans/wip-git-integration-high-hard.md` and its child stories.
 - **ACP Agent Chat** — built-in assistant contribution and scoped credential/API
@@ -66,9 +66,9 @@ In scope:
   file.saved, workspace.switched) and extension-emitted events
 - `extension.json` manifest format (with activation events, apiVersion,
   packaging format, and soft capability declarations)
-- extension packaging format: directory with `extension.json` + JS entry;
-  local-directory dev loading first; install-from-file later with an app-
-  privileges warning
+- extension packaging contract: directory with `extension.json` + JS entry and
+  optional assets/themes; local-directory development loading is a separate
+  loader story, and install-from-file is later with an app-privileges warning
 - compatibility gates for declared capabilities and platform requirements (not
   a security sandbox)
 - extension-scoped, namespaced non-secret settings through the existing JSON
@@ -78,7 +78,9 @@ In scope:
 - install from file (later, with a trusted-code warning)
 - third-party extension API surface: views, panels, menus, context menus,
   editor actions, settings contributions, themes, AI tools, Git tools,
-  background tasks, extension data storage, event system, static registry
+  background tasks, extension data storage, event system, static registry; the
+  oversized API rollup is split into focused contribution, event/task, storage,
+  and feature-hook stories listed below
 - API versioning: manifest declares `apiVersion`; app supports a semver range
 - platform-aware capabilities: desktop-only capabilities (terminal,
   process-spawn) are silently unavailable on mobile; manifests can declare
@@ -185,13 +187,40 @@ their existing epics; this epic owns only their extension registrations.
 
 Focused follow-up stories:
 
-- `plans/extensions/pending-extension_secret_storage-med-hard.md` — Rust/native
-  secret storage and OS credential-store adapters. The encrypted app-data
-  fallback remains an explicit decision to make later; it is not assumed by the
-  current implementation.
-- `plans/extensions/pending-beta_builtin_extensions-med-med.md` — beta
-  registration wiring for journal/calendar, Git sync, and ACP Agent Chat. Feature
-  behavior stays in the existing journal/calendar, Git, and AI epics.
+- `plans/extensions/pending-extension_manifest_format-low-med.md` — manifest
+  parser/schema and typed diagnostics.
+- `plans/extensions/pending-extension_capability_compatibility-low-med.md` — soft
+  capability/API/platform compatibility results; not a security sandbox.
+- `plans/extensions/pending-extension_local_directory_loader-low-med.md` — trusted
+  local-directory module loading and reload semantics.
+- `plans/extensions/pending-extension_lifecycle_bootstrap-low-med.md` — manifest
+  runtime, lazy activation, desktop bootstrap, and shutdown; existing lifecycle
+  cleanup is partial but tested.
+- `plans/extensions/pending-extension_api_surface-low-hard.md` — superseded
+  rollup; its focused contribution, event/task, storage, and AI/Git-hook child
+  stories own implementation.
+- `plans/extensions/pending-extension_contribution_surfaces-low-med.md` — typed
+  views, menus, context menus, editor actions, and themes.
+- `plans/extensions/pending-extension_events_tasks-low-med.md` — app/extension
+  events and abortable background tasks.
+- `plans/extensions/pending-extension_data_storage-low-med.md` — extension-owned
+  app-data storage and cleanup.
+- `plans/extensions/pending-extension_feature_hooks-low-med.md` — AI/Git hook
+  seams only; feature behavior remains in owning epics.
+- `plans/extensions/pending-extension_settings-low-med.md` — manifest schemas,
+  settings UI/persistence, and uninstall cleanup; scoped settings runtime is
+  already partial and tested.
+- `plans/extensions/pending-extension_secret_storage-med-hard.md` — native OS
+  credential-store boundary; encrypted app-data fallback remains undecided.
+- `plans/extensions/pending-extension_packaging_format-low-easy.md` — directory
+  and future archive contract, without installation.
+- `plans/extensions/pending-extension_file_installation-low-med.md` — later local
+  package installation with an app-privileges warning.
+- `plans/extensions/pending-beta_builtin_extensions-med-med.md` — registration
+  boundaries for journal/calendar, Git sync, and ACP Agent Chat; behavior stays
+  in the existing feature epics.
+- `plans/extensions/pending-extension_deferred_distribution-low-med.md` — explicit
+  URL/marketplace/signing deferral and reopen gate.
 
 The internal contribution implementation and lifecycle/scoped-settings work are
 usable prerequisites for these stories. Secret storage also depends on the
@@ -219,22 +248,30 @@ are not yet formalized, the first story here should establish them.
 
 - ✅ Internal contribution points — core command, panel, editor-hook, and
   settings-schema contracts/bridges are implemented and tested; follow-up review
-  notes remain in `plans/extensions/pending-internal_contribution_points-low-med.md`
-- ⬜ Extension execution model — lifecycle/disposable ownership and tested
-  cleanup are implemented; module loading, manifests, capability/platform gates,
-  and local-directory loading remain pending (see
-  `plans/extensions/pending-extension_execution_model-low-med.md`)
-- ⬜ Extension manifest format — `extension.json` schema, parser, activation events, apiVersion, soft capability declarations
-- ⬜ Extension packaging format — directory structure and local-directory dev loading; file packaging remains later
-- ⬜ Soft capability gates — compatibility checks and warnings, not a security sandbox
-- ⬜ Extension API surface — views, panels, menus, context menus, editor actions, themes, AI/Git tool hooks, background tasks, namespaced settings/data, event system, and cleanup
-- ⬜ Install from URL — deferred; do not implement in beta
-- ⬜ Install from file — later trusted-package install with an explicit app-privileges warning
-- ⬜ Extension settings and credentials — scoped namespace/read-write/change subscriptions are implemented and tested; manifest schemas, settings UI/E2E, native secrets, encrypted-fallback decision, and uninstall cleanup remain pending (see
-  `plans/extensions/pending-extension_settings-low-med.md`)
-- ⬜ Rust/native secret storage — OS credential-store adapters and the explicitly
-  deferred encrypted-fallback decision (see
-  `plans/extensions/pending-extension_secret_storage-med-hard.md`)
-- ⬜ Beta built-in extensions integration — journal/calendar, Git sync, and ACP
-  Agent Chat registration wiring; feature behavior remains in existing epics
-  (see `plans/extensions/pending-beta_builtin_extensions-med-med.md`)
+  notes remain in `plans/extensions/pending-internal_contribution_points-low-med.md`.
+- 🟨 Lifecycle/disposable ownership and scoped settings runtime are implemented
+  and tested, but the extension platform is not complete. Manifest-driven runtime,
+  bootstrap, module loading, compatibility, and local-directory loading remain
+  pending in the focused stories below.
+- ⬜ Manifest parser/schema — `plans/extensions/pending-extension_manifest_format-low-med.md`.
+- ⬜ Soft capability/API/platform compatibility —
+  `plans/extensions/pending-extension_capability_compatibility-low-med.md`.
+- ⬜ Local-directory loader — `plans/extensions/pending-extension_local_directory_loader-low-med.md`.
+- ⬜ Lifecycle/bootstrap integration —
+  `plans/extensions/pending-extension_lifecycle_bootstrap-low-med.md`; existing
+  lifecycle cleanup is not a claim that loading/bootstrap is complete.
+- ⬜ API/event/background-task/data surfaces —
+  `plans/extensions/pending-extension_api_surface-low-hard.md`.
+- ⬜ Settings UI/persistence/uninstall —
+  `plans/extensions/pending-extension_settings-low-med.md`.
+- ⬜ Native secret storage — `plans/extensions/pending-extension_secret_storage-med-hard.md`;
+  encrypted app-data fallback remains an explicit unmade security decision.
+- ⬜ Packaging contract — `plans/extensions/pending-extension_packaging_format-low-easy.md`.
+- ⬜ File installation — `plans/extensions/pending-extension_file_installation-low-med.md`;
+  later trusted-package path with an explicit app-privileges warning.
+- ⬜ Beta built-in registration boundaries —
+  `plans/extensions/pending-beta_builtin_extensions-med-med.md`; journal/calendar,
+  Git, and AI behavior remains in the owning epics.
+- 🚫 URL/marketplace/signing/distribution — explicitly deferred; see
+  `plans/extensions/pending-extension_deferred_distribution-low-med.md`. Do not
+  implement in beta.

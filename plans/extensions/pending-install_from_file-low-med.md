@@ -1,29 +1,56 @@
-# Install from File
+# Install from File (Superseded Alias)
+
+## Status
+
+⬜ Superseded as a duplicate checklist. The canonical implementation package is `pending-extension_file_installation-low-med.md`; no file-install behavior is currently implemented.
 
 ## Goal
 
-Allow users to install an extension from a local file later in beta. The app
-reads the package, validates its manifest and compatibility declarations, and
-installs it outside the workspace. Because extensions are trusted same-context
-modules, the UI must warn clearly that installed code runs with app privileges;
-this is not a sandboxed install.
+Keep the historical local-package-install reference aligned with the canonical story: validate a local archive, warn about trusted app privileges, install outside the workspace, and remain independent of URL/marketplace work.
 
-## Acceptance Criteria
+## Discovery questions
 
-- [ ] User can pick a local zip file and trigger install from the extensions UI.
-- [ ] Zip is extracted and validated (manifest parse, compatibility-gate check)
-      before activation. Packaging format is defined in the packaging format
-      story.
-- [ ] Install fails loudly with useful errors for invalid packages or missing
-      manifests.
-- [ ] Installed extension is stored outside the workspace (OS app-data area).
-- [ ] UI presents and records the explicit warning that installed code runs with
-      app privileges; no sandbox guarantee is made.
-- [ ] Manual/E2E test: install a sample extension from file, verify warnings,
-      compatibility behavior, and disposable cleanup. URL installation and
-      signing are not prerequisites.
+See the canonical file-install story for archive type, confirmation frequency, conflicts/rollback, mobile behavior, and extraction limits.
+
+**Stop-and-ask gate:** Do not implement from this alias. Obtain the packaging/security decisions and work only in the canonical story.
+
+## Prerequisites
+
+`pending-extension_packaging_format-low-easy.md` and `pending-extension_file_installation-low-med.md`.
+
+## Exact likely file areas
+
+Use the canonical story’s Rust/native/UI areas; this alias owns no code.
+
+## Implementation tasks
+
+1. Keep this alias status synchronized.
+2. Link consumers to the canonical file-install plan.
+3. Preserve the explicit app-privileges warning and outside-workspace storage boundary.
+
+## Acceptance criteria
+
+- [ ] No installation is claimed complete here.
+- [ ] Canonical file-install story owns implementation and validation.
+- [ ] URL install/signing remain out of scope.
+
+## Automated validation
+
+Use canonical installer tests and normal QA; no separate test target.
+
+## Manual desktop/mobile checks
+
+Use canonical story’s install/cancel/malformed archive checks; verify no URL action on either platform.
+
+## Non-goals
+
+URL install, marketplace, signing, auto-update, sandbox, and feature behavior.
+
+## Handoff artifacts
+
+Canonical-story link and duplicate-status note.
 
 ## References
 
-- `plans/technical-decisions.md` — Extensions section (install from file)
-- `apps/desktop/src-tauri` — native file pick/install bridge
+- `plans/extensions/pending-extension_file_installation-low-med.md`
+- `plans/extensions/pending-extension_packaging_format-low-easy.md`

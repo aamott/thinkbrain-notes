@@ -1,33 +1,56 @@
-# Capability Declarations and Compatibility Gates
+# Capability Declarations and Compatibility Gates (Superseded Alias)
+
+## Status
+
+⬜ Superseded as an implementation plan. The beta does **not** implement a capability sandbox. Use `pending-extension_capability_compatibility-low-med.md` for the canonical soft-gate work package.
 
 ## Goal
 
-Define typed, manifest-declared capability information for trusted local
-same-context extensions. Capabilities document intended access and act as
-compatibility gates (including platform availability); they are not a security
-sandbox or hostile-extension isolation boundary. The runtime may disable or warn
-about unsupported operations, while extensions otherwise run with app
-privileges.
+Keep the historical capability story from being mistaken for hostile-extension isolation. Capabilities are typed declarations, compatibility/documentation signals, and platform availability gates; trusted same-context extensions still have app privileges.
 
-## Acceptance Criteria
+## Discovery questions
 
-- [ ] Capability declarations are typed, documented, and parsed from the
-      manifest (e.g. read-note, write-note, register-command, register-panel,
-      network — exact list to be finalized).
-- [ ] Capability declarations are evaluated at activation time and produce
-      compatibility results for the extension and current platform.
-- [ ] Unsupported or unavailable capabilities disable the affected operation or
-      produce a clear warning; they are never described as adversarial
-      protection.
-- [ ] The manifest and UI clearly warn that trusted local/file-loaded extensions
-      run with app privileges.
-- [ ] Unit tests cover supported, unsupported, and platform-incompatible
-      capability declarations.
-- [ ] Strong iframe/process isolation, signing, and install-from-URL remain
-      explicitly deferred and are not hidden acceptance criteria.
+See the canonical story for the capability vocabulary, activation policy, platform matrix, API range, and warning copy.
+
+**Stop-and-ask gate:** Do not add sandbox, iframe/process isolation, signing, or permission enforcement under this alias. Ask the product/security owner before reopening any deferred threat-model work.
+
+## Prerequisites
+
+`plans/extensions/pending-extension_manifest_format-low-med.md` and `plans/extensions/pending-extension_capability_compatibility-low-med.md`.
+
+## Exact likely file areas
+
+Canonical implementation areas are listed in `pending-extension_capability_compatibility-low-med.md`; no code should be added for this alias.
+
+## Implementation tasks
+
+1. Link consumers to the canonical soft-compatibility story.
+2. Preserve the explicit non-sandbox wording in future docs/tests.
+3. Reopen only through an approved threat-model decision.
+
+## Acceptance criteria
+
+- [ ] No implementation is claimed by this alias.
+- [ ] Canonical soft-gate story owns compatibility work.
+- [ ] Strong isolation remains deferred.
+
+## Automated validation
+
+Repository search should show no new sandbox/security-enforcement symbols from extension beta work; run normal lint/typecheck/build after canonical work.
+
+## Manual desktop/mobile checks
+
+Verify any extension status copy says “trusted app privileges” and never “sandboxed,” on desktop and mobile.
+
+## Non-goals
+
+Sandboxing, permissions, signing, installer, URL/marketplace, or native isolation.
+
+## Handoff artifacts
+
+Canonical-story link and explicit threat-model reopen gate.
 
 ## References
 
-- `plans/technical-decisions.md` — Extensions section (trusted same-context beta)
-- `plans/pending-extensions-low-hard.md` — beta boundary and deferred isolation
-- `packages/core` — capability types and compatibility-gate logic
+- `plans/extensions/pending-extension_capability_compatibility-low-med.md`
+- `plans/technical-decisions.md`

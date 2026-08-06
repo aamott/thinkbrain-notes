@@ -1,58 +1,80 @@
-# Extension API Surface
+# Extension API: Contributions, Events, Tasks, and Data
+
+## Status
+
+🟨 Superseded rollup. Core command/panel/editor/settings contribution contracts and the desktop scoped settings bridge are implemented and tested. Remaining work is split into the four focused child stories below; this file owns no implementation checklist.
 
 ## Goal
 
-Expose the local extension API surface on top of the internal contribution
-points and trusted same-context runtime. Extensions can contribute views, panels,
-menus, editor actions, settings contributions, themes, AI tools, Git tools, and
-register via the static registry. Soft capabilities are compatibility gates, not
-sandboxing. The API must support the target beta built-ins: Git sync (file
-watching, background tasks, conflict resolution UI), ACP agent chat (network,
-streaming, native credential storage), and journal/calendar (panels, templates,
-workspace-scoped settings), while feature ownership remains in their existing
-epics.
+Keep one index for the trusted same-context API split: contribution surfaces, app/extension events and tasks, extension-owned app-data storage, and AI/Git hooks. Every child keeps registration in the activation disposable scope; feature behavior remains owned by Git, AI, journal/calendar, and other feature epics.
 
-## Acceptance Criteria
+## Discovery questions
 
-- [ ] Extension API exposes typed methods for each contribution point. Relative
-      contribution IDs use lowercase kebab-case and are namespaced by the
-      canonical extension id.
-- [ ] Extensions activate via declared activation events and receive a scoped
-      API object with compatibility results and an explicit app-privileges
-      warning.
-- [ ] Static registry populates commands, panels, menus, etc. from parsed
-      manifests.
-- [ ] Extensions can contribute themes and namespaced non-secret settings
-      schemas through the existing settings registry.
-- [ ] Context menu contribution point: extensions declare context menu items
-      with placement (editor, explorer, panel) and receive callbacks.
-- [ ] Event system: extensions subscribe to typed app events (note.opened,
-      file.saved, workspace.switched, file.created, file.deleted,
-      file.renamed) and emit custom events.
-- [ ] Background task support: extensions can register long-running tasks
-      (e.g. Git autosync, file watchers) with lifecycle managed by the runtime.
-      Tasks are abortable and cleaned up on deactivate.
-- [ ] Extension data storage: extensions can store caches, indices, and
-      metadata in `<app_data>/extensions/<id>/` (outside the workspace), with
-      ownership tied to the activation disposable scope.
-- [ ] AI tool and Git tool hooks are defined (actual AI/Git features are
-      delivered by the `ai` and `git-integration` epics; this story only
-      provides the hooks). ACP credentials use the native secret-store adapter,
-      never JSON or bulk/raw cross-extension reads.
-- [ ] Extension lifecycle: activate, deactivate, and cleanup hooks. Registered
-      resources are auto-cleaned on deactivate, unload, and failed activation;
-      subscriptions, timers, watchers, and background tasks are disposable.
-- [ ] API lives in `packages/core`; platform-specific activation via adapters.
-- [ ] Unit/integration tests cover activation, contribution registration,
-      capability-scoped API access, event subscription, background tasks,
-      data storage, and lifecycle cleanup.
+- Which menu/context-menu locations, view renderer contract, theme format, and editor action payloads are beta-stable?
+- Which payloads/delivery guarantees apply to `note.opened`, `file.saved`, `workspace.switched`, `file.created`, `file.deleted`, and `file.renamed`?
+- Are custom events local-only and namespaced, and is extension-to-extension delivery prohibited?
+- What task limits, cancellation/restart policy, and progress UI are required?
+- Which data operations (JSON/blob/file), quotas, and cleanup rules are required?
+- What exact AI/Git hook contracts are needed without duplicating owning epics?
+
+**Stop-and-ask gate:** Do not mock UI, define payloads, or implement a new surface until product/API owners answer the relevant questions. UI-facing work must get panel/menu/view layout and accessibility approval before mockups or React code.
+
+## Prerequisites
+
+- Existing registries in `packages/core/src/contributions.ts`, `apps/desktop/src/commands/`, `panels/`, and `tabs/`.
+- Lifecycle/disposable runtime and compatibility results.
+- Native workspace/app-data boundaries in `apps/desktop/src/native/` and `src-tauri/src/commands/`.
+
+## Exact likely file areas
+
+- Add `packages/core/src/extensions/events.ts`, `tasks.ts`, `storage.ts` plus tests; export from `packages/core/src/index.ts`.
+- Extend `apps/desktop/src/extensions/desktopExtensionHost.ts` with scoped facades and adapters/services under `apps/desktop/src/extensions/`.
+- Add native adapters in `apps/desktop/src/native/` and Rust commands only for approved app-data operations.
+- UI bindings use `apps/desktop/src/panels/`, `commands/`, `tabs/`, `shell/`, and `settings/` after the layout gate.
+
+## Implementation tasks
+
+1. Route contribution, event/task, storage, and feature-hook work to the focused child story that owns it.
+2. Keep this rollup synchronized with child status and cross-references; do not add a second implementation here.
+3. Record unresolved API/layout decisions in the owning child handoff.
+
+## Focused child stories
+
+- `pending-extension_contribution_surfaces-low-med.md`
+- `pending-extension_events_tasks-low-med.md`
+- `pending-extension_data_storage-low-med.md`
+- `pending-extension_feature_hooks-low-med.md`
+
+## Acceptance criteria
+
+- [ ] The four focused child stories are linked, status-labeled, and have non-overlapping ownership.
+- [ ] No missing API behavior is claimed complete by this rollup.
+- [ ] Child handoffs preserve typed, extension-scoped, capability-aware, disposable APIs.
+- [ ] AI/Git hooks remain seams only; owning epics remain owners.
+
+## Automated validation
+
+- Core Vitest tests for event/task/storage contracts.
+- Desktop integration tests with fake adapters and lifecycle cleanup.
+- `pnpm --filter @thinkbrain/core test`; `pnpm --filter @thinkbrain/desktop test -- extension`; then `pnpm lint`, `pnpm typecheck`, `pnpm build`.
+
+## Manual desktop/mobile checks
+
+- Desktop: register sample contributions, emit events, start/cancel a task, read/write extension data, and deactivate while resources are active.
+- Mobile: verify shared behavior and clear unavailable states for unsupported native hooks; no crash.
+
+## Non-goals
+
+No sandbox, cross-extension direct messaging, provider/Git/journal implementation, marketplace, URL install, or unapproved UI mockups.
+
+## Handoff artifacts
+
+- Separate contracts/adapters/tests, approved payload/layout decisions, capability map, lifecycle resource inventory, sample extension, and deferred-hook list.
 
 ## References
 
-- `plans/technical-decisions.md` — Extensions section
-- `plans/extensions/pending-beta_builtin_extensions-med-med.md` — beta built-in
-  registration consumers
-- `plans/extensions/pending-extension_secret_storage-med-hard.md` — native
-  credential boundary for ACP/provider hooks
-- `packages/core` — API interfaces
-- `apps/desktop/src` — adapter bindings
+- `plans/extensions/pending-internal_contribution_points-low-med.md`
+- `plans/extensions/pending-extension_lifecycle_bootstrap-low-med.md`
+- `plans/extensions/pending-extension_secret_storage-med-hard.md`
+- `plans/wip-git-integration-high-hard.md`
+- `plans/wip-ai-low-hard.md`

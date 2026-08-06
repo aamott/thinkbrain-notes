@@ -49,9 +49,16 @@ if [ "$(uname -s)" = "Linux" ] && [ "$(uname -m)" = "x86_64" ]; then
     echo "rust-env: mold+clang enabled for x86_64-unknown-linux-gnu"
   else
     unset CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS
-    [ ! -x "$(command -v mold 2>/dev/null)" ] && echo "rust-env: mold not found; skipping (install: sudo apt install mold)"
-    [ ! -x "$(command -v clang 2>/dev/null)" ] && echo "rust-env: clang not found; skipping (install: sudo apt install clang)"
+    if ! command -v mold >/dev/null 2>&1; then
+      echo "rust-env: mold not found; skipping (install: sudo apt install mold)"
+    fi
+    if ! command -v clang >/dev/null 2>&1; then
+      echo "rust-env: clang not found; skipping (install: sudo apt install clang)"
+    fi
   fi
 else
   unset CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS
 fi
+
+# Sourcing this helper must never fail the caller when an optional tool is absent.
+true

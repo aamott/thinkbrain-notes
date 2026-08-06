@@ -97,27 +97,27 @@ the persisted app setting and `data-thinkbrain-theme`.
   `plans/ui-shell/done-mockup_v3_shell_rebuild-high-hard.md`
 - ✅ shell token and CSS Module migration — see
   `plans/ui-shell/done-shell_tokens_and_css_modules-high-hard.md`
-- ⬜ desktop shell composition (panel separation) — rolled back by `b2124ee "UI
-  Cleanup"`; see `plans/ui-shell/pending-desktop_shell_composition-high-hard.md`
+- ✅ desktop shell composition (panel separation) — rebuilt after the earlier
+  rollback; see `plans/ui-shell/done-desktop_shell_composition-high-hard.md`
 - ✅ tab model, registry, and tab strip — see
   `plans/ui-shell/done-tab_content_registry-high-hard.md`
-- ⬜ left popout integration — see
-  `plans/ui-shell/pending-left_popout_integration-high-med.md`
-- ⬜ inspector/right popout integration — see
-  `plans/ui-shell/pending-right_popout_inspectors-med-med.md`
+- ✅ left popout integration — see
+  `plans/ui-shell/done-left_popout_integration-high-med.md`
+- ✅ inspector/right popout integration — see
+  `plans/ui-shell/done-right_popout_inspectors-med-med.md`
 - ✅ command palette and workspace file navigation — see
   `plans/ui-shell/done-command_palette_and_navigation-high-med.md`
-- ⬜ resizable layout and OS app-data persistence — see
-  `plans/ui-shell/pending-resizable_panel_persistence-med-med.md`
-- ⬜ theme control in the new shell — see
-  `plans/ui-shell/pending-shell_theme_control-high-easy.md`
-- ⬜ bottom panel framework and status integration — see
-  `plans/ui-shell/pending-bottom_panel_framework-low-med.md`
+- ✅ resizable layout and OS app-data persistence — see
+  `plans/ui-shell/done-resizable_panel_persistence-med-med.md`
+- ✅ theme control in the new shell — see
+  `plans/ui-shell/done-shell_theme_control-high-easy.md`
+- ✅ bottom panel framework and status integration — see
+  `plans/ui-shell/done-bottom_panel_framework-low-med.md`
 - ⬜ generic file viewer tabs (code editor, image/audio/video viewers) — see
   `plans/ui-shell/pending-generic_file_viewers-med-med.md`
 - ⬜ semi-preview markdown editor (live preview with inline source on focus) — see
   `plans/ui-shell/pending-semi_preview_editor-med-hard.md`
 - ⬜ modular settings system (declarative, auto-populating settings tab) — see
-  `plans/ui-shell/pending-modular_settings_system-med-med.md`
+  `plans/ui-shell/pending-modular_settings_system-med-hard.md`
 - ❌ prior movable-action/slot and layout-editing stories described `mockup2.htm`,
   not `mockup_v3/`; they were superseded and removed.

@@ -1,137 +1,150 @@
 # AI
 
-> Optional, privacy-preserving desktop AI. The UI uses assistant-ui with
-> `useExternalStoreRuntime`; ACP is the host-to-agent protocol, owned in Rust.
-> Read `plans/app-vision.md`, `plans/technical-decisions.md`, and the ACP skill
-> before implementing a story.
+> Optional, privacy-preserving desktop AI. The renderer uses assistant-ui with
+> `useExternalStoreRuntime`; ACP is the host-to-agent protocol owned in Rust.
+> Read `plans/app-vision.md`, `plans/technical-decisions.md`, the ACP skill, and
+> the linked child stories before implementation.
 
 ## Goal
 
 Provide local-first model chat and explicit ACP agent sessions in the desktop
-assistant panel without exposing credentials to the renderer, placing app data
-in the vault, or making host-side decisions that belong to an agent.
+assistant panel without exposing credentials to the renderer, putting app data in
+the vault, or making host-side decisions that belong to an agent.
 
-## Scope
+## Scope and invariants
 
-**In scope:** provider/model configuration; desktop chat transport and UI;
-local chat history; ACP lifecycle, capabilities, and permissions; opted-in
-active-note/workspace context; and a small bridge toward semantic search.
+**In scope:** provider/model metadata and native model gateway; native secret-store
+consumer boundary; local history; assistant-ui text streaming; ACP registry,
+process/session lifecycle, capabilities and consent; opted-in model context; a
+later semantic-search bridge; and registration of the trusted assistant built-in.
 
-**Out of scope:** mandatory AI, Assistant Cloud, raw provider keys in React,
-proprietary agent protocols, host-side planning/editing logic, and standalone
-semantic search/embeddings (owned by `semantic-search`).
+**Out of scope:** mandatory AI, Assistant Cloud by default, raw provider keys in
+React, proprietary agent protocols, host-side planning/editing/merging, automatic
+remote context, and replacing deterministic FTS5 search.
 
-## Architecture Decisions
+- `packages/core/src/ai/` is platform-neutral. It contains values/contracts only;
+  no React, Tauri, provider SDK, filesystem, or secret-store dependency.
+- All renderer IPC goes through `apps/desktop/src/native/`; components do not call
+  Tauri directly. Rust owns provider calls, credentials, network policy, ACP
+  process/session lifecycle, and permission enforcement.
+- ACP uses the official `agent-client-protocol` Rust crate. The renderer never
+  imports `@agentclientprotocol/sdk`; the existing dependency is removable only
+  once source imports are gone.
+- A host is deterministic: it transports protocol requests, validates/enforces
+  capabilities, returns stale-write conflicts/current content, and never reasons,
+  plans, edits, or merges for an agent.
+- Cloud model/context consent is explicit and separate from ACP capability
+  permission. Presence of a stored credential or an installed agent is not consent.
+- Secrets stay in the extension-owned native secret store. AI consumes a scoped
+  native boundary and never duplicates keychain ownership or adds a fallback.
 
-### Chat UI: assistant-ui with useExternalStoreRuntime
+## Implementation order (small subagents)
 
-Use `@assistant-ui/react` with `useExternalStoreRuntime` for the assistant
-panel. The renderer owns message state and consumes Tauri events directly.
-Build the `Thread`, composer, messages, tool/activity renderers, and approval
-affordances with Tailwind v4 utilities themed by `--tn-*` tokens (see
-AGENTS.md UI section, updated 2026-07-18).
+1. **AI contracts and consent records** —
+   `plans/ai/pending-ai_contracts_and_consent-low-hard.md`
+2. **ACP agent registry/detection** —
+   `plans/ai/pending-agent_registry-low-med.md`
+3. **Native secret-store consumer boundary** —
+   `plans/ai/pending-native_secret_store_consumer_boundary-med-hard.md`
+   (storage implementation remains the extension secret-storage owner).
+4. **ACP host/session lifecycle** —
+   `plans/ai/pending-acp_host_runtime-med-hard.md`
+5. **Provider configuration and native model gateway rollup** —
+   `plans/ai/pending-provider_configuration_and_gateway-med-hard.md`
+   (superseded rollup; its focused configuration and gateway children own
+   implementation).
+6. **Provider configuration UI and metadata** —
+   `plans/ai/pending-provider_configuration_ui-low-med.md`
+   (product-question STOP gate before UI).
+7. **Native model gateway** —
+   `plans/ai/pending-model_gateway_native-med-hard.md`
+   (secret consumer only; no parallel keychain/fallback).
+8. **Agent text-streaming renderer/runtime** —
+   `plans/ai/pending-agent_chat_text_streaming_mvp-high-hard.md`
+9. **Assistant-ui desktop thread and local history** —
+   `plans/ai/pending-assistant_ui_desktop_thread-med-med.md`
+10. **ACP capabilities, consent, and permission requests rollup** —
+   `plans/ai/pending-acp_capabilities_and_permissions-med-hard.md`
+   (superseded rollup; native enforcement and UI children own implementation).
+11. **ACP native capability enforcement** —
+    `plans/ai/pending-acp_capability_enforcement-med-hard.md`
+12. **ACP permission-consent UI** —
+    `plans/ai/pending-acp_permission_consent_ui-med-med.md`
+    (official current ACP option shapes and STOP gate required).
+13. **Opted-in model context** —
+    `plans/ai/pending-context_aware_chat-low-med.md`
+14. **Assistant built-in registration handoff** —
+    `plans/ai/pending-assistant_builtin_registration-low-med.md`
+    (shared extension bootstrap owns mechanics; do not edit or duplicate the
+    extension/Git/journal plans).
+15. **AI-assisted discovery bridge, last** —
+    `plans/ai/pending-ai_assisted_search-low-hard.md`; semantic-search remains
+    its owner and FTS5 is unchanged.
 
-The renderer talks to an agent process via ACP, not an LLM provider, so there
-is no transport/provider-abstraction layer in the renderer. ACP
-`session/update` variants (`Plan`, `AvailableCommandsUpdate`,
-`CurrentModeUpdate`, `ConfigOptionUpdate`, `SessionInfoUpdate`,
-`UsageUpdate`, `ToolCallUpdate`, `request_permission`) are modeled as
-first-class `ThreadMessageLike` parts via `useExternalStoreRuntime`.
+## Confirmed wire/event contracts
 
-Persist `ThreadMessageLike` history, thread metadata, and session links in OS
-app-data through a local `ThreadHistoryAdapter`/Tauri adapter. Do not enable
-Assistant Cloud by default. Persist only completed/explicitly saved turns and
-redact secret values from logs, errors, and event payloads.
+- ACP commands: `agent_spawn`, `agent_session_new`, `agent_prompt`,
+  `agent_cancel`, `agent_session_close`; all accept typed opaque IDs and
+  allowlisted agent/workspace values only.
+- ACP events: `agent://session-state`, `agent://session-update`,
+  `agent://permission-request`, `agent://permission-resolved`, and
+  `agent://error`; all include session/request IDs where applicable, monotonic
+  sequence for updates, are session-filtered, replay-safe, and redacted.
+- Model gateway commands: `ai_list_providers`, `ai_read_provider_config`,
+  `ai_write_provider_config`, `ai_delete_provider_config`,
+  `ai_start_model_stream`, `ai_cancel_model_stream`; events:
+  `ai://stream-update` and `ai://error`, request-filtered and secret-free.
+- History commands: `ai_list_threads`, `ai_read_thread`, `ai_save_thread`,
+  `ai_delete_thread`, `ai_clear_threads`; app-data only, versioned/atomic and
+  bounded.
+- `onNew` maps to `agent_prompt`; `AbortSignal` maps to `agent_cancel`.
+  ACP text deltas append to one assistant `ThreadMessageLike` text part; unknown
+  update kinds are not guessed into UI content.
 
-### ACP is the agent protocol (host-owned in Rust)
+## Current reconciled status (as inspected)
 
-ACP is the agent protocol. An explicit **Agent** session maps one user-made
-agent session to one ACP session and renders through assistant-ui's
-`useExternalStoreRuntime` adapter while preserving ACP lifecycle and
-permission events. Session metadata links the UI thread and ACP session
-without assuming their message formats are interchangeable.
+- ✅ Assistant panel foundation —
+  `plans/ai/done-assistant_panel_foundation-med-med.md`; visual shell exists.
+- ⬜ All behavior below is not implemented. The current
+  `apps/desktop/src/agent/AssistantPanel.tsx` still uses a throwing
+  `useLocalRuntime` placeholder, disables the composer, and contains visual MCP
+  toggles only. `AssistantPanelSurface` lazy-loads it and
+  `panelRegistry.tsx` already has the `assistant` panel contribution.
+- ⬜ Rust has `agent-client-protocol = "1.2"` in `Cargo.toml`/lock, but no ACP
+  module, commands, event emission, process spawn, or lifecycle registration is
+  present. `commands/mod.rs` registers only existing workspace/Git/Markdown/search/
+  settings/theme handlers; `capabilities/default.json` has no agent capability.
+- ⬜ `@agentclientprotocol/sdk` remains in `apps/desktop/package.json`; remove it
+  only in the text-streaming/host implementation after confirming no import.
+- ⬜ No `packages/core/src/ai/` directory, provider gateway, secret consumer,
+  history adapter, or AI consent records currently exist.
+- ⬜ `plans/ai/pending-ai_assisted_search-low-hard.md` is intentionally last and
+  does not block chat/ACP.
 
-Implement the ACP host in Rust next to the Tauri capability boundary using the
-official `agent-client-protocol` Rust crate. Rust owns the full ACP client
-lifecycle: `initialize`, `session/new`, `session/prompt`, `session/update`
-reading, `session/cancel`, and later `session/request_permission` enforcement.
-It emits typed Tauri events filtered by session ID. The renderer never imports
-`@agentclientprotocol/sdk` — it only calls Tauri commands and listens for
-events. The `@agentclientprotocol/sdk@1.2.1` TypeScript dependency is removed
-once the Rust side is wired. If a required host feature is absent in the Rust
-crate, consume the official schema and implement the minimum protocol
-surface—never a proprietary replacement.
+## Dependencies and boundaries
 
-The deterministic host exposes scoped filesystem and terminal capabilities,
-session lifecycle, notifications, and permission decisions. An agent requests
-a capability; UI presents allow once/always/deny; Rust validates scope and
-enforces the recorded decision. The host returns stale-write conflicts/current
-content and lets the agent decide how to retry or merge.
+`ui-shell` supplies the panel/tokens and is not reopened by AI. The extension epic
+supplies contribution/lifecycle/secret-storage mechanics; AI supplies behavior
+and consumes scoped APIs. The beta built-in integration registers ACP Agent Chat
+and its credential boundary but must not duplicate provider, ACP, history, or
+chat logic. `semantic-search` may consume approved discovery/context contracts;
+it does not block chat or ACP.
 
-### Confirmed integration contracts
+## Cross-cutting acceptance checks
 
-The renderer's `useExternalStoreRuntime` adapter consumes Tauri events
-(`agent://session-update`) and produces `ThreadMessageLike` objects directly.
-`onNew` calls a Tauri `agent_prompt` command; `abortSignal` maps to
-`agent_cancel`. The assistant-ui panel receives an externally supplied
-`AssistantRuntimeProvider` runtime, so the static configuration state can
-render without inventing a fake provider.
+Every story must include unit/integration tests plus desktop manual checks for
+normal, unavailable, cancellation, error, and redaction paths. No real cloud
+credential or agent process belongs in CI. Local-only flows must work offline;
+remote model/context flows must be visibly consented and cancellable. Tauri
+Mobile reuses the same React/core/native adapters, but every story must test or
+record keyboard, narrow layout, app suspension/background cancellation, secure
+store availability, storage limits, and the absence of desktop PATH/process
+assumptions.
 
-ACP agent mode follows the official session lifecycle: initialize, create or
-load a session, prompt, receive streaming updates, cancel, and close. A
-permission request carries the session ID, tool-call update, and protocol
-supplied options. The UI displays those options; the deterministic native host
-validates and enforces the selected outcome. It never selects an option or
-reasons on an agent's behalf.
+## Historical/superseded references
 
-### Shared contracts, configuration, and consent
-
-`packages/core/src/ai/` contains platform-neutral value types and contracts:
-provider/model configuration shape, chat/agent session metadata, consent
-records, and capability/permission requests. Concrete provider clients,
-credential storage, Tauri IPC, ACP runtime, and React hooks remain in desktop
-adapters/native code. This retains the hub-and-spoke boundary without forcing
-network implementations into `packages/core`.
-
-Cloud providers and any note/workspace context are opt-in. The composer shows
-what context is about to leave the device, and a remote-context permission is
-separate from ACP capability permission. Credentials and app/workspace settings
-live in OS app-data; keys use the OS secret store when available rather than
-plain JSON.
-
-## Dependencies
-
-- `ui-shell` supplies the right assistant panel and design tokens; it can ship
-  the panel container before AI behavior is enabled.
-- The `extensions` epic remains prerequisite for third-party providers/agents.
-  Built-in local chat and the host transport may be planned independently but
-  must not create an extension bypass. Registration wiring is tracked in
-  `plans/extensions/pending-beta_builtin_extensions-med-med.md`.
-- Native credential storage for ACP/provider callers is tracked in
-  `plans/extensions/pending-extension_secret_storage-med-hard.md`; the
-  encrypted app-data fallback remains a separate deferred decision.
-- `semantic-search` consumes approved AI contracts later; it does not block
-  chat or ACP.
-
-## Status
-
-- ✅ assistant-ui panel foundation — see
-  `plans/ai/done-assistant_panel_foundation-med-med.md`
-- ✅ Tailwind v4 switch for desktop UI (2026-07-18) — recorded in AGENTS.md;
-      agent chat components use Tailwind utilities mapped to `--tn-*` tokens
-- ⬜ agent chat text streaming MVP — see
-  `plans/ai/pending-agent_chat_text_streaming_mvp-high-hard.md`
-- ⬜ assistant-ui desktop thread and local history — see
-  `plans/ai/pending-assistant_ui_desktop_thread-med-med.md`
-- ⬜ provider/model configuration and native gateway — see
-  `plans/ai/pending-provider_configuration_and_gateway-med-hard.md`
-- ⬜ ACP runtime selection and host lifecycle — see
-  `plans/ai/pending-acp_host_runtime-med-hard.md`
-- ⬜ ACP capabilities and permission UI — see
-  `plans/ai/pending-acp_capabilities_and_permissions-med-hard.md`
-- ⬜ opted-in active-note/workspace context — see
-  `plans/ai/pending-context_aware_chat-low-med.md`
-- ⬜ AI-assisted discovery bridge — see
-  `plans/ai/pending-ai_assisted_search-low-hard.md`
-- ❌ prior generic provider/chat stories predated assistant-ui and the
-      separate ACP session model; they were superseded and removed.
+The old generic provider/chat decomposition is superseded by the ordered stories
+above. Existing `done-assistant_panel_foundation` remains complete; it does not
+claim runtime behavior. Broad provider and ACP stories are rollups only; focused
+children own configuration, native transport/enforcement, renderer UI, host
+lifecycle, streaming, and built-in registration separately.

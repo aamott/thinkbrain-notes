@@ -35,7 +35,7 @@ desktop UI code or CSS.
 
 ## Dependencies
 
-- `plans/ui-shell/pending-tab_content_registry-high-hard.md`
+- `plans/ui-shell/done-tab_content_registry-high-hard.md`
 - `apps/desktop/src/native/commands.ts`
 - `apps/desktop/src/workspace/ReadOnlyWorkspaceExplorer.tsx`
 
