@@ -104,23 +104,44 @@ need prerequisites. Recorded here so no story discovers this mid-implementation.
 | Editor hooks — CodeMirror `Extension[]` / `KeyBinding[]` only | `apps/desktop/src/tabs/editorHookRegistry.ts` |
 | Reference built-in to copy | `apps/desktop/src/extensions/builtins/noteStats.tsx` |
 
-**Gap 1 — the calendar tab has no contribution path (blocks story 7).**
-`TabKind` is `"editor" | "preview" | "settings" | "graph" | "browser"`; there is no
-`"canvas"` kind. `apps/desktop/src/shell/TabContent.tsx` builds its own module-scoped
-registry and switches on `tab.kind`, and `DesktopExtensionContext` has no `tabs` surface.
-Opening the calendar as a tab (D14, D27) therefore requires a **shell change**, not an
-extension contribution. **A prerequisite story now exists:**
-`plans/extensions/pending-tab_view_registry-high-med.md`, which promotes the tab registry to
-a singleton whose entries carry a renderer `factory` — mirroring the shipped
-`desktopPanelRegistry` pattern — and adds a general `openTab` entry point. Story 7 depends
-on it. Note that `TabKind` is already an open union (`BuiltInTabKind | (string & {})`), so no
-`packages/core` change is required.
+**Gap 1 — CLOSED. The calendar tab has a real contribution path.** *(verified 2026-08-07
+against shipped code; the earlier "no seam" finding was based on a pre-push state)*
 
-**Gap 2 — no React slot above the editor body (affects story 6).**
+`apps/desktop/src/tabs/tabRegistry.ts` exports the `desktopTabRegistry` singleton.
+`DesktopTabView` carries `factory?: (context: DesktopTabContext) => ReactNode`, registration
+returns a `Disposable`, and `subscribe()` lets the shell re-render when kinds come and go.
+`TabContent.tsx` reads that same singleton and calls `view.factory({ rootPath, tabId })`
+before falling through to its built-in branches. `DesktopExtensionContext.tabs.register()`
+contributes a kind (the kind is namespaced by the host), and `openTab(kind, title)` in
+`DesktopShell.tsx` opens one.
+
+Two constraints follow for story 7:
+
+- **A contributed kind must bring a `factory`.** Without one the tab falls through to the
+  Markdown editor branch and reports a missing document.
+- **`DesktopTabContext` is deliberately narrow — `rootPath` and `tabId` only.** The calendar
+  gets journal data from the journal service or `DesktopExtensionContext.workspace`, not
+  from the tab context. Built-in kinds stay shell-drawn precisely because the editor needs
+  document state this context does not carry.
+
+Also newly available and relevant: `DesktopExtensionContext.workspace`
+(`DesktopExtensionWorkspace`) reads, writes, creates and opens notes. Stories 3 and 9 should
+decide whether the journal service uses it or the existing workspace adapters — a real
+question, not a settled one.
+
+**Gap 2 — no React slot above the editor body, and hooks registered late silently no-op (affects story 6).**
 The metadata widget (D11, D24, D35) is a React surface above the editor body, but
 `editorHooks` inject raw CodeMirror extensions only. Two candidate routes exist —
 portaling React into a CodeMirror panel/widget from an editor hook, or adding a new React
 contribution slot in `MarkdownEditor.tsx` — and the choice is STOP-gated in story 6.
+
+**Confirmed timing constraint:** `MarkdownEditor.tsx` reads
+`markdownEditorHookRegistry.getExtensions(...)` once inside a mount-only effect and never
+subscribes to registry changes. A hook registered *after* an editor mounts therefore applies
+only to editors mounted later — a lazily activated journal would silently no-op on the
+already-open editor. Note the asymmetry: the tab registry gained `subscribe()`, the editor
+hook registry did not. Story 6 must either activate the journal `onStartup` or propose the
+same observability for editor hooks.
 
 **Gap 3 — extension settings are not yet visible in the UI (affects story 5).**
 The scoped settings API works and persists to OS app-data, but extension-owned sections
@@ -182,6 +203,6 @@ recorded in the story. Stories may be split further if a subagent would exceed o
 - ⬜ Journal popout and calendar tab implemented from approved mockups
 - ⬜ Mobile refinement approved and verified
 - ⬜ Built-in registration wired through `desktopExtensionHost`
-- ⬜ Gap 1 resolved: `plans/extensions/pending-tab_view_registry-high-med.md` delivers the tab renderer seam and `openTab`
+- ✅ Gap 1 closed: `desktopTabRegistry` singleton, `factory`, `tabs.register()`, and `openTab` all shipped
 - ⬜ Gap 2 resolved: a mounting route chosen for the metadata widget
 - ⬜ Gap 3 resolved: D23's per-workspace half either supported or explicitly deferred
