@@ -14,19 +14,19 @@ Discovery gate is CLOSED for items below. See `../pending-journal_discovery_and_
 - **D5** The calendar serves navigation, reflection, and metadata filtering in roughly equal
   measure — the model must support all three, not privilege one. (Separately, the epic's
   non-goals forbid emoji vocabulary and wellness/therapeutic framing.)
-- **D8** Multiple entries per day. Metadata is per file. Per-day aggregation strategy is PROVISIONAL ("last one wins" is a placeholder) and is **this story's own decision to make** — the provisional value is not approved product behavior.
+- **D8/D43** Multiple entries per day, metadata per file. Day summaries preserve all distinct per-field values; never choose a winner or calculate a synthetic daily value. Filters qualify a day only when one entry satisfies every active predicate.
 - **D14/D27** Full calendar opens as a canvas tab. Week and month views. First release shows a DOT ONLY.
 - **D19** Local device time; no workspace timezone, no day-start offset.
 - **D25** Clicking a day in the calendar **filters the popout list** to that day. It does not open an entry. Calendar and popout **share filter state**.
-- **D29** One dot per entry, capped. Cap value and overflow treatment are **undecided**.
+- **D29/D46** Both views show up to three dots, then `+N`; accessible text retains the exact matching count. Active filters count only D43-matching entries.
 - **D33** Entry qualification: parseable date in filename only. Malformed frontmatter does not disqualify. Unknown frontmatter must survive. Calendar loading must not rewrite any file.
 - **D36** Undated files form a pinned "Undated" group. Non-Markdown files are hidden. Non-Markdown and undated handling must be reflected in calendar day state.
 - **D38** Ambiguous dates are UNDATED. The model must not guess.
 
 **STOP gate:** The discovery gate above is closed. The following items remain OPEN and this story OWNS the decisions where marked:
 
-- **Per-day aggregation (OWNED HERE):** D8's "last one wins" is a placeholder, not an answer. This story must propose and get approval for the aggregation strategy (e.g. "show all", "last one wins", "count only") before implementing it. Do not ship a default silently.
-- **Dot cap and overflow (OPEN, not owned here):** D29 cap value and overflow treatment (e.g. `+N` badge, truncated row) are undecided. Implement the dot-per-entry structure with a configurable/injectable cap; leave overflow rendering to the UI story.
+D43 and D46 close aggregation and entry-density policy. The remaining open items are UI routing/state questions:
+
 - **Day-click when the popout is closed:** behavior when a calendar day is clicked and the popout is not open is undecided. The model must expose the filter state; routing that state to a closed popout is out of scope here.
 - **Date filter as a chip:** representation of the day filter as a chip in the popout UI is undecided; the model must expose a selected-day filter value without assuming chip UI.
 - **Calendar tab singleton + option persistence:** undecided; not owned here.
@@ -34,14 +34,14 @@ Discovery gate is CLOSED for items below. See `../pending-journal_discovery_and_
 
 ## Goal
 
-Define a platform-agnostic calendar model and pure aggregation/query functions that derive day states from journal file lists. The model must support shared filter state between calendar and popout (D25), represent one dot per entry up to a cap (D29), expose user-defined metadata as opaque values (D4), and never rewrite files on load or filter (D33). Per-day aggregation strategy requires product-owner approval before implementation.
+Define a platform-agnostic calendar model and pure aggregation/query functions that derive day states from journal entries. Preserve D43 distinct values and same-entry filter semantics, expose D46 exact/capped counts, share filter state with the popout (D25), and never rewrite files (D33).
 
 ## Scope
 
-- `CalendarDay` type: date identity, entry list (with refs), dot count (capped, cap injectable), metadata summary (opaque user-defined values), loading state, diagnostic bag.
-- `CalendarFilter` type: selected day (nullable), active metadata filters. This is the shared state between calendar and popout (D25).
-- Pure aggregation functions: derive `CalendarDay[]` from `JournalEntryRef[]` for a date range; UNDATED entries excluded from day cells, counted separately.
-- Query helpers: filter entries by day, by metadata value.
+- `CalendarDay` type: date identity, entries, exact matching count, visible dot count capped at three, overflow count, distinct-value metadata summary, loading state, diagnostics.
+- `CalendarFilter` type: selected day and active metadata predicates, shared by calendar and popout (D25).
+- Pure aggregation: preserve distinct values across entries; exclude UNDATED entries from day cells and count them separately.
+- Query helpers: AND active predicates within each entry, then derive qualifying days and D46 counts from matching entries only.
 - Day-state enum: no-entry, has-entries, undated-present, loading, error.
 - No color assignments, no icon mappings, no vocabulary (D4).
 - Fixture file: `plans/journal-calendar/assets/calendar-data-examples.md` with approved examples.
@@ -60,19 +60,19 @@ Define a platform-agnostic calendar model and pure aggregation/query functions t
 - Approved discovery and journal frontmatter/data-model story.
 - Journal service listing contract (`listJournalEntries` returning `JournalEntryRef[]`).
 - Existing workspace file list and parser boundaries.
-- FTS5/index cache is optional and rebuildable; calendar model must not treat it as source of truth.
+- D41 index queries provide matching paths at scale, but the pure model remains deterministic from entry fixtures and never treats the cache as source of truth.
 
 ## Acceptance criteria
 
 - [ ] `CalendarDay` type distinguishes: no entry, one or more entries (with list), UNDATED presence, loading, and error states.
-- [ ] Dot count per day is capped by an injectable parameter; the model does not hard-code the cap value (D29 cap undecided).
-- [ ] Metadata summary fields carry opaque user-defined values; no mood vocabulary, no activity icons, no color tokens (D4).
-- [ ] `CalendarFilter` carries a nullable selected-day and nullable metadata filters; calendar and popout consume the same type (D25).
-- [ ] Per-day aggregation strategy is documented, product-owner-approved, and explicitly modeled — not silently defaulted from the D8 placeholder.
+- [ ] Day state exposes exact matching count, visible dots `min(count, 3)`, and overflow `max(count - 3, 0)` for D46.
+- [ ] Metadata summaries preserve all distinct opaque values per field; no latest-entry, averaging, vocabulary, icons, or color semantics (D4/D43).
+- [ ] `CalendarFilter` carries selected day and metadata predicates; predicates are ANDed within each entry, and qualifying days/counts derive only from matching entries (D25/D43).
+- [x] Per-day aggregation and density strategies are product-owner-approved in D43/D46 and recorded in `assets/calendar-data-examples.md`.
 - [ ] Aggregation is deterministic for: empty range, single entry, multiple entries same day, malformed frontmatter (entry still counted), unknown field values, UNDATED entries (excluded from day cells).
 - [ ] Calendar loading and filtering never rewrite any file (D33).
 - [ ] Unknown frontmatter fields survive the aggregation pass (D33).
-- [ ] Tests cover: month boundaries, leap years, timezone-fixed fixtures, multiple entries per day, malformed frontmatter, filters, empty ranges, dot-cap boundary, UNDATED exclusion.
+- [ ] Tests cover month boundaries, leap years, timezone fixtures, distinct multi-entry values, same-entry AND filters, empty ranges, counts 0/1/3/4/8, malformed frontmatter, and UNDATED exclusion.
 - [ ] Model rebuilds correctly from a fresh `JournalEntryRef[]` with no app cache (D33).
 - [ ] `pnpm lint`, `pnpm typecheck`, `pnpm test` all pass on `packages/core`.
 
@@ -94,7 +94,7 @@ Desktop: compare aggregation with Markdown fixtures; delete/recreate notes; veri
 
 - No calendar React component, visual encoding (colors, icons, emoji), settings UI, native watcher, reminder system, or extension registration.
 - Do not choose a mood scale, activity color palette, hard-coded activity icons, or default filter (D4).
-- Do not hard-code the dot cap value (D29).
+- Do not replace D43/D46 with alternate aggregation or density rules.
 - Do not implement calendar tab singleton or grid keyboard model (undecided).
 
 ## Handoff artifacts
@@ -103,7 +103,7 @@ The next story (calendar UI / popout filter integration) needs:
 
 - `CalendarDay` and `CalendarDay[]` types with dot count and opaque metadata summary.
 - `CalendarFilter` type — shared state shape for calendar and popout.
-- `aggregateCalendarDays(entries, range, cap)` — pure function.
+- `aggregateCalendarDays(entries, range, filters)` — pure D43/D46 aggregation with exact, visible-dot, and overflow counts.
 - `filterEntriesByDay(entries, day)` — returns `JournalEntryRef[]`.
 - Approved per-day aggregation strategy (product-owner sign-off document).
 - Approved `plans/journal-calendar/assets/calendar-data-examples.md`.
