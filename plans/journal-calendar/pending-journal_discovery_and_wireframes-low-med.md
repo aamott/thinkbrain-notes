@@ -810,6 +810,39 @@ D37/D39, D40).*
   journal service story.
 - Field-definition drift and orphaned metadata display (note 6).
 
+## Reconciliation — 2026-08-07 (post-merge)
+
+The `extensions` branch advanced by nine commits between the start of discovery and the
+final push of these plans. **No decision in this log changed**, and no pushed file
+overwrote newer work — every write was made against an explicit blob SHA, so a stale base
+would have been rejected rather than silently clobbering. The two asset files that already
+existed were discovery placeholders reading "Status: placeholder pending product-owner
+discovery", which these artifacts were written to replace.
+
+What landed: an extension platform core (manifest parsing, capability compatibility,
+lifecycle bootstrap, lazy activation), a `Note Stats` built-in, live extension status, a
+markdown live-preview editor extension behind a settings toggle, and four fixes (symlink
+escape in markdown commands, core note offsets, settings staging during in-flight saves,
+live-preview reparse).
+
+Consequences are recorded in the epic's **Platform reality check** section and in the
+affected stories. In summary, three approved decisions have no complete implementation
+path on today's platform and are STOP-gated in their owning stories rather than
+weakened:
+
+- **D14 / D27** — the calendar tab. No `"canvas"` tab kind and no `tabs` contribution
+  surface exist; `TabContent.tsx` must gain a rendering branch. A shell change, untracked
+  by any story.
+- **D11 / D24 / D35** — the metadata widget. `editorHooks` inject CodeMirror extensions
+  only; there is no React slot above the editor body. Two candidate routes recorded, the
+  choice deliberately left open.
+- **D23** — per-workspace field definitions. All extension settings are currently
+  `scope: "app"` with no workspace-scoped path, and extension settings are not yet
+  rendered in the settings UI.
+
+None of this reopens a product question. Each item is a platform prerequisite, and the
+decision it serves stands as approved.
+
 ## Acceptance criteria
 
 - [x] User answers recorded for workflow (D1, D9), date/time policy (D19, D20, D33,
