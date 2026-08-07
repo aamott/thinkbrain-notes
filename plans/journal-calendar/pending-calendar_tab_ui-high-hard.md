@@ -26,11 +26,22 @@ The discovery gate is CLOSED for the decisions above. See the discovery story fo
 The built-in `TabKind` values (from `packages/core/src/layout/index.ts`) are:
 `"editor" | "preview" | "settings" | "graph" | "browser"`
 
-There is NO `"canvas"` kind and no canvas-tab concept in the current codebase. There is NO `tabs` surface on `DesktopExtensionContext`. `apps/desktop/src/tabs/tabRegistry.ts` (note: `.ts`, not `.tsx`) exports only a factory function (`createDesktopTabRegistry()`); there is no exported app-wide singleton that an extension can reach. `apps/desktop/src/shell/TabContent.tsx` builds its own module-scoped registry instance via `createDesktopTabRegistry()` and switches on `tab.kind` — a new kind requires a new rendering branch in that switch.
+The tab contribution seam exists and is shipped (verified 2026-08-07). Register the calendar
+kind on the `desktopTabRegistry` singleton exported from `apps/desktop/src/tabs/tabRegistry.ts`
+with a `factory: (context: DesktopTabContext) => ReactNode`;
+`apps/desktop/src/shell/TabContent.tsx` calls it before its built-in branches, so **no shell
+edit is required**. `DesktopExtensionContext.tabs.register()` is the extension-facing route and
+namespaces the kind. Open the tab with `openTab(kind, title)`
+(`apps/desktop/src/shell/DesktopShell.tsx`).
 
-This is a shell-level change, not an extension contribution. The story cannot be completed by an extension-only change. Registering the kind in `tabRegistry.ts` alone is insufficient; `TabContent.tsx` must also be modified to handle the new kind. Adding a new `TabKind` value also touches `packages/core/src/layout/index.ts`, which is platform-agnostic — coordinate carefully to keep `packages/core` free of UI and Tauri coupling.
+`TabKind` is already an open union (`BuiltInTabKind | (string & {})`), so **no
+`packages/core` change is required** to add a kind.
 
-Recommend (do not create here) a small prerequisite story for a tab-kind contribution point. The calendar tab story is blocked on that story's completion. Do not implement the calendar tab rendering until the contribution point exists and is confirmed.
+Two hard constraints: a contributed kind **must** bring a `factory`, or the tab falls through
+to the Markdown editor branch and reports a missing document; and `DesktopTabContext` carries
+only `rootPath` and `tabId`, so journal data comes from the journal service or
+`DesktopExtensionContext.workspace` — do not widen the context without raising it as a
+separate decision.
 
 ## Questions first — STOP gate (still open for this story)
 
@@ -43,9 +54,8 @@ The items below are **genuinely undecided**. Do not implement the affected surfa
 5. **Calendar grid keyboard model:** Roving-focus model, month paging keys, and activation semantics for day cells need their own accessibility pass. Do NOT guess — mark as a STOP gate.
 6. **Day click when the popout is closed:** If the user clicks a day and the popout is not open, does it open? Does the filter still apply?
 7. **Date filter as a dismissible chip:** Does the active day filter appear in the popout as a chip that the user can dismiss independently of the calendar tab?
-8. **Tab-kind contribution point:** Which prerequisite story creates it? This story is blocked until that story is complete.
 
-**STOP gate:** Do not implement the grid, dot rendering, day-selection behavior, keyboard model, or tab-kind registration until the prerequisite tab-kind contribution story is done AND each open item above has a product-owner decision recorded in the discovery story.
+**STOP gate:** The tab seam is available, so registration is unblocked. Do not implement the grid, dot rendering, day-selection behavior, or the keyboard model until each open item above has a product-owner decision recorded in the discovery story.
 
 ## Goal
 
@@ -84,10 +94,9 @@ Do NOT touch `apps/desktop/src/shell/ActivityBar.tsx` for the calendar — no ac
 
 ## Acceptance criteria
 
-- [ ] Tab-kind contribution point (prerequisite story) is complete before any calendar tab code is merged.
 - [ ] Calendar opens only from the journal popout "Open calendar" button into a canvas tab; no activity-bar entry or panel registration.
-- [ ] Both `apps/desktop/src/tabs/tabRegistry.ts` AND `apps/desktop/src/shell/TabContent.tsx` are updated; registering the kind without a rendering branch is a defect.
-- [ ] `packages/core/src/layout/index.ts` is updated with the new `TabKind` value; no UI or Tauri coupling introduced in `packages/core`.
+- [ ] The calendar kind is registered with a `factory`; `TabContent.tsx` is NOT edited. A registration without a factory is a defect.
+- [ ] `packages/core` is unchanged — `TabKind` is already an open union, so adding a kind needs no core edit.
 - [ ] Week view and month view are selectable from the options strip at the top of the tab.
 - [ ] First release renders one dot per entry per day cell, capped; cap value and overflow treatment implemented per the product-owner decision recorded in the discovery story.
 - [ ] Clicking a day filters the journal popout list to that day; clicking again or clearing dismisses the filter; calendar and popout share the same filter state object.
