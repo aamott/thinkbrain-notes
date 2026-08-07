@@ -86,17 +86,20 @@ Non-goals:
 
 ## Platform reality check — 2026-08-07
 
-The branch advanced by nine commits while discovery was running. An extension platform
-core and a markdown live-preview editor shipped. The decisions in the discovery log are
-unaffected, but two of them now have **no implementation path** on today's platform and
-need prerequisites. Recorded here so no story discovers this mid-implementation.
+An extension platform core, contributed tab kinds, and a markdown live-preview editor
+shipped while discovery was running. The decisions in the discovery log are unaffected.
+Two of them still have **no complete implementation path** and are STOP-gated in their
+owning stories — recorded here so no story discovers that mid-implementation.
 
 **Shipped and usable by the journal:**
 
 | Surface | Where |
 |---|---|
 | `desktopExtensionHost` singleton, `register` / `registerAndActivate` | `apps/desktop/src/extensions/desktopExtensionHost.ts` |
-| `DesktopExtensionContext` — exactly `commands`, `panels`, `editorHooks`, `settings` | same |
+| `DesktopExtensionContext` — `commands`, `panels`, `editorHooks`, `settings`, `tabs`, `workspace` | same |
+| Contributed tab kinds: `desktopTabRegistry` singleton, `DesktopTabView.factory`, `subscribe()`, disposable registration | `apps/desktop/src/tabs/tabRegistry.ts` |
+| `openTab(kind, title)` | `apps/desktop/src/shell/DesktopShell.tsx` |
+| Notes read/write/create/open for extensions (`DesktopExtensionWorkspace`) | `apps/desktop/src/extensions/desktopExtensionHost.ts` |
 | `ExtensionManifest`; `contributes` supports **only** `commands` and `panels` | `packages/core/src/extensions/manifest.ts` |
 | Activation events `onStartup` / `onCommand:<id>` / `onView:<id>`, lazy activation with stubs | `packages/core/src/extensions/activation.ts`, `apps/desktop/src/extensions/bootstrap.ts` |
 | Disposable scope (`DisposableStore`, `context.subscriptions`) | `packages/core/src/lifecycle.ts` |
@@ -104,30 +107,17 @@ need prerequisites. Recorded here so no story discovers this mid-implementation.
 | Editor hooks — CodeMirror `Extension[]` / `KeyBinding[]` only | `apps/desktop/src/tabs/editorHookRegistry.ts` |
 | Reference built-in to copy | `apps/desktop/src/extensions/builtins/noteStats.tsx` |
 
-**Gap 1 — CLOSED. The calendar tab has a real contribution path.** *(verified 2026-08-07
-against shipped code; the earlier "no seam" finding was based on a pre-push state)*
+**Gap 1 — CLOSED.** The calendar tab has a real contribution path: register a kind with a
+`factory` on the `desktopTabRegistry` singleton (or via `DesktopExtensionContext.tabs`), and
+open it with `openTab`. No shell edit is needed. A contributed kind **must** supply a
+`factory` or it falls through to the editor branch and reports a missing document, and
+`DesktopTabContext` carries only `rootPath` and `tabId` — journal data comes from the journal
+service or `context.workspace`. Details in
+`journal-calendar/pending-calendar_tab_ui-high-hard.md`.
 
-`apps/desktop/src/tabs/tabRegistry.ts` exports the `desktopTabRegistry` singleton.
-`DesktopTabView` carries `factory?: (context: DesktopTabContext) => ReactNode`, registration
-returns a `Disposable`, and `subscribe()` lets the shell re-render when kinds come and go.
-`TabContent.tsx` reads that same singleton and calls `view.factory({ rootPath, tabId })`
-before falling through to its built-in branches. `DesktopExtensionContext.tabs.register()`
-contributes a kind (the kind is namespaced by the host), and `openTab(kind, title)` in
-`DesktopShell.tsx` opens one.
-
-Two constraints follow for story 7:
-
-- **A contributed kind must bring a `factory`.** Without one the tab falls through to the
-  Markdown editor branch and reports a missing document.
-- **`DesktopTabContext` is deliberately narrow — `rootPath` and `tabId` only.** The calendar
-  gets journal data from the journal service or `DesktopExtensionContext.workspace`, not
-  from the tab context. Built-in kinds stay shell-drawn precisely because the editor needs
-  document state this context does not carry.
-
-Also newly available and relevant: `DesktopExtensionContext.workspace`
-(`DesktopExtensionWorkspace`) reads, writes, creates and opens notes. Stories 3 and 9 should
-decide whether the journal service uses it or the existing workspace adapters — a real
-question, not a settled one.
+Newly available: `DesktopExtensionContext.workspace` reads, writes, creates and opens notes.
+Stories 3 and 9 must decide whether the journal service uses it or the existing workspace
+adapters — a real question, not a settled one.
 
 **Gap 2 — no React slot above the editor body, and hooks registered late silently no-op (affects story 6).**
 The metadata widget (D11, D24, D35) is a React surface above the editor body, but
