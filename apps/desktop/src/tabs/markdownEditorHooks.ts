@@ -1,11 +1,15 @@
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
-import { markdown } from "@codemirror/lang-markdown";
+import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
+import { languages } from "@codemirror/language-data";
+import type { Compartment } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 
 import {
   createDesktopEditorHookRegistry,
   type DesktopEditorHookRegistry
 } from "./editorHookRegistry";
+import { livePreview } from "./livePreview";
+import { wikiLinkExtension } from "./livePreview/wikiLink";
 
 /** Runtime callbacks supplied by the controlled Markdown editor instance. */
 export interface MarkdownEditorHookPayload {
@@ -13,6 +17,17 @@ export interface MarkdownEditorHookPayload {
   readonly onChange: (value: string) => void;
   /** Requests persistence of the current document. */
   readonly onSave: () => void;
+  /**
+   * Per-view compartment holding the live-preview extension.
+   *
+   * Owned by the editor instance rather than this module so two open editors
+   * can be reconfigured independently.
+   */
+  readonly livePreviewCompartment: Compartment;
+  /** Whether live preview is on at mount time. */
+  readonly livePreviewEnabled: boolean;
+  /** Resolves relative image sources; omitted outside a workspace. */
+  readonly resolveAssetUrl?: (src: string) => string | null;
 }
 
 /** The context is intentionally empty because these hooks need no host state. */
@@ -41,7 +56,30 @@ export const markdownEditorHookRegistry: MarkdownEditorHookRegistry =
     {
       id: "markdown-language",
       order: 20,
-      extensions: () => [markdown()]
+      // GFM rather than strict CommonMark: strikethrough, task lists and tables
+      // only exist in the GFM dialect, and live preview decorates the first two.
+      // `languages` lazily imports a grammar the first time a fenced block names
+      // it, so the initial bundle only carries the language index.
+      extensions: () => [
+        markdown({
+          base: markdownLanguage,
+          codeLanguages: languages,
+          // Registered unconditionally: parsing `[[Target]]` correctly is right
+          // even when live preview is off.
+          extensions: [wikiLinkExtension]
+        })
+      ]
+    },
+    {
+      id: "markdown-live-preview",
+      order: 25,
+      extensions: (payload) => [
+        payload.livePreviewCompartment.of(
+          payload.livePreviewEnabled
+            ? livePreview({ resolveAssetUrl: payload.resolveAssetUrl })
+            : []
+        )
+      ]
     },
     {
       id: "line-wrapping",

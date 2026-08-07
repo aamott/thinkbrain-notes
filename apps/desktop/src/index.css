@@ -64,6 +64,7 @@
   --radius-medium: var(--tn-radius-medium);
   --radius-large: var(--tn-radius-large);
   --font-sans: var(--tn-font-sans);
+  --font-mono: var(--tn-font-mono);
   --shadow-soft: var(--tn-shadow-soft);
 }
 
