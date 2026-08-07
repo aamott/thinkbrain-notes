@@ -41,7 +41,7 @@ List relevant folder to see task status. Keep filenames updated to reflect curre
 
 **Plan Folder**
 ```
-docs/plans/
+./plans/
 ├── status-epic_name-difficulty.md
 ├── epic_name/
 │   └── status-story_name-difficulty.md
