@@ -256,9 +256,14 @@ are not yet formalized, the first story here should establish them.
 - ✅ Manifest parser/schema — `plans/extensions/done-extension_manifest_format-low-med.md`.
 - ✅ Soft capability/API/platform compatibility —
   `plans/extensions/done-extension_capability_compatibility-low-med.md`.
-- ⬜ Local-directory loader — `plans/extensions/pending-extension_local_directory_loader-low-med.md`.
-  **This is the next step**: built-ins load as app code today, so nothing loads
-  from disk yet.
+- ✅ Local-directory loader —
+  `plans/extensions/done-extension_local_directory_loader-low-med.md`. A
+  directory holding `extension.json` plus a single pre-bundled ESM entry loads,
+  activates lazily, reloads, and unloads from the Extensions panel. Disk
+  extensions contribute commands and settings; declared panels are reported and
+  skipped until `pending-extension_contribution_surfaces` defines a
+  framework-neutral mount contract. Directory persistence across restarts is
+  `plans/extensions/pending-local_extension_directory_persistence-low-easy.md`.
 - ✅ Lifecycle/bootstrap integration —
   `plans/extensions/done-extension_lifecycle_bootstrap-low-med.md`. Built-ins are
   registered from manifests at startup and activated lazily via contribution

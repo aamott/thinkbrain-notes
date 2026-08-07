@@ -63,3 +63,12 @@ Deliver the approved contribution matrix, likely-file diff, typed contracts/test
 - `plans/extensions/pending-extension_api_surface-low-hard.md`
 - `plans/extensions/pending-extension_manifest_format-low-med.md`
 - `plans/extensions/pending-extension_lifecycle_bootstrap-low-med.md`
+
+## Blocked-on note from the loader story
+
+A locally loaded extension cannot contribute a panel today. `DesktopPanelContribution.factory`
+returns a `ReactNode`, and a pre-bundled extension that imports React runs against a
+second copy of the library, breaking hooks across the boundary. The loader reports
+and strips declared panels. This story owns the fix: a framework-neutral mount
+contract (the extension receives an element and owns its contents), which is a
+public API and must be designed on its own terms.
