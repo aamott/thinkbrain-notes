@@ -40,13 +40,16 @@ Future extensions include:
 List relevant folder to see task status. Keep filenames updated to reflect current status. Review after milestones. Delete tasks after review, or fix status if work is not complete. Add action items from review as stories unless they are immediately fixable. Plans should be concise. Avoid duplicating information across files.  
 
 **Plan Folder**
+
+Filename grammar: `[NN-]status-name[-urgency]-difficulty.md`
+(`NN` = optional 2-digit order; urgency optional, defaults to med)
 ```
 ./plans/
-├── status-epic_name-difficulty.md
+├── status-epic_name-urgency-difficulty.md
 ├── epic_name/
-│   └── status-story_name-difficulty.md
+│   └── [NN-]status-story_name-urgency-difficulty.md
 └── other_tasks/ # bugs, chores, etc.
-    └── status-task_name-difficulty-urgency.md
+    └── status-task_name-urgency-difficulty.md
 ```
 
 ## Optional: Repomix
