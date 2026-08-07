@@ -8,19 +8,14 @@ Part of [Journal & Calendar](../pending-journal-calendar-high-hard.md).
 
 ## Discovery constraints (approved 2026-08-07)
 
-Discovery gate is CLOSED for items below. See `../pending-journal_discovery_and_wireframes-low-med.md` for the full decision log. Do not re-litigate these.
+The discovery gate is CLOSED; full rationale and D1-D47 live in
+`../pending-journal_discovery_and_wireframes-low-med.md`.
 
-- **D7/D17** Default path `journal/YYYY/MM/YYYY-MM-DD-HHmm.md`. Journal root is configurable. Nesting bounded at year/month/day. Time always present.
-- **D18** "New entry" ALWAYS creates a new file. Never reopens or appends to an existing file.
-- **D19** Device local time. Backfill allowed. No workspace timezone, no day-start offset.
-- **D20** Filename wins on date conflict. Service must not rewrite frontmatter on open.
-- **D21** No templates in the first slice. Template application is explicitly OUT OF SCOPE for this story.
-- **D22** A new entry contains frontmatter with the date only; fields are NOT pre-seeded.
-- **D30** Same-minute collision → counter suffix `-2`, `-3`, never seconds. Service must detect collision, increment counter, and not overwrite.
-- **D33** Opening or listing entries must NOT rewrite files. Unknown frontmatter survives.
-- **D41** Metadata facet values come from the platform index; no journal-owned cache and no full-file-scan fallback.
-- **D42** Listing accepts only the approved narrow ISO read table; date-only entries sort before timed entries on the same day. Creation still emits D17 only.
-- **D43** Combined metadata predicates match within one entry; service/index results must not combine values from separate entries.
+- **D7/D17/D19:** configurable `journal/YYYY/MM/YYYY-MM-DD-HHmm.md` root/path, local device time, backfill allowed, no workspace timezone or day-start offset.
+- **D18/D30:** every new entry is a new file; same-minute collisions use `-2`, `-3`, never overwrite, and never add seconds.
+- **D20/D21/D22/D33:** filename wins; no templates; new frontmatter is date-only; open/list never rewrite files and unknown frontmatter survives.
+- **D41/D43:** metadata facets come from the platform index (no journal cache/full scan); predicates match within one entry.
+- **D42:** listing accepts only the narrow ISO table, date-only sorts first, and creation emits D17 only.
 
 **STOP gate:** The discovery gate above is closed. The following items remain OPEN and must not be silently resolved:
 
@@ -28,19 +23,13 @@ Discovery gate is CLOSED for items below. See `../pending-journal_discovery_and_
 - **Folder creation on backfill:** when a backfilled entry falls into a past year/month folder that does not yet exist, should the service create it silently or prompt? Undecided.
 - **Day-click when the popout is closed:** behavior when a calendar day is clicked and the popout is not open is undecided; this story does not need to resolve it but must not assume either path.
 - **Error/retry copy:** exact error messages and retry behavior when the workspace is unavailable or a path is invalid are not yet approved.
+- **Service adapter boundary:** choose `DesktopExtensionContext.workspace` or the existing workspace adapters before implementation; do not support both or couple the service directly to the host.
 
 Do not implement backfill mechanics, folder-creation policy, or error copy until the owner approves them.
 
 ## Listing at scale — DECIDED
 
-Resolved 2026-08-07 against the shipped index and D41. Listing and previews need no new
-infrastructure; metadata facets depend on the indexing-search story below.
-
-**Nothing in the list requires reading file contents.** D20 makes the *filename*
-authoritative for an entry's date, so dates, year/month grouping, the Undated group,
-calendar dots and the day filter all derive from paths alone. One `list_workspace_entries`
-tree walk per refresh; no `read_markdown_file` calls. This is the whole reason the
-full-scan problem disappears.
+Resolved 2026-08-07 against the shipped index and D41. No new infrastructure is needed for listing or previews; metadata facets depend on the indexing-search story below. Dates, year/month grouping, Undated, calendar dots, and day filters derive from paths alone (D20), so each refresh uses one `list_workspace_entries` tree walk and no `read_markdown_file` calls for the list.
 
 | Need | Source | Cost |
 |---|---|---|
@@ -49,37 +38,17 @@ full-scan problem disappears.
 | Full-text search (D16) | existing `search_index(rootPath, query, limit)`, hits filtered to the journal root | already shipped |
 | Metadata filter values (D16/D41) | platform index facet query | indexing dependency |
 
-**Previews are lazy because the list is virtualized.** D13 already requires
-virtualization, so only the visible window is ever rendered — fetch previews for those rows
-and cache them. Do not prefetch the whole folder, and do not block first paint on previews:
-render the row with its date immediately and fill the preview when it arrives.
+Because D13 virtualizes the list, fetch and memoise previews only for visible rows; do not prefetch the folder or block first paint (render the date first, then fill the preview). Delegate search to `search_index`, filtering hits to the journal root; if that is too coarse, add a native path-prefix argument through the indexing epic, not a journal-owned index. The disposable, rebuildable app FTS5 cache is never source of truth.
 
-**Search delegates; it does not re-implement.** `search_index` is query-only and takes no
-path filter, so filter the returned hits to paths under the journal root. If that proves
-too coarse, the fix is a path-prefix argument on the native command — an indexing-epic
-change, not a journal-owned index.
-
-**Do not build a journal-owned search index.** The FTS5 cache is the app's one index, is
-disposable and rebuildable, and is never the source of truth.
-
-**Known caveat:** there is no file watcher yet
-(`plans/indexing-search/pending-file_watcher-low-med.md`), so externally-created journal
-files will not appear in search until the workspace is reindexed. The tree walk *does* see
-them, so the list stays correct — only search lags. State this in the UI rather than
-pretending otherwise.
+**Known caveat:** no file watcher exists yet (`plans/indexing-search/pending-file_watcher-low-med.md`), so externally-created files appear in the tree-walk list but not search until reindexing. State this in the UI.
 
 ### Metadata facets — platform dependency
 
-D41 chooses the platform-owned disposable index for structured frontmatter and facet
-queries. This story may expose the query through its UI-independent boundary, but it does
-not own the index schema or native command. Metadata facets remain blocked on
-`plans/indexing-search/pending-frontmatter_metadata_facets-high-hard.md`; listing, date
-filters, lazy previews and search remain unblocked. If the index is unavailable, return a
-typed unavailable result — never scan every file or create a journal cache.
+D41 assigns structured-frontmatter facets to the platform-owned disposable index. This story may expose them through its UI-independent boundary but does not own the index schema or native command. Facets are blocked on `plans/indexing-search/pending-frontmatter_metadata_facets-high-hard.md`; listing, date filters, lazy previews, and search are not. If unavailable, return a typed unavailable result—never scan every file or create a journal cache.
 
 ## Goal
 
-Implement a typed, UI-independent service that resolves a journal date, expands the approved folder/filename convention, detects same-minute collisions (counter suffix), and creates a new daily Markdown note through existing workspace adapters. Template application is deferred to a later increment (D21). Opening/listing must not rewrite files (D20/D33).
+Implement a typed, UI-independent service that resolves dates/paths, detects same-minute collisions, and creates notes through the approved typed workspace boundary. Template application is deferred to a later increment (D21). Opening/listing must not rewrite files (D20/D33).
 
 ## Scope
 
@@ -116,7 +85,7 @@ Implement a typed, UI-independent service that resolves a journal date, expands 
 - [ ] New file contains date-only frontmatter; no fields are pre-seeded; no template content is applied (D21/D22).
 - [ ] Opening or listing entries does not rewrite any file; unknown frontmatter survives (D20/D33).
 - [ ] Folder and filename expansion uses only approved, path-safe tokens; traversal, empty names, and invalid extensions produce typed diagnostics, not silent failures.
-- [ ] Backfill creates a file at the past date path; the time component is STOP-gated and must not be silently defaulted.
+- [ ] Before backfill approval, only pure past-date path expansion is implemented/tested; file creation remains blocked on time and folder policy.
 - [ ] Service is platform/UI agnostic at its boundary; no panel state, no direct Tauri calls.
 - [ ] `listJournalEntries` reads **no file contents** — dates come from filenames (D20); it
       applies D42 and sorts date-only before timed entries, and a 1,000-entry test asserts zero
@@ -127,21 +96,10 @@ Implement a typed, UI-independent service that resolves a journal date, expands 
 - [ ] Tests cover: today's entry, same-minute collision (counter 2 and 3), past-date path expansion, invalid path segments, workspace unavailable, open/list no-rewrite, unknown frontmatter survival.
 - [ ] `pnpm lint`, `pnpm typecheck`, `pnpm test` all pass.
 
-## Tests / manual checks
+## Validation
 
-- Unit tests with injected clock: today's note, collision at minute boundary (counter 2 then 3), path traversal attempt.
-- No-rewrite test: list/open an existing note; assert the file bytes are unchanged after the call.
-- Run `pnpm lint`, `pnpm typecheck`, `pnpm test` / `./scripts/qa.sh`.
-- Manual in a temporary workspace: create today's entry, create a second entry in the same minute (verify `-2` suffix), open an existing note (verify no rewrite), inspect files in a plain text editor after each operation.
-- Verify listing/opening alone produces no file timestamp or content change.
-
-## Automated validation
-
-`pnpm lint`, `pnpm typecheck`, `pnpm test` or `./scripts/qa.sh` on focused service/path tests.
-
-## Manual desktop/mobile checks
-
-Desktop: temporary workspace, today/collision/past-date/invalid/error flows; inspect files externally after each. Mobile/shared webview: verify date/path behavior; verify no desktop-only native dependency; verify keyboard/suspension cancellation handles workspace-unavailable case.
+- Focused tests cover the acceptance cases above, including injected-clock creation, collision counters 2/3, path traversal, no-rewrite bytes, lazy previews, 1,000-entry zero-read listing, facets, and typed unavailable results; run `pnpm lint`, `pnpm typecheck`, `pnpm test` or `./scripts/qa.sh`.
+- Desktop: in a temporary workspace, create today's and same-minute entries, inspect `-2`, open/list without timestamp or content changes, exercise past-date/invalid/error flows, and inspect files externally. Mobile/shared webview: verify date/path behavior, no desktop-only native dependency, and keyboard/suspension cancellation for workspace-unavailable cases.
 
 ## Non-goals
 
