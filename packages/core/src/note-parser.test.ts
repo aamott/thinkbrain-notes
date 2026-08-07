@@ -61,18 +61,21 @@ Body with #inline-tag and [[Some Note]] plus [[Other Note|Display Text]].
         endOffset: expect.any(Number)
       }
     ]);
+    // Lines 18 and 19 of the source above, counting the 14-line frontmatter
+    // block. These previously read 16 and 17, which silently encoded a masking
+    // bug that dropped the two `---` fence lines.
     expect(parsed.tasks).toEqual([
       {
         checked: false,
         text: "Write parser",
-        line: 16,
+        line: 18,
         startOffset: expect.any(Number),
         endOffset: expect.any(Number)
       },
       {
         checked: true,
         text: "Add tests",
-        line: 17,
+        line: 19,
         startOffset: expect.any(Number),
         endOffset: expect.any(Number)
       }
@@ -161,5 +164,36 @@ Body`);
     expect(metadata.created).toBe("legacy-user-field");
     expect(metadata.created_at).toBeUndefined();
     expect(reparsed.body).toBe("Body");
+  });
+});
+
+describe("offsets reported against the original document", () => {
+  const NOTE = "---\ntags: []\n---\n- [ ] Task and [[A Link]]";
+
+  it("reports task offsets that slice the task out of the original markdown", () => {
+    const [task] = parseNote(NOTE).tasks;
+
+    expect(task).toBeDefined();
+    expect(NOTE.slice(task!.startOffset, task!.endOffset)).toBe("- [ ] Task and [[A Link]]");
+  });
+
+  it("reports the task's real line number, counting the frontmatter block", () => {
+    const [task] = parseNote(NOTE).tasks;
+
+    expect(task!.line).toBe(4);
+  });
+
+  it("reports wiki link offsets that slice the link out of the original markdown", () => {
+    const [link] = parseNote(NOTE).wikiLinks;
+
+    expect(link).toBeDefined();
+    expect(NOTE.slice(link!.startOffset, link!.endOffset)).toBe("[[A Link]]");
+  });
+
+  it("still ignores tags and links inside the frontmatter block", () => {
+    const parsed = parseNote("---\nnote: see [[Hidden]] #hiddentag\n---\nbody #real");
+
+    expect(parsed.wikiLinks).toHaveLength(0);
+    expect(parsed.inlineTags).toEqual(["real"]);
   });
 });

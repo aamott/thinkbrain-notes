@@ -163,8 +163,13 @@ function maskMarkdown(markdown: string, frontmatter: { raw: string; endOffset: n
   let masked = markdown;
 
   if (frontmatter) {
-    const replacement = frontmatter.raw.replace(/[^\r\n]/g, " ");
-    masked = replacement + masked.slice(frontmatter.endOffset);
+    // Blank the whole block including both `---` fences, rather than
+    // substituting only `raw`. Masking must be length- and line-preserving:
+    // every offset and line number reported by the extractors is computed
+    // against this masked text but describes a position in the original, so
+    // dropping the fences would shift them all by the fences' width.
+    const block = markdown.slice(0, frontmatter.endOffset);
+    masked = block.replace(/[^\r\n]/g, " ") + masked.slice(frontmatter.endOffset);
   }
 
   // Mask fenced code blocks (e.g., ```lang ... ``` or ~~~ ... ~~~)
