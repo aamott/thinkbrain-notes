@@ -15,6 +15,7 @@ const commandContext: DesktopCommandContext = {
   toggleOutline: () => undefined,
   toggleAssistant: () => undefined,
   toggleBottomPanel: () => undefined,
+  toggleLivePreview: () => undefined,
   openSettings: () => undefined,
   rebuildIndex: () => undefined,
   closePalette: () => undefined
@@ -25,9 +26,10 @@ describe("desktop command registry", () => {
     const registry = createDesktopCommandRegistry();
 
     expect(registry.entries().map((command) => command.id)).toEqual([
-      "open-file", "new-note", "search", "toggle-theme", "toggle-explorer",
-      "toggle-outline", "toggle-assistant", "toggle-bottom-panel", "open-settings",
-      "rebuild-index", "open-graph", "open-source-control", "open-extensions"
+      "open-file", "new-note", "search", "toggle-live-preview", "toggle-theme",
+      "toggle-explorer", "toggle-outline", "toggle-assistant", "toggle-bottom-panel",
+      "open-settings", "rebuild-index", "open-graph", "open-source-control",
+      "open-extensions"
     ]);
     expect(registry.get("toggle-explorer")?.title).toBe("Toggle Explorer");
     expect(registry.get("open-file")?.keybinding).toBe("Ctrl/Cmd+P");

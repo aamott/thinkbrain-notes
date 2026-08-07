@@ -12,7 +12,8 @@ import {
 describe("command palette filtering", () => {
   it("filters case-insensitively with deterministic title-prefix ranking", () => {
     expect(filterDesktopCommands(builtInDesktopCommands, "TOGGLE").map((command) => command.id)).toEqual([
-      "toggle-theme", "toggle-explorer", "toggle-outline", "toggle-assistant", "toggle-bottom-panel"
+      "toggle-live-preview", "toggle-theme", "toggle-explorer", "toggle-outline",
+      "toggle-assistant", "toggle-bottom-panel"
     ]);
     expect(filterDesktopCommands(builtInDesktopCommands, "git").map((command) => command.id)).toEqual([
       "open-source-control"
@@ -37,10 +38,11 @@ describe("command palette keyboard decisions", () => {
   it("wraps arrow navigation and handles Home and End", () => {
     const state = { ...initialCommandPaletteState, query: "toggle" };
 
-    expect(handleCommandPaletteKey(state, builtInDesktopCommands, [], "ArrowUp").state.activeIndex).toBe(4);
+    // "toggle" matches six commands, so wrapping lands on index 5.
+    expect(handleCommandPaletteKey(state, builtInDesktopCommands, [], "ArrowUp").state.activeIndex).toBe(5);
     expect(handleCommandPaletteKey(state, builtInDesktopCommands, [], "ArrowDown").state.activeIndex).toBe(1);
     expect(handleCommandPaletteKey({ ...state, activeIndex: 3 }, builtInDesktopCommands, [], "Home").state.activeIndex).toBe(0);
-    expect(handleCommandPaletteKey(state, builtInDesktopCommands, [], "End").state.activeIndex).toBe(4);
+    expect(handleCommandPaletteKey(state, builtInDesktopCommands, [], "End").state.activeIndex).toBe(5);
   });
 
   it("emits execute for the active command and close for Escape", () => {

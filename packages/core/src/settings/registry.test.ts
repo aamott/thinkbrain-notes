@@ -54,6 +54,11 @@ describe("settings registry", () => {
     expect(lineWrapping?.type).toBe("boolean");
     expect(lineWrapping?.default).toBe(true);
 
+    const livePreview = registry.getDefinition("editor.livePreview");
+    expect(livePreview?.type).toBe("boolean");
+    expect(livePreview?.default).toBe(true);
+    expect(livePreview?.section).toBe("editor.display");
+
     expect(registry.getDefinition("appearance.missing")).toBeUndefined();
   });
 
@@ -148,7 +153,8 @@ describe("settings registry", () => {
     const displayDefs = registry.getDefinitionsForSection("editor.display");
     expect(displayDefs.map((def) => def.key)).toEqual([
       "editor.fontSize",
-      "editor.lineWrapping"
+      "editor.lineWrapping",
+      "editor.livePreview"
     ]);
 
     const themeDefs = registry.getDefinitionsForSection("appearance.theme");
@@ -322,6 +328,7 @@ describe("extractDefaults", () => {
       "appearance.themeFile": null,
       "editor.fontSize": 16,
       "editor.lineWrapping": true,
+      "editor.livePreview": true,
       "settings.autosave": false
     });
   });

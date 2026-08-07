@@ -132,6 +132,14 @@ export interface SettingsStoreState {
   setActiveSection(id: string | null): void;
   setSearchQuery(query: string): void;
   getEffectiveValue(key: string): unknown;
+  /**
+   * Stages a single setting and saves immediately.
+   *
+   * Used by palette commands, where there is no Save bar to press. Any other
+   * staged edits are persisted alongside it — acceptable because the Settings
+   * tab and the palette are not usually driven at the same time.
+   */
+  setSettingImmediately(key: string, value: unknown): Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -451,6 +459,14 @@ export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettin
         return state.workspaceValues[key];
       }
       return appSettingsRegistry.getDefinition(key)?.default;
+    },
+
+    async setSettingImmediately(key: string, value: unknown): Promise<void> {
+      get().stageChange(key, value);
+      const result = await get().saveSettings();
+      if (!result.success) {
+        console.error(`[settingsStore] Failed to persist "${key}".`, result.diagnostics);
+      }
     }
   }));
 }

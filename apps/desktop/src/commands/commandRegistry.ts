@@ -14,6 +14,7 @@ export type DesktopCommandId =
   | "toggle-outline"
   | "toggle-assistant"
   | "toggle-bottom-panel"
+  | "toggle-live-preview"
   | "open-settings"
   | "rebuild-index"
   | "open-graph"
@@ -31,6 +32,7 @@ export interface DesktopCommandContext {
   readonly toggleOutline: () => void;
   readonly toggleAssistant: () => void;
   readonly toggleBottomPanel: () => void;
+  readonly toggleLivePreview: () => void;
   readonly openSettings: () => void;
   readonly rebuildIndex: () => void;
   readonly closePalette: (restoreFocus?: boolean) => void;
@@ -97,6 +99,15 @@ export const builtInDesktopCommands: readonly DesktopCommand[] = [
     shortcut: "Ctrl/Cmd+Shift+F",
     handler: ({ openSearch, closePalette }) => {
       openSearch();
+      closePalette();
+    }
+  }),
+  available({
+    id: "toggle-live-preview",
+    title: "Toggle live preview",
+    keywords: ["markdown", "wysiwyg", "preview", "source", "editor"],
+    handler: ({ toggleLivePreview, closePalette }) => {
+      toggleLivePreview();
       closePalette();
     }
   }),

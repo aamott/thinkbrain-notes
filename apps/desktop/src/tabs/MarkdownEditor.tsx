@@ -1,7 +1,8 @@
-import { EditorState } from "@codemirror/state";
+import { Compartment, EditorState } from "@codemirror/state";
 import { keymap, EditorView } from "@codemirror/view";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
+import { livePreview as livePreviewExtension } from "./livePreview";
 import {
   markdownEditorHookRegistry,
   type MarkdownEditorHookPayload
@@ -11,6 +12,10 @@ export interface MarkdownEditorProps {
   readonly value: string;
   readonly isSaving?: boolean;
   readonly error?: string | null;
+  /** Renders Markdown formatted inline, revealing source at the cursor. */
+  readonly livePreview?: boolean;
+  /** Resolves relative image sources to loadable URLs. */
+  readonly resolveAssetUrl?: (src: string) => string | null;
   readonly onChange: (value: string) => void;
   readonly onSave: () => void;
 }
@@ -20,6 +25,8 @@ export function MarkdownEditor({
   value,
   isSaving = false,
   error,
+  livePreview = true,
+  resolveAssetUrl,
   onChange,
   onSave
 }: MarkdownEditorProps) {
@@ -28,11 +35,17 @@ export function MarkdownEditor({
   const valueRef = useRef(value);
   const onChangeRef = useRef(onChange);
   const onSaveRef = useRef(onSave);
+  // Lazy `useState` rather than `useRef`: it gives one stable instance per
+  // view without allocating a throwaway Compartment on every render.
+  const [livePreviewCompartment] = useState(() => new Compartment());
+  const livePreviewRef = useRef(livePreview);
+  const resolveAssetUrlRef = useRef(resolveAssetUrl);
 
   useEffect(() => {
     onChangeRef.current = onChange;
     onSaveRef.current = onSave;
-  }, [onChange, onSave]);
+    resolveAssetUrlRef.current = resolveAssetUrl;
+  }, [onChange, onSave, resolveAssetUrl]);
 
   useEffect(() => {
     if (!hostRef.current) {
@@ -42,7 +55,10 @@ export function MarkdownEditor({
 
     const payload: MarkdownEditorHookPayload = {
       onChange: (nextValue) => onChangeRef.current(nextValue),
-      onSave: () => onSaveRef.current()
+      onSave: () => onSaveRef.current(),
+      livePreviewCompartment,
+      livePreviewEnabled: livePreviewRef.current,
+      resolveAssetUrl: (src) => resolveAssetUrlRef.current?.(src) ?? null
     };
     const extensions = markdownEditorHookRegistry.getExtensions(payload, undefined);
     const keybindings = markdownEditorHookRegistry.getKeybindings(payload, undefined);
@@ -59,13 +75,32 @@ export function MarkdownEditor({
       view.destroy();
       viewRef.current = null;
     };
-  }, []);
+    // The compartment is created once per component instance, so this effect
+    // still runs exactly once; it is listed only to satisfy exhaustive-deps.
+  }, [livePreviewCompartment]);
 
   useEffect(() => {
     const view = viewRef.current;
     if (!view || value === view.state.doc.toString()) return;
     view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: value } });
   }, [value]);
+
+  useEffect(() => {
+    livePreviewRef.current = livePreview;
+    const view = viewRef.current;
+    if (!view) return;
+    // Reconfiguring the compartment swaps the extension without recreating the
+    // state, so the cursor, scroll position and undo history all survive.
+    view.dispatch({
+      effects: livePreviewCompartment.reconfigure(
+        livePreview
+          ? livePreviewExtension({
+              resolveAssetUrl: (src) => resolveAssetUrlRef.current?.(src) ?? null
+            })
+          : []
+      )
+    });
+  }, [livePreview, livePreviewCompartment]);
 
   return (
     <section className="flex min-h-0 flex-1 flex-col" aria-busy={isSaving} aria-label="Markdown document">
