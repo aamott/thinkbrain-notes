@@ -50,6 +50,10 @@ docs/plans/
     └── status-task-difficulty-urgency.md
 ```
 
+## Optional: Repomix
+
+For major or cross-cutting refactors, `npx repomix --compress` can help map dependencies before editing. Use `--include` for a focused area; treat `repomix-output.xml` as generated and regenerate it when useful.
+
 ## Build Tooling (Linux, optional)
 - Rust builds auto-enable `sccache`/`mold`/`clang` if installed (no setup). Suggested: `sudo apt install sccache mold clang`. Details in `scripts/rust-env.sh`.
 - Build profiles live in `apps/desktop/src-tauri/Cargo.toml`: `[profile.dev]` favors compile speed, `[profile.release]` favors runtime speed + small binaries.
