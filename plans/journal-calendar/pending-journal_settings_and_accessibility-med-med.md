@@ -8,15 +8,14 @@ Part of [Journal & Calendar](../pending-journal-calendar-high-hard.md).
 
 ## Discovery constraints (approved 2026-08-07)
 
-Discovery gate is CLOSED for items below. See `../pending-journal_discovery_and_wireframes-low-med.md` for the full decision log. Do not re-litigate these.
+The discovery gate is CLOSED; full rationale and D1-D47 live in
+`../pending-journal_discovery_and_wireframes-low-med.md`.
 
-- **D4** Metadata fields are user-defined. Four input types: multi-select, single-select, number, text. App ships NO mood scale and NO activity taxonomy.
-- **D7** Journal root is configurable.
-- **D21** No templates in the first slice. Template settings are OUT OF SCOPE.
-- **D23/D45** Field definitions exist globally and per workspace. Workspace definitions replace complete same-id global definitions; untouched globals remain. Removed values stay visible/filterable as unconfigured and never trigger note rewrites.
-- **D31** Accessibility must-haves: **keyboard operation** and **screen-reader compatibility**. Deferred: reduced-motion, formal touch-target audit. HIGH CONTRAST IS OUT OF SCOPE — themes own it. The journal must use `--tn-*` tokens only; never hard-coded colors.
-- **D33** Settings must never cause the app to rewrite a journal note on open. Unknown frontmatter must survive.
-- **D34** Approval cadence: per-artifact sign-off. Product owner is the approver.
+- **D4/D7/D21:** user-defined four input types; configurable journal root; no templates or template settings.
+- **D23/D45:** global/workspace definitions use same-id replacement with untouched globals retained; removed values remain visible/filterable as `unconfigured` and never rewrite notes.
+- **D31:** keyboard and screen-reader support required; high contrast is theme-owned; use `--tn-*` tokens; reduced motion and formal touch-target audit are deferred.
+- **D33:** settings/opening never rewrite notes; unknown frontmatter survives.
+- **D34:** product owner signs off per artifact.
 
 **STOP gate:** The discovery gate above is closed. The following items remain OPEN and this story OWNS the decisions where marked:
 
@@ -101,27 +100,11 @@ Define and register the approved journal settings under `journal-calendar`, reso
 - [ ] **Settings are not assumed to be user-visible in the UI.** Acceptance criteria for settings visibility are conditional on `pending-extension_settings-low-med.md` delivering the rendering layer. Until then, verifiable programmatically only.
 - [ ] `pnpm lint`, `pnpm typecheck`, `pnpm test` or `./scripts/qa.sh` all pass.
 
-## Tests / manual checks
+## Validation
 
-- Run core/desktop settings tests, `pnpm lint`, `pnpm typecheck`, and full QA (`./scripts/qa.sh`).
-- Manual keyboard-only pass: Tab/Enter/Escape through all journal settings controls and journal/calendar interactive surfaces.
-- Screen-reader pass: verify labels, error announcements, and live-region status changes.
-- 200% zoom: verify no truncation or overlap in settings controls.
-- Dark/light theme: verify `--tn-*` tokens apply; verify no hard-coded color leaks.
-- High-contrast: not required (out of scope, D31).
-- Reduced-motion: deferred (D31).
-- Touch-target audit: deferred (D31).
-- Confirm changing a setting never writes settings JSON into the workspace.
-- Confirm changing a setting never rewrites an existing journal note.
-- If `pending-extension_settings-low-med.md` has shipped: verify journal settings sections appear in the settings tab UI and staged save/reset works end-to-end. If not shipped: verify programmatically via `context.settings.get` / `context.settings.set`.
-
-## Automated validation
-
-`pnpm lint`, `pnpm typecheck`, `pnpm test` or `./scripts/qa.sh` on core/desktop settings and accessibility tests.
-
-## Manual desktop/mobile checks
-
-Desktop: keyboard/screen-reader/zoom/dark/light theme pass; verify settings stay outside workspace. Mobile: Android/iOS touch, TalkBack/VoiceOver, text scaling, keyboard, and persistence checks against approved mockups. High contrast and reduced-motion: out of scope / deferred (D31).
+- Run core/desktop settings and accessibility tests, `pnpm lint`, `pnpm typecheck`, and `pnpm test` or `./scripts/qa.sh`.
+- Desktop: keyboard-only (Tab/Shift-Tab/Enter/Space/Escape), screen-reader labels/errors/live-region announcements, 200% zoom, and dark/light themes with `--tn-*` tokens only; verify settings stay outside the workspace, changes never rewrite notes, and no hard-coded colors leak. Mobile Android/iOS: check touch, TalkBack/VoiceOver, text scaling, keyboard, and persistence against approved mockups.
+- If `pending-extension_settings-low-med.md` has shipped, verify settings sections and staged save/reset end-to-end; otherwise verify programmatically via `context.settings.get` / `context.settings.set`. High contrast is not required; reduced-motion and touch-target audit remain deferred (D31).
 
 ## Non-goals
 
