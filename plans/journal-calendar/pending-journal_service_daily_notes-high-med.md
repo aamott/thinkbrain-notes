@@ -19,6 +19,8 @@ Discovery gate is CLOSED for items below. See `../pending-journal_discovery_and_
 - **D30** Same-minute collision → counter suffix `-2`, `-3`, never seconds. Service must detect collision, increment counter, and not overwrite.
 - **D33** Opening or listing entries must NOT rewrite files. Unknown frontmatter survives.
 - **D41** Metadata facet values come from the platform index; no journal-owned cache and no full-file-scan fallback.
+- **D42** Listing accepts only the approved narrow ISO read table; date-only entries sort before timed entries on the same day. Creation still emits D17 only.
+- **D43** Combined metadata predicates match within one entry; service/index results must not combine values from separate entries.
 
 **STOP gate:** The discovery gate above is closed. The following items remain OPEN and must not be silently resolved:
 
@@ -116,13 +118,12 @@ Implement a typed, UI-independent service that resolves a journal date, expands 
 - [ ] Folder and filename expansion uses only approved, path-safe tokens; traversal, empty names, and invalid extensions produce typed diagnostics, not silent failures.
 - [ ] Backfill creates a file at the past date path; the time component is STOP-gated and must not be silently defaulted.
 - [ ] Service is platform/UI agnostic at its boundary; no panel state, no direct Tauri calls.
-- [ ] `listJournalEntries` reads **no file contents** — dates come from filenames (D20); a
-      test asserts zero `read_markdown_file` calls for a list of 1,000+ entries.
+- [ ] `listJournalEntries` reads **no file contents** — dates come from filenames (D20); it
+      applies D42 and sorts date-only before timed entries, and a 1,000-entry test asserts zero
+      `read_markdown_file` calls.
 - [ ] First-line previews are fetched lazily for visible rows only and memoised; a test
       asserts previews are not prefetched for off-screen entries.
-- [ ] Metadata facet/filter queries delegate to the D41 platform-index API, return matching
-      paths for D16 search-within-filter, and return a typed unavailable result when the index
-      is unavailable; no full-file scan or journal cache.
+- [ ] Metadata facet/filter queries delegate to D41, AND predicates within one entry per D43, return matching paths for D16 search-within-filter, and return typed unavailable state without scans or a journal cache.
 - [ ] Tests cover: today's entry, same-minute collision (counter 2 and 3), past-date path expansion, invalid path segments, workspace unavailable, open/list no-rewrite, unknown frontmatter survival.
 - [ ] `pnpm lint`, `pnpm typecheck`, `pnpm test` all pass.
 
