@@ -9,6 +9,7 @@ rebuildable and lives in OS app-data, never in the vault.
 - Background workspace indexing on open (batched, abortable, non-blocking).
 - Incremental index upsert/remove on in-app create, save, rename, delete.
 - Full-text search across filename, title, tags, aliases, and body text.
+- Structured frontmatter indexing and facet queries for feature-owned filters (D41).
 - Search UI panel with debounced type-ahead and result snippets.
 - Per-workspace SQLite FTS5 cache stored in the OS app-data directory.
 
@@ -20,6 +21,9 @@ rebuildable and lives in OS app-data, never in the vault.
 - **Per-workspace cache files.** Each workspace gets its own SQLite file named
   from a stable FNV-1a hash of the canonicalized root, so distinct vaults never
   collide.
+- **One platform-owned derived metadata cache (D41).** Structured frontmatter and
+  facet values extend the existing rebuildable index; features do not maintain
+  parallel caches or treat indexed metadata as source of truth.
 - **Frontend-driven indexing (OI-005).** The frontend reads files and runs the
   shared core `parseNote`, then sends records to native SQLite via Tauri
   commands. This is deliberate: it reuses the tested core parser and keeps the
@@ -42,5 +46,6 @@ rebuildable and lives in OS app-data, never in the vault.
 - ✅ Incremental upsert/remove on in-app mutations — `apps/desktop/src/search/searchService.ts` (`indexDocument`, `removeIndexedDocument`)
 - ✅ Search UI panel with debounced type-ahead and snippets — `apps/desktop/src/search/SearchPanel.tsx`
 - ✅ Native command bridge and types — `apps/desktop/src/native/commands.ts`
+- ⬜ Structured frontmatter records and facet queries (D41) — `pending-frontmatter_metadata_facets-high-hard.md`
 - ⬜ File watcher for external edits (OI-003) — `pending-file_watcher-low-med.md`
 - ⬜ Connection pooling / managed SQLite state (OI-004) — `pending-connection_pooling-low-med.md`
