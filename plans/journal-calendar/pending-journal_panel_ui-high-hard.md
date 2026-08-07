@@ -142,6 +142,19 @@ Runtime panel dimension is the only case where a scoped CSSOM custom property on
 
 Desktop: validate all twelve UI states, real create/open/dirty/error flows, keyboard/screen reader, themes, and filter emphasis. Mobile: narrowed scope is owned by `pending-journal_mobile_refinement-med-med.md`; this story must not add mobile-only markup.
 
+## Confirmed platform constraint — editor hook timing
+
+`apps/desktop/src/tabs/MarkdownEditor.tsx` reads
+`markdownEditorHookRegistry.getExtensions(...)` once inside a mount-only effect and never
+subscribes to registry changes. A hook registered after an editor has mounted therefore
+applies only to editors mounted afterwards — a lazily activated journal would silently fail
+to decorate the already-open editor. Note the asymmetry: the tab registry gained
+`subscribe()`; the editor hook registry did not.
+
+Before any widget code ships, verify this empirically, then choose between activating the
+journal `onStartup` and proposing `subscribe()` for the editor hook registry. Do not assume
+either — record the choice here.
+
 ## Non-goals
 
 - No calendar view, group-by control, mood-color mapping, emoji vocabulary, paper texture, or handwriting typefaces.
