@@ -8,21 +8,15 @@ Part of [Journal & Calendar](../pending-journal-calendar-high-hard.md).
 
 ## Discovery constraints (approved 2026-08-07)
 
-Discovery gate is CLOSED for items below. See `../pending-journal_discovery_and_wireframes-low-med.md` for the full decision log. Do not re-litigate these.
+The discovery gate is CLOSED; full rationale and D1-D47 live in
+`../pending-journal_discovery_and_wireframes-low-med.md`.
 
-- **D2** Entries are ordinary Markdown notes. No special format, no DB record.
-- **D3** Metadata at the head of the file; human-legible, self-describing keys, no internal IDs or codes.
-- **D4** Daily metadata fields are user-defined; four input types: multi-select, single-select, number, text. App ships NO mood scale and NO activity taxonomy.
-- **D20** Date written to BOTH filename and frontmatter; **filename wins on conflict**. Parsing must NOT rewrite a disagreeing frontmatter date. Surfacing a mismatch is fine; silent repair is a defect.
-- **D7/D17** The canonical WRITE format is `journal/YYYY/MM/YYYY-MM-DD-HHmm.md` with a
-  configurable root; time is always present. This is the single format the writer emits —
-  the accepted READ formats are a superset, enumerated in the approved format table.
-- **D21** No templates in the first slice.
-- **D22** A new entry contains frontmatter with the **date only**. Fields are NOT pre-seeded.
-- **D30** Same-minute collision uses counter suffix `-2`, `-3`, never seconds. Parser must accept an optional counter and must not read it as time.
-- **D33** The only requirement to be an entry is a parseable date in the filename. Read leniently, write one format. Frontmatter NOT required; malformed frontmatter does NOT disqualify an entry. Unknown frontmatter must survive read/write.
-- **D38** Ambiguous dates (e.g. `01-02-2026`) are treated as UNDATED. The app NEVER guesses.
-- **D42** Read formats are exactly the approved narrow ISO table in `assets/journal-frontmatter-examples.md`; date-only sorts before timed entries, and collision counters require `N >= 2`.
+- **D2/D3:** entries are ordinary Markdown; metadata is a human-readable frontmatter block with self-describing keys, not codes/IDs.
+- **D4:** fields are user-defined with only multi-select, single-select, number, and text inputs; no shipped mood/activity vocabulary.
+- **D7/D17/D20:** writer emits `journal/YYYY/MM/YYYY-MM-DD-HHmm.md` under a configurable root, writes the date in filename/frontmatter, and filename wins without repair.
+- **D21/D22:** no templates; new frontmatter contains only the date.
+- **D30/D42:** read the approved narrow ISO forms; timed counters are `N >= 2`, never seconds or date-only counters; date-only sorts before timed entries.
+- **D33/D38:** read leniently; filename date alone qualifies, malformed/absent frontmatter remains eligible and survives writes, and ambiguous dates are `UNDATED` without guessing.
 
 **STOP gate:** The discovery gate above is closed. The following items remain OPEN and must not be silently resolved:
 
@@ -35,7 +29,7 @@ definition drift: preserve existing values and surface removed ones as unconfigu
 
 ## Goal
 
-Define platform-agnostic journal metadata and a stable Markdown contract that composes with the existing note parser while preserving unknown frontmatter and plain-file portability. The contract must be consistent with D20/D33/D38 (filename wins, lenient read, ambiguity = UNDATED) and must not assume templates (D21) or pre-seeded fields (D22).
+Define platform-agnostic journal metadata and a stable, portable Markdown contract that composes with the existing note parser. It preserves unknown frontmatter, follows D20/D33/D38 (filename wins, lenient read, ambiguity = UNDATED), and does not assume templates (D21) or pre-seeded fields (D22).
 
 ## Scope
 
@@ -76,21 +70,10 @@ Define platform-agnostic journal metadata and a stable Markdown contract that co
 - [ ] Serialization is ordinary Markdown/YAML; no DB or workspace cache.
 - [ ] `pnpm lint`, `pnpm typecheck`, `pnpm test` all pass on `packages/core`.
 
-## Tests / manual checks
+## Validation
 
-- `packages/core` unit tests for every approved format and every ambiguous input (must return UNDATED).
-- Counter tests: timed `-2`/`-3` accepted; `-1` and date-only counters rejected.
-- Unknown-field round-trip: read a note with unknown keys, write it, confirm keys survive.
-- Run `pnpm --filter @thinkbrain/core test`, `pnpm lint`, `pnpm typecheck`.
-- Manual: open approved examples in a plain text editor; edit an unknown field externally; confirm it survives an explicit journal update without being dropped or rewritten.
-
-## Automated validation
-
-`pnpm lint`, `pnpm typecheck`, `pnpm test` on `packages/core`.
-
-## Manual desktop/mobile checks
-
-Desktop: open approved examples outside the app; explicit save must preserve unknown fields without rewrite. Mobile/shared webview: run the same pure parser fixtures; verify no desktop/native dependency is introduced.
+- `packages/core` tests cover every approved format, ambiguous input (must return UNDATED), timed `-2`/`-3`, rejected `-1` and date-only counters, unknown-field round-trip, malformed/absent frontmatter, mismatch, and no-rewrite behavior; run `pnpm --filter @thinkbrain/core test`, `pnpm lint`, and `pnpm typecheck`.
+- Desktop: open approved examples outside the app, edit an unknown field externally, and confirm explicit save preserves it without rewrite. Mobile/shared webview: run the pure parser fixtures and verify no desktop/native dependency.
 
 ## Non-goals
 
