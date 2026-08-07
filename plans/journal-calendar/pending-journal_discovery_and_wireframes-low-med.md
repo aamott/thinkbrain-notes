@@ -1,6 +1,6 @@
 # Story: Journal Discovery, Moodboards & Wireframes
 
-**Status:** pending · **Urgency:** low · **Difficulty:** med
+**Status:** complete (discovery approved 2026-08-07) · **Urgency:** low · **Difficulty:** med
 
 ## Epic
 
@@ -15,7 +15,14 @@ Part of [Journal & Calendar](../pending-journal-calendar-high-hard.md). This is 
 - Should desktop show two activity-bar entries, and what is the smallest useful mobile navigation model?
 - What does the user need to approve at each mockup checkpoint, and who may reject or revise it?
 
-**STOP gate:** Ask the product owner these questions, capture answers, and stop. Do not create a production component, final schema, final folder/name syntax, or implementation PR until the answers and a first desktop/mobile wireframe are explicitly approved.
+**STOP gate — SATISFIED 2026-08-07.** The questions above are answered in the decision
+log below (D1-D40) and all three discovery artifacts are approved. Downstream stories
+may now proceed **within** those decisions.
+
+The gate remains closed for anything the log records as open. Each downstream story
+carries its own STOP gate for its own undecided items, and no implementation story may
+silently settle one. A superseding decision is recorded as a new D-number, never by
+editing an earlier one.
 
 ## Goal
 
@@ -24,8 +31,9 @@ Produce a decision record and low-fidelity moodboard/wireframe set that separate
 ## Likely files
 
 - `plans/journal-calendar/pending-journal_discovery_and_wireframes-low-med.md` (this decision log, updated with answers and approvals).
-- `plans/journal-calendar/assets/journal-calendar-moodboard.md` (new; text references and visual direction, if the repository keeps discovery artifacts as Markdown).
-- `plans/journal-calendar/assets/journal-calendar-wireframes.md` (new; desktop and mobile wireframes/alternatives, or links to approved artifacts).
+- `plans/journal-calendar/assets/journal-calendar-moodboard.md` (written; approved D35).
+- `plans/journal-calendar/assets/journal-calendar-wireframes.md` (written; IA and mobile
+  alternatives, state coverage, focus order; approved D37/D39/D40).
 - `plans/technical-decisions.md` (do not edit in this story; propose cross-cutting decisions there only if separately approved).
 
 ## Dependencies
@@ -371,33 +379,489 @@ makes the most common daily action a two-step scroll-and-click.
     its folder, D20 says the filename wins — so the folder is also cosmetic, and
     whether the app relocates the file is undecided.
 
+### Batch 6 — recorded 2026-08-06
+
+**D22. A new entry contains frontmatter with the date only.**
+Creation writes a minimal frontmatter block carrying the entry date (per D20, the
+frontmatter copy of the filename date) and nothing else. Configured metadata
+fields are **not** pre-seeded with empty values — the file stays clean until the
+user actually sets something through the form widget (D11). Combined with D21,
+there is no body content in a new entry.
+
+**D23. Metadata field definitions may be defined globally or per workspace.**
+Both levels exist. The user keeps the fields they always want at the app level and
+customizes per workspace for a specific journal. The precedence and merge rules
+between the two levels are not settled here and belong to
+`pending-journal_settings_and_accessibility-med-med.md`; that story must define
+whether a workspace definition replaces, extends, or shadows a global one of the
+same name.
+
+### M1. Mockup v1 — PROPOSAL, NOT APPROVED
+
+A low-fidelity interactive mockup of P1 was produced for review, built with the
+repository's real `--tn-*` dark tokens so proportions and chrome read true. It is
+explicitly not a final visual style and not an approved information architecture.
+
+States covered: desktop default; desktop with search and three filters active;
+the full calendar tab; mobile full-screen popout. Unresolved questions are marked
+inline in amber rather than silently resolved — the calendar activity-bar icon
+(D14 residual), an unparseable filename in the list (note 23), day-click and dot
+semantics (notes 11-12), cross-surface filter scope (note 14), and the mobile
+return path.
+
+The mobile bottom navigation shown is **one composition option, not a decision**.
+D12 said the popout goes full screen but never specified how the user returns to
+the editor; the mockup makes that gap visible instead of assuming a bottom bar.
+
+### Analyst notes — gaps raised by Batch 6
+
+28. **Global/workspace precedence.** D23 establishes two levels without merge
+    semantics: replace, extend, or shadow on name collision, and what happens when
+    a workspace narrows a global select list that existing entries already use.
+29. **Minimal frontmatter and the widget.** D22 means most entries have no field
+    keys at all, so the form widget must render configured fields that are absent
+    from the file without treating absence as invalid.
+
+### Batch 7 — recorded 2026-08-06
+
+**D24. M1/P1 approved as the structural basis, with one change: the entry
+metadata widget starts collapsed.**
+The popout zone structure, the grouped list, the filter-emphasis treatment, and
+the calendar tab composition are accepted as the basis for the wireframe set and
+downstream stories. The metadata form as drawn reads as too busy, so it is
+**collapsed by default** and the user expands it. Visual density cleanup beyond
+that is explicitly deferred — later refinement is expected and is not a blocker.
+
+Consequences: the collapsed state is the default in every subsequent mockup and in
+`pending-journal_panel_ui-high-hard.md`. The collapsed header still needs to
+communicate whether the entry has metadata set, so a summary affordance is likely
+required — the exact summary treatment is not yet decided.
+
+**D25. Clicking a day in the full calendar filters the popout list to that day.**
+*(resolves analyst note 11)*
+A day click is a filtering action, not an open-file action. It does not open an
+entry, even when the day has exactly one. This makes the calendar a **navigation
+and filtering surface that drives the popout**, and it partially answers note 14:
+the two surfaces share filter state rather than maintaining independent filters.
+
+Follow-on questions this creates: what happens when the popout is closed at the
+time of the click, and whether the resulting date filter appears as a dismissible
+chip like any other filter (P1 suggests yes, but it is now load-bearing).
+
+**D26. Mobile popout placement is the app's concern, not the journal
+extension's.** *(resolves the mobile return path question)*
+On mobile all popouts are treated uniformly: a subset is surfaced in the bottom
+navigation and the remainder in a left hamburger menu. The journal extension
+registers an ordinary popout and inherits this behavior automatically. It must not
+implement bespoke mobile navigation, a private bottom bar, or its own return path.
+
+Consequences: the bottom bar drawn in M1 is **descriptive of the app shell, not a
+journal design decision**, and `pending-journal_mobile_refinement-med-med.md`
+should narrow to journal-specific concerns — touch targets, the collapsed metadata
+widget, list density, and calendar-tab behavior on a phone — while deferring
+navigation composition to the mobile/UI-shell epics
+(`plans/mobile/pending-responsive_layout-low-med.md`).
+
+### Analyst notes — gaps raised by Batch 7
+
+30. **Collapsed-state summary.** With the widget collapsed by default (D24), the
+    collapsed header needs to indicate whether metadata exists on this entry
+    without expanding — otherwise set values become invisible.
+31. **Day click with the popout closed.** D25 targets the popout; behavior when
+    the popout is not open is undefined (open it, or filter silently).
+32. **Date filter as a chip.** Whether the calendar-driven date filter is a
+    first-class dismissible chip, and what clears it.
+33. **Calendar tab on a phone.** Still open — D26 covers popouts, but the calendar
+    is a canvas tab, not a popout.
+
+### Batch 8 — recorded 2026-08-06
+
+**D27. There is no calendar activity-bar button. The journal button is the only
+activity-bar entry.** *(fully supersedes D6; closes the D14 residual)*
+The activity bar is for popouts, and the calendar is a canvas tab, not a popout —
+so it does not belong there. The calendar is reached only through the calendar
+action in the journal popout (D14).
+
+Consequences: `pending-calendar_panel_ui-high-hard.md` is misnamed relative to this
+decision — the calendar is a **tab view, not a panel**, and it must not register an
+activity-bar contribution. Its registration path differs from the journal popout's
+and needs to be re-examined against the panel registry and tab-kind registry.
+
+**D28. The metadata form widget appears for any note in the journal folder, plus
+any note anywhere that already carries the configured fields.**
+Two triggers, either sufficient: location inside the configured journal folder, or
+the presence of the configured field keys in the note's frontmatter. A note
+outside the journal folder that carries the fields still gets the form, which keeps
+the feature useful for notes that were moved, and honors D2 — nothing about the
+widget depends on a special file type.
+
+Consequences: the widget cannot be gated on the journal folder alone, so the
+editor-hook registration must test frontmatter keys as well as path. Field
+definitions come from both settings levels (D23), so "the configured fields" is
+itself scope-dependent.
+
+**D29. The calendar shows one dot per entry, capped.**
+A day with three entries shows three dots; a day with many shows the cap. The cap
+value is not yet chosen. This preserves the "several entries today" signal that a
+single dot would erase.
+
+### Analyst notes — gaps raised by Batch 8
+
+34. **Cap value and overflow affordance.** D29 needs a specific cap and a treatment
+    for days over it (a "+N", a different mark, or nothing).
+35. **Dots in week view.** D29 is described for month cells; week view has more
+    room per day and may want a different treatment.
+36. **Calendar story mismatch.** `pending-calendar_panel_ui-high-hard.md` is framed
+    as a panel; D27 makes it a tab. The story needs renaming/rescoping, and the
+    epic's story table and dependency notes need updating.
+37. **Widget trigger cost.** D28's frontmatter-key trigger means every opened note
+    is tested against the configured field list — cheap per note, but it makes the
+    widget's behavior depend on settings state at open time.
+
+### Batch 9 — recorded 2026-08-07
+
+**D30. Same-minute collisions get a counter suffix.**
+When `YYYY-MM-DD-HHmm.md` already exists, the next entry becomes
+`YYYY-MM-DD-HHmm-2.md`, then `-3`, and so on. Seconds are never added; the minute
+stays the finest time unit in the filename (D17).
+
+Consequences: the filename parser must accept an optional `-N` counter and must not
+mistake it for part of the time. Ordering within a minute follows the counter.
+
+**D31. Accessibility must-haves for the first release: keyboard operation and
+screen-reader compatibility.**
+Both are required, not optional, for the popout (actions, search, group-by, filter
+popover, list rows) and the calendar tab (grid navigation, view switching, day
+activation per D25).
+
+Explicitly deferred, to be picked up later or when trivially cheap: reduced-motion
+handling and a formal minimum-touch-target audit. **High contrast is out of scope
+for this feature** — it is handled by the theme system, and the journal must simply
+use `--tn-*` tokens rather than hard-coded colors so themes work.
+
+This narrows the epic's accessibility question, which had listed keyboard,
+screen-reader, reduced-motion, and high-contrast as one undifferentiated block.
+
+### P2. Proposed handling of undated files — PROPOSAL, NOT APPROVED
+
+The product owner's direction: show undated files flagged, position them using file
+modified time, and allow filtering to find them — while noting the real risk that a
+user with ten years of entries would never scroll to them, and the legitimate case
+of a journal folder holding undated notes on purpose. The owner asked for a
+recommendation. This is that recommendation, not a decision.
+
+**The problem with positioning by mtime.** In a list whose entire organizing
+principle is chronology (D9, D15), placing an undated file at an mtime-derived
+position makes the row assert a date it does not have. Worse, mtime changes on every
+edit, so the file silently relocates between sessions — and under the ten-year
+scenario it lands in a group nobody scrolls to. Flagging it does not fix that,
+because the flag is only visible once you have already found it.
+
+**Recommendation — lift undated files out of the chronological stream:**
+
+1. **A dedicated "Undated" group pinned to the top of the list**, collapsed by
+   default, with a count. Top rather than bottom because it is the only position
+   guaranteed to be seen; collapsed because it is usually noise. **When there are no
+   undated files the group is absent entirely**, so the ordinary user never meets
+   this concept.
+2. **Order within that group by mtime.** Inside an explicitly undated group, mtime
+   ordering implies nothing false and is genuinely the most useful order.
+3. **A filter option for undated / flagged files**, as the owner suggested, so they
+   are reachable deliberately rather than only by scrolling.
+4. **Split the file kinds.** Non-Markdown files (images, PDFs, attachments) are
+   **hidden** from the popout — they are the file explorer's job and the journal
+   list is a list of entries. Only **undated Markdown** appears in the Undated
+   group. This keeps an attachments subfolder from flooding the list.
+
+**On the deliberate folder of undated notes.** The same mechanism serves it: such a
+user expands the Undated group, or filters to undated-only, and gets exactly a plain
+note list. If that turns out to be a real workflow rather than an edge case, the
+natural follow-up is for the group-by control to gain a mode that treats all files
+uniformly — but that is a future consideration, not part of this proposal.
+
+**Rejected alternative:** hiding undated files entirely. Simplest to build, but it
+makes files silently invisible in a folder the user owns, which contradicts the
+Markdown-first, no-surprises posture in `plans/app-vision.md`.
+
+### Analyst notes — gaps raised by Batch 9
+
+38. **Flag semantics.** If P2 is accepted, "flagged" needs a defined meaning and an
+    accessible name — undated is a category, not an error, and should not be styled
+    as a failure.
+39. **Counter and backfill.** D30's counter interacts with backfill: a backfilled
+    entry for a past date may need a counter against entries already on that date.
+40. **Keyboard model for the calendar grid.** D31 requires keyboard operation but
+    the grid's model (arrow-key roving focus, page-per-month, activation semantics
+    under D25) is unspecified.
+
+### Batch 10 — recorded 2026-08-07
+
+**D32. P2 accepted in principle, with a hard constraint: undated files must occupy
+minimal space.** The presentation is deliberately left open — a full group header
+like `Week of Aug 3` is likely too heavy. A small toggle beside the filter control
+that reveals ungrouped/undated files is a candidate. **The choice is to be settled
+by comparing mockups**, and the mockup set must show both treatments rather than
+picking one silently.
+
+What is settled from P2: undated Markdown is not placed in the chronological
+stream, is ordered by mtime among itself, is reachable through a filter, and
+non-Markdown files are hidden from the popout.
+
+**D33. The only requirement to be a journal entry is a parseable date in the
+filename. Read leniently, write one format.**
+The reader accepts a wide range of date formats in filenames; the writer only ever
+emits the D17 variation. A file is treated as an entry if its name yields a date at
+all — nothing else is required, and in particular **frontmatter is not required and
+malformed frontmatter does not disqualify an entry**.
+
+Only an **unreadable date format** routes a file to the undated treatment (D32).
+The other states the story originally listed — empty, malformed frontmatter,
+read-only, unsaved — get **no journal-specific treatment** and rely on existing
+editor behavior. Journal stories must not invent bespoke states for them.
+
+**D34. Approval cadence: per-artifact, as each is drafted.**
+Each discovery artifact is presented for sign-off on its own rather than batched
+into one review. The product owner is the approver and may reject or revise any
+artifact. Downstream stories are updated only after the artifacts they depend on
+are approved.
+
+### Analyst notes — gaps raised by Batch 10
+
+41. **Ambiguous dates are a correctness risk, not just a parsing detail.** D33's
+    lenient reader will meet names like `01-02-2026`, where day-first and month-first
+    readings both parse and disagree. The recommendation for the data-model story is
+    to treat genuinely ambiguous formats as **unreadable** (routing them to D32's
+    undated treatment) rather than guessing, because a wrong guess silently files an
+    entry on the wrong day and the user has no signal. Not decided here.
+42. **The accepted-format list needs enumerating** in
+    `pending-journal_data_model_frontmatter-med-hard.md`, with tests per format, plus
+    the interaction with the D30 counter suffix and with folder nesting.
+43. **Lenient read plus single write means filenames drift in shape.** An imported
+    journal keeps its original names — the app must never silently rename to
+    normalize, per the no-surprises posture. Whether an explicit opt-in normalize
+    action exists is a separate future question.
+
+### Batch 11 — recorded 2026-08-07
+
+**D35. Moodboard v1 approved: Direction B ("Page in a Workshop") with Direction A's
+popout.** The editor surface is a measured column and the collapsed metadata widget
+is a **dateline** — `Wednesday, August 5 · good · 7 · running, outdoors` — which also
+serves as the collapsed-state summary required by analyst note 30. The popout keeps
+the file-explorer's density and discipline.
+
+Rejected: **Direction A throughout** (the status strip reads as a build status above
+personal prose, and nothing in it invites slow writing) and **Direction C, "Data
+Journal"** (it conflicts with D4 — a user-defined vocabulary gives the app no basis
+for value ordering or color meaning, so the interface would promise capability the
+data model cannot support). Direction C may be revisited only if the metadata model
+later gains user-supplied ordering and color semantics.
+
+Constraints carried forward: no new color tokens, no mood-color mapping, no emoji
+vocabulary, no paper texture or notebook skeuomorphism, no handwriting typefaces, and
+no wellness or therapeutic framing. Direction B's measured column needs a defined
+behavior at narrow widths and on mobile, where the editor is full width.
+
+**D36. Undated files use a pinned group header.** *(closes D32's open presentation)*
+A single `Undated` row pinned to the top of the list, collapsed, with a count, absent
+entirely when no undated files exist. The rejected alternative was a toggle beside
+the filter control — zero rows and a better fit for a deliberately-undated folder,
+but a small badge is too easy to ignore, and discoverability won: a stray
+`README.md` should be noticed once without the user going looking for it.
+
+The rest of P2 stands: undated Markdown stays out of the chronological stream,
+orders by mtime among itself, is reachable by filter, and non-Markdown files are
+hidden from the popout.
+
+### Batch 12 — recorded 2026-08-07
+
+**D37. Desktop IA approved as IA-3, a hybrid: a flat stream with collapsible
+headers and no indentation. The group-by control is removed.**
+*(supersedes the `Group by` row of D10)*
+
+- The list is **visually flat** — headers are not indented and rows do not sit inside
+  a tree. It reads as one stream, not a hierarchy.
+- **Headers collapse**, which is what delivers IA-2's ten-year navigability without
+  IA-2's tree semantics or its conflict with a group-by control.
+- **No group-by control.** The `none / day / week / month / year` options and the
+  `week` default from D10 are withdrawn. Grouping becomes a fixed property of the
+  list rather than a user setting.
+- **Retained from D10:** full-text search (D16) and metadata filtering with
+  auto-populated values. These are now the only two list controls, which simplifies
+  the popout header from P1's three zones.
+
+Rejected: **IA-1 as drawn** (a non-collapsing flat stream leaves the archive
+reachable only through another surface) and **IA-2 as drawn** (indentation plus tree
+keyboard semantics, and it contradicted D10's group-by control — a contradiction
+D37 instead resolves by removing the control).
+
+*Open:* which header levels exist. "Collapsible headers" with no group-by control
+implies a fixed set — month headers only, or year plus month headers. Not decided;
+both are drawn for comparison.
+
+**D38. Ambiguous filename dates are treated as undated. The app never guesses.**
+*(closes analyst note 41)*
+A name like `01-02-2026`, where day-first and month-first both parse and disagree, is
+**not** an entry — it goes to the Undated group (D36). Guessing is rejected outright,
+including guess-with-a-flag: a wrong guess files an entry on the wrong day, and the
+calendar and list would both show it confidently in the wrong place.
+
+Consequence for `pending-journal_data_model_frontmatter-med-hard.md`: the accepted
+format list must be enumerated such that every accepted format is *unambiguous*, and
+ambiguity detection needs its own tests. This is a correctness requirement, not a
+nicety.
+
+### Analyst notes — gaps raised by Batch 12
+
+44. **Header levels undecided** (see D37) — month-only versus year-plus-month.
+45. **Collapse state persistence.** Whether collapsed headers stay collapsed across
+    sessions, and whether that state is per workspace.
+46. **P1's control strip shrinks.** With group-by gone (D37), the popout header has
+    search plus filter only. P1's zone 3 should be re-drawn rather than left with a
+    hole where the group-by dropdown was.
+47. **Collapsed headers and search.** When a search or filter matches entries inside a
+    collapsed header, the header must either auto-expand or show a match count —
+    otherwise results are silently hidden.
+
+### Batch 13 — recorded 2026-08-07 (discovery complete)
+
+**D39. IA-3 header levels: year plus month, both collapsible, neither indented.**
+Levels are distinguished by weight, size, case and background — never by padding.
+Rejected: month-headers-only (3a), because 96 collapsed month rows is still a scroll
+and it therefore fails the ten-year case that motivated the collapsible design.
+
+**D40. Mobile: M-1's compact list with M-2's bottom sheet for metadata editing.**
+One list implementation shared with desktop, and the bottom sheet confined to metadata
+editing — the four input types from D4, multi-select especially, do not fit inline on a
+phone. Rejected: M-1 throughout (inline multi-select is cramped) and M-2 throughout
+(halves the entries visible while browsing). Acknowledged cost: a bottom sheet is new
+component surface the desktop app uses nowhere else.
+
+## Checkpoint table
+
+| Artifact / version | Reviewer | Status | Follow-up |
+|---|---|---|---|
+| Question batches 1-10 (D1-D34) | product owner | ✅ answered | — |
+| P1 popout header v1 | product owner | ✅ approved with change (D24) | Metadata widget starts collapsed |
+| M1 interactive mockup v1 | product owner | ✅ approved as structural basis (D24) | Visual density cleanup deferred |
+| P2 undated-file handling | product owner | ✅ accepted with constraint (D32) | Minimal space; treatment compared |
+| Moodboard v1 (artifact 1) | product owner | ✅ approved (D35) | Direction B + A's popout; C rejected |
+| Undated treatment comparison | product owner | ✅ approved (D36) | Pinned group header chosen |
+| Desktop IA v1: IA-1 vs IA-2 (artifact 2) | product owner | ✅ resolved as IA-3 (D37) | Group-by control removed |
+| State coverage, 12 states | product owner | ✅ reviewed with artifact 2 | Referenced by the panel story |
+| Keyboard / screen-reader focus order | product owner | ✅ reviewed with artifact 2 | Calendar grid model still open |
+| IA-3 header levels: 3a vs 3b | product owner | ✅ approved 3b (D39) | — |
+| Mobile layouts M-1 vs M-2 (artifact 3) | product owner | ✅ approved hybrid (D40) | Bottom sheet is new component surface |
+
+**Approver:** the product owner, per D34. Any artifact may be rejected or revised by
+the product owner at any time; a superseding decision is recorded as a new D-number
+rather than by editing an earlier one.
+
+## Rejected alternatives (consolidated)
+
+| Rejected | In favor of | Why |
+|---|---|---|
+| Calendar widget in the popout | Grouped list (D15) | A real calendar belongs in the canvas tab |
+| One panel with switchable views | Journal popout + calendar tab (D14) | The activity bar is for popouts |
+| Calendar activity-bar button | Popout button only (D27) | The calendar is a tab, not a popout |
+| Templates in the first slice | No templates (D21) | Not needed for the first usable slice |
+| Pre-seeded empty metadata fields | Date-only frontmatter (D22) | Keeps files clean until values are set |
+| Seconds in filenames | Counter suffix (D30) | Minute stays the finest unit |
+| Guessing ambiguous dates | Undated (D38) | A wrong guess silently misfiles an entry |
+| Hiding undated files | Pinned group (D36) | Invisible files in a user-owned folder |
+| Toggle beside the filter for undated | Pinned group header (D36) | A small badge is too easy to ignore |
+| Direction A "Quiet Instrument" | Direction B (D35) | Status strip reads as build status over prose |
+| Direction C "Data Journal" | Direction B (D35) | Contradicts D4's user-defined vocabulary |
+| IA-1 flat non-collapsing stream | IA-3 (D37) | Archive reachable only via another surface |
+| IA-2 indented drill-down | IA-3 (D37) | Indentation + tree semantics; clashed with group-by |
+| 3a month headers only | 3b year + month (D39) | 96 collapsed rows still fails the ten-year case |
+| M-1 inline metadata throughout | M-1 + sheet (D40) | Multi-select is cramped inline on a phone |
+| M-2 comfortable rows throughout | M-1 + sheet (D40) | Halves entries visible while browsing |
+| Bespoke mobile navigation | App shell owns it (D26) | Popout placement is not a journal concern |
+
 ### Open questions carried forward
 
-- **Approval of P1**, including the proposed "Today" behavior.
-- Whether a new entry is empty or pre-seeded with a frontmatter block (note 26).
-- Handling of unparseable filenames and non-entry files in the journal folder
-  (notes 23-24); rename warnings and folder relocation (notes 25, 27).
-- Same-minute filename collision rule.
-- Backfill mechanics and the time component of a backfilled entry.
-- Whether a separate calendar activity-bar button still exists (D14 residual).
-- Per-day aggregation policy for the calendar (D8 provisional).
-- Day-click behavior, dot semantics, calendar tab identity, cross-surface filter
-  scope, calendar on mobile (analyst notes 11-14, 16).
-- Whether metadata field definitions are app-global or per-workspace.
-- Entry-state affordances: missing, empty, malformed, read-only, unsaved.
-- Field-definition drift and orphaned metadata display.
-- Form-widget scope and malformed-frontmatter behavior.
-- Accessibility requirements.
-- Mockup approval cadence.
+**Blocking discovery sign-off**
+
+*No open item blocks discovery sign-off. All three artifacts are approved (D35,
+D37/D39, D40).*
+
+- Collapsed-header behavior under search/filter (note 47) and collapse-state
+  persistence (note 45) — journal panel story.
+- Narrow-width and mobile behavior of Direction B's measured column (D35).
+
+**Deferred to the owning implementation story (not blocking discovery)**
+
+- Per-day aggregation policy for the calendar (D8 provisional) —
+  `pending-calendar_data_model-med-med.md`.
+- Global versus workspace field precedence and merge rules (note 28) —
+  `pending-journal_settings_and_accessibility-med-med.md`.
+- Dot cap value, overflow treatment, dots in week view (notes 34-35) —
+  calendar view story.
+- Calendar tab singleton and option persistence (note 13); calendar on a phone
+  (note 33); keyboard model for the calendar grid (note 40).
+- Collapsed-state metadata summary treatment (note 30); widget behavior on
+  malformed frontmatter, which D33 keeps as a valid entry (note 8) — journal
+  panel story.
+- Enumerating accepted date formats and rejecting ambiguous ones (notes 41-43) —
+  `pending-journal_data_model_frontmatter-med-hard.md`.
+- Day click with the popout closed; date filter as a chip (notes 31-32).
+- Backfill mechanics, time component of a backfilled entry, counter interaction
+  (note 39); rename warnings and folder relocation (notes 25, 27) —
+  journal service story.
+- Field-definition drift and orphaned metadata display (note 6).
+
+## Reconciliation — 2026-08-07 (post-merge)
+
+The `extensions` branch advanced by nine commits between the start of discovery and the
+final push of these plans. **No decision in this log changed**, and no pushed file
+overwrote newer work — every write was made against an explicit blob SHA, so a stale base
+would have been rejected rather than silently clobbering. The two asset files that already
+existed were discovery placeholders reading "Status: placeholder pending product-owner
+discovery", which these artifacts were written to replace.
+
+What landed: an extension platform core (manifest parsing, capability compatibility,
+lifecycle bootstrap, lazy activation), a `Note Stats` built-in, live extension status, a
+markdown live-preview editor extension behind a settings toggle, and four fixes (symlink
+escape in markdown commands, core note offsets, settings staging during in-flight saves,
+live-preview reparse).
+
+Consequences are recorded in the epic's **Platform reality check** section and in the
+affected stories. In summary, three approved decisions have no complete implementation
+path on today's platform and are STOP-gated in their owning stories rather than
+weakened:
+
+- **D14 / D27** — the calendar tab. No `"canvas"` tab kind and no `tabs` contribution
+  surface exist; `TabContent.tsx` must gain a rendering branch. A shell change, untracked
+  by any story.
+- **D11 / D24 / D35** — the metadata widget. `editorHooks` inject CodeMirror extensions
+  only; there is no React slot above the editor body. Two candidate routes recorded, the
+  choice deliberately left open.
+- **D23** — per-workspace field definitions. All extension settings are currently
+  `scope: "app"` with no workspace-scoped path, and extension settings are not yet
+  rendered in the settings UI.
+
+None of this reopens a product question. Each item is a platform prerequisite, and the
+decision it serves stands as approved.
 
 ## Acceptance criteria
 
-- [ ] User answers are recorded for workflow, date/time policy, folder/naming, templates, mood/activity metadata, calendar defaults, settings, accessibility, and mobile behavior.
-- [ ] At least two clearly labeled alternatives are shown for panel/navigation composition; no alternative is treated as chosen until approval.
-- [ ] Wireframes cover first-run/no-workspace, no-entry, existing-entry, invalid-frontmatter, create/edit, calendar filtering, and error states.
-- [ ] Desktop and phone layouts identify focus order, touch targets, accessible names, and responsive transitions.
-- [ ] A checkpoint table names artifact version, reviewer, approval/rejection, and follow-up question.
-- [ ] The story lists explicit non-goals and unresolved decisions for downstream authors.
+- [x] User answers recorded for workflow (D1, D9), date/time policy (D19, D20, D33,
+  D38), folder/naming (D7, D17, D30), templates (D21), metadata fields (D3, D4, D22,
+  D23), calendar defaults (D14, D25, D29), settings (D23), accessibility (D31), and
+  mobile behavior (D12, D26, D40).
+- [x] Three labeled alternatives for composition (IA-1, IA-2, IA-3) plus two mobile
+  alternatives; none treated as chosen before approval, and the resolution (IA-3) was
+  the product owner's, not the author's.
+- [x] Twelve states covered: no workspace, no journal folder, zero entries, new entry,
+  existing entry with metadata, malformed frontmatter, calendar-filtered day, filter
+  matching nothing, unreadable folder, index unavailable, undated group expanded,
+  ambiguous date.
+- [x] Desktop and phone layouts identify focus order (popout, 10 stops), accessible
+  names, touch-target intent, and responsive behavior. The calendar grid keyboard
+  model is explicitly deferred rather than guessed (note 40).
+- [x] Checkpoint table names artifact version, reviewer, status, and follow-up.
+- [x] Non-goals and unresolved decisions are listed for downstream authors, split into
+  discovery-blocking versus owned-by-a-later-story.
 
 ## Tests / manual checks
 
