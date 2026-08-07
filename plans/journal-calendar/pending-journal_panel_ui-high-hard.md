@@ -8,28 +8,16 @@ Part of [Journal & Calendar](../pending-journal-calendar-high-hard.md).
 
 ## Discovery constraints (approved 2026-08-07)
 
-Decisions from `../pending-journal_discovery_and_wireframes-low-med.md` that bind this story:
+The discovery gate is CLOSED; full rationale and D1-D47 live in
+`../pending-journal_discovery_and_wireframes-low-med.md`.
 
-- **D9** — Popout is a NAVIGATOR. Entries open in the main editor as normal tabs; rows show date, time, first line.
-- **D13** — List virtualization required (scale target: thousands of entries).
-- **D15** — Popout body is a grouped list, never a calendar widget.
-- **D16/D41** — Full-text search and auto-populated metadata facets reuse the platform index. No journal cache or full-file-scan fallback. When filters are active, emphasize them with count badge + chip row + "showing N of M"; a muted indicator is a defect.
-- **D18** — "New entry" always creates a new file; never reopens or appends.
-- **D22** — A new entry contains frontmatter with the date only; fields are NOT pre-seeded.
-- **D24** / **D11** — Metadata widget sits above the editor body and starts COLLAPSED.
-- **D25** — Clicking a day in the calendar filters the popout list; calendar and popout share filter state.
-- **D28** — Metadata widget appears for any note in the journal folder OR any note anywhere that already carries the configured fields.
-- **D31** — Keyboard operation and screen-reader compatibility are must-haves. Focus order for the popout is specified in the discovery story. High contrast is OUT OF SCOPE (themes own it); use `--tn-*` tokens only.
-- **D33** — The only requirement to be an entry is a parseable date in the filename. Malformed frontmatter does NOT disqualify an entry; opening must not rewrite it. Show a non-blocking notice; never trigger a repair on open.
-- **D35** — Collapsed metadata renders as a DATELINE (`Wednesday, August 5 · good · 7 · running`). Warmth from space and typography only. No new color tokens, no mood-color mapping, no emoji vocabulary, no paper texture, no handwriting faces, no wellness/therapeutic framing.
-- **D36** — Pinned, collapsed "Undated" group at the TOP of the list with a count (absent when empty). Undated files ordered by mtime. Non-Markdown files are HIDDEN from the popout. Announce as a category, never an error.
-- **D37** — **IA-3**: flat stream, collapsible NON-INDENTED headers, group-by control REMOVED. Remaining list controls are full-text search and metadata filter ONLY.
-- **D39** — Collapsible headers: year + month, both collapsible, no indentation. Distinguish levels by weight/size/case/background, never by padding.
-- **D43** — Multiple metadata predicates must match within one entry; filtered list/counts use matching entries only.
-- **D44** — Metadata widget uses a React editor-header contribution with an observable disposable registry; no CodeMirror portal or startup-order dependency.
-- **D45** — Removed/narrowed configured values remain visible and filterable as unconfigured; the widget never rewrites or hides them.
-
-The discovery gate is CLOSED for the decisions above. See the discovery story for the full rationale; do not re-litigate them here.
+- **D9/D13/D15:** navigator rows show date/time/first line and open normal editor tabs; use a virtualized grouped list, never a calendar widget.
+- **D16/D41:** reuse platform search/facets, never a journal cache/full scan; active filters require count badge, chip row, and `showing N of M` emphasis.
+- **D18/D22:** New entry always creates a file; new frontmatter is date-only.
+- **D11/D24/D28/D35/D44:** collapsed dateline widget is above the editor body, applies to journal-folder or configured-field notes, and uses the observable React header registry—not CodeMirror or startup timing.
+- **D25/D43:** day click shares popout filter state; predicates match within one entry and list/counts use matches only.
+- **D31/D33:** keyboard/screen-reader support and token-only styling are required; malformed frontmatter remains eligible, gets a non-blocking notice, and is never rewritten.
+- **D36/D37/D39/D45:** pinned collapsed Undated group (mtime order, non-Markdown hidden); flat non-indented stream with collapsible year/month headers; removed values remain visible/filterable as `unconfigured`.
 
 ## Questions first — STOP gate (still open for this story)
 
@@ -43,12 +31,13 @@ The items below are **genuinely undecided**. Do not implement JSX/CSS for affect
 
 ## Metadata widget route — DECIDED D44
 
-The widget uses a new first-class React contribution slot above the Markdown editor body,
-backed by an observable disposable registry. Already-open editors subscribe and render or
-remove contributions as registrations change. Do not portal React into CodeMirror DOM and do
-not depend on startup activation order. This story consumes the platform prerequisite
+`MarkdownEditor.tsx` currently reads CodeMirror hooks once and has no React header slot. The
+widget instead uses the platform prerequisite's first-class React slot and observable, disposable
+registry above the Markdown body. Already-open editors must react to registration/disposal; do not
+portal into CodeMirror DOM, alter `editorHooks`, or depend on startup order. This story consumes
 `plans/extensions/pending-editor_header_contribution-high-med.md`; it does not implement the
-registry itself. CodeMirror `editorHooks` remain for CodeMirror extensions/keybindings only.
+registry. The prerequisite must prove post-mount registration/disposal; CodeMirror hooks remain
+for CodeMirror extensions/keybindings only.
 
 ## Panel side and context gap
 
@@ -114,7 +103,7 @@ Runtime panel dimension is the only case where a scoped CSSOM custom property on
 - [ ] Rows render from filename-derived dates alone; first-line previews load lazily for
       visible rows only and never block first paint (see the listing strategy in
       `pending-journal_service_daily_notes-high-med.md`).
-- [ ] Undated group is pinned collapsed at the top with a count; absent when empty; non-Markdown files are hidden; both are announced as a category (D36).
+- [ ] Undated is a pinned collapsed category with a count and is absent when empty; non-Markdown files are silently excluded from the popout (D32/D36).
 - [ ] Active filters show count badge + chip row + "showing N of M" string; a muted-only indicator is a defect (D16).
 - [ ] Metadata facet values and paths come from D41 queries; all active predicates match within one entry per D43, and D16 search runs inside that entry set. Index unavailable disables only facets with explicit status and never scans files.
 - [ ] Metadata widget registers as `metadata-widget` through D44's observable React editor-header registry, appears in already-open editors, disposes cleanly, follows D28 triggers, starts as D35's dateline, and expands to the form.
@@ -125,27 +114,11 @@ Runtime panel dimension is the only case where a scoped CSSOM custom property on
 - [ ] Desktop tests cover rendering, service failures, creating/opening notes, dirty-state behavior, panel toggling, filter emphasis, facet values, index-unavailable degradation, and malformed-frontmatter notice.
 - [ ] `DesktopPanelContext` gap (workspace listing / index access) is resolved and documented before the panel factory body is merged.
 
-## Tests / manual checks
+## Validation
 
-- `JournalPanel.test.tsx`, `JournalEntryList.test.tsx`, `MetadataWidget.test.tsx`, relevant panel-registry tests, lint/typecheck/full QA.
-- Manual desktop: open/close via activity-bar, create today/past note ("New entry" always new file), open an existing note with unsaved edits, collapse/expand year+month headers, trigger full-text search and verify chip+badge emphasis, apply metadata filter, open calendar tab from popout, resize popout, switch theme, keyboard-only navigation through popout header controls and entry list, screen-reader labels, malformed-frontmatter notice, error recovery.
-- Verify real Markdown files are created at `journal/YYYY/MM/YYYY-MM-DD-HHmm.md` and remain readable outside the app.
-- Activate/deactivate the journal with an editor already open; verify D44 adds/removes the widget without remounting the editor.
-
-## Automated validation
-
-`pnpm lint`, `pnpm typecheck`, `pnpm test` (or `./scripts/qa.sh`). All panel/view-model/registry/widget tests must pass.
-
-## Manual desktop/mobile checks
-
-Desktop: validate all twelve UI states, real create/open/dirty/error flows, keyboard/screen reader, themes, and filter emphasis. Mobile: narrowed scope is owned by `pending-journal_mobile_refinement-med-med.md`; this story must not add mobile-only markup.
-
-## Platform prerequisite — D44
-
-`MarkdownEditor.tsx` currently reads CodeMirror hooks once and has no React header slot. D44
-resolves both concerns with a separate observable React contribution registry; do not modify
-the CodeMirror hook contract to carry this widget. The prerequisite story must prove
-post-mount registration and disposal before this story integrates `MetadataWidget`.
+- Automated: `JournalPanel.test.tsx`, `JournalEntryList.test.tsx`, `MetadataWidget.test.tsx`, relevant panel-registry tests, and `pnpm lint`, `pnpm typecheck`, `pnpm test` (or `./scripts/qa.sh`); all panel/view-model/registry/widget tests must pass.
+- Desktop: validate all twelve UI states; open/close via activity bar; create today/past note ("New entry" always new file); open an existing note with unsaved edits; collapse/expand year+month headers; test full-text search, chip/badge emphasis, metadata filters, calendar-tab launch, resizing, themes, keyboard-only navigation, screen-reader labels, malformed-frontmatter notice, error recovery, and filter emphasis. Verify real Markdown files use `journal/YYYY/MM/YYYY-MM-DD-HHmm.md` and remain readable outside the app.
+- With an editor already open, activate/deactivate and verify D44 adds/removes the widget without remounting. Mobile is owned by `pending-journal_mobile_refinement-med-med.md`; add no mobile-only markup.
 
 ## Non-goals
 
