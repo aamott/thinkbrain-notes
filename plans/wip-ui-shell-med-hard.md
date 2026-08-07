@@ -58,7 +58,8 @@ decision and capability/CSP design.
 ### Panels and dependencies
 
 The left popout wires the existing `WorkspaceExplorer`, `SearchPanel`, and
-`SettingsPanel`; source control is a status-aware `git-integration` boundary,
+settings surfaces (`SettingsContent`/`ThemeSectionControls`); source control is a
+status-aware `git-integration` boundary,
 and tags/extensions remain unavailable until their epics are active. The right
 popout owns outline/properties presentation; backlinks consume index data only
 when the graph/indexing work exposes it. The assistant panel is an integration
@@ -66,11 +67,12 @@ point for the `ai` epic, not a hand-built chat UI.
 
 ### Tokens, styling, and dynamic dimensions
 
-Merge the mockup's chrome surfaces into `packages/ui/src/styles/tokens.css`
+Keep the mockup's chrome surfaces in `packages/ui/src/styles/tokens.css`
 using the `--tn-*` prefix, with light and dark values for title bar, activity
-bar, sidebar, editor, panel, status bar, and active/inactive tabs. Replace the
-monolithic `apps/desktop/src/styles.css` shell rules with co-located CSS
-Modules; keep only reset, app root, and third-party editor overrides global.
+bar, sidebar, editor, panel, status bar, and active/inactive tabs. Translate the
+mockup's Tailwind classes into co-located CSS Modules backed by those variables;
+keep only reset, app root, and third-party editor overrides global. The current
+production source still uses utility classes, so this migration remains pending.
 
 Panel widths are state in pixels, clamped in the resize controller and applied
 to the shell root with scoped CSSOM custom properties. This is the approved
@@ -95,7 +97,8 @@ the persisted app setting and `data-thinkbrain-theme`.
   `workspace-explorer/done-fresh_shell_workspace_open-high-med.md`
 - ✅ a new shell rebuild from `mockup_v3/` is complete — see
   `plans/ui-shell/done-mockup_v3_shell_rebuild-high-hard.md`
-- ✅ shell token and CSS Module migration — see
+- ⬜ shell token and CSS Module migration — production JSX still uses Tailwind
+  utility classes; see
   `plans/ui-shell/done-shell_tokens_and_css_modules-high-hard.md`
 - ✅ desktop shell composition (panel separation) — rebuilt after the earlier
   rollback; see `plans/ui-shell/done-desktop_shell_composition-high-hard.md`
@@ -115,8 +118,11 @@ the persisted app setting and `data-thinkbrain-theme`.
   `plans/ui-shell/done-bottom_panel_framework-low-med.md`
 - ⬜ generic file viewer tabs (code editor, image/audio/video viewers) — see
   `plans/ui-shell/pending-generic_file_viewers-med-med.md`
-- ⬜ semi-preview markdown editor (live preview with inline source on focus) — see
-  `plans/ui-shell/pending-semi_preview_editor-med-hard.md`
+- ✅ semi-preview markdown editor (live preview with inline source on focus) — see
+  `plans/ui-shell/done-semi_preview_editor-med-hard.md`; implementation lives in
+  `apps/desktop/src/tabs/livePreview/` (design docs:
+  `docs/superpowers/specs/2026-08-06-markdown-live-preview-design.md` and
+  `docs/superpowers/plans/2026-08-06-markdown-live-preview.md`).
 - ⬜ modular settings system (declarative, auto-populating settings tab) — see
   `plans/ui-shell/pending-modular_settings_system-med-hard.md`
 - ❌ prior movable-action/slot and layout-editing stories described `mockup2.htm`,

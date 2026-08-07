@@ -56,9 +56,11 @@ In scope:
   registration, editor command hooks, settings schema registration
 - extension execution model: trusted same-context JS modules (no
   iframe/process isolation in beta)
-- extension activation lifecycle: lazy activation via declared events, with
-  disposable ownership and automatic cleanup on deactivate/unload/failure
-  (onStartup, onCommand, onView, onLanguage)
+- extension activation lifecycle: eager startup or lazy activation via the
+  supported declared events, with disposable ownership and automatic cleanup on
+  deactivate/unload/failure (`onStartup`, `onCommand:<id>`, `onView:<id>`).
+  `onLanguage` remains an unsupported, warning-only manifest event until a trigger
+  point exists.
 - extension event system: typed pub/sub for app events (note.opened,
   file.saved, workspace.switched) and extension-emitted events
 - `extension.json` manifest format (with activation events, apiVersion,
@@ -78,10 +80,11 @@ In scope:
   background tasks, extension data storage, event system, static registry; the
   oversized API rollup is split into focused contribution, event/task, storage,
   and feature-hook stories listed below
-- API versioning: manifest declares `apiVersion`; app supports a semver range
-- platform-aware capabilities: desktop-only capabilities (terminal,
-  process-spawn) are silently unavailable on mobile; manifests can declare
-  platform requirements
+- API versioning: manifest declares `apiVersion`; beta accepts only `*`, exact
+  `x.y.z`, `^x.y.z`, or `~x.y.z`. Other ranges are incompatible.
+- platform-aware capabilities: desktop-only capabilities (`terminal`,
+  `process-spawn`) are unavailable on mobile and surface soft compatibility
+  warnings; manifests can declare platform requirements
 
 Non-goals (deferred or out of scope for V1):
 
@@ -165,16 +168,20 @@ failed activation.
 
 ### Lazy activation
 
-Extensions declare activation events in their manifest (e.g. `onCommand`,
-`onView`, `onLanguage`, `onStartup`). The extension runtime only loads and
-activates an extension when one of its declared events fires. This prevents
-all extensions from loading on startup and keeps the app fast.
+Extensions declare activation events in their manifest (`onStartup`,
+`onCommand:<id>`, or `onView:<id>`). The extension runtime only loads and
+activates an extension when one of its supported declared events fires. The
+manifest may retain `onLanguage:<language>` with a warning, but no trigger point
+exists yet. This prevents unrelated extensions from loading on startup and keeps
+the app fast.
 
 ### API versioning
 
-The manifest declares an `apiVersion` (semver). The app supports a range of
-API versions. Breaking API changes require a major version bump. Outdated
-extensions get a deprecation warning, not a silent failure.
+The manifest declares an `apiVersion`. Beta compatibility supports only `*`,
+exact `x.y.z`, `^x.y.z`, and `~x.y.z`; any other range is incompatible rather than
+silently guessed. Breaking API changes require a major version bump. An
+incompatible extension is listed with an explicit diagnostic and contributes
+nothing.
 
 ## Prerequisites / Dependencies
 
@@ -191,15 +198,15 @@ their existing epics; this epic owns only their extension registrations.
 
 Focused follow-up stories:
 
-- `plans/extensions/pending-extension_manifest_format-low-med.md` — manifest
+- `plans/extensions/done-extension_manifest_format-low-med.md` — shipped manifest
   parser/schema and typed diagnostics.
-- `plans/extensions/pending-extension_capability_compatibility-low-med.md` — soft
-  capability/API/platform compatibility results; not a security sandbox.
-- `plans/extensions/pending-extension_local_directory_loader-low-med.md` — trusted
-  local-directory module loading and reload semantics.
-- `plans/extensions/pending-extension_lifecycle_bootstrap-low-med.md` — manifest
-  runtime, lazy activation, desktop bootstrap, and shutdown; existing lifecycle
-  cleanup is partial but tested.
+- `plans/extensions/done-extension_capability_compatibility-low-med.md` — shipped
+  soft capability/API/platform compatibility results; not a security sandbox.
+- `plans/extensions/done-extension_local_directory_loader-low-med.md` — shipped
+  trusted local-directory module loading and reload semantics; Blob URL cleanup remains open.
+- `plans/extensions/done-extension_lifecycle_bootstrap-low-med.md` — shipped
+  manifest runtime, startup/command/view activation, desktop bootstrap, and shutdown;
+  `onLanguage` remains unsupported.
 - `plans/extensions/pending-extension_api_surface-low-hard.md` — superseded
   rollup; its focused contribution, event/task, storage, and AI/Git-hook child
   stories own implementation.
@@ -258,9 +265,10 @@ are not yet formalized, the first story here should establish them.
   `subscribe`, and disposable registration; `DesktopExtensionContext.tabs.register()` and
   `openTab(kind, title)`. Built-in kinds remain shell-drawn by design.
 - 🟨 Lifecycle/disposable ownership and scoped settings runtime are implemented
-  and tested, but the extension platform is not complete. Manifest-driven runtime,
-  bootstrap, module loading, compatibility, and local-directory loading remain
-  pending in the focused stories below.
+  and tested. Manifest parsing, compatibility evaluation, local-directory loading,
+  and bootstrap are shipped for the trusted beta path; remaining gaps are
+  unsupported `onLanguage`, duplicate-id diagnostics, successful local Blob URL
+  cleanup, and local panel mounting.
 - ✅ Manifest parser/schema — `plans/extensions/done-extension_manifest_format-low-med.md`.
 - ✅ Soft capability/API/platform compatibility —
   `plans/extensions/done-extension_capability_compatibility-low-med.md`.

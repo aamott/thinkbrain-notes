@@ -3,9 +3,9 @@
 ## Goal
 
 Make the `"system"` theme setting resolve to `light` or `dark` based on the OS
-`prefers-color-scheme` media query. Currently `App.tsx` sets
-`data-thinkbrain-theme="system"` but no CSS rule matches that value, so the
-system option produces no theme.
+`prefers-color-scheme` media query. `ThemeProvider.tsx` owns the theme
+attribute, and the token stylesheet must provide the matching system behavior
+while the setting remains `"system"`.
 
 ## Acceptance Criteria
 
@@ -21,6 +21,8 @@ system option produces no theme.
 
 ## File References
 
-- `apps/desktop/src/App.tsx:58-60` — current theme application effect
-- `packages/core/src/settings.ts:12` — `AppThemeSetting` type includes `"system"`
-- `apps/desktop/src/settings/SettingsPanel.tsx:49-61` — theme select dropdown
+- `apps/desktop/src/settings/ThemeProvider.tsx` — theme application and OS
+  preference resolution
+- `packages/core/src/settings/modules/appearance.ts` — appearance theme
+  setting includes `"system"`
+- `apps/desktop/src/settings/ThemeSectionControls.tsx` — theme selection UI

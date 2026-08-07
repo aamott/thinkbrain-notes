@@ -19,7 +19,12 @@ from the source-control panel.
 
 ## Relevant Files
 
-- `apps/desktop/src-tauri/src/lib.rs` — new commands + registration
+- `apps/desktop/src-tauri/src/commands/git.rs` — stage/unstage command
+  implementations
+- `apps/desktop/src-tauri/src/commands/mod.rs` — export and
+  `app_command_handlers!` registration
+- `apps/desktop/src-tauri/src/lib.rs` — builder entry only; not a per-command
+  registration list
 - `apps/desktop/src/native/commands.ts` — `NativeCommandMap` entries + types
 - `apps/desktop/src/git/gitService.ts` — frontend helpers
 - `apps/desktop/src/git/SourceControlPanel.tsx` — per-file actions

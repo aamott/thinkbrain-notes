@@ -21,6 +21,7 @@ with keyword hits.
 ## References
 
 - `apps/desktop/src/search/SearchPanel.tsx` — search panel to extend
-- `apps/desktop/src/stores/appStore.ts` — `SearchState`, `IndexingState` slices
-- `apps/desktop/src/search/useWorkspaceIndexer.ts` — indexing progress pattern
+- `apps/desktop/src/search/searchPanelModel.ts` — current placeholder search state model
+- `plans/wip-indexing-search-med-med.md` — indexing-search epic and remaining frontend wiring
+- A future typed frontend bridge remains planned for native search/index commands; no indexer hook file is assigned yet.
 - `plans/pending-semantic-search-low-hard.md` — Scope (semantic search UI)

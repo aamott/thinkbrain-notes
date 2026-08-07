@@ -11,13 +11,14 @@ Control).
 ## Acceptance Criteria
 
 - Browse/search the cached registry index with debounced type-ahead.
-- Extension detail view shows metadata, declared capabilities/permissions,
-  version, author, and install/update/remove actions.
+- Extension detail view shows metadata, declared capabilities, compatibility
+  status, version, author, and install/update/remove actions; capabilities are
+  soft compatibility signals, not access controls.
 - Installed extensions are listed separately with their current version and
   update state.
 - Install/update/remove actions route through a future trusted-code consent and
   install mechanism; soft capability gates provide compatibility warnings, not
-  sandbox guarantees.
+  access-control enforcement or sandbox guarantees.
 - Errors (fetch failure, signature failure, compatibility failure) fail loudly
   with useful messages, and the UI warns that extension code has app privileges.
 - No inline styles; CSS Modules co-located with components.

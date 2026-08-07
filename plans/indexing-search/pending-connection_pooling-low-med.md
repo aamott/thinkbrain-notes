@@ -28,5 +28,6 @@ becomes an issue.
 
 ## References
 
-- `apps/desktop/src-tauri/src/lib.rs` — `open_index_connection`, `init_index_schema`, index command handlers
-- `apps/desktop/src/native/commands.ts` — native command map and types
+- `apps/desktop/src-tauri/src/commands/search.rs` — `open_index_connection`,
+  `init_index_schema`, and index command handlers
+- `apps/desktop/src/native/commands.ts` — frontend native command map and types

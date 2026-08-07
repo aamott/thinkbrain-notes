@@ -39,6 +39,7 @@ Present filtered ACP permission requests as untrusted agent-provided text, let u
 - [ ] UI renders only session-filtered, agent-supplied options as untrusted text and cannot authorize directly.
 - [ ] Approved decision scope and exact option ID are sent through typed adapters; invalid/stale requests are rejected.
 - [ ] Desktop/mobile layout, focus, labels, live announcements, reduced motion, and unavailable terminal state match approved mockups.
+- [ ] Renderer styling uses co-located CSS Modules with shared `--tn-*` tokens; no Tailwind utility classes or inline styles.
 - [ ] No secrets, raw command environment, or hidden cloud consent appear in UI/state.
 
 ## Automated validation

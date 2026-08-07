@@ -8,9 +8,9 @@ include spacing, typography, radius, shadow, and z-index scales.
 
 ## Acceptance Criteria
 
-- [ ] All theme tokens (light and dark) are defined in
-      `packages/ui/src/styles/` — no theme token definitions remain in
-      `apps/desktop/src/styles.css`.
+- [x] All theme tokens (light and dark) are defined in
+      `packages/ui/src/styles/`; `apps/desktop/src/index.css` contains no theme
+      token definitions.
 - [ ] Token categories cover: color, spacing, typography, radius, shadow,
       z-index.
 - [ ] `apps/desktop` imports the consolidated token stylesheet from
@@ -22,7 +22,8 @@ include spacing, typography, radius, shadow, and z-index scales.
 
 ## File References
 
-- `packages/ui/src/styles/tokens.css` — current dark `:root` tokens
-- `apps/desktop/src/styles.css:24-34` — light theme overrides to move
-- `packages/ui/package.json:13` — `./styles.css` export
-- `apps/desktop/src/App.tsx:3` — imports `@thinkbrain/ui/styles.css`
+- `packages/ui/src/styles/tokens.css` — consolidated light/dark tokens
+- `packages/ui/package.json:13` — `./styles.css` export for the token sheet
+- `apps/desktop/src/main.tsx` — imports `@thinkbrain/ui/styles.css` token sheet.
+- `apps/desktop/src/index.css` — current global app stylesheet to reduce to
+  reset/base rules during the CSS Module migration.

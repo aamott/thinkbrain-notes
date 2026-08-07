@@ -38,11 +38,11 @@ is acceptable if it shares the platform index's lifecycle and disposal boundary.
 
 - `packages/core/src/note-model.ts` and tests — expose parsed frontmatter in the index record
   without changing Markdown source-of-truth behavior.
-- `apps/desktop/src/search/searchService.ts` and tests — pass structured frontmatter through
-  rebuild and incremental upsert paths.
-- `apps/desktop/src/native/commands.ts` — typed record and facet-query bridge.
-- `apps/desktop/src-tauri/src/lib.rs` and focused Rust tests — disposable schema, upsert,
-  clear/remove and path-scoped facet query.
+- `apps/desktop/src/search/SearchPanel.tsx` and `searchPanelModel.ts` — current
+  search UI/state seam to extend once the frontend index bridge is wired.
+- `apps/desktop/src/native/commands.ts` — typed record and facet-query bridge to add.
+- `apps/desktop/src-tauri/src/commands/search.rs` and focused Rust tests — disposable
+  schema, upsert, clear/remove and path-scoped facet query.
 
 ## Dependencies
 

@@ -50,6 +50,7 @@ History is local-only by default and is not consent to send content remotely. Re
 ## Acceptance criteria
 
 - [ ] Approved thread/history workflow is implemented through assistant-ui and one bounded app-data adapter.
+- [ ] Renderer styling uses co-located CSS Modules with shared `--tn-*` tokens; no Tailwind utility classes or inline styles.
 - [ ] Save/load/delete/clear, corruption/size errors, redaction, session links, and no-duplicate-store behavior are tested.
 - [ ] Desktop/mobile focus, keyboard, narrow layout, suspension, storage limits, and approved retention behavior are verified.
 

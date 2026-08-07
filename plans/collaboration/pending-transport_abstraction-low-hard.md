@@ -2,18 +2,22 @@
 
 ## Goal
 
-Provide a swappable transport layer in `packages/core` for collaboration,
-abstracting over the chosen backend(s) (P2P WebRTC, user-hosted relay, etc.)
-so the UI and CRDT layer never depend on a specific transport.
+Define platform-neutral collaboration transport interfaces in `packages/core`,
+so the UI and CRDT layer never depend on a specific transport. Core owns contracts
+only; WebRTC, relay, signaling, native, and other network implementations belong
+behind desktop/Tauri adapters.
 
 ## Acceptance Criteria
 
-- [ ] Transport interface defined in `packages/core` (connect, disconnect,
-      send, receive, presence broadcast).
-- [ ] At least one backend implementation behind the interface.
-- [ ] Transport is only instantiated when a collaboration session is active.
-- [ ] No transport code is imported in single-user / default mode.
-- [ ] Tests cover message round-trip and peer connect/disconnect.
+- [ ] Platform-neutral transport interfaces are defined in `packages/core` for
+      connect, disconnect, send, receive, and presence broadcast; core contains
+      no WebRTC, relay, signaling, native, socket, or other network implementation.
+- [ ] The contract supports dependency-injected implementations, cancellation, and
+      unavailable/error mapping without choosing WebRTC, relay, or signaling here.
+- [ ] Core tests cover interface behavior with fakes and prove no platform/network
+      dependencies enter `packages/core`.
+- [ ] Concrete transport selection/implementation remains blocked on the architectural
+      direction decision and must live behind desktop/Tauri adapters.
 
 ## References
 

@@ -28,11 +28,13 @@ in the explorer tree. Currently drag and drop are explicitly disabled
   expose move semantics or be rebuilt after a move.
 - `apps/desktop/src/workspace/WorkspaceExplorer.tsx` — add a `handleMove`
   handler that calls the native move and refreshes entries.
-- `apps/desktop/src/workspace/workspaceService.ts` — add a `moveEntry`
-  helper (rename across directories).
-- `apps/desktop/src/native/commands.ts` — add a `move_workspace_entry`
-  command (or reuse a generic rename command).
-- `apps/desktop/src-tauri/src/lib.rs` — add a Rust move command that handles
-  recursive folder moves and overwrite/cycle guards.
-- `apps/desktop/src/search/searchService.ts` — `removeIndexedDocument` /
-  `indexDocument` for re-indexing moved Markdown files.
+- `apps/desktop/src/workspace/workspaceAdapter.ts` — extend the existing
+  `renameWorkspaceEntry` adapter for the move flow.
+- `apps/desktop/src/native/commands.ts` — use the existing
+  `rename_workspace_entry` command (a separate move command is unnecessary).
+- `apps/desktop/src-tauri/src/commands/workspace.rs` — extend the existing
+  rename command as needed for recursive folder moves and overwrite/cycle
+  guards.
+- `apps/desktop/src-tauri/src/commands/search.rs` — indexing-search owns
+  remove/upsert operations for moved Markdown files; the explorer only invokes
+  the shared bridge after the move.

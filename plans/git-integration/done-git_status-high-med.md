@@ -20,7 +20,12 @@ repo so the source-control panel can list them.
 
 ## Relevant Files
 
-- `apps/desktop/src-tauri/src/lib.rs` — new command + registration
+- `apps/desktop/src-tauri/src/commands/git.rs` — status command implementation
+  and Rust parsing tests
+- `apps/desktop/src-tauri/src/commands/mod.rs` — export and
+  `app_command_handlers!` registration
+- `apps/desktop/src-tauri/src/lib.rs` — builder entry only; not a per-command
+  registration list
 - `apps/desktop/src/native/commands.ts` — `NativeCommandMap` entry + types
 - `apps/desktop/src/git/gitService.ts` — frontend helper + parsing
 - `apps/desktop/src/git/gitService.test.ts` — parsing tests

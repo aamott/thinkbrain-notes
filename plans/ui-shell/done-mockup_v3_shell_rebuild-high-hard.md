@@ -10,9 +10,10 @@ restoring, importing, inspecting, or reusing any previous desktop UI or CSS.
 - [x] The title bar, title-bar tabs, action rail, side popouts, editor surface,
       status bar, bottom panel, and keyboard shortcuts express the mockup-v3
       interaction model with accessible semantic controls.
-- [x] Every production visual rule lives in co-located CSS Modules and consumes
-      `packages/ui` `--tn-*` semantic tokens; production contains no Tailwind
-      classes, JSX style props, or copied mockup source.
+- [ ] Production visual rules use co-located CSS Modules backed by `packages/ui`
+      `--tn-*` tokens, with no Tailwind classes or JSX style props. Shell behavior
+      is rebuilt, but styling migration remains in
+      `plans/theme-foundation/pending-surface_styling_migration-med-med.md`.
 - [x] The shell uses a scoped CSSOM ref for the two dynamic pane width custom
       properties, with CSS Module fallbacks and min/max constraints.
 - [x] Explorer, search, settings, Git, tags, extensions, backlinks, graph,

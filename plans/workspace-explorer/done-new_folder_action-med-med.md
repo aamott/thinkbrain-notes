@@ -17,16 +17,14 @@ creating a file inside it.
 
 ## File References
 
-- `apps/desktop/src/workspace/WorkspaceExplorer.tsx` — add a
-  `handleCreateFolder` handler and a header button; `handleCreateNote`
-  (line 87) is the pattern to follow.
-- `apps/desktop/src/workspace/workspaceService.ts` — add a
-  `createFolder` helper.
-- `apps/desktop/src/native/commands.ts` — add a `create_workspace_folder`
-  command entry.
-- `apps/desktop/src-tauri/src/lib.rs` — add a Rust command using
-  `fs::create_dir_all`; existing `create_markdown_file` (line ~210) is the
-  pattern for path normalization.
+- `apps/desktop/src/workspace/WorkspaceExplorer.tsx` — implemented
+  `submitCreate`/context-menu handling for folders.
+- `apps/desktop/src/workspace/workspaceAdapter.ts` — implemented
+  `createWorkspaceFolder`.
+- `apps/desktop/src/native/commands.ts` — implemented
+  `create_workspace_folder` command entry.
+- `apps/desktop/src-tauri/src/commands/workspace.rs` — implemented native
+  command using `fs::create_dir_all`.
 
 ## Implementation Notes
 

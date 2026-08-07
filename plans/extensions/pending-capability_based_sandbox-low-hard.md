@@ -2,7 +2,7 @@
 
 ## Status
 
-⬜ Superseded as an implementation plan. The beta does **not** implement a capability sandbox. Use `pending-extension_capability_compatibility-low-med.md` for the canonical soft-gate work package.
+⬜ Superseded as an implementation plan. The beta does **not** implement a capability sandbox. Use `done-extension_capability_compatibility-low-med.md` for the canonical soft-gate contract.
 
 ## Goal
 
@@ -16,11 +16,11 @@ See the canonical story for the capability vocabulary, activation policy, platfo
 
 ## Prerequisites
 
-`plans/extensions/pending-extension_manifest_format-low-med.md` and `plans/extensions/pending-extension_capability_compatibility-low-med.md`.
+`plans/extensions/done-extension_manifest_format-low-med.md` and `plans/extensions/done-extension_capability_compatibility-low-med.md`.
 
 ## Exact likely file areas
 
-Canonical implementation areas are listed in `pending-extension_capability_compatibility-low-med.md`; no code should be added for this alias.
+Canonical implementation is documented in `done-extension_capability_compatibility-low-med.md`; no code should be added for this alias.
 
 ## Implementation tasks
 
@@ -52,5 +52,5 @@ Canonical-story link and explicit threat-model reopen gate.
 
 ## References
 
-- `plans/extensions/pending-extension_capability_compatibility-low-med.md`
+- `plans/extensions/done-extension_capability_compatibility-low-med.md`
 - `plans/technical-decisions.md`

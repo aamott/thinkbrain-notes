@@ -2,21 +2,20 @@
 
 ## Status
 
-⬜ Not implemented. `apps/desktop/src/extensions/` currently exposes only the in-memory host; no manifest/file loader exists.
+✅ Supported beta load path shipped for trusted local development directories. Remaining lifecycle cleanup, local panel mounting, and duplicate-id diagnostic gaps stay unchecked below; this status does not close them.
 
 ## Goal
 
 Load a trusted development extension from an arbitrary local directory containing the approved manifest and entry module, validate it, and register it with the same-context host. Local-directory loading is the primary beta development path and must remain explicit about app privileges. Hot reload means unload/reload behavior, not a security boundary.
 
-## Discovery questions
+## Shipped loader contract and remaining gaps
 
-- Should the loader accept an absolute path only, or permit a configured relative development root?
-- Which module formats are supported in the Tauri webview (ES module, bundled UMD, import map), and who bundles a source extension?
-- Is hot reload automatic via watcher, manual reload command, or both?
-- Should a changed manifest require a full unload/reload, and what happens to unsaved extension UI state?
-- What user confirmation is required before loading an arbitrary local path in development?
-
-**Stop-and-ask gate:** Do not implement module import, watcher behavior, path policy, or reload UX until these questions are answered. Never implement a permissive path shortcut that bypasses the trusted-code warning.
+- A local directory contains `extension.json` and one pre-bundled ESM entry (`main`); path validation rejects traversal and invalid entry paths.
+- The loader is explicit trusted-code loading: the module runs same-context with app privileges, not in a sandbox. Compatibility errors stop loading; capability warnings are retained.
+- `localExtensions` provides explicit add, remove, and remove-then-add reload behavior. Failed imports clean up their Blob URL.
+- Commands and settings load from disk. Declared local panels are warned about and skipped until a framework-neutral panel mount contract ships.
+- `onLanguage` remains an unsupported activation trigger, and duplicate-id diagnostics remain a host/registry gap.
+- Successful unload/reload does not yet wire `revokeExtensionModule` to the lifecycle, so Blob URL cleanup remains an open gap.
 
 ## Prerequisites
 
@@ -31,21 +30,23 @@ Load a trusted development extension from an arbitrary local directory containin
 - Add native directory/module metadata commands in `apps/desktop/src/native/commands.ts` and `apps/desktop/src-tauri/src/commands/` only if the approved browser/Tauri import path requires them.
 - Bootstrap consumer will live in `apps/desktop/src/extensions/bootstrap.ts`, a separate story.
 
-## Implementation tasks
+## Shipped implementation
 
-1. Define a loader interface for directory path, parsed manifest, module import, compatibility result, and disposable unload handle; document that code runs with app privileges.
-2. Validate directory shape and manifest/entry path without following symlinks or path traversal beyond the approved policy; return typed diagnostics with source path.
-3. Implement the approved module import strategy and map the exported extension definition to the host id. Reject wrong exports, duplicate ids, and failed activation with cleanup.
-4. Implement explicit reload/unload behavior. If hot reload is approved, add a narrowly scoped watcher/debounce adapter and ensure old registrations/disposables are gone before replacement.
-5. Add fixture integration tests using a sample local extension and a failing extension; avoid relying on a global developer machine path.
+1. `createLocalDirectoryLoader` injects file reading and module importing, parses and validates the manifest, evaluates compatibility, resolves the entry path, and validates the `activate` export.
+2. `createDesktopLocalDirectoryLoader` reads through the native bridge and imports a self-contained entry from a Blob URL with a source URL for diagnostics.
+3. `createLocalExtensions` and bootstrap own explicit remove/reload, registration replacement, activation, and contribution cleanup.
+4. Tests cover valid load, entry/path/import failures, compatibility failure, malformed manifests, panel warnings/stripping, and clean local registration replacement.
+5. Remaining implementation work is to connect successful lifecycle removal to Blob URL revocation and to improve duplicate-id diagnostics; do not broaden this into an installer, watcher, or marketplace path.
 
 ## Acceptance criteria
 
-- [ ] A valid local directory loads only after manifest and compatibility validation.
-- [ ] Entry module receives the scoped API and explicit app-privileges warning.
-- [ ] Invalid paths/manifests/exports and activation failures fail loudly and leave no registrations behind.
-- [ ] Unload/reload disposes lifecycle-owned resources before a new instance activates.
-- [ ] Path and module strategy works in shared desktop/mobile webview constraints or documents a mobile limitation.
+- [x] A valid local directory loads only after manifest and compatibility validation.
+- [x] Entry module receives the scoped API and the trusted app-privileges boundary is documented.
+- [x] Invalid paths/manifests/exports and activation failures fail loudly and leave no registrations behind.
+- [x] Explicit remove/reload disposes lifecycle-owned registrations before a new instance activates.
+- [x] The pre-bundled ESM/Blob URL strategy works in the desktop webview; mobile remains outside this desktop adapter.
+- [ ] Successful unload/reload must still revoke the entry module's Blob URL.
+- [ ] Local panel mounting and host/registry duplicate-id diagnostics remain deferred.
 
 ## Automated validation
 
@@ -69,7 +70,8 @@ No zip/file installer, URL install, marketplace, signing, sandbox, extension UI 
 
 ## References
 
-- `plans/extensions/pending-extension_manifest_format-low-med.md`
-- `plans/extensions/pending-extension_capability_compatibility-low-med.md`
-- `plans/extensions/pending-extension_execution_model-low-med.md`
+- `plans/extensions/done-extension_manifest_format-low-med.md`
+- `plans/extensions/done-extension_capability_compatibility-low-med.md`
+- `plans/extensions/done-extension_lifecycle_bootstrap-low-med.md`
+- `plans/extensions/pending-extension_contribution_surfaces-low-med.md` — local panels remain skipped pending a mount contract
 - `plans/technical-decisions.md`

@@ -64,13 +64,16 @@ constraints, the epic stays deferred.
 
 - A **CRDT layer** (e.g. Yjs / Automerge) over Markdown document state, so
   concurrent edits merge deterministically without a central authority.
-- A **transport abstraction** in `packages/core` with swappable backends
-  (P2P, user-hosted relay, etc.) — never wired directly into UI.
+- A **transport interface only** in `packages/core` with platform-neutral message,
+  session, and presence contracts. WebRTC, relay, signaling, native, and other
+  network implementations do not live in core; they are desktop/Tauri adapters
+  behind the native boundary and are selected only for an active session — never
+  wired directly into UI.
 - **Presence as ephemeral state** — presence data is never written to the
   vault or the SQLite cache; it lives only in memory / session state.
-- **Vault stays pure Markdown** — collaboration merge state/metadata must
-  not pollute user files. Any CRDT metadata lives in app-data, not the vault
-  (user-data separation rule).
+- **Collaboration metadata stays outside user documents** — notes remain Markdown and
+  `.canvas` follows its approved user-owned JSON exception. CRDT/session metadata lives in
+  app-data or memory, not inside note/canvas files or the search cache.
 - **CodeMirror 6 collaboration bindings** — the editor already uses CM6;
   collaboration binds to CM6 transactions via the CRDT layer.
 
@@ -89,6 +92,9 @@ constraints, the epic stays deferred.
 - To be defined once the architecture is chosen. At minimum:
   - Unit tests for the CRDT merge layer (concurrent edit scenarios).
   - Integration test: two sessions editing the same note converge.
+  - CRDT/conflict fixtures preserve unknown frontmatter fields by value.
+  - Sync, index, and open do not add or mutate `created_at` / `updated_at`;
+    timestamps change only on explicit create/save.
   - Presence does not persist to disk or the vault.
   - Single-user (non-collaboration) mode is unaffected.
 
@@ -102,5 +108,6 @@ constraints, the epic stays deferred.
 - ⬜ Shared-workspace sessions (invite, join, leave)
 - ⬜ Permission model (read-only vs. edit)
 - ⬜ Comments / inline annotations
-- ⬜ Transport abstraction in `packages/core` (P2P / relay backends)
+- ⬜ Transport interfaces in `packages/core`; WebRTC/relay/signaling/native/network
+  implementations remain behind desktop/Tauri adapters
 - ⬜ Collaboration state isolated from vault and SQLite cache

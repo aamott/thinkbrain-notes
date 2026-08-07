@@ -63,6 +63,6 @@ No archive extraction, install/uninstall UI, signing, URL/marketplace, auto-upda
 
 ## References
 
-- `plans/extensions/pending-extension_manifest_format-low-med.md`
+- `plans/extensions/done-extension_manifest_format-low-med.md`
 - `plans/extensions/pending-extension_file_installation-low-med.md`
 - `plans/technical-decisions.md`

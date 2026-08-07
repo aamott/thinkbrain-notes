@@ -21,10 +21,10 @@ Git behavior remains in `gitService.ts`/Rust commands.
   long paths? Define touch target and horizontal overflow rules.
 
 **STOP gate:** No mockups, JSX, CSS, icon changes, or screenshot review until the
-answers are recorded. After approval, use the existing contribution registry and
-Tailwind tokens; do not implement the obsolete `ActivePanel`, `appStore`,
-`ActiveSidePanel`, `App.tsx`, or `styles.css` architecture described by the old
-story.
+answers are recorded. After approval, use the existing contribution registry,
+co-located CSS Modules, and shared `--tn-*` tokens; do not use Tailwind utility
+classes or implement the obsolete `ActivePanel`, `appStore`, `ActiveSidePanel`,
+`App.tsx`, or `styles.css` architecture described by the old story.
 
 ## Implementation-ready acceptance criteria
 
@@ -41,8 +41,8 @@ story.
   identity across workspace changes.
 - [ ] Render accessible group headings, counts, path/filename, status code, stage/
   unstage actions, commit input/button, refresh, current branch, local branch list,
-  and diff affordance. Use existing Tailwind token classes (or a co-located module
-  only if discovery approves it); no inline styles or retired CSS.
+  and diff affordance. Use a co-located CSS Module with shared `--tn-*` tokens;
+  no Tailwind utility classes, inline styles, or retired CSS.
 - [ ] Preserve panel state while hidden (`keepMounted`), but reset workspace-scoped
   message/selection when `rootPath` changes. Provide keyboard/focus and `aria-live`
   behavior for loading, success, and errors.

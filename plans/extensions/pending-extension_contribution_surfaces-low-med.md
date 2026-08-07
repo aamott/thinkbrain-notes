@@ -61,8 +61,8 @@ Deliver the approved contribution matrix, likely-file diff, typed contracts/test
 ## References
 
 - `plans/extensions/pending-extension_api_surface-low-hard.md`
-- `plans/extensions/pending-extension_manifest_format-low-med.md`
-- `plans/extensions/pending-extension_lifecycle_bootstrap-low-med.md`
+- `plans/extensions/done-extension_manifest_format-low-med.md`
+- `plans/extensions/done-extension_lifecycle_bootstrap-low-med.md`
 
 ## Blocked-on note from the loader story
 

@@ -28,7 +28,11 @@ Tracks open item OI-003. Matches the deferred file-watching plan in
 
 ## References
 
-- `apps/desktop/src-tauri/src/lib.rs` — native index commands, `open_index_connection`
-- `apps/desktop/src/search/searchService.ts` — `indexWorkspace`, `indexDocument`, `removeIndexedDocument`
-- `apps/desktop/src/search/useWorkspaceIndexer.ts` — open-time rebuild hook
-- `plans/wip-indexing-search-med-med.md` — file-watching requirements
+- `apps/desktop/src-tauri/src/commands/search.rs` — native index commands,
+  `open_index_connection`, and FTS5 update helpers
+- `apps/desktop/src/native/commands.ts` — frontend command bridge to add for
+  index updates and search
+- `apps/desktop/src/search/SearchPanel.tsx` and `searchPanelModel.ts` — current
+  search UI placeholder/state model
+- `plans/wip-indexing-search-med-med.md` — file-watching ownership and
+  requirements

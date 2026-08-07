@@ -39,6 +39,7 @@ Expose approved non-secret provider/model metadata and settings with explicit va
 - [ ] Only approved provider metadata and non-secret fields are rendered/persisted.
 - [ ] Credential values never enter React, JSON settings, events, logs, or history; only presence/opaque references are exposed.
 - [ ] Validation, dirty/save/reset, remote-consent status, and OS-store-unavailable states match approved copy.
+- [ ] Renderer styling uses co-located CSS Modules with shared `--tn-*` tokens; no Tailwind utility classes or inline styles.
 - [ ] Desktop/mobile keyboard, focus, screen-reader, narrow layout, and suspension behavior are tested.
 
 ## Automated validation

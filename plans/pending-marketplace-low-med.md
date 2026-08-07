@@ -70,7 +70,8 @@ mistaken for a capability gate.
 ### User-data separation
 
 Registry cache, installed-extension metadata, and update state live in OS
-app-data — never in the vault. The vault stays Markdown + attachments only.
+app-data — never in the vault. User-owned vault files follow `app-vision.md`:
+Markdown, attachments, and the explicit `.canvas` JSON document exception.
 
 ## Dependencies
 

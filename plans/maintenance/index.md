@@ -4,6 +4,19 @@ Focused follow-ups from the extensions/contributions/settings/editor/panels/comm
 review pass. These are maintenance stories only; feature behavior remains owned by
 its existing epic.
 
+Maintenance is a deliberate exception to the top-level epic structure: this index
+may hold narrow cross-cutting fixes that do not have one feature owner. It is not a
+new maintenance epic or a catch-all. Feature behavior stays in its owning epic;
+broad work must be re-homed to the appropriate top-level epic (or split across
+its owners), and completed stories are retired rather than retained as active
+backlog.
+
+`pending-core_adapter_interfaces-low-hard.md` is the explicit cross-cutting
+holding item here. Its ownership is the platform/core boundary, not mobile,
+extensions, or any single feature epic; re-home it to a dedicated platform/refactor
+epic (or split the implementation into the owning epics) if that structure is
+created before implementation begins.
+
 ## Recommended order
 
 1. `pending-settings_schema_safety-low-med.md` — core schema contracts and validation;
@@ -21,6 +34,15 @@ its existing epic.
 7. `pending-desktop_shell_dirty_sync-trivial-low.md` — eliminate redundant dirty-state
    dispatches after the shell typing changes.
 
+## Deferred holding item
+
+- `pending-core_adapter_interfaces-low-hard.md` — quarantined, non-blocking, and not in
+  execution order. Re-home or split only after a concrete feature proves a shared gap.
+
+## Completed candidate
+
+- `pending-pre_commit_hooks-high-easy.md` — complete and excluded from active order; filename status cleanup is deferred.
+
 ## Scope guard
 
 Do not duplicate work in:
@@ -37,6 +59,9 @@ Do not duplicate work in:
 
 The index intentionally excludes resolved findings, historical commit summaries, and confirmed observations that do not need a story. Current findings represented by the stories above:
 
+- Core packages and the Tauri integration still lack platform-agnostic adapter interfaces
+  (`FileSystemAdapter`, `SearchAdapter`, `AppPathsAdapter`, `GitAdapter`,
+  `SettingsAdapter`).
 - `SettingType` validation still has a silent future-type branch; `SettingDefinition.default`
   remains too broad, and empty/invalid enum schemas can pass registration.
 

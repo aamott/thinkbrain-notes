@@ -14,7 +14,7 @@ LeftPopout, RightPopout) and the standalone
 `shell/{ActivityBar,TitleBar,StatusBar}.tsx`, leaving a single 805-line inlined
 `shell/DesktopShell.tsx`.
 
-The shell has now been decomposed again for the Tailwind v4 architecture.
+The shell has now been decomposed again into focused production components. The current source uses Tailwind utilities, while the binding CSS Modules migration remains open below.
 `shell/DesktopShell.tsx` is a slim composition orchestrator that owns only
 state, effects, and callbacks; every surface it renders is an extracted
 component:
@@ -39,10 +39,12 @@ activity bar actions, dock popouts and resize handles, and status bar states.
       preserves all existing boot, indexing, and native status feedback.
 - [x] Keyboard focus order, landmark labels, reduced-motion behavior, and
       narrow-window overflow are tested.
-- [x] Components use shared tokens only — Tailwind v4 utilities backed by the
-      `--tn-*` design tokens. CSS Modules were dropped project-wide by the
-      Tailwind v4 migration, so this criterion is satisfied via utilities and
-      tokens rather than module stylesheets.
+- [ ] Production component styling uses co-located CSS Modules backed by shared
+      `--tn-*` design tokens, with no Tailwind utility classes or inline styles.
+      The completed shell composition remains the behavioral foundation, but the
+      current Tailwind v4 utility implementation does not satisfy this binding
+      production styling rule; see
+      `plans/theme-foundation/pending-surface_styling_migration-med-med.md`.
 
 ## References
 

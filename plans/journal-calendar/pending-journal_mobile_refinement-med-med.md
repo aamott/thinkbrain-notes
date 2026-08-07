@@ -16,10 +16,10 @@ The discovery gate is CLOSED; full rationale and D1-D47 live in
 - **D35:** collapsed metadata is a readable dateline at narrow widths.
 - **D40:** share one list with desktop using compact M-1 density; M-2 is a metadata-only bottom sheet and a new component surface.
 
-**Inherited blocker:** M-2 is metadata editing, so it inherits the metadata-widget
-implementation route decision that is STOP-gated in
-`pending-journal_panel_ui-high-hard.md`. The sheet cannot be built before that route is
-chosen.
+**Inherited blocker:** M-2 is metadata editing and inherits the metadata-widget
+implementation route chosen by D44 in `pending-journal_panel_ui-high-hard.md` (React
+editor-header contribution slot). The prerequisite D44 platform implementation is still
+pending, so the sheet cannot be built until that route ships.
 
 The discovery gate is CLOSED for the decisions above.
 

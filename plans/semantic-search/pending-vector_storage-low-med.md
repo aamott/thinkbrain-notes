@@ -22,6 +22,7 @@ existing index policy.
 
 ## References
 
-- `apps/desktop/src-tauri/src/lib.rs` — `resolve_index_db_path`, `open_index_connection`, `init_index_schema`
-- `apps/desktop/src/search/searchService.ts` — `indexWorkspace`, `indexDocument`, `removeIndexedDocument`
+- `plans/wip-indexing-search-med-med.md` — indexing-search epic and cache policy
+- `apps/desktop/src-tauri/src/commands/search.rs` — shipped native per-workspace SQLite cache and index commands
+- A future typed frontend bridge remains planned for native index commands; no bridge file is assigned yet.
 - `plans/pending-semantic-search-low-hard.md` — Architecture Decisions (ephemeral cache)

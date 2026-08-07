@@ -50,7 +50,8 @@ captured and reported consistently. This matches the existing pattern: native
 Tauri commands in `apps/desktop/src-tauri/src/commands/git.rs`, aggregated through
 `commands/mod.rs`, a typed `NativeCommandMap` and `invokeNativeCommand` helper in
 `apps/desktop/src/native/commands.ts`, and a thin frontend service that wraps
-those typed invocations (mirroring `workspaceService.ts` / `searchService.ts`).
+those typed invocations through the existing `apps/desktop/src/git/gitService.ts`
+frontend adapter.
 
 New Git commands are added as new `#[tauri::command]` functions in the Rust
 command module and registered through the existing command aggregation; `lib.rs`

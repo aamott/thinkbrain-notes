@@ -2,8 +2,9 @@
 
 Infinite canvas editor for spatial note arrangement — similar to Obsidian
 Canvas. Users place notes as cards on an infinite 2D surface, draw connections
-between them, and group related cards. Canvas state is persisted alongside the
-vault so it remains Git-friendly and sync-compatible.
+between them, and group related cards. A canvas is a user-owned sticky-note /
+whiteboard document persisted as `.canvas` JSON alongside the vault so it
+remains Git-friendly and sync-compatible.
 
 This is a **future epic** — low urgency, not yet started. No prerequisites.
 
@@ -13,19 +14,23 @@ This is a **future epic** — low urgency, not yet started. No prerequisites.
 - Notes placed as cards on the canvas, rendered from their Markdown content.
 - Connections (edges) drawn between cards, with labels and directional arrows.
 - Card grouping: visual groups that contain multiple cards and move together.
-- Canvas persistence: save/load canvas documents as files alongside the vault.
+- Canvas persistence: save/load canvas documents as files alongside the vault,
+  with debounced/batched saves, atomic writes, and external-change conflict
+  handling.
 - Canvas management: create, open, rename, delete canvas documents from the
-  explorer or a dedicated surface.
+  explorer or a dedicated surface without silently overwriting user changes.
 - Navigation aids: minimap, zoom-to-fit, keyboard pan/zoom.
 
 ## Architecture Decisions
 
-- **Canvas documents are files in the vault.** A canvas is a single file stored
-  alongside Markdown notes so it is Git-friendly and sync-compatible. The
-  canonical format is JSON (`.canvas` extension, JSON schema), matching the
-  Obsidian Canvas format for interoperability. A Markdown-with-frontmatter
+- **Canvas documents are user-owned files in the vault.** A canvas is a single
+  `.canvas` JSON file stored alongside Markdown notes; this is the explicit
+  vault-file exception for sticky-note/whiteboard document structure. It is
+  Git-friendly and sync-compatible, with a canonical format matching the
+  Obsidian Canvas schema for interoperability. A Markdown-with-frontmatter
   alternative was considered and rejected because spatial layout does not map
-  cleanly to linear Markdown.
+  cleanly to linear Markdown. Settings, cache, and viewport/session state stay
+  outside the vault.
 - **Canvas logic lives in `packages/core`.** The canvas document model (nodes,
   edges, positions, sizes) is platform-agnostic and must not depend on React or
   the DOM, per the hub-and-spoke rule. Rendering and interaction live in
@@ -38,6 +43,10 @@ This is a **future epic** — low urgency, not yet started. No prerequisites.
   extension. The infinite pan/zoom viewport is implemented with a transform
   layer (CSS transforms or a lightweight canvas/WebGL renderer) rather than
   scaling the DOM tree, to keep large canvases performant.
+- **Conflict-safe persistence.** Edits are debounced/batched and saved
+  atomically. External changes are detected before replacement and are never
+  silently overwritten; preserve both versions and let the user reload or
+  resolve. Structural auto-merge is deferred.
 - **No proprietary backend.** Canvas files are plain files. Multi-user
   real-time collaboration is out of scope (see `collaboration` epic).
 - **No third-party canvas framework lock-in for MVP of this epic.** Evaluate
@@ -55,6 +64,8 @@ This is a **future epic** — low urgency, not yet started. No prerequisites.
 - Real-time multi-user collaboration (see `collaboration` epic).
 - Canvas export to image/PDF (may become a maintenance story later).
 - Mobile canvas editing (Phase 2 / `mobile` epic).
+- Structural auto-merge of conflicting canvas documents (deferred; preserve
+  both versions and require reload/resolve).
 - AI-assisted canvas layout (see `ai` epic).
 - Embedding arbitrary web content (iframes of untrusted URLs) — security
   review required before considering.

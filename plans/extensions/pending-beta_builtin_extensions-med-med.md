@@ -47,7 +47,7 @@ their extension namespaces, not unapproved commands/views.
 ## Implementation tasks
 
 1. Use D47 namespaces and journal ids; collect only the still-open Git/agent-chat relative ids, activation events, capabilities, unavailable behavior, and mobile placement.
-2. Implement journal/calendar registration-only module for approved panels/commands/templates/settings, delegating behavior/storage to its epic.
+2. Implement journal/calendar registration-only module for approved panels/commands/settings, delegating behavior/storage to its epic; do not add templates (D21).
 3. Implement Git sync registration-only module for approved source-control/background-task seams, delegating Git/watch/conflict UX to Git epic.
 4. Implement ACP registration-only module for assistant/provider/credential seams, delegating ACP/chat/permission/provider behavior to AI and secret stories.
 5. Register all three through one bootstrap; test collision/disposal/failed activation and assert no feature implementation is imported.
@@ -84,7 +84,7 @@ No journal/calendar, Git sync/conflict, ACP host/chat/provider, secret-store, in
 ## References
 
 - `plans/pending-extensions-low-hard.md`
-- `plans/extensions/pending-extension_lifecycle_bootstrap-low-med.md`
+- `plans/extensions/done-extension_lifecycle_bootstrap-low-med.md`
 - `plans/extensions/pending-extension_api_surface-low-hard.md`
 - `plans/extensions/pending-extension_secret_storage-med-hard.md`
 - `plans/wip-git-integration-high-hard.md`

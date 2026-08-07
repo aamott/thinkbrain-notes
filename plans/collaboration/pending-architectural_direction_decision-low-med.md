@@ -19,6 +19,9 @@ detailed design document, not code.
       if cross-cutting.
 - [ ] Any backend/relay dependency is optional and never required for single-user
       use.
+- [ ] The design assigns transport interfaces/contracts only to `packages/core`;
+      WebRTC, relay, signaling, native, and network implementations stay behind
+      desktop/Tauri adapters and are not imported by core, CRDT, or UI code.
 - [ ] If the design reveals that collaboration cannot work within the
       local-first constraints, document why and recommend deferring the epic.
 

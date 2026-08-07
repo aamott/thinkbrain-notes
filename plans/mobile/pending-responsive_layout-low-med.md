@@ -6,8 +6,9 @@
 
 Add responsive breakpoints to the desktop shell so it adapts to phone screens.
 Phone-first on small screens (single panel, bottom tab navigation), multi-panel
-on large screens (current desktop layout). Use Tailwind breakpoints and CSS
-media queries. Touch-friendly hit targets (44px minimum).
+on large screens (current desktop layout). Use co-located CSS Modules, shared
+`--tn-*` tokens, and CSS media queries. Touch-friendly hit targets (44px
+minimum).
 
 ## Acceptance Criteria
 

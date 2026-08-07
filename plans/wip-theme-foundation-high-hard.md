@@ -19,7 +19,8 @@ shell surfaces without a heavy opinionated UI framework.
   component framework.
 - Theme selection state/setting — settings persistence is already implemented;
   this epic wires the setting to actual theme application.
-- Basic styling for shell/editor/sidebar surfaces using tokens and CSS Modules.
+- Basic styling for shell/editor/sidebar surfaces using shared `--tn-*` tokens
+  and co-located CSS Modules.
 
 ## Architecture Decisions
 
@@ -33,8 +34,10 @@ shell surfaces without a heavy opinionated UI framework.
   `document.documentElement`. The `"system"` value must resolve to `light` or
   `dark` based on `prefers-color-scheme`, not be passed through as a literal
   attribute value with no matching CSS rule.
-- **No inline styles.** Use CSS Modules (`*.module.css`) co-located with
-  components. Shared tokens/themes as CSS variables in `packages/ui`.
+- **No inline styles.** Use co-located CSS Modules for desktop surfaces,
+  backed by the shared `--tn-*` variables in `packages/ui`; keep shared
+  tokens/themes as CSS variables. Tailwind classes in `mockup_v3/` are reference
+  only and must not be copied into production JSX.
 - **Custom components over framework.** Build app components backed by Radix
   UI-style primitives where useful. Avoid a heavy, opinionated component
   framework that fights a desktop/editor UI.
@@ -46,8 +49,9 @@ shell surfaces without a heavy opinionated UI framework.
 
 ## Dependencies
 
-- Settings (done) — theme selection is persisted via `AppSettings.theme` in
-  `packages/core/src/settings.ts` and applied in `apps/desktop/src/App.tsx`.
+- Settings (done) — theme selection and custom theme paths are persisted via
+  the appearance settings module in `packages/core/src/settings/modules/appearance.ts`
+  and applied by `apps/desktop/src/settings/ThemeProvider.tsx`.
 
 ## Non-Goals
 
@@ -59,12 +63,19 @@ shell surfaces without a heavy opinionated UI framework.
 
 ## Status
 
-- ✅ Theme selection setting persisted — `packages/core/src/settings.ts`, `apps/desktop/src/settings/SettingsPanel.tsx`
-- ✅ CSS variable token system consolidated in `packages/ui` — defined in `packages/ui/src/styles/tokens.css` and mapped to Tailwind v4 in `apps/desktop/src/index.css`.
+- ✅ Theme selection setting persisted — `packages/core/src/settings/modules/appearance.ts`, `apps/desktop/src/settings/ThemeSectionControls.tsx`
+- ✅ CSS variable token system consolidated in `packages/ui` — defined in
+  `packages/ui/src/styles/tokens.css` and imported by `apps/desktop/src/main.tsx`.
 - ✅ Default light theme token set — implemented in `:root, :root[data-thinkbrain-theme="light"]`.
 - ✅ Default dark theme token set — implemented in `:root[data-thinkbrain-theme="dark"]`.
-- ✅ System theme resolves to OS preference — implemented via `@media (prefers-color-scheme: dark)` mapping `[data-thinkbrain-theme="system"]` to dark colors.
+- 🟨 System theme has CSS fallback coverage, but `ThemeProvider.tsx` still writes literal `system`; full light/dark resolution and OS-change handling remain in `pending-system_theme_resolution-med-med.md`.
 - ✅ Reusable base components in `packages/ui` — `shadcn/ui` initialized and `Button` component added.
 - ✅ Accessibility-focused primitives (Radix UI-style) — implemented via `shadcn/ui` (Radix UI under the hood).
-- ✅ Shell/editor/sidebar surfaces use tokens + CSS Modules — Legacy CSS Modules deleted, fully migrated to Tailwind v4 utility classes.
-- ⬜ Importable themes — load user-supplied theme files (JSON/CSS token overrides) from disk and apply them via `data-thinkbrain-theme`
+- ⬜ Shell/editor/sidebar surfaces use shared `--tn-*` tokens + co-located CSS
+  Modules — the current production source still uses Tailwind utility classes,
+  so CSS-module migration remains pending.
+- Importable themes are substantially implemented — parser/serialization in
+  `packages/core/src/theme.ts`, application in
+  `apps/desktop/src/settings/ThemeProvider.tsx`, and import/export in
+  `apps/desktop/src/settings/themeImportExport.ts`; strict CSS color-value
+  validation remains before closing `pending-importable_themes-med-hard.md`.

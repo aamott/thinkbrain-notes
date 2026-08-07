@@ -2,25 +2,22 @@
 
 ## Status
 
-⬜ Not implemented. Capabilities are currently only a design decision; no manifest evaluator or platform result is wired into the host.
+✅ Shipped. `packages/core/src/extensions/compatibility.ts` evaluates API-version/platform compatibility and reports unavailable capabilities as soft warnings; bootstrap and local loading consume the result.
 
 ## Goal
 
 Evaluate manifest-declared capabilities, API versions, and platform requirements as soft compatibility gates. Unsupported operations may be unavailable or produce warnings, especially on mobile, but the result must never be described as a security sandbox: beta extensions are trusted same-context code with app privileges.
 
-## Discovery questions
+## Shipped compatibility contract
 
-- What is the authoritative beta capability vocabulary and which capabilities are advisory versus required for activation?
-- Should an unsupported capability block activation, register an unavailable contribution, or allow activation with a warning?
-- Which app semver range is supported now, and how are prerelease versions handled?
-- Which platform values and feature matrix define desktop versus mobile (`terminal`, `process-spawn`, native secrets, file watching)?
-- Where should warnings surface first: developer console/log, extension status, command/panel UI, or all three?
-
-**Stop-and-ask gate:** Do not choose block/warn behavior, capability names, platform matrix, or user-facing warning copy until product/security owners answer these questions. Do not call a capability result “permission,” “sandbox,” or “isolation.”
+- API compatibility accepts only `*`, exact `x.y.z`, `^x.y.z`, and `~x.y.z`. Other ranges are incompatible and produce an error; the evaluator does not guess at richer semver syntax.
+- Platform mismatch and malformed host/API versions are errors and prevent registration/loading.
+- Missing capabilities are warnings only: they mark the feature unavailable without blocking a trusted extension or granting an operation. Compatibility output never represents permissions, sandboxing, or isolation.
+- Capability and compatibility reasons are surfaced in the extension status/Extensions panel; trusted same-context code still runs with app privileges.
 
 ## Prerequisites
 
-- Manifest parser and typed capability declarations from `pending-extension_manifest_format-low-med.md`.
+- Shipped manifest parser and typed capability declarations from `done-extension_manifest_format-low-med.md`.
 - Existing `AppPlatform` type in `packages/core/src/index.ts` and lifecycle host in `packages/core/src/lifecycle.ts`.
 - Native availability facts from `apps/desktop/src/native/commands.ts` and Tauri mobile constraints in `plans/technical-decisions.md`.
 
@@ -30,20 +27,20 @@ Evaluate manifest-declared capabilities, API versions, and platform requirements
 - Add desktop platform adapter/result wiring under `apps/desktop/src/extensions/` and tests.
 - Update manifest/runtime context types only; do not add security enforcement to `apps/desktop/src-tauri/src/lib.rs` in this story.
 
-## Implementation tasks
+## Shipped implementation
 
-1. Encode the approved capability vocabulary, API/app semver range, platform feature matrix, and typed result (`compatible`, warnings, unavailable capabilities, activation policy).
-2. Implement a pure evaluator that is deterministic for the supplied app version/platform and preserves all diagnostics. Make unknown capabilities explicit rather than ignored.
-3. Add desktop/mobile adapter inputs without importing platform code into core; ensure `terminal`/`process-spawn` are unavailable on mobile according to the approved matrix.
-4. Integrate only the result object into the future extension context/status seam and add tests for compatible, unsupported, unknown, API mismatch, and platform mismatch cases.
+1. `evaluateCompatibility(manifest, host)` parses the concrete host API version, evaluates the approved narrow semver grammar, checks declared platforms, and preserves every reason.
+2. Capability mismatches produce warnings; API-version/platform mismatches produce errors and make the result incompatible.
+3. The host supplies platform/capability facts through `CompatibilityHost`; no native secret, filesystem, process, network, or security enforcement is added here.
+4. Tests cover compatible, unsupported capability, API mismatch, unsupported range, and platform mismatch cases.
 
 ## Acceptance criteria
 
-- [ ] Compatibility output is typed, stable, and distinguishes advisory warning from unavailable operation and activation refusal.
-- [ ] Desktop/mobile feature matrix is tested and documented.
-- [ ] Unsupported capabilities do not silently grant an operation and never imply hostile-code protection.
-- [ ] API-version mismatch produces an explicit deprecation/incompatibility diagnostic.
-- [ ] No native secret, filesystem, process, or network operation is implemented here.
+- [x] Compatibility output is typed, stable, and distinguishes advisory warning from unavailable capability and incompatibility.
+- [x] Desktop/mobile platform facts are supplied and tested.
+- [x] Unsupported capabilities do not silently grant an operation and never imply hostile-code protection.
+- [x] API-version mismatch and unsupported ranges produce explicit incompatibility diagnostics.
+- [x] No native secret, filesystem, process, or network operation is implemented here.
 
 ## Automated validation
 
@@ -62,12 +59,11 @@ No OS permission model, sandbox/process isolation, signing, network policy, secr
 
 ## Handoff artifacts
 
-- Capability vocabulary/matrix decision record.
-- Pure evaluator, typed result contract, fixtures/tests, and integration notes for loader/API stories.
-- Approved warning/block copy and list of unresolved platform capabilities.
+- Capability/platform compatibility contract, narrow beta semver grammar, typed evaluator, fixtures/tests, and integration notes for loader/bootstrap stories.
+- Approved warning/incompatibility copy and the trusted app-privileges boundary.
 
 ## References
 
-- `plans/extensions/pending-extension_manifest_format-low-med.md`
+- `plans/extensions/done-extension_manifest_format-low-med.md`
 - `plans/technical-decisions.md` — trusted local same-context model
 - `plans/app-vision.md` — mobile/shared webview architecture

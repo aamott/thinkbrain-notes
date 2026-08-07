@@ -67,21 +67,23 @@ path can proceed independently.
 
 Re-embedding a workspace must not block the editor, matching the existing
 indexing constraint. Batched, abortable background work with progress reporting,
-keyed on the workspace root path — same pattern as
-`useWorkspaceIndexer` / `indexWorkspace`.
+keyed on the workspace root path, following the non-blocking indexing architecture
+in the `indexing-search` epic.
 
 ## Dependencies
 
 - `indexing-search` (done) — FTS5 keyword search, the per-workspace SQLite
-  cache in OS app-data, the batched/abortable indexing loop, and the
-  `SearchPanel` UI all exist and are the foundation this epic extends.
-  - `apps/desktop/src-tauri/src/lib.rs` — `open_index_connection`,
-    `resolve_index_db_path`, `init_index_schema`, `documents_fts` virtual table
-  - `apps/desktop/src/search/searchService.ts` — `indexWorkspace`,
-    `searchWorkspace`, `indexDocument`, `removeIndexedDocument`
-  - `apps/desktop/src/search/useWorkspaceIndexer.ts` — background reindex hook
-  - `apps/desktop/src/search/SearchPanel.tsx` — search UI to extend
-  - `apps/desktop/src/native/commands.ts` — `NativeCommandMap` search entries
+  cache in OS app-data, and the existing search UI surface are the foundation
+  this epic extends.
+  - `plans/wip-indexing-search-med-med.md` — indexing/search architecture and
+    remaining frontend wiring
+  - `apps/desktop/src-tauri/src/commands/search.rs` — shipped native FTS5 backend:
+    document indexing, index search, clearing, removal, and cache management
+  - `apps/desktop/src/search/SearchPanel.tsx` and
+    `apps/desktop/src/search/searchPanelModel.ts` — current frontend search
+    surface and placeholder state model
+  - A future typed frontend bridge remains planned for the native search commands;
+    no bridge file is assigned yet.
 - `ai` (stub, not started) — optional provider abstraction for remote
   embeddings. A minimal local-only path can proceed without it.
 

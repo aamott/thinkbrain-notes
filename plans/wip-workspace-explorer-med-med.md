@@ -41,6 +41,10 @@ default application.
 - **Tree stays virtualized.** react-arborist is already in use; drag-and-drop
   should use its built-in DnD (currently disabled via `disableDrag`/
   `disableDrop`) rather than a separate DnD library.
+- **Search/index ownership stays in indexing-search.** That epic owns the FTS5
+  backend, index lifecycle, and index updates. Explorer stories only consume
+  watcher/index events to refresh tree or editor UI; they do not add a second
+  watcher or FTS5 backend.
 
 ## Status
 
@@ -58,10 +62,13 @@ default application.
   `pending-non_markdown_file_ops-med-med.md`
 - ⬜ Drag-and-drop move in the file tree — see
   `pending-drag_and_drop_move-med-hard.md`
-- ⬜ New-folder action — see `pending-new_folder_action-med-med.md`
-- ⬜ Show-hidden toggle for dot-prefixed entries — see
-  `pending-show_hidden_toggle-med-med.md`
-- ⬜ Native file watcher (external changes sync) — see
-  `pending-file_watcher-med-hard.md`
-- ⬜ SQLite FTS5 full-text search backend — see
-  `pending-fts5_search_backend-low-hard.md`
+- ✅ New-folder action — see `done-new_folder_action-med-med.md`
+- ✅ Show-hidden toggle for dot-prefixed entries — see
+  `done-show_hidden_toggle-med-med.md`
+- ⬜ Explorer tree/editor consumption of external file-change events — see
+  `pending-file_watcher-med-hard.md`; watcher lifecycle and index updates belong
+  to `plans/wip-indexing-search-med-med.md`.
+- FTS5 backend/index lifecycle is owned by indexing-search — see
+  `plans/wip-indexing-search-med-med.md`; retain
+  `pending-fts5_search_backend-low-hard.md` as the explorer/UI integration note
+  only.

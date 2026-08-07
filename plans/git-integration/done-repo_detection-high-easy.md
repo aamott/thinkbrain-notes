@@ -18,7 +18,12 @@ can switch between "not a repo" (offer init) and "repo" (show status/staging).
 
 ## Relevant Files
 
-- `apps/desktop/src-tauri/src/lib.rs` — new command + registration
+- `apps/desktop/src-tauri/src/commands/git.rs` — repository-detection command
+  implementation
+- `apps/desktop/src-tauri/src/commands/mod.rs` — export and
+  `app_command_handlers!` registration
+- `apps/desktop/src-tauri/src/lib.rs` — builder entry only; not a per-command
+  registration list
 - `apps/desktop/src/native/commands.ts` — `NativeCommandMap` entry + types
 - `apps/desktop/src/git/gitService.ts` — fresh frontend helper
 - A future fresh source-control panel owns repository-display state; do not

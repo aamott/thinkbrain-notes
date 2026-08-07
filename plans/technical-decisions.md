@@ -79,6 +79,9 @@ Decision: Markdown files are the source of truth.
 - Notes are normal `.md` files.
 - Metadata uses YAML frontmatter.
 - Attachments are normal files referenced by relative paths.
+- User-owned canvas documents are the explicit non-Markdown vault-file exception:
+  `.canvas` JSON stores sticky-note/whiteboard document structure. Canvas settings,
+  cache, and viewport/session state remain outside the vault in OS app-data/config.
 - No proprietary note format is allowed.
 
 ## Database and Indexes

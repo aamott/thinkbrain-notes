@@ -1,20 +1,36 @@
 # SQLite FTS5 Search Backend
 
+**Status:** integration note · backend owned by `indexing-search`
+
 ## Goal
 
-Provide a robust, instant full-text search across all notes in the vault, scaling to thousands of documents without relying on slow JavaScript array filtering.
+Connect the explorer-owned search surfaces to the existing indexing-search FTS5
+backend. This story does not create a second SQLite database, FTS5 table, or
+index lifecycle.
 
 ## Design
 
-- Use SQLite's FTS5 (Full-Text Search) extension on the native Rust side.
-- When notes are parsed, index their plain text content into an FTS virtual table.
-- Provide a `search_notes` Tauri command that takes a query string and returns matching note paths with snippets and highlighted terms.
-- The Command Palette and Search sidebar panel use this native command instead of filtering the `visiblePaths` array in JS.
+- The indexing-search epic owns the Rust FTS5 schema, workspace cache, indexing
+  commands, and search queries in `apps/desktop/src-tauri/src/commands/search.rs`.
+- The explorer/UI layer consumes the native `index_documents`, `search_index`,
+  `clear_index`, and `remove_index_document` commands through the desktop bridge.
+- The Command Palette and Search sidebar use the shared backend rather than
+  filtering explorer paths locally.
 
 ## Acceptance Criteria
 
-- [ ] SQLite database is configured with an FTS5 virtual table.
-- [ ] Note text content is synced to the FTS table on save.
-- [ ] `search_notes` Tauri command implemented and exposed to the frontend.
-- [ ] Command Palette queries the native search instead of local JS filtering.
-- [ ] (Future) Search sidebar panel uses native search to show results with context snippets.
+- [ ] Explorer/search surfaces have a typed frontend bridge to the existing
+      indexing-search commands.
+- [ ] Search results open the selected workspace-relative file and show the
+      backend-provided snippet.
+- [ ] Explorer mutations and workspace switches use the indexing-search update
+      lifecycle; no parallel explorer-owned index is introduced.
+- [ ] `pnpm lint`, `pnpm typecheck`, and `pnpm test` pass.
+
+## References
+
+- `apps/desktop/src-tauri/src/commands/search.rs` — FTS5 backend and commands
+- `apps/desktop/src-tauri/src/commands/mod.rs` — command registration
+- `apps/desktop/src/search/SearchPanel.tsx` — current unavailable UI placeholder
+- `apps/desktop/src/search/searchPanelModel.ts` — search panel state model
+- `plans/wip-indexing-search-med-med.md` — backend/index owner and open work

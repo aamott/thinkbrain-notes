@@ -18,8 +18,12 @@ missing.
 
 ## Relevant Files
 
-- `apps/desktop/src-tauri/src/lib.rs` — add `#[tauri::command]` + register in
-  `tauri::generate_handler![]`
+- `apps/desktop/src-tauri/src/commands/git.rs` — `git_availability` command
+  implementation and tests
+- `apps/desktop/src-tauri/src/commands/mod.rs` — export the Git command module and
+  register it through `app_command_handlers!`
+- `apps/desktop/src-tauri/src/lib.rs` — builder entry only; it invokes the existing
+  command aggregation and is not edited as a per-command registration list
 - `apps/desktop/src/native/commands.ts` — add to `NativeCommandMap`, add typed
   result interface
 - `apps/desktop/src/git/gitService.ts` — fresh frontend service and

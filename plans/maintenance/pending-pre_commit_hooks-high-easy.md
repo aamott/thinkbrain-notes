@@ -1,5 +1,7 @@
 # Automated QA Pre-Commit Hooks
 
+**Status:** complete and excluded from active backlog; filename status cleanup is deferred.
+
 ## Goal
 
 Prevent bad code (lint errors, type errors) from entering the codebase by enforcing checks before a commit can be made.

@@ -2,21 +2,19 @@
 
 ## Status
 
-🟨 Partially implemented. `packages/core/src/lifecycle.ts` and `apps/desktop/src/extensions/desktopExtensionHost.ts` implement trusted in-memory activation/deactivation and disposable cleanup with tests. Manifest-driven lazy activation and application bootstrap are not implemented.
+✅ Supported beta runtime boundary shipped for startup/command/view activation and host-owned registration cleanup. `onLanguage`, duplicate-id diagnostics, successful local Blob URL cleanup, and forwarding local module `deactivate` remain unchecked follow-ups below.
 
 ## Goal
 
-Connect the existing disposable lifecycle to manifest-loaded extensions and a desktop bootstrap that starts/shuts down the extension host predictably. Support lazy activation events (`onStartup`, `onCommand`, `onView`, `onLanguage`) without loading every extension at startup. Preserve cleanup on deactivate, unload, failed activation, and host shutdown.
+Connect the existing disposable lifecycle to manifest-loaded extensions and a desktop bootstrap that starts/shuts down the extension host predictably. Support startup and lazy command/view activation without loading every extension at startup. Preserve cleanup on deactivate, unload, failed activation, and host shutdown.
 
-## Discovery questions
+## Shipped lifecycle contract and remaining gaps
 
-- Which bootstrap phase owns built-ins: before React render, after shell mount, or an explicit app-ready event?
-- Is `onStartup` eager at app-ready or deferred until the first workspace is ready?
-- How are command/view/language events emitted and queued if an extension is still loading?
-- Should activation failure disable the extension for the current session, retry, or remain registered but failed?
-- What shutdown deadline applies to async deactivation/background tasks?
-
-**Stop-and-ask gate:** Do not wire app bootstrap, activation timing, retry policy, or shutdown timeouts until product/runtime owners answer these questions. Do not mark lifecycle complete merely because the existing host tests pass.
+- Bootstrap parses every built-in manifest, evaluates compatibility, registers compatible extensions, and exposes status/reasons through the Extensions panel.
+- `onStartup` activates eagerly; `onCommand:<id>` and `onView:<id>` activate through disposable stubs. `onLanguage:<language>` is retained as a manifest warning but has no trigger point yet.
+- Activation is at-most-once, failed activation removes stubs and records `failed`, and host removal/shutdown disposes extension-owned registrations before replacement or exit.
+- Local extensions use the same host path and are rejected on duplicate extension ids, but duplicate-id diagnostics are still not a parser/loader result.
+- Successful local unload still needs the loader module's `deactivate`/Blob-revocation handle forwarded through bootstrap disposal; no bootstrap claim should imply it is complete.
 
 ## Prerequisites
 
@@ -24,27 +22,29 @@ Connect the existing disposable lifecycle to manifest-loaded extensions and a de
 - Manifest parser, compatibility evaluator, and local-directory loader.
 - Existing React/Tauri startup in `apps/desktop/src/main.tsx`, `App.tsx`, `DesktopShell.tsx`, and native readiness conventions.
 
-## Exact likely file areas
+## Shipped file areas
 
-- Add `apps/desktop/src/extensions/extensionRuntime.ts`, `bootstrap.ts`, and tests.
-- Extend `packages/core/src/lifecycle.ts` only for generic activation-event/status contracts; keep platform orchestration in desktop.
-- Integrate startup/shutdown from `apps/desktop/src/App.tsx` or a root provider chosen after discovery; do not put Tauri calls in core.
+- `apps/desktop/src/extensions/bootstrap.ts` and tests — runtime/bootstrap orchestration.
+- `packages/core/src/lifecycle.ts` — generic disposable lifecycle contracts.
+- `apps/desktop/src/main.tsx` / `App.tsx` — startup and shutdown integration.
+- No separate `extensionRuntime.ts` exists; do not create one unless a proven split is needed.
 
-## Implementation tasks
+## Shipped implementation
 
-1. Define runtime records for parsed manifest, loader handle, compatibility result, activation events, status, and disposable ownership; cover concurrent activate/deactivate requests.
-2. Implement event-to-extension activation routing and lazy activation with deterministic ordering, queued trigger behavior, and explicit failure status.
-3. Implement desktop bootstrap/teardown around the existing app lifecycle, registering built-ins and development extensions through one host; make shutdown await cleanup and surface errors.
-4. Add tests for startup ordering, onCommand/onView/onLanguage triggers, failed activation cleanup, deactivation/unload, duplicate ids, and host disposal.
-5. Add status/log hooks for the app-privileges warning and compatibility diagnostics without claiming security isolation.
+1. Bootstrap keeps manifest, source, compatibility/status, stubs, activation, and host-registration state per extension.
+2. It registers manifest command/panel stubs before activation, swaps them for real scoped registrations on first command/view use, and eagerly activates `onStartup` entries.
+3. It supports built-in and local-directory sources through one host, with status subscriptions and awaited disposal on removal/reload/shutdown.
+4. Tests cover lazy/eager activation, concurrent activation, incompatible/invalid manifests, activation failure cleanup, local registration replacement, duplicate registration rejection, and shutdown disposal.
+5. Status reasons preserve compatibility and load diagnostics, including the trusted app-privileges boundary; unsupported `onLanguage`, duplicate-id diagnostics, and Blob URL cleanup remain explicit gaps.
 
 ## Acceptance criteria
 
-- [ ] Existing lifecycle behavior remains passing and is consumed by manifest/runtime records.
-- [ ] Declared activation events trigger only the owning extension; unrelated extensions stay unloaded.
-- [ ] Bootstrap and shutdown are idempotent and dispose all registrations/resources.
-- [ ] Failed activation leaves no contributions and exposes typed status/diagnostics.
-- [ ] No feature epic behavior is moved into bootstrap.
+- [x] Existing lifecycle behavior remains passing and is consumed by manifest/runtime records.
+- [x] Supported declared activation events trigger only the owning extension; unrelated extensions stay unloaded.
+- [x] Bootstrap and shutdown are idempotent and dispose host registrations/resources.
+- [x] Failed activation leaves no contributions and exposes status/diagnostics.
+- [x] No feature epic behavior is moved into bootstrap.
+- [ ] `onLanguage`, duplicate-id diagnostics, and forwarding local `deactivate`/Blob-revocation cleanup remain open.
 
 ## Automated validation
 
@@ -70,6 +70,7 @@ No new API contributions, manifest parsing, installer, marketplace, sandbox, or 
 
 - `packages/core/src/lifecycle.ts`
 - `apps/desktop/src/extensions/desktopExtensionHost.ts`
+- `apps/desktop/src/extensions/localDirectoryLoader.ts`
 - `apps/desktop/src/main.tsx`
 - `apps/desktop/src/App.tsx`
 - `plans/extensions/pending-beta_builtin_extensions-med-med.md`

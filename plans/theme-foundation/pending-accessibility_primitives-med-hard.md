@@ -15,7 +15,7 @@ dialog/modal, and dropdown menu. Avoid adopting a heavy component framework.
       accessible) — either via `radix-ui` packages or custom implementations
       following the same principles.
 - [ ] No heavy opinionated component framework is introduced.
-- [ ] Primitives use CSS Modules and consume design tokens.
+- [ ] Primitives use co-located CSS Modules and consume shared `--tn-*` design tokens.
 - [ ] Primitives are exported from `packages/ui/src/index.ts`.
 - [ ] `pnpm lint`, `pnpm typecheck`, and `pnpm build` pass.
 

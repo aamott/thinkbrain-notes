@@ -25,8 +25,10 @@ remote context, and replacing deterministic FTS5 search.
 - `packages/core/src/ai/` is platform-neutral. It contains values/contracts only;
   no React, Tauri, provider SDK, filesystem, or secret-store dependency.
 - All renderer IPC goes through `apps/desktop/src/native/`; components do not call
-  Tauri directly. Rust owns provider calls, credentials, network policy, ACP
-  process/session lifecycle, and permission enforcement.
+  Tauri directly. AI renderer surfaces use co-located CSS Modules backed by shared
+  `--tn-*` tokens, never Tailwind utility classes. Rust owns provider calls,
+  credentials, network policy, ACP process/session lifecycle, and permission
+  enforcement.
 - ACP uses the official `agent-client-protocol` Rust crate. The renderer never
   imports `@agentclientprotocol/sdk`; the existing dependency is removable only
   once source imports are gone.

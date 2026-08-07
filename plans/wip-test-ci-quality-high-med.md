@@ -63,11 +63,14 @@ before declaring work done. Failures must be visible and never suppressed.
 - ✅ root validation scripts (`lint`, `typecheck`, `test`, `test:e2e`, `build`) — `package.json`
 - ✅ Vitest configuration (desktop explicit; core/ui defaults) — `apps/desktop/vite.config.ts`
 - ✅ Playwright E2E configuration — `apps/desktop/playwright.config.ts`
-- ✅ Rust tests documented and passing — `apps/desktop/src-tauri/src/lib.rs`, `plans/archive/.../STATUS.md`
+- ✅ Rust tests documented and passing — `apps/desktop/src-tauri/src/lib.rs` and
+  `apps/desktop/src-tauri/src/commands/{extensions,themes}.rs`
 - ✅ lint configuration (ESLint flat config) — `eslint.config.js`
 - ✅ typecheck configuration (per-package `tsc --noEmit`) — `tsconfig.base.json`, per-package `tsconfig.json`
 - ✅ smoke tests for core/ui/desktop packages — `packages/core/src/*.test.ts`, `packages/ui/src/lib/classNames.test.ts`, `apps/desktop/src/**/*.test.ts`
 - ✅ E2E smoke test for app boot — `apps/desktop/e2e/app.spec.ts`
 - ✅ root convenience script for Rust tests (`pnpm test:rust`) — see
   `plans/test-ci-quality/done-rust_test_root_script-med-easy.md`
-- ⬜ GitHub Actions CI workflow — no `.github/workflows/` directory exists
+- ✅ GitHub Actions CI workflow exists — `.github/workflows/ci.yml`; a remote
+  sample run/green status remains unverified until the workflow is run on the
+  repository remote.

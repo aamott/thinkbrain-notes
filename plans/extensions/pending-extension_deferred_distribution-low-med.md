@@ -14,7 +14,10 @@ Preserve a clear boundary for future URL/marketplace work so local-directory dev
 - Is signing/verification mandatory before any remote install, and which trust/root-key rotation model is acceptable?
 - What privacy, telemetry, moderation, malware scanning, update, rollback, and offline-cache policies apply?
 - Should URL install ever be supported on mobile, and what network/consent UI is required?
-- How do ids, versions, dependencies, API compatibility, capabilities, permissions, and uninstall/rollback interact?
+- How do ids, versions, dependencies, API compatibility, soft capability compatibility
+  signals, and uninstall/rollback interact? Future distribution must describe
+  capabilities only as soft compatibility signals, never as access grants; any
+  installed code still requires a clear trusted app-privileges warning.
 
 **Stop-and-ask gate:** Do not create endpoints, fetchers, marketplace screens, signing code, URL parsing, or remote install stubs until a separate product/security decision approves the threat model, trust model, registry, and UX. A “temporary” URL path violates the current scope.
 
@@ -37,7 +40,9 @@ Preserve a clear boundary for future URL/marketplace work so local-directory dev
 2. Design desktop/mobile browse/search/detail/install/update/rollback UX; ask product/layout questions before mockups or code.
 3. Implement signed metadata verification and offline cache before any remote code download.
 4. Add a remote installer that reuses local package validation and atomic install; keep app-privileges warning explicit.
-5. Add end-to-end offline/error/signature/rollback/update tests and manual consent checks.
+5. Add end-to-end offline/error/signature/rollback/update tests and manual checks that
+   compatibility warnings are soft, no capability is presented as an access grant,
+   and trusted app privileges are shown before install.
 
 ## Acceptance criteria for this deferral
 

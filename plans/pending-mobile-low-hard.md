@@ -20,11 +20,12 @@ In scope:
 
 - `tauri android init` / `tauri ios init` scaffolding for the Android and iOS
   targets
-- Responsive layout breakpoints (Tailwind) so the desktop shell adapts to phone
-  screens
+- Responsive layout breakpoints using co-located CSS Modules and shared `--tn-*`
+  tokens so the desktop shell adapts to phone screens
 - Touch-friendly navigation (bottom tabs, swipe gestures, 44px touch targets)
-- Mobile capability gating — desktop-only Tauri commands (terminal,
-  process-spawn) are excluded from mobile builds via platform-aware capabilities
+- Mobile capability compatibility — desktop-only Tauri commands (terminal,
+  process-spawn) are reported as unavailable on mobile via platform-aware
+  declarations; this is soft compatibility behavior, not security enforcement
 - Mobile-specific Tauri config (`tauri.android.conf.json`, `tauri.ios.conf.json`
   if needed)
 - CodeMirror 6 mobile testing and fixes (scrolling, IME, touch selection)
@@ -53,19 +54,20 @@ both desktop and mobile builds use.
 
 ### Responsive layout
 
-Mobile uses CSS breakpoints (Tailwind) to switch between desktop and mobile
-layouts within the same shell. Phone-first on small screens (single panel,
-bottom tab navigation), multi-panel on large screens (current desktop layout).
-There is no separate screen tree or navigation stack — the same React
-components reflow based on viewport width.
+Mobile uses CSS media queries and co-located CSS Modules with shared `--tn-*`
+tokens to switch between desktop and mobile layouts within the same shell.
+Phone-first on small screens (single panel, bottom tab navigation), multi-panel
+on large screens (current desktop layout). There is no separate screen tree or
+navigation stack — the same React components reflow based on viewport width.
 
 ### Capability gating
 
 Some Tauri commands are desktop-only (terminal, process-spawn). The trusted
-extension system uses platform-aware capability declarations as compatibility
-gates (already in the `extensions` plan): mobile builds may declare a more
-restrictive set and warn/disable desktop-only features. These gates are not a
-security sandbox or hostile-extension boundary.
+extension system uses platform-aware capability declarations as soft
+compatibility signals (already in the `extensions` plan): mobile builds may
+report features as unavailable and warn or disable their UI paths. These
+declarations are not security enforcement, a sandbox, or a hostile-extension
+boundary.
 
 ### Known limitations
 
@@ -80,13 +82,12 @@ security sandbox or hostile-extension boundary.
 - **Single webview only**: Tauri Mobile supports a single webview. This is not
   a problem for us — the desktop app is already single-webview.
 
-### Prerequisite: core adapter interfaces still apply
+### Core adapter follow-up
 
-The core adapter interfaces in `packages/core` (from the maintenance epic) are
-still a prerequisite, but the rationale has changed: it is now about clean
-separation and testability, not about mobile-specific adapter implementations.
-Mobile reuses the same Tauri adapters as desktop — there are no separate Expo
-adapters to write.
+The cross-cutting adapter-interface item in `plans/maintenance/` may improve
+separation and testability, but it is not a blanket blocker for this Phase 2 epic.
+Mobile reuses the current Tauri adapters; re-home any broad refactor before implementation
+rather than creating mobile-specific adapters.
 
 ### Bring Your Own Sync
 
@@ -95,22 +96,22 @@ No cloud sync. Mobile users rely on the same external sync tools
 
 ## Dependencies
 
-- Core adapter interfaces defined in `packages/core` (see prerequisite note
-  above — tracked in `plans/maintenance/`).
+- Existing Tauri adapter boundaries; the optional cross-cutting adapter cleanup remains tracked in `plans/maintenance/` and must be re-homed if it grows.
 - `packages/core` business logic (note model, frontmatter, markdown parsing,
   settings shapes) — already present and platform-agnostic.
 - `packages/ui` and the React frontend — already shared, no mobile-specific
   work needed beyond responsive layout.
 
-No other epic blocks this one, but it should not start until the adapter
-interface prerequisite is resolved.
+No other epic blocks this one. Resolve only adapter gaps actually proven by mobile implementation.
 
 ## Status
 
-- ⬜ Responsive layout breakpoints (Tailwind, phone-first on small screens)
+- ⬜ Responsive layout breakpoints (CSS Modules + shared `--tn-*` tokens,
+  phone-first on small screens)
 - ⬜ Touch-friendly navigation (bottom tabs, swipe gestures, 44px touch targets)
 - ⬜ `tauri android init` — scaffold Android target
 - ⬜ `tauri ios init` — scaffold iOS target (requires macOS)
-- ⬜ Mobile Tauri config (permissions, capabilities, no desktop-only commands)
+- ⬜ Mobile Tauri config (soft capability declarations and unavailable
+  desktop-only commands)
 - ⬜ CodeMirror mobile testing and fixes (scrolling, IME, touch selection)
-- ⬜ Core adapter interfaces in `packages/core` (prerequisite — tracked in maintenance)
+- ⬜ Reuse current Tauri adapters; raise only proven cross-cutting adapter gaps through maintenance

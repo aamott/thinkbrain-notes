@@ -19,7 +19,7 @@ The discovery gate is CLOSED; rationale and D1-D47 live in
 
 ## Real registration API — authoritative
 
-**Manifest** (`packages/core/src/extensions/manifest.ts`, `ExtensionManifest`): `id` (kebab-case), `name`, `version`, `apiVersion` (semver range), `engines.platform` (`"desktop"|"mobile"`), `activationEvents` (`"onStartup"`/`"onCommand:<id>"`/`"onView:<id>"`), `capabilities` (soft hints, not a sandbox), `contributes: { commands: {id,title}[], panels: {id,label,icon,side}[] }`. ONLY commands and panels are declared in the manifest — tabs, CodeMirror hooks, and D44 editor headers register at runtime inside `activate()`. Confirm at implementation time if a manifest-level tab declaration is wanted; do not invent one.
+**Manifest** (`packages/core/src/extensions/manifest.ts`, `ExtensionManifest`): `id` (kebab-case), `name`, `version`, `apiVersion` (beta grammar: `*`, exact `x.y.z`, `^x.y.z`, or `~x.y.z`; other ranges are incompatible), `engines.platform` (`"desktop"|"mobile"`), `activationEvents` (`"onStartup"`/`"onCommand:<id>"`/`"onView:<id>"`), `capabilities` (soft compatibility hints, not permissions or a sandbox), `contributes: { commands: {id,title}[], panels: {id,label,icon,side}[] }`. ONLY commands and panels are declared in the manifest — tabs, CodeMirror hooks, and D44 editor headers register at runtime inside `activate()`. Confirm at implementation time if a manifest-level tab declaration is wanted; do not invent one.
 
 **Host** (`desktopExtensionHost` singleton): current runtime registrations are commands, panels, CodeMirror editor hooks, and tabs, plus settings/workspace. D44 adds `editorHeaders.register(...)` with the same disposable ownership and id prefixing. D47 fixes this extension to `journal-calendar`; relative ids become `${extensionId}.${id}` and settings use `extension-journal-calendar`. Relative ids remain lowercase kebab-case.
 
@@ -79,7 +79,7 @@ Deferred (do not implement here): URL install, signing, marketplace, strong isol
 - `plans/extensions/pending-editor_header_contribution-high-med.md` (D44) and `pending-extension_settings-low-med.md` (D45).
 - Existing command/panel/tab/settings/workspace APIs and registries plus D44 editor headers; preserve disposable lifecycle tests.
 - Indexing/search epic's FTS5 cache (D16) — do not build a parallel index.
-- Beta boundary: `pending-beta_builtin_extensions-med-med.md`, `pending-internal_contribution_points-low-med.md`, `pending-extension_execution_model-low-med.md` (all in `plans/extensions/`).
+- Beta boundary: `pending-beta_builtin_extensions-med-med.md`, `pending-internal_contribution_points-low-med.md`, and shipped `done-extension_lifecycle_bootstrap-low-med.md` (all in `plans/extensions/`).
 
 ## Acceptance criteria
 
