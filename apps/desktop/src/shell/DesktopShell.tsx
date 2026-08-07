@@ -331,6 +331,7 @@ export function DesktopShell() {
       toggleAssistant: () => setRightPanel((panel) => panel === "assistant" ? null : "assistant"),
       toggleBottomPanel,
       toggleLivePreview,
+      revealPanel: (panelId: string) => setRightPanel(panelId),
       openSettings: openSettingsTab,
       rebuildIndex: () => updateBottomPanel("terminal"),
       closePalette

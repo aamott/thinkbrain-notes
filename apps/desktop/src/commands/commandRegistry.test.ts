@@ -16,6 +16,7 @@ const commandContext: DesktopCommandContext = {
   toggleAssistant: () => undefined,
   toggleBottomPanel: () => undefined,
   toggleLivePreview: () => undefined,
+  revealPanel: () => undefined,
   openSettings: () => undefined,
   rebuildIndex: () => undefined,
   closePalette: () => undefined

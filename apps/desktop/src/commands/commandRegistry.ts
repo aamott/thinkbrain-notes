@@ -33,6 +33,8 @@ export interface DesktopCommandContext {
   readonly toggleAssistant: () => void;
   readonly toggleBottomPanel: () => void;
   readonly toggleLivePreview: () => void;
+  /** Reveals a panel by its fully-qualified id, opening its side popout. */
+  readonly revealPanel: (panelId: string) => void;
   readonly openSettings: () => void;
   readonly rebuildIndex: () => void;
   readonly closePalette: (restoreFocus?: boolean) => void;
