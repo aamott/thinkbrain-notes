@@ -35,7 +35,7 @@ The items below are **genuinely undecided**. Do not implement JSX/CSS for affect
 1. **Collapsed-header + search interaction:** When a full-text search matches entries inside a collapsed year or month header, must the header auto-expand, or is showing a match count inside the collapsed header acceptable? Silently hiding matched entries is a defect per D16; the exact UX is not yet decided.
 2. **Collapse-state persistence:** Should collapse state survive a panel close/reopen? Is it scoped per workspace or globally? Not decided.
 3. **Collapsed dateline — no metadata:** D22 makes the no-metadata case the common case for new entries. What does the collapsed dateline render when an entry has only a date and no user-defined fields (just `Wednesday, August 5` with no suffix)?
-4. **Measured-column behavior at narrow widths:** At what popout width does the date/time/first-line row switch to a compact layout, and which columns are dropped or wrapped?
+4. **Measured-column behavior at narrow widths (OWNED HERE):** At what popout width does the date/time/first-line row switch to a compact layout, and which columns are dropped or wrapped? `pending-journal_mobile_refinement-med-med.md` consumes this answer; decide it once, here.
 5. **Metadata widget implementation route:** Two candidate routes exist (see below); the choice is STOP-gated. Do not implement the widget until the route is selected.
 
 **STOP gate:** Do not implement the affected surfaces until each open item above has a product-owner decision recorded in the discovery story.
@@ -96,7 +96,7 @@ Implement the approved journal list/create/open experience as a focused React su
 - `apps/desktop/src/journal/MetadataWidget.test.tsx` (new).
 - `apps/desktop/src/panels/panelRegistry.tsx` (register journal contribution via the extension host; do not bypass registry).
 - `apps/desktop/src/panels/LeftPopout.tsx`, `apps/desktop/src/shell/ActivityBar.tsx`, `apps/desktop/src/shell/DesktopShell.tsx` (minimal context/callback wiring only).
-- `apps/desktop/src/tabs/tabModel.ts` / `apps/desktop/src/shell/TabContent.tsx` (only to open the existing editor contract; do not fork editor state).
+- Opening tabs uses the existing `openTab(kind, title)` entry point in `apps/desktop/src/shell/DesktopShell.tsx`; `TabContent.tsx` should NOT need editing. Do not fork editor state.
 - `apps/desktop/src/tabs/MarkdownEditor.tsx` — touch only if route (b) is selected for the metadata widget contribution slot; otherwise leave untouched.
 
 Runtime panel dimension is the only case where a scoped CSSOM custom property on the panel root element is acceptable. All other styling via CSS Modules + `--tn-*` tokens.
