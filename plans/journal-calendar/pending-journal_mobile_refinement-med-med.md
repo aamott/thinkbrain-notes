@@ -15,6 +15,11 @@ Decisions from `../pending-journal_discovery_and_wireframes-low-med.md` that bin
 - **D35** — Collapsed metadata renders as a DATELINE. On a phone the dateline must remain readable at narrow widths.
 - **D40** — Mobile layout M-1: compact list density. M-2: BOTTOM SHEET for metadata editing. One list implementation shared with desktop; the sheet is confined to metadata editing only. **The bottom sheet is new component surface — this is a non-trivial cost item.**
 
+**Inherited blocker:** M-2 is metadata editing, so it inherits the metadata-widget
+implementation route decision that is STOP-gated in
+`pending-journal_panel_ui-high-hard.md`. The sheet cannot be built before that route is
+chosen.
+
 The discovery gate is CLOSED for the decisions above.
 
 ## Questions first — STOP gate (still open for this story)
@@ -23,7 +28,7 @@ The items below are **genuinely undecided**. Do not implement the affected surfa
 
 1. **Calendar tab on a phone:** How does the canvas tab calendar behave at phone widths? Not decided by D12/D26 (which apply only to the popout). Coordinate with `pending-calendar_tab_ui-high-hard.md`.
 2. **Formal touch-target audit:** Deferred per D31. Once undeferred, this story or a follow-on must audit all interactive elements against the repository's minimum target size and document exceptions.
-3. **Measured-column behavior at narrow widths:** At what popout width does the date/time/first-line row switch to a compact layout, and which columns are dropped or wrapped?
+3. **Measured-column behavior at narrow widths:** OWNED BY `pending-journal_panel_ui-high-hard.md`, not here. Consume its answer; do not decide a second, conflicting breakpoint.
 
 **STOP gate:** Do not implement the bottom sheet, narrow-width column changes, or calendar-on-phone layout until each open item above has a product-owner decision recorded.
 
