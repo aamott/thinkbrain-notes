@@ -8,9 +8,22 @@
 
 Register beta built-ins through shared contribution/lifecycle APIs with canonical namespaces and disposable ownership, without moving domain behavior into this story. Built-ins are trusted app code; there is no third-party install path or separate privilege model.
 
+## Canonical namespaces — APPROVED D47
+
+- Extension ids: `journal-calendar`, `git`, `agent-chat`.
+- Relative ids stay semantic lowercase kebab-case and are host-prefixed as
+  `${extensionId}.${id}`; do not add type or vendor prefixes.
+- Journal/calendar local ids: panel `journal`, tab `calendar`, commands `new-entry`,
+  `today`, `open-calendar`, editor-header contribution `metadata-widget`.
+- Full examples: `journal-calendar.journal`, `journal-calendar.calendar`, and
+  `journal-calendar.open-calendar`.
+
+Git and agent-chat contribution matrices remain owned by their feature epics; D47 settles
+their extension namespaces, not unapproved commands/views.
+
 ## Discovery questions
 
-- What final built-in ids and contribution ids should journal/calendar, Git sync, and ACP Agent Chat use?
+- Which Git and agent-chat relative contribution ids are required after their owning epics approve the beta matrix? Extension namespaces and journal ids are closed by D47.
 - Which registrations are real now versus placeholders until the owning feature epic lands?
 - Which panel/activity-bar/menu layouts are approved, and should mobile expose compact alternatives?
 - What activation events should each use, and what happens when an owning feature is unavailable?
@@ -33,7 +46,7 @@ Register beta built-ins through shared contribution/lifecycle APIs with canonica
 
 ## Implementation tasks
 
-1. Collect owner-approved ids, contributions, activation events, capability requirements, unavailable behavior, and mobile placement before coding.
+1. Use D47 namespaces and journal ids; collect only the still-open Git/agent-chat relative ids, activation events, capabilities, unavailable behavior, and mobile placement.
 2. Implement journal/calendar registration-only module for approved panels/commands/templates/settings, delegating behavior/storage to its epic.
 3. Implement Git sync registration-only module for approved source-control/background-task seams, delegating Git/watch/conflict UX to Git epic.
 4. Implement ACP registration-only module for assistant/provider/credential seams, delegating ACP/chat/permission/provider behavior to AI and secret stories.
@@ -41,7 +54,8 @@ Register beta built-ins through shared contribution/lifecycle APIs with canonica
 
 ## Acceptance criteria
 
-- [ ] Each built-in uses approved ids, metadata, activation events, and disposable scope.
+- [x] D47 fixes extension namespaces and journal/calendar relative ids.
+- [ ] Each built-in uses those ids plus owner-approved metadata, activation events, and disposable scope; Git/agent-chat add no unapproved relative ids.
 - [ ] Failures are typed and do not strand other built-ins.
 - [ ] Journal/Git/AI behavior stays in existing epics.
 - [ ] ACP credentials route to native secret storage; no JSON secret path.
