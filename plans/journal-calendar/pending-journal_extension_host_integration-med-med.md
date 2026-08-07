@@ -8,22 +8,14 @@ Part of [Journal & Calendar](../pending-journal-calendar-high-hard.md). Owns onl
 
 ## Discovery constraints (approved 2026-08-07)
 
-Decisions from `../pending-journal_discovery_and_wireframes-low-med.md` bind this story (rationale lives there, not here). Discovery gate is CLOSED for these:
+The discovery gate is CLOSED; rationale and D1-D47 live in
+`../pending-journal_discovery_and_wireframes-low-med.md`.
 
-- **D16** — Journal search reuses existing search infra; hard dependency on the indexing/search epic's FTS5 cache (disposable/rebuildable, never source of truth).
-- **D27** — Calendar is a CANVAS TAB, not an activity-bar entry. Exactly ONE activity-bar entry (journal popout). Calendar is not in the panel registry or activity bar.
-- **D28** — Metadata-widget editor-header contribution tests BOTH journal-folder path and configured frontmatter keys; one-condition behavior is a defect.
-- **D31** — `--tn-*` tokens only; no hard-coded colors.
-- **D44** — Metadata widget registers through the observable React editor-header surface, not CodeMirror `editorHooks`.
-- **D45** — Settings support app and workspace scopes through the shared platform path.
-- **D47** — Extension id `journal-calendar`; local ids `journal`, `calendar`, `new-entry`, `today`, `open-calendar`, `metadata-widget`.
-
-Architectural constraints from findings/digest:
-
-- Registration goes through `desktopExtensionHost` with disposable scope. Existing surfaces cover commands/panels/CodeMirror hooks/tabs/settings/workspace; D44 adds `editorHeaders` for React editor-header contributions. Journal → `panels`, calendar → `tabs`, metadata widget → `editorHeaders`.
-- `packages/core` stays platform-agnostic; UI never calls Tauri directly — go through `apps/desktop/src/native/` adapters.
-- App/workspace settings live outside the vault under `extension-journal-calendar` through D45's shared platform path. Secrets never use JSON settings.
-- Extensions are trusted same-context modules; capabilities are compatibility declarations, NOT hostile-code isolation. URL install, signing, marketplace, strong isolation remain DEFERRED.
+- **D16:** reuse the disposable/rebuildable platform FTS5 cache; it is never source of truth.
+- **D27:** exactly one activity-bar entry (`journal`); calendar is a canvas tab, not a panel/activity-bar entry.
+- **D28/D44:** `metadata-widget` must test both journal-folder and configured-key triggers and register through the observable React editor-header surface, not CodeMirror hooks.
+- **D31/D45:** use `--tn-*` tokens; settings use shared app/workspace scopes.
+- **D47:** extension `journal-calendar`; local ids are `journal`, `calendar`, `new-entry`, `today`, `open-calendar`, and `metadata-widget`.
 
 ## Real registration API — authoritative
 
@@ -31,7 +23,7 @@ Architectural constraints from findings/digest:
 
 **Host** (`desktopExtensionHost` singleton): current runtime registrations are commands, panels, CodeMirror editor hooks, and tabs, plus settings/workspace. D44 adds `editorHeaders.register(...)` with the same disposable ownership and id prefixing. D47 fixes this extension to `journal-calendar`; relative ids become `${extensionId}.${id}` and settings use `extension-journal-calendar`. Relative ids remain lowercase kebab-case.
 
-**Tab contribution surface (confirmed in code, not a gap):** `apps/desktop/src/tabs/tabRegistry.ts` exports `desktopTabRegistry`, an **app-wide singleton** (`register(view): Disposable`, `get(kind)`, `entries()`, `subscribe(listener)`). `DesktopTabView` extends `TabRegistration` (`kind`, `label`, `isAvailable`) plus `availability`, `unavailableMessage?`, and **`factory?: (context: DesktopTabContext) => ReactNode`**, where `DesktopTabContext` is `{ rootPath: string | null, tabId: string }` only. `apps/desktop/src/shell/TabContent.tsx` reads this singleton and, if `view.factory` exists, calls `view.factory({ rootPath, tabId })` **before** any built-in branch — **no shell edit is required to render a contributed kind**. Built-ins (`editor`, `preview`, `settings`, `graph`, `browser`) have no `factory` and stay shell-drawn, since the editor needs document state `DesktopTabContext` doesn't carry; a contributed kind omitting `factory` falls through to the editor branch and reports a missing document — always supply one. `openTab(kind, title)` exists on the workspace bridge published by `DesktopShell.tsx`, reachable via `context.workspace`, for opening a tab kind from the popout — confirm exact workspace-surface method name/shape at implementation time if it differs.
+**Tab contribution surface (confirmed in code, not a gap):** `apps/desktop/src/tabs/tabRegistry.ts` exports `desktopTabRegistry`, an **app-wide singleton** (`register(view): Disposable`, `get(kind)`, `entries()`, `subscribe(listener)`). `DesktopTabView` extends `TabRegistration` (`kind`, `label`, `isAvailable`) plus `availability`, `unavailableMessage?`, and **`factory?: (context: DesktopTabContext) => ReactNode`**, where `DesktopTabContext` is `{ rootPath: string | null, tabId: string }` only. `apps/desktop/src/shell/TabContent.tsx` reads this singleton and, if `view.factory` exists, calls `view.factory({ rootPath, tabId })` **before** any built-in branch — **no shell edit is required to render a contributed kind**. Built-ins (`editor`, `preview`, `settings`, `graph`, `browser`) have no `factory` and stay shell-drawn, since the editor needs document state `DesktopTabContext` doesn't carry; a contributed kind omitting `factory` falls through to the editor branch and reports a missing document — always supply one. Internal `openTab(kind, title)` exists on the shell workspace bridge, but `DesktopExtensionContext.workspace` does not expose it; the extension-facing open route is STOP-gated below.
 
 **Registration sequence:** copy the built-in pattern, declare manifest commands/panel, then register settings, panel `journal`, tab `calendar`, approved commands, and editor header `metadata-widget` inside `activate()`. Add the built-in once to `builtInExtensions`; disposable scope owns cleanup. D44 makes widget correctness independent of eager versus lazy activation.
 
@@ -49,20 +41,22 @@ Do not register contributions or expand host contracts until each is resolved an
 1. **Activation event:** startup, first-view, command, or another trigger; D44 removes timing as a correctness constraint.
 2. **Required beta contribution table:** which approved commands/panels/settings are exposed at beta.
 3. **Mobile representation:** how desktop panel behavior maps to the shared mobile shell.
-4. **Calendar factory contract:** whether `{ rootPath, tabId }` is sufficient without widening `DesktopTabContext`.
+4. **Calendar tab opening:** expose a scoped tab-open operation or choose another approved extension-facing route; `context.workspace` has no `openTab` today.
+5. **Service adapter boundary:** choose `DesktopExtensionContext.workspace` or existing workspace adapters with story 3; do not create parallel service paths.
+6. **Calendar factory contract:** whether `{ rootPath, tabId }` is sufficient without widening `DesktopTabContext`.
 
-**STOP gate:** D47 namespace work is unblocked. Do not finalize activation, beta surface, mobile representation, or any host-contract expansion until their owners approve them. Templates remain out of v1 by D21.
+**STOP gate:** D47 namespace work is unblocked. Do not finalize activation, beta/mobile surface, tab opening, service adapter, or any host-contract expansion until approved. Templates remain out of v1 by D21.
 
 ## Goal & scope
 
 Register journal and calendar built-ins through `desktopExtensionHost` with disposable lifecycle ownership, as one built-in extension id:
 
 - Exactly ONE activity-bar entry (journal popout) via `context.panels.register(...)`; calendar is a tab, not an activity-bar entry (D27).
-- Calendar canvas tab via `context.tabs.register(...)` with a `factory` rendering from `{ rootPath, tabId }`; opened from the popout via the workspace bridge's tab-open capability.
+- Calendar canvas tab via `context.tabs.register(...)` with a `{ rootPath, tabId }` factory; popout opening waits on the approved extension-facing tab-open route.
 - Metadata widget via D44 `context.editorHeaders.register(...)` with local id `metadata-widget`; D28 tests both path and configured keys.
 - App/workspace settings under `extension-journal-calendar` through D45; no feature-owned persistence or JSON secrets.
 - Disposable scope: all contributions deactivate on deactivation/failure/shutdown. Extensions are trusted same-context modules; capability declarations only.
-- FTS5 cache dependency (D16): register/document explicitly; cache is disposable, never source of truth.
+- Keep `packages/core` platform-agnostic and route UI/native work through `apps/desktop/src/native/`; FTS5 is disposable derived state, never source of truth (D16).
 
 Deferred (do not implement here): URL install, signing, marketplace, strong isolation, and templates (D21).
 
@@ -91,7 +85,8 @@ Deferred (do not implement here): URL install, signing, marketplace, strong isol
 
 - [ ] Built-in id `journal-calendar` activates only D47-prefixed contributions through `desktopExtensionHost`; no direct registry mutation.
 - [ ] Exactly one activity-bar entry (journal popout) via `context.panels.register(...)`; no calendar activity-bar entry (D27).
-- [ ] Calendar canvas tab registers via `context.tabs.register(...)` with a `factory`; renders correctly given only `{ rootPath, tabId }`; never falls through to the editor branch.
+- [ ] Calendar tab registers via `context.tabs.register(...)` with a factory and never falls through to the editor branch; the popout opens it only through the approved extension-facing route.
+- [ ] Story 3 and this story use one approved typed workspace/service boundary, not parallel adapter paths.
 - [ ] `metadata-widget` registers through D44 `editorHeaders`, appears in already-open editors, disposes cleanly, and tests both D28 triggers.
 - [ ] App/workspace settings use D45 under `extension-journal-calendar`, remain outside the vault, and never store secrets in JSON.
 - [ ] All contributions disposed on deactivation/failure/shutdown; deactivation does not remove other built-ins; registration collisions and missing feature dependencies fail loudly with typed/useful diagnostics.
@@ -103,10 +98,10 @@ Deferred (do not implement here): URL install, signing, marketplace, strong isol
 
 ## Manual desktop/mobile checks
 
-- Desktop: start app once; verify exactly one journal activity-bar entry (no calendar entry); invoke approved commands; open journal popout; open calendar tab from popout; change a namespaced setting; close/unmount; verify no stale registration remains.
-- Activate/deactivate with an editor already open; verify D44 adds/removes `metadata-widget` without remounting or stale UI.
-- Failure case: disable one feature dependency; verify a clear unavailable state, not a crash or false success.
-- Mobile: confirm the same registration path and that no desktop-only command/capability is exposed; no crash, no assumed desktop shell.
+- Desktop: start once and exercise the approved command/popout → calendar-tab flow; change a namespaced setting, close/unmount, and verify the single journal entry, no calendar activity entry, and no stale registration.
+- With an editor already open, activate/deactivate and verify D44 adds/removes `metadata-widget` without remounting or stale UI.
+- Disable one feature dependency and verify a clear unavailable state, not a crash or false success.
+- Mobile: use the same registration path; verify no desktop-only command/capability, no crash, and no assumed desktop shell.
 
 ## Non-goals
 
@@ -119,4 +114,4 @@ Deferred (do not implement here): URL install, signing, marketplace, strong isol
 
 - D47 registration matrix: `journal-calendar` with panel `journal`, tab `calendar`, commands `new-entry`/`today`/`open-calendar`, editor header `metadata-widget`.
 - API surface: panels, tabs with factory, D44 editor headers, D45 app/workspace settings, and `${extensionId}.${id}` prefixing.
-- D41 index dependency plus remaining activation/mobile/beta-table questions; no widget timing workaround.
+- D41 index dependency plus remaining activation/mobile/beta-table, tab-open, service-adapter, and factory questions; no widget timing workaround.
