@@ -6,6 +6,7 @@ import {
   type DesktopCommand,
   type DesktopCommandContext
 } from "../commands/commandRegistry";
+import { setWorkspaceBridge } from "../extensions/workspaceBridge";
 import { gitService } from "../git/gitService";
 import { BottomPanel as BottomPanelContent } from "../panels/BottomPanel";
 import { LeftPopout } from "../panels/LeftPopout";
@@ -291,6 +292,24 @@ export function DesktopShell() {
       }));
     });
   }, []);
+
+  // Publishes the workspace surface extensions use. The root, the tabs, and the
+  // documents are all React state here, so the bridge is republished whenever
+  // the root changes and withdrawn on unmount — an extension calling into a
+  // stale shell would open a tab nobody renders.
+  useEffect(() => {
+    setWorkspaceBridge({
+      rootPath: restoredWorkspacePath,
+      openNote: (relativePath) => {
+        if (!restoredWorkspacePath) return;
+        openMarkdownDocument(restoredWorkspacePath, relativePath);
+      },
+      openTab: (kind, title) => {
+        dispatchTabs({ type: "open", tab: createStaticTab(kind, title) });
+      }
+    });
+    return () => setWorkspaceBridge(null);
+  }, [restoredWorkspacePath, openMarkdownDocument]);
 
   const handleMarkdownFileCreated = useCallback((rootPath: string, relativePath: string) => {
     if (rootPath !== restoredWorkspacePath) return;

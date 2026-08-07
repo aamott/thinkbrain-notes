@@ -10,6 +10,7 @@ import {
   useSettingsStore
 } from "../settings/settingsStore";
 import { desktopCommandRegistry } from "../commands/commandRegistry";
+import { createDesktopTabRegistry } from "../tabs/tabRegistry";
 import { desktopPanelRegistry } from "../panels/panelRegistry";
 import { markdownEditorHookRegistry } from "../tabs/markdownEditorHooks";
 import {
@@ -197,5 +198,61 @@ describe("desktop extension host", () => {
     await host.deactivate("returned");
     expect(disposed).toBe(1);
 
+  });
+});
+
+describe("workspace and tab contributions", () => {
+  it("exposes the workspace notes API to an activated extension", async () => {
+    let context: DesktopExtensionContext | undefined;
+    const host = createDesktopExtensionHost();
+    host.register(definition("workspace-user", (received) => {
+      context = received;
+    }));
+
+    await host.activate("workspace-user");
+
+    expect(typeof context?.workspace.readNote).toBe("function");
+    expect(typeof context?.workspace.createNote).toBe("function");
+    expect(typeof context?.workspace.openNote).toBe("function");
+    expect(context?.workspace.rootPath()).toBeNull();
+  });
+
+  it("registers a contributed tab under a prefixed kind and disposes it", async () => {
+    const tabs = createDesktopTabRegistry([]);
+    const host = createDesktopExtensionHost({ tabs });
+    host.register(definition("calendars", (context) => {
+      context.tabs.register({
+        kind: "calendar",
+        label: "Calendar",
+        isAvailable: true,
+        availability: "available",
+        factory: () => null
+      });
+    }));
+
+    await host.activate("calendars");
+    expect(tabs.get("calendars.calendar")?.label).toBe("Calendar");
+
+    await host.deactivate("calendars");
+    expect(tabs.get("calendars.calendar")).toBeUndefined();
+  });
+
+  it("rejects a tab kind that is not a relative kebab-case id", async () => {
+    const tabs = createDesktopTabRegistry([]);
+    const host = createDesktopExtensionHost({ tabs });
+    host.register(definition("calendars", (context) => {
+      context.tabs.register({
+        kind: "Calendar View",
+        label: "Calendar",
+        isAvailable: true,
+        availability: "available"
+      });
+    }));
+
+    // Activation wraps the cause, so the useful message is on `cause`.
+    const error = await host.activate("calendars").catch((thrown: unknown) => thrown);
+
+    expect((error as { cause?: Error }).cause?.message).toMatch(/kebab-case/i);
+    expect(tabs.get("calendars.Calendar View")).toBeUndefined();
   });
 });

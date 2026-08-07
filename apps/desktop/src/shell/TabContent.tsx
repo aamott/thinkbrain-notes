@@ -2,7 +2,7 @@ import { lazy, Suspense, useMemo } from "react";
 import { cn } from "../lib/utils";
 import { createVaultAssetResolver } from "../native/assets";
 import { useSettingsStore } from "../settings/settingsStore";
-import { createDesktopTabRegistry } from "../tabs/tabRegistry";
+import { desktopTabRegistry } from "../tabs/tabRegistry";
 import type { DesktopTab } from "../tabs/tabModel";
 import type { DocumentViewState } from "./shellTypes";
 import { SettingsTab } from "../settings/SettingsTab";
@@ -17,9 +17,6 @@ type TabContentProps = {
   readonly onChange: (tabId: string, contents: string) => void;
   readonly onSave: (tab: DesktopTab) => Promise<boolean>;
 };
-
-/** Module-scoped registry describing which tab kinds are available. */
-const desktopTabRegistry = createDesktopTabRegistry();
 
 /** Lazy-loaded Markdown editor; only fetched when an editor tab is rendered. */
 const MarkdownEditor = lazy(async () => {
@@ -69,6 +66,13 @@ export function TabContent({ tab, document, onChange, onSave }: TabContentProps)
         description={view?.unavailableMessage ?? "This tab type is unavailable."}
       />
     );
+  }
+
+  // A contributed kind brings its own renderer. Checked before the built-in
+  // branches so an extension tab never falls through to the editor, which would
+  // report a missing document for a tab that has no document.
+  if (view.factory) {
+    return <>{view.factory({ rootPath: rootPath ?? null, tabId: tab.id })}</>;
   }
 
   if (tab.kind === "browser") {

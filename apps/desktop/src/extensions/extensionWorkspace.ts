@@ -1,0 +1,102 @@
+/**
+ * The notes API an extension uses to read, write, create, and open notes.
+ *
+ * This is the surface that makes an extension useful: without it a command can
+ * only toggle chrome. Every path is workspace-relative and validated here, so a
+ * mistake names the offending path rather than surfacing as an opaque native
+ * error. The Rust side validates independently — this does not replace it.
+ *
+ * Nothing here is a privilege boundary. A loaded extension is trusted code with
+ * full application privileges; these checks catch bugs, not adversaries.
+ */
+
+import type { WorkspaceDocumentApi } from "../workspace/workspaceDocumentAdapter";
+import type { WorkspaceBridge } from "./workspaceBridge";
+
+/** Workspace operations exposed to one extension. */
+export interface DesktopExtensionWorkspace {
+  /** Current workspace root, or `null` when no workspace is open. */
+  rootPath(): string | null;
+  /** Reads a note's Markdown contents. */
+  readNote(relativePath: string): Promise<string>;
+  /** Overwrites a note's Markdown contents. */
+  writeNote(relativePath: string, contents: string): Promise<void>;
+  /** Creates a note, failing if one already exists at that path. */
+  createNote(relativePath: string, contents?: string): Promise<void>;
+  /** Opens a note in an editor tab. */
+  openNote(relativePath: string): Promise<void>;
+}
+
+export interface ExtensionWorkspaceOptions {
+  readonly documents: WorkspaceDocumentApi;
+  readonly getBridge: () => WorkspaceBridge | null;
+}
+
+const WINDOWS_ABSOLUTE = /^[A-Za-z]:[\\/]/;
+
+/** Rejects anything that is not a path inside the workspace. */
+function assertRelativePath(relativePath: string): void {
+  if (typeof relativePath !== "string" || relativePath.trim().length === 0) {
+    throw new Error("A note path must be a non-empty workspace-relative path.");
+  }
+  if (
+    relativePath.startsWith("/") ||
+    relativePath.startsWith("\\") ||
+    WINDOWS_ABSOLUTE.test(relativePath)
+  ) {
+    throw new Error(`Note path "${relativePath}" must be relative to the workspace.`);
+  }
+  if (relativePath.split(/[\\/]/).includes("..")) {
+    throw new Error(`Note path "${relativePath}" must stay inside the workspace.`);
+  }
+}
+
+export function createExtensionWorkspace(
+  options: ExtensionWorkspaceOptions
+): DesktopExtensionWorkspace {
+  const { documents, getBridge } = options;
+
+  /** Resolves the shell surface, failing before the shell has mounted. */
+  const bridge = (): WorkspaceBridge => {
+    const current = getBridge();
+    if (!current) {
+      throw new Error("The workspace is not ready yet.");
+    }
+    return current;
+  };
+
+  /** Validates a path and resolves the root it is relative to. */
+  const resolve = (relativePath: string): string => {
+    assertRelativePath(relativePath);
+    const root = getBridge()?.rootPath ?? null;
+    if (!root) {
+      throw new Error("No workspace is open.");
+    }
+    return root;
+  };
+
+  return {
+    rootPath: () => getBridge()?.rootPath ?? null,
+
+    readNote: async (relativePath) => {
+      const rootPath = resolve(relativePath);
+      const file = await documents.readMarkdownDocument({ rootPath, relativePath });
+      return file.contents;
+    },
+
+    writeNote: async (relativePath, contents) => {
+      const rootPath = resolve(relativePath);
+      await documents.writeMarkdownDocument({ rootPath, relativePath, contents });
+    },
+
+    createNote: async (relativePath, contents) => {
+      const rootPath = resolve(relativePath);
+      await documents.createMarkdownDocument({ rootPath, relativePath, contents });
+    },
+
+    openNote: async (relativePath) => {
+      assertRelativePath(relativePath);
+      bridge().openNote(relativePath);
+    }
+  };
+}

@@ -1,3 +1,5 @@
+import type { Disposable } from "../lifecycle";
+
 /**
  * Platform-neutral metadata for a workspace tab. Desktop and future clients
  * supply their own renderers; this package deliberately has no UI dependency.
@@ -38,7 +40,8 @@ export interface TabRegistration {
 }
 
 export interface TabRegistry {
-  register(registration: TabRegistration): void;
+  /** Registers a tab kind and returns a handle that unregisters it. */
+  register(registration: TabRegistration): Disposable;
   get(kind: TabKind): TabRegistration | undefined;
   entries(): readonly TabRegistration[];
 }
@@ -46,6 +49,9 @@ export interface TabRegistry {
 /**
  * Small registry contract shared by hosts and extension contribution adapters.
  * Duplicate kinds are rejected so ownership stays explicit.
+ *
+ * Registration is revocable because an extension's activation scope owns every
+ * contribution it makes and must be able to give all of them back.
  */
 export function createTabRegistry(): TabRegistry {
   const registrations = new Map<TabKind, TabRegistration>();
@@ -57,6 +63,19 @@ export function createTabRegistry(): TabRegistry {
       }
 
       registrations.set(registration.kind, registration);
+      let disposed = false;
+
+      return {
+        dispose: (): void => {
+          if (disposed) return;
+          disposed = true;
+          // Only remove our own registration: a later owner of the same kind
+          // must survive a late dispose of the earlier handle.
+          if (registrations.get(registration.kind) === registration) {
+            registrations.delete(registration.kind);
+          }
+        }
+      };
     },
     get(kind) {
       return registrations.get(kind);

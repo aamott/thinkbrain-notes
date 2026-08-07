@@ -22,6 +22,10 @@ import {
   markdownEditorHookRegistry,
   type MarkdownEditorHookPayload
 } from "../tabs/markdownEditorHooks";
+import { desktopTabRegistry, type DesktopTabView } from "../tabs/tabRegistry";
+import { workspaceDocumentApi } from "../workspace/workspaceDocumentAdapter";
+import { createExtensionWorkspace, type DesktopExtensionWorkspace } from "./extensionWorkspace";
+import { getWorkspaceBridge } from "./workspaceBridge";
 import type { DesktopEditorHookContribution } from "../tabs/editorHookRegistry";
 import {
   appSettingsRegistry,
@@ -39,6 +43,9 @@ export type DesktopExtensionEditorHook = Omit<
   DesktopEditorHookContribution<MarkdownEditorHookPayload, undefined>,
   "id"
 > & { readonly id: string };
+
+/** A tab view whose kind is relative to the owning extension. */
+export type DesktopExtensionTab = Omit<DesktopTabView, "kind"> & { readonly kind: string };
 
 /** An extension schema receives its own module and section namespaces automatically. */
 export type DesktopExtensionSettingsSchema = Omit<SettingsModule, "id">;
@@ -69,12 +76,19 @@ export interface DesktopExtensionEditorHookContributions {
   register(hook: DesktopExtensionEditorHook): Disposable;
 }
 
+export interface DesktopExtensionTabContributions {
+  register(tab: DesktopExtensionTab): Disposable;
+}
+
 /** The desktop context layered over the platform-neutral core context. */
 export interface DesktopExtensionContext extends ExtensionContext {
   readonly commands: DesktopExtensionContributions;
   readonly panels: DesktopExtensionPanelContributions;
   readonly editorHooks: DesktopExtensionEditorHookContributions;
+  readonly tabs: DesktopExtensionTabContributions;
   readonly settings: DesktopExtensionSettings;
+  /** Reads, writes, creates, and opens notes in the current workspace. */
+  readonly workspace: DesktopExtensionWorkspace;
 }
 
 export type DesktopExtensionActivation = (
@@ -190,12 +204,25 @@ export interface DesktopExtensionHostRegistries {
   readonly commands: typeof desktopCommandRegistry;
   readonly panels: typeof desktopPanelRegistry;
   readonly editorHooks: typeof markdownEditorHookRegistry;
+  readonly tabs: typeof desktopTabRegistry;
 }
 
 const defaultRegistries = (): DesktopExtensionHostRegistries => ({
   commands: desktopCommandRegistry,
   panels: desktopPanelRegistry,
-  editorHooks: markdownEditorHookRegistry
+  editorHooks: markdownEditorHookRegistry,
+  tabs: desktopTabRegistry
+});
+
+/**
+ * One workspace surface shared by every extension.
+ *
+ * Stateless: it reads the shell's published bridge on each call, so it stays
+ * correct across workspace switches and shell remounts.
+ */
+const extensionWorkspace = createExtensionWorkspace({
+  documents: workspaceDocumentApi,
+  getBridge: getWorkspaceBridge
 });
 
 /** Creates a scoped desktop context for one host-controlled lifecycle. */
@@ -273,6 +300,16 @@ function createDesktopExtensionContext(
         }), assertActive);
       }
     },
+    tabs: {
+      register: (tab) => {
+        assertActive();
+        return own(context, registries.tabs.register({
+          ...tab,
+          kind: prefixId(context.extensionId, "Tab", tab.kind)
+        }), assertActive);
+      }
+    },
+    workspace: extensionWorkspace,
     settings
   };
 }
