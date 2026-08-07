@@ -131,11 +131,26 @@ The following stories need from this one:
 - Dot rendering component API (needed if calendar data model story adds per-day aggregation logic).
 - Open items list (dot cap, keyboard model, phone behavior) forwarded to product owner for resolution before grid implementation begins.
 
-## Prerequisite — tab renderer seam
+## Platform note — the tab seam already exists
 
-`../extensions/pending-tab_view_registry-high-med.md` promotes `desktopTabRegistry` to an
-exported singleton whose entries carry a renderer `factory`, migrates the five existing
-kinds, and adds a general `openTab(kind, title)` entry point. Once it lands, this story
-registers a calendar kind with a single `register()` call and needs **no**
-`TabContent.tsx` edit. Do not start this story before that one, and do not work around it
-by adding a bespoke branch to the shell.
+Verified against shipped code on 2026-08-07. **No prerequisite story is required.**
+
+Register the calendar kind on the `desktopTabRegistry` singleton exported from
+`apps/desktop/src/tabs/tabRegistry.ts`, supplying
+`factory: (context: DesktopTabContext) => ReactNode`. `apps/desktop/src/shell/TabContent.tsx`
+reads that same singleton and calls `view.factory({ rootPath, tabId })` before its built-in
+branches, so **no shell edit is required**. As a built-in the journal may import the
+singleton directly, or contribute through `DesktopExtensionContext.tabs.register()`, which
+namespaces the kind — confirm the resulting kind string from `prefixId` before hard-coding it
+anywhere. Open the tab with `openTab(kind, title)` (`apps/desktop/src/shell/DesktopShell.tsx`).
+Registration returns a `Disposable`, and the registry exposes `subscribe()` so the shell
+re-renders as kinds come and go.
+
+Two constraints:
+
+- **A contributed kind must bring a `factory`.** Without one the tab falls through to the
+  Markdown editor branch and reports a missing document.
+- **`DesktopTabContext` carries only `rootPath` and `tabId`.** Journal data comes from the
+  journal service or `DesktopExtensionContext.workspace`; do not expect document state here,
+  and do not widen the context without raising it as a separate decision. Built-in kinds stay
+  shell-drawn precisely because the editor needs state this context does not carry.
