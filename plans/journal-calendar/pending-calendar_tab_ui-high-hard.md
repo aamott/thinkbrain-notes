@@ -130,3 +130,12 @@ The following stories need from this one:
 - Stable filter-state interface (shared with journal popout) so `journal_panel_ui` and this story can consume the same state slice.
 - Dot rendering component API (needed if calendar data model story adds per-day aggregation logic).
 - Open items list (dot cap, keyboard model, phone behavior) forwarded to product owner for resolution before grid implementation begins.
+
+## Prerequisite — tab renderer seam
+
+`../extensions/pending-tab_view_registry-high-med.md` promotes `desktopTabRegistry` to an
+exported singleton whose entries carry a renderer `factory`, migrates the five existing
+kinds, and adds a general `openTab(kind, title)` entry point. Once it lands, this story
+registers a calendar kind with a single `register()` call and needs **no**
+`TabContent.tsx` edit. Do not start this story before that one, and do not work around it
+by adding a bespoke branch to the shell.
