@@ -11,7 +11,9 @@ Part of [Journal & Calendar](../pending-journal-calendar-high-hard.md).
 Discovery gate is CLOSED for items below. See `../pending-journal_discovery_and_wireframes-low-med.md` for the full decision log. Do not re-litigate these.
 
 - **D4** Metadata fields are user-defined. No hard-coded mood colors, no hard-coded activity icons. The app ships NO vocabulary. Types must represent user-defined values as opaque strings/numbers.
-- **D5** (implied by D4) No emoji vocabulary, no wellness/therapeutic framing in the data model.
+- **D5** The calendar serves navigation, reflection, and metadata filtering in roughly equal
+  measure — the model must support all three, not privilege one. (Separately, the epic's
+  non-goals forbid emoji vocabulary and wellness/therapeutic framing.)
 - **D8** Multiple entries per day. Metadata is per file. Per-day aggregation strategy is PROVISIONAL ("last one wins" is a placeholder) and is **this story's own decision to make** — the provisional value is not approved product behavior.
 - **D14/D27** Full calendar opens as a canvas tab. Week and month views. First release shows a DOT ONLY.
 - **D19** Local device time; no workspace timezone, no day-start offset.
@@ -91,7 +93,7 @@ Desktop: compare aggregation with Markdown fixtures; delete/recreate notes; veri
 ## Non-goals
 
 - No calendar React component, visual encoding (colors, icons, emoji), settings UI, native watcher, reminder system, or extension registration.
-- Do not choose a mood scale, activity color palette, hard-coded activity icons, or default filter (D4/D5).
+- Do not choose a mood scale, activity color palette, hard-coded activity icons, or default filter (D4).
 - Do not hard-code the dot cap value (D29).
 - Do not implement calendar tab singleton or grid keyboard model (undecided).
 
