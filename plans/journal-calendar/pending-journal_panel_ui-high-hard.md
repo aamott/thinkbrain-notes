@@ -13,7 +13,7 @@ Decisions from `../pending-journal_discovery_and_wireframes-low-med.md` that bin
 - **D9** — Popout is a NAVIGATOR. Entries open in the main editor as normal tabs; rows show date, time, first line.
 - **D13** — List virtualization required (scale target: thousands of entries).
 - **D15** — Popout body is a grouped list, never a calendar widget.
-- **D16** — Full-text search over entries reusing existing search infrastructure (FTS5 cache). Filter values auto-populated from values actually present. When filters are active, active filters must be emphasized: count badge + chip row + "showing N of M". A muted indicator is a defect.
+- **D16/D41** — Full-text search and auto-populated metadata facets reuse the platform index. No journal cache or full-file-scan fallback. When filters are active, emphasize them with count badge + chip row + "showing N of M"; a muted indicator is a defect.
 - **D18** — "New entry" always creates a new file; never reopens or appends.
 - **D22** — A new entry contains frontmatter with the date only; fields are NOT pre-seeded.
 - **D24** / **D11** — Metadata widget sits above the editor body and starts COLLAPSED.
@@ -81,6 +81,8 @@ Implement the approved journal list/create/open experience as a focused React su
 - Entry list: flat virtualized stream, collapsible year + month headers (non-indented), Undated pinned at top.
 - Metadata widget: above editor body, starts collapsed, renders as dateline; appears for journal-folder notes OR notes with configured fields (D28). Implementation route STOP-gated — see above.
 - Active-filter emphasis: count badge + chip row + "showing N of M" text (D16).
+- Metadata facet options come from the D41 platform-index query. If unavailable, disable
+  only metadata facets with an explicit status; browsing, date filtering and lazy previews remain usable.
 - Twelve UI states enumerated in the discovery story's state-coverage section must all be handled. Reference that list; do not re-enumerate them here.
 - Malformed frontmatter: non-blocking notice only; never a rewrite on open (D33).
 - `DesktopPanelContext` gap: resolve the workspace listing / index access question before implementing the panel factory body.
@@ -103,12 +105,12 @@ Runtime panel dimension is the only case where a scoped CSSOM custom property on
 
 ## Dependencies
 
-- Approved discovery desktop wireframe and state/copy matrix (closed for D9–D39; open items above must be resolved).
+- Approved discovery desktop wireframe and state/copy matrix (closed for the constraints above; open items above must be resolved).
 - Metadata widget implementation route decision (STOP-gated above).
 - `DesktopPanelContext` gap resolution: workspace listing and index access must be provided before the panel factory body can be implemented.
 - Journal data model, journal service, and settings/accessibility contract.
 - Existing `DesktopPanelContribution`, `DesktopPanelContext`, `LeftPopout`, `ActivityBar`, and editor-tab reducer.
-- Indexing/search epic's FTS5 cache (D16); disposable, rebuildable, never source of truth.
+- `plans/indexing-search/pending-frontmatter_metadata_facets-high-hard.md` for D41 facet queries; the cache stays disposable, rebuildable and never source of truth.
 
 ## Acceptance criteria
 
@@ -122,12 +124,15 @@ Runtime panel dimension is the only case where a scoped CSSOM custom property on
       `pending-journal_service_daily_notes-high-med.md`).
 - [ ] Undated group is pinned collapsed at the top with a count; absent when empty; non-Markdown files are hidden; both are announced as a category (D36).
 - [ ] Active filters show count badge + chip row + "showing N of M" string; a muted-only indicator is a defect (D16).
+- [ ] Metadata facet values and matching paths come from D41 platform-index queries; selected
+      values filter the list and constrain D16 search. Index unavailable disables only facets
+      with explicit status and never triggers a full-file scan.
 - [ ] Metadata widget appears above the editor body for journal-folder notes and for notes with configured fields (D28); starts collapsed as a dateline (D35); expands to the editable form. Route decision is recorded and prerequisites are complete.
 - [ ] Malformed frontmatter: non-blocking notice shown; file is never rewritten on open (D33).
 - [ ] All twelve UI states from the discovery story's state-coverage section are handled with distinct copy and recovery actions; no fake/placeholder data ships.
 - [ ] Keyboard focus order matches the focus spec in the discovery story; screen-reader roles/names/live regions are correct; no hard-coded colors — `--tn-*` tokens only (D31).
 - [ ] CSS uses co-located CSS Modules and `--tn-*` tokens; no inline styles except runtime panel-dimension CSSOM custom properties on the panel root.
-- [ ] Desktop tests cover rendering, service failures, creating/opening notes, dirty-state behavior, panel toggling, filter emphasis, and malformed-frontmatter notice.
+- [ ] Desktop tests cover rendering, service failures, creating/opening notes, dirty-state behavior, panel toggling, filter emphasis, facet values, index-unavailable degradation, and malformed-frontmatter notice.
 - [ ] `DesktopPanelContext` gap (workspace listing / index access) is resolved and documented before the panel factory body is merged.
 
 ## Tests / manual checks
