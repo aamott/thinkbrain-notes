@@ -25,6 +25,13 @@ Discovery gate is CLOSED for items below. See `../pending-journal_discovery_and_
 - **Folder creation on backfill:** when a backfilled entry falls into a past year/month folder that does not yet exist, should the service create it silently or prompt? Undecided.
 - **Day-click when the popout is closed:** behavior when a calendar day is clicked and the popout is not open is undecided; this story does not need to resolve it but must not assume either path.
 - **Error/retry copy:** exact error messages and retry behavior when the workspace is unavailable or a path is invalid are not yet approved.
+- **Listing at scale (design question, unresolved):** D13 sets a target of thousands of
+  entries and D9 requires each row to show the entry's first line. A naive recursive scan
+  that opens every file to extract a first line does not hold at that size, and the popout
+  opens on every activation. D16 makes the FTS5 index the likely source for previews and
+  metadata filter values, but the split between "service walks the tree" and "service reads
+  the index" is not decided. Decide it before implementing `listJournalEntries`; do not ship
+  a full-scan-per-open implementation on the assumption it can be optimised later.
 
 Do not implement backfill mechanics, folder-creation policy, or error copy until the owner approves them.
 
@@ -68,6 +75,9 @@ Implement a typed, UI-independent service that resolves a journal date, expands 
 - [ ] Folder and filename expansion uses only approved, path-safe tokens; traversal, empty names, and invalid extensions produce typed diagnostics, not silent failures.
 - [ ] Backfill creates a file at the past date path; the time component is STOP-gated and must not be silently defaulted.
 - [ ] Service is platform/UI agnostic at its boundary; no panel state, no direct Tauri calls.
+- [ ] `listJournalEntries` accepts a bounded date range and its cost is documented against the
+      thousands-of-entries target (D13); the tree-walk vs. index split is decided and recorded
+      before implementation.
 - [ ] Tests cover: today's entry, same-minute collision (counter 2 and 3), past-date path expansion, invalid path segments, workspace unavailable, open/list no-rewrite, unknown frontmatter survival.
 - [ ] `pnpm lint`, `pnpm typecheck`, `pnpm test` all pass.
 
