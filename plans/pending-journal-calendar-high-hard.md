@@ -83,6 +83,61 @@ Non-goals:
   is disposable, rebuildable, and never the source of truth. Browsing must degrade
   gracefully when the index is unavailable.
 
+
+## Platform reality check — 2026-08-07
+
+The branch advanced by nine commits while discovery was running. An extension platform
+core and a markdown live-preview editor shipped. The decisions in the discovery log are
+unaffected, but two of them now have **no implementation path** on today's platform and
+need prerequisites. Recorded here so no story discovers this mid-implementation.
+
+**Shipped and usable by the journal:**
+
+| Surface | Where |
+|---|---|
+| `desktopExtensionHost` singleton, `register` / `registerAndActivate` | `apps/desktop/src/extensions/desktopExtensionHost.ts` |
+| `DesktopExtensionContext` — exactly `commands`, `panels`, `editorHooks`, `settings` | same |
+| `ExtensionManifest`; `contributes` supports **only** `commands` and `panels` | `packages/core/src/extensions/manifest.ts` |
+| Activation events `onStartup` / `onCommand:<id>` / `onView:<id>`, lazy activation with stubs | `packages/core/src/extensions/activation.ts`, `apps/desktop/src/extensions/bootstrap.ts` |
+| Disposable scope (`DisposableStore`, `context.subscriptions`) | `packages/core/src/lifecycle.ts` |
+| Panel contributions (`side: "left" \| "right"`) | `apps/desktop/src/panels/panelRegistry.tsx` |
+| Editor hooks — CodeMirror `Extension[]` / `KeyBinding[]` only | `apps/desktop/src/tabs/editorHookRegistry.ts` |
+| Reference built-in to copy | `apps/desktop/src/extensions/builtins/noteStats.tsx` |
+
+**Gap 1 — the calendar tab has no contribution path (blocks story 7).**
+`TabKind` is `"editor" | "preview" | "settings" | "graph" | "browser"`; there is no
+`"canvas"` kind. `apps/desktop/src/shell/TabContent.tsx` builds its own module-scoped
+registry and switches on `tab.kind`, and `DesktopExtensionContext` has no `tabs` surface.
+Opening the calendar as a tab (D14, D27) therefore requires a **shell change**, not an
+extension contribution — and it is untracked by any existing story. A small prerequisite
+story for a tab-kind contribution point is recommended; adding a `TabKind` value also
+touches `packages/core/src/layout/index.ts`.
+
+**Gap 2 — no React slot above the editor body (affects story 6).**
+The metadata widget (D11, D24, D35) is a React surface above the editor body, but
+`editorHooks` inject raw CodeMirror extensions only. Two candidate routes exist —
+portaling React into a CodeMirror panel/widget from an editor hook, or adding a new React
+contribution slot in `MarkdownEditor.tsx` — and the choice is STOP-gated in story 6.
+
+**Gap 3 — extension settings are not yet visible in the UI (affects story 5).**
+The scoped settings API works and persists to OS app-data, but extension-owned sections
+are not rendered yet (`plans/extensions/pending-extension_settings-low-med.md`). Worse,
+all extension settings are `scope: "app"` with no workspace-scoped path, so **D23's
+per-workspace field definitions cannot be fully implemented today**. Story 5 STOP-gates
+the choice between extending the platform and deferring D23's workspace half.
+
+**Gap 4 — built-in ids are still undecided.**
+`plans/extensions/pending-beta_builtin_extensions-med-med.md` has not settled canonical
+built-in ids or contribution ids, which blocks naming in story 9.
+
+**Repo hygiene note, for a human to resolve — not changed here.** Three stories in
+`plans/extensions/` are named `done-` (`extension_manifest_format`,
+`extension_capability_compatibility`, `extension_lifecycle_bootstrap`) but their bodies
+still read "Not implemented" or "Partially implemented", while the corresponding code has
+in fact shipped. `pending-internal_contribution_points-low-med.md` has every acceptance
+criterion checked and looks like it should be `done-`. Those files belong to the
+extensions epic, so this epic only reports the inconsistency.
+
 ## Story sequence
 
 | # | Story | Depends on |
@@ -91,9 +146,9 @@ Non-goals:
 | 2 | `journal-calendar/pending-journal_data_model_frontmatter-med-hard.md` | 1 approved contract |
 | 3 | `journal-calendar/pending-journal_service_daily_notes-high-med.md` | 1, 2 |
 | 4 | `journal-calendar/pending-calendar_data_model-med-med.md` | 1, 2 |
-| 5 | `journal-calendar/pending-journal_settings_and_accessibility-med-med.md` | 1, 2; settings registry |
+| 5 | `journal-calendar/pending-journal_settings_and_accessibility-med-med.md` | 1, 2; settings registry; **Gap 3 limits D23** |
 | 6 | `journal-calendar/pending-journal_panel_ui-high-hard.md` | 1–3, 5; approved desktop wireframe |
-| 7 | `journal-calendar/pending-calendar_tab_ui-high-hard.md` | 1, 3, 4, 5; approved desktop wireframe |
+| 7 | `journal-calendar/pending-calendar_tab_ui-high-hard.md` | 1, 3, 4, 5; approved desktop wireframe; **blocked by Gap 1** |
 | 8 | `journal-calendar/pending-journal_mobile_refinement-med-med.md` | 6, 7; approved mobile wireframe |
 | 9 | `journal-calendar/pending-journal_extension_host_integration-med-med.md` | 3, 5–7; beta host APIs |
 
@@ -124,3 +179,6 @@ recorded in the story. Stories may be split further if a subagent would exceed o
 - ⬜ Journal popout and calendar tab implemented from approved mockups
 - ⬜ Mobile refinement approved and verified
 - ⬜ Built-in registration wired through `desktopExtensionHost`
+- ⬜ Gap 1 resolved: a tab-kind path exists for the calendar tab
+- ⬜ Gap 2 resolved: a mounting route chosen for the metadata widget
+- ⬜ Gap 3 resolved: D23's per-workspace half either supported or explicitly deferred
