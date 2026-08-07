@@ -106,6 +106,12 @@ them (command registry, panel registration, editor hooks, settings schema
 registration) as the same surface third-party extensions will later use, so
 built-in features and extensions share one contribution model.
 
+One surface is still missing its seam: **tab kinds**. Panels are contributed through a
+singleton registry whose entries carry a renderer `factory`, but `TabContent.tsx` builds a
+throwaway tab registry and hard-codes a branch per kind, so a new tab kind cannot be added
+without editing the shell. `plans/extensions/pending-tab_view_registry-high-med.md` closes
+that gap for built-ins, deliberately without adding an extension-facing `tabs` API yet.
+
 ### Soft capability declarations
 
 Capabilities are typed, manifest-declared compatibility gates and documentation,
@@ -249,6 +255,10 @@ are not yet formalized, the first story here should establish them.
 - ✅ Internal contribution points — core command, panel, editor-hook, and
   settings-schema contracts/bridges are implemented and tested; follow-up review
   notes remain in `plans/extensions/pending-internal_contribution_points-low-med.md`.
+- ⬜ Tab view registry — `plans/extensions/pending-tab_view_registry-high-med.md`.
+  Tabs are the one contribution surface with no renderer seam: `TabContent.tsx` hard-codes
+  a branch per `tab.kind`. **Blocks the journal calendar tab**
+  (`plans/journal-calendar/pending-calendar_tab_ui-high-hard.md`).
 - 🟨 Lifecycle/disposable ownership and scoped settings runtime are implemented
   and tested, but the extension platform is not complete. Manifest-driven runtime,
   bootstrap, module loading, compatibility, and local-directory loading remain
