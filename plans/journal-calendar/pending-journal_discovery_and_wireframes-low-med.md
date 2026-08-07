@@ -7,7 +7,7 @@
 Part of [Journal & Calendar](../pending-journal-calendar-high-hard.md). Discovery gate;
 precedes irreversible data and UI work.
 
-**STOP gate — SATISFIED 2026-08-07.** D1-D40 answer the discovery questions and all
+**STOP gate — SATISFIED 2026-08-07.** D1-D41 answer the discovery questions and all
 three artifacts (moodboard, wireframes, this log) are approved. Downstream stories may
 proceed **within** these decisions; the gate stays closed for anything still open
 below. Each downstream story owns its own STOP gate for its own undecided items; no
@@ -34,7 +34,7 @@ IAs without presenting either as final.
 integration story — read before discovery. No code dependency; discovery output
 blocks data-model and UI stories.
 
-## Decision log (D1-D40)
+## Decision log (D1-D41)
 
 Recorded 2026-08-05 through 2026-08-07. Each is confirmed unless marked provisional.
 Superseded decisions are noted inline.
@@ -258,6 +258,14 @@ Rejected alternatives: M-1 throughout, M-2 throughout (see table below).
 Acknowledged cost: bottom sheet is a new component surface used nowhere else in the
 desktop app.
 
+**D41.** D16's auto-populated metadata filter values come from the platform-owned,
+disposable index. Extend the indexing/search record and query API to carry structured
+frontmatter, return facet values and apply metadata predicates; do not build a
+journal-owned cache and do not defer
+metadata facets from v1. The index remains rebuildable derived state, never source of truth.
+If it is unavailable, browsing and date filtering still work, while metadata facets show an
+explicit unavailable state rather than falling back to a full-file scan.
+
 ## Checkpoint table
 
 | Artifact / version | Reviewer | Status | Follow-up |
@@ -273,6 +281,7 @@ desktop app.
 | Keyboard / screen-reader focus order | product owner | reviewed with artifact 2 | Calendar grid model still open |
 | IA-3 header levels: 3a vs 3b | product owner | approved 3b (D39) | — |
 | Mobile layouts M-1 vs M-2 (artifact 3) | product owner | approved hybrid (D40) | Bottom sheet is new component surface |
+| Metadata facet source | product owner | platform index approved (D41) | Indexing story added; no journal cache |
 
 **Approver:** the product owner, per D34.
 
@@ -332,7 +341,7 @@ implementation path on today's platform and are STOP-gated in their owning stori
 
 - [x] User answers recorded for workflow, date/time policy, folder/naming, templates,
   metadata fields, calendar defaults, settings, accessibility, and mobile behavior
-  (see D1-D40 above).
+  (see D1-D41 above).
 - [x] Three labeled composition alternatives (IA-1/IA-2/IA-3) plus two mobile
   alternatives; none treated as chosen before approval; resolution (IA-3) was the
   product owner's.
