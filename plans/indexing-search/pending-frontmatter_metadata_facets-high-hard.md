@@ -22,7 +22,8 @@ prefix without reading source files on demand.
 - Store a queryable representation of arbitrary field keys and the scalar/list values needed
   by D4; do not hard-code journal field names or vocabularies.
 - Add typed facet and metadata-filter queries scoped by workspace, path prefix and requested
-  field keys/values so D16 search can operate within the filtered set.
+  field keys/values. Per D43, every active predicate is ANDed against one document record;
+  values from separate entries never combine into a match.
 - Flatten multi-select/list values into distinct facet values; preserve strings and numbers
   without assigning product meaning.
 - Keep rebuild, upsert, rename/delete and clear behavior consistent with document search.
@@ -53,9 +54,9 @@ is acceptable if it shares the platform index's lifecycle and disposal boundary.
 
 - [ ] Index records carry arbitrary parsed frontmatter keys and supported scalar/list values;
       no journal-specific keys, mood scale or activity taxonomy are embedded.
-- [ ] Facet and metadata-filter queries accept workspace root, workspace-relative path prefix
-      and requested field keys/values; they return deterministic distinct values and matching
-      document paths so D16 search can run within the filtered set.
+- [ ] Facet and metadata-filter queries accept workspace root, path prefix and requested
+      field keys/values; all predicates must match one document per D43, and results include
+      deterministic distinct values plus matching paths for D16 search.
 - [ ] List values are flattened for multi-select facets; strings and numbers round-trip without
       product-specific interpretation.
 - [ ] Rebuild and incremental create/save/rename/delete paths keep metadata facets consistent
