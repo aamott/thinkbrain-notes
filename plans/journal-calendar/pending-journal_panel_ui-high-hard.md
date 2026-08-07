@@ -25,6 +25,9 @@ Decisions from `../pending-journal_discovery_and_wireframes-low-med.md` that bin
 - **D36** — Pinned, collapsed "Undated" group at the TOP of the list with a count (absent when empty). Undated files ordered by mtime. Non-Markdown files are HIDDEN from the popout. Announce as a category, never an error.
 - **D37** — **IA-3**: flat stream, collapsible NON-INDENTED headers, group-by control REMOVED. Remaining list controls are full-text search and metadata filter ONLY.
 - **D39** — Collapsible headers: year + month, both collapsible, no indentation. Distinguish levels by weight/size/case/background, never by padding.
+- **D43** — Multiple metadata predicates must match within one entry; filtered list/counts use matching entries only.
+- **D44** — Metadata widget uses a React editor-header contribution with an observable disposable registry; no CodeMirror portal or startup-order dependency.
+- **D45** — Removed/narrowed configured values remain visible and filterable as unconfigured; the widget never rewrites or hides them.
 
 The discovery gate is CLOSED for the decisions above. See the discovery story for the full rationale; do not re-litigate them here.
 
@@ -36,27 +39,16 @@ The items below are **genuinely undecided**. Do not implement JSX/CSS for affect
 2. **Collapse-state persistence:** Should collapse state survive a panel close/reopen? Is it scoped per workspace or globally? Not decided.
 3. **Collapsed dateline — no metadata:** D22 makes the no-metadata case the common case for new entries. What does the collapsed dateline render when an entry has only a date and no user-defined fields (just `Wednesday, August 5` with no suffix)?
 4. **Measured-column behavior at narrow widths (OWNED HERE):** At what popout width does the date/time/first-line row switch to a compact layout, and which columns are dropped or wrapped? `pending-journal_mobile_refinement-med-med.md` consumes this answer; decide it once, here.
-5. **Metadata widget implementation route:** Two candidate routes exist (see below); the choice is STOP-gated. Do not implement the widget until the route is selected.
+**STOP gate:** Do not implement the four affected surfaces above until each has a product-owner decision recorded in the discovery story.
 
-**STOP gate:** Do not implement the affected surfaces until each open item above has a product-owner decision recorded in the discovery story.
+## Metadata widget route — DECIDED D44
 
-## Metadata widget: two candidate implementation routes — choose neither yet
-
-D11/D24/D35 require a metadata widget above the editor body, starting collapsed. The `editorHooks` surface (`apps/desktop/src/tabs/editorHookRegistry.ts`, singleton `markdownEditorHookRegistry` in `apps/desktop/src/tabs/markdownEditorHooks.ts`) injects raw CodeMirror `Extension[]` and `KeyBinding[]` objects only. There is NO React-component slot above the editor body in `apps/desktop/src/tabs/MarkdownEditor.tsx`. Rendering a React widget in a distinct DOM region above the editor content area is NOT achievable through the current `editorHooks` path without additional work.
-
-Two candidate routes; pick neither here:
-
-**(a) CodeMirror panel/block widget via an editor hook (achievable through the existing API)**
-Mount the dateline inside the CodeMirror-owned DOM using a CodeMirror `panel` or `blockWidget` extension returned from `context.editorHooks.register(...)`. React can be portaled into the CodeMirror-owned DOM node. This uses the existing hook API without shell changes, but the component is architecturally inside the editor viewport and React portaling into third-party DOM is fragile.
-
-**(b) New React contribution slot in `MarkdownEditor.tsx` (shell change, new contribution surface)**
-Add an explicit React slot above the editor body in `apps/desktop/src/tabs/MarkdownEditor.tsx`. This is a first-class React surface with clean component boundaries and no CodeMirror DOM dependency, but it requires a new contribution type not in `DesktopExtensionContext` today — a shell-level change that must be designed and tracked separately.
-
-State the trade-off: route (a) avoids shell changes but React-in-CodeMirror-DOM is fragile and limits layout freedom. Route (b) is architecturally cleaner but requires a new contribution surface and a separate prerequisite story. **STOP-gate the choice.** Do not implement `MetadataWidget` mounting until the route is selected and any prerequisite story is complete.
-
-### Closest precedent: live preview
-
-Live preview is NOT an extension — it is a built-in `MarkdownEditorHookContribution` registered at module load time (`apps/desktop/src/tabs/markdownEditorHooks.ts`, entry id `"markdown-live-preview"`, order 25), driven by the `editor.livePreview` setting. It contributes CodeMirror `Extension[]` only. It is the closest existing precedent for editor hooks but does NOT demonstrate a React surface above the editor — it is not a template for route (b).
+The widget uses a new first-class React contribution slot above the Markdown editor body,
+backed by an observable disposable registry. Already-open editors subscribe and render or
+remove contributions as registrations change. Do not portal React into CodeMirror DOM and do
+not depend on startup activation order. This story consumes the platform prerequisite
+`plans/extensions/pending-editor_header_contribution-high-med.md`; it does not implement the
+registry itself. CodeMirror `editorHooks` remain for CodeMirror extensions/keybindings only.
 
 ## Panel side and context gap
 
@@ -70,7 +62,7 @@ This is an open integration question. Do not solve it in this story — flag it 
 
 ## Goal
 
-Implement the approved journal list/create/open experience as a focused React surface: a navigator popout that lists entries in a flat, virtualized, collapsible year+month stream, opens entries in the main editor, exposes full-text search and metadata filter, and shows the collapsed-dateline metadata widget above the editor body. Implementation route for the metadata widget is STOP-gated (see above).
+Implement the approved journal list/create/open experience as a focused React surface: a flat virtualized navigator, full-text search and metadata filters, plus the D44 collapsed-dateline widget contributed above the editor body.
 
 ## Scope
 
@@ -79,7 +71,7 @@ Implement the approved journal list/create/open experience as a focused React su
   - "Today" opens today's most recent entry or creates one if none exists.
   - "Open calendar" opens the canvas tab (D14/D27); this is the only calendar entry point from the popout.
 - Entry list: flat virtualized stream, collapsible year + month headers (non-indented), Undated pinned at top.
-- Metadata widget: above editor body, starts collapsed, renders as dateline; appears for journal-folder notes OR notes with configured fields (D28). Implementation route STOP-gated — see above.
+- Metadata widget: contribute through D44's React editor-header registry; starts collapsed as a dateline and appears for journal-folder notes OR notes with configured fields (D28).
 - Active-filter emphasis: count badge + chip row + "showing N of M" text (D16).
 - Metadata facet options come from the D41 platform-index query. If unavailable, disable
   only metadata facets with an explicit status; browsing, date filtering and lazy previews remain usable.
@@ -94,19 +86,19 @@ Implement the approved journal list/create/open experience as a focused React su
 - `apps/desktop/src/journal/JournalPanel.test.tsx` (new).
 - `apps/desktop/src/journal/journalViewModel.ts` and test (new, if state mapping merits separation).
 - `apps/desktop/src/journal/JournalEntryList.tsx` and `JournalEntryList.module.css` (new; virtualized list component).
-- `apps/desktop/src/journal/MetadataWidget.tsx` and `MetadataWidget.module.css` (new; collapsed dateline + expanded form — implementation route STOP-gated).
+- `apps/desktop/src/journal/MetadataWidget.tsx` and `MetadataWidget.module.css` (new; collapsed dateline + expanded form through D44).
 - `apps/desktop/src/journal/MetadataWidget.test.tsx` (new).
 - `apps/desktop/src/panels/panelRegistry.tsx` (register journal contribution via the extension host; do not bypass registry).
 - `apps/desktop/src/panels/LeftPopout.tsx`, `apps/desktop/src/shell/ActivityBar.tsx`, `apps/desktop/src/shell/DesktopShell.tsx` (minimal context/callback wiring only).
 - Opening tabs uses the existing `openTab(kind, title)` entry point in `apps/desktop/src/shell/DesktopShell.tsx`; `TabContent.tsx` should NOT need editing. Do not fork editor state.
-- `apps/desktop/src/tabs/MarkdownEditor.tsx` — touch only if route (b) is selected for the metadata widget contribution slot; otherwise leave untouched.
+- `apps/desktop/src/tabs/MarkdownEditor.tsx` and the React slot registry belong to the D44 platform prerequisite; consume them here, do not duplicate them.
 
 Runtime panel dimension is the only case where a scoped CSSOM custom property on the panel root element is acceptable. All other styling via CSS Modules + `--tn-*` tokens.
 
 ## Dependencies
 
 - Approved discovery desktop wireframe and state/copy matrix (closed for the constraints above; open items above must be resolved).
-- Metadata widget implementation route decision (STOP-gated above).
+- `plans/extensions/pending-editor_header_contribution-high-med.md` implements D44 before widget integration.
 - `DesktopPanelContext` gap resolution: workspace listing and index access must be provided before the panel factory body can be implemented.
 - Journal data model, journal service, and settings/accessibility contract.
 - Existing `DesktopPanelContribution`, `DesktopPanelContext`, `LeftPopout`, `ActivityBar`, and editor-tab reducer.
@@ -114,7 +106,7 @@ Runtime panel dimension is the only case where a scoped CSSOM custom property on
 
 ## Acceptance criteria
 
-- [ ] Journal popout is registered through `context.panels.register(...)` inside `activate()` with a stable contribution id (`side: "left"`); no direct registry mutation.
+- [ ] Journal popout registers local panel id `journal` (`journal-calendar.journal`) through `context.panels.register(...)` with `side: "left"`; no direct registry mutation (D47).
 - [ ] Popout is a navigator: every entry row opens in the main editor as a normal tab; no inline editing in the popout.
 - [ ] Popout header contains exactly: New entry / Today / Open calendar / overflow, then search, then filter strip. No group-by control.
 - [ ] "Today" opens the most recent entry for today's date or creates a new one; never appends to an existing file (D18).
@@ -124,11 +116,9 @@ Runtime panel dimension is the only case where a scoped CSSOM custom property on
       `pending-journal_service_daily_notes-high-med.md`).
 - [ ] Undated group is pinned collapsed at the top with a count; absent when empty; non-Markdown files are hidden; both are announced as a category (D36).
 - [ ] Active filters show count badge + chip row + "showing N of M" string; a muted-only indicator is a defect (D16).
-- [ ] Metadata facet values and matching paths come from D41 platform-index queries; selected
-      values filter the list and constrain D16 search. Index unavailable disables only facets
-      with explicit status and never triggers a full-file scan.
-- [ ] Metadata widget appears above the editor body for journal-folder notes and for notes with configured fields (D28); starts collapsed as a dateline (D35); expands to the editable form. Route decision is recorded and prerequisites are complete.
-- [ ] Malformed frontmatter: non-blocking notice shown; file is never rewritten on open (D33).
+- [ ] Metadata facet values and paths come from D41 queries; all active predicates match within one entry per D43, and D16 search runs inside that entry set. Index unavailable disables only facets with explicit status and never scans files.
+- [ ] Metadata widget registers as `metadata-widget` through D44's observable React editor-header registry, appears in already-open editors, disposes cleanly, follows D28 triggers, starts as D35's dateline, and expands to the form.
+- [ ] Malformed frontmatter shows a non-blocking notice; D45 unconfigured values remain visible/filterable; neither case rewrites the file.
 - [ ] All twelve UI states from the discovery story's state-coverage section are handled with distinct copy and recovery actions; no fake/placeholder data ships.
 - [ ] Keyboard focus order matches the focus spec in the discovery story; screen-reader roles/names/live regions are correct; no hard-coded colors — `--tn-*` tokens only (D31).
 - [ ] CSS uses co-located CSS Modules and `--tn-*` tokens; no inline styles except runtime panel-dimension CSSOM custom properties on the panel root.
@@ -140,7 +130,7 @@ Runtime panel dimension is the only case where a scoped CSSOM custom property on
 - `JournalPanel.test.tsx`, `JournalEntryList.test.tsx`, `MetadataWidget.test.tsx`, relevant panel-registry tests, lint/typecheck/full QA.
 - Manual desktop: open/close via activity-bar, create today/past note ("New entry" always new file), open an existing note with unsaved edits, collapse/expand year+month headers, trigger full-text search and verify chip+badge emphasis, apply metadata filter, open calendar tab from popout, resize popout, switch theme, keyboard-only navigation through popout header controls and entry list, screen-reader labels, malformed-frontmatter notice, error recovery.
 - Verify real Markdown files are created at `journal/YYYY/MM/YYYY-MM-DD-HHmm.md` and remain readable outside the app.
-- Verify the metadata widget appears correctly in an already-open editor (confirm timing relative to `markdownEditorHookRegistry` assembly — see lazy-activation RISK in `exthost.md`).
+- Activate/deactivate the journal with an editor already open; verify D44 adds/removes the widget without remounting the editor.
 
 ## Automated validation
 
@@ -150,18 +140,12 @@ Runtime panel dimension is the only case where a scoped CSSOM custom property on
 
 Desktop: validate all twelve UI states, real create/open/dirty/error flows, keyboard/screen reader, themes, and filter emphasis. Mobile: narrowed scope is owned by `pending-journal_mobile_refinement-med-med.md`; this story must not add mobile-only markup.
 
-## Confirmed platform constraint — editor hook timing
+## Platform prerequisite — D44
 
-`apps/desktop/src/tabs/MarkdownEditor.tsx` reads
-`markdownEditorHookRegistry.getExtensions(...)` once inside a mount-only effect and never
-subscribes to registry changes. A hook registered after an editor has mounted therefore
-applies only to editors mounted afterwards — a lazily activated journal would silently fail
-to decorate the already-open editor. Note the asymmetry: the tab registry gained
-`subscribe()`; the editor hook registry did not.
-
-Before any widget code ships, verify this empirically, then choose between activating the
-journal `onStartup` and proposing `subscribe()` for the editor hook registry. Do not assume
-either — record the choice here.
+`MarkdownEditor.tsx` currently reads CodeMirror hooks once and has no React header slot. D44
+resolves both concerns with a separate observable React contribution registry; do not modify
+the CodeMirror hook contract to carry this widget. The prerequisite story must prove
+post-mount registration and disposal before this story integrates `MetadataWidget`.
 
 ## Non-goals
 
@@ -169,14 +153,14 @@ either — record the choice here.
 - No mobile-specific redesign, background indexing, reminders, AI assistance, or extension-host lifecycle code.
 - High contrast is out of scope (themes own it).
 - Do not invent the final mood/activity taxonomy, navigation labels, collapsed-header+search behavior, or narrow-width column layout — all are open items pending product-owner decision.
-- Do not pick the metadata widget implementation route here — it is STOP-gated.
+- Do not reimplement D44's registry or portal the widget into CodeMirror DOM.
 
 ## Handoff artifacts
 
 The following story needs from this one:
 
 - `JournalPanel` registered contribution id and stable panel props/context contract.
-- `MetadataWidget` exported component API and field-definition injection interface (needed by `journal_extension_host_integration`) — only available after implementation route is chosen.
+- `MetadataWidget` component API and D44 registration contract using local id `metadata-widget` (needed by extension-host integration).
 - `JournalEntryList` virtualized list API including filter/search state shape (needed by `calendar_tab_ui` for shared filter state per D25).
 - `DesktopPanelContext` gap resolution: decision and implementation on workspace listing / index access.
 - State-coverage matrix (all twelve states) with copy strings, so mobile refinement can reuse without re-specifying.
