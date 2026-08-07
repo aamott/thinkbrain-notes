@@ -5,7 +5,7 @@
 ## Collaboration gate — SATISFIED 2026-08-07
 
 The questions below were answered by the product owner and are recorded as decisions
-D1-D40 in `journal-calendar/pending-journal_discovery_and_wireframes-low-med.md`, together
+D1-D41 in `journal-calendar/pending-journal_discovery_and_wireframes-low-med.md`, together
 with the approved moodboard, IA and mobile artifacts. **Downstream stories may now proceed
 within those decisions.** The gate remains closed for every item the discovery log lists as
 open, and each child story carries its own STOP gate for its own undecided items.
@@ -25,7 +25,7 @@ Original questions, retained for the record:
 9. Which actions require keyboard access, screen-reader announcements, reduced-motion behavior, and high-contrast clarity?
 10. What is the approval cadence for discovery boards, wireframes, desktop mockups, mobile mockups, and implementation increments?
 
-**STOP gate — status:** discovery is complete and approved (D1-D40, artifacts approved
+**STOP gate — status:** discovery is complete and approved (D1-D41, artifacts approved
 D35/D37/D39/D40). Information architecture is settled as **IA-3**; the workflow, storage
 layout, metadata model, calendar composition, accessibility bar and mobile split are
 decided. Frontmatter keys are **not** yet defined — that remains story 2's work, bounded by
@@ -76,12 +76,12 @@ Non-goals:
 - Existing modular settings work (`apps/desktop/src/settings/settingsStore.ts`, `packages/core/src/settings/`) owns namespaced settings persistence outside the workspace.
 - Mobile is the same `apps/desktop` React/Tauri webview; coordinate with `plans/mobile/pending-responsive_layout-low-med.md`, `pending-mobile_tauri_config-low-easy.md`, and `pending-codemirror_mobile_testing-low-med.md`.
 - Coordinate registration only with `plans/extensions/pending-beta_builtin_extensions-med-med.md`; journal/calendar behavior and storage stay here.
-- **Indexing/search dependency (new, from D16).** Full-text search, auto-populated filter
-  values, and first-line previews at thousands of entries cannot be served by reading files
-  on demand. The journal reuses the existing search infrastructure and therefore depends on
-  the indexing/search epic's SQLite FTS5 cache — which per `plans/technical-decisions.md`
-  is disposable, rebuildable, and never the source of truth. Browsing must degrade
-  gracefully when the index is unavailable.
+- **Indexing/search dependency (D16/D41).** Full-text search and metadata facets reuse the
+  platform-owned disposable index; metadata facets wait on
+  `indexing-search/pending-frontmatter_metadata_facets-high-hard.md`. Browsing, dates,
+  grouping and lazy previews do not depend on that work. If the index is unavailable,
+  browsing and date filters remain usable and metadata facets report unavailable — never
+  fall back to a full-file scan or a journal-owned cache.
 
 
 ## Platform reality check — 2026-08-07
@@ -161,8 +161,8 @@ extensions epic, so this epic only reports the inconsistency.
 | 3 | `journal-calendar/pending-journal_service_daily_notes-high-med.md` | 1, 2 |
 | 4 | `journal-calendar/pending-calendar_data_model-med-med.md` | 1, 2 |
 | 5 | `journal-calendar/pending-journal_settings_and_accessibility-med-med.md` | 1, 2; settings registry; **Gap 3 limits D23** |
-| 6 | `journal-calendar/pending-journal_panel_ui-high-hard.md` | 1–3, 5; approved desktop wireframe |
-| 7 | `journal-calendar/pending-calendar_tab_ui-high-hard.md` | 1, 3, 4, 5; approved desktop wireframe; **blocked by Gap 1** |
+| 6 | `journal-calendar/pending-journal_panel_ui-high-hard.md` | 1–3, 5; approved desktop wireframe; D41 indexing facet story |
+| 7 | `journal-calendar/pending-calendar_tab_ui-high-hard.md` | 1, 3, 4, 5; approved desktop wireframe; Gap 1 closed |
 | 8 | `journal-calendar/pending-journal_mobile_refinement-med-med.md` | 6, 7; approved mobile wireframe |
 | 9 | `journal-calendar/pending-journal_extension_host_integration-med-med.md` | 3, 5–7; beta host APIs |
 
@@ -185,9 +185,10 @@ recorded in the story. Stories may be split further if a subagent would exceed o
 
 ## Status
 
-- ✅ Product questions answered and discovery/wireframes explicitly approved (D1-D40)
+- ✅ Product questions answered and discovery/wireframes explicitly approved (D1-D41)
 - ⬜ Journal data/frontmatter contract approved and tested
 - ⬜ Journal service and daily-note creation implemented
+- ⬜ D41 platform index supports frontmatter facet queries
 - ⬜ Calendar model and metadata aggregation implemented
 - ⬜ Settings/accessibility contract implemented
 - ⬜ Journal popout and calendar tab implemented from approved mockups
