@@ -136,3 +136,146 @@ describe("bootstrapExtensions", () => {
     expect(commands.get("sample.go")).toBeUndefined();
   });
 });
+
+describe("locally loaded extensions", () => {
+  const local = (activate = vi.fn(), overrides: Partial<ExtensionManifest> = {}) => ({
+    directory: "/ext/sample",
+    manifest: manifest(overrides),
+    activate,
+    deactivate: undefined
+  });
+
+  const empty = () => {
+    const commands = createDesktopCommandRegistry([]);
+    const panels = createDesktopPanelRegistry([]);
+    const host = createDesktopExtensionHost({ commands, panels });
+    const boot = bootstrapExtensions({ host, commands, panels, extensions: [] });
+    return { commands, panels, host, boot };
+  };
+
+  it("stubs a locally loaded extension's commands without activating it", () => {
+    const { commands, boot } = empty();
+    const activate = vi.fn();
+
+    boot.addLocalExtension(local(activate), []);
+
+    expect(commands.get("sample.go")?.title).toBe("Go");
+    expect(activate).not.toHaveBeenCalled();
+    expect(boot.entries()[0]).toMatchObject({
+      id: "sample",
+      status: "registered",
+      source: "local-directory",
+      directory: "/ext/sample"
+    });
+  });
+
+  it("notifies subscribers when a local extension is added", () => {
+    const { boot } = empty();
+    let notifications = 0;
+    boot.subscribe(() => {
+      notifications += 1;
+    });
+
+    boot.addLocalExtension(local(), []);
+
+    expect(notifications).toBeGreaterThan(0);
+  });
+
+  it("activates a locally loaded extension through its stub", async () => {
+    const realHandler = vi.fn();
+    const activate = vi.fn((context: DesktopExtensionContext) => {
+      context.commands.register({
+        id: "go",
+        title: "Go",
+        availability: "available",
+        handler: realHandler
+      });
+    });
+    const { commands, boot } = empty();
+    boot.addLocalExtension(local(activate), []);
+
+    await commands.get("sample.go")?.handler(commandContext);
+
+    expect(realHandler).toHaveBeenCalledTimes(1);
+    expect(boot.entries()[0]?.status).toBe("active");
+  });
+
+  it("removes every registration a local extension owned", async () => {
+    const activate = vi.fn((context: DesktopExtensionContext) => {
+      context.commands.register({
+        id: "go",
+        title: "Go",
+        availability: "available",
+        handler: vi.fn()
+      });
+    });
+    const { commands, boot } = empty();
+    boot.addLocalExtension(local(activate), []);
+    await commands.get("sample.go")?.handler(commandContext);
+
+    await boot.removeLocalExtension("sample");
+
+    expect(commands.get("sample.go")).toBeUndefined();
+    expect(boot.entries()).toEqual([]);
+  });
+
+  it("removes an extension that was never activated", async () => {
+    const { commands, boot } = empty();
+    boot.addLocalExtension(local(), []);
+
+    await boot.removeLocalExtension("sample");
+
+    expect(commands.get("sample.go")).toBeUndefined();
+  });
+
+  /**
+   * Reload is remove-then-add. The old registrations must be gone before the
+   * replacement activates, or the second registration collides on the same id.
+   */
+  it("re-registers cleanly when the same directory is loaded again", async () => {
+    const { commands, boot } = empty();
+    const first = vi.fn((context: DesktopExtensionContext) => {
+      context.commands.register({
+        id: "go",
+        title: "Go",
+        availability: "available",
+        handler: vi.fn()
+      });
+    });
+    boot.addLocalExtension(local(first), []);
+    await commands.get("sample.go")?.handler(commandContext);
+
+    await boot.removeLocalExtension("sample");
+    const second = vi.fn();
+    boot.addLocalExtension(local(second), []);
+
+    expect(commands.get("sample.go")?.title).toBe("Go");
+    expect(boot.entries()[0]?.status).toBe("registered");
+  });
+
+  it("surfaces load diagnostics on the entry", () => {
+    const { boot } = empty();
+
+    boot.addLocalExtension(local(), [
+      { code: "panels_not_supported", message: "Panels are not loaded yet.", severity: "warning" }
+    ]);
+
+    expect(boot.entries()[0]?.reasons[0]?.message).toBe("Panels are not loaded yet.");
+  });
+
+  it("rejects a local extension whose id is already registered", () => {
+    const { boot } = empty();
+    boot.addLocalExtension(local(), []);
+
+    expect(() => boot.addLocalExtension(local(), [])).toThrow(/already/i);
+  });
+
+  it("disposes locally loaded extensions on shutdown", async () => {
+    const { commands, boot } = empty();
+    boot.addLocalExtension(local(), []);
+
+    await boot.dispose();
+
+    expect(commands.get("sample.go")).toBeUndefined();
+  });
+});

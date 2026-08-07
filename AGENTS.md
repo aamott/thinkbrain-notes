@@ -37,7 +37,7 @@ Future extensions include:
 
 
 ## Plans
-List relevant folder to see task status. Review after milestones. Task reviewer deletes tasks after review, or updates status if work is not complete. Add action items from review as stories unless they are immediately fixable. Plans should be concise.
+List relevant folder to see task status. Keep filenames updated to reflect current status. Review after milestones. Delete tasks after review, or fix status if work is not complete. Add action items from review as stories unless they are immediately fixable. Plans should be concise. Avoid duplicating information across files.  
 
 **Plan Folder**
 ```

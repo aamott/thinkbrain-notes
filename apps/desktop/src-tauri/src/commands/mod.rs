@@ -10,12 +10,14 @@
 //! - `search`: Full-text document indexing and search query execution.
 //! - `settings`: Application-level and workspace-level configuration reading and writing.
 //! - `themes`: Discovery and listing of `.tbtheme.json` theme files in the app-data themes directory.
+//! - `extensions`: Contained reads of files inside a locally loaded extension directory.
 //!
 //! Security Guarantees & Safety Invariants:
 //! - Path Scoping: File and directory operations must validate paths to prevent directory traversal outside workspace boundaries.
 //! - Input Validation: User inputs (such as paths or filenames) must be sanitized and checked before execution.
 //! - State Safety: Desktop state and workspace window mappings use synchronized thread-safe primitives.
 
+pub mod extensions;
 pub mod git;
 pub mod workspace;
 pub mod markdown;
@@ -62,6 +64,7 @@ macro_rules! app_command_handlers {
             $crate::commands::settings::write_workspace_settings,
             $crate::commands::themes::list_themes,
             $crate::commands::themes::read_theme_file,
+            $crate::commands::extensions::read_extension_file,
             $crate::commands::workspace::open_workspace_window,
             $crate::commands::workspace::window_workspace_root
         ]

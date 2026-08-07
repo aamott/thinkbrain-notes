@@ -24,6 +24,26 @@ describe("parseExtensionManifest", () => {
     expect(manifest?.contributes.panels[0]?.side).toBe("right");
   });
 
+  it("carries the optional entry module path", () => {
+    const { manifest, diagnostics } = parseExtensionManifest({ ...VALID, main: "dist/main.js" });
+
+    expect(diagnostics).toEqual([]);
+    expect(manifest?.main).toBe("dist/main.js");
+  });
+
+  it("leaves main undefined for a built-in that ships no entry file", () => {
+    const { manifest } = parseExtensionManifest(VALID);
+
+    expect(manifest?.main).toBeUndefined();
+  });
+
+  it("reports a non-string main", () => {
+    const { manifest, diagnostics } = parseExtensionManifest({ ...VALID, main: 7 });
+
+    expect(manifest).toBeNull();
+    expect(diagnostics.some((d) => d.code === "manifest_invalid_field")).toBe(true);
+  });
+
   it("defaults the optional collections", () => {
     const { manifest, diagnostics } = parseExtensionManifest({
       id: "minimal",

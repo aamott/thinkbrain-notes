@@ -1,5 +1,4 @@
 import {
-  createDisposableStore,
   evaluateCompatibility,
   hasStartupActivation,
   parseExtensionManifest,
@@ -13,12 +12,14 @@ import { desktopCommandRegistry, type DesktopCommandContext } from "../commands/
 import { desktopPanelRegistry, type DesktopPanelContext } from "../panels/panelRegistry";
 import { builtInExtensions, type BuiltInExtension } from "./builtins";
 import { desktopExtensionHost, type DesktopExtensionHost } from "./desktopExtensionHost";
+import { HOST_COMPATIBILITY } from "./hostCompatibility";
 import { createLazyExtensionPanel } from "./LazyExtensionPanel";
 import {
   getExtensionBootstrap as getExtensionBootstrapInternal,
   setExtensionBootstrap,
   type BootstrapEntry,
   type BootstrapEntryStatus,
+  type ExtensionSource,
   type ExtensionBootstrap
 } from "./bootstrapRef";
 
@@ -33,15 +34,14 @@ export { getExtensionBootstrap } from "./bootstrapRef";
  * first frame. Touching a stub activates its extension, which registers the
  * real contribution under the same id.
  *
- * This MUST run before the first React render. The command and panel registries
- * are not reactive — nothing subscribes to them — so a contribution added after
- * the first render would not appear until an unrelated re-render. For the same
- * reason a stub and its real counterpart share id, label, icon, and side: the
- * rendered list never changes shape, only the factory behind it.
+ * A stub and its real counterpart share id, label, icon, and side, so swapping
+ * one for the other never changes the shape of the rendered list.
+ *
+ * Extensions can also be added while the app runs — see `addLocalExtension` —
+ * which the shell picks up through the registries' subscriptions.
  */
 
-/** The extension API version this host implements. */
-export const HOST_API_VERSION = "1.0.0";
+export { HOST_API_VERSION } from "./hostCompatibility";
 
 export interface BootstrapOptions {
   readonly host?: DesktopExtensionHost;
@@ -51,18 +51,16 @@ export interface BootstrapOptions {
   readonly compatibilityHost?: CompatibilityHost;
 }
 
-const DEFAULT_COMPATIBILITY_HOST: CompatibilityHost = {
-  apiVersion: HOST_API_VERSION,
-  platform: "desktop",
-  capabilities: ["commands", "panels", "editorHooks", "settings"]
-};
-
 interface EntryState {
   readonly manifest: ExtensionManifest;
+  readonly source: ExtensionSource;
+  readonly directory: string | undefined;
   status: BootstrapEntryStatus;
   reasons: readonly CompatibilityReason[];
   /** Stub registrations, disposed immediately before activation. */
   stubs: Disposable[];
+  /** Host registration handle; disposing it also deactivates the extension. */
+  registration: Disposable | null;
   activation: Promise<void> | undefined;
 }
 
@@ -70,10 +68,9 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
   const host = options.host ?? desktopExtensionHost;
   const commands = options.commands ?? desktopCommandRegistry;
   const panels = options.panels ?? desktopPanelRegistry;
-  const compatibilityHost = options.compatibilityHost ?? DEFAULT_COMPATIBILITY_HOST;
+  const compatibilityHost = options.compatibilityHost ?? HOST_COMPATIBILITY;
   const extensions = options.extensions ?? builtInExtensions;
 
-  const store = createDisposableStore();
   const listeners = new Set<() => void>();
   const notify = (): void => {
     for (const listener of listeners) listener();
@@ -115,6 +112,63 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
     return activation;
   };
 
+  /**
+   * Registers a stub for every contribution the manifest declares.
+   *
+   * Local extensions reach here with no panels: the loader strips them, because
+   * a panel factory returns React and a disk bundle cannot share the app's React
+   * instance. The loops are therefore identical for both sources.
+   */
+  const registerStubs = (state: EntryState): void => {
+    for (const command of state.manifest.contributes.commands) {
+      const fullId = `${state.manifest.id}.${command.id}`;
+      state.stubs.push(
+        commands.register({
+          id: fullId,
+          title: command.title,
+          availability: "available",
+          handler: async (context: DesktopCommandContext): Promise<void> => {
+            await ensureActive(state);
+            const real = commands.get(fullId);
+            if (real) await real.handler(context);
+          }
+        })
+      );
+    }
+
+    for (const panel of state.manifest.contributes.panels) {
+      const fullId = `${state.manifest.id}.${panel.id}`;
+      state.stubs.push(
+        panels.register({
+          id: fullId,
+          label: panel.label,
+          icon: panel.icon,
+          side: panel.side,
+          factory: (panelContext: DesktopPanelContext) =>
+            createLazyExtensionPanel({
+              ensureActive: () => ensureActive(state),
+              // Only ever called after activation resolves, by which point the
+              // stub has been disposed and `get` returns the extension's real
+              // panel. Calling it earlier would re-enter this same factory.
+              resolve: (resolveContext) => panels.get(fullId)?.factory(resolveContext) ?? null,
+              context: panelContext
+            })
+        })
+      );
+    }
+  };
+
+  /** Disposes everything one extension owns, in reverse of registration. */
+  const disposeEntry = async (state: EntryState): Promise<void> => {
+    disposeStubs(state);
+    // The host's registration handle awaits any in-flight activation and
+    // deactivates before unregistering, so the activation scope — and every
+    // command, panel, and setting it owned — is gone when this resolves.
+    await state.registration?.dispose();
+    state.registration = null;
+    state.activation = undefined;
+  };
+
   for (const extension of extensions) {
     // Re-parse even a statically authored manifest: built-ins must satisfy the
     // same contract third-party extensions will, and a typo should surface here
@@ -125,6 +179,7 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
         id: extension.manifest.id || "(unknown)",
         name: extension.manifest.name || "(invalid manifest)",
         status: "incompatible",
+        source: "built-in",
         reasons: diagnostics.map((diagnostic) => ({
           code: "capability" as const,
           message: diagnostic.message,
@@ -137,9 +192,12 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
     const compatibility = evaluateCompatibility(manifest, compatibilityHost);
     const state: EntryState = {
       manifest,
+      source: "built-in",
+      directory: undefined,
       status: compatibility.compatible ? "registered" : "incompatible",
       reasons: compatibility.reasons,
       stubs: [],
+      registration: null,
       activation: undefined
     };
     states.set(manifest.id, state);
@@ -151,49 +209,14 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
       continue;
     }
 
-    store.add(host.register({ id: manifest.id, activate: extension.activate }));
+    state.registration = host.register({ id: manifest.id, activate: extension.activate });
 
     if (hasStartupActivation(manifest)) {
       void ensureActive(state).catch(() => undefined);
       continue;
     }
 
-    for (const command of manifest.contributes.commands) {
-      const fullId = `${manifest.id}.${command.id}`;
-      const stub = commands.register({
-        id: fullId,
-        title: command.title,
-        availability: "available",
-        handler: async (context: DesktopCommandContext): Promise<void> => {
-          await ensureActive(state);
-          const real = commands.get(fullId);
-          if (real) await real.handler(context);
-        }
-      });
-      state.stubs.push(stub);
-      store.add(stub);
-    }
-
-    for (const panel of manifest.contributes.panels) {
-      const fullId = `${manifest.id}.${panel.id}`;
-      const stub = panels.register({
-        id: fullId,
-        label: panel.label,
-        icon: panel.icon,
-        side: panel.side,
-        factory: (panelContext: DesktopPanelContext) =>
-          createLazyExtensionPanel({
-            ensureActive: () => ensureActive(state),
-            // Only ever called after activation resolves, by which point the
-            // stub has been disposed and `get` returns the extension's real
-            // panel. Calling it earlier would re-enter this same factory.
-            resolve: (resolveContext) => panels.get(fullId)?.factory(resolveContext) ?? null,
-            context: panelContext
-          })
-      });
-      state.stubs.push(stub);
-      store.add(stub);
-    }
+    registerStubs(state);
   }
 
   // A cached snapshot keeps `entries()` referentially stable between changes,
@@ -204,7 +227,9 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
         id: state.manifest.id,
         name: state.manifest.name,
         status: state.status,
-        reasons: state.reasons
+        reasons: state.reasons,
+        source: state.source,
+        ...(state.directory === undefined ? {} : { directory: state.directory })
       })),
       ...failedManifests
     ];
@@ -219,9 +244,57 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
-    dispose: () => {
+
+    addLocalExtension: (extension, diagnostics): void => {
+      if (states.has(extension.manifest.id)) {
+        throw new Error(`Extension "${extension.manifest.id}" is already registered.`);
+      }
+
+      const state: EntryState = {
+        manifest: extension.manifest,
+        source: "local-directory",
+        directory: extension.directory,
+        status: "registered",
+        // Load diagnostics ride along as reasons so the Extensions panel shows
+        // an author why, for example, a declared panel did not appear.
+        reasons: diagnostics.map((diagnostic) => ({
+          code: "capability" as const,
+          message: diagnostic.message,
+          severity: diagnostic.severity
+        })),
+        stubs: [],
+        registration: null,
+        activation: undefined
+      };
+      states.set(state.manifest.id, state);
+
+      state.registration = host.register({
+        id: state.manifest.id,
+        activate: extension.activate
+      });
+
+      if (hasStartupActivation(state.manifest)) {
+        void ensureActive(state).catch(() => undefined);
+      } else {
+        registerStubs(state);
+      }
+
+      rebuildSnapshot();
+    },
+
+    removeLocalExtension: async (id: string): Promise<void> => {
+      const state = states.get(id);
+      if (!state) return;
+
+      await disposeEntry(state);
+      states.delete(id);
+      rebuildSnapshot();
+    },
+
+    dispose: async () => {
       if (getExtensionBootstrapInternal() === bootstrap) setExtensionBootstrap(null);
-      return store.dispose();
+      for (const state of states.values()) await disposeEntry(state);
+      states.clear();
     }
   };
 

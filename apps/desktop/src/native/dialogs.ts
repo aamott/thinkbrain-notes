@@ -49,6 +49,24 @@ export async function pickFilePath(
 }
 
 /**
+ * Opens a native directory picker and returns the selected path, or `null`
+ * when the user cancels or the runtime is not Tauri.
+ *
+ * Args:
+ *   title: Dialog title shown to the user.
+ *
+ * Returns:
+ *   The absolute directory path, or `null` if cancelled / unavailable.
+ */
+export async function pickDirectoryPath(title: string): Promise<string | null> {
+  // Guard non-Tauri contexts (tests, web-only dev) so callers don't crash.
+  if (!isTauri()) return null;
+
+  const selection = await open({ title, directory: true, multiple: false });
+  return typeof selection === "string" ? selection : null;
+}
+
+/**
  * Opens a native save-file dialog and returns the user-chosen path, or `null`
  * when the user cancels or the runtime is not Tauri.
  *

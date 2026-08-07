@@ -43,6 +43,13 @@ export interface ExtensionManifest {
   /** Soft compatibility hints. Never permissions, never a sandbox. */
   readonly capabilities: readonly string[];
   readonly contributes: ManifestContributions;
+  /**
+   * Directory-relative entry module, for extensions loaded from disk.
+   *
+   * Absent for built-ins, which pair a manifest with an imported activate
+   * function and have no file to resolve. Path rules live in `loader.ts`.
+   */
+  readonly main?: string;
 }
 
 export interface ManifestDiagnostic {
@@ -261,8 +268,13 @@ export function parseExtensionManifest(value: unknown): ManifestParseResult {
     }
   }
 
+  if (value.main !== undefined && typeof value.main !== "string") {
+    diagnostics.push(error("manifest_invalid_field", `"main" must be a string.`));
+  }
+
   const manifest: ExtensionManifest = {
     id,
+    ...(typeof value.main === "string" ? { main: value.main } : {}),
     name: typeof value.name === "string" ? value.name : "",
     version: typeof value.version === "string" ? value.version : "",
     apiVersion: typeof value.apiVersion === "string" ? value.apiVersion : "",

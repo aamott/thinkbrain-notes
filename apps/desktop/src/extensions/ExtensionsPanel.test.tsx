@@ -32,7 +32,8 @@ describe("ExtensionsPanel", () => {
   it("lists each extension with a human-readable status", async () => {
     const host = await render(
       <ExtensionsPanel
-        entries={[{ id: "note-stats", name: "Note Stats", status: "registered", reasons: [] }]}
+        entries={[{ id: "note-stats", name: "Note Stats", status: "registered",
+      source: "built-in", reasons: [] }]}
       />
     );
     expect(host.textContent).toContain("Note Stats");
@@ -48,6 +49,7 @@ describe("ExtensionsPanel", () => {
             id: "broken",
             name: "Broken",
             status: "incompatible",
+      source: "built-in",
             reasons: [{ code: "api-version", message: "Requires host api ^9.0.0", severity: "error" }]
           }
         ]}

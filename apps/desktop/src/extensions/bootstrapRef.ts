@@ -1,9 +1,17 @@
-import type { CompatibilityReason, Disposable, ExtensionStatus } from "@thinkbrain/core";
+import type {
+  CompatibilityReason,
+  Disposable,
+  ExtensionStatus,
+  ManifestDiagnostic
+} from "@thinkbrain/core";
+
+import type { LoadedExtension } from "./localDirectoryLoader";
 
 /**
  * The app-wide bootstrap reference and its result types.
  *
- * This module deliberately has **no value imports**. `panelRegistry` renders
+ * This module deliberately has **no value imports** (type-only imports are
+ * erased at build time and cannot close a runtime cycle). `panelRegistry` renders
  * the Extensions panel, which needs the bootstrap, but the bootstrap needs the
  * panel registry to install stubs. Holding the reference here breaks that cycle;
  * importing `bootstrap.ts` from the panel instead crashes app startup with
@@ -12,16 +20,33 @@ import type { CompatibilityReason, Disposable, ExtensionStatus } from "@thinkbra
 
 export type BootstrapEntryStatus = ExtensionStatus | "incompatible";
 
+/** Where an extension came from. Built-ins ship as app code. */
+export type ExtensionSource = "built-in" | "local-directory";
+
 export interface BootstrapEntry {
   readonly id: string;
   readonly name: string;
   readonly status: BootstrapEntryStatus;
   readonly reasons: readonly CompatibilityReason[];
+  readonly source: ExtensionSource;
+  /** Absolute directory a local extension was loaded from. */
+  readonly directory?: string;
 }
 
 export interface ExtensionBootstrap extends Disposable {
-  /** Current status of every built-in, for the Extensions panel. */
+  /** Current status of every extension, for the Extensions panel. */
   entries(): readonly BootstrapEntry[];
+  /**
+   * Registers an already-loaded local extension and stubs its commands.
+   *
+   * @throws When its id is already registered.
+   */
+  addLocalExtension(
+    extension: LoadedExtension,
+    diagnostics: readonly ManifestDiagnostic[]
+  ): void;
+  /** Disposes a local extension's activation and registrations. */
+  removeLocalExtension(id: string): Promise<void>;
   /**
    * Subscribes to status changes and returns an unsubscribe function.
    *

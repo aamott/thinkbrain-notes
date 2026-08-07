@@ -186,6 +186,13 @@ export interface NativeCommandMap {
     readonly args: { readonly path: string };
     readonly result: string | null;
   };
+  // Reads one file inside a locally loaded extension directory. The Rust side
+  // canonicalizes both paths and rejects anything resolving outside the
+  // directory, including an escaping symlink.
+  readonly read_extension_file: {
+    readonly args: { readonly directory: string; readonly relativePath: string };
+    readonly result: string;
+  };
   readonly git_availability: {
     readonly args: undefined;
     readonly result: NativeGitAvailability;
