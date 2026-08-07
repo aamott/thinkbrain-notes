@@ -43,8 +43,6 @@ Extension settings schema is registered in `appSettingsRegistry` (the Zustand-ba
 
 **Consequence for this story:** journal settings will not be user-visible in the settings tab on first activation. Acceptance criteria must not assume a visible settings UI. All functional criteria (schema registration, get/set/onDidChange, persistence, staged save) can be verified programmatically. The visible settings UI is a dependency that must be listed explicitly; do not ship user documentation implying settings are configurable through the UI until `pending-extension_settings-low-med.md` delivers the rendering layer.
 
-Add `pending-extension_settings-low-med.md` to the Dependencies section and adjust acceptance criteria accordingly (see below).
-
 ## PLATFORM CONFLICT on D23: No workspace-scoped extension settings path
 
 All extension settings currently use `scope: "app"`. There is NO workspace-scoped extension settings path in the platform today. D23 requires field definitions at BOTH global and per-workspace level.
@@ -72,7 +70,7 @@ Define and register the approved journal settings schema (journal root configura
 
 ## Likely files
 
-- `packages/core/src/settings/modules/journal.ts` — workspace-scoped module/schema; exact keys wait for owner approval.
+- `packages/core/src/settings/modules/journal.ts` — app-scoped module/schema (workspace scope is blocked; see the platform conflict above); exact keys wait for owner approval.
 - `packages/core/src/settings/modules/index.ts` and `packages/core/src/settings/index.ts` — exports/registration.
 - `apps/desktop/src/settings/settingsStore.ts` — register module; preserve staged/save/reset semantics.
 - `apps/desktop/src/settings/SettingsContent.tsx`, `SettingsNav.tsx`, `controls/` — render approved controls only; blocked on `pending-extension_settings-low-med.md` for extension-section rendering.
