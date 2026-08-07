@@ -2,7 +2,7 @@
 
 ## Status
 
-⬜ Focused child story. Existing command/panel/editor/settings contracts remain implemented; views, menus, context menus, themes, and additional editor actions are pending.
+⬜ Focused child story. Existing command/panel/editor/settings contracts remain implemented; views, menus, context menus, themes, and additional editor actions are pending. D44's React editor-header slot is isolated in `pending-editor_header_contribution-high-med.md`.
 
 ## Goal
 
@@ -52,7 +52,7 @@ Desktop: register a fixture view/menu/theme/action, verify approved placement, k
 
 ## Non-goals
 
-No manifest loading, event/task runtime, app-data storage, secret storage, installer, marketplace, sandbox, or feature behavior.
+No manifest loading, event/task runtime, app-data storage, secret storage, installer, marketplace, sandbox, feature behavior, or duplicate React editor-header registry.
 
 ## Handoff expectations
 
