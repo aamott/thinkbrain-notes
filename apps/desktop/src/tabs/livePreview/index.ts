@@ -1,3 +1,4 @@
+import { syntaxTree } from "@codemirror/language";
 import type { Extension } from "@codemirror/state";
 import {
   Decoration,
@@ -33,7 +34,20 @@ export function livePreview(options: LivePreviewOptions = {}): Extension {
       }
 
       update(update: ViewUpdate) {
-        if (!update.docChanged && !update.selectionSet && !update.viewportChanged) return;
+        // The tree comparison is not optional. CodeMirror parses large
+        // documents incrementally, and the background work that finishes the
+        // parse arrives as transactions that change neither the document, the
+        // selection, nor the viewport. Without this check a long note renders
+        // whatever had been parsed when it opened and never catches up.
+        const reparsed = syntaxTree(update.startState) !== syntaxTree(update.state);
+        if (
+          !update.docChanged &&
+          !update.selectionSet &&
+          !update.viewportChanged &&
+          !reparsed
+        ) {
+          return;
+        }
         const built = buildDecorations(update.view, options);
         this.decorations = built.content;
         this.atomic = built.atomic;

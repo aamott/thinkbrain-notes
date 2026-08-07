@@ -62,6 +62,18 @@ const SAMPLE = [
   ""
 ].join("\n");
 
+/**
+ * `?headings=N` appends N extra headings, which pushes the document past what
+ * CodeMirror parses in one go. Used by the e2e suite to cover incremental
+ * parsing — a behaviour that cannot be observed in a headless DOM, because
+ * without layout the viewport, not the syntax tree, caps the decorations.
+ */
+const extraHeadings = Number(new URLSearchParams(location.search).get("headings") ?? "0");
+const doc =
+  extraHeadings > 0
+    ? `${SAMPLE}\n${Array.from({ length: extraHeadings }, (_, i) => `## Filler ${i}`).join("\n\n")}`
+    : SAMPLE;
+
 const parent = document.getElementById("root");
 if (!parent) throw new Error("[demo] #root missing");
 
@@ -70,7 +82,7 @@ parent.className = "mx-auto my-10 max-w-[52rem] rounded-xl border border-border 
 new EditorView({
   parent,
   state: EditorState.create({
-    doc: SAMPLE,
+    doc,
     extensions: [
       history(),
       markdown({

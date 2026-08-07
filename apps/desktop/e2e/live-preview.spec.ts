@@ -58,3 +58,21 @@ test("shows wiki link targets and aliases", async ({ page }) => {
   await expect(links.filter({ hasText: "Another Note" }).first()).toBeVisible();
   await expect(links.filter({ hasText: "an aliased note" })).toHaveCount(1);
 });
+
+test("decorates a long document after scrolling to the end", async ({ page }) => {
+  // CodeMirror parses long documents incrementally, so the end of this one is
+  // not parsed when it opens. Note this does NOT isolate the parse-catch-up
+  // path in the plugin's update guard: scrolling produces further viewport
+  // measurements that would refresh the decorations anyway. It covers the
+  // user-visible outcome only.
+  await page.goto("/demo/live-preview.html?headings=4000");
+  await expect(page.locator(".cm-content")).toBeVisible();
+
+  await page.locator(".cm-scroller").evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+
+  const lastHeading = page.locator(".cm-h2").last();
+  await expect(lastHeading).toContainText("Filler");
+  await expect(lastHeading).not.toContainText("##");
+});
