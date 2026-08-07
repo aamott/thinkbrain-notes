@@ -109,9 +109,12 @@ need prerequisites. Recorded here so no story discovers this mid-implementation.
 `"canvas"` kind. `apps/desktop/src/shell/TabContent.tsx` builds its own module-scoped
 registry and switches on `tab.kind`, and `DesktopExtensionContext` has no `tabs` surface.
 Opening the calendar as a tab (D14, D27) therefore requires a **shell change**, not an
-extension contribution — and it is untracked by any existing story. A small prerequisite
-story for a tab-kind contribution point is recommended; adding a `TabKind` value also
-touches `packages/core/src/layout/index.ts`.
+extension contribution. **A prerequisite story now exists:**
+`plans/extensions/pending-tab_view_registry-high-med.md`, which promotes the tab registry to
+a singleton whose entries carry a renderer `factory` — mirroring the shipped
+`desktopPanelRegistry` pattern — and adds a general `openTab` entry point. Story 7 depends
+on it. Note that `TabKind` is already an open union (`BuiltInTabKind | (string & {})`), so no
+`packages/core` change is required.
 
 **Gap 2 — no React slot above the editor body (affects story 6).**
 The metadata widget (D11, D24, D35) is a React surface above the editor body, but
@@ -179,6 +182,6 @@ recorded in the story. Stories may be split further if a subagent would exceed o
 - ⬜ Journal popout and calendar tab implemented from approved mockups
 - ⬜ Mobile refinement approved and verified
 - ⬜ Built-in registration wired through `desktopExtensionHost`
-- ⬜ Gap 1 resolved: a tab-kind path exists for the calendar tab
+- ⬜ Gap 1 resolved: `plans/extensions/pending-tab_view_registry-high-med.md` delivers the tab renderer seam and `openTab`
 - ⬜ Gap 2 resolved: a mounting route chosen for the metadata widget
 - ⬜ Gap 3 resolved: D23's per-workspace half either supported or explicitly deferred
