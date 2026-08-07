@@ -14,6 +14,9 @@ Discovery gate is CLOSED for items below. See `../pending-journal_discovery_and_
 - **D3** Metadata at the head of the file; human-legible, self-describing keys, no internal IDs or codes.
 - **D4** Daily metadata fields are user-defined; four input types: multi-select, single-select, number, text. App ships NO mood scale and NO activity taxonomy.
 - **D20** Date written to BOTH filename and frontmatter; **filename wins on conflict**. Parsing must NOT rewrite a disagreeing frontmatter date. Surfacing a mismatch is fine; silent repair is a defect.
+- **D7/D17** The canonical WRITE format is `journal/YYYY/MM/YYYY-MM-DD-HHmm.md` with a
+  configurable root; time is always present. This is the single format the writer emits —
+  the accepted READ formats are a superset, enumerated in the approved format table.
 - **D21** No templates in the first slice.
 - **D22** A new entry contains frontmatter with the **date only**. Fields are NOT pre-seeded.
 - **D30** Same-minute collision uses counter suffix `-2`, `-3`, never seconds. Parser must accept an optional counter and must not read it as time.
