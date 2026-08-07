@@ -2,9 +2,17 @@
 
 > Dedicated feature epic for an optional, local-first journal and journaling calendar built on ordinary Markdown notes. Read `plans/app-vision.md`, `plans/technical-decisions.md`, `user-noted-todo.md`, the mobile epic, the UI-shell plans, and `plans/extensions/pending-beta_builtin_extensions-med-med.md` before starting any story.
 
-## Collaboration gate — questions before design
+## Collaboration gate — SATISFIED 2026-08-07
 
-Please answer these questions with the product owner before any mockup, wireframe, schema commitment, or implementation:
+The questions below were answered by the product owner and are recorded as decisions
+D1-D40 in `journal-calendar/pending-journal_discovery_and_wireframes-low-med.md`, together
+with the approved moodboard, IA and mobile artifacts. **Downstream stories may now proceed
+within those decisions.** The gate remains closed for every item the discovery log lists as
+open, and each child story carries its own STOP gate for its own undecided items.
+
+A superseding decision is recorded as a new D-number, never by editing an earlier one.
+
+Original questions, retained for the record:
 
 1. What is the primary daily workflow: open today's note, browse history, capture a quick entry, or something else?
 2. Which parts of the experience are journal-specific versus normal Markdown editor behavior?
@@ -17,7 +25,12 @@ Please answer these questions with the product owner before any mockup, wirefram
 9. Which actions require keyboard access, screen-reader announcements, reduced-motion behavior, and high-contrast clarity?
 10. What is the approval cadence for discovery boards, wireframes, desktop mockups, mobile mockups, and implementation increments?
 
-**STOP gate:** Do not create mockups, choose a final information architecture, define irreversible frontmatter keys, or implement code until the product owner answers the questions above and explicitly approves the proposed workflow and first wireframe. Every UI-heavy child story repeats this gate.
+**STOP gate — status:** discovery is complete and approved (D1-D40, artifacts approved
+D35/D37/D39/D40). Information architecture is settled as **IA-3**; the workflow, storage
+layout, metadata model, calendar composition, accessibility bar and mobile split are
+decided. Frontmatter keys are **not** yet defined — that remains story 2's work, bounded by
+D3, D20, D22, D30, D33 and D38. Every UI-heavy child story still repeats a STOP gate for
+its own open items.
 
 ## Goal
 
@@ -30,10 +43,15 @@ In scope:
 - Product workflow discovery, moodboards/wireframes, and iterative approval checkpoints.
 - A documented journal Markdown/frontmatter contract, folder and filename template rules, and migration/invalid-data behavior.
 - Platform-agnostic journal metadata and calendar query models in `packages/core`.
-- A journal service for date resolution, folder/naming expansion, template application, daily-note creation, reading, and listing.
+- A journal service for date resolution, folder/naming expansion, entry creation
+  (always a new file, D18), reading, and listing. No template application (D21).
 - Calendar aggregation from journal notes, including explicit handling of mood/activity metadata and missing/invalid values.
-- Desktop journal and calendar panels registered through `desktopExtensionHost`, with activity-bar/popout behavior using the existing panel registry.
-- Namespaced workspace settings for journal location, naming, templates, date/time policy, metadata options, and calendar defaults (only after questions are answered).
+- A single journal popout registered through `desktopExtensionHost` using the existing
+  panel registry. The calendar is a **canvas tab, not a panel**, and registers **no**
+  activity-bar entry (D27).
+- Namespaced settings for journal location, naming, date/time policy, metadata field
+  definitions (global and per-workspace, D23), and calendar defaults. Template settings
+  are out of the first slice (D21).
 - Responsive mobile behavior using the shared desktop webview, touch targets, keyboard/screen-reader accessibility, and manual emulator/simulator checks.
 - Small, reviewable mockup-to-implementation increments; no implementation story may silently settle an unanswered product question.
 
@@ -43,7 +61,11 @@ Non-goals:
 - Replacing the Markdown editor or changing the global frontmatter mutation policy.
 - AI-generated entries, sentiment inference, medical/mental-health claims, reminders, notifications, habit streak gamification, or social sharing.
 - Git sync, conflict resolution, indexing architecture, or marketplace/third-party install work owned by other epics.
-- Inventing final UX, mood scales, activity taxonomy, folder layout, filename syntax, or mobile navigation before approval.
+- Inventing product decisions. Mood scales and activity taxonomies are user-defined (D4)
+  and must never ship built in; mobile navigation belongs to the app shell (D26).
+- A group-by control. Withdrawn by D37; grouping is a fixed property of the list.
+- Templates, guessing ambiguous dates (D38), or any calendar encoding richer than dots in
+  the first release (D29).
 
 ## Dependencies and boundaries
 
@@ -54,22 +76,35 @@ Non-goals:
 - Existing modular settings work (`apps/desktop/src/settings/settingsStore.ts`, `packages/core/src/settings/`) owns namespaced settings persistence outside the workspace.
 - Mobile is the same `apps/desktop` React/Tauri webview; coordinate with `plans/mobile/pending-responsive_layout-low-med.md`, `pending-mobile_tauri_config-low-easy.md`, and `pending-codemirror_mobile_testing-low-med.md`.
 - Coordinate registration only with `plans/extensions/pending-beta_builtin_extensions-med-med.md`; journal/calendar behavior and storage stay here.
+- **Indexing/search dependency (new, from D16).** Full-text search, auto-populated filter
+  values, and first-line previews at thousands of entries cannot be served by reading files
+  on demand. The journal reuses the existing search infrastructure and therefore depends on
+  the indexing/search epic's SQLite FTS5 cache — which per `plans/technical-decisions.md`
+  is disposable, rebuildable, and never the source of truth. Browsing must degrade
+  gracefully when the index is unavailable.
 
 ## Story sequence
 
 | # | Story | Depends on |
 |---|---|---|
-| 1 | `journal-calendar/pending-journal_discovery_and_wireframes-low-med.md` | — |
+| 1 | `journal-calendar/pending-journal_discovery_and_wireframes-low-med.md` ✅ complete | — |
 | 2 | `journal-calendar/pending-journal_data_model_frontmatter-med-hard.md` | 1 approved contract |
 | 3 | `journal-calendar/pending-journal_service_daily_notes-high-med.md` | 1, 2 |
 | 4 | `journal-calendar/pending-calendar_data_model-med-med.md` | 1, 2 |
 | 5 | `journal-calendar/pending-journal_settings_and_accessibility-med-med.md` | 1, 2; settings registry |
 | 6 | `journal-calendar/pending-journal_panel_ui-high-hard.md` | 1–3, 5; approved desktop wireframe |
-| 7 | `journal-calendar/pending-calendar_panel_ui-high-hard.md` | 1, 3, 4, 5; approved desktop wireframe |
+| 7 | `journal-calendar/pending-calendar_tab_ui-high-hard.md` | 1, 3, 4, 5; approved desktop wireframe |
 | 8 | `journal-calendar/pending-journal_mobile_refinement-med-med.md` | 6, 7; approved mobile wireframe |
 | 9 | `journal-calendar/pending-journal_extension_host_integration-med-med.md` | 3, 5–7; beta host APIs |
 
-Every UI-facing story requires iterative approval of desktop and mobile mockups: discovery alternative → desktop wireframe → desktop mockup → mobile mockup → implementation increment, with product-owner sign-off at each checkpoint and the approved version recorded in the story. Stories may be split further if a subagent would exceed one focused change set. Do not mark a story complete when an approval gate or unresolved product decision remains open.
+Story 7 was renamed from `calendar_panel_ui` to `calendar_tab_ui` because D27 makes the
+calendar a canvas tab rather than a panel; it registers no activity-bar entry and targets
+the tab-kind registry rather than the panel registry.
+
+Every UI-facing story requires iterative approval of desktop and mobile mockups: discovery
+alternative → desktop wireframe → desktop mockup → mobile mockup → implementation
+increment, with **per-artifact** product-owner sign-off (D34) and the approved version
+recorded in the story. Stories may be split further if a subagent would exceed one focused change set. Do not mark a story complete when an approval gate or unresolved product decision remains open.
 
 ## Validation
 
@@ -81,11 +116,11 @@ Every UI-facing story requires iterative approval of desktop and mobile mockups:
 
 ## Status
 
-- ⬜ Product questions answered and discovery/wireframes explicitly approved
+- ✅ Product questions answered and discovery/wireframes explicitly approved (D1-D40)
 - ⬜ Journal data/frontmatter contract approved and tested
 - ⬜ Journal service and daily-note creation implemented
 - ⬜ Calendar model and metadata aggregation implemented
 - ⬜ Settings/accessibility contract implemented
-- ⬜ Journal and calendar desktop panels implemented from approved mockups
+- ⬜ Journal popout and calendar tab implemented from approved mockups
 - ⬜ Mobile refinement approved and verified
 - ⬜ Built-in registration wired through `desktopExtensionHost`
