@@ -21,15 +21,17 @@ Discovery gate is CLOSED for items below. See `../pending-journal_discovery_and_
 - **D22** A new entry contains frontmatter with the **date only**. Fields are NOT pre-seeded.
 - **D30** Same-minute collision uses counter suffix `-2`, `-3`, never seconds. Parser must accept an optional counter and must not read it as time.
 - **D33** The only requirement to be an entry is a parseable date in the filename. Read leniently, write one format. Frontmatter NOT required; malformed frontmatter does NOT disqualify an entry. Unknown frontmatter must survive read/write.
-- **D38** Ambiguous dates (e.g. `01-02-2026`) are treated as UNDATED. The app NEVER guesses. Every accepted filename format must be provably unambiguous.
+- **D38** Ambiguous dates (e.g. `01-02-2026`) are treated as UNDATED. The app NEVER guesses.
+- **D42** Read formats are exactly the approved narrow ISO table in `assets/journal-frontmatter-examples.md`; date-only sorts before timed entries, and collision counters require `N >= 2`.
 
 **STOP gate:** The discovery gate above is closed. The following items remain OPEN and must not be silently resolved:
 
-- Field definition drift and orphaned metadata (what happens when a user removes a field definition?).
-- Rename warnings and folder relocation policy.
-- Exact accepted filename formats have not been enumerated and signed off — do not ship the parser until a written format table is approved and every entry in it is proven unambiguous.
+- Exact frontmatter date key, field-definition shape, invalid-data policy, and compatibility promise remain unsigned.
+- Rename warnings and folder relocation policy remain open in the journal service story.
 
-Do not add types, serializers, validators, or fixtures for open items until the product owner signs off the written field table, format table, invalid-data policy, and compatibility promise.
+The filename parser is unblocked by D42. Do not implement frontmatter serializers or validators
+for the remaining open field contract until the product owner signs it off. D45 already settles
+definition drift: preserve existing values and surface removed ones as unconfigured.
 
 ## Goal
 
@@ -38,7 +40,7 @@ Define platform-agnostic journal metadata and a stable Markdown contract that co
 ## Scope
 
 - Type definitions for journal date/ref, metadata, and path components.
-- Filename parser: accepts an explicit, documented set of unambiguous formats; returns `UNDATED` for anything ambiguous or unrecognized (D38); optionally parses counter suffix (D30).
+- Filename parser: accepts exactly D42's three forms; returns `UNDATED` for every other form; validates dates/times and parses timed counters `N >= 2` without mistaking them for time.
 - Frontmatter helpers: lenient read (D33), date-only write on create (D22), filename-wins resolution on conflict (D20), unknown field pass-through.
 - Fixtures and unit tests covering every approved format, ambiguous inputs, counter suffixes, malformed YAML, absent frontmatter, and filename/frontmatter date mismatch.
 - A signed-off format table artifact at `plans/journal-calendar/assets/journal-frontmatter-examples.md`.
@@ -60,23 +62,24 @@ Define platform-agnostic journal metadata and a stable Markdown contract that co
 
 ## Acceptance criteria
 
-- [ ] A written, product-owner-approved format table enumerates every accepted filename date format and proves each is unambiguous; no entry that matches a format can be interpreted as two different dates (D38).
-- [ ] Parser returns `UNDATED` (not an error, not a guess) for any filename that is ambiguous or does not match the approved format table (D38).
-- [ ] Parser accepts an optional `-2`/`-3` counter suffix and does not read it as part of the time component (D30).
+- [x] The product-owner-approved D42 format table enumerates every accepted filename form and proves the year-first fixed-width forms unambiguous.
+- [ ] Parser returns `UNDATED` for every filename outside D42, including alternate separators, ISO `T`, month names, invalid dates/times, missing padding, and date-only counters.
+- [ ] Parser accepts timed counter suffixes `N >= 2`, rejects `-1`, and does not read the counter as part of the time component (D30/D42).
+- [ ] Date-only entries carry unknown time and sort before timed entries on the same day (D42).
 - [ ] A new-entry write emits frontmatter with the date field only; no other fields are pre-seeded (D22).
 - [ ] On read, filename date takes precedence over frontmatter date; the parser records the mismatch as a diagnostic but does NOT rewrite the file (D20).
 - [ ] Malformed YAML frontmatter does not disqualify an entry; the entry is surfaced with a diagnostic, not hidden (D33).
 - [ ] Unknown frontmatter fields survive a round-trip through any journal write path (D33).
 - [ ] Types carry no hard-coded mood vocabulary or activity taxonomy; user-defined field values are represented as opaque strings/numbers (D4).
 - [ ] No template types or template application logic (D21).
-- [ ] Unit tests cover: every approved format parsed correctly; every ambiguous input returns UNDATED; counter suffix 1/2/3; malformed YAML; absent frontmatter; unknown fields round-trip; filename/frontmatter mismatch diagnostic; no-rewrite behavior.
+- [ ] Unit tests cover all D42 accepted/rejected examples, date-only ordering, counters 2/3, rejected counter 1, malformed YAML, absent frontmatter, unknown fields, date mismatch, and no-rewrite behavior.
 - [ ] Serialization is ordinary Markdown/YAML; no DB or workspace cache.
 - [ ] `pnpm lint`, `pnpm typecheck`, `pnpm test` all pass on `packages/core`.
 
 ## Tests / manual checks
 
 - `packages/core` unit tests for every approved format and every ambiguous input (must return UNDATED).
-- Counter suffix tests: `-2`, `-3`, and absence.
+- Counter tests: timed `-2`/`-3` accepted; `-1` and date-only counters rejected.
 - Unknown-field round-trip: read a note with unknown keys, write it, confirm keys survive.
 - Run `pnpm --filter @thinkbrain/core test`, `pnpm lint`, `pnpm typecheck`.
 - Manual: open approved examples in a plain text editor; edit an unknown field externally; confirm it survives an explicit journal update without being dropped or rewritten.
@@ -102,7 +105,7 @@ Desktop: open approved examples outside the app; explicit save must preserve unk
 The next story (journal service) needs:
 
 - `JournalEntryRef` type (date, counter, path, UNDATED flag).
-- `parseJournalFilename(filename)` — approved format table, returns `JournalEntryRef | UNDATED`.
+- `parseJournalFilename(filename)` — D42 table, returns `JournalEntryRef | UNDATED` with unknown time for date-only entries and a stable date-only-before-timed comparator.
 - `readJournalFrontmatter(rawYaml)` — lenient, returns parsed fields + unknown-field pass-through bag + diagnostics.
 - `buildNewEntryFrontmatter(date)` — date-only write (D22).
 - Exported accepted-format enum/constant set.
