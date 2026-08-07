@@ -7,7 +7,7 @@
 Part of [Journal & Calendar](../pending-journal-calendar-high-hard.md). Discovery gate;
 precedes irreversible data and UI work.
 
-**STOP gate — SATISFIED 2026-08-07.** D1-D41 answer the discovery questions and all
+**STOP gate — SATISFIED 2026-08-07.** D1-D47 answer the discovery questions and all
 three artifacts (moodboard, wireframes, this log) are approved. Downstream stories may
 proceed **within** these decisions; the gate stays closed for anything still open
 below. Each downstream story owns its own STOP gate for its own undecided items; no
@@ -34,7 +34,7 @@ IAs without presenting either as final.
 integration story — read before discovery. No code dependency; discovery output
 blocks data-model and UI stories.
 
-## Decision log (D1-D41)
+## Decision log (D1-D47)
 
 Recorded 2026-08-05 through 2026-08-07. Each is confirmed unless marked provisional.
 Superseded decisions are noted inline.
@@ -261,10 +261,40 @@ desktop app.
 **D41.** D16's auto-populated metadata filter values come from the platform-owned,
 disposable index. Extend the indexing/search record and query API to carry structured
 frontmatter, return facet values and apply metadata predicates; do not build a
-journal-owned cache and do not defer
-metadata facets from v1. The index remains rebuildable derived state, never source of truth.
-If it is unavailable, browsing and date filtering still work, while metadata facets show an
-explicit unavailable state rather than falling back to a full-file scan.
+journal-owned cache or defer metadata facets from v1. The index remains rebuildable
+derived state, never source of truth. If unavailable, browsing and date filtering still
+work while facets show an explicit unavailable state rather than scanning every file.
+
+**D42.** Accepted journal read filenames are the narrow readable ISO family:
+`YYYY-MM-DD.md`, `YYYY-MM-DD-HHmm.md`, and `YYYY-MM-DD-HHmm-N.md` for collision
+counters `N >= 2`. Values are fixed-width and zero-padded; dates and times must be
+valid. Mixed separators, ISO `T`, month names, day/month-first forms, and date-only
+counters are undated. The writer still emits D17 only. Date-only entries have unknown
+time and sort before timed entries on the same day.
+
+**D43.** A day preserves all distinct per-field metadata values across its entries; it
+never picks a winner or calculates a synthetic daily value. Filters remain entry-level:
+a day qualifies only when at least one entry satisfies every active predicate, and filtered
+dots/counts represent matching entries. Full-text search uses that same matching set.
+
+**D44.** The metadata widget mounts in a new first-class React contribution slot above
+the Markdown editor body, not in CodeMirror-owned DOM. The slot has an observable,
+disposable registry; already-open editors react when contributions register or unregister.
+
+**D45.** V1 extends the platform with workspace-scoped extension settings and ships both
+D23 levels. Workspace field definitions replace complete same-id global definitions;
+untouched global fields remain. Definition changes never rewrite notes. Values no longer
+configured remain visible and filterable with an `unconfigured` label and diagnostic.
+
+**D46.** Month and week views share one density treatment: show up to three entry dots,
+then `+N` for the remainder. Under active filters the dots and remainder count only D43
+matches. Accessible text announces the exact matching count regardless of visual cap.
+
+**D47.** Canonical built-in extension ids are `journal-calendar`, `git`, and
+`agent-chat`. Relative contribution ids stay semantic lowercase kebab-case and rely on
+host prefixing. Journal/calendar uses panel `journal`, tab `calendar`, commands
+`new-entry`, `today`, `open-calendar`, and editor contribution `metadata-widget`, yielding
+runtime ids such as `journal-calendar.calendar`.
 
 ## Checkpoint table
 
@@ -282,6 +312,12 @@ explicit unavailable state rather than falling back to a full-file scan.
 | IA-3 header levels: 3a vs 3b | product owner | approved 3b (D39) | — |
 | Mobile layouts M-1 vs M-2 (artifact 3) | product owner | approved hybrid (D40) | Bottom sheet is new component surface |
 | Metadata facet source | product owner | platform index approved (D41) | Indexing story added; no journal cache |
+| Filename read table | product owner | narrow ISO family approved (D42) | Date-only sorts first |
+| Multi-entry day semantics | product owner | distinct values + entry-level filters (D43) | No synthetic daily value |
+| Metadata widget route | product owner | React slot + observable registry (D44) | Platform prerequisite |
+| Workspace field definitions | product owner | platform scope + id overlay (D45) | Preserve unconfigured values |
+| Calendar entry density | product owner | 3 dots + `+N` in both views (D46) | Exact count remains accessible |
+| Built-in namespaces | product owner | feature-scoped semantic ids (D47) | Runtime ids are host-prefixed |
 
 **Approver:** the product owner, per D34.
 
@@ -319,29 +355,26 @@ treatment nuance and widget behavior on malformed frontmatter (D33 keeps it vali
 day click with the popout closed and date filter as a dismissible chip (D25).
 
 **Owned by other implementation stories:**
-- Per-day aggregation policy (D8 provisional) — `pending-calendar_data_model-med-med.md`.
-- Global vs workspace field precedence/merge rules and field-definition
-  drift/orphaned metadata (D23) —
-  `pending-journal_settings_and_accessibility-med-med.md`.
-- Dot cap/overflow/week-view treatment (D29), calendar tab singleton/persistence,
-  calendar-on-phone, calendar grid keyboard model (D31) — calendar view story.
-- Enumerating accepted date formats and rejecting ambiguous ones (D33/D38) —
-  `pending-journal_data_model_frontmatter-med-hard.md`.
-- Backfill mechanics, counter interaction (D30), rename warnings/folder relocation
-  under D20's filename-wins — journal service story.
+- Calendar tab singleton/persistence, calendar-on-phone, and the calendar grid keyboard
+  model (D31) — calendar view story.
+- Exact approved settings list/defaults beyond D7/D4/D23 — settings story.
+- Backfill mechanics, counter interaction (D30), rename warnings/folder relocation,
+  and error/retry copy — journal service story.
+- Built-in activation events, required beta contribution table, unavailable behavior,
+  and mobile placement — beta built-ins story. Canonical ids themselves are closed by D47.
 
 ## Reconciliation — 2026-08-07 (post-merge)
 
-The `extensions` branch advanced nine commits during discovery with no decision here
-changed or clobbered. D14/D27, D11/D24/D35, and D23 each lack a complete
-implementation path on today's platform and are STOP-gated in their owning stories
-(not weakened) — see the epic's **Platform reality check** section for detail.
+The `extensions` branch advanced during discovery with no decision here changed or
+clobbered. D14/D27 uses the shipped tab seam. D44 and D45 choose platform changes for
+the remaining editor-slot and workspace-settings gaps; their implementation stories are
+prerequisites, not open product choices. See the epic's **Platform reality check**.
 
 ## Acceptance criteria
 
 - [x] User answers recorded for workflow, date/time policy, folder/naming, templates,
   metadata fields, calendar defaults, settings, accessibility, and mobile behavior
-  (see D1-D41 above).
+  (see D1-D47 above).
 - [x] Three labeled composition alternatives (IA-1/IA-2/IA-3) plus two mobile
   alternatives; none treated as chosen before approval; resolution (IA-3) was the
   product owner's.
@@ -371,5 +404,4 @@ implementation path on today's platform and are STOP-gated in their owning stori
 - Do not select a mood scale, activity taxonomy, folder hierarchy, filename format,
   icon, color meaning, or calendar visualization without explicit approval.
 - Do not ship a built-in mood or activity vocabulary; D4 makes these user-defined.
-- Do not settle the calendar's per-day aggregation rule here; D8's "last one wins" is
-  a provisional placeholder owned by the calendar data-model story.
+- Do not replace D43's distinct-value aggregation with latest-entry or synthetic field rules.
