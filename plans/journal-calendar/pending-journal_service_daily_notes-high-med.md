@@ -18,6 +18,7 @@ Discovery gate is CLOSED for items below. See `../pending-journal_discovery_and_
 - **D22** A new entry contains frontmatter with the date only; fields are NOT pre-seeded.
 - **D30** Same-minute collision → counter suffix `-2`, `-3`, never seconds. Service must detect collision, increment counter, and not overwrite.
 - **D33** Opening or listing entries must NOT rewrite files. Unknown frontmatter survives.
+- **D41** Metadata facet values come from the platform index; no journal-owned cache and no full-file-scan fallback.
 
 **STOP gate:** The discovery gate above is closed. The following items remain OPEN and must not be silently resolved:
 
@@ -30,8 +31,8 @@ Do not implement backfill mechanics, folder-creation policy, or error copy until
 
 ## Listing at scale — DECIDED
 
-Resolved 2026-08-07 against the shipped index. Three of the four parts need no new
-infrastructure; the fourth is flagged below.
+Resolved 2026-08-07 against the shipped index and D41. Listing and previews need no new
+infrastructure; metadata facets depend on the indexing-search story below.
 
 **Nothing in the list requires reading file contents.** D20 makes the *filename*
 authoritative for an entry's date, so dates, year/month grouping, the Undated group,
@@ -44,7 +45,7 @@ full-scan problem disappears.
 | Entry list, dates, grouping, Undated (D36), calendar dots (D29) | `list_workspace_entries` — paths only | one tree walk |
 | First-line preview (D9) | `read_markdown_file`, **lazy per visible row**, memoised | ~20-40 reads, not thousands |
 | Full-text search (D16) | existing `search_index(rootPath, query, limit)`, hits filtered to the journal root | already shipped |
-| Metadata filter values (D16) | **see gap below** | unresolved |
+| Metadata filter values (D16/D41) | platform index facet query | indexing dependency |
 
 **Previews are lazy because the list is virtualized.** D13 already requires
 virtualization, so only the visible window is ever rendered — fetch previews for those rows
@@ -65,20 +66,14 @@ files will not appear in search until the workspace is reindexed. The tree walk 
 them, so the list stays correct — only search lags. State this in the UI rather than
 pretending otherwise.
 
-### Gap — metadata filter values are not indexable today
+### Metadata facets — platform dependency
 
-D16 requires filter options auto-populated from values actually present. The FTS5 record
-holds filename, title, tags, aliases and body — **not arbitrary frontmatter**, so
-user-defined fields (D4) cannot be queried from it. Reading every entry's frontmatter to
-build the facet list is exactly the full scan this section rules out.
-
-Options, none chosen here: extend the native index record to carry frontmatter (durable,
-benefits graph/tags/queries too, but an indexing-epic change); a journal-owned background
-frontmatter pass (small, but a second cache); or ship v1 with search and date filters and
-add metadata facets once the index carries frontmatter.
-
-**STOP gate:** do not implement metadata filter facets until this is decided. The other
-three rows of the table above are unblocked.
+D41 chooses the platform-owned disposable index for structured frontmatter and facet
+queries. This story may expose the query through its UI-independent boundary, but it does
+not own the index schema or native command. Metadata facets remain blocked on
+`plans/indexing-search/pending-frontmatter_metadata_facets-high-hard.md`; listing, date
+filters, lazy previews and search remain unblocked. If the index is unavailable, return a
+typed unavailable result — never scan every file or create a journal cache.
 
 ## Goal
 
@@ -105,10 +100,11 @@ Implement a typed, UI-independent service that resolves a journal date, expands 
 
 ## Dependencies
 
-- Approved discovery/wireframes story (gate closed for D7–D33 above).
+- Approved discovery/wireframes story (gate closed for the listed decisions above).
 - Data-model story (approved `JournalEntryRef`, `parseJournalFilename`, `buildNewEntryFrontmatter`).
 - Existing `WorkspaceDocumentApi`, `WorkspaceDesktopApi`, `loadWorkspaceDocument`, `saveWorkspaceDocument`, and native error shape.
 - Existing frontmatter mutation policy (`created_at` at creation, `updated_at` on explicit save).
+- D41 metadata facets depend on `plans/indexing-search/pending-frontmatter_metadata_facets-high-hard.md`; other service work does not.
 
 ## Acceptance criteria
 
@@ -124,6 +120,9 @@ Implement a typed, UI-independent service that resolves a journal date, expands 
       test asserts zero `read_markdown_file` calls for a list of 1,000+ entries.
 - [ ] First-line previews are fetched lazily for visible rows only and memoised; a test
       asserts previews are not prefetched for off-screen entries.
+- [ ] Metadata facet/filter queries delegate to the D41 platform-index API, return matching
+      paths for D16 search-within-filter, and return a typed unavailable result when the index
+      is unavailable; no full-file scan or journal cache.
 - [ ] Tests cover: today's entry, same-minute collision (counter 2 and 3), past-date path expansion, invalid path segments, workspace unavailable, open/list no-rewrite, unknown frontmatter survival.
 - [ ] `pnpm lint`, `pnpm typecheck`, `pnpm test` all pass.
 
@@ -147,7 +146,7 @@ Desktop: temporary workspace, today/collision/past-date/invalid/error flows; ins
 
 - No template application (D21) — explicitly deferred.
 - No calendar aggregation, panel UI, mood/activity picker, settings UI, extension registration, reminders, or background watcher.
-- Do not add a journal database or change generic workspace CRUD semantics.
+- Do not add a journal database, implement the platform index schema, or change generic workspace CRUD semantics.
 - Do not silently default the time component of a backfilled entry (STOP-gated).
 
 ## Handoff artifacts
