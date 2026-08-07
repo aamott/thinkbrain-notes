@@ -117,6 +117,9 @@ Runtime panel dimension is the only case where a scoped CSSOM custom property on
 - [ ] Popout header contains exactly: New entry / Today / Open calendar / overflow, then search, then filter strip. No group-by control.
 - [ ] "Today" opens the most recent entry for today's date or creates a new one; never appends to an existing file (D18).
 - [ ] List renders as a flat virtualized stream with collapsible year + month headers, non-indented (D37, D39); list handles thousands of entries without layout thrash (D13).
+- [ ] Rows render from filename-derived dates alone; first-line previews load lazily for
+      visible rows only and never block first paint (see the listing strategy in
+      `pending-journal_service_daily_notes-high-med.md`).
 - [ ] Undated group is pinned collapsed at the top with a count; absent when empty; non-Markdown files are hidden; both are announced as a category (D36).
 - [ ] Active filters show count badge + chip row + "showing N of M" string; a muted-only indicator is a defect (D16).
 - [ ] Metadata widget appears above the editor body for journal-folder notes and for notes with configured fields (D28); starts collapsed as a dateline (D35); expands to the editable form. Route decision is recorded and prerequisites are complete.
