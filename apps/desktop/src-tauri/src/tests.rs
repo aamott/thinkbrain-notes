@@ -1352,3 +1352,35 @@ fn rename_workspace_entry_treats_source_equal_destination_as_a_noop() {
 
     fs::remove_dir_all(root).expect("temp rename-noop directory is cleaned up");
 }
+
+#[cfg(unix)]
+#[test]
+fn markdown_commands_reject_symlink_escapes_from_the_workspace() {
+    use std::os::unix::fs::symlink;
+
+    let root = temp_test_dir("markdown-symlink");
+    let outside = temp_test_dir("markdown-symlink-outside");
+    let secret = outside.join("secret.md");
+    fs::write(&secret, "outside the vault").expect("outside file is written");
+
+    // A vault can legitimately contain symlinks — synced from another machine,
+    // or shipped inside a shared/downloaded vault. Following one out of the
+    // workspace would read and overwrite files the workspace never covered.
+    symlink(&secret, root.join("innocent.md")).expect("symlink is created");
+
+    let read_escape = read_markdown_file(
+        root.to_string_lossy().to_string(),
+        "innocent.md".to_string(),
+    );
+    assert!(read_escape.is_err(), "reading through a symlink must be refused");
+    assert_eq!(read_escape.unwrap_err().code, "workspace.invalid_path");
+
+    assert_eq!(
+        fs::read_to_string(&secret).expect("outside file still readable"),
+        "outside the vault",
+        "the outside file must not have been touched"
+    );
+
+    fs::remove_dir_all(root).expect("temp markdown symlink root is cleaned up");
+    fs::remove_dir_all(outside).expect("temp markdown symlink outside dir is cleaned up");
+}

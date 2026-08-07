@@ -5,7 +5,9 @@ use std::path::{Path, PathBuf};
 use std::fs;
 use std::time::UNIX_EPOCH;
 
-use crate::commands::workspace::{resolve_workspace_root, normalize_relative_path};
+use crate::commands::workspace::{
+    normalize_relative_path, resolve_workspace_entry_path, resolve_workspace_root,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct MarkdownFileEntry {
@@ -208,7 +210,12 @@ pub fn resolve_markdown_file_path(root: &Path, relative_path: &str) -> Result<Pa
         ));
     }
 
-    Ok(path)
+    // `normalize_relative_path` rejects `..`, but it cannot see symlinks: a
+    // link inside the vault still resolves outside it, which would let these
+    // commands read, overwrite or delete arbitrary files. Defer to the entry
+    // resolver, which canonicalizes and verifies containment for both existing
+    // targets and not-yet-created ones.
+    resolve_workspace_entry_path(root, relative_path)
 }
 
 
