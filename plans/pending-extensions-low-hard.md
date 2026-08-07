@@ -253,13 +253,17 @@ are not yet formalized, the first story here should establish them.
   and tested, but the extension platform is not complete. Manifest-driven runtime,
   bootstrap, module loading, compatibility, and local-directory loading remain
   pending in the focused stories below.
-- ⬜ Manifest parser/schema — `plans/extensions/pending-extension_manifest_format-low-med.md`.
-- ⬜ Soft capability/API/platform compatibility —
-  `plans/extensions/pending-extension_capability_compatibility-low-med.md`.
+- ✅ Manifest parser/schema — `plans/extensions/done-extension_manifest_format-low-med.md`.
+- ✅ Soft capability/API/platform compatibility —
+  `plans/extensions/done-extension_capability_compatibility-low-med.md`.
 - ⬜ Local-directory loader — `plans/extensions/pending-extension_local_directory_loader-low-med.md`.
-- ⬜ Lifecycle/bootstrap integration —
-  `plans/extensions/pending-extension_lifecycle_bootstrap-low-med.md`; existing
-  lifecycle cleanup is not a claim that loading/bootstrap is complete.
+  **This is the next step**: built-ins load as app code today, so nothing loads
+  from disk yet.
+- ✅ Lifecycle/bootstrap integration —
+  `plans/extensions/done-extension_lifecycle_bootstrap-low-med.md`. Built-ins are
+  registered from manifests at startup and activated lazily via contribution
+  stubs; `note-stats` is the first built-in and exercises commands, panels, and
+  namespaced settings.
 - ⬜ API/event/background-task/data surfaces —
   `plans/extensions/pending-extension_api_surface-low-hard.md`.
 - ⬜ Settings UI/persistence/uninstall —

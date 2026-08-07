@@ -180,10 +180,29 @@ function own(context: ExtensionContext, disposable: Disposable, assertActive: ()
   return context.subscriptions.add(disposable);
 }
 
+/**
+ * Registries an extension host writes into.
+ *
+ * Injectable so tests can isolate a host from the app-wide singletons; two
+ * hosts sharing the module singletons would collide on contribution ids.
+ */
+export interface DesktopExtensionHostRegistries {
+  readonly commands: typeof desktopCommandRegistry;
+  readonly panels: typeof desktopPanelRegistry;
+  readonly editorHooks: typeof markdownEditorHookRegistry;
+}
+
+const defaultRegistries = (): DesktopExtensionHostRegistries => ({
+  commands: desktopCommandRegistry,
+  panels: desktopPanelRegistry,
+  editorHooks: markdownEditorHookRegistry
+});
+
 /** Creates a scoped desktop context for one host-controlled lifecycle. */
 function createDesktopExtensionContext(
   context: ExtensionContext,
-  isActive: () => boolean
+  isActive: () => boolean,
+  registries: DesktopExtensionHostRegistries
 ): DesktopExtensionContext {
   const moduleId = settingsModuleId(context.extensionId);
   const assertActive = (): void => {
@@ -230,7 +249,7 @@ function createDesktopExtensionContext(
     commands: {
       register: (command) => {
         assertActive();
-        return own(context, desktopCommandRegistry.register({
+        return own(context, registries.commands.register({
           ...command,
           id: prefixId(context.extensionId, "Command", command.id)
         }), assertActive);
@@ -239,7 +258,7 @@ function createDesktopExtensionContext(
     panels: {
       register: (panel) => {
         assertActive();
-        return own(context, desktopPanelRegistry.register({
+        return own(context, registries.panels.register({
           ...panel,
           id: prefixId(context.extensionId, "Panel", panel.id)
         }), assertActive);
@@ -248,7 +267,7 @@ function createDesktopExtensionContext(
     editorHooks: {
       register: (hook) => {
         assertActive();
-        return own(context, markdownEditorHookRegistry.register({
+        return own(context, registries.editorHooks.register({
           ...hook,
           id: prefixId(context.extensionId, "Editor hook", hook.id)
         }), assertActive);
@@ -259,8 +278,11 @@ function createDesktopExtensionContext(
 }
 
 /** Creates a trusted same-context desktop extension host. */
-export function createDesktopExtensionHost(): DesktopExtensionHost {
+export function createDesktopExtensionHost(
+  registries: Partial<DesktopExtensionHostRegistries> = {}
+): DesktopExtensionHost {
   const coreHost = createExtensionHost();
+  const resolved: DesktopExtensionHostRegistries = { ...defaultRegistries(), ...registries };
 
   const register = (extension: DesktopExtensionDefinition): Disposable => {
     let active = false;
@@ -269,7 +291,7 @@ export function createDesktopExtensionHost(): DesktopExtensionHost {
       activate: async (context) => {
         active = true;
         try {
-          return await extension.activate(createDesktopExtensionContext(context, () => active));
+          return await extension.activate(createDesktopExtensionContext(context, () => active, resolved));
         } catch (error: unknown) {
           active = false;
           throw error;
@@ -278,7 +300,7 @@ export function createDesktopExtensionHost(): DesktopExtensionHost {
       deactivate: async (context) => {
         try {
           if (extension.deactivate) {
-            await extension.deactivate(createDesktopExtensionContext(context, () => active));
+            await extension.deactivate(createDesktopExtensionContext(context, () => active, resolved));
           }
         } finally {
           active = false;

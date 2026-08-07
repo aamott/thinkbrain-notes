@@ -6,6 +6,7 @@ import {
 import type { ReactNode } from "react";
 import { SourceControlPanel } from "../git/SourceControlPanel";
 import { SearchPanel } from "../search/SearchPanel";
+import { ExtensionsPanel } from "../extensions/ExtensionsPanel";
 import { Unavailable } from "../shell/Unavailable";
 import { AssistantPanelSurface } from "./AssistantPanelSurface";
 import { OutlinePanel } from "./OutlinePanel";
@@ -107,10 +108,7 @@ export const builtInDesktopPanels: readonly DesktopPanelContribution[] = [
     label: "Extensions",
     icon: "⊞",
     side: "left",
-    availability: () => false,
-    factory: () => (
-      <Unavailable title="extensions" description="Extensions will appear here when the capability sandbox is ready." />
-    )
+    factory: () => <ExtensionsPanel />
   },
   {
     id: "outline",
