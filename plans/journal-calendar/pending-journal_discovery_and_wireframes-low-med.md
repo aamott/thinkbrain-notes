@@ -290,20 +290,100 @@ the first slice.
 22. **Folder creation on backfill.** Backfilling into a past year or month implies
     creating `YYYY/MM` folders that do not exist yet.
 
+### Batch 5 — recorded 2026-08-06
+
+**D20. Both the filename and a frontmatter date are written; the filename wins on
+conflict.** *(resolves analyst note 17)*
+Each entry carries its date in the filename (D17) and in a frontmatter field. The
+two are expected to agree. When they disagree — after a manual rename, an external
+edit, or a sync artifact — the **filename is authoritative** for grouping,
+calendar placement, and ordering. Consequences for downstream stories:
+
+- The frontmatter date is a convenience/portability copy, not the source of truth.
+- Reading a note must not rewrite a disagreeing frontmatter date; that would
+  violate the frontmatter mutation policy in `plans/technical-decisions.md`.
+  Surfacing the mismatch is acceptable; silently repairing it is not.
+- A file whose name does not parse as a date needs defined handling (open).
+
+**D21. No templates in the first slice.**
+New entries are not pre-filled from a template. Templates are not rejected as a
+future idea, but nothing in the first release reads a template file or a template
+setting. `pending-journal_service_daily_notes-high-med.md` should drop template
+application from its first increment.
+
+### P1. Proposed journal popout header — PROPOSAL, NOT APPROVED
+
+The product owner asked for a recommendation rather than supplying a menu list.
+The following is a proposal for approval. **It is not a decision and must not be
+implemented or treated as settled.** It is recorded here so the approval has
+something concrete to accept, amend, or reject.
+
+Design intent: this is a narrow side panel, not the main canvas. Keep it to three
+compact zones and push anything rare into an overflow menu.
+
+**Zone 1 — action row**
+
+| Item | Form | Behavior |
+|---|---|---|
+| New entry | Primary button, label + icon | Always creates a new file (D18) |
+| Today | Icon button | See the "Today" note below |
+| Calendar | Icon button | Opens the full calendar tab (D14) |
+| Overflow `...` | Icon button | Rarely used items, e.g. journal settings, reveal folder |
+
+**Zone 2 — search row**
+A single full-width search input (full text, D16).
+
+**Zone 3 — control strip**
+A thin row beneath search: group-by as a compact dropdown on the left showing the
+current value (`Week` by default, D10), and a filter button on the right that
+opens a popover of the auto-populated metadata filters. The filter button carries
+a count badge when filters are active.
+
+**Active-filter chips.** When any filter or search is active, a chip row appears
+under the control strip listing each active constraint with an individual dismiss
+control, plus "Clear all". This is how P1 satisfies D16's requirement that active
+filters be emphasized, and it supplies the clear-filters affordance flagged in
+analyst note 15.
+
+**Proposed "Today" behavior — needs explicit approval.** D18 makes "new entry"
+always create a new file, which removed the "resume today's entry" path from D1.
+The proposal: **Today opens the most recent entry for today if one exists, and
+creates one if none does.** This restores the D1 workflow without weakening D18.
+Two alternatives were considered and are recorded as rejected-for-now, not
+dismissed: (a) Today merely scrolls the list to today without opening anything —
+simpler but leaves D1 unserved; (b) no Today action at all — smallest surface but
+makes the most common daily action a two-step scroll-and-click.
+
+### Analyst notes — gaps raised by Batch 5
+
+23. **Unparseable filenames.** D20 makes the filename authoritative, so a journal
+    folder file whose name is not a date needs defined behavior: hidden, shown
+    ungrouped, or flagged.
+24. **Files in the journal folder that are not entries.** Related to 23 — a user
+    may drop an ordinary note or an attachment into the journal folder.
+25. **Rename consequences.** Renaming a file changes its date under D20, silently
+    moving it in the calendar and list. Whether the app should warn is undecided.
+26. **Empty new entries.** With no templates (D21), it is unspecified whether a
+    new file is completely empty or arrives with a frontmatter block pre-seeded
+    with the configured fields.
+27. **Nesting versus filename date.** D17 stores files under `YYYY/MM` folders
+    that duplicate the filename date. If a rename makes the filename disagree with
+    its folder, D20 says the filename wins — so the folder is also cosmetic, and
+    whether the app relocates the file is undecided.
+
 ### Open questions carried forward
 
-- **Date authority: filename versus frontmatter date field versus file mtime**
-  (analyst note 17) — blocks the frontmatter contract story.
+- **Approval of P1**, including the proposed "Today" behavior.
+- Whether a new entry is empty or pre-seeded with a frontmatter block (note 26).
+- Handling of unparseable filenames and non-entry files in the journal folder
+  (notes 23-24); rename warnings and folder relocation (notes 25, 27).
 - Same-minute filename collision rule.
-- The popout top-menu item list, including whether a distinct "today" action
-  exists alongside "new entry".
 - Backfill mechanics and the time component of a backfilled entry.
 - Whether a separate calendar activity-bar button still exists (D14 residual).
 - Per-day aggregation policy for the calendar (D8 provisional).
 - Day-click behavior, dot semantics, calendar tab identity, cross-surface filter
-  scope, clear-filters affordance, calendar on mobile (analyst notes 11-16).
+  scope, calendar on mobile (analyst notes 11-14, 16).
 - Whether metadata field definitions are app-global or per-workspace.
-- Template handling.
 - Entry-state affordances: missing, empty, malformed, read-only, unsaved.
 - Field-definition drift and orphaned metadata display.
 - Form-widget scope and malformed-frontmatter behavior.
