@@ -2,11 +2,11 @@
 
 ## Status
 
-🟨 Partially implemented. Scoped read/write/change subscriptions and schema cleanup are implemented/tested in `desktopExtensionHost.ts`. Manifest schemas, settings UI/E2E, persisted namespace cleanup, and uninstall are not implemented. Secrets are separate.
+🟨 Partially implemented. App-scoped read/write/change subscriptions and schema cleanup are implemented/tested. D45 workspace scope, extension settings UI/E2E, persisted cleanup, and uninstall are not implemented. Secrets are separate.
 
 ## Goal
 
-Render approved non-secret extension settings in the existing settings tab, persist them through the namespaced JSON registry outside the workspace, and provide safe uninstall cleanup. Preserve `extension-${extensionId}` module derivation and extension-owned access.
+Render approved non-secret extension settings, persist app and workspace scopes outside the vault, and provide safe cleanup. Preserve `extension-${extensionId}` derivation and extension-owned access. D45 requires workspace isolation and observable scoped reads/writes; it does not permit feature-owned storage.
 
 ## Discovery questions
 
@@ -21,7 +21,8 @@ Render approved non-secret extension settings in the existing settings tab, pers
 ## Prerequisites
 
 - Modular settings registry/store/UI in `apps/desktop/src/settings/` and core settings types.
-- Scoped settings API/tests in `apps/desktop/src/extensions/desktopExtensionHost.ts`.
+- App-scoped settings API/tests in `apps/desktop/src/extensions/desktopExtensionHost.ts`.
+- Existing workspace identity and workspace-settings serialization boundaries; D45 must reuse them rather than write into the vault.
 - Manifest schema, lifecycle/bootstrap, and extension status model.
 
 ## Exact likely file areas
@@ -32,29 +33,30 @@ Render approved non-secret extension settings in the existing settings tab, pers
 
 ## Implementation tasks
 
-1. After the product gate, map manifest schemas to the namespaced registry with strict type/validation checks and malformed-schema diagnostics.
-2. Render extension sections using existing controls, staged Save/Reset behavior, focus/keyboard/error semantics, and mobile layout; add component tests.
-3. Ensure load/save preserves unrelated JSON keys and persists outside the workspace; test multiple extensions and isolation.
-4. Implement uninstall service: deactivate first, remove registrations/data per policy, optionally delete `extension-${id}` settings, and report failures.
-5. Add E2E for edit/validate/save/reset, malformed/disabled state, and uninstall confirmation/cleanup.
+1. Extend extension settings schemas/context operations with explicit app/workspace scope, keyed through the existing workspace identity; preserve relative extension keys and `extension-${id}` namespaces.
+2. Map schemas to the registry with strict validation and malformed-schema diagnostics.
+3. Render approved extension sections using existing staged Save/Reset, accessibility, and mobile patterns.
+4. Persist outside the vault, preserve unrelated keys, isolate extensions and workspaces, and notify scoped subscribers when the active workspace changes.
+5. Implement approved uninstall cleanup, then add E2E for both scopes, malformed/disabled state, save/reset, workspace switching, and cleanup.
 
 ## Acceptance criteria
 
 - [ ] Approved accessible desktop/mobile layout and uninstall confirmation exist.
 - [ ] Manifest schemas render with typed validation/errors.
-- [ ] Values persist outside the workspace and cannot cross namespaces.
+- [ ] App and workspace values persist outside the vault; extension and workspace namespaces cannot cross.
+- [ ] Scoped get/set/onDidChange behavior resolves the active workspace explicitly, handles no-workspace state, and updates subscribers on workspace change (D45).
 - [ ] Uninstall deactivates first and follows keep/remove policy without unrelated deletion.
 - [ ] Secrets never enter JSON, workspace, logs, or general UI state.
 
 ## Automated validation
 
-- Core registry/store tests for schema validation, serialization, isolation, and cleanup.
+- Core/desktop tests for schema validation, app/workspace serialization, no-workspace behavior, workspace switching, namespace isolation, subscriptions, and cleanup.
 - Desktop component and Playwright/E2E settings/uninstall tests.
 - `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:e2e`, `pnpm build`.
 
 ## Manual desktop/mobile checks
 
-- Desktop Tauri: load fixture schema, edit/save/reset, restart, inspect no vault change, uninstall with both choices.
+- Desktop Tauri: edit/save/reset app and workspace fixtures, switch between two workspaces, restart, inspect no vault change or cross-workspace leakage, then test approved uninstall choices.
 - Mobile Tauri: verify scrolling/touch/keyboard accessibility, offline save, and no desktop-only UI.
 
 ## Non-goals
