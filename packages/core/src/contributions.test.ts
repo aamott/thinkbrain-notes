@@ -144,7 +144,7 @@ describe("contribution registry", () => {
     replacementRegistration.dispose();
   });
 
-  it("returns a defensive entries snapshot", () => {
+  it("returns a frozen entries snapshot a caller cannot mutate", () => {
     const command: CommandContribution = {
       id: "snapshot",
       title: "Snapshot",
@@ -153,9 +153,82 @@ describe("contribution registry", () => {
     const registry = createContributionRegistry([command]);
     const entries = registry.entries();
 
-    (entries as CommandContribution[]).pop();
-
+    expect(Object.isFrozen(entries)).toBe(true);
+    expect(() => (entries as CommandContribution[]).pop()).toThrow();
     expect(registry.entries()).toEqual([command]);
+  });
+
+  it("keeps the entries reference stable until the registry changes", () => {
+    const command: CommandContribution = {
+      id: "stable",
+      title: "Stable",
+      handler: () => undefined
+    };
+    const registry = createContributionRegistry([command]);
+
+    // `useSyncExternalStore` re-renders whenever the snapshot reference
+    // changes, so an unchanged registry must return the identical array.
+    expect(registry.entries()).toBe(registry.entries());
+
+    const before = registry.entries();
+    const registration = registry.register({
+      id: "added",
+      title: "Added",
+      handler: () => undefined
+    });
+    expect(registry.entries()).not.toBe(before);
+
+    const afterRegister = registry.entries();
+    registration.dispose();
+    expect(registry.entries()).not.toBe(afterRegister);
+  });
+
+  it("notifies subscribers when a contribution is registered or disposed", () => {
+    const registry = createContributionRegistry<CommandContribution>();
+    const seen: number[] = [];
+    registry.subscribe(() => seen.push(registry.entries().length));
+
+    const registration = registry.register({
+      id: "watched",
+      title: "Watched",
+      handler: () => undefined
+    });
+    registration.dispose();
+
+    expect(seen).toEqual([1, 0]);
+  });
+
+  it("stops notifying after a subscriber unsubscribes", () => {
+    const registry = createContributionRegistry<CommandContribution>();
+    let notifications = 0;
+    const unsubscribe = registry.subscribe(() => {
+      notifications += 1;
+    });
+
+    registry.register({ id: "first", title: "First", handler: () => undefined });
+    unsubscribe();
+    registry.register({ id: "second", title: "Second", handler: () => undefined });
+
+    expect(notifications).toBe(1);
+  });
+
+  it("does not notify when disposing an already-disposed registration", () => {
+    const registry = createContributionRegistry<CommandContribution>();
+    const registration = registry.register({
+      id: "once",
+      title: "Once",
+      handler: () => undefined
+    });
+
+    let notifications = 0;
+    registry.subscribe(() => {
+      notifications += 1;
+    });
+
+    registration.dispose();
+    registration.dispose();
+
+    expect(notifications).toBe(1);
   });
 });
 

@@ -4,8 +4,8 @@ import type { WorkspaceExplorerProps } from "../workspace/WorkspaceExplorer";
 import { PanelTitle } from "./PanelTitle";
 import {
   getDesktopPanelOrUndefined,
-  getLeftPanelContributions,
   renderDesktopPanel,
+  useLeftPanelContributions,
   type DesktopPanelContext
 } from "./panelRegistry";
 
@@ -31,6 +31,7 @@ export function LeftPopout({ panel, rootPath, explorerProps, onOpenSearchResult 
     explorerProps,
     onOpenSearchResult
   };
+  const leftPanels = useLeftPanelContributions();
   const contribution = getDesktopPanelOrUndefined(panel);
 
   if (!contribution) {
@@ -53,7 +54,7 @@ export function LeftPopout({ panel, rootPath, explorerProps, onOpenSearchResult 
       aria-label={`${contribution.label} panel`}
     >
       <PanelTitle title={contribution.label} />
-      {getLeftPanelContributions().map((panelContribution) => {
+      {leftPanels.map((panelContribution) => {
         const isActive = panelContribution.id === panel;
         if (!isActive && !panelContribution.keepMounted) return null;
         const isAvailable = panelContribution.availability?.(context) ?? true;

@@ -2,7 +2,7 @@ import { isTauri } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useReducer, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { CommandPalette, type WorkspaceFileResult } from "../commands/CommandPalette";
 import {
-  desktopCommandRegistry,
+  useDesktopCommands,
   type DesktopCommand,
   type DesktopCommandContext
 } from "../commands/commandRegistry";
@@ -55,6 +55,7 @@ type PanelSide = "left" | "right";
  * state, effects, and callbacks so the layout stays easy to reason about.
  */
 export function DesktopShell() {
+  const paletteCommands = useDesktopCommands();
   const rootRef = useRef<HTMLElement>(null);
   const [tabState, dispatchTabs] = useReducer(desktopTabReducer, initialDesktopTabState);
   const [documents, setDocuments] = useState<Record<string, DocumentViewState>>({});
@@ -593,7 +594,7 @@ export function DesktopShell() {
 
       {paletteOpen && (
         <CommandPalette
-          commands={desktopCommandRegistry.entries()}
+          commands={paletteCommands}
           files={workspaceFiles
             .map((file): WorkspaceFileResult => ({ rootPath: restoredWorkspacePath ?? "", relativePath: file.relative_path }))
             .filter((file) => Boolean(file.rootPath))}

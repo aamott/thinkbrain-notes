@@ -4,8 +4,8 @@ import { Unavailable } from "../shell/Unavailable";
 import { PanelTitle } from "./PanelTitle";
 import {
   getDesktopPanelOrUndefined,
-  getRightPanelContributions,
   renderDesktopPanel,
+  useRightPanelContributions,
   type DesktopPanelContext
 } from "./panelRegistry";
 
@@ -26,6 +26,7 @@ type RightPopoutProps = {
  * fixed-width dock and responsive overlay behavior.
  */
 export function RightPopout({ panel, rootPath, documentContents }: RightPopoutProps) {
+  const rightPanels = useRightPanelContributions();
   const contribution = getDesktopPanelOrUndefined(panel);
   const context: DesktopPanelContext = {
     rootPath,
@@ -64,7 +65,7 @@ export function RightPopout({ panel, rootPath, documentContents }: RightPopoutPr
       aria-label={`${contribution.label} panel`}
     >
       <PanelTitle title={contribution.label} />
-      {getRightPanelContributions().map((panelContribution) => {
+      {rightPanels.map((panelContribution) => {
         const isActive = panelContribution.id === panel;
         if (!isActive && !panelContribution.keepMounted) return null;
         const isAvailable = panelContribution.availability?.(context) ?? true;

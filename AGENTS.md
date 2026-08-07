@@ -37,17 +37,16 @@ Future extensions include:
 
 
 ## Plans
-List relevant folder to see task status. Review after milestones. Task reviewer deletes tasks after review, or updates status if work is not complete. Add action items from review as stories unless they are immediately fixable. 
+List relevant folder to see task status. Review after milestones. Task reviewer deletes tasks after review, or updates status if work is not complete. Add action items from review as stories unless they are immediately fixable. Plans should be concise.
 
 **Plan Folder**
 ```
 docs/plans/
-├── Blueprint.md  # summary of the app. Ignore for now - needs updating. 
-├── status-epic-difficulty.md
-├── epic/
-│   └── status-story-difficulty.md
+├── status-epic_name-difficulty.md
+├── epic_name/
+│   └── status-story_name-difficulty.md
 └── other_tasks/ # bugs, chores, etc.
-    └── status-task-difficulty-urgency.md
+    └── status-task_name-difficulty-urgency.md
 ```
 
 ## Optional: Repomix

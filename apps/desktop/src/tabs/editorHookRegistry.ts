@@ -84,6 +84,7 @@ export function createDesktopEditorHookRegistry<Payload = void, Context = unknow
     register: coreRegistry.register,
     get: coreRegistry.get,
     entries: coreRegistry.entries,
+    subscribe: coreRegistry.subscribe,
     orderedEntries,
     getExtensions,
     getKeybindings

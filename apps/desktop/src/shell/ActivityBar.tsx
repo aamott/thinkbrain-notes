@@ -1,4 +1,4 @@
-import { getLeftPanelContributions } from "../panels/panelRegistry";
+import { useLeftPanelContributions } from "../panels/panelRegistry";
 import { IconButton } from "./IconButton";
 import { type LeftPanel } from "./shellTypes";
 
@@ -23,13 +23,15 @@ export function ActivityBar({
   onSelectLeftPanel,
   onOpenSettings
 }: ActivityBarProps) {
+  const leftPanels = useLeftPanelContributions();
+
   return (
     <aside
       className="flex flex-col justify-between flex-[0_0_3rem] bg-activitybar border-r border-border py-[0.4rem]"
       aria-label="Workspace sections"
     >
       <div>
-        {getLeftPanelContributions().map((action) => (
+        {leftPanels.map((action) => (
           <IconButton
             key={action.id}
             label={action.label}

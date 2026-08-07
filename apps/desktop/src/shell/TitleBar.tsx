@@ -1,7 +1,7 @@
 import { cn } from "../lib/utils";
 import type { AppTheme } from "../settings/theme-context";
 import type { DesktopTab } from "../tabs/tabModel";
-import { getRightPanelContributions } from "../panels/panelRegistry";
+import { useRightPanelContributions } from "../panels/panelRegistry";
 import { IconButton } from "./IconButton";
 import { type RightPanel } from "./shellTypes";
 
@@ -60,6 +60,8 @@ export function TitleBar({
   onToggleRightPanel,
   onToggleTheme
 }: TitleBarProps) {
+  const rightPanels = useRightPanelContributions();
+
   return (
     <header className="flex items-end bg-titlebar border-b border-border min-w-0">
       {/* App identity — width tracks the activity bar + left sidebar so the
@@ -112,7 +114,7 @@ export function TitleBar({
 
       {/* Right action group — panel toggles, divider, theme switcher. */}
       <div className="flex items-center border-l border-border gap-[0.125rem] h-full px-1">
-        {getRightPanelContributions().map((action) => (
+        {rightPanels.map((action) => (
           <IconButton
             key={action.id}
             label={action.label}

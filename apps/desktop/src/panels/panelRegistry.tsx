@@ -3,7 +3,7 @@ import {
   type ContributionRegistry,
   type PanelContribution
 } from "@thinkbrain/core";
-import type { ReactNode } from "react";
+import { useMemo, useSyncExternalStore, type ReactNode } from "react";
 import { SourceControlPanel } from "../git/SourceControlPanel";
 import { SearchPanel } from "../search/SearchPanel";
 import { ExtensionsPanel } from "../extensions/ExtensionsPanel";
@@ -184,6 +184,7 @@ export function createDesktopPanelRegistry(
     register: coreRegistry.register,
     get: coreRegistry.get,
     entries: coreRegistry.entries,
+    subscribe: coreRegistry.subscribe,
     entriesBySide: (side) =>
       coreRegistry.entries().filter((panel) => isPanelOnSide(panel, side)),
     isAvailable: (id, context) => {
@@ -230,4 +231,36 @@ export function getLeftPanelContributions(): readonly LeftPanelContribution[] {
 /** Returns the registered right-side panels for title-bar/popout rendering. */
 export function getRightPanelContributions(): readonly RightPanelContribution[] {
   return desktopPanelRegistry.entriesBySide("right");
+}
+
+/**
+ * Subscribes a component to the panels registered on one side.
+ *
+ * Reading the registry once during render is not enough: an extension loaded
+ * from disk registers its panels while the app is already running. The filtered
+ * result is memoised because `useSyncExternalStore` compares snapshots by
+ * reference, and a fresh array on every render would loop.
+ */
+function usePanelContributions<Side extends "left" | "right">(
+  side: Side
+): readonly (DesktopPanelContribution & { readonly side: Side })[] {
+  const entries = useSyncExternalStore(
+    desktopPanelRegistry.subscribe,
+    desktopPanelRegistry.entries,
+    desktopPanelRegistry.entries
+  );
+  return useMemo(
+    () => entries.filter((panel) => isPanelOnSide(panel, side)),
+    [entries, side]
+  );
+}
+
+/** Live left-side panels for activity-bar rendering. */
+export function useLeftPanelContributions(): readonly LeftPanelContribution[] {
+  return usePanelContributions("left");
+}
+
+/** Live right-side panels for title-bar and popout rendering. */
+export function useRightPanelContributions(): readonly RightPanelContribution[] {
+  return usePanelContributions("right");
 }

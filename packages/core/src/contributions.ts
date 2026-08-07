@@ -26,8 +26,20 @@ export interface ContributionRegistry<T extends IdentifiedContribution> {
   register(contribution: T): Disposable;
   /** Returns the contribution for an identifier, or `undefined` when absent. */
   get(id: string): T | undefined;
-  /** Returns a defensive copy of contributions in registration order. */
+  /**
+   * Returns a frozen snapshot of contributions in registration order.
+   *
+   * The reference is stable until the registry changes, so the result can be
+   * read directly by a `useSyncExternalStore` subscriber without looping.
+   */
   entries(): readonly T[];
+  /**
+   * Observes registrations and disposals.
+   *
+   * @param listener Called after each change, once per change.
+   * @returns A function that removes the listener.
+   */
+  subscribe(listener: () => void): () => void;
 }
 
 /**
@@ -44,6 +56,14 @@ export function createContributionRegistry<T extends IdentifiedContribution>(
 ): ContributionRegistry<T> {
   const contributions = new Map<string, T>();
   const order: string[] = [];
+  const listeners = new Set<() => void>();
+  let snapshot: readonly T[] | null = null;
+
+  /** Invalidates the cached snapshot and notifies subscribers of one change. */
+  const changed = (): void => {
+    snapshot = null;
+    for (const listener of listeners) listener();
+  };
 
   const register = (contribution: T): Disposable => {
     if (contributions.has(contribution.id)) {
@@ -54,6 +74,7 @@ export function createContributionRegistry<T extends IdentifiedContribution>(
 
     contributions.set(contribution.id, contribution);
     order.push(contribution.id);
+    changed();
     let disposed = false;
 
     return {
@@ -68,6 +89,7 @@ export function createContributionRegistry<T extends IdentifiedContribution>(
           if (index >= 0) {
             order.splice(index, 1);
           }
+          changed();
         }
       }
     };
@@ -80,7 +102,14 @@ export function createContributionRegistry<T extends IdentifiedContribution>(
   return {
     register,
     get: (id: string): T | undefined => contributions.get(id),
-    entries: (): readonly T[] => order.map((id) => contributions.get(id)!),
+    entries: (): readonly T[] =>
+      (snapshot ??= Object.freeze(order.map((id) => contributions.get(id)!))),
+    subscribe: (listener: () => void): (() => void) => {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    }
   };
 }
 

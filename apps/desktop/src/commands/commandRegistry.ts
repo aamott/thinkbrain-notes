@@ -3,6 +3,7 @@ import {
   type CommandContribution,
   type ContributionRegistry
 } from "@thinkbrain/core";
+import { useSyncExternalStore } from "react";
 
 /** Stable command identifiers owned by the desktop shell or an extension. */
 export type DesktopCommandId =
@@ -210,3 +211,17 @@ export function createDesktopCommandRegistry(
 
 /** Shared command registry consumed by the desktop shell and extension bootstrap. */
 export const desktopCommandRegistry = createDesktopCommandRegistry();
+
+/**
+ * Subscribes a component to the registered commands.
+ *
+ * An extension loaded from disk registers its commands while the app is already
+ * running, so the palette follows the registry rather than reading it once.
+ */
+export function useDesktopCommands(): readonly DesktopCommand[] {
+  return useSyncExternalStore(
+    desktopCommandRegistry.subscribe,
+    desktopCommandRegistry.entries,
+    desktopCommandRegistry.entries
+  );
+}
