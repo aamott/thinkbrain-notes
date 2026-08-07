@@ -106,11 +106,14 @@ them (command registry, panel registration, editor hooks, settings schema
 registration) as the same surface third-party extensions will later use, so
 built-in features and extensions share one contribution model.
 
-One surface is still missing its seam: **tab kinds**. Panels are contributed through a
-singleton registry whose entries carry a renderer `factory`, but `TabContent.tsx` builds a
-throwaway tab registry and hard-codes a branch per kind, so a new tab kind cannot be added
-without editing the shell. `plans/extensions/pending-tab_view_registry-high-med.md` closes
-that gap for built-ins, deliberately without adding an extension-facing `tabs` API yet.
+Tab kinds are contributed the same way. `apps/desktop/src/tabs/tabRegistry.ts` exports
+`desktopTabRegistry` as an app-wide singleton whose `DesktopTabView` entries carry an
+optional renderer `factory`, plus `subscribe()` so the shell re-renders on registration and
+`Disposable` registration so a deactivating extension's kinds disappear.
+`DesktopExtensionContext.tabs.register()` contributes a kind and `openTab(kind, title)`
+opens one. Built-in kinds deliberately stay shell-drawn — the editor needs document state
+the generic `DesktopTabContext` (`rootPath`, `tabId`) does not carry — so a contributed kind
+must bring its own `factory`.
 
 ### Soft capability declarations
 
@@ -255,10 +258,9 @@ are not yet formalized, the first story here should establish them.
 - ✅ Internal contribution points — core command, panel, editor-hook, and
   settings-schema contracts/bridges are implemented and tested; follow-up review
   notes remain in `plans/extensions/pending-internal_contribution_points-low-med.md`.
-- ⬜ Tab view registry — `plans/extensions/pending-tab_view_registry-high-med.md`.
-  Tabs are the one contribution surface with no renderer seam: `TabContent.tsx` hard-codes
-  a branch per `tab.kind`. **Blocks the journal calendar tab**
-  (`plans/journal-calendar/pending-calendar_tab_ui-high-hard.md`).
+- ✅ Contributed tab kinds — `desktopTabRegistry` singleton with renderer `factory`,
+  `subscribe`, and disposable registration; `DesktopExtensionContext.tabs.register()` and
+  `openTab(kind, title)`. Built-in kinds remain shell-drawn by design.
 - 🟨 Lifecycle/disposable ownership and scoped settings runtime are implemented
   and tested, but the extension platform is not complete. Manifest-driven runtime,
   bootstrap, module loading, compatibility, and local-directory loading remain
