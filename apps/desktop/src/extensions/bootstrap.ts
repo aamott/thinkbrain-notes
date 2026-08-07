@@ -6,8 +6,7 @@ import {
   type CompatibilityHost,
   type CompatibilityReason,
   type Disposable,
-  type ExtensionManifest,
-  type ExtensionStatus
+  type ExtensionManifest
 } from "@thinkbrain/core";
 
 import { desktopCommandRegistry, type DesktopCommandContext } from "../commands/commandRegistry";
@@ -15,6 +14,16 @@ import { desktopPanelRegistry, type DesktopPanelContext } from "../panels/panelR
 import { builtInExtensions, type BuiltInExtension } from "./builtins";
 import { desktopExtensionHost, type DesktopExtensionHost } from "./desktopExtensionHost";
 import { createLazyExtensionPanel } from "./LazyExtensionPanel";
+import {
+  getExtensionBootstrap as getExtensionBootstrapInternal,
+  setExtensionBootstrap,
+  type BootstrapEntry,
+  type BootstrapEntryStatus,
+  type ExtensionBootstrap
+} from "./bootstrapRef";
+
+export type { BootstrapEntry, BootstrapEntryStatus, ExtensionBootstrap } from "./bootstrapRef";
+export { getExtensionBootstrap } from "./bootstrapRef";
 
 /**
  * Registers built-in extensions and activates them lazily.
@@ -33,20 +42,6 @@ import { createLazyExtensionPanel } from "./LazyExtensionPanel";
 
 /** The extension API version this host implements. */
 export const HOST_API_VERSION = "1.0.0";
-
-export type BootstrapEntryStatus = ExtensionStatus | "incompatible";
-
-export interface BootstrapEntry {
-  readonly id: string;
-  readonly name: string;
-  readonly status: BootstrapEntryStatus;
-  readonly reasons: readonly CompatibilityReason[];
-}
-
-export interface ExtensionBootstrap extends Disposable {
-  /** Current status of every built-in, for the Extensions panel. */
-  entries(): readonly BootstrapEntry[];
-}
 
 export interface BootstrapOptions {
   readonly host?: DesktopExtensionHost;
@@ -79,6 +74,11 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
   const extensions = options.extensions ?? builtInExtensions;
 
   const store = createDisposableStore();
+  const listeners = new Set<() => void>();
+  const notify = (): void => {
+    for (const listener of listeners) listener();
+  };
+  let snapshot: readonly BootstrapEntry[] = [];
   const states = new Map<string, EntryState>();
   const failedManifests: BootstrapEntry[] = [];
 
@@ -102,9 +102,11 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
       .activate(state.manifest.id)
       .then(() => {
         state.status = host.status(state.manifest.id) ?? "active";
+        rebuildSnapshot();
       })
       .catch((error: unknown) => {
         state.status = "failed";
+        rebuildSnapshot();
         console.error(`[extensions] Failed to activate "${state.manifest.id}".`, error);
         throw error;
       });
@@ -194,8 +196,10 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
     }
   }
 
-  return {
-    entries: (): readonly BootstrapEntry[] => [
+  // A cached snapshot keeps `entries()` referentially stable between changes,
+  // which useSyncExternalStore requires to avoid an infinite render loop.
+  function rebuildSnapshot(): void {
+    snapshot = [
       ...[...states.values()].map((state) => ({
         id: state.manifest.id,
         name: state.manifest.name,
@@ -203,7 +207,27 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
         reasons: state.reasons
       })),
       ...failedManifests
-    ],
-    dispose: () => store.dispose()
+    ];
+    notify();
+  }
+
+  rebuildSnapshot();
+
+  const bootstrap: ExtensionBootstrap = {
+    entries: (): readonly BootstrapEntry[] => snapshot,
+    subscribe: (listener: () => void): (() => void) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    dispose: () => {
+      if (getExtensionBootstrapInternal() === bootstrap) setExtensionBootstrap(null);
+      return store.dispose();
+    }
   };
+
+  // Only the default (app-wide) bootstrap is published; an injected-registry
+  // bootstrap in a test must not become the one the Extensions panel reads.
+  if (!options.commands && !options.panels && !options.host) setExtensionBootstrap(bootstrap);
+
+  return bootstrap;
 }
