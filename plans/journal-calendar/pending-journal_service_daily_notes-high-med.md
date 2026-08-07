@@ -25,15 +25,60 @@ Discovery gate is CLOSED for items below. See `../pending-journal_discovery_and_
 - **Folder creation on backfill:** when a backfilled entry falls into a past year/month folder that does not yet exist, should the service create it silently or prompt? Undecided.
 - **Day-click when the popout is closed:** behavior when a calendar day is clicked and the popout is not open is undecided; this story does not need to resolve it but must not assume either path.
 - **Error/retry copy:** exact error messages and retry behavior when the workspace is unavailable or a path is invalid are not yet approved.
-- **Listing at scale (design question, unresolved):** D13 sets a target of thousands of
-  entries and D9 requires each row to show the entry's first line. A naive recursive scan
-  that opens every file to extract a first line does not hold at that size, and the popout
-  opens on every activation. D16 makes the FTS5 index the likely source for previews and
-  metadata filter values, but the split between "service walks the tree" and "service reads
-  the index" is not decided. Decide it before implementing `listJournalEntries`; do not ship
-  a full-scan-per-open implementation on the assumption it can be optimised later.
 
 Do not implement backfill mechanics, folder-creation policy, or error copy until the owner approves them.
+
+## Listing at scale — DECIDED
+
+Resolved 2026-08-07 against the shipped index. Three of the four parts need no new
+infrastructure; the fourth is flagged below.
+
+**Nothing in the list requires reading file contents.** D20 makes the *filename*
+authoritative for an entry's date, so dates, year/month grouping, the Undated group,
+calendar dots and the day filter all derive from paths alone. One `list_workspace_entries`
+tree walk per refresh; no `read_markdown_file` calls. This is the whole reason the
+full-scan problem disappears.
+
+| Need | Source | Cost |
+|---|---|---|
+| Entry list, dates, grouping, Undated (D36), calendar dots (D29) | `list_workspace_entries` — paths only | one tree walk |
+| First-line preview (D9) | `read_markdown_file`, **lazy per visible row**, memoised | ~20-40 reads, not thousands |
+| Full-text search (D16) | existing `search_index(rootPath, query, limit)`, hits filtered to the journal root | already shipped |
+| Metadata filter values (D16) | **see gap below** | unresolved |
+
+**Previews are lazy because the list is virtualized.** D13 already requires
+virtualization, so only the visible window is ever rendered — fetch previews for those rows
+and cache them. Do not prefetch the whole folder, and do not block first paint on previews:
+render the row with its date immediately and fill the preview when it arrives.
+
+**Search delegates; it does not re-implement.** `search_index` is query-only and takes no
+path filter, so filter the returned hits to paths under the journal root. If that proves
+too coarse, the fix is a path-prefix argument on the native command — an indexing-epic
+change, not a journal-owned index.
+
+**Do not build a journal-owned search index.** The FTS5 cache is the app's one index, is
+disposable and rebuildable, and is never the source of truth.
+
+**Known caveat:** there is no file watcher yet
+(`plans/indexing-search/pending-file_watcher-low-med.md`), so externally-created journal
+files will not appear in search until the workspace is reindexed. The tree walk *does* see
+them, so the list stays correct — only search lags. State this in the UI rather than
+pretending otherwise.
+
+### Gap — metadata filter values are not indexable today
+
+D16 requires filter options auto-populated from values actually present. The FTS5 record
+holds filename, title, tags, aliases and body — **not arbitrary frontmatter**, so
+user-defined fields (D4) cannot be queried from it. Reading every entry's frontmatter to
+build the facet list is exactly the full scan this section rules out.
+
+Options, none chosen here: extend the native index record to carry frontmatter (durable,
+benefits graph/tags/queries too, but an indexing-epic change); a journal-owned background
+frontmatter pass (small, but a second cache); or ship v1 with search and date filters and
+add metadata facets once the index carries frontmatter.
+
+**STOP gate:** do not implement metadata filter facets until this is decided. The other
+three rows of the table above are unblocked.
 
 ## Goal
 
@@ -75,9 +120,10 @@ Implement a typed, UI-independent service that resolves a journal date, expands 
 - [ ] Folder and filename expansion uses only approved, path-safe tokens; traversal, empty names, and invalid extensions produce typed diagnostics, not silent failures.
 - [ ] Backfill creates a file at the past date path; the time component is STOP-gated and must not be silently defaulted.
 - [ ] Service is platform/UI agnostic at its boundary; no panel state, no direct Tauri calls.
-- [ ] `listJournalEntries` accepts a bounded date range and its cost is documented against the
-      thousands-of-entries target (D13); the tree-walk vs. index split is decided and recorded
-      before implementation.
+- [ ] `listJournalEntries` reads **no file contents** — dates come from filenames (D20); a
+      test asserts zero `read_markdown_file` calls for a list of 1,000+ entries.
+- [ ] First-line previews are fetched lazily for visible rows only and memoised; a test
+      asserts previews are not prefetched for off-screen entries.
 - [ ] Tests cover: today's entry, same-minute collision (counter 2 and 3), past-date path expansion, invalid path segments, workspace unavailable, open/list no-rewrite, unknown frontmatter survival.
 - [ ] `pnpm lint`, `pnpm typecheck`, `pnpm test` all pass.
 
