@@ -8,12 +8,13 @@ Part of [Journal & Calendar](../pending-journal-calendar-high-hard.md). Mobile i
 
 ## Discovery constraints (approved 2026-08-07)
 
-Decisions from `../pending-journal_discovery_and_wireframes-low-med.md` that bind this story:
+The discovery gate is CLOSED; full rationale and D1-D47 live in
+`../pending-journal_discovery_and_wireframes-low-med.md`.
 
-- **D12** / **D26** — On mobile the popout is FULL SCREEN. Popout placement and the return path are the APP SHELL's concern (bottom-nav subset + hamburger). The journal must NOT implement bespoke mobile navigation, a private bottom bar, or a custom return path.
-- **D31** — Keyboard operation and screen-reader compatibility are must-haves. Formal touch-target audit is DEFERRED. High contrast is OUT OF SCOPE (themes own it); `--tn-*` tokens only.
-- **D35** — Collapsed metadata renders as a DATELINE. On a phone the dateline must remain readable at narrow widths.
-- **D40** — Mobile layout M-1: compact list density. M-2: BOTTOM SHEET for metadata editing. One list implementation shared with desktop; the sheet is confined to metadata editing only. **The bottom sheet is new component surface — this is a non-trivial cost item.**
+- **D12/D26:** the popout is full screen; shell owns placement/return navigation. No bespoke journal navigation, bottom bar, or return path.
+- **D31:** keyboard and screen-reader support are required; high contrast is theme-owned; use `--tn-*` tokens; formal touch-target audit is deferred.
+- **D35:** collapsed metadata is a readable dateline at narrow widths.
+- **D40:** share one list with desktop using compact M-1 density; M-2 is a metadata-only bottom sheet and a new component surface.
 
 **Inherited blocker:** M-2 is metadata editing, so it inherits the metadata-widget
 implementation route decision that is STOP-gated in
@@ -82,20 +83,11 @@ Do NOT create `apps/mobile/` or add a separate mobile screen tree.
 - [ ] No bespoke bottom nav, private return path, or `apps/mobile/` code is introduced.
 - [ ] `mobile-a11y-checklist.md` covers VoiceOver/TalkBack labels, zoom/text scaling, and soft-keyboard/viewport interactions for journal-owned surfaces.
 
-## Tests / manual checks
+## Validation
 
-- `MetadataBottomSheet.test.tsx`, `JournalPanel.mobile.test.tsx`, responsive component tests with narrow/wide viewport fixtures, lint/typecheck/full QA.
-- Manual Android emulator and iOS simulator/device: open full-screen popout (via shell navigation), compact list density, open metadata bottom sheet, dismiss sheet, rotate if supported, invoke back via shell, recover from error.
-- Confirm no `apps/mobile/` directory or bespoke bottom-nav code is created.
-- Confirm calendar tab phone behavior is NOT addressed here (deferred to open item).
-
-## Automated validation
-
-`pnpm lint`, `pnpm typecheck`, `pnpm test` (or `./scripts/qa.sh`). Responsive component and accessibility tests must pass.
-
-## Manual desktop/mobile checks
-
-Desktop: verify approved desktop mockup remains unchanged at wide and narrow widths. Mobile: Android emulator and iOS simulator/device — keyboard, compact list scroll, bottom sheet open/close/focus, back/close, screen reader, and dateline readability. Broader shell navigation remains the mobile layout story's responsibility.
+- Automated: `MetadataBottomSheet.test.tsx`, `JournalPanel.mobile.test.tsx`, responsive narrow/wide viewport tests, and `pnpm lint`, `pnpm typecheck`, `pnpm test` (or `./scripts/qa.sh`); responsive and accessibility tests must pass.
+- Desktop: verify the approved mockup remains unchanged at wide and narrow widths. Mobile Android/iOS: open the shell-provided full-screen popout; verify compact density/scrolling, bottom-sheet open/dismiss/focus trap, keyboard/viewport interactions, screen-reader behavior, dateline readability, rotation if supported, shell back/close, and error recovery.
+- Confirm no `apps/mobile/` directory, bespoke bottom-nav code, or calendar-tab phone behavior is added; broader shell navigation remains the mobile layout story's responsibility.
 
 ## Non-goals
 
