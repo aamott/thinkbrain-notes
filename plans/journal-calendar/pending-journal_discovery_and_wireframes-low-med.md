@@ -323,25 +323,25 @@ runtime ids such as `journal-calendar.calendar`.
 
 ## Rejected alternatives (consolidated)
 
-| Rejected | In favor of | Why |
-|---|---|---|
-| Calendar widget in the popout | Grouped list (D15) | A real calendar belongs in the canvas tab |
-| One panel with switchable views | Journal popout + calendar tab (D14) | The activity bar is for popouts |
-| Calendar activity-bar button | Popout button only (D27) | The calendar is a tab, not a popout |
-| Templates in the first slice | No templates (D21) | Not needed for the first usable slice |
-| Pre-seeded empty metadata fields | Date-only frontmatter (D22) | Keeps files clean until values are set |
-| Seconds in filenames | Counter suffix (D30) | Minute stays the finest unit |
-| Guessing ambiguous dates | Undated (D38) | A wrong guess silently misfiles an entry |
-| Hiding undated files | Pinned group (D36) | Invisible files in a user-owned folder |
-| Toggle beside the filter for undated | Pinned group header (D36) | A small badge is too easy to ignore |
-| Direction A "Quiet Instrument" | Direction B (D35) | Status strip reads as build status over prose |
-| Direction C "Data Journal" | Direction B (D35) | Contradicts D4's user-defined vocabulary |
-| IA-1 flat non-collapsing stream | IA-3 (D37) | Archive reachable only via another surface |
-| IA-2 indented drill-down | IA-3 (D37) | Indentation + tree semantics; clashed with group-by |
-| 3a month headers only | 3b year + month (D39) | 96 collapsed rows still fails the ten-year case |
-| M-1 inline metadata throughout | M-1 + sheet (D40) | Multi-select is cramped inline on a phone |
-| M-2 comfortable rows throughout | M-1 + sheet (D40) | Halves entries visible while browsing |
-| Bespoke mobile navigation | App shell owns it (D26) | Popout placement is not a journal concern |
+| Rejected | In favor of |
+|---|---|
+| Calendar widget in the popout | Grouped list (D15) |
+| One panel with switchable views | Journal popout + calendar tab (D14) |
+| Calendar activity-bar button | Popout button only (D27) |
+| Templates in the first slice | No templates (D21) |
+| Pre-seeded empty metadata fields | Date-only frontmatter (D22) |
+| Seconds in filenames | Counter suffix (D30) |
+| Guessing ambiguous dates | Undated (D38) |
+| Hiding undated files | Pinned group (D36) |
+| Toggle beside the filter for undated | Pinned group header (D36) |
+| Direction A "Quiet Instrument" | Direction B (D35) |
+| Direction C "Data Journal" | Direction B (D35); D4 |
+| IA-1 flat non-collapsing stream | IA-3 (D37) |
+| IA-2 indented drill-down | IA-3 (D37) |
+| 3a month headers only | 3b year + month (D39) |
+| M-1 inline metadata throughout | M-1 + sheet (D40) |
+| M-2 comfortable rows throughout | M-1 + sheet (D40) |
+| Bespoke mobile navigation | App shell owns it (D26) |
 
 ## Open questions carried forward
 
@@ -359,16 +359,18 @@ day click with the popout closed and date filter as a dismissible chip (D25).
   model (D31) — calendar view story.
 - Exact approved settings list/defaults beyond D7/D4/D23 — settings story.
 - Backfill mechanics, counter interaction (D30), rename warnings/folder relocation,
-  and error/retry copy — journal service story.
-- Built-in activation events, required beta contribution table, unavailable behavior,
-  and mobile placement — beta built-ins story. Canonical ids themselves are closed by D47.
+  error/retry copy, and the single service adapter boundary — journal service story.
+- Extension-facing calendar tab opening, activation events, beta contribution table,
+  unavailable behavior, and mobile placement — extension-host/beta built-ins stories.
+  Canonical ids themselves are closed by D47.
 
 ## Reconciliation — 2026-08-07 (post-merge)
 
 The `extensions` branch advanced during discovery with no decision here changed or
 clobbered. D14/D27 uses the shipped tab seam. D44 and D45 choose platform changes for
 the remaining editor-slot and workspace-settings gaps; their implementation stories are
-prerequisites, not open product choices. See the epic's **Platform reality check**.
+prerequisites, not open product choices. D27's historical `pending-calendar_panel_ui-high-hard.md`
+name now maps to `pending-calendar_tab_ui-high-hard.md`. See the epic's **Platform reality check**.
 
 ## Acceptance criteria
 
