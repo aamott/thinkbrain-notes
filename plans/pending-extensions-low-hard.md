@@ -24,8 +24,7 @@ Target extension use cases that shape the API design:
 - **ACP Agent Chat**: network access, streaming chat UI, credential storage,
   panel registration. Built-in ACP host runtime in Rust; provider/model
   configuration and chat UI delivered as an extension.
-- **Journal/calendar**: activity bar entries, popout panels, note templates,
-  workspace-scoped settings.
+- **Journal/calendar**: journal popout, calendar tab, React editor-header contribution, and app/workspace-scoped settings.
 
 These use cases drive the capability declarations, compatibility gates, event
 types, and API surface. The extension system must support them without
@@ -38,9 +37,7 @@ contribution/lifecycle APIs as future local extensions. This epic owns only the
 extension boundary and registration; feature behavior remains in the existing
 epics:
 
-- **Journal/calendar** — built-in activity-bar entries, panels, templates, and
-  namespaced settings. Journal/calendar behavior and Markdown storage remain in
-  its existing feature epic.
+- **Journal/calendar** — one journal panel/activity entry, calendar tab, D44 editor-header widget, and D45 app/workspace settings. Templates are out by D21; feature behavior and Markdown storage remain in its epic.
 - **Git sync** — built-in sync/background-task registration only. Git operations,
   file watching, conflict handling, and sync UX remain owned by
   `plans/wip-git-integration-high-hard.md` and its child stories.
@@ -71,8 +68,8 @@ In scope:
   loader story, and install-from-file is later with an app-privileges warning
 - compatibility gates for declared capabilities and platform requirements (not
   a security sandbox)
-- extension-scoped, namespaced non-secret settings through the existing JSON
-  registry; secret storage through Rust/native OS credential-store adapters with
+- extension-scoped, namespaced non-secret app/workspace settings through the shared
+  JSON registry outside the vault (D45); secret storage through Rust/native adapters with
   no raw/bulk cross-extension reads. An encrypted app-data fallback decision is
   deferred.
 - install from file (later, with a trusted-code warning)
@@ -128,15 +125,13 @@ provide hostile-extension isolation.
 Each extension ships an `extension.json` manifest declaring id, version,
 capabilities, contribution points, and entry points. Extension ids are canonical
 lowercase kebab-case values matching `[a-z][a-z0-9]*(?:-[a-z0-9]+)*`; dotted,
-uppercase, and underscore forms are invalid. The static registry reads manifests
-to populate commands, panels, menus, etc.
+uppercase, and underscore forms are invalid. D47 reserves beta built-in ids
+`journal-calendar`, `git`, and `agent-chat`; relative semantic ids are host-prefixed.
+The static registry reads manifests to populate commands, panels, menus, etc.
 
 ### Settings and credentials integration
 
-Non-secret extension settings reuse the existing JSON settings registry through
-extension-scoped, namespaced APIs. Values live in the OS application-data/config
-area, never inside the workspace, and an extension can read/write only its own
-namespace. Credentials never live in JSON: Rust/native code uses OS credential-
+Non-secret extension settings reuse the JSON registry through namespaced app/workspace APIs (D45). Values live in OS app-data/config, never in the vault, and extensions read/write only their own namespace and active workspace scope. Credentials never live in JSON: Rust/native code uses OS credential-
 store adapters. An encrypted app-data fallback requires a separate security
 decision and is explicitly deferred. APIs expose scoped operations and never
 bulk/raw cross-extension secrets.
@@ -210,15 +205,16 @@ Focused follow-up stories:
   stories own implementation.
 - `plans/extensions/pending-extension_contribution_surfaces-low-med.md` — typed
   views, menus, context menus, editor actions, and themes.
+- `plans/extensions/pending-editor_header_contribution-high-med.md` — D44 observable
+  React slot above the editor body; distinct from CodeMirror hooks.
 - `plans/extensions/pending-extension_events_tasks-low-med.md` — app/extension
   events and abortable background tasks.
 - `plans/extensions/pending-extension_data_storage-low-med.md` — extension-owned
   app-data storage and cleanup.
 - `plans/extensions/pending-extension_feature_hooks-low-med.md` — AI/Git hook
   seams only; feature behavior remains in owning epics.
-- `plans/extensions/pending-extension_settings-low-med.md` — manifest schemas,
-  settings UI/persistence, and uninstall cleanup; scoped settings runtime is
-  already partial and tested.
+- `plans/extensions/pending-extension_settings-low-med.md` — D45 app/workspace scope,
+  settings UI/persistence, and cleanup; app-scoped runtime is already partial and tested.
 - `plans/extensions/pending-extension_secret_storage-med-hard.md` — native OS
   credential-store boundary; encrypted app-data fallback remains undecided.
 - `plans/extensions/pending-extension_packaging_format-low-easy.md` — directory
@@ -283,7 +279,9 @@ are not yet formalized, the first story here should establish them.
   namespaced settings.
 - ⬜ API/event/background-task/data surfaces —
   `plans/extensions/pending-extension_api_surface-low-hard.md`.
-- ⬜ Settings UI/persistence/uninstall —
+- ⬜ D44 React editor-header contribution —
+  `plans/extensions/pending-editor_header_contribution-high-med.md`.
+- ⬜ D45 app/workspace settings UI/persistence/uninstall —
   `plans/extensions/pending-extension_settings-low-med.md`.
 - ⬜ Native secret storage — `plans/extensions/pending-extension_secret_storage-med-hard.md`;
   encrypted app-data fallback remains an explicit unmade security decision.
