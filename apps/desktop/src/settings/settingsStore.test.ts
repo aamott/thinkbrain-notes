@@ -418,3 +418,46 @@ describe("settingsStore", () => {
     });
   });
 });
+
+describe("saveSettings concurrency", () => {
+  it("keeps changes staged while a save is in flight", async () => {
+    // The write is held open so an edit can land mid-save, which is exactly
+    // what a palette toggle racing a Settings-tab edit looks like.
+    let releaseWrite: (() => void) | undefined;
+    const held = new Promise<void>((resolve) => {
+      releaseWrite = resolve;
+    });
+    const gateway = createMockGateway(null);
+    gateway.writeAppSettings = vi.fn(async () => {
+      await held;
+    });
+
+    const store = createSettingsStore(gateway);
+    await store.getState().loadSettings(null);
+
+    store.getState().stageChange("editor.fontSize", 20);
+    const saving = store.getState().saveSettings();
+
+    // A second edit arrives before the first save's write resolves.
+    store.getState().stageChange("editor.lineWrapping", false);
+
+    releaseWrite?.();
+    await saving;
+
+    expect(store.getState().stagedChanges).toEqual({ "editor.lineWrapping": false });
+    expect(store.getState().isDirty).toBe(true);
+    expect(store.getState().dirtyCount).toBe(1);
+  });
+
+  it("clears the staged keys that the save actually persisted", async () => {
+    const gateway = createMockGateway(null);
+    const store = createSettingsStore(gateway);
+    await store.getState().loadSettings(null);
+
+    store.getState().stageChange("editor.fontSize", 20);
+    await store.getState().saveSettings();
+
+    expect(store.getState().stagedChanges).toEqual({});
+    expect(store.getState().isDirty).toBe(false);
+  });
+});

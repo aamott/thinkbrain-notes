@@ -381,10 +381,24 @@ export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettin
         }
 
         // Both writes succeeded — now commit the new state atomically.
+        //
+        // Clear only the keys this save actually persisted, at the value it
+        // persisted. Edits staged while the gateway writes were in flight are
+        // not covered by those writes, so blanking `stagedChanges` wholesale
+        // would drop them silently and leave `isDirty` false, hiding the loss.
+        // A key re-staged mid-flight with a different value keeps its new value.
+        const remaining = { ...get().stagedChanges };
+        for (const [key, savedValue] of Object.entries(staged)) {
+          if (key in remaining && Object.is(remaining[key], savedValue)) {
+            delete remaining[key];
+          }
+        }
+        const remainingCount = Object.keys(remaining).length;
+
         const next: Partial<SettingsStoreState> = {
-          stagedChanges: {},
-          isDirty: false,
-          dirtyCount: 0,
+          stagedChanges: remaining,
+          isDirty: remainingCount > 0,
+          dirtyCount: remainingCount,
           validationDiagnostics: [],
           saveError: null
         };
