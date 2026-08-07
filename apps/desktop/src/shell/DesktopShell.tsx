@@ -304,6 +304,18 @@ export function DesktopShell() {
       }]);
   }, [restoredWorkspacePath]);
 
+  /**
+   * Flips `editor.livePreview` and persists it straight away.
+   *
+   * Read through the store's one-shot getter rather than a subscription: the
+   * shell only needs the value at the moment the command fires.
+   */
+  const toggleLivePreview = useCallback(() => {
+    const store = useSettingsStore.getState();
+    const current = store.getEffectiveValue("editor.livePreview") !== false;
+    void store.setSettingImmediately("editor.livePreview", !current);
+  }, []);
+
   /** Executes a registered command with shell effects, keeping the registry canonical. */
   const handlePaletteCommand = useCallback((command: DesktopCommand) => {
     const context: DesktopCommandContext = {
@@ -318,6 +330,7 @@ export function DesktopShell() {
       toggleOutline: () => setRightPanel((panel) => panel === "outline" ? null : "outline"),
       toggleAssistant: () => setRightPanel((panel) => panel === "assistant" ? null : "assistant"),
       toggleBottomPanel,
+      toggleLivePreview,
       openSettings: openSettingsTab,
       rebuildIndex: () => updateBottomPanel("terminal"),
       closePalette
@@ -327,7 +340,7 @@ export function DesktopShell() {
       .catch((error: unknown) => {
         console.error(`[commandRegistry] Command "${command.id}" failed.`, error);
       });
-  }, [closePalette, openSettingsTab, persistDesktopState, selectLeftPanel, setTheme, showExplorer, theme, toggleBottomPanel, updateBottomPanel]);
+  }, [closePalette, openSettingsTab, persistDesktopState, selectLeftPanel, setTheme, showExplorer, theme, toggleBottomPanel, toggleLivePreview, updateBottomPanel]);
 
   const updateDocument = useCallback((tabId: string, contents: string) => {
     setDocuments((current) => {

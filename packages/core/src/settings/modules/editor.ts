@@ -42,6 +42,16 @@ export const editorModule: SettingsModule = {
           label: "Line wrapping",
           description:
             "Wrap long lines instead of horizontal scrolling."
+        },
+        {
+          key: "livePreview",
+          type: "boolean",
+          default: true,
+          scope: "app",
+          section: "editor.display",
+          label: "Live preview",
+          description:
+            "Render Markdown formatted inline, showing raw syntax only where the cursor is."
         }
       ]
     }
