@@ -8,20 +8,16 @@ Part of [Journal & Calendar](../pending-journal-calendar-high-hard.md).
 
 ## Discovery constraints (approved 2026-08-07)
 
-Discovery gate is CLOSED for items below. See `../pending-journal_discovery_and_wireframes-low-med.md` for the full decision log. Do not re-litigate these.
+Discovery gate is CLOSED; rationale and the full D1-D47 log live in
+`../pending-journal_discovery_and_wireframes-low-med.md`. Do not re-litigate it.
 
-- **D4** Metadata fields are user-defined. No hard-coded mood colors, no hard-coded activity icons. The app ships NO vocabulary. Types must represent user-defined values as opaque strings/numbers.
-- **D5** The calendar serves navigation, reflection, and metadata filtering in roughly equal
-  measure — the model must support all three, not privilege one. (Separately, the epic's
-  non-goals forbid emoji vocabulary and wellness/therapeutic framing.)
-- **D8/D43** Multiple entries per day, metadata per file. Day summaries preserve all distinct per-field values; never choose a winner or calculate a synthetic daily value. Filters qualify a day only when one entry satisfies every active predicate.
-- **D14/D27** Full calendar opens as a canvas tab. Week and month views. First release shows a DOT ONLY.
-- **D19** Local device time; no workspace timezone, no day-start offset.
-- **D25** Clicking a day in the calendar **filters the popout list** to that day. It does not open an entry. Calendar and popout **share filter state**.
-- **D29/D46** Both views show up to three dots, then `+N`; accessible text retains the exact matching count. Active filters count only D43-matching entries.
-- **D33** Entry qualification: parseable date in filename only. Malformed frontmatter does not disqualify. Unknown frontmatter must survive. Calendar loading must not rewrite any file.
-- **D36** Undated files form a pinned "Undated" group. Non-Markdown files are hidden. Non-Markdown and undated handling must be reflected in calendar day state.
-- **D38** Ambiguous dates are UNDATED. The model must not guess.
+- **D4:** fields and values are user-defined opaque strings/numbers; no shipped vocabulary, mood colors, activity icons, emoji, or wellness framing.
+- **D5:** support navigation, reflection, and metadata filtering without privileging one purpose.
+- **D8/D43:** preserve distinct per-field values across entries; qualify/filter only when one entry satisfies every active predicate.
+- **D14/D27/D25:** week/month calendar is a canvas tab; day click filters the shared popout state and never opens an entry.
+- **D19:** use local device time; no workspace timezone or day-start offset.
+- **D29/D46:** show up to three dots plus `+N`; accessible text and active filters use exact matching counts.
+- **D33/D36/D38:** filename date alone qualifies an entry; malformed frontmatter remains eligible and survives; loading never rewrites files; non-Markdown is hidden, undated is pinned, and calendar day state reflects both; ambiguous dates are `UNDATED` without guessing.
 
 **STOP gate:** The discovery gate above is closed. The following items remain OPEN and this story OWNS the decisions where marked:
 
@@ -34,7 +30,7 @@ D43 and D46 close aggregation and entry-density policy. The remaining open items
 
 ## Goal
 
-Define a platform-agnostic calendar model and pure aggregation/query functions that derive day states from journal entries. Preserve D43 distinct values and same-entry filter semantics, expose D46 exact/capped counts, share filter state with the popout (D25), and never rewrite files (D33).
+Define a platform-agnostic calendar model and pure aggregation/query functions that derive day states from journal entries while preserving D43 values and same-entry filters, exposing D46 exact/capped counts, sharing D25 filter state with the popout, and never rewriting files (D33).
 
 ## Scope
 
@@ -76,19 +72,10 @@ Define a platform-agnostic calendar model and pure aggregation/query functions t
 - [ ] Model rebuilds correctly from a fresh `JournalEntryRef[]` with no app cache (D33).
 - [ ] `pnpm lint`, `pnpm typecheck`, `pnpm test` all pass on `packages/core`.
 
-## Tests / manual checks
+## Validation
 
-- Core unit tests with fixed clocks and fixture notes for all acceptance criteria above.
-- Run `pnpm lint`, `pnpm typecheck`, `pnpm test`.
-- Manual: compare aggregated fixture set with files on disk; delete/recreate one note; verify result changes only from the file set; confirm no file is rewritten by loading or filtering.
-
-## Automated validation
-
-`pnpm lint`, `pnpm typecheck`, `pnpm test` on focused core aggregation/query fixtures.
-
-## Manual desktop/mobile checks
-
-Desktop: compare aggregation with Markdown fixtures; delete/recreate notes; verify loading/filtering never rewrites files. Mobile/shared webview: run the same deterministic fixtures; verify no SQLite/native desktop dependency.
+- Focused core fixtures cover the acceptance cases above, including month/leap-year boundaries, timezone fixtures, distinct values, same-entry AND filters, empty ranges, counts 0/1/3/4/8, malformed frontmatter, and UNDATED exclusion; run `pnpm lint`, `pnpm typecheck`, `pnpm test`.
+- Desktop: compare aggregation with Markdown fixtures, delete/recreate a note, and confirm results change only from the file set and loading/filtering never rewrite files. Mobile/shared webview: run the deterministic fixtures and verify no SQLite/native desktop dependency.
 
 ## Non-goals
 
