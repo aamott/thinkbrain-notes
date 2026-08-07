@@ -13,18 +13,18 @@ Discovery gate is CLOSED for items below. See `../pending-journal_discovery_and_
 - **D4** Metadata fields are user-defined. Four input types: multi-select, single-select, number, text. App ships NO mood scale and NO activity taxonomy.
 - **D7** Journal root is configurable.
 - **D21** No templates in the first slice. Template settings are OUT OF SCOPE.
-- **D23** Field definitions exist at BOTH global and per-workspace level. Precedence and merge rules are **undecided and OWNED BY THIS STORY**. See platform conflict below.
+- **D23/D45** Field definitions exist globally and per workspace. Workspace definitions replace complete same-id global definitions; untouched globals remain. Removed values stay visible/filterable as unconfigured and never trigger note rewrites.
 - **D31** Accessibility must-haves: **keyboard operation** and **screen-reader compatibility**. Deferred: reduced-motion, formal touch-target audit. HIGH CONTRAST IS OUT OF SCOPE — themes own it. The journal must use `--tn-*` tokens only; never hard-coded colors.
 - **D33** Settings must never cause the app to rewrite a journal note on open. Unknown frontmatter must survive.
 - **D34** Approval cadence: per-artifact sign-off. Product owner is the approver.
 
 **STOP gate:** The discovery gate above is closed. The following items remain OPEN and this story OWNS the decisions where marked:
 
-- **Global/workspace field precedence (OWNED HERE):** D23 says this is undecided. This story must propose a precedence and merge rule (e.g. workspace overrides global, global fills gaps, union, last-write-wins) and get product-owner approval before implementing settings registration. Do not silently default. See platform conflict below — the workspace-scoped half is additionally blocked by a platform gap.
-- **Setting list and defaults:** the exact list of configurable settings beyond journal root (D7) and field definitions (D4/D23) is not approved. Do not register settings for unapproved behavior.
+- **Setting list and defaults:** the exact configurable settings beyond journal root (D7) and field definitions (D4/D23/D45) are not approved. Do not register settings for unapproved behavior.
 - **Reduced-motion and touch-target audit:** deferred (D31). Do not ship these in this story.
-- **High contrast:** out of scope — themes own it (D31). The journal must use `--tn-*` tokens; never add hard-coded colors or mood-color mappings.
-- **Field definition drift and orphaned metadata:** what happens when a user removes a field definition is undecided. Surface as a diagnostic; do not silently drop data.
+- **High contrast:** out of scope — themes own it (D31). Use `--tn-*` tokens; never add hard-coded colors or mood mappings.
+
+D45 closes precedence, platform direction, and drift behavior. Workspace scope remains an implementation dependency, not an open product choice.
 
 ## Real settings API — authoritative
 
@@ -43,26 +43,23 @@ Extension settings schema is registered in `appSettingsRegistry` (the Zustand-ba
 
 **Consequence for this story:** journal settings will not be user-visible in the settings tab on first activation. Acceptance criteria must not assume a visible settings UI. All functional criteria (schema registration, get/set/onDidChange, persistence, staged save) can be verified programmatically. The visible settings UI is a dependency that must be listed explicitly; do not ship user documentation implying settings are configurable through the UI until `pending-extension_settings-low-med.md` delivers the rendering layer.
 
-## PLATFORM CONFLICT on D23: No workspace-scoped extension settings path
+## PLATFORM PREREQUISITE — workspace-scoped extension settings
 
-All extension settings currently use `scope: "app"`. There is NO workspace-scoped extension settings path in the platform today. D23 requires field definitions at BOTH global and per-workspace level.
-
-**D23 cannot be fully implemented on today's platform.** Two options, neither chosen here:
-
-1. The platform gains workspace-scoped extension settings (new API work, not yet designed or tracked).
-2. D23's workspace half is deferred; only global field definitions ship in the first slice.
-
-**STOP-gate this choice.** Do not pick an option here. Surface it to the product owner with the platform constraint clearly stated. Record the decision in the discovery story before implementing any per-workspace field definition path. Until resolved, implement only the global (app-scoped) field definitions that the platform already supports.
+Today's extension settings bridge is app-scoped only. D45 chooses to extend it rather than
+defer D23. `plans/extensions/pending-extension_settings-low-med.md` now owns the shared
+workspace-scoped API, persistence and UI rendering. This journal story consumes that path;
+it must not create journal-owned workspace settings or silently fall back to global scope.
 
 ## Goal
 
-Define and register the approved journal settings schema (journal root configurable, user-defined field definitions at global scope — workspace scope is blocked by a platform gap), implement the accessibility contract (keyboard + screen reader), and establish the precedence/merge rule for global vs. per-workspace field definitions (STOP-gated on platform gap resolution). Settings live outside the workspace in OS app-data. High contrast is out of scope (themes own it, use `--tn-*` tokens).
+Define and register the approved journal settings under `journal-calendar`, resolve global and workspace field definitions with D45's id overlay, preserve unconfigured values, and implement the keyboard/screen-reader contract. Settings remain outside the workspace; high contrast stays theme-owned.
 
 ## Scope
 
-- Settings schema: journal root path (D7); global field definitions (D4, four input types); per-workspace field definitions (D4/D23) — **blocked on platform gap resolution**.
-- Precedence/merge rule: propose, get approval, implement (D23 owned here) — **blocked on platform gap resolution for the workspace half**.
-- Settings stored in OS app-data via `extension-${extensionId}` namespace; never in the workspace vault (boundary rule).
+- Settings schema: journal root plus global/workspace field definitions for D4's four types.
+- Resolve definitions by stable id: workspace replaces the complete same-id global definition; untouched globals remain (D45).
+- Preserve removed/narrowed values as visible/filterable `unconfigured` values with diagnostics; never rewrite notes.
+- Persist outside the vault through app/workspace scopes under `extension-journal-calendar` (D45/D47).
 - Accessibility: keyboard operation and screen-reader compatibility for journal/calendar controls (D31). Use `--tn-*` tokens throughout; no hard-coded colors.
 - No template settings (D21).
 - Diagnostic behavior for invalid settings (bad path, malformed field definition) with actionable messages.
@@ -70,7 +67,7 @@ Define and register the approved journal settings schema (journal root configura
 
 ## Likely files
 
-- `packages/core/src/settings/modules/journal.ts` — app-scoped module/schema (workspace scope is blocked; see the platform conflict above); exact keys wait for owner approval.
+- `packages/core/src/settings/modules/journal.ts` — global/workspace schema under D47's `journal-calendar` namespace; exact unapproved keys still wait.
 - `packages/core/src/settings/modules/index.ts` and `packages/core/src/settings/index.ts` — exports/registration.
 - `apps/desktop/src/settings/settingsStore.ts` — register module; preserve staged/save/reset semantics.
 - `apps/desktop/src/settings/SettingsContent.tsx`, `SettingsNav.tsx`, `controls/` — render approved controls only; blocked on `pending-extension_settings-low-med.md` for extension-section rendering.
@@ -81,27 +78,26 @@ Define and register the approved journal settings schema (journal root configura
 ## Dependencies
 
 - Discovery approval, data-model story, and modular settings stories (`plans/ui-shell/pending-modular_settings_system-med-hard.md` and child stories).
-- **`pending-extension_settings-low-med.md`** — settings UI rendering for extension-owned sections is not yet implemented. Journal settings will not be visible in the settings tab until this story ships. Explicit blocker for user-visible settings.
-- Platform decision on workspace-scoped extension settings (required for D23's workspace half) — STOP-gated; see platform conflict above.
-- Product-owner decision on global/workspace precedence rule — STOP-gated until workspace-scoped platform gap is resolved.
+- **`plans/extensions/pending-extension_settings-low-med.md`** — D45 workspace scope plus extension-owned settings UI; explicit blocker for complete user-visible settings.
 - Existing `appSettingsRegistry`, `useSettingsStore`, extension-scoped settings bridge, and CSS `--tn-*` tokens.
 - Approved desktop/mobile wireframes for focus order and responsive behavior (per D34, these require per-artifact sign-off before controls are built).
 
 ## Acceptance criteria
 
-- [ ] Product-owner-approved precedence/merge rule for global vs. per-workspace field definitions is documented (D23, owned here) — workspace half is STOP-gated on platform gap resolution; do not implement per-workspace path until unblocked.
+- [x] D45 documents the approved workspace-support, id-overlay and definition-drift rules.
+- [ ] Global and workspace definitions resolve by stable id; workspace replaces same-id definitions completely and untouched globals remain.
 - [ ] Journal root setting is configurable and validated; unsafe paths produce actionable diagnostics (D7).
 - [ ] Field definitions support multi-select, single-select, number, and text input types; no other types are added without approval (D4).
 - [ ] No template settings exist in the schema (D21).
-- [ ] Settings are stored outside the workspace in OS app-data via `extension-${extensionId}` namespace; no settings JSON is written into the vault (boundary rule).
+- [ ] App and workspace scopes persist outside the vault under `extension-journal-calendar`; workspaces cannot leak values into each other (D45/D47).
 - [ ] Settings changes stage, validate, and show dirty state using `context.settings.set`; `packages/core` does not call Tauri directly.
 - [ ] Changing a setting never rewrites an existing journal note (D33).
-- [ ] Field definition removal produces a diagnostic; existing note frontmatter is NOT silently dropped.
+- [ ] Removed or narrowed values remain visible and filterable as `unconfigured`, with a diagnostic; existing frontmatter is never dropped or rewritten (D45).
 - [ ] All journal/calendar UI controls use `--tn-*` tokens only; no hard-coded colors, no mood-color mappings (D31/D4).
 - [ ] Journal/calendar controls are fully keyboard-operable: Tab/Shift-Tab focus order, Enter/Space activation, Escape dismissal (D31).
 - [ ] Screen-reader: all controls have visible labels, errors are announced, status changes are live-region announced (D31).
 - [ ] No color-only meaning anywhere in journal/calendar controls (D31).
-- [ ] Tests cover: schema registration, defaults, validation (good/bad path, bad field type), persistence boundaries (OS app-data not vault), dirty/staged behavior, keyboard semantics, accessible names, precedence rule (global interaction — workspace half deferred until platform gap resolved).
+- [ ] Tests cover schema/defaults/validation, app/workspace isolation, full same-id replacement, inherited globals, unconfigured values, persistence boundaries, staged behavior, keyboard semantics, and accessible names.
 - [ ] **Settings are not assumed to be user-visible in the UI.** Acceptance criteria for settings visibility are conditional on `pending-extension_settings-low-med.md` delivering the rendering layer. Until then, verifiable programmatically only.
 - [ ] `pnpm lint`, `pnpm typecheck`, `pnpm test` or `./scripts/qa.sh` all pass.
 
@@ -135,15 +131,15 @@ Desktop: keyboard/screen-reader/zoom/dark/light theme pass; verify settings stay
 - Reduced-motion preference and formal touch-target audit are deferred (D31).
 - No final visual design, calendar panel, journal workflow implementation, extension registration, credential handling, or app-wide accessibility rewrite.
 - Do not add settings for unapproved behavior to simplify implementation.
-- Do not implement the workspace-scoped settings path until the platform gap and D23 workspace decision are resolved.
+- Do not create a journal-owned workspace settings path or weaken D45 to global-only fallback.
 
 ## Handoff artifacts
 
 Downstream stories need:
 
-- Approved precedence/merge rule for global vs. per-workspace field definitions (product-owner sign-off document) — workspace half blocked; document the gap alongside whatever global-only rule ships first.
-- `getJournalSettings(scope)` — typed selector returning resolved journal root and field definitions after precedence rule is applied. Note: workspace scope returns global values until platform gap is resolved.
+- D45 global/workspace resolution and unconfigured-value contract.
+- `getJournalSettings(scope)` — typed selector returning D45-resolved journal root and field definitions; no global-only fallback.
 - `FieldDefinition` type (id, label, inputType: multi-select | single-select | number | text).
 - `journalSettingsSchema` — schema registration artifact.
 - `apps/desktop/src/journal/accessibility.md` — checklist with pass/fail results for keyboard and screen-reader.
-- Platform gap statement for D23 (workspace-scoped extension settings) — forwarded to the platform team for scoping.
+- Platform dependency on D45 workspace-scoped extension settings, linked to its owner story.
