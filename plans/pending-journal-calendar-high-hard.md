@@ -101,7 +101,7 @@ activation with stubs, and the disposable scope. Built-in ids are fixed by D47.
 | 1 | `journal-calendar/pending-journal_discovery_and_wireframes-low-med.md` ✅ complete | — |
 | 2 | `journal-calendar/pending-journal_data_model_frontmatter-med-hard.md` | 1 approved contract |
 | 3 | `journal-calendar/pending-journal_service_daily_notes-high-med.md` | 1, 2 |
-| 4 | `journal-calendar/pending-calendar_data_model-med-med.md` | 1, 2 |
+| 4 | `journal-calendar/done-calendar_data_model-med-med.md` ✅ complete | 1, 2 |
 | 5 | `journal-calendar/pending-journal_settings_and_accessibility-med-med.md` | 1, 2; D45 extension-settings prerequisite |
 | 6 | `journal-calendar/pending-journal_panel_ui-high-hard.md` | 1–3, 5; D41 index and D44 editor-header prerequisites |
 | 7 | `journal-calendar/pending-calendar_tab_ui-high-hard.md` | 1, 3, 4, 5; tab registration shipped; extension-facing open route pending in story 9 |
@@ -134,6 +134,8 @@ recorded in the story. Stories may be split further if a subagent would exceed o
   undated split (D36/D38), openToday, and D63 failure copy; previews and search wiring remain
 - 🟨 Story 5 settings — D64's four settings and the D49 field-definition control implemented;
   workspace-scope persistence waits on D45, registration on story 9
-- ⬜ Stories 4, 6-9: calendar model, panel, calendar tab, mobile, registration
+- ✅ Story 4 calendar model — D43 distinct values, D43 same-entry AND filters, D46 counts,
+  undated pinned outside the grid, in `packages/core/src/journal/calendar.ts`
+- ⬜ Stories 6-9: panel, calendar tab, mobile, registration
 - 🟨 Platform prerequisites: D68/D69 API additions shipped; D44 editor-header slot, D45
   workspace-scoped settings, and D41 metadata facets remain

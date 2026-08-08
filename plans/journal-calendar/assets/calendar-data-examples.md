@@ -30,7 +30,13 @@ same matching-entry set.
 Month and week views use the same treatment. Accessible text always reports the exact
 matching count, for example `8 journal entries`.
 
-## Remaining fixture work
+## Undated, loading, and error
 
-Add fixed malformed-frontmatter, leap-year, timezone-boundary, undated, empty, loading,
-and error fixtures during implementation without changing D43/D46 behavior.
+An undated file is never placed in a cell (D38) and is returned separately for pinning
+(D36). While the folder is loading or failed to read, every cell reports that state and no
+count: a stale count is worse than none.
+
+Implemented in `packages/core/src/journal/calendar.ts`; fixtures for leap and common
+February, year boundaries, midnight/23:59 (no timezone shift), backwards and single-day
+ranges, unreadable frontmatter, unknown fields, and counts 0/1/3/4/8 live in
+`calendar.test.ts`.

@@ -1,6 +1,10 @@
 # Story: Calendar Data Model & Journal Aggregation
 
-**Status:** pending · **Urgency:** med · **Difficulty:** med
+**Status:** done · **Urgency:** med · **Difficulty:** med
+
+Shipped in `packages/core/src/journal/calendar.ts` (38 tests). The UI stories consume
+`aggregateCalendarDays(entries, range, filter, status?)`, `filterEntries`, and
+`filterEntriesByDay`.
 
 ## Epic
 
@@ -62,17 +66,17 @@ Define a platform-agnostic calendar model and pure aggregation/query functions t
 
 ## Acceptance criteria
 
-- [ ] `CalendarDay` type distinguishes: no entry, one or more entries (with list), UNDATED presence, loading, and error states.
-- [ ] Day state exposes exact matching count, visible dots `min(count, 3)`, and overflow `max(count - 3, 0)` for D46.
-- [ ] Metadata summaries preserve all distinct opaque values per field; no latest-entry, averaging, vocabulary, icons, or color semantics (D4/D43).
-- [ ] `CalendarFilter` carries selected day and metadata predicates; predicates are ANDed within each entry, and qualifying days/counts derive only from matching entries (D25/D43).
+- [x] `CalendarDay` type distinguishes: no entry, one or more entries (with list), loading, and error states. **UNDATED is an aggregate-level list, not a day state** — no day can hold an undated entry (D38), so a day state for it would be unreachable.
+- [x] Day state exposes exact matching count, visible dots `min(count, 3)`, and overflow `max(count - 3, 0)` for D46.
+- [x] Metadata summaries preserve all distinct opaque values per field; no latest-entry, averaging, vocabulary, icons, or color semantics (D4/D43).
+- [x] `CalendarFilter` carries selected day and metadata predicates; predicates are ANDed within each entry, and qualifying days/counts derive only from matching entries (D25/D43).
 - [x] Per-day aggregation and density strategies are product-owner-approved in D43/D46 and recorded in `assets/calendar-data-examples.md`.
-- [ ] Aggregation is deterministic for: empty range, single entry, multiple entries same day, malformed frontmatter (entry still counted), unknown field values, UNDATED entries (excluded from day cells).
-- [ ] Calendar loading and filtering never rewrite any file (D33).
-- [ ] Unknown frontmatter fields survive the aggregation pass (D33).
-- [ ] Tests cover month boundaries, leap years, timezone fixtures, distinct multi-entry values, same-entry AND filters, empty ranges, counts 0/1/3/4/8, malformed frontmatter, and UNDATED exclusion.
-- [ ] Model rebuilds correctly from a fresh `JournalEntryRef[]` with no app cache (D33).
-- [ ] `pnpm lint`, `pnpm typecheck`, `pnpm test` all pass on `packages/core`.
+- [x] Aggregation is deterministic for: empty range, single entry, multiple entries same day, malformed frontmatter (entry still counted), unknown field values, UNDATED entries (excluded from day cells).
+- [x] Calendar loading and filtering never rewrite any file (D33); frozen input proves it.
+- [x] Unknown frontmatter fields survive the aggregation pass (D33).
+- [x] Tests cover month boundaries, leap years, timezone fixtures, distinct multi-entry values, same-entry AND filters, empty ranges, counts 0/1/3/4/8, malformed frontmatter, and UNDATED exclusion.
+- [x] Model rebuilds correctly from a fresh `JournalEntryRef[]` with no app cache (D33).
+- [x] `pnpm lint`, `pnpm typecheck`, `pnpm test` all pass on `packages/core`.
 
 ## Validation
 
