@@ -9,7 +9,8 @@
 
 /** Creates a timestamped note and opens it. */
 async function capture(context) {
-  const stamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, "-");
+  // Milliseconds included so two captures in the same second cannot collide.
+  const stamp = new Date().toISOString().slice(0, 23).replace(/[T:.]/g, "-");
   const relativePath = `captures/capture-${stamp}.md`;
   // The workspace API is scoped to the open workspace root; parent folders
   // are created for you.
@@ -46,10 +47,6 @@ export function activate(context) {
     mount: (element, panel) => {
       const doc = element.ownerDocument;
 
-      const button = doc.createElement("button");
-      button.type = "button";
-      button.textContent = "New capture";
-
       const status = doc.createElement("p");
       const render = (state) => {
         status.textContent = state.rootPath
@@ -62,18 +59,30 @@ export function activate(context) {
       // workspace or the open note changed.
       panel.onDidChange(render);
 
-      const onClick = () => {
-        void capture(context).catch((error) => {
-          status.textContent = `Capture failed: ${error.message}`;
-        });
-      };
-      button.addEventListener("click", onClick);
+      // Anything the app does to the workspace shows up here, including the
+      // captures this extension makes itself.
+      const list = doc.createElement("ul");
+      const created = context.events.on("note.created", (event) => {
+        const item = doc.createElement("li");
+        item.textContent = event.relativePath;
+        list.append(item);
+      });
 
-      element.append(button, status);
+      element.append(status, list);
 
       // Optional: undo anything that outlives the element. The element's own
       // children are discarded for you.
-      return () => button.removeEventListener("click", onClick);
-    }
+      return () => created.dispose();
+    },
+    // Buttons in the panel's own header. They are data, not markup, so they
+    // look and behave like the app's own panel buttons.
+    actions: [
+      {
+        id: "new-capture",
+        label: "New capture",
+        icon: "＋",
+        run: () => capture(context)
+      }
+    ]
   });
 }

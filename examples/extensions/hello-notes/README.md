@@ -22,7 +22,9 @@ An extension is a folder with two files:
    the Extensions panel flips from "Not started" to "Active".
 4. Click the **✎ Capture** icon in the activity bar — the extension's own
    entry, next to Explorer and Search. Its panel is plain DOM the extension
-   built itself.
+   built itself, and the **＋** button in the panel header is an action the
+   extension contributed. Each capture appears in the panel's list, because
+   it is subscribed to `note.created`.
 5. Save any note (`Ctrl+S`) and check the devtools console
    (`Ctrl+Shift+I`): `[hello-notes] saved: <path>`.
 6. Restart the app — the extension is still installed. Edit `extension.js`
@@ -31,8 +33,10 @@ An extension is a folder with two files:
 ## What the API offers today
 
 - `context.commands.register(...)` — palette commands.
-- `context.panels.register({ side, mount })` — a panel with its own icon in
-  the activity bar (`side: "left"`) or the title bar (`side: "right"`).
+- `context.panels.register({ side, mount, actions })` — a panel with its own
+  icon in the activity bar (`side: "left"`) or the title bar
+  (`side: "right"`), plus optional `{ id, label, icon, run }` buttons in its
+  header.
 - `context.workspace` — `createNote`, `openNote`, `readNote`, `writeNote`,
   scoped to the open workspace root.
 - `context.events.on(...)` — typed app events: `note.opened`, `note.saved`,

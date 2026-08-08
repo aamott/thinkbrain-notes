@@ -64,7 +64,7 @@ export function RightPopout({ panel, rootPath, documentContents }: RightPopoutPr
       className="flex flex-col min-w-0 overflow-hidden bg-sidebar border-l border-border flex-[0_0_var(--tn-shell-right-width)] max-[760px]:absolute max-[760px]:z-[2]"
       aria-label={`${contribution.label} panel`}
     >
-      <PanelTitle title={contribution.label} />
+      <PanelTitle title={contribution.label} actions={contribution.actions} />
       {rightPanels.map((panelContribution) => {
         const isActive = panelContribution.id === panel;
         if (!isActive && !panelContribution.keepMounted) return null;

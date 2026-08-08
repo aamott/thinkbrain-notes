@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   createDesktopPanelRegistry,
@@ -110,6 +110,33 @@ describe("panels contributed with a mount function", () => {
       root?.render(panel?.factory(panelContext({ documentContents: "abcdef" })));
     });
     expect(rendered.textContent).toBe("6");
+  });
+
+  it("carries the header actions a mounted panel contributes", async () => {
+    const run = vi.fn();
+    const panels = createDesktopPanelRegistry([]);
+    const host = createDesktopExtensionHost({ panels });
+    host.register({
+      id: "calendar",
+      trusted: true,
+      activate: (context) => {
+        context.panels.register({
+          id: "month",
+          label: "Month",
+          icon: "▤",
+          side: "left",
+          mount: () => undefined,
+          actions: [{ id: "today", label: "Go to today", icon: "◎", run }]
+        });
+      }
+    });
+
+    await host.activate("calendar");
+
+    const action = panels.get("calendar.month")?.actions?.[0];
+    expect(action?.label).toBe("Go to today");
+    action?.run();
+    expect(run).toHaveBeenCalledTimes(1);
   });
 
   it("removes a mounted panel when its extension deactivates", async () => {

@@ -281,8 +281,8 @@ are not yet formalized, the first story here should establish them.
   `plans/extensions/done-local_extension_directory_persistence-low-easy.md`.
 - 🟨 Panel mount contract — a disk extension contributes panels with
   `mount(element, panel)` and gets its own activity-bar (left) or title-bar
-  (right) entry, identical to a built-in's. Menus, context menus, themes, and
-  panel toolbar actions remain in
+  (right) entry, identical to a built-in's, plus `actions` rendered as buttons
+  in the panel header. Menus, context menus, and themes remain in
   `plans/extensions/pending-extension_contribution_surfaces-low-med.md`.
   `examples/extensions/hello-notes` is the worked example, pinned by an
   end-to-end test.

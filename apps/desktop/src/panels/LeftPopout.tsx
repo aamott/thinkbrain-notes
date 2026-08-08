@@ -53,7 +53,7 @@ export function LeftPopout({ panel, rootPath, explorerProps, onOpenSearchResult 
       className="flex flex-col min-w-0 overflow-hidden bg-sidebar border-r border-border flex-[0_0_var(--tn-shell-left-width)] max-[760px]:absolute max-[760px]:z-[2]"
       aria-label={`${contribution.label} panel`}
     >
-      <PanelTitle title={contribution.label} />
+      <PanelTitle title={contribution.label} actions={contribution.actions} />
       {leftPanels.map((panelContribution) => {
         const isActive = panelContribution.id === panel;
         if (!isActive && !panelContribution.keepMounted) return null;

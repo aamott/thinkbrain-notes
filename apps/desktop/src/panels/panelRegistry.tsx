@@ -46,11 +46,29 @@ export type LeftPanel = DesktopPanelId;
 /** Title-bar panel id selected on the right side of the shell. */
 export type RightPanel = DesktopPanelId;
 
+/**
+ * A button a panel contributes to its own header.
+ *
+ * Data rather than markup, so an extension that mounted plain DOM contributes
+ * one exactly as a first-party React panel does.
+ */
+export interface PanelAction {
+  /** Unique within the panel; used as the React key and in failure reports. */
+  readonly id: string;
+  /** Accessible name and tooltip. */
+  readonly label: string;
+  /** Single glyph shown on the button. */
+  readonly icon: string;
+  run(): void | Promise<void>;
+}
+
 /** A core panel contribution specialized to React render factories. */
 export type DesktopPanelContribution = PanelContribution<ReactNode, DesktopPanelContext> & {
   readonly id: DesktopPanelId;
   /** Keeps stateful content mounted while another panel on the same side is active. */
   readonly keepMounted?: boolean;
+  /** Buttons rendered in the panel header, in declaration order. */
+  readonly actions?: readonly PanelAction[];
 };
 
 /** The left-side subset used by the activity bar and left popout. */

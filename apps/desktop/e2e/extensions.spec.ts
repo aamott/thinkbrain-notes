@@ -253,7 +253,19 @@ export function activate(context) {
       mountContext.onDidChange(render);
       region.append(status);
       element.append(region);
-    }
+    },
+    // Header buttons are data, so a panel that renders its own DOM still gets
+    // them from the shell's chrome.
+    actions: [
+      {
+        id: "clear",
+        label: "Clear board",
+        icon: "⌫",
+        run: () => {
+          document.title = "cleared";
+        }
+      }
+    ]
   });
 }
 `;
@@ -299,6 +311,10 @@ test("an extension loaded from disk gets its own activity-bar space and mounts i
   const boardContents = page.getByRole("region", { name: "Board contents" });
   await expect(boardContents).toBeVisible();
   await expect(boardContents).toHaveText("No note open");
+
+  // The panel's own header button, contributed alongside the panel.
+  await page.getByRole("button", { name: "Clear board" }).click();
+  await expect(page).toHaveTitle("cleared");
 
   // Opening the panel is what activated it: both are left-side panels, so the
   // Extensions list has to be reopened to see the new status.
@@ -380,17 +396,22 @@ test("the hello-notes example extension loads from its shipped files and capture
 
   // The example's panel takes its own place in the activity bar.
   await activityBar.getByRole("button", { name: "Capture", exact: true }).click();
-  await expect(page.getByRole("button", { name: "New capture" })).toBeVisible();
   await expect(page.getByText("Capturing into /vault")).toBeVisible();
 
+  // Its header action captures a note, and its own note.created subscription
+  // lists the result.
+  await page.getByRole("button", { name: "New capture" }).click();
+  await expect.poll(() => created).toHaveLength(1);
+  expect(created[0]).toMatch(/^captures\/capture-.+\.md$/);
+  const capturePanel = page.getByRole("complementary", { name: "Capture panel" });
+  await expect(capturePanel.getByRole("listitem")).toHaveText(created[0]!);
+
+  // The same capture is reachable from the command palette.
   await page.keyboard.press("Control+p");
   await page.getByRole("combobox", { name: "Search commands" }).fill("Capture a note");
   await page.keyboard.press("Enter");
 
-  // The example writes into captures/ with a timestamped name and opens the
-  // new note as an editor tab.
-  await expect.poll(() => created).toHaveLength(1);
-  expect(created[0]).toMatch(/^captures\/capture-.+\.md$/);
+  await expect.poll(() => created).toHaveLength(2);
   await expect(page.getByRole("navigation", { name: "Open tabs" })).toContainText(".md");
 });
 

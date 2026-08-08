@@ -2,8 +2,8 @@
 
 ## Status
 
-🟨 The panel mount contract is shipped; menus, context menus, themes, and
-additional editor actions are still pending. D44's React editor-header slot is
+🟨 The panel mount contract and panel header actions are shipped; menus,
+context menus, themes, and additional editor actions are still pending. D44's React editor-header slot is
 isolated in `pending-editor_header_contribution-high-med.md`.
 
 An extension loaded from disk now contributes panels on equal footing with a
@@ -15,6 +15,11 @@ bar (right) render both kinds identically, and the loader no longer strips
 declared panels. Host state reaches a mounted panel through `panel.state` at
 mount time and `panel.onDidChange(listener)` afterwards; only `rootPath` and
 `documentContents` are forwarded, never the shell's React props.
+
+A panel also contributes `actions: PanelAction[]` — `{ id, label, icon, run }`
+records the shell renders as buttons in the panel header (`PanelTitle`), so an
+extension gets header buttons without rendering any markup. A throwing or
+rejecting action is reported, never propagated into the shell.
 
 ## Goal
 
@@ -85,6 +90,7 @@ by the mount contract described under Status; the loader's `panels_not_supported
 diagnostic is gone. `examples/extensions/hello-notes` contributes a panel this
 way and is loaded verbatim by an end-to-end test.
 
-Remaining panel-adjacent gaps: a mounted panel cannot yet contribute toolbar
-actions or a title-bar affordance of its own, and there is no styling contract
+Remaining panel-adjacent gaps: header actions are static for the lifetime of
+the registration (no enabled/disabled state or dynamic list), the header's
+`•••` overflow button is still inert chrome, and there is no styling contract
 beyond whatever DOM the extension writes.
