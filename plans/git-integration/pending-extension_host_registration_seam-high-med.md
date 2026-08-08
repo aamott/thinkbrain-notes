@@ -1,5 +1,8 @@
 # Extension-Host Registration Seam for Git Background Work
 
+> **REPLAN NEEDED:** Git sync should replace built-in Git entirely, not layer on
+> top. See `plans/wip-git-integration-low-hard.md` before implementing.
+
 ## Goal
 
 Expose a typed, disposable registration seam so the trusted built-in Git module can

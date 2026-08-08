@@ -1,5 +1,8 @@
 # Branch List + Current Branch
 
+> **REPLAN NEEDED:** Git sync should replace built-in Git entirely, not layer on
+> top. See `plans/wip-git-integration-low-hard.md` before implementing.
+
 ## Goal
 
 Expose read-only local branch metadata and show it in Source Control. This is

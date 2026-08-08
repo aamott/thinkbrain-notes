@@ -1,5 +1,8 @@
 # Later: Git Conflict Detection and Resolution
 
+> **REPLAN NEEDED:** Git sync should replace built-in Git entirely, not layer on
+> top. See `plans/wip-git-integration-low-hard.md` before implementing.
+
 ## Boundary
 
 Deferred advanced conflict detection and three-way resolution UI. MVP may surface

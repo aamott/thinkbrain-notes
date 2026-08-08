@@ -1,5 +1,8 @@
 # Later: Git File Watchers and Status Refresh
 
+> **REPLAN NEEDED:** Git sync should replace built-in Git entirely, not layer on
+> top. See `plans/wip-git-integration-low-hard.md` before implementing.
+
 ## Boundary
 
 Deferred background file watching/polling for workspace and `.git` changes. Basic

@@ -20,7 +20,7 @@ Define minimal typed extension hooks for AI and Git metadata/background contribu
 
 - Extension lifecycle, contribution/event-task contracts, compatibility, and beta built-in registration.
 - AI contracts/consent and Git typed adapters/error stories as consumer-owned dependencies.
-- `plans/wip-ai-low-hard.md` and `plans/wip-git-integration-high-hard.md` remain behavior owners.
+- `plans/wip-ai-low-hard.md` and `plans/wip-git-integration-low-hard.md` remain behavior owners.
 
 ## Likely files
 
@@ -63,4 +63,4 @@ Deliver owner-approved hook matrix, typed seam/tests, capability/disposal report
 - `plans/extensions/pending-extension_api_surface-low-hard.md`
 - `plans/extensions/pending-beta_builtin_extensions-med-med.md`
 - `plans/wip-ai-low-hard.md`
-- `plans/wip-git-integration-high-hard.md`
+- `plans/wip-git-integration-low-hard.md`

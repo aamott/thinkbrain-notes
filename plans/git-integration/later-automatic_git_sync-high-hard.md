@@ -1,5 +1,8 @@
 # Later: Automatic Git Sync Policy
 
+> **REPLAN NEEDED:** Git sync should replace built-in Git entirely, not layer on
+> top. See `plans/wip-git-integration-low-hard.md` before implementing.
+
 ## Boundary
 
 Deferred beyond basic MVP Git. Define opt-in scheduled/background sync (fetch,

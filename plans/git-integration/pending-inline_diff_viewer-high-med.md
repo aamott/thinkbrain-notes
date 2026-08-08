@@ -1,5 +1,8 @@
 # Inline Diff Viewer
 
+> **REPLAN NEEDED:** Git sync should replace built-in Git entirely, not layer on
+> top. See `plans/wip-git-integration-low-hard.md` before implementing.
+
 ## Goal
 
 Let users inspect a changed workspace file from Source Control in a VS Code-style

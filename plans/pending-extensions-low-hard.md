@@ -40,7 +40,7 @@ epics:
 - **Journal/calendar** — one journal panel/activity entry, calendar tab, D44 editor-header widget, and D45 app/workspace settings. Templates are out by D21; feature behavior and Markdown storage remain in its epic.
 - **Git sync** — built-in sync/background-task registration only. Git operations,
   file watching, conflict handling, and sync UX remain owned by
-  `plans/wip-git-integration-high-hard.md` and its child stories.
+  `plans/wip-git-integration-low-hard.md` and its child stories.
 - **ACP Agent Chat** — built-in assistant contribution and scoped credential/API
   boundary. ACP host lifecycle, chat UI, permissions, and provider behavior
   remain owned by `plans/wip-ai-low-hard.md` and `plans/ai/`.

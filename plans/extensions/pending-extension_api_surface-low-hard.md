@@ -76,5 +76,5 @@ No sandbox, cross-extension direct messaging, provider/Git/journal implementatio
 - `plans/extensions/pending-internal_contribution_points-low-med.md`
 - `plans/extensions/done-extension_lifecycle_bootstrap-low-med.md`
 - `plans/extensions/pending-extension_secret_storage-med-hard.md`
-- `plans/wip-git-integration-high-hard.md`
+- `plans/wip-git-integration-low-hard.md`
 - `plans/wip-ai-low-hard.md`

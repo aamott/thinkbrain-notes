@@ -1,5 +1,8 @@
 # Source-Control Sidebar Panel Completion
 
+> **REPLAN NEEDED:** Git sync should replace built-in Git entirely, not layer on
+> top. See `plans/wip-git-integration-low-hard.md` before implementing.
+
 ## Goal
 
 Finish the current fresh-shell Source Control contribution so availability,

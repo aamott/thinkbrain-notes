@@ -1,8 +1,15 @@
 # Git Integration
 
-> System Git integration for the active workspace. The next MVP epic to
-> implement. Read `plans/app-vision.md` and `plans/technical-decisions.md`
-> (Git section) before starting any story here.
+> **REPLAN NEEDED before implementing any story in this epic.** The current plan
+> assumes MVP Git as a direct native implementation with sync as a separate
+> extension layer. The new direction: Git sync should replace built-in Git
+> entirely so Git is presented as one user-facing feature that hides Git
+> complexity from non-technical users. Replan the epic scope, story breakdown,
+> and the extension-vs-built-in boundary when this epic is opened for work.
+
+> System Git integration for the active workspace. Read `plans/app-vision.md`
+> and `plans/technical-decisions.md` (Git section) before starting any story
+> here.
 
 ## Goal
 

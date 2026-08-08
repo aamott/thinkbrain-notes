@@ -1,5 +1,8 @@
 # Typed Git Error Handling
 
+> **REPLAN NEEDED:** Git sync should replace built-in Git entirely, not layer on
+> top. See `plans/wip-git-integration-low-hard.md` before implementing.
+
 ## Goal
 
 Make every current MVP Git command fail loudly with stable typed codes, bounded
