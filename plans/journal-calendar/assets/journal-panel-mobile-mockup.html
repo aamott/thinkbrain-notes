@@ -1,0 +1,1163 @@
+<title>Journal on mobile — mockup v1</title>
+<style>
+  /* ============================================================
+     PAGE TOKENS — the review sheet's own palette.
+     Deliberately neutral-cool so it never competes with the app
+     tokens rendered inside the figures. The only accent is the
+     redline ochre, used exclusively for annotation.
+     ============================================================ */
+  :root {
+    --ground: #f6f7f9;
+    --surface: #ffffff;
+    --surface-sunk: #eef0f4;
+    --ink: #141922;
+    --ink-muted: #5c6675;
+    --rule: #dee2e9;
+    --rule-soft: #e9ecf1;
+    --redline: #a9642f;
+    --redline-soft: #f2e6da;
+
+    --serif: ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+    /* ---- App tokens (light). Copied from packages/ui/src/styles/tokens.css ---- */
+    --tn-color-background: hsl(0 0% 100%);
+    --tn-color-foreground: hsl(222 47% 11%);
+    --tn-color-border: hsl(220 13% 91%);
+    --tn-color-input: hsl(220 13% 91%);
+    --tn-color-muted: hsl(220 14% 96%);
+    --tn-color-muted-foreground: hsl(220 9% 46%);
+    --tn-color-secondary: hsl(220 14% 96%);
+    --tn-color-secondary-foreground: hsl(222 47% 11%);
+    --tn-color-primary: hsl(262 83% 58%);
+    --tn-color-primary-foreground: hsl(0 0% 100%);
+    --tn-color-accent: hsl(262 83% 96%);
+    --tn-color-accent-foreground: hsl(262 83% 40%);
+    --tn-color-danger: hsl(0 84% 38%);
+    --tn-color-warning: hsl(38 92% 42%);
+    --tn-color-activitybar: hsl(220 16% 93%);
+    --tn-color-activitybar-foreground: hsl(220 9% 40%);
+    --tn-color-activitybar-active: hsl(262 83% 58%);
+    --tn-color-sidebar: hsl(220 16% 97%);
+    --tn-color-sidebar-foreground: hsl(222 47% 11%);
+    --tn-color-editor: hsl(0 0% 100%);
+    --tn-color-editor-foreground: hsl(222 47% 11%);
+    --tn-color-tab-active: hsl(0 0% 100%);
+    --tn-color-tab-inactive: hsl(220 16% 94%);
+    --tn-color-tab-active-foreground: hsl(222 47% 11%);
+    --tn-color-tab-inactive-foreground: hsl(220 9% 46%);
+    --tn-radius-small: 0.25rem;
+    --tn-radius-medium: 0.5rem;
+    --tn-font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --tn-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+
+  /* Page palette, dark. Guarded so an explicit light choice beats a dark OS. */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #11141a;
+      --surface: #171b22;
+      --surface-sunk: #1e232b;
+      --ink: #e6e9ee;
+      --ink-muted: #98a2b1;
+      --rule: #262c35;
+      --rule-soft: #1f242c;
+      --redline: #d69a62;
+      --redline-soft: #2b2018;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #11141a;
+    --surface: #171b22;
+    --surface-sunk: #1e232b;
+    --ink: #e6e9ee;
+    --ink-muted: #98a2b1;
+    --rule: #262c35;
+    --rule-soft: #1f242c;
+    --redline: #d69a62;
+    --redline-soft: #2b2018;
+  }
+
+  /* ---- App tokens (dark). Applied to .tn-dark always, and to any
+     theme-following figure when the viewer is in dark mode. ---- */
+  .tn-dark,
+  :root[data-theme="dark"] .tn-auto {
+    --tn-color-background: hsl(0 0% 7%);
+    --tn-color-foreground: hsl(0 0% 98%);
+    --tn-color-border: hsl(0 0% 18%);
+    --tn-color-input: hsl(0 0% 18%);
+    --tn-color-muted: hsl(0 0% 16%);
+    --tn-color-muted-foreground: hsl(0 0% 60%);
+    --tn-color-secondary: hsl(0 0% 16%);
+    --tn-color-secondary-foreground: hsl(0 0% 98%);
+    --tn-color-primary: hsl(152 60% 38%);
+    --tn-color-primary-foreground: hsl(0 0% 100%);
+    --tn-color-accent: hsl(152 40% 18%);
+    --tn-color-accent-foreground: hsl(152 60% 55%);
+    --tn-color-danger: hsl(0 72% 62%);
+    --tn-color-warning: hsl(38 92% 50%);
+    --tn-color-activitybar: hsl(0 0% 11%);
+    --tn-color-activitybar-foreground: hsl(0 0% 60%);
+    --tn-color-activitybar-active: hsl(152 60% 45%);
+    --tn-color-sidebar: hsl(0 0% 9%);
+    --tn-color-sidebar-foreground: hsl(0 0% 98%);
+    --tn-color-editor: hsl(0 0% 7%);
+    --tn-color-editor-foreground: hsl(0 0% 98%);
+    --tn-color-tab-active: hsl(0 0% 7%);
+    --tn-color-tab-inactive: hsl(0 0% 12%);
+    --tn-color-tab-active-foreground: hsl(0 0% 98%);
+    --tn-color-tab-inactive-foreground: hsl(0 0% 60%);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .tn-auto {
+      --tn-color-background: hsl(0 0% 7%);
+      --tn-color-foreground: hsl(0 0% 98%);
+      --tn-color-border: hsl(0 0% 18%);
+      --tn-color-input: hsl(0 0% 18%);
+      --tn-color-muted: hsl(0 0% 16%);
+      --tn-color-muted-foreground: hsl(0 0% 60%);
+      --tn-color-secondary: hsl(0 0% 16%);
+      --tn-color-secondary-foreground: hsl(0 0% 98%);
+      --tn-color-primary: hsl(152 60% 38%);
+      --tn-color-primary-foreground: hsl(0 0% 100%);
+      --tn-color-accent: hsl(152 40% 18%);
+      --tn-color-accent-foreground: hsl(152 60% 55%);
+      --tn-color-danger: hsl(0 72% 62%);
+      --tn-color-warning: hsl(38 92% 50%);
+      --tn-color-activitybar: hsl(0 0% 11%);
+      --tn-color-activitybar-foreground: hsl(0 0% 60%);
+      --tn-color-activitybar-active: hsl(152 60% 45%);
+      --tn-color-sidebar: hsl(0 0% 9%);
+      --tn-color-sidebar-foreground: hsl(0 0% 98%);
+      --tn-color-editor: hsl(0 0% 7%);
+      --tn-color-editor-foreground: hsl(0 0% 98%);
+      --tn-color-tab-active: hsl(0 0% 7%);
+      --tn-color-tab-inactive: hsl(0 0% 12%);
+      --tn-color-tab-active-foreground: hsl(0 0% 98%);
+      --tn-color-tab-inactive-foreground: hsl(0 0% 60%);
+    }
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 17px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .sheet {
+    max-width: 78rem;
+    margin: 0 auto;
+    padding: clamp(2rem, 5vw, 4.5rem) clamp(1rem, 4vw, 3rem) 6rem;
+  }
+
+  /* ---------------- masthead ---------------- */
+  .masthead { border-bottom: 1px solid var(--rule); padding-bottom: 2.5rem; }
+  .eyebrow {
+    font-family: var(--sans);
+    font-size: 0.7rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--redline);
+    margin: 0 0 1.25rem;
+  }
+  h1 {
+    font-size: clamp(2.2rem, 5vw, 3.4rem);
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    font-weight: 600;
+    margin: 0 0 1rem;
+    text-wrap: balance;
+  }
+  .standfirst {
+    font-size: 1.15rem;
+    color: var(--ink-muted);
+    max-width: 46ch;
+    margin: 0 0 2rem;
+  }
+  .facts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+    gap: 1.25rem 2rem;
+    font-family: var(--sans);
+    font-size: 0.85rem;
+    line-height: 1.5;
+  }
+  .facts dt {
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    margin-bottom: 0.3rem;
+  }
+  .facts dd { margin: 0; }
+
+  /* ---------------- section grid with redline gutter ---------------- */
+  section { margin-top: 4.5rem; }
+  .block {
+    display: grid;
+    grid-template-columns: 8.5rem minmax(0, 1fr);
+    gap: 0 2.5rem;
+    align-items: start;
+  }
+  .gutter {
+    font-family: var(--sans);
+    font-size: 0.68rem;
+    line-height: 1.7;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    text-align: right;
+    padding-top: 0.55rem;
+    border-right: 1px solid var(--rule-soft);
+    padding-right: 1rem;
+  }
+  .gutter b { display: block; color: var(--redline); font-weight: 600; letter-spacing: 0.08em; }
+  .col { min-width: 0; }
+
+  h2 {
+    font-size: clamp(1.5rem, 3vw, 2rem);
+    line-height: 1.15;
+    letter-spacing: -0.015em;
+    font-weight: 600;
+    margin: 0 0 0.75rem;
+    text-wrap: balance;
+  }
+  h3 {
+    font-family: var(--sans);
+    font-size: 0.78rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-weight: 650;
+    margin: 2.5rem 0 0.9rem;
+    color: var(--ink);
+  }
+  p { margin: 0 0 1rem; max-width: 68ch; }
+  .col > p:last-child { margin-bottom: 0; }
+  code {
+    font-family: var(--mono);
+    font-size: 0.82em;
+    background: var(--surface-sunk);
+    padding: 0.1em 0.35em;
+    border-radius: 3px;
+  }
+  strong { font-weight: 650; }
+  a { color: var(--redline); }
+
+  ul.notes { margin: 0 0 1rem; padding-left: 1.1rem; max-width: 68ch; }
+  ul.notes li { margin-bottom: 0.5rem; }
+
+  /* ---------------- figures ---------------- */
+  figure { margin: 1.75rem 0 0; }
+  figcaption {
+    font-family: var(--sans);
+    font-size: 0.78rem;
+    line-height: 1.5;
+    color: var(--ink-muted);
+    margin-top: 0.85rem;
+    max-width: 62ch;
+  }
+  .figrow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    align-items: flex-start;
+  }
+  .scroller { overflow-x: auto; padding-bottom: 0.5rem; }
+  .plate {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    padding: 1.25rem;
+    display: inline-block;
+  }
+  .platelabel {
+    font-family: var(--sans);
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    margin-bottom: 0.75rem;
+    display: flex;
+    gap: 0.5rem;
+    align-items: baseline;
+  }
+  .platelabel .n {
+    color: var(--redline);
+    font-weight: 650;
+  }
+
+  /* ---------------- the app mockup ---------------- */
+  .app {
+    display: flex;
+    font-family: var(--tn-font-sans);
+    background: var(--tn-color-background);
+    color: var(--tn-color-foreground);
+    border: 1px solid var(--tn-color-border);
+    border-radius: 6px;
+    overflow: hidden;
+    height: var(--app-h, 460px);
+    width: var(--app-w, 860px);
+    max-width: 100%;
+    font-size: 13px;
+    line-height: 1.45;
+  }
+  .app.standalone { width: var(--panel-w, 288px); }
+
+  .activitybar {
+    flex: 0 0 3rem;
+    background: var(--tn-color-activitybar);
+    border-right: 1px solid var(--tn-color-border);
+    padding: 0.4rem 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.15rem;
+  }
+  .ab-btn {
+    width: 2rem; height: 2rem;
+    display: grid; place-items: center;
+    color: var(--tn-color-activitybar-foreground);
+    font-size: 15px;
+    border-radius: var(--tn-radius-small);
+  }
+  .ab-btn.active {
+    color: var(--tn-color-activitybar-active);
+    box-shadow: inset 2px 0 0 var(--tn-color-activitybar-active);
+  }
+
+  .panel {
+    flex: 0 0 var(--panel-w, 288px);
+    width: var(--panel-w, 288px);
+    background: var(--tn-color-sidebar);
+    color: var(--tn-color-sidebar-foreground);
+    border-right: 1px solid var(--tn-color-border);
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .app.standalone .panel { border-right: 0; flex: 1 1 auto; width: auto; }
+
+  /* Panel chrome — matches PanelTitle.tsx exactly: 2.25rem tall, px-3,
+     uppercase 0.68rem tracked title, icon actions, then the ••• overflow. */
+  .panel-title {
+    display: flex; align-items: center; justify-content: space-between;
+    height: 2.25rem; padding: 0 0.75rem; flex: none;
+  }
+  .panel-title h4 {
+    margin: 0;
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .pt-actions { display: flex; align-items: center; gap: 0.25rem; }
+  .pt-actions span {
+    padding: 0 0.25rem;
+    color: var(--tn-color-muted-foreground);
+    font-size: 13px;
+  }
+  .pt-actions span.dots { font-size: 0.68rem; }
+
+  .panel-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .panel-head { padding: 0 0.5rem 0.5rem; display: flex; flex-direction: column; gap: 0.4rem; flex: none; }
+
+  /* The action row: one filled control, and only one. Today and Open calendar
+     sit beside it as quiet outlined buttons. */
+  .actionrow { display: flex; gap: 0.3rem; align-items: stretch; }
+  .btn-primary {
+    display: flex; align-items: center; justify-content: center; gap: 0.35rem;
+    height: 1.85rem;
+    flex: 1 1 auto; min-width: 0;
+    background: var(--tn-color-primary);
+    color: var(--tn-color-primary-foreground);
+    border-radius: var(--tn-radius-small);
+    font-size: 12px; font-weight: 600;
+    white-space: nowrap;
+  }
+  .icon-btn {
+    flex: none;
+    width: 1.85rem; height: 1.85rem;
+    display: grid; place-items: center;
+    border: 1px solid var(--tn-color-border);
+    border-radius: var(--tn-radius-small);
+    background: var(--tn-color-background);
+    color: var(--tn-color-foreground);
+    font-size: 13px;
+  }
+  .btn-ghost {
+    display: inline-flex; align-items: center; gap: 0.3rem;
+    height: 1.6rem; padding: 0 0.5rem;
+    border: 1px solid var(--tn-color-border);
+    border-radius: var(--tn-radius-small);
+    color: var(--tn-color-foreground);
+    font-size: 12px;
+    background: var(--tn-color-background);
+  }
+  .search {
+    display: flex; align-items: center; gap: 0.4rem;
+    height: 1.7rem; padding: 0 0.5rem;
+    background: var(--tn-color-background);
+    border: 1px solid var(--tn-color-input);
+    border-radius: var(--tn-radius-small);
+    color: var(--tn-color-muted-foreground);
+    font-size: 12px;
+  }
+  .search.filled { color: var(--tn-color-foreground); }
+
+  /* Filter sits hard right; the count line takes the space to its left. */
+  .filterrow {
+    display: flex; align-items: center; gap: 0.35rem;
+    justify-content: flex-end; flex-wrap: wrap;
+  }
+  .filterrow .showing { margin-right: auto; flex: 1 1 8rem; min-width: 0; }
+  .filter-btn {
+    display: inline-flex; align-items: center; gap: 0.35rem;
+    height: 1.5rem; padding: 0 0.45rem;
+    border: 1px solid var(--tn-color-border);
+    border-radius: var(--tn-radius-small);
+    font-size: 12px;
+    color: var(--tn-color-foreground);
+  }
+  .badge {
+    min-width: 1.05rem; height: 1.05rem; padding: 0 0.25rem;
+    display: grid; place-items: center;
+    background: var(--tn-color-primary);
+    color: var(--tn-color-primary-foreground);
+    border-radius: 999px;
+    font-size: 10px; font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .chips { display: flex; flex-wrap: wrap; gap: 0.25rem; align-items: center; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 0.3rem;
+    padding: 0.1rem 0.35rem;
+    background: var(--tn-color-accent);
+    color: var(--tn-color-accent-foreground);
+    border-radius: var(--tn-radius-small);
+    font-size: 11px;
+  }
+  .chip .x { opacity: 0.7; }
+  .clear-all {
+    font-size: 11px;
+    color: var(--tn-color-muted-foreground);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .showing {
+    font-size: 11px;
+    color: var(--tn-color-foreground);
+    font-weight: 600;
+    padding: 0 0.15rem;
+  }
+  .showing em { font-style: normal; color: var(--tn-color-muted-foreground); font-weight: 400; }
+
+  .list { flex: 1; min-height: 0; overflow: hidden; }
+
+  /* Group headers: year and month differ by weight, size, case and ground —
+     never by indentation (D37/D39). */
+  .h-year {
+    display: flex; align-items: center; gap: 0.4rem;
+    padding: 0.3rem 0.5rem;
+    background: var(--tn-color-secondary);
+    border-top: 1px solid var(--tn-color-border);
+    font-size: 11px; font-weight: 700;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    font-variant-numeric: tabular-nums;
+  }
+  .h-month {
+    display: flex; align-items: center; gap: 0.4rem;
+    padding: 0.25rem 0.5rem;
+    border-bottom: 1px solid var(--tn-color-border);
+    font-size: 12px; font-weight: 600;
+  }
+  .h-undated {
+    display: flex; align-items: center; gap: 0.4rem;
+    padding: 0.3rem 0.5rem;
+    background: var(--tn-color-muted);
+    border-bottom: 1px solid var(--tn-color-border);
+    font-size: 12px; font-weight: 600;
+    color: var(--tn-color-foreground);
+  }
+  .caret { color: var(--tn-color-muted-foreground); font-size: 9px; width: 0.6rem; }
+  .count {
+    margin-left: auto;
+    color: var(--tn-color-muted-foreground);
+    font-size: 11px; font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0;
+  }
+  .matchcount {
+    margin-left: auto;
+    color: var(--tn-color-accent-foreground);
+    background: var(--tn-color-accent);
+    border-radius: 999px;
+    padding: 0 0.35rem;
+    font-size: 10px; font-weight: 700;
+    letter-spacing: 0;
+  }
+
+  /* Rows. Wide tier: one line, three zones. */
+  .row {
+    display: flex; align-items: baseline; gap: 0.5rem;
+    padding: 0.28rem 0.5rem;
+    border-bottom: 1px solid transparent;
+    min-width: 0;
+  }
+  .row.sel { background: var(--tn-color-accent); }
+  .row .d { font-weight: 600; font-size: 12px; flex: none; font-variant-numeric: tabular-nums; }
+  .row .t {
+    color: var(--tn-color-muted-foreground);
+    font-size: 11px; flex: none;
+    font-variant-numeric: tabular-nums;
+  }
+  .row .p {
+    color: var(--tn-color-muted-foreground);
+    font-size: 12px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    min-width: 0;
+  }
+  /* Narrow tier: the date line keeps the time, the preview wraps beneath. */
+  .row.stack { display: block; }
+  .row.stack .dt { display: flex; gap: 0.4rem; align-items: baseline; }
+  .row.stack .p { display: block; white-space: normal; overflow: visible; }
+  .row.mark .d::before {
+    content: "▲";
+    color: var(--tn-color-warning);
+    font-size: 8px;
+    margin-right: 0.3rem;
+    vertical-align: 1px;
+  }
+
+  /* Empty / error blocks inside the panel */
+  .state {
+    padding: 1.1rem 0.9rem;
+    display: flex; flex-direction: column; gap: 0.5rem;
+    align-items: flex-start;
+  }
+  .state .title { font-size: 12.5px; font-weight: 650; }
+  .state .body { font-size: 12px; color: var(--tn-color-muted-foreground); }
+  .state .path {
+    font-family: var(--tn-font-mono); font-size: 11px;
+    color: var(--tn-color-muted-foreground);
+    background: var(--tn-color-muted);
+    padding: 0.1rem 0.3rem; border-radius: 3px;
+    max-width: 100%; overflow: hidden; text-overflow: ellipsis;
+  }
+  .state .acts { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.15rem; }
+
+  .banner {
+    margin: 0.4rem 0.5rem;
+    padding: 0.45rem 0.55rem;
+    border-radius: var(--tn-radius-small);
+    border-left: 3px solid var(--tn-color-warning);
+    background: var(--tn-color-muted);
+    font-size: 11.5px;
+    display: flex; flex-direction: column; gap: 0.25rem;
+  }
+  .banner.err { border-left-color: var(--tn-color-danger); }
+  .banner .bt { font-weight: 650; }
+  .banner .bb { color: var(--tn-color-muted-foreground); }
+
+  /* ---------------- editor surface (Direction B) ---------------- */
+  .editor {
+    flex: 1; min-width: 0;
+    background: var(--tn-color-editor);
+    color: var(--tn-color-editor-foreground);
+    display: flex; flex-direction: column;
+  }
+  .tabstrip {
+    display: flex; flex: none;
+    background: var(--tn-color-tab-inactive);
+    border-bottom: 1px solid var(--tn-color-border);
+  }
+  .tab {
+    padding: 0.4rem 0.8rem;
+    font-size: 12px;
+    color: var(--tn-color-tab-inactive-foreground);
+    border-right: 1px solid var(--tn-color-border);
+  }
+  .tab.active {
+    background: var(--tn-color-tab-active);
+    color: var(--tn-color-tab-active-foreground);
+  }
+  .page {
+    flex: 1; min-height: 0;
+    padding: 1.75rem 1.5rem;
+    overflow: hidden;
+  }
+  .measure { max-width: 34rem; margin: 0 auto; }
+
+  .dateline {
+    display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap;
+    padding-bottom: 0.6rem;
+    border-bottom: 1px solid var(--tn-color-border);
+    margin-bottom: 1.25rem;
+  }
+  .dateline .day { font-size: 13px; font-weight: 650; }
+  .dateline .vals { font-size: 13px; color: var(--tn-color-muted-foreground); }
+  .dateline .act {
+    margin-left: auto;
+    font-size: 11px;
+    color: var(--tn-color-muted-foreground);
+    border: 1px solid var(--tn-color-border);
+    border-radius: var(--tn-radius-small);
+    padding: 0.05rem 0.4rem;
+  }
+  .prose p { font-size: 13.5px; line-height: 1.75; margin: 0 0 0.9rem; max-width: none; }
+  .prose .h { font-size: 15px; font-weight: 650; margin: 0 0 0.75rem; }
+
+  .fieldgrid {
+    display: grid;
+    grid-template-columns: 7rem 1fr;
+    gap: 0.5rem 0.75rem;
+    align-items: center;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--tn-color-border);
+    margin-bottom: 1.25rem;
+  }
+  .fieldgrid .lab { font-size: 11.5px; color: var(--tn-color-muted-foreground); }
+  .fieldgrid .val {
+    font-size: 12px;
+    border: 1px solid var(--tn-color-input);
+    border-radius: var(--tn-radius-small);
+    padding: 0.2rem 0.4rem;
+    background: var(--tn-color-background);
+  }
+  .fieldgrid .segs { display: flex; gap: 0.25rem; flex-wrap: wrap; }
+  .seg {
+    font-size: 11.5px; padding: 0.12rem 0.45rem;
+    border: 1px solid var(--tn-color-border);
+    border-radius: 999px;
+    color: var(--tn-color-muted-foreground);
+  }
+  .seg.on {
+    background: var(--tn-color-accent);
+    color: var(--tn-color-accent-foreground);
+    border-color: transparent;
+    font-weight: 600;
+  }
+
+  /* ---------------- decision call-outs ---------------- */
+  .ask {
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--redline);
+    background: var(--surface);
+    border-radius: 0 8px 8px 0;
+    padding: 1.1rem 1.25rem;
+    margin: 1.25rem 0 0;
+  }
+  .ask h4 {
+    font-family: var(--sans);
+    font-size: 0.8rem;
+    letter-spacing: 0.02em;
+    margin: 0 0 0.5rem;
+    font-weight: 650;
+  }
+  .ask p { font-size: 0.95rem; margin: 0 0 0.6rem; }
+  .ask p:last-child { margin-bottom: 0; }
+  .ask .rec {
+    font-family: var(--sans);
+    font-size: 0.78rem;
+    color: var(--redline);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-weight: 650;
+  }
+
+  .statelist { display: grid; grid-template-columns: repeat(auto-fill, minmax(19rem, 1fr)); gap: 1.5rem; }
+
+  table.copy {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--sans);
+    font-size: 0.82rem;
+    margin-top: 1rem;
+  }
+  table.copy th, table.copy td {
+    text-align: left;
+    padding: 0.5rem 0.75rem 0.5rem 0;
+    border-bottom: 1px solid var(--rule-soft);
+    vertical-align: top;
+  }
+  table.copy th {
+    font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--ink-muted); font-weight: 650;
+  }
+  table.copy td.n { color: var(--redline); font-weight: 650; width: 2.5rem; font-variant-numeric: tabular-nums; }
+  table.copy td code { background: none; padding: 0; color: var(--ink); }
+
+  @media (max-width: 900px) {
+    .block { grid-template-columns: minmax(0, 1fr); gap: 0.75rem; }
+    .gutter {
+      text-align: left; border-right: 0; padding: 0 0 0.25rem;
+      border-bottom: 1px solid var(--rule-soft);
+    }
+    .gutter b { display: inline; margin-right: 0.5rem; }
+  }
+</style>
+<style>
+  /* ---------------- phone frames ---------------- */
+  .phone {
+    width: var(--phone-w, 390px);
+    height: var(--phone-h, 720px);
+    border: 1px solid var(--tn-color-border);
+    border-radius: 22px;
+    overflow: hidden;
+    background: var(--tn-color-background);
+    color: var(--tn-color-foreground);
+    font-family: var(--tn-font-sans);
+    font-size: 13px;
+    line-height: 1.45;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    max-width: 100%;
+  }
+  .statusbar {
+    flex: none;
+    height: 26px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 1rem;
+    font-size: 11px;
+    color: var(--tn-color-muted-foreground);
+    font-variant-numeric: tabular-nums;
+  }
+  /* The shell owns this bar, its title and its close affordance (D12/D26). */
+  .shellbar {
+    flex: none;
+    height: 44px;
+    display: flex; align-items: center; gap: 0.5rem;
+    padding: 0 0.6rem;
+    border-bottom: 1px solid var(--tn-color-border);
+    background: var(--tn-color-sidebar);
+  }
+  .shellbar .back { font-size: 17px; width: 44px; height: 44px; display: grid; place-items: center; margin-left: -0.6rem; }
+  .shellbar h4 {
+    margin: 0; font-size: 0.68rem; letter-spacing: 0.08em;
+    text-transform: uppercase; font-weight: 600;
+  }
+  .shellbar .dots { margin-left: auto; width: 44px; height: 44px; display: grid; place-items: center; color: var(--tn-color-muted-foreground); font-size: 0.68rem; }
+  .shell-note {
+    position: absolute; inset-inline: 0; top: 26px; height: 44px;
+    border: 1px dashed var(--redline);
+    border-radius: 4px;
+    pointer-events: none;
+  }
+
+  .phone .panel-head { padding: 0.5rem 0.6rem; gap: 0.5rem; }
+  .phone .search { height: 2.4rem; font-size: 13px; }
+  .phone .btn-primary { height: 2.6rem; font-size: 13px; }
+  .phone .icon-btn { width: 2.6rem; height: 2.6rem; font-size: 15px; }
+  .phone .filter-btn { height: 2.2rem; font-size: 13px; padding: 0 0.6rem; }
+  .phone .chip { padding: 0.25rem 0.5rem; font-size: 12px; }
+  .phone .list { flex: 1; }
+
+  /* M-1 density, sized for a fingertip: two lines, 44px minimum. */
+  .trow {
+    display: block;
+    padding: 0.45rem 0.6rem;
+    min-height: 44px;
+    border-bottom: 1px solid var(--tn-color-border);
+  }
+  .trow .dt { display: flex; gap: 0.45rem; align-items: baseline; }
+  .trow .d { font-weight: 600; font-size: 13px; font-variant-numeric: tabular-nums; }
+  .trow .t { color: var(--tn-color-muted-foreground); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .trow .p {
+    display: block; color: var(--tn-color-muted-foreground); font-size: 12.5px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .phone .h-year { padding: 0.4rem 0.6rem; }
+  .phone .h-month, .phone .h-undated { padding: 0.4rem 0.6rem; min-height: 36px; }
+
+  /* ---------------- bottom sheet (M-2) ---------------- */
+  .scrim { position: absolute; inset: 0; background: var(--tn-color-overlay); }
+  .msheet {
+    position: absolute; inset-inline: 0; bottom: 0;
+    background: var(--tn-color-background);
+    border-top: 1px solid var(--tn-color-border);
+    border-radius: 14px 14px 0 0;
+    padding: 0.5rem 0.9rem 1rem;
+    display: flex; flex-direction: column; gap: 0.75rem;
+    box-shadow: 0 -12px 40px rgb(0 0 0 / 22%);
+  }
+  .grabber {
+    width: 36px; height: 4px; border-radius: 2px;
+    background: var(--tn-color-border);
+    margin: 0.15rem auto 0.35rem;
+  }
+  .msheet-head { display: flex; align-items: baseline; gap: 0.5rem; }
+  .msheet-head .title { font-size: 14px; font-weight: 650; }
+  .msheet-head .done {
+    margin-left: auto; font-size: 13px; font-weight: 600;
+    color: var(--tn-color-primary);
+    min-height: 44px; display: flex; align-items: center;
+  }
+  .field { display: flex; flex-direction: column; gap: 0.35rem; }
+  .field .lab { font-size: 11.5px; color: var(--tn-color-muted-foreground); }
+  .field .segs { display: flex; gap: 0.35rem; flex-wrap: wrap; }
+  .field .seg {
+    font-size: 13px; padding: 0.5rem 0.75rem; min-height: 44px;
+    display: flex; align-items: center;
+    border: 1px solid var(--tn-color-border);
+    border-radius: 999px;
+    color: var(--tn-color-muted-foreground);
+  }
+  .field .seg.on {
+    background: var(--tn-color-accent);
+    color: var(--tn-color-accent-foreground);
+    border-color: transparent;
+    font-weight: 600;
+  }
+  .field .input {
+    min-height: 44px; display: flex; align-items: center;
+    border: 1px solid var(--tn-color-input);
+    border-radius: var(--tn-radius-small);
+    padding: 0 0.6rem; font-size: 13px;
+    background: var(--tn-color-background);
+  }
+  .keyboard {
+    position: absolute; inset-inline: 0; bottom: 0; height: 210px;
+    background: var(--tn-color-muted);
+    border-top: 1px solid var(--tn-color-border);
+    display: grid; place-items: center;
+    color: var(--tn-color-muted-foreground); font-size: 11px;
+  }
+
+  .phone .page { padding: 1rem 0.9rem; }
+  .phone .measure { max-width: none; }
+  .phone .dateline { gap: 0.4rem; }
+  .phone .dateline .day { font-size: 14px; }
+  .phone .dateline .act { min-height: 44px; display: flex; align-items: center; padding: 0 0.6rem; }
+  .phone .prose p { font-size: 15px; line-height: 1.7; }
+
+  .touch-key {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    font-family: var(--sans); font-size: 0.72rem; color: var(--ink-muted);
+  }
+  .swatch {
+    width: 0.85rem; height: 0.85rem; border-radius: 3px;
+    border: 1px dashed var(--redline); display: inline-block;
+  }
+</style>
+
+<div class="sheet">
+
+  <header class="masthead">
+    <p class="eyebrow">Mockup v1 · mobile · for sign-off under D34</p>
+    <h1>The journal on a phone</h1>
+    <p class="standfirst">
+      The same list, the same states, the same tokens. Two things change: rows are sized for a
+      fingertip, and metadata editing moves into a sheet. One question needs your call.
+    </p>
+    <dl class="facts">
+      <div>
+        <dt>Governed by</dt>
+        <dd>D40 — M‑1's list density with M‑2's bottom sheet; D12/D26 — the shell owns navigation</dd>
+      </div>
+      <div>
+        <dt>Inherits</dt>
+        <dd>D71–D75 header, D72 preview always kept, D74 dateline, all fourteen states</dd>
+      </div>
+      <div>
+        <dt>Drawn at</dt>
+        <dd>390&nbsp;px — the popout is full width, so it is its own width tier</dd>
+      </div>
+      <div>
+        <dt>New components</dt>
+        <dd>One: the metadata sheet. Nothing else on this page is new</dd>
+      </div>
+    </dl>
+  </header>
+
+  <section>
+    <div class="block">
+      <div class="gutter"><b>D12 D26</b> shell owns nav<br /><b>D40</b> M‑1 density</div>
+      <div class="col">
+        <h2>The list, full screen</h2>
+        <p>
+          The popout fills the screen at phone widths, and everything above it belongs to the app
+          shell — the title, the close affordance, the way back. The journal contributes no
+          navigation of its own, no bottom bar, no back gesture. The dashed outline below marks
+          what the journal does <em>not</em> own.
+        </p>
+        <p class="touch-key"><span class="swatch"></span> shell-owned chrome, drawn for context only</p>
+
+        <figure>
+          <div class="scroller">
+            <div class="figrow">
+              <div class="plate">
+                <div class="platelabel"><span class="n">1</span> browsing</div>
+                <div class="phone tn-auto">
+                  <div class="statusbar"><span>9:41</span><span>▮▮▮</span></div>
+                  <div class="shellbar">
+                    <span class="back">‹</span>
+                    <h4>Journal</h4>
+                    <span class="dots">•••</span>
+                  </div>
+                  <div class="shell-note"></div>
+                  <div class="panel-head">
+                    <div class="actionrow">
+                      <div class="btn-primary">＋ New entry</div>
+                      <div class="icon-btn">◷</div>
+                      <div class="icon-btn">▦</div>
+                    </div>
+                    <div class="search">⌕ Search entries</div>
+                    <div class="filterrow"><div class="filter-btn">Filter</div></div>
+                  </div>
+                  <div class="list">
+                    <div class="h-undated"><span class="caret">▸</span>Undated<span class="count">3</span></div>
+                    <div class="h-year"><span class="caret">▾</span>2026<span class="count">412</span></div>
+                    <div class="h-month"><span class="caret">▾</span>August<span class="count">7</span></div>
+                    <div class="trow"><div class="dt"><span class="d">Fri 7</span><span class="t">6:02 PM</span></div><span class="p">Bread needed more salt. Try 2%.</span></div>
+                    <div class="trow"><div class="dt"><span class="d">Fri 7</span><span class="t">7:41 AM</span></div><span class="p">Long run before the heat came in</span></div>
+                    <div class="trow"><div class="dt"><span class="d">Wed 5</span><span class="t">1:07 PM</span></div><span class="p">Call with Priya about the renovation quote</span></div>
+                    <div class="trow"><div class="dt"><span class="d">Tue 4</span><span class="t">9:15 PM</span></div><span class="p">Didn't sleep well. Short one.</span></div>
+                    <div class="trow"><div class="dt"><span class="d">Mon 3</span><span class="t">8:30 AM</span></div><span class="p">First day back. Inbox survivable.</span></div>
+                    <div class="trow"><div class="dt"><span class="d">Sun 2</span><span class="t">7:12 PM</span></div><span class="p">Garden is ahead of me again</span></div>
+                    <div class="trow"><div class="dt"><span class="d">Sat 1</span><span class="t">10:40 AM</span></div><span class="p">Market, then nothing at all</span></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="plate">
+                <div class="platelabel"><span class="n">2</span> filtered from the calendar</div>
+                <div class="phone tn-auto">
+                  <div class="statusbar"><span>9:41</span><span>▮▮▮</span></div>
+                  <div class="shellbar">
+                    <span class="back">‹</span>
+                    <h4>Journal</h4>
+                    <span class="dots">•••</span>
+                  </div>
+                  <div class="panel-head">
+                    <div class="actionrow">
+                      <div class="btn-primary">＋ New entry</div>
+                      <div class="icon-btn">◷</div>
+                      <div class="icon-btn">▦</div>
+                    </div>
+                    <div class="search">⌕ Search entries</div>
+                    <div class="filterrow">
+                      <div class="showing">Showing 1 <em>of 1,431 — from the calendar</em></div>
+                      <div class="filter-btn">Filter <span class="badge">2</span></div>
+                    </div>
+                    <div class="chips">
+                      <span class="chip">August 7 <span class="x">✕</span></span>
+                      <span class="chip">context: running <span class="x">✕</span></span>
+                      <span class="clear-all">Clear all</span>
+                    </div>
+                  </div>
+                  <div class="list">
+                    <div class="h-year"><span class="caret">▾</span>2026<span class="matchcount">1</span></div>
+                    <div class="h-month"><span class="caret">▾</span>August<span class="matchcount">1</span></div>
+                    <div class="trow"><div class="dt"><span class="d">Fri 7</span><span class="t">7:41 AM</span></div><span class="p">Long run before the heat came in</span></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="plate">
+                <div class="platelabel"><span class="n">3</span> nothing to show yet</div>
+                <div class="phone tn-auto">
+                  <div class="statusbar"><span>9:41</span><span>▮▮▮</span></div>
+                  <div class="shellbar">
+                    <span class="back">‹</span>
+                    <h4>Journal</h4>
+                    <span class="dots">•••</span>
+                  </div>
+                  <div class="panel-head">
+                    <div class="actionrow">
+                      <div class="btn-primary">＋ New entry</div>
+                      <div class="icon-btn">◷</div>
+                      <div class="icon-btn">▦</div>
+                    </div>
+                  </div>
+                  <div class="state">
+                    <div class="title">No entries yet.</div>
+                    <div class="body">Your first one will be filed under <span class="path">journal/2026/08</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <figcaption>
+            Chip rows wrap rather than scroll sideways, so a third filter is never hidden off the
+            edge of a phone — D16 requires active filters to be unmissable, and a horizontal
+            scroller hides them by design.
+          </figcaption>
+        </figure>
+
+        <div class="ask">
+          <h4>The one question — how tall is a row?</h4>
+          <p>
+            D55 sizes rows by the popout's own width, and a full-screen phone popout is 390&nbsp;px
+            — the widest tier, whose row is a single 26&nbsp;px line. That is a comfortable
+            <em>reading</em> row and an uncomfortable <em>tapping</em> one: it is roughly half the
+            44&nbsp;px minimum, and every row here opens a file.
+          </p>
+          <p>
+            So the rows above use the two-line form at a 44&nbsp;px minimum height. Seven fit on
+            screen, which is close to M‑1's nine and still reads as a dense list rather than a set
+            of cards.
+          </p>
+          <p class="rec">Recommended: touch decides the row height on a phone, width decides it on a desktop</p>
+          <p>
+            The alternative is honouring the width tier literally and accepting 26&nbsp;px targets.
+            D31's formal touch-target audit is deferred, so nothing forces the issue — which is
+            exactly why it is worth deciding on purpose now rather than inheriting it by accident.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="block">
+      <div class="gutter"><b>D40</b> M‑2 sheet<br /><b>D44</b> header slot<br /><b>D4</b> user's fields</div>
+      <div class="col">
+        <h2>Editing metadata</h2>
+        <p>
+          On a desktop the metadata widget expands in place. On a phone it cannot: multi-select
+          alone needs more room than a dateline has, and D4 lets a user define as many fields as
+          they like. So the dateline stays exactly what it is — a summary you tap — and the editing
+          moves to a sheet.
+        </p>
+        <p>
+          The sheet is the only new component in the journal, and it is confined to metadata
+          editing. It does not replace the popout, does not host navigation, and closes back to
+          the note the user was already reading.
+        </p>
+
+        <figure>
+          <div class="scroller">
+            <div class="figrow">
+              <div class="plate">
+                <div class="platelabel"><span class="n">4</span> the note, dateline collapsed</div>
+                <div class="phone tn-auto" style="--phone-h: 560px">
+                  <div class="statusbar"><span>9:41</span><span>▮▮▮</span></div>
+                  <div class="shellbar"><span class="back">‹</span><h4>2026-08-07-1802.md</h4></div>
+                  <div class="page">
+                    <div class="measure">
+                      <div class="dateline">
+                        <span class="day">Friday, August 7, 2026</span>
+                        <span class="vals">· good · 7 · baking, reading</span>
+                        <span class="act">Edit</span>
+                      </div>
+                      <div class="prose">
+                        <p>Bread needed more salt. Try 2% next time — the crumb was right but it tasted flat against the butter.</p>
+                        <p>Read on the porch until the light went.</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="plate">
+                <div class="platelabel"><span class="n">5</span> sheet open</div>
+                <div class="phone tn-auto" style="--phone-h: 560px">
+                  <div class="statusbar"><span>9:41</span><span>▮▮▮</span></div>
+                  <div class="shellbar"><span class="back">‹</span><h4>2026-08-07-1802.md</h4></div>
+                  <div class="page">
+                    <div class="measure">
+                      <div class="dateline">
+                        <span class="day">Friday, August 7, 2026</span>
+                      </div>
+                      <div class="prose"><p>Bread needed more salt.</p></div>
+                    </div>
+                  </div>
+                  <div class="scrim"></div>
+                  <div class="msheet">
+                    <div class="grabber"></div>
+                    <div class="sheet-head">
+                      <span class="title">Friday, August 7</span>
+                      <span class="done">Done</span>
+                    </div>
+                    <div class="field">
+                      <span class="lab">Mood</span>
+                      <span class="segs">
+                        <span class="seg">rough</span><span class="seg">okay</span><span class="seg on">good</span>
+                      </span>
+                    </div>
+                    <div class="field">
+                      <span class="lab">Energy</span>
+                      <span class="input" style="max-width:6rem">7</span>
+                    </div>
+                    <div class="field">
+                      <span class="lab">Context</span>
+                      <span class="segs">
+                        <span class="seg on">baking</span><span class="seg on">reading</span><span class="seg">running</span>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="plate">
+                <div class="platelabel"><span class="n">6</span> text field, keyboard up</div>
+                <div class="phone tn-auto" style="--phone-h: 560px">
+                  <div class="statusbar"><span>9:41</span><span>▮▮▮</span></div>
+                  <div class="shellbar"><span class="back">‹</span><h4>2026-08-07-1802.md</h4></div>
+                  <div class="page">
+                    <div class="measure">
+                      <div class="dateline"><span class="day">Friday, August 7, 2026</span></div>
+                    </div>
+                  </div>
+                  <div class="scrim"></div>
+                  <div class="msheet" style="bottom: 210px">
+                    <div class="grabber"></div>
+                    <div class="sheet-head">
+                      <span class="title">Note to self</span>
+                      <span class="done">Done</span>
+                    </div>
+                    <div class="field">
+                      <span class="lab">Note to self</span>
+                      <span class="input">Try 2% salt|</span>
+                    </div>
+                  </div>
+                  <div class="keyboard">soft keyboard</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <figcaption>
+            Plate&nbsp;6: the sheet rides above the keyboard rather than hiding behind it — the
+            field being typed into has to stay visible. Every control in the sheet is at least
+            44&nbsp;px tall, including the option pills.
+          </figcaption>
+        </figure>
+
+        <h3>Behaviour the sheet owes</h3>
+        <ul class="notes">
+          <li><strong>Focus is trapped while it is open</strong>, and returns to the dateline control that opened it.</li>
+          <li><strong>It announces itself as a dialog</strong> named for the entry's date, so a screen-reader user knows what they are editing.</li>
+          <li><strong>Dismiss by swipe, scrim tap, or the shell's back</strong> — all three land in the same place, the note.</li>
+          <li><strong>Values save as they change</strong>, the same as the desktop widget; `Done` closes rather than commits, so nothing is lost to a stray dismissal.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="block">
+      <div class="gutter"><b>Next</b></div>
+      <div class="col">
+        <h2>After this</h2>
+        <p>
+          Answer the row-height question and this is done — everything else on the page is the
+          approved desktop design at a narrower width. Then I build the panel: the list, the header,
+          the fourteen states, and the metadata widget through the editor-header slot that shipped
+          today.
+        </p>
+        <p>
+          Metadata filters will render in their unavailable state until the index exists. Browsing,
+          dates, search-by-filename, and previews all work without it.
+        </p>
+      </div>
+    </div>
+  </section>
+
+</div>

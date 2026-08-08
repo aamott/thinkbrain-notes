@@ -7,7 +7,7 @@
 Part of [Journal & Calendar](../pending-journal-calendar-high-hard.md). Discovery gate;
 precedes irreversible data and UI work.
 
-**STOP gate — SATISFIED 2026-08-07, extended 2026-08-08.** D1-D75 answer the discovery questions and all
+**STOP gate — SATISFIED 2026-08-07, extended 2026-08-08.** D1-D78 answer the discovery questions and all
 three artifacts (moodboard, wireframes, this log) are approved. Downstream stories may
 proceed **within** these decisions; the gate stays closed for anything still open
 below. Each downstream story owns its own STOP gate for its own undecided items; no
@@ -34,7 +34,7 @@ IAs without presenting either as final.
 integration story — read before discovery. No code dependency; discovery output
 blocks data-model and UI stories.
 
-## Decision log (D1-D75)
+## Decision log (D1-D78)
 
 Recorded 2026-08-05 through 2026-08-07. Each is confirmed unless marked provisional.
 Superseded decisions are noted inline.
@@ -406,6 +406,19 @@ between them separated a statement from its own answer. Amends D31's focus order
 overflow, New entry, Today, Open calendar, search, filter, chips, list. Accessible names
 are unchanged.
 
+**D76.** At phone widths the row height is decided by touch, not by D55's width tier: the
+two-line row at a 44px minimum, ~7 rows on screen. A full-screen popout is 390px wide, which
+D55 would put in the one-line tier at ~26px — half the touch minimum, on a control that opens
+a file. Desktop keeps the width tiers unchanged.
+
+**D77.** Filter chip rows wrap; never a horizontal scroller. D16 requires active filters to be
+unmissable, and a sideways scroller hides them by design.
+
+**D78.** Metadata sheet contract (M-2): it sits above the soft keyboard so the field being
+edited stays visible; focus is trapped while open and returns to the control that opened it;
+it announces as a dialog named for the entry's date; swipe, scrim tap and the shell's back all
+dismiss to the note; values save as they change, so `Done` closes rather than commits.
+
 ## Checkpoint table
 
 Every artifact and decision batch was approved by the product owner per D34, across
@@ -437,7 +450,7 @@ was rejected.
 
 ## Open questions carried forward
 
-**None.** Every product question this log tracked is answered by D1-D75; the batch closed
+**None.** Every product question this log tracked is answered by D1-D78; the batch closed
 on 2026-08-08 is recorded above. Rename warnings and folder relocation were dropped rather
 than decided — moving or renaming an entry is ordinary file management under D2, and the
 journal adds no behavior to it.
@@ -450,7 +463,7 @@ What remains is implementation and approval process, not undecided product quest
 
 ## Story close-out
 
-Discovery is complete: decisions recorded (D1-D75), three artifacts approved (moodboard
+Discovery is complete: decisions recorded (D1-D78), three artifacts approved (moodboard
 D35, wireframes/IA D37/D39, mobile D40), twelve states and the popout focus order covered
 in `assets/journal-calendar-wireframes.md`. No code was written by this story.
 

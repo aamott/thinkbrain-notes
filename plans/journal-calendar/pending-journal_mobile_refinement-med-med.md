@@ -14,12 +14,13 @@ The discovery gate is CLOSED; full rationale and D1-D47 live in
 - **D12/D26:** the popout is full screen; shell owns placement/return navigation. No bespoke journal navigation, bottom bar, or return path.
 - **D31:** keyboard and screen-reader support are required; high contrast is theme-owned; use `--tn-*` tokens; formal touch-target audit is deferred.
 - **D35:** collapsed metadata is a readable dateline at narrow widths.
-- **D40:** share one list with desktop using compact M-1 density; M-2 is a metadata-only bottom sheet and a new component surface.
+- **D40/D76:** share one list with desktop; phone rows use the two-line form at a 44px minimum. M-2 is a metadata-only bottom sheet and the journal's only new component.
 
-**Inherited blocker:** M-2 is metadata editing and inherits the metadata-widget
-implementation route chosen by D44 in `pending-journal_panel_ui-high-hard.md` (React
-editor-header contribution slot). The prerequisite D44 platform implementation is still
-pending, so the sheet cannot be built until that route ships.
+**Mobile mockup APPROVED 2026-08-08** — `assets/journal-panel-mobile-mockup.html`, closing
+D76 (touch decides phone row height), D77 (chips wrap) and D78 (the sheet's contract).
+
+M-2 inherits the metadata-widget route chosen by D44; that slot shipped 2026-08-08
+(`apps/desktop/src/tabs/editorHeaderRegistry.tsx`), so the sheet is no longer blocked.
 
 The discovery gate is CLOSED for the decisions above.
 
