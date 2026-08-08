@@ -19,46 +19,43 @@ import {
   type LocalDirectoryLoader
 } from "./localDirectoryLoader";
 
-/** Blob urls minted for loaded entry modules, revoked on unload. */
-const objectUrls = new Map<string, string>();
-
 /** Reads a file inside an extension directory through the native bridge. */
 async function readExtensionFile(directory: string, relativePath: string): Promise<string> {
   return invokeNativeCommand("read_extension_file", { directory, relativePath });
 }
 
+/** Evaluates one url as an ES module. Injected so tests need no real blob. */
+type DynamicImport = (url: string) => Promise<unknown>;
+
+const dynamicImport: DynamicImport = (url) => import(/* @vite-ignore */ url);
+
 /**
- * Imports pre-bundled ESM source from a blob url.
+ * Creates an importer that evaluates pre-bundled ESM source from a blob url.
  *
- * The url is retained so {@link revokeExtensionModule} can free it; the module
- * itself stays in the ESM registry, which is inherent to same-context loading.
+ * The url is revoked as soon as the import settles: a single-file bundle has
+ * nothing left to fetch once evaluated, and stack traces keep naming the file
+ * on disk through the `sourceURL` annotation. The module itself stays in the
+ * ESM registry, which is inherent to same-context loading.
  */
-export const importExtensionModule: ExtensionModuleImporter = async (code, sourceUrl) => {
-  const annotated = `${code}\n//# sourceURL=${sourceUrl}\n`;
-  const objectUrl = URL.createObjectURL(new Blob([annotated], { type: "text/javascript" }));
-  objectUrls.set(sourceUrl, objectUrl);
+export function createExtensionModuleImporter(
+  importModule: DynamicImport = dynamicImport
+): ExtensionModuleImporter {
+  return async (code, sourceUrl) => {
+    const annotated = `${code}\n//# sourceURL=${sourceUrl}\n`;
+    const objectUrl = URL.createObjectURL(new Blob([annotated], { type: "text/javascript" }));
 
-  try {
-    return (await import(/* @vite-ignore */ objectUrl)) as unknown;
-  } catch (error: unknown) {
-    URL.revokeObjectURL(objectUrl);
-    objectUrls.delete(sourceUrl);
-    throw error;
-  }
-};
-
-/** Frees the blob url minted for one entry module. */
-export function revokeExtensionModule(sourceUrl: string): void {
-  const objectUrl = objectUrls.get(sourceUrl);
-  if (!objectUrl) return;
-  URL.revokeObjectURL(objectUrl);
-  objectUrls.delete(sourceUrl);
+    try {
+      return await importModule(objectUrl);
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+    }
+  };
 }
 
 /** The loader used by the running desktop app. */
 export function createDesktopLocalDirectoryLoader(): LocalDirectoryLoader {
   return createLocalDirectoryLoader({
     readFile: readExtensionFile,
-    importModule: importExtensionModule
+    importModule: createExtensionModuleImporter()
   });
 }
