@@ -4,7 +4,7 @@
 
 ## Collaboration gate — SATISFIED 2026-08-07, extended 2026-08-08
 
-The product-owner answers are recorded as decisions D1-D74 in
+The product-owner answers are recorded as decisions D1-D75 in
 `journal-calendar/pending-journal_discovery_and_wireframes-low-med.md`, together with the
 approved moodboard, IA and mobile artifacts. **Downstream stories may now proceed within
 those decisions.** Superseding decisions are recorded as new D-numbers, never by editing
@@ -17,8 +17,8 @@ bar, IA (**IA-3**) and mobile split. D48-D70 closed the remainder: the frontmatt
 calendar behavior, backfill mechanics, error copy, the settings list, registration, and the
 extension API additions the journal needs. Rationale and rejected alternatives for that
 batch are in `docs/superpowers/specs/2026-08-08-journal-open-decisions-proposal.md`.
-D71-D74 came out of the approved desktop panel mockup (header order, preview always kept,
-filter alignment, dateline format).
+D71-D75 came out of the approved desktop panel mockup (action emphasis, preview always
+kept, filter alignment, dateline format, header order).
 
 What still gates implementation is process and platform work, not decisions: the mobile
 mockup under D34, and the prerequisites listed below.
@@ -129,7 +129,7 @@ recorded in the story. Stories may be split further if a subagent would exceed o
 
 ## Status
 
-- ✅ Every product decision closed (D1-D74)
+- ✅ Every product decision closed (D1-D75)
 - 🟨 Story 2 journal data/frontmatter contract — implemented in `packages/core/src/journal/`;
   the unknown-field write round-trip waits on story 3's write path
 - 🟨 Story 3 journal service — create (always new, D18), backfill (D61/D62), listing with

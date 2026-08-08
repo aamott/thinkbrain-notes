@@ -706,7 +706,7 @@
 <div class="sheet">
 
   <header class="masthead">
-    <p class="eyebrow">Mockup v2 · desktop · approved 2026-08-08 under D34</p>
+    <p class="eyebrow">Mockup v3 · desktop · approved 2026-08-08 under D34</p>
     <h1>The journal panel</h1>
     <p class="standfirst">
       The approved wireframe and moodboard, drawn in the app's real tokens. Revised from your
@@ -727,7 +727,7 @@
       </div>
       <div>
         <dt>New decisions</dt>
-        <dd>D71 header order · D72 preview always kept · D73 filter right-aligned · D74 dateline keeps the year</dd>
+        <dd>D71 action emphasis · D72 preview always kept · D73 filter right-aligned · D74 dateline keeps the year · D75 search below the actions</dd>
       </div>
     </dl>
   </header>
@@ -768,12 +768,12 @@
                     </div>
                     <div class="panel-body">
                       <div class="panel-head">
-                        <div class="search">⌕ Search entries</div>
                         <div class="actionrow">
                           <div class="btn-primary">＋ New entry</div>
                           <div class="icon-btn">◷</div>
                           <div class="icon-btn">▦</div>
                         </div>
+                        <div class="search">⌕ Search entries</div>
                         <div class="filterrow">
                           <div class="filter-btn">Filter</div>
                         </div>
@@ -853,12 +853,12 @@
                     </div>
                     <div class="panel-body">
                       <div class="panel-head">
-                        <div class="search">⌕ Search entries</div>
                         <div class="actionrow">
                           <div class="btn-primary">＋ New entry</div>
                           <div class="icon-btn">◷</div>
                           <div class="icon-btn">▦</div>
                         </div>
+                        <div class="search">⌕ Search entries</div>
                         <div class="filterrow">
                           <div class="filter-btn">Filter</div>
                         </div>
@@ -933,19 +933,24 @@
 
   <section>
     <div class="block">
-      <div class="gutter"><b>D71</b> header order<br /><b>D18</b> always creates</div>
+      <div class="gutter"><b>D71 D75</b> header order<br /><b>D18</b> always creates</div>
       <div class="col">
         <h2>The header</h2>
         <p>
-          Search first, then the actions, then the filter row. <strong>New entry</strong> is the
-          only filled control in the panel — <strong>Today</strong> and <strong>Open calendar</strong>
-          sit beside it as outlined buttons, present without competing. Overflow stays where every
+          Actions, then search, then the filter row. <strong>New entry</strong> is the only filled
+          control in the panel — <strong>Today</strong> and <strong>Open calendar</strong> sit
+          beside it as outlined buttons, present without competing. Overflow stays where every
           other panel keeps it, in the chrome row.
         </p>
         <p>
           One filled control per surface is what makes it read as <em>the</em> action rather than
           one of three. Today and Open calendar are used often enough to be one click away and not
           often enough to be coloured.
+        </p>
+        <p>
+          Search sits directly above the filter row and the list because those three are one
+          thing: what you typed, what you filtered by, and what came back. Putting the actions
+          between them separates the query from its own result.
         </p>
 
         <figure>
@@ -961,12 +966,12 @@
                     </div>
                     <div class="panel-body">
                       <div class="panel-head">
-                        <div class="search">⌕ Search entries</div>
                         <div class="actionrow">
                           <div class="btn-primary">＋ New entry</div>
                           <div class="icon-btn">◷</div>
                           <div class="icon-btn">▦</div>
                         </div>
+                        <div class="search">⌕ Search entries</div>
                         <div class="filterrow"><div class="filter-btn">Filter</div></div>
                       </div>
                       <div class="list">
@@ -990,12 +995,12 @@
                     </div>
                     <div class="panel-body">
                       <div class="panel-head">
-                        <div class="search filled">⌕ bread</div>
                         <div class="actionrow">
                           <div class="btn-primary">＋ New entry</div>
                           <div class="icon-btn">◷</div>
                           <div class="icon-btn">▦</div>
                         </div>
+                        <div class="search filled">⌕ bread</div>
                         <div class="filterrow">
                           <div class="showing">Showing 2 <em>of 1,431</em></div>
                           <div class="filter-btn">Filter <span class="badge">1</span></div>
@@ -1019,7 +1024,7 @@
           <figcaption>
             The three icons in the chrome row are gone: only <code>•••</code> remains there, so the
             journal's own actions are all in one place. Keyboard order follows the drawing —
-            overflow, search, New entry, Today, Open calendar, filter, chips, list — which amends
+            overflow, New entry, Today, Open calendar, search, filter, chips, list — which amends
             the order proposed in D31, written before the chrome's action row existed. Every
             accessible name is unchanged.
           </figcaption>
@@ -1205,12 +1210,12 @@
                 <div class="app tn-auto standalone" style="--app-h: 288px">
                   <div class="panel"><div class="panel-body">
                     <div class="panel-head">
-                      <div class="search">⌕ Search entries</div>
                       <div class="actionrow">
                         <div class="btn-primary">＋ New entry</div>
                         <div class="icon-btn">◷</div>
                         <div class="icon-btn">▦</div>
                       </div>
+                      <div class="search">⌕ Search entries</div>
                       <div class="filterrow">
                         <div class="showing">Showing 1 <em>of 1,431 — from the calendar</em></div>
                         <div class="filter-btn">Filter <span class="badge">2</span></div>
@@ -1235,12 +1240,12 @@
                 <div class="app tn-auto standalone" style="--app-h: 288px">
                   <div class="panel"><div class="panel-body">
                     <div class="panel-head">
-                      <div class="search">⌕ Search entries</div>
                       <div class="actionrow">
                         <div class="btn-primary">＋ New entry</div>
                         <div class="icon-btn">◷</div>
                         <div class="icon-btn">▦</div>
                       </div>
+                      <div class="search">⌕ Search entries</div>
                       <div class="filterrow">
                         <div class="showing">Showing 0 <em>of 1,431</em></div>
                         <div class="filter-btn">Filter <span class="badge">3</span></div>
@@ -1272,12 +1277,12 @@
                       <span class="bb">Browsing and the date filter still work. Metadata filters need the index.</span>
                     </div>
                     <div class="panel-head">
-                      <div class="search">⌕ Search entries</div>
                       <div class="actionrow">
                         <div class="btn-primary">＋ New entry</div>
                         <div class="icon-btn">◷</div>
                         <div class="icon-btn">▦</div>
                       </div>
+                      <div class="search">⌕ Search entries</div>
                       <div class="filterrow"><div class="filter-btn" style="opacity:.5">Filter</div></div>
                     </div>
                     <div class="list">
@@ -1584,10 +1589,14 @@
         <h2>What changed from v1</h2>
         <ul class="notes">
           <li>
-            <strong>D71 — header order and emphasis.</strong> Search moved above the actions.
-            <code>New entry</code> is a primary button with Today and Open&nbsp;calendar beside it
-            as outlined buttons; it is the only filled control in the panel. The chrome row keeps
-            only <code>•••</code>. Amends the focus order proposed in D31.
+            <strong>D71 — action emphasis.</strong> <code>New entry</code> is a primary button with
+            Today and Open&nbsp;calendar beside it as outlined buttons; it is the only filled
+            control in the panel. The chrome row keeps only <code>•••</code>. Amends the focus
+            order proposed in D31.
+          </li>
+          <li>
+            <strong>D75 — search stays below the actions</strong>, directly above the filter row
+            and the list, so the query and its results read as one group.
           </li>
           <li>
             <strong>D72 — the preview is never dropped.</strong> D55's <code>&lt;260px</code> tier

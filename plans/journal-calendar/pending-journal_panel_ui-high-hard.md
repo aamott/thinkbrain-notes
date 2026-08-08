@@ -29,8 +29,8 @@ Closed by D48-D70; full text in `../pending-journal_discovery_and_wireframes-low
 - **Measured-column behavior at narrow widths — D55, amended by D72.** At ≥320px the row is one line (date · time · first line); below that the time joins the date line and the preview wraps. The preview is **never** dropped, at any width. The mobile story consumes, not redefines.
 
 **Desktop mockup APPROVED 2026-08-08** — `assets/journal-panel-mockup.html`, which closed
-D71 (header order and emphasis), D72 (preview always kept), D73 (filter right-aligned) and
-D74 (dateline keeps the year, mismatch surfaced). The mobile mockup is still outstanding
+D71/D75 (header order and emphasis), D72 (preview always kept), D73 (filter right-aligned)
+and D74 (dateline keeps the year, mismatch surfaced). The mobile mockup is still outstanding
 under D34.
 
 ## Metadata widget route — DECIDED D44
@@ -60,7 +60,7 @@ Implement the approved journal list/create/open experience as a focused React su
 ## Scope
 
 - Popout navigator only. Not a calendar; not an editor fork.
-- Popout header (D71): search field; then an action row of **New entry** (primary, the only filled control) with **Today** and **Open calendar** beside it as outlined buttons; then the filter row with the filter control right-aligned (D73). Overflow stays in the panel chrome and is the only thing there.
+- Popout header (D71/D75): an action row of **New entry** (primary, the only filled control) with **Today** and **Open calendar** beside it as outlined buttons; then the search field; then the filter row with the filter control right-aligned (D73). Overflow stays in the panel chrome and is the only thing there.
   - "Today" opens today's most recent entry or creates one if none exists.
   - "Open calendar" opens the canvas tab (D14/D27); this is the only calendar entry point from the popout.
 - Entry list: flat virtualized stream, collapsible year + month headers (non-indented), Undated pinned at top.
@@ -90,7 +90,7 @@ Runtime panel dimension is the only case where a scoped CSSOM custom property on
 
 ## Dependencies
 
-- Approved discovery desktop wireframe and state/copy matrix, plus the approved desktop mockup `assets/journal-panel-mockup.html` (D71-D74). D34 still gates the mobile artifact.
+- Approved discovery desktop wireframe and state/copy matrix, plus the approved desktop mockup `assets/journal-panel-mockup.html` (D71-D75). D34 still gates the mobile artifact.
 - `plans/extensions/pending-editor_header_contribution-high-med.md` implements D44 before widget integration.
 - `DesktopPanelContext` gap resolution: workspace listing and index access must be provided before the panel factory body can be implemented.
 - Journal data model, journal service, and settings/accessibility contract.
@@ -101,7 +101,7 @@ Runtime panel dimension is the only case where a scoped CSSOM custom property on
 
 - [ ] Journal popout registers local panel id `journal` (`journal-calendar.journal`) through `context.panels.register(...)` with `side: "left"`; no direct registry mutation (D47).
 - [ ] Popout is a navigator: every entry row opens in the main editor as a normal tab; no inline editing in the popout.
-- [ ] Popout header follows D71: search, then New entry (the only filled control) with Today and Open calendar beside it, then the filter row with the control right-aligned (D73). No group-by control. Focus order: overflow, search, New entry, Today, Open calendar, filter, chips, list.
+- [ ] Popout header follows D71/D75: New entry (the only filled control) with Today and Open calendar beside it, then search, then the filter row with the control right-aligned (D73). No group-by control. Focus order: overflow, New entry, Today, Open calendar, search, filter, chips, list.
 - [ ] "Today" opens the most recent entry for today's date or creates a new one; never appends to an existing file (D18).
 - [ ] List renders as a flat virtualized stream with collapsible year + month headers, non-indented (D37, D39); list handles thousands of entries without layout thrash (D13).
 - [ ] Rows render from filename-derived dates alone; first-line previews load lazily for

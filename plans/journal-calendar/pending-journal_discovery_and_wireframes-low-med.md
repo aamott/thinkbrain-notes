@@ -7,7 +7,7 @@
 Part of [Journal & Calendar](../pending-journal-calendar-high-hard.md). Discovery gate;
 precedes irreversible data and UI work.
 
-**STOP gate — SATISFIED 2026-08-07, extended 2026-08-08.** D1-D74 answer the discovery questions and all
+**STOP gate — SATISFIED 2026-08-07, extended 2026-08-08.** D1-D75 answer the discovery questions and all
 three artifacts (moodboard, wireframes, this log) are approved. Downstream stories may
 proceed **within** these decisions; the gate stays closed for anything still open
 below. Each downstream story owns its own STOP gate for its own undecided items; no
@@ -34,7 +34,7 @@ IAs without presenting either as final.
 integration story — read before discovery. No code dependency; discovery output
 blocks data-model and UI stories.
 
-## Decision log (D1-D74)
+## Decision log (D1-D75)
 
 Recorded 2026-08-05 through 2026-08-07. Each is confirmed unless marked provisional.
 Superseded decisions are noted inline.
@@ -384,11 +384,9 @@ extension registered. Internal `openTab` stays internal.
 
 **D70.** `DesktopTabContext` stays `{ rootPath, tabId }` for v1.
 
-**D71.** Popout header order: search, then an action row of `New entry` (primary — the only
-filled control in the panel) with `Today` and `Open calendar` beside it as outlined buttons,
-then the filter row. Overflow stays in the panel chrome, which holds nothing else. Amends
-D31's focus order to: overflow, search, New entry, Today, Open calendar, filter, chips, list.
-Accessible names are unchanged.
+**D71.** Popout header: an action row of `New entry` (primary — the only filled control in
+the panel) with `Today` and `Open calendar` beside it as outlined buttons. Overflow stays in
+the panel chrome, which holds nothing else. Order settled by D75.
 
 **D72.** The first-line preview is never dropped. D55's `<260px` tier is withdrawn: below
 320px the row is two lines and the preview truncates, at every width down to the shell's
@@ -401,6 +399,12 @@ space to its left.
 frontmatter date is the backup record if a file is renamed, so it has to be readable. A
 filename/frontmatter mismatch is surfaced in the dateline naming both dates and which one
 is used; non-blocking, never rewritten (D20/D33).
+
+**D75.** Header order: actions, then search, then the filter row. Search belongs with the
+filter and the results — the query and what it returned are one group, and the actions
+between them separated a statement from its own answer. Amends D31's focus order to:
+overflow, New entry, Today, Open calendar, search, filter, chips, list. Accessible names
+are unchanged.
 
 ## Checkpoint table
 
@@ -433,7 +437,7 @@ was rejected.
 
 ## Open questions carried forward
 
-**None.** Every product question this log tracked is answered by D1-D74; the batch closed
+**None.** Every product question this log tracked is answered by D1-D75; the batch closed
 on 2026-08-08 is recorded above. Rename warnings and folder relocation were dropped rather
 than decided — moving or renaming an entry is ordinary file management under D2, and the
 journal adds no behavior to it.
@@ -446,7 +450,7 @@ What remains is implementation and approval process, not undecided product quest
 
 ## Story close-out
 
-Discovery is complete: decisions recorded (D1-D74), three artifacts approved (moodboard
+Discovery is complete: decisions recorded (D1-D75), three artifacts approved (moodboard
 D35, wireframes/IA D37/D39, mobile D40), twelve states and the popout focus order covered
 in `assets/journal-calendar-wireframes.md`. No code was written by this story.
 
