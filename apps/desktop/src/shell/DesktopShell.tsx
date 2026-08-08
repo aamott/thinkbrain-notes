@@ -447,8 +447,8 @@ export function DesktopShell() {
   }, [closePalette, openPalette, paletteOpen, selectLeftPanel, toggleBottomPanel]);
 
   // Dock widths are published as CSS custom properties so the popouts can size
-  // themselves from tokens instead of inline styles. A collapsed dock publishes
-  // 0 so the title bar and other consumers release the reserved space.
+  // themselves from tokens instead of inline styles. The left dock publishes 0
+  // when collapsed so the title bar releases the reserved space.
   useEffect(() => {
     leftWidthRef.current = leftWidth;
     rootRef.current?.style.setProperty("--tn-shell-left-width", leftPanel ? `${leftWidth}px` : "0px");

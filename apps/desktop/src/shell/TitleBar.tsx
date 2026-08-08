@@ -61,7 +61,7 @@ export function TitleBar({
     <header className="flex items-end bg-titlebar border-b border-border min-w-0">
       {/* App identity + command palette. */}
       <div
-        className="flex items-center gap-2 h-full px-2 pl-3 flex-[0_0_max(10rem,calc(var(--tn-size-activitybar-width)+var(--tn-shell-left-width)))] max-[760px]:flex-[0_0_3rem]"
+        className="flex items-center gap-2 h-full pl-3 pr-2 flex-[0_0_max(10rem,calc(var(--tn-size-activitybar-width)+var(--tn-shell-left-width)))] max-[760px]:flex-[0_0_3rem]"
         aria-label="ThinkBrain"
       >
         <span className="inline-flex items-center justify-center bg-primary text-primary-foreground rounded-small text-[0.625rem] font-extrabold h-4 w-4">
@@ -70,9 +70,9 @@ export function TitleBar({
         <span className="text-xs font-[650] max-[760px]:hidden">ThinkBrain</span>
         <button
           type="button"
-          className="flex items-center justify-center h-[1.6rem] w-[1.6rem] border-0 rounded-small bg-transparent text-activitybar-foreground text-[1.1rem] cursor-pointer hover:bg-[color-mix(in_srgb,var(--tn-color-accent)_60%,transparent)] hover:text-activitybar-active focus-visible:outline-2 focus-visible:outline-ring focus-visible:-outline-offset-1 max-[760px]:hidden"
-          aria-label="Command palette (Ctrl+P)"
-          title="Command palette (Ctrl+P)"
+          className="flex items-center justify-center h-[1.6rem] w-[1.6rem] border-0 rounded-small bg-transparent text-titlebar-foreground text-[1.1rem] cursor-pointer hover:bg-[color-mix(in_srgb,var(--tn-color-accent)_60%,transparent)] hover:text-activitybar-active focus-visible:outline-2 focus-visible:outline-ring focus-visible:-outline-offset-1 max-[760px]:hidden"
+          aria-label="Command palette (Ctrl/Cmd+P)"
+          title="Command palette (Ctrl/Cmd+P)"
           onClick={onOpenCommandPalette}
         >
           <span aria-hidden="true">⌘</span>

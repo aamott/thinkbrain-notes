@@ -3,7 +3,7 @@
 These are random issues or shortcomings users have noted. They may or may not be mentioned in plans or fully planned out. Some are just too small to put into stories and could be wiped out in minutes, others take significant time. 
 
 ## Themes
-- [ ] Forest theme background is too dark. Needs a little more gray tones where right now it's straight black.
+- [x] Forest theme background is too dark. Needs a little more gray tones where right now it's straight black.
 
 ## Editor
 - [ ] Only markdown files can be edited. Any filetype that can reasonably be edited or viewed should be able to be. If a file can't be edited, clicking it should open something in the canvas with an option to open in the system's default app. 
@@ -14,13 +14,13 @@ These are random issues or shortcomings users have noted. They may or may not be
 - [ ] Themes should be able to use custom icon set per filetype and either fall back to app defaults or their own fallback.
 
 ## Other
-- [ ] Right panel should be collapsed by default.
-- [ ] Add command palette button to the left of tabs, right of logo, very top left.
+- [x] Right panel should be collapsed by default.
+- [x] Add command palette button to the left of tabs, right of logo, very top left.
 - [ ] Remember tabs on reload. Currently all tabs close on reload/exit.
-- [ ] Action items menu buttons are too close together. Light/dark toggle should be removed (outdated/no longer connected. Replaced by themes.)
+- [x] Action items menu buttons are too close together. Light/dark toggle should be removed (outdated/no longer connected. Replaced by themes.)
 
 
 ## Settings
 - [ ] Settings should be single-page scrollable, and the nav should scroll to sections and highlight the current section (without causing glitchy scrolling that jumps up and down), and when the canvas gets below a certain size the settings nav should collapse to a hamburger menu. Right now it's all separate pages per subsection. It should be optimized for thousands of settings, just in case of expansion.
 - [ ] Search should search all settings content, not just section titles.
-- [ ] BUG: Switching away from unsaved settings and switching back resets settings.
+- [x] BUG: Switching away from unsaved settings and switching back resets settings.
