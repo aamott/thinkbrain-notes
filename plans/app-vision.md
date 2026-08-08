@@ -46,7 +46,7 @@ fully supported. Cloud providers are optional.
 | Storage | Markdown files + JSON config; secrets via native OS store |
 | Search index | SQLite FTS5 (ephemeral cache, never source of truth) |
 | Git | System Git (invoked via Rust) |
-| AI | Local and remote providers (deferred) |
+| AI | Extension-based; local and remote providers (deferred) |
 | Extensions | Trusted local same-context modules (beta); soft capability gates |
 
 ## Architecture

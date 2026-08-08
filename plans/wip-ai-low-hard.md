@@ -1,7 +1,7 @@
 # AI
 
-> Optional, privacy-preserving desktop AI. The renderer uses assistant-ui with
-> `useExternalStoreRuntime`; ACP is the host-to-agent protocol owned in Rust.
+> Optional, privacy-preserving desktop AI. The renderer uses a custom chat
+> panel; ACP is the host-to-agent protocol owned in Rust.
 > Read `plans/app-vision.md`, `plans/technical-decisions.md`, the ACP skill, and
 > the linked child stories before implementation.
 
@@ -14,7 +14,7 @@ the vault, or making host-side decisions that belong to an agent.
 ## Scope and invariants
 
 **In scope:** provider/model metadata and native model gateway; native secret-store
-consumer boundary; local history; assistant-ui text streaming; ACP registry,
+consumer boundary; local history; text streaming; ACP registry,
 process/session lifecycle, capabilities and consent; opted-in model context; a
 later semantic-search bridge; and registration of the trusted assistant built-in.
 
@@ -25,13 +25,10 @@ remote context, and replacing deterministic FTS5 search.
 - `packages/core/src/ai/` is platform-neutral. It contains values/contracts only;
   no React, Tauri, provider SDK, filesystem, or secret-store dependency.
 - All renderer IPC goes through `apps/desktop/src/native/`; components do not call
-  Tauri directly. AI renderer surfaces use co-located CSS Modules backed by shared
-  `--tn-*` tokens, never Tailwind utility classes. Rust owns provider calls,
-  credentials, network policy, ACP process/session lifecycle, and permission
-  enforcement.
-- ACP uses the official `agent-client-protocol` Rust crate. The renderer never
-  imports `@agentclientprotocol/sdk`; the existing dependency is removable only
-  once source imports are gone.
+  Tauri directly. AI renderer surfaces use Tailwind utilities with shared `--tn-*`
+  tokens. Rust owns provider calls, credentials, network policy, ACP
+  process/session lifecycle, and permission enforcement.
+- ACP uses the official `agent-client-protocol` Rust crate.
 - A host is deterministic: it transports protocol requests, validates/enforces
   capabilities, returns stale-write conflicts/current content, and never reasons,
   plans, edits, or merges for an agent.
@@ -63,7 +60,7 @@ remote context, and replacing deterministic FTS5 search.
    (secret consumer only; no parallel keychain/fallback).
 8. **Agent text-streaming renderer/runtime** —
    `plans/ai/pending-agent_chat_text_streaming_mvp-high-hard.md`
-9. **Assistant-ui desktop thread and local history** —
+9. **Desktop thread and local history** —
    `plans/ai/pending-assistant_ui_desktop_thread-med-med.md`
 10. **ACP capabilities, consent, and permission requests rollup** —
    `plans/ai/pending-acp_capabilities_and_permissions-med-hard.md`
@@ -100,23 +97,21 @@ remote context, and replacing deterministic FTS5 search.
   `ai_delete_thread`, `ai_clear_threads`; app-data only, versioned/atomic and
   bounded.
 - `onNew` maps to `agent_prompt`; `AbortSignal` maps to `agent_cancel`.
-  ACP text deltas append to one assistant `ThreadMessageLike` text part; unknown
-  update kinds are not guessed into UI content.
+  ACP text deltas append to one assistant text part; unknown update kinds are
+  not guessed into UI content.
 
 ## Current reconciled status (as inspected)
 
 - ✅ Assistant panel foundation; visual shell exists.
 - ⬜ All behavior below is not implemented. The current
-  `apps/desktop/src/agent/AssistantPanel.tsx` still uses a throwing
-  `useLocalRuntime` placeholder, disables the composer, and contains visual MCP
-  toggles only. `AssistantPanelSurface` lazy-loads it and
-  `panelRegistry.tsx` already has the `assistant` panel contribution.
+  `apps/desktop/src/agent/AssistantPanel.tsx` is a visual-only placeholder that
+  disables the composer and contains visual MCP toggles only.
+  `AssistantPanelSurface` lazy-loads it and `panelRegistry.tsx` already has the
+  `assistant` panel contribution.
 - ⬜ Rust has `agent-client-protocol = "1.2"` in `Cargo.toml`/lock, but no ACP
   module, commands, event emission, process spawn, or lifecycle registration is
   present. `commands/mod.rs` registers only existing workspace/Git/Markdown/search/
   settings/theme handlers; `capabilities/default.json` has no agent capability.
-- ⬜ `@agentclientprotocol/sdk` remains in `apps/desktop/package.json`; remove it
-  only in the text-streaming/host implementation after confirming no import.
 - ⬜ No `packages/core/src/ai/` directory, provider gateway, secret consumer,
   history adapter, or AI consent records currently exist.
 - ⬜ `plans/ai/pending-ai_assisted_search-low-hard.md` is intentionally last and

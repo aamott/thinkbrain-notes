@@ -10,7 +10,7 @@ Decide: (1) whether history is one global thread list or workspace-scoped, (2) h
 
 ## Goal
 
-Use assistant-ui `AssistantRuntimeProvider`/`useExternalStoreRuntime` with a Tauri-backed local `ThreadHistoryAdapter` that persists explicit/completed turns and session links in OS app-data.
+Use a custom chat runtime with a Tauri-backed local `ThreadHistoryAdapter` that persists explicit/completed turns and session links in OS app-data.
 
 ## Exact likely files
 
@@ -24,7 +24,7 @@ Use assistant-ui `AssistantRuntimeProvider`/`useExternalStoreRuntime` with a Tau
 
 ## Contracts and typed boundaries
 
-Commands: `ai_list_threads`, `ai_read_thread({threadId})`, `ai_save_thread({threadId, messages, metadata})`, `ai_delete_thread`, `ai_clear_threads`. Persist `ThreadMessageLike` only after explicit save or completed turn; metadata contains mode/provider/model/session link IDs but no credential, full context payload, raw tool secret, or unredacted error. Use versioned schema, atomic write, bounded message count/bytes, and typed `history_corrupt`, `history_too_large`, and `history_unavailable` errors.
+Commands: `ai_list_threads`, `ai_read_thread({threadId})`, `ai_save_thread({threadId, messages, metadata})`, `ai_delete_thread`, `ai_clear_threads`. Persist messages only after explicit save or completed turn; metadata contains mode/provider/model/session link IDs but no credential, full context payload, raw tool secret, or unredacted error. Use versioned schema, atomic write, bounded message count/bytes, and typed `history_corrupt`, `history_too_large`, and `history_unavailable` errors.
 
 One UI thread can link one ACP session via `AgentSessionLink`, but transcript and ACP protocol semantics remain distinct. Do not persist every streaming delta unless product approves; save the final redacted assistant turn and user turn after completion.
 
@@ -49,8 +49,8 @@ History is local-only by default and is not consent to send content remotely. Re
 
 ## Acceptance criteria
 
-- [ ] Approved thread/history workflow is implemented through assistant-ui and one bounded app-data adapter.
-- [ ] Renderer styling uses co-located CSS Modules with shared `--tn-*` tokens; no Tailwind utility classes or inline styles.
+- [ ] Approved thread/history workflow is implemented through a custom chat runtime and one bounded app-data adapter.
+- [ ] Renderer styling uses Tailwind utilities with shared `--tn-*` tokens; no inline styles for static styling.
 - [ ] Save/load/delete/clear, corruption/size errors, redaction, session links, and no-duplicate-store behavior are tested.
 - [ ] Desktop/mobile focus, keyboard, narrow layout, suspension, storage limits, and approved retention behavior are verified.
 

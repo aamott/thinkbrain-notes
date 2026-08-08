@@ -14,8 +14,6 @@
     "tauri": "tauri"
   },
   "dependencies": {
-    "@agentclientprotocol/sdk": "^1.2.1",
-    "@assistant-ui/react": "^0.14.27",
     "@codemirror/commands": "^6.10.3",
     "@codemirror/lang-markdown": "^6.5.0",
     "@codemirror/language": "^6.12.3",

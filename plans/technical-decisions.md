@@ -155,18 +155,16 @@ Production lint covers `apps/` and `packages/` without suppressing errors.
 
 ## AI
 
-Decision: AI is optional, implemented only through the `ai` epic.
+Decision: AI is an extension, implemented only through the `ai` epic.
 
-- Desktop agent chat uses `@assistant-ui/react` with
-  `useExternalStoreRuntime`. Renderer owns message state and consumes typed
-  Tauri events directly — no transport/provider-abstraction layer in the
-  renderer.
+- Desktop agent chat is a custom React panel. Renderer owns message state and
+  consumes typed Tauri events directly — no transport/provider-abstraction
+  layer in the renderer.
 - ACP is the host-to-agent protocol, lives in Rust via the
   `agent-client-protocol` crate. Rust owns the full ACP client lifecycle
   (`initialize`, `session/new`, `session/prompt`, `session/update`,
   `session/cancel`, later `session/request_permission`) and emits typed Tauri
-  events filtered by session ID. Renderer never imports
-  `@agentclientprotocol/sdk`.
+  events filtered by session ID.
 - Rust/native gateway owns provider calls, cancellation, credentials, and
   outbound network policy. Renderer never stores/receives provider secrets.
   Chat history stored locally in OS app-data; Assistant Cloud off by default.
