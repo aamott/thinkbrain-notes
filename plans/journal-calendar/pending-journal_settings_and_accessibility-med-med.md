@@ -17,27 +17,14 @@ The discovery gate is CLOSED; full rationale and D1-D47 live in
 - **D33:** settings/opening never rewrite notes; unknown frontmatter survives.
 - **D34:** product owner signs off per artifact.
 
-**STOP gate — CLOSED.** The discovery gate above is closed, and the settings-list question this
-story owned is now decided (`../pending-journal_discovery_and_wireframes-low-med.md`, "Approved
-2026-08-08 (D48-D70)"):
+## STOP gate — CLOSED
 
-- **Setting list and defaults — closed by D64.** The journal registers exactly these four
-  settings:
+Closed by D48-D70; full text in `../pending-journal_discovery_and_wireframes-low-med.md`.
 
-  | Setting | Type | Scope | Default |
-  |---|---|---|---|
-  | `root` | path | app + workspace | `journal` |
-  | `fieldDefinitions` | custom control (`journal-field-definitions`, D49) | app + workspace (D45) | empty |
-  | `calendarDefaultView` | enum: `week` / `month` | app | `month` |
-  | `startOfWeek` | enum: `system` / `monday` / `sunday` | app | `system` |
-
-  Explicitly **not** settings in v1: templates (D21), folder-nesting pattern and filename format
-  (fixed by D17), timezone or day-start offset (D19), and anything touching mood colors or
-  iconography (D4, D31). Do not register any setting outside the four above.
-- **Field-definition setting shape — closed by D49.** `fieldDefinitions` is a `string` setting
-  rendered by a custom `journal-field-definitions` control holding a JSON array of field
-  definitions (`{ id, label, type, options? }`); no first-class structured setting type is
-  introduced for it.
+- **Setting list and defaults — D64.** Four settings registered; see table in Scope below.
+- **Field-definition setting shape — D49.** `fieldDefinitions` is a `string` setting rendered by
+  a custom `journal-field-definitions` control holding a JSON array of field definitions; no new
+  structured setting type.
 
 Unchanged from discovery and still governing this story:
 
@@ -78,6 +65,18 @@ Define and register the approved journal settings under `journal-calendar`, reso
 
 ## Scope
 
+- **Setting list and defaults — D64.** The journal registers exactly these four settings:
+
+  | Setting | Type | Scope | Default |
+  |---|---|---|---|
+  | `root` | path | app + workspace | `journal` |
+  | `fieldDefinitions` | custom control (`journal-field-definitions`, D49) | app + workspace (D45) | empty |
+  | `calendarDefaultView` | enum: `week` / `month` | app | `month` |
+  | `startOfWeek` | enum: `system` / `monday` / `sunday` | app | `system` |
+
+  Explicitly **not** settings in v1: templates (D21), folder-nesting pattern and filename format
+  (fixed by D17), timezone or day-start offset (D19), and anything touching mood colors or
+  iconography (D4, D31). Do not register any setting outside the four above.
 - Settings schema: journal root plus global/workspace field definitions for D4's four types.
 - Resolve definitions by stable id: workspace replaces the complete same-id global definition; untouched globals remain (D45).
 - Preserve removed/narrowed values as visible/filterable `unconfigured` values with diagnostics; never rewrite notes.

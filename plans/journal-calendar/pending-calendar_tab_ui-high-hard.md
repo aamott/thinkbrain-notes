@@ -29,38 +29,16 @@ the popout still depends on story 9 because `context.workspace` has no `openTab`
 
 ## Questions first — STOP gate (CLOSED)
 
-All five items below are decided by D48-D70 (approved 2026-08-08; see
-`../pending-journal_discovery_and_wireframes-low-med.md`, "Approved 2026-08-08 (D48-D70)").
-Implementation of the affected surfaces may proceed.
+Closed by D48-D70; full text in `../pending-journal_discovery_and_wireframes-low-med.md`.
 
-1. **Tab singleton and option persistence — closed by D56.** The calendar is a singleton tab:
-   `open-calendar` focuses the existing tab when one is open, rather than opening a duplicate.
-   View mode (week/month) and active date persist per workspace and are restored on reopen —
-   required because D25 gives the calendar and popout shared filter state.
-2. **Calendar on a phone — closed by D57.** Both week and month views are available at phone
-   widths. The option strip collapses to a single segmented control. Day cells render dots
-   only, dropping the `+N` remainder text below 40px cell width while the exact count remains
-   in the accessible name (D46). This is a layout threshold, NOT the touch-target audit deferred
-   by D31.
-3. **Calendar grid keyboard model — closed by D58.** The grid is one tab stop with roving
-   focus. Arrows move by day, `Home`/`End` to the focused week's start/end, `PageUp`/`PageDown`
-   by month (`Shift` by year), `Enter`/`Space` activates the day, which under D25 filters the
-   popout. The focused day announces its date and exact matching entry count.
-4. **Day click with popout closed — closed by D59.** Activating a calendar day while the
-   journal popout is closed opens the popout and applies the day filter. Doing nothing visible,
-   or setting an unseen filter, are both defects.
-5. **Date filter chip — closed by D60.** The active day filter appears in the popout chip row
-   as an independently dismissible chip alongside metadata chips and `Clear all`. Dismissing it
-   clears only the day filter, and the calendar's day selection clears in step (D16).
+- **Tab singleton, option persistence — D56.** `open-calendar` focuses the existing tab; view mode/date persist per workspace.
+- **Calendar on a phone — D57.** Both views available; option strip collapses to one control; cells show dots only below 40px width.
+- **Calendar grid keyboard model — D58.** One tab stop, roving focus; arrows/Home/End/PageUp/PageDown/Enter navigate and activate.
+- **Day click with popout closed — D59.** Opens the popout and applies the day filter.
+- **Date filter chip — D60.** Independently dismissible chip in the popout chip row; clears in step with calendar selection.
+- **Tab-open API and context shape — D69/D70.** Extensions get a scoped `tabs.open(kind, title)`; `DesktopTabContext` stays `{ rootPath, tabId }`.
 
-Also decided: **D69** gives the extension-facing tab-open route this story's Dependencies
-section flagged as owed by story 9 — `DesktopExtensionContext.tabs` gains a scoped
-`open(kind, title)` restricted to tab kinds the calling extension registered; the internal
-`openTab` stays internal. **D70** keeps `DesktopTabContext` as `{ rootPath, tabId }` for v1 —
-the calendar reads everything else from the journal service and its own settings.
-
-Per-artifact mockup sign-off under D34 still applies before implementation of the affected
-surfaces — that is process, not an open product question.
+Per-artifact mockup sign-off under D34 still applies before implementation — process, not an open question.
 
 ## Goal
 

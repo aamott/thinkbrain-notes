@@ -298,150 +298,98 @@ runtime ids such as `journal-calendar.calendar`.
 
 ### Approved 2026-08-08 (D48-D70)
 
-Rationale and rejected alternatives for this batch:
-`docs/superpowers/specs/2026-08-08-journal-open-decisions-proposal.md`.
+Rationale and rejected alternatives: `docs/superpowers/specs/2026-08-08-journal-open-decisions-proposal.md`.
 
-**D48.** The journal frontmatter date key is **`date`**, a plain `YYYY-MM-DD` string with
-no time component (e.g. `date: 2026-08-05`). Time lives in the filename only (D17), which
-wins on conflict (D20). `date` is reserved: a user-defined field (D4) may not use it, nor
-the note model's existing reserved keys `title`, `tags`, `aliases`, `status`, `created_at`,
-`updated_at`. `created_at` is deliberately not reused — file creation is a different fact
-from the entry's subject date.
+**D48.** Frontmatter date key is `date`, a plain `YYYY-MM-DD` string, no time (time lives in
+the filename, which wins per D20). `date` is reserved, as are the note model's `title`,
+`tags`, `aliases`, `status`, `created_at`, `updated_at`.
 
-**D49.** A metadata field definition is `{ id, label, type, options? }`. `id` is the literal
-frontmatter key, matching `^[a-z][a-z0-9_-]*$` and avoiding D48's reserved keys. `type` is
-one of D4's four input types; `options` is required for `single-select`/`multi-select` and
-forbidden otherwise. Value shapes are fixed by type: `text` and `single-select` write a
-plain string, `number` a plain number, `multi-select` a flow list of strings. Definitions
-are stored as one `string` setting rendered by a custom `journal-field-definitions` control
-holding a JSON array; a first-class structured setting type is deferred until a second
-extension needs one.
+**D49.** A field definition is `{ id, label, type, options? }`. `id` is the literal
+frontmatter key, `^[a-z][a-z0-9_-]*$`, not a D48 reserved key. `options` required for the
+select types, forbidden otherwise. Value shapes: `text`/`single-select` → string, `number` →
+number, `multi-select` → string list. Stored as one `string` setting with a custom
+`journal-field-definitions` control.
 
-**D50.** Reading is lenient and never repairs. Unknown frontmatter keys pass through
-untouched. A value whose shape contradicts its declared type is kept verbatim on disk,
-shown as invalid with a non-blocking notice, and excluded from that field's facet values
-rather than coerced. A frontmatter `date` disagreeing with the filename surfaces a mismatch
-notice and is never rewritten. The journal writes to a note only on an explicit widget edit,
-and then rewrites only the changed keys. Accepted cost: the current serializer does not
-preserve YAML comments or key order, so an explicit edit may reflow frontmatter until
-`plans/note-model/pending-comment_preserving_frontmatter_roundtrips-low-hard.md` lands.
+**D50.** Read leniently, never repair. Unknown keys pass through. A value contradicting its
+field's type is kept verbatim, flagged, and excluded from facets — never coerced. A
+frontmatter/filename date mismatch is reported, not fixed. Writes happen only on an explicit
+widget edit, touching only changed keys. Accepted cost: YAML comments/key order may reflow
+until the note-model comment-preserving story lands.
 
-**D51.** The v1 stable contract is D42's filename table plus D48's `date` key. User-defined
-field keys are user-owned: never renamed, migrated, or garbage-collected. No schema-version
-marker is written into notes (D2). Reserving a further journal frontmatter key requires a
-new decision.
+**D51.** Stable v1 contract = D42 filenames + D48 `date`. User-defined keys are never
+renamed, migrated, or collected. No schema-version marker in notes. A further reserved key
+needs a new decision.
 
-**D52.** While a search query or metadata filter is active, year and month headers
-containing matches expand automatically and show a match count; clearing the query restores
-the previous collapse state. Auto-expansion is transient and never persisted (D16).
+**D52.** Under an active search or filter, headers containing matches auto-expand and show a
+match count; clearing restores prior state. Auto-expansion is never persisted.
 
-**D53.** Collapse state persists per workspace in desktop state — not in settings, not in
-the vault — and is restored when the popout reopens.
+**D53.** Collapse state persists per workspace in desktop state — not settings, not the vault.
 
-**D54.** An entry with a date and no user-defined field values renders its dateline as the
-date alone — `Wednesday, August 5` — with no separator and no placeholder text; the widget
-carries an explicit `Add metadata` control in its collapsed state. Refines the
-"no metadata set" copy in state 4 of the approved wireframes, because D22 makes the empty
-case the normal state of every new entry.
+**D54.** An entry with no field values renders its dateline as the bare date
+(`Wednesday, August 5`), no placeholder; `Add metadata` lives in the widget. Refines state 4
+of the approved wireframes.
 
-**D55.** The measured row responds to the popout's own width, not the viewport, at two
-breakpoints. At 320px and above: date, time, first line. Below 320px: time joins the date
-line, first line wraps beneath. Below 260px: the first-line preview is dropped.
-`pending-journal_mobile_refinement-med-med.md` consumes these and defines no second
-breakpoint.
+**D55.** The measured row responds to the popout's own width: ≥320px date + time + first
+line; <320px time joins the date line and the first line wraps; <260px the preview is
+dropped. Owned here, consumed by the mobile story.
 
-**D56.** The calendar is a singleton tab: `open-calendar` focuses the existing tab when one
-is open. View mode and active date persist per workspace and are restored on reopen —
-required because D25 gives the calendar and popout shared filter state.
+**D56.** Singleton calendar tab; `open-calendar` focuses an existing one. View mode and active
+date persist per workspace.
 
-**D57.** Both week and month views are available at phone widths. The option strip collapses
-to a single segmented control. Day cells render dots only, dropping the `+N` remainder text
-below 40px cell width while the exact count remains in the accessible name (D46). This is a
-layout threshold, not the touch-target audit deferred by D31.
+**D57.** Both views at phone widths; option strip collapses to one segmented control; cells
+render dots only, dropping `+N` below 40px cell width while the exact count stays in the
+accessible name. A layout threshold, not the D31 touch-target audit.
 
-**D58.** The calendar grid is one tab stop with roving focus. Arrows move by day, `Home`/`End`
-to the focused week's start/end, `PageUp`/`PageDown` by month (`Shift` by year), `Enter`/`Space`
-activates the day, which under D25 filters the popout. The focused day announces its date and
-exact matching entry count.
+**D58.** Calendar grid is one tab stop with roving focus: arrows by day, `Home`/`End` to week
+bounds, `PageUp`/`PageDown` by month (`Shift` by year), `Enter`/`Space` activates (filters the
+popout per D25). Focused day announces its date and exact matching count.
 
-**D59.** Activating a calendar day while the journal popout is closed opens the popout and
-applies the day filter. Doing nothing visible, or setting an unseen filter, are both defects.
+**D59.** Activating a day while the popout is closed opens the popout and applies the filter.
 
-**D60.** The active day filter appears in the popout chip row as an independently dismissible
-chip alongside metadata chips and `Clear all`. Dismissing it clears only the day filter, and
-the calendar's day selection clears in step (D16).
+**D60.** The day filter is an independently dismissible chip in the popout chip row;
+dismissing it clears only that filter and the calendar selection clears in step.
 
-**D61.** Backfilling supplies the **date**; the filename time component is the **current clock
-time** at creation. Midnight is never fabricated and the user is not prompted for a time —
-D17's rule that every new entry appends the current time applies unchanged to a past date.
+**D61.** Backfill supplies the **date**; the filename time is the **current clock time**.
+Never midnight, never prompted.
 
-**D62.** A backfilled entry whose year or month folder does not exist creates that folder
-silently. The path is derived from the date by D17, so there is nothing to confirm.
+**D62.** A missing year/month folder is created silently on backfill.
 
-**D63.** Approved failure copy. Journal folder unreadable: **"Can't read the journal folder."**
-with the path beneath and actions `Retry` / `Choose a different folder…`. No workspace open:
-**"Open a folder to start journaling."** with `Open folder…`. Invalid journal root setting:
-**"The journal folder setting isn't a valid path."** with the offending value and
-`Open settings`. Errors name what failed and offer the fix; a raw error string is never the
-headline.
+**D63.** Failure copy. Unreadable folder: **"Can't read the journal folder."** + path,
+actions `Retry` / `Choose a different folder…`. No workspace: **"Open a folder to start
+journaling."** + `Open folder…`. Invalid root setting: **"The journal folder setting isn't a
+valid path."** + value, `Open settings`. Never lead with a raw error string.
 
-**D64.** The journal registers exactly four settings: `root` (path, app + workspace, default
-`journal`), `fieldDefinitions` (custom control per D49, app + workspace per D45, default
-empty), `calendarDefaultView` (enum `week`/`month`, app, default `month`), and `startOfWeek`
-(enum `system`/`monday`/`sunday`, app, default `system`). Explicitly not settings in v1:
-templates (D21), folder-nesting pattern and filename format (fixed by D17), timezone or
-day-start offset (D19), and anything touching mood colors or iconography (D4, D31).
+**D64.** Exactly four settings: `root` (path, app + workspace, default `journal`),
+`fieldDefinitions` (custom control, app + workspace, default empty), `calendarDefaultView`
+(enum `week`/`month`, app, default `month`), `startOfWeek` (enum `system`/`monday`/`sunday`,
+app, default `system`). Not settings in v1: templates (D21), nesting/filename format (D17),
+timezone or day-start (D19), mood colors (D4, D31).
 
-**D65.** `journal-calendar` activates lazily on `onView:journal` and on `onCommand:new-entry`,
-`onCommand:today`, `onCommand:open-calendar`. It does not activate at startup; D44 removed
-the only timing argument for doing so.
+**D65.** Lazy activation on `onView:journal` and `onCommand:new-entry` / `today` /
+`open-calendar`. Never `onStartup`.
 
-**D66.** Beta contributions, all real rather than placeholder: panel `journal`, tab `calendar`,
-commands `new-entry` / `today` / `open-calendar`, editor-header contribution `metadata-widget`,
-and the settings module. The popout action row is implemented as panel header actions on the
-`journal` panel, not bespoke chrome.
+**D66.** Beta contributions, all real: panel `journal`, tab `calendar`, the three commands,
+editor-header `metadata-widget`, settings module. The popout action row uses the existing
+`PanelAction` contract.
 
-**D67.** The journal registers one ordinary left panel and inherits the shell's mobile
-placement and return path (D26), contributing no bespoke mobile navigation. The metadata
-bottom sheet (D40) belongs to the widget, not the panel registration.
+**D67.** One ordinary left panel, inheriting the shell's mobile placement and return path
+(D26). The D40 bottom sheet belongs to the widget, not the registration.
 
-**D68.** The journal service goes through `DesktopExtensionContext.workspace` rather than the
-workspace adapters directly; where that API is insufficient it is extended for every
-extension rather than bypassed. Known gap this exposes: the extension workspace API cannot
-list notes, which the journal requires to browse at all. `listNotes(prefix)` returning
-relative paths with modified times is added — D32 also needs mtime ordering for undated files.
+**D68.** The journal service uses `DesktopExtensionContext.workspace`, extended rather than
+bypassed. Requires adding `listNotes(prefix)` (relative paths + mtimes) — the API cannot list
+notes today, and D32 needs mtime ordering.
 
-**D69.** `DesktopExtensionContext.tabs` gains a scoped `open(kind, title)` restricted to tab
-kinds the calling extension registered. The internal `openTab` stays internal.
+**D69.** `DesktopExtensionContext.tabs` gains a scoped `open(kind, title)` limited to kinds the
+extension registered. Internal `openTab` stays internal.
 
-**D70.** `DesktopTabContext` stays `{ rootPath, tabId }` for v1. The calendar reads everything
-else from the journal service and its own settings.
+**D70.** `DesktopTabContext` stays `{ rootPath, tabId }` for v1.
 
 ## Checkpoint table
 
-| Artifact / version | Reviewer | Status | Follow-up |
-|---|---|---|---|
-| Question batches 1-10 (D1-D34) | product owner | approved | — |
-| P1 popout header v1 | product owner | approved with change (D24) | Metadata widget starts collapsed |
-| M1 interactive mockup v1 | product owner | approved as structural basis (D24) | Visual density cleanup deferred |
-| P2 undated-file handling | product owner | accepted with constraint (D32) | Minimal space; treatment compared |
-| Moodboard v1 (artifact 1) | product owner | approved (D35) | Direction B + A's popout; C rejected |
-| Undated treatment comparison | product owner | approved (D36) | Pinned group header chosen |
-| Desktop IA v1: IA-1 vs IA-2 (artifact 2) | product owner | resolved as IA-3 (D37) | Group-by control removed |
-| State coverage, 12 states | product owner | reviewed with artifact 2 | Referenced by the panel story |
-| Keyboard / screen-reader focus order | product owner | reviewed with artifact 2 | Calendar grid model still open |
-| IA-3 header levels: 3a vs 3b | product owner | approved 3b (D39) | — |
-| Mobile layouts M-1 vs M-2 (artifact 3) | product owner | approved hybrid (D40) | Bottom sheet is new component surface |
-| Metadata facet source | product owner | platform index approved (D41) | Indexing story added; no journal cache |
-| Filename read table | product owner | narrow ISO family approved (D42) | Date-only sorts first |
-| Multi-entry day semantics | product owner | distinct values + entry-level filters (D43) | No synthetic daily value |
-| Metadata widget route | product owner | React slot + observable registry (D44) | Platform prerequisite |
-| Workspace field definitions | product owner | platform scope + id overlay (D45) | Preserve unconfigured values |
-| Calendar entry density | product owner | 3 dots + `+N` in both views (D46) | Exact count remains accessible |
-| Built-in namespaces | product owner | feature-scoped semantic ids (D47) | Runtime ids are host-prefixed |
-| Open-decision batch (D48-D70) | product owner | approved 2026-08-08 | Closes every remaining product question |
-
-**Approver:** the product owner, per D34.
+Every artifact and decision batch was approved by the product owner per D34, across
+2026-08-05 to 2026-08-08. The row-by-row approval history was removed once the gate closed;
+each decision above records what was chosen, and the consolidated table below records what
+was rejected.
 
 ## Rejected alternatives (consolidated)
 
@@ -478,46 +426,12 @@ What remains is implementation and approval process, not undecided product quest
 - Platform prerequisites: D44 editor-header slot, D45 workspace-scoped settings, D41
   metadata facets, and the D68/D69 extension API additions.
 
-## Reconciliation — 2026-08-07 (post-merge)
+## Story close-out
 
-The `extensions` branch advanced during discovery with no decision here changed or
-clobbered. D14/D27 uses the shipped tab seam. D44 and D45 choose platform changes for
-the remaining editor-slot and workspace-settings gaps; their implementation stories are
-prerequisites, not open product choices. D27's historical `pending-calendar_panel_ui-high-hard.md`
-name now maps to `pending-calendar_tab_ui-high-hard.md`. See the epic's **Platform reality check**.
+Discovery is complete: decisions recorded (D1-D70), three artifacts approved (moodboard
+D35, wireframes/IA D37/D39, mobile D40), twelve states and the popout focus order covered
+in `assets/journal-calendar-wireframes.md`. No code was written by this story.
 
-## Acceptance criteria
-
-- [x] User answers recorded for workflow, date/time policy, folder/naming, templates,
-  metadata fields, calendar defaults, settings, accessibility, and mobile behavior
-  (see D1-D70 above).
-- [x] Three labeled composition alternatives (IA-1/IA-2/IA-3) plus two mobile
-  alternatives; none treated as chosen before approval; resolution (IA-3) was the
-  product owner's.
-- [x] Twelve states covered: no workspace, no journal folder, zero entries, new entry,
-  existing entry with metadata, malformed frontmatter, calendar-filtered day, filter
-  matching nothing, unreadable folder, index unavailable, undated group expanded,
-  ambiguous date.
-- [x] Desktop/phone layouts identify focus order (popout, 10 stops), accessible names,
-  touch-target intent, responsive behavior; calendar grid keyboard model explicitly
-  deferred rather than guessed.
-- [x] Checkpoint table names artifact version, reviewer, status, follow-up.
-- [x] Non-goals and unresolved decisions listed, split into discovery-blocking vs.
-  owned-by-a-later-story.
-
-## Tests / manual checks
-
-- No automated code tests expected.
-- Manual: walk the daily workflow with a real sample workspace; verify each screen
-  can be described without assuming a final visual style or metadata vocabulary.
-- Manual: review with keyboard-only and a screen-reader outline; every action needs a
-  discoverable label.
-
-## Non-goals
-
-- No React/CSS/Tailwind implementation, production assets, frontmatter parser
-  changes, settings schema, or extension registration.
-- Do not select a mood scale, activity taxonomy, folder hierarchy, filename format,
-  icon, color meaning, or calendar visualization without explicit approval.
-- Do not ship a built-in mood or activity vocabulary; D4 makes these user-defined.
-- Do not replace D43's distinct-value aggregation with latest-entry or synthetic field rules.
+Standing constraints for every downstream story: never ship a built-in mood or activity
+vocabulary (D4), never guess an ambiguous date (D38), and never replace D43's
+distinct-value aggregation with a synthetic daily value.

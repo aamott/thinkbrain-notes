@@ -73,61 +73,26 @@ Non-goals:
   fall back to a full-file scan or a journal-owned cache.
 
 
-## Platform reality check — 2026-08-07
+## Platform reality check — 2026-08-08
 
-An extension platform core, contributed tab kinds, and a Markdown live-preview editor
-shipped during discovery. D44/D45 now choose the two remaining platform paths; both are
-tracked prerequisites rather than open product decisions.
+The extension platform, contributed tab kinds, panel header actions, and live preview all
+shipped during discovery. Copy `apps/desktop/src/extensions/builtins/noteStats.tsx` as the
+reference built-in; `plans/pending-extensions-low-hard.md` lists the platform surface.
 
-**Shipped and usable by the journal:**
+Prerequisites still to build, all decided:
 
-| Surface | Where |
-|---|---|
-| `desktopExtensionHost` singleton, `register` / `registerAndActivate` | `apps/desktop/src/extensions/desktopExtensionHost.ts` |
-| `DesktopExtensionContext` — `commands`, `panels`, `editorHooks`, `settings`, `tabs`, `workspace` | same |
-| Contributed tab kinds: `desktopTabRegistry` singleton, `DesktopTabView.factory`, `subscribe()`, disposable registration | `apps/desktop/src/tabs/tabRegistry.ts` |
-| Internal `openTab(kind, title)` | `apps/desktop/src/shell/DesktopShell.tsx`; not exposed by `DesktopExtensionContext.workspace` |
-| Notes read/write/create/open for extensions (`DesktopExtensionWorkspace`) | `apps/desktop/src/extensions/desktopExtensionHost.ts` |
-| `ExtensionManifest`; `contributes` supports **only** `commands` and `panels` | `packages/core/src/extensions/manifest.ts` |
-| Activation events `onStartup` / `onCommand:<id>` / `onView:<id>`, lazy activation with stubs | `packages/core/src/extensions/activation.ts`, `apps/desktop/src/extensions/bootstrap.ts` |
-| Disposable scope (`DisposableStore`, `context.subscriptions`) | `packages/core/src/lifecycle.ts` |
-| Panel contributions (`side: "left" \| "right"`) | `apps/desktop/src/panels/panelRegistry.tsx` |
-| Editor hooks — CodeMirror `Extension[]` / `KeyBinding[]` only | `apps/desktop/src/tabs/editorHookRegistry.ts` |
-| Reference built-in to copy | `apps/desktop/src/extensions/builtins/noteStats.tsx` |
+| # | Needs | Owner |
+|---|---|---|
+| 1 | `tabs.open(kind, title)`, scoped to the extension's own kinds (D69) | `extensions/pending-extension_api_surface-low-hard.md` |
+| 2 | React editor-header slot for `metadata-widget` (D44) | `extensions/pending-editor_header_contribution-high-med.md` |
+| 3 | Workspace-scoped extension settings + UI (D45) | `extensions/pending-extension_settings-low-med.md` |
+| 4 | `listNotes(prefix)` — the extension workspace API cannot list notes, so the journal cannot browse (D68) | `extensions/pending-extension_api_surface-low-hard.md` |
+| 5 | Frontmatter metadata facets in the index (D41) | `indexing-search/pending-frontmatter_metadata_facets-high-hard.md` |
 
-**Gap 1 — ROUTE CHOSEN D69; implementation pending.** A contributed calendar kind with a
-`factory` already renders through `DesktopExtensionContext.tabs`. D69 adds a scoped
-`tabs.open(kind, title)` restricted to kinds the calling extension registered; internal
-`openTab` stays internal, and D70 keeps `DesktopTabContext` as `{ rootPath, tabId }`.
-
-**Gap 5 — NEW, from D68.** The journal service goes through
-`DesktopExtensionContext.workspace`, which today reads, writes, creates and opens notes but
-**cannot list them** — so the journal cannot browse entries at all. D68 adds
-`listNotes(prefix)` returning relative paths with modified times; D32's mtime ordering for
-undated files needs the same data.
-
-**Panel header actions — SHIPPED 2026-08-08.** `PanelAction` (`{ id, label, icon, run }`) on
-`DesktopPanelContribution`, rendered by `PanelTitle` for both dock sides. D66's popout action
-row (`New entry`, `Today`, `Open calendar`) uses this contract; no new platform work needed.
-Panels contributed by extensions loaded from disk mount plain DOM via `mount(element, panel)`,
-so the journal is not obliged to ship as a built-in for UI reasons.
-
-**Gap 2 — PATH CHOSEN D44; platform prerequisite pending.** The metadata widget uses a
-new observable disposable React editor-header registry, not CodeMirror `editorHooks`.
-`plans/extensions/pending-editor_header_contribution-high-med.md` owns the slot and
-post-mount registration/disposal behavior; story 6 consumes it.
-
-**Gap 3 — PATH CHOSEN D45; platform prerequisite pending.** Extend shared extension
-settings with workspace scope and UI rendering; no journal-owned fallback. Workspace
-field definitions overlay globals by id, and removed values remain unconfigured but visible.
-`plans/extensions/pending-extension_settings-low-med.md` owns the platform work.
-
-**Gap 4 — CLOSED D47.** Built-in extension ids are `journal-calendar`, `git`, and
-`agent-chat`; journal contribution ids are fixed in the discovery log and beta built-ins story.
-
-**Repo hygiene note — RESOLVED 2026-08-08.** The three `done-` stories in
-`plans/extensions/` now carry accurate shipped statuses, and
-`internal_contribution_points` was renamed to `done-`.
+Already usable: `desktopExtensionHost` register/activate, `DesktopExtensionContext`
+(`commands`, `panels`, `editorHooks`, `settings`, `tabs`, `workspace`), contributed tab kinds
+with a `factory`, panel contributions on either side with `PanelAction` header buttons, lazy
+activation with stubs, and the disposable scope. Built-in ids are fixed by D47.
 
 ## Story sequence
 
@@ -162,18 +127,8 @@ recorded in the story. Stories may be split further if a subagent would exceed o
 
 ## Status
 
-- ✅ Product questions answered and discovery/wireframes explicitly approved (D1-D47)
-- ✅ Every remaining product decision closed (D48-D70, approved 2026-08-08)
-- ⬜ Journal data/frontmatter contract approved and tested
-- ⬜ Journal service and daily-note creation implemented
-- ⬜ D41 platform index supports frontmatter facet queries
-- ⬜ Calendar model and metadata aggregation implemented
-- ⬜ Settings/accessibility contract implemented
-- ⬜ Journal popout and calendar tab implemented from approved mockups
-- ⬜ Mobile refinement approved and verified
-- ⬜ Built-in registration wired through `desktopExtensionHost`
-- 🟨 Gap 1 partial: tab registration/factory shipped; D69 tab-open bridge still pending
-- ⬜ Gap 5 (D68): `listNotes` missing from the extension workspace API — blocks browsing
-- ✅ Gap 2 path chosen (D44): React editor-header slot + observable registry; implementation pending
-- ✅ Gap 3 path chosen (D45): shared workspace-scoped extension settings; implementation pending
-- ✅ Gap 4 closed (D47): canonical built-in and journal contribution ids approved
+- ✅ Every product decision closed (D1-D70)
+- 🟨 Story 2 journal data/frontmatter contract — implemented in `packages/core/src/journal/`;
+  the unknown-field write round-trip waits on story 3's write path
+- ⬜ Stories 3-9: service, calendar model, settings, panel, calendar tab, mobile, registration
+- ⬜ Platform prerequisites 1-5 in the reality check above

@@ -25,30 +25,13 @@ The discovery gate is CLOSED for the decisions above.
 
 ## Questions first — STOP gate — CLOSED 2026-08-08 (D57, D55)
 
-Rationale and rejected alternatives: `docs/superpowers/specs/2026-08-08-journal-open-decisions-proposal.md`.
+Closed by D48-D70; full text in `../pending-journal_discovery_and_wireframes-low-med.md`.
 
-1. **Calendar tab on a phone — closed by D57.** Both week and month views are
-   available at phone widths. The view-options control strip collapses to a single
-   segmented control. Day cells render dots only: the `+N` remainder text is
-   dropped below a 40px cell width (per D46's density model), while the exact
-   matching count remains present in the accessible name regardless. This is a
-   layout threshold, not the touch-target audit — see item 2, which stays
-   deferred.
-2. **Formal touch-target audit — still deferred per D31.** Not closed by this
-   batch. Once undeferred, this story or a follow-on must audit all interactive
-   elements against the repository's minimum target size and document exceptions.
-3. **Measured-column behavior at narrow widths — closed by D55, owned by
-   `pending-journal_panel_ui-high-hard.md`.** This story consumes, and must not
-   define a second breakpoint. The measured row responds to the popout's own
-   width, not the viewport, at two breakpoints: at 320px and above it shows date,
-   time, and first line; below 320px the time joins the date line and the first
-   line wraps beneath; below 260px the first-line preview is dropped entirely.
+- **Calendar tab on a phone — D57.** Both views at phone widths; option strip collapses to one control; dots only, no `+N`, below 40px cells.
+- **Formal touch-target audit — still DEFERRED per D31.** Not closed by this batch; owed once undeferred.
+- **Measured-column behavior at narrow widths — D55 (owned by panel_ui story).** This story consumes; must not define a second breakpoint.
 
-**STOP gate: CLOSED for items 1 and 3.** The calendar-on-phone layout (D57) and the
-narrow-width measured column (D55, consumed from the panel story) may now be
-implemented. Item 2, the formal touch-target audit, remains deferred by D31 and
-blocks nothing else in this story — treat all other touch targets as informal
-until that audit lands.
+Items 1 and 3 (D57, D55) are closed and may be implemented; item 2 (D31 audit) stays deferred and blocks nothing else here.
 
 ## Scope (narrowed)
 

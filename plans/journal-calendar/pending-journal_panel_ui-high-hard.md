@@ -21,31 +21,14 @@ The discovery gate is CLOSED; full rationale and D1-D47 live in
 
 ## Questions first — STOP gate (CLOSED)
 
-All four items below are decided by D48-D70 (approved 2026-08-08; see
-`../pending-journal_discovery_and_wireframes-low-med.md`, "Approved 2026-08-08 (D48-D70)").
-Implementation of the affected surfaces may proceed.
+Closed by D48-D70; full text in `../pending-journal_discovery_and_wireframes-low-med.md`.
 
-1. **Collapsed-header + search interaction — closed by D52.** While a search query or metadata
-   filter is active, year and month headers containing matches auto-expand and show a match
-   count; clearing the query/filter restores the previous collapse state. Auto-expansion is
-   transient and is never persisted.
-2. **Collapse-state persistence — closed by D53.** Collapse state persists per workspace in
-   desktop state — not in settings, not in the vault — and is restored when the popout reopens.
-3. **Collapsed dateline — no metadata — closed by D54.** An entry with a date and no
-   user-defined field values renders its dateline as the bare date alone, e.g.
-   `Wednesday, August 5` — no separator, no placeholder text. The widget carries an explicit
-   `Add metadata` control in its collapsed state. This REFINES the "no metadata set" copy in
-   state 4 of the approved wireframes, because D22 makes the empty case the normal state of
-   every new entry.
-4. **Measured-column behavior at narrow widths — closed by D55 (owned by this story).** The
-   measured row responds to the popout's own width, not the viewport, at two breakpoints: at
-   320px and above, date + time + first line; below 320px, time joins the date line and the
-   first line wraps beneath; below 260px, the first-line preview is dropped. This story owns
-   these numbers; `pending-journal_mobile_refinement-med-med.md` consumes them and defines no
-   second breakpoint.
+- **Collapsed-header + search interaction — D52.** Matching headers auto-expand with a match count while a search/filter is active; never persisted.
+- **Collapse-state persistence — D53.** Persists per workspace in desktop state, restored on popout reopen.
+- **Collapsed dateline, no metadata — D54.** Renders the bare date only, plus an `Add metadata` control; refines wireframe state 4.
+- **Measured-column behavior at narrow widths — D55 (owned by this story).** Two breakpoints (320px, 260px) gate time/first-line visibility; the mobile story consumes, not redefines.
 
-Per-artifact mockup sign-off under D34 is still required before implementation of the affected
-surfaces — that is process, not an open product question.
+Per-artifact mockup sign-off under D34 still applies before implementation.
 
 ## Metadata widget route — DECIDED D44
 

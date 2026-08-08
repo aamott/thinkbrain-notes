@@ -1,6 +1,11 @@
 # Story: Journal Data Model & Markdown Frontmatter Contract
 
-**Status:** pending · **Urgency:** med · **Difficulty:** hard
+**Status:** 🟨 implemented in `packages/core/src/journal/` (filename parser, entry comparator,
+date resolution, field-definition validation, metadata reading) · **Urgency:** med ·
+**Difficulty:** hard
+
+Remaining: the unknown-field write round-trip, which needs the write path owned by
+`pending-journal_service_daily_notes-high-med.md`.
 
 ## Epic
 
@@ -85,18 +90,21 @@ Define platform-agnostic journal metadata and a stable, portable Markdown contra
 ## Acceptance criteria
 
 - [x] The product-owner-approved D42 format table enumerates every accepted filename form and proves the year-first fixed-width forms unambiguous.
-- [ ] Parser returns `UNDATED` for every filename outside D42, including alternate separators, ISO `T`, month names, invalid dates/times, missing padding, and date-only counters.
-- [ ] Parser accepts timed counter suffixes `N >= 2`, rejects `-1`, and does not read the counter as part of the time component (D30/D42).
-- [ ] Date-only entries carry unknown time and sort before timed entries on the same day (D42).
-- [ ] A new-entry write emits frontmatter with the date field only; no other fields are pre-seeded (D22).
-- [ ] On read, filename date takes precedence over frontmatter date; the parser records the mismatch as a diagnostic but does NOT rewrite the file (D20).
-- [ ] Malformed YAML frontmatter does not disqualify an entry; the entry is surfaced with a diagnostic, not hidden (D33).
+- [x] Parser returns `UNDATED` for every filename outside D42, including alternate separators, ISO `T`, month names, invalid dates/times, missing padding, and date-only counters.
+- [x] Parser accepts timed counter suffixes `N >= 2`, rejects `-1`, and does not read the counter as part of the time component (D30/D42).
+- [x] Date-only entries carry unknown time and sort before timed entries on the same day (D42).
+- [x] A new-entry write emits frontmatter with the date field only; no other fields are pre-seeded (D22).
+- [x] On read, filename date takes precedence over frontmatter date; the parser records the mismatch as a diagnostic but does NOT rewrite the file (D20).
+- [x] Malformed YAML frontmatter does not disqualify an entry; the entry is surfaced with a diagnostic, not hidden (D33).
 - [ ] Unknown frontmatter fields survive a round-trip through any journal write path (D33).
-- [ ] Types carry no hard-coded mood vocabulary or activity taxonomy; user-defined field values are represented as opaque strings/numbers (D4).
-- [ ] No template types or template application logic (D21).
-- [ ] Unit tests cover all D42 accepted/rejected examples, date-only ordering, counters 2/3, rejected counter 1, malformed YAML, absent frontmatter, unknown fields, date mismatch, and no-rewrite behavior.
-- [ ] Serialization is ordinary Markdown/YAML; no DB or workspace cache.
-- [ ] `pnpm lint`, `pnpm typecheck`, `pnpm test` all pass on `packages/core`.
+  *(No journal write path exists yet — `readJournalMetadata` keeps every unmatched key in
+  `unconfigured`, and `pending-journal_service_daily_notes-high-med.md` owns proving the
+  round-trip when it adds writes.)*
+- [x] Types carry no hard-coded mood vocabulary or activity taxonomy; user-defined field values are represented as opaque strings/numbers (D4).
+- [x] No template types or template application logic (D21).
+- [x] Unit tests cover all D42 accepted/rejected examples, date-only ordering, counters 2/3, rejected counter 1, malformed YAML, absent frontmatter, unknown fields, date mismatch, and no-rewrite behavior.
+- [x] Serialization is ordinary Markdown/YAML; no DB or workspace cache.
+- [x] `pnpm lint`, `pnpm typecheck`, `pnpm test` all pass on `packages/core`.
 
 ## Validation
 

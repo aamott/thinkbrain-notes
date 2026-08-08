@@ -17,34 +17,18 @@ The discovery gate is CLOSED; full rationale and D1-D47 live in
 - **D41/D43:** metadata facets come from the platform index (no journal cache/full scan); predicates match within one entry.
 - **D42:** listing accepts only the narrow ISO table, date-only sorts first, and creation emits D17 only.
 
-**STOP gate — CLOSED.** The discovery gate above is closed, and every item this story STOP-gated is
-now decided (`../pending-journal_discovery_and_wireframes-low-med.md`, "Approved 2026-08-08
-(D48-D70)"):
+## STOP gate — CLOSED
 
-- **Backfill mechanics and time component — closed by D61.** Backfilling supplies the **date**;
-  the filename time component is the **current clock time** at creation. Midnight is never
-  fabricated and the user is never prompted for a time — D17's rule that every new entry appends
-  the current time applies unchanged to a past date.
-- **Folder creation on backfill — closed by D62.** A backfilled entry whose year or month folder
-  does not exist creates that folder silently; the path is derived from the date by D17, so there
-  is nothing to confirm.
-- **Day-click when the popout is closed — closed by D59.** Activating a calendar day while the
-  journal popout is closed opens the popout and applies the day filter. (UI ownership stays with
-  the panel/calendar stories; noted here only because this story's STOP gate previously left the
-  question open.)
-- **Error/retry copy — closed by D63.** Approved copy, verbatim: journal folder unreadable —
-  **"Can't read the journal folder."** with the path beneath and actions `Retry` / `Choose a
-  different folder…`; no workspace open — **"Open a folder to start journaling."** with
-  `Open folder…`; invalid journal root setting — **"The journal folder setting isn't a valid
-  path."** with the offending value and `Open settings`. Errors name what failed and offer the
-  fix; a raw error string is never the headline.
-- **Service adapter boundary — closed by D68.** The service goes through
-  `DesktopExtensionContext.workspace` (the `DesktopExtensionWorkspace` interface), not the
-  workspace adapters directly. The gap this exposes — no way to list notes — is closed by adding
-  `listNotes(prefix)`, returning relative paths with modified times.
+Closed by D48-D70; full text in `../pending-journal_discovery_and_wireframes-low-med.md`.
 
-Implement backfill mechanics, folder-creation policy, error copy, and the D68 adapter boundary
-against the decisions above.
+- **Backfill mechanics and time — D61.** Date is backfilled; filename time is the current clock
+  time; midnight is never fabricated.
+- **Folder creation on backfill — D62.** Missing year/month folder is created silently.
+- **Day-click when popout is closed — D59.** Opens the popout and applies the day filter (UI
+  owned by panel/calendar stories).
+- **Error/retry copy — D63.** Verbatim strings in Scope below.
+- **Service adapter boundary — D68.** Via `DesktopExtensionContext.workspace`, extended with
+  `listNotes(prefix)`.
 
 ## Listing at scale — DECIDED
 
@@ -80,6 +64,12 @@ Implement a typed, UI-independent service that resolves dates/paths, detects sam
   stamps the filename with the current clock time (D61), and creates a missing year/month folder
   silently (D62).
 - Typed diagnostics for path safety, collisions, workspace errors.
+- **Error/retry copy — D63.** Approved copy, verbatim: journal folder unreadable —
+  **"Can't read the journal folder."** with the path beneath and actions `Retry` / `Choose a
+  different folder…`; no workspace open — **"Open a folder to start journaling."** with
+  `Open folder…`; invalid journal root setting — **"The journal folder setting isn't a valid
+  path."** with the offending value and `Open settings`. Errors name what failed and offer the
+  fix; a raw error string is never the headline.
 
 ## Likely files
 

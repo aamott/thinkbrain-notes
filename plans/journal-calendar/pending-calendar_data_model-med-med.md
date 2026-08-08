@@ -19,32 +19,16 @@ Discovery gate is CLOSED; rationale and the full D1-D47 log live in
 - **D29/D46:** show up to three dots plus `+N`; accessible text and active filters use exact matching counts.
 - **D33/D36/D38:** filename date alone qualifies an entry; malformed frontmatter remains eligible and survives; loading never rewrites files; non-Markdown is hidden, undated is pinned, and calendar day state reflects both; ambiguous dates are `UNDATED` without guessing.
 
-**STOP gate: CLOSED.** The discovery gate above was already closed; the remaining UI
-routing/state items are now decided by D48-D70 (approved 2026-08-08; see
-`../pending-journal_discovery_and_wireframes-low-med.md`, "Approved 2026-08-08 (D48-D70)"). D43
-and D46 close aggregation and entry-density policy, as before. None of the closing decisions
-add scope to this story: the model exposes the filter state; routing/rendering remains the UI
-stories' concern.
+## Questions first — STOP gate (CLOSED)
 
-- **Day-click when the popout is closed — closed by D59.** Activating a calendar day while the
-  journal popout is closed opens the popout and applies the day filter; doing nothing visible,
-  or setting an unseen filter, are both defects. The model must continue to expose the
-  selected-day filter state; opening the popout is `pending-calendar_tab_ui-high-hard.md`'s
-  concern.
-- **Date filter as a chip — closed by D60.** The active day filter appears in the popout chip
-  row as an independently dismissible chip alongside metadata chips and `Clear all`. Dismissing
-  it clears only the day filter, and the calendar's day selection clears in step. The model must
-  expose the selected-day filter as a value that can be cleared independently of metadata
-  predicates so the UI can implement this; chip rendering itself is a UI-story concern.
-- **Calendar tab singleton + option persistence — closed by D56.** The calendar is a singleton
-  tab: `open-calendar` focuses the existing tab when one is open. View mode and active date
-  persist per workspace and are restored on reopen. Tab lifecycle and persistence are
-  `pending-calendar_tab_ui-high-hard.md`'s concern, not modeled here.
-- **Calendar grid keyboard model — closed by D58.** The calendar grid is one tab stop with
-  roving focus: arrows move by day, `Home`/`End` to the focused week's start/end,
-  `PageUp`/`PageDown` by month (`Shift` by year), `Enter`/`Space` activates the day (feeding
-  D59's popout-opening behavior). The focused day announces its date and exact matching entry
-  count. This is a UI-story concern, not modeled here.
+Closed by D48-D70; full text in `../pending-journal_discovery_and_wireframes-low-med.md`. D43/D46
+close aggregation/density as before; none of the closing decisions add scope here — the model
+exposes filter state, routing/rendering stays the UI stories' concern.
+
+- **Day-click when popout closed — D59.** Model exposes the selected-day filter; opening the popout is the tab-UI story's job.
+- **Date filter as a chip — D60.** Model exposes it as independently clearable; chip rendering is the UI story's job.
+- **Tab singleton + option persistence — D56.** Tab lifecycle/persistence live in the tab-UI story, not modeled here.
+- **Calendar grid keyboard model — D58.** Roving-focus keyboard model lives in the tab-UI story, not modeled here.
 
 ## Goal
 
