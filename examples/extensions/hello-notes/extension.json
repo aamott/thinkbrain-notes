@@ -4,10 +4,10 @@
   "version": "1.0.0",
   "apiVersion": "^1.0.0",
   "engines": { "platform": ["desktop"] },
-  "activationEvents": ["onCommand:capture"],
+  "activationEvents": ["onCommand:capture", "onView:capture"],
   "capabilities": [],
   "contributes": {
     "commands": [{ "id": "capture", "title": "Capture a note" }],
-    "panels": []
+    "panels": [{ "id": "capture", "label": "Capture", "icon": "✎", "side": "left" }]
   }
 }

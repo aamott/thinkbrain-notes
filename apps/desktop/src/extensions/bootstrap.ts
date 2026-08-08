@@ -115,9 +115,9 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
   /**
    * Registers a stub for every contribution the manifest declares.
    *
-   * Local extensions reach here with no panels: the loader strips them, because
-   * a panel factory returns React and a disk bundle cannot share the app's React
-   * instance. The loops are therefore identical for both sources.
+   * Identical for both sources: a built-in fulfils a panel stub with a React
+   * factory and a local extension with a mount function, but both arrive in the
+   * registry under the same id and the same shape.
    */
   const registerStubs = (state: EntryState): void => {
     for (const command of state.manifest.contributes.commands) {

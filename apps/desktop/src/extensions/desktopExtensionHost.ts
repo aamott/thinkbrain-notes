@@ -19,6 +19,10 @@ import {
   type DesktopPanelContribution
 } from "../panels/panelRegistry";
 import {
+  createExtensionPanelMountFactory,
+  type ExtensionPanelMount
+} from "../panels/extensionPanelMount";
+import {
   markdownEditorHookRegistry,
   type MarkdownEditorHookPayload
 } from "../tabs/markdownEditorHooks";
@@ -36,8 +40,24 @@ import {
 /** A command definition whose identifier is relative to the owning extension. */
 export type DesktopExtensionCommand = Omit<DesktopCommand, "id"> & { readonly id: string };
 
-/** A panel definition whose identifier is relative to the owning extension. */
-export type DesktopExtensionPanel = Omit<DesktopPanelContribution, "id"> & { readonly id: string };
+/**
+ * A panel definition whose identifier is relative to the owning extension.
+ *
+ * Two forms, because two kinds of extension exist. A built-in shares the app's
+ * React instance and contributes a `factory`. An extension loaded from disk is
+ * a pre-bundled module with no access to that instance, so it contributes a
+ * framework-neutral `mount` and owns the DOM inside the element it is given.
+ */
+export type DesktopExtensionPanel =
+  | (Omit<DesktopPanelContribution, "id"> & {
+      readonly id: string;
+      readonly mount?: undefined;
+    })
+  | (Omit<DesktopPanelContribution, "id" | "factory"> & {
+      readonly id: string;
+      readonly mount: ExtensionPanelMount;
+      readonly factory?: undefined;
+    });
 
 /** A Markdown editor hook whose identifier is relative to the owning extension. */
 export type DesktopExtensionEditorHook = Omit<
@@ -132,6 +152,25 @@ function assertRelativeId(kind: string, id: string): void {
 function prefixId(extensionId: string, kind: string, id: string): string {
   assertRelativeId(kind, id);
   return `${extensionId}.${id}`;
+}
+
+/** Resolves either panel form to the single contribution shape the registry stores. */
+function toPanelContribution(
+  extensionId: string,
+  panel: DesktopExtensionPanel
+): DesktopPanelContribution {
+  const relativeId = panel.id;
+  const id = prefixId(extensionId, "Panel", relativeId);
+  if (panel.mount) {
+    const { mount, ...rest } = panel;
+    return { ...rest, id, factory: createExtensionPanelMountFactory(mount) };
+  }
+  // Defensive rather than redundant: an extension loaded from disk is plain
+  // JavaScript, so the union above constrains built-ins only.
+  if (!panel.factory) {
+    throw new Error(`Panel "${relativeId}" must declare a factory or a mount function.`);
+  }
+  return { ...panel, id };
 }
 
 function settingsModuleId(extensionId: string): string {
@@ -297,10 +336,11 @@ function createDesktopExtensionContext(
     panels: {
       register: (panel) => {
         assertActive();
-        return own(context, registries.panels.register({
-          ...panel,
-          id: prefixId(context.extensionId, "Panel", panel.id)
-        }), assertActive);
+        return own(
+          context,
+          registries.panels.register(toPanelContribution(context.extensionId, panel)),
+          assertActive
+        );
       }
     },
     editorHooks: {

@@ -27,6 +27,15 @@ export default tseslint.config(
     }
   },
   {
+    // Example extensions are pre-bundled ES modules that run in the webview.
+    files: ["examples/**/*.js"],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: "module",
+      globals: { ...globals.browser }
+    }
+  },
+  {
     files: ["**/*.tsx"],
     plugins: {
       "react-hooks": reactHooks,

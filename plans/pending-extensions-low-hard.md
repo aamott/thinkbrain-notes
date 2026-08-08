@@ -268,7 +268,7 @@ are not yet formalized, the first story here should establish them.
 - 🟨 Lifecycle/disposable ownership and scoped settings runtime are implemented
   and tested. Manifest parsing, compatibility evaluation, local-directory loading,
   and bootstrap are shipped for the trusted beta path; remaining gaps are
-  unsupported `onLanguage`, duplicate-id diagnostics, and local panel mounting.
+  unsupported `onLanguage` and duplicate-id diagnostics.
 - ✅ Manifest parser/schema — `plans/extensions/done-extension_manifest_format-low-med.md`.
 - ✅ Soft capability/API/platform compatibility —
   `plans/extensions/done-extension_capability_compatibility-low-med.md`.
@@ -276,10 +276,16 @@ are not yet formalized, the first story here should establish them.
   `plans/extensions/done-extension_local_directory_loader-low-med.md`. A
   directory holding `extension.json` plus a single pre-bundled ESM entry loads,
   activates lazily, reloads, and unloads from the Extensions panel. Disk
-  extensions contribute commands and settings; declared panels are reported and
-  skipped until `pending-extension_contribution_surfaces` defines a
-  framework-neutral mount contract. Directory persistence across restarts is
-  shipped — `plans/extensions/done-local_extension_directory_persistence-low-easy.md`.
+  extensions contribute commands, settings, and panels. Directory persistence
+  across restarts is shipped —
+  `plans/extensions/done-local_extension_directory_persistence-low-easy.md`.
+- 🟨 Panel mount contract — a disk extension contributes panels with
+  `mount(element, panel)` and gets its own activity-bar (left) or title-bar
+  (right) entry, identical to a built-in's. Menus, context menus, themes, and
+  panel toolbar actions remain in
+  `plans/extensions/pending-extension_contribution_surfaces-low-med.md`.
+  `examples/extensions/hello-notes` is the worked example, pinned by an
+  end-to-end test.
 - 🟨 App events — typed `context.events` subscriptions for `note.opened`,
   `note.saved`, `note.created`, and `workspace.opened`, scoped to the activation
   and isolated per listener. Custom extension-emitted events and background

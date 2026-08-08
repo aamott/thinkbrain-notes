@@ -90,6 +90,6 @@ For major or cross-cutting refactors, `npx repomix --compress` can help map depe
 
 ## Unique Terminology
 - Action bar: Bar on left side of screen, contains buttons for different features.
-  - Contains: Explorer, search, tags, each extension with an action bar button (journal, etc), and an extensions menu. Settings at bottom.
+  - Contains: Explorer, search, tags, extensions `side: "left"` (journal, etc), and an extensions menu. Settings at bottom.
 - Action items menu: Top right menu, contains buttons for different features.
-  - Contains: Outline, properties, backlinks, and each extension with an action items button (agent chat, etc).
+  - Contains: Outline, properties, backlinks, and extensions `side: "right"` (agent chat, etc).

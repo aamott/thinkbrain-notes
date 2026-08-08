@@ -1,8 +1,8 @@
 # Hello Notes — example extension
 
-The smallest useful Thinkbrain extension: one command that captures a
-timestamped note through the workspace API, plus an app-event subscription
-that logs every save.
+The smallest useful Thinkbrain extension: a command that captures a
+timestamped note through the workspace API, a panel with its own place in the
+activity bar, and an app-event subscription that logs every save.
 
 An extension is a folder with two files:
 
@@ -20,23 +20,37 @@ An extension is a folder with two files:
 3. `Ctrl+P` → run **Capture a note**. The extension activates, creates
    `captures/capture-<timestamp>.md`, and opens it in a tab. Its status in
    the Extensions panel flips from "Not started" to "Active".
-4. Save any note (`Ctrl+S`) and check the devtools console
+4. Click the **✎ Capture** icon in the activity bar — the extension's own
+   entry, next to Explorer and Search. Its panel is plain DOM the extension
+   built itself.
+5. Save any note (`Ctrl+S`) and check the devtools console
    (`Ctrl+Shift+I`): `[hello-notes] saved: <path>`.
-5. Restart the app — the extension is still installed. Edit `extension.js`
+6. Restart the app — the extension is still installed. Edit `extension.js`
    and press **Reload** in the Extensions panel to pick up changes.
 
 ## What the API offers today
 
 - `context.commands.register(...)` — palette commands.
-- `context.workspace` — `createNote`, `openNote`, `readNote`, scoped to the
-  open workspace root.
+- `context.panels.register({ side, mount })` — a panel with its own icon in
+  the activity bar (`side: "left"`) or the title bar (`side: "right"`).
+- `context.workspace` — `createNote`, `openNote`, `readNote`, `writeNote`,
+  scoped to the open workspace root.
 - `context.events.on(...)` — typed app events: `note.opened`, `note.saved`,
   `note.created`, `workspace.opened`.
 - `context.settings` — namespaced settings with a declared schema.
 
-Panels declared by a disk-loaded extension are not rendered yet (the
-Extensions panel reports this when it strips them); built-in extensions
-already contribute panels that get their own activity-bar/title-bar icon.
+## Why panels are DOM, not React
+
+A built-in extension is compiled with the app and can return React from a
+panel factory. An extension loaded from disk is a pre-bundled module: any
+React it imported would be a *second copy* of the library, and hooks break
+across that boundary. So the contract for a disk extension is
+`mount(element, panel)` — you get an element, you own its contents, and you
+return an optional cleanup. Use any library you like inside it, or none.
+
+`panel.state` holds `rootPath` and `documentContents` at mount time;
+`panel.onDidChange(listener)` delivers later values, since a mounted panel is
+not re-invoked the way a React panel is re-rendered.
 
 This folder is loaded verbatim by an end-to-end test
 (`apps/desktop/e2e/extensions.spec.ts`), so the example cannot drift from

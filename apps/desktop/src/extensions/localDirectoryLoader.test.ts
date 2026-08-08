@@ -159,36 +159,17 @@ describe("createLocalDirectoryLoader", () => {
     expect(reads).toEqual(["extension.json"]);
   });
 
-  it("warns that declared panels are not loaded from disk yet", async () => {
+  it("keeps declared panels, which mount their own DOM", async () => {
+    const panels = [{ id: "stats", label: "Stats", icon: "S", side: "right" as const }];
     const result = await loader({
       ...validFiles,
       "extension.json": JSON.stringify({
         ...MANIFEST,
-        contributes: {
-          ...MANIFEST.contributes,
-          panels: [{ id: "stats", label: "Stats", icon: "S", side: "right" }]
-        }
+        contributes: { ...MANIFEST.contributes, panels }
       })
     }).load("/ext/sample");
 
-    expect(result.extension).not.toBeNull();
-    const panelWarning = result.diagnostics.find((d) => d.code === "panels_not_supported");
-    expect(panelWarning?.severity).toBe("warning");
-  });
-
-  it("strips declared panels so no stub is registered for them", async () => {
-    const result = await loader({
-      ...validFiles,
-      "extension.json": JSON.stringify({
-        ...MANIFEST,
-        contributes: {
-          ...MANIFEST.contributes,
-          panels: [{ id: "stats", label: "Stats", icon: "S", side: "right" }]
-        }
-      })
-    }).load("/ext/sample");
-
-    expect(result.extension?.manifest.contributes.panels).toEqual([]);
-    expect(result.extension?.manifest.contributes.commands).toHaveLength(1);
+    expect(result.extension?.manifest.contributes.panels).toEqual(panels);
+    expect(result.diagnostics.find((d) => d.code === "panels_not_supported")).toBeUndefined();
   });
 });

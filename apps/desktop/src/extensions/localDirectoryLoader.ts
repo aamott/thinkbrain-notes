@@ -84,34 +84,6 @@ function sourceUrlFor(directory: string, relativePath: string): string {
 }
 
 /**
- * Drops panel contributions, which a disk extension cannot supply yet.
- *
- * A panel factory returns a React node, and a bundled extension that imported
- * React would run against a second copy of the library. Supporting panels needs
- * a framework-neutral mount contract, which is the contribution-surfaces story.
- * Until then the declaration is reported and removed, so the bootstrap never
- * registers a stub that nothing can fulfil.
- */
-function withoutPanels(
-  manifest: ExtensionManifest,
-  diagnostics: ManifestDiagnostic[]
-): ExtensionManifest {
-  if (manifest.contributes.panels.length === 0) return manifest;
-
-  diagnostics.push({
-    code: "panels_not_supported",
-    message:
-      "Panels declared by a local extension are not loaded yet; its commands and settings still work.",
-    severity: "warning"
-  });
-
-  return {
-    ...manifest,
-    contributes: { ...manifest.contributes, panels: [] }
-  };
-}
-
-/**
  * Creates a loader for extension directories.
  *
  * @param options Injected file reader, module importer, and host descriptor.
@@ -184,7 +156,7 @@ export function createLocalDirectoryLoader(
     return {
       extension: {
         directory,
-        manifest: withoutPanels(parsed.manifest, diagnostics),
+        manifest: parsed.manifest,
         activate: validated.module.activate,
         deactivate: validated.module.deactivate
       },

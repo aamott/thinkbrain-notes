@@ -229,6 +229,84 @@ const NOTES_MANIFEST = {
 };
 
 /**
+ * A panel contributed from disk. The extension never imports React: it is
+ * handed an element and owns everything inside it, which is what lets a
+ * pre-bundled module contribute UI at all.
+ */
+const PANEL_EXTENSION_SOURCE = `
+export function activate(context) {
+  context.panels.register({
+    id: "board",
+    label: "Board",
+    icon: "▦",
+    side: "left",
+    mount: (element, mountContext) => {
+      const region = element.ownerDocument.createElement("section");
+      region.setAttribute("aria-label", "Board contents");
+      const status = element.ownerDocument.createElement("p");
+      const render = (state) => {
+        status.textContent = state.documentContents === null
+          ? "No note open"
+          : "Characters: " + state.documentContents.length;
+      };
+      render(mountContext.state);
+      mountContext.onDidChange(render);
+      region.append(status);
+      element.append(region);
+    }
+  });
+}
+`;
+
+const PANEL_MANIFEST = {
+  id: "board-ext",
+  name: "Board",
+  version: "1.0.0",
+  apiVersion: "^1.0.0",
+  engines: { platform: ["desktop"] },
+  activationEvents: ["onView:board"],
+  capabilities: [],
+  contributes: {
+    commands: [],
+    panels: [{ id: "board", label: "Board", icon: "▦", side: "left" }]
+  }
+};
+
+test("an extension loaded from disk gets its own activity-bar space and mounts its own DOM", async ({
+  page
+}) => {
+  await fakeExtensionDirectory(page, {
+    "extension.json": JSON.stringify(PANEL_MANIFEST),
+    "extension.js": PANEL_EXTENSION_SOURCE
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Extensions", exact: true }).click();
+  await page.getByRole("button", { name: "Add from folder…" }).click();
+  await expect(page.getByRole("list", { name: "Installed extensions" })).toContainText("Board");
+
+  // The panel is its own entry in the activity bar — not a child of the
+  // Extensions panel — and exists from the manifest, before any code runs.
+  const activityBar = page.getByRole("complementary", { name: "Workspace sections" });
+  const boardButton = activityBar.getByRole("button", { name: "Board", exact: true });
+  await expect(boardButton).toBeVisible();
+  await expect(page.getByRole("list", { name: "Installed extensions" })).toContainText(
+    "Not started"
+  );
+
+  // Opening it activates the extension, which mounts its own DOM in place of
+  // the placeholder.
+  await boardButton.click();
+  const boardContents = page.getByRole("region", { name: "Board contents" });
+  await expect(boardContents).toBeVisible();
+  await expect(boardContents).toHaveText("No note open");
+
+  // Opening the panel is what activated it: both are left-side panels, so the
+  // Extensions list has to be reopened to see the new status.
+  await activityBar.getByRole("button", { name: "Extensions", exact: true }).click();
+  await expect(page.getByRole("list", { name: "Installed extensions" })).toContainText("Active");
+});
+
+/**
  * The shipped example extension is real documentation: this test loads the
  * actual files from examples/extensions/hello-notes so the sample a user
  * follows can never drift from the platform it demonstrates.
@@ -295,9 +373,15 @@ test("the hello-notes example extension loads from its shipped files and capture
   );
 
   await page.goto("/");
-  await page.getByRole("button", { name: "Extensions", exact: true }).click();
+  const activityBar = page.getByRole("complementary", { name: "Workspace sections" });
+  await activityBar.getByRole("button", { name: "Extensions", exact: true }).click();
   await page.getByRole("button", { name: "Add from folder…" }).click();
   await expect(page.getByRole("list", { name: "Installed extensions" })).toContainText("Hello Notes");
+
+  // The example's panel takes its own place in the activity bar.
+  await activityBar.getByRole("button", { name: "Capture", exact: true }).click();
+  await expect(page.getByRole("button", { name: "New capture" })).toBeVisible();
+  await expect(page.getByText("Capturing into /vault")).toBeVisible();
 
   await page.keyboard.press("Control+p");
   await page.getByRole("combobox", { name: "Search commands" }).fill("Capture a note");

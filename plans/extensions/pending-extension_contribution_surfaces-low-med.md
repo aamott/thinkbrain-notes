@@ -2,7 +2,19 @@
 
 ## Status
 
-⬜ Focused child story. Existing command/panel/editor/settings contracts remain implemented; views, menus, context menus, themes, and additional editor actions are pending. D44's React editor-header slot is isolated in `pending-editor_header_contribution-high-med.md`.
+🟨 The panel mount contract is shipped; menus, context menus, themes, and
+additional editor actions are still pending. D44's React editor-header slot is
+isolated in `pending-editor_header_contribution-high-med.md`.
+
+An extension loaded from disk now contributes panels on equal footing with a
+built-in: `context.panels.register({ side, mount })` takes a framework-neutral
+`mount(element, panel)` that owns the element's contents and returns an
+optional cleanup. `apps/desktop/src/panels/extensionPanelMount.tsx` adapts it
+to the React factory the registry stores, so the activity bar (left) and title
+bar (right) render both kinds identically, and the loader no longer strips
+declared panels. Host state reaches a mounted panel through `panel.state` at
+mount time and `panel.onDidChange(listener)` afterwards; only `rootPath` and
+`documentContents` are forwarded, never the shell's React props.
 
 ## Goal
 
@@ -64,11 +76,15 @@ Deliver the approved contribution matrix, likely-file diff, typed contracts/test
 - `plans/extensions/done-extension_manifest_format-low-med.md`
 - `plans/extensions/done-extension_lifecycle_bootstrap-low-med.md`
 
-## Blocked-on note from the loader story
+## Resolved: the loader story's blocked-on note
 
-A locally loaded extension cannot contribute a panel today. `DesktopPanelContribution.factory`
-returns a `ReactNode`, and a pre-bundled extension that imports React runs against a
-second copy of the library, breaking hooks across the boundary. The loader reports
-and strips declared panels. This story owns the fix: a framework-neutral mount
-contract (the extension receives an element and owns its contents), which is a
-public API and must be designed on its own terms.
+A locally loaded extension could not contribute a panel, because
+`DesktopPanelContribution.factory` returns a `ReactNode` and a pre-bundled
+extension that imports React runs against a second copy of the library. Fixed
+by the mount contract described under Status; the loader's `panels_not_supported`
+diagnostic is gone. `examples/extensions/hello-notes` contributes a panel this
+way and is loaded verbatim by an end-to-end test.
+
+Remaining panel-adjacent gaps: a mounted panel cannot yet contribute toolbar
+actions or a title-bar affordance of its own, and there is no styling contract
+beyond whatever DOM the extension writes.
