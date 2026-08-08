@@ -4,6 +4,7 @@ import {
   type NativeWorkspaceEntry,
   type NativeWorkspaceSnapshot
 } from "../native/commands";
+import { appEvents } from "../events/appEvents";
 
 export interface WorkspaceDesktopApi {
   pickWorkspaceDirectory(): Promise<string | null>;
@@ -39,8 +40,13 @@ export const workspaceDesktopApi: WorkspaceDesktopApi = {
 
     return typeof selection === "string" ? selection : null;
   },
-  openWorkspace(rootPath) {
-    return invokeNativeCommand("open_workspace", { rootPath });
+  // Every workspace load funnels through here — explicit opens and startup
+  // restores alike — so this is the one place `workspace.opened` can be
+  // emitted without missing a path.
+  async openWorkspace(rootPath) {
+    const snapshot = await invokeNativeCommand("open_workspace", { rootPath });
+    appEvents.emit("workspace.opened", { rootPath });
+    return snapshot;
   },
   listWorkspaceEntries(rootPath, includeHidden) {
     return invokeNativeCommand("list_workspace_entries", { rootPath, includeHidden });

@@ -2,7 +2,14 @@
 
 ## Status
 
-⬜ Focused child story. Typed event and task contracts are not implemented; lifecycle disposal remains the owner of cleanup.
+🟨 App-event subscriptions are shipped; custom extension-emitted events and
+background tasks remain. `packages/core/src/extensions/events.ts` provides the
+typed bus with listener-failure isolation; `apps/desktop/src/events/appEvents.ts`
+defines the beta app-event map (`note.opened`, `note.saved`, `note.created`,
+`workspace.opened`); emissions live at the single chokepoints
+(`workspaceDocumentAdapter`, `workspaceAdapter`, `DesktopShell.openMarkdownDocument`);
+`context.events.on()` scopes each subscription to the activation disposable
+scope. Lifecycle disposal remains the owner of cleanup.
 
 ## Goal
 

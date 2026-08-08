@@ -196,6 +196,12 @@ test("reports a broken extension directory without registering anything", async 
  */
 const NOTES_EXTENSION_SOURCE = `
 export function activate(context) {
+  context.events.on("note.created", (event) => {
+    window.recordEvent?.("created:" + event.relativePath);
+  });
+  context.events.on("note.opened", (event) => {
+    window.recordEvent?.("opened:" + event.relativePath);
+  });
   context.commands.register({
     id: "capture",
     title: "Capture note",
@@ -221,7 +227,9 @@ const NOTES_MANIFEST = {
 
 test("an extension creates a note and opens it through the workspace API", async ({ page }) => {
   const created: string[] = [];
+  const events: string[] = [];
   await page.exposeFunction("recordCreate", (path: string) => created.push(path));
+  await page.exposeFunction("recordEvent", (event: string) => events.push(event));
 
   await page.addInitScript(
     ({ files }) => {
@@ -284,4 +292,8 @@ test("an extension creates a note and opens it through the workspace API", async
   // The note was written through the native bridge and opened as an editor tab.
   await expect.poll(() => created).toContain("captured.md");
   await expect(page.getByRole("navigation", { name: "Open tabs" })).toContainText("captured.md");
+
+  // The same extension observed both moments through context.events.
+  await expect.poll(() => events).toContain("created:captured.md");
+  await expect.poll(() => events).toContain("opened:captured.md");
 });

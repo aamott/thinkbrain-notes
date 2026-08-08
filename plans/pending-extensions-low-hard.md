@@ -203,7 +203,8 @@ Focused follow-up stories:
 - `plans/extensions/done-extension_capability_compatibility-low-med.md` — shipped
   soft capability/API/platform compatibility results; not a security sandbox.
 - `plans/extensions/done-extension_local_directory_loader-low-med.md` — shipped
-  trusted local-directory module loading and reload semantics; Blob URL cleanup remains open.
+  trusted local-directory module loading and reload semantics; entry blob urls
+  are revoked as soon as the import settles.
 - `plans/extensions/done-extension_lifecycle_bootstrap-low-med.md` — shipped
   manifest runtime, startup/command/view activation, desktop bootstrap, and shutdown;
   `onLanguage` remains unsupported.
@@ -267,8 +268,7 @@ are not yet formalized, the first story here should establish them.
 - 🟨 Lifecycle/disposable ownership and scoped settings runtime are implemented
   and tested. Manifest parsing, compatibility evaluation, local-directory loading,
   and bootstrap are shipped for the trusted beta path; remaining gaps are
-  unsupported `onLanguage`, duplicate-id diagnostics, successful local Blob URL
-  cleanup, and local panel mounting.
+  unsupported `onLanguage`, duplicate-id diagnostics, and local panel mounting.
 - ✅ Manifest parser/schema — `plans/extensions/done-extension_manifest_format-low-med.md`.
 - ✅ Soft capability/API/platform compatibility —
   `plans/extensions/done-extension_capability_compatibility-low-med.md`.
@@ -279,7 +279,11 @@ are not yet formalized, the first story here should establish them.
   extensions contribute commands and settings; declared panels are reported and
   skipped until `pending-extension_contribution_surfaces` defines a
   framework-neutral mount contract. Directory persistence across restarts is
-  `plans/extensions/pending-local_extension_directory_persistence-low-easy.md`.
+  shipped — `plans/extensions/done-local_extension_directory_persistence-low-easy.md`.
+- 🟨 App events — typed `context.events` subscriptions for `note.opened`,
+  `note.saved`, `note.created`, and `workspace.opened`, scoped to the activation
+  and isolated per listener. Custom extension-emitted events and background
+  tasks remain in `plans/extensions/pending-extension_events_tasks-low-med.md`.
 - ✅ Lifecycle/bootstrap integration —
   `plans/extensions/done-extension_lifecycle_bootstrap-low-med.md`. Built-ins are
   registered from manifests at startup and activated lazily via contribution

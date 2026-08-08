@@ -6,6 +6,7 @@ import {
   type DesktopCommand,
   type DesktopCommandContext
 } from "../commands/commandRegistry";
+import { appEvents } from "../events/appEvents";
 import { setWorkspaceBridge } from "../extensions/workspaceBridge";
 import { gitService } from "../git/gitService";
 import { BottomPanel as BottomPanelContent } from "../panels/BottomPanel";
@@ -277,6 +278,7 @@ export function DesktopShell() {
   const openMarkdownDocument = useCallback((rootPath: string, relativePath: string) => {
     const tab = createEditorTab({ rootPath, relativePath });
     dispatchTabs({ type: "open", tab });
+    appEvents.emit("note.opened", { rootPath, relativePath });
 
     if (documentsRef.current[tab.id]) return;
     setDocuments((current) => ({

@@ -9,6 +9,7 @@ import {
   appSettingsRegistry,
   useSettingsStore
 } from "../settings/settingsStore";
+import { appEvents } from "../events/appEvents";
 import { desktopCommandRegistry } from "../commands/commandRegistry";
 import { createDesktopTabRegistry } from "../tabs/tabRegistry";
 import { desktopPanelRegistry } from "../panels/panelRegistry";
@@ -198,6 +199,36 @@ describe("desktop extension host", () => {
     await host.deactivate("returned");
     expect(disposed).toBe(1);
 
+  });
+});
+
+describe("app events", () => {
+  it("delivers app events to an active extension and stops after deactivate", async () => {
+    const received: unknown[] = [];
+    const host = createDesktopExtensionHost();
+    host.register(definition("listener", (context) => {
+      context.events.on("note.saved", (event) => received.push(event));
+    }));
+    await host.activate("listener");
+
+    appEvents.emit("note.saved", { rootPath: "/vault", relativePath: "a.md" });
+    expect(received).toEqual([{ rootPath: "/vault", relativePath: "a.md" }]);
+
+    await host.deactivate("listener");
+    appEvents.emit("note.saved", { rootPath: "/vault", relativePath: "b.md" });
+    expect(received).toHaveLength(1);
+  });
+
+  it("rejects a subscription after the extension deactivates", async () => {
+    let context: DesktopExtensionContext | undefined;
+    const host = createDesktopExtensionHost();
+    host.register(definition("late", (received) => {
+      context = received;
+    }));
+    await host.activate("late");
+    await host.deactivate("late");
+
+    expect(() => context?.events.on("note.saved", () => undefined)).toThrow("no longer active");
   });
 });
 

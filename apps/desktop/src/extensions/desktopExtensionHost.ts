@@ -23,6 +23,7 @@ import {
   type MarkdownEditorHookPayload
 } from "../tabs/markdownEditorHooks";
 import { desktopTabRegistry, type DesktopTabView } from "../tabs/tabRegistry";
+import { appEvents, type AppEvents } from "../events/appEvents";
 import { workspaceDocumentApi } from "../workspace/workspaceDocumentAdapter";
 import { createExtensionWorkspace, type DesktopExtensionWorkspace } from "./extensionWorkspace";
 import { getWorkspaceBridge } from "./workspaceBridge";
@@ -80,6 +81,15 @@ export interface DesktopExtensionTabContributions {
   register(tab: DesktopExtensionTab): Disposable;
 }
 
+/** App-event subscriptions scoped to one extension's activation. */
+export interface DesktopExtensionEvents {
+  /** Subscribes until disposed or the extension deactivates. */
+  on<Name extends keyof AppEvents & string>(
+    event: Name,
+    listener: (payload: AppEvents[Name]) => void
+  ): Disposable;
+}
+
 /** The desktop context layered over the platform-neutral core context. */
 export interface DesktopExtensionContext extends ExtensionContext {
   readonly commands: DesktopExtensionContributions;
@@ -87,6 +97,8 @@ export interface DesktopExtensionContext extends ExtensionContext {
   readonly editorHooks: DesktopExtensionEditorHookContributions;
   readonly tabs: DesktopExtensionTabContributions;
   readonly settings: DesktopExtensionSettings;
+  /** Notifies about app events such as notes being saved or created. */
+  readonly events: DesktopExtensionEvents;
   /** Reads, writes, creates, and opens notes in the current workspace. */
   readonly workspace: DesktopExtensionWorkspace;
 }
@@ -307,6 +319,12 @@ function createDesktopExtensionContext(
           ...tab,
           kind: prefixId(context.extensionId, "Tab", tab.kind)
         }), assertActive);
+      }
+    },
+    events: {
+      on: (event, listener) => {
+        assertActive();
+        return own(context, appEvents.on(event, listener), assertActive);
       }
     },
     workspace: extensionWorkspace,
