@@ -1,41 +1,33 @@
 # Technical Decisions
 
-> Cross-cutting implementation decisions. This is a reference document, not an
-> epic. Read alongside `plans/app-vision.md` for full context.
+> Cross-cutting implementation decisions. Reference document, not an epic.
+> Read alongside `plans/app-vision.md` for full context.
 
 ## Platform
 
-Decision: Build a cross-platform application, desktop-first.
+Decision: Cross-platform, desktop-first.
 
 - Frontend: React, TypeScript, Vite
 - Desktop shell/native bridge: Tauri v2
 - Backend/native code: Rust
-- Mobile (Phase 2): Tauri Mobile for Android/iOS — same webview stack as
-  desktop, not a separate app
-
-Mobile is a responsive variant of the desktop app, not a separate codebase.
-Tauri v2 Mobile uses the same webview as desktop, so the entire React frontend,
-`packages/ui`, CodeMirror 6, and the adapter pattern are reused. Mobile is a
-build target of `apps/desktop/` (via `tauri android init` / `tauri ios init`),
-not a separate `apps/mobile/` directory. The shared-core architecture and
-platform adapter interfaces are designed from day one so that `packages/core`
-never couples to desktop-only APIs; mobile reuses the same Tauri adapters as
-desktop (no separate Expo/native adapters).
+- Mobile (Phase 2): Tauri Mobile for Android/iOS — same webview stack, not a
+  separate app or codebase. Mobile is a build target of `apps/desktop/`
+  (`tauri android init` / `tauri ios init`), reusing the full React frontend,
+  `packages/ui`, CodeMirror 6, and Tauri adapters. `packages/core` never
+  couples to desktop-only APIs.
 
 ### Known Tauri Mobile limitations
 
-- Android keyboard / `visualViewport` issue (tauri-apps/tauri#10631) affects
-  text editing — the webview viewport does not resize correctly when the soft
-  keyboard opens. Must be verified and worked around before mobile editing
-  ships.
+- Android keyboard / `visualViewport` issue (tauri-apps/tauri#10631) — webview
+  viewport doesn't resize when soft keyboard opens. Must be worked around
+  before mobile editing ships.
 - CodeMirror 6 mobile quirks (Android scrolling, IME/Gboard, iOS touch
   selection) need explicit testing and likely fixes.
 - Single webview only — not a problem for this app.
 
 ## Repository Structure
 
-Decision: Use a workspace-style repository with platform-specific apps and
-shared packages.
+Decision: Workspace-style repo with platform-specific apps and shared packages.
 
 ```text
 apps/
@@ -48,208 +40,157 @@ packages/
   ui/               # React (DOM) components — shared by desktop and mobile
 ```
 
-There is no `apps/mobile/` directory. Mobile is a Tauri Mobile build target of
-`apps/desktop/` (via `tauri android init` / `tauri ios init`), using the same
-webview, the same React frontend, the same `packages/ui`, and the same Tauri
-adapters. Mobile uses the same CSS design tokens as desktop — there is no
-separate token mapping or `StyleSheet` layer.
+No `apps/mobile/` directory. Don't split `packages/core` into many packages
+until complexity justifies it.
 
-Do not split `packages/core` into many packages until the codebase has enough
-complexity to justify it.
+## Package Manager
 
-## Package Manager and Build Orchestration
+Decision: `pnpm` workspaces without Turborepo for MVP.
 
-Decision: Use `pnpm` workspaces without Turborepo for MVP.
-
-- `pnpm` is stable, widely supported, and works well with Tauri/Vite/React.
-- Bun is fast, but `pnpm` is the safer default for broad dependency compatibility.
-- Turborepo can be added later if build orchestration becomes painful.
+`pnpm` is stable and works well with Tauri/Vite/React. Turborepo can be added
+later if build orchestration becomes painful.
 
 ## Editor
 
-Decision: Use CodeMirror 6 directly for the Markdown editor.
+Decision: CodeMirror 6 directly for the Markdown editor.
 
-Do not use Monaco or `@uiw/react-md-editor` unless this decision is explicitly
-changed.
+Do not use Monaco or `@uiw/react-md-editor` unless explicitly changed.
 
 ## Storage
 
 Decision: Markdown files are the source of truth.
 
-- Notes are normal `.md` files.
-- Metadata uses YAML frontmatter.
+- Notes are normal `.md` files; metadata uses YAML frontmatter.
 - Attachments are normal files referenced by relative paths.
-- User-owned canvas documents are the explicit non-Markdown vault-file exception:
-  `.canvas` JSON stores sticky-note/whiteboard document structure. Canvas settings,
-  cache, and viewport/session state remain outside the vault in OS app-data/config.
-- No proprietary note format is allowed.
+- No proprietary note format.
+- Canvas documents (`.canvas` JSON) are the explicit non-Markdown vault-file
+  exception — see `plans/pending-canvas-low-hard.md`. Canvas settings, cache,
+  and viewport/session state remain outside the vault in OS app-data/config.
 
 ## Database and Indexes
 
-Decision: Use SQLite FTS5 as a disposable cache for indexing and search.
+Decision: SQLite FTS5 as a disposable cache for indexing and search.
 
-- SQLite must never be the source of truth.
-- The index must be rebuildable from workspace files.
-- Database files must be stored in the OS application-data directory, not inside
-  the workspace/vault.
-- Prefer implementing SQLite/indexing through the Tauri/Rust layer so filesystem
-  access, app-data paths, background work, and database behavior stay native and
-  predictable.
+- SQLite is never the source of truth; the index is rebuildable from workspace
+  files.
+- Database files live in OS app-data, not inside the workspace/vault.
+- Implement through the Tauri/Rust layer so filesystem access, app-data paths,
+  background work, and database behavior stay native and predictable.
 
 ## Search
 
-Decision: MVP search supports Markdown text, filenames, tags, and aliases using
+Decision: MVP search supports Markdown text, filenames, tags, and aliases via
 SQLite FTS5.
 
 ## Git
 
-Decision: Use system Git for MVP.
+Decision: System Git for MVP.
 
-- Invoke installed Git binaries through the desktop/native layer.
-- Do not implement embedded Git for MVP.
+Invoke installed Git binaries through the native layer. No embedded Git.
 
 ## Settings
 
-Decision: Use human-readable JSON settings.
+Decision: Human-readable JSON settings.
 
-Settings levels:
+Levels:
 1. Application settings
-2. Workspace settings stored outside the workspace
-3. Extension settings, deferred until the `extensions` epic is active; when
-   implemented, non-secret values reuse the registry through extension-scoped
-   namespaces
+2. Workspace settings (stored outside workspace, in OS app-data/config, keyed
+   by workspace identity/path)
+3. Extension settings — deferred until `extensions` epic; non-secret values
+   reuse the registry through extension-scoped namespaces
 
-Workspace settings must live in the OS application-data/config area, keyed by
-workspace identity/path. Do not place app settings files inside the user's
-workspace.
+Never place app settings files inside the user's workspace.
 
 ## Extensions
 
-Decision: For the foreseeable beta, extensions are trusted local, same-context
-JavaScript modules. Maintainability and easy development take priority over
-hostile-extension isolation. Built-ins ship first; local-directory development
-loading is the primary development path, and later install-from-file may warn
-that an extension runs with app privileges.
+Decision: Trusted local, same-context JavaScript modules for the foreseeable
+beta. Maintainability and easy development over hostile-extension isolation.
+Built-ins ship first; local-directory loading is the primary dev path.
 
 Capabilities are soft declarations and compatibility gates, not a security
-sandbox. They document intended access, allow the app to disable or warn about
-unsupported features (including platform-specific features), and must not be
-presented as adversarial isolation. Defer install-from-URL, signing,
-marketplace/discovery, and strong process/iframe isolation.
+sandbox. They document intended access and allow disabling/warning about
+unsupported features. Defer install-from-URL, signing, marketplace/discovery,
+and strong process/iframe isolation.
 
-Non-secret extension settings reuse the existing JSON settings registry through
-extension-scoped, namespaced APIs and remain outside the workspace. Credentials
-never live in JSON: the Rust/native layer uses the OS secret store through
-platform adapters. An encrypted app-data fallback is an explicitly deferred
-security decision, not an assumed or current storage path. APIs return scoped
-operations and never bulk/raw cross-extension secrets. See
+Non-secret extension settings reuse the JSON registry via extension-scoped
+namespaced APIs, outside the workspace. Credentials never live in JSON — the
+Rust layer uses the OS secret store. Encrypted app-data fallback is explicitly
+deferred. See
 `plans/extensions/pending-extension_secret_storage-med-hard.md`.
 
 Every extension activation owns a disposable resource scope. Commands, panels,
-event subscriptions, timers, file watchers, background tasks, and other
-registered resources must be disposed automatically on deactivation, unload, and
-failed activation.
+event subscriptions, timers, file watchers, and background tasks are disposed
+automatically on deactivation, unload, and failed activation.
 
 ## UI Components and Themes
 
-Decision: Build `packages/ui` early using reusable React components, CSS
-variables, and accessibility-focused primitives.
+Decision: `packages/ui` with reusable React components, Tailwind v4 utilities,
+and `--tn-*` CSS token variables.
 
-- Use custom app components backed by Radix UI-style primitives where useful.
-- Avoid a heavy, opinionated component framework that fights a desktop/editor UI.
-- Theme tokens should be CSS variables.
-- No inline styles (`style={{}}` or `<style>` in JSX). Use CSS Modules
-  (`*.module.css`) co-located with components. Shared tokens/themes as CSS
-  variables in `packages/ui`. Mobile uses the same CSS tokens as desktop
-  (same webview, no `StyleSheet` layer).
-
-MVP may include built-in themes and theme tokens. Third-party theme packages are
-deferred until the `extensions` epic is active.
+- shadcn/ui components built on Radix UI primitives where useful.
+- No heavy, opinionated component framework that fights a desktop/editor UI.
+- Theme tokens are CSS variables in `packages/ui/src/styles/tokens.css`,
+  switched via `[data-thinkbrain-theme]`. Mobile uses the same tokens.
+- No inline styles for static styling — use Tailwind utilities. Dynamic
+  computed values (tree-depth padding, pixel positioning) are acceptable
+  exceptions. Runtime panel dimensions use scoped CSSOM custom properties on
+  the shell root, not JSX `style` props.
+- Built-in themes and tokens for MVP. Third-party theme packages deferred
+  until `extensions` epic.
 
 ### Desktop shell visual system
 
-Decision: The desktop shell uses React components with co-located CSS Modules,
-shared `--tn-*` tokens, existing stores, and real feature boundaries. Do not
-restore the older movable-action/slot layout design.
+Decision: React components with Tailwind utilities, shared `--tn-*` tokens,
+existing stores, and real feature boundaries. Do not restore the older
+movable-action/slot layout design.
 
-The shared token set includes chrome-specific semantic surfaces: title bar,
-activity bar, sidebar, editor, panel, status bar, and active/inactive tabs in
-both light and dark themes. Runtime panel dimensions are the sole exception to
-the no-inline-styles rule: write scoped custom properties through CSSOM on the
-shell root; do not use JSX `style` props.
+Chrome-specific semantic surfaces in the token set: title bar, activity bar,
+sidebar, editor, panel, status bar, and active/inactive tabs (light + dark).
 
 Browser tabs are registered as an unavailable tab kind until a separate
 security decision approves a Tauri webview strategy, navigation policy, and
-capability/CSP boundary. Do not use a raw iframe as a shortcut.
+CSP/capability boundary. No raw iframe shortcut.
 
 Production lint covers `apps/` and `packages/` without suppressing errors.
 
 ## AI
 
-Decision: AI remains optional and is implemented only through the `ai` epic.
+Decision: AI is optional, implemented only through the `ai` epic.
 
 - Desktop agent chat uses `@assistant-ui/react` with
-  `useExternalStoreRuntime`. The renderer owns message state and consumes
-  typed Tauri events directly; there is no transport/provider-abstraction
-  layer in the renderer.
-- ACP is the host-to-agent protocol and lives in Rust, using the official
-  `agent-client-protocol` Rust crate. Rust owns the full ACP client lifecycle
+  `useExternalStoreRuntime`. Renderer owns message state and consumes typed
+  Tauri events directly — no transport/provider-abstraction layer in the
+  renderer.
+- ACP is the host-to-agent protocol, lives in Rust via the
+  `agent-client-protocol` crate. Rust owns the full ACP client lifecycle
   (`initialize`, `session/new`, `session/prompt`, `session/update`,
   `session/cancel`, later `session/request_permission`) and emits typed Tauri
-  events filtered by session ID. The renderer never imports
+  events filtered by session ID. Renderer never imports
   `@agentclientprotocol/sdk`.
-- The Rust/native gateway owns provider calls, cancellation, credentials, and
-  outbound network policy. Renderer code never stores or receives provider
-  secrets. Chat history is stored locally in OS app-data through an
-  assistant-ui history adapter; Assistant Cloud is off by default.
-- The host is deterministic and does not duplicate agent reasoning or merge
-  conflicts. ACP filesystem/terminal permission is separately requested and
-  enforced by the native host (allow once / always / deny).
+- Rust/native gateway owns provider calls, cancellation, credentials, and
+  outbound network policy. Renderer never stores/receives provider secrets.
+  Chat history stored locally in OS app-data; Assistant Cloud off by default.
+- Host is deterministic — does not duplicate agent reasoning or merge
+  conflicts. ACP filesystem/terminal permission separately requested and
+  enforced by native host (allow once / always / deny).
 - Cloud model use and sending note/workspace context require explicit consent.
 
-ACP permission requests carry the agent-provided options and tool-call update
-for a specific session. The renderer presents the information; the native ACP
-host enforces the user's answer and does not reconstruct an agent plan.
-
-## Proposed Confirmations for Mockup v3
-
-These are the recommended defaults reflected in `ui-shell` and `ai`; confirm
-them before implementation begins because changing any one expands the work.
-
-1. **Styling:** keep CSS Modules and shared `--tn-*` tokens. Do not adopt
-   Tailwind in production just because the mockup uses it.
-2. **Dynamic panel widths:** use scoped CSSOM custom-property updates, not JSX
-   inline styles or a finite set of `data-*` width buckets.
-3. **Desktop chat transport:** use custom Tauri IPC/native-event transport,
-   not a local HTTP server or an assumed `/api/chat` endpoint.
-4. **AI versus ACP:** ship model chat and explicit ACP Agent sessions as
-   separate modes that share assistant-ui presentation but not a wire protocol.
-5. **Browser tabs:** retain an unavailable tab placeholder until a dedicated
-   webview security, navigation, and CSP/capability decision is approved.
-6. **Extensions panel:** render a clearly unavailable panel; do not pull
-   marketplace/installation work forward from the `extensions` epic.
-
-## Sync
-
-Decision: Built-in cloud sync is deferred.
-
-The project follows Bring Your Own Sync. MVP must avoid storing app caches in the
-workspace so users can safely use external sync tools.
+ACP permission requests carry agent-provided options and tool-call updates per
+session. Renderer presents the information; native host enforces the user's
+answer and does not reconstruct an agent plan.
 
 ## State Management
 
-Decision: Use Zustand for MVP app/UI state.
+Decision: Zustand for MVP app/UI state.
 
-Zustand is lightweight, simple, and appropriate for editor tabs, active
-workspace/document state, sidebar state, indexing status, and settings state.
+Lightweight and appropriate for editor tabs, active workspace/document state,
+sidebar state, indexing status, and settings.
 
 ## Frontmatter Mutation Policy
 
-Decision: Opening, indexing, or searching a note must not rewrite the note.
+Decision: Opening, indexing, or searching a note must not rewrite it.
 
-The app manages `created_at` and `updated_at` frontmatter fields during explicit
-note creation/save operations:
-- `created_at` is set when the app creates a new note if the field is missing.
-- `updated_at` is updated when the user explicitly saves a note through the app.
-- Indexing and opening a note must not update timestamps.
+- `created_at` set on new note creation if field is missing.
+- `updated_at` updated on explicit user save through the app.
+- Indexing and opening must not update timestamps.
 - Unknown frontmatter fields must be preserved.
