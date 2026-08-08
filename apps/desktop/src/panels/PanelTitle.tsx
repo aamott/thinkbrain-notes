@@ -50,7 +50,7 @@ export function PanelTitle({
           </button>
         ))}
         <button
-          className="bg-transparent border-0 cursor-pointer tracking-[0.12em]"
+          className="bg-transparent border-0 cursor-pointer px-1 text-[0.68rem] text-muted-foreground hover:text-foreground"
           aria-label={`More ${title} actions`}
         >
           •••
