@@ -2,22 +2,25 @@
 
 These are random issues or shortcomings users have noted. They may or may not be mentioned in plans or fully planned out. Some are just too small to put into stories and could be wiped out in minutes, others take significant time. 
 
+## Themes
+- [ ] Forest theme background is too dark. Needs a little more gray tones where right now it's straight black.
 
 ## Editor
-- [ ] Only markdown files can be edited. Any filetype that can reasonably be edited or viewed should be able to be. If a file can't be edited, clicking it should open something in the canvas with an optino to open in the system's default app. 
-- [ ] Markdown preview style editor is not implemented. Goal is obsidian-style, where you can see the markdown rendered, but when the cursor is on the same line all markdown symbols are shown, and when it leaves the line markdown symbols are hidden. You make edits by adding markdown symbols, or if you press ctrl+i for example the system puts symbols to make it italic. 
-
-
-## Extensions
-- [ ] Not sure if extensions are planned out. Extensions should allow for custom functionality and features.
-   - [ ] Example: A journal and journaling calendar. Activity bar has two new buttons, one for the journal and one for the calendar. The journal button opens a left popout with a list of journal entries, and the calendar button opens a left popout with a calendar view, options to show days with journal entries, mood by day, activity by day, etc. Journal entries are stored in a configurable folder in the workspace with configurable markdown names for each entry, optionally stored in folders by week, month, and/or year. Default month and year. Mobile friendly design.
-
-## Themes
-- [ ] Themes should be modular and stored in a single file. Importing and exporting themes involves only that one file. It should be easy to improve the UI and have themes automatically applied, using system colors rather than hard rgb values for example. Account for anything I might be missing here. 
-
+- [ ] Only markdown files can be edited. Any filetype that can reasonably be edited or viewed should be able to be. If a file can't be edited, clicking it should open something in the canvas with an option to open in the system's default app. 
+  - Types of files: text-based (code, markdown, txt, etc.), images, videos, audio, pdf (if easy), etc.
 
 ## Workspace Viewer
-- [ ] File icons should represent the current file and show color. They exist to a degree but should include everything from mp3 to markdown to docx. Should be adaptable to different themes.
+- [ ] File icons should represent the current file and be themed. They exist to a degree but should include everything from mp3 to markdown to docx. Should be adaptable to different themes.
+- [ ] Themes should be able to use custom icon set per filetype and either fall back to app defaults or their own fallback.
 
 ## Other
-- [ ] Agent chat (ACP) still needs to be implemented as an extension. When implemented, it should be in the action items menu. Right panel should be collapsed by default.
+- [ ] Right panel should be collapsed by default.
+- [ ] Add command palette button to the left of tabs, right of logo, very top left.
+- [ ] Remember tabs on reload. Currently all tabs close on reload/exit.
+- [ ] Action items menu buttons are too close together. Light/dark toggle should be removed (outdated/no longer connected. Replaced by themes.)
+
+
+## Settings
+- [ ] Settings should be single-page scrollable, and the nav should scroll to sections and highlight the current section (without causing glitchy scrolling that jumps up and down), and when the canvas gets below a certain size the settings nav should collapse to a hamburger menu. Right now it's all separate pages per subsection. It should be optimized for thousands of settings, just in case of expansion.
+- [ ] Search should search all settings content, not just section titles.
+- [ ] BUG: Switching away from unsaved settings and switching back resets settings.

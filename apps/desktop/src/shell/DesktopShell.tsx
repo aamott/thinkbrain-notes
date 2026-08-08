@@ -64,7 +64,7 @@ export function DesktopShell() {
   const documentsRef = useRef(documents);
   const paletteRestoreFocusRef = useRef<HTMLElement | null>(null);
   const [leftPanel, setLeftPanel] = useState<LeftPanel | null>("explorer");
-  const [rightPanel, setRightPanel] = useState<RightPanel | null>("outline");
+  const [rightPanel, setRightPanel] = useState<RightPanel | null>(null);
   const [bottomPanel, setBottomPanel] = useState<BottomPanel | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const { theme, setTheme } = useTheme();
@@ -447,11 +447,12 @@ export function DesktopShell() {
   }, [closePalette, openPalette, paletteOpen, selectLeftPanel, toggleBottomPanel]);
 
   // Dock widths are published as CSS custom properties so the popouts can size
-  // themselves from tokens instead of inline styles.
+  // themselves from tokens instead of inline styles. A collapsed dock publishes
+  // 0 so the title bar and other consumers release the reserved space.
   useEffect(() => {
     leftWidthRef.current = leftWidth;
-    rootRef.current?.style.setProperty("--tn-shell-left-width", `${leftWidth}px`);
-  }, [leftWidth]);
+    rootRef.current?.style.setProperty("--tn-shell-left-width", leftPanel ? `${leftWidth}px` : "0px");
+  }, [leftWidth, leftPanel]);
 
   useEffect(() => {
     rightWidthRef.current = rightWidth;
@@ -526,11 +527,10 @@ export function DesktopShell() {
         tabs={tabState.tabs}
         activeTabId={tabState.activeTabId}
         rightPanel={rightPanel}
-        theme={theme}
         onSelectTab={(tabId) => dispatchTabs({ type: "activate", tabId })}
         onRequestCloseTab={(tabId) => dispatchTabs({ type: "requestClose", tabId })}
         onToggleRightPanel={(panel) => setRightPanel((current) => current === panel ? null : panel)}
-        onToggleTheme={() => setTheme(theme === "dark" ? "light" : "dark")}
+        onOpenCommandPalette={openPalette}
       />
 
       <div className="flex min-h-0 max-[760px]:relative">

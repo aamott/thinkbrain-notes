@@ -53,14 +53,16 @@ describe("DesktopShell composition", () => {
     expect(markup).toContain('title="Settings"');
   });
 
-  it("keeps the editor region and both dock landmarks in the layout", () => {
+  it("keeps the editor region and left dock landmark in the layout", () => {
     const markup = shellMarkup();
 
     expect(markup).toContain('aria-label="Note workspace"');
     expect(markup).toContain('aria-label="Explorer panel"');
-    expect(markup).toContain('aria-label="Outline panel"');
+    // The right dock is collapsed by default, so neither its panel nor its
+    // resize handle should be present on first render.
+    expect(markup).not.toContain('aria-label="Outline panel"');
     expect(markup).toContain('aria-label="Resize left panel. Use arrow keys to resize."');
-    expect(markup).toContain('aria-label="Resize right panel. Use arrow keys to resize."');
+    expect(markup).not.toContain('aria-label="Resize right panel. Use arrow keys to resize."');
   });
 
   it("reports an empty workspace in the status bar before a workspace is opened", () => {

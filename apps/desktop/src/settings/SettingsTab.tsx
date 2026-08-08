@@ -41,6 +41,14 @@ export function SettingsTab() {
     // exists. `windowWorkspaceRoot` resolves to null when no workspace is open.
     void (async () => {
       const root = await workspaceDesktopApi.windowWorkspaceRoot();
+      // Skip the reload on remount when the store already holds settings for
+      // the same workspace root. The store is a module-level singleton, so
+      // `loaded` and `workspaceRootPath` survive tab unmount/remount — but the
+      // component-local `loadedRef` does not, so without this guard a remount
+      // would call `loadSettings`, which clears `stagedChanges` and loses any
+      // unsaved edits the user staged before switching tabs.
+      const { loaded, workspaceRootPath } = useSettingsStore.getState();
+      if (loaded && workspaceRootPath === root) return;
       await loadSettings(root);
     })();
   }, [loadSettings]);
