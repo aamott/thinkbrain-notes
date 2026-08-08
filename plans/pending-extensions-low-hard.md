@@ -279,6 +279,9 @@ are not yet formalized, the first story here should establish them.
   extensions contribute commands, settings, and panels. Directory persistence
   across restarts is shipped —
   `plans/extensions/done-local_extension_directory_persistence-low-easy.md`.
+- ✅ Extension workspace/tab APIs — `context.workspace.listNotes(prefix)` (Markdown only,
+  folder-prefix matched, with modified times) and `context.tabs.open(kind, title)` scoped to
+  kinds the calling extension registered. Closes D68/D69 for the journal.
 - 🟨 Panel mount contract — a disk extension contributes panels with
   `mount(element, panel)` and gets its own activity-bar (left) or title-bar
   (right) entry, identical to a built-in's, plus `actions` rendered as buttons

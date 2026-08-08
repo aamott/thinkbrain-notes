@@ -487,3 +487,106 @@ test("an extension creates a note and opens it through the workspace API", async
   await expect.poll(() => events).toContain("created:captured.md");
   await expect.poll(() => events).toContain("opened:captured.md");
 });
+
+/**
+ * The two APIs the journal needs: listing notes, and opening a tab of a kind
+ * the extension itself contributed.
+ */
+const LISTING_EXTENSION_SOURCE = `
+export function activate(context) {
+  context.tabs.register({
+    kind: "calendar",
+    label: "Calendar",
+    isAvailable: true,
+    availability: "available",
+    factory: () => null
+  });
+  context.commands.register({
+    id: "list",
+    title: "List journal notes",
+    availability: "available",
+    handler: async () => {
+      const notes = await context.workspace.listNotes("journal");
+      window.recordNotes?.(notes.map((note) => note.relativePath));
+      context.tabs.open("calendar", "August 2026");
+    }
+  });
+}
+`;
+
+const LISTING_MANIFEST = {
+  id: "lister",
+  name: "Lister",
+  version: "1.0.0",
+  apiVersion: "^1.0.0",
+  engines: { platform: ["desktop"] },
+  activationEvents: ["onCommand:list"],
+  capabilities: [],
+  contributes: { commands: [{ id: "list", title: "List journal notes" }], panels: [] }
+};
+
+test("an extension lists notes in a folder and opens its own contributed tab", async ({ page }) => {
+  const listed: string[][] = [];
+  await page.exposeFunction("recordNotes", (paths: string[]) => listed.push(paths));
+
+  await page.addInitScript(
+    ({ files }) => {
+      const appWindow = window as Window & {
+        isTauri?: boolean;
+        __TAURI_INTERNALS__?: { invoke: (command: string, args: Record<string, unknown>) => Promise<unknown> };
+      };
+      appWindow.isTauri = true;
+      appWindow.__TAURI_INTERNALS__ = {
+        async invoke(command, args) {
+          if (command === "plugin:dialog|open") return "/ext/lister";
+          if (command === "read_extension_file") {
+            const contents = files[String(args.relativePath)];
+            if (contents === undefined) throw new Error(`missing ${String(args.relativePath)}`);
+            return contents;
+          }
+          if (command === "open_workspace") {
+            return { workspace: { root_path: String(args.rootPath), name: "vault" }, files: [] };
+          }
+          if (command === "list_workspace_entries") {
+            const file = (relativePath: string, updatedAt: number | null) => ({
+              relative_path: relativePath,
+              name: relativePath.split("/").at(-1),
+              parent_path: relativePath.split("/").slice(0, -1).join("/"),
+              kind: "file",
+              is_markdown: relativePath.endsWith(".md"),
+              byte_size: 0,
+              updated_at: updatedAt
+            });
+            return [
+              file("journal/2026/08/2026-08-07-1307.md", 30),
+              file("journal/cover.png", 20),
+              file("journalish/other.md", 10),
+              file("inbox/scratch.md", 5)
+            ];
+          }
+          if (command === "read_app_settings") return null;
+          if (command === "window_workspace_root") return "/vault";
+          return null;
+        }
+      };
+      window.confirm = () => true;
+    },
+    { files: { "extension.json": JSON.stringify(LISTING_MANIFEST), "extension.js": LISTING_EXTENSION_SOURCE } }
+  );
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "Extensions", exact: true }).click();
+  await page.getByRole("button", { name: "Add from folder…" }).click();
+  await expect(page.getByRole("list", { name: "Installed extensions" })).toContainText("Lister");
+
+  await page.keyboard.press("Control+p");
+  await page.getByRole("combobox", { name: "Search commands" }).fill("List journal notes");
+  await page.keyboard.press("Enter");
+
+  // Markdown only, and the journal folder only — journalish/ does not match.
+  await expect.poll(() => listed).toHaveLength(1);
+  expect(listed[0]).toEqual(["journal/2026/08/2026-08-07-1307.md"]);
+
+  // The extension opened a tab of the kind it registered.
+  await expect(page.getByRole("navigation", { name: "Open tabs" })).toContainText("August 2026");
+});

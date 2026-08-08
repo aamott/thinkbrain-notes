@@ -28,6 +28,7 @@ import {
 } from "../tabs/markdownEditorHooks";
 import { desktopTabRegistry, type DesktopTabView } from "../tabs/tabRegistry";
 import { appEvents, type AppEvents } from "../events/appEvents";
+import { workspaceDesktopApi } from "../workspace/workspaceAdapter";
 import { workspaceDocumentApi } from "../workspace/workspaceDocumentAdapter";
 import { createExtensionWorkspace, type DesktopExtensionWorkspace } from "./extensionWorkspace";
 import { getWorkspaceBridge } from "./workspaceBridge";
@@ -99,6 +100,13 @@ export interface DesktopExtensionEditorHookContributions {
 
 export interface DesktopExtensionTabContributions {
   register(tab: DesktopExtensionTab): Disposable;
+  /**
+   * Opens a tab of a kind this extension registered.
+   *
+   * Scoped deliberately: an extension opens its own views, not another's. The
+   * shell's internal `openTab` stays internal.
+   */
+  open(kind: string, title: string): void;
 }
 
 /** App-event subscriptions scoped to one extension's activation. */
@@ -273,7 +281,8 @@ const defaultRegistries = (): DesktopExtensionHostRegistries => ({
  */
 const extensionWorkspace = createExtensionWorkspace({
   documents: workspaceDocumentApi,
-  getBridge: getWorkspaceBridge
+  getBridge: getWorkspaceBridge,
+  entries: workspaceDesktopApi
 });
 
 /** Creates a scoped desktop context for one host-controlled lifecycle. */
@@ -283,6 +292,8 @@ function createDesktopExtensionContext(
   registries: DesktopExtensionHostRegistries
 ): DesktopExtensionContext {
   const moduleId = settingsModuleId(context.extensionId);
+  /** Tab kinds this activation registered, so `open` cannot reach another's. */
+  const ownKinds = new Set<string>();
   const assertActive = (): void => {
     if (!isActive()) {
       throw new Error(`Extension "${context.extensionId}" is no longer active.`);
@@ -355,10 +366,21 @@ function createDesktopExtensionContext(
     tabs: {
       register: (tab) => {
         assertActive();
-        return own(context, registries.tabs.register({
-          ...tab,
-          kind: prefixId(context.extensionId, "Tab", tab.kind)
-        }), assertActive);
+        const kind = prefixId(context.extensionId, "Tab", tab.kind);
+        ownKinds.add(kind);
+        return own(context, registries.tabs.register({ ...tab, kind }), assertActive);
+      },
+      open: (kind, title) => {
+        assertActive();
+        const fullKind = prefixId(context.extensionId, "Tab", kind);
+        if (!ownKinds.has(fullKind)) {
+          throw new Error(
+            `Extension "${context.extensionId}" did not register a tab kind "${kind}".`
+          );
+        }
+        const bridge = getWorkspaceBridge();
+        if (!bridge) throw new Error("The workspace is not ready yet.");
+        bridge.openTab(fullKind, title);
       }
     },
     events: {

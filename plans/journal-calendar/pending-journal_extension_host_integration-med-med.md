@@ -41,8 +41,8 @@ Closed by D65-D70; full text in `../pending-journal_discovery_and_wireframes-low
 - **Activation event — D65.** Lazy: `onView:journal` + the three commands; never `onStartup`.
 - **Beta contribution table — D66.** All contributions real at beta; popout uses `PanelAction`.
 - **Mobile representation — D67.** One ordinary left panel; inherits shell's mobile placement.
-- **Calendar tab opening — D69.** Scoped `tabs.open(kind, title)`; `openTab` stays internal.
-- **Service adapter boundary — D68.** `DesktopExtensionContext.workspace`, extended with `listNotes`.
+- **Calendar tab opening — D69 ✅ shipped.** Scoped `tabs.open(kind, title)`; `openTab` stays internal.
+- **Service adapter boundary — D68 ✅ `listNotes` shipped.** `DesktopExtensionContext.workspace`, extended with `listNotes`.
 - **Calendar factory contract — D70.** `DesktopTabContext` stays `{ rootPath, tabId }` for v1.
 
 ## Goal & scope

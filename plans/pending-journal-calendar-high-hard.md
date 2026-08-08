@@ -83,10 +83,10 @@ Prerequisites still to build, all decided:
 
 | # | Needs | Owner |
 |---|---|---|
-| 1 | `tabs.open(kind, title)`, scoped to the extension's own kinds (D69) | `extensions/pending-extension_api_surface-low-hard.md` |
+| ~~1~~ | ✅ `tabs.open(kind, title)` shipped 2026-08-08 | — |
 | 2 | React editor-header slot for `metadata-widget` (D44) | `extensions/pending-editor_header_contribution-high-med.md` |
 | 3 | Workspace-scoped extension settings + UI (D45) | `extensions/pending-extension_settings-low-med.md` |
-| 4 | `listNotes(prefix)` — the extension workspace API cannot list notes, so the journal cannot browse (D68) | `extensions/pending-extension_api_surface-low-hard.md` |
+| ~~4~~ | ✅ `listNotes(prefix)` shipped 2026-08-08 | — |
 | 5 | Frontmatter metadata facets in the index (D41) | `indexing-search/pending-frontmatter_metadata_facets-high-hard.md` |
 
 Already usable: `desktopExtensionHost` register/activate, `DesktopExtensionContext`
@@ -131,4 +131,5 @@ recorded in the story. Stories may be split further if a subagent would exceed o
 - 🟨 Story 2 journal data/frontmatter contract — implemented in `packages/core/src/journal/`;
   the unknown-field write round-trip waits on story 3's write path
 - ⬜ Stories 3-9: service, calendar model, settings, panel, calendar tab, mobile, registration
-- ⬜ Platform prerequisites 1-5 in the reality check above
+- 🟨 Platform prerequisites: D68/D69 API additions shipped; D44 editor-header slot, D45
+  workspace-scoped settings, and D41 metadata facets remain

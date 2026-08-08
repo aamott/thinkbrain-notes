@@ -38,7 +38,9 @@ An extension is a folder with two files:
   (`side: "right"`), plus optional `{ id, label, icon, run }` buttons in its
   header.
 - `context.workspace` — `createNote`, `openNote`, `readNote`, `writeNote`,
-  scoped to the open workspace root.
+  `listNotes(prefix)`, scoped to the open workspace root.
+- `context.tabs.register(...)` / `context.tabs.open(kind, title)` — full-canvas
+  tab views of kinds your extension registered.
 - `context.events.on(...)` — typed app events: `note.opened`, `note.saved`,
   `note.created`, `workspace.opened`.
 - `context.settings` — namespaced settings with a declared schema.

@@ -12,6 +12,7 @@ import {
 import { appEvents } from "../events/appEvents";
 import { desktopCommandRegistry } from "../commands/commandRegistry";
 import { createDesktopTabRegistry } from "../tabs/tabRegistry";
+import { setWorkspaceBridge } from "./workspaceBridge";
 import { desktopPanelRegistry } from "../panels/panelRegistry";
 import { markdownEditorHookRegistry } from "../tabs/markdownEditorHooks";
 import {
@@ -285,5 +286,77 @@ describe("workspace and tab contributions", () => {
 
     expect((error as { cause?: Error }).cause?.message).toMatch(/kebab-case/i);
     expect(tabs.get("calendars.Calendar View")).toBeUndefined();
+  });
+
+  it("opens a tab of a kind the extension registered", async () => {
+    const tabs = createDesktopTabRegistry([]);
+    const opened: [string, string][] = [];
+    setWorkspaceBridge({
+      rootPath: "/vault",
+      openNote: () => undefined,
+      openTab: (kind, title) => opened.push([kind, title])
+    });
+    const host = createDesktopExtensionHost({ tabs });
+    host.register(definition("calendars", (context) => {
+      context.tabs.register({
+        kind: "calendar",
+        label: "Calendar",
+        isAvailable: true,
+        availability: "available",
+        factory: () => null
+      });
+      context.tabs.open("calendar", "August 2026");
+    }));
+
+    await host.activate("calendars");
+
+    // The kind is host-prefixed, so the shell opens the registered kind.
+    expect(opened).toEqual([["calendars.calendar", "August 2026"]]);
+    setWorkspaceBridge(null);
+  });
+
+  it("refuses to open a tab kind the extension did not register", async () => {
+    const tabs = createDesktopTabRegistry([]);
+    setWorkspaceBridge({
+      rootPath: "/vault",
+      openNote: () => undefined,
+      openTab: () => undefined
+    });
+    const host = createDesktopExtensionHost({ tabs });
+    host.register(definition("calendars", (context) => {
+      context.tabs.open("calendar", "August 2026");
+    }));
+
+    const error = await host.activate("calendars").catch((thrown: unknown) => thrown);
+
+    expect((error as { cause?: Error }).cause?.message).toMatch(/did not register/i);
+    setWorkspaceBridge(null);
+  });
+
+  it("stops opening tabs once the extension deactivates", async () => {
+    const tabs = createDesktopTabRegistry([]);
+    setWorkspaceBridge({
+      rootPath: "/vault",
+      openNote: () => undefined,
+      openTab: () => undefined
+    });
+    let captured: DesktopExtensionContext | undefined;
+    const host = createDesktopExtensionHost({ tabs });
+    host.register(definition("calendars", (context) => {
+      captured = context;
+      context.tabs.register({
+        kind: "calendar",
+        label: "Calendar",
+        isAvailable: true,
+        availability: "available",
+        factory: () => null
+      });
+    }));
+
+    await host.activate("calendars");
+    await host.deactivate("calendars");
+
+    expect(() => captured?.tabs.open("calendar", "August 2026")).toThrow(/no longer active/i);
+    setWorkspaceBridge(null);
   });
 });

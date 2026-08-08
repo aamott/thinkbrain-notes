@@ -10,8 +10,16 @@
  * full application privileges; these checks catch bugs, not adversaries.
  */
 
+import type { WorkspaceDesktopApi } from "../workspace/workspaceAdapter";
 import type { WorkspaceDocumentApi } from "../workspace/workspaceDocumentAdapter";
 import type { WorkspaceBridge } from "./workspaceBridge";
+
+/** A note found by {@link DesktopExtensionWorkspace.listNotes}. */
+export interface ExtensionNote {
+  readonly relativePath: string;
+  /** Last modified time, or `null` when the platform did not report one. */
+  readonly updatedAt: number | null;
+}
 
 /** Workspace operations exposed to one extension. */
 export interface DesktopExtensionWorkspace {
@@ -25,11 +33,19 @@ export interface DesktopExtensionWorkspace {
   createNote(relativePath: string, contents?: string): Promise<void>;
   /** Opens a note in an editor tab. */
   openNote(relativePath: string): Promise<void>;
+  /**
+   * Lists Markdown notes, optionally within one folder.
+   *
+   * @param prefix Workspace-relative folder to list, or omitted for the whole
+   *   workspace. Matched as a folder, so `"journal"` excludes `journalish/`.
+   */
+  listNotes(prefix?: string): Promise<readonly ExtensionNote[]>;
 }
 
 export interface ExtensionWorkspaceOptions {
   readonly documents: WorkspaceDocumentApi;
   readonly getBridge: () => WorkspaceBridge | null;
+  readonly entries: Pick<WorkspaceDesktopApi, "listWorkspaceEntries">;
 }
 
 const WINDOWS_ABSOLUTE = /^[A-Za-z]:[\\/]/;
@@ -54,7 +70,7 @@ function assertRelativePath(relativePath: string): void {
 export function createExtensionWorkspace(
   options: ExtensionWorkspaceOptions
 ): DesktopExtensionWorkspace {
-  const { documents, getBridge } = options;
+  const { documents, getBridge, entries } = options;
 
   /** Resolves the shell surface, failing before the shell has mounted. */
   const bridge = (): WorkspaceBridge => {
@@ -97,6 +113,32 @@ export function createExtensionWorkspace(
     openNote: async (relativePath) => {
       assertRelativePath(relativePath);
       bridge().openNote(relativePath);
+    },
+
+    listNotes: async (prefix) => {
+      const root = getBridge()?.rootPath ?? null;
+      if (!root) throw new Error("No workspace is open.");
+
+      // A folder prefix, not a string prefix: asking for "journal" must not
+      // return "journalish/notes.md".
+      let folder = "";
+      if (prefix !== undefined && prefix.trim() !== "") {
+        assertRelativePath(prefix);
+        folder = prefix.endsWith("/") ? prefix : `${prefix}/`;
+      }
+
+      const found = await entries.listWorkspaceEntries(root, false);
+      return found
+        .filter(
+          (entry) =>
+            entry.kind === "file" &&
+            entry.is_markdown &&
+            entry.relative_path.startsWith(folder)
+        )
+        .map((entry) => ({
+          relativePath: entry.relative_path,
+          updatedAt: entry.updated_at ?? null
+        }));
     }
   };
 }
