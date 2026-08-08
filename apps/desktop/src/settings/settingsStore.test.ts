@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createSettingsStore, type SettingsStoreGateway } from "./settingsStore";
 import { appSettingsRegistry } from "./settingsStore";
@@ -459,5 +459,151 @@ describe("saveSettings concurrency", () => {
 
     expect(store.getState().stagedChanges).toEqual({});
     expect(store.getState().isDirty).toBe(false);
+  });
+});
+
+/**
+ * D45: an extension module holds settings of both scopes — the journal's folder
+ * is per workspace while its calendar defaults are global (D64). Scope is a
+ * property of each setting, not of the module it arrived in.
+ */
+describe("mixed-scope modules (D45)", () => {
+  const MODULE_ID = "extension-scope-fixture";
+  const ROOT = `${MODULE_ID}.root`;
+  const VIEW = `${MODULE_ID}.view`;
+
+  let registration: { dispose: () => void } | null = null;
+
+  beforeEach(() => {
+    registration = appSettingsRegistry.register({
+      id: MODULE_ID,
+      label: "Scope fixture",
+      scope: "app",
+      sections: [
+        {
+          id: `${MODULE_ID}.main`,
+          label: "Main",
+          settings: [
+            {
+              key: "root",
+              type: "path",
+              label: "Folder",
+              description: "Per workspace.",
+              default: "journal",
+              scope: "workspace",
+              section: `${MODULE_ID}.main`
+            },
+            {
+              key: "view",
+              type: "string",
+              label: "View",
+              description: "Global.",
+              default: "month",
+              scope: "app",
+              section: `${MODULE_ID}.main`
+            }
+          ]
+        }
+      ]
+    });
+  });
+
+  afterEach(() => {
+    registration?.dispose();
+    registration = null;
+  });
+
+  it("reads a workspace override for a workspace-scoped setting", async () => {
+    const store = createSettingsStore(
+      createMockGateway(null, JSON.stringify({ version: 1, [ROOT]: "diary" }))
+    );
+
+    await store.getState().loadSettings("/notes/work");
+
+    expect(store.getState().getEffectiveValue(ROOT)).toBe("diary");
+  });
+
+  it("falls back to the default when the workspace has no override", async () => {
+    const store = createSettingsStore(createMockGateway(null, JSON.stringify({ version: 1 })));
+
+    await store.getState().loadSettings("/notes/work");
+
+    expect(store.getState().getEffectiveValue(ROOT)).toBe("journal");
+  });
+
+  it("falls back to the default when no workspace is open", async () => {
+    const store = createSettingsStore(createMockGateway(null, null));
+
+    await store.getState().loadSettings(null);
+
+    expect(store.getState().getEffectiveValue(ROOT)).toBe("journal");
+  });
+
+  it("persists a workspace-scoped edit to the workspace file", async () => {
+    // The bug this covers loses the edit outright: it is routed to the workspace
+    // payload and then dropped by the serializer.
+    const gateway = createMockGateway(null, JSON.stringify({ version: 1 }));
+    const store = createSettingsStore(gateway);
+    await store.getState().loadSettings("/notes/work");
+
+    store.getState().stageChange(ROOT, "diary");
+    const result = await store.getState().saveSettings();
+
+    expect(result.success).toBe(true);
+    const written = gateway.writtenWorkspaceSettings.at(-1);
+    expect(written?.rootPath).toBe("/notes/work");
+    expect(JSON.parse(written?.contents ?? "{}")[ROOT]).toBe("diary");
+    expect(store.getState().getEffectiveValue(ROOT)).toBe("diary");
+  });
+
+  it("keeps a workspace override out of the app settings file", async () => {
+    const gateway = createMockGateway(null, JSON.stringify({ version: 1 }));
+    const store = createSettingsStore(gateway);
+    await store.getState().loadSettings("/notes/work");
+
+    store.getState().stageChange(ROOT, "diary");
+    await store.getState().saveSettings();
+
+    for (const contents of gateway.writtenAppSettings) {
+      expect(Object.keys(JSON.parse(contents))).not.toContain(ROOT);
+    }
+  });
+
+  it("leaves an app-scoped setting in the same module global", async () => {
+    const gateway = createMockGateway(null, JSON.stringify({ version: 1 }));
+    const store = createSettingsStore(gateway);
+    await store.getState().loadSettings("/notes/work");
+
+    store.getState().stageChange(VIEW, "week");
+    await store.getState().saveSettings();
+
+    const appWritten = gateway.writtenAppSettings.at(-1);
+    expect(JSON.parse(appWritten ?? "{}")[VIEW]).toBe("week");
+    const workspaceWritten = gateway.writtenWorkspaceSettings.at(-1);
+    expect(Object.keys(JSON.parse(workspaceWritten?.contents ?? "{}"))).not.toContain(VIEW);
+  });
+
+  it("ignores a workspace file that tries to override an app-scoped setting", async () => {
+    // Workspace files travel with a vault; one must not reach across scopes.
+    const store = createSettingsStore(
+      createMockGateway(null, JSON.stringify({ version: 1, [VIEW]: "week" }))
+    );
+
+    await store.getState().loadSettings("/notes/work");
+
+    expect(store.getState().getEffectiveValue(VIEW)).toBe("month");
+  });
+
+  it("re-reads workspace values when the active workspace changes", async () => {
+    const gateway = createMockGateway(null, JSON.stringify({ version: 1, [ROOT]: "diary" }));
+    const store = createSettingsStore(gateway);
+    await store.getState().loadSettings("/notes/work");
+
+    gateway.readWorkspaceSettings = vi.fn(async () =>
+      JSON.stringify({ version: 1, [ROOT]: "personal-journal" })
+    );
+    await store.getState().loadSettings("/notes/home");
+
+    expect(store.getState().getEffectiveValue(ROOT)).toBe("personal-journal");
   });
 });

@@ -6,7 +6,6 @@ import {
   type ExtensionHost,
   type ExtensionStatus,
   type ExtensionStatusEntry,
-  type SettingDefinition,
   type SettingSection,
   type SettingsModule
 } from "@thinkbrain/core";
@@ -39,6 +38,7 @@ import { getWorkspaceBridge } from "./workspaceBridge";
 import type { DesktopEditorHookContribution } from "../tabs/editorHookRegistry";
 import {
   appSettingsRegistry,
+  effectiveSettingValue,
   useSettingsStore
 } from "../settings/settingsStore";
 
@@ -255,20 +255,6 @@ function namespaceSchema(moduleId: string, schema: DesktopExtensionSettingsSchem
   };
 }
 
-function effectiveValue(
-  state: ReturnType<typeof useSettingsStore.getState>,
-  definition: SettingDefinition | undefined,
-  key: string
-): unknown {
-  if (key in state.stagedChanges) return state.stagedChanges[key];
-  if (definition?.scope === "workspace") {
-    if (state.workspaceValues && key in state.workspaceValues) return state.workspaceValues[key];
-  } else if (key in state.appValues) {
-    return state.appValues[key];
-  }
-  return definition?.default;
-}
-
 function own(context: ExtensionContext, disposable: Disposable, assertActive: () => void): Disposable {
   assertActive();
   return context.subscriptions.add(disposable);
@@ -332,7 +318,7 @@ function createDesktopExtensionContext(
       assertActive();
       const fullKey = fullSettingKey(context.extensionId, key);
       const state = useSettingsStore.getState();
-      return effectiveValue(state, appSettingsRegistry.getDefinition(fullKey), fullKey) as T | undefined;
+      return effectiveSettingValue(state, appSettingsRegistry.getDefinition(fullKey), fullKey) as T | undefined;
     },
     set: (key, value) => {
       assertActive();
@@ -343,9 +329,9 @@ function createDesktopExtensionContext(
       assertActive();
       const fullKey = fullSettingKey(context.extensionId, key);
       const definition = appSettingsRegistry.getDefinition(fullKey);
-      let previous = effectiveValue(useSettingsStore.getState(), definition, fullKey);
+      let previous = effectiveSettingValue(useSettingsStore.getState(), definition, fullKey);
       const subscription = useSettingsStore.subscribe((state) => {
-        const next = effectiveValue(state, definition, fullKey);
+        const next = effectiveSettingValue(state, definition, fullKey);
         if (Object.is(next, previous)) return;
         const old = previous;
         previous = next;

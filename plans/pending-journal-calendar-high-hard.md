@@ -87,9 +87,9 @@ Prerequisites still to build, all decided:
 |---|---|---|
 | ~~1~~ | ✅ `tabs.open(kind, title)` shipped 2026-08-08 | — |
 | ~~2~~ | ✅ React editor-header slot shipped 2026-08-08 (D44) | — |
-| 3 | Workspace-scoped extension settings + UI (D45) | `extensions/pending-extension_settings-low-med.md` |
+| ~~3~~ | ✅ Workspace-scoped settings shipped 2026-08-08 (D45); the settings **UI/uninstall** work stays behind that story's product gate and blocks nothing here | — |
 | ~~4~~ | ✅ `listNotes(prefix)` shipped 2026-08-08 | — |
-| 5 | Frontmatter metadata facets in the index (D41) | `indexing-search/pending-frontmatter_metadata_facets-high-hard.md` |
+| 5 | Frontmatter metadata facets in the index (D41) — **blocked**: rests on the frontend indexing service, workspace-open hook, incremental upsert and native bridge, all unbuilt. The panel ships with facets in their unavailable state until this lands | `indexing-search/pending-frontmatter_metadata_facets-high-hard.md` |
 
 Already usable: `desktopExtensionHost` register/activate, `DesktopExtensionContext`
 (`commands`, `panels`, `editorHooks`, `settings`, `tabs`, `workspace`), contributed tab kinds
@@ -135,7 +135,7 @@ recorded in the story. Stories may be split further if a subagent would exceed o
 - 🟨 Story 3 journal service — create (always new, D18), backfill (D61/D62), listing with
   undated split (D36/D38), openToday, and D63 failure copy; previews and search wiring remain
 - 🟨 Story 5 settings — D64's four settings and the D49 field-definition control implemented;
-  workspace-scope persistence waits on D45, registration on story 9
+  workspace-scope persistence shipped with D45; registration waits on story 9
 - ✅ Story 4 calendar model — D43 distinct values, D43 same-entry AND filters, D46 counts,
   undated pinned outside the grid, in `packages/core/src/journal/calendar.ts`
 - ⬜ Stories 6-9: panel, calendar tab, mobile, registration

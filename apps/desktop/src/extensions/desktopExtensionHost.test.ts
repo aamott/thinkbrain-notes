@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import {
   ExtensionActivationError,
   InvalidExtensionIdError,
@@ -408,5 +408,97 @@ describe("editor header contributions", () => {
     await host.deactivate("journal-calendar");
 
     expect(() => captured?.editorHeaders.register(dateline)).toThrow();
+  });
+});
+
+/** D45: an extension reads and observes values for the workspace that is open. */
+describe("workspace-scoped extension settings", () => {
+  const scopedSchema = {
+    label: "Journal",
+    scope: "app" as const,
+    sections: [
+      {
+        id: "main",
+        label: "Main",
+        settings: [
+          {
+            key: "root",
+            type: "path" as const,
+            label: "Folder",
+            description: "Per workspace.",
+            default: "journal",
+            scope: "workspace" as const,
+            section: "main"
+          }
+        ]
+      }
+    ]
+  };
+
+  // The settings registry is app-wide, so each test has to hand its module back
+  // or the next activation collides on the same namespace.
+  let host: ReturnType<typeof createDesktopExtensionHost> | null = null;
+
+  afterEach(async () => {
+    await host?.dispose();
+    host = null;
+  });
+
+  const activate = async (): Promise<DesktopExtensionContext> => {
+    host = createDesktopExtensionHost();
+    let context: DesktopExtensionContext | undefined;
+    host.register(definition("journal-calendar", (received) => {
+      context = received;
+      received.settings.registerSchema(scopedSchema);
+    }));
+    await host.activate("journal-calendar");
+    if (!context) throw new Error("activation did not run");
+    return context;
+  };
+
+  const KEY = "extension-journal-calendar.root";
+
+  it("reads the override for the workspace that is open", async () => {
+    const context = await activate();
+    useSettingsStore.setState({
+      appValues: {},
+      workspaceValues: { [KEY]: "diary" },
+      workspaceRootPath: "/notes/work",
+      stagedChanges: {}
+    });
+
+    expect(context.settings.get<string>("root")).toBe("diary");
+  });
+
+  it("falls back to the default when no workspace is open", async () => {
+    const context = await activate();
+    useSettingsStore.setState({
+      appValues: {},
+      workspaceValues: null,
+      workspaceRootPath: null,
+      stagedChanges: {}
+    });
+
+    expect(context.settings.get<string>("root")).toBe("journal");
+  });
+
+  it("notifies a subscriber when the active workspace changes", async () => {
+    // An open journal panel has to follow the user into the next vault.
+    const context = await activate();
+    useSettingsStore.setState({
+      appValues: {},
+      workspaceValues: { [KEY]: "diary" },
+      workspaceRootPath: "/notes/work",
+      stagedChanges: {}
+    });
+    const seen: unknown[] = [];
+    context.settings.onDidChange("root", (value) => seen.push(value));
+
+    useSettingsStore.setState({
+      workspaceValues: { [KEY]: "personal" },
+      workspaceRootPath: "/notes/home"
+    });
+
+    expect(seen).toEqual(["personal"]);
   });
 });

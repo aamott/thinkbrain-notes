@@ -11,7 +11,6 @@
 import {
   CURRENT_SETTINGS_VERSION,
   extractDefaults,
-  getModuleIdFromKey,
   isRecord,
   type SettingsRegistry
 } from "@thinkbrain/core";
@@ -42,8 +41,9 @@ export function parseDynamicWorkspaceSettings(
 
   const values: Record<string, unknown> = { ...defaults };
   for (const def of registry.getAllDefinitions()) {
-    const module = registry.getModule(getModuleIdFromKey(def.key));
-    if (!module || module.scope !== "workspace") continue;
+    // Per-setting scope, not per-module: an app-scoped module may still own a
+    // setting the user sets separately in each workspace.
+    if (def.scope !== "workspace") continue;
     if (def.key in parsed) {
       values[def.key] = (parsed as Record<string, unknown>)[def.key];
     }
@@ -72,8 +72,7 @@ export function serializeDynamicWorkspaceSettings(
 
   const knownSettingKeys = new Set<string>();
   for (const def of registry.getAllDefinitions()) {
-    const module = registry.getModule(getModuleIdFromKey(def.key));
-    if (module && module.scope === "workspace") {
+    if (def.scope === "workspace") {
       knownSettingKeys.add(def.key);
     }
   }

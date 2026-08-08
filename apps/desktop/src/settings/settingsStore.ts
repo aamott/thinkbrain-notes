@@ -20,6 +20,7 @@ import {
   editorModule,
   settingsModule,
   validateSettings,
+  type SettingDefinition,
   type SettingsDiagnostic,
   type SettingsRegistry,
   type SettingScope
@@ -145,6 +146,35 @@ export interface SettingsStoreState {
 // ---------------------------------------------------------------------------
 // Helpers.
 // ---------------------------------------------------------------------------
+
+/**
+ * Resolves the value a setting currently has: staged, then the workspace
+ * override, then the app value, then the definition default.
+ *
+ * A workspace override only outranks the app value for a setting that declares
+ * `scope: "workspace"`. Workspace settings travel with a vault, so a file that
+ * names an app-scoped key must not be able to reach across scopes and change
+ * how the app behaves everywhere.
+ *
+ * Exported so the extension settings API resolves values the same way the
+ * settings UI does; two copies of this rule would drift.
+ */
+export function effectiveSettingValue(
+  state: Pick<SettingsStoreState, "stagedChanges" | "appValues" | "workspaceValues">,
+  definition: SettingDefinition | undefined,
+  key: string
+): unknown {
+  if (key in state.stagedChanges) return state.stagedChanges[key];
+  if (
+    definition?.scope === "workspace" &&
+    state.workspaceValues &&
+    key in state.workspaceValues
+  ) {
+    return state.workspaceValues[key];
+  }
+  if (key in state.appValues) return state.appValues[key];
+  return definition?.default;
+}
 
 /**
  * Returns the scope of a setting key from the registry, or undefined if the key
@@ -466,13 +496,7 @@ export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettin
      * else loaded value (app or workspace), else the registry default.
      */
     getEffectiveValue(key: string): unknown {
-      const state = get();
-      if (key in state.stagedChanges) return state.stagedChanges[key];
-      if (key in state.appValues) return state.appValues[key];
-      if (state.workspaceValues && key in state.workspaceValues) {
-        return state.workspaceValues[key];
-      }
-      return appSettingsRegistry.getDefinition(key)?.default;
+      return effectiveSettingValue(get(), appSettingsRegistry.getDefinition(key), key);
     },
 
     async setSettingImmediately(key: string, value: unknown): Promise<void> {

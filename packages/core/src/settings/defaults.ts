@@ -1,13 +1,12 @@
 /**
  * Default-value extraction for the modular settings system.
  *
- * Returns a flat `fullKey -> default` map for every definition in the given
- * scope. Missing keys are filled by defaults downstream, so only present
+ * Returns a flat `fullKey -> default` map for every definition declaring the
+ * given scope. Missing keys are filled by defaults downstream, so only present
  * definitions contribute entries here.
  */
 
 import type { SettingsRegistry } from "./registry";
-import { getModuleIdFromKey } from "./registry";
 import type { SettingScope } from "./types";
 
 /**
@@ -15,7 +14,7 @@ import type { SettingScope } from "./types";
  *
  * Args:
  *   registry: The settings registry to read definitions from.
- *   scope: Which module scope to extract ("app" or "workspace").
+ *   scope: Which setting scope to extract ("app" or "workspace").
  *
  * Returns:
  *   A `Record<string, unknown>` keyed by full setting key, with each value set
@@ -27,11 +26,10 @@ export function extractDefaults(
 ): Record<string, unknown> {
   const defaults: Record<string, unknown> = {};
 
-  // Walk resolved definitions and keep only those whose module matches scope.
+  // Scope is a property of the setting, not of the module it arrived in: one
+  // extension module can hold a per-workspace folder and a global default view.
   for (const def of registry.getAllDefinitions()) {
-    const moduleId = getModuleIdFromKey(def.key);
-    const module = registry.getModule(moduleId);
-    if (module && module.scope === scope) {
+    if (def.scope === scope) {
       defaults[def.key] = def.default;
     }
   }

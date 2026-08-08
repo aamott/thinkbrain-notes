@@ -2,7 +2,14 @@
 
 ## Status
 
-🟨 Partially implemented. App-scoped read/write/change subscriptions and schema cleanup are implemented/tested. D45 workspace scope, extension settings UI/E2E, persisted cleanup, and uninstall are not implemented. Secrets are separate.
+🟨 Partially implemented. App-scoped read/write/change subscriptions and schema cleanup were
+already done. **D45 workspace scope shipped 2026-08-08:** scope is now read per setting rather
+than per module, so one module may hold both (the journal's folder is per workspace, its
+calendar defaults are global). Workspace overrides are read, persisted, and re-read on
+workspace switch; a workspace file cannot override an app-scoped key.
+
+Still open: extension settings UI/E2E, persisted cleanup, and uninstall — all behind the
+stop-and-ask gate below. Secrets are separate.
 
 ## Goal
 
@@ -43,8 +50,10 @@ Render approved non-secret extension settings, persist app and workspace scopes 
 
 - [ ] Approved accessible desktop/mobile layout and uninstall confirmation exist.
 - [ ] Manifest schemas render with typed validation/errors.
-- [ ] App and workspace values persist outside the vault; extension and workspace namespaces cannot cross.
-- [ ] Scoped get/set/onDidChange behavior resolves the active workspace explicitly, handles no-workspace state, and updates subscribers on workspace change (D45).
+- [x] App and workspace values persist outside the vault; extension and workspace namespaces cannot cross. A workspace-scoped edit reaches the workspace file and stays out of the app file.
+- [x] Scoped get/set/onDidChange behavior resolves the active workspace explicitly, handles no-workspace state, and updates subscribers on workspace change (D45). One shared
+      `effectiveSettingValue` serves the settings UI and the extension API so the precedence
+      rule cannot drift.
 - [ ] Uninstall deactivates first and follows keep/remove policy without unrelated deletion.
 - [ ] Secrets never enter JSON, workspace, logs, or general UI state.
 
@@ -72,3 +81,22 @@ No credentials/encryption fallback, installer, marketplace, URL install, feature
 - `plans/technical-decisions.md`
 - `plans/extensions/pending-extension_secret_storage-med-hard.md`
 - `apps/desktop/src/settings/`
+
+## Bug found and fixed (2026-08-08)
+
+Scope was declared per setting but enforced per module in three places: default extraction,
+workspace parse, and workspace serialize. `saveSettings` routed by the setting's own scope,
+so a workspace-scoped setting inside an app-scoped module was written into the workspace
+payload and then dropped by the serializer — the user's edit disappeared with no error. Reads
+had the mirror defect: `getEffectiveValue` consulted app values before workspace values, so
+an override would have been ignored even had it survived.
+
+Every existing definition's scope matched its module's, so making scope per-setting changed
+no shipped behaviour.
+
+## Deliberately not settled here
+
+Setting one key at *both* levels — D64 describes the journal root as "app + workspace" — needs
+a scope-aware editing UI, which is exactly what the stop-and-ask gate reserves. Today a
+workspace-scoped setting is edited per workspace and falls back to its default. Nothing about
+the storage model blocks the global level later.
