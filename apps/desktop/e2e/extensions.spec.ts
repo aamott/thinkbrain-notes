@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { expect, test } from "@playwright/test";
 
 /**
@@ -224,6 +227,88 @@ const NOTES_MANIFEST = {
   capabilities: [],
   contributes: { commands: [{ id: "capture", title: "Capture note" }], panels: [] }
 };
+
+/**
+ * The shipped example extension is real documentation: this test loads the
+ * actual files from examples/extensions/hello-notes so the sample a user
+ * follows can never drift from the platform it demonstrates.
+ */
+test("the hello-notes example extension loads from its shipped files and captures a note", async ({ page }) => {
+  const exampleDirectory = path.join(
+    path.dirname(fileURLToPath(import.meta.url)),
+    "..",
+    "..",
+    "..",
+    "examples",
+    "extensions",
+    "hello-notes"
+  );
+  const files = {
+    "extension.json": readFileSync(path.join(exampleDirectory, "extension.json"), "utf8"),
+    "extension.js": readFileSync(path.join(exampleDirectory, "extension.js"), "utf8")
+  };
+
+  const created: string[] = [];
+  await page.exposeFunction("recordCreate", (relativePath: string) => created.push(relativePath));
+
+  await page.addInitScript(
+    ({ files }) => {
+      const appWindow = window as Window & {
+        isTauri?: boolean;
+        recordCreate?: (path: string) => void;
+        __TAURI_INTERNALS__?: { invoke: (command: string, args: Record<string, unknown>) => Promise<unknown> };
+      };
+      appWindow.isTauri = true;
+      const notes = new Map<string, string>();
+      appWindow.__TAURI_INTERNALS__ = {
+        async invoke(command, args) {
+          if (command === "plugin:dialog|open") return "/ext/hello-notes";
+          if (command === "read_extension_file") {
+            const contents = files[String(args.relativePath)];
+            if (contents === undefined) throw new Error(`missing ${String(args.relativePath)}`);
+            return contents;
+          }
+          if (command === "open_workspace") {
+            return { workspace: { root_path: String(args.rootPath), name: "vault" }, files: [] };
+          }
+          if (command === "list_workspace_entries") return [];
+          if (command === "create_markdown_file") {
+            const relativePath = String(args.relativePath);
+            notes.set(relativePath, String(args.contents ?? ""));
+            appWindow.recordCreate?.(relativePath);
+            return { relative_path: relativePath, name: relativePath, byte_size: 0, updated_at: null };
+          }
+          if (command === "read_markdown_file") {
+            return {
+              relative_path: String(args.relativePath),
+              contents: notes.get(String(args.relativePath)) ?? ""
+            };
+          }
+          if (command === "read_app_settings") return null;
+          if (command === "window_workspace_root") return "/vault";
+          return null;
+        }
+      };
+      window.confirm = () => true;
+    },
+    { files }
+  );
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "Extensions", exact: true }).click();
+  await page.getByRole("button", { name: "Add from folder…" }).click();
+  await expect(page.getByRole("list", { name: "Installed extensions" })).toContainText("Hello Notes");
+
+  await page.keyboard.press("Control+p");
+  await page.getByRole("combobox", { name: "Search commands" }).fill("Capture a note");
+  await page.keyboard.press("Enter");
+
+  // The example writes into captures/ with a timestamped name and opens the
+  // new note as an editor tab.
+  await expect.poll(() => created).toHaveLength(1);
+  expect(created[0]).toMatch(/^captures\/capture-.+\.md$/);
+  await expect(page.getByRole("navigation", { name: "Open tabs" })).toContainText(".md");
+});
 
 test("an extension creates a note and opens it through the workspace API", async ({ page }) => {
   const created: string[] = [];
