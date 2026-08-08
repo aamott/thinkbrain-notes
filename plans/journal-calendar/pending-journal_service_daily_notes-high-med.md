@@ -1,6 +1,10 @@
 # Story: Journal Service & Daily-Note Creation
 
-**Status:** pending · **Urgency:** high · **Difficulty:** med
+**Status:** 🟨 core service implemented (`apps/desktop/src/journal/journalService.ts`,
+path expansion in `packages/core/src/journal/paths.ts`) · **Urgency:** high · **Difficulty:** med
+
+Remaining: lazy first-line previews, search delegation, and wiring the service to settings
+and the panel.
 
 ## Epic
 

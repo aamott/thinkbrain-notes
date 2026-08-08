@@ -130,6 +130,8 @@ recorded in the story. Stories may be split further if a subagent would exceed o
 - ✅ Every product decision closed (D1-D70)
 - 🟨 Story 2 journal data/frontmatter contract — implemented in `packages/core/src/journal/`;
   the unknown-field write round-trip waits on story 3's write path
-- ⬜ Stories 3-9: service, calendar model, settings, panel, calendar tab, mobile, registration
+- 🟨 Story 3 journal service — create (always new, D18), backfill (D61/D62), listing with
+  undated split (D36/D38), openToday, and D63 failure copy; previews and search wiring remain
+- ⬜ Stories 4-9: calendar model, settings, panel, calendar tab, mobile, registration
 - 🟨 Platform prerequisites: D68/D69 API additions shipped; D44 editor-header slot, D45
   workspace-scoped settings, and D41 metadata facets remain
