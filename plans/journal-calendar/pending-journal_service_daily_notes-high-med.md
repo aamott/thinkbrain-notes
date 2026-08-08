@@ -17,15 +17,34 @@ The discovery gate is CLOSED; full rationale and D1-D47 live in
 - **D41/D43:** metadata facets come from the platform index (no journal cache/full scan); predicates match within one entry.
 - **D42:** listing accepts only the narrow ISO table, date-only sorts first, and creation emits D17 only.
 
-**STOP gate:** The discovery gate above is closed. The following items remain OPEN and must not be silently resolved:
+**STOP gate — CLOSED.** The discovery gate above is closed, and every item this story STOP-gated is
+now decided (`../pending-journal_discovery_and_wireframes-low-med.md`, "Approved 2026-08-08
+(D48-D70)"):
 
-- **Backfill mechanics and time component:** D19 allows backfill but the mechanics are undecided (what time is written to the filename when backfilling? midnight? user-supplied? current time?). Do not ship backfill without owner approval of the time component.
-- **Folder creation on backfill:** when a backfilled entry falls into a past year/month folder that does not yet exist, should the service create it silently or prompt? Undecided.
-- **Day-click when the popout is closed:** behavior when a calendar day is clicked and the popout is not open is undecided; this story does not need to resolve it but must not assume either path.
-- **Error/retry copy:** exact error messages and retry behavior when the workspace is unavailable or a path is invalid are not yet approved.
-- **Service adapter boundary:** choose `DesktopExtensionContext.workspace` or the existing workspace adapters before implementation; do not support both or couple the service directly to the host.
+- **Backfill mechanics and time component — closed by D61.** Backfilling supplies the **date**;
+  the filename time component is the **current clock time** at creation. Midnight is never
+  fabricated and the user is never prompted for a time — D17's rule that every new entry appends
+  the current time applies unchanged to a past date.
+- **Folder creation on backfill — closed by D62.** A backfilled entry whose year or month folder
+  does not exist creates that folder silently; the path is derived from the date by D17, so there
+  is nothing to confirm.
+- **Day-click when the popout is closed — closed by D59.** Activating a calendar day while the
+  journal popout is closed opens the popout and applies the day filter. (UI ownership stays with
+  the panel/calendar stories; noted here only because this story's STOP gate previously left the
+  question open.)
+- **Error/retry copy — closed by D63.** Approved copy, verbatim: journal folder unreadable —
+  **"Can't read the journal folder."** with the path beneath and actions `Retry` / `Choose a
+  different folder…`; no workspace open — **"Open a folder to start journaling."** with
+  `Open folder…`; invalid journal root setting — **"The journal folder setting isn't a valid
+  path."** with the offending value and `Open settings`. Errors name what failed and offer the
+  fix; a raw error string is never the headline.
+- **Service adapter boundary — closed by D68.** The service goes through
+  `DesktopExtensionContext.workspace` (the `DesktopExtensionWorkspace` interface), not the
+  workspace adapters directly. The gap this exposes — no way to list notes — is closed by adding
+  `listNotes(prefix)`, returning relative paths with modified times.
 
-Do not implement backfill mechanics, folder-creation policy, or error copy until the owner approves them.
+Implement backfill mechanics, folder-creation policy, error copy, and the D68 adapter boundary
+against the decisions above.
 
 ## Listing at scale — DECIDED
 
@@ -57,15 +76,17 @@ Implement a typed, UI-independent service that resolves dates/paths, detects sam
 - Counter-suffix collision detection and increment (D30).
 - Date-only frontmatter on create (D22).
 - Lenient listing/opening that does not rewrite any file (D20/D33).
-- Backfill entry point (accepts a past date) — path expansion only; time component and folder-creation policy are STOP-gated above.
+- Backfill entry point (accepts a past date): resolves the path via D17 from the supplied date,
+  stamps the filename with the current clock time (D61), and creates a missing year/month folder
+  silently (D62).
 - Typed diagnostics for path safety, collisions, workspace errors.
 
 ## Likely files
 
-- `apps/desktop/src/journal/journalService.ts` — service facade over typed workspace adapters.
+- `apps/desktop/src/journal/journalService.ts` — service facade over `DesktopExtensionContext.workspace`, not the workspace adapters directly (D68).
 - `apps/desktop/src/journal/journalPath.ts` — pure path expansion helper; no template interpolation (D21).
 - `apps/desktop/src/journal/journalService.test.ts`, `journalPath.test.ts` — unit tests.
-- `apps/desktop/src/workspace/workspaceDocumentAdapter.ts` and `workspaceAdapter.ts` — consume existing APIs; extend typed interfaces only where a gap is proven.
+- `apps/desktop/src/extensions/extensionWorkspace.ts` — add `listNotes(prefix)` to `DesktopExtensionWorkspace`, returning relative paths with modified times (D68); it wraps `workspaceDocumentAdapter.ts`/`workspaceAdapter.ts` internally, but the journal service does not call those adapters directly.
 - `apps/desktop/src/native/commands.ts` — only if a required typed native command is missing; no direct Tauri calls from core or UI layers.
 - `packages/core/src/journal/types.ts` — from data-model story (`JournalEntryRef`, `parseJournalFilename`).
 
@@ -85,7 +106,7 @@ Implement a typed, UI-independent service that resolves dates/paths, detects sam
 - [ ] New file contains date-only frontmatter; no fields are pre-seeded; no template content is applied (D21/D22).
 - [ ] Opening or listing entries does not rewrite any file; unknown frontmatter survives (D20/D33).
 - [ ] Folder and filename expansion uses only approved, path-safe tokens; traversal, empty names, and invalid extensions produce typed diagnostics, not silent failures.
-- [ ] Before backfill approval, only pure past-date path expansion is implemented/tested; file creation remains blocked on time and folder policy.
+- [ ] Backfill creates the file at the supplied past date: filename time is the current clock time (D61) and a missing year/month folder is created silently (D62); tests cover both.
 - [ ] Service is platform/UI agnostic at its boundary; no panel state, no direct Tauri calls.
 - [ ] `listJournalEntries` reads **no file contents** — dates come from filenames (D20); it
       applies D42 and sorts date-only before timed entries, and a 1,000-entry test asserts zero
@@ -106,7 +127,7 @@ Implement a typed, UI-independent service that resolves dates/paths, detects sam
 - No template application (D21) — explicitly deferred.
 - No calendar aggregation, panel UI, mood/activity picker, settings UI, extension registration, reminders, or background watcher.
 - Do not add a journal database, implement the platform index schema, or change generic workspace CRUD semantics.
-- Do not silently default the time component of a backfilled entry (STOP-gated).
+- Do not fabricate midnight or prompt the user for a time; the filename time component of a backfilled entry is always the current clock time (D61).
 
 ## Handoff artifacts
 

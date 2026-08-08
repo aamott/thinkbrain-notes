@@ -17,11 +17,34 @@ The discovery gate is CLOSED; full rationale and D1-D47 live in
 - **D33:** settings/opening never rewrite notes; unknown frontmatter survives.
 - **D34:** product owner signs off per artifact.
 
-**STOP gate:** The discovery gate above is closed. The following items remain OPEN and this story OWNS the decisions where marked:
+**STOP gate — CLOSED.** The discovery gate above is closed, and the settings-list question this
+story owned is now decided (`../pending-journal_discovery_and_wireframes-low-med.md`, "Approved
+2026-08-08 (D48-D70)"):
 
-- **Setting list and defaults:** the exact configurable settings beyond journal root (D7) and field definitions (D4/D23/D45) are not approved. Do not register settings for unapproved behavior.
-- **Reduced-motion and touch-target audit:** deferred (D31). Do not ship these in this story.
-- **High contrast:** out of scope — themes own it (D31). Use `--tn-*` tokens; never add hard-coded colors or mood mappings.
+- **Setting list and defaults — closed by D64.** The journal registers exactly these four
+  settings:
+
+  | Setting | Type | Scope | Default |
+  |---|---|---|---|
+  | `root` | path | app + workspace | `journal` |
+  | `fieldDefinitions` | custom control (`journal-field-definitions`, D49) | app + workspace (D45) | empty |
+  | `calendarDefaultView` | enum: `week` / `month` | app | `month` |
+  | `startOfWeek` | enum: `system` / `monday` / `sunday` | app | `system` |
+
+  Explicitly **not** settings in v1: templates (D21), folder-nesting pattern and filename format
+  (fixed by D17), timezone or day-start offset (D19), and anything touching mood colors or
+  iconography (D4, D31). Do not register any setting outside the four above.
+- **Field-definition setting shape — closed by D49.** `fieldDefinitions` is a `string` setting
+  rendered by a custom `journal-field-definitions` control holding a JSON array of field
+  definitions (`{ id, label, type, options? }`); no first-class structured setting type is
+  introduced for it.
+
+Unchanged from discovery and still governing this story:
+
+- **Reduced-motion and touch-target audit** remain deferred (D31). Do not ship these in this
+  story.
+- **High contrast** remains theme-owned, out of scope (D31). Use `--tn-*` tokens; never add
+  hard-coded colors or mood mappings.
 
 D45 closes precedence, platform direction, and drift behavior. Workspace scope remains an implementation dependency, not an open product choice.
 
@@ -66,7 +89,7 @@ Define and register the approved journal settings under `journal-calendar`, reso
 
 ## Likely files
 
-- `packages/core/src/settings/modules/journal.ts` — global/workspace schema under D47's `journal-calendar` namespace; exact unapproved keys still wait.
+- `packages/core/src/settings/modules/journal.ts` — global/workspace schema under D47's `journal-calendar` namespace, implementing D64's four settings (`root`, `fieldDefinitions`, `calendarDefaultView`, `startOfWeek`) with `fieldDefinitions` using D49's custom-control shape.
 - `packages/core/src/settings/modules/index.ts` and `packages/core/src/settings/index.ts` — exports/registration.
 - `apps/desktop/src/settings/settingsStore.ts` — register module; preserve staged/save/reset semantics.
 - `apps/desktop/src/settings/SettingsContent.tsx`, `SettingsNav.tsx`, `controls/` — render approved controls only; blocked on `pending-extension_settings-low-med.md` for extension-section rendering.
@@ -122,7 +145,10 @@ Downstream stories need:
 
 - D45 global/workspace resolution and unconfigured-value contract.
 - `getJournalSettings(scope)` — typed selector returning D45-resolved journal root and field definitions; no global-only fallback.
-- `FieldDefinition` type (id, label, inputType: multi-select | single-select | number | text).
+- `FieldDefinition` type: `{ id, label, type, options? }`, where `type` is one of `text` |
+  `single-select` | `number` | `multi-select` and `options` is required for
+  `single-select`/`multi-select` and forbidden otherwise (D49 — field name is `type`, not
+  `inputType`).
 - `journalSettingsSchema` — schema registration artifact.
 - `apps/desktop/src/journal/accessibility.md` — checklist with pass/fail results for keyboard and screen-reader.
 - Platform dependency on D45 workspace-scoped extension settings, linked to its owner story.

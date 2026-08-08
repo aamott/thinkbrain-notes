@@ -19,14 +19,32 @@ Discovery gate is CLOSED; rationale and the full D1-D47 log live in
 - **D29/D46:** show up to three dots plus `+N`; accessible text and active filters use exact matching counts.
 - **D33/D36/D38:** filename date alone qualifies an entry; malformed frontmatter remains eligible and survives; loading never rewrites files; non-Markdown is hidden, undated is pinned, and calendar day state reflects both; ambiguous dates are `UNDATED` without guessing.
 
-**STOP gate:** The discovery gate above is closed. The following items remain OPEN and this story OWNS the decisions where marked:
+**STOP gate: CLOSED.** The discovery gate above was already closed; the remaining UI
+routing/state items are now decided by D48-D70 (approved 2026-08-08; see
+`../pending-journal_discovery_and_wireframes-low-med.md`, "Approved 2026-08-08 (D48-D70)"). D43
+and D46 close aggregation and entry-density policy, as before. None of the closing decisions
+add scope to this story: the model exposes the filter state; routing/rendering remains the UI
+stories' concern.
 
-D43 and D46 close aggregation and entry-density policy. The remaining open items are UI routing/state questions:
-
-- **Day-click when the popout is closed:** behavior when a calendar day is clicked and the popout is not open is undecided. The model must expose the filter state; routing that state to a closed popout is out of scope here.
-- **Date filter as a chip:** representation of the day filter as a chip in the popout UI is undecided; the model must expose a selected-day filter value without assuming chip UI.
-- **Calendar tab singleton + option persistence:** undecided; not owned here.
-- **Calendar grid keyboard model:** undecided; out of scope for the data model.
+- **Day-click when the popout is closed — closed by D59.** Activating a calendar day while the
+  journal popout is closed opens the popout and applies the day filter; doing nothing visible,
+  or setting an unseen filter, are both defects. The model must continue to expose the
+  selected-day filter state; opening the popout is `pending-calendar_tab_ui-high-hard.md`'s
+  concern.
+- **Date filter as a chip — closed by D60.** The active day filter appears in the popout chip
+  row as an independently dismissible chip alongside metadata chips and `Clear all`. Dismissing
+  it clears only the day filter, and the calendar's day selection clears in step. The model must
+  expose the selected-day filter as a value that can be cleared independently of metadata
+  predicates so the UI can implement this; chip rendering itself is a UI-story concern.
+- **Calendar tab singleton + option persistence — closed by D56.** The calendar is a singleton
+  tab: `open-calendar` focuses the existing tab when one is open. View mode and active date
+  persist per workspace and are restored on reopen. Tab lifecycle and persistence are
+  `pending-calendar_tab_ui-high-hard.md`'s concern, not modeled here.
+- **Calendar grid keyboard model — closed by D58.** The calendar grid is one tab stop with
+  roving focus: arrows move by day, `Home`/`End` to the focused week's start/end,
+  `PageUp`/`PageDown` by month (`Shift` by year), `Enter`/`Space` activates the day (feeding
+  D59's popout-opening behavior). The focused day announces its date and exact matching entry
+  count. This is a UI-story concern, not modeled here.
 
 ## Goal
 
@@ -82,7 +100,8 @@ Define a platform-agnostic calendar model and pure aggregation/query functions t
 - No calendar React component, visual encoding (colors, icons, emoji), settings UI, native watcher, reminder system, or extension registration.
 - Do not choose a mood scale, activity color palette, hard-coded activity icons, or default filter (D4).
 - Do not replace D43/D46 with alternate aggregation or density rules.
-- Do not implement calendar tab singleton or grid keyboard model (undecided).
+- Do not implement the calendar tab singleton (D56) or grid keyboard model (D58); both are
+  decided but belong to `pending-calendar_tab_ui-high-hard.md`.
 
 ## Handoff artifacts
 

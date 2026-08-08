@@ -2,7 +2,7 @@
 
 ## Status
 
-✅ Supported beta runtime boundary shipped for startup/command/view activation and host-owned registration cleanup. `onLanguage`, duplicate-id diagnostics, successful local Blob URL cleanup, and forwarding local module `deactivate` remain unchecked follow-ups below.
+✅ Supported beta runtime boundary shipped for startup/command/view activation and host-owned registration cleanup. Blob URL cleanup is shipped — `createExtensionModuleImporter` revokes the object URL as soon as the import settles. `onLanguage`, duplicate-id diagnostics, and forwarding local module `deactivate` remain unchecked follow-ups below.
 
 ## Goal
 
@@ -14,7 +14,7 @@ Connect the existing disposable lifecycle to manifest-loaded extensions and a de
 - `onStartup` activates eagerly; `onCommand:<id>` and `onView:<id>` activate through disposable stubs. `onLanguage:<language>` is retained as a manifest warning but has no trigger point yet.
 - Activation is at-most-once, failed activation removes stubs and records `failed`, and host removal/shutdown disposes extension-owned registrations before replacement or exit.
 - Local extensions use the same host path and are rejected on duplicate extension ids, but duplicate-id diagnostics are still not a parser/loader result.
-- Successful local unload still needs the loader module's `deactivate`/Blob-revocation handle forwarded through bootstrap disposal; no bootstrap claim should imply it is complete.
+- Successful local unload still needs the loader module's `deactivate` forwarded through bootstrap disposal; no bootstrap claim should imply it is complete.
 
 ## Prerequisites
 
@@ -35,7 +35,7 @@ Connect the existing disposable lifecycle to manifest-loaded extensions and a de
 2. It registers manifest command/panel stubs before activation, swaps them for real scoped registrations on first command/view use, and eagerly activates `onStartup` entries.
 3. It supports built-in and local-directory sources through one host, with status subscriptions and awaited disposal on removal/reload/shutdown.
 4. Tests cover lazy/eager activation, concurrent activation, incompatible/invalid manifests, activation failure cleanup, local registration replacement, duplicate registration rejection, and shutdown disposal.
-5. Status reasons preserve compatibility and load diagnostics, including the trusted app-privileges boundary; unsupported `onLanguage`, duplicate-id diagnostics, and Blob URL cleanup remain explicit gaps.
+5. Status reasons preserve compatibility and load diagnostics, including the trusted app-privileges boundary; unsupported `onLanguage` and duplicate-id diagnostics remain explicit gaps.
 
 ## Acceptance criteria
 
@@ -44,7 +44,7 @@ Connect the existing disposable lifecycle to manifest-loaded extensions and a de
 - [x] Bootstrap and shutdown are idempotent and dispose host registrations/resources.
 - [x] Failed activation leaves no contributions and exposes status/diagnostics.
 - [x] No feature epic behavior is moved into bootstrap.
-- [ ] `onLanguage`, duplicate-id diagnostics, and forwarding local `deactivate`/Blob-revocation cleanup remain open.
+- [ ] `onLanguage`, duplicate-id diagnostics, and forwarding local `deactivate` remain open.
 
 ## Automated validation
 

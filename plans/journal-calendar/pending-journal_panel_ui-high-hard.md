@@ -19,15 +19,33 @@ The discovery gate is CLOSED; full rationale and D1-D47 live in
 - **D31/D33:** keyboard/screen-reader support and token-only styling are required; malformed frontmatter remains eligible, gets a non-blocking notice, and is never rewritten.
 - **D36/D37/D39/D45:** pinned collapsed Undated group (mtime order, non-Markdown hidden); flat non-indented stream with collapsible year/month headers; removed values remain visible/filterable as `unconfigured`.
 
-## Questions first — STOP gate (still open for this story)
+## Questions first — STOP gate (CLOSED)
 
-The items below are **genuinely undecided**. Do not implement JSX/CSS for affected surfaces until each is resolved and recorded.
+All four items below are decided by D48-D70 (approved 2026-08-08; see
+`../pending-journal_discovery_and_wireframes-low-med.md`, "Approved 2026-08-08 (D48-D70)").
+Implementation of the affected surfaces may proceed.
 
-1. **Collapsed-header + search interaction:** When a full-text search matches entries inside a collapsed year or month header, must the header auto-expand, or is showing a match count inside the collapsed header acceptable? Silently hiding matched entries is a defect per D16; the exact UX is not yet decided.
-2. **Collapse-state persistence:** Should collapse state survive a panel close/reopen? Is it scoped per workspace or globally? Not decided.
-3. **Collapsed dateline — no metadata:** D22 makes the no-metadata case the common case for new entries. What does the collapsed dateline render when an entry has only a date and no user-defined fields (just `Wednesday, August 5` with no suffix)?
-4. **Measured-column behavior at narrow widths (OWNED HERE):** At what popout width does the date/time/first-line row switch to a compact layout, and which columns are dropped or wrapped? `pending-journal_mobile_refinement-med-med.md` consumes this answer; decide it once, here.
-**STOP gate:** Do not implement the four affected surfaces above until each has a product-owner decision recorded in the discovery story.
+1. **Collapsed-header + search interaction — closed by D52.** While a search query or metadata
+   filter is active, year and month headers containing matches auto-expand and show a match
+   count; clearing the query/filter restores the previous collapse state. Auto-expansion is
+   transient and is never persisted.
+2. **Collapse-state persistence — closed by D53.** Collapse state persists per workspace in
+   desktop state — not in settings, not in the vault — and is restored when the popout reopens.
+3. **Collapsed dateline — no metadata — closed by D54.** An entry with a date and no
+   user-defined field values renders its dateline as the bare date alone, e.g.
+   `Wednesday, August 5` — no separator, no placeholder text. The widget carries an explicit
+   `Add metadata` control in its collapsed state. This REFINES the "no metadata set" copy in
+   state 4 of the approved wireframes, because D22 makes the empty case the normal state of
+   every new entry.
+4. **Measured-column behavior at narrow widths — closed by D55 (owned by this story).** The
+   measured row responds to the popout's own width, not the viewport, at two breakpoints: at
+   320px and above, date + time + first line; below 320px, time joins the date line and the
+   first line wraps beneath; below 260px, the first-line preview is dropped. This story owns
+   these numbers; `pending-journal_mobile_refinement-med-med.md` consumes them and defines no
+   second breakpoint.
+
+Per-artifact mockup sign-off under D34 is still required before implementation of the affected
+surfaces — that is process, not an open product question.
 
 ## Metadata widget route — DECIDED D44
 
@@ -86,7 +104,7 @@ Runtime panel dimension is the only case where a scoped CSSOM custom property on
 
 ## Dependencies
 
-- Approved discovery desktop wireframe and state/copy matrix (closed for the constraints above; open items above must be resolved).
+- Approved discovery desktop wireframe and state/copy matrix; D34 per-artifact mockup sign-off still gates UI work.
 - `plans/extensions/pending-editor_header_contribution-high-med.md` implements D44 before widget integration.
 - `DesktopPanelContext` gap resolution: workspace listing and index access must be provided before the panel factory body can be implemented.
 - Journal data model, journal service, and settings/accessibility contract.
@@ -125,7 +143,7 @@ Runtime panel dimension is the only case where a scoped CSSOM custom property on
 - No calendar view, group-by control, mood-color mapping, emoji vocabulary, paper texture, or handwriting typefaces.
 - No mobile-specific redesign, background indexing, reminders, AI assistance, or extension-host lifecycle code.
 - High contrast is out of scope (themes own it).
-- Do not invent the final mood/activity taxonomy, navigation labels, collapsed-header+search behavior, or narrow-width column layout — all are open items pending product-owner decision.
+- Do not invent the final mood/activity taxonomy (D4 keeps it user-defined) or navigation labels. Collapsed-header search behavior (D52) and narrow-width column layout (D55) are decided; implement them as written rather than reinterpreting them.
 - Do not reimplement D44's registry or portal the widget into CodeMirror DOM.
 
 ## Handoff artifacts

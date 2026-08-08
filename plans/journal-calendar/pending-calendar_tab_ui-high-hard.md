@@ -27,17 +27,40 @@ so no shell or `packages/core` edit is required for rendering. `DesktopTabContex
 `{ rootPath, tabId }`; journal data comes from the service/workspace boundary. Opening from
 the popout still depends on story 9 because `context.workspace` has no `openTab` method.
 
-## Questions first — STOP gate (still open for this story)
+## Questions first — STOP gate (CLOSED)
 
-The items below are **genuinely undecided**. Do not implement the affected surfaces until each is resolved and recorded.
+All five items below are decided by D48-D70 (approved 2026-08-08; see
+`../pending-journal_discovery_and_wireframes-low-med.md`, "Approved 2026-08-08 (D48-D70)").
+Implementation of the affected surfaces may proceed.
 
-1. **Tab singleton and option persistence:** one calendar tab or many; persistence for week/month and active date.
-2. **Calendar on a phone:** canvas-tab layout at phone widths.
-3. **Calendar grid keyboard model:** roving focus, paging keys, and activation semantics.
-4. **Day click with popout closed:** whether the popout opens and how the filter is surfaced.
-5. **Date filter chip:** whether the active day filter is independently dismissible in the popout.
+1. **Tab singleton and option persistence — closed by D56.** The calendar is a singleton tab:
+   `open-calendar` focuses the existing tab when one is open, rather than opening a duplicate.
+   View mode (week/month) and active date persist per workspace and are restored on reopen —
+   required because D25 gives the calendar and popout shared filter state.
+2. **Calendar on a phone — closed by D57.** Both week and month views are available at phone
+   widths. The option strip collapses to a single segmented control. Day cells render dots
+   only, dropping the `+N` remainder text below 40px cell width while the exact count remains
+   in the accessible name (D46). This is a layout threshold, NOT the touch-target audit deferred
+   by D31.
+3. **Calendar grid keyboard model — closed by D58.** The grid is one tab stop with roving
+   focus. Arrows move by day, `Home`/`End` to the focused week's start/end, `PageUp`/`PageDown`
+   by month (`Shift` by year), `Enter`/`Space` activates the day, which under D25 filters the
+   popout. The focused day announces its date and exact matching entry count.
+4. **Day click with popout closed — closed by D59.** Activating a calendar day while the
+   journal popout is closed opens the popout and applies the day filter. Doing nothing visible,
+   or setting an unseen filter, are both defects.
+5. **Date filter chip — closed by D60.** The active day filter appears in the popout chip row
+   as an independently dismissible chip alongside metadata chips and `Clear all`. Dismissing it
+   clears only the day filter, and the calendar's day selection clears in step (D16).
 
-**STOP gate:** Registration and D46 dot rendering are unblocked. Do not implement the remaining option persistence, phone layout, day-routing, chip behavior, or keyboard model until approved.
+Also decided: **D69** gives the extension-facing tab-open route this story's Dependencies
+section flagged as owed by story 9 — `DesktopExtensionContext.tabs` gains a scoped
+`open(kind, title)` restricted to tab kinds the calling extension registered; the internal
+`openTab` stays internal. **D70** keeps `DesktopTabContext` as `{ rootPath, tabId }` for v1 —
+the calendar reads everything else from the journal service and its own settings.
+
+Per-artifact mockup sign-off under D34 still applies before implementation of the affected
+surfaces — that is process, not an open product question.
 
 ## Goal
 
@@ -67,7 +90,7 @@ Do NOT touch `apps/desktop/src/shell/ActivityBar.tsx` for the calendar — no ac
 ## Dependencies
 
 - Shipped tab registry/factory seam; story 9 must still provide an approved extension-facing tab-open route.
-- Approved discovery desktop wireframe; remaining open items above still gate affected UI.
+- Approved discovery desktop wireframe; D34 per-artifact mockup sign-off still gates UI work.
 - Calendar data model implements D43 aggregation/filtering and D46 counts.
 - `pending-journal_panel_ui-high-hard.md` must export a stable filter-state contract (shared filter state per D25).
 - `--tn-*` design token set (no new tokens for this story).
@@ -97,7 +120,7 @@ Do NOT touch `apps/desktop/src/shell/ActivityBar.tsx` for the calendar — no ac
 
 - No calendar activity-bar button or panel registration.
 - No hard-coded mood/activity taxonomy, colors, or icons.
-- No journal service rewrite, mobile refinement (blocked by open item), notifications, streaks, AI/sentiment inference, or extension-host registration.
+- No journal service rewrite, mobile refinement (owned by `pending-journal_mobile_refinement-med-med.md`), notifications, streaks, AI/sentiment inference, or extension-host registration.
 - High contrast is out of scope (themes own it).
 - Do not decide a final visualization or mood/activity palette in implementation.
 - Do not bypass D47 host prefixing or edit shell/core to add a built-in tab kind.
@@ -109,4 +132,4 @@ The following stories need from this one:
 - D47 tab registration contract: local `calendar`, full `journal-calendar.calendar`, factory through `context.tabs.register()` (needed by extension-host integration).
 - Stable filter-state interface (shared with journal popout) so `journal_panel_ui` and this story can consume the same state slice.
 - D46 dot/overflow component API consuming the calendar model's exact, visible-dot, and overflow counts.
-- Remaining open items (keyboard model, phone behavior, persistence and day-routing/chip behavior) forwarded before affected UI work.
+- Decided behavior (D56 persistence, D57 phone layout, D58 keyboard model, D59 day routing, D60 chip) carried into the mockups for D34 sign-off.

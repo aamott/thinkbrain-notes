@@ -34,18 +34,47 @@ D44's observable React editor-header registry must pass post-mount registration/
 before this integration story registers `metadata-widget`. Activation timing can therefore be
 chosen from feature availability/performance needs, not as a correctness workaround.
 
-## Questions first — STOP gate (still open)
+## Questions first — STOP gate — CLOSED 2026-08-08 (D65-D70)
 
-Do not register contributions or expand host contracts until each is resolved and recorded:
+All six items below are now decided. Rationale and rejected alternatives:
+`docs/superpowers/specs/2026-08-08-journal-open-decisions-proposal.md`.
 
-1. **Activation event:** startup, first-view, command, or another trigger; D44 removes timing as a correctness constraint.
-2. **Required beta contribution table:** which approved commands/panels/settings are exposed at beta.
-3. **Mobile representation:** how desktop panel behavior maps to the shared mobile shell.
-4. **Calendar tab opening:** expose a scoped tab-open operation or choose another approved extension-facing route; `context.workspace` has no `openTab` today.
-5. **Service adapter boundary:** choose `DesktopExtensionContext.workspace` or existing workspace adapters with story 3; do not create parallel service paths.
-6. **Calendar factory contract:** whether `{ rootPath, tabId }` is sufficient without widening `DesktopTabContext`.
+1. **Activation event — closed by D65.** `journal-calendar` activates lazily on
+   `onView:journal` and on `onCommand:new-entry`, `onCommand:today`, and
+   `onCommand:open-calendar`. It never activates on `onStartup`; D44's observable
+   editor-header registry removed the only argument for eager activation.
+2. **Required beta contribution table — closed by D66.** All contributions below are
+   real (none placeholder) at beta: panel `journal`, tab `calendar`, commands
+   `new-entry` / `today` / `open-calendar`, editor-header contribution
+   `metadata-widget`, and the settings module. The popout action row is implemented
+   as panel header actions on the `journal` panel — using the existing
+   `PanelAction` (`{ id, label, icon, run }`) field on `DesktopPanelContribution`
+   already defined in `apps/desktop/src/panels/panelRegistry.tsx` and rendered by
+   `apps/desktop/src/panels/PanelTitle.tsx` — not bespoke chrome, and not new
+   platform work.
+3. **Mobile representation — closed by D67.** The journal registers one ordinary
+   left panel and inherits the shell's mobile placement and return path per D26; it
+   contributes no bespoke mobile navigation. The D40 metadata bottom sheet belongs
+   to the widget, not to this story's panel registration.
+4. **Calendar tab opening — closed by D69.** `DesktopExtensionContext.tabs` gains a
+   scoped `open(kind, title)` restricted to tab kinds the calling extension
+   registered. The internal `openTab(kind, title)` on the shell workspace bridge
+   stays internal and is not exposed.
+5. **Service adapter boundary — closed by D68.** The journal service goes through
+   `DesktopExtensionContext.workspace`, not the existing workspace adapters
+   directly. Where that API is insufficient it is extended for every extension
+   rather than bypassed here: the workspace API cannot list notes today, so
+   `listNotes(prefix)` is added, returning relative paths with modified times (the
+   journal cannot browse without it; D32 also needs the mtime ordering for undated
+   files).
+6. **Calendar factory contract — closed by D70.** `DesktopTabContext` stays
+   `{ rootPath, tabId }` for v1; the calendar reads everything else from the
+   journal service (item 5) and its own settings — no widening of
+   `DesktopTabContext`.
 
-**STOP gate:** D47 namespace work is unblocked. Do not finalize activation, beta/mobile surface, tab opening, service adapter, or any host-contract expansion until approved. Templates remain out of v1 by D21.
+**STOP gate: CLOSED.** Registration, host-contract expansion (`listNotes`, scoped
+`tabs.open`), activation wiring, and the beta/mobile surface may proceed within
+D65-D70. Templates remain out of v1 by D21.
 
 ## Goal & scope
 

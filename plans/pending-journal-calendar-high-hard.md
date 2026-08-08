@@ -2,21 +2,24 @@
 
 > Dedicated feature epic for an optional, local-first journal and journaling calendar built on ordinary Markdown notes. Read `plans/app-vision.md`, `plans/technical-decisions.md`, `user-noted-todo.md`, the mobile epic, the UI-shell plans, and `plans/extensions/pending-beta_builtin_extensions-med-med.md` before starting any story.
 
-## Collaboration gate — SATISFIED 2026-08-07
+## Collaboration gate — SATISFIED 2026-08-07, extended 2026-08-08
 
-The product-owner answers are recorded as decisions D1-D47 in
+The product-owner answers are recorded as decisions D1-D70 in
 `journal-calendar/pending-journal_discovery_and_wireframes-low-med.md`, together with the
 approved moodboard, IA and mobile artifacts. **Downstream stories may now proceed within
-those decisions.** The gate remains closed for items the discovery log lists as open, and
-each child story carries its own STOP gate for its undecided items. Superseding decisions
-are recorded as new D-numbers, never by editing earlier ones.
+those decisions.** Superseding decisions are recorded as new D-numbers, never by editing
+earlier ones.
 
-**STOP gate — status:** discovery is complete and approved (D1-D47, artifacts approved
-D35/D37/D39/D40). Information architecture is settled as **IA-3**; the workflow, storage
-layout, metadata model, calendar composition, accessibility bar and mobile split are
-decided. Frontmatter keys are **not** yet defined — that remains story 2's work, bounded by
-D3, D20, D22, D30, D33 and D38. Every UI-heavy child story still repeats a STOP gate for
-its own open items.
+**STOP gate — CLOSED.** Every product question this epic tracked is answered. D1-D47
+settled the workflow, storage layout, metadata model, calendar composition, accessibility
+bar, IA (**IA-3**) and mobile split. D48-D70 closed the remainder: the frontmatter contract
+(`date` key, field-definition shape, invalid-data policy, compatibility promise), panel and
+calendar behavior, backfill mechanics, error copy, the settings list, registration, and the
+extension API additions the journal needs. Rationale and rejected alternatives for that
+batch are in `docs/superpowers/specs/2026-08-08-journal-open-decisions-proposal.md`.
+
+What still gates implementation is process and platform work, not decisions: per-artifact
+mockup sign-off under D34 for the two UI-heavy stories, and the prerequisites listed below.
 
 ## Goal
 
@@ -92,15 +95,22 @@ tracked prerequisites rather than open product decisions.
 | Editor hooks — CodeMirror `Extension[]` / `KeyBinding[]` only | `apps/desktop/src/tabs/editorHookRegistry.ts` |
 | Reference built-in to copy | `apps/desktop/src/extensions/builtins/noteStats.tsx` |
 
-**Gap 1 — REGISTRATION CLOSED; OPENING BRIDGE PENDING.** A contributed calendar kind with a
-`factory` renders through `DesktopExtensionContext.tabs` without shell/core edits. However,
-internal `openTab(kind, title)` is not exposed on `DesktopExtensionContext.workspace`; story 9
-must choose an extension-facing open route before the popout action ships. `DesktopTabContext`
-remains `{ rootPath, tabId }`. Details: `pending-calendar_tab_ui-high-hard.md`.
+**Gap 1 — ROUTE CHOSEN D69; implementation pending.** A contributed calendar kind with a
+`factory` already renders through `DesktopExtensionContext.tabs`. D69 adds a scoped
+`tabs.open(kind, title)` restricted to kinds the calling extension registered; internal
+`openTab` stays internal, and D70 keeps `DesktopTabContext` as `{ rootPath, tabId }`.
 
-Newly available: `DesktopExtensionContext.workspace` reads, writes, creates and opens notes.
-Stories 3 and 9 must decide whether the journal service uses it or the existing workspace
-adapters — a real question, not a settled one.
+**Gap 5 — NEW, from D68.** The journal service goes through
+`DesktopExtensionContext.workspace`, which today reads, writes, creates and opens notes but
+**cannot list them** — so the journal cannot browse entries at all. D68 adds
+`listNotes(prefix)` returning relative paths with modified times; D32's mtime ordering for
+undated files needs the same data.
+
+**Panel header actions — SHIPPED 2026-08-08.** `PanelAction` (`{ id, label, icon, run }`) on
+`DesktopPanelContribution`, rendered by `PanelTitle` for both dock sides. D66's popout action
+row (`New entry`, `Today`, `Open calendar`) uses this contract; no new platform work needed.
+Panels contributed by extensions loaded from disk mount plain DOM via `mount(element, panel)`,
+so the journal is not obliged to ship as a built-in for UI reasons.
 
 **Gap 2 — PATH CHOSEN D44; platform prerequisite pending.** The metadata widget uses a
 new observable disposable React editor-header registry, not CodeMirror `editorHooks`.
@@ -115,13 +125,9 @@ field definitions overlay globals by id, and removed values remain unconfigured 
 **Gap 4 — CLOSED D47.** Built-in extension ids are `journal-calendar`, `git`, and
 `agent-chat`; journal contribution ids are fixed in the discovery log and beta built-ins story.
 
-**Repo hygiene note, for a human to resolve — not changed here.** Three stories in
-`plans/extensions/` are named `done-` (`extension_manifest_format`,
-`extension_capability_compatibility`, `extension_lifecycle_bootstrap`) but their bodies
-still read "Not implemented" or "Partially implemented", while the corresponding code has
-in fact shipped. `pending-internal_contribution_points-low-med.md` has every acceptance
-criterion checked and looks like it should be `done-`. Those files belong to the
-extensions epic, so this epic only reports the inconsistency.
+**Repo hygiene note — RESOLVED 2026-08-08.** The three `done-` stories in
+`plans/extensions/` now carry accurate shipped statuses, and
+`internal_contribution_points` was renamed to `done-`.
 
 ## Story sequence
 
@@ -157,6 +163,7 @@ recorded in the story. Stories may be split further if a subagent would exceed o
 ## Status
 
 - ✅ Product questions answered and discovery/wireframes explicitly approved (D1-D47)
+- ✅ Every remaining product decision closed (D48-D70, approved 2026-08-08)
 - ⬜ Journal data/frontmatter contract approved and tested
 - ⬜ Journal service and daily-note creation implemented
 - ⬜ D41 platform index supports frontmatter facet queries
@@ -165,7 +172,8 @@ recorded in the story. Stories may be split further if a subagent would exceed o
 - ⬜ Journal popout and calendar tab implemented from approved mockups
 - ⬜ Mobile refinement approved and verified
 - ⬜ Built-in registration wired through `desktopExtensionHost`
-- 🟨 Gap 1 partial: tab registration/factory shipped; extension-facing tab-open bridge still pending
+- 🟨 Gap 1 partial: tab registration/factory shipped; D69 tab-open bridge still pending
+- ⬜ Gap 5 (D68): `listNotes` missing from the extension workspace API — blocks browsing
 - ✅ Gap 2 path chosen (D44): React editor-header slot + observable registry; implementation pending
 - ✅ Gap 3 path chosen (D45): shared workspace-scoped extension settings; implementation pending
 - ✅ Gap 4 closed (D47): canonical built-in and journal contribution ids approved

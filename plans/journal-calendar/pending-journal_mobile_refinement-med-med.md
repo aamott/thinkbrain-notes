@@ -23,15 +23,32 @@ pending, so the sheet cannot be built until that route ships.
 
 The discovery gate is CLOSED for the decisions above.
 
-## Questions first — STOP gate (still open for this story)
+## Questions first — STOP gate — CLOSED 2026-08-08 (D57, D55)
 
-The items below are **genuinely undecided**. Do not implement the affected surfaces until each is resolved.
+Rationale and rejected alternatives: `docs/superpowers/specs/2026-08-08-journal-open-decisions-proposal.md`.
 
-1. **Calendar tab on a phone:** How does the canvas tab calendar behave at phone widths? Not decided by D12/D26 (which apply only to the popout). Coordinate with `pending-calendar_tab_ui-high-hard.md`.
-2. **Formal touch-target audit:** Deferred per D31. Once undeferred, this story or a follow-on must audit all interactive elements against the repository's minimum target size and document exceptions.
-3. **Measured-column behavior at narrow widths:** OWNED BY `pending-journal_panel_ui-high-hard.md`, not here. Consume its answer; do not decide a second, conflicting breakpoint.
+1. **Calendar tab on a phone — closed by D57.** Both week and month views are
+   available at phone widths. The view-options control strip collapses to a single
+   segmented control. Day cells render dots only: the `+N` remainder text is
+   dropped below a 40px cell width (per D46's density model), while the exact
+   matching count remains present in the accessible name regardless. This is a
+   layout threshold, not the touch-target audit — see item 2, which stays
+   deferred.
+2. **Formal touch-target audit — still deferred per D31.** Not closed by this
+   batch. Once undeferred, this story or a follow-on must audit all interactive
+   elements against the repository's minimum target size and document exceptions.
+3. **Measured-column behavior at narrow widths — closed by D55, owned by
+   `pending-journal_panel_ui-high-hard.md`.** This story consumes, and must not
+   define a second breakpoint. The measured row responds to the popout's own
+   width, not the viewport, at two breakpoints: at 320px and above it shows date,
+   time, and first line; below 320px the time joins the date line and the first
+   line wraps beneath; below 260px the first-line preview is dropped entirely.
 
-**STOP gate:** Do not implement the bottom sheet, narrow-width column changes, or calendar-on-phone layout until each open item above has a product-owner decision recorded.
+**STOP gate: CLOSED for items 1 and 3.** The calendar-on-phone layout (D57) and the
+narrow-width measured column (D55, consumed from the panel story) may now be
+implemented. Item 2, the formal touch-target audit, remains deferred by D31 and
+blocks nothing else in this story — treat all other touch targets as informal
+until that audit lands.
 
 ## Scope (narrowed)
 
@@ -47,7 +64,7 @@ This story does NOT own:
 
 - Popout placement, return path, bottom-nav subset, or hamburger — those belong to `plans/mobile/pending-responsive_layout-low-med.md`. Coordinate; do not duplicate.
 - Bespoke mobile navigation, a private bottom bar, or a custom back gesture (D26).
-- Calendar tab behavior on a phone (open item above).
+- Calendar tab behavior on a phone (D57).
 
 ## Goal
 
@@ -92,7 +109,7 @@ Do NOT create `apps/mobile/` or add a separate mobile screen tree.
 ## Non-goals
 
 - No bespoke mobile navigation, private bottom bar, custom return path, or `apps/mobile/` directory.
-- No calendar tab phone layout (open item; coordinate with calendar story).
+- No calendar tab phone layout beyond D57; `pending-calendar_tab_ui-high-hard.md` implements it.
 - No separate mobile app, React Native layer, cloud sync, tablet-specific design, or app-store work.
 - No fix for unrelated CodeMirror/Tauri keyboard issues — link to `pending-codemirror_mobile_testing-low-med.md`.
 - High contrast is out of scope (themes own it).
@@ -102,5 +119,5 @@ Do NOT create `apps/mobile/` or add a separate mobile screen tree.
 The following stories need from this one:
 
 - `MetadataBottomSheet` component API and CSS Module for reuse if the metadata widget is extended in future slices.
-- `mobile-a11y-checklist.md` for sign-off by the product owner and for reference by the calendar mobile open item.
+- `mobile-a11y-checklist.md` for sign-off by the product owner and for reference by the calendar tab story.
 - Confirmation (in test output) that the wide-desktop layout is unchanged, for the calendar tab story to rely on.

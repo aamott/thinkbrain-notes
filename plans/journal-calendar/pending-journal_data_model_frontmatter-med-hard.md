@@ -18,14 +18,33 @@ The discovery gate is CLOSED; full rationale and D1-D47 live in
 - **D30/D42:** read the approved narrow ISO forms; timed counters are `N >= 2`, never seconds or date-only counters; date-only sorts before timed entries.
 - **D33/D38:** read leniently; filename date alone qualifies, malformed/absent frontmatter remains eligible and survives writes, and ambiguous dates are `UNDATED` without guessing.
 
-**STOP gate:** The discovery gate above is closed. The following items remain OPEN and must not be silently resolved:
+**STOP gate — CLOSED.** The discovery gate above is closed, and the field-contract items this
+story STOP-gated are now decided (`../pending-journal_discovery_and_wireframes-low-med.md`,
+"Approved 2026-08-08 (D48-D70)"):
 
-- Exact frontmatter date key, field-definition shape, invalid-data policy, and compatibility promise remain unsigned.
-- Rename warnings and folder relocation policy remain open in the journal service story.
+- **Frontmatter date key — closed by D48.** The key is `date`, a plain `YYYY-MM-DD` string with
+  no time component; time lives in the filename only (D17), which wins on conflict (D20). `date`
+  is reserved, alongside the note model's existing reserved keys (`title`, `tags`, `aliases`,
+  `status`, `created_at`, `updated_at`); a user-defined field (D4) may not use any of them.
+- **Field-definition shape — closed by D49.** See "Field-definition and value shapes (D49)" in
+  Scope below.
+- **Invalid-data policy — closed by D50.** Reading is lenient and never repairs. A value whose
+  shape contradicts its declared type is kept verbatim on disk, shown as invalid with a
+  non-blocking notice, and excluded from that field's facet values rather than coerced. Writes
+  happen only on an explicit widget edit and touch only the changed keys; the current serializer
+  may reflow YAML on such a write until
+  `plans/note-model/pending-comment_preserving_frontmatter_roundtrips-low-hard.md` lands.
+- **Compatibility promise — closed by D51.** The v1 stable contract is D42's filename table plus
+  D48's `date` key. User-defined field keys are user-owned — never renamed, migrated, or
+  garbage-collected. No schema-version marker is written into notes (D2). Reserving a further
+  journal frontmatter key requires a new decision.
 
-The filename parser is unblocked by D42. Do not implement frontmatter serializers or validators
-for the remaining open field contract until the product owner signs it off. D45 already settles
-definition drift: preserve existing values and surface removed ones as unconfigured.
+Rename warnings and folder-relocation policy were dropped, not decided — moving or renaming an
+entry is ordinary file management under D2, out of scope for this story.
+
+The filename parser is unblocked by D42. Implement the frontmatter serializers/validators against
+D48-D51 above. D45 already settles definition drift: preserve existing values and surface removed
+ones as unconfigured.
 
 ## Goal
 
@@ -36,6 +55,15 @@ Define platform-agnostic journal metadata and a stable, portable Markdown contra
 - Type definitions for journal date/ref, metadata, and path components.
 - Filename parser: accepts exactly D42's three forms; returns `UNDATED` for every other form; validates dates/times and parses timed counters `N >= 2` without mistaking them for time.
 - Frontmatter helpers: lenient read (D33), date-only write on create (D22), filename-wins resolution on conflict (D20), unknown field pass-through.
+- **Field-definition and value shapes (D49).** A field definition is `{ id, label, type, options? }`.
+  `id` is the literal frontmatter key, matching `^[a-z][a-z0-9_-]*$` and avoiding D48's reserved
+  keys. `type` is one of D4's four input types (`text`, `single-select`, `number`,
+  `multi-select`); `options` is required for `single-select`/`multi-select` and forbidden
+  otherwise. Value shapes are fixed by type: `text` and `single-select` write a plain string,
+  `number` a plain number, `multi-select` a flow list of strings. (Definitions themselves are
+  stored as a single `string` setting with a custom control — owned by
+  `pending-journal_settings_and_accessibility-med-med.md`; this story only consumes the shape
+  for reading/validating values.)
 - Fixtures and unit tests covering every approved format, ambiguous inputs, counter suffixes, malformed YAML, absent frontmatter, and filename/frontmatter date mismatch.
 - A signed-off format table artifact at `plans/journal-calendar/assets/journal-frontmatter-examples.md`.
 

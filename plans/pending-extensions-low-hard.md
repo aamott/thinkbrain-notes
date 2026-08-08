@@ -261,7 +261,7 @@ are not yet formalized, the first story here should establish them.
 
 - ✅ Internal contribution points — core command, panel, editor-hook, and
   settings-schema contracts/bridges are implemented and tested; follow-up review
-  notes remain in `plans/extensions/pending-internal_contribution_points-low-med.md`.
+  notes remain in `plans/extensions/done-internal_contribution_points-low-med.md`.
 - ✅ Contributed tab kinds — `desktopTabRegistry` singleton with renderer `factory`,
   `subscribe`, and disposable registration; `DesktopExtensionContext.tabs.register()` and
   `openTab(kind, title)`. Built-in kinds remain shell-drawn by design.
