@@ -26,6 +26,10 @@ import {
   markdownEditorHookRegistry,
   type MarkdownEditorHookPayload
 } from "../tabs/markdownEditorHooks";
+import {
+  desktopEditorHeaderRegistry,
+  type DesktopEditorHeaderContribution
+} from "../tabs/editorHeaderRegistry";
 import { desktopTabRegistry, type DesktopTabView } from "../tabs/tabRegistry";
 import { appEvents, type AppEvents } from "../events/appEvents";
 import { workspaceDesktopApi } from "../workspace/workspaceAdapter";
@@ -98,6 +102,22 @@ export interface DesktopExtensionEditorHookContributions {
   register(hook: DesktopExtensionEditorHook): Disposable;
 }
 
+/**
+ * Editor-header contributions (D44).
+ *
+ * Separate from `editorHooks`, which stays limited to CodeMirror extensions and
+ * keybindings: a header is a React surface, and overloading one surface with
+ * both would tie a component's lifetime to CodeMirror's.
+ */
+export interface DesktopExtensionEditorHeaderContributions {
+  register(header: DesktopExtensionEditorHeader): Disposable;
+}
+
+export type DesktopExtensionEditorHeader = Omit<
+  DesktopEditorHeaderContribution,
+  "id"
+> & { readonly id: string };
+
 export interface DesktopExtensionTabContributions {
   register(tab: DesktopExtensionTab): Disposable;
   /**
@@ -123,6 +143,7 @@ export interface DesktopExtensionContext extends ExtensionContext {
   readonly commands: DesktopExtensionContributions;
   readonly panels: DesktopExtensionPanelContributions;
   readonly editorHooks: DesktopExtensionEditorHookContributions;
+  readonly editorHeaders: DesktopExtensionEditorHeaderContributions;
   readonly tabs: DesktopExtensionTabContributions;
   readonly settings: DesktopExtensionSettings;
   /** Notifies about app events such as notes being saved or created. */
@@ -263,6 +284,7 @@ export interface DesktopExtensionHostRegistries {
   readonly commands: typeof desktopCommandRegistry;
   readonly panels: typeof desktopPanelRegistry;
   readonly editorHooks: typeof markdownEditorHookRegistry;
+  readonly editorHeaders: typeof desktopEditorHeaderRegistry;
   readonly tabs: typeof desktopTabRegistry;
 }
 
@@ -270,6 +292,7 @@ const defaultRegistries = (): DesktopExtensionHostRegistries => ({
   commands: desktopCommandRegistry,
   panels: desktopPanelRegistry,
   editorHooks: markdownEditorHookRegistry,
+  editorHeaders: desktopEditorHeaderRegistry,
   tabs: desktopTabRegistry
 });
 
@@ -360,6 +383,15 @@ function createDesktopExtensionContext(
         return own(context, registries.editorHooks.register({
           ...hook,
           id: prefixId(context.extensionId, "Editor hook", hook.id)
+        }), assertActive);
+      }
+    },
+    editorHeaders: {
+      register: (header) => {
+        assertActive();
+        return own(context, registries.editorHeaders.register({
+          ...header,
+          id: prefixId(context.extensionId, "Editor header", header.id)
         }), assertActive);
       }
     },

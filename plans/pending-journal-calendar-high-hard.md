@@ -86,7 +86,7 @@ Prerequisites still to build, all decided:
 | # | Needs | Owner |
 |---|---|---|
 | ~~1~~ | ✅ `tabs.open(kind, title)` shipped 2026-08-08 | — |
-| 2 | React editor-header slot for `metadata-widget` (D44) | `extensions/pending-editor_header_contribution-high-med.md` |
+| ~~2~~ | ✅ React editor-header slot shipped 2026-08-08 (D44) | — |
 | 3 | Workspace-scoped extension settings + UI (D45) | `extensions/pending-extension_settings-low-med.md` |
 | ~~4~~ | ✅ `listNotes(prefix)` shipped 2026-08-08 | — |
 | 5 | Frontmatter metadata facets in the index (D41) | `indexing-search/pending-frontmatter_metadata_facets-high-hard.md` |

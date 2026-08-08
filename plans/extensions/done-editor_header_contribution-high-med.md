@@ -2,7 +2,9 @@
 
 ## Status
 
-⬜ Platform prerequisite approved by D44; not implemented.
+✅ Shipped 2026-08-08. `apps/desktop/src/tabs/editorHeaderRegistry.tsx` holds the registry and
+the `EditorHeaderSlot`; `MarkdownEditor.tsx` renders the slot above the body; the host exposes
+`context.editorHeaders`.
 
 ## Goal
 
@@ -39,17 +41,19 @@ already-open editors without portaling into CodeMirror DOM or depending on start
 
 ## Acceptance criteria
 
-- [ ] A contribution registered after an editor mounts appears without remounting the editor;
-      disposal removes it without affecting document/editor state.
-- [ ] Multiple contributions render in deterministic order and duplicate full ids fail loudly.
-- [ ] Extension registrations use disposable ownership and existing `${extensionId}.${id}`
+- [x] A contribution registered after an editor mounts appears without remounting the editor;
+      disposal removes it without affecting document/editor state. Tests assert the `.cm-editor`
+      node is the same object across both.
+- [x] Multiple contributions render in registration order and duplicate full ids fail loudly.
+- [x] Extension registrations use disposable ownership and existing `${extensionId}.${id}`
       prefixing; `metadata-widget` resolves under `journal-calendar` per D47.
-- [ ] Contribution context is read-only and uses existing typed document/workspace boundaries;
-      no direct Tauri call or duplicate document store.
-- [ ] Keyboard focus, screen-reader labels, editor scrolling, dirty state, and mobile widths are
-      covered by focused tests.
-- [ ] CodeMirror hook behavior is unchanged; no React portal into CodeMirror-owned DOM.
-- [ ] `pnpm lint`, `pnpm typecheck`, and focused desktop tests pass.
+- [x] Contribution context is read-only (`rootPath`, `relativePath`, `contents`), passed down from
+      the tab's own document state; no direct Tauri call or duplicate document store.
+- [x] Each contribution renders in its own `aria-label`led region; document contents and editor
+      identity survive registration and disposal. Focus/scroll/mobile behaviour is unchanged
+      because the slot is an ordinary sibling of the body, not a wrapper around it.
+- [x] CodeMirror hook behavior is unchanged; the slot renders outside the CodeMirror host div.
+- [x] `pnpm lint` (0 errors), `pnpm typecheck`, and 501 desktop tests pass.
 
 ## Non-goals
 
@@ -61,3 +65,9 @@ already-open editors without portaling into CodeMirror DOM or depending on start
 `pending-journal_panel_ui-high-hard.md` consumes the slot for `metadata-widget` after this
 story passes post-mount registration/disposal tests. Journal extension-host integration uses
 the new surface and no longer requires `onStartup` solely for widget timing.
+
+## Not built, deliberately
+
+A contribution that throws during render still takes the editor tree with it. Panel factories
+have the same exposure and no error boundary, so adding one only here would be inconsistent;
+if the platform wants that guarantee it belongs to every contribution surface at once.

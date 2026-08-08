@@ -15,6 +15,7 @@ import { createDesktopTabRegistry } from "../tabs/tabRegistry";
 import { setWorkspaceBridge } from "./workspaceBridge";
 import { desktopPanelRegistry } from "../panels/panelRegistry";
 import { markdownEditorHookRegistry } from "../tabs/markdownEditorHooks";
+import { createDesktopEditorHeaderRegistry } from "../tabs/editorHeaderRegistry";
 import {
   createDesktopExtensionHost,
   type DesktopExtensionContext,
@@ -358,5 +359,54 @@ describe("workspace and tab contributions", () => {
 
     expect(() => captured?.tabs.open("calendar", "August 2026")).toThrow(/no longer active/i);
     setWorkspaceBridge(null);
+  });
+});
+
+describe("editor header contributions", () => {
+  const dateline = {
+    id: "metadata-widget",
+    label: "Entry metadata",
+    render: () => null
+  };
+
+  it("registers an editor header under a prefixed id and disposes it", async () => {
+    const editorHeaders = createDesktopEditorHeaderRegistry();
+    const host = createDesktopExtensionHost({ editorHeaders });
+    host.register(definition("journal-calendar", (context) => {
+      context.editorHeaders.register(dateline);
+    }));
+
+    await host.activate("journal-calendar");
+    expect(editorHeaders.get("journal-calendar.metadata-widget")?.label).toBe(
+      "Entry metadata"
+    );
+
+    await host.deactivate("journal-calendar");
+    expect(editorHeaders.get("journal-calendar.metadata-widget")).toBeUndefined();
+  });
+
+  it("rejects a header id that is not a relative kebab-case id", async () => {
+    const editorHeaders = createDesktopEditorHeaderRegistry();
+    const host = createDesktopExtensionHost({ editorHeaders });
+    host.register(definition("journal-calendar", (context) => {
+      context.editorHeaders.register({ ...dateline, id: "Metadata Widget" });
+    }));
+
+    await expect(host.activate("journal-calendar")).rejects.toThrow();
+    expect(editorHeaders.entries()).toEqual([]);
+  });
+
+  it("refuses to register once the extension is no longer active", async () => {
+    const editorHeaders = createDesktopEditorHeaderRegistry();
+    const host = createDesktopExtensionHost({ editorHeaders });
+    let captured: DesktopExtensionContext | undefined;
+    host.register(definition("journal-calendar", (context) => {
+      captured = context;
+    }));
+
+    await host.activate("journal-calendar");
+    await host.deactivate("journal-calendar");
+
+    expect(() => captured?.editorHeaders.register(dateline)).toThrow();
   });
 });

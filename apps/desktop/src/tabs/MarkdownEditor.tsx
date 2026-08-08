@@ -2,6 +2,7 @@ import { Compartment, EditorState } from "@codemirror/state";
 import { keymap, EditorView } from "@codemirror/view";
 import { useEffect, useRef, useState } from "react";
 
+import { EditorHeaderSlot } from "./editorHeaderRegistry";
 import { livePreview as livePreviewExtension } from "./livePreview";
 import {
   markdownEditorHookRegistry,
@@ -12,6 +13,10 @@ export interface MarkdownEditorProps {
   readonly value: string;
   readonly isSaving?: boolean;
   readonly error?: string | null;
+  /** Workspace root of the open document, passed to header contributions (D44). */
+  readonly rootPath?: string | null;
+  /** Workspace-relative path of the open document, passed to header contributions. */
+  readonly relativePath?: string | null;
   /** Renders Markdown formatted inline, revealing source at the cursor. */
   readonly livePreview?: boolean;
   /** Resolves relative image sources to loadable URLs. */
@@ -25,6 +30,8 @@ export function MarkdownEditor({
   value,
   isSaving = false,
   error,
+  rootPath = null,
+  relativePath = null,
   livePreview = true,
   resolveAssetUrl,
   onChange,
@@ -123,6 +130,7 @@ export function MarkdownEditor({
           {error}
         </p>
       )}
+      <EditorHeaderSlot context={{ rootPath, relativePath, contents: value }} />
       <div
         className="min-h-0 flex-1 overflow-auto [&_.cm-editor]:min-h-full [&_.cm-editor]:bg-editor [&_.cm-editor]:text-foreground [&_.cm-editor]:font-mono [&_.cm-editor]:text-sm [&_.cm-editor]:leading-[1.65] [&_.cm-scroller]:overflow-auto [&_.cm-content]:pt-4 [&_.cm-content]:px-5 [&_.cm-content]:pb-16 [&_.cm-focused]:outline-none"
         ref={hostRef}

@@ -4,6 +4,10 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import {
+  desktopEditorHeaderRegistry,
+  type EditorHeaderContext
+} from "./editorHeaderRegistry";
 import { MarkdownEditor } from "./MarkdownEditor";
 
 let root: Root | null = null;
@@ -105,5 +109,70 @@ describe("MarkdownEditor", () => {
     await act(async () => root?.unmount());
     expect(container.querySelector(".cm-editor")).toBeNull();
     root = null;
+  });
+});
+
+describe("MarkdownEditor header slot", () => {
+  const header = (id: string) => ({
+    id,
+    label: "Entry metadata",
+    render: ({ relativePath }: EditorHeaderContext) => <p>header for {relativePath}</p>
+  });
+
+  it("renders a contributed header above the editor body", async () => {
+    const handle = desktopEditorHeaderRegistry.register(header("above-body"));
+    try {
+      const host = await mount(
+        <MarkdownEditor
+          value="body"
+          relativePath="journal/2026/08/2026-08-07-1802.md"
+          onChange={() => {}}
+          onSave={() => {}}
+        />
+      );
+
+      const region = host.querySelector('[data-editor-header="above-body"]');
+      expect(region?.textContent).toBe("header for journal/2026/08/2026-08-07-1802.md");
+      // Above the text, not inside CodeMirror's DOM.
+      expect(region?.compareDocumentPosition(host.querySelector(".cm-editor")!)).toBe(
+        Node.DOCUMENT_POSITION_FOLLOWING
+      );
+    } finally {
+      handle.dispose();
+    }
+  });
+
+  it("shows a header registered after the editor mounted, without rebuilding it", async () => {
+    // A lazily activated extension must reach editors that are already open,
+    // and doing so must not cost the user their cursor or undo history.
+    const host = await mount(
+      <MarkdownEditor value="body" relativePath="note.md" onChange={() => {}} onSave={() => {}} />
+    );
+    const editorBefore = host.querySelector(".cm-editor");
+
+    const handle = desktopEditorHeaderRegistry.register(header("late"));
+    try {
+      await act(async () => {});
+
+      expect(host.querySelector('[data-editor-header="late"]')).not.toBeNull();
+      expect(host.querySelector(".cm-editor")).toBe(editorBefore);
+    } finally {
+      handle.dispose();
+    }
+  });
+
+  it("removes a disposed header without disturbing the document", async () => {
+    const host = await mount(
+      <MarkdownEditor value="body" relativePath="note.md" onChange={() => {}} onSave={() => {}} />
+    );
+    const handle = desktopEditorHeaderRegistry.register(header("temporary"));
+    await act(async () => {});
+    const editorBefore = host.querySelector(".cm-editor");
+
+    await act(async () => handle.dispose());
+
+    expect(host.querySelector('[data-editor-header="temporary"]')).toBeNull();
+    expect(host.querySelector(".cm-editor")).toBe(editorBefore);
+    expect(host.querySelector(".cm-content")?.textContent).toContain("body");
   });
 });

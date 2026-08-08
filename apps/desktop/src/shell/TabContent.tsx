@@ -133,6 +133,8 @@ export function TabContent({ tab, document, onChange, onSave }: TabContentProps)
         value={document.contents}
         isSaving={document.phase === "saving"}
         error={document.error}
+        rootPath={rootPath ?? null}
+        relativePath={relativePath ?? null}
         livePreview={livePreview}
         resolveAssetUrl={resolveAssetUrl}
         onChange={(contents) => onChange(tab.id, contents)}
