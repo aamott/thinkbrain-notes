@@ -1010,6 +1010,7 @@ fn desktop_state_update_merges_concurrent_mrus_and_preserves_app_settings() {
             left_panel_width: Some(352.0),
             right_panel_width: None,
             bottom_panel_open: Some(true),
+            development_extension_directories: None,
         },
     )
     .expect("first desktop-state update succeeds");
@@ -1026,6 +1027,7 @@ fn desktop_state_update_merges_concurrent_mrus_and_preserves_app_settings() {
             left_panel_width: None,
             right_panel_width: Some(512.0),
             bottom_panel_open: None,
+            development_extension_directories: None,
         },
     )
     .expect("second desktop-state update succeeds");
@@ -1047,8 +1049,87 @@ fn desktop_state_update_merges_concurrent_mrus_and_preserves_app_settings() {
             "explorerOpen": true,
             "leftPanelWidth": 352.0,
             "rightPanelWidth": 480.0,
-            "bottomPanelOpen": true
+            "bottomPanelOpen": true,
+            "developmentExtensionDirectories": []
         })
+    );
+}
+
+#[test]
+fn desktop_state_persists_development_extension_directories_verbatim() {
+    // Directories are stored as given — not canonicalized — so a directory
+    // that is temporarily missing stays in the list instead of vanishing.
+    let stored = update_desktop_state_contents(
+        None,
+        DesktopStateUpdate {
+            last_workspace_path: None,
+            recent_workspace_paths: None,
+            explorer_open: None,
+            left_panel_width: None,
+            right_panel_width: None,
+            bottom_panel_open: None,
+            development_extension_directories: Some(vec![
+                "/ext/one".to_string(),
+                "".to_string(),
+                "/ext/two".to_string(),
+                "/ext/one".to_string(),
+            ]),
+        },
+    )
+    .expect("desktop-state update succeeds");
+
+    let settings: Value = serde_json::from_str(&stored).expect("serialized settings are valid");
+    assert_eq!(
+        settings["desktopState"]["developmentExtensionDirectories"],
+        serde_json::json!(["/ext/one", "/ext/two"])
+    );
+
+    // An update that does not mention the field keeps the stored list.
+    let unchanged = update_desktop_state_contents(
+        Some(&stored),
+        DesktopStateUpdate {
+            last_workspace_path: None,
+            recent_workspace_paths: None,
+            explorer_open: Some(true),
+            left_panel_width: None,
+            right_panel_width: None,
+            bottom_panel_open: None,
+            development_extension_directories: None,
+        },
+    )
+    .expect("unrelated desktop-state update succeeds");
+
+    let settings: Value = serde_json::from_str(&unchanged).expect("serialized settings are valid");
+    assert_eq!(
+        settings["desktopState"]["developmentExtensionDirectories"],
+        serde_json::json!(["/ext/one", "/ext/two"])
+    );
+}
+
+#[test]
+fn desktop_state_without_extension_directories_defaults_to_empty() {
+    let existing = serde_json::json!({
+        "desktopState": { "version": 3, "explorerOpen": true }
+    });
+
+    let updated = update_desktop_state_contents(
+        Some(&existing.to_string()),
+        DesktopStateUpdate {
+            last_workspace_path: None,
+            recent_workspace_paths: None,
+            explorer_open: None,
+            left_panel_width: None,
+            right_panel_width: None,
+            bottom_panel_open: None,
+            development_extension_directories: None,
+        },
+    )
+    .expect("desktop-state update succeeds");
+
+    let settings: Value = serde_json::from_str(&updated).expect("serialized settings are valid");
+    assert_eq!(
+        settings["desktopState"]["developmentExtensionDirectories"],
+        serde_json::json!([])
     );
 }
 

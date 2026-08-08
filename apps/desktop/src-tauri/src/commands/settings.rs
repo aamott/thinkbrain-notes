@@ -35,6 +35,8 @@ pub struct DesktopStateUpdate {
     pub right_panel_width: Option<f64>,
     #[serde(default)]
     pub bottom_panel_open: Option<bool>,
+    #[serde(default)]
+    pub development_extension_directories: Option<Vec<String>>,
 }
 
 
@@ -46,6 +48,7 @@ pub struct DesktopState {
     left_panel_width: f64,
     right_panel_width: f64,
     bottom_panel_open: bool,
+    development_extension_directories: Vec<String>,
 }
 
 
@@ -262,6 +265,7 @@ pub fn read_desktop_state(app_settings: &Map<String, Value>) -> DesktopState {
                 None,
                 None,
                 None,
+                None,
             )
         })
 }
@@ -287,6 +291,7 @@ pub fn read_versioned_desktop_state(state: &Map<String, Value>) -> DesktopState 
         state.get("leftPanelWidth"),
         state.get("rightPanelWidth"),
         state.get("bottomPanelOpen"),
+        state.get("developmentExtensionDirectories"),
     )
 }
 
@@ -322,6 +327,10 @@ pub fn apply_desktop_state_update(current: DesktopState, update: DesktopStateUpd
             .map(clamp_panel_width)
             .unwrap_or(current.right_panel_width),
         bottom_panel_open: update.bottom_panel_open.unwrap_or(current.bottom_panel_open),
+        development_extension_directories: update
+            .development_extension_directories
+            .map(normalize_extension_directories)
+            .unwrap_or(current.development_extension_directories),
     }
 }
 
@@ -333,6 +342,7 @@ pub fn create_desktop_state(
     left_panel_width: Option<&Value>,
     right_panel_width: Option<&Value>,
     bottom_panel_open: Option<&Value>,
+    development_extension_directories: Option<&Value>,
 ) -> DesktopState {
     let last_workspace_path = last_workspace_path
         .and_then(Value::as_str)
@@ -358,6 +368,18 @@ pub fn create_desktop_state(
         left_panel_width: read_panel_width(left_panel_width, DEFAULT_LEFT_PANEL_WIDTH),
         right_panel_width: read_panel_width(right_panel_width, DEFAULT_RIGHT_PANEL_WIDTH),
         bottom_panel_open: bottom_panel_open.and_then(Value::as_bool).unwrap_or(false),
+        development_extension_directories: development_extension_directories
+            .and_then(Value::as_array)
+            .map(|directories| {
+                normalize_extension_directories(
+                    directories
+                        .iter()
+                        .filter_map(Value::as_str)
+                        .map(str::to_owned)
+                        .collect(),
+                )
+            })
+            .unwrap_or_default(),
     }
 }
 
@@ -370,7 +392,24 @@ pub fn default_desktop_state() -> DesktopState {
         left_panel_width: DEFAULT_LEFT_PANEL_WIDTH,
         right_panel_width: DEFAULT_RIGHT_PANEL_WIDTH,
         bottom_panel_open: false,
+        development_extension_directories: Vec::new(),
     }
+}
+
+
+/// Deduplicates extension directories without touching the filesystem.
+///
+/// Unlike workspace paths these are deliberately not canonicalized: a
+/// directory that is temporarily missing must stay in the stored list so the
+/// user can fix it rather than silently losing the entry.
+pub fn normalize_extension_directories(directories: Vec<String>) -> Vec<String> {
+    let mut normalized: Vec<String> = Vec::with_capacity(directories.len());
+    for directory in directories {
+        if !directory.is_empty() && !normalized.contains(&directory) {
+            normalized.push(directory);
+        }
+    }
+    normalized
 }
 
 
@@ -453,6 +492,16 @@ pub fn serialize_desktop_state(state: DesktopState) -> Value {
     serialized.insert("leftPanelWidth".to_string(), Value::from(state.left_panel_width));
     serialized.insert("rightPanelWidth".to_string(), Value::from(state.right_panel_width));
     serialized.insert("bottomPanelOpen".to_string(), Value::Bool(state.bottom_panel_open));
+    serialized.insert(
+        "developmentExtensionDirectories".to_string(),
+        Value::Array(
+            state
+                .development_extension_directories
+                .into_iter()
+                .map(Value::String)
+                .collect(),
+        ),
+    );
     Value::Object(serialized)
 }
 

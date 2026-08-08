@@ -4,6 +4,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { ExtensionsPanel } from "./ExtensionsPanel";
+import { setLocalExtensions } from "./localExtensionsRef";
+import type { LocalExtensions } from "./localExtensions";
 
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
@@ -13,6 +15,7 @@ afterEach(async () => {
   container?.remove();
   root = null;
   container = null;
+  setLocalExtensions(null);
 });
 
 const render = async (element: React.ReactElement): Promise<HTMLDivElement> => {
@@ -57,5 +60,32 @@ describe("ExtensionsPanel", () => {
     );
     expect(host.textContent).toContain("Incompatible");
     expect(host.textContent).toContain("Requires host api ^9.0.0");
+  });
+
+  it("reports stored directories that failed to load at startup", async () => {
+    // A stable reference: useSyncExternalStore requires a cached snapshot.
+    const failures = [
+      {
+        directory: "/ext/gone",
+        diagnostics: [
+          { code: "manifest_unreadable", message: "Could not read extension.json", severity: "error" as const }
+        ]
+      }
+    ];
+    const local: LocalExtensions = {
+      add: async () => ({ loaded: true, diagnostics: [] }),
+      reload: async () => ({ loaded: true, diagnostics: [] }),
+      remove: async () => undefined,
+      restore: async () => undefined,
+      startupFailures: () => failures,
+      subscribe: () => () => undefined
+    };
+    setLocalExtensions(local);
+
+    const host = await render(<ExtensionsPanel entries={[]} />);
+
+    const errors = host.querySelector('[aria-label="Extension load errors"]');
+    expect(errors?.textContent).toContain("/ext/gone");
+    expect(errors?.textContent).toContain("Could not read extension.json");
   });
 });

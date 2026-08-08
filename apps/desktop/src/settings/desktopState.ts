@@ -17,6 +17,7 @@ export interface DesktopState {
   readonly leftPanelWidth: number;
   readonly rightPanelWidth: number;
   readonly bottomPanelOpen: boolean;
+  readonly developmentExtensionDirectories: readonly string[];
 }
 
 export interface DesktopStateUpdate {
@@ -26,6 +27,7 @@ export interface DesktopStateUpdate {
   readonly leftPanelWidth?: number;
   readonly rightPanelWidth?: number;
   readonly bottomPanelOpen?: boolean;
+  readonly developmentExtensionDirectories?: readonly string[];
 }
 
 export interface DesktopStateGateway {
@@ -41,7 +43,8 @@ export const DEFAULT_DESKTOP_STATE: DesktopState = Object.freeze({
   explorerOpen: true,
   leftPanelWidth: DEFAULT_LEFT_PANEL_WIDTH,
   rightPanelWidth: DEFAULT_RIGHT_PANEL_WIDTH,
-  bottomPanelOpen: false
+  bottomPanelOpen: false,
+  developmentExtensionDirectories: []
 });
 
 const nativeDesktopStateGateway: DesktopStateGateway = {
@@ -170,7 +173,11 @@ function applyDesktopStateUpdate(
     rightPanelWidth:
       update.rightPanelWidth === undefined ? state.rightPanelWidth : update.rightPanelWidth,
     bottomPanelOpen:
-      update.bottomPanelOpen === undefined ? state.bottomPanelOpen : update.bottomPanelOpen
+      update.bottomPanelOpen === undefined ? state.bottomPanelOpen : update.bottomPanelOpen,
+    developmentExtensionDirectories:
+      update.developmentExtensionDirectories === undefined
+        ? state.developmentExtensionDirectories
+        : update.developmentExtensionDirectories
   });
 }
 
@@ -189,8 +196,22 @@ function createDesktopState(value: Readonly<Record<string, unknown>>): DesktopSt
     bottomPanelOpen:
       typeof value.bottomPanelOpen === "boolean"
         ? value.bottomPanelOpen
-        : DEFAULT_DESKTOP_STATE.bottomPanelOpen
+        : DEFAULT_DESKTOP_STATE.bottomPanelOpen,
+    developmentExtensionDirectories: normalizeExtensionDirectories(
+      value.developmentExtensionDirectories
+    )
   };
+}
+
+/**
+ * Deduplicates extension directories without resolving them: a directory that
+ * is temporarily missing must stay stored so the user can fix it.
+ */
+function normalizeExtensionDirectories(value: unknown): readonly string[] {
+  const directories = Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === "string" && entry.length > 0)
+    : [];
+  return [...new Set(directories)];
 }
 
 function readWorkspacePath(value: unknown): string | null {

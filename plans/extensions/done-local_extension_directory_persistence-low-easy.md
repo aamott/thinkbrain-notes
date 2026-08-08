@@ -2,8 +2,12 @@
 
 ## Status
 
-⬜ Not implemented. Directories added through the Extensions panel load
-correctly but are forgotten on restart.
+✅ Done. `developmentExtensionDirectories` is stored in `desktopState`
+(Rust + TS mirrors), `createLocalExtensions` persists on add/remove and
+restores at startup via `restore()`, and a stored directory that fails to
+load stays stored and reports its diagnostics in the Extensions panel.
+Directories are deliberately not canonicalized so a temporarily missing one
+is not silently dropped.
 
 ## Goal
 
@@ -25,10 +29,10 @@ them at startup. Deferred out of the loader story because it needs a new
 
 ## Acceptance criteria
 
-- [ ] Added directories survive a restart.
-- [ ] A removed directory is not reloaded.
-- [ ] A directory that fails to load reports why and stays listed.
-- [ ] Existing settings documents without the field still parse.
+- [x] Added directories survive a restart.
+- [x] A removed directory is not reloaded.
+- [x] A directory that fails to load reports why and stays listed.
+- [x] Existing settings documents without the field still parse.
 
 ## Automated validation
 

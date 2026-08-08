@@ -193,7 +193,8 @@ describe("desktop state persistence", () => {
         explorerOpen: false,
         leftPanelWidth: 288,
         rightPanelWidth: 320,
-        bottomPanelOpen: false
+        bottomPanelOpen: false,
+        developmentExtensionDirectories: []
       }
     });
   });
@@ -294,6 +295,44 @@ describe("desktop state persistence", () => {
       rightPanelWidth: 304,
       bottomPanelOpen: true
     });
+  });
+
+  it("parses stored development extension directories, dropping junk entries", () => {
+    expect(
+      parseDesktopState(
+        JSON.stringify({
+          [DESKTOP_STATE_KEY]: {
+            version: 3,
+            developmentExtensionDirectories: ["/ext/one", "", 7, "/ext/two", "/ext/one"]
+          }
+        })
+      )
+    ).toEqual({
+      ...DEFAULT_DESKTOP_STATE,
+      developmentExtensionDirectories: ["/ext/one", "/ext/two"]
+    });
+  });
+
+  it("saves development extension directories without touching other state", async () => {
+    const gateway = createGateway(
+      JSON.stringify({
+        theme: "dark",
+        [DESKTOP_STATE_KEY]: { version: 3, explorerOpen: false }
+      })
+    );
+
+    const saved = await saveDesktopState(
+      { developmentExtensionDirectories: ["/ext/one"] },
+      gateway
+    );
+
+    expect(saved.developmentExtensionDirectories).toEqual(["/ext/one"]);
+    expect(saved.explorerOpen).toBe(false);
+    const written = getWrittenSettings(gateway);
+    expect(written.theme).toBe("dark");
+    expect(
+      (written[DESKTOP_STATE_KEY] as Record<string, unknown>).developmentExtensionDirectories
+    ).toEqual(["/ext/one"]);
   });
 });
 

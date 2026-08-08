@@ -121,6 +121,59 @@ test("loads, runs, reloads, and removes an extension from a local directory", as
   await expect(list).not.toContainText("Hello Disk");
 });
 
+test("restores stored extension directories at startup and reports one that fails", async ({ page }) => {
+  await page.addInitScript(
+    ({ files }) => {
+      const appWindow = window as Window & {
+        isTauri?: boolean;
+        __TAURI_INTERNALS__?: { invoke: (command: string, args: Record<string, unknown>) => Promise<unknown> };
+      };
+      appWindow.isTauri = true;
+      appWindow.__TAURI_INTERNALS__ = {
+        async invoke(command, args) {
+          if (command === "read_extension_file") {
+            if (String(args.directory) !== "/ext/hello-disk") {
+              throw new Error(`missing directory ${String(args.directory)}`);
+            }
+            const contents = files[String(args.relativePath)];
+            if (contents === undefined) throw new Error(`missing ${String(args.relativePath)}`);
+            return contents;
+          }
+          if (command === "read_app_settings") {
+            return JSON.stringify({
+              desktopState: {
+                version: 3,
+                developmentExtensionDirectories: ["/ext/hello-disk", "/ext/vanished"]
+              }
+            });
+          }
+          if (command === "window_workspace_root") return null;
+          return null;
+        }
+      };
+    },
+    {
+      files: {
+        "extension.json": JSON.stringify(MANIFEST),
+        "extension.js": EXTENSION_SOURCE
+      }
+    }
+  );
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "Extensions", exact: true }).click();
+
+  // The stored directory loaded again with no user action.
+  const list = page.getByRole("list", { name: "Installed extensions" });
+  await expect(list).toContainText("Hello Disk");
+  await expect(list).toContainText("/ext/hello-disk");
+
+  // The vanished directory stays reported instead of silently disappearing.
+  await expect(page.getByRole("list", { name: "Extension load errors" })).toContainText(
+    "/ext/vanished"
+  );
+});
+
 test("reports a broken extension directory without registering anything", async ({ page }) => {
   await fakeExtensionDirectory(page, { "extension.json": "{ not json" });
   await page.goto("/");

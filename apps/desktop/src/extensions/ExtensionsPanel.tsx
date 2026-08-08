@@ -3,14 +3,21 @@ import { useCallback, useState, useSyncExternalStore } from "react";
 import { pickDirectoryPath } from "../native/dialogs";
 import { getExtensionBootstrap, type BootstrapEntry } from "./bootstrapRef";
 import { getLocalExtensions } from "./localExtensionsRef";
-import type { LoadOutcome } from "./localExtensions";
+import type { LoadOutcome, StartupFailure } from "./localExtensions";
 
 const EMPTY: readonly BootstrapEntry[] = [];
+const NO_FAILURES: readonly StartupFailure[] = [];
 
 const subscribe = (listener: () => void): (() => void) =>
   getExtensionBootstrap()?.subscribe(listener) ?? (() => undefined);
 
 const snapshot = (): readonly BootstrapEntry[] => getExtensionBootstrap()?.entries() ?? EMPTY;
+
+const subscribeStartupFailures = (listener: () => void): (() => void) =>
+  getLocalExtensions()?.subscribe(listener) ?? (() => undefined);
+
+const startupFailuresSnapshot = (): readonly StartupFailure[] =>
+  getLocalExtensions()?.startupFailures() ?? NO_FAILURES;
 
 export interface ExtensionsPanelProps {
   /** Injected by tests; defaults to the app-wide bootstrap. */
@@ -37,8 +44,22 @@ const STATUS_LABELS: Record<BootstrapEntry["status"], string> = {
 export function ExtensionsPanel({ entries }: ExtensionsPanelProps) {
   const live = useSyncExternalStore(subscribe, snapshot, snapshot);
   const resolved = entries ?? live;
+  const startupFailures = useSyncExternalStore(
+    subscribeStartupFailures,
+    startupFailuresSnapshot,
+    startupFailuresSnapshot
+  );
   const [errors, setErrors] = useState<readonly string[]>([]);
   const [busy, setBusy] = useState(false);
+
+  // Stored directories that failed to load at startup stay stored so the user
+  // can fix them; they are reported here alongside interactive load errors.
+  const startupErrors = startupFailures.flatMap((failure) =>
+    failure.diagnostics
+      .filter((diagnostic) => diagnostic.severity === "error")
+      .map((diagnostic) => `${failure.directory}: ${diagnostic.message}`)
+  );
+  const allErrors = [...startupErrors, ...errors];
 
   const report = useCallback((outcome: LoadOutcome): void => {
     setErrors(
@@ -100,9 +121,9 @@ export function ExtensionsPanel({ entries }: ExtensionsPanelProps) {
         </button>
       </div>
 
-      {errors.length > 0 && (
+      {allErrors.length > 0 && (
         <ul className="m-0 list-none border-b border-border p-2" aria-label="Extension load errors">
-          {errors.map((message) => (
+          {allErrors.map((message) => (
             <li key={message} className="text-[0.6875rem] text-danger">
               {message}
             </li>

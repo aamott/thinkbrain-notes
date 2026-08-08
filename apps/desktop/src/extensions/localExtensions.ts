@@ -5,6 +5,11 @@
  * bootstrap owns registration, stubs, lazy activation, and disposal. This joins
  * the two and is the only place that knows a directory can be re-read.
  *
+ * Added directories are remembered through an injected store so they survive a
+ * restart. A stored directory that fails to load at startup stays stored — the
+ * user fixes it and reloads rather than silently losing the entry — and its
+ * diagnostics are kept for the Extensions panel to display.
+ *
  * Every extension loaded here is trusted local code with full application
  * privileges. Callers are responsible for telling the user so before adding a
  * directory.
@@ -20,18 +25,38 @@ export interface LoadOutcome {
   readonly diagnostics: readonly ManifestDiagnostic[];
 }
 
+/** Where the list of added directories is remembered between sessions. */
+export interface ExtensionDirectoryStore {
+  load(): Promise<readonly string[]>;
+  save(directories: readonly string[]): Promise<void>;
+}
+
+/** A stored directory that failed to load during {@link LocalExtensions.restore}. */
+export interface StartupFailure {
+  readonly directory: string;
+  readonly diagnostics: readonly ManifestDiagnostic[];
+}
+
 export interface LocalExtensionsOptions {
   readonly loader: LocalDirectoryLoader;
   readonly bootstrap: ExtensionBootstrap;
+  /** Omitted in tests and outside Tauri; persistence then does nothing. */
+  readonly directories?: ExtensionDirectoryStore;
 }
 
 export interface LocalExtensions {
-  /** Loads a directory and registers its contributions. */
+  /** Loads a directory, registers its contributions, and remembers it. */
   add(directory: string): Promise<LoadOutcome>;
   /** Unloads an extension, then loads its directory again. */
   reload(id: string): Promise<LoadOutcome>;
-  /** Unloads an extension and disposes everything it registered. */
+  /** Unloads an extension, disposes its registrations, and forgets it. */
   remove(id: string): Promise<void>;
+  /** Loads the directories remembered from a previous session. */
+  restore(): Promise<void>;
+  /** Stored directories that failed to load during {@link restore}. */
+  startupFailures(): readonly StartupFailure[];
+  /** Notifies when {@link startupFailures} changes. */
+  subscribe(listener: () => void): () => void;
 }
 
 const failed = (message: string, code: string): LoadOutcome => ({
@@ -40,7 +65,21 @@ const failed = (message: string, code: string): LoadOutcome => ({
 });
 
 export function createLocalExtensions(options: LocalExtensionsOptions): LocalExtensions {
-  const { loader, bootstrap } = options;
+  const { loader, bootstrap, directories } = options;
+
+  let stored: readonly string[] = [];
+  let failures: readonly StartupFailure[] = [];
+  const listeners = new Set<() => void>();
+
+  const setFailures = (next: readonly StartupFailure[]): void => {
+    failures = next;
+    for (const listener of listeners) listener();
+  };
+
+  const persist = async (next: readonly string[]): Promise<void> => {
+    stored = [...new Set(next)];
+    await directories?.save(stored);
+  };
 
   const directoryOf = (id: string): string | undefined =>
     bootstrap.entries().find((entry) => entry.id === id)?.directory;
@@ -62,7 +101,15 @@ export function createLocalExtensions(options: LocalExtensionsOptions): LocalExt
           "directory_already_loaded"
         );
       }
-      return load(directory);
+
+      const outcome = await load(directory);
+      if (outcome.loaded) {
+        await persist([...stored, directory]);
+        if (failures.some((failure) => failure.directory === directory)) {
+          setFailures(failures.filter((failure) => failure.directory !== directory));
+        }
+      }
+      return outcome;
     },
 
     reload: async (id) => {
@@ -79,6 +126,31 @@ export function createLocalExtensions(options: LocalExtensionsOptions): LocalExt
       return load(directory);
     },
 
-    remove: (id) => bootstrap.removeLocalExtension(id)
+    remove: async (id) => {
+      const directory = directoryOf(id);
+      await bootstrap.removeLocalExtension(id);
+      if (directory !== undefined && stored.includes(directory)) {
+        await persist(stored.filter((entry) => entry !== directory));
+      }
+    },
+
+    restore: async () => {
+      if (!directories) return;
+
+      stored = [...new Set(await directories.load())];
+      const found: StartupFailure[] = [];
+      for (const directory of stored) {
+        const outcome = await load(directory);
+        if (!outcome.loaded) found.push({ directory, diagnostics: outcome.diagnostics });
+      }
+      if (found.length > 0) setFailures(found);
+    },
+
+    startupFailures: () => failures,
+
+    subscribe: (listener) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    }
   };
 }

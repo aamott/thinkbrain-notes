@@ -6,7 +6,7 @@ import { createDesktopCommandRegistry, type DesktopCommandContext } from "../com
 import { createDesktopPanelRegistry } from "../panels/panelRegistry";
 import { bootstrapExtensions } from "./bootstrap";
 import { createDesktopExtensionHost } from "./desktopExtensionHost";
-import { createLocalExtensions } from "./localExtensions";
+import { createLocalExtensions, type ExtensionDirectoryStore } from "./localExtensions";
 import type { LoadExtensionResult, LocalDirectoryLoader } from "./localDirectoryLoader";
 
 const manifest = (id = "sample"): ExtensionManifest => ({
@@ -30,12 +30,28 @@ const ok = (directory: string, activate = vi.fn()): LoadExtensionResult => ({
   diagnostics: []
 });
 
-const setup = (results: Record<string, LoadExtensionResult>) => {
+const memoryStore = (initial: readonly string[] = []): ExtensionDirectoryStore & {
+  readonly saved: () => readonly string[];
+} => {
+  let directories = initial;
+  return {
+    load: async () => directories,
+    save: async (next) => {
+      directories = next;
+    },
+    saved: () => directories
+  };
+};
+
+const setup = (
+  results: Record<string, LoadExtensionResult>,
+  directories?: ExtensionDirectoryStore
+) => {
   const commands = createDesktopCommandRegistry([]);
   const panels = createDesktopPanelRegistry([]);
   const host = createDesktopExtensionHost({ commands, panels });
   const boot = bootstrapExtensions({ host, commands, panels, extensions: [] });
-  const local = createLocalExtensions({ loader: loaderFor(results), bootstrap: boot });
+  const local = createLocalExtensions({ loader: loaderFor(results), bootstrap: boot, directories });
   return { commands, boot, local };
 };
 
@@ -129,5 +145,100 @@ describe("createLocalExtensions", () => {
 
     expect(outcome.loaded).toBe(false);
     expect(outcome.diagnostics[0]?.message).toMatch(/not loaded/i);
+  });
+});
+
+describe("directory persistence", () => {
+  it("persists a successfully added directory and unpersists it on remove", async () => {
+    const store = memoryStore();
+    const { local } = setup({ "/ext/a": ok("/ext/a") }, store);
+
+    await local.add("/ext/a");
+    expect(store.saved()).toEqual(["/ext/a"]);
+
+    await local.remove("sample");
+    expect(store.saved()).toEqual([]);
+  });
+
+  it("does not persist a directory that failed to load", async () => {
+    const store = memoryStore();
+    const { local } = setup(
+      {
+        "/ext/bad": {
+          extension: null,
+          diagnostics: [{ code: "manifest_unreadable", message: "no manifest", severity: "error" }]
+        }
+      },
+      store
+    );
+
+    await local.add("/ext/bad");
+
+    expect(store.saved()).toEqual([]);
+  });
+
+  it("restores stored directories at startup", async () => {
+    const store = memoryStore(["/ext/a"]);
+    const { commands, local } = setup({ "/ext/a": ok("/ext/a") }, store);
+
+    await local.restore();
+
+    expect(commands.get("sample.go")?.title).toBe("Go");
+    expect(store.saved()).toEqual(["/ext/a"]);
+  });
+
+  it("keeps a failing stored directory listed and reports why", async () => {
+    const store = memoryStore(["/ext/gone"]);
+    const { local } = setup(
+      {
+        "/ext/gone": {
+          extension: null,
+          diagnostics: [{ code: "manifest_unreadable", message: "no manifest", severity: "error" }]
+        }
+      },
+      store
+    );
+    const listener = vi.fn();
+    local.subscribe(listener);
+
+    await local.restore();
+
+    expect(store.saved()).toEqual(["/ext/gone"]);
+    expect(local.startupFailures()).toEqual([
+      {
+        directory: "/ext/gone",
+        diagnostics: [{ code: "manifest_unreadable", message: "no manifest", severity: "error" }]
+      }
+    ]);
+    expect(listener).toHaveBeenCalled();
+  });
+
+  it("clears a startup failure when its directory later loads", async () => {
+    const store = memoryStore(["/ext/a"]);
+    const results: Record<string, LoadExtensionResult> = {
+      "/ext/a": {
+        extension: null,
+        diagnostics: [{ code: "entry_unreadable", message: "gone", severity: "error" }]
+      }
+    };
+    const { local } = setup(results, store);
+    await local.restore();
+    expect(local.startupFailures()).toHaveLength(1);
+
+    results["/ext/a"] = ok("/ext/a");
+    await local.add("/ext/a");
+
+    expect(local.startupFailures()).toEqual([]);
+    expect(store.saved()).toEqual(["/ext/a"]);
+  });
+
+  it("works without a directory store", async () => {
+    const { local } = setup({ "/ext/a": ok("/ext/a") });
+
+    await local.restore();
+    const outcome = await local.add("/ext/a");
+
+    expect(outcome.loaded).toBe(true);
+    expect(local.startupFailures()).toEqual([]);
   });
 });
