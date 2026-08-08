@@ -48,23 +48,18 @@ default application.
 
 ## Status
 
-- ✅ fresh-shell workspace open, restore, and read-only explorer — see
-  `plans/workspace-explorer/done-fresh_shell_workspace_open-high-med.md`
-- ✅ Markdown CRUD UI integration in the fresh shell — see
-  `plans/workspace-explorer/done-fresh_markdown_crud_ui-high-hard.md`
+- ✅ fresh-shell workspace open, restore, and read-only explorer
+- ✅ Markdown CRUD UI integration in the fresh shell
 - ✅ Full-vault tree integration (folders + non-Markdown files, read-only) —
   rebuilt against `list_workspace_entries` in the fresh shell
 - ✅ Dot-prefixed entries hidden by default — `lib.rs` `is_hidden_name`
-- ✅ Explorer icons, workspace selector, and multi-window workspace sessions — see
-  `plans/workspace-explorer/done-explorer_workspace_selector-high-hard.md` and
-  `plans/workspace-explorer/done-multi_window_workspace_sessions-high-hard.md`
+- ✅ Explorer icons, workspace selector, and multi-window workspace sessions
 - ⬜ Non-Markdown file operations (open / rename / delete) — see
   `pending-non_markdown_file_ops-med-med.md`
 - ⬜ Drag-and-drop move in the file tree — see
   `pending-drag_and_drop_move-med-hard.md`
-- ✅ New-folder action — see `done-new_folder_action-med-med.md`
-- ✅ Show-hidden toggle for dot-prefixed entries — see
-  `done-show_hidden_toggle-med-med.md`
+- ✅ New-folder action
+- ✅ Show-hidden toggle for dot-prefixed entries
 - ⬜ Explorer tree/editor consumption of external file-change events — see
   `pending-file_watcher-med-hard.md`; watcher lifecycle and index updates belong
   to `plans/wip-indexing-search-med-med.md`.

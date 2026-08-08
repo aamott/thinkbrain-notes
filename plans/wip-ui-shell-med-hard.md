@@ -1,8 +1,7 @@
 # UI Shell
 
-> Adopt `mockup_v3/` as the desktop UI reference. It is a visual/interaction
-> specification, not production code: translate it to the established React,
-> CSS Module, Tauri, and shared-token architecture.
+> The desktop UI shell is a visual/interaction specification translated to the
+> established React, CSS Module, Tauri, and shared-token architecture.
 
 ## Goal
 
@@ -13,7 +12,7 @@ reused rather than recreated from mock data.
 
 ## Scope
 
-**In scope:** mockup-v3 shell chrome; token migration; left/right popouts;
+**In scope:** shell chrome; token migration; left/right popouts;
 pluggable tabs; command palette; theme control; resizable layout persistence;
 and the bottom panel.
 
@@ -32,7 +31,7 @@ command palette, tabs, active tab, and panel widths. Persist user preferences
 through the existing settings/Tauri path to OS app-data. Do not persist open
 document contents or any layout data in the vault.
 
-Translate the mockup into these boundaries:
+Organize the shell into these boundaries:
 
 ```text
 apps/desktop/src/
@@ -67,10 +66,10 @@ point for the `ai` epic, not a hand-built chat UI.
 
 ### Tokens, styling, and dynamic dimensions
 
-Keep the mockup's chrome surfaces in `packages/ui/src/styles/tokens.css`
+Keep chrome surfaces in `packages/ui/src/styles/tokens.css`
 using the `--tn-*` prefix, with light and dark values for title bar, activity
-bar, sidebar, editor, panel, status bar, and active/inactive tabs. Translate the
-mockup's Tailwind classes into co-located CSS Modules backed by those variables;
+bar, sidebar, editor, panel, status bar, and active/inactive tabs. Translate
+Tailwind utility classes into co-located CSS Modules backed by those variables;
 keep only reset, app root, and third-party editor overrides global. The current
 production source still uses utility classes, so this migration remains pending.
 
@@ -91,39 +90,28 @@ the persisted app setting and `data-thinkbrain-theme`.
 
 ## Status
 
-- ✅ fresh-shell startup and browser-harness wiring — see
-  `plans/ui-shell/done-fresh_shell_launch_wiring-high-med.md`
-- ✅ persisted Explorer visibility and workspace restoration — see
-  `workspace-explorer/done-fresh_shell_workspace_open-high-med.md`
-- ✅ a new shell rebuild from `mockup_v3/` is complete — see
-  `plans/ui-shell/done-mockup_v3_shell_rebuild-high-hard.md`
+- ✅ fresh-shell startup and browser-harness wiring
+- ✅ persisted Explorer visibility and workspace restoration
+- ✅ fresh shell rebuild
 - ⬜ shell token and CSS Module migration — production JSX still uses Tailwind
   utility classes; see
-  `plans/ui-shell/done-shell_tokens_and_css_modules-high-hard.md`
+  `plans/theme-foundation/pending-surface_styling_migration-med-med.md`
 - ✅ desktop shell composition (panel separation) — rebuilt after the earlier
-  rollback; see `plans/ui-shell/done-desktop_shell_composition-high-hard.md`
-- ✅ tab model, registry, and tab strip — see
-  `plans/ui-shell/done-tab_content_registry-high-hard.md`
-- ✅ left popout integration — see
-  `plans/ui-shell/done-left_popout_integration-high-med.md`
-- ✅ inspector/right popout integration — see
-  `plans/ui-shell/done-right_popout_inspectors-med-med.md`
-- ✅ command palette and workspace file navigation — see
-  `plans/ui-shell/done-command_palette_and_navigation-high-med.md`
-- ✅ resizable layout and OS app-data persistence — see
-  `plans/ui-shell/done-resizable_panel_persistence-med-med.md`
-- ✅ theme control in the new shell — see
-  `plans/ui-shell/done-shell_theme_control-high-easy.md`
-- ✅ bottom panel framework and status integration — see
-  `plans/ui-shell/done-bottom_panel_framework-low-med.md`
+  rollback
+- ✅ tab model, registry, and tab strip
+- ✅ left popout integration
+- ✅ inspector/right popout integration
+- ✅ command palette and workspace file navigation
+- ✅ resizable layout and OS app-data persistence
+- ✅ theme control in the new shell
+- ✅ bottom panel framework and status integration
 - ⬜ generic file viewer tabs (code editor, image/audio/video viewers) — see
   `plans/ui-shell/pending-generic_file_viewers-med-med.md`
-- ✅ semi-preview markdown editor (live preview with inline source on focus) — see
-  `plans/ui-shell/done-semi_preview_editor-med-hard.md`; implementation lives in
-  `apps/desktop/src/tabs/livePreview/` (design docs:
+- ✅ semi-preview markdown editor (live preview with inline source on focus);
+  implementation lives in `apps/desktop/src/tabs/livePreview/` (design docs:
   `docs/superpowers/specs/2026-08-06-markdown-live-preview-design.md` and
   `docs/superpowers/plans/2026-08-06-markdown-live-preview.md`).
 - ⬜ modular settings system (declarative, auto-populating settings tab) — see
   `plans/ui-shell/pending-modular_settings_system-med-hard.md`
-- ❌ prior movable-action/slot and layout-editing stories described `mockup2.htm`,
-  not `mockup_v3/`; they were superseded and removed.
+- ❌ prior movable-action/slot and layout-editing stories were superseded and
+  removed.

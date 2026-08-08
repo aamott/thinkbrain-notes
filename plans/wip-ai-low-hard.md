@@ -105,8 +105,7 @@ remote context, and replacing deterministic FTS5 search.
 
 ## Current reconciled status (as inspected)
 
-- ✅ Assistant panel foundation —
-  `plans/ai/done-assistant_panel_foundation-med-med.md`; visual shell exists.
+- ✅ Assistant panel foundation; visual shell exists.
 - ⬜ All behavior below is not implemented. The current
   `apps/desktop/src/agent/AssistantPanel.tsx` still uses a throwing
   `useLocalRuntime` placeholder, disables the composer, and contains visual MCP
@@ -146,7 +145,7 @@ assumptions.
 ## Historical/superseded references
 
 The old generic provider/chat decomposition is superseded by the ordered stories
-above. Existing `done-assistant_panel_foundation` remains complete; it does not
+above. The assistant panel foundation remains complete; it does not
 claim runtime behavior. Broad provider and ACP stories are rollups only; focused
 children own configuration, native transport/enforcement, renderer UI, host
 lifecycle, streaming, and built-in registration separately.

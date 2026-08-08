@@ -173,8 +173,6 @@ __pycache__/
 
 # Local development and temporary files
 blocks.txt
-mockup*.htm
-mockup*/
 *.tmp
 parse.py
 split.py

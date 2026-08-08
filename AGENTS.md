@@ -11,14 +11,36 @@ Future extensions include:
   - Other
 
 ## File Map
-- **`apps/desktop/`** - Desktop Application (React UI & Tauri Rust Host). See [apps/desktop/AGENTS.md](file:///media/adam/extex/projects/thinkbrain-notes/apps/desktop/AGENTS.md).
-  - **`apps/desktop/src/`** - Frontend UI & Client State. See [apps/desktop/src/AGENTS.md](file:///media/adam/extex/projects/thinkbrain-notes/apps/desktop/src/AGENTS.md).
-  - **`apps/desktop/src-tauri/`** - Tauri Rust Backend & ACP Host. See [apps/desktop/src-tauri/AGENTS.md](file:///media/adam/extex/projects/thinkbrain-notes/apps/desktop/src-tauri/AGENTS.md).
-- **`packages/core/`** - Core Domain Models & Parsing (Platform-Agnostic TS). See [packages/core/AGENTS.md](file:///media/adam/extex/projects/thinkbrain-notes/packages/core/AGENTS.md).
-- **`packages/ui/`** - Design System & Component Library (Tailwind v4 & shadcn). See [packages/ui/AGENTS.md](file:///media/adam/extex/projects/thinkbrain-notes/packages/ui/AGENTS.md).
-- **`plans/`** - Architecture epics, feature specs, and task tracking.
-- **`scripts/`** - Project scripts (`scripts/qa.sh` for lint/typecheck/tests).
-- **`docs/`** - Subagent review logs and known issue trackers.
+
+Keep map up to date. Relative filepaths. Concise.
+
+```
+apps/desktop/  # React UI + Tauri Rust host (See apps/desktop/AGENTS.md)
+├─ src/  # Frontend UI & client state (See apps/desktop/src/AGENTS.md)
+│  ├─ agent/  # Assistant panel (ACP renderer boundary)
+│  ├─ commands/  # Command palette & registry
+│  ├─ events/  # App-wide event bus
+│  ├─ extensions/  # Extension host, bootstrap, builtins, loader
+│  ├─ git/  # Git service & source-control panel
+│  ├─ lib/  # Shared renderer utils
+│  ├─ native/  # Tauri bridge: commands, dialogs, fs, assets
+│  ├─ panels/  # Left/right popouts, bottom panel, outline
+│  ├─ search/  # Search panel & model
+│  ├─ settings/  # Settings UI, theme provider, desktop state
+│  ├─ shell/  # DesktopShell, activity bar, title bar, status bar
+│  ├─ tabs/  # Tab model, registry, editor, live preview
+│  └─ workspace/  # Explorer, document adapter, workspace model
+├─ src-tauri/  # Rust backend & ACP host (See apps/desktop/src-tauri/AGENTS.md)
+│  └─ src/commands/  # Tauri commands: extensions, git, markdown, search, settings, themes, workspace
+├─ e2e/  # Playwright E2E specs
+└─ demo/  # Demo fixtures
+packages/core/  # Platform-agnostic TS: note model, markdown, frontmatter, settings, layout, extensions (See packages/core/AGENTS.md)
+packages/ui/  # Design system: tokens, shadcn components (See packages/ui/AGENTS.md)
+plans/  # Epics, feature specs, task tracking (See ## Plans below)
+scripts/  # qa.sh, rust-env.sh, with-rust-env.sh
+docs/  # Review logs, known issues, superpowers specs
+examples/extensions/  # Sample extension (hello-notes)
+```
 
 ## Core Architecture
 - **Layer Separation**: `packages/core` is strictly platform-agnostic. UI components never call Tauri/Rust directly; all native communication is routed through `apps/desktop/src/native/` adapters.
@@ -64,3 +86,10 @@ For major or cross-cutting refactors, `npx repomix --compress` can help map depe
 ## Rules
 - Never commit/push without explicit user approval.
 - Never change AGENTS.md (this file) without explicit user direction and approval. (Exception: `## File Map`)
+
+
+## Unique Terminology
+- Action bar: Bar on left side of screen, contains buttons for different features.
+  - Contains: Explorer, search, tags, each extension with an action bar button (journal, etc), and an extensions menu. Settings at bottom.
+- Action items menu: Top right menu, contains buttons for different features.
+  - Contains: Outline, properties, backlinks, and each extension with an action items button (agent chat, etc).

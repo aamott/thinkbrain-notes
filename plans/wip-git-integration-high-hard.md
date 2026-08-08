@@ -115,15 +115,11 @@ resolution remain later separate Git stories and are not dependencies of MVP.
 
 ## Status
 
-- ✅ Git availability check — see
-  `plans/git-integration/done-git_availability_check-high-easy.md`
-- ✅ Repository detection — see
-  `plans/git-integration/done-repo_detection-high-easy.md`
-- ✅ Repository initialization — see
-  `plans/git-integration/done-repo_init-high-easy.md`
-- ✅ Git status — see `plans/git-integration/done-git_status-high-med.md`
-- ✅ Stage / unstage files — see
-  `plans/git-integration/done-stage_unstage-high-med.md`
+- ✅ Git availability check
+- ✅ Repository detection
+- ✅ Repository initialization
+- ✅ Git status
+- ✅ Stage / unstage files
 - ⬜ Commit staged files — `plans/git-integration/pending-commit-high-med.md`
 - ⬜ Branch list + current branch — `plans/git-integration/pending-branch_list-high-easy.md`
 - ⬜ Source-control sidebar panel completion — `plans/git-integration/pending-source_control_panel-high-med.md`
@@ -137,7 +133,5 @@ Later, explicitly separate and not MVP blockers:
 - ⬜ File watchers/status refresh — `plans/git-integration/later-git_file_watchers-med-hard.md`
 - ⬜ Conflict detection/resolution — `plans/git-integration/later-git_conflict_resolution-high-hard.md`
 
-Plan-status note: the five foundational child files in `plans/git-integration/`
-are recorded as done in their own documents, but this epic's remaining integration
-items above are still pending. Nothing in this reconciliation claims an
-implementation, review, or manual validation is complete.
+The five foundational stories above are done, but this epic's remaining
+integration items are still pending.

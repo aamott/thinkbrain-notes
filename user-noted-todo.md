@@ -18,3 +18,6 @@ These are random issues or shortcomings users have noted. They may or may not be
 
 ## Workspace Viewer
 - [ ] File icons should represent the current file and show color. They exist to a degree but should include everything from mp3 to markdown to docx. Should be adaptable to different themes.
+
+## Other
+- [ ] Agent chat (ACP) still needs to be implemented as an extension. When implemented, it should be in the action items menu. Right panel should be collapsed by default.

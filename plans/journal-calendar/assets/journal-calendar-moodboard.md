@@ -17,7 +17,7 @@ outright.
 
 The constraint that makes this tractable: per `plans/technical-decisions.md` the
 journal has **no license to invent visual language**. It uses the existing `--tn-*`
-tokens, CSS Modules, and the mockup_v3-derived chrome. So this is not a palette
+tokens, CSS Modules, and the established shell chrome. So this is not a palette
 exercise. It is a decision about *where the journal sits on the spectrum between
 tool chrome and writing surface*, expressed through density, hierarchy, and
 restraint rather than new colors.
@@ -132,7 +132,7 @@ gains user-supplied value ordering and color meaning.
 
 Named for register, not for copying:
 
-- **VS Code / mockup_v3 chrome** — the popout's density target.
+- **VS Code / shell chrome** — the popout's density target.
 - **Obsidian daily notes** — the closest analogue for "ordinary files, organized by
   date", including its weaknesses: date-named files with no visible sense of *when*
   in a long list.

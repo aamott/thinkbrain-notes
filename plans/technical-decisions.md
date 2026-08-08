@@ -166,13 +166,11 @@ variables, and accessibility-focused primitives.
 MVP may include built-in themes and theme tokens. Third-party theme packages are
 deferred until the `extensions` epic is active.
 
-### Mockup v3 adoption
+### Desktop shell visual system
 
-Decision: `mockup_v3/` is the visual and interaction reference for the desktop
-shell, not production code or a package dependency. Translate its Tailwind v4
-classes and mock state to React components with co-located CSS Modules, shared
-`--tn-*` tokens, existing stores, and real feature boundaries. Do not restore
-the older movable-action/slot design from `mockup2.htm`.
+Decision: The desktop shell uses React components with co-located CSS Modules,
+shared `--tn-*` tokens, existing stores, and real feature boundaries. Do not
+restore the older movable-action/slot layout design.
 
 The shared token set includes chrome-specific semantic surfaces: title bar,
 activity bar, sidebar, editor, panel, status bar, and active/inactive tabs in
@@ -184,10 +182,7 @@ Browser tabs are registered as an unavailable tab kind until a separate
 security decision approves a Tauri webview strategy, navigation policy, and
 capability/CSP boundary. Do not use a raw iframe as a shortcut.
 
-The standalone reference application is not part of the production workspace
-or its quality gate. Root ESLint ignores `mockup_v3/`; its separate toolchain
-may be run deliberately when the reference itself changes. Production lint
-continues to cover `apps/` and `packages/` without suppressing errors.
+Production lint covers `apps/` and `packages/` without suppressing errors.
 
 ## AI
 

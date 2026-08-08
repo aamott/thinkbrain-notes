@@ -36,8 +36,8 @@ shell surfaces without a heavy opinionated UI framework.
   attribute value with no matching CSS rule.
 - **No inline styles.** Use co-located CSS Modules for desktop surfaces,
   backed by the shared `--tn-*` variables in `packages/ui`; keep shared
-  tokens/themes as CSS variables. Tailwind classes in `mockup_v3/` are reference
-  only and must not be copied into production JSX.
+  tokens/themes as CSS variables. Tailwind utility classes must not be copied
+  into production JSX.
 - **Custom components over framework.** Build app components backed by Radix
   UI-style primitives where useful. Avoid a heavy, opinionated component
   framework that fights a desktop/editor UI.
