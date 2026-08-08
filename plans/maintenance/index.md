@@ -39,10 +39,6 @@ created before implementation begins.
 - `pending-core_adapter_interfaces-low-hard.md` — quarantined, non-blocking, and not in
   execution order. Re-home or split only after a concrete feature proves a shared gap.
 
-## Completed candidate
-
-- `pending-pre_commit_hooks-high-easy.md` — complete and excluded from active order; filename status cleanup is deferred.
-
 ## Scope guard
 
 Do not duplicate work in:
