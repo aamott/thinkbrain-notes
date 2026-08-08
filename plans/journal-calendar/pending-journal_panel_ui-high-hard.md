@@ -51,7 +51,11 @@ for CodeMirror extensions/keybindings only.
 - the context must be extended to expose workspace listing / index access, or
 - the panel factory must reach shared state another way (e.g. a shared Zustand store or service singleton).
 
-This is an open integration question. Do not solve it in this story — flag it as a dependency and require a decision before implementing the panel factory.
+**Resolved 2026-08-08.** No `DesktopPanelContext` change is needed. The journal extension
+builds its service during `activate()` from `context.workspace` (which has `listNotes`,
+`readNote`, `createNote`, `openNote` after D68) and the panel factory closes over it. The
+panel itself is presentational: every action is a prop. That keeps workspace access on the
+extension API every third-party extension uses, rather than widening a shell context.
 
 ## Goal
 
@@ -86,7 +90,13 @@ Implement the approved journal list/create/open experience as a focused React su
 - Opening tabs uses the existing `openTab(kind, title)` entry point in `apps/desktop/src/shell/DesktopShell.tsx`; `TabContent.tsx` should NOT need editing. Do not fork editor state.
 - `apps/desktop/src/tabs/MarkdownEditor.tsx` and the React slot registry belong to the D44 platform prerequisite; consume them here, do not duplicate them.
 
-Runtime panel dimension is the only case where a scoped CSSOM custom property on the panel root element is acceptable. All other styling via CSS Modules + `--tn-*` tokens.
+**Styling convention — deviation, flagged.** `plans/technical-decisions.md` calls for CSS
+Modules, but the app contains **zero** `.module.css` files: every shell component styles with
+Tailwind utilities, and `apps/desktop/src/index.css` maps those utilities onto the `--tn-*`
+tokens (`--color-sidebar: var(--tn-color-sidebar)`). The journal follows its neighbours, so
+`bg-sidebar` and `text-muted-foreground` resolve to the same tokens a CSS Module would use;
+no colour is hard-coded. Introducing the repo's only CSS Module inside Tailwind-styled panel
+chrome would be the inconsistent choice. **Product owner: say the word and I will convert.**
 
 ## Dependencies
 
