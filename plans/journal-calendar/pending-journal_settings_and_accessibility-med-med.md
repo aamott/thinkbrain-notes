@@ -1,6 +1,8 @@
 # Story: Journal Settings & Accessibility Contract
 
-**Status:** pending · **Urgency:** med · **Difficulty:** med
+**Status:** 🟨 settings implemented (`apps/desktop/src/journal/journalSettings.ts`, `JournalFieldDefinitionsControl.tsx`) · **Urgency:** med · **Difficulty:** med
+
+Remaining: workspace-scope persistence (D45 platform prerequisite), registration through the host (story 9), and the accessibility pass, which belongs with the panel UI.
 
 ## Epic
 

@@ -132,6 +132,8 @@ recorded in the story. Stories may be split further if a subagent would exceed o
   the unknown-field write round-trip waits on story 3's write path
 - 🟨 Story 3 journal service — create (always new, D18), backfill (D61/D62), listing with
   undated split (D36/D38), openToday, and D63 failure copy; previews and search wiring remain
-- ⬜ Stories 4-9: calendar model, settings, panel, calendar tab, mobile, registration
+- 🟨 Story 5 settings — D64's four settings and the D49 field-definition control implemented;
+  workspace-scope persistence waits on D45, registration on story 9
+- ⬜ Stories 4, 6-9: calendar model, panel, calendar tab, mobile, registration
 - 🟨 Platform prerequisites: D68/D69 API additions shipped; D44 editor-header slot, D45
   workspace-scoped settings, and D41 metadata facets remain
