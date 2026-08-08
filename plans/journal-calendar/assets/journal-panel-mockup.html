@@ -1,0 +1,1616 @@
+<title>Journal panel — desktop mockup v1</title>
+<style>
+  /* ============================================================
+     PAGE TOKENS — the review sheet's own palette.
+     Deliberately neutral-cool so it never competes with the app
+     tokens rendered inside the figures. The only accent is the
+     redline ochre, used exclusively for annotation.
+     ============================================================ */
+  :root {
+    --ground: #f6f7f9;
+    --surface: #ffffff;
+    --surface-sunk: #eef0f4;
+    --ink: #141922;
+    --ink-muted: #5c6675;
+    --rule: #dee2e9;
+    --rule-soft: #e9ecf1;
+    --redline: #a9642f;
+    --redline-soft: #f2e6da;
+
+    --serif: ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+    /* ---- App tokens (light). Copied from packages/ui/src/styles/tokens.css ---- */
+    --tn-color-background: hsl(0 0% 100%);
+    --tn-color-foreground: hsl(222 47% 11%);
+    --tn-color-border: hsl(220 13% 91%);
+    --tn-color-input: hsl(220 13% 91%);
+    --tn-color-muted: hsl(220 14% 96%);
+    --tn-color-muted-foreground: hsl(220 9% 46%);
+    --tn-color-secondary: hsl(220 14% 96%);
+    --tn-color-secondary-foreground: hsl(222 47% 11%);
+    --tn-color-primary: hsl(262 83% 58%);
+    --tn-color-primary-foreground: hsl(0 0% 100%);
+    --tn-color-accent: hsl(262 83% 96%);
+    --tn-color-accent-foreground: hsl(262 83% 40%);
+    --tn-color-danger: hsl(0 84% 38%);
+    --tn-color-warning: hsl(38 92% 42%);
+    --tn-color-activitybar: hsl(220 16% 93%);
+    --tn-color-activitybar-foreground: hsl(220 9% 40%);
+    --tn-color-activitybar-active: hsl(262 83% 58%);
+    --tn-color-sidebar: hsl(220 16% 97%);
+    --tn-color-sidebar-foreground: hsl(222 47% 11%);
+    --tn-color-editor: hsl(0 0% 100%);
+    --tn-color-editor-foreground: hsl(222 47% 11%);
+    --tn-color-tab-active: hsl(0 0% 100%);
+    --tn-color-tab-inactive: hsl(220 16% 94%);
+    --tn-color-tab-active-foreground: hsl(222 47% 11%);
+    --tn-color-tab-inactive-foreground: hsl(220 9% 46%);
+    --tn-radius-small: 0.25rem;
+    --tn-radius-medium: 0.5rem;
+    --tn-font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --tn-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+
+  /* Page palette, dark. Guarded so an explicit light choice beats a dark OS. */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #11141a;
+      --surface: #171b22;
+      --surface-sunk: #1e232b;
+      --ink: #e6e9ee;
+      --ink-muted: #98a2b1;
+      --rule: #262c35;
+      --rule-soft: #1f242c;
+      --redline: #d69a62;
+      --redline-soft: #2b2018;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #11141a;
+    --surface: #171b22;
+    --surface-sunk: #1e232b;
+    --ink: #e6e9ee;
+    --ink-muted: #98a2b1;
+    --rule: #262c35;
+    --rule-soft: #1f242c;
+    --redline: #d69a62;
+    --redline-soft: #2b2018;
+  }
+
+  /* ---- App tokens (dark). Applied to .tn-dark always, and to any
+     theme-following figure when the viewer is in dark mode. ---- */
+  .tn-dark,
+  :root[data-theme="dark"] .tn-auto {
+    --tn-color-background: hsl(0 0% 7%);
+    --tn-color-foreground: hsl(0 0% 98%);
+    --tn-color-border: hsl(0 0% 18%);
+    --tn-color-input: hsl(0 0% 18%);
+    --tn-color-muted: hsl(0 0% 16%);
+    --tn-color-muted-foreground: hsl(0 0% 60%);
+    --tn-color-secondary: hsl(0 0% 16%);
+    --tn-color-secondary-foreground: hsl(0 0% 98%);
+    --tn-color-primary: hsl(152 60% 38%);
+    --tn-color-primary-foreground: hsl(0 0% 100%);
+    --tn-color-accent: hsl(152 40% 18%);
+    --tn-color-accent-foreground: hsl(152 60% 55%);
+    --tn-color-danger: hsl(0 72% 62%);
+    --tn-color-warning: hsl(38 92% 50%);
+    --tn-color-activitybar: hsl(0 0% 11%);
+    --tn-color-activitybar-foreground: hsl(0 0% 60%);
+    --tn-color-activitybar-active: hsl(152 60% 45%);
+    --tn-color-sidebar: hsl(0 0% 9%);
+    --tn-color-sidebar-foreground: hsl(0 0% 98%);
+    --tn-color-editor: hsl(0 0% 7%);
+    --tn-color-editor-foreground: hsl(0 0% 98%);
+    --tn-color-tab-active: hsl(0 0% 7%);
+    --tn-color-tab-inactive: hsl(0 0% 12%);
+    --tn-color-tab-active-foreground: hsl(0 0% 98%);
+    --tn-color-tab-inactive-foreground: hsl(0 0% 60%);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .tn-auto {
+      --tn-color-background: hsl(0 0% 7%);
+      --tn-color-foreground: hsl(0 0% 98%);
+      --tn-color-border: hsl(0 0% 18%);
+      --tn-color-input: hsl(0 0% 18%);
+      --tn-color-muted: hsl(0 0% 16%);
+      --tn-color-muted-foreground: hsl(0 0% 60%);
+      --tn-color-secondary: hsl(0 0% 16%);
+      --tn-color-secondary-foreground: hsl(0 0% 98%);
+      --tn-color-primary: hsl(152 60% 38%);
+      --tn-color-primary-foreground: hsl(0 0% 100%);
+      --tn-color-accent: hsl(152 40% 18%);
+      --tn-color-accent-foreground: hsl(152 60% 55%);
+      --tn-color-danger: hsl(0 72% 62%);
+      --tn-color-warning: hsl(38 92% 50%);
+      --tn-color-activitybar: hsl(0 0% 11%);
+      --tn-color-activitybar-foreground: hsl(0 0% 60%);
+      --tn-color-activitybar-active: hsl(152 60% 45%);
+      --tn-color-sidebar: hsl(0 0% 9%);
+      --tn-color-sidebar-foreground: hsl(0 0% 98%);
+      --tn-color-editor: hsl(0 0% 7%);
+      --tn-color-editor-foreground: hsl(0 0% 98%);
+      --tn-color-tab-active: hsl(0 0% 7%);
+      --tn-color-tab-inactive: hsl(0 0% 12%);
+      --tn-color-tab-active-foreground: hsl(0 0% 98%);
+      --tn-color-tab-inactive-foreground: hsl(0 0% 60%);
+    }
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 17px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .sheet {
+    max-width: 78rem;
+    margin: 0 auto;
+    padding: clamp(2rem, 5vw, 4.5rem) clamp(1rem, 4vw, 3rem) 6rem;
+  }
+
+  /* ---------------- masthead ---------------- */
+  .masthead { border-bottom: 1px solid var(--rule); padding-bottom: 2.5rem; }
+  .eyebrow {
+    font-family: var(--sans);
+    font-size: 0.7rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--redline);
+    margin: 0 0 1.25rem;
+  }
+  h1 {
+    font-size: clamp(2.2rem, 5vw, 3.4rem);
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    font-weight: 600;
+    margin: 0 0 1rem;
+    text-wrap: balance;
+  }
+  .standfirst {
+    font-size: 1.15rem;
+    color: var(--ink-muted);
+    max-width: 46ch;
+    margin: 0 0 2rem;
+  }
+  .facts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+    gap: 1.25rem 2rem;
+    font-family: var(--sans);
+    font-size: 0.85rem;
+    line-height: 1.5;
+  }
+  .facts dt {
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    margin-bottom: 0.3rem;
+  }
+  .facts dd { margin: 0; }
+
+  /* ---------------- section grid with redline gutter ---------------- */
+  section { margin-top: 4.5rem; }
+  .block {
+    display: grid;
+    grid-template-columns: 8.5rem minmax(0, 1fr);
+    gap: 0 2.5rem;
+    align-items: start;
+  }
+  .gutter {
+    font-family: var(--sans);
+    font-size: 0.68rem;
+    line-height: 1.7;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    text-align: right;
+    padding-top: 0.55rem;
+    border-right: 1px solid var(--rule-soft);
+    padding-right: 1rem;
+  }
+  .gutter b { display: block; color: var(--redline); font-weight: 600; letter-spacing: 0.08em; }
+  .col { min-width: 0; }
+
+  h2 {
+    font-size: clamp(1.5rem, 3vw, 2rem);
+    line-height: 1.15;
+    letter-spacing: -0.015em;
+    font-weight: 600;
+    margin: 0 0 0.75rem;
+    text-wrap: balance;
+  }
+  h3 {
+    font-family: var(--sans);
+    font-size: 0.78rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-weight: 650;
+    margin: 2.5rem 0 0.9rem;
+    color: var(--ink);
+  }
+  p { margin: 0 0 1rem; max-width: 68ch; }
+  .col > p:last-child { margin-bottom: 0; }
+  code {
+    font-family: var(--mono);
+    font-size: 0.82em;
+    background: var(--surface-sunk);
+    padding: 0.1em 0.35em;
+    border-radius: 3px;
+  }
+  strong { font-weight: 650; }
+  a { color: var(--redline); }
+
+  ul.notes { margin: 0 0 1rem; padding-left: 1.1rem; max-width: 68ch; }
+  ul.notes li { margin-bottom: 0.5rem; }
+
+  /* ---------------- figures ---------------- */
+  figure { margin: 1.75rem 0 0; }
+  figcaption {
+    font-family: var(--sans);
+    font-size: 0.78rem;
+    line-height: 1.5;
+    color: var(--ink-muted);
+    margin-top: 0.85rem;
+    max-width: 62ch;
+  }
+  .figrow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    align-items: flex-start;
+  }
+  .scroller { overflow-x: auto; padding-bottom: 0.5rem; }
+  .plate {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    padding: 1.25rem;
+    display: inline-block;
+  }
+  .platelabel {
+    font-family: var(--sans);
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    margin-bottom: 0.75rem;
+    display: flex;
+    gap: 0.5rem;
+    align-items: baseline;
+  }
+  .platelabel .n {
+    color: var(--redline);
+    font-weight: 650;
+  }
+
+  /* ---------------- the app mockup ---------------- */
+  .app {
+    display: flex;
+    font-family: var(--tn-font-sans);
+    background: var(--tn-color-background);
+    color: var(--tn-color-foreground);
+    border: 1px solid var(--tn-color-border);
+    border-radius: 6px;
+    overflow: hidden;
+    height: var(--app-h, 460px);
+    width: var(--app-w, 860px);
+    max-width: 100%;
+    font-size: 13px;
+    line-height: 1.45;
+  }
+  .app.standalone { width: var(--panel-w, 288px); }
+
+  .activitybar {
+    flex: 0 0 3rem;
+    background: var(--tn-color-activitybar);
+    border-right: 1px solid var(--tn-color-border);
+    padding: 0.4rem 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.15rem;
+  }
+  .ab-btn {
+    width: 2rem; height: 2rem;
+    display: grid; place-items: center;
+    color: var(--tn-color-activitybar-foreground);
+    font-size: 15px;
+    border-radius: var(--tn-radius-small);
+  }
+  .ab-btn.active {
+    color: var(--tn-color-activitybar-active);
+    box-shadow: inset 2px 0 0 var(--tn-color-activitybar-active);
+  }
+
+  .panel {
+    flex: 0 0 var(--panel-w, 288px);
+    width: var(--panel-w, 288px);
+    background: var(--tn-color-sidebar);
+    color: var(--tn-color-sidebar-foreground);
+    border-right: 1px solid var(--tn-color-border);
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .app.standalone .panel { border-right: 0; flex: 1 1 auto; width: auto; }
+
+  /* Panel chrome — matches PanelTitle.tsx exactly: 2.25rem tall, px-3,
+     uppercase 0.68rem tracked title, icon actions, then the ••• overflow. */
+  .panel-title {
+    display: flex; align-items: center; justify-content: space-between;
+    height: 2.25rem; padding: 0 0.75rem; flex: none;
+  }
+  .panel-title h4 {
+    margin: 0;
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .pt-actions { display: flex; align-items: center; gap: 0.25rem; }
+  .pt-actions span {
+    padding: 0 0.25rem;
+    color: var(--tn-color-muted-foreground);
+    font-size: 13px;
+  }
+  .pt-actions span.dots { font-size: 0.68rem; }
+
+  .panel-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .panel-head { padding: 0 0.5rem 0.5rem; display: flex; flex-direction: column; gap: 0.4rem; flex: none; }
+
+  /* The action row: one filled control, and only one. Today and Open calendar
+     sit beside it as quiet outlined buttons. */
+  .actionrow { display: flex; gap: 0.3rem; align-items: stretch; }
+  .btn-primary {
+    display: flex; align-items: center; justify-content: center; gap: 0.35rem;
+    height: 1.85rem;
+    flex: 1 1 auto; min-width: 0;
+    background: var(--tn-color-primary);
+    color: var(--tn-color-primary-foreground);
+    border-radius: var(--tn-radius-small);
+    font-size: 12px; font-weight: 600;
+    white-space: nowrap;
+  }
+  .icon-btn {
+    flex: none;
+    width: 1.85rem; height: 1.85rem;
+    display: grid; place-items: center;
+    border: 1px solid var(--tn-color-border);
+    border-radius: var(--tn-radius-small);
+    background: var(--tn-color-background);
+    color: var(--tn-color-foreground);
+    font-size: 13px;
+  }
+  .btn-ghost {
+    display: inline-flex; align-items: center; gap: 0.3rem;
+    height: 1.6rem; padding: 0 0.5rem;
+    border: 1px solid var(--tn-color-border);
+    border-radius: var(--tn-radius-small);
+    color: var(--tn-color-foreground);
+    font-size: 12px;
+    background: var(--tn-color-background);
+  }
+  .search {
+    display: flex; align-items: center; gap: 0.4rem;
+    height: 1.7rem; padding: 0 0.5rem;
+    background: var(--tn-color-background);
+    border: 1px solid var(--tn-color-input);
+    border-radius: var(--tn-radius-small);
+    color: var(--tn-color-muted-foreground);
+    font-size: 12px;
+  }
+  .search.filled { color: var(--tn-color-foreground); }
+
+  /* Filter sits hard right; the count line takes the space to its left. */
+  .filterrow {
+    display: flex; align-items: center; gap: 0.35rem;
+    justify-content: flex-end; flex-wrap: wrap;
+  }
+  .filterrow .showing { margin-right: auto; flex: 1 1 8rem; min-width: 0; }
+  .filter-btn {
+    display: inline-flex; align-items: center; gap: 0.35rem;
+    height: 1.5rem; padding: 0 0.45rem;
+    border: 1px solid var(--tn-color-border);
+    border-radius: var(--tn-radius-small);
+    font-size: 12px;
+    color: var(--tn-color-foreground);
+  }
+  .badge {
+    min-width: 1.05rem; height: 1.05rem; padding: 0 0.25rem;
+    display: grid; place-items: center;
+    background: var(--tn-color-primary);
+    color: var(--tn-color-primary-foreground);
+    border-radius: 999px;
+    font-size: 10px; font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .chips { display: flex; flex-wrap: wrap; gap: 0.25rem; align-items: center; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 0.3rem;
+    padding: 0.1rem 0.35rem;
+    background: var(--tn-color-accent);
+    color: var(--tn-color-accent-foreground);
+    border-radius: var(--tn-radius-small);
+    font-size: 11px;
+  }
+  .chip .x { opacity: 0.7; }
+  .clear-all {
+    font-size: 11px;
+    color: var(--tn-color-muted-foreground);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .showing {
+    font-size: 11px;
+    color: var(--tn-color-foreground);
+    font-weight: 600;
+    padding: 0 0.15rem;
+  }
+  .showing em { font-style: normal; color: var(--tn-color-muted-foreground); font-weight: 400; }
+
+  .list { flex: 1; min-height: 0; overflow: hidden; }
+
+  /* Group headers: year and month differ by weight, size, case and ground —
+     never by indentation (D37/D39). */
+  .h-year {
+    display: flex; align-items: center; gap: 0.4rem;
+    padding: 0.3rem 0.5rem;
+    background: var(--tn-color-secondary);
+    border-top: 1px solid var(--tn-color-border);
+    font-size: 11px; font-weight: 700;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    font-variant-numeric: tabular-nums;
+  }
+  .h-month {
+    display: flex; align-items: center; gap: 0.4rem;
+    padding: 0.25rem 0.5rem;
+    border-bottom: 1px solid var(--tn-color-border);
+    font-size: 12px; font-weight: 600;
+  }
+  .h-undated {
+    display: flex; align-items: center; gap: 0.4rem;
+    padding: 0.3rem 0.5rem;
+    background: var(--tn-color-muted);
+    border-bottom: 1px solid var(--tn-color-border);
+    font-size: 12px; font-weight: 600;
+    color: var(--tn-color-foreground);
+  }
+  .caret { color: var(--tn-color-muted-foreground); font-size: 9px; width: 0.6rem; }
+  .count {
+    margin-left: auto;
+    color: var(--tn-color-muted-foreground);
+    font-size: 11px; font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0;
+  }
+  .matchcount {
+    margin-left: auto;
+    color: var(--tn-color-accent-foreground);
+    background: var(--tn-color-accent);
+    border-radius: 999px;
+    padding: 0 0.35rem;
+    font-size: 10px; font-weight: 700;
+    letter-spacing: 0;
+  }
+
+  /* Rows. Wide tier: one line, three zones. */
+  .row {
+    display: flex; align-items: baseline; gap: 0.5rem;
+    padding: 0.28rem 0.5rem;
+    border-bottom: 1px solid transparent;
+    min-width: 0;
+  }
+  .row.sel { background: var(--tn-color-accent); }
+  .row .d { font-weight: 600; font-size: 12px; flex: none; font-variant-numeric: tabular-nums; }
+  .row .t {
+    color: var(--tn-color-muted-foreground);
+    font-size: 11px; flex: none;
+    font-variant-numeric: tabular-nums;
+  }
+  .row .p {
+    color: var(--tn-color-muted-foreground);
+    font-size: 12px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    min-width: 0;
+  }
+  /* Narrow tier: the date line keeps the time, the preview wraps beneath. */
+  .row.stack { display: block; }
+  .row.stack .dt { display: flex; gap: 0.4rem; align-items: baseline; }
+  .row.stack .p { display: block; white-space: normal; overflow: visible; }
+  .row.mark .d::before {
+    content: "▲";
+    color: var(--tn-color-warning);
+    font-size: 8px;
+    margin-right: 0.3rem;
+    vertical-align: 1px;
+  }
+
+  /* Empty / error blocks inside the panel */
+  .state {
+    padding: 1.1rem 0.9rem;
+    display: flex; flex-direction: column; gap: 0.5rem;
+    align-items: flex-start;
+  }
+  .state .title { font-size: 12.5px; font-weight: 650; }
+  .state .body { font-size: 12px; color: var(--tn-color-muted-foreground); }
+  .state .path {
+    font-family: var(--tn-font-mono); font-size: 11px;
+    color: var(--tn-color-muted-foreground);
+    background: var(--tn-color-muted);
+    padding: 0.1rem 0.3rem; border-radius: 3px;
+    max-width: 100%; overflow: hidden; text-overflow: ellipsis;
+  }
+  .state .acts { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.15rem; }
+
+  .banner {
+    margin: 0.4rem 0.5rem;
+    padding: 0.45rem 0.55rem;
+    border-radius: var(--tn-radius-small);
+    border-left: 3px solid var(--tn-color-warning);
+    background: var(--tn-color-muted);
+    font-size: 11.5px;
+    display: flex; flex-direction: column; gap: 0.25rem;
+  }
+  .banner.err { border-left-color: var(--tn-color-danger); }
+  .banner .bt { font-weight: 650; }
+  .banner .bb { color: var(--tn-color-muted-foreground); }
+
+  /* ---------------- editor surface (Direction B) ---------------- */
+  .editor {
+    flex: 1; min-width: 0;
+    background: var(--tn-color-editor);
+    color: var(--tn-color-editor-foreground);
+    display: flex; flex-direction: column;
+  }
+  .tabstrip {
+    display: flex; flex: none;
+    background: var(--tn-color-tab-inactive);
+    border-bottom: 1px solid var(--tn-color-border);
+  }
+  .tab {
+    padding: 0.4rem 0.8rem;
+    font-size: 12px;
+    color: var(--tn-color-tab-inactive-foreground);
+    border-right: 1px solid var(--tn-color-border);
+  }
+  .tab.active {
+    background: var(--tn-color-tab-active);
+    color: var(--tn-color-tab-active-foreground);
+  }
+  .page {
+    flex: 1; min-height: 0;
+    padding: 1.75rem 1.5rem;
+    overflow: hidden;
+  }
+  .measure { max-width: 34rem; margin: 0 auto; }
+
+  .dateline {
+    display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap;
+    padding-bottom: 0.6rem;
+    border-bottom: 1px solid var(--tn-color-border);
+    margin-bottom: 1.25rem;
+  }
+  .dateline .day { font-size: 13px; font-weight: 650; }
+  .dateline .vals { font-size: 13px; color: var(--tn-color-muted-foreground); }
+  .dateline .act {
+    margin-left: auto;
+    font-size: 11px;
+    color: var(--tn-color-muted-foreground);
+    border: 1px solid var(--tn-color-border);
+    border-radius: var(--tn-radius-small);
+    padding: 0.05rem 0.4rem;
+  }
+  .prose p { font-size: 13.5px; line-height: 1.75; margin: 0 0 0.9rem; max-width: none; }
+  .prose .h { font-size: 15px; font-weight: 650; margin: 0 0 0.75rem; }
+
+  .fieldgrid {
+    display: grid;
+    grid-template-columns: 7rem 1fr;
+    gap: 0.5rem 0.75rem;
+    align-items: center;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--tn-color-border);
+    margin-bottom: 1.25rem;
+  }
+  .fieldgrid .lab { font-size: 11.5px; color: var(--tn-color-muted-foreground); }
+  .fieldgrid .val {
+    font-size: 12px;
+    border: 1px solid var(--tn-color-input);
+    border-radius: var(--tn-radius-small);
+    padding: 0.2rem 0.4rem;
+    background: var(--tn-color-background);
+  }
+  .fieldgrid .segs { display: flex; gap: 0.25rem; flex-wrap: wrap; }
+  .seg {
+    font-size: 11.5px; padding: 0.12rem 0.45rem;
+    border: 1px solid var(--tn-color-border);
+    border-radius: 999px;
+    color: var(--tn-color-muted-foreground);
+  }
+  .seg.on {
+    background: var(--tn-color-accent);
+    color: var(--tn-color-accent-foreground);
+    border-color: transparent;
+    font-weight: 600;
+  }
+
+  /* ---------------- decision call-outs ---------------- */
+  .ask {
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--redline);
+    background: var(--surface);
+    border-radius: 0 8px 8px 0;
+    padding: 1.1rem 1.25rem;
+    margin: 1.25rem 0 0;
+  }
+  .ask h4 {
+    font-family: var(--sans);
+    font-size: 0.8rem;
+    letter-spacing: 0.02em;
+    margin: 0 0 0.5rem;
+    font-weight: 650;
+  }
+  .ask p { font-size: 0.95rem; margin: 0 0 0.6rem; }
+  .ask p:last-child { margin-bottom: 0; }
+  .ask .rec {
+    font-family: var(--sans);
+    font-size: 0.78rem;
+    color: var(--redline);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-weight: 650;
+  }
+
+  .statelist { display: grid; grid-template-columns: repeat(auto-fill, minmax(19rem, 1fr)); gap: 1.5rem; }
+
+  table.copy {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--sans);
+    font-size: 0.82rem;
+    margin-top: 1rem;
+  }
+  table.copy th, table.copy td {
+    text-align: left;
+    padding: 0.5rem 0.75rem 0.5rem 0;
+    border-bottom: 1px solid var(--rule-soft);
+    vertical-align: top;
+  }
+  table.copy th {
+    font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--ink-muted); font-weight: 650;
+  }
+  table.copy td.n { color: var(--redline); font-weight: 650; width: 2.5rem; font-variant-numeric: tabular-nums; }
+  table.copy td code { background: none; padding: 0; color: var(--ink); }
+
+  @media (max-width: 900px) {
+    .block { grid-template-columns: minmax(0, 1fr); gap: 0.75rem; }
+    .gutter {
+      text-align: left; border-right: 0; padding: 0 0 0.25rem;
+      border-bottom: 1px solid var(--rule-soft);
+    }
+    .gutter b { display: inline; margin-right: 0.5rem; }
+  }
+</style>
+
+<div class="sheet">
+
+  <header class="masthead">
+    <p class="eyebrow">Mockup v2 · desktop · approved 2026-08-08 under D34</p>
+    <h1>The journal panel</h1>
+    <p class="standfirst">
+      The approved wireframe and moodboard, drawn in the app's real tokens. Revised from your
+      v1 review; this is what gets built.
+    </p>
+    <dl class="facts">
+      <div>
+        <dt>Governed by</dt>
+        <dd>Moodboard Direction&nbsp;B with Direction&nbsp;A's popout (D35); wireframe IA‑3 (D37, D39)</dd>
+      </div>
+      <div>
+        <dt>Drawn at</dt>
+        <dd>288&nbsp;px — the shell's real default popout width</dd>
+      </div>
+      <div>
+        <dt>Colour</dt>
+        <dd>Only existing <code>--tn-*</code> tokens. No new palette, no mood colours (D4)</dd>
+      </div>
+      <div>
+        <dt>New decisions</dt>
+        <dd>D71 header order · D72 preview always kept · D73 filter right-aligned · D74 dateline keeps the year</dd>
+      </div>
+    </dl>
+  </header>
+
+  <section>
+    <div class="block">
+      <div class="gutter"><b>D35</b> moodboard<br /><b>D37 D39</b> IA‑3</div>
+      <div class="col">
+        <h2>The whole surface</h2>
+        <p>
+          The popout is the file explorer's sibling — dense, flat, unsentimental. The editor is
+          a page: a measured column with the metadata widget set as its dateline. The contrast
+          between the two is the design.
+        </p>
+        <p>
+          Both themes below are the app's own, unmodified. The dark theme's forest green and the
+          light theme's purple come from the token file; the journal adds nothing.
+        </p>
+
+        <figure>
+          <div class="scroller">
+            <div class="figrow">
+              <div class="plate">
+                <div class="platelabel"><span class="n">Light</span></div>
+                <div class="app tn-light" style="--app-w: 800px">
+                  <div class="activitybar">
+                    <div class="ab-btn">☰</div>
+                    <div class="ab-btn">⌕</div>
+                    <div class="ab-btn active">◧</div>
+                    <div class="ab-btn">⑂</div>
+                  </div>
+                  <div class="panel">
+                    <div class="panel-title">
+                      <h4>Journal</h4>
+                      <div class="pt-actions">
+                        <span class="dots">•••</span>
+                      </div>
+                    </div>
+                    <div class="panel-body">
+                      <div class="panel-head">
+                        <div class="search">⌕ Search entries</div>
+                        <div class="actionrow">
+                          <div class="btn-primary">＋ New entry</div>
+                          <div class="icon-btn">◷</div>
+                          <div class="icon-btn">▦</div>
+                        </div>
+                        <div class="filterrow">
+                          <div class="filter-btn">Filter</div>
+                        </div>
+                      </div>
+                      <div class="list">
+                        <div class="h-year"><span class="caret">▾</span>2026<span class="count">412</span></div>
+                        <div class="h-month"><span class="caret">▾</span>August<span class="count">7</span></div>
+                        <div class="row sel">
+                          <span class="d">Fri 7</span><span class="t">6:02 PM</span>
+                          <span class="p">Bread needed more salt. Try 2%.</span>
+                        </div>
+                        <div class="row">
+                          <span class="d">Fri 7</span><span class="t">7:41 AM</span>
+                          <span class="p">Long run before the heat came in</span>
+                        </div>
+                        <div class="row">
+                          <span class="d">Wed 5</span><span class="t">1:07 PM</span>
+                          <span class="p">Call with Priya about the renovation quote</span>
+                        </div>
+                        <div class="row">
+                          <span class="d">Tue 4</span><span class="t">9:15 PM</span>
+                          <span class="p">Didn't sleep well. Short one.</span>
+                        </div>
+                        <div class="row">
+                          <span class="d">Mon 3</span><span class="t">8:30 AM</span>
+                          <span class="p">First day back. Inbox survivable.</span>
+                        </div>
+                        <div class="h-month"><span class="caret">▸</span>July<span class="count">31</span></div>
+                        <div class="h-month"><span class="caret">▸</span>June<span class="count">28</span></div>
+                        <div class="h-year"><span class="caret">▸</span>2025<span class="count">361</span></div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="editor">
+                    <div class="tabstrip">
+                      <div class="tab active">2026-08-07-1802.md</div>
+                      <div class="tab">README.md</div>
+                    </div>
+                    <div class="page">
+                      <div class="measure">
+                        <div class="dateline">
+                          <span class="day">Friday, August 7, 2026</span>
+                          <span class="vals">· good · 7 · baking, reading</span>
+                          <span class="act">Edit</span>
+                        </div>
+                        <div class="prose">
+                          <p>
+                            Bread needed more salt. Try 2% next time — the crumb was right but it
+                            tasted flat against the butter.
+                          </p>
+                          <p>
+                            Read on the porch until the light went. Didn't check the phone once,
+                            which is the part worth writing down.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="plate">
+                <div class="platelabel"><span class="n">Dark</span></div>
+                <div class="app tn-dark" style="--app-w: 800px">
+                  <div class="activitybar">
+                    <div class="ab-btn">☰</div>
+                    <div class="ab-btn">⌕</div>
+                    <div class="ab-btn active">◧</div>
+                    <div class="ab-btn">⑂</div>
+                  </div>
+                  <div class="panel">
+                    <div class="panel-title">
+                      <h4>Journal</h4>
+                      <div class="pt-actions">
+                        <span class="dots">•••</span>
+                      </div>
+                    </div>
+                    <div class="panel-body">
+                      <div class="panel-head">
+                        <div class="search">⌕ Search entries</div>
+                        <div class="actionrow">
+                          <div class="btn-primary">＋ New entry</div>
+                          <div class="icon-btn">◷</div>
+                          <div class="icon-btn">▦</div>
+                        </div>
+                        <div class="filterrow">
+                          <div class="filter-btn">Filter</div>
+                        </div>
+                      </div>
+                      <div class="list">
+                        <div class="h-year"><span class="caret">▾</span>2026<span class="count">412</span></div>
+                        <div class="h-month"><span class="caret">▾</span>August<span class="count">7</span></div>
+                        <div class="row sel">
+                          <span class="d">Fri 7</span><span class="t">6:02 PM</span>
+                          <span class="p">Bread needed more salt. Try 2%.</span>
+                        </div>
+                        <div class="row">
+                          <span class="d">Fri 7</span><span class="t">7:41 AM</span>
+                          <span class="p">Long run before the heat came in</span>
+                        </div>
+                        <div class="row">
+                          <span class="d">Wed 5</span><span class="t">1:07 PM</span>
+                          <span class="p">Call with Priya about the renovation quote</span>
+                        </div>
+                        <div class="row">
+                          <span class="d">Tue 4</span><span class="t">9:15 PM</span>
+                          <span class="p">Didn't sleep well. Short one.</span>
+                        </div>
+                        <div class="row">
+                          <span class="d">Mon 3</span><span class="t">8:30 AM</span>
+                          <span class="p">First day back. Inbox survivable.</span>
+                        </div>
+                        <div class="h-month"><span class="caret">▸</span>July<span class="count">31</span></div>
+                        <div class="h-month"><span class="caret">▸</span>June<span class="count">28</span></div>
+                        <div class="h-year"><span class="caret">▸</span>2025<span class="count">361</span></div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="editor">
+                    <div class="tabstrip">
+                      <div class="tab active">2026-08-07-1802.md</div>
+                      <div class="tab">README.md</div>
+                    </div>
+                    <div class="page">
+                      <div class="measure">
+                        <div class="dateline">
+                          <span class="day">Friday, August 7, 2026</span>
+                          <span class="vals">· good · 7 · baking, reading</span>
+                          <span class="act">Edit</span>
+                        </div>
+                        <div class="prose">
+                          <p>
+                            Bread needed more salt. Try 2% next time — the crumb was right but it
+                            tasted flat against the butter.
+                          </p>
+                          <p>
+                            Read on the porch until the light went. Didn't check the phone once,
+                            which is the part worth writing down.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <figcaption>
+            <strong>good · 7 · baking, reading</strong> are one hypothetical user's own field
+            values, not shipped vocabulary. The app has no opinion about what "good" means and
+            never colours it (D4).
+          </figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="block">
+      <div class="gutter"><b>D71</b> header order<br /><b>D18</b> always creates</div>
+      <div class="col">
+        <h2>The header</h2>
+        <p>
+          Search first, then the actions, then the filter row. <strong>New entry</strong> is the
+          only filled control in the panel — <strong>Today</strong> and <strong>Open calendar</strong>
+          sit beside it as outlined buttons, present without competing. Overflow stays where every
+          other panel keeps it, in the chrome row.
+        </p>
+        <p>
+          One filled control per surface is what makes it read as <em>the</em> action rather than
+          one of three. Today and Open calendar are used often enough to be one click away and not
+          often enough to be coloured.
+        </p>
+
+        <figure>
+          <div class="scroller">
+            <div class="figrow">
+              <div class="plate">
+                <div class="platelabel"><span class="n">1</span> resting</div>
+                <div class="app tn-auto standalone" style="--app-h: 300px">
+                  <div class="panel">
+                    <div class="panel-title">
+                      <h4>Journal</h4>
+                      <div class="pt-actions"><span class="dots">•••</span></div>
+                    </div>
+                    <div class="panel-body">
+                      <div class="panel-head">
+                        <div class="search">⌕ Search entries</div>
+                        <div class="actionrow">
+                          <div class="btn-primary">＋ New entry</div>
+                          <div class="icon-btn">◷</div>
+                          <div class="icon-btn">▦</div>
+                        </div>
+                        <div class="filterrow"><div class="filter-btn">Filter</div></div>
+                      </div>
+                      <div class="list">
+                        <div class="h-year"><span class="caret">▾</span>2026<span class="count">412</span></div>
+                        <div class="h-month"><span class="caret">▾</span>August<span class="count">7</span></div>
+                        <div class="row stack"><div class="dt"><span class="d">Fri 7</span><span class="t">6:02 PM</span></div><span class="p">Bread needed more salt. Try 2%.</span></div>
+                        <div class="row stack"><div class="dt"><span class="d">Wed 5</span><span class="t">1:07 PM</span></div><span class="p">Call with Priya about the renovation</span></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="plate">
+                <div class="platelabel"><span class="n">2</span> searching and filtered</div>
+                <div class="app tn-auto standalone" style="--app-h: 300px">
+                  <div class="panel">
+                    <div class="panel-title">
+                      <h4>Journal</h4>
+                      <div class="pt-actions"><span class="dots">•••</span></div>
+                    </div>
+                    <div class="panel-body">
+                      <div class="panel-head">
+                        <div class="search filled">⌕ bread</div>
+                        <div class="actionrow">
+                          <div class="btn-primary">＋ New entry</div>
+                          <div class="icon-btn">◷</div>
+                          <div class="icon-btn">▦</div>
+                        </div>
+                        <div class="filterrow">
+                          <div class="showing">Showing 2 <em>of 1,431</em></div>
+                          <div class="filter-btn">Filter <span class="badge">1</span></div>
+                        </div>
+                        <div class="chips">
+                          <span class="chip">context: baking <span class="x">✕</span></span>
+                          <span class="clear-all">Clear all</span>
+                        </div>
+                      </div>
+                      <div class="list">
+                        <div class="h-year"><span class="caret">▾</span>2026<span class="matchcount">2</span></div>
+                        <div class="h-month"><span class="caret">▾</span>August<span class="matchcount">1</span></div>
+                        <div class="row stack"><div class="dt"><span class="d">Fri 7</span><span class="t">6:02 PM</span></div><span class="p">Bread needed more salt. Try 2%.</span></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <figcaption>
+            The three icons in the chrome row are gone: only <code>•••</code> remains there, so the
+            journal's own actions are all in one place. Keyboard order follows the drawing —
+            overflow, search, New entry, Today, Open calendar, filter, chips, list — which amends
+            the order proposed in D31, written before the chrome's action row existed. Every
+            accessible name is unchanged.
+          </figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="block">
+      <div class="gutter"><b>D37 D39</b> flat, two levels<br /><b>D36</b> undated<br /><b>D13</b> ten years</div>
+      <div class="col">
+        <h2>The list</h2>
+        <p>
+          Flat, never indented. Year and month headers are told apart by weight, size, case and
+          ground — the year is uppercase and tracked on a filled band, the month is sentence case
+          on a hairline. Neither is inset, so a row's left edge is the same everywhere in the list
+          and the eye can run straight down it through ten years of entries.
+        </p>
+        <p>
+          Undated files are pinned above everything as a collapsed category with a count. They are
+          not an error and are not styled as one: no warning colour, no icon, just a group whose
+          name says what it is.
+        </p>
+
+        <figure>
+          <div class="scroller">
+            <div class="figrow">
+              <div class="plate">
+                <div class="platelabel"><span class="n">1</span> undated pinned, collapsed</div>
+                <div class="app tn-auto standalone" style="--app-h: 268px">
+                  <div class="panel"><div class="panel-body"><div class="list">
+                    <div class="h-undated"><span class="caret">▸</span>Undated<span class="count">3</span></div>
+                    <div class="h-year"><span class="caret">▾</span>2026<span class="count">412</span></div>
+                    <div class="h-month"><span class="caret">▾</span>August<span class="count">7</span></div>
+                    <div class="row"><span class="d">Fri 7</span><span class="t">6:02 PM</span><span class="p">Bread needed more salt.</span></div>
+                    <div class="row"><span class="d">Fri 7</span><span class="t">7:41 AM</span><span class="p">Long run before the heat</span></div>
+                    <div class="row"><span class="d">Wed 5</span><span class="t">1:07 PM</span><span class="p">Call with Priya about the</span></div>
+                    <div class="h-month"><span class="caret">▸</span>July<span class="count">31</span></div>
+                    <div class="h-year"><span class="caret">▸</span>2025<span class="count">361</span></div>
+                  </div></div></div>
+                </div>
+              </div>
+
+              <div class="plate">
+                <div class="platelabel"><span class="n">2</span> undated expanded, mtime order</div>
+                <div class="app tn-auto standalone" style="--app-h: 268px">
+                  <div class="panel"><div class="panel-body"><div class="list">
+                    <div class="h-undated"><span class="caret">▾</span>Undated<span class="count">3</span></div>
+                    <div class="row stack"><div class="dt"><span class="d">Reading list.md</span></div><span class="p">Books to get to before winter</span></div>
+                    <div class="row stack"><div class="dt"><span class="d">2026-8-5.md</span></div><span class="p">Ambiguous name — never guessed</span></div>
+                    <div class="row stack"><div class="dt"><span class="d">scratch.md</span></div><span class="p">Half a thought about the garage</span></div>
+                    <div class="h-year"><span class="caret">▾</span>2026<span class="count">412</span></div>
+                    <div class="h-month"><span class="caret">▾</span>August<span class="count">7</span></div>
+                    <div class="row"><span class="d">Fri 7</span><span class="t">6:02 PM</span><span class="p">Bread needed more salt.</span></div>
+                  </div></div></div>
+                </div>
+              </div>
+
+              <div class="plate">
+                <div class="platelabel"><span class="n">3</span> search open, headers auto‑expanded</div>
+                <div class="app tn-auto standalone" style="--app-h: 268px">
+                  <div class="panel"><div class="panel-body">
+                    <div class="panel-head">
+                      <div class="search filled">⌕ bread</div>
+                      <div class="filterrow">
+                        <div class="showing">Showing 4 <em>of 1,431</em></div>
+                        <div class="filter-btn">Filter</div>
+                      </div>
+                    </div>
+                    <div class="list">
+                      <div class="h-year"><span class="caret">▾</span>2026<span class="matchcount">3</span></div>
+                      <div class="h-month"><span class="caret">▾</span>August<span class="matchcount">1</span></div>
+                      <div class="row"><span class="d">Fri 7</span><span class="t">6:02 PM</span><span class="p">Bread needed more salt.</span></div>
+                      <div class="h-month"><span class="caret">▾</span>March<span class="matchcount">2</span></div>
+                      <div class="row"><span class="d">Sat 14</span><span class="t">11:20 AM</span><span class="p">Bread, second attempt</span></div>
+                      <div class="row"><span class="d">Sun 1</span><span class="t">4:05 PM</span><span class="p">Sourdough starter, day one</span></div>
+                      <div class="h-year"><span class="caret">▾</span>2025<span class="matchcount">1</span></div>
+                    </div>
+                  </div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <figcaption>
+            Under a search, a header that contains matches expands itself and swaps its total for a
+            match count (D52) — a collapsed header hiding a match would be a defect. The expansion
+            is never saved; clearing the search restores whatever you had collapsed (D53).
+          </figcaption>
+        </figure>
+
+        <h3>Row width tiers (D55, amended by D72)</h3>
+        <p>
+          The row responds to the popout's own width, not the window's. The shell's default is
+          288&nbsp;px, which is the middle tier — so the two-line row is what most people will
+          actually see, and the one-line row appears only after someone widens the panel. The
+          default stays where the shell puts it; a panel that resizes the shell to suit itself is
+          a surprise, and one drag persists.
+        </p>
+
+        <figure>
+          <div class="scroller">
+            <div class="figrow">
+              <div class="plate">
+                <div class="platelabel"><span class="n">≥320 px</span> date · time · first line</div>
+                <div class="app tn-auto standalone" style="--panel-w: 340px; --app-h: 150px">
+                  <div class="panel"><div class="panel-body"><div class="list">
+                    <div class="h-month"><span class="caret">▾</span>August<span class="count">7</span></div>
+                    <div class="row"><span class="d">Fri 7</span><span class="t">6:02 PM</span><span class="p">Bread needed more salt. Try 2%.</span></div>
+                    <div class="row"><span class="d">Wed 5</span><span class="t">1:07 PM</span><span class="p">Call with Priya about the renovation</span></div>
+                    <div class="row"><span class="d">Tue 4</span><span class="t">9:15 PM</span><span class="p">Didn't sleep well. Short one.</span></div>
+                  </div></div></div>
+                </div>
+              </div>
+
+              <div class="plate">
+                <div class="platelabel"><span class="n">288 px</span> default — preview wraps</div>
+                <div class="app tn-auto standalone" style="--panel-w: 288px; --app-h: 150px">
+                  <div class="panel"><div class="panel-body"><div class="list">
+                    <div class="h-month"><span class="caret">▾</span>August<span class="count">7</span></div>
+                    <div class="row stack"><div class="dt"><span class="d">Fri 7</span><span class="t">6:02 PM</span></div><span class="p">Bread needed more salt. Try 2%.</span></div>
+                    <div class="row stack"><div class="dt"><span class="d">Wed 5</span><span class="t">1:07 PM</span></div><span class="p">Call with Priya about the renovation quote</span></div>
+                  </div></div></div>
+                </div>
+              </div>
+
+              <div class="plate">
+                <div class="platelabel"><span class="n">224 px</span> narrowest — preview stays</div>
+                <div class="app tn-auto standalone" style="--panel-w: 224px; --app-h: 150px">
+                  <div class="panel"><div class="panel-body"><div class="list">
+                    <div class="h-month"><span class="caret">▾</span>August<span class="count">7</span></div>
+                    <div class="row stack"><div class="dt"><span class="d">Fri 7</span><span class="t">6:02 PM</span></div><span class="p">Bread needed more salt. Try 2%.</span></div>
+                    <div class="row stack"><div class="dt"><span class="d">Wed 5</span><span class="t">1:07 PM</span></div><span class="p">Call with Priya about the renovation quote</span></div>
+                  </div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <figcaption>
+            The shell clamps the popout to 224–480&nbsp;px. The preview never disappears: below
+            320&nbsp;px it wraps under the date, and at the narrowest width it simply gets fewer
+            words. Dropping it — D55's original third tier — is withdrawn.
+          </figcaption>
+        </figure>
+
+        <p>
+          Losing the preview would leave a column of bare dates, which is the one thing a
+          date-named-file list already does badly and the reason this list exists at all. So it
+          stays at every width, and there is no setting for it: the journal ships exactly the four
+          settings D64 approved, and a fifth would be a new decision for a preference nobody has
+          asked for yet. If it turns out people want the dense date-only column, that's a cheap
+          setting to add later — the row already knows how to render both.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="block">
+      <div class="gutter"><b>D16</b> unmistakable<br /><b>D73</b> right-aligned<br /><b>D25 D60</b> shared state<br /><b>D43</b> same entry</div>
+      <div class="col">
+        <h2>Filters, and saying so</h2>
+        <p>
+          An active filter has to be impossible to miss — a count badge, a chip row, and a plain
+          "showing N of M" line, all three (D16). A single muted indicator is the failure mode where
+          someone concludes their entries are gone.
+        </p>
+        <p>
+          The filter control sits hard right, with the count line filling the space to its left, so
+          the row reads as one statement — <em>this many, because of this control</em> — rather
+          than two things that happen to share a line.
+        </p>
+        <p>
+          The day the calendar sends over is a chip like any other, dismissible on its own; letting
+          it go clears the calendar's selection in the same movement (D60).
+        </p>
+
+        <figure>
+          <div class="scroller">
+            <div class="figrow">
+              <div class="plate">
+                <div class="platelabel"><span class="n">4</span> filtered from the calendar</div>
+                <div class="app tn-auto standalone" style="--app-h: 288px">
+                  <div class="panel"><div class="panel-body">
+                    <div class="panel-head">
+                      <div class="search">⌕ Search entries</div>
+                      <div class="actionrow">
+                        <div class="btn-primary">＋ New entry</div>
+                        <div class="icon-btn">◷</div>
+                        <div class="icon-btn">▦</div>
+                      </div>
+                      <div class="filterrow">
+                        <div class="showing">Showing 1 <em>of 1,431 — from the calendar</em></div>
+                        <div class="filter-btn">Filter <span class="badge">2</span></div>
+                      </div>
+                      <div class="chips">
+                        <span class="chip">August 7 <span class="x">✕</span></span>
+                        <span class="chip">context: running <span class="x">✕</span></span>
+                        <span class="clear-all">Clear all</span>
+                      </div>
+                    </div>
+                    <div class="list">
+                      <div class="h-year"><span class="caret">▾</span>2026<span class="matchcount">1</span></div>
+                      <div class="h-month"><span class="caret">▾</span>August<span class="matchcount">1</span></div>
+                      <div class="row stack"><div class="dt"><span class="d">Fri 7</span><span class="t">7:41 AM</span></div><span class="p">Long run before the heat came in</span></div>
+                    </div>
+                  </div></div>
+                </div>
+              </div>
+
+              <div class="plate">
+                <div class="platelabel"><span class="n">5</span> filters match nothing</div>
+                <div class="app tn-auto standalone" style="--app-h: 288px">
+                  <div class="panel"><div class="panel-body">
+                    <div class="panel-head">
+                      <div class="search">⌕ Search entries</div>
+                      <div class="actionrow">
+                        <div class="btn-primary">＋ New entry</div>
+                        <div class="icon-btn">◷</div>
+                        <div class="icon-btn">▦</div>
+                      </div>
+                      <div class="filterrow">
+                        <div class="showing">Showing 0 <em>of 1,431</em></div>
+                        <div class="filter-btn">Filter <span class="badge">3</span></div>
+                      </div>
+                      <div class="chips">
+                        <span class="chip">context: running <span class="x">✕</span></span>
+                        <span class="chip">energy: 4 <span class="x">✕</span></span>
+                        <span class="chip">mood: good <span class="x">✕</span></span>
+                        <span class="clear-all">Clear all</span>
+                      </div>
+                    </div>
+                    <div class="state">
+                      <div class="title">No entries match these 3 filters.</div>
+                      <div class="body">
+                        Every filter has to be true of the same entry, not just the same day.
+                      </div>
+                      <div class="acts"><span class="btn-ghost">Clear all filters</span></div>
+                    </div>
+                  </div></div>
+                </div>
+              </div>
+
+              <div class="plate">
+                <div class="platelabel"><span class="n">6</span> search index unavailable</div>
+                <div class="app tn-auto standalone" style="--app-h: 288px">
+                  <div class="panel"><div class="panel-body">
+                    <div class="banner">
+                      <span class="bt">Search is unavailable right now.</span>
+                      <span class="bb">Browsing and the date filter still work. Metadata filters need the index.</span>
+                    </div>
+                    <div class="panel-head">
+                      <div class="search">⌕ Search entries</div>
+                      <div class="actionrow">
+                        <div class="btn-primary">＋ New entry</div>
+                        <div class="icon-btn">◷</div>
+                        <div class="icon-btn">▦</div>
+                      </div>
+                      <div class="filterrow"><div class="filter-btn" style="opacity:.5">Filter</div></div>
+                    </div>
+                    <div class="list">
+                      <div class="h-year"><span class="caret">▾</span>2026<span class="count">412</span></div>
+                      <div class="h-month"><span class="caret">▾</span>August<span class="count">7</span></div>
+                      <div class="row stack"><div class="dt"><span class="d">Fri 7</span><span class="t">6:02 PM</span></div><span class="p">Bread needed more salt. Try 2%.</span></div>
+                      <div class="row stack"><div class="dt"><span class="d">Wed 5</span><span class="t">1:07 PM</span></div><span class="p">Call with Priya about the renovation</span></div>
+                    </div>
+                  </div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <figcaption>
+            Plate 5's second line is the one piece of copy doing real explanatory work: the AND-within-one-entry
+            rule (D43) is exactly the thing a person gets wrong when a filter returns nothing.
+          </figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="block">
+      <div class="gutter"><b>D63</b> failure copy<br /><b>D33</b> never rewritten</div>
+      <div class="col">
+        <h2>When there's nothing to show</h2>
+        <p>
+          Four of these use D63's approved strings verbatim. Each one names what happened and offers
+          the way out; none of them leads with a raw error.
+        </p>
+
+        <figure>
+          <div class="statelist">
+            <div class="plate" style="display:block">
+              <div class="platelabel"><span class="n">1</span> no workspace open</div>
+              <div class="app tn-auto standalone" style="--app-h: 150px">
+                <div class="panel"><div class="panel-body"><div class="state">
+                  <div class="title">Open a folder to start journaling.</div>
+                  <div class="acts"><span class="btn-ghost">Open folder…</span></div>
+                </div></div></div>
+              </div>
+            </div>
+
+            <div class="plate" style="display:block">
+              <div class="platelabel"><span class="n">2</span> no journal folder yet</div>
+              <div class="app tn-auto standalone" style="--app-h: 150px">
+                <div class="panel"><div class="panel-body"><div class="state">
+                  <div class="title">No journal folder yet.</div>
+                  <div class="body">Entries will be created in <span class="path">journal/</span></div>
+                  <div class="acts"><span class="btn-ghost">Start journaling</span></div>
+                </div></div></div>
+              </div>
+            </div>
+
+            <div class="plate" style="display:block">
+              <div class="platelabel"><span class="n">3</span> folder exists, no entries</div>
+              <div class="app tn-auto standalone" style="--app-h: 150px">
+                <div class="panel"><div class="panel-body"><div class="state">
+                  <div class="title">No entries yet.</div>
+                  <div class="body">Your first one will be filed under <span class="path">journal/2026/08</span></div>
+                  <div class="acts"><span class="btn-ghost">＋ New entry</span></div>
+                </div></div></div>
+              </div>
+            </div>
+
+            <div class="plate" style="display:block">
+              <div class="platelabel"><span class="n">4</span> folder unreadable</div>
+              <div class="app tn-auto standalone" style="--app-h: 150px">
+                <div class="panel"><div class="panel-body"><div class="state">
+                  <div class="title">Can't read the journal folder.</div>
+                  <div class="body"><span class="path">/home/adam/vault/journal</span></div>
+                  <div class="acts">
+                    <span class="btn-ghost">Retry</span>
+                    <span class="btn-ghost">Choose a different folder…</span>
+                  </div>
+                </div></div></div>
+              </div>
+            </div>
+
+            <div class="plate" style="display:block">
+              <div class="platelabel"><span class="n">5</span> journal folder setting is invalid</div>
+              <div class="app tn-auto standalone" style="--app-h: 150px">
+                <div class="panel"><div class="panel-body"><div class="state">
+                  <div class="title">The journal folder setting isn't a valid path.</div>
+                  <div class="body"><span class="path">../../elsewhere</span></div>
+                  <div class="acts"><span class="btn-ghost">Open settings</span></div>
+                </div></div></div>
+              </div>
+            </div>
+
+            <div class="plate" style="display:block">
+              <div class="platelabel"><span class="n">6</span> entry with unreadable frontmatter</div>
+              <div class="app tn-auto standalone" style="--app-h: 150px">
+                <div class="panel"><div class="panel-body">
+                  <div class="list">
+                    <div class="h-month"><span class="caret">▾</span>August<span class="count">7</span></div>
+                    <div class="row stack mark"><div class="dt"><span class="d">Fri 7</span><span class="t">6:02 PM</span></div><span class="p">Bread needed more salt. Try 2%.</span></div>
+                    <div class="row stack"><div class="dt"><span class="d">Wed 5</span><span class="t">1:07 PM</span></div><span class="p">Call with Priya about the renovation</span></div>
+                  </div>
+                </div></div>
+              </div>
+            </div>
+          </div>
+          <figcaption>
+            Plate&nbsp;6: a note whose frontmatter can't be parsed is still an entry, still listed, still
+            in date order — marked, not demoted (D33). The explanation belongs in the editor, not
+            the list; see the next section.
+          </figcaption>
+        </figure>
+
+        <figure>
+        <table class="copy">
+          <thead>
+            <tr><th>#</th><th>State</th><th>What it says</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="n">1</td><td>No workspace</td><td><code>Open a folder to start journaling.</code> · Open folder…</td></tr>
+            <tr><td class="n">2</td><td>No journal folder</td><td><code>No journal folder yet.</code> · Start journaling</td></tr>
+            <tr><td class="n">3</td><td>Zero entries</td><td><code>No entries yet.</code> · ＋ New entry</td></tr>
+            <tr><td class="n">4</td><td>New entry created</td><td><code>Friday, August 7, 2026</code> alone; <code>Add metadata</code> in the widget (D54)</td></tr>
+            <tr><td class="n">5</td><td>Entry with metadata</td><td>Dateline shows the values; <code>Edit</code> expands</td></tr>
+            <tr><td class="n">6</td><td>Malformed frontmatter</td><td><code>This note's frontmatter couldn't be read.</code> Non-blocking; never rewritten</td></tr>
+            <tr><td class="n">7</td><td>Filtered from calendar</td><td><code>Showing 1 of 1,431 — from the calendar</code></td></tr>
+            <tr><td class="n">8</td><td>Filter matches nothing</td><td><code>No entries match these 3 filters.</code> · Clear all filters</td></tr>
+            <tr><td class="n">9</td><td>Folder unreadable</td><td><code>Can't read the journal folder.</code> · Retry / Choose a different folder…</td></tr>
+            <tr><td class="n">10</td><td>Search unavailable</td><td><code>Search is unavailable right now.</code> Browsing still works</td></tr>
+            <tr><td class="n">11</td><td>Undated expanded</td><td>A category with a count, in modified order — never an error</td></tr>
+            <tr><td class="n">12</td><td>Ambiguous filename</td><td>Routed to Undated silently; no date is ever guessed</td></tr>
+            <tr><td class="n">13</td><td>Invalid root setting</td><td><code>The journal folder setting isn't a valid path.</code> · Open settings</td></tr>
+            <tr><td class="n">14</td><td>Date disagrees with filename</td><td><code>The date in this note is August 5, 2026.</code> Filename decides; nothing changed (D74)</td></tr>
+          </tbody>
+        </table>
+        <figcaption>
+          States 13 and 14 are new. D63 approved copy for an invalid <code>root</code> setting after
+          the wireframe's twelve-state matrix was written; 14 is the filename/frontmatter
+          disagreement the parser already detects but nothing was specified to show. Both are here
+          so the story's checklist covers what the service can actually fail with.
+        </figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="block">
+      <div class="gutter"><b>D24 D54</b> collapsed<br /><b>D74</b> long form<br /><b>D35</b> dateline<br /><b>D44</b> header slot</div>
+      <div class="col">
+        <h2>The metadata widget</h2>
+        <p>
+          Collapsed by default and set as the page's dateline, so the summary and the affordance are
+          the same object. With no values it is just the date — no placeholder, no empty chips, no
+          "not set" (D54). The most common entry is the one with nothing recorded, and it should
+          look finished, not unfilled.
+        </p>
+
+        <figure>
+          <div class="scroller">
+            <div class="figrow">
+              <div class="plate">
+                <div class="platelabel"><span class="n">A</span> new entry, nothing recorded</div>
+                <div class="app tn-auto standalone" style="--panel-w: 400px; --app-h: 210px">
+                  <div class="editor" style="flex:1">
+                    <div class="page" style="padding:1.25rem 1rem">
+                      <div class="measure">
+                        <div class="dateline">
+                          <span class="day">Friday, August 7, 2026</span>
+                          <span class="act">Add metadata</span>
+                        </div>
+                        <div class="prose"><p style="color:var(--tn-color-muted-foreground)">Start writing…</p></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="plate">
+                <div class="platelabel"><span class="n">B</span> values recorded, collapsed</div>
+                <div class="app tn-auto standalone" style="--panel-w: 400px; --app-h: 210px">
+                  <div class="editor" style="flex:1">
+                    <div class="page" style="padding:1.25rem 1rem">
+                      <div class="measure">
+                        <div class="dateline">
+                          <span class="day">Friday, August 7, 2026</span>
+                          <span class="vals">· good · 7 · baking, reading</span>
+                          <span class="act">Edit</span>
+                        </div>
+                        <div class="prose">
+                          <p>Bread needed more salt. Try 2% next time — the crumb was right but it tasted flat.</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="plate">
+                <div class="platelabel"><span class="n">C</span> expanded, inside the column</div>
+                <div class="app tn-auto standalone" style="--panel-w: 400px; --app-h: 300px">
+                  <div class="editor" style="flex:1">
+                    <div class="page" style="padding:1.25rem 1rem">
+                      <div class="measure">
+                        <div class="dateline">
+                          <span class="day">Friday, August 7, 2026</span>
+                          <span class="act">Done</span>
+                        </div>
+                        <div class="fieldgrid">
+                          <span class="lab">Mood</span>
+                          <span class="segs"><span class="seg">rough</span><span class="seg">okay</span><span class="seg on">good</span></span>
+                          <span class="lab">Energy</span>
+                          <span class="val" style="max-width:5rem">7</span>
+                          <span class="lab">Context</span>
+                          <span class="segs"><span class="seg on">baking</span><span class="seg on">reading</span><span class="seg">running</span><span class="seg">outdoors</span></span>
+                          <span class="lab">Note to self</span>
+                          <span class="val">Try 2% salt</span>
+                        </div>
+                        <div class="prose">
+                          <p>Bread needed more salt. Try 2% next time — the crumb was right.</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="plate">
+                <div class="platelabel"><span class="n">D</span> the file was renamed</div>
+                <div class="app tn-auto standalone" style="--panel-w: 400px; --app-h: 210px">
+                  <div class="editor" style="flex:1">
+                    <div class="page" style="padding:1.25rem 1rem">
+                      <div class="measure">
+                        <div class="dateline">
+                          <span class="day">Friday, August 7, 2026</span>
+                          <span class="vals">· good · 7 · baking, reading</span>
+                          <span class="act">Edit</span>
+                        </div>
+                        <div class="banner" style="margin:0 0 1rem">
+                          <span class="bt">The date in this note is August 5, 2026.</span>
+                          <span class="bb">The filename decides, so this entry is filed under August 7. Nothing has been changed.</span>
+                        </div>
+                        <div class="prose">
+                          <p>Bread needed more salt. Try 2% next time.</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="plate">
+                <div class="platelabel"><span class="n">E</span> frontmatter that can't be read</div>
+                <div class="app tn-auto standalone" style="--panel-w: 400px; --app-h: 210px">
+                  <div class="editor" style="flex:1">
+                    <div class="page" style="padding:1.25rem 1rem">
+                      <div class="measure">
+                        <div class="dateline">
+                          <span class="day">Friday, August 7, 2026</span>
+                        </div>
+                        <div class="banner" style="margin:0 0 1rem">
+                          <span class="bt">This note's frontmatter couldn't be read.</span>
+                          <span class="bb">It's still an entry and nothing has been changed. Fix it in the note itself.</span>
+                        </div>
+                        <div class="prose">
+                          <p>Bread needed more salt. Try 2% next time.</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <figcaption>
+            Plate&nbsp;C shows all four field types a user can configure — single-select, number,
+            multi-select, text. The order and the labels are theirs; the app supplies the controls
+            and no vocabulary. Plate&nbsp;E never offers to repair the file: reading a note is not
+            permission to write to it (D33/D50).
+          </figcaption>
+        </figure>
+
+        <h3>Why the year is back — and what it caught</h3>
+        <p>
+          <code>Friday, August 7, 2026</code>, long form, year included. The year isn't redundant
+          with the filename, because the filename is the thing that can be lost: rename a file by
+          accident and the frontmatter date is the only surviving record of when the entry was
+          written. A date you can read on the page is a date you can restore from.
+        </p>
+        <p>
+          Which points at a gap. The filename always wins (D20), and the frontmatter date is
+          already checked against it — the parser emits a mismatch warning today — but nothing was
+          ever specified to <em>show</em> that warning. So the backup date could quietly disagree
+          with the filename forever and the page would look fine. Plate&nbsp;D is the fix: when the
+          two disagree, the dateline says so, names both dates, and says which one is being used.
+          Non-blocking, and it never rewrites the file.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="block">
+      <div class="gutter"><b>D71–D74</b> settled here</div>
+      <div class="col">
+        <h2>What changed from v1</h2>
+        <ul class="notes">
+          <li>
+            <strong>D71 — header order and emphasis.</strong> Search moved above the actions.
+            <code>New entry</code> is a primary button with Today and Open&nbsp;calendar beside it
+            as outlined buttons; it is the only filled control in the panel. The chrome row keeps
+            only <code>•••</code>. Amends the focus order proposed in D31.
+          </li>
+          <li>
+            <strong>D72 — the preview is never dropped.</strong> D55's <code>&lt;260px</code> tier
+            is withdrawn; at every width the first line stays and simply gets fewer words. No
+            setting is added — D64's four stand.
+          </li>
+          <li>
+            <strong>D73 — the filter control is right-aligned</strong>, with the "showing N of M"
+            count filling the row to its left.
+          </li>
+          <li>
+            <strong>D74 — the dateline keeps the year</strong>, long form. Because the frontmatter
+            date is the backup record, a filename/frontmatter mismatch now surfaces in the dateline
+            (plate&nbsp;D) instead of staying silent.
+          </li>
+        </ul>
+        <p>
+          Next is the mobile mockup — same list, metadata moved to a bottom sheet (D40). The panel
+          itself still waits on the editor-header slot (D44) and the metadata facets (D41), both
+          unbuilt platform work I can start in the meantime.
+        </p>
+      </div>
+    </div>
+  </section>
+
+</div>

@@ -29,7 +29,7 @@ Closed by D48-D70; full text in `../pending-journal_discovery_and_wireframes-low
 
 - **Calendar tab on a phone — D57.** Both views at phone widths; option strip collapses to one control; dots only, no `+N`, below 40px cells.
 - **Formal touch-target audit — still DEFERRED per D31.** Not closed by this batch; owed once undeferred.
-- **Measured-column behavior at narrow widths — D55 (owned by panel_ui story).** This story consumes; must not define a second breakpoint.
+- **Measured-column behavior at narrow widths — D55, amended by D72 (owned by panel_ui story).** This story consumes; must not define a second breakpoint. The first-line preview is never dropped, at any width.
 
 Items 1 and 3 (D57, D55) are closed and may be implemented; item 2 (D31 audit) stays deferred and blocks nothing else here.
 

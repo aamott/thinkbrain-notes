@@ -26,9 +26,12 @@ Closed by D48-D70; full text in `../pending-journal_discovery_and_wireframes-low
 - **Collapsed-header + search interaction — D52.** Matching headers auto-expand with a match count while a search/filter is active; never persisted.
 - **Collapse-state persistence — D53.** Persists per workspace in desktop state, restored on popout reopen.
 - **Collapsed dateline, no metadata — D54.** Renders the bare date only, plus an `Add metadata` control; refines wireframe state 4.
-- **Measured-column behavior at narrow widths — D55 (owned by this story).** Two breakpoints (320px, 260px) gate time/first-line visibility; the mobile story consumes, not redefines.
+- **Measured-column behavior at narrow widths — D55, amended by D72.** At ≥320px the row is one line (date · time · first line); below that the time joins the date line and the preview wraps. The preview is **never** dropped, at any width. The mobile story consumes, not redefines.
 
-Per-artifact mockup sign-off under D34 still applies before implementation.
+**Desktop mockup APPROVED 2026-08-08** — `assets/journal-panel-mockup.html`, which closed
+D71 (header order and emphasis), D72 (preview always kept), D73 (filter right-aligned) and
+D74 (dateline keeps the year, mismatch surfaced). The mobile mockup is still outstanding
+under D34.
 
 ## Metadata widget route — DECIDED D44
 
@@ -57,7 +60,7 @@ Implement the approved journal list/create/open experience as a focused React su
 ## Scope
 
 - Popout navigator only. Not a calendar; not an editor fork.
-- Popout header (per P1, group-by removed): **New entry** / **Today** / **Open calendar** / overflow menu; then search bar; then filter strip.
+- Popout header (D71): search field; then an action row of **New entry** (primary, the only filled control) with **Today** and **Open calendar** beside it as outlined buttons; then the filter row with the filter control right-aligned (D73). Overflow stays in the panel chrome and is the only thing there.
   - "Today" opens today's most recent entry or creates one if none exists.
   - "Open calendar" opens the canvas tab (D14/D27); this is the only calendar entry point from the popout.
 - Entry list: flat virtualized stream, collapsible year + month headers (non-indented), Undated pinned at top.
@@ -65,7 +68,7 @@ Implement the approved journal list/create/open experience as a focused React su
 - Active-filter emphasis: count badge + chip row + "showing N of M" text (D16).
 - Metadata facet options come from the D41 platform-index query. If unavailable, disable
   only metadata facets with an explicit status; browsing, date filtering and lazy previews remain usable.
-- Twelve UI states enumerated in the discovery story's state-coverage section must all be handled. Reference that list; do not re-enumerate them here.
+- Fourteen UI states: the twelve in the discovery story's state-coverage section, plus the invalid-root-setting failure (D63) and the filename/frontmatter date mismatch (D74). The approved mockup's copy table is the reference; do not re-enumerate them here.
 - Malformed frontmatter: non-blocking notice only; never a rewrite on open (D33).
 - `DesktopPanelContext` gap: resolve the workspace listing / index access question before implementing the panel factory body.
 
@@ -87,7 +90,7 @@ Runtime panel dimension is the only case where a scoped CSSOM custom property on
 
 ## Dependencies
 
-- Approved discovery desktop wireframe and state/copy matrix; D34 per-artifact mockup sign-off still gates UI work.
+- Approved discovery desktop wireframe and state/copy matrix, plus the approved desktop mockup `assets/journal-panel-mockup.html` (D71-D74). D34 still gates the mobile artifact.
 - `plans/extensions/pending-editor_header_contribution-high-med.md` implements D44 before widget integration.
 - `DesktopPanelContext` gap resolution: workspace listing and index access must be provided before the panel factory body can be implemented.
 - Journal data model, journal service, and settings/accessibility contract.
@@ -98,7 +101,7 @@ Runtime panel dimension is the only case where a scoped CSSOM custom property on
 
 - [ ] Journal popout registers local panel id `journal` (`journal-calendar.journal`) through `context.panels.register(...)` with `side: "left"`; no direct registry mutation (D47).
 - [ ] Popout is a navigator: every entry row opens in the main editor as a normal tab; no inline editing in the popout.
-- [ ] Popout header contains exactly: New entry / Today / Open calendar / overflow, then search, then filter strip. No group-by control.
+- [ ] Popout header follows D71: search, then New entry (the only filled control) with Today and Open calendar beside it, then the filter row with the control right-aligned (D73). No group-by control. Focus order: overflow, search, New entry, Today, Open calendar, filter, chips, list.
 - [ ] "Today" opens the most recent entry for today's date or creates a new one; never appends to an existing file (D18).
 - [ ] List renders as a flat virtualized stream with collapsible year + month headers, non-indented (D37, D39); list handles thousands of entries without layout thrash (D13).
 - [ ] Rows render from filename-derived dates alone; first-line previews load lazily for
@@ -107,9 +110,9 @@ Runtime panel dimension is the only case where a scoped CSSOM custom property on
 - [ ] Undated is a pinned collapsed category with a count and is absent when empty; non-Markdown files are silently excluded from the popout (D32/D36).
 - [ ] Active filters show count badge + chip row + "showing N of M" string; a muted-only indicator is a defect (D16).
 - [ ] Metadata facet values and paths come from D41 queries; all active predicates match within one entry per D43, and D16 search runs inside that entry set. Index unavailable disables only facets with explicit status and never scans files.
-- [ ] Metadata widget registers as `metadata-widget` through D44's observable React editor-header registry, appears in already-open editors, disposes cleanly, follows D28 triggers, starts as D35's dateline, and expands to the form.
+- [ ] Metadata widget registers as `metadata-widget` through D44's observable React editor-header registry, appears in already-open editors, disposes cleanly, follows D28 triggers, starts as D35's dateline in D74's long form with the year, and expands to the form.
 - [ ] Malformed frontmatter shows a non-blocking notice; D45 unconfigured values remain visible/filterable; neither case rewrites the file.
-- [ ] All twelve UI states from the discovery story's state-coverage section are handled with distinct copy and recovery actions; no fake/placeholder data ships.
+- [ ] All fourteen UI states are handled with the approved mockup's copy and recovery actions; no fake/placeholder data ships.
 - [ ] Keyboard focus order matches the focus spec in the discovery story; screen-reader roles/names/live regions are correct; no hard-coded colors — `--tn-*` tokens only (D31).
 - [ ] CSS uses co-located CSS Modules and `--tn-*` tokens; no inline styles except runtime panel-dimension CSSOM custom properties on the panel root.
 - [ ] Desktop tests cover rendering, service failures, creating/opening notes, dirty-state behavior, panel toggling, filter emphasis, facet values, index-unavailable degradation, and malformed-frontmatter notice.
@@ -118,7 +121,7 @@ Runtime panel dimension is the only case where a scoped CSSOM custom property on
 ## Validation
 
 - Automated: `JournalPanel.test.tsx`, `JournalEntryList.test.tsx`, `MetadataWidget.test.tsx`, relevant panel-registry tests, and `pnpm lint`, `pnpm typecheck`, `pnpm test` (or `./scripts/qa.sh`); all panel/view-model/registry/widget tests must pass.
-- Desktop: validate all twelve UI states; open/close via activity bar; create today/past note ("New entry" always new file); open an existing note with unsaved edits; collapse/expand year+month headers; test full-text search, chip/badge emphasis, metadata filters, calendar-tab launch, resizing, themes, keyboard-only navigation, screen-reader labels, malformed-frontmatter notice, error recovery, and filter emphasis. Verify real Markdown files use `journal/YYYY/MM/YYYY-MM-DD-HHmm.md` and remain readable outside the app.
+- Desktop: validate all fourteen UI states; open/close via activity bar; create today/past note ("New entry" always new file); open an existing note with unsaved edits; collapse/expand year+month headers; test full-text search, chip/badge emphasis, metadata filters, calendar-tab launch, resizing, themes, keyboard-only navigation, screen-reader labels, malformed-frontmatter notice, error recovery, and filter emphasis. Verify real Markdown files use `journal/YYYY/MM/YYYY-MM-DD-HHmm.md` and remain readable outside the app.
 - With an editor already open, activate/deactivate and verify D44 adds/removes the widget without remounting. Mobile is owned by `pending-journal_mobile_refinement-med-med.md`; add no mobile-only markup.
 
 ## Non-goals
@@ -137,5 +140,5 @@ The following story needs from this one:
 - `MetadataWidget` component API and D44 registration contract using local id `metadata-widget` (needed by extension-host integration).
 - `JournalEntryList` virtualized list API including filter/search state shape (needed by `calendar_tab_ui` for shared filter state per D25).
 - `DesktopPanelContext` gap resolution: decision and implementation on workspace listing / index access.
-- State-coverage matrix (all twelve states) with copy strings, so mobile refinement can reuse without re-specifying.
+- State-coverage matrix (all fourteen states) with copy strings — the approved mockup's table — so mobile refinement can reuse without re-specifying.
 - Confirmed focus order (from discovery story) validated in automated tests.
