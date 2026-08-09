@@ -50,3 +50,15 @@
     `JournalFieldDefinitionsControl.tsx` lines 163-164 (`choiceless` guard
     only in the form, not the promotion path). Read `MetadataField.tsx` lines
     65-106 (dashed extra pills for values not in options).
+
+## Investigation notes (2026-08-08, unverified)
+
+Written from reading only — no code was changed and none of this was run.
+Treat it as a lead, not a conclusion.
+
+Two candidate fixes: guard
+`onDefineField` in `builtins/journal.tsx` so a select with no options cannot be promoted
+(mirrors the `choiceless` guard the settings form already applies), or seed the options from
+the note's own values. The first is smaller; the second is friendlier and closer to how D83
+already heals values — worth deciding deliberately rather than by which is easier. Test
+fixtures must avoid reserved keys (`tags`, `aliases`, …): `readJournalMetadata` skips them.

@@ -31,3 +31,16 @@
     `JournalError` with codes `no-workspace | invalid-root | unreadable`
     (`journalService.ts` lines 75-88, 102-121). `CalendarTab` only accepts
     `days: ReadonlyMap`, `totalShowing`, etc. — no error/status prop.
+
+## Investigation notes (2026-08-08, unverified)
+
+Written from reading only — no code was changed and none of this was run.
+Treat it as a lead, not a conclusion.
+
+The shape of `JournalPanelContainer` is the
+model to copy: a status of `"loading" | "ready" | JournalErrorCode`, a reload token for retry,
+and no reset to `"loading"` on retry. `aggregateCalendarDays` already accepts a
+`CalendarStatus` as its optional fourth argument, so `packages/core` needs no change; what is
+missing is any error surface at all in `CalendarTab.tsx`. No `CalendarTabContainer.test.tsx`
+exists yet — `JournalPanelContainer.test.tsx`'s `service()` / `listing()` helpers are the
+closest template.

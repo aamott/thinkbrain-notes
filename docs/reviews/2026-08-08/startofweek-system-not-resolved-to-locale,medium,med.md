@@ -23,3 +23,14 @@
     `CalendarTabContainer` defaults `weekStartsOn` to `0` (line 41) but the
     extension always passes an explicit value, so the default is not the
     fallback path.
+
+## Investigation notes (2026-08-08, unverified)
+
+Written from reading only — no code was changed and none of this was run.
+Treat it as a lead, not a conclusion.
+
+`"system"` collapses to Sunday in
+`builtins/journal.tsx` (`=== "monday" ? 1 : 0`). `new Intl.Locale(...).weekInfo.firstDay`
+reportedly resolves without a polyfill on this Node version, and happy-dom's default
+`navigator.language` is `en-US`, so a test can pin the locale rather than depend on the
+machine. Worth doing together with the reactivity item — same call site.

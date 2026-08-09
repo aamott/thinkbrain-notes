@@ -43,3 +43,13 @@
     returns `JournalEntry` with no values). Read
     `JournalPanelContainer.tsx` line 110 (`matchingPaths: null`). Confirmed
     both surfaces avoid metadata today, hiding the gap.
+
+## Investigation notes (2026-08-08, unverified)
+
+Written from reading only — no code was changed and none of this was run.
+Treat it as a lead, not a conclusion.
+
+Read the finding carefully before acting
+— one investigation concluded it asks only for a comment tying the empty `values` to the
+pending story, which may understate it. Confirm what the D25 shared-filter contract actually
+requires before deciding scope.

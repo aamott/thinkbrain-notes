@@ -41,3 +41,14 @@
     `extensionWorkspace.ts` lines 118-128 (`listNotes` appends `/` to the
     prefix, so `journal/` becomes `journal//`). Confirmed the core normalizer
     is not used at either the extension gate or the service validation path.
+
+## Investigation notes (2026-08-08, unverified)
+
+Written from reading only — no code was changed and none of this was run.
+Treat it as a lead, not a conclusion.
+
+Confirmed in `builtins/journal.tsx`: a raw `startsWith`
+check, and the same unnormalised value is handed to `createJournalService` as `root`, so a
+trailing slash breaks both the widget gate and the folder listing. `normalizeRoot` exists in
+`packages/core/src/journal/paths.ts` but is **not exported** — exporting it is likely better
+than duplicating the trim/strip/backslash-fold logic into the built-in.
