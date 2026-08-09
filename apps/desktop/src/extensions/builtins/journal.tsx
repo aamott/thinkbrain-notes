@@ -1,9 +1,11 @@
-import type { ExtensionManifest } from "@thinkbrain/core";
+import { parseFrontmatter, type ExtensionManifest } from "@thinkbrain/core";
 
 import { JournalPanelContainer } from "../../journal/JournalPanelContainer";
 import { createJournalService } from "../../journal/journalService";
 import { journalSettingsSchema } from "../../journal/journalSettings";
 import { registerJournalControls } from "../../journal/JournalFieldDefinitionsControl";
+import { MetadataWidgetContainer } from "../../journal/MetadataWidgetContainer";
+import { parseFieldDefinitions } from "../../journal/journalSettings";
 import type { DesktopExtensionContext } from "../desktopExtensionHost";
 
 /**
@@ -55,6 +57,38 @@ export function activateJournal(context: DesktopExtensionContext): void {
     // (D45), so it changes under a running panel when the vault changes.
     root: () => context.settings.get<string>("root") ?? DEFAULT_ROOT,
     now: () => new Date()
+  });
+
+  const definitions = () =>
+    parseFieldDefinitions(context.settings.get<string>("fieldDefinitions")).definitions;
+
+  /**
+   * D28: the widget belongs on a note in the journal folder, or on any note
+   * that already carries one of the user's configured fields — those notes are
+   * journal entries in every sense that matters, wherever they live.
+   */
+  const belongsHere = (relativePath: string | null, contents: string): boolean => {
+    if (relativePath === null) return false;
+    const root = context.settings.get<string>("root") ?? DEFAULT_ROOT;
+    if (relativePath.startsWith(`${root}/`)) return true;
+    const configured = definitions();
+    if (configured.length === 0) return false;
+    const metadata = parseFrontmatter(contents).metadata;
+    return configured.some((definition) => metadata[definition.id] !== undefined);
+  };
+
+  context.editorHeaders.register({
+    id: "metadata-widget",
+    label: "Entry metadata",
+    applies: ({ relativePath, contents }) => belongsHere(relativePath, contents),
+    render: ({ relativePath, contents, applyEdit }) => (
+      <MetadataWidgetContainer
+        relativePath={relativePath ?? ""}
+        contents={contents}
+        definitions={definitions()}
+        applyEdit={applyEdit}
+      />
+    )
   });
 
   const openCalendar = (): void => {

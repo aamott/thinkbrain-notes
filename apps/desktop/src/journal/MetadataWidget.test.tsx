@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { MetadataWidget, type MetadataWidgetProps } from "./MetadataWidget";
+import { MetadataWidgetContainer } from "./MetadataWidgetContainer";
 
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
@@ -200,5 +201,71 @@ describe("notices", () => {
 
     const labels = [...host.querySelectorAll("button")].map((b) => b.textContent ?? "");
     expect(labels.join(" ")).not.toMatch(/fix|repair|update the note/i);
+  });
+});
+
+describe("MetadataWidgetContainer", () => {
+  const note = (frontmatter: string) =>
+    `---\n${frontmatter}---\n\nBread needed more salt.\n`;
+
+  const mountContainer = async (
+    props: Partial<React.ComponentProps<typeof MetadataWidgetContainer>> = {}
+  ): Promise<HTMLDivElement> => {
+    container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
+    await act(async () =>
+      root?.render(
+        <MetadataWidgetContainer
+          relativePath={props.relativePath ?? "journal/2026/08/2026-08-07-1802.md"}
+          contents={props.contents ?? note("date: 2026-08-07\n")}
+          definitions={props.definitions ?? definitions}
+          applyEdit={props.applyEdit}
+        />
+      )
+    );
+    return container;
+  };
+
+  it("takes the date from the filename", async () => {
+    const host = await mountContainer();
+
+    expect(host.textContent).toContain("Friday, August 7, 2026");
+  });
+
+  it("reads the values already in the note", async () => {
+    const host = await mountContainer({
+      contents: note("date: 2026-08-07\nmood: good\nenergy: 7\n")
+    });
+
+    expect(host.textContent).toContain("good · 7");
+  });
+
+  it("edits the open document instead of the file, changing one key", async () => {
+    const applyEdit = vi.fn();
+    const host = await mountContainer({
+      contents: note("date: 2026-08-07\nenergy: 7\n"),
+      applyEdit
+    });
+
+    // A value is already set, so the control reads "Edit" rather than "Add".
+    await click(host, "Edit");
+    await click(host, "Mood: good");
+
+    expect(applyEdit).toHaveBeenCalledWith(
+      note("date: 2026-08-07\nenergy: 7\nmood: good\n")
+    );
+  });
+
+  it("renders nothing for a note whose name carries no date", async () => {
+    const host = await mountContainer({ relativePath: "journal/scratch.md" });
+
+    expect(host.innerHTML).toBe("");
+  });
+
+  it("reports a date that disagrees with the filename", async () => {
+    const host = await mountContainer({ contents: note("date: 2026-08-05\n") });
+
+    expect(host.querySelector('[role="status"]')?.textContent).toContain("2026-08-05");
   });
 });

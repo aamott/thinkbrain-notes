@@ -130,7 +130,9 @@ export function MarkdownEditor({
           {error}
         </p>
       )}
-      <EditorHeaderSlot context={{ rootPath, relativePath, contents: value }} />
+      <EditorHeaderSlot
+        context={{ rootPath, relativePath, contents: value, applyEdit: onChange }}
+      />
       <div
         className="min-h-0 flex-1 overflow-auto [&_.cm-editor]:min-h-full [&_.cm-editor]:bg-editor [&_.cm-editor]:text-foreground [&_.cm-editor]:font-mono [&_.cm-editor]:text-sm [&_.cm-editor]:leading-[1.65] [&_.cm-scroller]:overflow-auto [&_.cm-content]:pt-4 [&_.cm-content]:px-5 [&_.cm-content]:pb-16 [&_.cm-focused]:outline-none"
         ref={hostRef}

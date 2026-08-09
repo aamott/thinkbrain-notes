@@ -6,9 +6,9 @@ Shipped: `journalViewModel.ts` (all fourteen states, pure), `JournalPanel.tsx` (
 `JournalPanelContainer.tsx` (state + service), `MetadataWidget.tsx`, and registration through
 `extensions/builtins/journal.tsx`.
 
-Remaining: list virtualization (D13), the widget's write path and its editor-header
-registration, search/facets (waiting on D41), collapse persistence (D53), and the two shell
-affordances noted below. First-line previews now load after paint, newest 60 first — scoping
+Remaining: list virtualization (D13), search/facets (waiting on D41), collapse persistence
+(D53), and the two shell affordances noted below. The widget now registers through D44's slot
+and edits the open document — not the file — so the user's Save stays the only thing that writes. First-line previews now load after paint, newest 60 first — scoping
 them to the visible range waits on virtualization.
 
 ## Epic
@@ -129,8 +129,8 @@ chrome would be the inconsistent choice. **Product owner: say the word and I wil
 - [ ] Undated is a pinned collapsed category with a count and is absent when empty; non-Markdown files are silently excluded from the popout (D32/D36).
 - [ ] Active filters show count badge + chip row + "showing N of M" string; a muted-only indicator is a defect (D16).
 - [ ] Metadata facet values and paths come from D41 queries; all active predicates match within one entry per D43, and D16 search runs inside that entry set. Index unavailable disables only facets with explicit status and never scans files.
-- [ ] Metadata widget registers as `metadata-widget` through D44's observable React editor-header registry, appears in already-open editors, disposes cleanly, follows D28 triggers, starts as D35's dateline in D74's long form with the year, and expands to the form.
-- [ ] Malformed frontmatter shows a non-blocking notice; D45 unconfigured values remain visible/filterable; neither case rewrites the file.
+- [x] Metadata widget registers as `metadata-widget` through D44's observable React editor-header registry, appears in already-open editors, disposes cleanly, follows D28 triggers, starts as D35's dateline in D74's long form with the year, and expands to the form.
+- [x] Malformed frontmatter shows a non-blocking notice, as does a date that disagrees with the filename; neither rewrites anything. Edits are a single-key textual change, so key order, comments and quoting survive (`frontmatterEdit.ts`).
 - [ ] All fourteen UI states are handled with the approved mockup's copy and recovery actions; no fake/placeholder data ships.
 - [ ] Keyboard focus order matches the focus spec in the discovery story; screen-reader roles/names/live regions are correct; no hard-coded colors — `--tn-*` tokens only (D31).
 - [ ] CSS uses co-located CSS Modules and `--tn-*` tokens; no inline styles except runtime panel-dimension CSSOM custom properties on the panel root.

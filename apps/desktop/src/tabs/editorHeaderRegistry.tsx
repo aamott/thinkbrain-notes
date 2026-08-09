@@ -20,6 +20,14 @@ export interface EditorHeaderContext {
   /** Workspace-relative path, or `null` for a document with no file yet. */
   readonly relativePath: string | null;
   readonly contents: string;
+  /**
+   * Replaces the open document's text.
+   *
+   * Edits go through the editor, not the file: the user's unsaved changes and
+   * their Save are the editor's business, and writing underneath it would race
+   * whatever they are typing.
+   */
+  readonly applyEdit?: (contents: string) => void;
 }
 
 export interface DesktopEditorHeaderContribution extends IdentifiedContribution {
