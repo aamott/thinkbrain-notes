@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { useMemo, useSyncExternalStore } from "react";
 import {
   type DesktopEditorHeaderContribution,
   type DesktopEditorHeaderRegistry,
@@ -29,7 +29,13 @@ export function EditorHeaderSlot({
   readonly registry?: DesktopEditorHeaderRegistry;
 }) {
   const headers = useEditorHeaders(registry);
-  const applicable = headers.filter((header) => header.applies?.(context) ?? true);
+  // Memoize the applies filter: `context.contents` changes on every keystroke,
+  // and `applies` callbacks (e.g. `belongsHere`) may parse frontmatter. The
+  // filter result is stable for the same (headers, context) pair.
+  const applicable = useMemo(
+    () => headers.filter((header) => header.applies?.(context) ?? true),
+    [headers, context]
+  );
   if (applicable.length === 0) return null;
 
   return (

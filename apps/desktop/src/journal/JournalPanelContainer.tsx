@@ -74,7 +74,9 @@ export function JournalPanelContainer({
 
   // First lines are read after the list is on screen, newest first and capped:
   // the rows must never wait on file reads, and a ten-year journal must never
-  // read ten years of files to draw one screen.
+  // read ten years of files to draw one screen. Reads are batched in parallel
+  // (capped to avoid flooding the IPC bridge) so 60 previews don't take 60
+  // sequential round-trips.
   useEffect(() => {
     if (!listing) return;
     let cancelled = false;
@@ -84,11 +86,18 @@ export function JournalPanelContainer({
       .map((entry) => entry.relativePath);
 
     void (async () => {
+      const CONCURRENCY = 8;
       const loaded = new Map<string, string>();
-      for (const relativePath of wanted) {
-        const preview = await service.readPreview(relativePath);
+      for (let i = 0; i < wanted.length; i += CONCURRENCY) {
         if (cancelled) return;
-        if (preview !== null) loaded.set(relativePath, preview);
+        const batch = wanted.slice(i, i + CONCURRENCY);
+        const results = await Promise.all(
+          batch.map(async (path) => [path, await service.readPreview(path)] as const)
+        );
+        if (cancelled) return;
+        for (const [path, preview] of results) {
+          if (preview !== null) loaded.set(path, preview);
+        }
       }
       if (!cancelled) setPreviews(loaded);
     })();

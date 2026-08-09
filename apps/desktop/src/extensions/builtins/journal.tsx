@@ -1,5 +1,5 @@
 import { normalizeRoot, parseFrontmatter, type ExtensionManifest } from "@thinkbrain/core";
-import { useSyncExternalStore } from "react";
+import { useMemo, useSyncExternalStore } from "react";
 
 import { JournalPanelContainer } from "../../journal/JournalPanelContainer";
 import { createJournalService } from "../../journal/journalService";
@@ -82,8 +82,17 @@ export function activateJournal(context: DesktopExtensionContext): void {
     now: () => new Date()
   });
 
-  const definitions = () =>
-    parseFieldDefinitions(context.settings.get<string>("fieldDefinitions")).definitions;
+  // Cache parsed field definitions so `belongsHere` and callbacks don't
+  // re-parse JSON on every call. Updated via settings subscription.
+  let cachedDefinitions = parseFieldDefinitions(
+    context.settings.get<string>("fieldDefinitions")
+  ).definitions;
+  context.settings.onDidChange("fieldDefinitions", () => {
+    cachedDefinitions = parseFieldDefinitions(
+      context.settings.get<string>("fieldDefinitions")
+    ).definitions;
+  });
+  const definitions = () => cachedDefinitions;
 
   /**
    * D28: the widget belongs on a note in the journal folder, or on any note
@@ -156,12 +165,18 @@ export function activateJournal(context: DesktopExtensionContext): void {
     readonly applyEdit?: (next: string) => void;
   }) {
     const raw = useDefinitions();
+    // Parse and validate field definitions once per settings change, not on
+    // every editor re-render (which happens on every keystroke).
+    const parsedDefinitions = useMemo(
+      () => parseFieldDefinitions(raw).definitions,
+      [raw]
+    );
 
     return (
       <MetadataWidgetContainer
         relativePath={relativePath ?? ""}
         contents={contents}
-        definitions={parseFieldDefinitions(raw).definitions}
+        definitions={parsedDefinitions}
         applyEdit={applyEdit}
         // D85: promoting a key the note already uses is the one settings write
         // the editor makes, and only ever when the user asks for it by name.

@@ -1,6 +1,6 @@
 import { Compartment, EditorState } from "@codemirror/state";
 import { keymap, EditorView } from "@codemirror/view";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { EditorHeaderSlot } from "./editorHeaderRegistry.tsx";
 import { livePreview as livePreviewExtension } from "./livePreview";
@@ -155,6 +155,13 @@ export function MarkdownEditor({
     });
   }, [livePreview, livePreviewCompartment]);
 
+  // Stable context for EditorHeaderSlot so its `applies` filter memo holds
+  // across renders that don't change the document identity or contents.
+  const headerContext = useMemo(
+    () => ({ rootPath, relativePath, contents: value, applyEdit: onChange }),
+    [rootPath, relativePath, value, onChange]
+  );
+
   return (
     <section className="flex min-h-0 flex-1 flex-col" aria-busy={isSaving} aria-label="Markdown document">
       <div className="flex min-h-8 items-center justify-between gap-3 px-[0.9rem] border-b border-border text-muted-foreground text-[0.6875rem]">
@@ -177,7 +184,7 @@ export function MarkdownEditor({
         </p>
       )}
       <EditorHeaderSlot
-        context={{ rootPath, relativePath, contents: value, applyEdit: onChange }}
+        context={headerContext}
       />
       <div
         className="min-h-0 flex-1 overflow-auto [&_.cm-editor]:min-h-full [&_.cm-editor]:bg-editor [&_.cm-editor]:text-foreground [&_.cm-editor]:font-mono [&_.cm-editor]:text-sm [&_.cm-editor]:leading-[1.65] [&_.cm-scroller]:overflow-auto [&_.cm-content]:pt-4 [&_.cm-content]:px-5 [&_.cm-content]:pb-16 [&_.cm-focused]:outline-none"

@@ -9,6 +9,7 @@ import {
   type JournalFieldValue,
   type JournalMetadataResult
 } from "@thinkbrain/core";
+import { useMemo } from "react";
 
 import { setFrontmatterField } from "./frontmatterEdit";
 import { MetadataWidget } from "./MetadataWidget";
@@ -87,37 +88,52 @@ export function MetadataWidgetContainer({
   onDefineField,
   onAddOption
 }: MetadataWidgetContainerProps) {
-  const ref = parseJournalFilename(relativePath);
-  // No unambiguous date means no dateline; the app never guesses one (D38).
-  if (ref === UNDATED) return null;
+  // The frontmatter parse, date resolution, metadata read, and value healing
+  // are all pure functions of (relativePath, contents, definitions). Memoizing
+  // them avoids re-parsing YAML on every keystroke — the editor re-renders on
+  // every character typed, and `parseFrontmatter` runs a full YAML parse.
+  const { date, unconfigured, values, diagnostics } = useMemo(() => {
+    const ref = parseJournalFilename(relativePath);
+    // No unambiguous date means no dateline; the app never guesses one (D38).
+    if (ref === UNDATED) return { date: null, unconfigured: [], values: {}, diagnostics: [] };
 
-  const parsed = parseFrontmatter(contents);
-  const resolved = resolveEntryDate(ref, parsed.metadata);
-  const metadata = readJournalMetadata(parsed.metadata, definitions);
+    const parsed = parseFrontmatter(contents);
+    const resolved = resolveEntryDate(ref, parsed.metadata);
+    const metadata = readJournalMetadata(parsed.metadata, definitions);
 
-  // Keys the settings have never heard of are still the user's data (D33), so
-  // they get a field of their own rather than being preserved out of sight.
-  const unconfigured = Object.entries(metadata.unconfigured).map(([key, raw]) =>
-    inferField(key, raw)
-  );
-  const values = { ...healed(metadata, definitions) };
-  for (const field of unconfigured) {
-    const raw = metadata.unconfigured[field.id];
-    if (typeof raw === "string" || typeof raw === "number") values[field.id] = raw;
-    else if (Array.isArray(raw) && raw.every((entry) => typeof entry === "string")) {
-      values[field.id] = raw as readonly string[];
+    // Keys the settings have never heard of are still the user's data (D33), so
+    // they get a field of their own rather than being preserved out of sight.
+    const unconfigured = Object.entries(metadata.unconfigured).map(([key, raw]) =>
+      inferField(key, raw)
+    );
+    const values: Record<string, JournalFieldValue> = { ...healed(metadata, definitions) };
+    for (const field of unconfigured) {
+      const raw = metadata.unconfigured[field.id];
+      if (typeof raw === "string" || typeof raw === "number") values[field.id] = raw;
+      else if (Array.isArray(raw) && raw.every((entry) => typeof entry === "string")) {
+        values[field.id] = raw as readonly string[];
+      }
     }
-  }
+
+    return {
+      date: resolved.date,
+      unconfigured,
+      values,
+      diagnostics: [...parsed.diagnostics, ...resolved.diagnostics]
+    };
+  }, [relativePath, contents, definitions]);
+
+  if (date === null) return null;
 
   return (
     <MetadataWidget
-      date={resolved.date}
+      date={date}
       definitions={definitions}
       unconfigured={unconfigured}
       onDefineField={onDefineField}
       onAddOption={onAddOption}
       values={values}
-      diagnostics={[...parsed.diagnostics, ...resolved.diagnostics]}
+      diagnostics={diagnostics}
       onSet={(fieldId, value) => applyEdit?.(setFrontmatterField(contents, fieldId, value))}
       readOnly={applyEdit === undefined}
     />
