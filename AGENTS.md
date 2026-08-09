@@ -86,13 +86,14 @@ For major or cross-cutting refactors, `npx repomix --compress` can help map depe
 - Build profiles live in `apps/desktop/src-tauri/Cargo.toml`: `[profile.dev]` favors compile speed, `[profile.release]` favors runtime speed + small binaries.
 
 
-## Rules
+## Rules/suggestions
 - Never commit/push without explicit user approval.
 - Never change AGENTS.md (this file) without explicit user direction and approval. (Exception: `## File Map`)
-
+- Write compact, maintainable and optimized code. Shorter code is easier to read faster.
+- Avoid large files. Never over 800 lines. Break up earlier rather than later when it's already big. 
 
 ## Unique Terminology
-- Action bar: Bar on left side of screen, contains buttons for different features.
+- Action bar: Left screen, contains buttons for different features.
   - Contains: Explorer, search, tags, extensions `side: "left"` (journal, etc), and an extensions menu. Settings at bottom.
 - Action items menu: Top right menu, contains buttons for different features.
   - Contains: Outline, properties, backlinks, and extensions `side: "right"` (agent chat, etc).

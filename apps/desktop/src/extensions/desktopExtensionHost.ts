@@ -28,7 +28,7 @@ import {
 import {
   desktopEditorHeaderRegistry,
   type DesktopEditorHeaderContribution
-} from "../tabs/editorHeaderRegistry";
+} from "../tabs/editorHeaderRegistry.ts";
 import { desktopTabRegistry, type DesktopTabView } from "../tabs/tabRegistry";
 import { appEvents, type AppEvents } from "../events/appEvents";
 import { workspaceDesktopApi } from "../workspace/workspaceAdapter";

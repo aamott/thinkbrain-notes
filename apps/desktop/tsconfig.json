@@ -1,7 +1,9 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "types": ["vite/client", "vitest"]
+    "types": ["vite/client", "vitest"],
+    "noEmit": true,
+    "allowImportingTsExtensions": true
   },
   "include": ["src", "demo", "vite.config.ts", "playwright.config.ts"]
 }

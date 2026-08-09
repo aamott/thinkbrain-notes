@@ -524,6 +524,7 @@ export function JournalFieldDefinitionsControl({
  * because a `control` key with nothing registered falls back to a plain text
  * box and warns.
  */
+// eslint-disable-next-line react-refresh/only-export-components -- registration shim, no JSX
 export function registerJournalControls(): void {
   registerControl(FIELD_DEFINITIONS_CONTROL, JournalFieldDefinitionsControl);
 }

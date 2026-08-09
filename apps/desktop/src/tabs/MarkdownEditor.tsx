@@ -2,7 +2,7 @@ import { Compartment, EditorState } from "@codemirror/state";
 import { keymap, EditorView } from "@codemirror/view";
 import { useEffect, useRef, useState } from "react";
 
-import { EditorHeaderSlot } from "./editorHeaderRegistry";
+import { EditorHeaderSlot } from "./editorHeaderRegistry.tsx";
 import { livePreview as livePreviewExtension } from "./livePreview";
 import {
   markdownEditorHookRegistry,

@@ -170,6 +170,7 @@ export function ExtensionPanelMountPoint({
  * of `DesktopPanelContext` is React props for first-party panels, which an
  * extension must not receive.
  */
+// eslint-disable-next-line react-refresh/only-export-components -- factory for non-tsx extension host
 export function createExtensionPanelMountFactory(
   mount: ExtensionPanelMount
 ): (context: DesktopPanelContext) => ReactNode {

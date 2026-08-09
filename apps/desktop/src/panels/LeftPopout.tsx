@@ -41,7 +41,7 @@ export function LeftPopout({ panel, rootPath, explorerProps, onOpenSearchResult 
   if (!contribution) {
     return (
       <aside
-        className="flex flex-col min-w-0 overflow-hidden bg-sidebar border-r border-border flex-[0_0_var(--tn-shell-left-width)] max-[760px]:absolute max-[760px]:top-0 max-[760px]:bottom-0 max-[760px]:left-[var(--tn-size-activitybar-width)] max-[760px]:z-30 max-[760px]:shadow-lg"
+        className="flex flex-col min-w-0 overflow-hidden bg-sidebar border-r border-border flex-[0_0_var(--tn-shell-left-width)] max-[760px]:absolute max-[760px]:top-0 max-[760px]:bottom-0 max-[760px]:left-[var(--tn-size-activitybar-width)] max-[760px]:z-30 max-[760px]:overflow-visible max-[760px]:shadow-panel-left"
         aria-label="Panel not available"
       >
         <Unavailable

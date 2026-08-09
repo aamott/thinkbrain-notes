@@ -20,7 +20,7 @@ import {
   importTheme,
   type ImportThemeResult
 } from "./themeImportExport";
-import { computeEffectiveValue } from "./SettingsContent";
+import { computeEffectiveValue } from "./effectiveValue";
 import { useTransientStatus } from "./useTransientStatus";
 
 /**

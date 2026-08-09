@@ -15,7 +15,7 @@ import { createDesktopTabRegistry } from "../tabs/tabRegistry";
 import { setWorkspaceBridge } from "./workspaceBridge";
 import { desktopPanelRegistry } from "../panels/panelRegistry";
 import { markdownEditorHookRegistry } from "../tabs/markdownEditorHooks";
-import { createDesktopEditorHeaderRegistry } from "../tabs/editorHeaderRegistry";
+import { createDesktopEditorHeaderRegistry } from "../tabs/editorHeaderRegistry.ts";
 import {
   createDesktopExtensionHost,
   type DesktopExtensionContext,

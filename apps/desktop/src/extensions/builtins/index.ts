@@ -2,7 +2,8 @@ import type { ExtensionManifest } from "@thinkbrain/core";
 
 import type { DesktopExtensionActivation } from "../desktopExtensionHost";
 import { activateJournal, journalManifest } from "./journal";
-import { activateNoteStats, noteStatsManifest } from "./noteStats";
+import { noteStatsManifest } from "./noteStats";
+import { activateNoteStats } from "./noteStats.tsx";
 
 /**
  * A built-in extension: a manifest paired with a statically imported activate

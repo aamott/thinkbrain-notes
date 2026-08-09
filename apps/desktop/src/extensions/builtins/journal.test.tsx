@@ -14,7 +14,7 @@ import { createDesktopExtensionHost } from "../desktopExtensionHost";
 import { createDesktopTabRegistry } from "../../tabs/tabRegistry";
 import { desktopCommandRegistry } from "../../commands/commandRegistry";
 import { desktopPanelRegistry } from "../../panels/panelRegistry";
-import { desktopEditorHeaderRegistry } from "../../tabs/editorHeaderRegistry";
+import { desktopEditorHeaderRegistry } from "../../tabs/editorHeaderRegistry.ts";
 import { appSettingsRegistry, useSettingsStore } from "../../settings/settingsStore";
 
 let host: ReturnType<typeof createDesktopExtensionHost> | null = null;

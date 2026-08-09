@@ -58,6 +58,7 @@ export function LazyExtensionPanel({ ensureActive, resolve, context }: LazyExten
 }
 
 /** Factory form, so the bootstrap can stay a plain `.ts` module. */
+// eslint-disable-next-line react-refresh/only-export-components -- factory for non-tsx bootstrap
 export function createLazyExtensionPanel(props: LazyExtensionPanelProps): ReactNode {
   return <LazyExtensionPanel {...props} />;
 }

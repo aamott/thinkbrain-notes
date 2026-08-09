@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   desktopEditorHeaderRegistry,
   type EditorHeaderContext
-} from "./editorHeaderRegistry";
+} from "./editorHeaderRegistry.ts";
 import { EditorView } from "@codemirror/view";
 
 import { MarkdownEditor } from "./MarkdownEditor";

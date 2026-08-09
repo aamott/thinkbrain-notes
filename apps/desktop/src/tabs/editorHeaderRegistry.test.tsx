@@ -5,10 +5,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   createDesktopEditorHeaderRegistry,
-  EditorHeaderSlot,
   type DesktopEditorHeaderContribution,
   type EditorHeaderContext
-} from "./editorHeaderRegistry";
+} from "./editorHeaderRegistry.ts";
+import { EditorHeaderSlot } from "./editorHeaderRegistry.tsx";
 
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
