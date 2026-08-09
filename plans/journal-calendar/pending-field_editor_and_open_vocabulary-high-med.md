@@ -54,7 +54,9 @@ no facet or index work (D41), no repair of anything already written (D50).
 - [x] `Edit as JSON` still edits the same setting and still refuses to save unparseable input.
 - [x] A select value absent from the options renders as a selected choice on that note (D83), marked as not one of the configured choices.
 - [x] `＋ Add` records a value on the note without touching the field's options (D84).
-- [x] The written JSON is byte-comparable with what the JSON control produces today.
+- [x] The written JSON parses to exactly what the JSON control produces today. It is not
+  byte-identical: the form pretty-prints with two-space indentation, where the old control
+  wrote back whatever the user typed.
 
 ## Validation
 

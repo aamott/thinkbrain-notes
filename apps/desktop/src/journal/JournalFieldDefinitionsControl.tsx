@@ -348,6 +348,17 @@ export function JournalFieldDefinitionsControl({
     </div>
   );
 
+  function move(index: number, delta: number): void {
+    const next = [...fields];
+    const target = index + delta;
+    const moved = next[index];
+    const displaced = next[target];
+    if (!moved || !displaced) return;
+    next[target] = moved;
+    next[index] = displaced;
+    write(next);
+  }
+
   function addChoice(): void {
     if (draft === null) return;
     const text = choice.trim();
@@ -440,6 +451,27 @@ export function JournalFieldDefinitionsControl({
               <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
                 {summarise(field)}
               </span>
+              {/* The list order is the order the fields appear on an entry. */}
+              {index > 0 && (
+                <button
+                  type="button"
+                  aria-label={`Move ${field.label} up`}
+                  onClick={() => move(index, -1)}
+                  className={LINK}
+                >
+                  ↑
+                </button>
+              )}
+              {index < fields.length - 1 && (
+                <button
+                  type="button"
+                  aria-label={`Move ${field.label} down`}
+                  onClick={() => move(index, 1)}
+                  className={LINK}
+                >
+                  ↓
+                </button>
+              )}
               <button
                 type="button"
                 aria-label={`Edit ${field.label}`}

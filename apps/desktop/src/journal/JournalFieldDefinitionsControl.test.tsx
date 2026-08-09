@@ -241,6 +241,43 @@ describe("editing and removing", () => {
   });
 });
 
+describe("ordering", () => {
+  const ENERGY = { id: "energy", label: "Energy", type: "number" };
+
+  // The list order is the order the fields appear on an entry, so the list is
+  // also how you arrange them.
+  it("moves a field down", async () => {
+    const onChange = vi.fn();
+    const host = await render(JSON.stringify([MOOD, ENERGY]), onChange);
+
+    await click(host, "Move Mood down");
+
+    expect((written(onChange) as { id: string }[]).map((field) => field.id)).toEqual([
+      "energy",
+      "mood"
+    ]);
+  });
+
+  it("moves a field up", async () => {
+    const onChange = vi.fn();
+    const host = await render(JSON.stringify([MOOD, ENERGY]), onChange);
+
+    await click(host, "Move Energy up");
+
+    expect((written(onChange) as { id: string }[]).map((field) => field.id)).toEqual([
+      "energy",
+      "mood"
+    ]);
+  });
+
+  it("offers no way off either end of the list", async () => {
+    const host = await render(JSON.stringify([MOOD, ENERGY]));
+
+    expect(host.querySelector('button[aria-label="Move Mood up"]')).toBeNull();
+    expect(host.querySelector('button[aria-label="Move Energy down"]')).toBeNull();
+  });
+});
+
 describe("the JSON escape hatch", () => {
   it("still edits the same setting", async () => {
     const onChange = vi.fn();
