@@ -4,7 +4,7 @@
 
 ## Collaboration gate — SATISFIED 2026-08-07, extended 2026-08-08
 
-The product-owner answers are recorded as decisions D1-D78 in
+The product-owner answers are recorded as decisions D1-D79 in
 `journal-calendar/pending-journal_discovery_and_wireframes-low-med.md`, together with the
 approved moodboard, IA and mobile artifacts. **Downstream stories may now proceed within
 those decisions.** Superseding decisions are recorded as new D-numbers, never by editing
@@ -21,7 +21,7 @@ D71-D75 came out of the approved desktop panel mockup (action emphasis, preview 
 kept, filter alignment, dateline format, header order); D76-D78 from the approved mobile
 mockup (touch row height, wrapping chips, the sheet's contract).
 
-Both D34 mockups are approved. What remains is platform work: the D41 facets prerequisite
+All three D34 mockups are approved (panel, mobile, calendar tab). What remains is platform work: the D41 facets prerequisite
 below, which the panel degrades around rather than waits for.
 
 ## Goal
@@ -130,7 +130,7 @@ recorded in the story. Stories may be split further if a subagent would exceed o
 
 ## Status
 
-- ✅ Every product decision closed (D1-D78)
+- ✅ Every product decision closed (D1-D79)
 - 🟨 Story 2 journal data/frontmatter contract — implemented in `packages/core/src/journal/`;
   the unknown-field write round-trip waits on story 3's write path
 - 🟨 Story 3 journal service — create (always new, D18), backfill (D61/D62), listing with

@@ -1,0 +1,1044 @@
+<title>Journal calendar — mockup v1</title>
+<style>
+  /* ============================================================
+     PAGE TOKENS — the review sheet's own palette.
+     Deliberately neutral-cool so it never competes with the app
+     tokens rendered inside the figures. The only accent is the
+     redline ochre, used exclusively for annotation.
+     ============================================================ */
+  :root {
+    --ground: #f6f7f9;
+    --surface: #ffffff;
+    --surface-sunk: #eef0f4;
+    --ink: #141922;
+    --ink-muted: #5c6675;
+    --rule: #dee2e9;
+    --rule-soft: #e9ecf1;
+    --redline: #a9642f;
+    --redline-soft: #f2e6da;
+
+    --serif: ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+    /* ---- App tokens (light). Copied from packages/ui/src/styles/tokens.css ---- */
+    --tn-color-background: hsl(0 0% 100%);
+    --tn-color-foreground: hsl(222 47% 11%);
+    --tn-color-border: hsl(220 13% 91%);
+    --tn-color-input: hsl(220 13% 91%);
+    --tn-color-muted: hsl(220 14% 96%);
+    --tn-color-muted-foreground: hsl(220 9% 46%);
+    --tn-color-secondary: hsl(220 14% 96%);
+    --tn-color-secondary-foreground: hsl(222 47% 11%);
+    --tn-color-primary: hsl(262 83% 58%);
+    --tn-color-primary-foreground: hsl(0 0% 100%);
+    --tn-color-accent: hsl(262 83% 96%);
+    --tn-color-accent-foreground: hsl(262 83% 40%);
+    --tn-color-danger: hsl(0 84% 38%);
+    --tn-color-warning: hsl(38 92% 42%);
+    --tn-color-activitybar: hsl(220 16% 93%);
+    --tn-color-activitybar-foreground: hsl(220 9% 40%);
+    --tn-color-activitybar-active: hsl(262 83% 58%);
+    --tn-color-sidebar: hsl(220 16% 97%);
+    --tn-color-sidebar-foreground: hsl(222 47% 11%);
+    --tn-color-editor: hsl(0 0% 100%);
+    --tn-color-editor-foreground: hsl(222 47% 11%);
+    --tn-color-tab-active: hsl(0 0% 100%);
+    --tn-color-tab-inactive: hsl(220 16% 94%);
+    --tn-color-tab-active-foreground: hsl(222 47% 11%);
+    --tn-color-tab-inactive-foreground: hsl(220 9% 46%);
+    --tn-radius-small: 0.25rem;
+    --tn-radius-medium: 0.5rem;
+    --tn-font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --tn-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+
+  /* Page palette, dark. Guarded so an explicit light choice beats a dark OS. */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #11141a;
+      --surface: #171b22;
+      --surface-sunk: #1e232b;
+      --ink: #e6e9ee;
+      --ink-muted: #98a2b1;
+      --rule: #262c35;
+      --rule-soft: #1f242c;
+      --redline: #d69a62;
+      --redline-soft: #2b2018;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #11141a;
+    --surface: #171b22;
+    --surface-sunk: #1e232b;
+    --ink: #e6e9ee;
+    --ink-muted: #98a2b1;
+    --rule: #262c35;
+    --rule-soft: #1f242c;
+    --redline: #d69a62;
+    --redline-soft: #2b2018;
+  }
+
+  /* ---- App tokens (dark). Applied to .tn-dark always, and to any
+     theme-following figure when the viewer is in dark mode. ---- */
+  .tn-dark,
+  :root[data-theme="dark"] .tn-auto {
+    --tn-color-background: hsl(0 0% 7%);
+    --tn-color-foreground: hsl(0 0% 98%);
+    --tn-color-border: hsl(0 0% 18%);
+    --tn-color-input: hsl(0 0% 18%);
+    --tn-color-muted: hsl(0 0% 16%);
+    --tn-color-muted-foreground: hsl(0 0% 60%);
+    --tn-color-secondary: hsl(0 0% 16%);
+    --tn-color-secondary-foreground: hsl(0 0% 98%);
+    --tn-color-primary: hsl(152 60% 38%);
+    --tn-color-primary-foreground: hsl(0 0% 100%);
+    --tn-color-accent: hsl(152 40% 18%);
+    --tn-color-accent-foreground: hsl(152 60% 55%);
+    --tn-color-danger: hsl(0 72% 62%);
+    --tn-color-warning: hsl(38 92% 50%);
+    --tn-color-activitybar: hsl(0 0% 11%);
+    --tn-color-activitybar-foreground: hsl(0 0% 60%);
+    --tn-color-activitybar-active: hsl(152 60% 45%);
+    --tn-color-sidebar: hsl(0 0% 9%);
+    --tn-color-sidebar-foreground: hsl(0 0% 98%);
+    --tn-color-editor: hsl(0 0% 7%);
+    --tn-color-editor-foreground: hsl(0 0% 98%);
+    --tn-color-tab-active: hsl(0 0% 7%);
+    --tn-color-tab-inactive: hsl(0 0% 12%);
+    --tn-color-tab-active-foreground: hsl(0 0% 98%);
+    --tn-color-tab-inactive-foreground: hsl(0 0% 60%);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .tn-auto {
+      --tn-color-background: hsl(0 0% 7%);
+      --tn-color-foreground: hsl(0 0% 98%);
+      --tn-color-border: hsl(0 0% 18%);
+      --tn-color-input: hsl(0 0% 18%);
+      --tn-color-muted: hsl(0 0% 16%);
+      --tn-color-muted-foreground: hsl(0 0% 60%);
+      --tn-color-secondary: hsl(0 0% 16%);
+      --tn-color-secondary-foreground: hsl(0 0% 98%);
+      --tn-color-primary: hsl(152 60% 38%);
+      --tn-color-primary-foreground: hsl(0 0% 100%);
+      --tn-color-accent: hsl(152 40% 18%);
+      --tn-color-accent-foreground: hsl(152 60% 55%);
+      --tn-color-danger: hsl(0 72% 62%);
+      --tn-color-warning: hsl(38 92% 50%);
+      --tn-color-activitybar: hsl(0 0% 11%);
+      --tn-color-activitybar-foreground: hsl(0 0% 60%);
+      --tn-color-activitybar-active: hsl(152 60% 45%);
+      --tn-color-sidebar: hsl(0 0% 9%);
+      --tn-color-sidebar-foreground: hsl(0 0% 98%);
+      --tn-color-editor: hsl(0 0% 7%);
+      --tn-color-editor-foreground: hsl(0 0% 98%);
+      --tn-color-tab-active: hsl(0 0% 7%);
+      --tn-color-tab-inactive: hsl(0 0% 12%);
+      --tn-color-tab-active-foreground: hsl(0 0% 98%);
+      --tn-color-tab-inactive-foreground: hsl(0 0% 60%);
+    }
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 17px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .sheet {
+    max-width: 78rem;
+    margin: 0 auto;
+    padding: clamp(2rem, 5vw, 4.5rem) clamp(1rem, 4vw, 3rem) 6rem;
+  }
+
+  /* ---------------- masthead ---------------- */
+  .masthead { border-bottom: 1px solid var(--rule); padding-bottom: 2.5rem; }
+  .eyebrow {
+    font-family: var(--sans);
+    font-size: 0.7rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--redline);
+    margin: 0 0 1.25rem;
+  }
+  h1 {
+    font-size: clamp(2.2rem, 5vw, 3.4rem);
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    font-weight: 600;
+    margin: 0 0 1rem;
+    text-wrap: balance;
+  }
+  .standfirst {
+    font-size: 1.15rem;
+    color: var(--ink-muted);
+    max-width: 46ch;
+    margin: 0 0 2rem;
+  }
+  .facts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+    gap: 1.25rem 2rem;
+    font-family: var(--sans);
+    font-size: 0.85rem;
+    line-height: 1.5;
+  }
+  .facts dt {
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    margin-bottom: 0.3rem;
+  }
+  .facts dd { margin: 0; }
+
+  /* ---------------- section grid with redline gutter ---------------- */
+  section { margin-top: 4.5rem; }
+  .block {
+    display: grid;
+    grid-template-columns: 8.5rem minmax(0, 1fr);
+    gap: 0 2.5rem;
+    align-items: start;
+  }
+  .gutter {
+    font-family: var(--sans);
+    font-size: 0.68rem;
+    line-height: 1.7;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    text-align: right;
+    padding-top: 0.55rem;
+    border-right: 1px solid var(--rule-soft);
+    padding-right: 1rem;
+  }
+  .gutter b { display: block; color: var(--redline); font-weight: 600; letter-spacing: 0.08em; }
+  .col { min-width: 0; }
+
+  h2 {
+    font-size: clamp(1.5rem, 3vw, 2rem);
+    line-height: 1.15;
+    letter-spacing: -0.015em;
+    font-weight: 600;
+    margin: 0 0 0.75rem;
+    text-wrap: balance;
+  }
+  h3 {
+    font-family: var(--sans);
+    font-size: 0.78rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-weight: 650;
+    margin: 2.5rem 0 0.9rem;
+    color: var(--ink);
+  }
+  p { margin: 0 0 1rem; max-width: 68ch; }
+  .col > p:last-child { margin-bottom: 0; }
+  code {
+    font-family: var(--mono);
+    font-size: 0.82em;
+    background: var(--surface-sunk);
+    padding: 0.1em 0.35em;
+    border-radius: 3px;
+  }
+  strong { font-weight: 650; }
+  a { color: var(--redline); }
+
+  ul.notes { margin: 0 0 1rem; padding-left: 1.1rem; max-width: 68ch; }
+  ul.notes li { margin-bottom: 0.5rem; }
+
+  /* ---------------- figures ---------------- */
+  figure { margin: 1.75rem 0 0; }
+  figcaption {
+    font-family: var(--sans);
+    font-size: 0.78rem;
+    line-height: 1.5;
+    color: var(--ink-muted);
+    margin-top: 0.85rem;
+    max-width: 62ch;
+  }
+  .figrow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    align-items: flex-start;
+  }
+  .scroller { overflow-x: auto; padding-bottom: 0.5rem; }
+  .plate {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    padding: 1.25rem;
+    display: inline-block;
+  }
+  .platelabel {
+    font-family: var(--sans);
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    margin-bottom: 0.75rem;
+    display: flex;
+    gap: 0.5rem;
+    align-items: baseline;
+  }
+  .platelabel .n {
+    color: var(--redline);
+    font-weight: 650;
+  }
+
+  /* ---------------- the app mockup ---------------- */
+  .app {
+    display: flex;
+    font-family: var(--tn-font-sans);
+    background: var(--tn-color-background);
+    color: var(--tn-color-foreground);
+    border: 1px solid var(--tn-color-border);
+    border-radius: 6px;
+    overflow: hidden;
+    height: var(--app-h, 460px);
+    width: var(--app-w, 860px);
+    max-width: 100%;
+    font-size: 13px;
+    line-height: 1.45;
+  }
+  .app.standalone { width: var(--panel-w, 288px); }
+
+  .activitybar {
+    flex: 0 0 3rem;
+    background: var(--tn-color-activitybar);
+    border-right: 1px solid var(--tn-color-border);
+    padding: 0.4rem 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.15rem;
+  }
+  .ab-btn {
+    width: 2rem; height: 2rem;
+    display: grid; place-items: center;
+    color: var(--tn-color-activitybar-foreground);
+    font-size: 15px;
+    border-radius: var(--tn-radius-small);
+  }
+  .ab-btn.active {
+    color: var(--tn-color-activitybar-active);
+    box-shadow: inset 2px 0 0 var(--tn-color-activitybar-active);
+  }
+
+  .panel {
+    flex: 0 0 var(--panel-w, 288px);
+    width: var(--panel-w, 288px);
+    background: var(--tn-color-sidebar);
+    color: var(--tn-color-sidebar-foreground);
+    border-right: 1px solid var(--tn-color-border);
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .app.standalone .panel { border-right: 0; flex: 1 1 auto; width: auto; }
+
+  /* Panel chrome — matches PanelTitle.tsx exactly: 2.25rem tall, px-3,
+     uppercase 0.68rem tracked title, icon actions, then the ••• overflow. */
+  .panel-title {
+    display: flex; align-items: center; justify-content: space-between;
+    height: 2.25rem; padding: 0 0.75rem; flex: none;
+  }
+  .panel-title h4 {
+    margin: 0;
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .pt-actions { display: flex; align-items: center; gap: 0.25rem; }
+  .pt-actions span {
+    padding: 0 0.25rem;
+    color: var(--tn-color-muted-foreground);
+    font-size: 13px;
+  }
+  .pt-actions span.dots { font-size: 0.68rem; }
+
+  .panel-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .panel-head { padding: 0 0.5rem 0.5rem; display: flex; flex-direction: column; gap: 0.4rem; flex: none; }
+
+  /* The action row: one filled control, and only one. Today and Open calendar
+     sit beside it as quiet outlined buttons. */
+  .actionrow { display: flex; gap: 0.3rem; align-items: stretch; }
+  .btn-primary {
+    display: flex; align-items: center; justify-content: center; gap: 0.35rem;
+    height: 1.85rem;
+    flex: 1 1 auto; min-width: 0;
+    background: var(--tn-color-primary);
+    color: var(--tn-color-primary-foreground);
+    border-radius: var(--tn-radius-small);
+    font-size: 12px; font-weight: 600;
+    white-space: nowrap;
+  }
+  .icon-btn {
+    flex: none;
+    width: 1.85rem; height: 1.85rem;
+    display: grid; place-items: center;
+    border: 1px solid var(--tn-color-border);
+    border-radius: var(--tn-radius-small);
+    background: var(--tn-color-background);
+    color: var(--tn-color-foreground);
+    font-size: 13px;
+  }
+  .btn-ghost {
+    display: inline-flex; align-items: center; gap: 0.3rem;
+    height: 1.6rem; padding: 0 0.5rem;
+    border: 1px solid var(--tn-color-border);
+    border-radius: var(--tn-radius-small);
+    color: var(--tn-color-foreground);
+    font-size: 12px;
+    background: var(--tn-color-background);
+  }
+  .search {
+    display: flex; align-items: center; gap: 0.4rem;
+    height: 1.7rem; padding: 0 0.5rem;
+    background: var(--tn-color-background);
+    border: 1px solid var(--tn-color-input);
+    border-radius: var(--tn-radius-small);
+    color: var(--tn-color-muted-foreground);
+    font-size: 12px;
+  }
+  .search.filled { color: var(--tn-color-foreground); }
+
+  /* Filter sits hard right; the count line takes the space to its left. */
+  .filterrow {
+    display: flex; align-items: center; gap: 0.35rem;
+    justify-content: flex-end; flex-wrap: wrap;
+  }
+  .filterrow .showing { margin-right: auto; flex: 1 1 8rem; min-width: 0; }
+  .filter-btn {
+    display: inline-flex; align-items: center; gap: 0.35rem;
+    height: 1.5rem; padding: 0 0.45rem;
+    border: 1px solid var(--tn-color-border);
+    border-radius: var(--tn-radius-small);
+    font-size: 12px;
+    color: var(--tn-color-foreground);
+  }
+  .badge {
+    min-width: 1.05rem; height: 1.05rem; padding: 0 0.25rem;
+    display: grid; place-items: center;
+    background: var(--tn-color-primary);
+    color: var(--tn-color-primary-foreground);
+    border-radius: 999px;
+    font-size: 10px; font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .chips { display: flex; flex-wrap: wrap; gap: 0.25rem; align-items: center; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 0.3rem;
+    padding: 0.1rem 0.35rem;
+    background: var(--tn-color-accent);
+    color: var(--tn-color-accent-foreground);
+    border-radius: var(--tn-radius-small);
+    font-size: 11px;
+  }
+  .chip .x { opacity: 0.7; }
+  .clear-all {
+    font-size: 11px;
+    color: var(--tn-color-muted-foreground);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .showing {
+    font-size: 11px;
+    color: var(--tn-color-foreground);
+    font-weight: 600;
+    padding: 0 0.15rem;
+  }
+  .showing em { font-style: normal; color: var(--tn-color-muted-foreground); font-weight: 400; }
+
+  .list { flex: 1; min-height: 0; overflow: hidden; }
+
+  /* Group headers: year and month differ by weight, size, case and ground —
+     never by indentation (D37/D39). */
+  .h-year {
+    display: flex; align-items: center; gap: 0.4rem;
+    padding: 0.3rem 0.5rem;
+    background: var(--tn-color-secondary);
+    border-top: 1px solid var(--tn-color-border);
+    font-size: 11px; font-weight: 700;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    font-variant-numeric: tabular-nums;
+  }
+  .h-month {
+    display: flex; align-items: center; gap: 0.4rem;
+    padding: 0.25rem 0.5rem;
+    border-bottom: 1px solid var(--tn-color-border);
+    font-size: 12px; font-weight: 600;
+  }
+  .h-undated {
+    display: flex; align-items: center; gap: 0.4rem;
+    padding: 0.3rem 0.5rem;
+    background: var(--tn-color-muted);
+    border-bottom: 1px solid var(--tn-color-border);
+    font-size: 12px; font-weight: 600;
+    color: var(--tn-color-foreground);
+  }
+  .caret { color: var(--tn-color-muted-foreground); font-size: 9px; width: 0.6rem; }
+  .count {
+    margin-left: auto;
+    color: var(--tn-color-muted-foreground);
+    font-size: 11px; font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0;
+  }
+  .matchcount {
+    margin-left: auto;
+    color: var(--tn-color-accent-foreground);
+    background: var(--tn-color-accent);
+    border-radius: 999px;
+    padding: 0 0.35rem;
+    font-size: 10px; font-weight: 700;
+    letter-spacing: 0;
+  }
+
+  /* Rows. Wide tier: one line, three zones. */
+  .row {
+    display: flex; align-items: baseline; gap: 0.5rem;
+    padding: 0.28rem 0.5rem;
+    border-bottom: 1px solid transparent;
+    min-width: 0;
+  }
+  .row.sel { background: var(--tn-color-accent); }
+  .row .d { font-weight: 600; font-size: 12px; flex: none; font-variant-numeric: tabular-nums; }
+  .row .t {
+    color: var(--tn-color-muted-foreground);
+    font-size: 11px; flex: none;
+    font-variant-numeric: tabular-nums;
+  }
+  .row .p {
+    color: var(--tn-color-muted-foreground);
+    font-size: 12px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    min-width: 0;
+  }
+  /* Narrow tier: the date line keeps the time, the preview wraps beneath. */
+  .row.stack { display: block; }
+  .row.stack .dt { display: flex; gap: 0.4rem; align-items: baseline; }
+  .row.stack .p { display: block; white-space: normal; overflow: visible; }
+  .row.mark .d::before {
+    content: "▲";
+    color: var(--tn-color-warning);
+    font-size: 8px;
+    margin-right: 0.3rem;
+    vertical-align: 1px;
+  }
+
+  /* Empty / error blocks inside the panel */
+  .state {
+    padding: 1.1rem 0.9rem;
+    display: flex; flex-direction: column; gap: 0.5rem;
+    align-items: flex-start;
+  }
+  .state .title { font-size: 12.5px; font-weight: 650; }
+  .state .body { font-size: 12px; color: var(--tn-color-muted-foreground); }
+  .state .path {
+    font-family: var(--tn-font-mono); font-size: 11px;
+    color: var(--tn-color-muted-foreground);
+    background: var(--tn-color-muted);
+    padding: 0.1rem 0.3rem; border-radius: 3px;
+    max-width: 100%; overflow: hidden; text-overflow: ellipsis;
+  }
+  .state .acts { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.15rem; }
+
+  .banner {
+    margin: 0.4rem 0.5rem;
+    padding: 0.45rem 0.55rem;
+    border-radius: var(--tn-radius-small);
+    border-left: 3px solid var(--tn-color-warning);
+    background: var(--tn-color-muted);
+    font-size: 11.5px;
+    display: flex; flex-direction: column; gap: 0.25rem;
+  }
+  .banner.err { border-left-color: var(--tn-color-danger); }
+  .banner .bt { font-weight: 650; }
+  .banner .bb { color: var(--tn-color-muted-foreground); }
+
+  /* ---------------- editor surface (Direction B) ---------------- */
+  .editor {
+    flex: 1; min-width: 0;
+    background: var(--tn-color-editor);
+    color: var(--tn-color-editor-foreground);
+    display: flex; flex-direction: column;
+  }
+  .tabstrip {
+    display: flex; flex: none;
+    background: var(--tn-color-tab-inactive);
+    border-bottom: 1px solid var(--tn-color-border);
+  }
+  .tab {
+    padding: 0.4rem 0.8rem;
+    font-size: 12px;
+    color: var(--tn-color-tab-inactive-foreground);
+    border-right: 1px solid var(--tn-color-border);
+  }
+  .tab.active {
+    background: var(--tn-color-tab-active);
+    color: var(--tn-color-tab-active-foreground);
+  }
+  .page {
+    flex: 1; min-height: 0;
+    padding: 1.75rem 1.5rem;
+    overflow: hidden;
+  }
+  .measure { max-width: 34rem; margin: 0 auto; }
+
+  .dateline {
+    display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap;
+    padding-bottom: 0.6rem;
+    border-bottom: 1px solid var(--tn-color-border);
+    margin-bottom: 1.25rem;
+  }
+  .dateline .day { font-size: 13px; font-weight: 650; }
+  .dateline .vals { font-size: 13px; color: var(--tn-color-muted-foreground); }
+  .dateline .act {
+    margin-left: auto;
+    font-size: 11px;
+    color: var(--tn-color-muted-foreground);
+    border: 1px solid var(--tn-color-border);
+    border-radius: var(--tn-radius-small);
+    padding: 0.05rem 0.4rem;
+  }
+  .prose p { font-size: 13.5px; line-height: 1.75; margin: 0 0 0.9rem; max-width: none; }
+  .prose .h { font-size: 15px; font-weight: 650; margin: 0 0 0.75rem; }
+
+  .fieldgrid {
+    display: grid;
+    grid-template-columns: 7rem 1fr;
+    gap: 0.5rem 0.75rem;
+    align-items: center;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--tn-color-border);
+    margin-bottom: 1.25rem;
+  }
+  .fieldgrid .lab { font-size: 11.5px; color: var(--tn-color-muted-foreground); }
+  .fieldgrid .val {
+    font-size: 12px;
+    border: 1px solid var(--tn-color-input);
+    border-radius: var(--tn-radius-small);
+    padding: 0.2rem 0.4rem;
+    background: var(--tn-color-background);
+  }
+  .fieldgrid .segs { display: flex; gap: 0.25rem; flex-wrap: wrap; }
+  .seg {
+    font-size: 11.5px; padding: 0.12rem 0.45rem;
+    border: 1px solid var(--tn-color-border);
+    border-radius: 999px;
+    color: var(--tn-color-muted-foreground);
+  }
+  .seg.on {
+    background: var(--tn-color-accent);
+    color: var(--tn-color-accent-foreground);
+    border-color: transparent;
+    font-weight: 600;
+  }
+
+  /* ---------------- decision call-outs ---------------- */
+  .ask {
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--redline);
+    background: var(--surface);
+    border-radius: 0 8px 8px 0;
+    padding: 1.1rem 1.25rem;
+    margin: 1.25rem 0 0;
+  }
+  .ask h4 {
+    font-family: var(--sans);
+    font-size: 0.8rem;
+    letter-spacing: 0.02em;
+    margin: 0 0 0.5rem;
+    font-weight: 650;
+  }
+  .ask p { font-size: 0.95rem; margin: 0 0 0.6rem; }
+  .ask p:last-child { margin-bottom: 0; }
+  .ask .rec {
+    font-family: var(--sans);
+    font-size: 0.78rem;
+    color: var(--redline);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-weight: 650;
+  }
+
+  .statelist { display: grid; grid-template-columns: repeat(auto-fill, minmax(19rem, 1fr)); gap: 1.5rem; }
+
+  table.copy {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--sans);
+    font-size: 0.82rem;
+    margin-top: 1rem;
+  }
+  table.copy th, table.copy td {
+    text-align: left;
+    padding: 0.5rem 0.75rem 0.5rem 0;
+    border-bottom: 1px solid var(--rule-soft);
+    vertical-align: top;
+  }
+  table.copy th {
+    font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--ink-muted); font-weight: 650;
+  }
+  table.copy td.n { color: var(--redline); font-weight: 650; width: 2.5rem; font-variant-numeric: tabular-nums; }
+  table.copy td code { background: none; padding: 0; color: var(--ink); }
+
+  @media (max-width: 900px) {
+    .block { grid-template-columns: minmax(0, 1fr); gap: 0.75rem; }
+    .gutter {
+      text-align: left; border-right: 0; padding: 0 0 0.25rem;
+      border-bottom: 1px solid var(--rule-soft);
+    }
+    .gutter b { display: inline; margin-right: 0.5rem; }
+  }
+</style>
+<style>
+  .cal {
+    display: flex; flex-direction: column;
+    font-family: var(--tn-font-sans);
+    background: var(--tn-color-editor);
+    color: var(--tn-color-editor-foreground);
+    border: 1px solid var(--tn-color-border);
+    border-radius: 6px;
+    overflow: hidden;
+    width: var(--cal-w, 560px);
+    max-width: 100%;
+    font-size: 13px;
+  }
+  .cal-strip {
+    display: flex; align-items: center; gap: 0.5rem;
+    padding: 0.5rem 0.65rem;
+    border-bottom: 1px solid var(--tn-color-border);
+    background: var(--tn-color-tab-inactive);
+  }
+  .cal-strip .title { font-size: 13px; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .seg-group { display: flex; border: 1px solid var(--tn-color-border); border-radius: var(--tn-radius-small); overflow: hidden; }
+  .seg-group span { padding: 0.2rem 0.6rem; font-size: 12px; color: var(--tn-color-muted-foreground); }
+  .seg-group span.on { background: var(--tn-color-accent); color: var(--tn-color-accent-foreground); font-weight: 600; }
+  .nav { margin-left: auto; display: flex; gap: 0.25rem; }
+  .nav span {
+    width: 1.6rem; height: 1.6rem; display: grid; place-items: center;
+    border: 1px solid var(--tn-color-border); border-radius: var(--tn-radius-small);
+    color: var(--tn-color-muted-foreground); font-size: 12px;
+  }
+
+  .weekdays {
+    display: grid; grid-template-columns: repeat(7, 1fr);
+    border-bottom: 1px solid var(--tn-color-border);
+  }
+  .weekdays span {
+    padding: 0.3rem 0.4rem; font-size: 0.62rem; letter-spacing: 0.09em;
+    text-transform: uppercase; color: var(--tn-color-muted-foreground); text-align: left;
+  }
+  .grid { display: grid; grid-template-columns: repeat(7, 1fr); }
+  .grid.week { grid-template-rows: 7rem; }
+  .cell {
+    min-height: 4.4rem;
+    border-right: 1px solid var(--tn-color-border);
+    border-bottom: 1px solid var(--tn-color-border);
+    padding: 0.3rem 0.4rem;
+    display: flex; flex-direction: column; gap: 0.3rem;
+  }
+  .cell:nth-child(7n) { border-right: 0; }
+  .cell .num { font-size: 12px; font-variant-numeric: tabular-nums; }
+  .cell.dim .num { color: var(--tn-color-muted-foreground); opacity: 0.55; }
+  .cell.today .num {
+    background: var(--tn-color-primary); color: var(--tn-color-primary-foreground);
+    border-radius: 999px; width: 1.35rem; height: 1.35rem;
+    display: grid; place-items: center; font-weight: 700;
+  }
+  .cell.selected { background: var(--tn-color-accent); outline: 2px solid var(--tn-color-ring); outline-offset: -2px; }
+  .cell.focused { outline: 2px dashed var(--redline); outline-offset: -2px; }
+  .dots { display: flex; align-items: center; gap: 0.2rem; }
+  .dot { width: 5px; height: 5px; border-radius: 999px; background: var(--tn-color-primary); }
+  .more { font-size: 0.62rem; color: var(--tn-color-muted-foreground); font-variant-numeric: tabular-nums; }
+  .cal-note {
+    padding: 0.5rem 0.65rem; font-size: 11.5px; color: var(--tn-color-muted-foreground);
+    border-top: 1px solid var(--tn-color-border);
+  }
+  .cal-state { padding: 1.5rem 0.9rem; display: flex; flex-direction: column; gap: 0.4rem; align-items: flex-start; }
+  .cal-state .t { font-size: 13px; font-weight: 650; }
+  .cal-state .b { font-size: 12px; color: var(--tn-color-muted-foreground); }
+
+  .phone {
+    width: var(--phone-w, 330px);
+    height: var(--phone-h, 460px);
+    border: 1px solid var(--tn-color-border);
+    border-radius: 22px;
+    overflow: hidden;
+    background: var(--tn-color-background);
+    color: var(--tn-color-foreground);
+    font-family: var(--tn-font-sans);
+    font-size: 13px;
+    display: flex;
+    flex-direction: column;
+    max-width: 100%;
+  }
+  .statusbar {
+    flex: none; height: 26px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 1rem; font-size: 11px;
+    color: var(--tn-color-muted-foreground);
+    font-variant-numeric: tabular-nums;
+  }
+  .shellbar {
+    flex: none; height: 44px;
+    display: flex; align-items: center; gap: 0.5rem;
+    padding: 0 0.6rem;
+    border-bottom: 1px solid var(--tn-color-border);
+    background: var(--tn-color-sidebar);
+  }
+  .shellbar .back { font-size: 17px; width: 44px; height: 44px; display: grid; place-items: center; margin-left: -0.6rem; }
+  .shellbar h4 {
+    margin: 0; font-size: 0.68rem; letter-spacing: 0.08em;
+    text-transform: uppercase; font-weight: 600;
+  }
+  .phone .cell { min-height: 2.6rem; }
+
+  .kbd {
+    display: inline-block; font-family: var(--mono); font-size: 0.72rem;
+    border: 1px solid var(--rule); border-bottom-width: 2px; border-radius: 4px;
+    padding: 0.05rem 0.35rem; background: var(--surface);
+  }
+  table.keys { width: 100%; border-collapse: collapse; font-family: var(--sans); font-size: 0.82rem; margin-top: 0.75rem; }
+  table.keys td { padding: 0.4rem 0.75rem 0.4rem 0; border-bottom: 1px solid var(--rule-soft); vertical-align: top; }
+  table.keys td:first-child { width: 11rem; white-space: nowrap; }
+</style>
+
+<div class="sheet">
+  <header class="masthead">
+    <p class="eyebrow">Mockup v1 · calendar tab · for sign-off under D34</p>
+    <h1>The journal calendar</h1>
+    <p class="standfirst">
+      A canvas tab, not a panel. Dots only, capped at three. Clicking a day filters the popout
+      rather than opening anything.
+    </p>
+    <dl class="facts">
+      <div><dt>Governed by</dt><dd>D14/D27 canvas tab · D29/D46 dot density · D25/D43 shared filter · D56–D60 behaviour</dd></div>
+      <div><dt>Data</dt><dd>`aggregateCalendarDays` — already built and tested</dd></div>
+      <div><dt>Colour</dt><dd>Dots take the accent; no value is ever coloured (D4)</dd></div>
+      <div><dt>Needs you</dt><dd>One question, at the foot</dd></div>
+    </dl>
+  </header>
+
+  <section>
+    <div class="block">
+      <div class="gutter"><b>D14 D27</b> canvas tab<br /><b>D46</b> three then +N</div>
+      <div class="col">
+        <h2>Month</h2>
+        <p>
+          One dot per matching entry, three at most, then <code>+N</code>. The dots say
+          <em>something happened</em> and nothing more — no value gets a colour, because the
+          vocabulary is the user's and the app has no opinion about which mood outranks which (D4).
+        </p>
+        <p>
+          Today is marked. The selected day is filled and outlined, and stays selected while you
+          page through months, because it is a filter rather than a cursor.
+        </p>
+        <figure>
+          <div class="scroller"><div class="figrow">
+            <div class="plate">
+              <div class="platelabel"><span class="n">1</span> month view · Aug 7 selected</div>
+              <div class="cal tn-auto">
+                <div class="cal-strip">
+                  <span class="title">August 2026</span>
+                  <span class="seg-group"><span>Week</span><span class="on">Month</span></span>
+                  <span class="nav"><span>‹</span><span>Today</span><span>›</span></span>
+                </div>
+                <div class="weekdays"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div>
+                <div class="grid"><div class="cell dim"><span class="num">26</span></div><div class="cell dim"><span class="num">27</span></div><div class="cell dim"><span class="num">28</span></div><div class="cell dim"><span class="num">29</span></div><div class="cell dim"><span class="num">30</span></div><div class="cell dim"><span class="num">31</span></div><div class="cell "><span class="num">1</span><span class="dots"><span class="dot"></span></span></div><div class="cell "><span class="num">2</span><span class="dots"><span class="dot"></span></span></div><div class="cell "><span class="num">3</span><span class="dots"><span class="dot"></span></span></div><div class="cell "><span class="num">4</span><span class="dots"><span class="dot"></span></span></div><div class="cell "><span class="num">5</span><span class="dots"><span class="dot"></span><span class="dot"></span></span></div><div class="cell "><span class="num">6</span></div><div class="cell selected"><span class="num">7</span><span class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="more">+5</span></span></div><div class="cell "><span class="num">8</span></div><div class="cell "><span class="num">9</span><span class="dots"><span class="dot"></span></span></div><div class="cell "><span class="num">10</span></div><div class="cell "><span class="num">11</span></div><div class="cell today"><span class="num">12</span><span class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span></div><div class="cell "><span class="num">13</span></div><div class="cell "><span class="num">14</span><span class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="more">+1</span></span></div><div class="cell "><span class="num">15</span></div><div class="cell "><span class="num">16</span></div><div class="cell "><span class="num">17</span></div><div class="cell "><span class="num">18</span><span class="dots"><span class="dot"></span></span></div><div class="cell "><span class="num">19</span><span class="dots"><span class="dot"></span><span class="dot"></span></span></div><div class="cell "><span class="num">20</span></div><div class="cell "><span class="num">21</span><span class="dots"><span class="dot"></span></span></div><div class="cell "><span class="num">22</span></div><div class="cell "><span class="num">23</span></div><div class="cell "><span class="num">24</span><span class="dots"><span class="dot"></span></span></div><div class="cell "><span class="num">25</span></div><div class="cell "><span class="num">26</span><span class="dots"><span class="dot"></span></span></div><div class="cell "><span class="num">27</span></div><div class="cell "><span class="num">28</span><span class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span></div><div class="cell "><span class="num">29</span></div><div class="cell "><span class="num">30</span><span class="dots"><span class="dot"></span></span></div><div class="cell "><span class="num">31</span></div><div class="cell dim"><span class="num">1</span></div><div class="cell dim"><span class="num">2</span></div><div class="cell dim"><span class="num">3</span></div><div class="cell dim"><span class="num">4</span></div><div class="cell dim"><span class="num">5</span></div></div>
+                <div class="cal-note">Showing 1,431 entries · 8 on Friday, August 7</div>
+              </div>
+            </div>
+          </div></div>
+          <figcaption>
+            Aug 7 holds eight entries: three dots and <code>+5</code>. Its accessible name is
+            <code>Friday, August 7, 8 journal entries</code> — the cap is visual only, and the exact
+            count is always spoken (D46).
+          </figcaption>
+        </figure>
+
+        <h3>Week</h3>
+        <figure>
+          <div class="scroller"><div class="figrow">
+            <div class="plate">
+              <div class="platelabel"><span class="n">2</span> week view</div>
+              <div class="cal tn-auto" style="--cal-w: 560px">
+                <div class="cal-strip">
+                  <span class="title">2–8 August 2026</span>
+                  <span class="seg-group"><span class="on">Week</span><span>Month</span></span>
+                  <span class="nav"><span>‹</span><span>Today</span><span>›</span></span>
+                </div>
+                <div class="weekdays"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div>
+                <div class="grid week"><div class="cell "><span class="num">2</span><span class="dots"><span class="dot"></span></span></div><div class="cell "><span class="num">3</span><span class="dots"><span class="dot"></span></span></div><div class="cell "><span class="num">4</span><span class="dots"><span class="dot"></span></span></div><div class="cell "><span class="num">5</span><span class="dots"><span class="dot"></span><span class="dot"></span></span></div><div class="cell "><span class="num">6</span></div><div class="cell selected"><span class="num">7</span><span class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="more">+5</span></span></div><div class="cell "><span class="num">8</span></div></div>
+                <div class="cal-note">Same cells, more room. The treatment does not change (D29).</div>
+              </div>
+            </div>
+          </div></div>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="block">
+      <div class="gutter"><b>D25 D59 D60</b> day click</div>
+      <div class="col">
+        <h2>Clicking a day</h2>
+        <p>
+          A day is a filter, not a link. Clicking one filters the popout to that day and never
+          opens an entry — with eight entries on Aug 7 there is no single note to open, and picking
+          one would be a guess.
+        </p>
+        <p>
+          If the popout is closed, it opens (D59). The day arrives as a chip you can dismiss on its
+          own, and dismissing it clears the calendar's selection in the same movement (D60).
+        </p>
+        <figure>
+          <div class="scroller"><div class="figrow">
+            <div class="plate">
+              <div class="platelabel"><span class="n">3</span> the two surfaces sharing one filter</div>
+              <div class="app tn-auto" style="--app-w: 760px; --app-h: 380px">
+                <div class="activitybar">
+                  <div class="ab-btn">☰</div><div class="ab-btn">⌕</div>
+                  <div class="ab-btn active">◫</div><div class="ab-btn">⑂</div>
+                </div>
+                <div class="panel">
+                  <div class="panel-title"><h4>Journal</h4><div class="pt-actions"><span class="dots">•••</span></div></div>
+                  <div class="panel-body">
+                    <div class="panel-head">
+                      <div class="actionrow">
+                        <div class="btn-primary">＋ New entry</div>
+                        <div class="icon-btn">◷</div><div class="icon-btn">▦</div>
+                      </div>
+                      <div class="search">⌕ Search entries</div>
+                      <div class="filterrow">
+                        <div class="showing">Showing 8 <em>of 1,431</em></div>
+                        <div class="filter-btn">Filter <span class="badge">1</span></div>
+                      </div>
+                      <div class="chips">
+                        <span class="chip">August 7 <span class="x">✕</span></span>
+                        <span class="clear-all">Clear all</span>
+                      </div>
+                    </div>
+                    <div class="list">
+                      <div class="h-year"><span class="caret">▾</span>2026<span class="matchcount">8</span></div>
+                      <div class="h-month"><span class="caret">▾</span>August<span class="matchcount">8</span></div>
+                      <div class="row stack"><div class="dt"><span class="d">Fri 7</span><span class="t">6:02 PM</span></div><span class="p">Bread needed more salt.</span></div>
+                      <div class="row stack"><div class="dt"><span class="d">Fri 7</span><span class="t">1:20 PM</span></div><span class="p">Half an hour in the garden</span></div>
+                      <div class="row stack"><div class="dt"><span class="d">Fri 7</span><span class="t">7:41 AM</span></div><span class="p">Long run before the heat</span></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="editor">
+                  <div class="tabstrip"><div class="tab active">Journal calendar</div><div class="tab">README.md</div></div>
+                  <div class="cal tn-auto" style="--cal-w: 100%; border: 0; border-radius: 0">
+                    <div class="cal-strip">
+                      <span class="title">August 2026</span>
+                      <span class="seg-group"><span>Week</span><span class="on">Month</span></span>
+                      <span class="nav"><span>‹</span><span>Today</span><span>›</span></span>
+                    </div>
+                    <div class="weekdays"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div>
+                    <div class="grid"><div class="cell dim"><span class="num">26</span></div><div class="cell dim"><span class="num">27</span></div><div class="cell dim"><span class="num">28</span></div><div class="cell dim"><span class="num">29</span></div><div class="cell dim"><span class="num">30</span></div><div class="cell dim"><span class="num">31</span></div><div class="cell "><span class="num">1</span><span class="dots"><span class="dot"></span></span></div><div class="cell "><span class="num">2</span><span class="dots"><span class="dot"></span></span></div><div class="cell "><span class="num">3</span><span class="dots"><span class="dot"></span></span></div><div class="cell "><span class="num">4</span><span class="dots"><span class="dot"></span></span></div><div class="cell "><span class="num">5</span><span class="dots"><span class="dot"></span><span class="dot"></span></span></div><div class="cell "><span class="num">6</span></div><div class="cell selected"><span class="num">7</span><span class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="more">+5</span></span></div><div class="cell "><span class="num">8</span></div><div class="cell "><span class="num">9</span><span class="dots"><span class="dot"></span></span></div><div class="cell "><span class="num">10</span></div><div class="cell "><span class="num">11</span></div><div class="cell today"><span class="num">12</span><span class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span></div><div class="cell "><span class="num">13</span></div><div class="cell "><span class="num">14</span><span class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="more">+1</span></span></div><div class="cell "><span class="num">15</span></div><div class="cell "><span class="num">16</span></div><div class="cell "><span class="num">17</span></div><div class="cell "><span class="num">18</span><span class="dots"><span class="dot"></span></span></div><div class="cell "><span class="num">19</span><span class="dots"><span class="dot"></span><span class="dot"></span></span></div><div class="cell "><span class="num">20</span></div><div class="cell "><span class="num">21</span><span class="dots"><span class="dot"></span></span></div><div class="cell "><span class="num">22</span></div><div class="cell "><span class="num">23</span></div><div class="cell "><span class="num">24</span><span class="dots"><span class="dot"></span></span></div><div class="cell "><span class="num">25</span></div><div class="cell "><span class="num">26</span><span class="dots"><span class="dot"></span></span></div><div class="cell "><span class="num">27</span></div><div class="cell "><span class="num">28</span><span class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span></div><div class="cell "><span class="num">29</span></div><div class="cell "><span class="num">30</span><span class="dots"><span class="dot"></span></span></div><div class="cell "><span class="num">31</span></div><div class="cell dim"><span class="num">1</span></div><div class="cell dim"><span class="num">2</span></div><div class="cell dim"><span class="num">3</span></div><div class="cell dim"><span class="num">4</span></div><div class="cell dim"><span class="num">5</span></div></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div></div>
+          <figcaption>
+            The popout's count, its chip and the calendar's selection are one piece of state
+            (D25). A filter set in either place shows in both, and the dots count only matching
+            entries — so filtering by <code>context: running</code> thins the dots too (D43).
+          </figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="block">
+      <div class="gutter"><b>D58</b> keyboard<br /><b>D57</b> phone</div>
+      <div class="col">
+        <h2>Keyboard, and the phone</h2>
+        <p>
+          The grid is <strong>one tab stop</strong> with roving focus, so tabbing past a month
+          never means 31 stops. The focused day is drawn with a dashed outline; it announces its
+          date and its exact count.
+        </p>
+        <table class="keys">
+          <tr><td><span class="kbd">← → ↑ ↓</span></td><td>By day and by week</td></tr>
+          <tr><td><span class="kbd">Home</span> <span class="kbd">End</span></td><td>To the week's first and last day</td></tr>
+          <tr><td><span class="kbd">PageUp</span> <span class="kbd">PageDown</span></td><td>By month; with <span class="kbd">Shift</span>, by year</td></tr>
+          <tr><td><span class="kbd">Enter</span> <span class="kbd">Space</span></td><td>Filters the popout to that day</td></tr>
+        </table>
+        <figure>
+          <div class="scroller"><div class="figrow">
+            <div class="plate">
+              <div class="platelabel"><span class="n">4</span> phone · option strip collapsed</div>
+              <div class="phone tn-auto" style="--phone-w: 330px; --phone-h: 460px">
+                <div class="statusbar"><span>9:41</span><span>▮▮▮</span></div>
+                <div class="shellbar"><span class="back">‹</span><h4>Journal calendar</h4></div>
+                <div class="cal tn-auto" style="--cal-w: 100%; border: 0; border-radius: 0">
+                  <div class="cal-strip">
+                    <span class="title">Aug 2026</span>
+                    <span class="seg-group"><span>W</span><span class="on">M</span></span>
+                    <span class="nav"><span>‹</span><span>›</span></span>
+                  </div>
+                  <div class="weekdays"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div>
+                  <div class="grid"><div class="cell dim"><span class="num">26</span></div><div class="cell dim"><span class="num">27</span></div><div class="cell dim"><span class="num">28</span></div><div class="cell dim"><span class="num">29</span></div><div class="cell dim"><span class="num">30</span></div><div class="cell dim"><span class="num">31</span></div><div class="cell "><span class="num">1</span><span class="dots"><span class="dot"></span></span></div><div class="cell "><span class="num">2</span><span class="dots"><span class="dot"></span></span></div><div class="cell "><span class="num">3</span><span class="dots"><span class="dot"></span></span></div><div class="cell "><span class="num">4</span><span class="dots"><span class="dot"></span></span></div><div class="cell "><span class="num">5</span><span class="dots"><span class="dot"></span><span class="dot"></span></span></div><div class="cell "><span class="num">6</span></div><div class="cell selected"><span class="num">7</span><span class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="more">+5</span></span></div><div class="cell "><span class="num">8</span></div><div class="cell "><span class="num">9</span><span class="dots"><span class="dot"></span></span></div><div class="cell "><span class="num">10</span></div><div class="cell "><span class="num">11</span></div><div class="cell today"><span class="num">12</span><span class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span></div><div class="cell "><span class="num">13</span></div><div class="cell "><span class="num">14</span><span class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="more">+1</span></span></div><div class="cell "><span class="num">15</span></div><div class="cell "><span class="num">16</span></div><div class="cell "><span class="num">17</span></div><div class="cell "><span class="num">18</span><span class="dots"><span class="dot"></span></span></div><div class="cell "><span class="num">19</span><span class="dots"><span class="dot"></span><span class="dot"></span></span></div><div class="cell "><span class="num">20</span></div><div class="cell "><span class="num">21</span><span class="dots"><span class="dot"></span></span></div><div class="cell "><span class="num">22</span></div><div class="cell "><span class="num">23</span></div><div class="cell "><span class="num">24</span><span class="dots"><span class="dot"></span></span></div><div class="cell "><span class="num">25</span></div><div class="cell "><span class="num">26</span><span class="dots"><span class="dot"></span></span></div><div class="cell "><span class="num">27</span></div><div class="cell "><span class="num">28</span><span class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span></div><div class="cell "><span class="num">29</span></div><div class="cell "><span class="num">30</span><span class="dots"><span class="dot"></span></span></div><div class="cell "><span class="num">31</span></div><div class="cell dim"><span class="num">1</span></div><div class="cell dim"><span class="num">2</span></div><div class="cell dim"><span class="num">3</span></div><div class="cell dim"><span class="num">4</span></div><div class="cell dim"><span class="num">5</span></div></div>
+                </div>
+              </div>
+            </div>
+            <div class="plate">
+              <div class="platelabel"><span class="n">5</span> empty and error</div>
+              <div class="cal tn-auto" style="--cal-w: 300px">
+                <div class="cal-strip"><span class="title">August 2026</span>
+                  <span class="seg-group"><span>Week</span><span class="on">Month</span></span></div>
+                <div class="cal-state">
+                  <span class="t">No entries this month.</span>
+                  <span class="b">Days you write on will show a dot.</span>
+                </div>
+                <div class="cal-state" style="border-top: 1px solid var(--tn-color-border)">
+                  <span class="t">Can't read the journal folder.</span>
+                  <span class="b">The calendar shows what the folder has; nothing has been changed.</span>
+                </div>
+              </div>
+            </div>
+          </div></div>
+          <figcaption>
+            On a phone the option strip collapses to one segmented control and the nav loses its
+            <code>Today</code> label. Below a 40&nbsp;px cell the <code>+N</code> is dropped and the
+            dots stand alone — the exact count stays in the accessible name, so nothing is lost to
+            a screen reader (D57).
+          </figcaption>
+        </figure>
+
+        <div class="ask">
+          <h4>The one question — what does the tab do when you reopen it?</h4>
+          <p>
+            D56 makes the tab a singleton and persists the view mode and active date per workspace.
+            So reopening the calendar next week lands you on <em>the month you were last looking
+            at</em>, which may be months behind today.
+          </p>
+          <p class="rec">Recommended: persist the view mode, but open on today's month</p>
+          <p>
+            The view mode is a preference; the date you were last parked on is usually an
+            accident of browsing. <code>Today</code> is one click away either way, but landing in
+            March when it is August is a small daily annoyance. This narrows D56 rather than
+            contradicting it — say the word if you would rather keep the date too.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>

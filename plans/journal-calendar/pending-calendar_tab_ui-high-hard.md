@@ -1,5 +1,7 @@
 # Story: Calendar Tab UI
 
+**Mockup APPROVED 2026-08-08** — `assets/journal-calendar-tab-mockup.html`, closing D79.
+
 **Status:** pending · **Urgency:** high · **Difficulty:** hard
 
 ## Epic
@@ -31,7 +33,7 @@ the popout still depends on story 9 because `context.workspace` has no `openTab`
 
 Closed by D48-D70; full text in `../pending-journal_discovery_and_wireframes-low-med.md`.
 
-- **Tab singleton, option persistence — D56.** `open-calendar` focuses the existing tab; view mode/date persist per workspace.
+- **Tab singleton, option persistence — D56, narrowed by D79.** `open-calendar` focuses the existing tab; the **view mode** persists per workspace and the tab always opens on today's month.
 - **Calendar on a phone — D57.** Both views available; option strip collapses to one control; cells show dots only below 40px width.
 - **Calendar grid keyboard model — D58.** One tab stop, roving focus; arrows/Home/End/PageUp/PageDown/Enter navigate and activate.
 - **Day click with popout closed — D59.** Opens the popout and applies the day filter.
