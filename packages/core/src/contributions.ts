@@ -114,11 +114,25 @@ export function createContributionRegistry<T extends IdentifiedContribution>(
     register(contribution);
   }
 
+  /**
+   * Returns the contribution for an ordered id, throwing a descriptive error
+   * if the map/order invariant is broken instead of silently dropping the entry.
+   */
+  const requireOrdered = (id: string): T => {
+    const entry = contributions.get(id);
+    if (!entry) {
+      throw new Error(
+        `Registry invariant broken: "${id}" is in order but not in contributions map.`
+      );
+    }
+    return entry;
+  };
+
   return {
     register,
     get: (id: string): T | undefined => contributions.get(id),
     entries: (): readonly T[] =>
-      (snapshot ??= Object.freeze(order.map((id) => contributions.get(id)!))),
+      (snapshot ??= Object.freeze(order.map(requireOrdered))),
     subscribe: (listener: () => void): (() => void) => {
       listeners.add(listener);
       return () => {

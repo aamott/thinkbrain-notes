@@ -11,8 +11,10 @@ tab array reference.
 - `apps/desktop/src/shell/DesktopShell.tsx` — derive a boolean such as
   `hasSettingsTab = tabState.tabs.some((tab) => tab.id === "settings")` and depend on
   `[settingsIsDirty, hasSettingsTab]` instead of `[settingsIsDirty, tabState.tabs]`.
-- `apps/desktop/src/shell/DesktopShell.test.tsx` — add regression coverage for dirty
-  synchronization when unrelated tabs open/close and when the settings tab is absent.
+- `apps/desktop/src/shell/DesktopShell.dirtySync.test.tsx` — focused regression coverage
+  with a reducer dispatch spy for unrelated tab array changes and settings-tab
+  presence/dirty-flag synchronization. (Separate file to keep the existing
+  `renderToStaticMarkup` composition tests untouched.)
 
 ## Reproduction / verification
 
@@ -26,10 +28,10 @@ tab array reference.
 
 ## Acceptance criteria
 
-- [ ] Dirty synchronization dispatches only when `settingsIsDirty` or settings-tab
+- [x] Dirty synchronization dispatches only when `settingsIsDirty` or settings-tab
       presence changes.
-- [ ] Settings dirty dot and dirty-close behavior remain correct.
-- [ ] Opening, activating, or closing unrelated tabs does not cause a redundant dirty
+- [x] Settings dirty dot and dirty-close behavior remain correct.
+- [x] Opening, activating, or closing unrelated tabs does not cause a redundant dirty
       dispatch.
 
 ## Manual checks

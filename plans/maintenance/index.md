@@ -29,8 +29,8 @@ created before implementation begins.
    while keeping registry IDs extensible.
 5. `pending-settings_effective_value_source-low-med.md` — one effective-value source
    for the settings UI and store.
-6. `pending-settings_highlight_bus-low-med.md` — isolate subscriber failures and HMR
-   state in the settings search bridge.
+6. `done-settings_highlight_bus-low-med.md` — isolate subscriber failures and HMR
+   state in the settings search bridge. (Implemented; pending review.)
 7. `pending-desktop_shell_dirty_sync-trivial-low.md` — eliminate redundant dirty-state
    dispatches after the shell typing changes.
 
@@ -66,7 +66,8 @@ The index intentionally excludes resolved findings, historical commit summaries,
 - Shell `LeftPanel`/`RightPanel` still widen to arbitrary strings, losing built-in ID
   compile-time safety.
 - Settings highlight listeners can abort sibling notification; module-scoped state has
-  no HMR disposal hook.
+  no HMR disposal hook. — **resolved** by `done-settings_highlight_bus-low-med.md`
+  (subscriber try/catch isolation + Vite HMR dispose).
 - `SettingsContent` still duplicates effective-value precedence.
 - `DesktopShell` still depends on the whole tab array for its settings dirty-sync
   effect, causing redundant dispatches.

@@ -232,6 +232,39 @@ describe("contribution registry", () => {
 
     expect(notifications).toBe(1);
   });
+
+  it("removes a disposed contribution exactly once and retains order of the rest", () => {
+    // Regression for the registry lookup type-safety story: disposing the
+    // first of three contributions must drop it once (not twice, not zero)
+    // and leave the remaining two in their original registration order.
+    const one: CommandContribution = {
+      id: "one",
+      title: "One",
+      handler: () => undefined
+    };
+    const two: CommandContribution = {
+      id: "two",
+      title: "Two",
+      handler: () => undefined
+    };
+    const three: CommandContribution = {
+      id: "three",
+      title: "Three",
+      handler: () => undefined
+    };
+    const registry = createContributionRegistry<CommandContribution>();
+    const oneHandle = registry.register(one);
+    registry.register(two);
+    registry.register(three);
+    expect(registry.entries().map((c) => c.id)).toEqual(["one", "two", "three"]);
+
+    oneHandle.dispose();
+    oneHandle.dispose(); // idempotent: must not remove `two` or `three`.
+
+    expect(registry.get("one")).toBeUndefined();
+    expect(registry.entries().map((c) => c.id)).toEqual(["two", "three"]);
+    expect(registry.entries()).toHaveLength(2);
+  });
 });
 
 describe("typed panel contributions", () => {

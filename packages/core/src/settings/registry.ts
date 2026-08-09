@@ -171,7 +171,7 @@ class SettingsRegistryImpl implements SettingsRegistry {
   }
 
   getAllModules(): readonly SettingsModule[] {
-    return this.moduleOrder.map((id) => this.modules.get(id)!.module);
+    return this.moduleOrder.map((id) => this.requireModule(id).module);
   }
 
   getDefinition(fullKey: string): SettingDefinition | undefined {
@@ -185,7 +185,7 @@ class SettingsRegistryImpl implements SettingsRegistry {
   getDefinitionsForSection(sectionId: string): readonly SettingDefinition[] {
     // Section ids are globally unique by convention (e.g. "editor.display").
     for (const id of this.moduleOrder) {
-      const registered = this.modules.get(id)!;
+      const registered = this.requireModule(id);
       const defs = registered.bySection.get(sectionId);
       if (defs) return [...defs];
     }
@@ -194,19 +194,33 @@ class SettingsRegistryImpl implements SettingsRegistry {
 
   getModulesByScope(scope: SettingScope): readonly SettingsModule[] {
     return this.moduleOrder
-      .map((id) => this.modules.get(id)!.module)
+      .map((id) => this.requireModule(id).module)
       .filter((module) => module.scope === scope);
   }
 
   getAllDefinitions(): readonly SettingDefinition[] {
     const all: SettingDefinition[] = [];
     for (const id of this.moduleOrder) {
-      const registered = this.modules.get(id)!;
+      const registered = this.requireModule(id);
       for (const def of registered.definitions.values()) {
         all.push(def);
       }
     }
     return all;
+  }
+
+  /**
+   * Returns the registered module for an ordered id, throwing a descriptive
+   * error if the map/order invariant is broken instead of silently dropping it.
+   */
+  private requireModule(id: string): RegisteredModule {
+    const registered = this.modules.get(id);
+    if (!registered) {
+      throw new Error(
+        `Registry invariant broken: "${id}" is in moduleOrder but not in modules map.`
+      );
+    }
+    return registered;
   }
 
   /**

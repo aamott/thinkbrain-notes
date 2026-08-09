@@ -76,10 +76,17 @@ export function desktopTabReducer(
       return state.tabs.some((tab) => tab.id === action.tabId)
         ? { ...state, activeTabId: action.tabId }
         : state;
-    case "setDirty":
+    case "setDirty": {
+      // Compare against the normalized target so dispatching `isDirty: false`
+      // on a tab whose `isDirty` is already `undefined` is a no-op. Without
+      // this, `undefined === false` is `false` and the reducer churns the
+      // tabs array on every settings-tab open, triggering an extra re-render
+      // and a debounced desktop-state persistence write.
+      const target = action.isDirty || undefined;
       return updateTab(state, action.tabId, (tab) =>
-        tab.isDirty === action.isDirty ? tab : { ...tab, isDirty: action.isDirty || undefined }
+        tab.isDirty === target ? tab : { ...tab, isDirty: target }
       );
+    }
     case "requestClose": {
       const tab = state.tabs.find((candidate) => candidate.id === action.tabId);
       if (!tab) return state;

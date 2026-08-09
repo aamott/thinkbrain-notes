@@ -114,13 +114,21 @@ export function DesktopShell() {
     setDocuments(next);
   }
 
+  // Whether a settings tab is currently open. Derived once so the dirty-sync
+  // effect below can depend on a stable boolean instead of the entire `tabs`
+  // array reference — otherwise opening/closing unrelated tabs (which always
+  // produces a new array) would re-run the effect and dispatch a redundant
+  // `setDirty` even though neither the settings dirty flag nor settings-tab
+  // presence changed.
+  const hasSettingsTab = tabState.tabs.some((tab) => tab.id === "settings");
+
   // Mirror the settings store's dirty flag into the tab system so the settings
   // tab shows the dirty dot and triggers DirtyCloseDialog on close. Only
   // dispatches when a settings tab is actually open to avoid spurious actions.
   useEffect(() => {
-    if (!tabState.tabs.some((t) => t.id === "settings")) return;
+    if (!hasSettingsTab) return;
     dispatchTabs({ type: "setDirty", tabId: "settings", isDirty: settingsIsDirty });
-  }, [settingsIsDirty, tabState.tabs]);
+  }, [settingsIsDirty, hasSettingsTab]);
 
   const updateRecentWorkspacePaths = useCallback((rootPath: string): readonly string[] => {
     const next = promoteRecentWorkspace(recentWorkspacePathsRef.current, rootPath);

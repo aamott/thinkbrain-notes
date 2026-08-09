@@ -131,6 +131,76 @@ describe("settings registry", () => {
     replacementRegistration.dispose();
   });
 
+  it("retains order across getAllModules/getModulesByScope/getAllDefinitions after disposal", () => {
+    // Regression for the registry lookup type-safety story: the ordered
+    // enumeration paths must not silently drop or duplicate entries when a
+    // module is disposed, and remaining modules must keep their order.
+    const registry = createSettingsRegistry();
+    const moduleA: SettingsModule = {
+      id: "mod-a",
+      label: "A",
+      scope: "app",
+      sections: [{
+        id: "mod-a.section",
+        label: "A Section",
+        settings: [{
+          key: "value",
+          type: "string",
+          label: "Value",
+          description: "A value",
+          default: "a",
+          scope: "app",
+          section: "mod-a.section"
+        }]
+      }]
+    };
+    const moduleB: SettingsModule = {
+      id: "mod-b",
+      label: "B",
+      scope: "app",
+      sections: [{
+        id: "mod-b.section",
+        label: "B Section",
+        settings: [{
+          key: "value",
+          type: "string",
+          label: "Value",
+          description: "B value",
+          default: "b",
+          scope: "app",
+          section: "mod-b.section"
+        }]
+      }]
+    };
+    const moduleC: SettingsModule = {
+      id: "mod-c",
+      label: "C",
+      scope: "workspace",
+      sections: [{
+        id: "mod-c.section",
+        label: "C Section",
+        settings: []
+      }]
+    };
+    const aHandle = registry.register(moduleA);
+    registry.register(moduleB);
+    registry.register(moduleC);
+
+    aHandle.dispose();
+    aHandle.dispose(); // idempotent: must not disturb moduleB or moduleC.
+
+    expect(registry.getAllModules().map((m) => m.id)).toEqual(["mod-b", "mod-c"]);
+    expect(registry.getModulesByScope("app").map((m) => m.id)).toEqual(["mod-b"]);
+    expect(registry.getModulesByScope("workspace").map((m) => m.id)).toEqual([
+      "mod-c"
+    ]);
+    expect(registry.getAllDefinitions().map((d) => d.key)).toEqual([
+      "mod-b.value"
+    ]);
+    expect(registry.getDefinition("mod-a.value")).toBeUndefined();
+    expect(registry.getDefinitionsForSection("mod-a.section")).toEqual([]);
+  });
+
   it("rejects duplicate section ids, including empty sections", () => {
     const registry = createSettingsRegistry();
     const module: SettingsModule = {
