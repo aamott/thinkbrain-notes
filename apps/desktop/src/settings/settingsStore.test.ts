@@ -556,6 +556,19 @@ describe("mixed-scope modules (D45)", () => {
     expect(store.getState().getEffectiveValue(ROOT)).toBe("diary");
   });
 
+  it("reports failure rather than success when nothing could be written", async () => {
+    // Reporting success while the value never left memory is how a Save button
+    // ends up doing nothing, twice, with no explanation.
+    const store = createSettingsStore(createMockGateway(null, null));
+    await store.getState().loadSettings(null);
+
+    store.getState().stageChange(ROOT, "diary");
+    const result = await store.getState().saveSettings();
+
+    expect(result.success).toBe(false);
+    expect(store.getState().saveError).toMatch(/workspace/i);
+  });
+
   it("keeps a workspace-scoped edit staged when there is no workspace to write it to", async () => {
     // Nothing can persist it yet, so dropping it from `stagedChanges` would lose
     // the edit outright and report success while doing so.

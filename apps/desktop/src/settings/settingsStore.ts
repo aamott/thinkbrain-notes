@@ -420,7 +420,9 @@ export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettin
         //
         // A workspace-scoped edit made with no workspace open has nowhere to go:
         // it stays staged rather than being cleared, so the value survives until
-        // a workspace opens instead of vanishing on a "successful" save.
+        // a workspace opens instead of vanishing on a "successful" save. It is
+        // also reported as a failure below — a Save that persists nothing and
+        // says it worked leaves the user pressing a button that does nothing.
         const persisted = new Set<string>([
           ...(appSerialized !== null ? Object.keys(appStaged) : []),
           ...(workspaceSerialized !== null ? Object.keys(workspaceStaged) : [])
@@ -448,6 +450,16 @@ export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettin
           next.workspaceValues = workspaceMerged;
           next.rawWorkspaceSettingsJson = workspaceSerialized;
         }
+        const stranded = Object.keys(workspaceStaged).filter((key) => !persisted.has(key));
+        if (stranded.length > 0) {
+          set({
+            ...next,
+            saveError:
+              "These settings belong to a workspace, and no workspace is open. Open one to save them."
+          });
+          return { success: false, diagnostics: [] };
+        }
+
         set(next);
         return { success: true, diagnostics: [] };
       } catch (error) {

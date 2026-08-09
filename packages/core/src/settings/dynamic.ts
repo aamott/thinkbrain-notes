@@ -11,7 +11,6 @@
 
 import type { SettingsRegistry } from "./registry";
 import { extractDefaults } from "./defaults";
-import { getModuleIdFromKey } from "./registry";
 import { validateSettings } from "./validation";
 import type { SettingsDiagnostic } from "../settings";
 import {
@@ -136,8 +135,10 @@ export function parseDynamicAppSettings(
   // are ignored so stale/misspelled entries don't leak into the settings model.
   const values: Record<string, unknown> = { ...defaults };
   for (const def of registry.getAllDefinitions()) {
-    const module = registry.getModule(getModuleIdFromKey(def.key));
-    if (!module || module.scope !== "app") continue;
+    // Scope is a property of the setting, not of the module it arrived in: an
+    // app-scoped module may hold a per-workspace setting, and that setting must
+    // not travel in the app file (D45).
+    if (def.scope !== "app") continue;
     if (def.key in record) {
       values[def.key] = record[def.key];
     }
@@ -195,10 +196,7 @@ export function serializeDynamicAppSettings(
   // setting keys from the base before writing the new values.
   const knownSettingKeys = new Set<string>();
   for (const def of registry.getAllDefinitions()) {
-    const module = registry.getModule(getModuleIdFromKey(def.key));
-    if (module && module.scope === "app") {
-      knownSettingKeys.add(def.key);
-    }
+    if (def.scope === "app") knownSettingKeys.add(def.key);
   }
 
   // Remove old setting keys from the base (they'll be replaced below), but keep
