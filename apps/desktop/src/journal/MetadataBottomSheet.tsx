@@ -27,6 +27,8 @@ export interface MetadataBottomSheetProps {
   readonly onDismiss: () => void;
   /** Rendered after the fields — the entry's own "add a field" row (D86). */
   readonly children?: ReactNode;
+  /** Disables all editable controls when true (e.g., when there is no write path). */
+  readonly readOnly?: boolean;
 }
 
 const FOCUSABLE = 'button, input, select, textarea, [href], [tabindex]:not([tabindex="-1"])';
@@ -68,7 +70,8 @@ export function MetadataBottomSheet({
   values,
   onSet,
   onDismiss,
-  children
+  children,
+  readOnly = false
 }: MetadataBottomSheetProps) {
   const sheetRef = useRef<HTMLDivElement>(null);
   const swipeStart = useRef<number | null>(null);
@@ -167,6 +170,7 @@ export function MetadataBottomSheet({
               value={values[definition.id]}
               size="touch"
               onSet={(value) => onSet(definition.id, value)}
+              readOnly={readOnly}
             />
           ))}
           {children}

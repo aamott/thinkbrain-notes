@@ -118,6 +118,15 @@ describe("bootstrapExtensions", () => {
     expect(boot.entries()[0]?.reasons.length).toBeGreaterThan(0);
   });
 
+  it("preserves the manifest diagnostic's own code instead of relabeling it as a capability reason", () => {
+    const { boot } = setup({
+      manifest: manifest({ id: "Not Valid" as string }),
+      activate: vi.fn()
+    });
+
+    expect(boot.entries()[0]?.reasons[0]?.code).toBe("manifest_invalid_id");
+  });
+
   it("leaves no stub behind when activation fails", async () => {
     const activate = vi.fn(() => {
       throw new Error("boom");
@@ -261,6 +270,35 @@ describe("locally loaded extensions", () => {
     ]);
 
     expect(boot.entries()[0]?.reasons[0]?.message).toBe("Panels are not loaded yet.");
+  });
+
+  it("preserves a load diagnostic's own code instead of relabeling it as a capability reason", () => {
+    const { boot } = empty();
+
+    boot.addLocalExtension(local(), [
+      { code: "panels_not_supported", message: "Panels are not loaded yet.", severity: "warning" }
+    ]);
+
+    expect(boot.entries()[0]?.reasons[0]?.code).toBe("panels_not_supported");
+  });
+
+  it("runs a local extension's deactivate export when it is removed", async () => {
+    const deactivate = vi.fn();
+    const activate = vi.fn((context: DesktopExtensionContext) => {
+      context.commands.register({
+        id: "go",
+        title: "Go",
+        availability: "available",
+        handler: vi.fn()
+      });
+    });
+    const { commands, boot } = empty();
+    boot.addLocalExtension({ ...local(activate), deactivate }, []);
+    await commands.get("sample.go")?.handler(commandContext);
+
+    await boot.removeLocalExtension("sample");
+
+    expect(deactivate).toHaveBeenCalledTimes(1);
   });
 
   it("rejects a local extension whose id is already registered", () => {

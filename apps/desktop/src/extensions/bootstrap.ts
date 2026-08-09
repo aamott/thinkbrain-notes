@@ -3,7 +3,6 @@ import {
   hasStartupActivation,
   parseExtensionManifest,
   type CompatibilityHost,
-  type CompatibilityReason,
   type Disposable,
   type ExtensionManifest
 } from "@thinkbrain/core";
@@ -19,11 +18,17 @@ import {
   setExtensionBootstrap,
   type BootstrapEntry,
   type BootstrapEntryStatus,
+  type BootstrapReason,
   type ExtensionSource,
   type ExtensionBootstrap
 } from "./bootstrapRef";
 
-export type { BootstrapEntry, BootstrapEntryStatus, ExtensionBootstrap } from "./bootstrapRef";
+export type {
+  BootstrapEntry,
+  BootstrapEntryStatus,
+  BootstrapReason,
+  ExtensionBootstrap
+} from "./bootstrapRef";
 export { getExtensionBootstrap } from "./bootstrapRef";
 
 /**
@@ -56,7 +61,7 @@ interface EntryState {
   readonly source: ExtensionSource;
   readonly directory: string | undefined;
   status: BootstrapEntryStatus;
-  reasons: readonly CompatibilityReason[];
+  reasons: readonly BootstrapReason[];
   /** Stub registrations, disposed immediately before activation. */
   stubs: Disposable[];
   /** Host registration handle; disposing it also deactivates the extension. */
@@ -181,7 +186,7 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
         status: "incompatible",
         source: "built-in",
         reasons: diagnostics.map((diagnostic) => ({
-          code: "capability" as const,
+          code: diagnostic.code,
           message: diagnostic.message,
           severity: diagnostic.severity
         }))
@@ -269,7 +274,7 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
         // Load diagnostics ride along as reasons so the Extensions panel shows
         // an author why, for example, a declared panel did not appear.
         reasons: diagnostics.map((diagnostic) => ({
-          code: "capability" as const,
+          code: diagnostic.code,
           message: diagnostic.message,
           severity: diagnostic.severity
         })),
@@ -281,7 +286,8 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
 
       state.registration = host.register({
         id: state.manifest.id,
-        activate: extension.activate
+        activate: extension.activate,
+        deactivate: extension.deactivate
       });
 
       if (hasStartupActivation(state.manifest)) {

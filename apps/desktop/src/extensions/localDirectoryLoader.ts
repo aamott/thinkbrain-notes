@@ -22,7 +22,7 @@ import {
 } from "@thinkbrain/core";
 
 import { HOST_COMPATIBILITY } from "./hostCompatibility";
-import type { DesktopExtensionActivation } from "./desktopExtensionHost";
+import type { DesktopExtensionActivation, DesktopExtensionContext } from "./desktopExtensionHost";
 
 /** Reads one file inside an extension directory. Rejects when unreadable. */
 export type ExtensionFileReader = (
@@ -41,7 +41,7 @@ export interface LoadedExtension {
   readonly directory: string;
   readonly manifest: ExtensionManifest;
   readonly activate: DesktopExtensionActivation;
-  readonly deactivate: ((context: never) => void | Promise<void>) | undefined;
+  readonly deactivate: ((context: DesktopExtensionContext) => void | Promise<void>) | undefined;
 }
 
 export interface LoadExtensionResult {
@@ -149,7 +149,7 @@ export function createLocalDirectoryLoader(
 
     const validated = validateExtensionModule<
       DesktopExtensionActivation,
-      (context: never) => void | Promise<void>
+      (context: DesktopExtensionContext) => void | Promise<void>
     >(namespace);
     if (!validated.module) return failure(...diagnostics, validated.diagnostic!);
 

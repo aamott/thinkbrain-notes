@@ -18,6 +18,8 @@ export interface MetadataFieldProps {
   readonly size?: MetadataFieldSize;
   /** `undefined` clears the field rather than writing an empty value. */
   readonly onSet: (value: JournalFieldValue | undefined) => void;
+  /** Disables editing when true (e.g., when there is no write path). */
+  readonly readOnly?: boolean;
 }
 
 const PILL = "rounded-full border text-[0.72rem] cursor-pointer";
@@ -31,7 +33,7 @@ const INPUT_SIZE: Record<MetadataFieldSize, string> = {
   touch: "h-11 text-sm"
 };
 
-export function MetadataField({ definition, value, size = "compact", onSet }: MetadataFieldProps) {
+export function MetadataField({ definition, value, size = "compact", onSet, readOnly = false }: MetadataFieldProps) {
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState("");
   const pill = `${PILL} ${PILL_SIZE[size]}`;
@@ -71,6 +73,7 @@ export function MetadataField({ definition, value, size = "compact", onSet }: Me
               <button
                 key={option}
                 type="button"
+                disabled={readOnly}
                 aria-pressed={on}
                 aria-label={`${definition.label}: ${option}`}
                 title={
@@ -108,6 +111,7 @@ export function MetadataField({ definition, value, size = "compact", onSet }: Me
           {adding ? (
             <input
               autoFocus
+              disabled={readOnly}
               aria-label={`New value for ${definition.label}`}
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
@@ -127,6 +131,7 @@ export function MetadataField({ definition, value, size = "compact", onSet }: Me
           ) : (
             <button
               type="button"
+              disabled={readOnly}
               aria-label={`Add a value to ${definition.label}`}
               onClick={() => setAdding(true)}
               className={`${pill} border-dashed border-border text-muted-foreground`}
@@ -138,6 +143,7 @@ export function MetadataField({ definition, value, size = "compact", onSet }: Me
       ) : (
         <input
           type={definition.type === "number" ? "number" : "text"}
+          disabled={readOnly}
           aria-label={definition.label}
           value={value === undefined ? "" : String(value)}
           onChange={(event) => {

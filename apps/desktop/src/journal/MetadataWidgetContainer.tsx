@@ -109,6 +109,7 @@ export function MetadataWidgetContainer({
       values={values}
       diagnostics={[...parsed.diagnostics, ...resolved.diagnostics]}
       onSet={(fieldId, value) => applyEdit?.(setFrontmatterField(contents, fieldId, value))}
+      readOnly={applyEdit === undefined}
     />
   );
 }

@@ -6,6 +6,7 @@ import {
 import { useState } from "react";
 
 import { registerControl, type ControlProps } from "../settings/controlRegistry";
+import { deriveFieldKey } from "./fieldKey";
 import { FIELD_DEFINITIONS_CONTROL, parseFieldDefinitions } from "./journalSettings";
 
 /**
@@ -43,18 +44,6 @@ const KINDS: readonly Kind[] = [
 
 const isSelect = (type: JournalFieldType): boolean =>
   type === "single-select" || type === "multi-select";
-
-/** `How I felt` becomes `how-i-felt`; D49's rule decides what survives. */
-function deriveFieldKey(label: string): string {
-  const slug = label
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  // The rule requires a leading letter, so a name starting with a digit gets
-  // one rather than being silently rejected.
-  return /^[0-9]/.test(slug) ? `f-${slug}` : slug;
-}
 
 /** Turns a validation code into something worth reading (D82). */
 function explain(code: string, key: string): string {

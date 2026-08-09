@@ -39,6 +39,8 @@ export interface MetadataWidgetProps {
   readonly diagnostics: readonly NoteDiagnostic[];
   /** `undefined` clears the field rather than writing an empty value. */
   readonly onSet: (fieldId: string, value: JournalFieldValue | undefined) => void;
+  /** Disables all editable controls when true (e.g., when there is no write path). */
+  readonly readOnly?: boolean;
 }
 
 const WEEKDAYS = [
@@ -82,7 +84,8 @@ export function MetadataWidget({
   onDefineField,
   values,
   diagnostics,
-  onSet
+  onSet,
+  readOnly = false
 }: MetadataWidgetProps) {
   const [expanded, setExpanded] = useState(false);
   // Fields named on this entry (D86). They hold no value until one is typed, so
@@ -111,6 +114,7 @@ export function MetadataWidget({
       )}
       existingKeys={shown.map((definition) => definition.id)}
       onAdd={(field) => setAdded((current) => [...current, field])}
+      readOnly={readOnly}
     />
   );
 
@@ -158,6 +162,7 @@ export function MetadataWidget({
                 definition={definition}
                 value={values[definition.id]}
                 onSet={(value) => onSet(definition.id, value)}
+                readOnly={readOnly}
               />
               {unconfigured.includes(definition) && (
                 <span className="pl-[7.5rem] text-[0.68rem] text-muted-foreground">
@@ -187,6 +192,7 @@ export function MetadataWidget({
           values={values}
           onSet={onSet}
           onDismiss={() => setExpanded(false)}
+          readOnly={readOnly}
         >
           {addRow}
         </MetadataBottomSheet>

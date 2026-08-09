@@ -1,11 +1,26 @@
 import type {
-  CompatibilityReason,
   Disposable,
   ExtensionStatus,
   ManifestDiagnostic
 } from "@thinkbrain/core";
 
 import type { LoadedExtension } from "./localDirectoryLoader";
+
+/**
+ * A `BootstrapEntry` reason, carrying either a compatibility check's closed
+ * code or a manifest/load diagnostic's open one.
+ *
+ * `CompatibilityReason.code` is a closed union because `evaluateCompatibility`
+ * only ever produces those three; a manifest or load diagnostic's `code` is an
+ * open string (`manifest_invalid_id`, `entry_absolute_path`, ...). Widening to
+ * `string` here — rather than aliasing every diagnostic to `"capability"` —
+ * keeps the distinguishing code intact for the Extensions panel.
+ */
+export interface BootstrapReason {
+  readonly code: string;
+  readonly message: string;
+  readonly severity: "error" | "warning";
+}
 
 /**
  * The app-wide bootstrap reference and its result types.
@@ -27,7 +42,7 @@ export interface BootstrapEntry {
   readonly id: string;
   readonly name: string;
   readonly status: BootstrapEntryStatus;
-  readonly reasons: readonly CompatibilityReason[];
+  readonly reasons: readonly BootstrapReason[];
   readonly source: ExtensionSource;
   /** Absolute directory a local extension was loaded from. */
   readonly directory?: string;

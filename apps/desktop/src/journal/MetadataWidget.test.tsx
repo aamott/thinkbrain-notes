@@ -526,3 +526,62 @@ describe("a key with no field behind it (D33)", () => {
     expect(host.querySelector('button[aria-label="Add mood to your fields"]')).toBeNull();
   });
 });
+
+describe("read-only mode when applyEdit is absent", () => {
+  const note = (frontmatter: string) =>
+    `---\n${frontmatter}---\n\nBread needed more salt.\n`;
+
+  const mount = async (
+    props: Partial<React.ComponentProps<typeof MetadataWidgetContainer>> = {}
+  ): Promise<HTMLDivElement> => {
+    container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
+    await act(async () =>
+      root?.render(
+        <MetadataWidgetContainer
+          relativePath="journal/2026/08/2026-08-07-1802.md"
+          contents={props.contents ?? note("date: 2026-08-07\n")}
+          definitions={props.definitions ?? definitions}
+          applyEdit={props.applyEdit}
+          onDefineField={props.onDefineField}
+        />
+      )
+    );
+    return container;
+  };
+
+  it("disables field controls when applyEdit is undefined", async () => {
+    const host = await mount({
+      contents: note("date: 2026-08-07\nmood: good\n"),
+      applyEdit: undefined
+    });
+
+    await click(host, "Edit");
+
+    const button = host.querySelector<HTMLButtonElement>('button[aria-label="Mood: good"]');
+    expect(button?.hasAttribute("disabled")).toBe(true);
+  });
+
+  it("disables the add field row when applyEdit is undefined", async () => {
+    const host = await mount({
+      applyEdit: undefined
+    });
+
+    await click(host, "Add metadata");
+
+    expect(host.querySelector('button[aria-label="Add a field"]')?.hasAttribute("disabled")).toBe(true);
+  });
+
+  it("disables text input when applyEdit is undefined", async () => {
+    const host = await mount({
+      contents: note("date: 2026-08-07\nnote: Try 2% salt\n"),
+      applyEdit: undefined
+    });
+
+    await click(host, "Edit");
+
+    const input = host.querySelector<HTMLInputElement>('input[aria-label="Note to self"]');
+    expect(input?.hasAttribute("disabled")).toBe(true);
+  });
+});

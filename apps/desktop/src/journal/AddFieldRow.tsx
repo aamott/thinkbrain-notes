@@ -1,6 +1,8 @@
 import { validateFieldDefinition, type JournalFieldDefinition } from "@thinkbrain/core";
 import { useState } from "react";
 
+import { deriveFieldKey } from "./fieldKey";
+
 /**
  * Recording something new without leaving the entry (D86).
  *
@@ -17,16 +19,8 @@ export interface AddFieldRowProps {
   /** Keys already on the entry; offering one twice offers to overwrite it. */
   readonly existingKeys: readonly string[];
   readonly onAdd: (field: JournalFieldDefinition) => void;
-}
-
-/** `How I slept` becomes `how-i-slept`; D49's rule decides what survives. */
-function deriveKey(label: string): string {
-  const slug = label
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return /^[0-9]/.test(slug) ? `f-${slug}` : slug;
+  /** Disables the control when true (e.g., when there is no write path). */
+  readonly readOnly?: boolean;
 }
 
 const MENU =
@@ -36,7 +30,7 @@ const OPTION =
 const HEAD =
   "bg-muted px-2 py-1 text-[0.62rem] uppercase tracking-[0.09em] text-muted-foreground";
 
-export function AddFieldRow({ available, existingKeys, onAdd }: AddFieldRowProps) {
+export function AddFieldRow({ available, existingKeys, onAdd, readOnly = false }: AddFieldRowProps) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
 
@@ -46,7 +40,7 @@ export function AddFieldRow({ available, existingKeys, onAdd }: AddFieldRowProps
   };
 
   const typed = draft.trim();
-  const key = deriveKey(typed);
+  const key = deriveFieldKey(typed);
   const matched = available.find(
     (field) => field.label.toLowerCase() === typed.toLowerCase() || field.id === key
   );
@@ -81,9 +75,10 @@ export function AddFieldRow({ available, existingKeys, onAdd }: AddFieldRowProps
     return (
       <button
         type="button"
+        disabled={readOnly}
         aria-label="Add a field"
         onClick={() => setOpen(true)}
-        className="self-start rounded-small border border-dashed border-border px-2 py-0.5 text-[0.7rem] text-muted-foreground cursor-pointer hover:text-foreground"
+        className="self-start rounded-small border border-dashed border-border px-2 py-0.5 text-[0.7rem] text-muted-foreground cursor-pointer hover:text-foreground disabled:opacity-50 disabled:cursor-default"
       >
         ＋ Add a field
       </button>
