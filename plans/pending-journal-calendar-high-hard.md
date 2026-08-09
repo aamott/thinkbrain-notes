@@ -130,7 +130,7 @@ recorded in the story. Stories may be split further if a subagent would exceed o
 
 ## Status
 
-- ✅ Every product decision closed (D1-D84)
+- ✅ Every product decision closed (D1-D85)
 - 🟨 Story 2 journal data/frontmatter contract — implemented in `packages/core/src/journal/`;
   the unknown-field write round-trip waits on story 3's write path
 - 🟨 Story 3 journal service — create (always new, D18), backfill (D61/D62), listing with

@@ -456,6 +456,15 @@ rewrite settings, and D83 means nothing is lost by not promoting it — the valu
 note and its choice reappears whenever the note is opened. Promoting a value to the field
 itself is D82's editor, where it is an explicit act.
 
+**D85.** A frontmatter key with no configured field behind it is shown and edited on the entry
+like any other, labelled by the key itself, and marked *not one of your fields yet* with an
+`Add it` that promotes it into the settings. D33 already kept such keys; keeping a value and
+never showing it reads as having lost it, and the first tap on the dateline would overwrite it.
+The inferred shape is conservative — a string becomes free text, never a select — because
+turning somebody's sentence into a tappable pill is a guess that reads as damage. This is the
+one settings write the editor makes, and only when the user asks for it by name (narrowing
+D84, which stands for values).
+
 ## Checkpoint table
 
 Every artifact and decision batch was approved by the product owner per D34, across

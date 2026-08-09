@@ -27,6 +27,7 @@ import { workspaceDesktopApi } from "../workspace/workspaceAdapter";
 import { invokeNativeCommand } from "../native/commands";
 import { SettingsTab } from "./SettingsTab";
 import { useSettingsStore, appSettingsRegistry } from "./settingsStore";
+import { setExtensionBootstrap } from "../extensions/bootstrapRef";
 import { registerControl, type ControlProps } from "./controlRegistry";
 
 /**
@@ -374,5 +375,30 @@ describe("SettingsTab", () => {
     // loadSettings must NOT have been called again on remount (no additional
     // native command invocations for read_app_settings / read_workspace_settings).
     expect(vi.mocked(invokeNativeCommand).mock.calls.length).toBe(callsAfterFirstMount);
+  });
+});
+
+describe("SettingsTab and lazy extensions", () => {
+  /**
+   * The bug this covers: the journal registers its settings when it activates,
+   * and it activates lazily, so opening Settings without having opened the
+   * journal first showed no Journal section at all — nothing to configure, and
+   * no hint that anything was missing.
+   */
+  it("wakes every extension so their sections exist", async () => {
+    const activateAll = vi.fn(async () => undefined);
+    setExtensionBootstrap({
+      entries: () => [],
+      activateAll,
+      addLocalExtension: () => undefined,
+      removeLocalExtension: async () => undefined,
+      subscribe: () => () => undefined,
+      dispose: async () => undefined
+    });
+
+    await renderSettingsTab();
+
+    expect(activateAll).toHaveBeenCalled();
+    setExtensionBootstrap(null);
   });
 });

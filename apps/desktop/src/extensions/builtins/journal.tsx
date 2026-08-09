@@ -88,6 +88,16 @@ export function activateJournal(context: DesktopExtensionContext): void {
         contents={contents}
         definitions={definitions()}
         applyEdit={applyEdit}
+        // D85: promoting a key the note already uses is the one settings write
+        // the editor makes, and only ever when the user asks for it by name.
+        onDefineField={(field) => {
+          const current = definitions();
+          if (current.some((existing) => existing.id === field.id)) return;
+          void context.settings.set(
+            "fieldDefinitions",
+            JSON.stringify([...current, field], null, 2)
+          );
+        }}
       />
     )
   });

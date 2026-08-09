@@ -27,6 +27,22 @@ export interface MetadataWidgetContainerProps {
   readonly contents: string;
   readonly definitions: readonly JournalFieldDefinition[];
   readonly applyEdit?: (contents: string) => void;
+  /** Promotes a key the note already uses into a configured field (D85). */
+  readonly onDefineField?: (definition: JournalFieldDefinition) => void;
+}
+
+/**
+ * Invents a field for a key the note uses and the settings do not know (D85).
+ *
+ * The shape is inferred from what is written, and inferred conservatively: a
+ * string becomes free text rather than a select, because turning someone's
+ * sentence into a tappable pill is a guess that reads as damage. Promoting the
+ * field in settings is where a real vocabulary gets chosen.
+ */
+function inferField(key: string, raw: unknown): JournalFieldDefinition {
+  if (typeof raw === "number") return { id: key, label: key, type: "number" };
+  if (Array.isArray(raw)) return { id: key, label: key, type: "multi-select", options: [] };
+  return { id: key, label: key, type: "text" };
 }
 
 /**
@@ -59,7 +75,8 @@ export function MetadataWidgetContainer({
   relativePath,
   contents,
   definitions,
-  applyEdit
+  applyEdit,
+  onDefineField
 }: MetadataWidgetContainerProps) {
   const ref = parseJournalFilename(relativePath);
   // No unambiguous date means no dateline; the app never guesses one (D38).
@@ -69,11 +86,27 @@ export function MetadataWidgetContainer({
   const resolved = resolveEntryDate(ref, parsed.metadata);
   const metadata = readJournalMetadata(parsed.metadata, definitions);
 
+  // Keys the settings have never heard of are still the user's data (D33), so
+  // they get a field of their own rather than being preserved out of sight.
+  const unconfigured = Object.entries(metadata.unconfigured).map(([key, raw]) =>
+    inferField(key, raw)
+  );
+  const values = { ...healed(metadata, definitions) };
+  for (const field of unconfigured) {
+    const raw = metadata.unconfigured[field.id];
+    if (typeof raw === "string" || typeof raw === "number") values[field.id] = raw;
+    else if (Array.isArray(raw) && raw.every((entry) => typeof entry === "string")) {
+      values[field.id] = raw as readonly string[];
+    }
+  }
+
   return (
     <MetadataWidget
       date={resolved.date}
       definitions={definitions}
-      values={healed(metadata, definitions)}
+      unconfigured={unconfigured}
+      onDefineField={onDefineField}
+      values={values}
       diagnostics={[...parsed.diagnostics, ...resolved.diagnostics]}
       onSet={(fieldId, value) => applyEdit?.(setFrontmatterField(contents, fieldId, value))}
     />

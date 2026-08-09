@@ -37,6 +37,16 @@ export interface ExtensionBootstrap extends Disposable {
   /** Current status of every extension, for the Extensions panel. */
   entries(): readonly BootstrapEntry[];
   /**
+   * Activates every compatible extension, ignoring failures.
+   *
+   * Contributions that are *declared* — commands, panels — get stubs at
+   * bootstrap, so laziness is invisible. Settings schemas are registered by the
+   * extension's own `activate`, so until something wakes it there is simply no
+   * section for it on the Settings page. Anything that claims to show
+   * everything configurable has to call this first.
+   */
+  activateAll(): Promise<void>;
+  /**
    * Registers an already-loaded local extension and stubs its commands.
    *
    * @throws When its id is already registered.

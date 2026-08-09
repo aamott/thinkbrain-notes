@@ -294,6 +294,7 @@ describe("MetadataWidgetContainer", () => {
           contents={props.contents ?? note("date: 2026-08-07\n")}
           definitions={props.definitions ?? definitions}
           applyEdit={props.applyEdit}
+          onDefineField={props.onDefineField}
         />
       )
     );
@@ -363,5 +364,96 @@ describe("MetadataWidgetContainer", () => {
     const host = await mountContainer({ contents: note("date: 2026-08-05\n") });
 
     expect(host.querySelector('[role="status"]')?.textContent).toContain("2026-08-05");
+  });
+});
+
+describe("a key with no field behind it (D33)", () => {
+  const note = (frontmatter: string) => `---\n${frontmatter}---\n\nBread needed more salt.\n`;
+
+  const mount = async (
+    props: Partial<React.ComponentProps<typeof MetadataWidgetContainer>> = {}
+  ): Promise<HTMLDivElement> => {
+    container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
+    await act(async () =>
+      root?.render(
+        <MetadataWidgetContainer
+          relativePath="journal/2026/08/2026-08-07-1802.md"
+          contents={props.contents ?? note("date: 2026-08-07\n")}
+          definitions={props.definitions ?? definitions}
+          applyEdit={props.applyEdit}
+          onDefineField={props.onDefineField}
+        />
+      )
+    );
+    return container;
+  };
+  /**
+   * The reported bug: a note saying `mood: happy` with no configured fields
+   * showed the date and nothing else. The value was in the file, preserved and
+   * invisible — which reads as "the app lost it".
+   */
+  it("shows the value in the dateline anyway", async () => {
+    const host = await mount({
+      contents: note("date: 2026-08-07\nmood: happy\n"),
+      definitions: []
+    });
+
+    expect(host.textContent).toContain("happy");
+  });
+
+  it("names the key, since there is no label to use", async () => {
+    const host = await mount({
+      contents: note("date: 2026-08-07\nmood: happy\n"),
+      definitions: []
+    });
+
+    await click(host, "Edit");
+
+    expect(host.querySelector('input[aria-label="mood"]')).not.toBeNull();
+  });
+
+  it("stays editable, and edits the same key", async () => {
+    const edits: string[] = [];
+    const host = await mount({
+      contents: note("date: 2026-08-07\nmood: happy\n"),
+      definitions: [],
+      applyEdit: (next) => edits.push(next)
+    });
+
+    await click(host, "Edit");
+    const input = host.querySelector<HTMLInputElement>('input[aria-label="mood"]');
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      setter?.call(input, "delighted");
+      input?.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    expect(edits.at(-1)).toContain("mood: delighted");
+  });
+
+  it("offers to make it a real field, and hands back D49's shape", async () => {
+    const defined: unknown[] = [];
+    const host = await mount({
+      contents: note("date: 2026-08-07\nmood: happy\n"),
+      definitions: [],
+      onDefineField: (definition) => defined.push(definition)
+    });
+
+    await click(host, "Edit");
+    await click(host, "Add mood to your fields");
+
+    expect(defined).toEqual([{ id: "mood", label: "mood", type: "text" }]);
+  });
+
+  it("offers nothing to add when the field is already configured", async () => {
+    const host = await mount({
+      contents: note("date: 2026-08-07\nmood: good\n")
+    });
+
+    await click(host, "Edit");
+
+    expect(host.querySelector('button[aria-label="Add mood to your fields"]')).toBeNull();
   });
 });

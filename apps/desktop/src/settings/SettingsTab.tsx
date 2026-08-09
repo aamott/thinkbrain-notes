@@ -13,6 +13,7 @@
 import { useEffect, useRef } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { workspaceDesktopApi } from "../workspace/workspaceAdapter";
+import { getExtensionBootstrap } from "../extensions/bootstrapRef";
 import { useSettingsStore } from "./settingsStore";
 import { SettingsNav } from "./SettingsNav";
 import { SettingsContent } from "./SettingsContent";
@@ -30,6 +31,14 @@ export function SettingsTab() {
   const loadError = useSettingsStore((s) => s.loadError);
   // Guard against double-load in React StrictMode (dev double-mounts effects).
   const loadedRef = useRef(false);
+
+  // An extension registers its settings schema when it activates, and most
+  // activate lazily — so before this, a journal you had not opened yet simply
+  // had no section here, and there was no way to configure it from a standing
+  // start. Runs outside the Tauri guard: it is app state, not native I/O.
+  useEffect(() => {
+    void getExtensionBootstrap()?.activateAll();
+  }, []);
 
   useEffect(() => {
     // Non-Tauri contexts (tests, web preview) skip the native load.

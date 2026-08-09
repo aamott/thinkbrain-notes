@@ -26,6 +26,14 @@ export interface MetadataWidgetProps {
   readonly date: JournalDate;
   readonly definitions: readonly JournalFieldDefinition[];
   readonly values: Readonly<Record<string, JournalFieldValue>>;
+  /**
+   * Fields invented for keys the note uses and the settings do not know (D85).
+   * Editable like any other; marked, because they are not yours yet.
+   */
+  readonly unconfigured?: readonly JournalFieldDefinition[];
+  /** Promotes one of those keys into a configured field. Omitted where the
+   * host cannot write settings. */
+  readonly onDefineField?: (definition: JournalFieldDefinition) => void;
   /** Anything noticed while reading the note; shown, never acted on (D33). */
   readonly diagnostics: readonly NoteDiagnostic[];
   /** `undefined` clears the field rather than writing an empty value. */
@@ -69,6 +77,8 @@ function formatValue(value: JournalFieldValue): string {
 export function MetadataWidget({
   date,
   definitions,
+  unconfigured = [],
+  onDefineField,
   values,
   diagnostics,
   onSet
@@ -78,7 +88,8 @@ export function MetadataWidget({
   // because the dateline's compact controls are half the touch minimum and sit
   // where the soft keyboard would cover them.
   const touch = useCoarsePointer();
-  const set = definitions
+  const shown = [...definitions, ...unconfigured];
+  const set = shown
     .filter((definition) => values[definition.id] !== undefined)
     .map((definition) => formatValue(values[definition.id]!));
 
@@ -94,7 +105,7 @@ export function MetadataWidget({
         {!expanded && set.length > 0 && (
           <span className="text-[0.82rem] text-muted-foreground">· {set.join(" · ")}</span>
         )}
-        {definitions.length > 0 && (
+        {shown.length > 0 && (
           <button
             type="button"
             onClick={() => setExpanded(!expanded)}
@@ -125,13 +136,29 @@ export function MetadataWidget({
 
       {expanded && !touch && (
         <div className="flex flex-col gap-2 border-b border-border py-3">
-          {definitions.map((definition) => (
-            <MetadataField
-              key={definition.id}
-              definition={definition}
-              value={values[definition.id]}
-              onSet={(value) => onSet(definition.id, value)}
-            />
+          {shown.map((definition) => (
+            <div key={definition.id} className="flex flex-col gap-0.5">
+              <MetadataField
+                definition={definition}
+                value={values[definition.id]}
+                onSet={(value) => onSet(definition.id, value)}
+              />
+              {unconfigured.includes(definition) && (
+                <span className="pl-[7.5rem] text-[0.68rem] text-muted-foreground">
+                  Not one of your fields yet.{" "}
+                  {onDefineField && (
+                    <button
+                      type="button"
+                      aria-label={`Add ${definition.id} to your fields`}
+                      onClick={() => onDefineField(definition)}
+                      className="border-0 bg-transparent p-0 text-[0.68rem] text-muted-foreground underline underline-offset-2 cursor-pointer hover:text-foreground"
+                    >
+                      Add it
+                    </button>
+                  )}
+                </span>
+              )}
+            </div>
           ))}
         </div>
       )}
@@ -139,7 +166,7 @@ export function MetadataWidget({
       {expanded && touch && (
         <MetadataBottomSheet
           title={formatSheetDate(date)}
-          definitions={definitions}
+          definitions={shown}
           values={values}
           onSet={onSet}
           onDismiss={() => setExpanded(false)}

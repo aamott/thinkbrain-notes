@@ -279,3 +279,52 @@ describe("locally loaded extensions", () => {
     expect(commands.get("sample.go")).toBeUndefined();
   });
 });
+
+describe("settings need every extension awake", () => {
+  /**
+   * A lazy extension registers its settings schema when it activates, so a
+   * Settings page that never woke it shows a gap where its section should be —
+   * and the user cannot configure what they cannot see.
+   */
+  it("activates a lazily-registered extension on demand", async () => {
+    const activate = vi.fn();
+    const { boot } = setup({ manifest: manifest(), activate });
+    expect(activate).not.toHaveBeenCalled();
+
+    await boot.activateAll();
+
+    expect(activate).toHaveBeenCalled();
+  });
+
+  it("activates each extension only once, however often it is asked", async () => {
+    const activate = vi.fn();
+    const { boot } = setup({ manifest: manifest(), activate });
+
+    await boot.activateAll();
+    await boot.activateAll();
+
+    expect(activate).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps going when one extension fails to activate", async () => {
+    const activate = vi.fn(() => {
+      throw new Error("nope");
+    });
+    const { boot } = setup({ manifest: manifest(), activate });
+
+    await expect(boot.activateAll()).resolves.toBeUndefined();
+    expect(boot.entries()[0]).toMatchObject({ status: "failed" });
+  });
+
+  it("leaves an incompatible extension alone", async () => {
+    const activate = vi.fn();
+    const { boot } = setup({
+      manifest: manifest({ engines: { platform: ["mobile"] } }),
+      activate
+    });
+
+    await boot.activateAll();
+
+    expect(activate).not.toHaveBeenCalled();
+  });
+});

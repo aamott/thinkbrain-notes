@@ -245,6 +245,17 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
       return () => listeners.delete(listener);
     },
 
+    activateAll: async (): Promise<void> => {
+      await Promise.all(
+        [...states.values()]
+          .filter((state) => state.status !== "incompatible" && state.registration !== null)
+          // One extension failing to activate must not cost the user the
+          // settings of every other one, so failures are already recorded on
+          // the entry and are swallowed here.
+          .map((state) => ensureActive(state).catch(() => undefined))
+      );
+    },
+
     addLocalExtension: (extension, diagnostics): void => {
       if (states.has(extension.manifest.id)) {
         throw new Error(`Extension "${extension.manifest.id}" is already registered.`);
