@@ -12,7 +12,7 @@
 import { useCallback, useEffect, useState, type ChangeEvent } from "react";
 import { Download, Upload } from "lucide-react";
 import { cn } from "../lib/utils";
-import { useSettingsStore } from "./settingsStore";
+import { useSettingsStore, resolveEffectiveValue, appSettingsRegistry } from "./settingsStore";
 import { listThemes, type ThemeEntry } from "./themeAdapter";
 import {
   buildThemeExportPayload,
@@ -20,7 +20,6 @@ import {
   importTheme,
   type ImportThemeResult
 } from "./themeImportExport";
-import { computeEffectiveValue } from "./effectiveValue";
 import { useTransientStatus } from "./useTransientStatus";
 
 /**
@@ -106,25 +105,29 @@ export function ThemePicker() {
     };
   }, []);
 
-  // Compute the effective themeFile value (staged > app > workspace > default).
-  // The default is `null` (no custom theme) per the settings registry.
-  const themeFileValue = computeEffectiveValue(
+  // Compute the effective themeFile value (staged > app > default). The
+  // default is `null` (no custom theme) per the settings registry. Both
+  // appearance.theme and appearance.themeFile are app-scoped, so a workspace
+  // file cannot override them — resolveEffectiveValue enforces that.
+  const themeFileDef = appSettingsRegistry.getDefinition("appearance.themeFile");
+  const themeFileValue = resolveEffectiveValue(
     "appearance.themeFile",
-    null,
     stagedChanges,
     appValues,
-    workspaceValues
+    workspaceValues,
+    themeFileDef
   );
 
   // The unified select's value: if a theme file is active (non-null string),
   // use its path; otherwise fall back to the effective base `appearance.theme`
   // value (defaulting to "system" if somehow not a string).
-  const themeValue = computeEffectiveValue(
+  const themeDef = appSettingsRegistry.getDefinition("appearance.theme");
+  const themeValue = resolveEffectiveValue(
     "appearance.theme",
-    "system",
     stagedChanges,
     appValues,
-    workspaceValues
+    workspaceValues,
+    themeDef
   );
   const selectValue =
     typeof themeFileValue === "string" && themeFileValue !== ""

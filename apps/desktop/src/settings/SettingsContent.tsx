@@ -24,12 +24,11 @@ import { RotateCcw } from "lucide-react";
 import type { SettingDefinition, SettingsDiagnostic } from "@thinkbrain/core";
 import { Unavailable } from "../shell/Unavailable";
 import { cn } from "../lib/utils";
-import { appSettingsRegistry, useSettingsStore } from "./settingsStore";
+import { appSettingsRegistry, resolveEffectiveValue, useSettingsStore } from "./settingsStore";
 import { getControlForDefinition } from "./controlRegistry";
 import { subscribeSettingHighlight } from "./settingHighlight";
 import { findSectionLabelAcrossModules } from "./sectionUtils";
 import { ThemePicker, ThemeToolbar } from "./ThemeSectionControls";
-import { computeEffectiveValue } from "./effectiveValue";
 
 /**
  * Renders a single setting row: label, description, control, and any inline
@@ -223,12 +222,12 @@ export function SettingsContent() {
               <SettingRow
                 key={definition.key}
                 definition={definition}
-                value={computeEffectiveValue(
+                value={resolveEffectiveValue(
                   definition.key,
-                  definition.default,
                   stagedChanges,
                   appValues,
-                  workspaceValues
+                  workspaceValues,
+                  definition
                 )}
                 onChange={(value) => stageChange(definition.key, value)}
                 diagnostics={validationDiagnostics.filter(

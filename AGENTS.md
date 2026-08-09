@@ -52,7 +52,6 @@ examples/extensions/  # Sample extension (hello-notes)
 - Run `./scripts/qa.sh` or `pnpm lint` and `pnpm typecheck` before completing tasks.
 - Avoid `any` types; prefer strict types or `unknown`.
 - Fail loudly: log errors clearly and return typed results.
-- Never commit automatically. Always hand off to the user with a recommended commit message and UI-facing manual test steps.
 
 ## Development & Launching
 - To run the Tauri desktop app in development mode, use `pnpm desktop:tauri dev` in the project root. Note: `pnpm dev` only launches the web UI, so always use `pnpm desktop:tauri dev` to test native functionality.
@@ -87,7 +86,7 @@ For major or cross-cutting refactors, `npx repomix --compress` can help map depe
 
 
 ## Rules/suggestions
-- Never commit/push without explicit user approval.
+- Never commit/push without explicit user approval. Recommend commit message and what to try out.
 - Never change AGENTS.md (this file) without explicit user direction and approval. (Exception: `## File Map`)
 - Write compact, maintainable and optimized code. Shorter code is easier to read faster.
 - Avoid large files. Never over 800 lines. Break up earlier rather than later when it's already big. 

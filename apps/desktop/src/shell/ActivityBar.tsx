@@ -1,4 +1,4 @@
-import { useLeftPanelContributions } from "../panels/panelRegistry";
+import { isBuiltInLeftPanel, useLeftPanelContributions } from "../panels/panelRegistry";
 import { IconButton } from "./IconButton";
 import { type LeftPanel } from "./shellTypes";
 
@@ -37,7 +37,13 @@ export function ActivityBar({
             label={action.label}
             symbol={action.icon}
             active={leftPanel === action.id}
-            onClick={() => onSelectLeftPanel(action.id)}
+            // Registry entries carry the wide `DesktopPanelId`; narrow to the
+            // built-in left union before handing the id to shell state. Built-in
+            // entries always satisfy the guard, and extension-owned ids (which
+            // are not selectable shell state yet) are dropped.
+            onClick={() => {
+              if (isBuiltInLeftPanel(action.id)) onSelectLeftPanel(action.id);
+            }}
           />
         ))}
       </div>

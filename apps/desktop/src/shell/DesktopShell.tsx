@@ -26,6 +26,7 @@ import {
 } from "../settings/desktopState";
 import { useTheme } from "../settings/theme-context";
 import { useSettingsStore } from "../settings/settingsStore";
+import { isBuiltInRightPanel } from "../panels/panelRegistry";
 import {
   createEditorTab,
   createStaticTab,
@@ -449,7 +450,13 @@ export function DesktopShell() {
       toggleAssistant: () => setRightPanel((panel) => panel === "assistant" ? null : "assistant"),
       toggleBottomPanel,
       toggleLivePreview,
-      revealPanel: (panelId: string) => setRightPanel(panelId),
+      // `revealPanel` accepts a wide string so extension-owned ids can be
+      // routed here without widening the command context. Extension selection
+      // is not implemented by the narrow-id story, so non-built-in ids are
+      // dropped: only first-party right panels become selectable shell state.
+      revealPanel: (panelId: string) => {
+        if (isBuiltInRightPanel(panelId)) setRightPanel(panelId);
+      },
       openSettings: openSettingsTab,
       rebuildIndex: () => updateBottomPanel("terminal"),
       closePalette

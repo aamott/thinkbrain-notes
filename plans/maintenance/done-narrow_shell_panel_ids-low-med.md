@@ -33,11 +33,11 @@ but extension selection is not implemented by this story.
 
 ## Acceptance criteria
 
-- [ ] Shell state, toggle/select callbacks, and popout props accept only valid
+- [x] Shell state, toggle/select callbacks, and popout props accept only valid
       built-in IDs for their respective side.
-- [ ] Registry registration and lookup continue to accept extension-owned string IDs.
-- [ ] Left/right built-in lists cannot accidentally cross sides at compile time.
-- [ ] Existing panel toggles, persisted Explorer restoration, and unavailable fallback
+- [x] Registry registration and lookup continue to accept extension-owned string IDs.
+- [x] Left/right built-in lists cannot accidentally cross sides at compile time.
+- [x] Existing panel toggles, persisted Explorer restoration, and unavailable fallback
       behavior remain unchanged.
 
 ## Manual checks

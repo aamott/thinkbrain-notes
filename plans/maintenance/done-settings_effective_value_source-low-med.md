@@ -33,11 +33,11 @@ reactive rendering by continuing to subscribe to the raw store maps.
 
 ## Acceptance criteria
 
-- [ ] Exactly one production implementation defines effective-value precedence.
-- [ ] `SettingsContent` remains reactive to staged, app, and workspace map changes.
-- [ ] The store action and rendered controls return the same value for registered keys,
+- [x] Exactly one production implementation defines effective-value precedence.
+- [x] `SettingsContent` remains reactive to staged, app, and workspace map changes.
+- [x] The store action and rendered controls return the same value for registered keys,
       including defaults and falsy values (`false`, `0`, and empty string).
-- [ ] Existing settings UI behavior and diagnostics remain unchanged.
+- [x] Existing settings UI behavior and diagnostics remain unchanged.
 
 ## Manual checks
 

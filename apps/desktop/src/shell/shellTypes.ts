@@ -6,8 +6,20 @@
  * contribution registry rather than in shell-specific action arrays.
  */
 
-/** Activity bar panel ids rendered on the left side of the shell. */
-export type { LeftPanel, RightPanel } from "../panels/panelRegistry";
+/**
+ * Narrow shell selection types re-exported from the panel registry.
+ *
+ * `LeftPanel`/`RightPanel` are restricted to first-party side-specific ids so
+ * a typo in shell state is a compile-time error. The wide `DesktopPanelId`
+ * (which also admits extension-owned string ids) remains in the registry module
+ * for registration and lookup only.
+ */
+export type {
+  BuiltInLeftPanel,
+  BuiltInRightPanel,
+  LeftPanel,
+  RightPanel
+} from "../panels/panelRegistry";
 
 /**
  * Bottom dock panel ids.

@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { createSettingsStore, type SettingsStoreGateway } from "./settingsStore";
+import { createSettingsStore, resolveEffectiveValue, type SettingsStoreGateway } from "./settingsStore";
 import { appSettingsRegistry } from "./settingsStore";
-import { extractDefaults } from "@thinkbrain/core";
+import { extractDefaults, type SettingDefinition } from "@thinkbrain/core";
 
 /**
  * Creates a mock gateway with controllable app/workspace settings payloads.
@@ -416,6 +416,305 @@ describe("settingsStore", () => {
       // Default for a key not in loaded or staged.
       expect(store.getState().getEffectiveValue("editor.fontSize")).toBe(16);
     });
+
+    // Falsy values must NOT be replaced by a lower-precedence layer. Each layer
+    // is checked by key presence (`in`), not truthiness, so a staged `false` is
+    // not silently dropped in favor of a saved `true`. These tests pin that
+    // behavior through the store action (which delegates to the shared
+    // `resolveEffectiveValue` helper).
+    it("keeps a staged falsy value over a saved truthy one", async () => {
+      const gateway = createMockGateway(
+        JSON.stringify({
+          version: 1,
+          "editor.lineWrapping": true,
+          "editor.fontSize": 24,
+          "appearance.theme": "dark"
+        })
+      );
+      const store = createSettingsStore(gateway);
+      await store.getState().loadSettings(null);
+
+      store.getState().stageChange("editor.lineWrapping", false);
+      expect(store.getState().getEffectiveValue("editor.lineWrapping")).toBe(false);
+
+      store.getState().stageChange("editor.fontSize", 0);
+      expect(store.getState().getEffectiveValue("editor.fontSize")).toBe(0);
+
+      store.getState().stageChange("appearance.theme", "");
+      expect(store.getState().getEffectiveValue("appearance.theme")).toBe("");
+    });
+
+    it("keeps a loaded falsy value over the default", async () => {
+      // The app settings file explicitly stores falsy values; they must win
+      // over the registry default rather than being treated as "missing".
+      const gateway = createMockGateway(
+        JSON.stringify({
+          version: 1,
+          "editor.lineWrapping": false,
+          "editor.fontSize": 0
+        })
+      );
+      const store = createSettingsStore(gateway);
+      await store.getState().loadSettings(null);
+
+      expect(store.getState().getEffectiveValue("editor.lineWrapping")).toBe(false);
+      expect(store.getState().getEffectiveValue("editor.fontSize")).toBe(0);
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolveEffectiveValue: pure table tests.
+//
+// The store action delegates to this helper, and the settings UI calls it
+// directly during render, so both consumers share one precedence definition.
+// These table tests pin every precedence layer, falsy-value handling, and the
+// "unknown key" / "no definition" edge cases so a future change to the helper
+// cannot silently drift the UI away from the store.
+// ---------------------------------------------------------------------------
+describe("resolveEffectiveValue", () => {
+  // A workspace-scoped definition (so the workspace layer is consulted) and an
+  // app-scoped definition (so it is not), plus an unknown key sentinel.
+  const workspaceDef: SettingDefinition = {
+    key: "root",
+    type: "string",
+    label: "Root",
+    description: "",
+    default: "default-ws",
+    scope: "workspace",
+    section: "fixture.main"
+  };
+  const appDef: SettingDefinition = {
+    key: "view",
+    type: "string",
+    label: "View",
+    description: "",
+    default: "default-app",
+    scope: "app",
+    section: "fixture.main"
+  };
+
+  type Case = {
+    readonly name: string;
+    readonly key: string;
+    readonly staged: Record<string, unknown>;
+    readonly app: Record<string, unknown>;
+    readonly workspace: Record<string, unknown> | null;
+    readonly def: SettingDefinition | undefined;
+    readonly expected: unknown;
+  };
+
+  const cases: readonly Case[] = [
+    // --- Precedence: staged > workspace > app > default ---
+    {
+      name: "staged wins over workspace, app, and default (workspace-scoped)",
+      key: "fixture.root",
+      staged: { "fixture.root": "staged" },
+      app: { "fixture.root": "app" },
+      workspace: { "fixture.root": "ws" },
+      def: workspaceDef,
+      expected: "staged"
+    },
+    {
+      name: "workspace wins over app and default for workspace-scoped key",
+      key: "fixture.root",
+      staged: {},
+      app: { "fixture.root": "app" },
+      workspace: { "fixture.root": "ws" },
+      def: workspaceDef,
+      expected: "ws"
+    },
+    {
+      name: "app wins over default when no staged/workspace value",
+      key: "fixture.root",
+      staged: {},
+      app: { "fixture.root": "app" },
+      workspace: null,
+      def: workspaceDef,
+      expected: "app"
+    },
+    {
+      name: "default used when key absent from every layer",
+      key: "fixture.root",
+      staged: {},
+      app: {},
+      workspace: {},
+      def: workspaceDef,
+      expected: "default-ws"
+    },
+    // --- Scope enforcement: app-scoped key ignores workspace file ---
+    {
+      name: "app-scoped key ignores a workspace override (scope enforcement)",
+      key: "fixture.view",
+      staged: {},
+      app: { "fixture.view": "app" },
+      workspace: { "fixture.view": "ws-should-be-ignored" },
+      def: appDef,
+      expected: "app"
+    },
+    {
+      name: "app-scoped key falls back to default, ignoring workspace file",
+      key: "fixture.view",
+      staged: {},
+      app: {},
+      workspace: { "fixture.view": "ws-should-be-ignored" },
+      def: appDef,
+      expected: "default-app"
+    },
+    {
+      name: "workspace layer skipped when workspaceValues is null",
+      key: "fixture.root",
+      staged: {},
+      app: { "fixture.root": "app" },
+      workspace: null,
+      def: workspaceDef,
+      expected: "app"
+    },
+    // --- Falsy values are honored at every layer ---
+    {
+      name: "staged false is kept over workspace true",
+      key: "fixture.root",
+      staged: { "fixture.root": false },
+      app: { "fixture.root": true },
+      workspace: { "fixture.root": true },
+      def: workspaceDef,
+      expected: false
+    },
+    {
+      name: "staged 0 is kept over app non-zero",
+      key: "fixture.root",
+      staged: { "fixture.root": 0 },
+      app: { "fixture.root": 42 },
+      workspace: null,
+      def: workspaceDef,
+      expected: 0
+    },
+    {
+      name: "staged empty string is kept over app non-empty",
+      key: "fixture.root",
+      staged: { "fixture.root": "" },
+      app: { "fixture.root": "filled" },
+      workspace: null,
+      def: workspaceDef,
+      expected: ""
+    },
+    {
+      name: "workspace false is kept over app true (workspace-scoped)",
+      key: "fixture.root",
+      staged: {},
+      app: { "fixture.root": true },
+      workspace: { "fixture.root": false },
+      def: workspaceDef,
+      expected: false
+    },
+    {
+      name: "app false is kept over default true",
+      key: "fixture.root",
+      staged: {},
+      app: { "fixture.root": false },
+      workspace: null,
+      def: { ...workspaceDef, default: true },
+      expected: false
+    },
+    {
+      name: "default false is returned when key absent everywhere",
+      key: "fixture.root",
+      staged: {},
+      app: {},
+      workspace: {},
+      def: { ...workspaceDef, default: false },
+      expected: false
+    },
+    // --- Unknown key / missing definition ---
+    {
+      name: "unknown key with no definition returns undefined",
+      key: "no.such.key",
+      staged: {},
+      app: {},
+      workspace: null,
+      def: undefined,
+      expected: undefined
+    },
+    {
+      name: "unknown key still resolves from staged when present",
+      key: "no.such.key",
+      staged: { "no.such.key": "staged-unknown" },
+      app: {},
+      workspace: null,
+      def: undefined,
+      expected: "staged-unknown"
+    },
+    {
+      name: "unknown key still resolves from app when present (no definition)",
+      key: "no.such.key",
+      staged: {},
+      app: { "no.such.key": "app-unknown" },
+      workspace: null,
+      def: undefined,
+      expected: "app-unknown"
+    }
+  ];
+
+  for (const c of cases) {
+    it(c.name, () => {
+      expect(resolveEffectiveValue(c.key, c.staged, c.app, c.workspace, c.def)).toBe(c.expected);
+    });
+  }
+
+  it("matches the store action for a registered workspace-scoped key", async () => {
+    // The store action resolves the definition from the registry and delegates
+    // to the same helper. This test guards the wiring: if either path changes
+    // precedence, the two diverge and this test fails.
+    const MODULE_ID = "resolve-fixture";
+    const ROOT = `${MODULE_ID}.root`;
+    const registration = appSettingsRegistry.register({
+      id: MODULE_ID,
+      label: "Resolve fixture",
+      scope: "app",
+      sections: [
+        {
+          id: `${MODULE_ID}.main`,
+          label: "Main",
+          settings: [
+            {
+              key: "root",
+              type: "string",
+              label: "Root",
+              description: "",
+              default: "default-ws",
+              scope: "workspace",
+              section: `${MODULE_ID}.main`
+            }
+          ]
+        }
+      ]
+    });
+    try {
+      const gateway = createMockGateway(
+        null,
+        JSON.stringify({ version: 1, [ROOT]: "ws" })
+      );
+      const store = createSettingsStore(gateway);
+      await store.getState().loadSettings("/notes/work");
+
+      const state = store.getState();
+      const def = appSettingsRegistry.getDefinition(ROOT);
+      // Both paths must agree on the workspace-override layer.
+      expect(store.getState().getEffectiveValue(ROOT)).toBe("ws");
+      expect(
+        resolveEffectiveValue(ROOT, state.stagedChanges, state.appValues, state.workspaceValues, def)
+      ).toBe("ws");
+
+      // And both must agree once a staged value lands.
+      store.getState().stageChange(ROOT, "staged");
+      const state2 = store.getState();
+      expect(store.getState().getEffectiveValue(ROOT)).toBe("staged");
+      expect(
+        resolveEffectiveValue(ROOT, state2.stagedChanges, state2.appValues, state2.workspaceValues, def)
+      ).toBe("staged");
+    } finally {
+      registration.dispose();
+    }
   });
 });
 

@@ -37,14 +37,71 @@ export type BuiltInDesktopPanelId =
   | "properties"
   | "assistant";
 
+/**
+ * First-party panel ids rendered on the left side of the shell.
+ *
+ * Narrow on purpose: shell selection state accepts only these ids so a typo
+ * (`"exlorer"`) is a compile-time error. Extension-owned left ids remain valid
+ * for registry registration/lookup via the wide {@link DesktopPanelId} but are
+ * not selectable shell state until extension selection is implemented.
+ */
+export type BuiltInLeftPanel =
+  | "explorer"
+  | "search"
+  | "source-control"
+  | "tags"
+  | "extensions";
+
+/**
+ * First-party panel ids rendered on the right side of the shell.
+ *
+ * Narrow on purpose: shell selection state accepts only these ids so a typo
+ * (`"propeties"`) is a compile-time error. Extension-owned right ids remain
+ * valid for registry registration/lookup via the wide {@link DesktopPanelId}
+ * but are not selectable shell state until extension selection is implemented.
+ */
+export type BuiltInRightPanel =
+  | "outline"
+  | "backlinks"
+  | "properties"
+  | "assistant";
+
 /** Open panel identifier, including future extension-owned IDs. */
 export type DesktopPanelId = BuiltInDesktopPanelId | (string & {});
 
 /** Activity-bar panel id selected on the left side of the shell. */
-export type LeftPanel = DesktopPanelId;
+export type LeftPanel = BuiltInLeftPanel;
 
 /** Title-bar panel id selected on the right side of the shell. */
-export type RightPanel = DesktopPanelId;
+export type RightPanel = BuiltInRightPanel;
+
+/**
+ * Runtime guard narrowing an arbitrary id to a built-in left panel id.
+ *
+ * Used by shell callbacks that receive a wide string (e.g. `revealPanel`) to
+ * safely feed only valid built-in ids into narrow shell state. Extension-owned
+ * ids are intentionally dropped here — extension selection is not implemented
+ * by the narrow-id maintenance story.
+ */
+export function isBuiltInLeftPanel(id: string): id is BuiltInLeftPanel {
+  return id === "explorer"
+    || id === "search"
+    || id === "source-control"
+    || id === "tags"
+    || id === "extensions";
+}
+
+/**
+ * Runtime guard narrowing an arbitrary id to a built-in right panel id.
+ *
+ * See {@link isBuiltInLeftPanel} for the rationale.
+ */
+export function isBuiltInRightPanel(id: string): id is BuiltInRightPanel {
+  return id === "outline"
+    || id === "backlinks"
+    || id === "properties"
+    || id === "assistant";
+}
 
 /**
  * A button a panel contributes to its own header.

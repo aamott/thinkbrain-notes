@@ -148,32 +148,73 @@ export interface SettingsStoreState {
 // ---------------------------------------------------------------------------
 
 /**
- * Resolves the value a setting currently has: staged, then the workspace
- * override, then the app value, then the definition default.
+ * The single source of truth for effective-value precedence.
  *
- * A workspace override only outranks the app value for a setting that declares
- * `scope: "workspace"`. Workspace settings travel with a vault, so a file that
- * names an app-scoped key must not be able to reach across scopes and change
- * how the app behaves everywhere.
+ * Resolution order: staged > workspace (only for `scope: "workspace"` keys) >
+ * app > definition default. A workspace override only outranks the app value
+ * for a setting that declares `scope: "workspace"`. Workspace settings travel
+ * with a vault, so a file that names an app-scoped key must not be able to
+ * reach across scopes and change how the app behaves everywhere.
+ *
+ * This is a pure function over its inputs — no store, registry, or React
+ * dependency — so it can be shared by the store action, the settings UI, and
+ * the extension settings API without any of them drifting. Falsy values
+ * (`false`, `0`, `""`) are honored at each layer: presence is checked via
+ * `in`, not truthiness, so a staged `false` is not replaced by a saved `true`.
+ *
+ * Args:
+ *   key: The full setting key (e.g. `"appearance.theme"`).
+ *   staged: Pending changes map. A key present here wins outright.
+ *   appValues: Loaded app-scoped values (defaults already merged in by the
+ *     store's loader).
+ *   workspaceValues: Loaded workspace-scoped values, or `null` when no
+ *     workspace is open. Only consulted for `scope: "workspace"` keys.
+ *   definition: The setting's registry definition, used for its `scope` and
+ *     `default`. May be `undefined` for an unknown key, in which case the
+ *     default is `undefined`.
+ *
+ * Returns:
+ *   The effective value, or `undefined` when the key is unknown and absent
+ *   from every layer.
+ */
+export function resolveEffectiveValue(
+  key: string,
+  staged: Record<string, unknown>,
+  appValues: Record<string, unknown>,
+  workspaceValues: Record<string, unknown> | null,
+  definition: SettingDefinition | undefined
+): unknown {
+  if (key in staged) return staged[key];
+  if (
+    definition?.scope === "workspace" &&
+    workspaceValues !== null &&
+    key in workspaceValues
+  ) {
+    return workspaceValues[key];
+  }
+  if (key in appValues) return appValues[key];
+  return definition?.default;
+}
+
+/**
+ * Store-state adapter around {@link resolveEffectiveValue}.
  *
  * Exported so the extension settings API resolves values the same way the
- * settings UI does; two copies of this rule would drift.
+ * settings UI does; two copies of this rule would drift. Prefer calling
+ * {@link resolveEffectiveValue} directly when you already hold the raw maps.
  */
 export function effectiveSettingValue(
   state: Pick<SettingsStoreState, "stagedChanges" | "appValues" | "workspaceValues">,
   definition: SettingDefinition | undefined,
   key: string
 ): unknown {
-  if (key in state.stagedChanges) return state.stagedChanges[key];
-  if (
-    definition?.scope === "workspace" &&
-    state.workspaceValues &&
-    key in state.workspaceValues
-  ) {
-    return state.workspaceValues[key];
-  }
-  if (key in state.appValues) return state.appValues[key];
-  return definition?.default;
+  return resolveEffectiveValue(
+    key,
+    state.stagedChanges,
+    state.appValues,
+    state.workspaceValues,
+    definition
+  );
 }
 
 /**

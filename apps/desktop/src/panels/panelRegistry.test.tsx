@@ -9,9 +9,15 @@ import {
   getDesktopPanelOrUndefined,
   getLeftPanelContributions,
   getRightPanelContributions,
+  isBuiltInLeftPanel,
+  isBuiltInRightPanel,
   renderDesktopPanel,
+  type BuiltInLeftPanel,
+  type BuiltInRightPanel,
   type DesktopPanelContext,
-  type DesktopPanelContribution
+  type DesktopPanelContribution,
+  type LeftPanel,
+  type RightPanel
 } from "./panelRegistry";
 
 const context: DesktopPanelContext = {
@@ -137,5 +143,63 @@ describe("desktop panel registry", () => {
     expect(registry.entriesBySide("right").map((p) => p.id)).toEqual(["right-a", "right-b"]);
     expect(registry.entriesBySide("left").every((p) => p.side === "left")).toBe(true);
     expect(registry.entriesBySide("right").every((p) => p.side === "right")).toBe(true);
+  });
+
+  it("accepts extension-owned string ids for registration and lookup without making them selectable shell state", () => {
+    const registry = createDesktopPanelRegistry([]);
+    const extensionPanel: DesktopPanelContribution = {
+      id: "extension.calendar",
+      label: "Calendar",
+      icon: "▦",
+      side: "left",
+      factory: () => <span>calendar</span>
+    };
+    registry.register(extensionPanel);
+
+    // Wide registry lookup resolves the extension-owned id on the registry it
+    // was registered against. The shared module-level registry does not know
+    // about it, demonstrating that extension lookup is per-registry and does
+    // not leak into shell selection state.
+    expect(registry.get("extension.calendar")?.label).toBe("Calendar");
+    expect(getDesktopPanelOrUndefined("extension.calendar")?.label).toBeUndefined();
+    // The extension id is not a built-in left/right panel, so it cannot narrow
+    // to selectable shell state.
+    expect(isBuiltInLeftPanel("extension.calendar")).toBe(false);
+    expect(isBuiltInRightPanel("extension.calendar")).toBe(false);
+  });
+
+  it("narrows built-in side ids via the type guards", () => {
+    for (const id of ["explorer", "search", "source-control", "tags", "extensions"] as const) {
+      expect(isBuiltInLeftPanel(id)).toBe(true);
+      expect(isBuiltInRightPanel(id)).toBe(false);
+    }
+    for (const id of ["outline", "backlinks", "properties", "assistant"] as const) {
+      expect(isBuiltInRightPanel(id)).toBe(true);
+      expect(isBuiltInLeftPanel(id)).toBe(false);
+    }
+    expect(isBuiltInLeftPanel("outline")).toBe(false);
+    expect(isBuiltInRightPanel("explorer")).toBe(false);
+  });
+
+  // Type-level fixtures: misspelled built-in ids must be rejected by the narrow
+  // shell selection unions. These compile only while the unions stay narrow;
+  // a regression that re-widens `LeftPanel`/`RightPanel` to `DesktopPanelId`
+  // would silence the `@ts-expect-error` directives below.
+  it("rejects misspelled built-in ids at compile time", () => {
+    // @ts-expect-error — "exlorer" is not a valid BuiltInLeftPanel.
+    const _badLeft: LeftPanel = "exlorer";
+    // @ts-expect-error — "propeties" is not a valid BuiltInRightPanel.
+    const _badRight: RightPanel = "propeties";
+    // @ts-expect-error — "outline" is a right panel, not a left panel.
+    const _crossToLeft: BuiltInLeftPanel = "outline";
+    // @ts-expect-error — "explorer" is a left panel, not a right panel.
+    const _crossToRight: BuiltInRightPanel = "explorer";
+
+    // Reference the bindings so they are not flagged as unused.
+    void _badLeft;
+    void _badRight;
+    void _crossToLeft;
+    void _crossToRight;
+    expect(true).toBe(true);
   });
 });
