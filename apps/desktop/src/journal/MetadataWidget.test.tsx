@@ -416,6 +416,22 @@ describe("MetadataWidgetContainer", () => {
     expect(host.textContent).toContain("good · 7");
   });
 
+  it("reads all configured field values including multi-select in the summary", async () => {
+    const host = await mountContainer({
+      contents: note("date: 2026-08-07\nmood: good\nenergy: 7\ncontext: [baking, reading]\n")
+    });
+
+    expect(host.textContent).toContain("good · 7 · baking, reading");
+  });
+
+  it("reads unconfigured field values in the summary alongside configured ones", async () => {
+    const host = await mountContainer({
+      contents: note("date: 2026-08-07\nmood: good\nenergy: 7\nweather: sunny\n")
+    });
+
+    expect(host.textContent).toContain("good · 7 · sunny");
+  });
+
   it("edits the open document instead of the file, changing one key", async () => {
     const applyEdit = vi.fn();
     const host = await mountContainer({

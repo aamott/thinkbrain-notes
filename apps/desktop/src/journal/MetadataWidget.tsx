@@ -169,7 +169,19 @@ export function MetadataWidget({
   // because the dateline's compact controls are half the touch minimum and sit
   // where the soft keyboard would cover them.
   const touch = useCoarsePointer();
-  const shown = [...definitions, ...unconfigured, ...added];
+  // `added` fields are local state — they exist only until a value is typed and
+  // the key reaches the frontmatter. Once it does, the container re-parses the
+  // file and the field arrives via `unconfigured` (or `definitions` if it was a
+  // configured field the entry wasn't showing yet). Without deduplication the
+  // same field renders twice: once from `added` and once from `unconfigured`,
+  // both reading the same `values[id]` and mirroring each other as the user
+  // types.
+  const knownIds = new Set<string>([
+    ...definitions.map((d) => d.id),
+    ...unconfigured.map((d) => d.id)
+  ]);
+  const addedShown = added.filter((field) => !knownIds.has(field.id));
+  const shown = [...definitions, ...unconfigured, ...addedShown];
   const set = shown
     .filter((definition) => values[definition.id] !== undefined)
     .map((definition) => formatValue(values[definition.id]!));
