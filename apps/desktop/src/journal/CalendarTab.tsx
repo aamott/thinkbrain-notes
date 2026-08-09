@@ -25,6 +25,13 @@ import { useRef, useState } from "react";
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 const MAX_DOTS = 3;
 
+/** `3–9 August 2026` becomes `3–9 Aug 2026` where the strip is narrow (D57). */
+const shortenMonths = (title: string): string =>
+  title.replace(
+    /January|February|March|April|May|June|July|August|September|October|November|December/g,
+    (month) => month.slice(0, 3)
+  );
+
 export interface CalendarTabProps {
   readonly view: CalendarView;
   /** Any day inside the span being shown. */
@@ -97,7 +104,9 @@ function DayCell({
             <span key={index} className="h-[5px] w-[5px] rounded-full bg-primary" />
           ))}
           {count > MAX_DOTS && (
-            <span className="text-[0.62rem] text-muted-foreground tabular-nums">
+            // D57: under a 40px cell — a container under 280px — the dots stand
+            // alone. Nothing is lost: the exact count is in the cell's name.
+            <span className="hidden @min-[280px]:inline text-[0.62rem] text-muted-foreground tabular-nums">
               +{count - MAX_DOTS}
             </span>
           )}
@@ -164,19 +173,26 @@ export function CalendarTab({
   const weekdayOrder = Array.from({ length: 7 }, (_unused, index) => WEEKDAYS[(index + weekStartsOn) % 7]!);
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col" aria-label="Journal calendar">
+    <section className="@container flex min-h-0 flex-1 flex-col" aria-label="Journal calendar">
       <div className="flex items-center gap-2 border-b border-border bg-tab-inactive px-2.5 py-2">
-        <h2 className="m-0 text-[0.82rem] font-semibold tabular-nums">{grid.title}</h2>
+        {/* One heading, two spellings: `August 2026` where it fits, `Aug 2026`
+            where it does not. The grid's own name stays long either way. */}
+        <h2 className="m-0 min-w-0 truncate text-[0.82rem] font-semibold tabular-nums">
+          <span className="hidden @sm:inline">{grid.title}</span>
+          <span className="@sm:hidden">{shortenMonths(grid.title)}</span>
+        </h2>
         <div
           role="radiogroup"
           aria-label="Calendar view"
-          className="flex overflow-hidden rounded-small border border-border"
+          className="flex shrink-0 overflow-hidden rounded-small border border-border"
         >
           {(["week", "month"] as const).map((option) => (
             <button
               key={option}
               type="button"
               role="radio"
+              // Named, not read off the glyph: D57 collapses these to `W`/`M`.
+              aria-label={option === "week" ? "Week" : "Month"}
               aria-checked={view === option}
               onClick={() => onViewChange(option)}
               className={`px-2.5 py-0.5 text-xs capitalize cursor-pointer ${
@@ -185,16 +201,25 @@ export function CalendarTab({
                   : "text-muted-foreground"
               }`}
             >
-              {option}
+              <span className="hidden @sm:inline">{option}</span>
+              <span className="@sm:hidden">{option === "week" ? "W" : "M"}</span>
             </button>
           ))}
         </div>
-        <div className="ml-auto flex gap-1">
+        <div className="ml-auto flex shrink-0 gap-1">
           <button type="button" aria-label="Previous" onClick={() => move(view, -1)} className={STRIP_BUTTON}>
             ‹
           </button>
-          <button type="button" onClick={() => onFocusDate(today)} className={STRIP_BUTTON}>
-            Today
+          <button
+            type="button"
+            aria-label="Today"
+            onClick={() => onFocusDate(today)}
+            className={STRIP_BUTTON}
+          >
+            <span className="hidden @sm:inline">Today</span>
+            <span className="@sm:hidden" aria-hidden="true">
+              ◉
+            </span>
           </button>
           <button type="button" aria-label="Next" onClick={() => move(view, 1)} className={STRIP_BUTTON}>
             ›

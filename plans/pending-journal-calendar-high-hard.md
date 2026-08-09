@@ -130,7 +130,7 @@ recorded in the story. Stories may be split further if a subagent would exceed o
 
 ## Status
 
-- ✅ Every product decision closed (D1-D79)
+- ✅ Every product decision closed (D1-D81)
 - 🟨 Story 2 journal data/frontmatter contract — implemented in `packages/core/src/journal/`;
   the unknown-field write round-trip waits on story 3's write path
 - 🟨 Story 3 journal service — create (always new, D18), backfill (D61/D62), listing with
@@ -143,8 +143,8 @@ recorded in the story. Stories may be split further if a subagent would exceed o
   virtualization, previews, the widget write path and search/facets remain
 - 🟨 Story 9 registration — the journal activates as a built-in (`extensions/builtins/journal.tsx`)
   with panel, three commands, settings and the calendar tab placeholder
-- 🟨 Story 7 calendar tab — grid, dots, keyboard and the shared day filter shipped; view-mode
-  persistence, phone layout and metadata predicates remain
+- 🟨 Story 7 calendar tab — grid, dots, keyboard, the shared day filter, D56/D79/D80 view-mode
+  persistence and the D57 phone layout shipped; metadata predicates remain, waiting on D41
 - ⬜ Story 8: mobile refinement
 - 🟨 Platform prerequisites: D68/D69 API additions shipped; D44 editor-header slot, D45
   workspace-scoped settings, and D41 metadata facets remain

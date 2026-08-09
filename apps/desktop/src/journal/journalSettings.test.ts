@@ -29,12 +29,14 @@ describe("journalSettingsSchema", () => {
     });
   });
 
+  // D80: the calendar's view strip writes this key, and D79 persists the view
+  // per workspace — so "the view the calendar opens in" is workspace-scoped.
   it("offers the approved calendar view and week-start options", () => {
     expect(byKey.get("calendarDefaultView")).toMatchObject({
       type: "enum",
       options: ["week", "month"],
       default: "month",
-      scope: "app"
+      scope: "workspace"
     });
     expect(byKey.get("startOfWeek")).toMatchObject({
       type: "enum",

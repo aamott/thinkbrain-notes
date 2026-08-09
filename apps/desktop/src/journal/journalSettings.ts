@@ -55,10 +55,13 @@ export const journalSettingsSchema: DesktopExtensionSettingsSchema = {
           type: "enum",
           options: ["week", "month"],
           default: "month",
-          scope: "app",
+          // Workspace-scoped (D80): the view strip writes this key, and D79
+          // persists the view per workspace. One key rather than two keeps the
+          // Settings page honest — after switching to week, it opens in week.
+          scope: "workspace",
           section: SECTION,
           label: "Default calendar view",
-          description: "View the calendar opens in."
+          description: "View the calendar opens in. Switching views in the calendar updates this."
         },
         {
           key: "startOfWeek",

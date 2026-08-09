@@ -556,6 +556,22 @@ describe("mixed-scope modules (D45)", () => {
     expect(store.getState().getEffectiveValue(ROOT)).toBe("diary");
   });
 
+  it("keeps a workspace-scoped edit staged when there is no workspace to write it to", async () => {
+    // Nothing can persist it yet, so dropping it from `stagedChanges` would lose
+    // the edit outright and report success while doing so.
+    const gateway = createMockGateway(null, null);
+    const store = createSettingsStore(gateway);
+    await store.getState().loadSettings(null);
+
+    store.getState().stageChange(ROOT, "diary");
+    await store.getState().saveSettings();
+
+    expect(gateway.writtenWorkspaceSettings).toHaveLength(0);
+    expect(store.getState().stagedChanges[ROOT]).toBe("diary");
+    expect(store.getState().isDirty).toBe(true);
+    expect(store.getState().getEffectiveValue(ROOT)).toBe("diary");
+  });
+
   it("keeps a workspace override out of the app settings file", async () => {
     const gateway = createMockGateway(null, JSON.stringify({ version: 1 }));
     const store = createSettingsStore(gateway);

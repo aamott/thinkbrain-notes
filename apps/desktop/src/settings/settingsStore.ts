@@ -417,9 +417,17 @@ export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettin
         // not covered by those writes, so blanking `stagedChanges` wholesale
         // would drop them silently and leave `isDirty` false, hiding the loss.
         // A key re-staged mid-flight with a different value keeps its new value.
+        //
+        // A workspace-scoped edit made with no workspace open has nowhere to go:
+        // it stays staged rather than being cleared, so the value survives until
+        // a workspace opens instead of vanishing on a "successful" save.
+        const persisted = new Set<string>([
+          ...(appSerialized !== null ? Object.keys(appStaged) : []),
+          ...(workspaceSerialized !== null ? Object.keys(workspaceStaged) : [])
+        ]);
         const remaining = { ...get().stagedChanges };
         for (const [key, savedValue] of Object.entries(staged)) {
-          if (key in remaining && Object.is(remaining[key], savedValue)) {
+          if (persisted.has(key) && key in remaining && Object.is(remaining[key], savedValue)) {
             delete remaining[key];
           }
         }

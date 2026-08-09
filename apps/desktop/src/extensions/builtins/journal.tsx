@@ -120,6 +120,11 @@ export function activateJournal(context: DesktopExtensionContext): void {
         service={service}
         weekStartsOn={context.settings.get<string>("startOfWeek") === "monday" ? 1 : 0}
         initialView={context.settings.get<string>("calendarDefaultView") === "week" ? "week" : "month"}
+        // D79/D80: the view persists per workspace; the date deliberately does
+        // not, since the month you browsed to is an accident of browsing.
+        onViewChange={(view) => {
+          void context.settings.set("calendarDefaultView", view);
+        }}
       />
     )
   });

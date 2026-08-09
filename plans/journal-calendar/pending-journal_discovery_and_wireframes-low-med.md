@@ -424,6 +424,19 @@ opens on today's month. The view mode is a preference; the date last browsed to 
 of browsing, and landing in March when it is August is a daily annoyance. `Today` stays one
 click away.
 
+**D80.** Implements D79 without a fifth setting: `calendarDefaultView` becomes
+workspace-scoped and the calendar's view strip writes it. "The view the calendar opens in" and
+"the view this workspace last used" are the same fact, and a hidden second key would need a
+platform feature that does not exist while leaving the visible setting lying about what the
+calendar does. Supersedes D64's `scope: "app"` for this one setting; the other three are
+unchanged.
+
+**D81.** `context.settings.set` persists instead of staging. An extension has no Save bar to
+press, so a staged write evaporated on quit unless the user happened to have autosave on. The
+key is still validated synchronously — a foreign key throws for a caller that never awaits —
+while the write itself is asynchronous and never rejects: a failed write is logged and the
+value stays effective for the session.
+
 ## Checkpoint table
 
 Every artifact and decision batch was approved by the product owner per D34, across

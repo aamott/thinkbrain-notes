@@ -48,7 +48,8 @@ This story does NOT own:
 
 - Popout placement, return path, bottom-nav subset, or hamburger — those belong to `plans/mobile/pending-responsive_layout-low-med.md`. Coordinate; do not duplicate.
 - Bespoke mobile navigation, a private bottom bar, or a custom back gesture (D26).
-- Calendar tab behavior on a phone (D57).
+- Calendar tab behavior on a phone (D57) — shipped 2026-08-08 in `CalendarTab.tsx` via
+  container queries; do not re-implement it here.
 
 ## Goal
 

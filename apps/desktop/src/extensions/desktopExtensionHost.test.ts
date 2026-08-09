@@ -170,12 +170,10 @@ describe("desktop extension host", () => {
     expect(appSettingsRegistry.getDefinition("extension-test-extension.nested.value")?.section)
       .toBe("extension-test-extension.section");
 
-    context?.settings.set("enabled", true);
-    context?.settings.set("nested.value", 2);
-    expect(useSettingsStore.getState().stagedChanges).toEqual({
-      "extension-test-extension.enabled": true,
-      "extension-test-extension.nested.value": 2
-    });
+    // Where the value lands is D81's business, covered in
+    // `desktopExtensionHostSettings.test.ts`; here it only has to be readable.
+    await context?.settings.set("enabled", true);
+    await context?.settings.set("nested.value", 2);
     expect(context?.settings.get<boolean>("enabled")).toBe(true);
     expect(context?.settings.get<number>("nested.value")).toBe(2);
     expect(changes).toEqual([[true, false]]);

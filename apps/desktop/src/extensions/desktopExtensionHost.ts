@@ -85,7 +85,13 @@ export type DesktopSettingChangeListener = (
 export interface DesktopExtensionSettings {
   registerSchema(schema: DesktopExtensionSettingsSchema): Disposable;
   get<T = unknown>(key: string): T | undefined;
-  set(key: string, value: unknown): void;
+  /**
+   * Writes and persists a setting (D81).
+   *
+   * Rejects nothing: a failed write is logged and the value stays effective for
+   * the session. Awaiting is optional — the key is validated before returning.
+   */
+  set(key: string, value: unknown): Promise<void>;
   onDidChange(key: string, listener: DesktopSettingChangeListener): Disposable;
 }
 
@@ -321,9 +327,12 @@ function createDesktopExtensionContext(
       return effectiveSettingValue(state, appSettingsRegistry.getDefinition(fullKey), fullKey) as T | undefined;
     },
     set: (key, value) => {
+      // Validates synchronously and persists asynchronously (D81): a foreign key
+      // is a programming error and must fail even for a caller that never
+      // awaits, while the write itself has no Save bar to wait for.
       assertActive();
       const fullKey = fullSettingKey(context.extensionId, key);
-      useSettingsStore.getState().stageChange(fullKey, value);
+      return useSettingsStore.getState().setSettingImmediately(fullKey, value);
     },
     onDidChange: (key, listener) => {
       assertActive();

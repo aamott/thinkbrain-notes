@@ -119,7 +119,7 @@ describe("selecting a day", () => {
     const onViewChange = vi.fn();
     const host = await render({ onViewChange });
 
-    const week = [...host.querySelectorAll("button")].find((b) => b.textContent === "week");
+    const week = host.querySelector<HTMLButtonElement>('button[aria-label="Week"]');
     await act(async () => week?.click());
 
     expect(onViewChange).toHaveBeenCalledWith("week");
@@ -129,10 +129,49 @@ describe("selecting a day", () => {
     const onFocusDate = vi.fn();
     const host = await render({ focusDate: date("2026-03-02"), onFocusDate });
 
-    const today = [...host.querySelectorAll("button")].find((b) => b.textContent === "Today");
+    const today = host.querySelector<HTMLButtonElement>('button[aria-label="Today"]');
     await act(async () => today?.click());
 
     expect(onFocusDate).toHaveBeenCalledWith(date("2026-08-12"));
+  });
+});
+
+describe("phone layout (D57)", () => {
+  const labelled = (host: HTMLElement, label: string): HTMLButtonElement => {
+    const found = host.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
+    if (!found) throw new Error(`No control labelled "${label}"`);
+    return found;
+  };
+
+  // The strip collapses to `W`/`M` and `Today` loses its word, so the accessible
+  // name has to come from the label, not from whichever glyph fits.
+  it("names the view controls independently of the text that fits", async () => {
+    const host = await render();
+
+    expect(labelled(host, "Week").getAttribute("role")).toBe("radio");
+    expect(labelled(host, "Month").getAttribute("role")).toBe("radio");
+    expect(labelled(host, "Today")).toBeDefined();
+  });
+
+  it("keeps both views selectable when the strip is collapsed", async () => {
+    const onViewChange = vi.fn();
+    const host = await render({ onViewChange });
+
+    await act(async () => labelled(host, "Week").click());
+
+    expect(onViewChange).toHaveBeenCalledWith("week");
+  });
+
+  it("drops the +N under a 40px cell while the count stays in the name", async () => {
+    const host = await render();
+    const august7 = cell(host, "Fri, 7");
+    const overflow = [...august7.querySelectorAll("span")].find(
+      (span) => span.children.length === 0 && span.textContent?.startsWith("+")
+    );
+
+    // Seven cells under 40px is a container under 280px; below that only dots.
+    expect(overflow?.className).toContain("@min-[280px]:inline");
+    expect(august7.getAttribute("aria-label")).toBe("Fri, 7, 8 journal entries");
   });
 });
 
