@@ -20,10 +20,10 @@ import type {
  * Internal resolved definition: identical to `SettingDefinition` but with the
  * key guaranteed to be the full `moduleId.key` form and `portable` defaulted.
  */
-interface ResolvedDefinition extends SettingDefinition {
+type ResolvedDefinition = SettingDefinition & {
   readonly key: string;
   readonly portable: boolean;
-}
+};
 
 /** A module plus its flattened, resolved definitions for quick lookup. */
 interface RegisteredModule {
@@ -290,11 +290,103 @@ function resolveDefinition(
   moduleId: string,
   def: SettingDefinition
 ): ResolvedDefinition {
+  assertValidDefinition(def);
+
   return {
     ...def,
     key: `${moduleId}.${def.key}`,
     portable: def.portable ?? def.type !== "path"
   };
+}
+
+/**
+ * Validates the parts of a definition that can be supplied by untrusted
+ * extension or manifest data despite the compile-time schema types.
+ */
+function assertValidDefinition(def: SettingDefinition): void {
+  switch (def.type) {
+    case "boolean":
+      assertDefaultType(def, typeof def.default === "boolean", "a boolean");
+      return;
+    case "string":
+      assertDefaultType(def, typeof def.default === "string", "a string");
+      return;
+    case "number":
+      assertDefaultType(
+        def,
+        typeof def.default === "number" && Number.isFinite(def.default),
+        "a finite number"
+      );
+      return;
+    case "path":
+      assertDefaultType(
+        def,
+        def.default === null || typeof def.default === "string",
+        "a string or null"
+      );
+      return;
+    case "enum":
+      assertDefaultType(def, typeof def.default === "string", "a string");
+      assertValidEnumDefinition(def);
+      return;
+    default:
+      return assertNeverDefinition(def);
+  }
+}
+
+/** Throws when a definition's default is not valid for its declared type. */
+function assertDefaultType(
+  def: SettingDefinition,
+  isValid: boolean,
+  expected: string
+): void {
+  if (!isValid) {
+    throw new Error(
+      `Invalid default for setting "${def.key}": expected ${expected} for type "${def.type}", received ${describeValue(def.default)}.`
+    );
+  }
+}
+
+/** Enforces the runtime requirements specific to enum definitions. */
+function assertValidEnumDefinition(
+  def: Extract<SettingDefinition, { readonly type: "enum" }>
+): void {
+  if (!Array.isArray(def.options)) {
+    throw new Error(
+      `Invalid enum setting "${def.key}": options must be a non-empty array.`
+    );
+  }
+  if (def.options.length === 0) {
+    throw new Error(
+      `Invalid enum setting "${def.key}": options must not be empty.`
+    );
+  }
+  if (def.options.some((option) => typeof option !== "string")) {
+    throw new Error(
+      `Invalid enum setting "${def.key}": every option must be a string.`
+    );
+  }
+  if (!def.options.includes(def.default)) {
+    throw new Error(
+      `Invalid enum setting "${def.key}": default "${def.default}" is not one of [${def.options.join(", ")}].`
+    );
+  }
+}
+
+/** Describes a dynamic value without relying on serialization. */
+function describeValue(value: unknown): string {
+  if (value === null) return "null";
+  if (typeof value === "number" && !Number.isFinite(value)) {
+    return String(value);
+  }
+  return typeof value;
+}
+
+/** Compile-time and runtime guard for a setting type not handled above. */
+function assertNeverDefinition(def: never): never {
+  throw new Error(
+    `Invalid setting definition type "${String((def as { type?: unknown }).type)}".`
+  );
 }
 
 /**

@@ -38,14 +38,14 @@ exhaustive when a new `SettingType` is added.
 
 ## Acceptance criteria
 
-- [ ] TypeScript rejects defaults whose type is incompatible with the declared setting
+- [x] TypeScript rejects defaults whose type is incompatible with the declared setting
       type; runtime registration also rejects untrusted/dynamic definitions.
-- [ ] Enum definitions require at least one allowed option at registration and cannot
+- [x] Enum definitions require at least one allowed option at registration and cannot
       declare a default outside that set.
-- [ ] `checkType` is compile-time exhaustive; no unknown setting type silently passes.
-- [ ] `path` defaults may remain `null` and validate consistently with the existing
+- [x] `checkType` is compile-time exhaustive; no unknown setting type silently passes.
+- [x] `path` defaults may remain `null` and validate consistently with the existing
       `path` control contract.
-- [ ] Existing built-in modules and dynamic parse/serialize tests pass unchanged in
+- [x] Existing built-in modules and dynamic parse/serialize tests pass unchanged in
       behavior for valid definitions.
 
 ## Manual checks

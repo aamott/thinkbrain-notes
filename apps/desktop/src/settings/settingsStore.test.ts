@@ -484,6 +484,15 @@ describe("resolveEffectiveValue", () => {
     scope: "workspace",
     section: "fixture.main"
   };
+  const booleanWorkspaceDef: Extract<SettingDefinition, { type: "boolean" }> = {
+    key: "root",
+    type: "boolean",
+    label: "Root",
+    description: "",
+    default: false,
+    scope: "workspace",
+    section: "fixture.main"
+  };
   const appDef: SettingDefinition = {
     key: "view",
     type: "string",
@@ -613,7 +622,7 @@ describe("resolveEffectiveValue", () => {
       staged: {},
       app: { "fixture.root": false },
       workspace: null,
-      def: { ...workspaceDef, default: true },
+      def: { ...booleanWorkspaceDef, default: true },
       expected: false
     },
     {
@@ -622,7 +631,7 @@ describe("resolveEffectiveValue", () => {
       staged: {},
       app: {},
       workspace: {},
-      def: { ...workspaceDef, default: false },
+      def: booleanWorkspaceDef,
       expected: false
     },
     // --- Unknown key / missing definition ---

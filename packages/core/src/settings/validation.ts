@@ -112,8 +112,15 @@ function checkType(
       }
       return undefined;
     default:
-      return undefined;
+      return assertNeverDefinition(def);
   }
+}
+
+/** Ensures adding a setting type requires a corresponding type check branch. */
+function assertNeverDefinition(def: never): never {
+  throw new Error(
+    `Unhandled setting type "${String((def as { type?: unknown }).type)}".`
+  );
 }
 
 /** Verifies a number value respects `min`/`max` bounds (inclusive). */

@@ -21,6 +21,20 @@ function registryWithBuiltIns(): SettingsRegistry {
   return registry;
 }
 
+/** Wraps a dynamic definition as an extension schema for runtime guard tests. */
+function moduleWithDynamicDefinition(definition: unknown): SettingsModule {
+  return {
+    id: "schema-safety",
+    label: "Schema safety",
+    scope: "app",
+    sections: [{
+      id: "schema-safety.section",
+      label: "Schema safety",
+      settings: [definition]
+    }]
+  } as unknown as SettingsModule;
+}
+
 describe("settings registry", () => {
   it("registers modules and exposes them via getAllModules/getModule", () => {
     const registry = registryWithBuiltIns();
@@ -81,6 +95,70 @@ describe("settings registry", () => {
         sections: []
       })).toThrow("Invalid settings module id");
     }
+  });
+
+  it("rejects a dynamic definition with a default of the wrong type", () => {
+    const registry = createSettingsRegistry();
+
+    expect(() => registry.register(moduleWithDynamicDefinition({
+      key: "value",
+      type: "number",
+      default: "16",
+      scope: "app",
+      section: "schema-safety.section",
+      label: "Value",
+      description: "A dynamically supplied value."
+    }))).toThrow(/Invalid default.*finite number.*received string/);
+  });
+
+  it("rejects enum definitions with missing or empty options", () => {
+    const missingOptions = {
+      key: "value",
+      type: "enum",
+      default: "one",
+      scope: "app",
+      section: "schema-safety.section",
+      label: "Value",
+      description: "A dynamically supplied value."
+    };
+    const emptyOptions = { ...missingOptions, options: [] };
+
+    expect(() => createSettingsRegistry().register(
+      moduleWithDynamicDefinition(missingOptions)
+    )).toThrow(/options must be a non-empty array/);
+    expect(() => createSettingsRegistry().register(
+      moduleWithDynamicDefinition(emptyOptions)
+    )).toThrow(/options must not be empty/);
+  });
+
+  it("rejects an enum default that is not one of its options", () => {
+    const registry = createSettingsRegistry();
+
+    expect(() => registry.register(moduleWithDynamicDefinition({
+      key: "value",
+      type: "enum",
+      options: ["one", "two"],
+      default: "three",
+      scope: "app",
+      section: "schema-safety.section",
+      label: "Value",
+      description: "A dynamically supplied value."
+    }))).toThrow(/default "three" is not one of \[one, two\]/);
+  });
+
+  it("accepts null as a path default", () => {
+    const registry = createSettingsRegistry();
+    registry.register(moduleWithDynamicDefinition({
+      key: "value",
+      type: "path",
+      default: null,
+      scope: "app",
+      section: "schema-safety.section",
+      label: "Value",
+      description: "A dynamically supplied value."
+    }));
+
+    expect(registry.getDefinition("schema-safety.value")?.default).toBeNull();
   });
 
   it("disposes exactly one module, releases its sections, and allows re-registration", () => {
