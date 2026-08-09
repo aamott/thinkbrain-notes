@@ -140,7 +140,36 @@ export function createJournalService(options: JournalServiceOptions): JournalSer
     return { entries, undated };
   };
 
-  const createEntry = async (date?: JournalDate): Promise<string> => {
+  /**
+   * Paths this session has written, which a listing may not report yet.
+   *
+   * `listNotes` is a directory scan and `createNote` is a separate native call;
+   * on the synced folders this app targets — OneDrive, Syncthing — the scan can
+   * lag the write. Remembering what we wrote is the only thing available that
+   * does not depend on the filesystem agreeing with itself.
+   */
+  const writtenPaths = new Set<string>();
+  const writtenByDay = new Map<string, string>();
+
+  /**
+   * Runs entry creation one at a time.
+   *
+   * Two "Today" clicks in quick succession would otherwise both list, both find
+   * nothing, and both write.
+   */
+  let tail: Promise<unknown> = Promise.resolve();
+  const serialize = <T>(work: () => Promise<T>): Promise<T> => {
+    const next = tail.then(work, work);
+    tail = next.then(
+      () => undefined,
+      () => undefined
+    );
+    return next;
+  };
+
+  const createEntry = (date?: JournalDate): Promise<string> => serialize(() => create(date));
+
+  const create = async (date?: JournalDate): Promise<string> => {
     const folder = requireRoot();
     const when = now();
     const entryDate = date ?? toJournalDate(when);
@@ -152,7 +181,9 @@ export function createJournalService(options: JournalServiceOptions): JournalSer
       // The clock, not the supplied date: backfilling picks the day, not the
       // minute the user happened to write it (D61).
       minuteOfDay: minuteOfDay(when),
-      taken: notes.map((note) => note.relativePath)
+      // Includes what this session has written but the listing may not show
+      // yet, or two entries a minute apart would collide on the same name.
+      taken: [...notes.map((note) => note.relativePath), ...writtenPaths]
     });
 
     const frontmatter = buildNewEntryFrontmatter(entryDate);
@@ -162,24 +193,29 @@ export function createJournalService(options: JournalServiceOptions): JournalSer
       relativePath,
       `---\ndate: ${frontmatter.date}\n---\n\n`
     );
+    writtenPaths.add(relativePath);
+    writtenByDay.set(formatJournalDate(entryDate), relativePath);
     await workspace.openNote(relativePath);
     return relativePath;
   };
 
-  const openToday = async (): Promise<string> => {
+  const openToday = (): Promise<string> => serialize(async () => {
     const today = formatJournalDate(toJournalDate(now()));
     const { entries } = await listEntries();
     const todays = entries.filter(
       (entry) => formatJournalDate(entry.ref.date) === today
     );
 
-    // `createEntry` opens what it creates, so opening again here would put the
-    // same note through the tab machinery twice.
-    const existing = todays.at(-1)?.relativePath;
-    if (existing === undefined) return createEntry();
+    // The listing first, then what this session wrote: a directory scan can lag
+    // a write it has already accepted, and answering that with a second entry
+    // for the same day is the one outcome worse than being slow.
+    const existing = todays.at(-1)?.relativePath ?? writtenByDay.get(today);
+    // `create` opens what it makes, so opening again here would put the same
+    // note through the tab machinery twice.
+    if (existing === undefined) return create();
     await workspace.openNote(existing);
     return existing;
-  };
+  });
 
   const openEntry = async (relativePath: string): Promise<void> => {
     await workspace.openNote(relativePath);

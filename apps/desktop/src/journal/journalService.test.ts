@@ -228,3 +228,75 @@ describe("first-line previews", () => {
     expect(await service.readPreview("journal/x.md")).toBeNull();
   });
 });
+
+describe("a listing that has not caught up", () => {
+  /**
+   * `listNotes` is a directory scan and `createNote` is a separate native call.
+   * On the synced folders this app targets — OneDrive, Syncthing — a listing can
+   * lag a write it has already accepted, and the journal must not respond by
+   * writing a second entry for the same day.
+   */
+  const stale = (options: { now?: () => Date } = {}) => {
+    const listed: ExtensionNote[] = [];
+    const created: string[] = [];
+    const opened: string[] = [];
+    const workspace = {
+      rootPath: () => "/vault",
+      // Deliberately never reports what was written: the worst case, not a race
+      // window that happens to be narrow today.
+      listNotes: vi.fn(async () => [...listed]),
+      createNote: vi.fn(async (path: string) => {
+        created.push(path);
+      }),
+      openNote: vi.fn(async (path: string) => {
+        opened.push(path);
+      }),
+      readNote: vi.fn(async () => "")
+    };
+    const service = createJournalService({
+      workspace: workspace as never,
+      root: () => "journal",
+      now: options.now ?? at("2026-08-07T13:07:30")
+    });
+    return { service, created, opened };
+  };
+
+  it("opens the entry it just made rather than making another", async () => {
+    const { service, created, opened } = stale();
+
+    const first = await service.createEntry();
+    const second = await service.openToday();
+
+    expect(created).toHaveLength(1);
+    expect(second).toBe(first);
+    expect(opened.at(-1)).toBe(first);
+  });
+
+  it("gives a same-minute second entry its own name", async () => {
+    const { service, created } = stale();
+
+    await service.createEntry();
+    await service.createEntry();
+
+    expect(created).toHaveLength(2);
+    expect(created[0]).not.toBe(created[1]);
+  });
+
+  it("answers two rapid Today clicks with one entry", async () => {
+    const { service, created } = stale();
+
+    const [first, second] = await Promise.all([service.openToday(), service.openToday()]);
+
+    expect(created).toHaveLength(1);
+    expect(first).toBe(second);
+  });
+
+  it("still creates a fresh entry for a different day", async () => {
+    const { service, created } = stale();
+
+    await service.createEntry();
+    await service.createEntry({ year: 2026, month: 8, day: 6 });
+
+    expect(created).toHaveLength(2);
+  });
+});
