@@ -12,6 +12,9 @@ import { JournalError, type JournalListing, type JournalService } from "./journa
  * file owns the parts that need one.
  */
 
+/** How many entries get a preview before virtualization exists to scope it. */
+const PREVIEW_LIMIT = 60;
+
 export interface JournalPanelContainerProps {
   readonly service: JournalService;
   /** False until the platform index exists; disables search and facets (D41). */
@@ -33,6 +36,7 @@ export function JournalPanelContainer({
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
   const [expandedUndated, setExpandedUndated] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
+  const [previews, setPreviews] = useState<ReadonlyMap<string, string>>(new Map());
 
   /** Reads the folder without touching state, so the effect owns when to apply it. */
   const read = useCallback(async (): Promise<{
@@ -65,6 +69,32 @@ export function JournalPanelContainer({
     };
   }, [read, reloadToken]);
 
+  // First lines are read after the list is on screen, newest first and capped:
+  // the rows must never wait on file reads, and a ten-year journal must never
+  // read ten years of files to draw one screen.
+  useEffect(() => {
+    if (!listing) return;
+    let cancelled = false;
+    const wanted = listing.entries
+      .slice(-PREVIEW_LIMIT)
+      .reverse()
+      .map((entry) => entry.relativePath);
+
+    void (async () => {
+      const loaded = new Map<string, string>();
+      for (const relativePath of wanted) {
+        const preview = await service.readPreview(relativePath);
+        if (cancelled) return;
+        if (preview !== null) loaded.set(relativePath, preview);
+      }
+      if (!cancelled) setPreviews(loaded);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [listing, service]);
+
   const reload = (): void => setReloadToken((token) => token + 1);
 
   const view = buildJournalView({
@@ -75,7 +105,7 @@ export function JournalPanelContainer({
     selectedDay: null,
     activeFilterCount: 0,
     matchingPaths: null,
-    previews: new Map()
+    previews
   });
 
   const toggle = (key: string): void => {

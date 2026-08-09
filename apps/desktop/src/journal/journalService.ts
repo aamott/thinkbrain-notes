@@ -42,15 +42,18 @@ export interface JournalListing {
 
 export interface JournalService {
   /**
-   * Creates a new entry and returns its path.
+   * Creates a new entry, opens it, and returns its path.
    *
    * Always a new file, never an append (D18). The filename carries the current
-   * clock time even when `date` is in the past (D61).
+   * clock time even when `date` is in the past (D61). It opens because the
+   * point of creating an entry is to write in it (D1).
    */
   createEntry(date?: JournalDate): Promise<string>;
   listEntries(): Promise<JournalListing>;
   /** Opens an entry the popout listed, as an ordinary editor tab (D9). */
   openEntry(relativePath: string): Promise<void>;
+  /** First line of an entry's prose, or `null` when it has none. */
+  readPreview(relativePath: string): Promise<string | null>;
   /** Opens today's most recent entry, creating one when today has none. */
   openToday(): Promise<string>;
 }
@@ -159,6 +162,7 @@ export function createJournalService(options: JournalServiceOptions): JournalSer
       relativePath,
       `---\ndate: ${frontmatter.date}\n---\n\n`
     );
+    await workspace.openNote(relativePath);
     return relativePath;
   };
 
@@ -169,14 +173,38 @@ export function createJournalService(options: JournalServiceOptions): JournalSer
       (entry) => formatJournalDate(entry.ref.date) === today
     );
 
-    const target = todays.at(-1)?.relativePath ?? (await createEntry());
-    await workspace.openNote(target);
-    return target;
+    // `createEntry` opens what it creates, so opening again here would put the
+    // same note through the tab machinery twice.
+    const existing = todays.at(-1)?.relativePath;
+    if (existing === undefined) return createEntry();
+    await workspace.openNote(existing);
+    return existing;
   };
 
   const openEntry = async (relativePath: string): Promise<void> => {
     await workspace.openNote(relativePath);
   };
 
-  return { createEntry, listEntries, openEntry, openToday };
+  /**
+   * The entry's first line of prose, for the list.
+   *
+   * Read on demand, never cached here: the popout asks only for rows it is
+   * about to show, and a stale preview would outlive the file it came from.
+   */
+  const readPreview = async (relativePath: string): Promise<string | null> => {
+    try {
+      const contents = await workspace.readNote(relativePath);
+      const body = contents.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "");
+      const line = body
+        .split(/\r?\n/)
+        .map((candidate) => candidate.trim())
+        .find((candidate) => candidate.length > 0);
+      return line ?? null;
+    } catch {
+      // A preview is a nicety; failing to read one must not empty the list.
+      return null;
+    }
+  };
+
+  return { createEntry, listEntries, openEntry, openToday, readPreview };
 }

@@ -6,9 +6,10 @@ Shipped: `journalViewModel.ts` (all fourteen states, pure), `JournalPanel.tsx` (
 `JournalPanelContainer.tsx` (state + service), `MetadataWidget.tsx`, and registration through
 `extensions/builtins/journal.tsx`.
 
-Remaining: list virtualization (D13), lazy first-line previews, the widget's write path and its
-editor-header registration, search/facets (waiting on D41), collapse persistence (D53), and the
-two shell affordances noted below.
+Remaining: list virtualization (D13), the widget's write path and its editor-header
+registration, search/facets (waiting on D41), collapse persistence (D53), and the two shell
+affordances noted below. First-line previews now load after paint, newest 60 first — scoping
+them to the visible range waits on virtualization.
 
 ## Epic
 

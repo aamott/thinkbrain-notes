@@ -33,6 +33,7 @@ const service = (overrides: Partial<JournalService> = {}): JournalService => ({
   createEntry: async () => "journal/2026-08-07-1900.md",
   openEntry: async () => undefined,
   openToday: async () => "journal/2026-08-07-1802.md",
+  readPreview: async () => null,
   ...overrides
 });
 
@@ -154,5 +155,26 @@ describe("journal panel container", () => {
 
     expect(host.textContent).toContain("Can't read the journal folder.");
     errors.mockRestore();
+  });
+});
+
+describe("first-line previews", () => {
+  it("shows each entry's first line once it has been read", async () => {
+    const readPreview = vi.fn(async () => "Bread needed more salt.");
+    const host = await mount({ service: service({ readPreview }) });
+
+    await act(async () => {});
+
+    expect(host.textContent).toContain("Bread needed more salt.");
+    expect(readPreview).toHaveBeenCalledWith("journal/2026-08-07-1802.md");
+  });
+
+  it("draws the rows before any preview has loaded", async () => {
+    // A slow disk must not delay the list itself.
+    const readPreview = vi.fn(() => new Promise<string | null>(() => undefined));
+    const host = await mount({ service: service({ readPreview }) });
+
+    expect(host.textContent).toContain("Fri 7");
+    expect(host.textContent).not.toContain("late");
   });
 });

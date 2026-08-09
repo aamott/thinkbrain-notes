@@ -193,3 +193,38 @@ describe("failures", () => {
     await expect(service.listEntries()).rejects.toThrow("Can't read the journal folder.");
   });
 });
+
+describe("creating opens what it created", () => {
+  it("opens the new entry, because the point of creating one is to write in it", async () => {
+    const { service, opened } = setup();
+
+    const created = await service.createEntry();
+
+    expect(opened).toEqual([created]);
+  });
+});
+
+describe("first-line previews", () => {
+  it("returns the first line of prose, skipping the frontmatter", async () => {
+    const { service, workspace } = setup();
+    workspace.readNote.mockResolvedValue(
+      "---\ndate: 2026-08-07\n---\n\nBread needed more salt.\n"
+    );
+
+    expect(await service.readPreview("journal/x.md")).toBe("Bread needed more salt.");
+  });
+
+  it("returns null for an entry with no prose yet", async () => {
+    const { service, workspace } = setup();
+    workspace.readNote.mockResolvedValue("---\ndate: 2026-08-07\n---\n\n");
+
+    expect(await service.readPreview("journal/x.md")).toBeNull();
+  });
+
+  it("returns null rather than failing when the note cannot be read", async () => {
+    const { service, workspace } = setup();
+    workspace.readNote.mockRejectedValue(new Error("gone"));
+
+    expect(await service.readPreview("journal/x.md")).toBeNull();
+  });
+});
