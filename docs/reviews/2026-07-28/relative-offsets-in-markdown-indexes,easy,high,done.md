@@ -1,5 +1,0 @@
-- name: Missing Absolute Positions for Tasks and Wiki Links
-- file: /media/adam/extex/projects/thinkbrain-notes/packages/core/src/markdown.ts
-- lines: 38-87
-- description: The `extractWikiLinks` and `extractMarkdownTasks` functions do not capture the absolute character offset of the matched elements. For tasks, they only capture line numbers. For wiki links, `position: match.index` is used, which is relative to the `maskedMarkdown` string and does not capture the end position. This limits the ability of the editor to accurately replace or highlight these elements. We should add `startOffset` and `endOffset` to `MarkdownTask` and ensure `WikiLink` has accurate absolute offsets based on the original unmasked string (e.g. maybe don't use `maskedMarkdown` for positions, or map offsets back).
-- verification: Verified by checking `packages/core/src/markdown.ts`.

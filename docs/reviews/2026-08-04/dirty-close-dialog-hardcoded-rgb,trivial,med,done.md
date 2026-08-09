@@ -1,5 +1,0 @@
-- name: DirtyCloseDialog overlay uses a hardcoded RGB color instead of a --tn-* token
-- file: /media/adam/extex/projects/thinkbrain-notes/apps/desktop/src/shell/DirtyCloseDialog.tsx
-- lines: 22
-- description: The modal overlay is styled with `bg-[rgb(0_0_0_/_42%)]` (line 22). The desktop src AGENTS.md styling rule requires "Tailwind v4 via `--tn-*` CSS tokens defined in `@thinkbrain/ui`" and the project's core guidance forbids hardcoded colors. Every other surface in the reviewed settings files uses semantic tokens (`bg-background`, `bg-surface`, `bg-popover`, `text-destructive`, `border-border`, etc.); this is the only hardcoded RGB value in the reviewed set. It also will not adapt to a potential light-theme overlay opacity convention. Replace with a token-backed utility (e.g. a `bg-overlay`/`bg-scrim` token if defined, or `bg-foreground/40` to stay within the token palette).
-- verification: Read DirtyCloseDialog.tsx in full. Confirmed line 22 is the only `rgb(...)` literal in the reviewed files; grepped the other settings files for `rgb(` and found none.

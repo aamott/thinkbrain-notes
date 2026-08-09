@@ -1,5 +1,0 @@
-- name: Standardize WorkspaceEntry timestamp serialization type
-- file: /media/adam/extex/projects/thinkbrain-notes/apps/desktop/src-tauri/src/commands/workspace.rs
-- lines: 92, 585-590
-- description: `WorkspaceEntry` (line 92) defines `updated_at` as `Option<String>`, and `workspace_entry` (lines 585-590) populates it by converting millisecond timestamps into string representations (`duration.as_millis().to_string()`). Stringified numeric timestamps introduce unnecessary string formatting overhead and parsing ambiguity on the frontend. Change `updated_at` type to `Option<u64>` (milliseconds since epoch) or format as an ISO-8601 string.
-- verification: Code inspection of workspace.rs lines 92 and 585-590.
