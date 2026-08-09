@@ -59,6 +59,14 @@ export function createContributionRegistry<T extends IdentifiedContribution>(
   const listeners = new Set<() => void>();
   let snapshot: readonly T[] | null = null;
 
+  /**
+   * Remembers the index at which a contribution was disposed so a
+   * re-registration with the same id can restore its original position
+   * instead of appending to the end. This keeps stub-to-real swaps stable
+   * (e.g. extension panel activation) without changing the visible order.
+   */
+  const previousPositions = new Map<string, number>();
+
   /** Invalidates the cached snapshot and notifies subscribers of one change. */
   const changed = (): void => {
     snapshot = null;
@@ -73,7 +81,13 @@ export function createContributionRegistry<T extends IdentifiedContribution>(
     }
 
     contributions.set(contribution.id, contribution);
-    order.push(contribution.id);
+    const previousPos = previousPositions.get(contribution.id);
+    if (previousPos !== undefined) {
+      order.splice(Math.min(previousPos, order.length), 0, contribution.id);
+      previousPositions.delete(contribution.id);
+    } else {
+      order.push(contribution.id);
+    }
     changed();
     let disposed = false;
 
@@ -84,11 +98,12 @@ export function createContributionRegistry<T extends IdentifiedContribution>(
         }
         disposed = true;
         if (contributions.get(contribution.id) === contribution) {
-          contributions.delete(contribution.id);
           const index = order.indexOf(contribution.id);
           if (index >= 0) {
+            previousPositions.set(contribution.id, index);
             order.splice(index, 1);
           }
+          contributions.delete(contribution.id);
           changed();
         }
       }

@@ -139,8 +139,10 @@ describe("contribution registry", () => {
     registration.dispose();
     expect(registry.entries()).toEqual([second]);
 
+    // Re-registration restores the original position instead of appending,
+    // so stub-to-real swaps (e.g. extension panel activation) don't reorder.
     const replacementRegistration = registry.register(replacement);
-    expect(registry.entries()).toEqual([second, replacement]);
+    expect(registry.entries()).toEqual([replacement, second]);
     replacementRegistration.dispose();
   });
 
