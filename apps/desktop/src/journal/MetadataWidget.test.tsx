@@ -161,6 +161,79 @@ describe("editing", () => {
   });
 });
 
+describe("editing under a fingertip (M-2, D78)", () => {
+  const withPointer = (coarse: boolean): void => {
+    window.matchMedia = ((text: string) => ({
+      matches: text === "(pointer: coarse)" ? coarse : false,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined
+    })) as unknown as typeof window.matchMedia;
+  };
+
+  afterEach(() => {
+    withPointer(false);
+  });
+
+  it("opens the sheet instead of expanding the dateline in place", async () => {
+    withPointer(true);
+    const host = await render();
+
+    await click(host, "Add metadata");
+
+    expect(document.querySelector('[role="dialog"]')?.getAttribute("aria-label")).toBe(
+      "Friday, August 7"
+    );
+  });
+
+  it("expands in place under a mouse, with no dialog at all", async () => {
+    withPointer(false);
+    const host = await render();
+
+    await click(host, "Add metadata");
+
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(host.querySelector("fieldset")).not.toBeNull();
+  });
+
+  // Two copies of the same field would mean two of every control in the
+  // accessibility tree, one of them stranded behind the scrim.
+  it("moves the fields into the sheet rather than duplicating them", async () => {
+    withPointer(true);
+    const host = await render();
+
+    await click(host, "Add metadata");
+
+    const outside = [...host.querySelectorAll("fieldset")].filter(
+      (field) => field.closest('[role="dialog"]') === null
+    );
+    expect(outside).toHaveLength(0);
+  });
+
+  it("returns to the dateline when the sheet is dismissed", async () => {
+    withPointer(true);
+    const host = await render();
+    await click(host, "Add metadata");
+
+    const done = document.querySelector<HTMLButtonElement>('[role="dialog"] button[aria-label="Done"]');
+    await act(async () => done?.click());
+
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(host.textContent).toContain("Friday, August 7, 2026");
+  });
+
+  it("writes through the same path the dateline uses", async () => {
+    withPointer(true);
+    const onSet = vi.fn();
+    const host = await render({ onSet });
+    await click(host, "Add metadata");
+
+    const good = document.querySelector<HTMLButtonElement>('button[aria-label="Mood: good"]');
+    await act(async () => good?.click());
+
+    expect(onSet).toHaveBeenCalledWith("mood", "good");
+  });
+});
+
 describe("notices", () => {
   it("reports frontmatter it could not read, without blocking the note (D33)", async () => {
     const host = await render({

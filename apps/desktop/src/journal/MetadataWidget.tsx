@@ -6,6 +6,10 @@ import type {
 } from "@thinkbrain/core";
 import { useState } from "react";
 
+import { MetadataBottomSheet } from "./MetadataBottomSheet";
+import { MetadataField } from "./MetadataField";
+import { useCoarsePointer } from "./useCoarsePointer";
+
 /**
  * The entry's metadata, set as the page's dateline (D35).
  *
@@ -47,87 +51,19 @@ function formatLongDate(date: JournalDate): string {
   return `${weekday}, ${MONTHS[date.month - 1]} ${date.day}, ${date.year}`;
 }
 
-function formatValue(value: JournalFieldValue): string {
-  return Array.isArray(value) ? value.join(", ") : String(value);
+/**
+ * `Friday, August 7` — the sheet's own name (D78).
+ *
+ * No year: the dateline behind the sheet is still carrying it, and a dialog
+ * name is read aloud every time focus enters.
+ */
+function formatSheetDate(date: JournalDate): string {
+  const weekday = WEEKDAYS[new Date(Date.UTC(date.year, date.month - 1, date.day)).getUTCDay()];
+  return `${weekday}, ${MONTHS[date.month - 1]} ${date.day}`;
 }
 
-const PILL = "rounded-full border px-2 py-0.5 text-[0.72rem] cursor-pointer";
-
-function Field({
-  definition,
-  value,
-  onSet
-}: {
-  readonly definition: JournalFieldDefinition;
-  readonly value: JournalFieldValue | undefined;
-  readonly onSet: (value: JournalFieldValue | undefined) => void;
-}) {
-  const selected = definition.type === "multi-select" && Array.isArray(value) ? value : [];
-
-  return (
-    <fieldset className="m-0 grid grid-cols-[7rem_minmax(0,1fr)] items-center gap-2 border-0 p-0">
-      <legend className="sr-only">{definition.label}</legend>
-      <span aria-hidden="true" className="text-[0.7rem] text-muted-foreground">
-        {definition.label}
-      </span>
-
-      {definition.type === "single-select" || definition.type === "multi-select" ? (
-        <span className="flex flex-wrap gap-1">
-          {definition.options?.map((option) => {
-            const on =
-              definition.type === "multi-select" ? selected.includes(option) : value === option;
-            return (
-              <button
-                key={option}
-                type="button"
-                aria-pressed={on}
-                aria-label={`${definition.label}: ${option}`}
-                onClick={() => {
-                  if (definition.type === "multi-select") {
-                    const next = on
-                      ? selected.filter((entry) => entry !== option)
-                      : [...selected, option];
-                    onSet(next.length > 0 ? next : undefined);
-                  } else {
-                    // Choosing the current option again clears it; there is no
-                    // other way to unset a single-select without a stray "none".
-                    onSet(on ? undefined : option);
-                  }
-                }}
-                className={
-                  on
-                    ? `${PILL} border-transparent bg-accent font-semibold text-accent-foreground`
-                    : `${PILL} border-border text-muted-foreground`
-                }
-              >
-                {option}
-              </button>
-            );
-          })}
-        </span>
-      ) : (
-        <input
-          type={definition.type === "number" ? "number" : "text"}
-          aria-label={definition.label}
-          value={value === undefined ? "" : String(value)}
-          onChange={(event) => {
-            const raw = event.target.value;
-            if (raw.trim() === "") {
-              onSet(undefined);
-              return;
-            }
-            if (definition.type === "number") {
-              const parsed = Number(raw);
-              onSet(Number.isFinite(parsed) ? parsed : undefined);
-              return;
-            }
-            onSet(raw);
-          }}
-          className="h-7 rounded-small border border-input bg-background px-2 text-xs text-foreground"
-        />
-      )}
-    </fieldset>
-  );
+function formatValue(value: JournalFieldValue): string {
+  return Array.isArray(value) ? value.join(", ") : String(value);
 }
 
 export function MetadataWidget({
@@ -138,6 +74,10 @@ export function MetadataWidget({
   onSet
 }: MetadataWidgetProps) {
   const [expanded, setExpanded] = useState(false);
+  // D76: touch decides. Under a fingertip the fields move into a sheet (M-2),
+  // because the dateline's compact controls are half the touch minimum and sit
+  // where the soft keyboard would cover them.
+  const touch = useCoarsePointer();
   const set = definitions
     .filter((definition) => values[definition.id] !== undefined)
     .map((definition) => formatValue(values[definition.id]!));
@@ -160,7 +100,8 @@ export function MetadataWidget({
             onClick={() => setExpanded(!expanded)}
             className="ml-auto rounded-small border border-border px-1.5 text-[0.68rem] text-muted-foreground cursor-pointer hover:text-foreground"
           >
-            {expanded ? "Done" : set.length > 0 ? "Edit" : "Add metadata"}
+            {/* The sheet carries its own Done, so the opener keeps its label. */}
+            {expanded && !touch ? "Done" : set.length > 0 ? "Edit" : "Add metadata"}
           </button>
         )}
       </div>
@@ -182,10 +123,10 @@ export function MetadataWidget({
         </p>
       )}
 
-      {expanded && (
+      {expanded && !touch && (
         <div className="flex flex-col gap-2 border-b border-border py-3">
           {definitions.map((definition) => (
-            <Field
+            <MetadataField
               key={definition.id}
               definition={definition}
               value={values[definition.id]}
@@ -193,6 +134,16 @@ export function MetadataWidget({
             />
           ))}
         </div>
+      )}
+
+      {expanded && touch && (
+        <MetadataBottomSheet
+          title={formatSheetDate(date)}
+          definitions={definitions}
+          values={values}
+          onSet={onSet}
+          onDismiss={() => setExpanded(false)}
+        />
       )}
     </div>
   );

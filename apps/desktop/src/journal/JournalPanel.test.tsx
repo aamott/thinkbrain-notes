@@ -153,6 +153,41 @@ describe("journal panel header (D71/D75)", () => {
   });
 });
 
+describe("touch density (M-1, D76)", () => {
+  /**
+   * Touch decides, not width: a full-screen popout and a wide desktop panel are
+   * the same number of pixels across, so the treatment rides on
+   * `pointer-coarse:` and leaves the mouse layout alone.
+   */
+  const TOUCH_MINIMUM = /pointer-coarse:(min-h-11|h-11)/;
+
+  it("gives every control a touch target under a fingertip", async () => {
+    const host = await render({ chips: [{ id: "day", label: "7 August 2026" }] });
+
+    const controls = [...host.querySelectorAll("button, input")];
+    expect(controls.length).toBeGreaterThan(4);
+    for (const control of controls) {
+      expect(control.className).toMatch(TOUCH_MINIMUM);
+    }
+  });
+
+  it("gives list rows the same minimum, keeping the two-line form", async () => {
+    const host = await render();
+
+    for (const row of host.querySelectorAll('[role="treeitem"]')) {
+      expect(row.className).toMatch(TOUCH_MINIMUM);
+    }
+  });
+
+  it("leaves the mouse layout compact", async () => {
+    const host = await render();
+
+    // The compact height is still the unprefixed class; only the coarse-pointer
+    // variant is added on top of it.
+    expect(button(host, "Today").className).toMatch(/(^|\s)h-7(\s|$)/);
+  });
+});
+
 describe("journal panel list", () => {
   it("opens the entry a row names", async () => {
     const onOpenEntry = vi.fn();

@@ -145,6 +145,7 @@ recorded in the story. Stories may be split further if a subagent would exceed o
   with panel, three commands, settings and the calendar tab placeholder
 - 🟨 Story 7 calendar tab — grid, dots, keyboard, the shared day filter, D56/D79/D80 view-mode
   persistence and the D57 phone layout shipped; metadata predicates remain, waiting on D41
-- ⬜ Story 8: mobile refinement
+- 🟨 Story 8 mobile refinement — M-2 sheet (D78), M-1 touch density (D76) and
+  `journal/mobile-a11y-checklist.md` shipped; the manual VoiceOver/TalkBack pass remains
 - 🟨 Platform prerequisites: D68/D69 API additions shipped; D44 editor-header slot, D45
   workspace-scoped settings, and D41 metadata facets remain

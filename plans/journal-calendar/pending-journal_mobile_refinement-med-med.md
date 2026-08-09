@@ -1,6 +1,17 @@
 # Story: Journal Mobile Refinement
 
-**Status:** pending · **Urgency:** med · **Difficulty:** med
+**Status:** 🟨 in progress — M-2 metadata sheet (D78), M-1 touch density (D76) and the a11y
+checklist shipped 2026-08-08. Remaining: the manual VoiceOver/TalkBack pass on real devices,
+which is the checklist's whole point and cannot be run here.
+
+**Urgency:** med · **Difficulty:** med
+
+## How the phone treatments are chosen
+
+Touch, not width (D76). A full-screen popout is about 390px across and so is a wide desktop
+panel, so a width query cannot tell a thumb from a mouse. Visual-only treatments use the
+`pointer-coarse:` utility; `useCoarsePointer()` exists for the one case where the DOM itself
+differs — the sheet standing in for the inline editor.
 
 ## Epic
 
@@ -76,14 +87,14 @@ Do NOT create `apps/mobile/` or add a separate mobile screen tree.
 
 ## Acceptance criteria
 
-- [ ] At phone widths, the journal popout renders full-screen; placement and return path are provided by the app shell (D12/D26); no bespoke journal navigation code.
-- [ ] Compact list density (M-1) applies at phone widths without changing the wide desktop layout; one list implementation is shared.
-- [ ] Metadata editing at phone widths uses a bottom sheet (M-2, D40); the sheet is confined to metadata editing; it does not replace the full-screen popout or override shell navigation.
-- [ ] Bottom sheet appears and dismisses correctly; focus is trapped while open and restored on close; screen-reader announcements are correct.
-- [ ] Collapsed dateline is readable at narrow widths; no overflow or truncation without accessible alternatives.
-- [ ] Existing wide-screen tests and shell behavior remain unchanged; QA passes.
-- [ ] No bespoke bottom nav, private return path, or `apps/mobile/` code is introduced.
-- [ ] `mobile-a11y-checklist.md` covers VoiceOver/TalkBack labels, zoom/text scaling, and soft-keyboard/viewport interactions for journal-owned surfaces.
+- [ ] At phone widths, the journal popout renders full-screen; placement and return path are provided by the app shell (D12/D26); no bespoke journal navigation code. — untouched here; the shell already owns it.
+- [x] Compact list density (M-1) applies at phone widths without changing the wide desktop layout; one list implementation is shared. — `pointer-coarse:min-h-11` in `JournalPanel.tsx`; the mouse layout is unchanged and a test walks every control.
+- [x] Metadata editing at phone widths uses a bottom sheet (M-2, D40); the sheet is confined to metadata editing; it does not replace the full-screen popout or override shell navigation. — `MetadataBottomSheet.tsx`, reached only through the dateline.
+- [x] Bottom sheet appears and dismisses correctly; focus is trapped while open and restored on close; screen-reader announcements are correct. — all four D78 behaviours covered; the announcements themselves still need the manual pass.
+- [x] Collapsed dateline is readable at narrow widths; no overflow or truncation without accessible alternatives. — the dateline wraps; nothing is truncated.
+- [x] Existing wide-screen tests and shell behavior remain unchanged; QA passes. — 663 desktop tests, lint 0 errors, typecheck clean.
+- [x] No bespoke bottom nav, private return path, or `apps/mobile/` code is introduced.
+- [x] `mobile-a11y-checklist.md` covers VoiceOver/TalkBack labels, zoom/text scaling, and soft-keyboard/viewport interactions for journal-owned surfaces. — `apps/desktop/src/journal/mobile-a11y-checklist.md`; **unrun**, it needs real devices.
 
 ## Validation
 

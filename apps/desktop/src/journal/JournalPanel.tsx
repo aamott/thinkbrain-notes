@@ -46,7 +46,16 @@ export interface JournalPanelProps {
   readonly onCreateFolder: () => void;
 }
 
-const ACTION = "h-7 px-2 rounded-small border border-border bg-background text-foreground text-xs cursor-pointer hover:bg-secondary";
+/**
+ * D76: touch decides the density, not width.
+ *
+ * A full-screen popout is about 390px across and so is a wide desktop panel, so
+ * `pointer-coarse:` is what separates a thumb from a mouse. Rows keep the
+ * two-line form either way; under a fingertip they clear 44px.
+ */
+const TOUCH = "pointer-coarse:min-h-11";
+
+const ACTION = `h-7 ${TOUCH} px-2 rounded-small border border-border bg-background text-foreground text-xs cursor-pointer hover:bg-secondary`;
 
 /** Approved copy (D63) — name what happened, offer the way out. */
 function EmptyState({
@@ -113,9 +122,9 @@ function Row({
       className={
         isHeader
           ? row.kind === "year"
-            ? "flex w-full items-center gap-1.5 px-2 py-1 bg-secondary border-t border-border text-[0.69rem] font-bold uppercase tracking-[0.12em] tabular-nums cursor-pointer text-left"
-            : "flex w-full items-center gap-1.5 px-2 py-1 border-b border-border text-xs font-semibold cursor-pointer text-left"
-          : "flex w-full flex-col gap-0.5 px-2 py-1 text-left cursor-pointer hover:bg-secondary"
+            ? `flex w-full items-center gap-1.5 px-2 py-1 ${TOUCH} bg-secondary border-t border-border text-[0.69rem] font-bold uppercase tracking-[0.12em] tabular-nums cursor-pointer text-left`
+            : `flex w-full items-center gap-1.5 px-2 py-1 ${TOUCH} border-b border-border text-xs font-semibold cursor-pointer text-left`
+          : `flex w-full flex-col justify-center gap-0.5 px-2 py-1 ${TOUCH} text-left cursor-pointer hover:bg-secondary`
       }
     >
       {isHeader ? (
@@ -205,7 +214,7 @@ export function JournalPanel({
           type="button"
           aria-label="New journal entry"
           onClick={onNewEntry}
-          className="flex h-7 flex-1 min-w-0 items-center justify-center gap-1 rounded-small bg-primary text-primary-foreground text-xs font-semibold cursor-pointer"
+          className={`flex h-7 ${TOUCH} flex-1 min-w-0 items-center justify-center gap-1 rounded-small bg-primary text-primary-foreground text-xs font-semibold cursor-pointer`}
         >
           ＋ New entry
         </button>
@@ -230,7 +239,7 @@ export function JournalPanel({
         value={search}
         disabled={!searchAvailable}
         onChange={(event) => onSearchChange(event.target.value)}
-        className="h-7 rounded-small border border-input bg-background px-2 text-xs text-foreground disabled:opacity-60"
+        className={`h-7 ${TOUCH} rounded-small border border-input bg-background px-2 text-xs text-foreground disabled:opacity-60`}
       />
 
       <div className="flex flex-wrap items-center justify-end gap-1.5">
@@ -269,7 +278,7 @@ export function JournalPanel({
               type="button"
               aria-label={`Remove filter: ${chip.label}`}
               onClick={() => onRemoveChip(chip.id)}
-              className="flex items-center gap-1 rounded-small bg-accent px-1.5 py-0.5 text-[0.68rem] text-accent-foreground cursor-pointer"
+              className={`flex items-center gap-1 rounded-small bg-accent px-1.5 py-0.5 ${TOUCH} text-[0.68rem] text-accent-foreground cursor-pointer`}
             >
               {chip.label}
               <span aria-hidden="true">✕</span>
@@ -278,7 +287,7 @@ export function JournalPanel({
           <button
             type="button"
             onClick={onClearFilters}
-            className="bg-transparent border-0 text-[0.68rem] text-muted-foreground underline underline-offset-2 cursor-pointer"
+            className={`bg-transparent border-0 ${TOUCH} text-[0.68rem] text-muted-foreground underline underline-offset-2 cursor-pointer`}
           >
             Clear all
           </button>
