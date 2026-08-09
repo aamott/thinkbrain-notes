@@ -16,7 +16,10 @@ import { open, save } from "@tauri-apps/plugin-dialog";
  * when the user cancels or the runtime is not Tauri.
  *
  * Args:
- *   title: Optional dialog title (defaults to "Select file").
+ *   title: Optional dialog title (defaults to "Select file"). When `extensions`
+ *     is provided, the title (with any trailing punctuation stripped) is also
+ *     used as the filter name shown in the dialog's file-type dropdown, so the
+ *     filter label always reflects what the caller is asking the user to pick.
  *   extensions: Optional readonly list of file extensions (without the leading
  *     dot) used to filter the dialog. When provided, only files matching one of
  *     the extensions (plus directories) are selectable. When omitted, no filter
@@ -38,9 +41,11 @@ export async function pickFilePath(
     multiple: false,
     // Tauri's `open` accepts a `filters` array of `{ name, extensions }`
     // objects. Spread the readonly input into a mutable array to satisfy the
-    // dialog plugin's typed contract.
+    // dialog plugin's typed contract. The filter name is derived from `title`
+    // (trailing punctuation trimmed) so it stays accurate for any caller
+    // rather than being hardcoded to a specific file kind.
     filters: extensions
-      ? [{ name: "Theme files", extensions: [...extensions] }]
+      ? [{ name: title.replace(/[\s\p{P}]+$/u, ""), extensions: [...extensions] }]
       : undefined
   });
 

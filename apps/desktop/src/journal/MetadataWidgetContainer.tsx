@@ -38,12 +38,18 @@ export interface MetadataWidgetContainerProps {
  *
  * The shape is inferred from what is written, and inferred conservatively: a
  * string becomes free text rather than a select, because turning someone's
- * sentence into a tappable pill is a guess that reads as damage. Promoting the
- * field in settings is where a real vocabulary gets chosen.
+ * sentence into a tappable pill is a guess that reads as damage. An array is
+ * treated the same way — inferring `multi-select` would require options, and
+ * guessing them (or leaving them empty) either boxes the user in or saves an
+ * unfillable field that the settings form's `choiceless` guard would otherwise
+ * block. Promoting the field in settings is where a real vocabulary gets chosen.
  */
 function inferField(key: string, raw: unknown): JournalFieldDefinition {
   if (typeof raw === "number") return { id: key, label: key, type: "number" };
-  if (Array.isArray(raw)) return { id: key, label: key, type: "multi-select", options: [] };
+  // Arrays fall back to free text rather than `multi-select` with empty options:
+  // the promotion path (D85) bypasses the form's `choiceless` guard, so an
+  // inferred select would be saved unfillable. The user picks the shape in
+  // settings when they promote the key.
   return { id: key, label: key, type: "text" };
 }
 

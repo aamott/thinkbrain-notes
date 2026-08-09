@@ -44,6 +44,18 @@ export function CalendarTabContainer({
   const [entries, setEntries] = useState<readonly CalendarEntry[]>([]);
   const { selectedDay } = useJournalFilter();
 
+  // `initialView` is now reactive (the journal extension re-reads the setting
+  // via `useWatchedSetting`). Re-seed the local view when it changes. This does
+  // not clobber an in-flight user navigation: the user's own view changes flow
+  // through `onViewChange` and persist back to the setting, which then
+  // round-trips as the same value. Adjusting state during render (with a guard)
+  // is the React-recommended pattern for syncing to changing props.
+  const [lastInitialView, setLastInitialView] = useState(initialView);
+  if (initialView !== lastInitialView) {
+    setLastInitialView(initialView);
+    setView(initialView);
+  }
+
   const read = useCallback(async (): Promise<readonly CalendarEntry[]> => {
     try {
       const listing = await service.listEntries();

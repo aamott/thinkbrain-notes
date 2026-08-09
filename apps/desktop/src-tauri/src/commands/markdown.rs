@@ -167,7 +167,10 @@ pub fn rename_markdown_file(
         )
     })?;
 
-    let _ = crate::commands::search::remove_index_document(app, root_path, relative_path);
+    let index_path = relative_path.clone();
+    if let Err(error) = crate::commands::search::remove_index_document(app, root_path, index_path) {
+        eprintln!("[markdown] failed to remove search index for {relative_path}: {error}");
+    }
 
     markdown_file_entry(&root, &new_file_path)
 }
@@ -193,7 +196,10 @@ pub fn delete_markdown_file(app: tauri::AppHandle, root_path: String, relative_p
         )
     })?;
 
-    let _ = crate::commands::search::remove_index_document(app, root_path, relative_path);
+    let index_path = relative_path.clone();
+    if let Err(error) = crate::commands::search::remove_index_document(app, root_path, index_path) {
+        eprintln!("[markdown] failed to remove search index for {relative_path}: {error}");
+    }
 
     Ok(())
 }

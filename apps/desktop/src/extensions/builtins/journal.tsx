@@ -1,4 +1,4 @@
-import { parseFrontmatter, type ExtensionManifest } from "@thinkbrain/core";
+import { normalizeRoot, parseFrontmatter, type ExtensionManifest } from "@thinkbrain/core";
 import { useSyncExternalStore } from "react";
 
 import { JournalPanelContainer } from "../../journal/JournalPanelContainer";
@@ -49,6 +49,27 @@ export const journalManifest: ExtensionManifest = {
 /** Default matches D64's `root`; used until the setting is read. */
 const DEFAULT_ROOT = "journal";
 
+/**
+ * Resolves the `startOfWeek` setting to a `WeekStart` (0=Sunday, 1=Monday).
+ *
+ * `"system"` defers to the OS locale's first day of week via `Intl.Locale`;
+ * 1=Monday maps to 1, anything else (7=Sunday) maps to 0. Falls back to Sunday
+ * if the locale info is unavailable.
+ */
+function resolveWeekStart(setting: string | undefined): 0 | 1 {
+  if (setting === "monday") return 1;
+  if (setting === "sunday") return 0;
+  try {
+    // `weekInfo` is not in the TS lib DOM types; cast to access it at runtime.
+    const locale = new Intl.Locale(navigator.language) as Intl.Locale & {
+      weekInfo?: { firstDay?: number };
+    };
+    return locale.weekInfo?.firstDay === 1 ? 1 : 0;
+  } catch {
+    return 0;
+  }
+}
+
 export function activateJournal(context: DesktopExtensionContext): void {
   context.settings.registerSchema(journalSettingsSchema);
   registerJournalControls();
@@ -57,7 +78,7 @@ export function activateJournal(context: DesktopExtensionContext): void {
     workspace: context.workspace,
     // Read on every call rather than captured: the folder is workspace-scoped
     // (D45), so it changes under a running panel when the vault changes.
-    root: () => context.settings.get<string>("root") ?? DEFAULT_ROOT,
+    root: () => normalizeRoot(context.settings.get<string>("root") ?? DEFAULT_ROOT),
     now: () => new Date()
   });
 
@@ -71,13 +92,41 @@ export function activateJournal(context: DesktopExtensionContext): void {
    */
   const belongsHere = (relativePath: string | null, contents: string): boolean => {
     if (relativePath === null) return false;
-    const root = context.settings.get<string>("root") ?? DEFAULT_ROOT;
+    const root = normalizeRoot(context.settings.get<string>("root") ?? DEFAULT_ROOT);
     if (relativePath.startsWith(`${root}/`)) return true;
     const configured = definitions();
     if (configured.length === 0) return false;
     const metadata = parseFrontmatter(contents).metadata;
     return configured.some((definition) => metadata[definition.id] !== undefined);
   };
+
+  /**
+   * Re-reads a setting whenever it changes.
+   *
+   * Nothing re-renders an open editor/tab when a setting changes, so a value
+   * edited in Settings stayed invisible on the surface in front of you until
+   * something else happened to re-render it. Subscribing through the extension
+   * API keeps the consumer honest about what is configured right now.
+   *
+   * The snapshot is the raw value; callers are responsible for any mapping
+   * (e.g. `resolveWeekStart`) — but the mapping must be applied inside the
+   * `useSyncExternalStore` getSnapshot so React sees a stable identity for the
+   * derived value, otherwise infinite render loops follow. For that reason the
+   * hook accepts an optional `derive` callback that is invoked inside the
+   * snapshot getter.
+   */
+  function useWatchedSetting<T, U = T>(
+    key: string,
+    derive: (raw: T | undefined) => U
+  ): U {
+    return useSyncExternalStore(
+      (onChange) => {
+        const subscription = context.settings.onDidChange(key, onChange);
+        return () => subscription.dispose();
+      },
+      () => derive(context.settings.get<T>(key))
+    );
+  }
 
   /**
    * Re-reads the field definitions whenever they change.
@@ -175,23 +224,41 @@ export function activateJournal(context: DesktopExtensionContext): void {
     )
   });
 
-  context.tabs.register({
-    kind: "calendar",
-    label: "Journal calendar",
-    isAvailable: true,
-    availability: "available",
-    factory: () => (
+  /**
+   * Reactive wrapper around {@link CalendarTabContainer} so the calendar tab
+   * re-reads `startOfWeek` and `calendarDefaultView` when they change in
+   * Settings while the tab is open. The plain factory read both inline once at
+   * mount, so adjusting either setting had no effect until the tab was closed
+   * and reopened.
+   */
+  function CalendarTabRoot() {
+    const weekStartsOn = useWatchedSetting<string, 0 | 1>("startOfWeek", (raw) =>
+      resolveWeekStart(raw)
+    );
+    const initialView = useWatchedSetting<string, "week" | "month">(
+      "calendarDefaultView",
+      (raw) => (raw === "week" ? "week" : "month")
+    );
+    return (
       <CalendarTabContainer
         service={service}
-        weekStartsOn={context.settings.get<string>("startOfWeek") === "monday" ? 1 : 0}
-        initialView={context.settings.get<string>("calendarDefaultView") === "week" ? "week" : "month"}
+        weekStartsOn={weekStartsOn}
+        initialView={initialView}
         // D79/D80: the view persists per workspace; the date deliberately does
         // not, since the month you browsed to is an accident of browsing.
         onViewChange={(view) => {
           void context.settings.set("calendarDefaultView", view);
         }}
       />
-    )
+    );
+  }
+
+  context.tabs.register({
+    kind: "calendar",
+    label: "Journal calendar",
+    isAvailable: true,
+    availability: "available",
+    factory: () => <CalendarTabRoot />
   });
 
   context.commands.register({

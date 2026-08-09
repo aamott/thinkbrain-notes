@@ -1,5 +1,5 @@
 import { isTauri } from "@tauri-apps/api/core";
-import { useCallback, useEffect, useReducer, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { CommandPalette, type WorkspaceFileResult } from "../commands/CommandPalette";
 import {
   useDesktopCommands,
@@ -95,6 +95,24 @@ export function DesktopShell() {
   useEffect(() => {
     documentsRef.current = documents;
   }, [documents]);
+
+  // Clean up document view-state entries when their tabs are closed. The tab
+  // reducer (`removeTab`) only drops the tab from the tabs array; the documents
+  // map is owned here, so orphaned entries (full note contents) would otherwise
+  // leak indefinitely as users open and close notes. Adjusting state during
+  // render (with a guard) is the React-recommended pattern for derived state.
+  const openTabIds = useMemo(
+    () => new Set(tabState.tabs.map((tab) => tab.id)),
+    [tabState.tabs]
+  );
+  const hasOrphanedDocs = Object.keys(documents).some((id) => !openTabIds.has(id));
+  if (hasOrphanedDocs) {
+    const next: Record<string, DocumentViewState> = {};
+    for (const [id, view] of Object.entries(documents)) {
+      if (openTabIds.has(id)) next[id] = view;
+    }
+    setDocuments(next);
+  }
 
   // Mirror the settings store's dirty flag into the tab system so the settings
   // tab shows the dirty dot and triggers DirtyCloseDialog on close. Only

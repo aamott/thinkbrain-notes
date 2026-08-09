@@ -13,7 +13,7 @@ import type { JournalDate } from "./types";
 const MINUTES_PER_DAY = 24 * 60;
 
 /** Trims a configured root to a bare relative folder, rejecting an escape. */
-function normalizeRoot(root: string): string {
+export function normalizeRoot(root: string): string {
   const trimmed = root.trim().replace(/^[/\\]+/, "").replace(/[/\\]+$/, "");
   if (trimmed === "") {
     throw new Error("The journal root must be a non-empty workspace-relative folder.");

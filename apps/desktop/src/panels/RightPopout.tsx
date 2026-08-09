@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 import { cn } from "../lib/utils";
 import { type RightPanel } from "../shell/shellTypes";
 import { Unavailable } from "../shell/Unavailable";
@@ -7,7 +7,8 @@ import {
   getDesktopPanelOrUndefined,
   renderDesktopPanel,
   useRightPanelContributions,
-  type DesktopPanelContext
+  type DesktopPanelContext,
+  type DesktopPanelContribution
 } from "./panelRegistry";
 
 type RightPopoutProps = {
@@ -77,15 +78,43 @@ export function RightPopout({ panel, rootPath, documentContents }: RightPopoutPr
         if (!isActive && !panelContribution.keepMounted) return null;
         const isAvailable = panelContribution.availability?.(context) ?? true;
         return (
-          <div
+          <MountedPanel
             key={panelContribution.id}
-            className={cn("flex min-h-0 flex-1 flex-col", !isActive && "hidden")}
-            data-panel-available={isAvailable}
-          >
-            {renderDesktopPanel(panelContribution, context)}
-          </div>
+            contribution={panelContribution}
+            context={context}
+            isActive={isActive}
+            isAvailable={isAvailable}
+          />
         );
       })}
     </aside>
   );
 }
+
+/**
+ * One panel's slot.
+ *
+ * Memoized so switching popouts re-renders only the panel that changed. A
+ * kept-mounted panel keeps its DOM and its state; it just stops re-rendering
+ * when its neighbour is the one being opened. Mirrors `LeftPopout`'s slot.
+ */
+const MountedPanel = memo(function MountedPanel({
+  contribution,
+  context,
+  isActive,
+  isAvailable
+}: {
+  readonly contribution: DesktopPanelContribution;
+  readonly context: DesktopPanelContext;
+  readonly isActive: boolean;
+  readonly isAvailable: boolean;
+}) {
+  return (
+    <div
+      className={cn("flex min-h-0 flex-1 flex-col", !isActive && "hidden")}
+      data-panel-available={isAvailable}
+    >
+      {renderDesktopPanel(contribution, context)}
+    </div>
+  );
+});
