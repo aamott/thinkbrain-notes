@@ -1,4 +1,5 @@
 import { parseFrontmatter, type ExtensionManifest } from "@thinkbrain/core";
+import { useSyncExternalStore } from "react";
 
 import { JournalPanelContainer } from "../../journal/JournalPanelContainer";
 import { createJournalService } from "../../journal/journalService";
@@ -78,15 +79,40 @@ export function activateJournal(context: DesktopExtensionContext): void {
     return configured.some((definition) => metadata[definition.id] !== undefined);
   };
 
-  context.editorHeaders.register({
-    id: "metadata-widget",
-    label: "Entry metadata",
-    applies: ({ relativePath, contents }) => belongsHere(relativePath, contents),
-    render: ({ relativePath, contents, applyEdit }) => (
+  /**
+   * Re-reads the field definitions whenever they change.
+   *
+   * Nothing re-renders an open editor when a setting changes, so a field added
+   * in Settings stayed invisible on the note in front of you until you happened
+   * to type. Subscribing through the extension API keeps the widget honest
+   * about what is configured right now.
+   */
+  const useDefinitions = () =>
+    useSyncExternalStore(
+      (onChange) => {
+        const subscription = context.settings.onDidChange("fieldDefinitions", onChange);
+        return () => subscription.dispose();
+      },
+      // A string snapshot, so React's identity check is the value's own.
+      () => context.settings.get<string>("fieldDefinitions") ?? "[]"
+    );
+
+  function MetadataHeader({
+    relativePath,
+    contents,
+    applyEdit
+  }: {
+    readonly relativePath: string | null;
+    readonly contents: string;
+    readonly applyEdit?: (next: string) => void;
+  }) {
+    const raw = useDefinitions();
+
+    return (
       <MetadataWidgetContainer
         relativePath={relativePath ?? ""}
         contents={contents}
-        definitions={definitions()}
+        definitions={parseFieldDefinitions(raw).definitions}
         applyEdit={applyEdit}
         // D85: promoting a key the note already uses is the one settings write
         // the editor makes, and only ever when the user asks for it by name.
@@ -98,6 +124,19 @@ export function activateJournal(context: DesktopExtensionContext): void {
             JSON.stringify([...current, field], null, 2)
           );
         }}
+      />
+    );
+  }
+
+  context.editorHeaders.register({
+    id: "metadata-widget",
+    label: "Entry metadata",
+    applies: ({ relativePath, contents }) => belongsHere(relativePath, contents),
+    render: ({ relativePath, contents, applyEdit }) => (
+      <MetadataHeader
+        relativePath={relativePath}
+        contents={contents}
+        applyEdit={applyEdit}
       />
     )
   });

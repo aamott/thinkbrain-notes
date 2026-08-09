@@ -14,6 +14,7 @@ import { createDesktopExtensionHost } from "../desktopExtensionHost";
 import { createDesktopTabRegistry } from "../../tabs/tabRegistry";
 import { desktopCommandRegistry } from "../../commands/commandRegistry";
 import { desktopPanelRegistry } from "../../panels/panelRegistry";
+import { desktopEditorHeaderRegistry } from "../../tabs/editorHeaderRegistry";
 import { appSettingsRegistry, useSettingsStore } from "../../settings/settingsStore";
 
 let host: ReturnType<typeof createDesktopExtensionHost> | null = null;
@@ -148,5 +149,52 @@ describe("journal built-in", () => {
     expect(desktopPanelRegistry.get("journal-calendar.journal")).toBeUndefined();
     expect(desktopCommandRegistry.get("journal-calendar.today")).toBeUndefined();
     expect(appSettingsRegistry.getModule("extension-journal-calendar")).toBeUndefined();
+  });
+});
+
+describe("the metadata widget and the settings behind it", () => {
+  const FIELDS_KEY = "extension-journal-calendar.fieldDefinitions";
+
+  const mountHeader = async (): Promise<HTMLDivElement> => {
+    const header = desktopEditorHeaderRegistry.get("journal-calendar.metadata-widget");
+    if (!header) throw new Error("The metadata widget did not register.");
+    container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
+    await act(async () => {
+      root?.render(
+        header.render({
+          rootPath: "/vault",
+          relativePath: "journal/2026/08/2026-08-07-1802.md",
+          contents: "---\ndate: 2026-08-07\n---\n\nBread.\n"
+        })
+      );
+    });
+    return container;
+  };
+
+  /**
+   * A field added in Settings has to appear on the note that is already open.
+   * Nothing re-renders the editor when a setting changes, so without a
+   * subscription the new field stays invisible until the user types.
+   */
+  it("picks up a field added while a note is open", async () => {
+    await activate();
+    const host = await mountHeader();
+    expect(host.textContent).not.toContain("Mood");
+
+    await act(async () => {
+      useSettingsStore.getState().stageChange(
+        FIELDS_KEY,
+        JSON.stringify([{ id: "mood", label: "Mood", type: "text" }])
+      );
+    });
+
+    // The affordance only exists once there is a field to fill in, and the
+    // label itself appears when it is expanded.
+    const add = host.querySelector<HTMLButtonElement>("button");
+    expect(add?.textContent).toBe("Add metadata");
+    await act(async () => add?.click());
+    expect(host.textContent).toContain("Mood");
   });
 });
