@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { JournalPanel, type JournalChip } from "./JournalPanel";
+import { selectJournalDay, useJournalFilter } from "./journalFilterStore";
 import { buildJournalView, type JournalStatus } from "./journalViewModel";
+import { formatJournalDate } from "@thinkbrain/core";
 import { JournalError, type JournalListing, type JournalService } from "./journalService";
 
 /**
@@ -37,6 +39,7 @@ export function JournalPanelContainer({
   const [expandedUndated, setExpandedUndated] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
   const [previews, setPreviews] = useState<ReadonlyMap<string, string>>(new Map());
+  const { selectedDay } = useJournalFilter();
 
   /** Reads the folder without touching state, so the effect owns when to apply it. */
   const read = useCallback(async (): Promise<{
@@ -102,8 +105,8 @@ export function JournalPanelContainer({
     listing,
     collapsed,
     expandedUndated,
-    selectedDay: null,
-    activeFilterCount: 0,
+    selectedDay,
+    activeFilterCount: selectedDay ? 1 : 0,
     matchingPaths: null,
     previews
   });
@@ -130,7 +133,11 @@ export function JournalPanelContainer({
       .finally(reload);
   };
 
-  const chips: readonly JournalChip[] = [];
+  // Dismissing the day chip clears the calendar's selection in step (D60),
+  // because they are one piece of state rather than two that agree.
+  const chips: readonly JournalChip[] = selectedDay
+    ? [{ id: "day", label: formatJournalDate(selectedDay) }]
+    : [];
 
   return (
     <JournalPanel
@@ -145,8 +152,8 @@ export function JournalPanelContainer({
       onOpenCalendar={onOpenCalendar}
       onOpenEntry={(relativePath) => run(() => service.openEntry(relativePath))}
       onToggleGroup={toggle}
-      onRemoveChip={() => undefined}
-      onClearFilters={() => undefined}
+      onRemoveChip={() => selectJournalDay(null)}
+      onClearFilters={() => selectJournalDay(null)}
       onRetry={() => {
         setStatus("loading");
         reload();

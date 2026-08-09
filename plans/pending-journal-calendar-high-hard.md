@@ -143,6 +143,8 @@ recorded in the story. Stories may be split further if a subagent would exceed o
   virtualization, previews, the widget write path and search/facets remain
 - 🟨 Story 9 registration — the journal activates as a built-in (`extensions/builtins/journal.tsx`)
   with panel, three commands, settings and the calendar tab placeholder
-- ⬜ Stories 7, 8: calendar tab, mobile refinement
+- 🟨 Story 7 calendar tab — grid, dots, keyboard and the shared day filter shipped; view-mode
+  persistence, phone layout and metadata predicates remain
+- ⬜ Story 8: mobile refinement
 - 🟨 Platform prerequisites: D68/D69 API additions shipped; D44 editor-header slot, D45
   workspace-scoped settings, and D41 metadata facets remain

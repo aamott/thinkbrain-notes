@@ -9,3 +9,4 @@ export * from "./filename";
 export * from "./paths";
 export * from "./frontmatter";
 export * from "./calendar";
+export * from "./calendarGrid";

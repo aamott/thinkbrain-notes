@@ -2,6 +2,10 @@
 
 **Mockup APPROVED 2026-08-08** — `assets/journal-calendar-tab-mockup.html`, closing D79.
 
+**Status:** 🟨 in progress — month/week grid, D46 dots, D58 keyboard, day-to-popout filtering
+and tab registration all shipped 2026-08-08. Remaining: metadata predicates in the grid
+(waiting on D41), view-mode persistence per workspace (D56), and the D57 phone layout.
+
 **Status:** pending · **Urgency:** high · **Difficulty:** hard
 
 ## Epic

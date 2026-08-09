@@ -74,12 +74,12 @@ describe("journal built-in", () => {
     );
   });
 
-  it("registers the calendar tab as unavailable, so its button explains itself", async () => {
+  it("registers the calendar as an available tab kind with a renderer", async () => {
     const tabs = await activate();
 
     const calendar = tabs.get("journal-calendar.calendar");
-    expect(calendar?.isAvailable).toBe(false);
-    expect(calendar?.unavailableMessage).toMatch(/calendar view/i);
+    expect(calendar?.isAvailable).toBe(true);
+    expect(typeof calendar?.factory).toBe("function");
   });
 
   it("hands everything back when it deactivates", async () => {

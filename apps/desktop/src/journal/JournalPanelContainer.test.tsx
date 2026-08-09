@@ -4,6 +4,11 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { JournalPanelContainer } from "./JournalPanelContainer";
+import {
+  getJournalFilter,
+  resetJournalFilter,
+  selectJournalDay
+} from "./journalFilterStore";
 import { JournalError, type JournalListing, type JournalService } from "./journalService";
 import { parseJournalFilename, UNDATED, type JournalEntryRef } from "@thinkbrain/core";
 
@@ -176,5 +181,44 @@ describe("first-line previews", () => {
 
     expect(host.textContent).toContain("Fri 7");
     expect(host.textContent).not.toContain("late");
+  });
+});
+
+describe("the shared day filter (D25/D60)", () => {
+  afterEach(() => resetJournalFilter());
+
+  it("narrows the list to the day the calendar selected", async () => {
+    const host = await mount({
+      service: service({
+        listEntries: async () => listing(["2026-08-07-1802.md", "2026-08-05-1307.md"])
+      })
+    });
+
+    await act(async () => selectJournalDay({ year: 2026, month: 8, day: 5 }));
+
+    expect(host.textContent).toContain("1:07 PM");
+    expect(host.textContent).not.toContain("6:02 PM");
+  });
+
+  it("shows the day as a chip and says how many of how many", async () => {
+    const host = await mount({
+      service: service({
+        listEntries: async () => listing(["2026-08-07-1802.md", "2026-08-05-1307.md"])
+      })
+    });
+
+    await act(async () => selectJournalDay({ year: 2026, month: 8, day: 5 }));
+
+    expect(host.textContent).toContain("2026-08-05");
+    expect(host.textContent).toContain("Showing 1");
+  });
+
+  it("clears the calendar's selection when the chip is dismissed", async () => {
+    const host = await mount();
+    await act(async () => selectJournalDay({ year: 2026, month: 8, day: 5 }));
+
+    await click(host, "Remove filter: 2026-08-05");
+
+    expect(getJournalFilter().selectedDay).toBeNull();
   });
 });

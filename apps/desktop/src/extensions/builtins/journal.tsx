@@ -4,6 +4,7 @@ import { JournalPanelContainer } from "../../journal/JournalPanelContainer";
 import { createJournalService } from "../../journal/journalService";
 import { journalSettingsSchema } from "../../journal/journalSettings";
 import { registerJournalControls } from "../../journal/JournalFieldDefinitionsControl";
+import { CalendarTabContainer } from "../../journal/CalendarTabContainer";
 import { MetadataWidgetContainer } from "../../journal/MetadataWidgetContainer";
 import { parseFieldDefinitions } from "../../journal/journalSettings";
 import type { DesktopExtensionContext } from "../desktopExtensionHost";
@@ -109,14 +110,18 @@ export function activateJournal(context: DesktopExtensionContext): void {
     )
   });
 
-  // Registered unavailable rather than omitted: the button in the popout then
-  // leads somewhere that explains itself, instead of doing nothing.
   context.tabs.register({
     kind: "calendar",
     label: "Journal calendar",
-    isAvailable: false,
-    availability: "unavailable",
-    unavailableMessage: "The journal calendar arrives with the calendar view."
+    isAvailable: true,
+    availability: "available",
+    factory: () => (
+      <CalendarTabContainer
+        service={service}
+        weekStartsOn={context.settings.get<string>("startOfWeek") === "monday" ? 1 : 0}
+        initialView={context.settings.get<string>("calendarDefaultView") === "week" ? "week" : "month"}
+      />
+    )
   });
 
   context.commands.register({
