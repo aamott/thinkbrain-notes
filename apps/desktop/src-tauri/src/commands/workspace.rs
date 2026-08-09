@@ -336,7 +336,7 @@ pub fn delete_workspace_entry(root_path: String, relative_path: String) -> Resul
 pub fn open_workspace_window(app: tauri::AppHandle, root_path: String) -> Result<(), NativeError> {
     let root = resolve_workspace_root(&root_path)?;
     let label = next_workspace_window_label();
-    let root_path = root.to_string_lossy().to_string();
+    let root_path = root.to_string_lossy().into_owned();
     let window =
         tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::App("index.html".into()))
             .title(describe_workspace(&root).name)
@@ -522,11 +522,11 @@ pub fn normalize_relative_path(relative_path: &str) -> Result<String, NativeErro
 
 pub fn describe_workspace(root: &Path) -> WorkspaceDescriptor {
     WorkspaceDescriptor {
-        root_path: root.to_string_lossy().to_string(),
+        root_path: root.to_string_lossy().into_owned(),
         name: root
             .file_name()
-            .map(|name| name.to_string_lossy().to_string())
-            .unwrap_or_else(|| root.to_string_lossy().to_string()),
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| root.to_string_lossy().into_owned()),
     }
 }
 
@@ -567,7 +567,7 @@ pub fn collect_workspace_entries(
                 error.to_string(),
             )
         })?;
-        let name = entry.file_name().to_string_lossy().to_string();
+        let name = entry.file_name().to_string_lossy().into_owned();
 
         if !include_hidden && is_hidden_name(&name) {
             continue;
@@ -627,7 +627,7 @@ pub fn workspace_entry(root: &Path, path: &Path, is_dir: bool) -> Result<Workspa
     Ok(WorkspaceEntry {
         name: path
             .file_name()
-            .map(|file_name| file_name.to_string_lossy().to_string())
+            .map(|file_name| file_name.to_string_lossy().into_owned())
             .unwrap_or_else(|| relative_path.clone()),
         parent_path: Path::new(&relative_path)
             .parent()

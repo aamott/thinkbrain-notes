@@ -507,13 +507,10 @@ export function DesktopShell() {
   // when collapsed so the title bar releases the reserved space.
   useEffect(() => {
     leftWidthRef.current = leftWidth;
-    rootRef.current?.style.setProperty("--tn-shell-left-width", leftPanel ? `${leftWidth}px` : "0px");
-  }, [leftWidth, leftPanel]);
-
-  useEffect(() => {
     rightWidthRef.current = rightWidth;
+    rootRef.current?.style.setProperty("--tn-shell-left-width", leftPanel ? `${leftWidth}px` : "0px");
     rootRef.current?.style.setProperty("--tn-shell-right-width", `${rightWidth}px`);
-  }, [rightWidth]);
+  }, [leftWidth, leftPanel, rightWidth]);
 
   /**
    * Starts a pointer-driven dock resize.

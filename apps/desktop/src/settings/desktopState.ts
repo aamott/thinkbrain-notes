@@ -200,7 +200,7 @@ function applyDesktopStateUpdate(
 }
 
 function createDesktopState(value: Readonly<Record<string, unknown>>): DesktopState {
-  const lastWorkspacePath = readWorkspacePath(value.lastWorkspacePath);
+  const lastWorkspacePath = readNonEmptyString(value.lastWorkspacePath);
   return {
     version: DESKTOP_STATE_VERSION,
     lastWorkspacePath,
@@ -219,7 +219,7 @@ function createDesktopState(value: Readonly<Record<string, unknown>>): DesktopSt
       value.developmentExtensionDirectories
     ),
     openTabs: readPersistedTabs(value.openTabs),
-    activeTabId: readActiveTabId(value.activeTabId)
+    activeTabId: readNonEmptyString(value.activeTabId)
   };
 }
 
@@ -251,12 +251,8 @@ function readPersistedTabs(value: unknown): readonly PersistedTab[] {
     .filter((tab) => tab.id.length > 0);
 }
 
-/** Reads the persisted active tab id, or null when absent/invalid. */
-function readActiveTabId(value: unknown): string | null {
-  return typeof value === "string" && value.length > 0 ? value : null;
-}
-
-function readWorkspacePath(value: unknown): string | null {
+/** Reads a non-empty string value, or null when absent/invalid. */
+function readNonEmptyString(value: unknown): string | null {
   return typeof value === "string" && value.length > 0 ? value : null;
 }
 

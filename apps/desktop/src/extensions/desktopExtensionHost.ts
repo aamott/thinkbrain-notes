@@ -280,14 +280,6 @@ export interface DesktopExtensionHostRegistries {
   readonly tabs: typeof desktopTabRegistry;
 }
 
-const defaultRegistries = (): DesktopExtensionHostRegistries => ({
-  commands: desktopCommandRegistry,
-  panels: desktopPanelRegistry,
-  editorHooks: markdownEditorHookRegistry,
-  editorHeaders: desktopEditorHeaderRegistry,
-  tabs: desktopTabRegistry
-});
-
 /**
  * One workspace surface shared by every extension.
  *
@@ -426,7 +418,14 @@ export function createDesktopExtensionHost(
   registries: Partial<DesktopExtensionHostRegistries> = {}
 ): DesktopExtensionHost {
   const coreHost = createExtensionHost();
-  const resolved: DesktopExtensionHostRegistries = { ...defaultRegistries(), ...registries };
+  const resolved: DesktopExtensionHostRegistries = {
+    commands: desktopCommandRegistry,
+    panels: desktopPanelRegistry,
+    editorHooks: markdownEditorHookRegistry,
+    editorHeaders: desktopEditorHeaderRegistry,
+    tabs: desktopTabRegistry,
+    ...registries
+  };
 
   const register = (extension: DesktopExtensionDefinition): Disposable => {
     let active = false;

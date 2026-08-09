@@ -1,5 +1,6 @@
 import { parseDocument, stringify } from "yaml";
 
+import { isRecord, uniqueStrings } from "./settings/internal";
 import type {
   FrontmatterParseResult,
   NoteDiagnostic,
@@ -189,7 +190,7 @@ function coerceFrontmatterFields(
     return {};
   }
 
-  if (isPlainRecord(parsedYaml)) {
+  if (isRecord(parsedYaml)) {
     return parsedYaml;
   }
 
@@ -200,10 +201,6 @@ function coerceFrontmatterFields(
   });
 
   return {};
-}
-
-function isPlainRecord(value: unknown): value is Readonly<Record<string, unknown>> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function yamlIssuesToDiagnostics(
@@ -302,8 +299,4 @@ function normalizeTagName(value: string): string | null {
 function normalizeAlias(value: string): string | null {
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
-}
-
-function uniqueStrings(values: readonly string[]): string[] {
-  return Array.from(new Set(values));
 }

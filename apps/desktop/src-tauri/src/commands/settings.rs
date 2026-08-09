@@ -293,9 +293,7 @@ pub fn read_desktop_state(app_settings: &Map<String, Value>) -> DesktopState {
 
 pub fn read_versioned_desktop_state(state: &Map<String, Value>) -> DesktopState {
     let supported_version = match state.get("version") {
-        Some(Value::Number(version)) => version.as_u64().is_some_and(|version| {
-            version == 0 || version == 1 || version == 2 || version == 3 || version == DESKTOP_STATE_VERSION
-        }),
+        Some(Value::Number(version)) => version.as_u64().is_some_and(|version| version <= DESKTOP_STATE_VERSION),
         None => true,
         _ => false,
     };

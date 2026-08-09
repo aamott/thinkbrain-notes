@@ -15,7 +15,8 @@ export {
 import {
   CURRENT_SETTINGS_VERSION,
   getErrorMessage,
-  isRecord
+  isRecord,
+  readSettingsVersion
 } from "./settings/internal";
 export { CURRENT_SETTINGS_VERSION };
 
@@ -224,7 +225,7 @@ function migrateSettingsObject(
       continue;
     }
 
-    if (step.fromVersion !== readRequiredVersion(value)) {
+    if (step.fromVersion !== (typeof value.version === "number" ? value.version : 0)) {
       throw new RangeError(
         `Expected settings version ${step.fromVersion} before migrating to ${step.toVersion}.`
       );
@@ -291,47 +292,6 @@ function normalizeAppSettings(value: unknown): ParseSettingsResult {
     },
     diagnostics
   };
-}
-
-function readSettingsVersion(value: Readonly<Record<string, unknown>>): {
-  readonly version: number;
-  readonly diagnostic?: SettingsDiagnostic;
-} {
-  const version = value.version;
-
-  if (version === undefined) {
-    return { version: 0 };
-  }
-
-  if (typeof version !== "number" || !Number.isInteger(version) || version < 0) {
-    return {
-      version: 0,
-      diagnostic: {
-        code: "settings.version.invalid",
-        message: "Application settings version must be a non-negative integer; defaults were used.",
-        severity: "error",
-        path: "version"
-      }
-    };
-  }
-
-  if (version > CURRENT_SETTINGS_VERSION) {
-    return {
-      version,
-      diagnostic: {
-        code: "settings.version.unsupported",
-        message: `Application settings version ${version} is newer than supported version ${CURRENT_SETTINGS_VERSION}; defaults were used.`,
-        severity: "error",
-        path: "version"
-      }
-    };
-  }
-
-  return { version };
-}
-
-function readRequiredVersion(value: Readonly<Record<string, unknown>>): number {
-  return typeof value.version === "number" ? value.version : 0;
 }
 
 function readTheme(

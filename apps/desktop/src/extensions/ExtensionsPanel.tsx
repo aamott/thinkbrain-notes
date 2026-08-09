@@ -8,16 +8,7 @@ import type { LoadOutcome, StartupFailure } from "./localExtensions";
 const EMPTY: readonly BootstrapEntry[] = [];
 const NO_FAILURES: readonly StartupFailure[] = [];
 
-const subscribe = (listener: () => void): (() => void) =>
-  getExtensionBootstrap()?.subscribe(listener) ?? (() => undefined);
-
-const snapshot = (): readonly BootstrapEntry[] => getExtensionBootstrap()?.entries() ?? EMPTY;
-
-const subscribeStartupFailures = (listener: () => void): (() => void) =>
-  getLocalExtensions()?.subscribe(listener) ?? (() => undefined);
-
-const startupFailuresSnapshot = (): readonly StartupFailure[] =>
-  getLocalExtensions()?.startupFailures() ?? NO_FAILURES;
+const noop = (): void => undefined;
 
 export interface ExtensionsPanelProps {
   /** Injected by tests; defaults to the app-wide bootstrap. */
@@ -42,12 +33,18 @@ const STATUS_LABELS: Record<BootstrapEntry["status"], string> = {
  * panel, and this list must not keep claiming it has not started.
  */
 export function ExtensionsPanel({ entries }: ExtensionsPanelProps) {
-  const live = useSyncExternalStore(subscribe, snapshot, snapshot);
+  const live = useSyncExternalStore(
+    (listener: () => void): (() => void) =>
+      getExtensionBootstrap()?.subscribe(listener) ?? noop,
+    (): readonly BootstrapEntry[] => getExtensionBootstrap()?.entries() ?? EMPTY,
+    (): readonly BootstrapEntry[] => getExtensionBootstrap()?.entries() ?? EMPTY
+  );
   const resolved = entries ?? live;
   const startupFailures = useSyncExternalStore(
-    subscribeStartupFailures,
-    startupFailuresSnapshot,
-    startupFailuresSnapshot
+    (listener: () => void): (() => void) =>
+      getLocalExtensions()?.subscribe(listener) ?? noop,
+    (): readonly StartupFailure[] => getLocalExtensions()?.startupFailures() ?? NO_FAILURES,
+    (): readonly StartupFailure[] => getLocalExtensions()?.startupFailures() ?? NO_FAILURES
   );
   const [errors, setErrors] = useState<readonly string[]>([]);
   const [busy, setBusy] = useState(false);

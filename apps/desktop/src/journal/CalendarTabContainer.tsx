@@ -2,6 +2,7 @@ import {
   aggregateCalendarDays,
   calendarGrid,
   formatJournalDate,
+  toJournalDate,
   type CalendarDay,
   type CalendarEntry,
   type CalendarView,
@@ -29,12 +30,6 @@ export interface CalendarTabContainerProps {
   readonly onViewChange?: (view: CalendarView) => void;
   readonly now?: () => Date;
 }
-
-const toJournalDate = (when: Date): JournalDate => ({
-  year: when.getFullYear(),
-  month: when.getMonth() + 1,
-  day: when.getDate()
-});
 
 export function CalendarTabContainer({
   service,

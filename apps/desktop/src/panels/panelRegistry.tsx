@@ -223,13 +223,6 @@ export function renderDesktopPanel(
   return panel.factory(context);
 }
 
-/** Looks up a registered panel and fails loudly when a shell id is invalid. */
-export function getDesktopPanel(id: DesktopPanelId): DesktopPanelContribution {
-  const panel = desktopPanelRegistry.get(id);
-  if (!panel) throw new Error(`Desktop panel '${id}' is not registered.`);
-  return panel;
-}
-
 /**
  * Render-safe lookup that returns the contribution or `undefined` instead of
  * throwing. Use this in React render paths so an unregistered id degrades to a

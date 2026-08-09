@@ -7,6 +7,7 @@
  */
 
 import { EXTENSION_ID_PATTERN } from "../lifecycle";
+import { isRecord } from "../settings/internal";
 
 /** Platforms an extension can declare support for. */
 export type ExtensionPlatform = "desktop" | "mobile";
@@ -71,9 +72,6 @@ const RELATIVE_ID_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 const KNOWN_PLATFORMS = new Set<string>(["desktop", "mobile"]);
 const KNOWN_ACTIVATION_EVENTS = /^(onStartup|onCommand:[a-z][a-z0-9-]*|onView:[a-z][a-z0-9-]*)$/;
 const DEFAULT_PLATFORMS: readonly ExtensionPlatform[] = ["desktop", "mobile"];
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const error = (code: string, message: string): ManifestDiagnostic => ({
   code,

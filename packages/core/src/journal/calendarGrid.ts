@@ -31,10 +31,23 @@ export interface CalendarGrid {
   readonly title: string;
 }
 
-const MONTHS = [
+export const MONTHS = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December"
 ] as const;
+
+/** Three-letter weekday labels, Sunday-first (D35). */
+export const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+
+/**
+ * Converts a local-time `Date` into a `JournalDate` (D19).
+ *
+ * Unlike `fromUtc`, this reads the host's local calendar fields — the journal
+ * names days in the user's timezone, not UTC.
+ */
+export function toJournalDate(when: Date): JournalDate {
+  return { year: when.getFullYear(), month: when.getMonth() + 1, day: when.getDate() };
+}
 
 const toUtc = (date: JournalDate): Date =>
   new Date(Date.UTC(date.year, date.month - 1, date.day));

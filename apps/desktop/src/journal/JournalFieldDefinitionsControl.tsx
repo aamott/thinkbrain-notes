@@ -401,7 +401,7 @@ export function JournalFieldDefinitionsControl({
   return (
     <div className="flex flex-col gap-2">
       <div className="rounded-small border border-border">
-        {fields.length === 0 && draft?.editing === undefined && fields.length === 0 && (
+        {fields.length === 0 && draft?.editing === undefined && (
           <p className="m-0 px-2 py-2 text-xs text-muted-foreground">
             Nothing yet — entries are just the date and what you write, which is a fine way to
             journal.

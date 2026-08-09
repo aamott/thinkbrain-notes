@@ -4,6 +4,7 @@ import {
   formatJournalDate,
   parseJournalFilename,
   resolveNewEntryPath,
+  toJournalDate,
   UNDATED,
   type JournalDate,
   type JournalEntryRef
@@ -85,10 +86,6 @@ export class JournalError extends Error {
     super(message, options);
     this.name = "JournalError";
   }
-}
-
-function toJournalDate(when: Date): JournalDate {
-  return { year: when.getFullYear(), month: when.getMonth() + 1, day: when.getDate() };
 }
 
 function minuteOfDay(when: Date): number {

@@ -72,6 +72,14 @@ const unavailable = (command: DesktopCommandDefinition): DesktopCommand => ({
   availability: "unavailable"
 });
 
+/** Wraps a command action so the palette closes after it runs. */
+const withClosePalette = (
+  action: (context: DesktopCommandContext) => void
+): ((context: DesktopCommandContext) => void) => (context) => {
+  action(context);
+  context.closePalette();
+};
+
 /** First-party command ownership and availability are explicit and testable. */
 export const builtInDesktopCommands: readonly DesktopCommand[] = [
   unavailable({
@@ -100,82 +108,73 @@ export const builtInDesktopCommands: readonly DesktopCommand[] = [
     keywords: ["find", "full text"],
     keybinding: "Ctrl/Cmd+Shift+F",
     shortcut: "Ctrl/Cmd+Shift+F",
-    handler: ({ openSearch, closePalette }) => {
+    handler: withClosePalette(({ openSearch }) => {
       openSearch();
-      closePalette();
-    }
+    })
   }),
   available({
     id: "toggle-live-preview",
     title: "Toggle live preview",
     keywords: ["markdown", "wysiwyg", "preview", "source", "editor"],
-    handler: ({ toggleLivePreview, closePalette }) => {
+    handler: withClosePalette(({ toggleLivePreview }) => {
       toggleLivePreview();
-      closePalette();
-    }
+    })
   }),
   available({
     id: "toggle-theme",
     title: "Toggle theme",
     keywords: ["dark", "light", "appearance"],
-    handler: ({ toggleTheme, closePalette }) => {
+    handler: withClosePalette(({ toggleTheme }) => {
       toggleTheme();
-      closePalette();
-    }
+    })
   }),
   available({
     id: "toggle-explorer",
     title: "Toggle Explorer",
     keywords: ["sidebar", "files"],
-    handler: ({ toggleExplorer, closePalette }) => {
+    handler: withClosePalette(({ toggleExplorer }) => {
       toggleExplorer();
-      closePalette();
-    }
+    })
   }),
   available({
     id: "toggle-outline",
     title: "Toggle Outline",
     keywords: ["sidebar", "headings"],
-    handler: ({ toggleOutline, closePalette }) => {
+    handler: withClosePalette(({ toggleOutline }) => {
       toggleOutline();
-      closePalette();
-    }
+    })
   }),
   available({
     id: "toggle-assistant",
     title: "Toggle Assistant",
     keywords: ["chat", "agent", "ai"],
-    handler: ({ toggleAssistant, closePalette }) => {
+    handler: withClosePalette(({ toggleAssistant }) => {
       toggleAssistant();
-      closePalette();
-    }
+    })
   }),
   available({
     id: "toggle-bottom-panel",
     title: "Toggle bottom panel",
     keywords: ["terminal", "dock"],
-    handler: ({ toggleBottomPanel, closePalette }) => {
+    handler: withClosePalette(({ toggleBottomPanel }) => {
       toggleBottomPanel();
-      closePalette();
-    }
+    })
   }),
   available({
     id: "open-settings",
     title: "Open settings",
     keywords: ["preferences", "configuration"],
-    handler: ({ openSettings, closePalette }) => {
+    handler: withClosePalette(({ openSettings }) => {
       openSettings();
-      closePalette();
-    }
+    })
   }),
   available({
     id: "rebuild-index",
     title: "Rebuild workspace index",
     keywords: ["search", "index", "refresh"],
-    handler: ({ rebuildIndex, closePalette }) => {
+    handler: withClosePalette(({ rebuildIndex }) => {
       rebuildIndex();
-      closePalette();
-    }
+    })
   }),
   unavailable({
     id: "open-graph",

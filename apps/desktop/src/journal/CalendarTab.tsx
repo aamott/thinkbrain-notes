@@ -2,6 +2,7 @@ import {
   calendarGrid,
   formatJournalDate,
   shiftCalendar,
+  WEEKDAYS,
   type CalendarDay,
   type CalendarView,
   type JournalDate,
@@ -22,7 +23,6 @@ import { useRef, useState } from "react";
  * entries has no single note to open.
  */
 
-const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 const MAX_DOTS = 3;
 
 /** `3–9 August 2026` becomes `3–9 Aug 2026` where the strip is narrow (D57). */

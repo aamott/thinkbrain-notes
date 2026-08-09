@@ -27,3 +27,68 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
 export function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
+
+/** De-duplicates a list of strings, preserving first-occurrence order. */
+export function uniqueStrings(values: readonly string[]): string[] {
+  return Array.from(new Set(values));
+}
+
+/**
+ * Diagnostic shape returned by {@link readSettingsVersion}.
+ *
+ * Structurally compatible with `SettingsDiagnostic` (declared in `../settings`)
+ * so callers can use the result without an explicit cast. Defined locally to
+ * keep this leaf module free of imports from the settings persistence layer.
+ */
+export interface SettingsVersionDiagnostic {
+  readonly code: string;
+  readonly message: string;
+  readonly severity: "error" | "warning";
+  readonly path?: string;
+}
+
+/**
+ * Reads and validates the `version` field from a raw settings record.
+ *
+ * Defaults to version 0 (unversioned) when the field is absent. A malformed
+ * version (non-integer, negative) yields a `settings.version.invalid` error
+ * diagnostic and is treated as v0. A version newer than
+ * `CURRENT_SETTINGS_VERSION` is rejected with a `settings.version.unsupported`
+ * error diagnostic so the caller can fall back to defaults rather than
+ * silently "migrating" a future document down to v0.
+ */
+export function readSettingsVersion(
+  value: Readonly<Record<string, unknown>>
+): { readonly version: number; readonly diagnostic?: SettingsVersionDiagnostic } {
+  const version = value.version;
+
+  if (version === undefined) {
+    return { version: 0 };
+  }
+
+  if (typeof version !== "number" || !Number.isInteger(version) || version < 0) {
+    return {
+      version: 0,
+      diagnostic: {
+        code: "settings.version.invalid",
+        message: "Application settings version must be a non-negative integer; defaults were used.",
+        severity: "error",
+        path: "version"
+      }
+    };
+  }
+
+  if (version > CURRENT_SETTINGS_VERSION) {
+    return {
+      version,
+      diagnostic: {
+        code: "settings.version.unsupported",
+        message: `Application settings version ${version} is newer than supported version ${CURRENT_SETTINGS_VERSION}; defaults were used.`,
+        severity: "error",
+        path: "version"
+      }
+    };
+  }
+
+  return { version };
+}

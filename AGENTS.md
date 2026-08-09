@@ -75,7 +75,7 @@ Filename grammar: `[NN-]status-name[-urgency]-difficulty.md`
 ```
 
 ## Reviews
-Review findings are stored in `docs/reviews/` with filename format `YYYY-MM-DD/finding_name-urgency-difficulty.md`. Findings are deleted upon being addressed.
+Review findings are stored in `docs/reviews/` with filename format `YYYY-MM-DD/finding_name-urgency-difficulty.md`. Check validity before implementing and avoid duplication. Findings are deleted upon being addressed.
 
 ## Optional: Repomix
 

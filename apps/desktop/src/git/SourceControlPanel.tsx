@@ -178,6 +178,15 @@ async function loadSourceControlState(
   }
 }
 
+/** Maps a non-`status` Git status result to a panel state, surfacing Git unavailability distinctly. */
+function mapGitStatusFailure(
+  result: Exclude<GitStatusResult, { kind: "status" }>
+): SourceControlPanelState {
+  return result.kind === "git-unavailable"
+    ? { kind: "git-missing", message: result.message }
+    : { kind: "error", message: result.message };
+}
+
 async function repositoryState(
   rootPath: string,
   branch: string | null,
@@ -189,9 +198,7 @@ async function repositoryState(
     return { kind: "repository", branch, status: result.status, initialized };
   }
 
-  return result.kind === "git-unavailable"
-    ? { kind: "git-missing", message: result.message }
-    : { kind: "error", message: result.message };
+  return mapGitStatusFailure(result);
 }
 
 function refreshedRepositoryState(
@@ -201,9 +208,7 @@ function refreshedRepositoryState(
   if (result.kind === "status") {
     return { ...state, actionError: undefined, status: result.status, isRefreshing: false };
   }
-  return result.kind === "git-unavailable"
-    ? { kind: "git-missing", message: result.message }
-    : { kind: "error", message: result.message };
+  return mapGitStatusFailure(result);
 }
 
 export function SourceControlPanelContent({

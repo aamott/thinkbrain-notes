@@ -1,6 +1,8 @@
 import {
   compareJournalEntries,
   formatJournalDate,
+  MONTHS,
+  WEEKDAYS,
   type JournalDate
 } from "@thinkbrain/core";
 
@@ -77,12 +79,6 @@ export interface JournalView {
   readonly total: number;
   readonly activeFilterCount: number;
 }
-
-const MONTHS = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December"
-] as const;
-const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 
 const yearKey = (date: JournalDate): string => String(date.year);
 const monthKey = (date: JournalDate): string =>

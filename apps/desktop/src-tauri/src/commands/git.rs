@@ -352,7 +352,7 @@ pub fn update_git_index_with(
         .iter()
         .map(|path| {
             let absolute = resolve_workspace_entry_path(root, path)?;
-            absolute.strip_prefix(root).map(|p| p.to_string_lossy().to_string().replace('\\', "/")).map_err(|_| {
+            absolute.strip_prefix(root).map(|p| p.to_string_lossy().into_owned().replace('\\', "/")).map_err(|_| {
                 NativeError::new("git.invalid_path", "Path outside workspace")
             })
         })

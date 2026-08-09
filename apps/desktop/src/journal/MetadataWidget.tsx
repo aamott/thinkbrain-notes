@@ -1,8 +1,9 @@
-import type {
-  JournalDate,
-  JournalFieldDefinition,
-  JournalFieldValue,
-  NoteDiagnostic
+import {
+  MONTHS,
+  type JournalDate,
+  type JournalFieldDefinition,
+  type JournalFieldValue,
+  type NoteDiagnostic
 } from "@thinkbrain/core";
 import { useState } from "react";
 
@@ -45,10 +46,6 @@ export interface MetadataWidgetProps {
 
 const WEEKDAYS = [
   "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"
-] as const;
-const MONTHS = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December"
 ] as const;
 
 /**

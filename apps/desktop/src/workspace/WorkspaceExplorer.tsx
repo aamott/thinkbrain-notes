@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useId, useMemo, useReducer, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useId, useMemo, useReducer, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, type RefObject } from "react";
 import { Check, ChevronDown, Folder, FolderOpen, FolderPlus, MoreHorizontal } from "lucide-react";
 import type { NativeWorkspaceEntry, NativeWorkspaceSnapshot } from "../native/commands";
 import {
@@ -909,6 +909,45 @@ function InlineNameInput({
 
 // ---- Context menu ----
 
+/**
+ * Shared keyboard navigation for menu-like components whose items are
+ * `<button role="menuitem">` elements rendered inside a container ref.
+ * Handles ArrowDown/ArrowUp (with wrap-around), Home, End, and Escape.
+ * The Escape close behavior is supplied via `onClose` so callers can plug
+ * in their own close semantics (e.g. restoring focus to a trigger button).
+ */
+function handleMenuKeyDown(
+  event: ReactKeyboardEvent,
+  menuRef: RefObject<HTMLDivElement | null>,
+  onClose: () => void
+): void {
+  const items = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>("button[role='menuitem']") ?? []);
+  if (!items.length) return;
+  const index = items.indexOf(document.activeElement as HTMLButtonElement);
+  switch (event.key) {
+    case "ArrowDown":
+      event.preventDefault();
+      items[(index + 1) % items.length]?.focus();
+      break;
+    case "ArrowUp":
+      event.preventDefault();
+      items[(index - 1 + items.length) % items.length]?.focus();
+      break;
+    case "Home":
+      event.preventDefault();
+      items[0]?.focus();
+      break;
+    case "End":
+      event.preventDefault();
+      items[items.length - 1]?.focus();
+      break;
+    case "Escape":
+      event.preventDefault();
+      onClose();
+      break;
+  }
+}
+
 type ContextMenuTarget =
   | { readonly kind: "background" }
   | { readonly kind: "file" | "folder"; readonly entry: NativeWorkspaceEntry };
@@ -957,31 +996,7 @@ function WorkspaceContextMenu({ menu, onClose, onStartCreate, onStartRename, onR
   };
 
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
-    const items = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>("button[role='menuitem']") ?? []);
-    if (!items.length) return;
-    const index = items.indexOf(document.activeElement as HTMLButtonElement);
-    switch (event.key) {
-      case "ArrowDown":
-        event.preventDefault();
-        items[(index + 1) % items.length]?.focus();
-        break;
-      case "ArrowUp":
-        event.preventDefault();
-        items[(index - 1 + items.length) % items.length]?.focus();
-        break;
-      case "Home":
-        event.preventDefault();
-        items[0]?.focus();
-        break;
-      case "End":
-        event.preventDefault();
-        items[items.length - 1]?.focus();
-        break;
-      case "Escape":
-        event.preventDefault();
-        onClose();
-        break;
-    }
+    handleMenuKeyDown(event, menuRef, onClose);
   };
 
   return (
@@ -1146,31 +1161,8 @@ export function WorkspaceSelector({ currentPath, paths, onSelect, onAdd }: { rea
   }, [closeMenu, open]);
 
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
-    const items = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>("button[role='menuitem']") ?? []);
-    if (!items.length) return;
-    const index = items.indexOf(document.activeElement as HTMLButtonElement);
-    switch (event.key) {
-      case "ArrowDown":
-        event.preventDefault();
-        items[(index + 1) % items.length]?.focus();
-        break;
-      case "ArrowUp":
-        event.preventDefault();
-        items[(index - 1 + items.length) % items.length]?.focus();
-        break;
-      case "Home":
-        event.preventDefault();
-        items[0]?.focus();
-        break;
-      case "End":
-        event.preventDefault();
-        items[items.length - 1]?.focus();
-        break;
-      case "Escape":
-        event.preventDefault();
-        closeMenu(true);
-        break;
-    }
+    // Restore focus to the trigger when Escape closes the selector menu.
+    handleMenuKeyDown(event, menuRef, () => closeMenu(true));
   };
 
   return (

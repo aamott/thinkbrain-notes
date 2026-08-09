@@ -77,9 +77,6 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
   const extensions = options.extensions ?? builtInExtensions;
 
   const listeners = new Set<() => void>();
-  const notify = (): void => {
-    for (const listener of listeners) listener();
-  };
   let snapshot: readonly BootstrapEntry[] = [];
   const states = new Map<string, EntryState>();
   const failedManifests: BootstrapEntry[] = [];
@@ -238,7 +235,7 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
       })),
       ...failedManifests
     ];
-    notify();
+    for (const listener of listeners) listener();
   }
 
   rebuildSnapshot();

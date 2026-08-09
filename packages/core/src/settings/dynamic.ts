@@ -16,7 +16,8 @@ import type { SettingsDiagnostic } from "../settings";
 import {
   CURRENT_SETTINGS_VERSION,
   getErrorMessage,
-  isRecord
+  isRecord,
+  readSettingsVersion
 } from "./internal";
 
 /** Result of parsing the dynamic app settings document. */
@@ -104,7 +105,7 @@ export function parseDynamicAppSettings(
   // defaults + an error diagnostic, mirroring the legacy `readSettingsVersion`
   // strict check. Skipped migration steps emit warning diagnostics that are
   // surfaced alongside the parse result.
-  const versionRead = readDynamicSettingsVersion(parsed);
+  const versionRead = readSettingsVersion(parsed);
   if (versionRead.diagnostic) {
     return {
       values: defaults,
@@ -248,7 +249,7 @@ function migrateDynamicSettingsObject(
   record: Readonly<Record<string, unknown>>,
   registry: SettingsRegistry
 ): { record: Record<string, unknown>; diagnostics: SettingsDiagnostic[] } {
-  const fromVersion = readDynamicSettingsVersion(record).version;
+  const fromVersion = readSettingsVersion(record).version;
   let value: Record<string, unknown> = { ...record };
   const diagnostics: SettingsDiagnostic[] = [];
 
@@ -258,7 +259,7 @@ function migrateDynamicSettingsObject(
 
   for (const step of migrations) {
     if (step.fromVersion < fromVersion) continue;
-    const currentVersion = readDynamicSettingsVersion(value).version;
+    const currentVersion = readSettingsVersion(value).version;
     if (currentVersion !== step.fromVersion) {
       // Skip if the record's version doesn't match this step's expected source.
       // This is lenient compared to the legacy strict check, but the dynamic
@@ -278,54 +279,4 @@ function migrateDynamicSettingsObject(
 
   value.version = CURRENT_SETTINGS_VERSION;
   return { record: value, diagnostics };
-}
-
-/**
- * Reads the `version` field from a raw record, defaulting to 0 (unversioned).
- *
- * Mirrors the legacy `readSettingsVersion` strict check: a version newer than
- * `CURRENT_SETTINGS_VERSION` is rejected with an error diagnostic so the caller
- * can fall back to defaults rather than silently "migrating" a future document
- * down to v0. A malformed version (non-integer, negative) yields a
- * `settings.version.invalid` error diagnostic and is treated as v0.
- */
-function readDynamicSettingsVersion(
-  value: Readonly<Record<string, unknown>>
-): { version: number; diagnostic?: SettingsDiagnostic } {
-  const version = value.version;
-
-  if (version === undefined) {
-    return { version: 0 };
-  }
-
-  if (
-    typeof version !== "number" ||
-    !Number.isInteger(version) ||
-    version < 0
-  ) {
-    return {
-      version: 0,
-      diagnostic: {
-        code: "settings.version.invalid",
-        message:
-          "Application settings version must be a non-negative integer; defaults were used.",
-        severity: "error",
-        path: "version"
-      }
-    };
-  }
-
-  if (version > CURRENT_SETTINGS_VERSION) {
-    return {
-      version,
-      diagnostic: {
-        code: "settings.version.unsupported",
-        message: `Application settings version ${version} is newer than supported version ${CURRENT_SETTINGS_VERSION}; defaults were used.`,
-        severity: "error",
-        path: "version"
-      }
-    };
-  }
-
-  return { version };
 }

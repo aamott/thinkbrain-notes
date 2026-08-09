@@ -1,4 +1,5 @@
 import { parseFrontmatter, serializeFrontmatter } from "./frontmatter";
+import { uniqueStrings } from "./settings/internal";
 import type { MarkdownTask, ParsedNote, SerializableNote, WikiLink } from "./note-model";
 
 const INLINE_TAG_PATTERN = /(^|[^A-Za-z0-9_/-])#([A-Za-z0-9][A-Za-z0-9_/-]*)/g;
@@ -153,10 +154,6 @@ function collectMatches(
   }
 
   return uniqueStrings(values);
-}
-
-function uniqueStrings(values: readonly string[]): string[] {
-  return Array.from(new Set(values));
 }
 
 function maskMarkdown(markdown: string, frontmatter: { raw: string; endOffset: number } | null): string {

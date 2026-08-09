@@ -6,7 +6,6 @@ import {
   builtInDesktopPanels,
   createDesktopPanelRegistry,
   desktopPanelRegistry,
-  getDesktopPanel,
   getDesktopPanelOrUndefined,
   getLeftPanelContributions,
   getRightPanelContributions,
@@ -120,12 +119,6 @@ describe("desktop panel registry", () => {
     expect(leftMarkup).toContain("Tags will appear here once note indexing is available.");
     expect(rightMarkup).toContain("Backlinks unavailable");
     expect(rightMarkup).toContain("This inspector activates after the workspace link index is available.");
-  });
-
-  it("throws a pinned error shape for an unknown id via getDesktopPanel", () => {
-    expect(() => getDesktopPanel("missing")).toThrow(
-      "Desktop panel 'missing' is not registered."
-    );
   });
 
   it("returns undefined for an unknown id via the render-safe lookup", () => {

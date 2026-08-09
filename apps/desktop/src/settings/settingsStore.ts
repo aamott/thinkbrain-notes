@@ -185,6 +185,27 @@ function scopeOfKey(registry: SettingsRegistry, key: string): SettingScope | und
 }
 
 /**
+ * Partitions a set of setting entries into app-scoped and workspace-scoped
+ * buckets based on the registry. Keys whose scope is not "workspace" (including
+ * unknown keys) are routed to the app bucket.
+ */
+function partitionByScope(
+  registry: SettingsRegistry,
+  entries: Record<string, unknown>
+): { app: Record<string, unknown>; workspace: Record<string, unknown> } {
+  const app: Record<string, unknown> = {};
+  const workspace: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(entries)) {
+    if (scopeOfKey(registry, key) === "workspace") {
+      workspace[key] = value;
+    } else {
+      app[key] = value;
+    }
+  }
+  return { app, workspace };
+}
+
+/**
  * Computes the dirty flag and count from the staged changes map.
  */
 function computeDirty(staged: Record<string, unknown>): { isDirty: boolean; dirtyCount: number } {
@@ -336,16 +357,9 @@ export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettin
 
       // Build the full effective values map for validation: merge loaded values
       // with staged changes so validators see the complete picture.
-      const appEffective = { ...state.appValues };
-      const workspaceEffective = { ...(state.workspaceValues ?? {}) };
-      for (const [key, value] of Object.entries(staged)) {
-        const scope = scopeOfKey(appSettingsRegistry, key);
-        if (scope === "workspace") {
-          workspaceEffective[key] = value;
-        } else {
-          appEffective[key] = value;
-        }
-      }
+      const { app: appStagedApp, workspace: appStagedWorkspace } = partitionByScope(appSettingsRegistry, staged);
+      const appEffective = { ...state.appValues, ...appStagedApp };
+      const workspaceEffective = { ...(state.workspaceValues ?? {}), ...appStagedWorkspace };
 
       // Validate all effective values (both scopes).
       const diagnostics = validateSettings(appSettingsRegistry, {
@@ -360,16 +374,7 @@ export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettin
 
       try {
         // Partition staged changes by scope; only write the scope that has changes.
-        const appStaged: Record<string, unknown> = {};
-        const workspaceStaged: Record<string, unknown> = {};
-        for (const [key, value] of Object.entries(staged)) {
-          const scope = scopeOfKey(appSettingsRegistry, key);
-          if (scope === "workspace") {
-            workspaceStaged[key] = value;
-          } else {
-            appStaged[key] = value;
-          }
-        }
+        const { app: appStaged, workspace: workspaceStaged } = partitionByScope(appSettingsRegistry, staged);
 
         // Compute the serialized payloads and merged values BEFORE issuing any
         // gateway write. We do not call `set()` until BOTH writes succeed, so a

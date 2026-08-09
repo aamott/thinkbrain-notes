@@ -151,7 +151,6 @@ function isValueTypeValid(def: SettingDefinition, value: unknown): boolean {
         value >= (def.min ?? -Infinity) && value <= (def.max ?? Infinity)
       );
     case "string":
-      return typeof value === "string";
     case "path":
       // Paths are strings; the portability warning is handled at export time.
       return typeof value === "string";
