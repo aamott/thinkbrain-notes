@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { cn } from "../lib/utils";
 import { type RightPanel } from "../shell/shellTypes";
 import { Unavailable } from "../shell/Unavailable";
@@ -28,22 +29,28 @@ type RightPopoutProps = {
 export function RightPopout({ panel, rootPath, documentContents }: RightPopoutProps) {
   const rightPanels = useRightPanelContributions();
   const contribution = getDesktopPanelOrUndefined(panel);
-  const context: DesktopPanelContext = {
-    rootPath,
-    documentContents,
-    explorerProps: {
-      initialWorkspacePath: null,
-      onWorkspaceOpened: () => undefined,
-      onWorkspaceUnavailable: () => undefined,
-      onMarkdownFileSelected: () => undefined,
-      onMarkdownFileCreated: () => undefined,
-      onNewNoteFocusHandled: () => undefined,
-      newNoteFocusRequest: 0,
-      recentWorkspacePaths: [],
-      onWorkspaceLaunched: () => undefined
-    },
-    onOpenSearchResult: () => undefined
-  };
+  // Stable across parent renders, for the same reason as `LeftPopout`: a fresh
+  // object re-renders every kept-mounted panel, and the outline and properties
+  // panels re-read the whole document when they render.
+  const context: DesktopPanelContext = useMemo(
+    () => ({
+      rootPath,
+      documentContents,
+      explorerProps: {
+        initialWorkspacePath: null,
+        onWorkspaceOpened: () => undefined,
+        onWorkspaceUnavailable: () => undefined,
+        onMarkdownFileSelected: () => undefined,
+        onMarkdownFileCreated: () => undefined,
+        onNewNoteFocusHandled: () => undefined,
+        newNoteFocusRequest: 0,
+        recentWorkspacePaths: [],
+        onWorkspaceLaunched: () => undefined
+      },
+      onOpenSearchResult: () => undefined
+    }),
+    [rootPath, documentContents]
+  );
 
   if (!contribution) {
     return (
