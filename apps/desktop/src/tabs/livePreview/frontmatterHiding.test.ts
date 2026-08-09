@@ -10,6 +10,10 @@ import { themeRules } from "./theme";
  * Hidden while you are reading, shown when the cursor arrives — the same deal
  * `#` and `**` already get. The one exception is a block that will not parse:
  * hiding that would hide the evidence.
+ *
+ * A cursor at position 0 is inside the block and reveals it, which is correct
+ * here: keeping a freshly opened entry hidden is `MarkdownEditor`'s job, by
+ * starting the cursor past the frontmatter rather than at byte 0.
  */
 
 let preview: PreviewHandle | null = null;
@@ -44,8 +48,9 @@ describe("hiding frontmatter", () => {
   });
 
   it("reveals the block when the cursor is inside it", () => {
-    // Cursor on the `mood:` line.
+    // Cursor on the `mood:` line, in an editor someone is actually typing in.
     preview = mountPreview(NOTE, NOTE.indexOf("mood"));
+    preview.view.focus();
 
     expect(preview.lineClass(3)).not.toContain("cm-frontmatter-hidden");
     expect(preview.lineText(3)).toBe("mood: happy");
@@ -53,6 +58,7 @@ describe("hiding frontmatter", () => {
 
   it("reveals it from the opening fence too", () => {
     preview = mountPreview(NOTE, 0);
+    preview.view.focus();
 
     expect(preview.lineClass(1)).not.toContain("cm-frontmatter-hidden");
     expect(preview.lineText(1)).toBe("---");

@@ -8,6 +8,8 @@ import {
   desktopEditorHeaderRegistry,
   type EditorHeaderContext
 } from "./editorHeaderRegistry";
+import { EditorView } from "@codemirror/view";
+
 import { MarkdownEditor } from "./MarkdownEditor";
 
 let root: Root | null = null;
@@ -174,5 +176,40 @@ describe("MarkdownEditor header slot", () => {
     expect(host.querySelector('[data-editor-header="temporary"]')).toBeNull();
     expect(host.querySelector(".cm-editor")).toBe(editorBefore);
     expect(host.querySelector(".cm-content")?.textContent).toContain("body");
+  });
+});
+
+/** Reads the live editor's cursor offset out of the rendered view. */
+const cursorOf = (host: HTMLElement): number => {
+  const editor = host.querySelector(".cm-editor");
+  const view = editor === null ? null : EditorView.findFromDOM(editor as HTMLElement);
+  if (!view) throw new Error("No editor mounted.");
+  return view.state.selection.main.head;
+};
+
+describe("where the cursor starts", () => {
+  /**
+   * The reported bug: a journal entry opened with its frontmatter showing,
+   * because a new document's selection sits at position 0 — inside the block —
+   * and live preview reads that as "the cursor is in here, reveal it".
+   */
+  it("starts after the frontmatter, not inside it", async () => {
+    const host = await mount(
+      <MarkdownEditor
+        value={"---\ndate: 2026-08-08\nmood: happy\n---\n\nBread needed more salt.\n"}
+        onChange={() => {}}
+        onSave={() => {}}
+      />
+    );
+
+    expect(cursorOf(host)).toBe(37);
+  });
+
+  it("starts at the top of a note that has no frontmatter", async () => {
+    const host = await mount(
+      <MarkdownEditor value={"# Heading\n\nBread.\n"} onChange={() => {}} onSave={() => {}} />
+    );
+
+    expect(cursorOf(host)).toBe(0);
   });
 });

@@ -26,6 +26,12 @@ export interface MarkdownEditorProps {
 }
 
 /** CodeMirror 6 is isolated behind this controlled, document-value boundary. */
+/** Offset of the first character after any frontmatter block. */
+function bodyStart(source: string): number {
+  const match = /^---\r?\n[\s\S]*?\r?\n---\r?\n/.exec(source);
+  return match ? match[0].length : 0;
+}
+
 export function MarkdownEditor({
   value,
   isSaving = false,
@@ -73,6 +79,11 @@ export function MarkdownEditor({
       parent: hostRef.current,
       state: EditorState.create({
         doc: valueRef.current,
+        // Past the frontmatter, not at byte 0. A document's default selection
+        // sits inside the block, which live preview reads as "the cursor is in
+        // here" and reveals it — so an entry opened showing the very thing the
+        // dateline is there to replace. The body is also simply where you write.
+        selection: { anchor: bodyStart(valueRef.current) },
         extensions: [...extensions, keymap.of(keybindings)]
       })
     });
