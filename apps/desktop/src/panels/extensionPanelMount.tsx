@@ -165,10 +165,10 @@ export function ExtensionPanelMountPoint({
 
 /**
  * Adapts a mount function into the render factory the panel registry stores.
- *
- * Only the framework-neutral slice of the panel context is forwarded: the rest
- * of `DesktopPanelContext` is React props for first-party panels, which an
- * extension must not receive.
+ * Only the framework-neutral slice is forwarded (rootPath + documentContents);
+ * React props for first-party panels are not exposed to extensions.
+ * `documentContents` is coalesced to `null` for left-side extension panels,
+ * whose context no longer carries it.
  */
 // eslint-disable-next-line react-refresh/only-export-components -- factory for non-tsx extension host
 export function createExtensionPanelMountFactory(
@@ -178,7 +178,7 @@ export function createExtensionPanelMountFactory(
     <ExtensionPanelMountPoint
       mount={mount}
       rootPath={context.rootPath}
-      documentContents={context.documentContents}
+      documentContents={context.documentContents ?? null}
     />
   );
 }

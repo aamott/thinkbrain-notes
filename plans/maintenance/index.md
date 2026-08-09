@@ -23,8 +23,8 @@ created before implementation begins.
    prerequisite for safely accepting extension-contributed settings.
 2. `pending-registry_lookup_safety-low-med.md` — remove registry non-null assertions
    and preserve lifecycle/disposal invariants.
-3. `pending-desktop_panel_contexts-low-med.md` — separate left/right panel factory
-   contexts before adding more extension panels.
+3. `done-desktop_panel_contexts-low-med.md` — separate left/right panel factory
+   contexts before adding more extension panels. (Implemented; pending review.)
 4. `pending-narrow_shell_panel_ids-low-med.md` — restore narrow shell selection types
    while keeping registry IDs extensible.
 5. `pending-settings_effective_value_source-low-med.md` — one effective-value source

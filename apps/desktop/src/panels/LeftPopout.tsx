@@ -6,10 +6,9 @@ import type { WorkspaceExplorerProps } from "../workspace/WorkspaceExplorer";
 import { PanelTitle } from "./PanelTitle";
 import {
   getDesktopPanelOrUndefined,
-  renderDesktopPanel,
   useLeftPanelContributions,
-  type DesktopPanelContext,
-  type DesktopPanelContribution
+  type LeftPanelContribution,
+  type LeftPanelContext
 } from "./panelRegistry";
 
 type LeftPopoutProps = {
@@ -30,9 +29,11 @@ type LeftPopoutProps = {
 export function LeftPopout({ panel, rootPath, explorerProps, onOpenSearchResult }: LeftPopoutProps) {
   // Stable across panel switches: a fresh object here would re-render every
   // kept-mounted panel — the file tree and Git status included — each time the
-  // user opens a different popout.
-  const context: DesktopPanelContext = useMemo(
-    () => ({ rootPath, documentContents: null, explorerProps, onOpenSearchResult }),
+  // user opens a different popout. Only the left-side state is constructed
+  // here; left factories cannot see `documentContents` and right factories are
+  // never rendered by this popout.
+  const context: LeftPanelContext = useMemo(
+    () => ({ rootPath, explorerProps, onOpenSearchResult }),
     [rootPath, explorerProps, onOpenSearchResult]
   );
   const leftPanels = useLeftPanelContributions();
@@ -89,8 +90,8 @@ const MountedPanel = memo(function MountedPanel({
   isActive,
   isAvailable
 }: {
-  readonly contribution: DesktopPanelContribution;
-  readonly context: DesktopPanelContext;
+  readonly contribution: LeftPanelContribution;
+  readonly context: LeftPanelContext;
   readonly isActive: boolean;
   readonly isAvailable: boolean;
 }) {
@@ -99,7 +100,7 @@ const MountedPanel = memo(function MountedPanel({
       className={isActive ? "flex flex-col flex-1 min-h-0" : "hidden"}
       data-panel-available={isAvailable}
     >
-      {renderDesktopPanel(contribution, context)}
+      {contribution.factory(context)}
     </div>
   );
 });

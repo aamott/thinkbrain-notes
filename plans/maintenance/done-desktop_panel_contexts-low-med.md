@@ -31,12 +31,12 @@ silently call a fabricated no-op explorer/search callback.
 
 ## Acceptance criteria
 
-- [ ] Right-side factories cannot type-check against explorer/search-only fields, and
+- [x] Right-side factories cannot type-check against explorer/search-only fields, and
       no fake left context is constructed in `RightPopout`.
-- [ ] Left-side factories retain the real explorer/search state and callbacks.
-- [ ] Existing built-in outline, backlinks, properties, assistant, explorer, search,
+- [x] Left-side factories retain the real explorer/search state and callbacks.
+- [x] Existing built-in outline, backlinks, properties, assistant, explorer, search,
       source-control, tags, and extensions panels render as before.
-- [ ] Panel availability metadata and unavailable-state rendering are unchanged.
+- [x] Panel availability metadata and unavailable-state rendering are unchanged.
 
 ## Manual checks
 

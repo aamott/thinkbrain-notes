@@ -1,4 +1,5 @@
 import { renderToStaticMarkup } from "react-dom/server";
+import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 import { LeftPopout } from "./LeftPopout";
 import { RightPopout } from "./RightPopout";
@@ -15,25 +16,58 @@ import {
   type BuiltInLeftPanel,
   type BuiltInRightPanel,
   type DesktopPanelContext,
-  type DesktopPanelContribution
+  type DesktopPanelContribution,
+  type LeftPanelContribution,
+  type LeftPanelContext,
+  type RightPanelContribution,
+  type RightPanelContext
 } from "./panelRegistry";
 
+const explorerProps: DesktopPanelContext["explorerProps"] = {
+  initialWorkspacePath: null,
+  onWorkspaceOpened: () => undefined,
+  onWorkspaceUnavailable: () => undefined,
+  onMarkdownFileSelected: () => undefined,
+  onMarkdownFileCreated: () => undefined,
+  onNewNoteFocusHandled: () => undefined,
+  newNoteFocusRequest: 0,
+  recentWorkspacePaths: [],
+  onWorkspaceLaunched: () => undefined
+};
+
+/**
+ * The wide registry-internal context. Kept for the registry-wide API
+ * (`isAvailable`, `renderDesktopPanel`); the side-specific popouts and
+ * factories use {@link leftContext}/{@link rightContext} instead.
+ */
 const context: DesktopPanelContext = {
   rootPath: null,
   documentContents: null,
-  explorerProps: {
-    initialWorkspacePath: null,
-    onWorkspaceOpened: () => undefined,
-    onWorkspaceUnavailable: () => undefined,
-    onMarkdownFileSelected: () => undefined,
-    onMarkdownFileCreated: () => undefined,
-    onNewNoteFocusHandled: () => undefined,
-    newNoteFocusRequest: 0,
-    recentWorkspacePaths: [],
-    onWorkspaceLaunched: () => undefined
-  },
+  explorerProps,
   onOpenSearchResult: () => undefined
 };
+
+/** Only the state a left-side factory may read. */
+const leftContext: LeftPanelContext = {
+  rootPath: "/notes",
+  explorerProps,
+  onOpenSearchResult: () => undefined
+};
+
+/** Only the state a right-side factory may read. */
+const rightContext: RightPanelContext = {
+  rootPath: "/notes",
+  documentContents: "# Hello"
+};
+
+/** Minimal spy contribution with a side and factory. */
+function spyContribution<Side extends "left" | "right">(
+  id: string,
+  side: Side,
+  factory: (ctx: Side extends "left" ? LeftPanelContext : RightPanelContext) => ReactNode
+): Side extends "left" ? LeftPanelContribution : RightPanelContribution {
+  return { id, label: id, icon: "x", side, factory } as never;
+}
 
 function contribution(
   id: DesktopPanelContribution["id"],
@@ -199,5 +233,83 @@ describe("desktop panel registry", () => {
     void _crossToLeft;
     void _crossToRight;
     expect(true).toBe(true);
+  });
+
+  // Type-level fixtures for the side-narrowed contexts: a right-side factory
+  // that destructures `explorerProps` (or `onOpenSearchResult`) and a left-side
+  // factory that destructures `documentContents` must be compile errors. This
+  // is the core guarantee of the context split — a future panel cannot silently
+  // reach across sides.
+  it("rejects cross-side context access in side-narrowed factories at compile time", () => {
+    const _badRightFactory: RightPanelContribution = {
+      id: "bad-right",
+      label: "bad",
+      icon: "x",
+      side: "right",
+      // @ts-expect-error — RightPanelContext has no explorerProps; right
+      // factories must not see left-side explorer state.
+      factory: ({ explorerProps: _explorer }) => <span>{String(_explorer)}</span>
+    };
+    const _badRightSearch: RightPanelContribution = {
+      id: "bad-right-search",
+      label: "bad",
+      icon: "x",
+      side: "right",
+      // @ts-expect-error — RightPanelContext has no onOpenSearchResult; right
+      // factories must not see left-side search callbacks.
+      factory: ({ onOpenSearchResult: _open }) => <span>{String(_open)}</span>
+    };
+    const _badLeftFactory: LeftPanelContribution = {
+      id: "bad-left",
+      label: "bad",
+      icon: "x",
+      side: "left",
+      // @ts-expect-error — LeftPanelContext has no documentContents; left
+      // factories must not see right-side document state.
+      factory: ({ documentContents: _doc }) => <span>{String(_doc)}</span>
+    };
+
+    void _badRightFactory;
+    void _badRightSearch;
+    void _badLeftFactory;
+    expect(true).toBe(true);
+  });
+
+  it("passes the side-narrowed context to each side's factory at runtime", () => {
+    const seenLeft: LeftPanelContext[] = [];
+    const seenRight: RightPanelContext[] = [];
+
+    const leftSpy = spyContribution("left-spy", "left", (ctx) => {
+      seenLeft.push(ctx);
+      return <span>left</span>;
+    });
+    const rightSpy = spyContribution("right-spy", "right", (ctx) => {
+      seenRight.push(ctx);
+      return <span>right</span>;
+    });
+
+    // The side-narrowed factories are invoked directly with their matching
+    // context — the same way the popouts call `contribution.factory(context)`.
+    expect(renderToStaticMarkup(leftSpy.factory(leftContext))).toBe("<span>left</span>");
+    expect(renderToStaticMarkup(rightSpy.factory(rightContext))).toBe("<span>right</span>");
+
+    expect(seenLeft).toEqual([leftContext]);
+    expect(seenRight).toEqual([rightContext]);
+    // The left spy must not have received documentContents, and the right spy
+    // must not have received explorerProps / onOpenSearchResult.
+    expect("documentContents" in seenLeft[0]!).toBe(false);
+    expect("explorerProps" in seenRight[0]!).toBe(false);
+    expect("onOpenSearchResult" in seenRight[0]!).toBe(false);
+  });
+
+  it("renders the side-narrowed factories through the wide registry render helper", () => {
+    const leftSpy = spyContribution("left-wide", "left", ({ rootPath }) => <span>{rootPath}</span>);
+    const rightSpy = spyContribution("right-wide", "right", ({ documentContents }) => <span>{documentContents}</span>);
+    expect(
+      renderToStaticMarkup(renderDesktopPanel(leftSpy, { ...context, rootPath: "/notes" }))
+    ).toBe("<span>/notes</span>");
+    expect(
+      renderToStaticMarkup(renderDesktopPanel(rightSpy, { ...context, documentContents: "doc" }))
+    ).toBe("<span>doc</span>");
   });
 });

@@ -1,7 +1,8 @@
 import {
   createContributionRegistry,
   type ContributionRegistry,
-  type PanelContribution
+  type PanelContribution,
+  type PanelFactory
 } from "@thinkbrain/core";
 import { useMemo, useSyncExternalStore, type ReactNode } from "react";
 import { SourceControlPanel } from "../git/SourceControlPanel";
@@ -13,17 +14,30 @@ import { OutlinePanel } from "./OutlinePanel";
 import { PropertiesPanel } from "./PropertiesPanel";
 import { WorkspaceExplorer, type WorkspaceExplorerProps } from "../workspace/WorkspaceExplorer";
 
-/** Context supplied to desktop panel render factories. */
-export interface DesktopPanelContext {
+/** State a left-side panel factory may read (explorer/search only). */
+export interface LeftPanelContext {
   /** Current workspace root, or `null` before a workspace is opened. */
   readonly rootPath: string | null;
-  /** Ready contents of the active Markdown document, or `null`. */
-  readonly documentContents: string | null;
   /** Explorer callbacks and state owned by the desktop shell. */
   readonly explorerProps: WorkspaceExplorerProps;
   /** Opens a Markdown file selected by the search panel. */
   readonly onOpenSearchResult: (relativePath: string) => void;
 }
+
+/** State a right-side panel factory may read (inspector panels only). */
+export interface RightPanelContext {
+  /** Current workspace root, or `null` before a workspace is opened. */
+  readonly rootPath: string | null;
+  /** Ready contents of the active Markdown document, or `null`. */
+  readonly documentContents: string | null;
+}
+
+/**
+ * Registry-internal wide context — the intersection of both side contexts.
+ * Exists so the heterogeneous registry and side-agnostic extension host can
+ * store one factory type; side-specific contributions narrow the factory.
+ */
+export interface DesktopPanelContext extends LeftPanelContext, RightPanelContext {}
 
 /** Stable identifiers for first-party desktop sidebar panels. */
 export type BuiltInDesktopPanelId =
@@ -139,18 +153,33 @@ export type DesktopPanelContribution = PanelContribution<ReactNode, DesktopPanel
   readonly actions?: readonly PanelAction[];
 };
 
-/** The left-side subset used by the activity bar and left popout. */
-export type LeftPanelContribution = DesktopPanelContribution & {
+/** Base for side-narrowed contribution types (omits side-specific factory/availability). */
+type DesktopPanelContributionBase = Omit<
+  DesktopPanelContribution,
+  "factory" | "availability" | "side"
+>;
+
+/** Left-side contribution with factory narrowed to {@link LeftPanelContext}. */
+export type LeftPanelContribution = DesktopPanelContributionBase & {
   readonly side: "left";
+  readonly factory: PanelFactory<ReactNode, LeftPanelContext>;
+  readonly availability?: (context: LeftPanelContext) => boolean;
 };
 
-/** The right-side subset used by the title bar and right popout. */
-export type RightPanelContribution = DesktopPanelContribution & {
+/** Right-side contribution with factory narrowed to {@link RightPanelContext}. */
+export type RightPanelContribution = DesktopPanelContributionBase & {
   readonly side: "right";
+  readonly factory: PanelFactory<ReactNode, RightPanelContext>;
+  readonly availability?: (context: RightPanelContext) => boolean;
 };
 
-/** All first-party panels, in their existing activity-bar/title-bar order. */
-export const builtInDesktopPanels: readonly DesktopPanelContribution[] = [
+/**
+ * First-party panels in activity-bar/title-bar order. Typed as a union of
+ * side-narrowed contributions so each literal is compile-checked against its
+ * own side's context — cross-side field access is an error here, not just
+ * at the popout. Entries remain assignable to the wide registry type.
+ */
+export const builtInDesktopPanels: readonly (LeftPanelContribution | RightPanelContribution)[] = [
   {
     id: "explorer",
     label: "Explorer",
@@ -283,7 +312,12 @@ export function createDesktopPanelRegistry(
 /** Shared first-party registry consumed by desktop shell components. */
 export const desktopPanelRegistry = createDesktopPanelRegistry();
 
-/** Invokes a contribution's React factory. */
+/**
+ * Invokes a contribution's React factory with the wide registry context.
+ * The side-specific popouts call `contribution.factory(context)` directly
+ * for the side-narrowed compile-time check; this helper is for registry
+ * internals and tests that don't choose a side.
+ */
 export function renderDesktopPanel(
   panel: DesktopPanelContribution,
   context: DesktopPanelContext
@@ -302,14 +336,14 @@ export function getDesktopPanelOrUndefined(
   return desktopPanelRegistry.get(id);
 }
 
-/** Returns the registered left-side panels for activity-bar rendering. */
+/** Registered left-side panels for activity-bar rendering. Cast is sound: entries were registered narrow. */
 export function getLeftPanelContributions(): readonly LeftPanelContribution[] {
-  return desktopPanelRegistry.entriesBySide("left");
+  return desktopPanelRegistry.entriesBySide("left") as readonly LeftPanelContribution[];
 }
 
-/** Returns the registered right-side panels for title-bar/popout rendering. */
+/** Registered right-side panels for title-bar/popout rendering. Cast is sound: entries were registered narrow. */
 export function getRightPanelContributions(): readonly RightPanelContribution[] {
-  return desktopPanelRegistry.entriesBySide("right");
+  return desktopPanelRegistry.entriesBySide("right") as readonly RightPanelContribution[];
 }
 
 /**
@@ -336,10 +370,10 @@ function usePanelContributions<Side extends "left" | "right">(
 
 /** Live left-side panels for activity-bar rendering. */
 export function useLeftPanelContributions(): readonly LeftPanelContribution[] {
-  return usePanelContributions("left");
+  return usePanelContributions("left") as readonly LeftPanelContribution[];
 }
 
 /** Live right-side panels for title-bar and popout rendering. */
 export function useRightPanelContributions(): readonly RightPanelContribution[] {
-  return usePanelContributions("right");
+  return usePanelContributions("right") as readonly RightPanelContribution[];
 }

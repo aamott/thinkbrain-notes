@@ -5,10 +5,9 @@ import { Unavailable } from "../shell/Unavailable";
 import { PanelTitle } from "./PanelTitle";
 import {
   getDesktopPanelOrUndefined,
-  renderDesktopPanel,
   useRightPanelContributions,
-  type DesktopPanelContext,
-  type DesktopPanelContribution
+  type RightPanelContribution,
+  type RightPanelContext
 } from "./panelRegistry";
 
 type RightPopoutProps = {
@@ -32,24 +31,11 @@ export function RightPopout({ panel, rootPath, documentContents }: RightPopoutPr
   const contribution = getDesktopPanelOrUndefined(panel);
   // Stable across parent renders, for the same reason as `LeftPopout`: a fresh
   // object re-renders every kept-mounted panel, and the outline and properties
-  // panels re-read the whole document when they render.
-  const context: DesktopPanelContext = useMemo(
-    () => ({
-      rootPath,
-      documentContents,
-      explorerProps: {
-        initialWorkspacePath: null,
-        onWorkspaceOpened: () => undefined,
-        onWorkspaceUnavailable: () => undefined,
-        onMarkdownFileSelected: () => undefined,
-        onMarkdownFileCreated: () => undefined,
-        onNewNoteFocusHandled: () => undefined,
-        newNoteFocusRequest: 0,
-        recentWorkspacePaths: [],
-        onWorkspaceLaunched: () => undefined
-      },
-      onOpenSearchResult: () => undefined
-    }),
+  // panels re-read the whole document when they render. Only the right-side
+  // state is constructed here — no fabricated explorer/search state, so a right
+  // factory cannot silently call a no-op explorer/search callback.
+  const context: RightPanelContext = useMemo(
+    () => ({ rootPath, documentContents }),
     [rootPath, documentContents]
   );
 
@@ -104,8 +90,8 @@ const MountedPanel = memo(function MountedPanel({
   isActive,
   isAvailable
 }: {
-  readonly contribution: DesktopPanelContribution;
-  readonly context: DesktopPanelContext;
+  readonly contribution: RightPanelContribution;
+  readonly context: RightPanelContext;
   readonly isActive: boolean;
   readonly isAvailable: boolean;
 }) {
@@ -114,7 +100,7 @@ const MountedPanel = memo(function MountedPanel({
       className={cn("flex min-h-0 flex-1 flex-col", !isActive && "hidden")}
       data-panel-available={isAvailable}
     >
-      {renderDesktopPanel(contribution, context)}
+      {contribution.factory(context)}
     </div>
   );
 });
