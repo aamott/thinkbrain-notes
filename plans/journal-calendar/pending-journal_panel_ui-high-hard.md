@@ -1,6 +1,14 @@
 # Story: Journal Panel UI
 
-**Status:** pending · **Urgency:** high · **Difficulty:** hard
+**Status:** 🟨 in progress · **Urgency:** high · **Difficulty:** hard
+
+Shipped: `journalViewModel.ts` (all fourteen states, pure), `JournalPanel.tsx` (presentational),
+`JournalPanelContainer.tsx` (state + service), `MetadataWidget.tsx`, and registration through
+`extensions/builtins/journal.tsx`.
+
+Remaining: list virtualization (D13), lazy first-line previews, the widget's write path and its
+editor-header registration, search/facets (waiting on D41), collapse persistence (D53), and the
+two shell affordances noted below.
 
 ## Epic
 
@@ -113,7 +121,7 @@ chrome would be the inconsistent choice. **Product owner: say the word and I wil
 - [ ] Popout is a navigator: every entry row opens in the main editor as a normal tab; no inline editing in the popout.
 - [ ] Popout header follows D71/D75: New entry (the only filled control) with Today and Open calendar beside it, then search, then the filter row with the control right-aligned (D73). No group-by control. Focus order: overflow, New entry, Today, Open calendar, search, filter, chips, list.
 - [ ] "Today" opens the most recent entry for today's date or creates a new one; never appends to an existing file (D18).
-- [ ] List renders as a flat virtualized stream with collapsible year + month headers, non-indented (D37, D39); list handles thousands of entries without layout thrash (D13).
+- [ ] List renders as a flat virtualized stream with collapsible year + month headers, non-indented (D37, D39); list handles thousands of entries without layout thrash (D13). **Grouping and collapse are done; virtualization is not — every row renders today.**
 - [ ] Rows render from filename-derived dates alone; first-line previews load lazily for
       visible rows only and never block first paint (see the listing strategy in
       `pending-journal_service_daily_notes-high-med.md`).
@@ -152,3 +160,13 @@ The following story needs from this one:
 - `DesktopPanelContext` gap resolution: decision and implementation on workspace listing / index access.
 - State-coverage matrix (all fourteen states) with copy strings — the approved mockup's table — so mobile refinement can reuse without re-specifying.
 - Confirmed focus order (from discovery story) validated in automated tests.
+
+## Platform gaps found while building (2026-08-08)
+
+- **`Open folder…` and `Open settings`.** D63's copy gives these states an action, but the
+  extension API exposes no route to a shell command — an extension can register commands, not
+  run another's. The panel takes both handlers as optional and renders the button only when one
+  is supplied; the built-in supplies neither, so the copy appears without a dead control.
+  Wiring them needs a decision about whether extensions may invoke host commands.
+- **The calendar tab** is registered `isAvailable: false` with a message rather than omitted,
+  so the popout's calendar button leads somewhere that explains itself until story 7 lands.

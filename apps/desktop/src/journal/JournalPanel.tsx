@@ -36,8 +36,13 @@ export interface JournalPanelProps {
   readonly onRemoveChip: (id: string) => void;
   readonly onClearFilters: () => void;
   readonly onRetry: () => void;
-  readonly onChooseFolder: () => void;
-  readonly onOpenSettings: () => void;
+  /**
+   * Shell affordances the extension API does not expose yet. Omitted rather
+   * than stubbed: a button that does nothing is worse than no button, and the
+   * state's copy still names what went wrong.
+   */
+  readonly onChooseFolder?: () => void;
+  readonly onOpenSettings?: () => void;
   readonly onCreateFolder: () => void;
 }
 
@@ -51,14 +56,20 @@ function EmptyState({
 }: {
   readonly title: string;
   readonly body?: string;
-  readonly actions: readonly { readonly label: string; readonly run: () => void }[];
+  readonly actions: readonly {
+    readonly label: string;
+    readonly run: (() => void) | undefined;
+  }[];
 }) {
+  const usable = actions.filter(
+    (action): action is { label: string; run: () => void } => action.run !== undefined
+  );
   return (
     <div className="flex flex-col items-start gap-2 px-3 py-4">
       <p className="m-0 text-[0.8rem] font-semibold">{title}</p>
       {body && <p className="m-0 text-xs text-muted-foreground">{body}</p>}
       <div className="flex flex-wrap gap-1.5 pt-0.5">
-        {actions.map((action) => (
+        {usable.map((action) => (
           <button key={action.label} type="button" className={ACTION} onClick={action.run}>
             {action.label}
           </button>

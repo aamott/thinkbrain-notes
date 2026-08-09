@@ -49,6 +49,8 @@ export interface JournalService {
    */
   createEntry(date?: JournalDate): Promise<string>;
   listEntries(): Promise<JournalListing>;
+  /** Opens an entry the popout listed, as an ordinary editor tab (D9). */
+  openEntry(relativePath: string): Promise<void>;
   /** Opens today's most recent entry, creating one when today has none. */
   openToday(): Promise<string>;
 }
@@ -66,9 +68,13 @@ const NO_WORKSPACE = "Open a folder to start journaling.";
 const INVALID_ROOT = "The journal folder setting isn't a valid path.";
 const UNREADABLE_FOLDER = "Can't read the journal folder.";
 
+/** Which failure happened, so the UI picks a state without matching on copy. */
+export type JournalErrorCode = "no-workspace" | "invalid-root" | "unreadable";
+
 /** An error carrying user-facing copy plus the detail behind it. */
 export class JournalError extends Error {
   constructor(
+    readonly code: JournalErrorCode,
     message: string,
     readonly detail: string | undefined,
     options?: { cause?: unknown }
@@ -91,14 +97,14 @@ export function createJournalService(options: JournalServiceOptions): JournalSer
 
   /** Fails with the approved copy rather than a raw path or native error. */
   const requireRoot = (): string => {
-    if (workspace.rootPath() === null) throw new JournalError(NO_WORKSPACE, undefined);
+    if (workspace.rootPath() === null) throw new JournalError("no-workspace", NO_WORKSPACE, undefined);
     const configured = root();
     if (
       typeof configured !== "string" ||
       configured.trim() === "" ||
       configured.split(/[\\/]/).includes("..")
     ) {
-      throw new JournalError(INVALID_ROOT, String(configured));
+      throw new JournalError("invalid-root", INVALID_ROOT, String(configured));
     }
     return configured;
   };
@@ -107,7 +113,7 @@ export function createJournalService(options: JournalServiceOptions): JournalSer
     try {
       return await workspace.listNotes(folder);
     } catch (cause: unknown) {
-      throw new JournalError(UNREADABLE_FOLDER, folder, { cause });
+      throw new JournalError("unreadable", UNREADABLE_FOLDER, folder, { cause });
     }
   };
 
@@ -168,5 +174,9 @@ export function createJournalService(options: JournalServiceOptions): JournalSer
     return target;
   };
 
-  return { createEntry, listEntries, openToday };
+  const openEntry = async (relativePath: string): Promise<void> => {
+    await workspace.openNote(relativePath);
+  };
+
+  return { createEntry, listEntries, openEntry, openToday };
 }

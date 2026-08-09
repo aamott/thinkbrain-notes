@@ -1,6 +1,7 @@
 import type { ExtensionManifest } from "@thinkbrain/core";
 
 import type { DesktopExtensionActivation } from "../desktopExtensionHost";
+import { activateJournal, journalManifest } from "./journal";
 import { activateNoteStats, noteStatsManifest } from "./noteStats";
 
 /**
@@ -17,5 +18,6 @@ export interface BuiltInExtension {
 }
 
 export const builtInExtensions: readonly BuiltInExtension[] = [
-  { manifest: noteStatsManifest, activate: activateNoteStats }
+  { manifest: noteStatsManifest, activate: activateNoteStats },
+  { manifest: journalManifest, activate: activateJournal }
 ];

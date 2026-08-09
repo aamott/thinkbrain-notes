@@ -139,6 +139,10 @@ recorded in the story. Stories may be split further if a subagent would exceed o
   workspace-scope persistence shipped with D45; registration waits on story 9
 - ✅ Story 4 calendar model — D43 distinct values, D43 same-entry AND filters, D46 counts,
   undated pinned outside the grid, in `packages/core/src/journal/calendar.ts`
-- ⬜ Stories 6-9: panel, calendar tab, mobile, registration
+- 🟨 Story 6 panel — view model, popout, container, metadata widget and registration shipped;
+  virtualization, previews, the widget write path and search/facets remain
+- 🟨 Story 9 registration — the journal activates as a built-in (`extensions/builtins/journal.tsx`)
+  with panel, three commands, settings and the calendar tab placeholder
+- ⬜ Stories 7, 8: calendar tab, mobile refinement
 - 🟨 Platform prerequisites: D68/D69 API additions shipped; D44 editor-header slot, D45
   workspace-scoped settings, and D41 metadata facets remain

@@ -1,0 +1,204 @@
+// @vitest-environment happy-dom
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { MetadataWidget, type MetadataWidgetProps } from "./MetadataWidget";
+
+let root: Root | null = null;
+let container: HTMLDivElement | null = null;
+
+afterEach(async () => {
+  await act(async () => root?.unmount());
+  container?.remove();
+  root = null;
+  container = null;
+});
+
+const definitions = [
+  { id: "mood", label: "Mood", type: "single-select" as const, options: ["rough", "okay", "good"] },
+  { id: "energy", label: "Energy", type: "number" as const },
+  {
+    id: "context",
+    label: "Context",
+    type: "multi-select" as const,
+    options: ["baking", "reading", "running"]
+  },
+  { id: "note", label: "Note to self", type: "text" as const }
+];
+
+const render = async (overrides: Partial<MetadataWidgetProps> = {}): Promise<HTMLDivElement> => {
+  container = document.createElement("div");
+  document.body.append(container);
+  root = createRoot(container);
+  const props: MetadataWidgetProps = {
+    date: { year: 2026, month: 8, day: 7 },
+    definitions,
+    values: {},
+    diagnostics: [],
+    onSet: () => undefined,
+    ...overrides
+  };
+  await act(async () => root?.render(<MetadataWidget {...props} />));
+  return container;
+};
+
+const click = async (host: HTMLElement, name: string): Promise<void> => {
+  const found = [...host.querySelectorAll("button")].find(
+    (candidate) => candidate.getAttribute("aria-label") === name || candidate.textContent === name
+  );
+  if (!found) throw new Error(`No control named "${name}"`);
+  await act(async () => found.click());
+};
+
+describe("collapsed dateline", () => {
+  it("shows the long date with its year (D74)", async () => {
+    const host = await render();
+
+    expect(host.textContent).toContain("Friday, August 7, 2026");
+  });
+
+  it("shows only the date and an invitation when nothing is recorded (D54)", async () => {
+    const host = await render();
+
+    expect(host.textContent).toContain("Add metadata");
+    // No placeholder values, no empty chips: the common case should look
+    // finished rather than unfilled.
+    expect(host.textContent).not.toMatch(/not set|—\s*—/);
+  });
+
+  it("summarises the recorded values in the order they are defined", async () => {
+    const host = await render({
+      values: { energy: 7, mood: "good", context: ["baking", "reading"] }
+    });
+
+    expect(host.textContent).toContain("good · 7 · baking, reading");
+  });
+
+  it("expands to the form and back", async () => {
+    const host = await render({ values: { mood: "good" } });
+
+    await click(host, "Edit");
+    expect(host.querySelectorAll("fieldset").length).toBeGreaterThan(0);
+
+    await click(host, "Done");
+    expect(host.querySelectorAll("fieldset")).toHaveLength(0);
+  });
+});
+
+describe("editing", () => {
+  it("records a single-select choice", async () => {
+    const onSet = vi.fn();
+    const host = await render({ onSet });
+    await click(host, "Add metadata");
+
+    await click(host, "Mood: good");
+
+    expect(onSet).toHaveBeenCalledWith("mood", "good");
+  });
+
+  it("clears a single-select choice when the same option is chosen again", async () => {
+    const onSet = vi.fn();
+    const host = await render({ values: { mood: "good" }, onSet });
+    await click(host, "Edit");
+
+    await click(host, "Mood: good");
+
+    expect(onSet).toHaveBeenCalledWith("mood", undefined);
+  });
+
+  it("adds and removes multi-select values without disturbing the others", async () => {
+    const onSet = vi.fn();
+    const host = await render({ values: { context: ["baking"] }, onSet });
+    await click(host, "Edit");
+
+    await click(host, "Context: reading");
+    expect(onSet).toHaveBeenCalledWith("context", ["baking", "reading"]);
+
+    await click(host, "Context: baking");
+    expect(onSet).toHaveBeenLastCalledWith("context", undefined);
+  });
+
+  it("records a number and a text value", async () => {
+    const onSet = vi.fn();
+    const host = await render({ onSet });
+    await click(host, "Add metadata");
+
+    const [energy, note] = [...host.querySelectorAll("input")];
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      setter?.call(energy, "7");
+      energy?.dispatchEvent(new Event("input", { bubbles: true }));
+      setter?.call(note, "Try 2% salt");
+      note?.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    expect(onSet).toHaveBeenCalledWith("energy", 7);
+    expect(onSet).toHaveBeenCalledWith("note", "Try 2% salt");
+  });
+
+  it("clears a value rather than writing an empty string", async () => {
+    const onSet = vi.fn();
+    const host = await render({ values: { note: "Try 2% salt" }, onSet });
+    await click(host, "Edit");
+
+    const note = [...host.querySelectorAll("input")].at(-1);
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      setter?.call(note, "");
+      note?.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    expect(onSet).toHaveBeenLastCalledWith("note", undefined);
+  });
+
+  it("offers no controls when the user has configured no fields", async () => {
+    const host = await render({ definitions: [] });
+
+    expect(host.textContent).toContain("Friday, August 7, 2026");
+    expect(host.querySelector("button")).toBeNull();
+  });
+});
+
+describe("notices", () => {
+  it("reports frontmatter it could not read, without blocking the note (D33)", async () => {
+    const host = await render({
+      diagnostics: [
+        { code: "frontmatter_invalid", message: "Map keys must be unique", severity: "warning" }
+      ]
+    });
+
+    const notice = host.querySelector('[role="status"]');
+    expect(notice?.textContent).toContain("couldn't be read");
+    // Still an entry, still showing its date.
+    expect(host.textContent).toContain("Friday, August 7, 2026");
+  });
+
+  it("names both dates when the note disagrees with its filename (D74)", async () => {
+    const host = await render({
+      diagnostics: [
+        {
+          code: "journal_date_mismatch",
+          message:
+            "This note's date (2026-08-05) disagrees with its filename (2026-08-07); the filename is used.",
+          severity: "warning"
+        }
+      ]
+    });
+
+    const notice = host.querySelector('[role="status"]');
+    expect(notice?.textContent).toContain("2026-08-05");
+    expect(notice?.textContent).toContain("filename");
+  });
+
+  it("never offers to repair the file", async () => {
+    const host = await render({
+      diagnostics: [
+        { code: "journal_date_mismatch", message: "disagrees", severity: "warning" }
+      ]
+    });
+
+    const labels = [...host.querySelectorAll("button")].map((b) => b.textContent ?? "");
+    expect(labels.join(" ")).not.toMatch(/fix|repair|update the note/i);
+  });
+});
