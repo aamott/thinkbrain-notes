@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { createPortal } from "react-dom";
 
 import { MetadataField } from "./MetadataField";
+import { FieldAffordances } from "./MetadataWidget";
 
 /**
  * Metadata editing on a phone (M-2, D40) under the contract D78 set.
@@ -29,6 +30,12 @@ export interface MetadataBottomSheetProps {
   readonly children?: ReactNode;
   /** Disables all editable controls when true (e.g., when there is no write path). */
   readonly readOnly?: boolean;
+  /** Fields invented for keys the settings do not know (D85). */
+  readonly unconfigured?: readonly JournalFieldDefinition[];
+  /** Promotes an unconfigured key into a configured field. */
+  readonly onDefineField?: (definition: JournalFieldDefinition) => void;
+  /** Adds a value to a configured select field's options (D84). */
+  readonly onAddOption?: (fieldId: string, option: string) => void;
 }
 
 const FOCUSABLE = 'button, input, select, textarea, [href], [tabindex]:not([tabindex="-1"])';
@@ -71,7 +78,10 @@ export function MetadataBottomSheet({
   onSet,
   onDismiss,
   children,
-  readOnly = false
+  readOnly = false,
+  unconfigured = [],
+  onDefineField,
+  onAddOption
 }: MetadataBottomSheetProps) {
   const sheetRef = useRef<HTMLDivElement>(null);
   const swipeStart = useRef<number | null>(null);
@@ -164,14 +174,23 @@ export function MetadataBottomSheet({
 
         <div className="flex flex-col gap-2">
           {definitions.map((definition) => (
-            <MetadataField
-              key={definition.id}
-              definition={definition}
-              value={values[definition.id]}
-              size="touch"
-              onSet={(value) => onSet(definition.id, value)}
-              readOnly={readOnly}
-            />
+            <div key={definition.id} className="flex flex-col gap-0.5">
+              <MetadataField
+                definition={definition}
+                value={values[definition.id]}
+                size="touch"
+                onSet={(value) => onSet(definition.id, value)}
+                readOnly={readOnly}
+              />
+              <FieldAffordances
+                definition={definition}
+                value={values[definition.id]}
+                isUnconfigured={unconfigured.includes(definition)}
+                readOnly={readOnly}
+                onDefineField={onDefineField}
+                onAddOption={onAddOption}
+              />
+            </div>
           ))}
           {children}
         </div>

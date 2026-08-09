@@ -185,7 +185,7 @@ export function DesktopShell() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [loadDocumentIntoView]);
 
   // Other windows can append to the recent workspace list, so refresh it
   // whenever this window regains focus.

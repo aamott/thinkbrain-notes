@@ -52,6 +52,32 @@ const click = async (host: HTMLElement, name: string): Promise<void> => {
   await act(async () => found.click());
 };
 
+/**
+ * Mounts a `MetadataWidgetContainer` with shared defaults. Each describe block
+ * that needs a custom `note` factory passes it via `defaultContents`.
+ */
+const mountContainerHelper = async (
+  defaultContents: string,
+  props: Partial<React.ComponentProps<typeof MetadataWidgetContainer>> = {}
+): Promise<HTMLDivElement> => {
+  container = document.createElement("div");
+  document.body.append(container);
+  root = createRoot(container);
+  await act(async () =>
+    root?.render(
+      <MetadataWidgetContainer
+        relativePath={props.relativePath ?? "journal/2026/08/2026-08-07-1802.md"}
+        contents={props.contents ?? defaultContents}
+        definitions={props.definitions ?? definitions}
+        applyEdit={props.applyEdit}
+        onDefineField={props.onDefineField}
+        onAddOption={props.onAddOption}
+      />
+    )
+  );
+  return container;
+};
+
 describe("collapsed dateline", () => {
   it("shows the long date with its year (D74)", async () => {
     const host = await render();
@@ -350,26 +376,8 @@ describe("MetadataWidgetContainer", () => {
   const note = (frontmatter: string) =>
     `---\n${frontmatter}---\n\nBread needed more salt.\n`;
 
-  const mountContainer = async (
-    props: Partial<React.ComponentProps<typeof MetadataWidgetContainer>> = {}
-  ): Promise<HTMLDivElement> => {
-    container = document.createElement("div");
-    document.body.append(container);
-    root = createRoot(container);
-    await act(async () =>
-      root?.render(
-        <MetadataWidgetContainer
-          relativePath={props.relativePath ?? "journal/2026/08/2026-08-07-1802.md"}
-          contents={props.contents ?? note("date: 2026-08-07\n")}
-          definitions={props.definitions ?? definitions}
-          applyEdit={props.applyEdit}
-          onDefineField={props.onDefineField}
-          onAddOption={props.onAddOption}
-        />
-      )
-    );
-    return container;
-  };
+  const mountContainer = (props: Partial<React.ComponentProps<typeof MetadataWidgetContainer>> = {}) =>
+    mountContainerHelper(note("date: 2026-08-07\n"), props);
 
   it("takes the date from the filename", async () => {
     const host = await mountContainer();
@@ -440,26 +448,8 @@ describe("MetadataWidgetContainer", () => {
 describe("a key with no field behind it (D33)", () => {
   const note = (frontmatter: string) => `---\n${frontmatter}---\n\nBread needed more salt.\n`;
 
-  const mount = async (
-    props: Partial<React.ComponentProps<typeof MetadataWidgetContainer>> = {}
-  ): Promise<HTMLDivElement> => {
-    container = document.createElement("div");
-    document.body.append(container);
-    root = createRoot(container);
-    await act(async () =>
-      root?.render(
-        <MetadataWidgetContainer
-          relativePath="journal/2026/08/2026-08-07-1802.md"
-          contents={props.contents ?? note("date: 2026-08-07\n")}
-          definitions={props.definitions ?? definitions}
-          applyEdit={props.applyEdit}
-          onDefineField={props.onDefineField}
-          onAddOption={props.onAddOption}
-        />
-      )
-    );
-    return container;
-  };
+  const mount = (props: Partial<React.ComponentProps<typeof MetadataWidgetContainer>> = {}) =>
+    mountContainerHelper(note("date: 2026-08-07\n"), props);
   /**
    * The reported bug: a note saying `mood: happy` with no configured fields
    * showed the date and nothing else. The value was in the file, preserved and
@@ -581,25 +571,8 @@ describe("read-only mode when applyEdit is absent", () => {
   const note = (frontmatter: string) =>
     `---\n${frontmatter}---\n\nBread needed more salt.\n`;
 
-  const mount = async (
-    props: Partial<React.ComponentProps<typeof MetadataWidgetContainer>> = {}
-  ): Promise<HTMLDivElement> => {
-    container = document.createElement("div");
-    document.body.append(container);
-    root = createRoot(container);
-    await act(async () =>
-      root?.render(
-        <MetadataWidgetContainer
-          relativePath="journal/2026/08/2026-08-07-1802.md"
-          contents={props.contents ?? note("date: 2026-08-07\n")}
-          definitions={props.definitions ?? definitions}
-          applyEdit={props.applyEdit}
-          onDefineField={props.onDefineField}
-        />
-      )
-    );
-    return container;
-  };
+  const mount = (props: Partial<React.ComponentProps<typeof MetadataWidgetContainer>> = {}) =>
+    mountContainerHelper(note("date: 2026-08-07\n"), props);
 
   it("disables field controls when applyEdit is undefined", async () => {
     const host = await mount({

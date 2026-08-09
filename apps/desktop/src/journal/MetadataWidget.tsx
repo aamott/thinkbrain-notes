@@ -82,6 +82,74 @@ function formatValue(value: JournalFieldValue): string {
   return Array.isArray(value) ? value.join(", ") : String(value);
 }
 
+const AFFORDANCE_LINK =
+  "border-0 bg-transparent p-0 text-[0.68rem] text-muted-foreground underline underline-offset-2 cursor-pointer hover:text-foreground";
+
+/**
+ * The "Add it" affordances under a field — promoting an unconfigured key, or
+ * adding an extra value as an option. Shared by the desktop dateline and the
+ * touch bottom sheet so the two paths cannot drift apart.
+ */
+export interface FieldAffordancesProps {
+  readonly definition: JournalFieldDefinition;
+  readonly value: JournalFieldValue | undefined;
+  readonly isUnconfigured: boolean;
+  readonly readOnly: boolean;
+  readonly onDefineField?: (definition: JournalFieldDefinition) => void;
+  readonly onAddOption?: (fieldId: string, option: string) => void;
+  /** Left padding to align with the field's value column (desktop only). */
+  readonly pad?: string;
+}
+
+export function FieldAffordances({
+  definition,
+  value,
+  isUnconfigured,
+  readOnly,
+  onDefineField,
+  onAddOption,
+  pad = ""
+}: FieldAffordancesProps) {
+  const extras = fieldChoices(definition, value).extras;
+  return (
+    <>
+      {isUnconfigured && (
+        <span className={`${pad} text-[0.68rem] text-muted-foreground`}>
+          Not one of your fields yet.{" "}
+          {onDefineField && (
+            <button
+              type="button"
+              aria-label={`Add ${definition.id} to your fields`}
+              onClick={() => onDefineField(definition)}
+              className={AFFORDANCE_LINK}
+            >
+              Add it
+            </button>
+          )}
+        </span>
+      )}
+      {extras.length > 0 && onAddOption && !readOnly && (
+        <span className={`${pad} text-[0.68rem] text-muted-foreground`}>
+          {extras.map((extra) => (
+            <span key={extra}>
+              &ldquo;{extra}&rdquo; isn&rsquo;t one of the choices.{" "}
+              <button
+                type="button"
+                aria-label={`Add ${extra} as an option for ${definition.label}`}
+                onClick={() => onAddOption(definition.id, extra)}
+                className={AFFORDANCE_LINK}
+              >
+                Add it
+              </button>
+              {" "}
+            </span>
+          ))}
+        </span>
+      )}
+    </>
+  );
+}
+
 export function MetadataWidget({
   date,
   definitions,
@@ -162,56 +230,25 @@ export function MetadataWidget({
 
       {expanded && !touch && (
         <div className="flex flex-col gap-2 border-b border-border py-3">
-          {shown.map((definition) => {
-            // D83: extras are values on the note that aren't in the field's
-            // options. They show as dashed pills; offer to promote each into
-            // the definition's vocabulary so the user can grow a select field
-            // without leaving the entry.
-            const extras = fieldChoices(definition, values[definition.id]).extras;
-            return (
-              <div key={definition.id} className="flex flex-col gap-0.5">
-                <MetadataField
-                  definition={definition}
-                  value={values[definition.id]}
-                  onSet={(value) => onSet(definition.id, value)}
-                  readOnly={readOnly}
-                />
-                {unconfigured.includes(definition) && (
-                  <span className="pl-[7.5rem] text-[0.68rem] text-muted-foreground">
-                    Not one of your fields yet.{" "}
-                    {onDefineField && (
-                      <button
-                        type="button"
-                        aria-label={`Add ${definition.id} to your fields`}
-                        onClick={() => onDefineField(definition)}
-                        className="border-0 bg-transparent p-0 text-[0.68rem] text-muted-foreground underline underline-offset-2 cursor-pointer hover:text-foreground"
-                      >
-                        Add it
-                      </button>
-                    )}
-                  </span>
-                )}
-                {extras.length > 0 && onAddOption && !readOnly && (
-                  <span className="pl-[7.5rem] text-[0.68rem] text-muted-foreground">
-                    {extras.map((extra) => (
-                      <span key={extra}>
-                        &ldquo;{extra}&rdquo; isn&rsquo;t one of the choices.{" "}
-                        <button
-                          type="button"
-                          aria-label={`Add ${extra} as an option for ${definition.label}`}
-                          onClick={() => onAddOption(definition.id, extra)}
-                          className="border-0 bg-transparent p-0 text-[0.68rem] text-muted-foreground underline underline-offset-2 cursor-pointer hover:text-foreground"
-                        >
-                          Add it
-                        </button>
-                        {" "}
-                      </span>
-                    ))}
-                  </span>
-                )}
-              </div>
-            );
-          })}
+          {shown.map((definition) => (
+            <div key={definition.id} className="flex flex-col gap-0.5">
+              <MetadataField
+                definition={definition}
+                value={values[definition.id]}
+                onSet={(value) => onSet(definition.id, value)}
+                readOnly={readOnly}
+              />
+              <FieldAffordances
+                definition={definition}
+                value={values[definition.id]}
+                isUnconfigured={unconfigured.includes(definition)}
+                readOnly={readOnly}
+                onDefineField={onDefineField}
+                onAddOption={onAddOption}
+                pad="pl-[7.5rem]"
+              />
+            </div>
+          ))}
           {addRow}
         </div>
       )}
@@ -224,6 +261,9 @@ export function MetadataWidget({
           onSet={onSet}
           onDismiss={() => setExpanded(false)}
           readOnly={readOnly}
+          unconfigured={unconfigured}
+          onDefineField={onDefineField}
+          onAddOption={onAddOption}
         >
           {addRow}
         </MetadataBottomSheet>
