@@ -14,6 +14,7 @@ import { useEffect, useRef } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { workspaceDesktopApi } from "../workspace/workspaceAdapter";
 import { getExtensionBootstrap } from "../extensions/bootstrapRef";
+import { getWorkspaceBridge } from "../extensions/workspaceBridge";
 import { useSettingsStore } from "./settingsStore";
 import { SettingsNav } from "./SettingsNav";
 import { SettingsContent } from "./SettingsContent";
@@ -49,7 +50,13 @@ export function SettingsTab() {
     // Load app settings plus workspace settings if a workspace window root
     // exists. `windowWorkspaceRoot` resolves to null when no workspace is open.
     void (async () => {
-      const root = await workspaceDesktopApi.windowWorkspaceRoot();
+      // Only a *secondary* workspace window registers a root natively, so in
+      // the main window this is null even with a vault open — and settings
+      // loaded with no workspace, leaving every workspace-scoped setting
+      // permanently unsaveable. The shell's own bridge is the live answer; the
+      // await above it guarantees the shell's mount effect has published it.
+      const windowRoot = await workspaceDesktopApi.windowWorkspaceRoot();
+      const root = windowRoot ?? getWorkspaceBridge()?.rootPath ?? null;
       // Skip the reload on remount when the store already holds settings for
       // the same workspace root. The store is a module-level singleton, so
       // `loaded` and `workspaceRootPath` survive tab unmount/remount — but the

@@ -28,6 +28,7 @@ import { invokeNativeCommand } from "../native/commands";
 import { SettingsTab } from "./SettingsTab";
 import { useSettingsStore, appSettingsRegistry } from "./settingsStore";
 import { setExtensionBootstrap } from "../extensions/bootstrapRef";
+import { setWorkspaceBridge } from "../extensions/workspaceBridge";
 import { registerControl, type ControlProps } from "./controlRegistry";
 
 /**
@@ -400,5 +401,48 @@ describe("SettingsTab and lazy extensions", () => {
 
     expect(activateAll).toHaveBeenCalled();
     setExtensionBootstrap(null);
+  });
+});
+
+describe("finding the workspace a setting belongs to", () => {
+  /**
+   * The bug this covers: only a *secondary* workspace window registers a root
+   * natively, so in the main window `windowWorkspaceRoot` is null even with a
+   * vault open. Settings then loaded with no workspace, and every
+   * workspace-scoped setting — the journal folder, the metadata fields — could
+   * be staged and never saved: Save did nothing and the bar stayed dirty.
+   */
+  it("falls back to the shell's open workspace", async () => {
+    vi.mocked(isTauri).mockReturnValue(true);
+    vi.mocked(workspaceDesktopApi.windowWorkspaceRoot).mockResolvedValue(null);
+    useSettingsStore.setState({ loaded: false, workspaceRootPath: null });
+    setWorkspaceBridge({
+      rootPath: "/vault",
+      openNote: () => undefined,
+      openTab: () => undefined
+    });
+
+    await renderSettingsTab();
+    await act(async () => undefined);
+
+    expect(useSettingsStore.getState().workspaceRootPath).toBe("/vault");
+    setWorkspaceBridge(null);
+  });
+
+  it("prefers the window's own root when it has one", async () => {
+    vi.mocked(isTauri).mockReturnValue(true);
+    vi.mocked(workspaceDesktopApi.windowWorkspaceRoot).mockResolvedValue("/window-vault");
+    useSettingsStore.setState({ loaded: false, workspaceRootPath: null });
+    setWorkspaceBridge({
+      rootPath: "/vault",
+      openNote: () => undefined,
+      openTab: () => undefined
+    });
+
+    await renderSettingsTab();
+    await act(async () => undefined);
+
+    expect(useSettingsStore.getState().workspaceRootPath).toBe("/window-vault");
+    setWorkspaceBridge(null);
   });
 });
