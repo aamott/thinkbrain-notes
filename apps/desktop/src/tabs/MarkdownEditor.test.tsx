@@ -213,3 +213,58 @@ describe("where the cursor starts", () => {
     expect(cursorOf(host)).toBe(0);
   });
 });
+
+describe("an edit that arrives as a whole new document", () => {
+  /**
+   * The metadata widget hands back the entire note with one frontmatter key
+   * changed. Replacing the document wholesale moved the cursor to the end and
+   * made the edit one undo step away from everything else the user had typed.
+   */
+  const NOTE = "---\ndate: 2026-08-08\n---\n\nBread needed more salt.\n";
+  const EDITED = "---\ndate: 2026-08-08\nmood: good\n---\n\nBread needed more salt.\n";
+
+  it("keeps the cursor where the user left it", async () => {
+    const host = await mount(
+      <MarkdownEditor value={NOTE} onChange={() => {}} onSave={() => {}} />
+    );
+    const view = EditorView.findFromDOM(host.querySelector(".cm-editor") as HTMLElement);
+    const inBody = NOTE.indexOf("needed");
+    await act(async () => {
+      view?.dispatch({ selection: { anchor: inBody } });
+    });
+
+    await act(async () => {
+      root?.render(<MarkdownEditor value={EDITED} onChange={() => {}} onSave={() => {}} />);
+    });
+
+    // The same character, pushed along by what was inserted above it.
+    expect(cursorOf(host)).toBe(inBody + (EDITED.length - NOTE.length));
+  });
+
+  it("applies the edit", async () => {
+    const host = await mount(
+      <MarkdownEditor value={NOTE} onChange={() => {}} onSave={() => {}} />
+    );
+
+    await act(async () => {
+      root?.render(<MarkdownEditor value={EDITED} onChange={() => {}} onSave={() => {}} />);
+    });
+
+    const view = EditorView.findFromDOM(host.querySelector(".cm-editor") as HTMLElement);
+    expect(view?.state.doc.toString()).toBe(EDITED);
+  });
+
+  it("touches nothing when the value has not moved", async () => {
+    const host = await mount(
+      <MarkdownEditor value={NOTE} onChange={() => {}} onSave={() => {}} />
+    );
+    const view = EditorView.findFromDOM(host.querySelector(".cm-editor") as HTMLElement);
+    const before = view?.state.doc.toString();
+
+    await act(async () => {
+      root?.render(<MarkdownEditor value={NOTE} onChange={() => {}} onSave={() => {}} />);
+    });
+
+    expect(view?.state.doc.toString()).toBe(before);
+  });
+});

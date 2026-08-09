@@ -26,6 +26,40 @@ export interface MarkdownEditorProps {
 }
 
 /** CodeMirror 6 is isolated behind this controlled, document-value boundary. */
+/**
+ * The smallest edit that turns `current` into `next`, or null if they match.
+ *
+ * A whole-document replacement cannot carry a selection across it, so an edit
+ * arriving as new `value` — the metadata widget hands back the entire note with
+ * one frontmatter key changed — used to throw the cursor to the end of the
+ * document and bundle itself into one undo step with everything else. Trimming
+ * to the differing middle keeps positions after it mapped, which is all the
+ * cursor needs.
+ */
+function minimalChange(
+  current: string,
+  next: string
+): { from: number; to: number; insert: string } | null {
+  if (current === next) return null;
+
+  let start = 0;
+  const shortest = Math.min(current.length, next.length);
+  while (start < shortest && current[start] === next[start]) start += 1;
+
+  let endCurrent = current.length;
+  let endNext = next.length;
+  while (
+    endCurrent > start &&
+    endNext > start &&
+    current[endCurrent - 1] === next[endNext - 1]
+  ) {
+    endCurrent -= 1;
+    endNext -= 1;
+  }
+
+  return { from: start, to: endCurrent, insert: next.slice(start, endNext) };
+}
+
 /** Offset of the first character after any frontmatter block. */
 function bodyStart(source: string): number {
   const match = /^---\r?\n[\s\S]*?\r?\n---\r?\n/.exec(source);
@@ -99,8 +133,9 @@ export function MarkdownEditor({
 
   useEffect(() => {
     const view = viewRef.current;
-    if (!view || value === view.state.doc.toString()) return;
-    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: value } });
+    if (!view) return;
+    const change = minimalChange(view.state.doc.toString(), value);
+    if (change) view.dispatch({ changes: change });
   }, [value]);
 
   useEffect(() => {
