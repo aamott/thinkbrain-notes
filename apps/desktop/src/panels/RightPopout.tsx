@@ -55,7 +55,7 @@ export function RightPopout({ panel, rootPath, documentContents }: RightPopoutPr
   if (!contribution) {
     return (
       <aside
-        className="flex flex-col min-w-0 overflow-hidden bg-sidebar border-l border-border flex-[0_0_var(--tn-shell-right-width)] max-[760px]:absolute max-[760px]:z-[2]"
+        className="flex flex-col min-w-0 overflow-hidden bg-sidebar border-l border-border flex-[0_0_var(--tn-shell-right-width)] max-[760px]:absolute max-[760px]:top-0 max-[760px]:bottom-0 max-[760px]:right-0 max-[760px]:z-30 max-[760px]:shadow-lg"
         aria-label="Panel not available"
       >
         <Unavailable
@@ -68,7 +68,7 @@ export function RightPopout({ panel, rootPath, documentContents }: RightPopoutPr
 
   return (
     <aside
-      className="flex flex-col min-w-0 overflow-hidden bg-sidebar border-l border-border flex-[0_0_var(--tn-shell-right-width)] max-[760px]:absolute max-[760px]:z-[2]"
+      className="flex flex-col min-w-0 overflow-hidden bg-sidebar border-l border-border flex-[0_0_var(--tn-shell-right-width)] max-[760px]:absolute max-[760px]:top-0 max-[760px]:bottom-0 max-[760px]:right-0 max-[760px]:z-30 max-[760px]:shadow-lg"
       aria-label={`${contribution.label} panel`}
     >
       <PanelTitle title={contribution.label} actions={contribution.actions} />
