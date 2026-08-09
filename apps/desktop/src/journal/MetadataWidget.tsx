@@ -1,4 +1,5 @@
 import {
+  fieldChoices,
   MONTHS,
   type JournalDate,
   type JournalFieldDefinition,
@@ -36,6 +37,13 @@ export interface MetadataWidgetProps {
   /** Promotes one of those keys into a configured field. Omitted where the
    * host cannot write settings. */
   readonly onDefineField?: (definition: JournalFieldDefinition) => void;
+  /**
+   * Adds a value to a configured select field's options. Called when the user
+   * promotes an extra (a value on the note that isn't in the definition's
+   * options) into the field's vocabulary. Omitted where the host cannot write
+   * settings.
+   */
+  readonly onAddOption?: (fieldId: string, option: string) => void;
   /** Anything noticed while reading the note; shown, never acted on (D33). */
   readonly diagnostics: readonly NoteDiagnostic[];
   /** `undefined` clears the field rather than writing an empty value. */
@@ -79,6 +87,7 @@ export function MetadataWidget({
   definitions,
   unconfigured = [],
   onDefineField,
+  onAddOption,
   values,
   diagnostics,
   onSet,
@@ -153,31 +162,56 @@ export function MetadataWidget({
 
       {expanded && !touch && (
         <div className="flex flex-col gap-2 border-b border-border py-3">
-          {shown.map((definition) => (
-            <div key={definition.id} className="flex flex-col gap-0.5">
-              <MetadataField
-                definition={definition}
-                value={values[definition.id]}
-                onSet={(value) => onSet(definition.id, value)}
-                readOnly={readOnly}
-              />
-              {unconfigured.includes(definition) && (
-                <span className="pl-[7.5rem] text-[0.68rem] text-muted-foreground">
-                  Not one of your fields yet.{" "}
-                  {onDefineField && (
-                    <button
-                      type="button"
-                      aria-label={`Add ${definition.id} to your fields`}
-                      onClick={() => onDefineField(definition)}
-                      className="border-0 bg-transparent p-0 text-[0.68rem] text-muted-foreground underline underline-offset-2 cursor-pointer hover:text-foreground"
-                    >
-                      Add it
-                    </button>
-                  )}
-                </span>
-              )}
-            </div>
-          ))}
+          {shown.map((definition) => {
+            // D83: extras are values on the note that aren't in the field's
+            // options. They show as dashed pills; offer to promote each into
+            // the definition's vocabulary so the user can grow a select field
+            // without leaving the entry.
+            const extras = fieldChoices(definition, values[definition.id]).extras;
+            return (
+              <div key={definition.id} className="flex flex-col gap-0.5">
+                <MetadataField
+                  definition={definition}
+                  value={values[definition.id]}
+                  onSet={(value) => onSet(definition.id, value)}
+                  readOnly={readOnly}
+                />
+                {unconfigured.includes(definition) && (
+                  <span className="pl-[7.5rem] text-[0.68rem] text-muted-foreground">
+                    Not one of your fields yet.{" "}
+                    {onDefineField && (
+                      <button
+                        type="button"
+                        aria-label={`Add ${definition.id} to your fields`}
+                        onClick={() => onDefineField(definition)}
+                        className="border-0 bg-transparent p-0 text-[0.68rem] text-muted-foreground underline underline-offset-2 cursor-pointer hover:text-foreground"
+                      >
+                        Add it
+                      </button>
+                    )}
+                  </span>
+                )}
+                {extras.length > 0 && onAddOption && !readOnly && (
+                  <span className="pl-[7.5rem] text-[0.68rem] text-muted-foreground">
+                    {extras.map((extra) => (
+                      <span key={extra}>
+                        &ldquo;{extra}&rdquo; isn&rsquo;t one of the choices.{" "}
+                        <button
+                          type="button"
+                          aria-label={`Add ${extra} as an option for ${definition.label}`}
+                          onClick={() => onAddOption(definition.id, extra)}
+                          className="border-0 bg-transparent p-0 text-[0.68rem] text-muted-foreground underline underline-offset-2 cursor-pointer hover:text-foreground"
+                        >
+                          Add it
+                        </button>
+                        {" "}
+                      </span>
+                    ))}
+                  </span>
+                )}
+              </div>
+            );
+          })}
           {addRow}
         </div>
       )}

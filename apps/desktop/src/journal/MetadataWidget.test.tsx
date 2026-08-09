@@ -364,6 +364,7 @@ describe("MetadataWidgetContainer", () => {
           definitions={props.definitions ?? definitions}
           applyEdit={props.applyEdit}
           onDefineField={props.onDefineField}
+          onAddOption={props.onAddOption}
         />
       )
     );
@@ -453,6 +454,7 @@ describe("a key with no field behind it (D33)", () => {
           definitions={props.definitions ?? definitions}
           applyEdit={props.applyEdit}
           onDefineField={props.onDefineField}
+          onAddOption={props.onAddOption}
         />
       )
     );
@@ -524,6 +526,54 @@ describe("a key with no field behind it (D33)", () => {
     await click(host, "Edit");
 
     expect(host.querySelector('button[aria-label="Add mood to your fields"]')).toBeNull();
+  });
+
+  it("offers to add an extra value as an option for a configured select field", async () => {
+    const addedOptions: Array<{ fieldId: string; option: string }> = [];
+    const host = await mount({
+      // "down" is not in the mood field's options ["rough", "okay", "good"]
+      contents: note("date: 2026-08-07\nmood: down\n"),
+      applyEdit: () => {},
+      onAddOption: (fieldId, option) => addedOptions.push({ fieldId, option })
+    });
+
+    await click(host, "Edit");
+
+    const button = host.querySelector<HTMLButtonElement>(
+      'button[aria-label="Add down as an option for Mood"]'
+    );
+    expect(button).not.toBeNull();
+    await click(host, "Add down as an option for Mood");
+
+    expect(addedOptions).toEqual([{ fieldId: "mood", option: "down" }]);
+  });
+
+  it("does not offer to add an option when onAddOption is absent", async () => {
+    const host = await mount({
+      contents: note("date: 2026-08-07\nmood: down\n"),
+      applyEdit: () => {}
+    });
+
+    await click(host, "Edit");
+
+    expect(
+      host.querySelector('button[aria-label="Add down as an option for Mood"]')
+    ).toBeNull();
+  });
+
+  it("does not offer to add an option when the value matches an existing option", async () => {
+    const host = await mount({
+      // "good" is in the mood field's options
+      contents: note("date: 2026-08-07\nmood: good\n"),
+      applyEdit: () => {},
+      onAddOption: () => {}
+    });
+
+    await click(host, "Edit");
+
+    expect(
+      host.querySelector('button[aria-label="Add good as an option for Mood"]')
+    ).toBeNull();
   });
 });
 

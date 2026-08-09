@@ -124,6 +124,22 @@ export function activateJournal(context: DesktopExtensionContext): void {
             JSON.stringify([...current, field], null, 2)
           );
         }}
+        // D84: adding a value to a select field's options grows the vocabulary
+        // where the user says so. Only select fields have options to extend.
+        onAddOption={(fieldId, option) => {
+          const current = definitions();
+          const target = current.find((existing) => existing.id === fieldId);
+          if (!target || !target.options || target.options.includes(option)) return;
+          const updated = current.map((existing) =>
+            existing.id === fieldId
+              ? { ...existing, options: [...existing.options!, option] }
+              : existing
+          );
+          void context.settings.set(
+            "fieldDefinitions",
+            JSON.stringify(updated, null, 2)
+          );
+        }}
       />
     );
   }

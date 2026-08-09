@@ -29,6 +29,8 @@ export interface MetadataWidgetContainerProps {
   readonly applyEdit?: (contents: string) => void;
   /** Promotes a key the note already uses into a configured field (D85). */
   readonly onDefineField?: (definition: JournalFieldDefinition) => void;
+  /** Adds a value to a configured select field's options (D84). */
+  readonly onAddOption?: (fieldId: string, option: string) => void;
 }
 
 /**
@@ -76,7 +78,8 @@ export function MetadataWidgetContainer({
   contents,
   definitions,
   applyEdit,
-  onDefineField
+  onDefineField,
+  onAddOption
 }: MetadataWidgetContainerProps) {
   const ref = parseJournalFilename(relativePath);
   // No unambiguous date means no dateline; the app never guesses one (D38).
@@ -106,6 +109,7 @@ export function MetadataWidgetContainer({
       definitions={definitions}
       unconfigured={unconfigured}
       onDefineField={onDefineField}
+      onAddOption={onAddOption}
       values={values}
       diagnostics={[...parsed.diagnostics, ...resolved.diagnostics]}
       onSet={(fieldId, value) => applyEdit?.(setFrontmatterField(contents, fieldId, value))}
