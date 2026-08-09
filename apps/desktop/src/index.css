@@ -66,8 +66,7 @@
   --font-sans: var(--tn-font-sans);
   --font-mono: var(--tn-font-mono);
   --shadow-soft: var(--tn-shadow-soft);
-  --shadow-panel-left: var(--tn-shadow-panel-left);
-  --shadow-panel-right: var(--tn-shadow-panel-right);
+  --shadow-panel: var(--tn-shadow-panel);
 }
 
 @layer base {
