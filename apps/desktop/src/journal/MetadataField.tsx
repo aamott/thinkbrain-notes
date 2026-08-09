@@ -1,4 +1,5 @@
-import type { JournalFieldDefinition, JournalFieldValue } from "@thinkbrain/core";
+import { fieldChoices, type JournalFieldDefinition, type JournalFieldValue } from "@thinkbrain/core";
+import { useState } from "react";
 
 /**
  * One metadata field, shared by the desktop dateline and the phone sheet (D40).
@@ -31,8 +32,28 @@ const INPUT_SIZE: Record<MetadataFieldSize, string> = {
 };
 
 export function MetadataField({ definition, value, size = "compact", onSet }: MetadataFieldProps) {
-  const selected = definition.type === "multi-select" && Array.isArray(value) ? value : [];
+  const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState("");
   const pill = `${PILL} ${PILL_SIZE[size]}`;
+
+  // D83: what this note says, healed. A value the options no longer contain is
+  // offered here and nowhere else — it never travels back into the definition.
+  const choices = fieldChoices(definition, value);
+  const selected = choices.selected;
+  const multi = definition.type === "multi-select";
+
+  /** D84: records a value on this note; the field's options are untouched. */
+  const commit = (): void => {
+    const text = draft.trim();
+    setDraft("");
+    setAdding(false);
+    if (text === "") return;
+    if (multi) {
+      onSet(selected.includes(text) ? selected : [...selected, text]);
+      return;
+    }
+    onSet(text);
+  };
 
   return (
     <fieldset className="m-0 grid grid-cols-[7rem_minmax(0,1fr)] items-center gap-2 border-0 p-0">
@@ -43,17 +64,22 @@ export function MetadataField({ definition, value, size = "compact", onSet }: Me
 
       {definition.type === "single-select" || definition.type === "multi-select" ? (
         <span className="flex flex-wrap gap-1">
-          {definition.options?.map((option) => {
-            const on =
-              definition.type === "multi-select" ? selected.includes(option) : value === option;
+          {choices.options.map((option) => {
+            const on = selected.includes(option);
+            const extra = choices.extras.includes(option);
             return (
               <button
                 key={option}
                 type="button"
                 aria-pressed={on}
                 aria-label={`${definition.label}: ${option}`}
+                title={
+                  extra
+                    ? `"${option}" isn't one of the choices for ${definition.label}; it's only on this entry.`
+                    : undefined
+                }
                 onClick={() => {
-                  if (definition.type === "multi-select") {
+                  if (multi) {
                     const next = on
                       ? selected.filter((entry) => entry !== option)
                       : [...selected, option];
@@ -64,16 +90,50 @@ export function MetadataField({ definition, value, size = "compact", onSet }: Me
                     onSet(on ? undefined : option);
                   }
                 }}
-                className={
+                className={[
+                  pill,
                   on
-                    ? `${pill} border-transparent bg-accent font-semibold text-accent-foreground`
-                    : `${pill} border-border text-muted-foreground`
-                }
+                    ? "border-transparent bg-accent font-semibold text-accent-foreground"
+                    : "border-border text-muted-foreground",
+                  // Dashed, not coloured: this is "yours alone", not "wrong",
+                  // and D4 keeps us out of judging anybody's vocabulary.
+                  extra ? "border-dashed" : ""
+                ].join(" ")}
               >
                 {option}
               </button>
             );
           })}
+
+          {adding ? (
+            <input
+              autoFocus
+              aria-label={`New value for ${definition.label}`}
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              onBlur={commit}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  commit();
+                } else if (event.key === "Escape") {
+                  event.preventDefault();
+                  setDraft("");
+                  setAdding(false);
+                }
+              }}
+              className={`${INPUT} ${INPUT_SIZE[size]} w-32`}
+            />
+          ) : (
+            <button
+              type="button"
+              aria-label={`Add a value to ${definition.label}`}
+              onClick={() => setAdding(true)}
+              className={`${pill} border-dashed border-border text-muted-foreground`}
+            >
+              ＋
+            </button>
+          )}
         </span>
       ) : (
         <input

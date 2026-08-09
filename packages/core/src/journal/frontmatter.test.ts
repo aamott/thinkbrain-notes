@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   JOURNAL_DATE_KEY,
   buildNewEntryFrontmatter,
+  fieldChoices,
   formatJournalDate,
   readJournalMetadata,
   resolveEntryDate,
@@ -186,5 +187,90 @@ describe("readJournalMetadata", () => {
 
   it("exposes the journal date key so callers need not hardcode it", () => {
     expect(JOURNAL_DATE_KEY).toBe("date");
+  });
+});
+
+describe("fieldChoices (D83)", () => {
+  const mood: JournalFieldDefinition = {
+    id: "mood",
+    label: "Mood",
+    type: "single-select",
+    options: ["rough", "okay", "good"]
+  };
+  const context: JournalFieldDefinition = {
+    id: "context",
+    label: "Context",
+    type: "multi-select",
+    options: ["baking", "reading"]
+  };
+
+  it("offers the configured options when the note says nothing", () => {
+    expect(fieldChoices(mood, undefined)).toEqual({
+      options: ["rough", "okay", "good"],
+      extras: [],
+      selected: []
+    });
+  });
+
+  it("keeps a value the options do not contain, for this note only", () => {
+    // The whole point: removing "good" from the settings later must not strand
+    // the notes that already say it.
+    expect(fieldChoices(mood, "uber happy")).toEqual({
+      options: ["rough", "okay", "good", "uber happy"],
+      extras: ["uber happy"],
+      selected: ["uber happy"]
+    });
+  });
+
+  it("does not duplicate a value that is already an option", () => {
+    expect(fieldChoices(mood, "good")).toEqual({
+      options: ["rough", "okay", "good"],
+      extras: [],
+      selected: ["good"]
+    });
+  });
+
+  it("splits a multi-select into what is configured and what is not", () => {
+    expect(fieldChoices(context, ["baking", "knitting"])).toEqual({
+      options: ["baking", "reading", "knitting"],
+      extras: ["knitting"],
+      selected: ["baking", "knitting"]
+    });
+  });
+
+  it("ignores a value of the wrong shape entirely", () => {
+    // A number in a select is not a vocabulary item; D50 keeps it in the file
+    // and it is reported elsewhere, but it is not offered as a choice.
+    expect(fieldChoices(mood, 7)).toEqual({
+      options: ["rough", "okay", "good"],
+      extras: [],
+      selected: []
+    });
+  });
+
+  it("offers nothing for a field that is not a select", () => {
+    const energy: JournalFieldDefinition = { id: "energy", label: "Energy", type: "number" };
+
+    expect(fieldChoices(energy, 7)).toEqual({ options: [], extras: [], selected: [] });
+  });
+
+  // The case that actually distinguishes a select from everything else: a free
+  // text value must not become a choice anyone could tap.
+  it("does not turn a text value into a choice", () => {
+    const note: JournalFieldDefinition = { id: "note", label: "Note", type: "text" };
+
+    expect(fieldChoices(note, "Try 2% salt")).toEqual({
+      options: [],
+      extras: [],
+      selected: []
+    });
+  });
+
+  it("keeps the extras in the order the note wrote them", () => {
+    expect(fieldChoices(context, ["zebra", "baking", "apple"])).toEqual({
+      options: ["baking", "reading", "zebra", "apple"],
+      extras: ["zebra", "apple"],
+      selected: ["zebra", "baking", "apple"]
+    });
   });
 });

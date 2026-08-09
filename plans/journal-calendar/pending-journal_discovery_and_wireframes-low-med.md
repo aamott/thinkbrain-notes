@@ -437,6 +437,25 @@ key is still validated synchronously — a foreign key throws for a caller that 
 while the write itself is asynchronous and never rejects: a failed write is logged and the
 value stays effective for the session.
 
+**D82.** The `fieldDefinitions` control is a form, not a JSON box: a list of fields plus an
+add/edit card, kinds named in plain words with an example each, and the frontmatter key derived
+from the name and shown as small print with a `Change` override. No starter presets — an
+example beside a kind is a hint, a one-tap preset would be a vocabulary we shipped, which D4
+forbids. `Edit as JSON` stays as an escape hatch and is the automatic fallback when the stored
+value is something the form cannot draw. D49's storage shape does not change.
+
+**D83.** Values self-heal. A select value that is not among a field's configured options is
+preserved and offered as a selected choice **on that note only**, never written back into the
+definitions. This is what makes the definitions safe to edit: dropping an option or re-keying a
+field can no longer strand what a note already says, and no tap on a pill can silently
+overwrite a value the editor was hiding.
+
+**D84.** The metadata editor offers `＋ Add` for a value that is not on the list. It applies to
+that note only and does not change the field's options. Writing an entry is not the moment to
+rewrite settings, and D83 means nothing is lost by not promoting it — the value stays in the
+note and its choice reappears whenever the note is opened. Promoting a value to the field
+itself is D82's editor, where it is an explicit act.
+
 ## Checkpoint table
 
 Every artifact and decision batch was approved by the product owner per D34, across

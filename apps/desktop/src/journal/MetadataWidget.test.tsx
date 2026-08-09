@@ -306,6 +306,29 @@ describe("MetadataWidgetContainer", () => {
     expect(host.textContent).toContain("Friday, August 7, 2026");
   });
 
+  // D83: the note was written when "elated" was a choice, or by another tool.
+  // Either way the value survives a settings change and reads back intact.
+  it("shows a value the settings no longer list, and keeps it on edit", async () => {
+    const edits: string[] = [];
+    const host = await mountContainer({
+      contents: note("date: 2026-08-07\nmood: elated\n"),
+      applyEdit: (next) => edits.push(next)
+    });
+
+    expect(host.textContent).toContain("elated");
+
+    await click(host, "Edit");
+    expect(
+      host
+        .querySelector('button[aria-label="Mood: elated"]')
+        ?.getAttribute("aria-pressed")
+    ).toBe("true");
+
+    // Choosing something else replaces it; nothing else in the note moves.
+    await click(host, "Mood: good");
+    expect(edits.at(-1)).toContain("mood: good");
+  });
+
   it("reads the values already in the note", async () => {
     const host = await mountContainer({
       contents: note("date: 2026-08-07\nmood: good\nenergy: 7\n")

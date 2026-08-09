@@ -267,3 +267,54 @@ export function readJournalMetadata(
 
   return { values, invalid, unconfigured, diagnostics };
 }
+
+/** What a select field offers on one particular note (D83). */
+export interface FieldChoices {
+  /** Configured options first, then anything this note added. */
+  readonly options: readonly string[];
+  /** Present on this note and not in the definition; never written back. */
+  readonly extras: readonly string[];
+  /** What this note currently has selected, extras included. */
+  readonly selected: readonly string[];
+}
+
+const EMPTY_CHOICES: FieldChoices = Object.freeze({
+  options: Object.freeze([]),
+  extras: Object.freeze([]),
+  selected: Object.freeze([])
+});
+
+/**
+ * The choices a select field shows for one note, healing anything unrecognised.
+ *
+ * A value the options no longer contain is offered as a choice on that note
+ * alone. This is what makes the definitions safe to edit: rename a key, drop an
+ * option, and the notes that already used them still read back exactly as they
+ * were written, rather than losing the value the first time someone taps a pill.
+ *
+ * Extras never travel back into the definition — a vocabulary grows only where
+ * the user says so (D4, D84).
+ */
+export function fieldChoices(
+  definition: JournalFieldDefinition,
+  raw: unknown
+): FieldChoices {
+  if (!SELECT_TYPES.has(definition.type)) return EMPTY_CHOICES;
+
+  const configured = definition.options ?? [];
+  const written =
+    definition.type === "multi-select"
+      ? isStringArray(raw)
+        ? raw
+        : []
+      : typeof raw === "string"
+        ? [raw]
+        : [];
+
+  const extras: string[] = [];
+  for (const value of written) {
+    if (!configured.includes(value) && !extras.includes(value)) extras.push(value);
+  }
+
+  return { options: [...configured, ...extras], extras, selected: written };
+}

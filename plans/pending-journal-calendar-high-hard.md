@@ -130,13 +130,13 @@ recorded in the story. Stories may be split further if a subagent would exceed o
 
 ## Status
 
-- ✅ Every product decision closed (D1-D81)
+- ✅ Every product decision closed (D1-D84)
 - 🟨 Story 2 journal data/frontmatter contract — implemented in `packages/core/src/journal/`;
   the unknown-field write round-trip waits on story 3's write path
 - 🟨 Story 3 journal service — create (always new, D18), backfill (D61/D62), listing with
   undated split (D36/D38), openToday, and D63 failure copy; previews and search wiring remain
-- 🟨 Story 5 settings — D64's four settings and the D49 field-definition control implemented;
-  workspace-scope persistence shipped with D45; registration waits on story 9
+- 🟨 Story 5 settings — D64's four settings implemented; the field-definition control is now
+  D82's form rather than a JSON box, with D83/D84 open vocabulary; registration waits on story 9
 - ✅ Story 4 calendar model — D43 distinct values, D43 same-entry AND filters, D46 counts,
   undated pinned outside the grid, in `packages/core/src/journal/calendar.ts`
 - 🟨 Story 6 panel — view model, popout, container, metadata widget and registration shipped;
