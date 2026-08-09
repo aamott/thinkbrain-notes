@@ -13,14 +13,26 @@ static APP_SETTINGS_MUTATION_LOCK: Mutex<()> = Mutex::new(());
 const APP_THEME_KEY: &str = "theme";
 const SUPPORTED_APP_THEMES: [&str; 3] = ["system", "light", "dark"];
 const DESKTOP_STATE_KEY: &str = "desktopState";
-const DESKTOP_STATE_VERSION: u64 = 3;
+const DESKTOP_STATE_VERSION: u64 = 4;
 const MAX_RECENT_WORKSPACES: usize = 12;
 const MIN_PANEL_WIDTH: f64 = 224.0;
 const MAX_PANEL_WIDTH: f64 = 480.0;
 const DEFAULT_LEFT_PANEL_WIDTH: f64 = 288.0;
 const DEFAULT_RIGHT_PANEL_WIDTH: f64 = 320.0;
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct PersistedTab {
+    pub id: String,
+    pub title: String,
+    pub kind: String,
+    #[serde(default)]
+    pub root_path: Option<String>,
+    #[serde(default)]
+    pub relative_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct DesktopStateUpdate {
     #[serde(default)]
@@ -37,6 +49,10 @@ pub struct DesktopStateUpdate {
     pub bottom_panel_open: Option<bool>,
     #[serde(default)]
     pub development_extension_directories: Option<Vec<String>>,
+    #[serde(default)]
+    pub open_tabs: Option<Vec<PersistedTab>>,
+    #[serde(default)]
+    pub active_tab_id: Option<Option<String>>,
 }
 
 
@@ -49,6 +65,8 @@ pub struct DesktopState {
     right_panel_width: f64,
     bottom_panel_open: bool,
     development_extension_directories: Vec<String>,
+    open_tabs: Vec<PersistedTab>,
+    active_tab_id: Option<String>,
 }
 
 
@@ -266,6 +284,8 @@ pub fn read_desktop_state(app_settings: &Map<String, Value>) -> DesktopState {
                 None,
                 None,
                 None,
+                None,
+                None,
             )
         })
 }
@@ -274,7 +294,7 @@ pub fn read_desktop_state(app_settings: &Map<String, Value>) -> DesktopState {
 pub fn read_versioned_desktop_state(state: &Map<String, Value>) -> DesktopState {
     let supported_version = match state.get("version") {
         Some(Value::Number(version)) => version.as_u64().is_some_and(|version| {
-            version == 0 || version == 1 || version == 2 || version == DESKTOP_STATE_VERSION
+            version == 0 || version == 1 || version == 2 || version == 3 || version == DESKTOP_STATE_VERSION
         }),
         None => true,
         _ => false,
@@ -292,6 +312,8 @@ pub fn read_versioned_desktop_state(state: &Map<String, Value>) -> DesktopState 
         state.get("rightPanelWidth"),
         state.get("bottomPanelOpen"),
         state.get("developmentExtensionDirectories"),
+        state.get("openTabs"),
+        state.get("activeTabId"),
     )
 }
 
@@ -331,6 +353,11 @@ pub fn apply_desktop_state_update(current: DesktopState, update: DesktopStateUpd
             .development_extension_directories
             .map(normalize_extension_directories)
             .unwrap_or(current.development_extension_directories),
+        open_tabs: update.open_tabs.unwrap_or(current.open_tabs),
+        active_tab_id: update
+            .active_tab_id
+            .and_then(|id| id.filter(|id| !id.is_empty()))
+            .or(current.active_tab_id),
     }
 }
 
@@ -343,6 +370,8 @@ pub fn create_desktop_state(
     right_panel_width: Option<&Value>,
     bottom_panel_open: Option<&Value>,
     development_extension_directories: Option<&Value>,
+    open_tabs: Option<&Value>,
+    active_tab_id: Option<&Value>,
 ) -> DesktopState {
     let last_workspace_path = last_workspace_path
         .and_then(Value::as_str)
@@ -380,6 +409,11 @@ pub fn create_desktop_state(
                 )
             })
             .unwrap_or_default(),
+        open_tabs: read_persisted_tabs(open_tabs),
+        active_tab_id: active_tab_id
+            .and_then(Value::as_str)
+            .filter(|id| !id.is_empty())
+            .map(str::to_owned),
     }
 }
 
@@ -393,6 +427,8 @@ pub fn default_desktop_state() -> DesktopState {
         right_panel_width: DEFAULT_RIGHT_PANEL_WIDTH,
         bottom_panel_open: false,
         development_extension_directories: Vec::new(),
+        open_tabs: Vec::new(),
+        active_tab_id: None,
     }
 }
 
@@ -502,7 +538,44 @@ pub fn serialize_desktop_state(state: DesktopState) -> Value {
                 .collect(),
         ),
     );
+    serialized.insert(
+        "openTabs".to_string(),
+        Value::Array(state.open_tabs.into_iter().map(serialize_persisted_tab).collect()),
+    );
+    serialized.insert(
+        "activeTabId".to_string(),
+        state
+            .active_tab_id
+            .map(Value::String)
+            .unwrap_or(Value::Null),
+    );
     Value::Object(serialized)
+}
+
+fn serialize_persisted_tab(tab: PersistedTab) -> Value {
+    let mut serialized = Map::new();
+    serialized.insert("id".to_string(), Value::String(tab.id));
+    serialized.insert("title".to_string(), Value::String(tab.title));
+    serialized.insert("kind".to_string(), Value::String(tab.kind));
+    if let Some(root_path) = tab.root_path {
+        serialized.insert("rootPath".to_string(), Value::String(root_path));
+    }
+    if let Some(relative_path) = tab.relative_path {
+        serialized.insert("relativePath".to_string(), Value::String(relative_path));
+    }
+    Value::Object(serialized)
+}
+
+fn read_persisted_tabs(value: Option<&Value>) -> Vec<PersistedTab> {
+    value
+        .and_then(Value::as_array)
+        .map(|tabs| {
+            tabs.iter()
+                .filter_map(|tab| serde_json::from_value::<PersistedTab>(tab.clone()).ok())
+                .filter(|tab| !tab.id.is_empty())
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 

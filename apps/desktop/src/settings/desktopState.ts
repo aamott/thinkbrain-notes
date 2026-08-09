@@ -1,13 +1,22 @@
 import { invokeNativeCommand } from "../native/commands";
 import { isRecord } from "@thinkbrain/core";
 
-export const DESKTOP_STATE_VERSION = 3;
+export const DESKTOP_STATE_VERSION = 4;
 export const DESKTOP_STATE_KEY = "desktopState";
 export const MAX_RECENT_WORKSPACES = 12;
 export const MIN_PANEL_WIDTH = 224;
 export const MAX_PANEL_WIDTH = 480;
 export const DEFAULT_LEFT_PANEL_WIDTH = 288;
 export const DEFAULT_RIGHT_PANEL_WIDTH = 320;
+
+/** Serializable tab metadata persisted across restarts. */
+export interface PersistedTab {
+  readonly id: string;
+  readonly title: string;
+  readonly kind: string;
+  readonly rootPath?: string;
+  readonly relativePath?: string;
+}
 
 export interface DesktopState {
   readonly version: typeof DESKTOP_STATE_VERSION;
@@ -18,6 +27,8 @@ export interface DesktopState {
   readonly rightPanelWidth: number;
   readonly bottomPanelOpen: boolean;
   readonly developmentExtensionDirectories: readonly string[];
+  readonly openTabs: readonly PersistedTab[];
+  readonly activeTabId: string | null;
 }
 
 export interface DesktopStateUpdate {
@@ -28,6 +39,8 @@ export interface DesktopStateUpdate {
   readonly rightPanelWidth?: number;
   readonly bottomPanelOpen?: boolean;
   readonly developmentExtensionDirectories?: readonly string[];
+  readonly openTabs?: readonly PersistedTab[];
+  readonly activeTabId?: string | null;
 }
 
 export interface DesktopStateGateway {
@@ -44,7 +57,9 @@ export const DEFAULT_DESKTOP_STATE: DesktopState = Object.freeze({
   leftPanelWidth: DEFAULT_LEFT_PANEL_WIDTH,
   rightPanelWidth: DEFAULT_RIGHT_PANEL_WIDTH,
   bottomPanelOpen: false,
-  developmentExtensionDirectories: []
+  developmentExtensionDirectories: [],
+  openTabs: [],
+  activeTabId: null
 });
 
 const nativeDesktopStateGateway: DesktopStateGateway = {
@@ -146,6 +161,7 @@ function readVersionedDesktopState(storedState: Readonly<Record<string, unknown>
     version !== 0 &&
     version !== 1 &&
     version !== 2 &&
+    version !== 3 &&
     version !== DESKTOP_STATE_VERSION
   ) {
     return DEFAULT_DESKTOP_STATE;
@@ -177,7 +193,9 @@ function applyDesktopStateUpdate(
     developmentExtensionDirectories:
       update.developmentExtensionDirectories === undefined
         ? state.developmentExtensionDirectories
-        : update.developmentExtensionDirectories
+        : update.developmentExtensionDirectories,
+    openTabs: update.openTabs === undefined ? state.openTabs : update.openTabs,
+    activeTabId: update.activeTabId === undefined ? state.activeTabId : update.activeTabId
   });
 }
 
@@ -199,7 +217,9 @@ function createDesktopState(value: Readonly<Record<string, unknown>>): DesktopSt
         : DEFAULT_DESKTOP_STATE.bottomPanelOpen,
     developmentExtensionDirectories: normalizeExtensionDirectories(
       value.developmentExtensionDirectories
-    )
+    ),
+    openTabs: readPersistedTabs(value.openTabs),
+    activeTabId: readActiveTabId(value.activeTabId)
   };
 }
 
@@ -212,6 +232,28 @@ function normalizeExtensionDirectories(value: unknown): readonly string[] {
     ? value.filter((entry): entry is string => typeof entry === "string" && entry.length > 0)
     : [];
   return [...new Set(directories)];
+}
+
+/** Reads and validates the persisted tab list from a desktop-state record. */
+function readPersistedTabs(value: unknown): readonly PersistedTab[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((entry): entry is Record<string, unknown> => isRecord(entry))
+    .map((entry) => ({
+      id: typeof entry.id === "string" ? entry.id : "",
+      title: typeof entry.title === "string" ? entry.title : "",
+      kind: typeof entry.kind === "string" ? entry.kind : "editor",
+      ...(typeof entry.rootPath === "string" && entry.rootPath ? { rootPath: entry.rootPath } : {}),
+      ...(typeof entry.relativePath === "string" && entry.relativePath
+        ? { relativePath: entry.relativePath }
+        : {})
+    }))
+    .filter((tab) => tab.id.length > 0);
+}
+
+/** Reads the persisted active tab id, or null when absent/invalid. */
+function readActiveTabId(value: unknown): string | null {
+  return typeof value === "string" && value.length > 0 ? value : null;
 }
 
 function readWorkspacePath(value: unknown): string | null {

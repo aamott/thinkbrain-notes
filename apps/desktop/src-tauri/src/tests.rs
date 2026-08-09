@@ -1006,11 +1006,9 @@ fn desktop_state_update_merges_concurrent_mrus_and_preserves_app_settings() {
                 one_path.clone(),
                 legacy_path.clone(),
             ]),
-            explorer_open: None,
             left_panel_width: Some(352.0),
-            right_panel_width: None,
             bottom_panel_open: Some(true),
-            development_extension_directories: None,
+            ..Default::default()
         },
     )
     .expect("first desktop-state update succeeds");
@@ -1018,16 +1016,13 @@ fn desktop_state_update_merges_concurrent_mrus_and_preserves_app_settings() {
     let second = update_desktop_state_contents(
         Some(&first),
         DesktopStateUpdate {
-            last_workspace_path: None,
             recent_workspace_paths: Some(vec![
                 two_path.clone(),
                 legacy_path.clone(),
             ]),
             explorer_open: Some(true),
-            left_panel_width: None,
             right_panel_width: Some(512.0),
-            bottom_panel_open: None,
-            development_extension_directories: None,
+            ..Default::default()
         },
     )
     .expect("second desktop-state update succeeds");
@@ -1043,14 +1038,16 @@ fn desktop_state_update_merges_concurrent_mrus_and_preserves_app_settings() {
     assert_eq!(
         settings["desktopState"],
         serde_json::json!({
-            "version": 3,
+            "version": 4,
             "lastWorkspacePath": one_path,
             "recentWorkspacePaths": [two_path, legacy_path, one_path],
             "explorerOpen": true,
             "leftPanelWidth": 352.0,
             "rightPanelWidth": 480.0,
             "bottomPanelOpen": true,
-            "developmentExtensionDirectories": []
+            "developmentExtensionDirectories": [],
+            "openTabs": [],
+            "activeTabId": null
         })
     );
 }
@@ -1062,18 +1059,13 @@ fn desktop_state_persists_development_extension_directories_verbatim() {
     let stored = update_desktop_state_contents(
         None,
         DesktopStateUpdate {
-            last_workspace_path: None,
-            recent_workspace_paths: None,
-            explorer_open: None,
-            left_panel_width: None,
-            right_panel_width: None,
-            bottom_panel_open: None,
             development_extension_directories: Some(vec![
                 "/ext/one".to_string(),
                 "".to_string(),
                 "/ext/two".to_string(),
                 "/ext/one".to_string(),
             ]),
+            ..Default::default()
         },
     )
     .expect("desktop-state update succeeds");
@@ -1088,13 +1080,8 @@ fn desktop_state_persists_development_extension_directories_verbatim() {
     let unchanged = update_desktop_state_contents(
         Some(&stored),
         DesktopStateUpdate {
-            last_workspace_path: None,
-            recent_workspace_paths: None,
             explorer_open: Some(true),
-            left_panel_width: None,
-            right_panel_width: None,
-            bottom_panel_open: None,
-            development_extension_directories: None,
+            ..Default::default()
         },
     )
     .expect("unrelated desktop-state update succeeds");
@@ -1114,15 +1101,7 @@ fn desktop_state_without_extension_directories_defaults_to_empty() {
 
     let updated = update_desktop_state_contents(
         Some(&existing.to_string()),
-        DesktopStateUpdate {
-            last_workspace_path: None,
-            recent_workspace_paths: None,
-            explorer_open: None,
-            left_panel_width: None,
-            right_panel_width: None,
-            bottom_panel_open: None,
-            development_extension_directories: None,
-        },
+        DesktopStateUpdate::default(),
     )
     .expect("desktop-state update succeeds");
 

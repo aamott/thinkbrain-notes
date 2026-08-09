@@ -21,7 +21,8 @@ import {
   loadDesktopState,
   promoteRecentWorkspace,
   saveDesktopState,
-  type DesktopStateUpdate
+  type DesktopStateUpdate,
+  type PersistedTab
 } from "../settings/desktopState";
 import { useTheme } from "../settings/theme-context";
 import { useSettingsStore } from "../settings/settingsStore";
@@ -84,6 +85,7 @@ export function DesktopShell() {
   const recentWorkspacePathsRef = useRef<readonly string[]>([]);
   const [newNoteFocusRequest, setNewNoteFocusRequest] = useState(0);
   const [stateRestored, setStateRestored] = useState(!isTauri());
+  const tabsRestoredRef = useRef(false);
 
   // Subscribe to the settings store's dirty flag so the settings tab shows the
   // dirty dot when staged changes exist. This re-renders DesktopShell when
@@ -109,6 +111,32 @@ export function DesktopShell() {
     return next;
   }, []);
 
+  /**
+   * Loads a workspace document into the documents view-state map. Shared by
+   * `openMarkdownDocument` (live opens) and the tab-restore effect (restart).
+   * The caller is responsible for dispatching the tab and, for live opens,
+   * emitting `note.opened`.
+   */
+  const loadDocumentIntoView = useCallback(
+    (tabId: string, rootPath: string, relativePath: string) => {
+      setDocuments((current) => ({
+        ...current,
+        [tabId]: { phase: "loading", contents: "", error: null }
+      }));
+      void loadWorkspaceDocument(workspaceDocumentApi, { rootPath, relativePath }).then(
+        (result) => {
+          setDocuments((current) => ({
+            ...current,
+            [tabId]: result.ok
+              ? { phase: "ready", contents: result.document.contents, error: null }
+              : { phase: "error", contents: "", error: result.message }
+          }));
+        }
+      );
+    },
+    []
+  );
+
   // Restore the persisted desktop state (last workspace, recents, explorer
   // visibility) plus the workspace root the native window was launched with.
   useEffect(() => {
@@ -131,6 +159,25 @@ export function DesktopShell() {
       setLeftWidth(desktopState.leftPanelWidth);
       setRightWidth(desktopState.rightPanelWidth);
       setBottomPanel(desktopState.bottomPanelOpen ? "terminal" : null);
+
+      // Restore persisted tabs once. Guarded by a ref because StrictMode
+      // double-mounts effects in dev — without this, tabs would open twice.
+      if (!tabsRestoredRef.current && desktopState.openTabs.length > 0) {
+        tabsRestoredRef.current = true;
+        const rootPath = windowRoot ?? desktopState.lastWorkspacePath;
+        for (const persisted of desktopState.openTabs) {
+          const tab = restoreTab(persisted, rootPath);
+          if (tab) {
+            dispatchTabs({ type: "open", tab });
+            if (tab.kind === "editor" && tab.resource?.rootPath && tab.resource?.relativePath) {
+              loadDocumentIntoView(tab.id, tab.resource.rootPath, tab.resource.relativePath);
+            }
+          }
+        }
+        if (desktopState.activeTabId) {
+          dispatchTabs({ type: "activate", tabId: desktopState.activeTabId });
+        }
+      }
     }).finally(() => {
       if (active) setStateRestored(true);
     });
@@ -165,6 +212,25 @@ export function DesktopShell() {
     if (!isTauri()) return;
     void saveDesktopState(update).catch(() => undefined);
   }, []);
+
+  /**
+   * Debounced tab persistence: writes the open tab list and active tab id
+   * whenever tabs change, coalescing rapid open/close bursts into one write.
+   * Skipped until state restoration completes so restored tabs don't
+   * immediately trigger a redundant save.
+   */
+  const tabSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!stateRestored || !isTauri()) return;
+    if (tabSaveTimerRef.current !== null) clearTimeout(tabSaveTimerRef.current);
+    tabSaveTimerRef.current = setTimeout(() => {
+      tabSaveTimerRef.current = null;
+      persistDesktopState({
+        openTabs: tabState.tabs.map(tabToPersisted),
+        activeTabId: tabState.activeTabId
+      });
+    }, 400);
+  }, [tabState, stateRestored, persistDesktopState]);
 
   /**
    * Coalesces rapid resize updates so a drag writes its final width once rather
@@ -216,6 +282,7 @@ export function DesktopShell() {
       const pendingTimer = panelWidthSaveTimersRef.current[side];
       if (pendingTimer !== null) clearTimeout(pendingTimer);
     }
+    if (tabSaveTimerRef.current !== null) clearTimeout(tabSaveTimerRef.current);
     resizeCleanupRef.current?.();
   }, []);
 
@@ -281,19 +348,8 @@ export function DesktopShell() {
     appEvents.emit("note.opened", { rootPath, relativePath });
 
     if (documentsRef.current[tab.id]) return;
-    setDocuments((current) => ({
-      ...current,
-      [tab.id]: { phase: "loading", contents: "", error: null }
-    }));
-    void loadWorkspaceDocument(workspaceDocumentApi, { rootPath, relativePath }).then((result) => {
-      setDocuments((current) => ({
-        ...current,
-        [tab.id]: result.ok
-          ? { phase: "ready", contents: result.document.contents, error: null }
-          : { phase: "error", contents: "", error: result.message }
-      }));
-    });
-  }, []);
+    loadDocumentIntoView(tab.id, rootPath, relativePath);
+  }, [loadDocumentIntoView]);
 
   // Publishes the workspace surface extensions use. The root, the tabs, and the
   // documents are all React state here, so the bridge is republished whenever
@@ -659,4 +715,32 @@ export function DesktopShell() {
       )}
     </main>
   );
+}
+
+/** Converts a runtime tab to the serializable shape persisted in desktop state. */
+function tabToPersisted(tab: DesktopTab): PersistedTab {
+  return {
+    id: tab.id,
+    title: tab.title,
+    kind: tab.kind,
+    ...(tab.resource?.rootPath ? { rootPath: tab.resource.rootPath } : {}),
+    ...(tab.resource?.relativePath ? { relativePath: tab.resource.relativePath } : {})
+  };
+}
+
+/**
+ * Reconstructs a runtime tab from persisted metadata.
+ *
+ * Editor tabs whose resource paths are missing are skipped: a tab with no file
+ * to open would just show a blank editor. Static tabs (settings, calendar, etc.)
+ * are restored by kind alone.
+ */
+function restoreTab(persisted: PersistedTab, fallbackRootPath: string | null): DesktopTab | null {
+  if (persisted.kind === "editor") {
+    const rootPath = persisted.rootPath ?? fallbackRootPath;
+    const relativePath = persisted.relativePath;
+    if (!rootPath || !relativePath) return null;
+    return createEditorTab({ rootPath, relativePath });
+  }
+  return createStaticTab(persisted.kind as Exclude<import("@thinkbrain/core").TabKind, "editor">, persisted.title);
 }

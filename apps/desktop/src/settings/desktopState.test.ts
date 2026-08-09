@@ -157,13 +157,15 @@ describe("desktop state persistence", () => {
       editor: { fontSize: 18, lineWrapping: false },
       extensionSettings: { "example.timer": { enabled: true } },
       [DESKTOP_STATE_KEY]: {
-        version: 3,
+        version: 4,
         lastWorkspacePath: "/notes/legacy",
         recentWorkspacePaths: ["/notes/legacy"],
         explorerOpen: true,
         leftPanelWidth: 288,
         rightPanelWidth: 320,
-        bottomPanelOpen: false
+        bottomPanelOpen: false,
+        openTabs: [],
+        activeTabId: null
       }
     });
     expect(written).not.toHaveProperty("lastWorkspacePath");
@@ -187,14 +189,16 @@ describe("desktop state persistence", () => {
 
     expect(getWrittenSettings(gateway)).toEqual({
       [DESKTOP_STATE_KEY]: {
-        version: 3,
+        version: 4,
         lastWorkspacePath: "/notes/new",
         recentWorkspacePaths: ["/notes/new"],
         explorerOpen: false,
         leftPanelWidth: 288,
         rightPanelWidth: 320,
         bottomPanelOpen: false,
-        developmentExtensionDirectories: []
+        developmentExtensionDirectories: [],
+        openTabs: [],
+        activeTabId: null
       }
     });
   });
