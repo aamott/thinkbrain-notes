@@ -369,6 +369,20 @@ export function DesktopShell() {
     return () => setWorkspaceBridge(null);
   }, [restoredWorkspacePath, openMarkdownDocument]);
 
+  // Reload settings whenever the workspace root changes so the settings store
+  // knows the workspace root path. Without this, workspace-scoped settings
+  // (like journal fieldDefinitions) are unsaveable when the user hasn't opened
+  // the Settings tab — `workspaceRootPath` stays null from ThemeProvider's
+  // initial `loadSettings(null)`, and `saveSettings` silently strands every
+  // workspace-scoped write in `stagedChanges` without persisting anything.
+  // SettingsTab has its own guard that skips the reload if the root matches.
+  useEffect(() => {
+    if (!isTauri()) return;
+    const { loaded, workspaceRootPath } = useSettingsStore.getState();
+    if (loaded && workspaceRootPath === restoredWorkspacePath) return;
+    void useSettingsStore.getState().loadSettings(restoredWorkspacePath);
+  }, [restoredWorkspacePath]);
+
   const handleMarkdownFileCreated = useCallback((rootPath: string, relativePath: string) => {
     if (rootPath !== restoredWorkspacePath) return;
     setWorkspaceFiles((files) => files.some((file) => file.relative_path === relativePath)
