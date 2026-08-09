@@ -1,6 +1,6 @@
 import { cn } from "../lib/utils";
 import type { DesktopTab } from "../tabs/tabModel";
-import { isBuiltInRightPanel, useRightPanelContributions } from "../panels/panelRegistry";
+import { useRightPanelContributions } from "../panels/panelRegistry";
 import { IconButton } from "./IconButton";
 import { type RightPanel } from "./shellTypes";
 
@@ -124,13 +124,7 @@ export function TitleBar({
             symbol={action.icon}
             active={rightPanel === action.id}
             className="max-[760px]:hidden"
-            // Registry entries carry the wide `DesktopPanelId`; narrow to the
-            // built-in right union before handing the id to shell state. Built-in
-            // entries always satisfy the guard, and extension-owned ids (which
-            // are not selectable shell state yet) are dropped.
-            onClick={() => {
-              if (isBuiltInRightPanel(action.id)) onToggleRightPanel(action.id);
-            }}
+            onClick={() => onToggleRightPanel(action.id)}
           />
         ))}
       </div>

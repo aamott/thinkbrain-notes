@@ -15,9 +15,7 @@ import {
   type BuiltInLeftPanel,
   type BuiltInRightPanel,
   type DesktopPanelContext,
-  type DesktopPanelContribution,
-  type LeftPanel,
-  type RightPanel
+  type DesktopPanelContribution
 } from "./panelRegistry";
 
 const context: DesktopPanelContext = {
@@ -181,15 +179,15 @@ describe("desktop panel registry", () => {
     expect(isBuiltInRightPanel("explorer")).toBe(false);
   });
 
-  // Type-level fixtures: misspelled built-in ids must be rejected by the narrow
-  // shell selection unions. These compile only while the unions stay narrow;
-  // a regression that re-widens `LeftPanel`/`RightPanel` to `DesktopPanelId`
-  // would silence the `@ts-expect-error` directives below.
+  // Type-level fixtures: misspelled built-in ids must be rejected by the
+  // narrow built-in unions. `LeftPanel`/`RightPanel` are wide (they accept
+  // extension-owned string ids), so the compile-time check uses the narrow
+  // `BuiltInLeftPanel`/`BuiltInRightPanel` types directly.
   it("rejects misspelled built-in ids at compile time", () => {
     // @ts-expect-error — "exlorer" is not a valid BuiltInLeftPanel.
-    const _badLeft: LeftPanel = "exlorer";
+    const _badLeft: BuiltInLeftPanel = "exlorer";
     // @ts-expect-error — "propeties" is not a valid BuiltInRightPanel.
-    const _badRight: RightPanel = "propeties";
+    const _badRight: BuiltInRightPanel = "propeties";
     // @ts-expect-error — "outline" is a right panel, not a left panel.
     const _crossToLeft: BuiltInLeftPanel = "outline";
     // @ts-expect-error — "explorer" is a left panel, not a right panel.

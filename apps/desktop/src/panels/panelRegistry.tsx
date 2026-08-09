@@ -69,11 +69,22 @@ export type BuiltInRightPanel =
 /** Open panel identifier, including future extension-owned IDs. */
 export type DesktopPanelId = BuiltInDesktopPanelId | (string & {});
 
-/** Activity-bar panel id selected on the left side of the shell. */
-export type LeftPanel = BuiltInLeftPanel;
+/**
+ * Activity-bar panel id selected on the left side of the shell.
+ *
+ * Wide enough to accept extension-registered panel ids (e.g. the journal
+ * extension's `"journal"` id) that are selectable today. `BuiltInLeftPanel`
+ * is the narrow union used for compile-time checks at call sites that pass
+ * literal built-in ids.
+ */
+export type LeftPanel = BuiltInLeftPanel | (string & {});
 
-/** Title-bar panel id selected on the right side of the shell. */
-export type RightPanel = BuiltInRightPanel;
+/**
+ * Title-bar panel id selected on the right side of the shell.
+ *
+ * See {@link LeftPanel} for the rationale.
+ */
+export type RightPanel = BuiltInRightPanel | (string & {});
 
 /**
  * Runtime guard narrowing an arbitrary id to a built-in left panel id.
