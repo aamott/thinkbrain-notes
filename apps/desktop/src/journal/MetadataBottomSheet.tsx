@@ -1,5 +1,5 @@
 import type { JournalFieldDefinition, JournalFieldValue } from "@thinkbrain/core";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 import { MetadataField } from "./MetadataField";
@@ -25,6 +25,8 @@ export interface MetadataBottomSheetProps {
   readonly values: Readonly<Record<string, JournalFieldValue>>;
   readonly onSet: (fieldId: string, value: JournalFieldValue | undefined) => void;
   readonly onDismiss: () => void;
+  /** Rendered after the fields — the entry's own "add a field" row (D86). */
+  readonly children?: ReactNode;
 }
 
 const FOCUSABLE = 'button, input, select, textarea, [href], [tabindex]:not([tabindex="-1"])';
@@ -65,7 +67,8 @@ export function MetadataBottomSheet({
   definitions,
   values,
   onSet,
-  onDismiss
+  onDismiss,
+  children
 }: MetadataBottomSheetProps) {
   const sheetRef = useRef<HTMLDivElement>(null);
   const swipeStart = useRef<number | null>(null);
@@ -166,6 +169,7 @@ export function MetadataBottomSheet({
               onSet={(value) => onSet(definition.id, value)}
             />
           ))}
+          {children}
         </div>
       </div>
     </>,

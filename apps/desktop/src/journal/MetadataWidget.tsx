@@ -6,6 +6,7 @@ import type {
 } from "@thinkbrain/core";
 import { useState } from "react";
 
+import { AddFieldRow } from "./AddFieldRow";
 import { MetadataBottomSheet } from "./MetadataBottomSheet";
 import { MetadataField } from "./MetadataField";
 import { useCoarsePointer } from "./useCoarsePointer";
@@ -84,11 +85,14 @@ export function MetadataWidget({
   onSet
 }: MetadataWidgetProps) {
   const [expanded, setExpanded] = useState(false);
+  // Fields named on this entry (D86). They hold no value until one is typed, so
+  // naming a field never puts a key in the file on its own.
+  const [added, setAdded] = useState<readonly JournalFieldDefinition[]>([]);
   // D76: touch decides. Under a fingertip the fields move into a sheet (M-2),
   // because the dateline's compact controls are half the touch minimum and sit
   // where the soft keyboard would cover them.
   const touch = useCoarsePointer();
-  const shown = [...definitions, ...unconfigured];
+  const shown = [...definitions, ...unconfigured, ...added];
   const set = shown
     .filter((definition) => values[definition.id] !== undefined)
     .map((definition) => formatValue(values[definition.id]!));
@@ -96,6 +100,18 @@ export function MetadataWidget({
   const notice = diagnostics.find(
     (diagnostic) =>
       diagnostic.code === "journal_date_mismatch" || diagnostic.code.startsWith("frontmatter")
+  );
+
+  const addRow = (
+    <AddFieldRow
+      // Everything configured is already on screen, so there is nothing of the
+      // user's left to offer here — only naming something new.
+      available={definitions.filter(
+        (definition) => !shown.some((entry) => entry.id === definition.id)
+      )}
+      existingKeys={shown.map((definition) => definition.id)}
+      onAdd={(field) => setAdded((current) => [...current, field])}
+    />
   );
 
   return (
@@ -160,6 +176,7 @@ export function MetadataWidget({
               )}
             </div>
           ))}
+          {addRow}
         </div>
       )}
 
@@ -170,7 +187,9 @@ export function MetadataWidget({
           values={values}
           onSet={onSet}
           onDismiss={() => setExpanded(false)}
-        />
+        >
+          {addRow}
+        </MetadataBottomSheet>
       )}
     </div>
   );

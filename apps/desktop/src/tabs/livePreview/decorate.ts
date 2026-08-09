@@ -8,7 +8,10 @@ import {
 } from "@codemirror/view";
 import type { SyntaxNodeRef } from "@lezer/common";
 
+import { parseFrontmatter } from "@thinkbrain/core";
+
 import { findFrontmatterRange } from "./frontmatterRange";
+import { selectionTouchesRange } from "./reveal";
 import { handlers } from "./handlers";
 import type { LivePreviewOptions } from "./options";
 
@@ -82,7 +85,19 @@ export function buildDecorations(
   };
 
   const frontmatter = findFrontmatterRange(state.doc);
-  if (frontmatter) decorateFrontmatter(frontmatter.lastLine, ctx);
+  if (frontmatter) {
+    // D88: the same bargain every other piece of syntax gets — hidden while you
+    // read, shown when the cursor arrives. A block that will not parse is never
+    // hidden: it is the evidence behind the diagnostic telling you it is broken.
+    const revealed = selectionTouchesRange(state, frontmatter.from, frontmatter.to);
+    const readable =
+      parseFrontmatter(state.doc.sliceString(frontmatter.from, frontmatter.to + 1)).diagnostics
+        .length === 0;
+    // Hidden a line at a time rather than by replacing the range: a plugin's
+    // decorations may not replace line breaks, and a line class leaves the
+    // document untouched, which is the whole promise of live preview.
+    decorateFrontmatter(frontmatter.lastLine, ctx, revealed || !readable);
+  }
 
   // Decorate a single span covering every visible range rather than iterating
   // each range separately: a node straddling two ranges would otherwise be
@@ -113,8 +128,13 @@ export function buildDecorations(
   };
 }
 
-/** Styles every frontmatter line as a dimmed monospace data block. */
-function decorateFrontmatter(lastLine: number, ctx: DecorateContext): void {
+/**
+ * Styles every frontmatter line as a dimmed monospace data block, or hides it.
+ *
+ * `shown` is false in the ordinary reading case (D88); the lines keep their
+ * class so the block is still one styled object the moment it comes back.
+ */
+function decorateFrontmatter(lastLine: number, ctx: DecorateContext, shown: boolean): void {
   for (let lineNumber = 1; lineNumber <= lastLine; lineNumber++) {
     const line = ctx.state.doc.line(lineNumber);
     const edge =
@@ -123,6 +143,11 @@ function decorateFrontmatter(lastLine: number, ctx: DecorateContext): void {
         : lineNumber === lastLine
           ? " cm-frontmatter-last"
           : "";
-    ctx.present(Decoration.line({ class: `cm-frontmatter${edge}` }), line.from, line.from);
+    const hidden = shown ? "" : " cm-frontmatter-hidden";
+    ctx.present(
+      Decoration.line({ class: `cm-frontmatter${edge}${hidden}` }),
+      line.from,
+      line.from
+    );
   }
 }

@@ -14,7 +14,7 @@ These are random issues or shortcomings users have noted. They may or may not be
 - [ ] Themes should be able to use custom icon set per filetype and either fall back to app defaults or their own fallback.
 
 ## Other
-- [ ] Remember tabs on reload. Currently all tabs close on reload/exit.
+- [ ] Remember tabs and unsaved content on reload. Currently all tabs close on reload/exit.
 - [ ] Command palette fuzzy search and separate file search from command search. If you put `>` at the start of the search it searches commands. Take it away and it searches files. Optimize for tens of thousands of files. Use an ignore list of common issues, like `node_modules`.
 
 

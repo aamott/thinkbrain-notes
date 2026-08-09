@@ -1,6 +1,6 @@
 # Story: Hide Frontmatter in Live Preview
 
-**Status:** pending · **Urgency:** med · **Difficulty:** easy
+**Status:** 🟩 complete 2026-08-08 — D88 chose option 1, hidden in every note with reveal-on-cursor.
 
 ## Why
 
@@ -45,12 +45,12 @@ setting unless the question above is answered that way, no change to what is wri
 
 ## Acceptance criteria
 
-- [ ] With live preview on, a note opens with no visible frontmatter block.
-- [ ] Putting the cursor in the hidden range reveals it, as other live-preview source does.
-- [ ] With live preview off, frontmatter renders exactly as it does today.
-- [ ] A note whose frontmatter is malformed still shows it — hiding something the parser could
+- [x] With live preview on, a note opens with no visible frontmatter block.
+- [x] Putting the cursor in the hidden range reveals it, as other live-preview source does.
+- [x] With live preview off, frontmatter renders exactly as it does today.
+- [x] A note whose frontmatter is malformed still shows it — hiding something the parser could
       not read would hide the evidence the user needs.
-- [ ] The document is never modified; existing live-preview integrity tests still pass.
+- [x] The document is never modified; existing live-preview integrity tests still pass.
 
 ## Validation
 

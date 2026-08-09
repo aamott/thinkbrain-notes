@@ -465,6 +465,22 @@ turning somebody's sentence into a tappable pill is a guess that reads as damage
 one settings write the editor makes, and only when the user asks for it by name (narrowing
 D84, which stands for values).
 
+**D86.** An entry can name a new field where you are: a row at the bottom of the expanded
+dateline, offering any configured field the entry is not already showing and free text for
+anything else. It appears only once the metadata is open — the writing page stays mostly prose.
+
+**D87.** A field made from an entry is free text. Asking "one from a list, several, a number,
+or a few words?" on the page you came to write on is the settings form in disguise; free text
+records anything and mangles nothing, and the shape gets chosen when the field is promoted
+(D85). Naming a field writes nothing on its own — the key reaches the file only when a value
+is typed.
+
+**D88.** Live preview hides a note's frontmatter and reveals it when the cursor enters, the
+same bargain `#` and `**` already get, in every note rather than only journal entries — an
+editor whose appearance depends on which extension is active is hard to explain and harder to
+predict. A block that will not parse is never hidden: it is the evidence behind the diagnostic
+saying it is broken. Hidden by a line class, never by touching the document.
+
 ## Checkpoint table
 
 Every artifact and decision batch was approved by the product owner per D34, across

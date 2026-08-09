@@ -234,6 +234,75 @@ describe("editing under a fingertip (M-2, D78)", () => {
   });
 });
 
+describe("adding a field from the entry (D86)", () => {
+  const openAdd = async (host: HTMLElement, name: string): Promise<void> => {
+    await click(host, "Add a field");
+    const input = host.querySelector<HTMLInputElement>('input[aria-label="New field name"]');
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      setter?.call(input, name);
+      input?.dispatchEvent(new Event("input", { bubbles: true }));
+      input?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+  };
+
+  it("offers the row only once the metadata is open", async () => {
+    const host = await render();
+
+    expect(host.querySelector('button[aria-label="Add a field"]')).toBeNull();
+    await click(host, "Add metadata");
+    expect(host.querySelector('button[aria-label="Add a field"]')).not.toBeNull();
+  });
+
+  it("shows the new field, ready to fill in", async () => {
+    const host = await render();
+    await click(host, "Add metadata");
+
+    await openAdd(host, "Weather");
+
+    expect(host.querySelector('input[aria-label="Weather"]')).not.toBeNull();
+  });
+
+  // Adding a field is not recording a value: an empty one must not put a key in
+  // the file just because it was named.
+  it("writes nothing until a value is typed", async () => {
+    const onSet = vi.fn();
+    const host = await render({ onSet });
+    await click(host, "Add metadata");
+
+    await openAdd(host, "Weather");
+
+    expect(onSet).not.toHaveBeenCalled();
+  });
+
+  it("writes the key once a value is typed", async () => {
+    const onSet = vi.fn();
+    const host = await render({ onSet });
+    await click(host, "Add metadata");
+    await openAdd(host, "Weather");
+
+    const input = host.querySelector<HTMLInputElement>('input[aria-label="Weather"]');
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      setter?.call(input, "drizzle");
+      input?.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    expect(onSet).toHaveBeenCalledWith("weather", "drizzle");
+  });
+
+  it("does not offer a field the entry already shows", async () => {
+    const host = await render();
+    await click(host, "Add metadata");
+
+    await click(host, "Add a field");
+
+    // Every configured field is already on screen, so there is nothing of yours
+    // left to offer — only naming a new one.
+    expect(host.textContent).not.toContain("Your fields");
+  });
+});
+
 describe("notices", () => {
   it("reports frontmatter it could not read, without blocking the note (D33)", async () => {
     const host = await render({

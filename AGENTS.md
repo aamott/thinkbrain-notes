@@ -38,7 +38,7 @@ packages/core/  # Platform-agnostic TS: note model, markdown, frontmatter, setti
 packages/ui/  # Design system: tokens, shadcn components (See packages/ui/AGENTS.md)
 plans/  # Epics, feature specs, task tracking (See ## Plans below)
 scripts/  # qa.sh, rust-env.sh, with-rust-env.sh
-docs/  # Review logs, known issues, superpowers specs
+docs/  # Reviews, known issues, superpowers specs
 examples/extensions/  # Sample extension (hello-notes)
 ```
 
@@ -73,6 +73,9 @@ Filename grammar: `[NN-]status-name[-urgency]-difficulty.md`
 └── other_tasks/ # bugs, chores, etc.
     └── status-task_name-urgency-difficulty.md
 ```
+
+## Reviews
+Review findings are stored in `docs/reviews/` with filename format `YYYY-MM-DD/name-urgency-difficulty.md`. Findings are deleted upon being addressed.
 
 ## Optional: Repomix
 

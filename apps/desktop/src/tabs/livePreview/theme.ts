@@ -8,7 +8,11 @@ import { EditorView } from "@codemirror/view";
  * toggling the compartment swaps fonts with no extra wiring. Every color is a
  * `--tn-*` token so imported themes restyle the editor for free.
  */
-export const livePreviewTheme = EditorView.theme({
+/**
+ * The rule set, exported so a test can assert that a class it relies on is
+ * actually styled — a class name alone proves nothing about what is rendered.
+ */
+export const themeRules = {
   ".cm-content": {
     fontFamily: "var(--tn-font-sans)"
   },
@@ -133,5 +137,10 @@ export const livePreviewTheme = EditorView.theme({
     paddingLeft: "0.6em"
   },
   ".cm-frontmatter-first": { paddingTop: "0.25em" },
-  ".cm-frontmatter-last": { paddingBottom: "0.25em" }
-});
+  ".cm-frontmatter-last": { paddingBottom: "0.25em" },
+  // D88: out of the way while reading. Hidden rather than removed, so the
+  // document is untouched and the block returns the moment the cursor does.
+  ".cm-frontmatter-hidden": { display: "none" }
+} as const;
+
+export const livePreviewTheme = EditorView.theme(themeRules);
