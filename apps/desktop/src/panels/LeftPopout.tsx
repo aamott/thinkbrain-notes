@@ -1,4 +1,4 @@
-import { memo, useMemo } from "react";
+import { useMemo } from "react";
 
 import { type LeftPanel } from "../shell/shellTypes";
 import { Unavailable } from "../shell/Unavailable";
@@ -6,8 +6,8 @@ import type { WorkspaceExplorerProps } from "../workspace/WorkspaceExplorer";
 import { PanelTitle } from "./PanelTitle";
 import {
   getDesktopPanelOrUndefined,
+  MountedPanel,
   useLeftPanelContributions,
-  type LeftPanelContribution,
   type LeftPanelContext
 } from "./panelRegistry";
 
@@ -76,31 +76,3 @@ export function LeftPopout({ panel, rootPath, explorerProps, onOpenSearchResult 
     </aside>
   );
 }
-
-/**
- * One panel's slot.
- *
- * Memoized so switching popouts re-renders only the panel that changed. A
- * kept-mounted panel keeps its DOM and its state; it just stops re-rendering
- * when its neighbour is the one being opened.
- */
-const MountedPanel = memo(function MountedPanel({
-  contribution,
-  context,
-  isActive,
-  isAvailable
-}: {
-  readonly contribution: LeftPanelContribution;
-  readonly context: LeftPanelContext;
-  readonly isActive: boolean;
-  readonly isAvailable: boolean;
-}) {
-  return (
-    <div
-      className={isActive ? "flex flex-col flex-1 min-h-0" : "hidden"}
-      data-panel-available={isAvailable}
-    >
-      {contribution.factory(context)}
-    </div>
-  );
-});

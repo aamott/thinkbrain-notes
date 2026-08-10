@@ -68,7 +68,6 @@ export interface ManifestParseResult {
 // empty id as both "missing" and "invalid" would be two diagnostics for one
 // mistake.
 const REQUIRED_FIELDS = ["name", "version", "apiVersion"] as const;
-const RELATIVE_ID_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 const KNOWN_PLATFORMS = new Set<string>(["desktop", "mobile"]);
 const KNOWN_ACTIVATION_EVENTS = /^(onStartup|onCommand:[a-z][a-z0-9-]*|onView:[a-z][a-z0-9-]*)$/;
 const DEFAULT_PLATFORMS: readonly ExtensionPlatform[] = ["desktop", "mobile"];
@@ -143,7 +142,7 @@ function readContribution<T>(
   }
 
   const id = raw.id;
-  if (typeof id !== "string" || !RELATIVE_ID_PATTERN.test(id)) {
+  if (typeof id !== "string" || !EXTENSION_ID_PATTERN.test(id)) {
     diagnostics.push(
       error(
         "manifest_invalid_contribution_id",

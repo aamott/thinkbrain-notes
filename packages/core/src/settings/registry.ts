@@ -15,6 +15,7 @@ import type {
   SettingScope,
   SettingSection
 } from "./types";
+import { assertNeverSettingType } from "./internal";
 
 /**
  * Internal resolved definition: identical to `SettingDefinition` but with the
@@ -330,7 +331,7 @@ function assertValidDefinition(def: SettingDefinition): void {
       assertValidEnumDefinition(def);
       return;
     default:
-      return assertNeverDefinition(def);
+      return assertNeverSettingType(def);
   }
 }
 
@@ -380,13 +381,6 @@ function describeValue(value: unknown): string {
     return String(value);
   }
   return typeof value;
-}
-
-/** Compile-time and runtime guard for a setting type not handled above. */
-function assertNeverDefinition(def: never): never {
-  throw new Error(
-    `Invalid setting definition type "${String((def as { type?: unknown }).type)}".`
-  );
 }
 
 /**

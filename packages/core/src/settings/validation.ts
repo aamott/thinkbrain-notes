@@ -11,6 +11,7 @@
 import type { SettingsRegistry } from "./registry";
 import type { SettingDefinition } from "./types";
 import type { SettingsDiagnostic } from "../settings";
+import { assertNeverSettingType } from "./internal";
 
 /**
  * Validates a flat `fullKey -> value` map against the registry's definitions.
@@ -112,15 +113,8 @@ function checkType(
       }
       return undefined;
     default:
-      return assertNeverDefinition(def);
+      return assertNeverSettingType(def);
   }
-}
-
-/** Ensures adding a setting type requires a corresponding type check branch. */
-function assertNeverDefinition(def: never): never {
-  throw new Error(
-    `Unhandled setting type "${String((def as { type?: unknown }).type)}".`
-  );
 }
 
 /** Verifies a number value respects `min`/`max` bounds (inclusive). */

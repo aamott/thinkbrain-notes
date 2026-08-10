@@ -18,12 +18,7 @@ export class NativeCommandError extends Error {
   }
 }
 
-export interface ShellStatus {
-  readonly appName: string;
-  readonly shellVersion: string;
-  readonly ready: boolean;
-}
-
+/** Rust-shaped status returned by the `desktop_shell_status` IPC command. */
 interface NativeShellStatus {
   readonly app_name: string;
   readonly shell_version: string;
@@ -221,8 +216,6 @@ export interface NativeCommandMap {
 
 export type NativeCommandName = keyof NativeCommandMap;
 
-type ShellStatusInvoker = () => Promise<NativeShellStatus>;
-
 export interface NativeWorkspaceDescriptor {
   readonly root_path: string;
   readonly name: string;
@@ -327,19 +320,6 @@ export async function invokeNativeCommand<TCommand extends NativeCommandName>(
   } catch (error) {
     throw normalizeNativeError(error);
   }
-}
-
-export async function getDesktopShellStatus(
-  commandInvoker: ShellStatusInvoker = () =>
-    invokeNativeCommand("desktop_shell_status")
-): Promise<ShellStatus> {
-  const status = await commandInvoker();
-
-  return {
-    appName: status.app_name,
-    shellVersion: status.shell_version,
-    ready: status.ready
-  };
 }
 
 export function normalizeNativeError(error: unknown): NativeCommandError {

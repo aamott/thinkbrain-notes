@@ -6,7 +6,7 @@
  * propagate to the store.
  */
 
-import type { ControlProps } from "../controlRegistry";
+import { inputClassName, type ControlProps } from "../controlRegistry";
 
 /**
  * A controlled number input. Applies `min`/`max` from the definition when
@@ -42,7 +42,7 @@ export function NumberControl({ definition, value, onChange, disabled }: Control
         if (definition.max !== undefined && parsed > definition.max) return;
         onChange(parsed);
       }}
-      className="w-24 rounded-small border border-border bg-surface px-2 py-1 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+      className={`w-24 ${inputClassName}`}
     />
   );
 }

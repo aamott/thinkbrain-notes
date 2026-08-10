@@ -7,13 +7,12 @@
  */
 
 import type { ExtensionManifest } from "./manifest";
+import { EXTENSION_ID_PATTERN } from "../lifecycle";
 
 export type ActivationEvent =
   | { readonly kind: "startup" }
   | { readonly kind: "command"; readonly id: string }
   | { readonly kind: "view"; readonly id: string };
-
-const RELATIVE_ID_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 
 /**
  * Parses one activation event string.
@@ -30,7 +29,7 @@ export function parseActivationEvent(raw: string): ActivationEvent | null {
 
   const prefix = raw.slice(0, separator);
   const id = raw.slice(separator + 1);
-  if (!RELATIVE_ID_PATTERN.test(id)) return null;
+  if (!EXTENSION_ID_PATTERN.test(id)) return null;
 
   if (prefix === "onCommand") return { kind: "command", id };
   if (prefix === "onView") return { kind: "view", id };

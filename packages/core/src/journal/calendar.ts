@@ -1,6 +1,6 @@
 import type { NoteDiagnostic } from "../note-model";
 import { compareJournalEntries, UNDATED, type JournalFilenameResult } from "./filename";
-import { formatJournalDate } from "./frontmatter";
+import { formatJournalDate, sameDate } from "./frontmatter";
 import type { JournalDate, JournalEntryRef, JournalFieldValue } from "./types";
 
 /**
@@ -125,10 +125,6 @@ function matchesPredicates(
     if (value === undefined) return false;
     return toValues(value).some((candidate) => predicate.values.includes(candidate));
   });
-}
-
-function sameDate(left: JournalDate, right: JournalDate): boolean {
-  return left.year === right.year && left.month === right.month && left.day === right.day;
 }
 
 /** An entry whose filename gave it a date, and so a place in the grid. */

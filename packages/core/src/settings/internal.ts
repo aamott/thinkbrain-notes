@@ -33,6 +33,13 @@ export function uniqueStrings(values: readonly string[]): string[] {
   return Array.from(new Set(values));
 }
 
+/** Compile-time exhaustiveness guard for `SettingType`. Throws on unknown types. */
+export function assertNeverSettingType(def: never): never {
+  throw new Error(
+    `Unhandled setting type "${String((def as { type?: unknown }).type)}".`
+  );
+}
+
 /**
  * Diagnostic shape returned by {@link readSettingsVersion}.
  *

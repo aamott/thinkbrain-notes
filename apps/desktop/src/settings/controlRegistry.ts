@@ -21,6 +21,10 @@ import { NumberControl } from "./controls/NumberControl";
 import { SelectControl } from "./controls/SelectControl";
 import { PathControl } from "./controls/PathControl";
 
+/** Shared input className for text/number/select/path controls. */
+export const inputClassName =
+  "rounded-small border border-border bg-surface px-2 py-1 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50";
+
 /**
  * Props every setting control receives.
  *

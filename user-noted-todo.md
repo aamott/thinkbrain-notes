@@ -21,3 +21,17 @@ These are random issues or shortcomings users have noted. They may or may not be
 ## Settings
 - [ ] Settings should be single-page scrollable, and the nav should scroll to sections and highlight the current section (without causing glitchy scrolling that jumps up and down), and when the canvas gets below a certain size the settings nav should collapse to a hamburger menu. Right now it's all separate pages per subsection. It should be optimized for thousands of settings, just in case of expansion.
 - [ ] Search should search all settings content, not just section titles.
+
+
+
+
+# Journal
+- [ ] Replace "Add Metadata" in journal... info ico instead? Call it the info tracker? Just "Info Tracker" not Add metadata/edit
+- [ ] Add direct link to metadata settings to add metadata
+- [ ] default to list of things, not text entry
+- default to list of things, not text entry
+
+
+# Other 
+- [ ] make scrollbar not expand on hover. Gets in the way of tabs.
+- [ ] Scroll to new tab
