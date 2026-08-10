@@ -9,8 +9,10 @@ import { AddFieldRow, type AddFieldRowProps } from "./AddFieldRow";
 /**
  * D86: recording something new without leaving the entry.
  *
- * D87 keeps it free text — asking "one from a list, several, a number, or a few
- * words?" on the page you came to write on is the settings form in disguise.
+ * New fields default to a single-select list — the user picks from pills
+ * rather than typing free text. Asking "one from a list, several, a number, or
+ * a few words?" on the page you came to write on is the settings form in
+ * disguise.
  */
 
 let root: Root | null = null;
@@ -72,7 +74,7 @@ describe("naming a new field", () => {
     expect(host.querySelector('input[aria-label="New field name"]')).toBeNull();
   });
 
-  it("creates a free-text field and shows the key it will write (D87)", async () => {
+  it("creates a single-select field and shows the key it will write (D87)", async () => {
     const onAdd = vi.fn();
     const host = await render({ onAdd });
 
@@ -81,7 +83,7 @@ describe("naming a new field", () => {
     expect(host.textContent).toContain("weather");
     await submit(host);
 
-    expect(onAdd).toHaveBeenCalledWith({ id: "weather", label: "Weather", type: "text" });
+    expect(onAdd).toHaveBeenCalledWith({ id: "weather", label: "Weather", type: "single-select", options: [] });
   });
 
   it("derives a usable key from an awkward name", async () => {
@@ -95,7 +97,8 @@ describe("naming a new field", () => {
     expect(onAdd).toHaveBeenCalledWith({
       id: "how-i-slept",
       label: "How I slept",
-      type: "text"
+      type: "single-select",
+      options: []
     });
   });
 

@@ -286,7 +286,8 @@ describe("adding a field from the entry (D86)", () => {
 
     await openAdd(host, "Weather");
 
-    expect(host.querySelector('input[aria-label="Weather"]')).not.toBeNull();
+    // Single-select fields show a pill list with a "＋" add-value affordance.
+    expect(host.querySelector('button[aria-label="Add a value to Weather"]')).not.toBeNull();
   });
 
   // Adding a field is not recording a value: an empty one must not put a key in
@@ -307,11 +308,14 @@ describe("adding a field from the entry (D86)", () => {
     await click(host, "Info Tracker");
     await openAdd(host, "Weather");
 
-    const input = host.querySelector<HTMLInputElement>('input[aria-label="Weather"]');
+    // Single-select: click "＋" to reveal the value input, then type and commit.
+    await click(host, "Add a value to Weather");
+    const input = host.querySelector<HTMLInputElement>('input[aria-label="New value for Weather"]');
     await act(async () => {
       const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
       setter?.call(input, "drizzle");
       input?.dispatchEvent(new Event("input", { bubbles: true }));
+      input?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     });
 
     expect(onSet).toHaveBeenCalledWith("weather", "drizzle");

@@ -6,11 +6,11 @@ import { deriveFieldKey } from "./fieldKey";
 /**
  * Recording something new without leaving the entry (D86).
  *
- * A field made here is an ordinary frontmatter key holding free text (D87). The
- * settings are not touched: it arrives marked as a key the settings do not know
- * (D85), with the same one-tap promotion once it earns a place. Asking for a
- * field's shape on the page you came to write on would be the settings form
- * wearing a disguise.
+ * A field made here defaults to a single-select list so the user picks from
+ * pills rather than typing free text. The settings are not touched: it arrives
+ * marked as a key the settings do not know (D85), with the same one-tap
+ * promotion once it earns a place. Asking for a field's shape on the page you
+ * came to write on would be the settings form wearing a disguise.
  */
 
 export interface AddFieldRowProps {
@@ -68,7 +68,7 @@ export function AddFieldRow({ available, existingKeys, onAdd, readOnly = false }
 
   const commit = (): void => {
     if (typed === "" || problem !== null) return;
-    add(matched ?? { id: key, label: typed, type: "text" });
+    add(matched ?? { id: key, label: typed, type: "single-select", options: [] });
   };
 
   if (!open) {

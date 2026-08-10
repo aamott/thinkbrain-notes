@@ -27,9 +27,10 @@ These are random issues or shortcomings users have noted. They may or may not be
 
 # Journal
 - [x] Replace "Add Metadata" in journal... info ico instead? Call it the info tracker? Just "Info Tracker" not Add metadata/edit
-  - Done: label renamed to "Info Tracker" (consolidated Add/Edit variants). Icon swap still pending — see note below.
+  - Done: label renamed to "Info Tracker" (consolidated Add/Edit variants).
 - [ ] Add direct link to metadata settings to add metadata
-- [ ] default to list of things, not text entry
+- [x] default to list of things, not text entry
+  - Done: new fields created inline now default to `single-select` (pill list) instead of `text`.
 
 
 # Other 

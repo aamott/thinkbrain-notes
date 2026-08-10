@@ -211,16 +211,14 @@ export function MetadataWidget({
         {!expanded && set.length > 0 && (
           <span className="text-[0.82rem] text-muted-foreground">· {set.join(" · ")}</span>
         )}
-        {shown.length > 0 && (
-          <button
-            type="button"
-            onClick={() => setExpanded(!expanded)}
-            className="ml-auto rounded-small border border-border px-1.5 text-[0.68rem] text-muted-foreground cursor-pointer hover:text-foreground"
-          >
-            {/* The sheet carries its own Done, so the opener keeps its label. */}
-            {expanded && !touch ? "Done" : "Info Tracker"}
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={() => setExpanded(!expanded)}
+          className="ml-auto rounded-small border border-border px-1.5 text-[0.68rem] text-muted-foreground cursor-pointer hover:text-foreground"
+        >
+          {/* The sheet carries its own Done, so the opener keeps its label. */}
+          {expanded && !touch ? "Done" : "Info Tracker"}
+        </button>
       </div>
 
       {notice && (
