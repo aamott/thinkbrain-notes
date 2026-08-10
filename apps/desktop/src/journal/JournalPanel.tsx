@@ -260,12 +260,16 @@ export function JournalPanel({
     setContextMenu({ state: { x: event.clientX, y: event.clientY }, entryPath });
   };
 
-  /** Commits a rename if the draft is valid and different. */
+  /** Commits a rename if the draft is valid and different. Only the filename
+   *  is edited — the folder path is preserved. */
   const commitRename = (): void => {
     if (!renaming) return;
     const trimmed = renaming.draft.trim();
-    if (trimmed && trimmed !== renaming.path && onRenameEntry) {
-      onRenameEntry(renaming.path, trimmed);
+    const slash = renaming.path.lastIndexOf("/");
+    const folder = slash >= 0 ? renaming.path.slice(0, slash + 1) : "";
+    const currentName = slash >= 0 ? renaming.path.slice(slash + 1) : renaming.path;
+    if (trimmed && trimmed !== currentName && onRenameEntry) {
+      onRenameEntry(renaming.path, `${folder}${trimmed}`);
     }
     setRenaming(null);
   };
@@ -470,7 +474,9 @@ export function JournalPanel({
           <MenuButton label="Open" onClick={() => { onOpenEntry(contextMenu.entryPath); setContextMenu(null); }} />
           {onRenameEntry && (
             <MenuButton label="Rename" onClick={() => {
-              setRenaming({ path: contextMenu.entryPath, draft: contextMenu.entryPath });
+              const slash = contextMenu.entryPath.lastIndexOf("/");
+              const name = slash >= 0 ? contextMenu.entryPath.slice(slash + 1) : contextMenu.entryPath;
+              setRenaming({ path: contextMenu.entryPath, draft: name });
               setContextMenu(null);
             }} />
           )}
