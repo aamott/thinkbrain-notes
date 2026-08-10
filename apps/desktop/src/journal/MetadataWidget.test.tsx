@@ -179,11 +179,13 @@ describe("editing", () => {
     expect(onSet).toHaveBeenLastCalledWith("note", undefined);
   });
 
-  it("offers no controls when the user has configured no fields", async () => {
+  it("still offers the Info Tracker button when the user has configured no fields", async () => {
     const host = await render({ definitions: [] });
 
     expect(host.textContent).toContain("Friday, August 7, 2026");
-    expect(host.querySelector("button")).toBeNull();
+    // The button is always visible so the user can open the panel and add
+    // fields — without it, there's no entry point to metadata at all.
+    expect(host.textContent).toContain("Info Tracker");
   });
 });
 
