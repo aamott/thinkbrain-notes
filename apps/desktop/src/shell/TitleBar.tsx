@@ -58,13 +58,9 @@ export function TitleBar({
 }: TitleBarProps) {
   const rightPanels = useRightPanelContributions();
 
-  // Per-tab DOM nodes keyed by tab id, so a freshly-added active tab can be
-  // scrolled into view without querying the document.
+  // Per-tab DOM nodes keyed by tab id, so the active tab can be scrolled into
+  // view without querying the document.
   const tabElementsRef = useRef<Map<string, HTMLDivElement>>(new Map());
-  // Tab ids observed on the previous render. Used to detect *new* tabs (vs.
-  // reactivating an existing one) so we only auto-scroll on creation and don't
-  // fight the user's manual scroll position on every activation.
-  const knownTabIdsRef = useRef<Set<string>>(new Set());
   // The tab strip scrolls horizontally; translate vertical wheel motion into
   // horizontal scroll so the scroll wheel moves tabs sideways. Attached as a
   // non-passive native listener so preventDefault works (React's onWheel is
@@ -84,21 +80,22 @@ export function TitleBar({
     return () => el.removeEventListener("wheel", onWheel);
   }, []);
 
-  // Scroll a newly-created active tab into view. Runs as a layout effect so the
-  // scroll lands before paint (no flicker); the new tab's DOM node is mounted
-  // by the time layout effects fire. Only triggers when the active tab id was
-  // not present in the previous render's tab set — reactivating an existing tab
-  // (clicking a chip, restore) is left to the user's scroll position.
+  // Scroll the active tab into view whenever it changes. Skips if the tab is
+  // already fully visible so it doesn't fight the user's scroll position when
+  // clicking visible tabs. Computes scrollLeft manually (getBoundingClientRect
+  // is reliable across webviews; scrollIntoView is flaky for horizontal
+  // containers in WebKitGTK) and animates via scrollTo({ behavior: "smooth" }).
   useLayoutEffect(() => {
-    const nextKnown = new Set(tabs.map((tab) => tab.id));
-    const isNewActive = activeTabId !== null && !knownTabIdsRef.current.has(activeTabId);
-    knownTabIdsRef.current = nextKnown;
-    if (!isNewActive) return;
-    const el = tabElementsRef.current.get(activeTabId);
-    // `inline: 'nearest'` keeps horizontal scrolling minimal — the tab bar
-    // scrolls horizontally, so we only nudge along that axis as needed.
-    el?.scrollIntoView({ block: "nearest", inline: "nearest" });
-  }, [tabs, activeTabId]);
+    if (activeTabId === null) return;
+    const tab = tabElementsRef.current.get(activeTabId);
+    const strip = tabStripRef.current;
+    if (!tab || !strip) return;
+    const rel = tab.getBoundingClientRect().left - strip.getBoundingClientRect().left;
+    if (rel >= 0 && rel + tab.offsetWidth <= strip.clientWidth) return;
+    const max = strip.scrollWidth - strip.clientWidth;
+    const left = Math.max(0, Math.min(rel - 8 + strip.scrollLeft, max));
+    strip.scrollTo({ left, behavior: "smooth" });
+  }, [activeTabId]);
 
   return (
     <header className="flex items-end bg-titlebar border-b border-border min-w-0">
@@ -123,7 +120,7 @@ export function TitleBar({
       </div>
 
       {/* Tab strip — maps over open tabs with active/dirty/close affordances. */}
-      <nav ref={tabStripRef} className="flex flex-1 items-end gap-[2px] h-full min-w-0 overflow-x-auto" aria-label="Open tabs">
+      <nav ref={tabStripRef} className="flex flex-1 items-end gap-0.5 h-full min-w-0 overflow-x-auto" aria-label="Open tabs">
         {tabs.map((tab) => {
           const isActive = tab.id === activeTabId;
           return (
