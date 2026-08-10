@@ -193,7 +193,7 @@ describe("the metadata widget and the settings behind it", () => {
     // The affordance only exists once there is a field to fill in, and the
     // label itself appears when it is expanded.
     const add = host.querySelector<HTMLButtonElement>("button");
-    expect(add?.textContent).toBe("Add metadata");
+    expect(add?.textContent).toBe("Info Tracker");
     await act(async () => add?.click());
     expect(host.textContent).toContain("Mood");
   });

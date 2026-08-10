@@ -1,3 +1,4 @@
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { cn } from "../lib/utils";
 import type { DesktopTab } from "../tabs/tabModel";
 import { useRightPanelContributions } from "../panels/panelRegistry";
@@ -57,6 +58,48 @@ export function TitleBar({
 }: TitleBarProps) {
   const rightPanels = useRightPanelContributions();
 
+  // Per-tab DOM nodes keyed by tab id, so a freshly-added active tab can be
+  // scrolled into view without querying the document.
+  const tabElementsRef = useRef<Map<string, HTMLDivElement>>(new Map());
+  // Tab ids observed on the previous render. Used to detect *new* tabs (vs.
+  // reactivating an existing one) so we only auto-scroll on creation and don't
+  // fight the user's manual scroll position on every activation.
+  const knownTabIdsRef = useRef<Set<string>>(new Set());
+  // The tab strip scrolls horizontally; translate vertical wheel motion into
+  // horizontal scroll so the scroll wheel moves tabs sideways. Attached as a
+  // non-passive native listener so preventDefault works (React's onWheel is
+  // passive at the root and would warn / no-op on preventDefault).
+  const tabStripRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const el = tabStripRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      // Only translate when the user is scrolling vertically (the common case
+      // for a mouse wheel) and there's no explicit horizontal trackpad motion.
+      if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+      el.scrollLeft += e.deltaY;
+      e.preventDefault();
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, []);
+
+  // Scroll a newly-created active tab into view. Runs as a layout effect so the
+  // scroll lands before paint (no flicker); the new tab's DOM node is mounted
+  // by the time layout effects fire. Only triggers when the active tab id was
+  // not present in the previous render's tab set — reactivating an existing tab
+  // (clicking a chip, restore) is left to the user's scroll position.
+  useLayoutEffect(() => {
+    const nextKnown = new Set(tabs.map((tab) => tab.id));
+    const isNewActive = activeTabId !== null && !knownTabIdsRef.current.has(activeTabId);
+    knownTabIdsRef.current = nextKnown;
+    if (!isNewActive) return;
+    const el = tabElementsRef.current.get(activeTabId);
+    // `inline: 'nearest'` keeps horizontal scrolling minimal — the tab bar
+    // scrolls horizontally, so we only nudge along that axis as needed.
+    el?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [tabs, activeTabId]);
+
   return (
     <header className="flex items-end bg-titlebar border-b border-border min-w-0">
       {/* App identity + command palette. */}
@@ -80,12 +123,17 @@ export function TitleBar({
       </div>
 
       {/* Tab strip — maps over open tabs with active/dirty/close affordances. */}
-      <nav className="flex flex-1 items-end gap-[2px] h-full min-w-0 overflow-x-auto" aria-label="Open tabs">
+      <nav ref={tabStripRef} className="flex flex-1 items-end gap-[2px] h-full min-w-0 overflow-x-auto" aria-label="Open tabs">
         {tabs.map((tab) => {
           const isActive = tab.id === activeTabId;
           return (
             <div
               key={tab.id}
+              data-tab-id={tab.id}
+              ref={(el) => {
+                if (el) tabElementsRef.current.set(tab.id, el);
+                else tabElementsRef.current.delete(tab.id);
+              }}
               className={cn(
                 "flex items-center bg-tab-inactive text-tab-inactive-foreground border-t-2 border-t-transparent rounded-t-small flex-[0_0_clamp(7.5rem,15vw,12.5rem)] max-[760px]:flex-basis-[7.25rem] text-xs h-[calc(100%-3px)] min-w-0 hover:bg-secondary",
                 isActive && "bg-tab-active border-t-primary text-tab-active-foreground"

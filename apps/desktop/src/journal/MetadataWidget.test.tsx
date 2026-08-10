@@ -88,7 +88,7 @@ describe("collapsed dateline", () => {
   it("shows only the date and an invitation when nothing is recorded (D54)", async () => {
     const host = await render();
 
-    expect(host.textContent).toContain("Add metadata");
+    expect(host.textContent).toContain("Info Tracker");
     // No placeholder values, no empty chips: the common case should look
     // finished rather than unfilled.
     expect(host.textContent).not.toMatch(/not set|—\s*—/);
@@ -105,7 +105,7 @@ describe("collapsed dateline", () => {
   it("expands to the form and back", async () => {
     const host = await render({ values: { mood: "good" } });
 
-    await click(host, "Edit");
+    await click(host, "Info Tracker");
     expect(host.querySelectorAll("fieldset").length).toBeGreaterThan(0);
 
     await click(host, "Done");
@@ -117,7 +117,7 @@ describe("editing", () => {
   it("records a single-select choice", async () => {
     const onSet = vi.fn();
     const host = await render({ onSet });
-    await click(host, "Add metadata");
+    await click(host, "Info Tracker");
 
     await click(host, "Mood: good");
 
@@ -127,7 +127,7 @@ describe("editing", () => {
   it("clears a single-select choice when the same option is chosen again", async () => {
     const onSet = vi.fn();
     const host = await render({ values: { mood: "good" }, onSet });
-    await click(host, "Edit");
+    await click(host, "Info Tracker");
 
     await click(host, "Mood: good");
 
@@ -137,7 +137,7 @@ describe("editing", () => {
   it("adds and removes multi-select values without disturbing the others", async () => {
     const onSet = vi.fn();
     const host = await render({ values: { context: ["baking"] }, onSet });
-    await click(host, "Edit");
+    await click(host, "Info Tracker");
 
     await click(host, "Context: reading");
     expect(onSet).toHaveBeenCalledWith("context", ["baking", "reading"]);
@@ -149,7 +149,7 @@ describe("editing", () => {
   it("records a number and a text value", async () => {
     const onSet = vi.fn();
     const host = await render({ onSet });
-    await click(host, "Add metadata");
+    await click(host, "Info Tracker");
 
     const [energy, note] = [...host.querySelectorAll("input")];
     await act(async () => {
@@ -167,7 +167,7 @@ describe("editing", () => {
   it("clears a value rather than writing an empty string", async () => {
     const onSet = vi.fn();
     const host = await render({ values: { note: "Try 2% salt" }, onSet });
-    await click(host, "Edit");
+    await click(host, "Info Tracker");
 
     const note = [...host.querySelectorAll("input")].at(-1);
     await act(async () => {
@@ -204,7 +204,7 @@ describe("editing under a fingertip (M-2, D78)", () => {
     withPointer(true);
     const host = await render();
 
-    await click(host, "Add metadata");
+    await click(host, "Info Tracker");
 
     expect(document.querySelector('[role="dialog"]')?.getAttribute("aria-label")).toBe(
       "Friday, August 7"
@@ -215,7 +215,7 @@ describe("editing under a fingertip (M-2, D78)", () => {
     withPointer(false);
     const host = await render();
 
-    await click(host, "Add metadata");
+    await click(host, "Info Tracker");
 
     expect(document.querySelector('[role="dialog"]')).toBeNull();
     expect(host.querySelector("fieldset")).not.toBeNull();
@@ -227,7 +227,7 @@ describe("editing under a fingertip (M-2, D78)", () => {
     withPointer(true);
     const host = await render();
 
-    await click(host, "Add metadata");
+    await click(host, "Info Tracker");
 
     const outside = [...host.querySelectorAll("fieldset")].filter(
       (field) => field.closest('[role="dialog"]') === null
@@ -238,7 +238,7 @@ describe("editing under a fingertip (M-2, D78)", () => {
   it("returns to the dateline when the sheet is dismissed", async () => {
     withPointer(true);
     const host = await render();
-    await click(host, "Add metadata");
+    await click(host, "Info Tracker");
 
     const done = document.querySelector<HTMLButtonElement>('[role="dialog"] button[aria-label="Done"]');
     await act(async () => done?.click());
@@ -251,7 +251,7 @@ describe("editing under a fingertip (M-2, D78)", () => {
     withPointer(true);
     const onSet = vi.fn();
     const host = await render({ onSet });
-    await click(host, "Add metadata");
+    await click(host, "Info Tracker");
 
     const good = document.querySelector<HTMLButtonElement>('button[aria-label="Mood: good"]');
     await act(async () => good?.click());
@@ -276,13 +276,13 @@ describe("adding a field from the entry (D86)", () => {
     const host = await render();
 
     expect(host.querySelector('button[aria-label="Add a field"]')).toBeNull();
-    await click(host, "Add metadata");
+    await click(host, "Info Tracker");
     expect(host.querySelector('button[aria-label="Add a field"]')).not.toBeNull();
   });
 
   it("shows the new field, ready to fill in", async () => {
     const host = await render();
-    await click(host, "Add metadata");
+    await click(host, "Info Tracker");
 
     await openAdd(host, "Weather");
 
@@ -294,7 +294,7 @@ describe("adding a field from the entry (D86)", () => {
   it("writes nothing until a value is typed", async () => {
     const onSet = vi.fn();
     const host = await render({ onSet });
-    await click(host, "Add metadata");
+    await click(host, "Info Tracker");
 
     await openAdd(host, "Weather");
 
@@ -304,7 +304,7 @@ describe("adding a field from the entry (D86)", () => {
   it("writes the key once a value is typed", async () => {
     const onSet = vi.fn();
     const host = await render({ onSet });
-    await click(host, "Add metadata");
+    await click(host, "Info Tracker");
     await openAdd(host, "Weather");
 
     const input = host.querySelector<HTMLInputElement>('input[aria-label="Weather"]');
@@ -319,7 +319,7 @@ describe("adding a field from the entry (D86)", () => {
 
   it("does not offer a field the entry already shows", async () => {
     const host = await render();
-    await click(host, "Add metadata");
+    await click(host, "Info Tracker");
 
     await click(host, "Add a field");
 
@@ -396,7 +396,7 @@ describe("MetadataWidgetContainer", () => {
 
     expect(host.textContent).toContain("elated");
 
-    await click(host, "Edit");
+    await click(host, "Info Tracker");
     expect(
       host
         .querySelector('button[aria-label="Mood: elated"]')
@@ -439,8 +439,8 @@ describe("MetadataWidgetContainer", () => {
       applyEdit
     });
 
-    // A value is already set, so the control reads "Edit" rather than "Add".
-    await click(host, "Edit");
+    // A value is already set, but the opener label stays "Info Tracker".
+    await click(host, "Info Tracker");
     await click(host, "Mood: good");
 
     expect(applyEdit).toHaveBeenCalledWith(
@@ -486,7 +486,7 @@ describe("a key with no field behind it (D33)", () => {
       definitions: []
     });
 
-    await click(host, "Edit");
+    await click(host, "Info Tracker");
 
     expect(host.querySelector('input[aria-label="mood"]')).not.toBeNull();
   });
@@ -499,7 +499,7 @@ describe("a key with no field behind it (D33)", () => {
       applyEdit: (next) => edits.push(next)
     });
 
-    await click(host, "Edit");
+    await click(host, "Info Tracker");
     const input = host.querySelector<HTMLInputElement>('input[aria-label="mood"]');
     await act(async () => {
       const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
@@ -518,7 +518,7 @@ describe("a key with no field behind it (D33)", () => {
       onDefineField: (definition) => defined.push(definition)
     });
 
-    await click(host, "Edit");
+    await click(host, "Info Tracker");
     await click(host, "Add mood to your fields");
 
     expect(defined).toEqual([{ id: "mood", label: "mood", type: "text" }]);
@@ -529,7 +529,7 @@ describe("a key with no field behind it (D33)", () => {
       contents: note("date: 2026-08-07\nmood: good\n")
     });
 
-    await click(host, "Edit");
+    await click(host, "Info Tracker");
 
     expect(host.querySelector('button[aria-label="Add mood to your fields"]')).toBeNull();
   });
@@ -543,7 +543,7 @@ describe("a key with no field behind it (D33)", () => {
       onAddOption: (fieldId, option) => addedOptions.push({ fieldId, option })
     });
 
-    await click(host, "Edit");
+    await click(host, "Info Tracker");
 
     const button = host.querySelector<HTMLButtonElement>(
       'button[aria-label="Add down as an option for Mood"]'
@@ -560,7 +560,7 @@ describe("a key with no field behind it (D33)", () => {
       applyEdit: () => {}
     });
 
-    await click(host, "Edit");
+    await click(host, "Info Tracker");
 
     expect(
       host.querySelector('button[aria-label="Add down as an option for Mood"]')
@@ -575,7 +575,7 @@ describe("a key with no field behind it (D33)", () => {
       onAddOption: () => {}
     });
 
-    await click(host, "Edit");
+    await click(host, "Info Tracker");
 
     expect(
       host.querySelector('button[aria-label="Add good as an option for Mood"]')
@@ -596,7 +596,7 @@ describe("read-only mode when applyEdit is absent", () => {
       applyEdit: undefined
     });
 
-    await click(host, "Edit");
+    await click(host, "Info Tracker");
 
     const button = host.querySelector<HTMLButtonElement>('button[aria-label="Mood: good"]');
     expect(button?.hasAttribute("disabled")).toBe(true);
@@ -607,7 +607,7 @@ describe("read-only mode when applyEdit is absent", () => {
       applyEdit: undefined
     });
 
-    await click(host, "Add metadata");
+    await click(host, "Info Tracker");
 
     expect(host.querySelector('button[aria-label="Add a field"]')?.hasAttribute("disabled")).toBe(true);
   });
@@ -618,7 +618,7 @@ describe("read-only mode when applyEdit is absent", () => {
       applyEdit: undefined
     });
 
-    await click(host, "Edit");
+    await click(host, "Info Tracker");
 
     const input = host.querySelector<HTMLInputElement>('input[aria-label="Note to self"]');
     expect(input?.hasAttribute("disabled")).toBe(true);

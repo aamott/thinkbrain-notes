@@ -218,7 +218,7 @@ export function MetadataWidget({
             className="ml-auto rounded-small border border-border px-1.5 text-[0.68rem] text-muted-foreground cursor-pointer hover:text-foreground"
           >
             {/* The sheet carries its own Done, so the opener keeps its label. */}
-            {expanded && !touch ? "Done" : set.length > 0 ? "Edit" : "Add metadata"}
+            {expanded && !touch ? "Done" : "Info Tracker"}
           </button>
         )}
       </div>

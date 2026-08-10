@@ -110,6 +110,24 @@
     outline: 2px solid var(--tn-color-ring);
     outline-offset: -2px;
   }
+
+  /* Scrollbar: static width so it never expands on hover (the native WebView
+     overlay scrollbar auto-expands and gets in the way of the tab strip).
+     Width stays constant; only the thumb color shifts subtly on hover. */
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--tn-color-border);
+    border-radius: 2px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--tn-color-muted-foreground);
+  }
 }
 
 /* CodeMirror cursor: override the default black border so the cursor tracks

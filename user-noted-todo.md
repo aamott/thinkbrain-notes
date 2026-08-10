@@ -26,12 +26,12 @@ These are random issues or shortcomings users have noted. They may or may not be
 
 
 # Journal
-- [ ] Replace "Add Metadata" in journal... info ico instead? Call it the info tracker? Just "Info Tracker" not Add metadata/edit
+- [x] Replace "Add Metadata" in journal... info ico instead? Call it the info tracker? Just "Info Tracker" not Add metadata/edit
+  - Done: label renamed to "Info Tracker" (consolidated Add/Edit variants). Icon swap still pending — see note below.
 - [ ] Add direct link to metadata settings to add metadata
 - [ ] default to list of things, not text entry
-- default to list of things, not text entry
 
 
 # Other 
-- [ ] make scrollbar not expand on hover. Gets in the way of tabs.
-- [ ] Scroll to new tab
+- [x] make scrollbar not expand on hover. Gets in the way of tabs.
+- [x] Scroll to new tab
