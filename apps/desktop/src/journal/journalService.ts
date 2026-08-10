@@ -53,6 +53,10 @@ export interface JournalService {
   listEntries(): Promise<JournalListing>;
   /** Opens an entry the popout listed, as an ordinary editor tab (D9). */
   openEntry(relativePath: string): Promise<void>;
+  /** Renames or moves an entry within the workspace. */
+  renameEntry(relativePath: string, newRelativePath: string): Promise<void>;
+  /** Deletes an entry from the workspace (permanently). */
+  deleteEntry(relativePath: string): Promise<void>;
   /** First line of an entry's prose, or `null` when it has none. */
   readPreview(relativePath: string): Promise<string | null>;
   /** Opens today's most recent entry, creating one when today has none. */
@@ -218,6 +222,14 @@ export function createJournalService(options: JournalServiceOptions): JournalSer
     await workspace.openNote(relativePath);
   };
 
+  const renameEntry = async (relativePath: string, newRelativePath: string): Promise<void> => {
+    await workspace.renameNote(relativePath, newRelativePath);
+  };
+
+  const deleteEntry = async (relativePath: string): Promise<void> => {
+    await workspace.deleteNote(relativePath);
+  };
+
   /**
    * The entry's first line of prose, for the list.
    *
@@ -239,5 +251,5 @@ export function createJournalService(options: JournalServiceOptions): JournalSer
     }
   };
 
-  return { createEntry, listEntries, openEntry, openToday, readPreview };
+  return { createEntry, listEntries, openEntry, renameEntry, deleteEntry, openToday, readPreview };
 }

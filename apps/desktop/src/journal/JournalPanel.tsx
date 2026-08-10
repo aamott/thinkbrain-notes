@@ -1,5 +1,6 @@
-import { useRef, useState } from "react";
+import { useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 
+import { ContextMenu, MenuButton, type ContextMenuState } from "../shell/ContextMenu";
 import type { JournalRow, JournalView } from "./journalViewModel";
 
 /**
@@ -32,6 +33,10 @@ export interface JournalPanelProps {
   readonly onToday: () => void;
   readonly onOpenCalendar: () => void;
   readonly onOpenEntry: (relativePath: string) => void;
+  /** Renames an entry. Omitted where the host cannot rename files. */
+  readonly onRenameEntry?: (relativePath: string, newRelativePath: string) => void;
+  /** Deletes an entry. Omitted where the host cannot delete files. */
+  readonly onDeleteEntry?: (relativePath: string) => void;
   readonly onToggleGroup: (key: string) => void;
   readonly onRemoveChip: (id: string) => void;
   readonly onClearFilters: () => void;
@@ -101,14 +106,45 @@ function rowName(row: JournalRow): string {
 function Row({
   row,
   focused,
-  onActivate
+  onActivate,
+  onContextMenu,
+  renaming,
+  onRenameChange,
+  onRenameCommit,
+  onRenameCancel
 }: {
   readonly row: JournalRow;
   readonly focused: boolean;
   readonly onActivate: () => void;
+  readonly onContextMenu?: (event: ReactMouseEvent) => void;
+  readonly renaming?: { draft: string };
+  readonly onRenameChange?: (value: string) => void;
+  readonly onRenameCommit?: () => void;
+  readonly onRenameCancel?: () => void;
 }) {
   const isHeader = row.collapsed !== null;
+  const isRenaming = renaming !== undefined;
   const level = row.kind === "year" || row.kind === "undated" ? 1 : row.kind === "month" ? 2 : 3;
+
+  // When renaming an entry row, render an inline input instead of the button.
+  if (!isHeader && isRenaming) {
+    return (
+      <div className={`flex w-full items-center px-2 py-1 ${TOUCH} border-b border-border`}>
+        <input
+          autoFocus
+          aria-label="Rename entry"
+          value={renaming.draft}
+          onChange={(e) => onRenameChange?.(e.target.value)}
+          onBlur={onRenameCommit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") { e.preventDefault(); onRenameCommit?.(); }
+            else if (e.key === "Escape") { e.preventDefault(); onRenameCancel?.(); }
+          }}
+          className="h-6 w-full rounded-small border border-input bg-background px-1.5 text-xs text-foreground"
+        />
+      </div>
+    );
+  }
 
   return (
     <button
@@ -119,6 +155,7 @@ function Row({
       aria-expanded={isHeader ? !row.collapsed : undefined}
       tabIndex={focused ? 0 : -1}
       onClick={onActivate}
+      onContextMenu={onContextMenu}
       className={
         isHeader
           ? row.kind === "year"
@@ -176,6 +213,8 @@ export function JournalPanel({
   onToday,
   onOpenCalendar,
   onOpenEntry,
+  onRenameEntry,
+  onDeleteEntry,
   onToggleGroup,
   onRemoveChip,
   onClearFilters,
@@ -187,6 +226,12 @@ export function JournalPanel({
   const [focusedRow, setFocusedRow] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
   const [lastRowCount, setLastRowCount] = useState(view.rows.length);
+  // Context menu for entry rows (right-click / long-press). Null when closed.
+  const [contextMenu, setContextMenu] = useState<{ state: ContextMenuState; entryPath: string } | null>(null);
+  // Inline rename state. Null when inactive.
+  const [renaming, setRenaming] = useState<{ path: string; draft: string } | null>(null);
+  // Delete confirmation. Null when inactive.
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
 
   // Keep the roving focus inside the list when rows come and go, adjusting
   // during render rather than in an effect so no frame shows a stale index.
@@ -204,7 +249,25 @@ export function JournalPanel({
 
   const activate = (row: JournalRow): void => {
     if (row.collapsed !== null) onToggleGroup(row.key);
+    else if (renaming?.path === row.key) return; // Don't open while renaming.
     else onOpenEntry(row.key);
+  };
+
+  /** Opens the context menu for an entry row on right-click. */
+  const showContextMenu = (event: ReactMouseEvent, entryPath: string): void => {
+    event.preventDefault();
+    event.stopPropagation();
+    setContextMenu({ state: { x: event.clientX, y: event.clientY }, entryPath });
+  };
+
+  /** Commits a rename if the draft is valid and different. */
+  const commitRename = (): void => {
+    if (!renaming) return;
+    const trimmed = renaming.draft.trim();
+    if (trimmed && trimmed !== renaming.path && onRenameEntry) {
+      onRenameEntry(renaming.path, trimmed);
+    }
+    setRenaming(null);
   };
 
   const header = (
@@ -370,6 +433,19 @@ export function JournalPanel({
                 row={row}
                 focused={index === focusedRow}
                 onActivate={() => activate(row)}
+                onContextMenu={
+                  row.collapsed === null && (onRenameEntry || onDeleteEntry)
+                    ? (event) => showContextMenu(event, row.key)
+                    : undefined
+                }
+                renaming={
+                  row.collapsed === null && renaming?.path === row.key
+                    ? { draft: renaming.draft }
+                    : undefined
+                }
+                onRenameChange={(value) => setRenaming({ path: row.key, draft: value })}
+                onRenameCommit={commitRename}
+                onRenameCancel={() => setRenaming(null)}
               />
             ))}
           </div>
@@ -389,6 +465,60 @@ export function JournalPanel({
       )}
       {header}
       {body()}
+      {contextMenu && (
+        <ContextMenu state={contextMenu.state} onClose={() => setContextMenu(null)}>
+          <MenuButton label="Open" onClick={() => { onOpenEntry(contextMenu.entryPath); setContextMenu(null); }} />
+          {onRenameEntry && (
+            <MenuButton label="Rename" onClick={() => {
+              setRenaming({ path: contextMenu.entryPath, draft: contextMenu.entryPath });
+              setContextMenu(null);
+            }} />
+          )}
+          {onDeleteEntry && (
+            <>
+              <hr className="my-1 border-0 border-t border-border" />
+              <MenuButton label="Delete" danger onClick={() => {
+                setPendingDelete(contextMenu.entryPath);
+                setContextMenu(null);
+              }} />
+            </>
+          )}
+        </ContextMenu>
+      )}
+      {pendingDelete && (
+        <div
+          className="fixed inset-0 z-60 flex items-center justify-center bg-black/40"
+          onClick={() => setPendingDelete(null)}
+        >
+          <div
+            className="max-w-[20rem] rounded-small border border-border bg-popover p-4 shadow-soft"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="m-0 mb-1 text-sm font-semibold">Delete this entry?</p>
+            <p className="m-0 mb-3 text-xs text-muted-foreground break-all">{pendingDelete}</p>
+            <p className="m-0 mb-3 text-xs text-muted-foreground">This cannot be undone.</p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                className="rounded-small border border-border px-3 py-1 text-xs cursor-pointer hover:bg-secondary"
+                onClick={() => setPendingDelete(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="rounded-small bg-danger px-3 py-1 text-xs text-danger-foreground cursor-pointer"
+                onClick={() => {
+                  onDeleteEntry?.(pendingDelete);
+                  setPendingDelete(null);
+                }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

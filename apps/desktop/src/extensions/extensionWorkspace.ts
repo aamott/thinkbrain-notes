@@ -33,6 +33,10 @@ export interface DesktopExtensionWorkspace {
   createNote(relativePath: string, contents?: string): Promise<void>;
   /** Opens a note in an editor tab. */
   openNote(relativePath: string): Promise<void>;
+  /** Renames or moves a note within the workspace. */
+  renameNote(relativePath: string, newRelativePath: string): Promise<void>;
+  /** Deletes a note from the workspace (permanently). */
+  deleteNote(relativePath: string): Promise<void>;
   /**
    * Lists Markdown notes, optionally within one folder.
    *
@@ -45,7 +49,7 @@ export interface DesktopExtensionWorkspace {
 export interface ExtensionWorkspaceOptions {
   readonly documents: WorkspaceDocumentApi;
   readonly getBridge: () => WorkspaceBridge | null;
-  readonly entries: Pick<WorkspaceDesktopApi, "listWorkspaceEntries">;
+  readonly entries: Pick<WorkspaceDesktopApi, "listWorkspaceEntries" | "renameWorkspaceEntry" | "deleteWorkspaceEntry">;
 }
 
 const WINDOWS_ABSOLUTE = /^[A-Za-z]:[\\/]/;
@@ -113,6 +117,17 @@ export function createExtensionWorkspace(
     openNote: async (relativePath) => {
       assertRelativePath(relativePath);
       bridge().openNote(relativePath);
+    },
+
+    renameNote: async (relativePath, newRelativePath) => {
+      const rootPath = resolve(relativePath);
+      assertRelativePath(newRelativePath);
+      await entries.renameWorkspaceEntry(rootPath, relativePath, newRelativePath);
+    },
+
+    deleteNote: async (relativePath) => {
+      const rootPath = resolve(relativePath);
+      await entries.deleteWorkspaceEntry(rootPath, relativePath);
     },
 
     listNotes: async (prefix) => {

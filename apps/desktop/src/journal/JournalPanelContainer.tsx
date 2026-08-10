@@ -160,6 +160,8 @@ export function JournalPanelContainer({
       onToday={() => run(() => service.openToday())}
       onOpenCalendar={onOpenCalendar}
       onOpenEntry={(relativePath) => run(() => service.openEntry(relativePath))}
+      onRenameEntry={(relativePath, newRelativePath) => run(() => service.renameEntry(relativePath, newRelativePath))}
+      onDeleteEntry={(relativePath) => run(() => service.deleteEntry(relativePath))}
       onToggleGroup={toggle}
       onRemoveChip={() => selectJournalDay(null)}
       onClearFilters={() => selectJournalDay(null)}

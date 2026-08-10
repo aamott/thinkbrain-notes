@@ -37,6 +37,8 @@ const service = (overrides: Partial<JournalService> = {}): JournalService => ({
   listEntries: async () => listing(["2026-08-07-1802.md"]),
   createEntry: async () => "journal/2026-08-07-1900.md",
   openEntry: async () => undefined,
+  renameEntry: async () => undefined,
+  deleteEntry: async () => undefined,
   openToday: async () => "journal/2026-08-07-1802.md",
   readPreview: async () => null,
   ...overrides

@@ -16,6 +16,7 @@ These are random issues or shortcomings users have noted. They may or may not be
 ## Other
 - [x] Remember tabs on reload. Currently all tabs close on reload/exit.
 - [ ] Command palette fuzzy search and separate file search from command search. If you put `>` at the start of the search it searches commands. Take it away and it searches files. Optimize for tens of thousands of files. Use an ignore list of common issues, like `node_modules`.
+- [ ] Action menu items are spaced right, but their button hitboxes aren't square, they're skinny and tall. 
 
 
 ## Settings
@@ -31,8 +32,10 @@ These are random issues or shortcomings users have noted. They may or may not be
 - [ ] Add direct link to metadata settings to add metadata
 - [x] default to list of things, not text entry
   - Done: new fields created inline now default to `single-select` (pill list) instead of `text`.
+- [ ] Journal popout takes longer to open depending on number of files in the workspace. Instant on empty workspace, slow on big one. Same amount of time even if you already opened it once. Explorer is slow on first open but faster after that. 
 
 
 # Other 
 - [x] make scrollbar not expand on hover. Gets in the way of tabs.
 - [x] Scroll to new tab
+- [ ] Occasionally during rebuilds, all saved settings are lost. Workspace, theme, tabs, everything. Stability issue? At the least we should be able to recover from corrupt state. Many paths of corruption fixes, backups, etc without memory leaks or flooding data or the drive. 
