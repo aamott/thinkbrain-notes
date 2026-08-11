@@ -1,5 +1,6 @@
 import { Compartment, EditorState, StateEffect } from "@codemirror/state";
 import { keymap, EditorView } from "@codemirror/view";
+import type { NoteIndexEntry } from "@thinkbrain/core";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { EditorHeaderSlot } from "./editorHeaderRegistry.tsx";
@@ -9,6 +10,7 @@ import {
   markdownEditorHookRegistry,
   type MarkdownEditorHookPayload
 } from "./markdownEditorHooks";
+import { wikiLinkAutocomplete as wikiLinkAutocompleteExtension } from "./wikiLinkAutocomplete";
 
 export interface MarkdownEditorProps {
   readonly value: string;
@@ -22,6 +24,10 @@ export interface MarkdownEditorProps {
   readonly livePreview?: boolean;
   /** Resolves relative image sources to loadable URLs. */
   readonly resolveAssetUrl?: (src: string) => string | null;
+  /** Vault note index for resolving `[[Target]]` wiki links at click time. */
+  readonly noteIndex?: readonly NoteIndexEntry[];
+  /** Called when the user clicks a resolved `[[Target]]` wiki link. */
+  readonly onOpenNote?: (relativePath: string) => void;
   /**
    * Identity to park the editor's own state under while this tab is not the
    * one on screen — the tab id, in the shell. Omitted where there is no tab to
@@ -81,6 +87,8 @@ export function MarkdownEditor({
   relativePath = null,
   livePreview = true,
   resolveAssetUrl,
+  noteIndex,
+  onOpenNote,
   stateKey,
   onChange,
   onSave
@@ -93,14 +101,19 @@ export function MarkdownEditor({
   // Lazy `useState` rather than `useRef`: it gives one stable instance per
   // view without allocating a throwaway Compartment on every render.
   const [livePreviewCompartment] = useState(() => new Compartment());
+  const [wikiLinkAutocompleteCompartment] = useState(() => new Compartment());
   const livePreviewRef = useRef(livePreview);
   const resolveAssetUrlRef = useRef(resolveAssetUrl);
+  const noteIndexRef = useRef(noteIndex);
+  const onOpenNoteRef = useRef(onOpenNote);
 
   useEffect(() => {
     onChangeRef.current = onChange;
     onSaveRef.current = onSave;
     resolveAssetUrlRef.current = resolveAssetUrl;
-  }, [onChange, onSave, resolveAssetUrl]);
+    noteIndexRef.current = noteIndex;
+    onOpenNoteRef.current = onOpenNote;
+  }, [onChange, onSave, resolveAssetUrl, noteIndex, onOpenNote]);
 
   useEffect(() => {
     if (!hostRef.current) {
@@ -112,8 +125,11 @@ export function MarkdownEditor({
       onChange: (nextValue) => onChangeRef.current(nextValue),
       onSave: () => onSaveRef.current(),
       livePreviewCompartment,
+      wikiLinkAutocompleteCompartment,
       livePreviewEnabled: livePreviewRef.current,
-      resolveAssetUrl: (src) => resolveAssetUrlRef.current?.(src) ?? null
+      resolveAssetUrl: (src) => resolveAssetUrlRef.current?.(src) ?? null,
+      noteIndex: noteIndexRef.current,
+      onOpenNote: (relativePath) => onOpenNoteRef.current?.(relativePath)
     };
     const extensions = markdownEditorHookRegistry.getExtensions(payload, undefined);
     const keybindings = markdownEditorHookRegistry.getKeybindings(payload, undefined);
@@ -157,9 +173,9 @@ export function MarkdownEditor({
       view.destroy();
       viewRef.current = null;
     };
-    // The compartment is created once per component instance, so this effect
-    // still runs exactly once; it is listed only to satisfy exhaustive-deps.
-  }, [livePreviewCompartment, stateKey]);
+    // The compartments are created once per component instance, so this effect
+    // still runs exactly once; they are listed only to satisfy exhaustive-deps.
+  }, [livePreviewCompartment, wikiLinkAutocompleteCompartment, stateKey]);
 
   useEffect(() => {
     const view = viewRef.current;
@@ -168,22 +184,35 @@ export function MarkdownEditor({
     if (change) view.dispatch({ changes: change });
   }, [value]);
 
+  // Reconfigure both compartmented extensions (live preview + wiki-link
+  // autocomplete) when their inputs change. Both depend on `noteIndex` — the
+  // live preview uses it for resolved/broken link styling and click resolution,
+  // the autocomplete uses it for its suggestion list — so a noteIndex change
+  // must reconfigure both or the styling and click paths hold a stale index
+  // while the autocomplete stays fresh. Reconfiguring swaps the extension
+  // without recreating the state, so cursor, scroll, and undo history survive.
   useEffect(() => {
     livePreviewRef.current = livePreview;
+    noteIndexRef.current = noteIndex;
     const view = viewRef.current;
     if (!view) return;
-    // Reconfiguring the compartment swaps the extension without recreating the
-    // state, so the cursor, scroll position and undo history all survive.
     view.dispatch({
-      effects: livePreviewCompartment.reconfigure(
-        livePreview
-          ? livePreviewExtension({
-              resolveAssetUrl: (src) => resolveAssetUrlRef.current?.(src) ?? null
-            })
-          : []
-      )
+      effects: [
+        livePreviewCompartment.reconfigure(
+          livePreview
+            ? livePreviewExtension({
+                resolveAssetUrl: (src) => resolveAssetUrlRef.current?.(src) ?? null,
+                noteIndex: noteIndex ?? [],
+                onOpenNote: (relativePath) => onOpenNoteRef.current?.(relativePath)
+              })
+            : []
+        ),
+        wikiLinkAutocompleteCompartment.reconfigure(
+          wikiLinkAutocompleteExtension(noteIndex ?? [])
+        )
+      ]
     });
-  }, [livePreview, livePreviewCompartment]);
+  }, [livePreview, noteIndex, livePreviewCompartment, wikiLinkAutocompleteCompartment]);
 
   // Stable context for EditorHeaderSlot so its `applies` filter memo holds
   // across renders that don't change the document identity or contents.

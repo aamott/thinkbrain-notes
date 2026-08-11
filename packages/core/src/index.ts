@@ -71,6 +71,7 @@ export * from "./journal/index";
 export * from "./layout";
 export * from "./markdown";
 export * from "./note-model";
+export * from "./wikiLinkIndex";
 export * from "./settings";
 // New modular settings system (lives in ./settings/ directory alongside the
 // legacy ./settings.ts persistence layer). Re-exported explicitly to avoid

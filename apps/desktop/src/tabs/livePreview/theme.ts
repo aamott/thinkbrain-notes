@@ -101,6 +101,15 @@ export const themeRules = {
     textDecoration: "underline",
     textUnderlineOffset: "3px"
   },
+  ".cm-link-resolved": {
+    cursor: "pointer",
+    color: "var(--tn-color-primary)"
+  },
+  ".cm-link-broken": {
+    color: "var(--tn-color-muted-foreground)",
+    textDecoration: "line-through",
+    cursor: "default"
+  },
   ".cm-image-text": {
     color: "var(--tn-color-muted-foreground)",
     fontStyle: "italic"

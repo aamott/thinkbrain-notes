@@ -3,6 +3,7 @@ import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { languages } from "@codemirror/language-data";
 import type { Compartment } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
+import type { NoteIndexEntry } from "@thinkbrain/core";
 
 import {
   createDesktopEditorHookRegistry,
@@ -10,6 +11,7 @@ import {
 } from "./editorHookRegistry";
 import { livePreview } from "./livePreview";
 import { wikiLinkExtension } from "./livePreview/wikiLink";
+import { wikiLinkAutocomplete } from "./wikiLinkAutocomplete";
 
 /** Runtime callbacks supplied by the controlled Markdown editor instance. */
 export interface MarkdownEditorHookPayload {
@@ -24,10 +26,21 @@ export interface MarkdownEditorHookPayload {
    * can be reconfigured independently.
    */
   readonly livePreviewCompartment: Compartment;
+  /**
+   * Per-view compartment holding the wiki-link autocomplete extension.
+   *
+   * Reconfigured when the vault note index changes so the popup always reflects
+   * the current set of notes.
+   */
+  readonly wikiLinkAutocompleteCompartment: Compartment;
   /** Whether live preview is on at mount time. */
   readonly livePreviewEnabled: boolean;
   /** Resolves relative image sources; omitted outside a workspace. */
   readonly resolveAssetUrl?: (src: string) => string | null;
+  /** Vault note index for resolving `[[Target]]` wiki links. */
+  readonly noteIndex?: readonly NoteIndexEntry[];
+  /** Called when the user clicks a resolved `[[Target]]` wiki link. */
+  readonly onOpenNote?: (relativePath: string) => void;
 }
 
 /** The context is intentionally empty because these hooks need no host state. */
@@ -76,8 +89,21 @@ export const markdownEditorHookRegistry: MarkdownEditorHookRegistry =
       extensions: (payload) => [
         payload.livePreviewCompartment.of(
           payload.livePreviewEnabled
-            ? livePreview({ resolveAssetUrl: payload.resolveAssetUrl })
+            ? livePreview({
+                resolveAssetUrl: payload.resolveAssetUrl,
+                noteIndex: payload.noteIndex,
+                onOpenNote: payload.onOpenNote
+              })
             : []
+        )
+      ]
+    },
+    {
+      id: "wiki-link-autocomplete",
+      order: 26,
+      extensions: (payload) => [
+        payload.wikiLinkAutocompleteCompartment.of(
+          wikiLinkAutocomplete(payload.noteIndex ?? [])
         )
       ]
     },

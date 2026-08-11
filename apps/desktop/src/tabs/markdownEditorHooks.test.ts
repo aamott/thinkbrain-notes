@@ -12,6 +12,7 @@ const payload = (
   onChange: () => undefined,
   onSave: () => undefined,
   livePreviewCompartment: new Compartment(),
+  wikiLinkAutocompleteCompartment: new Compartment(),
   livePreviewEnabled: true,
   ...overrides
 });
@@ -22,6 +23,7 @@ describe("markdownEditorHookRegistry", () => {
       "history",
       "markdown-language",
       "markdown-live-preview",
+      "wiki-link-autocomplete",
       "line-wrapping",
       "cursor-theme",
       "aria-content-attributes",

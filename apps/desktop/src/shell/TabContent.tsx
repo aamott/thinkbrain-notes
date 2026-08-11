@@ -1,4 +1,5 @@
 import { lazy, Suspense, useMemo } from "react";
+import type { NoteIndexEntry } from "@thinkbrain/core";
 import { cn } from "../lib/utils";
 import { createVaultAssetResolver } from "../native/assets";
 import { useSettingsStore } from "../settings/settingsStore";
@@ -16,6 +17,8 @@ type TabContentProps = {
   readonly document: DocumentViewState | undefined;
   readonly onChange: (tabId: string, contents: string) => void;
   readonly onSave: (tab: DesktopTab) => Promise<boolean>;
+  readonly noteIndex?: readonly NoteIndexEntry[];
+  readonly onOpenNote?: (relativePath: string) => void;
 };
 
 /** Lazy-loaded Markdown editor; only fetched when an editor tab is rendered. */
@@ -31,7 +34,7 @@ const MarkdownEditor = lazy(async () => {
  * not yet backed by a service and show an `Unavailable` placeholder. Editor
  * tabs render the lazy-loaded `MarkdownEditor` once the document is ready.
  */
-export function TabContent({ tab, document, onChange, onSave }: TabContentProps) {
+export function TabContent({ tab, document, onChange, onSave, noteIndex, onOpenNote }: TabContentProps) {
   // Hooks must run before any early return, so both are read up front even
   // though only the Markdown editor branch consumes them.
   const livePreview = useSettingsStore(
@@ -137,6 +140,8 @@ export function TabContent({ tab, document, onChange, onSave }: TabContentProps)
         relativePath={relativePath ?? null}
         livePreview={livePreview}
         resolveAssetUrl={resolveAssetUrl}
+        noteIndex={noteIndex}
+        onOpenNote={onOpenNote}
         // Switching tabs unmounts this editor; the id is how the next mount
         // finds the cursor, scroll and undo history it left behind.
         stateKey={tab.id}

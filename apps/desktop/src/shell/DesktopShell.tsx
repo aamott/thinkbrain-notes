@@ -27,6 +27,7 @@ import {
 import { useTheme } from "../settings/theme-context";
 import { useSearchIndexStore } from "../search/searchIndexStore";
 import { useSettingsStore } from "../settings/settingsStore";
+import { useWikiLinkIndexStore } from "../wikiLinks/wikiLinkIndexStore";
 import { releaseEditorStatesExcept } from "../tabs/editorStateCache";
 import {
   createEditorTab,
@@ -93,6 +94,9 @@ export function DesktopShell() {
   // dirty dot when staged changes exist. This re-renders DesktopShell when
   // isDirty changes, which is acceptable (infrequent, boolean toggle).
   const settingsIsDirty = useSettingsStore((s) => s.isDirty);
+
+  // Wiki-link note index for resolving `[[Target]]` links in the editor.
+  const noteIndex = useWikiLinkIndexStore((s) => s.noteIndex);
 
   useEffect(() => {
     documentsRef.current = documents;
@@ -337,6 +341,7 @@ export function DesktopShell() {
     const recentPaths = updateRecentWorkspacePaths(rootPath);
     void gitService.detectRepository(rootPath);
     void useSearchIndexStore.getState().indexWorkspace(rootPath, snapshot.files);
+    void useWikiLinkIndexStore.getState().indexWorkspace(rootPath, snapshot.files);
     persistDesktopState({ lastWorkspacePath: rootPath, recentWorkspacePaths: recentPaths });
   }, [persistDesktopState, updateRecentWorkspacePaths]);
 
@@ -345,6 +350,7 @@ export function DesktopShell() {
     setWorkspaceName(null);
     setWorkspaceFiles([]);
     useSearchIndexStore.getState().clearWorkspace();
+    useWikiLinkIndexStore.getState().clearWorkspace();
     persistDesktopState({ lastWorkspacePath: null });
   }, [persistDesktopState]);
 
@@ -389,6 +395,16 @@ export function DesktopShell() {
     loadDocumentIntoView(tab.id, rootPath, relativePath);
   }, [loadDocumentIntoView]);
 
+  // Opens a note by vault-relative path when a wiki link is clicked. Delegates
+  // to `openMarkdownDocument` with the current workspace root.
+  const onOpenNote = useCallback(
+    (relativePath: string) => {
+      if (!restoredWorkspacePath) return;
+      openMarkdownDocument(restoredWorkspacePath, relativePath);
+    },
+    [restoredWorkspacePath, openMarkdownDocument]
+  );
+
   // Publishes the workspace surface extensions use. The root, the tabs, and the
   // documents are all React state here, so the bridge is republished whenever
   // the root changes and withdrawn on unmount — an extension calling into a
@@ -424,6 +440,9 @@ export function DesktopShell() {
   // Subscribe the search index to note mutation events for incremental updates.
   // The store's actions are workspace-scoped, so events from other windows are ignored.
   useEffect(() => useSearchIndexStore.getState().subscribeToEvents(), []);
+  // Subscribe the wiki-link index to note mutation events for incremental updates.
+  // The store's actions are workspace-scoped, so events from other windows are ignored.
+  useEffect(() => useWikiLinkIndexStore.getState().subscribeToEvents(), []);
 
   const handleMarkdownFileCreated = useCallback((rootPath: string, relativePath: string) => {
     if (rootPath !== restoredWorkspacePath) return;
@@ -696,7 +715,7 @@ export function DesktopShell() {
                 </>
               )}
             </div>
-            <TabContent tab={activeTab} document={activeDocument} onChange={updateDocument} onSave={saveDocument} />
+            <TabContent tab={activeTab} document={activeDocument} onChange={updateDocument} onSave={saveDocument} noteIndex={noteIndex} onOpenNote={onOpenNote} />
           </article>
           {bottomPanel && (
             <BottomPanelContent

@@ -1,0 +1,215 @@
+/**
+ * Zustand store for the wiki-link index lifecycle.
+ *
+ * Mirrors {@link useSearchIndexStore}: owns the in-memory
+ * {@link WikiLinkIndex} for the current workspace, rebuilds it on workspace
+ * open, clears it when no workspace is available, and keeps it in sync with
+ * in-app `note.saved`/`note.created`/`note.renamed`/`note.deleted` events via
+ * {@link subscribeToEvents}.
+ *
+ * The store is deliberately thin: parsing and native IPC (reading files) are
+ * routed through `invokeNativeCommand` and `parseNote` from `@thinkbrain/core`.
+ * UI consumers (backlinks panel, graph view) read `noteIndex` and call
+ * `getBacklinks` to compute edges without re-parsing every note on each query.
+ */
+
+import { create } from "zustand";
+import {
+  addNote,
+  buildNoteIndexEntry,
+  buildWikiLinkIndex,
+  EMPTY_WIKI_LINK_INDEX,
+  getBacklinks as getBacklinksFromIndex,
+  removeNote,
+  parseNote,
+  type NoteIndexEntry,
+  type ParsedNote,
+  type WikiLinkIndex,
+  type WikiLinkIndexInput
+} from "@thinkbrain/core";
+import { appEvents } from "../events/appEvents";
+import type { Disposable } from "@thinkbrain/core";
+import { invokeNativeCommand, type NativeMarkdownFileEntry } from "../native/commands";
+
+/** Re-export so consumers can import selectors from the store module. */
+export { getBacklinksFromIndex };
+
+/**
+ * Tracks the current event subscription so `subscribeToEvents` is idempotent.
+ * A second call disposes the first before creating a new one, preventing
+ * React 18 strict-mode double-mount from leaking listeners.
+ */
+let currentSubscription: (() => void) | null = null;
+
+/** State + actions exposed by the wiki-link index store. */
+export interface WikiLinkIndexStore {
+  /** Current wiki-link index, or the empty index when no workspace is open. */
+  readonly wikiLinkIndex: WikiLinkIndex;
+  /** Shared note index entries for the current workspace. */
+  readonly noteIndex: readonly NoteIndexEntry[];
+  /** Workspace root the index covers, or `null` when no workspace is open. */
+  readonly rootPath: string | null;
+
+  /** Reads, parses, and indexes all markdown files in the workspace. */
+  indexWorkspace(rootPath: string, files: readonly NativeMarkdownFileEntry[]): Promise<void>;
+  /** Resets to no-workspace and clears the index. */
+  clearWorkspace(): void;
+  /** Incrementally re-indexes a single document (upsert on save/create). */
+  reindexDocument(rootPath: string, relativePath: string): Promise<void>;
+  /** Removes the old path and indexes the new one for a renamed/moved note. */
+  reindexRenamedDocument(
+    rootPath: string,
+    oldRelativePath: string,
+    newRelativePath: string
+  ): Promise<void>;
+  /** Removes a document from the index. */
+  removeDocument(rootPath: string, relativePath: string): void;
+  /**
+   * Subscribes to app-wide note mutation events and keeps the index in sync.
+   * Idempotent: calling it again disposes the previous subscription before
+   * creating a new one, so React 18 strict-mode double-mount does not leak
+   * listeners. Returns a disposal function that unsubscribes all listeners.
+   */
+  subscribeToEvents(): () => void;
+}
+
+/**
+ * Reads and parses a single markdown file from the workspace.
+ *
+ * Returns `null` when the file cannot be read or parsed so a single corrupt
+ * note cannot abort the whole index; the caller skips `null` entries.
+ */
+async function readAndParse(
+  rootPath: string,
+  relativePath: string
+): Promise<{ relativePath: string; parsedNote: ParsedNote } | null> {
+  try {
+    const { contents } = await invokeNativeCommand("read_markdown_file", {
+      rootPath,
+      relativePath
+    });
+    return { relativePath, parsedNote: parseNote(contents) };
+  } catch (error) {
+    console.warn(
+      `[wikiLinkIndexStore] Skipping "${relativePath}" during indexing:`,
+      error
+    );
+    return null;
+  }
+}
+
+/**
+ * Upserts a parsed note into `index` and commits the result to the store.
+ *
+ * Shared by `reindexDocument` and `reindexRenamedDocument`, which both build a
+ * {@link NoteIndexEntry} from the parsed note and replace the index state.
+ */
+function upsertNote(
+  set: (partial: Partial<WikiLinkIndexStore>) => void,
+  index: WikiLinkIndex,
+  parsed: { relativePath: string; parsedNote: ParsedNote }
+): void {
+  const entry = buildNoteIndexEntry(parsed);
+  const next = addNote(index, entry, parsed.parsedNote);
+  set({ wikiLinkIndex: next, noteIndex: next.noteIndex });
+}
+
+export const useWikiLinkIndexStore = create<WikiLinkIndexStore>((set, get) => ({
+  wikiLinkIndex: EMPTY_WIKI_LINK_INDEX,
+  noteIndex: [],
+  rootPath: null,
+
+  async indexWorkspace(rootPath, files) {
+    set({ rootPath });
+    try {
+      // Reads within the workspace are independent; fire them together.
+      const read = await Promise.all(
+        files.map((file) => readAndParse(rootPath, file.relative_path))
+      );
+      const inputs: WikiLinkIndexInput[] = read.filter(
+        (r): r is { relativePath: string; parsedNote: ParsedNote } => r !== null
+      );
+
+      // Guard against a superseding workspace switch overwriting stale results.
+      if (get().rootPath !== rootPath) return;
+
+      const index = buildWikiLinkIndex(inputs);
+      set({ wikiLinkIndex: index, noteIndex: index.noteIndex });
+    } catch (error) {
+      console.error("[wikiLinkIndexStore] Indexing failed:", error);
+      if (get().rootPath === rootPath) {
+        set({ wikiLinkIndex: EMPTY_WIKI_LINK_INDEX, noteIndex: [] });
+      }
+    }
+  },
+
+  clearWorkspace() {
+    set({
+      wikiLinkIndex: EMPTY_WIKI_LINK_INDEX,
+      noteIndex: [],
+      rootPath: null
+    });
+  },
+
+  async reindexDocument(rootPath, relativePath) {
+    if (get().rootPath !== rootPath) return;
+    const parsed = await readAndParse(rootPath, relativePath);
+    if (parsed === null) return;
+    if (get().rootPath !== rootPath) return;
+    upsertNote(set, get().wikiLinkIndex, parsed);
+  },
+
+  async reindexRenamedDocument(rootPath, oldRelativePath, newRelativePath) {
+    if (get().rootPath !== rootPath) return;
+    // Remove the old path first so stale links are cleared.
+    const afterRemove = removeNote(get().wikiLinkIndex, oldRelativePath);
+    set({ wikiLinkIndex: afterRemove, noteIndex: afterRemove.noteIndex });
+
+    const parsed = await readAndParse(rootPath, newRelativePath);
+    if (parsed === null) return;
+    if (get().rootPath !== rootPath) return;
+    upsertNote(set, afterRemove, parsed);
+  },
+
+  removeDocument(rootPath, relativePath) {
+    if (get().rootPath !== rootPath) return;
+    const next = removeNote(get().wikiLinkIndex, relativePath);
+    set({ wikiLinkIndex: next, noteIndex: next.noteIndex });
+  },
+
+  subscribeToEvents() {
+    // Dispose any existing subscription before creating a new one.
+    if (currentSubscription) currentSubscription();
+
+    const disposables: Disposable[] = [
+      appEvents.on("note.saved", ({ rootPath, relativePath }) => {
+        void get().reindexDocument(rootPath, relativePath);
+      }),
+      appEvents.on("note.created", ({ rootPath, relativePath }) => {
+        void get().reindexDocument(rootPath, relativePath);
+      }),
+      appEvents.on("note.renamed", ({ rootPath, oldRelativePath, newRelativePath }) => {
+        void get().reindexRenamedDocument(rootPath, oldRelativePath, newRelativePath);
+      }),
+      appEvents.on("note.deleted", ({ rootPath, relativePath }) => {
+        get().removeDocument(rootPath, relativePath);
+      })
+    ];
+    const dispose = () => disposables.forEach((d) => d.dispose());
+    currentSubscription = dispose;
+    return () => {
+      dispose();
+      currentSubscription = null;
+    };
+  }
+}));
+
+/**
+ * Selects the backlinks for a note from the current index.
+ *
+ * Returns the relative paths of every note that links to `relativePath`, or an
+ * empty array when no workspace is open or nothing links to the note.
+ */
+export function selectBacklinks(relativePath: string): readonly string[] {
+  return getBacklinksFromIndex(useWikiLinkIndexStore.getState().wikiLinkIndex, relativePath);
+}

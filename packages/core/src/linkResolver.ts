@@ -23,24 +23,14 @@ export interface NoteIndexEntry {
  *
  * Trims whitespace, lowercases, and strips a trailing `.md` (or `.markdown`)
  * extension so `[[My Note]]` matches `My Note.md`.
+ *
+ * Exported so the wiki-link indexer can dedupe targets with the exact same
+ * normalization the resolver uses for matching — keeping the two in sync by
+ * structure rather than by convention.
  */
-function normalize(value: string): string {
+export function normalize(value: string): string {
   const trimmed = value.trim().toLowerCase();
   return trimmed.replace(/\.(md|markdown)$/, "");
-}
-
-/**
- * Compares two candidates for deterministic tie-breaking.
- *
- * Shortest `relativePath` wins (shallower notes are closer to the vault root
- * and more likely to be the intended target). Alphabetical order is the final
- * tie-break so the result is stable across runs and entry ordering.
- */
-function compareCandidates(a: NoteIndexEntry, b: NoteIndexEntry): number {
-  if (a.relativePath.length !== b.relativePath.length) {
-    return a.relativePath.length - b.relativePath.length;
-  }
-  return a.relativePath < b.relativePath ? -1 : a.relativePath > b.relativePath ? 1 : 0;
 }
 
 /**
@@ -75,50 +65,34 @@ export function resolveWikiLinkTarget(
   const normalizedTarget = normalize(target);
   if (normalizedTarget === "") return null;
 
-  // Check each priority level in order. The first level with any match wins.
-  for (const level of [matchByFileName, matchByTitle, matchByAlias, matchByPath]) {
-    const matches = level(normalizedTarget, notes);
+  // Each matcher extracts candidate strings from a note and checks if any
+  // equals the normalized target. Priority is the array order: the first
+  // level with any match wins.
+  const matchers: readonly ((note: NoteIndexEntry) => readonly string[])[] = [
+    (note) => [normalize(note.fileName)],
+    (note) => (note.title !== undefined ? [normalize(note.title)] : []),
+    (note) => note.aliases.map(normalize),
+    (note) => {
+      const normalizedPath = normalize(note.relativePath);
+      const lastSegment = normalizedPath.split("/").pop() ?? normalizedPath;
+      return [normalizedPath, lastSegment];
+    }
+  ];
+
+  for (const matcher of matchers) {
+    const matches = notes.filter((note) =>
+      matcher(note).some((candidate) => candidate === normalizedTarget)
+    );
     if (matches.length > 0) {
-      matches.sort(compareCandidates);
+      // Tie-break: shortest path (closest to vault root), then alphabetical.
+      matches.sort((a, b) =>
+        a.relativePath.length !== b.relativePath.length
+          ? a.relativePath.length - b.relativePath.length
+          : a.relativePath < b.relativePath ? -1 : a.relativePath > b.relativePath ? 1 : 0
+      );
       return matches[0]!.relativePath;
     }
   }
 
   return null;
-}
-
-function matchByFileName(
-  target: string,
-  notes: readonly NoteIndexEntry[]
-): NoteIndexEntry[] {
-  return notes.filter((note) => normalize(note.fileName) === target);
-}
-
-function matchByTitle(
-  target: string,
-  notes: readonly NoteIndexEntry[]
-): NoteIndexEntry[] {
-  return notes.filter((note) => note.title !== undefined && normalize(note.title) === target);
-}
-
-function matchByAlias(
-  target: string,
-  notes: readonly NoteIndexEntry[]
-): NoteIndexEntry[] {
-  return notes.filter((note) =>
-    note.aliases.some((alias) => normalize(alias) === target)
-  );
-}
-
-function matchByPath(
-  target: string,
-  notes: readonly NoteIndexEntry[]
-): NoteIndexEntry[] {
-  return notes.filter((note) => {
-    const normalizedPath = normalize(note.relativePath);
-    // Full path match (with or without extension) or last-segment match.
-    if (normalizedPath === target) return true;
-    const lastSegment = normalizedPath.split("/").pop() ?? normalizedPath;
-    return lastSegment === target;
-  });
 }

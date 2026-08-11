@@ -1,0 +1,11 @@
+- name: Autocomplete test mock `CompletionContext` diverges from real CodeMirror `matchBefore` semantics
+- file: /media/adam/extex/projects/thinkbrain-notes/apps/desktop/src/tabs/wikiLinkAutocomplete.test.ts
+- lines: 15-33
+- description: `mockContext` (lines 15-33) implements `matchBefore(from)` as `from.exec(text)` on `text = doc.slice(0, pos)` and returns `{ from: match.index, to: pos, text: text.slice(match.index, pos) }`. This is *almost* correct but differs from CodeMirror's real `matchBefore` in two ways:
+
+  1. **Real `matchBefore` requires the match to end exactly at `pos`** and uses a regex without a `$` anchor internally — it finds the *last* match that ends at `pos`. The mock relies on the regex having `$` (the source's `/\[\[[^\]|]*$/` does) so `exec` returns the rightmost match ending at `pos`. If the source regex ever drops the `$`, the mock would still pass (because `exec` returns the first match) while the real CodeMirror (which anchors at `pos`) would behave differently. The mock and the source are coupled by the `$` anchor in a way that's not enforced.
+  2. **Real `matchBefore` returns `null` if the match doesn't end at the cursor** even if it matches earlier in the text. The mock's `from.exec(text)` returns the first match anywhere in `text`, then returns `{ from: match.index, to: pos, ... }` — but `to` is forced to `pos`, so if the match doesn't actually end at `pos` the returned `text` is `text.slice(match.index, pos)`, which is *longer* than the regex match. For the current regex with `$` this can't happen (the match must end at `pos`), but again it's a latent coupling.
+
+  The mock also throws on `abort()` and `tokenBefore()` (lines 26-31), which is good for surfacing unexpected calls, but it omits `view`, `state`, `filter`, `explicit` (typed but unused), and the rest of the `CompletionContext` surface. Any future source change that reads `context.state` or `context.view` will throw with a misleading "not a function" error rather than a clear "not expected in unit tests" error.
+
+- verification: Read `wikiLinkAutocomplete.test.ts` lines 15-33 and compared against CodeMirror 6's `CompletionContext.matchBefore` signature (returns `{from, to, text}` where `to` is the cursor position and the match must end at the cursor). Confirmed the mock's correctness depends on the source regex's `$` anchor.
