@@ -11,6 +11,7 @@
 //! - `settings`: Application-level and workspace-level configuration reading and writing.
 //! - `themes`: Discovery and listing of `.tbtheme.json` theme files in the app-data themes directory.
 //! - `extensions`: Contained reads of files inside a locally loaded extension directory.
+//! - `watcher`: Watches the open workspace for edits made outside the app and reports them.
 //!
 //! Security Guarantees & Safety Invariants:
 //! - Path Scoping: File and directory operations must validate paths to prevent directory traversal outside workspace boundaries.
@@ -24,6 +25,7 @@ pub mod markdown;
 pub mod search;
 pub mod settings;
 pub mod themes;
+pub mod watcher;
 
 /// Macro aggregating all Tauri IPC invoke handlers for registration in `tauri::Builder`.
 ///
@@ -66,7 +68,9 @@ macro_rules! app_command_handlers {
             $crate::commands::themes::read_theme_file,
             $crate::commands::extensions::read_extension_file,
             $crate::commands::workspace::open_workspace_window,
-            $crate::commands::workspace::window_workspace_root
+            $crate::commands::workspace::window_workspace_root,
+            $crate::commands::watcher::watch_workspace,
+            $crate::commands::watcher::unwatch_workspace
         ]
     };
 }

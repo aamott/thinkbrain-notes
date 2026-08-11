@@ -30,12 +30,16 @@ rebuildable and lives in OS app-data, never in the vault.
   UI responsive by yielding to the event loop between batches. It trades some
   IPC overhead for parser correctness and a single parsing code path. This is
   not a pending item — do not create a story for it.
-- **No file watcher yet (OI-003).** External edits are not reflected until the
-  workspace is reopened. Full rebuild on open plus incremental upsert/remove on
-  in-app mutations. A watcher is a deferred follow-up, not MVP debt.
-- **One connection per command (OI-004).** Each index command opens its own
-  `rusqlite::Connection`. Fine for single-user sequential use; revisit only if
-  concurrency or perf becomes an issue.
+- **The watcher reports, the frontend indexes (OI-003).** A native `notify`
+  watcher detects edits made outside the app and reports which paths changed;
+  it deliberately parses nothing, because indexing stays frontend-driven per
+  OI-005. The frontend republishes those changes as the same `note.*` events an
+  in-app edit produces, so the search index, wiki-link index and calendar all
+  stay fresh without knowing a watcher exists. App writes record an expected
+  echo so the watcher does not re-report the app's own saves.
+- **Pooled connections, never evicted (OI-004).** Index commands share a
+  per-workspace `rusqlite::Connection` from `SEARCH_CONNECTIONS`. Nothing
+  removes a handle when a workspace closes; revisit only if that matters.
 
 ## Status
 
@@ -47,5 +51,5 @@ rebuildable and lives in OS app-data, never in the vault.
 - ✅ Search UI backend wiring (debounced type-ahead and snippets) — `apps/desktop/src/search/SearchPanel.tsx` reads `useSearchIndexStore` status, debounces 300ms, queries via `searchService.search`, renders snippets
 - ✅ Native command bridge and frontend types — `apps/desktop/src/native/commands.ts` types (`NativeDocumentInput`, `NativeSearchHit`) and `invokeNativeCommand` wrappers for `index_documents`/`search_index`/`clear_index`/`remove_index_document`
 - ⬜ Structured frontmatter records and facet queries (D41) — `pending-frontmatter_metadata_facets-high-hard.md`
-- ⬜ File watcher for external edits (OI-003), including index updates — `pending-file_watcher-low-med.md`
-- ⬜ Connection pooling / managed SQLite state (OI-004) — `pending-connection_pooling-low-med.md`
+- ✅ File watcher for external edits (OI-003) — `apps/desktop/src-tauri/src/commands/watcher.rs` (native `notify` watcher, debounced, self-write suppression) and `apps/desktop/src/workspace/workspaceWatcher.ts` (translates changes into `note.*` events); started per workspace from `DesktopShell`
+- 🟨 Connection pooling / managed SQLite state (OI-004) — pooling done in `search.rs` (`get_search_connection`); pool eviction on workspace close still open — `pending-connection_pooling-low-med.md`

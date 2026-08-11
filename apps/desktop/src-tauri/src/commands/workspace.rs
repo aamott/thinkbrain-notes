@@ -10,8 +10,9 @@ use std::path::Component;
 use tauri::Manager;
 use std::io::Write;
 use crate::commands::markdown::{MarkdownFileEntry, list_markdown_file_entries, is_markdown_path};
+use crate::commands::watcher::record_self_write;
 
-const IGNORED_FOLDERS: &[&str] = &["node_modules", "target", "dist", "vendor"];
+pub const IGNORED_FOLDERS: &[&str] = &["node_modules", "target", "dist", "vendor"];
 const MAX_WORKSPACE_ENTRIES: usize = 10_000;
 
 pub static WORKSPACE_ENTRY_MUTATION_LOCK: Mutex<()> = Mutex::new(());
@@ -172,6 +173,7 @@ pub fn create_workspace_file(
         })?;
     }
 
+    record_self_write(&file_path);
     let mut file = fs::OpenOptions::new()
         .write(true)
         .create_new(true)
@@ -282,6 +284,8 @@ pub fn rename_workspace_entry(
         })?;
     }
 
+    record_self_write(&source_path);
+    record_self_write(&destination_path);
     let is_dir = source_path.is_dir();
     fs::rename(&source_path, &destination_path).map_err(|error| {
         NativeError::with_details(
@@ -316,6 +320,7 @@ pub fn delete_workspace_entry(root_path: String, relative_path: String) -> Resul
         ));
     }
 
+    record_self_write(&entry_path);
     let remove_result = if entry_path.is_dir() {
         fs::remove_dir_all(&entry_path)
     } else {

@@ -4,8 +4,9 @@
  * Owns the index status (no-workspace / indexing / ready / error) and the
  * current workspace root, and drives the {@link SearchService} for full and
  * incremental indexing. App-wide note mutation events are wired through
- * {@link subscribeToEvents} so the FTS5 cache stays in sync with in-app
- * create/save/rename/delete operations without a file watcher.
+ * {@link subscribeToEvents} so the FTS5 cache stays in sync with
+ * create/save/rename/delete, whether the app made the change or the native
+ * watcher saw somebody else make it.
  *
  * The store is deliberately thin: heavy lifting (batching, parsing, native IPC)
  * lives in `searchService`. UI consumers (e.g. `SearchPanel`) read `status` to

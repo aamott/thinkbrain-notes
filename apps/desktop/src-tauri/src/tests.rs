@@ -1538,3 +1538,310 @@ fn app_settings_write_treats_an_absent_file_as_a_precondition_of_its_own() {
     assert!(check_app_settings_precondition(Some("{}"), None).is_err());
     assert!(check_app_settings_precondition(None, Some("{}")).is_err());
 }
+
+// ---------------------------------------------------------------------------
+// File watcher
+// ---------------------------------------------------------------------------
+
+use crate::commands::watcher::*;
+use notify::event::{CreateKind, EventKind, ModifyKind, RemoveKind, RenameMode};
+use std::time::{Duration, Instant};
+
+#[test]
+fn only_markdown_inside_the_vault_is_worth_waking_the_index_for() {
+    let root = Path::new("/vault");
+
+    assert!(is_watchable_path(root, &root.join("notes/today.md")));
+    assert!(is_watchable_path(root, &root.join("deep/nested/note.markdown")));
+
+    // Not a note.
+    assert!(!is_watchable_path(root, &root.join("image.png")));
+    assert!(!is_watchable_path(root, &root.join("notes")));
+    // The editor's own scratch files and version control.
+    assert!(!is_watchable_path(root, &root.join(".obsidian/workspace.md")));
+    assert!(!is_watchable_path(root, &root.join(".git/COMMIT_EDITMSG.md")));
+    assert!(!is_watchable_path(root, &root.join("notes/.hidden.md")));
+    // Build output the workspace listing already refuses to walk.
+    assert!(!is_watchable_path(root, &root.join("node_modules/pkg/readme.md")));
+    // Outside the vault entirely.
+    assert!(!is_watchable_path(root, Path::new("/elsewhere/note.md")));
+}
+
+#[test]
+fn a_watched_path_is_reported_relative_to_the_vault_with_forward_slashes() {
+    let root = Path::new("/vault");
+
+    assert_eq!(
+        workspace_relative_path(root, &root.join("notes").join("today.md")),
+        Some("notes/today.md".to_string())
+    );
+    assert_eq!(
+        workspace_relative_path(root, Path::new("/elsewhere/note.md")),
+        None
+    );
+}
+
+#[test]
+fn a_new_file_on_disk_is_reported_as_created() {
+    let root = Path::new("/vault");
+    let changes = classify_event(
+        root,
+        &EventKind::Create(CreateKind::File),
+        &[root.join("fresh.md")],
+    );
+
+    assert_eq!(
+        changes,
+        vec![WorkspaceChange {
+            kind: WorkspaceChangeKind::Created,
+            path: "fresh.md".to_string(),
+            old_path: None,
+        }]
+    );
+}
+
+#[test]
+fn an_edit_from_another_editor_is_reported_as_modified() {
+    let root = Path::new("/vault");
+    let changes = classify_event(
+        root,
+        &EventKind::Modify(ModifyKind::Data(notify::event::DataChange::Content)),
+        &[root.join("edited.md")],
+    );
+
+    assert_eq!(changes[0].kind, WorkspaceChangeKind::Modified);
+    assert_eq!(changes[0].path, "edited.md");
+}
+
+#[test]
+fn a_rename_carries_both_paths_so_the_index_can_move_the_entry() {
+    let root = Path::new("/vault");
+    let changes = classify_event(
+        root,
+        &EventKind::Modify(ModifyKind::Name(RenameMode::Both)),
+        &[root.join("old.md"), root.join("new.md")],
+    );
+
+    assert_eq!(
+        changes,
+        vec![WorkspaceChange {
+            kind: WorkspaceChangeKind::Renamed,
+            path: "new.md".to_string(),
+            old_path: Some("old.md".to_string()),
+        }]
+    );
+}
+
+#[test]
+fn renaming_a_note_out_of_the_vault_reads_as_a_deletion() {
+    let root = Path::new("/vault");
+
+    // Moved outside the workspace entirely.
+    let out = classify_event(
+        root,
+        &EventKind::Modify(ModifyKind::Name(RenameMode::Both)),
+        &[root.join("note.md"), PathBuf::from("/elsewhere/note.md")],
+    );
+    assert_eq!(out[0].kind, WorkspaceChangeKind::Deleted);
+    assert_eq!(out[0].path, "note.md");
+
+    // Renamed to something that is no longer a note.
+    let unmarked = classify_event(
+        root,
+        &EventKind::Modify(ModifyKind::Name(RenameMode::Both)),
+        &[root.join("note.md"), root.join("note.txt")],
+    );
+    assert_eq!(unmarked[0].kind, WorkspaceChangeKind::Deleted);
+}
+
+#[test]
+fn renaming_a_plain_file_into_a_note_reads_as_a_creation() {
+    let root = Path::new("/vault");
+    let changes = classify_event(
+        root,
+        &EventKind::Modify(ModifyKind::Name(RenameMode::Both)),
+        &[root.join("note.txt"), root.join("note.md")],
+    );
+
+    assert_eq!(changes[0].kind, WorkspaceChangeKind::Created);
+    assert_eq!(changes[0].path, "note.md");
+    assert_eq!(changes[0].old_path, None);
+}
+
+#[test]
+fn a_removed_note_is_reported_as_deleted() {
+    let root = Path::new("/vault");
+    let changes = classify_event(
+        root,
+        &EventKind::Remove(RemoveKind::File),
+        &[root.join("gone.md")],
+    );
+
+    assert_eq!(changes[0].kind, WorkspaceChangeKind::Deleted);
+    assert_eq!(changes[0].path, "gone.md");
+}
+
+/// A folder that disappears takes its notes with it, but the OS reports one
+/// event for the folder and none for the files inside it. The index cannot be
+/// told which entries to drop, so it is told to rebuild instead.
+#[test]
+fn a_vanished_folder_asks_for_a_rebuild_because_its_notes_are_unenumerable() {
+    let root = Path::new("/vault");
+    let changes = classify_event(
+        root,
+        &EventKind::Remove(RemoveKind::Folder),
+        &[root.join("archive")],
+    );
+
+    assert_eq!(changes[0].kind, WorkspaceChangeKind::Rescan);
+}
+
+/// A deleted folder cannot be stat'd, so an absent file extension is the only
+/// hint that it was a folder — and a folder named `archive.2026` defeats it.
+/// When the OS says outright that a folder went away, that beats the guess.
+#[test]
+fn a_vanished_folder_named_like_a_file_still_asks_for_a_rebuild() {
+    let root = Path::new("/vault");
+    let changes = classify_event(
+        root,
+        &EventKind::Remove(RemoveKind::Folder),
+        &[root.join("archive.2026")],
+    );
+
+    assert_eq!(changes[0].kind, WorkspaceChangeKind::Rescan);
+}
+
+#[test]
+fn irrelevant_events_produce_nothing_at_all() {
+    let root = Path::new("/vault");
+
+    assert!(classify_event(
+        root,
+        &EventKind::Access(notify::event::AccessKind::Read),
+        &[root.join("note.md")]
+    )
+    .is_empty());
+    assert!(classify_event(
+        root,
+        &EventKind::Create(CreateKind::File),
+        &[root.join("picture.png")]
+    )
+    .is_empty());
+}
+
+#[test]
+fn the_app_recognises_the_echo_of_its_own_write_exactly_once() {
+    let log = SelfWriteLog::new();
+    let path = Path::new("/vault/note.md");
+    let now = Instant::now();
+
+    log.record_at(path, now);
+
+    // The watcher event caused by our own write is ours to swallow...
+    assert!(log.take_at(path, now + Duration::from_millis(100)));
+    // ...but a second event on the same path is somebody else editing.
+    assert!(!log.take_at(path, now + Duration::from_millis(200)));
+}
+
+#[test]
+fn an_unrecorded_path_is_never_mistaken_for_our_own_write() {
+    let log = SelfWriteLog::new();
+    assert!(!log.take_at(Path::new("/vault/external.md"), Instant::now()));
+}
+
+/// Suppression is a single expected echo, not a blanket quiet period: if the
+/// event never arrives (the OS coalesced it, the write changed nothing) the
+/// record must not go on swallowing somebody else's later edit.
+#[test]
+fn an_echo_that_never_arrives_stops_suppressing_once_it_is_stale() {
+    let log = SelfWriteLog::new();
+    let path = Path::new("/vault/note.md");
+    let now = Instant::now();
+
+    log.record_at(path, now);
+
+    assert!(!log.take_at(path, now + SELF_WRITE_TTL + Duration::from_millis(1)));
+}
+
+#[test]
+fn two_writes_to_one_path_expect_two_echoes() {
+    let log = SelfWriteLog::new();
+    let path = Path::new("/vault/note.md");
+    let now = Instant::now();
+
+    log.record_at(path, now);
+    log.record_at(path, now + Duration::from_millis(10));
+
+    assert!(log.take_at(path, now + Duration::from_millis(20)));
+    assert!(log.take_at(path, now + Duration::from_millis(30)));
+    assert!(!log.take_at(path, now + Duration::from_millis(40)));
+}
+
+/// Exercises the real OS notification path.
+///
+/// Every other watcher test hands `classify_event` an event it built itself,
+/// which proves the mapping but not that the platform actually reports what the
+/// mapping expects. This one writes a file and reads back whatever Linux,
+/// macOS or Windows really said about it.
+#[test]
+fn a_note_written_by_another_program_reaches_the_app_as_a_change() {
+    use notify::RecursiveMode;
+    use notify_debouncer_full::new_debouncer;
+    use std::sync::mpsc;
+
+    let root = temp_test_dir("watcher-live");
+    let (sender, receiver) = mpsc::channel();
+
+    let mut debouncer = new_debouncer(Duration::from_millis(100), None, move |result| {
+        // The receiver is dropped once the test is done; a failed send just
+        // means nobody is listening any more.
+        let _ = sender.send(result);
+    })
+    .expect("debouncer starts");
+    debouncer
+        .watch(&root, RecursiveMode::Recursive)
+        .expect("watching a temp dir succeeds");
+
+    // Something other than us writes a note into the vault.
+    let note = root.join("from-elsewhere.md");
+    fs::write(&note, "# Written by another program\n").expect("note is written");
+
+    // Collect until the note shows up or we run out of patience. Filesystem
+    // notifications are asynchronous and the debouncer holds events back on
+    // purpose, so this waits rather than assuming the first batch has it.
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    let mut seen: Vec<WorkspaceChange> = Vec::new();
+    while std::time::Instant::now() < deadline {
+        let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+        match receiver.recv_timeout(remaining) {
+            Ok(Ok(events)) => {
+                for event in &events {
+                    seen.extend(classify_event(&root, &event.kind, &event.paths));
+                }
+                if seen.iter().any(|change| change.path == "from-elsewhere.md") {
+                    break;
+                }
+            }
+            Ok(Err(_)) | Err(_) => break,
+        }
+    }
+
+    drop(debouncer);
+    let _ = fs::remove_dir_all(&root);
+
+    let found = seen
+        .iter()
+        .find(|change| change.path == "from-elsewhere.md")
+        .unwrap_or_else(|| panic!("the new note was never reported; saw {seen:?}"));
+
+    // Which of the two the platform reports is its own business — both mean
+    // "read this file again", and the frontend reindexes either way.
+    assert!(
+        matches!(
+            found.kind,
+            WorkspaceChangeKind::Created | WorkspaceChangeKind::Modified
+        ),
+        "unexpected kind {:?}",
+        found.kind
+    );
+}

@@ -39,6 +39,7 @@ import {
 import { workspaceDocumentApi } from "../workspace/workspaceDocumentAdapter";
 import { workspaceDesktopApi } from "../workspace/workspaceAdapter";
 import { loadWorkspaceDocument, saveWorkspaceDocument } from "../workspace/workspaceDocumentModel";
+import { watchWorkspace } from "../workspace/workspaceWatcher";
 import { ActivityBar } from "./ActivityBar";
 import { DirtyCloseDialog } from "./DirtyCloseDialog";
 import { ResizeHandle } from "./ResizeHandle";
@@ -463,6 +464,55 @@ export function DesktopShell() {
       void useSearchIndexStore.getState().indexWorkspace(restoredWorkspacePath, snapshot.files);
       void useWikiLinkIndexStore.getState().indexWorkspace(restoredWorkspacePath, snapshot.files);
     });
+  }, [restoredWorkspacePath]);
+
+  // Watch the open workspace for edits the app did not make. Both indexes and
+  // the calendar are caches of this folder, and until now only in-app writes
+  // refreshed them — a `git pull`, a sync client or another editor left them
+  // confidently wrong until the workspace was reopened. The watcher republishes
+  // outside changes as the same `note.*` events an in-app edit produces, so
+  // every consumer stays as it was.
+  useEffect(() => {
+    if (!isTauri() || !restoredWorkspacePath) return;
+    const rootPath = restoredWorkspacePath;
+    let cancelled = false;
+    let stop: (() => void) | null = null;
+
+    // A change the watcher cannot name path by path — a deleted folder takes
+    // its notes with it and the OS reports only the folder — so the caches are
+    // rebuilt from what is actually on disk.
+    const rebuildFromDisk = () => {
+      void workspaceDesktopApi.openWorkspace(rootPath).then((snapshot) => {
+        if (cancelled) return;
+        setWorkspaceFiles(snapshot.files);
+        void useSearchIndexStore.getState().indexWorkspace(rootPath, snapshot.files);
+        void useWikiLinkIndexStore.getState().indexWorkspace(rootPath, snapshot.files);
+      });
+    };
+
+    void watchWorkspace(rootPath, rebuildFromDisk)
+      .then((dispose) => {
+        // The workspace can close while the watch is being set up.
+        if (cancelled) {
+          dispose();
+          return;
+        }
+        stop = dispose;
+      })
+      .catch((error: unknown) => {
+        // Watching is an enhancement over the previous behaviour, not a
+        // prerequisite for it. Failing to watch costs freshness, so say so
+        // rather than leaving the user to wonder why edits are not showing up.
+        console.warn(
+          "[watcher] Edits made outside the app will not be picked up automatically.",
+          error
+        );
+      });
+
+    return () => {
+      cancelled = true;
+      stop?.();
+    };
   }, [restoredWorkspacePath]);
 
   const handleMarkdownFileCreated = useCallback((rootPath: string, relativePath: string) => {

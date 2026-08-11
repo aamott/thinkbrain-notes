@@ -4,8 +4,9 @@
  * Mirrors {@link useSearchIndexStore}: owns the in-memory
  * {@link WikiLinkIndex} for the current workspace, rebuilds it on workspace
  * open, clears it when no workspace is available, and keeps it in sync with
- * in-app `note.saved`/`note.created`/`note.renamed`/`note.deleted` events via
- * {@link subscribeToEvents}.
+ * `note.saved`/`note.created`/`note.renamed`/`note.deleted` events via
+ * {@link subscribeToEvents} — whether the app made the change or the native
+ * watcher saw another program make it.
  *
  * The store is deliberately thin: parsing and native IPC (reading files) are
  * routed through `invokeNativeCommand` and `parseNote` from `@thinkbrain/core`.

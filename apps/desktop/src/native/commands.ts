@@ -138,6 +138,15 @@ export interface NativeCommandMap {
     };
     readonly result: null;
   };
+  /** Starts watching a workspace; resolves with the canonical root events carry. */
+  readonly watch_workspace: {
+    readonly args: { readonly rootPath: string };
+    readonly result: string;
+  };
+  readonly unwatch_workspace: {
+    readonly args: { readonly rootPath: string };
+    readonly result: null;
+  };
   readonly read_app_settings: {
     readonly args: undefined;
     readonly result: string | null;

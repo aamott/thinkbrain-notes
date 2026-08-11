@@ -47,7 +47,7 @@ Resolved 2026-08-07 against the shipped index and D41. No new infrastructure is 
 
 Because D13 virtualizes the list, fetch and memoise previews only for visible rows; do not prefetch the folder or block first paint (render the date first, then fill the preview). Delegate search to `search_index`, filtering hits to the journal root; if that is too coarse, add a native path-prefix argument through the indexing epic, not a journal-owned index. The disposable, rebuildable app FTS5 cache is never source of truth.
 
-**Known caveat:** no file watcher exists yet (`plans/indexing-search/pending-file_watcher-low-med.md`), so externally-created files appear in the tree-walk list but not search until reindexing. State this in the UI.
+**Resolved 2026-08-11:** the native file watcher now reports outside changes as `note.*` events, so an externally-created entry reaches both the tree-walk list and search without reindexing by hand.
 
 ### Metadata facets — platform dependency
 

@@ -1,3 +1,4 @@
+use crate::commands::watcher::record_self_write;
 use crate::error::NativeError;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
@@ -73,6 +74,7 @@ pub fn write_markdown_file(
         ));
     }
 
+    record_self_write(&file_path);
     fs::write(&file_path, contents).map_err(|error| {
         NativeError::with_details(
             "workspace.write_failed",
@@ -112,6 +114,7 @@ pub fn create_markdown_file(
         })?;
     }
 
+    record_self_write(&file_path);
     fs::write(&file_path, contents.unwrap_or_default()).map_err(|error| {
         NativeError::with_details(
             "workspace.create_failed",
@@ -159,6 +162,8 @@ pub fn rename_markdown_file(
         })?;
     }
 
+    record_self_write(&file_path);
+    record_self_write(&new_file_path);
     fs::rename(&file_path, &new_file_path).map_err(|error| {
         NativeError::with_details(
             "workspace.rename_failed",
@@ -188,6 +193,7 @@ pub fn delete_markdown_file(app: tauri::AppHandle, root_path: String, relative_p
         ));
     }
 
+    record_self_write(&file_path);
     fs::remove_file(&file_path).map_err(|error| {
         NativeError::with_details(
             "workspace.delete_failed",
