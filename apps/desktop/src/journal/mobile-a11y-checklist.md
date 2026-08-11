@@ -86,7 +86,9 @@ Each state has to be reachable and readable, not only the happy path.
 
 - The formal touch-target audit is deferred per **D31**; this list checks the journal's own
   controls but is not that audit.
-- Search and metadata facets render in their unavailable state until the platform index exists
-  (**D41**), so their announcements cannot be fully checked yet.
+- Metadata facets render in their unavailable state until the index carries frontmatter, so
+  **Filter**'s announcements cannot be fully checked yet. Search itself is live: it is enabled
+  once the index reports ready, so both the enabled and the disabled announcements are now
+  checkable — open a workspace large enough to catch it mid-index if you want the latter.
 - `Open folder…` and `Open settings` are omitted from the empty states until the extension API
   can invoke host commands; there is nothing to check there yet.
