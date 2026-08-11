@@ -224,3 +224,98 @@ describe("the shared day filter (D25/D60)", () => {
     expect(getJournalFilter().selectedDay).toBeNull();
   });
 });
+
+/**
+ * The panel's search box was disabled by a missing argument rather than a
+ * missing index: it defaulted to unavailable, and its `onSearchChange` went
+ * nowhere. Enabling it without wiring it would have been worse than leaving it
+ * off — a control that accepts typing and does nothing.
+ */
+describe("searching the journal", () => {
+  const ENTRIES = ["2026-08-07-1802.md", "2026-08-08-0930.md"];
+
+  const searchable = async (
+    searchEntries: (query: string) => Promise<ReadonlySet<string>>
+  ): Promise<HTMLDivElement> => {
+    container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
+    await act(async () =>
+      root?.render(
+        <JournalPanelContainer
+          service={service({ listEntries: async () => listing(ENTRIES) })}
+          onOpenCalendar={() => undefined}
+          indexAvailable
+          searchEntries={searchEntries}
+        />
+      )
+    );
+    return container;
+  };
+
+  const typeSearch = async (host: HTMLElement, value: string): Promise<void> => {
+    const field = host.querySelector<HTMLInputElement>('input[type="search"], input');
+    if (!field) throw new Error("No search field.");
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value"
+      )?.set;
+      setter?.call(field, value);
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 260));
+    });
+  };
+
+  it("filters the list to what the index matched", async () => {
+    const host = await searchable(async () => new Set(["journal/2026-08-08-0930.md"]));
+
+    await typeSearch(host, "salt");
+
+    // Rows show the weekday and time, so the entries are told apart by those.
+    const rows = [...host.querySelectorAll('[role="treeitem"]')].map((row) => row.textContent);
+    expect(rows.join(" ")).toContain("9:30");
+    expect(rows.join(" ")).not.toContain("6:02");
+  });
+
+  it("says so when the index matched nothing", async () => {
+    const host = await searchable(async () => new Set<string>());
+
+    await typeSearch(host, "nothing here");
+
+    expect(host.textContent).toContain("No entries match");
+  });
+
+  it("shows everything again when the query is cleared", async () => {
+    const host = await searchable(async () => new Set(["journal/2026-08-08-0930.md"]));
+    await typeSearch(host, "salt");
+
+    await typeSearch(host, "");
+
+    const rows = [...host.querySelectorAll('[role="treeitem"]')].map((row) => row.textContent);
+    expect(rows.join(" ")).toContain("6:02");
+  });
+
+  /** One query per pause, not one per keystroke: each is an IPC round trip. */
+  it("does not query the index on every keystroke", async () => {
+    const searchEntries = vi.fn(async () => new Set<string>());
+    const host = await searchable(searchEntries);
+
+    const field = host.querySelector<HTMLInputElement>("input");
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value"
+      )?.set;
+      for (const value of ["s", "sa", "sal", "salt"]) {
+        setter?.call(field, value);
+        field?.dispatchEvent(new Event("input", { bubbles: true }));
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      await new Promise((resolve) => setTimeout(resolve, 260));
+    });
+
+    expect(searchEntries).toHaveBeenCalledTimes(1);
+    expect(searchEntries).toHaveBeenCalledWith("salt");
+  });
+});

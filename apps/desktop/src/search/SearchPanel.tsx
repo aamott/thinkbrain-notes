@@ -2,12 +2,11 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Search } from "lucide-react";
 import { Unavailable } from "../shell/Unavailable";
 import { cn } from "../lib/utils";
-import { createSearchService, type SearchResult } from "./searchService";
+import { searchService, type SearchResult } from "./searchService";
 import { useSearchIndexStore } from "./searchIndexStore";
 import type { SearchHit } from "./searchPanelModel";
 
 /** Module-scoped search service singleton backing the panel. */
-const searchService = createSearchService();
 
 /** Debounce delay (ms) before firing a search after the query stops changing. */
 const SEARCH_DEBOUNCE_MS = 300;

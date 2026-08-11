@@ -1,11 +1,13 @@
 import { normalizeRoot, parseFrontmatter, type ExtensionManifest } from "@thinkbrain/core";
-import { useMemo, useSyncExternalStore } from "react";
+import { useCallback, useMemo, useSyncExternalStore } from "react";
 
 import { JournalPanelContainer } from "../../journal/JournalPanelContainer";
 import { createJournalService } from "../../journal/journalService";
 import { journalSettingsSchema } from "../../journal/journalSettings";
 import { registerJournalControls } from "../../journal/JournalFieldDefinitionsControl";
 import { CalendarTabContainer } from "../../journal/CalendarTabContainer";
+import { useSearchIndexStore } from "../../search/searchIndexStore";
+import { searchService } from "../../search/searchService";
 import { MetadataWidgetContainer } from "../../journal/MetadataWidgetContainer";
 import { parseFieldDefinitions } from "../../journal/journalSettings";
 import type { DesktopExtensionContext } from "../desktopExtensionHost";
@@ -232,12 +234,42 @@ export function activateJournal(context: DesktopExtensionContext): void {
     side: "left",
     // No PanelActions: D71 puts New entry, Today and Open calendar in the
     // panel's own action row, leaving the chrome row to the overflow alone.
-    factory: () => (
+    factory: () => <JournalPanelRoot />
+  });
+
+  /**
+   * Reactive wrapper around {@link JournalPanelContainer} so the panel's search
+   * follows the index's lifecycle.
+   *
+   * The panel owns no index of its own (D41): it asks this for matching paths
+   * and filters its rows by the answer. Search stays unavailable until the
+   * index reports ready, because an enabled box backed by a half-built index
+   * would answer wrongly rather than not at all.
+   */
+  function JournalPanelRoot() {
+    const indexStatus = useSearchIndexStore((state) => state.status.kind);
+    const indexRoot = useSearchIndexStore((state) => state.rootPath);
+
+    const searchEntries = useCallback(
+      async (query: string): Promise<ReadonlySet<string>> => {
+        if (indexRoot === null) return new Set();
+        const hits = await searchService.search(indexRoot, query);
+        return new Set(hits.map((hit) => hit.relativePath));
+      },
+      [indexRoot]
+    );
+
+    return (
       // `Open folder…` and `Open settings` are shell affordances the extension
       // API has no route to yet; the states render without them until it does.
-      <JournalPanelContainer service={service} onOpenCalendar={openCalendar} />
-    )
-  });
+      <JournalPanelContainer
+        service={service}
+        onOpenCalendar={openCalendar}
+        indexAvailable={indexStatus === "ready"}
+        searchEntries={searchEntries}
+      />
+    );
+  }
 
   /**
    * Reactive wrapper around {@link CalendarTabContainer} so the calendar tab

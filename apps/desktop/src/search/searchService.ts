@@ -210,3 +210,11 @@ export function createSearchService(): SearchService {
     }
   };
 }
+
+/**
+ * The app's search service.
+ *
+ * One instance: it holds no state of its own beyond the native calls it makes,
+ * and a second would only make it ambiguous which one a caller meant.
+ */
+export const searchService: SearchService = createSearchService();

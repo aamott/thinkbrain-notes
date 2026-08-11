@@ -17,10 +17,22 @@ import { JournalError, type JournalListing, type JournalService } from "./journa
 /** How many entries get a preview before virtualization exists to scope it. */
 const PREVIEW_LIMIT = 60;
 
+/** A pause long enough to mean "done typing", short enough not to feel laggy. */
+const SEARCH_DEBOUNCE_MS = 200;
+
 export interface JournalPanelContainerProps {
   readonly service: JournalService;
-  /** False until the platform index exists; disables search and facets (D41). */
+  /** False until the platform index is ready for this workspace (D41). */
   readonly indexAvailable?: boolean;
+  /**
+   * Asks the index which entries match, as workspace-relative paths.
+   *
+   * The panel never scans files itself (D41): it hands over a query and filters
+   * its rows by what comes back. Omitted where no index is wired, which is why
+   * `indexAvailable` and this arrive together — a search box that accepts
+   * typing and does nothing is worse than one that says it is unavailable.
+   */
+  readonly searchEntries?: (query: string) => Promise<ReadonlySet<string>>;
   readonly onOpenSettings?: () => void;
   readonly onChooseFolder?: () => void;
   readonly onOpenCalendar: () => void;
@@ -29,6 +41,7 @@ export interface JournalPanelContainerProps {
 export function JournalPanelContainer({
   service,
   indexAvailable = false,
+  searchEntries,
   onOpenSettings,
   onChooseFolder,
   onOpenCalendar
@@ -39,6 +52,15 @@ export function JournalPanelContainer({
   const [expandedUndated, setExpandedUndated] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
   const [previews, setPreviews] = useState<ReadonlyMap<string, string>>(new Map());
+  const [search, setSearch] = useState("");
+  // The answer is kept with the question it answered, so a result for a query
+  // the user has already moved on from is ignored rather than shown as a filter
+  // of the new one. Deriving it also keeps the effect from setting state
+  // synchronously, which `react-hooks/set-state-in-effect` rightly rejects.
+  const [matches, setMatches] = useState<{
+    readonly query: string;
+    readonly paths: ReadonlySet<string>;
+  } | null>(null);
   const { selectedDay } = useJournalFilter();
 
   /** Reads the folder without touching state, so the effect owns when to apply it. */
@@ -107,6 +129,40 @@ export function JournalPanelContainer({
     };
   }, [listing, service]);
 
+  const query = search.trim();
+  const searching = indexAvailable && searchEntries !== undefined && query !== "";
+  // `null` means no content filter at all, which is not the same as a query
+  // that matched nothing — that one has to read as "no matches" (D52). A query
+  // still in flight also filters nothing, rather than showing the last one's.
+  const matchingPaths =
+    searching && matches?.query === query ? matches.paths : null;
+
+  // Typing is not a query. Each one is a round trip to the index, so the panel
+  // waits for a pause before asking, and drops an answer that arrives after the
+  // query moved on.
+  useEffect(() => {
+    if (!searching || searchEntries === undefined) return;
+
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      void searchEntries(query)
+        .then((paths) => {
+          if (!cancelled) setMatches({ query, paths });
+        })
+        .catch((error: unknown) => {
+          // Fail loudly, but do not strand the list behind a filter it could
+          // not compute: showing everything is the honest fallback.
+          console.error("[journal] Search failed.", error);
+          if (!cancelled) setMatches(null);
+        });
+    }, SEARCH_DEBOUNCE_MS);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [query, searching, searchEntries]);
+
   const reload = (): void => setReloadToken((token) => token + 1);
 
   const view = buildJournalView({
@@ -115,8 +171,8 @@ export function JournalPanelContainer({
     collapsed,
     expandedUndated,
     selectedDay,
-    activeFilterCount: selectedDay ? 1 : 0,
-    matchingPaths: null,
+    activeFilterCount: (selectedDay ? 1 : 0) + (matchingPaths === null ? 0 : 1),
+    matchingPaths,
     previews
   });
 
@@ -151,11 +207,13 @@ export function JournalPanelContainer({
   return (
     <JournalPanel
       view={view}
-      search=""
-      searchAvailable={indexAvailable}
-      facetsAvailable={indexAvailable}
+      search={search}
+      searchAvailable={indexAvailable && searchEntries !== undefined}
+      // Facets need frontmatter in the index, which is its own story; the
+      // full-text index landing does not make them available.
+      facetsAvailable={false}
       chips={chips}
-      onSearchChange={() => undefined}
+      onSearchChange={setSearch}
       onNewEntry={() => run(() => service.createEntry())}
       onToday={() => run(() => service.openToday())}
       onOpenCalendar={onOpenCalendar}
