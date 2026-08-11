@@ -1849,3 +1849,82 @@ fn a_note_written_by_another_program_reaches_the_app_as_a_change() {
         found.kind
     );
 }
+
+/// Proves self-write suppression works against real filesystem events.
+///
+/// The unit tests around `SelfWriteLog` prove the bookkeeping, but not that the
+/// path an app write records is the same path the OS reports back. If those two
+/// ever disagree — through canonicalization, a separator, a symlinked parent —
+/// suppression silently stops working and every other test still passes. So
+/// this writes a note both ways and checks that only the unrecorded write is
+/// reported.
+#[test]
+fn the_app_hears_an_outside_write_but_not_the_echo_of_its_own() {
+    use notify::RecursiveMode;
+    use notify_debouncer_full::new_debouncer;
+    use std::sync::mpsc;
+
+    let root = temp_test_dir("watcher-echo");
+    let (sender, receiver) = mpsc::channel();
+
+    let mut debouncer = new_debouncer(Duration::from_millis(100), None, move |result| {
+        let _ = sender.send(result);
+    })
+    .expect("debouncer starts");
+    debouncer
+        .watch(&root, RecursiveMode::Recursive)
+        .expect("watching a temp dir succeeds");
+
+    /// Drains events for up to two seconds, returning what the app would report.
+    fn drain(
+        receiver: &mpsc::Receiver<notify_debouncer_full::DebounceEventResult>,
+        root: &Path,
+    ) -> (usize, Vec<WorkspaceChange>) {
+        let deadline = std::time::Instant::now() + Duration::from_secs(2);
+        let mut raw = 0usize;
+        let mut reported = Vec::new();
+        while let Ok(result) =
+            receiver.recv_timeout(deadline.saturating_duration_since(std::time::Instant::now()))
+        {
+            if let Ok(events) = result {
+                raw += events.len();
+                reported.extend(collect_changes(root, &events));
+            }
+        }
+        (raw, reported)
+    }
+
+    // The app writes a note, announcing the echo it is about to cause.
+    let ours = root.join("ours.md");
+    record_self_write(&ours);
+    fs::write(&ours, "# Written by the app\n").expect("note is written");
+
+    let (raw_ours, reported_ours) = drain(&receiver, &root);
+
+    // Another program writes a different note, announcing nothing.
+    let theirs = root.join("theirs.md");
+    fs::write(&theirs, "# Written by another program\n").expect("note is written");
+
+    let (_, reported_theirs) = drain(&receiver, &root);
+
+    drop(debouncer);
+    let _ = fs::remove_dir_all(&root);
+
+    // The OS really did notice our write; the app simply declined to report it.
+    // Without this the assertion below would pass on an empty event stream.
+    assert!(
+        raw_ours > 0,
+        "the platform reported nothing at all, so suppression was never exercised"
+    );
+    assert_eq!(
+        reported_ours,
+        Vec::new(),
+        "the app reported the echo of its own write"
+    );
+    assert!(
+        reported_theirs
+            .iter()
+            .any(|change| change.path == "theirs.md"),
+        "an outside write went unreported; saw {reported_theirs:?}"
+    );
+}

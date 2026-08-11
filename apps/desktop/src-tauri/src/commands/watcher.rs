@@ -458,7 +458,7 @@ fn spawn_debouncer(
 ///
 /// Self-write echoes are dropped here rather than in `classify_event` so that
 /// classification stays a pure function of the event.
-fn collect_changes(
+pub(crate) fn collect_changes(
     root: &Path,
     events: &[notify_debouncer_full::DebouncedEvent],
 ) -> Vec<WorkspaceChange> {
