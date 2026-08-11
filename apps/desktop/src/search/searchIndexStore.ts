@@ -13,8 +13,7 @@
  */
 
 import { create } from "zustand";
-import { appEvents } from "../events/appEvents";
-import type { Disposable } from "@thinkbrain/core";
+import { subscribeIndexToNoteEvents } from "../events/noteIndexSubscription";
 import type { NativeMarkdownFileEntry } from "../native/commands";
 import {
   AbortError,
@@ -155,20 +154,6 @@ export const useSearchIndexStore = create<SearchIndexStore>((set, get) => ({
   },
 
   subscribeToEvents() {
-    const disposables: Disposable[] = [
-      appEvents.on("note.saved", ({ rootPath, relativePath }) => {
-        void get().reindexDocument(rootPath, relativePath);
-      }),
-      appEvents.on("note.created", ({ rootPath, relativePath }) => {
-        void get().reindexDocument(rootPath, relativePath);
-      }),
-      appEvents.on("note.renamed", ({ rootPath, oldRelativePath, newRelativePath }) => {
-        void get().reindexRenamedDocument(rootPath, oldRelativePath, newRelativePath);
-      }),
-      appEvents.on("note.deleted", ({ rootPath, relativePath }) => {
-        void get().removeDocument(rootPath, relativePath);
-      })
-    ];
-    return () => disposables.forEach((d) => d.dispose());
+    return subscribeIndexToNoteEvents(get);
   }
 }));

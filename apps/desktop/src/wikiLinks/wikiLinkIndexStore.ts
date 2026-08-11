@@ -26,8 +26,7 @@ import {
   type WikiLinkIndex,
   type WikiLinkIndexInput
 } from "@thinkbrain/core";
-import { appEvents } from "../events/appEvents";
-import type { Disposable } from "@thinkbrain/core";
+import { subscribeIndexToNoteEvents } from "../events/noteIndexSubscription";
 import { invokeNativeCommand, type NativeMarkdownFileEntry } from "../native/commands";
 
 /** Re-export so consumers can import selectors from the store module. */
@@ -218,21 +217,7 @@ export const useWikiLinkIndexStore = create<WikiLinkIndexStore>((set, get) => ({
     // Dispose any existing subscription before creating a new one.
     if (currentSubscription) currentSubscription();
 
-    const disposables: Disposable[] = [
-      appEvents.on("note.saved", ({ rootPath, relativePath }) => {
-        void get().reindexDocument(rootPath, relativePath);
-      }),
-      appEvents.on("note.created", ({ rootPath, relativePath }) => {
-        void get().reindexDocument(rootPath, relativePath);
-      }),
-      appEvents.on("note.renamed", ({ rootPath, oldRelativePath, newRelativePath }) => {
-        void get().reindexRenamedDocument(rootPath, oldRelativePath, newRelativePath);
-      }),
-      appEvents.on("note.deleted", ({ rootPath, relativePath }) => {
-        get().removeDocument(rootPath, relativePath);
-      })
-    ];
-    const dispose = () => disposables.forEach((d) => d.dispose());
+    const dispose = subscribeIndexToNoteEvents(get);
     currentSubscription = dispose;
     return () => {
       dispose();
