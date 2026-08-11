@@ -40,6 +40,7 @@ import { workspaceDocumentApi } from "../workspace/workspaceDocumentAdapter";
 import { workspaceDesktopApi } from "../workspace/workspaceAdapter";
 import { loadWorkspaceDocument, saveWorkspaceDocument } from "../workspace/workspaceDocumentModel";
 import { watchWorkspace } from "../workspace/workspaceWatcher";
+import { addWorkspaceFile, removeWorkspaceFile } from "./workspaceFileList";
 import { ActivityBar } from "./ActivityBar";
 import { DirtyCloseDialog } from "./DirtyCloseDialog";
 import { ResizeHandle } from "./ResizeHandle";
@@ -50,17 +51,6 @@ import { TitleBar } from "./TitleBar";
 
 type PanelSide = "left" | "right";
 
-/**
- * Root desktop shell composition.
- *
- * Owns shell-wide state (tabs, open documents, dock visibility, theme, panel
- * widths, workspace metadata) and composes the extracted chrome components:
- * {@link TitleBar}, {@link ActivityBar}, {@link LeftPopout}, {@link TabContent},
- * {@link BottomPanelContent}, {@link RightPopout}, and {@link StatusBar}.
- *
- * Presentation lives entirely in those components; this module is limited to
- * state, effects, and callbacks so the layout stays easy to reason about.
- */
 export function DesktopShell() {
   const paletteCommands = useDesktopCommands();
   const rootRef = useRef<HTMLElement>(null);
@@ -526,15 +516,38 @@ export function DesktopShell() {
 
   const handleMarkdownFileCreated = useCallback((rootPath: string, relativePath: string) => {
     if (rootPath !== restoredWorkspacePath) return;
-    setWorkspaceFiles((files) => files.some((file) => file.relative_path === relativePath)
-      ? files
-      : [...files, {
-        relative_path: relativePath,
-        file_name: relativePath.split("/").at(-1) ?? relativePath,
-        parent_path: relativePath.split("/").slice(0, -1).join("/"),
-        byte_size: 0,
-        updated_at: null
-      }]);
+    setWorkspaceFiles((files) => addWorkspaceFile(files, relativePath));
+  }, [restoredWorkspacePath]);
+
+  // Keep the shell's file list level with the folder. The indexes hear about
+  // notes through their own subscriptions, but this list is separate state and
+  // backs the command palette — so without this an externally created note is
+  // searchable yet unopenable from the palette, and a deleted one stays listed.
+  // Both in-app and outside changes arrive here, since they are the same events.
+  useEffect(() => {
+    if (!restoredWorkspacePath) return;
+    const rootPath = restoredWorkspacePath;
+    const forThisWorkspace = (eventRoot: string) => eventRoot === rootPath;
+
+    const disposables = [
+      appEvents.on("note.created", ({ rootPath: eventRoot, relativePath }) => {
+        if (!forThisWorkspace(eventRoot)) return;
+        setWorkspaceFiles((files) => addWorkspaceFile(files, relativePath));
+      }),
+      appEvents.on("note.deleted", ({ rootPath: eventRoot, relativePath }) => {
+        if (!forThisWorkspace(eventRoot)) return;
+        setWorkspaceFiles((files) => removeWorkspaceFile(files, relativePath));
+      }),
+      appEvents.on("note.renamed", ({ rootPath: eventRoot, oldRelativePath, newRelativePath }) => {
+        if (!forThisWorkspace(eventRoot)) return;
+        setWorkspaceFiles((files) =>
+          addWorkspaceFile(removeWorkspaceFile(files, oldRelativePath), newRelativePath)
+        );
+      })
+    ];
+    return () => {
+      for (const disposable of disposables) void disposable.dispose();
+    };
   }, [restoredWorkspacePath]);
 
   /**
