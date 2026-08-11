@@ -1763,8 +1763,12 @@ fn an_echo_that_never_arrives_stops_suppressing_once_it_is_stale() {
     assert!(!log.take_at(path, now + SELF_WRITE_TTL + Duration::from_millis(1)));
 }
 
+/// Two rapid saves reach the watcher as one debounced event, so that event has
+/// to settle both. Leaving one record behind would let it swallow the next
+/// edit — and the next edit is the external change this feature exists to
+/// catch. The opposite mistake only costs a redundant reindex.
 #[test]
-fn two_writes_to_one_path_expect_two_echoes() {
+fn one_event_settles_every_write_the_app_was_still_expecting() {
     let log = SelfWriteLog::new();
     let path = Path::new("/vault/note.md");
     let now = Instant::now();
@@ -1773,8 +1777,8 @@ fn two_writes_to_one_path_expect_two_echoes() {
     log.record_at(path, now + Duration::from_millis(10));
 
     assert!(log.take_at(path, now + Duration::from_millis(20)));
-    assert!(log.take_at(path, now + Duration::from_millis(30)));
-    assert!(!log.take_at(path, now + Duration::from_millis(40)));
+    // Nothing is left over to suppress somebody else's edit.
+    assert!(!log.take_at(path, now + Duration::from_millis(30)));
 }
 
 /// Exercises the real OS notification path.

@@ -19,11 +19,18 @@
 //! already updated through the in-app path, so each save would reindex a second
 //! time, and the feature is defined as *external* change detection.
 //!
-//! So each write records one expected echo, and the first matching watcher
-//! event consumes it. That is deliberately not a quiet period on the path: if
-//! the echo never arrives — the OS coalesced it, the write changed no bytes —
-//! the record expires instead of going on to swallow somebody else's later
-//! edit.
+//! So each write records an expected echo, and the arriving event claims it.
+//! That is deliberately not a quiet period on the path: if the echo never
+//! arrives — the write changed no bytes, the OS dropped it — the record expires
+//! instead of going on to swallow somebody else's later edit.
+//!
+//! One case cannot be resolved and is accepted: when another program writes the
+//! same note inside the same debounce window as one of our own writes, the two
+//! reach us as a single indistinguishable event and the outside edit is missed
+//! until that note changes again. Distinguishing them would mean hashing every
+//! written file and re-reading it on every event, which costs more than the
+//! rare miss it would fix. Nothing goes wrong permanently: the index is a
+//! disposable cache and the next change to that note corrects it.
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Component, Path, PathBuf};
@@ -271,10 +278,17 @@ impl SelfWriteLog {
         entries.entry(path.to_path_buf()).or_default().push(at);
     }
 
-    /// Claims one expected echo for `path`, returning whether it was ours.
+    /// Claims the outstanding echoes for `path`, returning whether any were ours.
+    ///
+    /// One arriving event settles *every* write we are still expecting for that
+    /// path, because the debouncer has already coalesced the burst: two rapid
+    /// saves reach us as one event. Claiming them one at a time would strand a
+    /// record, and a stranded record swallows the next edit — which is exactly
+    /// the external change this feature exists to catch. Erring the other way
+    /// costs at most one redundant reindex when the OS does *not* coalesce.
     ///
     /// Expired records are dropped rather than claimed, so a write whose echo
-    /// never arrived cannot silently swallow a later external edit.
+    /// never arrived cannot silently swallow a later external edit either.
     pub fn take_at(&self, path: &Path, now: Instant) -> bool {
         let mut guard = self.expected.lock().unwrap_or_else(|error| error.into_inner());
         let Some(entries) = guard.as_mut() else {
@@ -284,10 +298,8 @@ impl SelfWriteLog {
             return false;
         };
         times.retain(|recorded| now.duration_since(*recorded) <= SELF_WRITE_TTL);
-        let claimed = times.pop().is_some();
-        if times.is_empty() {
-            entries.remove(path);
-        }
+        let claimed = !times.is_empty();
+        entries.remove(path);
         claimed
     }
 }
