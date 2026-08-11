@@ -10,6 +10,8 @@ import {
 } from "@thinkbrain/core";
 import { useRef, useState } from "react";
 
+import { JournalTrouble, type JournalTroubleCode } from "./journalChrome";
+
 /**
  * The journal calendar, as a canvas tab (D14/D27).
  *
@@ -42,9 +44,17 @@ export interface CalendarTabProps {
   /** Aggregated days, keyed by `YYYY-MM-DD`. Missing means no entries. */
   readonly days: ReadonlyMap<string, CalendarDay>;
   readonly totalShowing: number;
+  /**
+   * Set when the folder could not be listed. A grid of empty cells is a claim
+   * that the days are empty, so the grid is withdrawn rather than left to lie.
+   */
+  readonly trouble?: JournalTroubleCode;
   readonly onViewChange: (view: CalendarView) => void;
   readonly onFocusDate: (date: JournalDate) => void;
   readonly onSelectDay: (date: JournalDate) => void;
+  readonly onRetry?: () => void;
+  readonly onChooseFolder?: () => void;
+  readonly onOpenSettings?: () => void;
 }
 
 const STRIP_BUTTON =
@@ -124,9 +134,13 @@ export function CalendarTab({
   selectedDay,
   days,
   totalShowing,
+  trouble,
   onViewChange,
   onFocusDate,
-  onSelectDay
+  onSelectDay,
+  onRetry,
+  onChooseFolder,
+  onOpenSettings
 }: CalendarTabProps) {
   const grid = calendarGrid({ view, date: focusDate, weekStartsOn });
   const cellsRef = useRef(new Map<string, HTMLButtonElement>());
@@ -227,54 +241,71 @@ export function CalendarTab({
         </div>
       </div>
 
-      <div role="grid" aria-label={grid.title} className="min-h-0 flex-1 overflow-auto">
-        <div role="row" className="grid grid-cols-7 border-b border-border">
-          {weekdayOrder.map((weekday) => (
-            <span
-              key={weekday}
-              role="columnheader"
-              className="px-1.5 py-1 text-[0.62rem] uppercase tracking-[0.09em] text-muted-foreground"
+      {/* The strip stays, as it does in the popout: the tab keeps its identity
+          and the way out sits under it. The grid and its count do not — a grid
+          of empty cells claims the days are empty, and "Showing 0 entries"
+          repeats the claim in words. */}
+      {trouble ? (
+        <div className="min-h-0 flex-1 overflow-auto">
+          <JournalTrouble
+            status={trouble}
+            onRetry={onRetry ?? (() => undefined)}
+            onChooseFolder={onChooseFolder}
+            onOpenSettings={onOpenSettings}
+          />
+        </div>
+      ) : (
+        <>
+          <div role="grid" aria-label={grid.title} className="min-h-0 flex-1 overflow-auto">
+            <div role="row" className="grid grid-cols-7 border-b border-border">
+              {weekdayOrder.map((weekday) => (
+                <span
+                  key={weekday}
+                  role="columnheader"
+                  className="px-1.5 py-1 text-[0.62rem] uppercase tracking-[0.09em] text-muted-foreground"
+                >
+                  {weekday}
+                </span>
+              ))}
+            </div>
+            <div
+              className="grid grid-cols-7"
+              onKeyDown={onKeyDown}
+              role="rowgroup"
             >
-              {weekday}
-            </span>
-          ))}
-        </div>
-        <div
-          className="grid grid-cols-7"
-          onKeyDown={onKeyDown}
-          role="rowgroup"
-        >
-          {grid.days.map((date) => {
-            const key = formatJournalDate(date);
-            return (
-              <DayCell
-                key={key}
-                date={date}
-                day={days.get(key)}
-                dimmed={date.month !== grid.month}
-                isToday={key === formatJournalDate(today)}
-                isSelected={selectedDay !== null && key === formatJournalDate(selectedDay)}
-                isFocused={key === focusKey}
-                onSelect={() => onSelectDay(date)}
-                register={(element) => {
-                  if (element) {
-                    cellsRef.current.set(key, element);
-                    if (pendingFocus === key) element.focus();
-                  } else {
-                    cellsRef.current.delete(key);
-                  }
-                }}
-              />
-            );
-          })}
-        </div>
-      </div>
+              {grid.days.map((date) => {
+                const key = formatJournalDate(date);
+                return (
+                  <DayCell
+                    key={key}
+                    date={date}
+                    day={days.get(key)}
+                    dimmed={date.month !== grid.month}
+                    isToday={key === formatJournalDate(today)}
+                    isSelected={selectedDay !== null && key === formatJournalDate(selectedDay)}
+                    isFocused={key === focusKey}
+                    onSelect={() => onSelectDay(date)}
+                    register={(element) => {
+                      if (element) {
+                        cellsRef.current.set(key, element);
+                        if (pendingFocus === key) element.focus();
+                      } else {
+                        cellsRef.current.delete(key);
+                      }
+                    }}
+                  />
+                );
+              })}
+            </div>
+          </div>
 
-      <p className="m-0 border-t border-border px-2.5 py-1.5 text-[0.72rem] text-muted-foreground">
-        Showing {totalShowing.toLocaleString()}{" "}
-        {totalShowing === 1 ? "entry" : "entries"}
-        {selectedDay && ` · filtered to ${formatJournalDate(selectedDay)}`}
-      </p>
+          <p className="m-0 border-t border-border px-2.5 py-1.5 text-[0.72rem] text-muted-foreground">
+            Showing {totalShowing.toLocaleString()}{" "}
+            {totalShowing === 1 ? "entry" : "entries"}
+            {selectedDay && ` · filtered to ${formatJournalDate(selectedDay)}`}
+          </p>
+        </>
+      )}
     </section>
   );
 }

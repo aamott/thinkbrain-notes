@@ -16,6 +16,10 @@ export interface AppEvents {
   readonly "note.saved": { readonly rootPath: string; readonly relativePath: string };
   /** A new note was created on disk. */
   readonly "note.created": { readonly rootPath: string; readonly relativePath: string };
+  /** A note was renamed or moved. */
+  readonly "note.renamed": { readonly rootPath: string; readonly oldRelativePath: string; readonly newRelativePath: string };
+  /** A note was deleted. */
+  readonly "note.deleted": { readonly rootPath: string; readonly relativePath: string };
   /** A workspace was opened in this window. */
   readonly "workspace.opened": { readonly rootPath: string };
 }

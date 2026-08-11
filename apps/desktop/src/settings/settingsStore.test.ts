@@ -20,16 +20,23 @@ function createMockGateway(
 } {
   const writtenAppSettings: string[] = [];
   const writtenWorkspaceSettings: { rootPath: string; contents: string }[] = [];
+  // A stand-in for the file, so `revise` sees what the last write left there.
+  let workspaceDocument = workspaceSettings;
 
   return {
     readAppSettings: vi.fn(async () => appSettings),
     writeAppSettings: vi.fn(async (contents: string) => {
       writtenAppSettings.push(contents);
     }),
-    readWorkspaceSettings: vi.fn(async () => workspaceSettings),
-    writeWorkspaceSettings: vi.fn(async (rootPath: string, contents: string) => {
-      writtenWorkspaceSettings.push({ rootPath, contents });
-    }),
+    readWorkspaceSettings: vi.fn(async () => workspaceDocument),
+    writeWorkspaceSettings: vi.fn(
+      async (rootPath: string, revise: (current: string | null) => string) => {
+        const contents = revise(workspaceDocument);
+        workspaceDocument = contents;
+        writtenWorkspaceSettings.push({ rootPath, contents });
+        return contents;
+      }
+    ),
     writtenAppSettings,
     writtenWorkspaceSettings
   };

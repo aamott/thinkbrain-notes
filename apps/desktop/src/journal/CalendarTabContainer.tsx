@@ -12,8 +12,10 @@ import {
 import { useCallback, useEffect, useState } from "react";
 
 import { CalendarTab } from "./CalendarTab";
+import type { JournalTroubleCode } from "./journalChrome";
 import { selectJournalDay, useJournalFilter } from "./journalFilterStore";
-import type { JournalService } from "./journalService";
+import { JournalError, type JournalService } from "./journalService";
+import { appEvents } from "../events/appEvents";
 
 /**
  * Feeds the calendar from the journal folder.
@@ -22,6 +24,9 @@ import type { JournalService } from "./journalService";
  * month, because the month you last browsed to is an accident of browsing (D79).
  */
 
+/** What the tab knows about the folder before any dots exist. */
+type CalendarStatus = "loading" | "ready" | JournalTroubleCode;
+
 export interface CalendarTabContainerProps {
   readonly service: JournalService;
   readonly weekStartsOn?: WeekStart;
@@ -29,6 +34,9 @@ export interface CalendarTabContainerProps {
   readonly initialView?: CalendarView;
   readonly onViewChange?: (view: CalendarView) => void;
   readonly now?: () => Date;
+  /** Shell affordances the extension API does not expose yet; see D63. */
+  readonly onChooseFolder?: () => void;
+  readonly onOpenSettings?: () => void;
 }
 
 export function CalendarTabContainer({
@@ -36,12 +44,16 @@ export function CalendarTabContainer({
   weekStartsOn = 0,
   initialView = "month",
   onViewChange,
-  now = () => new Date()
+  now = () => new Date(),
+  onChooseFolder,
+  onOpenSettings
 }: CalendarTabContainerProps) {
   const today = toJournalDate(now());
   const [view, setView] = useState<CalendarView>(initialView);
   const [focusDate, setFocusDate] = useState<JournalDate>(today);
   const [entries, setEntries] = useState<readonly CalendarEntry[]>([]);
+  const [status, setStatus] = useState<CalendarStatus>("loading");
+  const [reloadToken, setReloadToken] = useState(0);
   const { selectedDay } = useJournalFilter();
 
   // `initialView` is now reactive (the journal extension re-reads the setting
@@ -56,30 +68,64 @@ export function CalendarTabContainer({
     setView(initialView);
   }
 
-  const read = useCallback(async (): Promise<readonly CalendarEntry[]> => {
+  const read = useCallback(async (): Promise<{
+    readonly status: CalendarStatus;
+    readonly entries: readonly CalendarEntry[];
+  }> => {
     try {
       const listing = await service.listEntries();
-      return listing.entries.map((entry) => ({
-        relativePath: entry.relativePath,
-        ref: entry.ref,
-        // Metadata filtering waits on the platform index (D41); until then the
-        // calendar counts entries, which is all D29's first release shows.
-        values: {}
-      }));
-    } catch {
-      return [];
+      return {
+        status: "ready",
+        entries: listing.entries.map((entry) => ({
+          relativePath: entry.relativePath,
+          ref: entry.ref,
+          // Metadata filtering waits on the platform index (D41); until then the
+          // calendar counts entries, which is all D29's first release shows.
+          values: {}
+        }))
+      };
+    } catch (error: unknown) {
+      // The service already turned this into approved copy (D63); the tab only
+      // needs to know which state to draw. Swallowing it here would draw a grid
+      // of empty days, which reads as "you wrote nothing" rather than "I could
+      // not look".
+      return {
+        status: error instanceof JournalError ? error.code : "unreadable",
+        entries: []
+      };
     }
   }, [service]);
 
   useEffect(() => {
+    // A workspace switch can land while a read is in flight; the stale result
+    // must not overwrite the newer one.
     let cancelled = false;
     void read().then((next) => {
-      if (!cancelled) setEntries(next);
+      if (cancelled) return;
+      setStatus(next.status);
+      setEntries(next.entries);
     });
     return () => {
       cancelled = true;
     };
-  }, [read]);
+  }, [read, reloadToken]);
+
+  const reload = useCallback((): void => setReloadToken((token) => token + 1), []);
+
+  // The calendar is a second view of a folder the user edits from elsewhere, so
+  // it has to hear about writes rather than trust its mount-time read. Every
+  // note goes through the workspace adapters, which announce it (D68).
+  // `note.saved` is deliberately absent: editing an entry's prose changes no
+  // dot, and a reload on every keystroke-triggered save would relist the folder
+  // while the user types.
+  useEffect(() => {
+    const subscriptions = (["note.created", "note.deleted", "note.renamed"] as const).map(
+      (event) => appEvents.on(event, reload)
+    );
+    return () => {
+      for (const subscription of subscriptions) void subscription.dispose();
+    };
+  }, [reload]);
 
   const grid = calendarGrid({ view, date: focusDate, weekStartsOn });
   const aggregate = aggregateCalendarDays(entries, grid.range, {
@@ -104,12 +150,16 @@ export function CalendarTabContainer({
       selectedDay={selectedDay}
       days={days}
       totalShowing={entries.length}
+      trouble={status === "loading" || status === "ready" ? undefined : status}
       onViewChange={(next) => {
         setView(next);
         onViewChange?.(next);
       }}
       onFocusDate={setFocusDate}
       onSelectDay={selectJournalDay}
+      onRetry={reload}
+      onChooseFolder={onChooseFolder}
+      onOpenSettings={onOpenSettings}
     />
   );
 }

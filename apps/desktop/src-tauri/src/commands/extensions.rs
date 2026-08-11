@@ -16,6 +16,7 @@
 
 use crate::error::NativeError;
 use std::fs;
+use std::io::Read;
 use std::path::{Component, Path, PathBuf};
 
 /// Largest entry module accepted, guarding against reading a huge file into the
@@ -136,7 +137,17 @@ fn resolve_extension_file(directory: &str, relative_path: &str) -> Result<PathBu
 pub fn read_extension_file(directory: String, relative_path: String) -> Result<String, NativeError> {
     let path = resolve_extension_file(&directory, &relative_path)?;
 
-    let metadata = fs::metadata(&path).map_err(|error| {
+    let mut file = fs::File::open(&path).map_err(|error| {
+        NativeError::with_details(
+            "extensions.file_unavailable",
+            "Extension file could not be read.",
+            error.to_string(),
+        )
+    })?;
+
+    // Metadata retrieved from the open file handle is bound to the same
+    // inode that passed the containment check, preventing TOCTOU races.
+    let metadata = file.metadata().map_err(|error| {
         NativeError::with_details(
             "extensions.file_unavailable",
             "Extension file could not be read.",
@@ -151,13 +162,18 @@ pub fn read_extension_file(directory: String, relative_path: String) -> Result<S
         ));
     }
 
-    fs::read_to_string(&path).map_err(|error| {
+    // Reading from the same file handle ensures the bytes come from the
+    // same inode that passed the size check.
+    let mut contents = String::new();
+    file.read_to_string(&mut contents).map_err(|error| {
         NativeError::with_details(
             "extensions.file_unavailable",
             "Extension file is not valid UTF-8 text or could not be read.",
             error.to_string(),
         )
-    })
+    })?;
+
+    Ok(contents)
 }
 
 #[cfg(test)]
@@ -281,6 +297,44 @@ mod tests {
 
         assert_eq!(error.code, "extensions.invalid_path");
         fs::remove_file(outside).ok();
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn rejects_a_file_exceeding_the_size_limit() {
+        let dir = temp_test_dir("oversized");
+        let oversized = dir.join("huge.js");
+
+        let mut file = fs::File::create(&oversized).expect("file is created");
+        use std::io::Write;
+        file.write_all(&vec![b'x'; (MAX_EXTENSION_FILE_BYTES + 1) as usize])
+            .expect("oversized content is written");
+        drop(file);
+
+        let error = read_extension_file(
+            dir.to_string_lossy().into_owned(),
+            "huge.js".to_string(),
+        )
+        .expect_err("oversized file is rejected");
+
+        assert_eq!(error.code, "extensions.file_too_large");
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn rejects_a_non_utf8_file() {
+        let dir = temp_test_dir("invalid-utf8");
+        let invalid = dir.join("binary.js");
+
+        fs::write(&invalid, b"\x80\x81\x82\x83").expect("non-UTF-8 content is written");
+
+        let error = read_extension_file(
+            dir.to_string_lossy().into_owned(),
+            "binary.js".to_string(),
+        )
+        .expect_err("non-UTF-8 file is rejected");
+
+        assert_eq!(error.code, "extensions.file_unavailable");
         fs::remove_dir_all(dir).expect("cleanup");
     }
 }

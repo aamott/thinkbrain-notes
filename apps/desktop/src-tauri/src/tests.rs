@@ -1113,6 +1113,45 @@ fn desktop_state_without_extension_directories_defaults_to_empty() {
 }
 
 #[test]
+fn desktop_state_active_tab_id_explicit_null_clears_instead_of_restoring_current() {
+    // Mirrors `last_workspace_path`'s `Some(None)`-clears semantics: an
+    // explicit null must clear the active tab rather than keep the old one.
+    let stored = update_desktop_state_contents(
+        None,
+        DesktopStateUpdate {
+            active_tab_id: Some(Some("tab-1".to_string())),
+            ..Default::default()
+        },
+    )
+    .expect("desktop-state update succeeds");
+
+    let settings: Value = serde_json::from_str(&stored).expect("serialized settings are valid");
+    assert_eq!(settings["desktopState"]["activeTabId"], serde_json::json!("tab-1"));
+
+    let cleared = update_desktop_state_contents(
+        Some(&stored),
+        DesktopStateUpdate {
+            active_tab_id: Some(None),
+            ..Default::default()
+        },
+    )
+    .expect("desktop-state update succeeds");
+
+    let settings: Value = serde_json::from_str(&cleared).expect("serialized settings are valid");
+    assert_eq!(settings["desktopState"]["activeTabId"], Value::Null);
+
+    // An update that omits the field entirely keeps the current value.
+    let restored = update_desktop_state_contents(
+        Some(&stored),
+        DesktopStateUpdate::default(),
+    )
+    .expect("desktop-state update succeeds");
+
+    let settings: Value = serde_json::from_str(&restored).expect("serialized settings are valid");
+    assert_eq!(settings["desktopState"]["activeTabId"], serde_json::json!("tab-1"));
+}
+
+#[test]
 fn app_theme_update_replaces_theme_and_preserves_other_settings() {
     let existing = serde_json::json!({
         "version": 1,
@@ -1443,4 +1482,34 @@ fn markdown_commands_reject_symlink_escapes_from_the_workspace() {
 
     fs::remove_dir_all(root).expect("temp markdown symlink root is cleaned up");
     fs::remove_dir_all(outside).expect("temp markdown symlink outside dir is cleaned up");
+}
+
+#[test]
+fn workspace_settings_write_is_refused_when_the_file_moved_underneath_it() {
+    // Another window wrote between this window's read and its write, so the
+    // document it revised is no longer the one on disk.
+    assert!(check_workspace_settings_precondition(
+        Some("{\"showHidden\":true}"),
+        Some("{\"fieldDefinitions\":[]}")
+    )
+    .is_err());
+
+    // Nobody interfered.
+    assert!(check_workspace_settings_precondition(
+        Some("{\"showHidden\":true}"),
+        Some("{\"showHidden\":true}")
+    )
+    .is_ok());
+}
+
+#[test]
+fn workspace_settings_write_treats_an_absent_file_as_a_precondition_of_its_own() {
+    // The first writer read nothing and expects to still find nothing.
+    assert!(check_workspace_settings_precondition(None, None).is_ok());
+
+    // A file appeared where this writer saw none.
+    assert!(check_workspace_settings_precondition(Some("{}"), None).is_err());
+
+    // The file this writer read has since been removed.
+    assert!(check_workspace_settings_precondition(None, Some("{}")).is_err());
 }

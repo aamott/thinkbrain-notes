@@ -1,6 +1,7 @@
 import { useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 
 import { ContextMenu, MenuButton, type ContextMenuState } from "../shell/ContextMenu";
+import { ACTION, EmptyState, JournalTrouble, TOUCH } from "./journalChrome";
 import type { JournalRow, JournalView } from "./journalViewModel";
 
 /**
@@ -49,48 +50,6 @@ export interface JournalPanelProps {
   readonly onChooseFolder?: () => void;
   readonly onOpenSettings?: () => void;
   readonly onCreateFolder: () => void;
-}
-
-/**
- * D76: touch decides the density, not width.
- *
- * A full-screen popout is about 390px across and so is a wide desktop panel, so
- * `pointer-coarse:` is what separates a thumb from a mouse. Rows keep the
- * two-line form either way; under a fingertip they clear 44px.
- */
-const TOUCH = "pointer-coarse:min-h-11";
-
-const ACTION = `h-7 ${TOUCH} px-2 rounded-small border border-border bg-background text-foreground text-xs cursor-pointer hover:bg-secondary`;
-
-/** Approved copy (D63) — name what happened, offer the way out. */
-function EmptyState({
-  title,
-  body,
-  actions
-}: {
-  readonly title: string;
-  readonly body?: string;
-  readonly actions: readonly {
-    readonly label: string;
-    readonly run: (() => void) | undefined;
-  }[];
-}) {
-  const usable = actions.filter(
-    (action): action is { label: string; run: () => void } => action.run !== undefined
-  );
-  return (
-    <div className="flex flex-col items-start gap-2 px-3 py-4">
-      <p className="m-0 text-[0.8rem] font-semibold">{title}</p>
-      {body && <p className="m-0 text-xs text-muted-foreground">{body}</p>}
-      <div className="flex flex-wrap gap-1.5 pt-0.5">
-        {usable.map((action) => (
-          <button key={action.label} type="button" className={ACTION} onClick={action.run}>
-            {action.label}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
 }
 
 /** A header's accessible name carries its count; the visible badge is not enough. */
@@ -366,27 +325,14 @@ export function JournalPanel({
   const body = (): React.ReactNode => {
     switch (view.state) {
       case "no-workspace":
-        return (
-          <EmptyState
-            title="Open a folder to start journaling."
-            actions={[{ label: "Open folder…", run: onChooseFolder }]}
-          />
-        );
       case "invalid-root":
-        return (
-          <EmptyState
-            title="The journal folder setting isn't a valid path."
-            actions={[{ label: "Open settings", run: onOpenSettings }]}
-          />
-        );
       case "unreadable":
         return (
-          <EmptyState
-            title="Can't read the journal folder."
-            actions={[
-              { label: "Retry", run: onRetry },
-              { label: "Choose a different folder…", run: onChooseFolder }
-            ]}
+          <JournalTrouble
+            status={view.state}
+            onRetry={onRetry}
+            onChooseFolder={onChooseFolder}
+            onOpenSettings={onOpenSettings}
           />
         );
       case "loading":

@@ -163,6 +163,13 @@ export interface NativeCommandMap {
     readonly args: {
       readonly rootPath: string;
       readonly contents: string;
+      /**
+       * The document this write was computed from — `null` when the file was
+       * absent. The host writes only if that is still what is on disk, so a
+       * second window cannot lose the first one's keys. See
+       * `workspace/workspaceSettingsFile.ts`.
+       */
+      readonly expected: string | null;
     };
     readonly result: null;
   };
@@ -228,6 +235,18 @@ export interface NativeDesktopStateUpdate {
   readonly leftPanelWidth?: number;
   readonly rightPanelWidth?: number;
   readonly bottomPanelOpen?: boolean;
+  readonly developmentExtensionDirectories?: readonly string[];
+  readonly openTabs?: readonly NativePersistedTab[];
+  readonly activeTabId?: string | null;
+}
+
+/** Mirrors `settings::PersistedTab` on the Rust side (settings.rs). */
+export interface NativePersistedTab {
+  readonly id: string;
+  readonly title: string;
+  readonly kind: string;
+  readonly rootPath?: string;
+  readonly relativePath?: string;
 }
 
 export interface NativeMarkdownFileEntry {

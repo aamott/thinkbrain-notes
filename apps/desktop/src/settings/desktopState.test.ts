@@ -251,6 +251,39 @@ describe("desktop state persistence", () => {
     });
   });
 
+  it("merges an explicitly provided recentWorkspacePaths list with the current stored list", async () => {
+    const gateway = createGateway(
+      JSON.stringify({
+        [DESKTOP_STATE_KEY]: {
+          version: 4,
+          recentWorkspacePaths: ["/notes/one", "/notes/legacy"]
+        }
+      })
+    );
+
+    await expect(
+      saveDesktopState({ recentWorkspacePaths: ["/notes/two", "/notes/legacy"] }, gateway)
+    ).resolves.toMatchObject({
+      recentWorkspacePaths: ["/notes/two", "/notes/legacy", "/notes/one"]
+    });
+  });
+
+  /**
+   * The native path treats an empty id as no id at all. This path has to agree,
+   * or the fallback persists a tab id no tab can ever have.
+   */
+  it("treats an empty activeTabId as cleared, the way the native path does", async () => {
+    const gateway = createGateway(
+      JSON.stringify({
+        [DESKTOP_STATE_KEY]: { version: 4, activeTabId: "tab-1" }
+      })
+    );
+
+    await expect(saveDesktopState({ activeTabId: "" }, gateway)).resolves.toMatchObject({
+      activeTabId: null
+    });
+  });
+
   it("keeps known recent workspaces when the current root is cleared", async () => {
     const gateway = createGateway(
       JSON.stringify({

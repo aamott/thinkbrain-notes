@@ -182,7 +182,10 @@ function applyDesktopStateUpdate(
     recentWorkspacePaths:
       update.recentWorkspacePaths === undefined
         ? promoteRecentWorkspace(state.recentWorkspacePaths, update.lastWorkspacePath)
-        : normalizeWorkspacePaths(update.recentWorkspacePaths),
+        : mergeRecentWorkspacePaths(
+            state.recentWorkspacePaths,
+            normalizeWorkspacePaths(update.recentWorkspacePaths)
+          ),
     explorerOpen: update.explorerOpen === undefined ? state.explorerOpen : update.explorerOpen,
     leftPanelWidth:
       update.leftPanelWidth === undefined ? state.leftPanelWidth : update.leftPanelWidth,
@@ -277,6 +280,19 @@ function normalizeWorkspacePaths(value: unknown, fallback?: string | null): read
 export function promoteRecentWorkspace(paths: readonly string[], path: string | null | undefined): readonly string[] {
   const unique = [...new Set(path ? [path, ...paths] : paths)];
   return unique.slice(0, MAX_RECENT_WORKSPACES);
+}
+
+/**
+ * Merges an explicitly provided recent-workspace list with the stored one
+ * instead of replacing it outright. A caller's list can be stale relative to
+ * another window's concurrent write, so this preserves entries neither side
+ * sent explicitly (mirrors Rust's `merge_recent_workspace_paths`).
+ */
+function mergeRecentWorkspacePaths(
+  current: readonly string[],
+  incoming: readonly string[]
+): readonly string[] {
+  return promoteRecentWorkspace([...incoming, ...current], undefined);
 }
 
 function serializeAppSettingsRecord(appSettings: Readonly<Record<string, unknown>>): string {

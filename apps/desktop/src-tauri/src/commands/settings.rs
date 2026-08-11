@@ -10,6 +10,10 @@ use serde_json::{Map, Value};
 use crate::commands::workspace::{resolve_workspace_root, stable_workspace_hash};
 
 static APP_SETTINGS_MUTATION_LOCK: Mutex<()> = Mutex::new(());
+
+/// Separate from the app lock: the two documents are different files, and a
+/// workspace save has no reason to wait behind a theme change.
+static WORKSPACE_SETTINGS_MUTATION_LOCK: Mutex<()> = Mutex::new(());
 const APP_THEME_KEY: &str = "theme";
 const SUPPORTED_APP_THEMES: [&str; 3] = ["system", "light", "dark"];
 const DESKTOP_STATE_KEY: &str = "desktopState";
@@ -135,7 +139,32 @@ pub fn read_workspace_settings(
     app: tauri::AppHandle,
     root_path: String,
 ) -> Result<Option<String>, NativeError> {
+    let _settings_lock = WORKSPACE_SETTINGS_MUTATION_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     read_settings_file(&resolve_workspace_settings_path(&app, &root_path)?)
+}
+
+
+/// Refuses a write computed from a document that is no longer on disk.
+///
+/// The workspace file has more than one writer and none of them owns all of it,
+/// so each reads, merges its own keys and writes the whole document back. Two
+/// of those sequences interleaved lose whichever landed first. Carrying the
+/// document the revision was computed from turns that silent loss into a
+/// refusal the caller can retry against what is actually there.
+pub fn check_workspace_settings_precondition(
+    current: Option<&str>,
+    expected: Option<&str>,
+) -> Result<(), NativeError> {
+    if current == expected {
+        return Ok(());
+    }
+
+    Err(NativeError::new(
+        "settings.workspace_conflict",
+        "The workspace settings changed while this one was being saved.",
+    ))
 }
 
 
@@ -144,11 +173,19 @@ pub fn write_workspace_settings(
     app: tauri::AppHandle,
     root_path: String,
     contents: String,
+    expected: Option<String>,
 ) -> Result<(), NativeError> {
-    write_settings_file(
-        &resolve_workspace_settings_path(&app, &root_path)?,
-        &contents,
-    )
+    let _settings_lock = WORKSPACE_SETTINGS_MUTATION_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let settings_path = resolve_workspace_settings_path(&app, &root_path)?;
+
+    // Read and write under one lock: the check is only worth anything if no
+    // other write can land between it and the write it guards.
+    let current = read_settings_file(&settings_path)?;
+    check_workspace_settings_precondition(current.as_deref(), expected.as_deref())?;
+
+    write_settings_file(&settings_path, &contents)
 }
 
 
@@ -352,10 +389,10 @@ pub fn apply_desktop_state_update(current: DesktopState, update: DesktopStateUpd
             .map(normalize_extension_directories)
             .unwrap_or(current.development_extension_directories),
         open_tabs: update.open_tabs.unwrap_or(current.open_tabs),
-        active_tab_id: update
-            .active_tab_id
-            .and_then(|id| id.filter(|id| !id.is_empty()))
-            .or(current.active_tab_id),
+        active_tab_id: match update.active_tab_id {
+            Some(id) => id.filter(|id| !id.is_empty()),
+            None => current.active_tab_id,
+        },
     }
 }
 

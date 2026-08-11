@@ -15,6 +15,10 @@
 import { create } from "zustand";
 import { invokeNativeCommand } from "../native/commands";
 import {
+  readWorkspaceSettingsDocument,
+  updateWorkspaceSettingsDocument
+} from "../workspace/workspaceSettingsFile";
+import {
   appearanceModule,
   createSettingsRegistry,
   editorModule,
@@ -66,7 +70,18 @@ export interface SettingsStoreGateway {
   readAppSettings(): Promise<string | null>;
   writeAppSettings(contents: string): Promise<void>;
   readWorkspaceSettings(rootPath: string): Promise<string | null>;
-  writeWorkspaceSettings(rootPath: string, contents: string): Promise<void>;
+  /**
+   * Revises the workspace document and returns what was written.
+   *
+   * A document rather than a payload: this store is one of two writers to the
+   * file, so it has to serialize against the document as it is at the moment of
+   * writing rather than the copy it read when the workspace opened. `revise`
+   * runs inside the file's own update chain (see `workspaceSettingsFile.ts`).
+   */
+  writeWorkspaceSettings(
+    rootPath: string,
+    revise: (current: string | null) => string
+  ): Promise<string>;
 }
 
 /** Default gateway backed by native Tauri commands. */
@@ -75,10 +90,9 @@ const nativeSettingsGateway: SettingsStoreGateway = {
   async writeAppSettings(contents) {
     await invokeNativeCommand("write_app_settings", { contents });
   },
-  readWorkspaceSettings: (rootPath) => invokeNativeCommand("read_workspace_settings", { rootPath }),
-  async writeWorkspaceSettings(rootPath, contents) {
-    await invokeNativeCommand("write_workspace_settings", { rootPath, contents });
-  }
+  readWorkspaceSettings: (rootPath) => readWorkspaceSettingsDocument(rootPath),
+  writeWorkspaceSettings: (rootPath, revise) =>
+    updateWorkspaceSettingsDocument(rootPath, revise)
 };
 
 // ---------------------------------------------------------------------------
@@ -436,24 +450,28 @@ export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettin
           );
         }
 
-        let workspaceMerged: Record<string, unknown> | null = null;
-        let workspaceSerialized: string | null = null;
-        if (Object.keys(workspaceStaged).length > 0 && state.workspaceRootPath !== null) {
-          workspaceMerged = { ...(state.workspaceValues ?? {}), ...workspaceStaged };
-          workspaceSerialized = serializeDynamicWorkspaceSettings(
-            workspaceMerged,
-            appSettingsRegistry,
-            state.rawWorkspaceSettingsJson
-          );
-        }
+        // The workspace document is the one payload that cannot be prepared in
+        // advance: the explorer writes to the same file, so this save has to
+        // serialize against whatever is on disk when its turn comes rather than
+        // the copy read when the workspace opened. Serialization therefore
+        // happens inside the write, and `workspaceSerialized` is what landed.
+        const workspaceMerged: Record<string, unknown> | null =
+          Object.keys(workspaceStaged).length > 0 && state.workspaceRootPath !== null
+            ? { ...(state.workspaceValues ?? {}), ...workspaceStaged }
+            : null;
 
         // Issue both gateway writes first. If either throws, we skip ALL
         // `set()` calls below and surface a clear saveError to the caller.
         if (appSerialized !== null) {
           await gateway.writeAppSettings(appSerialized);
         }
-        if (workspaceSerialized !== null && state.workspaceRootPath !== null) {
-          await gateway.writeWorkspaceSettings(state.workspaceRootPath, workspaceSerialized);
+        let workspaceSerialized: string | null = null;
+        if (workspaceMerged !== null && state.workspaceRootPath !== null) {
+          workspaceSerialized = await gateway.writeWorkspaceSettings(
+            state.workspaceRootPath,
+            (current) =>
+              serializeDynamicWorkspaceSettings(workspaceMerged, appSettingsRegistry, current)
+          );
         }
 
         // Both writes succeeded — now commit the new state atomically.
