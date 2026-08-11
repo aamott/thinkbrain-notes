@@ -36,6 +36,29 @@ export default tseslint.config(
     }
   },
   {
+    // `packages/core` is platform-agnostic: it runs wherever its consumers do,
+    // so it must not reach for Node. That used to be enforced by accident —
+    // the package simply had no Node types — until a test needed to read a file
+    // from disk. Saying it out loud keeps the guarantee without keeping the
+    // tests untyped. Tests are exempt: they run only under vitest.
+    files: ["packages/core/src/**/*.ts"],
+    ignores: ["packages/core/src/**/*.test.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["node:*", "fs", "path", "os", "child_process"],
+              message:
+                "packages/core is platform-agnostic. Keep host APIs in apps/desktop."
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
     files: ["**/*.tsx"],
     plugins: {
       "react-hooks": reactHooks,

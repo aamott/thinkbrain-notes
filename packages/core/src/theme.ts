@@ -6,9 +6,18 @@
  * in `./settings.ts`.
  *
  * This is a leaf module: it must NOT import React, DOM APIs, Node.js built-ins,
- * or Tauri APIs (per `packages/core/AGENTS.md`). Color value validation is
- * limited to "non-empty string" here; CSS color syntax validation belongs to
- * the desktop layer, which can pull in a CSS parser.
+ * or Tauri APIs (per `packages/core/AGENTS.md`). Whether a value is a
+ * *legitimate CSS color* (hex, `rgb()`, `oklch()`, a named color, ...) is
+ * still not judged here — that requires real color-syntax knowledge and, per
+ * the theme-foundation plan, is left to a desktop-layer parser if one is ever
+ * added. What IS validated here is a narrower, platform-agnostic property:
+ * token values are interpolated verbatim into a CSS declaration by the
+ * desktop layer's `themeInjection.ts` (`${token}: ${value};`), so a value
+ * carrying `;`, `{`, `}`, `@`, or a CSS comment can break out of that
+ * declaration and inject arbitrary rules. That is a string-safety check, not
+ * a color parse, and it must happen wherever the diagnostics channel already
+ * lives — here — because the desktop layer has no diagnostics channel of its
+ * own to report through; see `readTokens` below.
  */
 
 import { getErrorMessage, isRecord } from "./settings/internal";
@@ -107,6 +116,22 @@ const THEME_BASES: ReadonlySet<ThemeBase> = new Set<ThemeBase>(["light", "dark"]
 /** All token keys must be namespaced under the ThinkBrain prefix. */
 const TOKEN_PREFIX = "--tn-";
 
+/**
+ * Current `.tbtheme.json` schema version. No consumer branches on `version`
+ * yet (there is exactly one schema shape), so this is used only as the
+ * default for files that omit the field — see `readVersion`.
+ */
+const CURRENT_THEME_VERSION = 1;
+
+/**
+ * Matches characters/sequences that let a token value escape the single CSS
+ * declaration it's interpolated into (`${token}: ${value};` in
+ * `themeInjection.ts`). No legitimate single-value color needs `;`, `{`,
+ * `}`, `@`, or a comment opener — hex, `rgb()`, `oklch()`, `color-mix(...)`,
+ * `var(--x)`, and named colors are all untouched by this check.
+ */
+const UNSAFE_VALUE_PATTERN = /[;{}@]|\/\*/;
+
 // ---------------------------------------------------------------------------
 // Parsing
 // ---------------------------------------------------------------------------
@@ -115,9 +140,10 @@ const TOKEN_PREFIX = "--tn-";
  * Parses a raw `.tbtheme.json` string into a validated theme document.
  *
  * Validation is non-throwing: structural problems (bad JSON, non-object root,
- * or missing/invalid `name`/`base`/`version`) yield `theme: null` plus error
- * diagnostics. Per-token problems yield diagnostics but the theme is still
- * returned with the surviving valid tokens.
+ * missing/invalid `name`/`base`, or a `version` that is present but
+ * malformed) yield `theme: null` plus error diagnostics. `version` itself is
+ * optional — see `readVersion`. Per-token problems yield diagnostics but the
+ * theme is still returned with the surviving valid tokens.
  *
  * Args:
  *   rawJson: Raw JSON text read from a `.tbtheme.json` file.
@@ -195,7 +221,7 @@ export function parseThemeFile(rawJson: string): ParseThemeResult {
       diagnostics: [
         {
           code: "theme.version.invalid",
-          message: "Theme `version` is required and must be a non-negative integer.",
+          message: "Theme `version`, if present, must be a non-negative integer.",
           severity: "error",
           path: "version"
         }
@@ -240,12 +266,27 @@ function readBase(record: Readonly<Record<string, unknown>>): ThemeBase | null {
 }
 
 /**
- * Reads and validates the required `version` field.
+ * Reads and validates the optional `version` field.
  *
- * Returns the version, or null if missing/non-finite/negative/non-integer.
+ * No consumer branches on `version` today, so an author who simply omits it
+ * should not get a hard parse failure over metadata nothing reads — absence
+ * defaults to {@link CURRENT_THEME_VERSION}. The field itself stays in the
+ * schema (rather than being dropped) because `.tbtheme.json` is a shareable
+ * file format: reserving the slot now means a future schema change has a
+ * version to gate on, without asking every existing/omitted file to be
+ * rewritten first. A *present* value is still validated strictly — a
+ * malformed version (wrong type, negative, fractional) is far more likely a
+ * corrupt or hand-edited file than an intentional omission, so that case
+ * keeps failing loudly rather than being coerced.
+ *
+ * Returns the version (defaulting to current when absent), or null if present
+ * but non-finite/negative/non-integer.
  */
 function readVersion(record: Readonly<Record<string, unknown>>): number | null {
   const value = record.version;
+  if (value === undefined) {
+    return CURRENT_THEME_VERSION;
+  }
   if (typeof value !== "number" || !Number.isFinite(value)) {
     return null;
   }
@@ -315,9 +356,9 @@ function readTokens(value: unknown): {
       continue;
     }
 
-    // Value must be a non-empty string. CSS color parsing is intentionally not
-    // done here (core is platform-agnostic); the desktop layer can validate
-    // color syntax if desired.
+    // Value must be a non-empty string. Whether it's a *legitimate CSS
+    // color* is intentionally not judged here (core is platform-agnostic);
+    // the desktop layer can add real color-syntax validation if desired.
     if (typeof rawValue !== "string") {
       diagnostics.push({
         code: "theme.token.value_not_string",
@@ -332,6 +373,25 @@ function readTokens(value: unknown): {
       diagnostics.push({
         code: "theme.token.value_empty",
         message: `Token "${key}" value must not be empty; token was dropped.`,
+        severity: "error",
+        path: `tokens.${key}`
+      });
+      continue;
+    }
+
+    // Unlike color-syntax validation, this check IS a core concern: the
+    // desktop layer interpolates the value verbatim into a CSS declaration
+    // (`themeInjection.ts`), so a value carrying `;`, `{`, `}`, `@`, or a
+    // comment opener can break out of that declaration and inject arbitrary
+    // CSS. Rejecting it here — where the diagnostics channel already exists —
+    // is the only place that can report the rejection back to the user; the
+    // desktop layer has no diagnostics channel of its own.
+    if (UNSAFE_VALUE_PATTERN.test(rawValue)) {
+      diagnostics.push({
+        code: "theme.token.value_unsafe",
+        message:
+          `Token "${key}" value contains characters that could break out of ` +
+          'its CSS declaration (";", "{", "}", "@", or a comment); token was dropped.',
         severity: "error",
         path: `tokens.${key}`
       });

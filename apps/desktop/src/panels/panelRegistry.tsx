@@ -84,29 +84,42 @@ export type BuiltInRightPanel =
 export type DesktopPanelId = BuiltInDesktopPanelId | (string & {});
 
 /**
+ * Shape every extension-registered panel id is guaranteed to have.
+ *
+ * `desktopExtensionHost.ts`'s `prefixId` and `bootstrap.ts`'s lazy stub
+ * registration both construct panel ids as `` `${extensionId}.${localId}` ``
+ * with no other path into the registry, so "contains a dot" is a real
+ * invariant, not a convention — unlike the generic `(string & {})` escape
+ * hatch, this rejects a plain typo (`"exlorer"` has no dot) at compile time
+ * while still admitting any id an extension actually registers.
+ */
+export type ExtensionPanelId = `${string}.${string}`;
+
+/**
  * Activity-bar panel id selected on the left side of the shell.
  *
- * Wide enough to accept extension-registered panel ids (e.g. the journal
- * extension's `"journal"` id) that are selectable today. `BuiltInLeftPanel`
- * is the narrow union used for compile-time checks at call sites that pass
- * literal built-in ids.
+ * Admits extension-registered panel ids (e.g. the journal extension's
+ * `"journal-calendar.journal"` id) via {@link ExtensionPanelId} — extension
+ * panels are selectable shell state today (see `ActivityBar`) — while still
+ * rejecting a misspelled built-in (`"exlorer"`) at compile time, unlike a bare
+ * `(string & {})` widening would.
  */
-export type LeftPanel = BuiltInLeftPanel | (string & {});
+export type LeftPanel = BuiltInLeftPanel | ExtensionPanelId;
 
 /**
  * Title-bar panel id selected on the right side of the shell.
  *
  * See {@link LeftPanel} for the rationale.
  */
-export type RightPanel = BuiltInRightPanel | (string & {});
+export type RightPanel = BuiltInRightPanel | ExtensionPanelId;
 
 /**
  * Runtime guard narrowing an arbitrary id to a built-in left panel id.
  *
- * Used by shell callbacks that receive a wide string (e.g. `revealPanel`) to
- * safely feed only valid built-in ids into narrow shell state. Extension-owned
- * ids are intentionally dropped here — extension selection is not implemented
- * by the narrow-id maintenance story.
+ * `LeftPanel` itself now admits extension ids via {@link ExtensionPanelId}, so
+ * this guard is for call sites that specifically need "is this one of the
+ * fixed first-party panels" (e.g. distinguishing a built-in from an extension
+ * panel), not for gating extension ids out of shell state.
  */
 export function isBuiltInLeftPanel(id: string): id is BuiltInLeftPanel {
   return id === "explorer"
@@ -153,21 +166,32 @@ export type DesktopPanelContribution = PanelContribution<ReactNode, DesktopPanel
   readonly actions?: readonly PanelAction[];
 };
 
-/** Base for side-narrowed contribution types (omits side-specific factory/availability). */
+/** Base for side-narrowed contribution types (omits side-specific id/factory/availability). */
 type DesktopPanelContributionBase = Omit<
   DesktopPanelContribution,
-  "factory" | "availability" | "side"
+  "id" | "factory" | "availability" | "side"
 >;
 
-/** Left-side contribution with factory narrowed to {@link LeftPanelContext}. */
+/**
+ * Left-side contribution with `id` and factory narrowed to {@link LeftPanel}
+ * / {@link LeftPanelContext}.
+ *
+ * Narrowing `id` (rather than inheriting the wide {@link DesktopPanelId})
+ * is what lets `ActivityBar` pass a registered contribution's id straight
+ * into `onSelectLeftPanel` and have the narrow {@link LeftPanel} shell-state
+ * type accept it without a cast — the registry itself is the proof the id is
+ * a real built-in or extension id, not an unchecked string.
+ */
 export type LeftPanelContribution = DesktopPanelContributionBase & {
+  readonly id: LeftPanel;
   readonly side: "left";
   readonly factory: PanelFactory<ReactNode, LeftPanelContext>;
   readonly availability?: (context: LeftPanelContext) => boolean;
 };
 
-/** Right-side contribution with factory narrowed to {@link RightPanelContext}. */
+/** Right-side contribution with `id` and factory narrowed to {@link RightPanel} / {@link RightPanelContext}. See {@link LeftPanelContribution} for the rationale. */
 export type RightPanelContribution = DesktopPanelContributionBase & {
+  readonly id: RightPanel;
   readonly side: "right";
   readonly factory: PanelFactory<ReactNode, RightPanelContext>;
   readonly availability?: (context: RightPanelContext) => boolean;

@@ -6,13 +6,15 @@
  * contribution registry rather than in shell-specific action arrays.
  */
 
+import { getDesktopPanelOrUndefined, type RightPanel } from "../panels/panelRegistry";
+
 /**
  * Narrow shell selection types re-exported from the panel registry.
  *
- * `LeftPanel`/`RightPanel` are restricted to first-party side-specific ids so
- * a typo in shell state is a compile-time error. The wide `DesktopPanelId`
- * (which also admits extension-owned string ids) remains in the registry module
- * for registration and lookup only.
+ * `LeftPanel`/`RightPanel` are restricted to first-party side-specific ids or
+ * an extension-prefixed id so a typo in shell state is a compile-time error.
+ * The wide `DesktopPanelId` (which admits any string) remains in the registry
+ * module for registration and lookup only.
  */
 export type {
   BuiltInLeftPanel,
@@ -20,6 +22,23 @@ export type {
   LeftPanel,
   RightPanel
 } from "../panels/panelRegistry";
+
+/**
+ * Narrows `revealPanel`'s wide command-context string to real right-dock
+ * shell state.
+ *
+ * `revealPanel` is exposed to extension command handlers as a plain `string`
+ * (see `DesktopCommandContext`) so any extension can reveal a panel it
+ * registered, without the shell enumerating every extension id up front.
+ * Checking membership against the live registry — rather than trusting the
+ * built-in/extension naming convention alone — means a typo or a stale id
+ * from a deactivated extension is dropped instead of reaching narrow
+ * `rightPanel` state that `getDesktopPanelOrUndefined` would then fail to
+ * resolve at render time.
+ */
+export function isSelectableRightPanel(id: string): id is RightPanel {
+  return getDesktopPanelOrUndefined(id)?.side === "right";
+}
 
 /**
  * Bottom dock panel ids.

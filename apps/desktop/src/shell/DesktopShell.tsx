@@ -41,7 +41,7 @@ import { loadWorkspaceDocument, saveWorkspaceDocument } from "../workspace/works
 import { ActivityBar } from "./ActivityBar";
 import { DirtyCloseDialog } from "./DirtyCloseDialog";
 import { ResizeHandle } from "./ResizeHandle";
-import type { BottomPanel, DocumentViewState, LeftPanel, RightPanel } from "./shellTypes";
+import { isSelectableRightPanel, type BottomPanel, type DocumentViewState, type LeftPanel, type RightPanel } from "./shellTypes";
 import { StatusBar } from "./StatusBar";
 import { TabContent } from "./TabContent";
 import { TitleBar } from "./TitleBar";
@@ -465,7 +465,14 @@ export function DesktopShell() {
       toggleAssistant: () => setRightPanel((panel) => panel === "assistant" ? null : "assistant"),
       toggleBottomPanel,
       toggleLivePreview,
-      revealPanel: (panelId: string) => setRightPanel(panelId),
+      // `panelId` is an unconstrained string at this boundary (see
+      // `DesktopCommandContext`) so any extension can reveal a panel it
+      // registered; narrow it against the live registry before it reaches
+      // `RightPanel` shell state, so a typo or a stale id from a deactivated
+      // extension is dropped instead of persisting as an id nothing renders.
+      revealPanel: (panelId: string) => {
+        if (isSelectableRightPanel(panelId)) setRightPanel(panelId);
+      },
       openSettings: openSettingsTab,
       rebuildIndex: () => updateBottomPanel("terminal"),
       closePalette

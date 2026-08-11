@@ -234,6 +234,90 @@ describe("ThemeProvider", () => {
     expect(document.documentElement.dataset.thinkbrainTheme).toBe("light");
   });
 
+  it("reverts to the user's theme when the file read throws", async () => {
+    // A missing or unreadable file rejects rather than resolving. The catch
+    // branch has to clear the base as thoroughly as the parse-failure branch,
+    // or the attribute keeps a base no file is backing any more.
+    vi.mocked(readThemeFile).mockResolvedValue(DARK_THEME_JSON);
+    useSettingsStore.setState({
+      loaded: true,
+      appValues: {
+        "appearance.theme": "light",
+        "appearance.themeFile": "/tmp/dark.tbtheme.json"
+      }
+    });
+    await renderProvider("system");
+    await flushAsyncFileRead();
+    expect(document.documentElement.dataset.thinkbrainTheme).toBe("dark");
+
+    vi.mocked(readThemeFile).mockRejectedValue(new Error("permission denied"));
+    await act(async () => {
+      useSettingsStore.setState({
+        appValues: {
+          "appearance.theme": "light",
+          "appearance.themeFile": "/tmp/gone.tbtheme.json"
+        }
+      });
+    });
+    await flushAsyncFileRead();
+
+    expect(document.documentElement.dataset.thinkbrainTheme).toBe("light");
+  });
+
+  /**
+   * A slow read for a path the user has already moved off must not land.
+   * Switching to another *file* is what makes this visible: switching to no
+   * file at all is caught by the `themeFile !== null` guard regardless, so it
+   * would pass even with cancellation removed.
+   */
+  it("ignores a read that finishes after its path was replaced", async () => {
+    const LIGHT_THEME_JSON = JSON.stringify({
+      name: "Test Light",
+      base: "light",
+      version: 1,
+      tokens: { "--tn-color-primary": "hsl(152 60% 38%)" }
+    });
+
+    let releaseSlow: ((raw: string) => void) | null = null;
+    vi.mocked(readThemeFile).mockImplementation((path: string) =>
+      path === "/tmp/slow.tbtheme.json"
+        ? new Promise<string>((resolve) => {
+            releaseSlow = resolve;
+          })
+        : Promise.resolve(LIGHT_THEME_JSON)
+    );
+
+    useSettingsStore.setState({
+      loaded: true,
+      appValues: {
+        "appearance.theme": "dark",
+        "appearance.themeFile": "/tmp/slow.tbtheme.json"
+      }
+    });
+    await renderProvider("system");
+
+    // The user picks a different file before the first read comes back.
+    await act(async () => {
+      useSettingsStore.setState({
+        appValues: {
+          "appearance.theme": "dark",
+          "appearance.themeFile": "/tmp/quick.tbtheme.json"
+        }
+      });
+    });
+    await flushAsyncFileRead();
+    expect(document.documentElement.dataset.thinkbrainTheme).toBe("light");
+
+    // Only now does the abandoned read deliver its dark-base file.
+    await act(async () => {
+      releaseSlow?.(DARK_THEME_JSON);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(document.documentElement.dataset.thinkbrainTheme).toBe("light");
+  });
+
   it("does not flap the attribute when the user toggles theme while a themeFile is active", async () => {
     // A dark-base theme file is active. The user then stages a different
     // `appearance.theme` value. Because the file's base takes precedence and

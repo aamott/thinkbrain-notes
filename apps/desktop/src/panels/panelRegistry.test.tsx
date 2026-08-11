@@ -17,8 +17,10 @@ import {
   type BuiltInRightPanel,
   type DesktopPanelContext,
   type DesktopPanelContribution,
+  type LeftPanel,
   type LeftPanelContribution,
   type LeftPanelContext,
+  type RightPanel,
   type RightPanelContribution,
   type RightPanelContext
 } from "./panelRegistry";
@@ -235,14 +237,38 @@ describe("desktop panel registry", () => {
     expect(true).toBe(true);
   });
 
+  // Type-level fixtures for the shell-selection unions themselves. Unlike a
+  // bare `(string & {})` widening, `LeftPanel`/`RightPanel` still reject a
+  // misspelled built-in — `setLeftPanel("exlorer")` must not compile — while
+  // admitting a real extension id (which is always "extensionId.localId" per
+  // `prefixId` in desktopExtensionHost.ts), so `ActivityBar` can keep passing
+  // a registered contribution's id straight into shell state.
+  it("rejects a misspelled built-in as LeftPanel/RightPanel shell state, but admits an extension id", () => {
+    // @ts-expect-error — "exlorer" is neither a built-in nor "x.y"-shaped.
+    const _badLeft: LeftPanel = "exlorer";
+    // @ts-expect-error — "propeties" is neither a built-in nor "x.y"-shaped.
+    const _badRight: RightPanel = "propeties";
+    const _extensionLeft: LeftPanel = "journal-calendar.journal";
+    const _extensionRight: RightPanel = "note-stats.stats";
+
+    void _badLeft;
+    void _badRight;
+    void _extensionLeft;
+    void _extensionRight;
+    expect(true).toBe(true);
+  });
+
   // Type-level fixtures for the side-narrowed contexts: a right-side factory
   // that destructures `explorerProps` (or `onOpenSearchResult`) and a left-side
   // factory that destructures `documentContents` must be compile errors. This
   // is the core guarantee of the context split — a future panel cannot silently
   // reach across sides.
   it("rejects cross-side context access in side-narrowed factories at compile time", () => {
+    // Ids use the "extension.local" shape (not a bare built-in) so they also
+    // exercise the narrowed `RightPanelContribution`/`LeftPanelContribution`
+    // id type alongside the context-access check below.
     const _badRightFactory: RightPanelContribution = {
-      id: "bad-right",
+      id: "test.bad-right",
       label: "bad",
       icon: "x",
       side: "right",
@@ -251,7 +277,7 @@ describe("desktop panel registry", () => {
       factory: ({ explorerProps: _explorer }) => <span>{String(_explorer)}</span>
     };
     const _badRightSearch: RightPanelContribution = {
-      id: "bad-right-search",
+      id: "test.bad-right-search",
       label: "bad",
       icon: "x",
       side: "right",
@@ -260,7 +286,7 @@ describe("desktop panel registry", () => {
       factory: ({ onOpenSearchResult: _open }) => <span>{String(_open)}</span>
     };
     const _badLeftFactory: LeftPanelContribution = {
-      id: "bad-left",
+      id: "test.bad-left",
       label: "bad",
       icon: "x",
       side: "left",

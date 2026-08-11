@@ -84,11 +84,16 @@ export function SettingsSaveBar() {
       if (!proceed) return;
     }
 
-    void writeExportFile(json).then((written) => {
-      if (written) {
-        status.show("Settings exported.");
-      }
-    });
+    void writeExportFile(json)
+      .then((written) => {
+        if (written) {
+          status.show("Settings exported.");
+        }
+        // false = the user dismissed the dialog, which needs no comment.
+      })
+      .catch(() => {
+        status.show("Export failed: could not write file.");
+      });
   }, [status]);
 
   /**
@@ -96,18 +101,22 @@ export function SettingsSaveBar() {
    * values, and shows a status message with the import counts.
    */
   const handleImport = useCallback((): void => {
-    void importSettings().then((result: ImportResult | null) => {
-      if (result === null) return; // User cancelled or file unreadable.
+    void importSettings()
+      .then((result: ImportResult | null) => {
+        if (result === null) return; // The user dismissed the dialog.
 
-      const parts: string[] = [`Imported ${result.imported} setting(s)`];
-      if (result.ignored > 0) {
-        parts.push(`ignored ${result.ignored} unknown key(s)`);
-      }
-      if (result.typeMismatches > 0) {
-        parts.push(`${result.typeMismatches} type mismatch(es)`);
-      }
-      status.show(parts.join(", ") + ".");
-    });
+        const parts: string[] = [`Imported ${result.imported} setting(s)`];
+        if (result.ignored > 0) {
+          parts.push(`ignored ${result.ignored} unknown key(s)`);
+        }
+        if (result.typeMismatches > 0) {
+          parts.push(`${result.typeMismatches} type mismatch(es)`);
+        }
+        status.show(parts.join(", ") + ".");
+      })
+      .catch(() => {
+        status.show("Import failed: the file could not be read.");
+      });
   }, [status]);
 
   const saveLabel = dirtyCount > 0 ? `Save (${dirtyCount})` : "Save";

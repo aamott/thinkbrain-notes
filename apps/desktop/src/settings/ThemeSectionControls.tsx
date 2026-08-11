@@ -15,7 +15,7 @@ import { cn } from "../lib/utils";
 import { useSettingsStore, resolveEffectiveValue, appSettingsRegistry } from "./settingsStore";
 import { listThemes, type ThemeEntry } from "./themeAdapter";
 import {
-  buildThemeExportPayload,
+  buildThemeExport,
   writeThemeExportFile,
   importTheme,
   type ImportThemeResult
@@ -224,8 +224,8 @@ export function ThemeToolbar() {
    * Shows a status message on success or failure.
    */
   const handleExport = useCallback((): void => {
-    const { json } = buildThemeExportPayload();
-    void writeThemeExportFile(json)
+    void buildThemeExport()
+      .then(({ json }) => writeThemeExportFile(json))
       .then((written) => {
         if (written) {
           status.show("Theme exported.");
