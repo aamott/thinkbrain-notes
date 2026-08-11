@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { act } from "react";
+import { act, useEffect, useMemo } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -9,8 +9,10 @@ import {
   type EditorHeaderContext
 } from "./editorHeaderRegistry.ts";
 import { EditorView } from "@codemirror/view";
+import { undo } from "@codemirror/commands";
 
 import { MarkdownEditor } from "./MarkdownEditor";
+import { releaseEditorState, releaseEditorStatesExcept } from "./editorStateCache";
 
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
@@ -266,5 +268,168 @@ describe("an edit that arrives as a whole new document", () => {
     });
 
     expect(view?.state.doc.toString()).toBe(before);
+  });
+});
+
+describe("switching tabs away and back", () => {
+  /**
+   * The shell keys the editor on the tab id, so switching tabs unmounts
+   * CodeMirror and mounts a fresh one. The document survives because the shell
+   * holds it, but everything the editor itself knows — where the cursor was,
+   * what could still be undone — was thrown away on every switch.
+   */
+  const NOTE = "# Heading\n\nBread needed more salt.\n";
+
+  const viewOf = (host: HTMLElement): EditorView => {
+    const editor = host.querySelector(".cm-editor");
+    const view = editor === null ? null : EditorView.findFromDOM(editor as HTMLElement);
+    if (!view) throw new Error("No editor mounted.");
+    return view;
+  };
+
+  /** Unmounts and remounts, the way a switch to another tab and back does. */
+  const switchAwayAndBack = async (element: React.ReactElement): Promise<HTMLDivElement> => {
+    await act(async () => root?.unmount());
+    container?.remove();
+    return await mount(element);
+  };
+
+  it("puts the cursor back where it was left", async () => {
+    const host = await mount(
+      <MarkdownEditor value={NOTE} stateKey="tab-a" onChange={() => {}} onSave={() => {}} />
+    );
+    const inBody = NOTE.indexOf("needed");
+    await act(async () => {
+      viewOf(host).dispatch({ selection: { anchor: inBody } });
+    });
+
+    const next = await switchAwayAndBack(
+      <MarkdownEditor value={NOTE} stateKey="tab-a" onChange={() => {}} onSave={() => {}} />
+    );
+
+    expect(cursorOf(next)).toBe(inBody);
+  });
+
+  it("can still undo what was typed before the switch", async () => {
+    const host = await mount(
+      <MarkdownEditor value={NOTE} stateKey="tab-a" onChange={() => {}} onSave={() => {}} />
+    );
+    await act(async () => {
+      viewOf(host).dispatch({ changes: { from: 0, to: 0, insert: "typed " } });
+    });
+    const typed = viewOf(host).state.doc.toString();
+
+    const next = await switchAwayAndBack(
+      <MarkdownEditor value={typed} stateKey="tab-a" onChange={() => {}} onSave={() => {}} />
+    );
+    await act(async () => {
+      undo(viewOf(next));
+    });
+
+    expect(viewOf(next).state.doc.toString()).toBe(NOTE);
+  });
+
+  it("does not hand one tab's cursor to another tab", async () => {
+    const host = await mount(
+      <MarkdownEditor value={NOTE} stateKey="tab-a" onChange={() => {}} onSave={() => {}} />
+    );
+    await act(async () => {
+      viewOf(host).dispatch({ selection: { anchor: NOTE.indexOf("needed") } });
+    });
+
+    const other = await switchAwayAndBack(
+      <MarkdownEditor value={NOTE} stateKey="tab-b" onChange={() => {}} onSave={() => {}} />
+    );
+
+    expect(cursorOf(other)).toBe(0);
+  });
+
+  /**
+   * A closed tab is gone: reopening the same note starts it fresh rather than
+   * restoring a cursor from a session the user ended.
+   */
+  it("forgets a tab that was closed", async () => {
+    const host = await mount(
+      <MarkdownEditor value={NOTE} stateKey="tab-a" onChange={() => {}} onSave={() => {}} />
+    );
+    await act(async () => {
+      viewOf(host).dispatch({ selection: { anchor: NOTE.indexOf("needed") } });
+    });
+
+    await act(async () => root?.unmount());
+    container?.remove();
+    releaseEditorState("tab-a");
+    const reopened = await mount(
+      <MarkdownEditor value={NOTE} stateKey="tab-a" onChange={() => {}} onSave={() => {}} />
+    );
+
+    expect(cursorOf(reopened)).toBe(0);
+  });
+
+  /**
+   * The parked state carries the previous mount's extensions, and those close
+   * over the previous mount's callbacks. Restored without rebinding, the editor
+   * keeps reporting to a component React has already thrown away.
+   */
+  it("reports edits to the mount that is on screen now", async () => {
+    const before = vi.fn();
+    const after = vi.fn();
+    await mount(
+      <MarkdownEditor value={NOTE} stateKey="tab-a" onChange={before} onSave={() => {}} />
+    );
+
+    const next = await switchAwayAndBack(
+      <MarkdownEditor value={NOTE} stateKey="tab-a" onChange={after} onSave={() => {}} />
+    );
+    await act(async () => {
+      viewOf(next).dispatch({ changes: { from: 0, to: 0, insert: "x" } });
+    });
+
+    expect(after).toHaveBeenCalled();
+    expect(before).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Closing a tab looks exactly like switching away from it, so the editor
+   * parks its state either way and the shell sweeps up afterwards. This pins
+   * the order the two happen in: park on unmount, then sweep. Reversed, the
+   * parked state outlives the tab and a reopened note inherits a cursor from a
+   * session the user ended.
+   */
+  it("is swept away when the shell drops the tab", async () => {
+    function Shell({ open }: { readonly open: readonly string[] }) {
+      const ids = useMemo(() => new Set(open), [open]);
+      useEffect(() => {
+        releaseEditorStatesExcept(ids);
+      }, [ids]);
+      return open.includes("tab-a") ? (
+        <MarkdownEditor value={NOTE} stateKey="tab-a" onChange={() => {}} onSave={() => {}} />
+      ) : null;
+    }
+
+    const host = await mount(<Shell open={["tab-a"]} />);
+    await act(async () => {
+      viewOf(host).dispatch({ selection: { anchor: NOTE.indexOf("needed") } });
+    });
+
+    await act(async () => root?.render(<Shell open={[]} />));
+    await act(async () => root?.render(<Shell open={["tab-a"]} />));
+
+    expect(cursorOf(host)).toBe(0);
+  });
+
+  it("keeps no state for an editor with no tab to key it on", async () => {
+    const host = await mount(
+      <MarkdownEditor value={NOTE} onChange={() => {}} onSave={() => {}} />
+    );
+    await act(async () => {
+      viewOf(host).dispatch({ selection: { anchor: NOTE.indexOf("needed") } });
+    });
+
+    const next = await switchAwayAndBack(
+      <MarkdownEditor value={NOTE} onChange={() => {}} onSave={() => {}} />
+    );
+
+    expect(cursorOf(next)).toBe(0);
   });
 });

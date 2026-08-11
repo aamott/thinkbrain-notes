@@ -13,7 +13,7 @@
  */
 
 import { create } from "zustand";
-import { invokeNativeCommand } from "../native/commands";
+import { readAppSettingsDocument, updateAppSettingsDocument } from "./appSettingsFile";
 import {
   readWorkspaceSettingsDocument,
   updateWorkspaceSettingsDocument
@@ -68,7 +68,16 @@ appSettingsRegistry.register(settingsModule);
  */
 export interface SettingsStoreGateway {
   readAppSettings(): Promise<string | null>;
-  writeAppSettings(contents: string): Promise<void>;
+  /**
+   * Revises the app-settings document and returns what was written.
+   *
+   * A document rather than a payload: `update_desktop_state` and
+   * `update_app_theme` write to the same file on every tab open, panel resize,
+   * or theme change, so this store has to serialize against the document as it
+   * is at the moment of writing rather than the copy it read at load. `revise`
+   * runs inside the document's own update chain (see `appSettingsFile.ts`).
+   */
+  writeAppSettings(revise: (current: string | null) => string): Promise<string>;
   readWorkspaceSettings(rootPath: string): Promise<string | null>;
   /**
    * Revises the workspace document and returns what was written.
@@ -86,10 +95,8 @@ export interface SettingsStoreGateway {
 
 /** Default gateway backed by native Tauri commands. */
 const nativeSettingsGateway: SettingsStoreGateway = {
-  readAppSettings: () => invokeNativeCommand("read_app_settings"),
-  async writeAppSettings(contents) {
-    await invokeNativeCommand("write_app_settings", { contents });
-  },
+  readAppSettings: () => readAppSettingsDocument(),
+  writeAppSettings: (revise) => updateAppSettingsDocument(revise),
   readWorkspaceSettings: (rootPath) => readWorkspaceSettingsDocument(rootPath),
   writeWorkspaceSettings: (rootPath, revise) =>
     updateWorkspaceSettingsDocument(rootPath, revise)
@@ -431,30 +438,24 @@ export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettin
         // Partition staged changes by scope; only write the scope that has changes.
         const { app: appStaged, workspace: workspaceStaged } = partitionByScope(appSettingsRegistry, staged);
 
-        // Compute the serialized payloads and merged values BEFORE issuing any
-        // gateway write. We do not call `set()` until BOTH writes succeed, so a
-        // failure of either write leaves the store consistent with the
-        // last-known-good state (the disk may be partially updated, but the
-        // store's stagedChanges / loaded values stay intact and the user can
-        // retry). This avoids the partial-commit inconsistency where the app
-        // write succeeded and `appValues` was updated but `stagedChanges` was
-        // never cleared because the workspace write threw afterwards.
-        let appMerged: Record<string, unknown> | null = null;
-        let appSerialized: string | null = null;
-        if (Object.keys(appStaged).length > 0) {
-          appMerged = { ...state.appValues, ...appStaged };
-          appSerialized = serializeDynamicAppSettings(
-            appMerged,
-            appSettingsRegistry,
-            state.rawAppSettingsJson
-          );
-        }
-
-        // The workspace document is the one payload that cannot be prepared in
-        // advance: the explorer writes to the same file, so this save has to
-        // serialize against whatever is on disk when its turn comes rather than
-        // the copy read when the workspace opened. Serialization therefore
-        // happens inside the write, and `workspaceSerialized` is what landed.
+        // Compute the merged *values* up front — they depend only on staged
+        // changes and loaded values, not on disk, so a failure of either write
+        // still leaves the store consistent with the last-known-good state
+        // (the disk may be partially updated, but stagedChanges / loaded
+        // values stay intact and the user can retry). This avoids the
+        // partial-commit inconsistency where the app write succeeded and
+        // `appValues` was updated but `stagedChanges` was never cleared
+        // because the workspace write threw afterwards.
+        //
+        // Neither document's *serialization* can be prepared this far ahead,
+        // though: `desktopState` (app) and the explorer's keys (workspace)
+        // have writers outside this store, so each has to serialize against
+        // whatever is on disk when its write actually runs rather than the
+        // copy read at load or workspace-open. Serialization therefore
+        // happens inside each write, and `appSerialized` / `workspaceSerialized`
+        // are what landed.
+        const appMerged: Record<string, unknown> | null =
+          Object.keys(appStaged).length > 0 ? { ...state.appValues, ...appStaged } : null;
         const workspaceMerged: Record<string, unknown> | null =
           Object.keys(workspaceStaged).length > 0 && state.workspaceRootPath !== null
             ? { ...(state.workspaceValues ?? {}), ...workspaceStaged }
@@ -462,8 +463,12 @@ export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettin
 
         // Issue both gateway writes first. If either throws, we skip ALL
         // `set()` calls below and surface a clear saveError to the caller.
-        if (appSerialized !== null) {
-          await gateway.writeAppSettings(appSerialized);
+        let appSerialized: string | null = null;
+        if (appMerged !== null) {
+          const values = appMerged;
+          appSerialized = await gateway.writeAppSettings((current) =>
+            serializeDynamicAppSettings(values, appSettingsRegistry, current)
+          );
         }
         let workspaceSerialized: string | null = null;
         if (workspaceMerged !== null && state.workspaceRootPath !== null) {

@@ -45,7 +45,13 @@ export interface DesktopStateUpdate {
 
 export interface DesktopStateGateway {
   readAppSettings(): Promise<string | null>;
-  writeAppSettings(contents: string): Promise<void>;
+  /**
+   * `expected` is the document this write's `contents` were revised from —
+   * `null` when none existed. `write_app_settings` refuses the write if that
+   * is no longer what is on disk (see `appSettingsFile.ts`), so the fallback
+   * path below must send what it actually read rather than nothing.
+   */
+  writeAppSettings(contents: string, expected: string | null): Promise<void>;
   updateDesktopState?(update: DesktopStateUpdate): Promise<string>;
 }
 
@@ -64,8 +70,8 @@ export const DEFAULT_DESKTOP_STATE: DesktopState = Object.freeze({
 
 const nativeDesktopStateGateway: DesktopStateGateway = {
   readAppSettings: () => invokeNativeCommand("read_app_settings"),
-  async writeAppSettings(contents) {
-    await invokeNativeCommand("write_app_settings", { contents });
+  async writeAppSettings(contents, expected) {
+    await invokeNativeCommand("write_app_settings", { contents, expected });
   },
   updateDesktopState(update) {
     return invokeNativeCommand("update_desktop_state", { update });
@@ -101,8 +107,17 @@ export async function saveDesktopState(
     "This may cause race conditions if multiple windows modify settings concurrently."
   );
 
+  // This does not go through `appSettingsFile.ts`'s retrying chain: that chain
+  // exists for the settings store, which is a real writer in the shipped app,
+  // races with `update_desktop_state` on every save, and is exercised by every
+  // build. This branch only runs for a caller-supplied gateway that omits
+  // `updateDesktopState` — never `nativeDesktopStateGateway`, which always
+  // defines it — so it has no writer to race against in practice. Sending
+  // `expected` keeps a theoretical race a loud failure instead of a silent
+  // overwrite; a retry loop here would be safety net for a path nothing takes.
   const performUpdate = async () => {
-    const appSettings = parseAppSettingsRecord(await gateway.readAppSettings());
+    const rawAppSettings = await gateway.readAppSettings();
+    const appSettings = parseAppSettingsRecord(rawAppSettings);
     const current = readDesktopState(appSettings);
     const next = applyDesktopStateUpdate(current, update);
 
@@ -110,7 +125,7 @@ export async function saveDesktopState(
     delete appSettings.lastWorkspacePath;
     delete appSettings.explorerOpen;
 
-    await gateway.writeAppSettings(serializeAppSettingsRecord(appSettings));
+    await gateway.writeAppSettings(serializeAppSettingsRecord(appSettings), rawAppSettings);
     return next;
   };
 

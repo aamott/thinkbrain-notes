@@ -17,16 +17,26 @@ function createMockGateway(
 ): SettingsStoreGateway & {
   writtenAppSettings: string[];
   writtenWorkspaceSettings: { rootPath: string; contents: string }[];
+  /**
+   * Simulates another writer — `update_desktop_state`, `update_app_theme`, or
+   * another window's save — landing on the app-settings document outside this
+   * store's knowledge, the way a tab open or panel resize does in production.
+   */
+  setAppDocument(contents: string | null): void;
 } {
   const writtenAppSettings: string[] = [];
   const writtenWorkspaceSettings: { rootPath: string; contents: string }[] = [];
-  // A stand-in for the file, so `revise` sees what the last write left there.
+  // Stand-ins for the files, so `revise` sees what the last write left there.
+  let appDocument = appSettings;
   let workspaceDocument = workspaceSettings;
 
   return {
-    readAppSettings: vi.fn(async () => appSettings),
-    writeAppSettings: vi.fn(async (contents: string) => {
+    readAppSettings: vi.fn(async () => appDocument),
+    writeAppSettings: vi.fn(async (revise: (current: string | null) => string) => {
+      const contents = revise(appDocument);
+      appDocument = contents;
       writtenAppSettings.push(contents);
+      return contents;
     }),
     readWorkspaceSettings: vi.fn(async () => workspaceDocument),
     writeWorkspaceSettings: vi.fn(
@@ -37,6 +47,9 @@ function createMockGateway(
         return contents;
       }
     ),
+    setAppDocument: (contents: string | null) => {
+      appDocument = contents;
+    },
     writtenAppSettings,
     writtenWorkspaceSettings
   };
@@ -209,6 +222,49 @@ describe("settingsStore", () => {
 
       expect(result.success).toBe(true);
       expect(gateway.writeAppSettings).not.toHaveBeenCalled();
+    });
+
+    /**
+     * The bug this pins: `rawAppSettingsJson` is a load-time snapshot.
+     * `update_desktop_state` writes to the same document on every tab open,
+     * panel resize, or workspace switch — all of which happen after load and
+     * before the user presses Save. A save that serializes against the
+     * snapshot instead of the document as it is right now reverts every one of
+     * those changes.
+     */
+    it("does not revert desktopState written since the store loaded", async () => {
+      const gateway = createMockGateway(APP_JSON_WITH_DESKTOP_STATE);
+      const store = createSettingsStore(gateway);
+      await store.getState().loadSettings(null);
+
+      // A tab opened after load, via `update_desktop_state` — not through this
+      // store, so `rawAppSettingsJson` never saw it.
+      gateway.setAppDocument(
+        JSON.stringify({
+          version: 1,
+          "appearance.theme": "dark",
+          "editor.fontSize": 20,
+          "editor.lineWrapping": false,
+          desktopState: {
+            version: 4,
+            lastWorkspacePath: "/notes/test",
+            explorerOpen: true,
+            leftPanelWidth: 288,
+            rightPanelWidth: 320,
+            bottomPanelOpen: false,
+            openTabs: [{ id: "a", title: "A", kind: "editor" }],
+            activeTabId: "a"
+          }
+        })
+      );
+
+      store.getState().stageChange("appearance.theme", "light");
+      const result = await store.getState().saveSettings();
+
+      expect(result.success).toBe(true);
+      const written = JSON.parse(gateway.writtenAppSettings.at(-1) as string);
+      expect(written.desktopState.openTabs).toEqual([{ id: "a", title: "A", kind: "editor" }]);
+      expect(written.desktopState.activeTabId).toBe("a");
     });
   });
 
@@ -743,8 +799,9 @@ describe("saveSettings concurrency", () => {
       releaseWrite = resolve;
     });
     const gateway = createMockGateway(null);
-    gateway.writeAppSettings = vi.fn(async () => {
+    gateway.writeAppSettings = vi.fn(async (revise: (current: string | null) => string) => {
       await held;
+      return revise(null);
     });
 
     const store = createSettingsStore(gateway);

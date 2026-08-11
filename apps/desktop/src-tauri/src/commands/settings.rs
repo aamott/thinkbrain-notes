@@ -83,15 +83,56 @@ pub fn read_app_settings(app: tauri::AppHandle) -> Result<Option<String>, Native
 }
 
 
-#[tauri::command]
-pub fn write_app_settings(app: tauri::AppHandle, contents: String) -> Result<(), NativeError> {
-    let _settings_lock = APP_SETTINGS_MUTATION_LOCK
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    write_settings_file(&resolve_app_settings_path(&app)?, &contents)
+/// Refuses a write computed from a document that is no longer on disk.
+///
+/// The app document has three writers. `update_desktop_state` and
+/// `update_app_theme` read and write inside a single locked command each, so
+/// nothing can land between their read and their write and they stay correct
+/// without a precondition. `write_app_settings` is different: the store reads
+/// the document (`read_app_settings`) on one IPC round trip and writes it on
+/// another, so a desktop-state update or a theme change — or another window's
+/// save — can land in between. Carrying the document the revision was computed
+/// from turns that silent loss into a refusal the caller can recompute against.
+pub fn check_app_settings_precondition(
+    current: Option<&str>,
+    expected: Option<&str>,
+) -> Result<(), NativeError> {
+    if current == expected {
+        return Ok(());
+    }
+
+    Err(NativeError::new(
+        "settings.app_conflict",
+        "The application settings changed while this one was being saved.",
+    ))
 }
 
 
+#[tauri::command]
+pub fn write_app_settings(
+    app: tauri::AppHandle,
+    contents: String,
+    expected: Option<String>,
+) -> Result<(), NativeError> {
+    let _settings_lock = APP_SETTINGS_MUTATION_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let settings_path = resolve_app_settings_path(&app)?;
+
+    // Read and check under the same lock acquisition as the write: the check is
+    // only worth anything if no other writer can land between it and the write
+    // it guards.
+    let current = read_settings_file(&settings_path)?;
+    check_app_settings_precondition(current.as_deref(), expected.as_deref())?;
+
+    write_settings_file(&settings_path, &contents)
+}
+
+
+/// Reads, revises, and writes `desktopState` inside one locked command, so it
+/// needs no `expected` precondition: unlike `write_app_settings` there is no
+/// second IPC round trip in which another writer could land. See
+/// `check_app_settings_precondition` for the writer that does need one.
 #[tauri::command]
 pub fn update_desktop_state(
     app: tauri::AppHandle,

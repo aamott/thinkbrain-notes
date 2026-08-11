@@ -143,7 +143,16 @@ export interface NativeCommandMap {
     readonly result: string | null;
   };
   readonly write_app_settings: {
-    readonly args: { readonly contents: string };
+    readonly args: {
+      readonly contents: string;
+      /**
+       * The document this write was computed from — `null` when the file was
+       * absent. The host writes only if that is still what is on disk, so a
+       * `desktopState` write racing this save cannot be reverted by it. See
+       * `settings/appSettingsFile.ts`.
+       */
+      readonly expected: string | null;
+    };
     readonly result: null;
   };
   readonly update_desktop_state: {

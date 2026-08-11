@@ -27,6 +27,7 @@ import {
 import { useTheme } from "../settings/theme-context";
 import { useSearchIndexStore } from "../search/searchIndexStore";
 import { useSettingsStore } from "../settings/settingsStore";
+import { releaseEditorStatesExcept } from "../tabs/editorStateCache";
 import {
   createEditorTab,
   createStaticTab,
@@ -114,6 +115,14 @@ export function DesktopShell() {
     }
     setDocuments(next);
   }
+
+  // The same cleanup for what the editors themselves parked. An unmount cannot
+  // tell a switch away from a close, so the editor parks its cursor and undo
+  // history either way and the shell — which knows which tabs are left — drops
+  // the ones nobody can return to.
+  useEffect(() => {
+    releaseEditorStatesExcept(openTabIds);
+  }, [openTabIds]);
 
   // Whether a settings tab is currently open. Derived once so the dirty-sync
   // effect below can depend on a stable boolean instead of the entire `tabs`

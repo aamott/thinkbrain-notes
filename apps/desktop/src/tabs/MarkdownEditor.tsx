@@ -1,8 +1,9 @@
-import { Compartment, EditorState } from "@codemirror/state";
+import { Compartment, EditorState, StateEffect } from "@codemirror/state";
 import { keymap, EditorView } from "@codemirror/view";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { EditorHeaderSlot } from "./editorHeaderRegistry.tsx";
+import { recallEditorState, rememberEditorState } from "./editorStateCache";
 import { livePreview as livePreviewExtension } from "./livePreview";
 import {
   markdownEditorHookRegistry,
@@ -21,6 +22,12 @@ export interface MarkdownEditorProps {
   readonly livePreview?: boolean;
   /** Resolves relative image sources to loadable URLs. */
   readonly resolveAssetUrl?: (src: string) => string | null;
+  /**
+   * Identity to park the editor's own state under while this tab is not the
+   * one on screen — the tab id, in the shell. Omitted where there is no tab to
+   * come back to, and then nothing is remembered.
+   */
+  readonly stateKey?: string;
   readonly onChange: (value: string) => void;
   readonly onSave: () => void;
 }
@@ -74,6 +81,7 @@ export function MarkdownEditor({
   relativePath = null,
   livePreview = true,
   resolveAssetUrl,
+  stateKey,
   onChange,
   onSave
 }: MarkdownEditorProps) {
@@ -109,27 +117,49 @@ export function MarkdownEditor({
     };
     const extensions = markdownEditorHookRegistry.getExtensions(payload, undefined);
     const keybindings = markdownEditorHookRegistry.getKeybindings(payload, undefined);
+    const configuration = [...extensions, keymap.of(keybindings)];
+    const parked = stateKey === undefined ? undefined : recallEditorState(stateKey);
+
     const view = new EditorView({
       parent: hostRef.current,
-      state: EditorState.create({
-        doc: valueRef.current,
-        // Past the frontmatter, not at byte 0. A document's default selection
-        // sits inside the block, which live preview reads as "the cursor is in
-        // here" and reveals it — so an entry opened showing the very thing the
-        // dateline is there to replace. The body is also simply where you write.
-        selection: { anchor: bodyStart(valueRef.current) },
-        extensions: [...extensions, keymap.of(keybindings)]
-      })
+      state:
+        parked?.state ??
+        EditorState.create({
+          doc: valueRef.current,
+          // Past the frontmatter, not at byte 0. A document's default selection
+          // sits inside the block, which live preview reads as "the cursor is in
+          // here" and reveals it — so an entry opened showing the very thing the
+          // dateline is there to replace. The body is also simply where you write.
+          selection: { anchor: bodyStart(valueRef.current) },
+          extensions: configuration
+        })
     });
     viewRef.current = view;
 
+    if (parked) {
+      // The parked state carries the previous mount's extensions, and those
+      // close over that mount's callbacks. Swapping the whole configuration
+      // rebinds them to this one; the state fields keyed to the same extension
+      // instances — the undo history above all — carry across untouched.
+      view.dispatch({ effects: StateEffect.reconfigure.of(configuration) });
+      view.scrollDOM.scrollTop = parked.scrollTop;
+    }
+
     return () => {
+      if (stateKey !== undefined) {
+        // Scroll position is DOM state rather than editor state, so it has to
+        // be taken before the view goes.
+        rememberEditorState(stateKey, {
+          state: view.state,
+          scrollTop: view.scrollDOM.scrollTop
+        });
+      }
       view.destroy();
       viewRef.current = null;
     };
     // The compartment is created once per component instance, so this effect
     // still runs exactly once; it is listed only to satisfy exhaustive-deps.
-  }, [livePreviewCompartment]);
+  }, [livePreviewCompartment, stateKey]);
 
   useEffect(() => {
     const view = viewRef.current;

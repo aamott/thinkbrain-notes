@@ -137,6 +137,9 @@ export function TabContent({ tab, document, onChange, onSave }: TabContentProps)
         relativePath={relativePath ?? null}
         livePreview={livePreview}
         resolveAssetUrl={resolveAssetUrl}
+        // Switching tabs unmounts this editor; the id is how the next mount
+        // finds the cursor, scroll and undo history it left behind.
+        stateKey={tab.id}
         onChange={(contents) => onChange(tab.id, contents)}
         onSave={() => {
           void onSave(tab);

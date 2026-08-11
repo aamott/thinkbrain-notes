@@ -371,6 +371,22 @@ describe("desktop state persistence", () => {
       (written[DESKTOP_STATE_KEY] as Record<string, unknown>).developmentExtensionDirectories
     ).toEqual(["/ext/one"]);
   });
+
+  /**
+   * `write_app_settings` now refuses a write whose `expected` no longer
+   * matches what is on disk (see `appSettingsFile.ts`). The fallback path has
+   * no `updateDesktopState` command to do its read-modify-write atomically, so
+   * it must pass what it read as `expected` itself or every fallback write
+   * would be rejected outright once a settings file already exists.
+   */
+  it("sends what it read as the write's precondition", async () => {
+    const raw = JSON.stringify({ theme: "dark" });
+    const gateway = createGateway(raw);
+
+    await saveDesktopState({ explorerOpen: false }, gateway);
+
+    expect(gateway.writeAppSettings).toHaveBeenCalledWith(expect.any(String), raw);
+  });
 });
 
 function createGateway(contents: string | null): DesktopStateGateway & {

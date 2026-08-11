@@ -1513,3 +1513,28 @@ fn workspace_settings_write_treats_an_absent_file_as_a_precondition_of_its_own()
     // The file this writer read has since been removed.
     assert!(check_workspace_settings_precondition(None, Some("{}")).is_err());
 }
+
+#[test]
+fn app_settings_write_is_refused_when_desktop_state_changed_underneath_it() {
+    // `update_desktop_state` landed (a tab opened) between the store's read and
+    // its write, so the document the store revised is no longer the one on disk.
+    assert!(check_app_settings_precondition(
+        Some("{\"desktopState\":{\"openTabs\":[\"a\"]}}"),
+        Some("{\"desktopState\":{\"openTabs\":[]}}")
+    )
+    .is_err());
+
+    // Nobody interfered.
+    assert!(check_app_settings_precondition(
+        Some("{\"appearance.theme\":\"dark\"}"),
+        Some("{\"appearance.theme\":\"dark\"}")
+    )
+    .is_ok());
+}
+
+#[test]
+fn app_settings_write_treats_an_absent_file_as_a_precondition_of_its_own() {
+    assert!(check_app_settings_precondition(None, None).is_ok());
+    assert!(check_app_settings_precondition(Some("{}"), None).is_err());
+    assert!(check_app_settings_precondition(None, Some("{}")).is_err());
+}
