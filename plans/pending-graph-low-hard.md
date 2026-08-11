@@ -74,10 +74,18 @@ future epics; this epic uses only explicit wiki-link edges.
 
 ## Status
 
+- ✅ Link target resolution (aliases + path normalization) — see
+  `pending-link_target_resolution-low-med.md`
+- ⬜ Clickable wiki-link navigation — click `[[Target]]` to open the note — see
+  `pending-clickable_wiki_link_navigation-low-med.md`
+- ⬜ Wiki-link autocomplete — `[[` triggers a note picker — see
+  `pending-wiki_link_autocomplete-med-med.md`
+- ⬜ Wiki-link index for backlinks — reverse index (target → linking notes) — see
+  `pending-wiki_link_index-med-med.md`
 - ⬜ Backlinks panel — list notes linking to the active note — see
   `pending-backlinks_panel-low-med.md`
-- ⬜ Link target resolution (aliases + path normalization) — see
-  `pending-link_target_resolution-low-med.md`
+- ⬜ Automatic link update on rename — rewrite `[[old]]` → `[[new]]` across the vault — see
+  `pending-automatic_link_update_on_rename-med-hard.md`
 - ⬜ Graph view — visual network of notes and wiki-link edges — see
   `pending-graph_view-low-hard.md`
 - ⬜ Local graph around active note — see `pending-local_graph-low-hard.md`

@@ -65,6 +65,7 @@ export * from "./contributions";
 export * from "./extensions";
 export * from "./lifecycle";
 export * from "./frontmatter";
+export * from "./linkResolver";
 // Journal data model: D42 filenames and the D48-D51 frontmatter contract.
 export * from "./journal/index";
 export * from "./layout";

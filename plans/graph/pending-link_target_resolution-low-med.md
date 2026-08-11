@@ -13,17 +13,17 @@ view.
 
 ## Acceptance Criteria
 
-- [ ] Resolver lives in `packages/core` with no React/DOM/Node dependency.
-- [ ] Resolves a `target` to a note by (in priority order): exact filename
+- [x] Resolver lives in `packages/core` with no React/DOM/Node dependency.
+- [x] Resolves a `target` to a note by (in priority order): exact filename
       match, frontmatter `title` match, frontmatter `aliases` match, and
       relative-path match.
-- [ ] Normalizes targets case-insensitively and ignores `.md` extension
+- [x] Normalizes targets case-insensitively and ignores `.md` extension
       differences (matches the indexer's existing behavior).
-- [ ] Returns a stable note identifier (e.g. vault-relative path) or `null`
+- [x] Returns a stable note identifier (e.g. vault-relative path) or `null`
       when no match exists; unresolved links are tracked but never throw.
-- [ ] Handles ambiguous targets (multiple notes match) deterministically and
+- [x] Handles ambiguous targets (multiple notes match) deterministically and
       documents the tie-break rule.
-- [ ] Tests cover: title match, alias match, path match, unresolved target,
+- [x] Tests cover: title match, alias match, path match, unresolved target,
       ambiguous target, case/extension normalization.
 
 ## References
