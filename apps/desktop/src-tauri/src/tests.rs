@@ -1711,6 +1711,46 @@ fn a_vanished_folder_named_like_a_file_still_asks_for_a_rebuild() {
     assert_eq!(changes[0].kind, WorkspaceChangeKind::Rescan);
 }
 
+/// Git churns constantly inside `.git`, and none of it is a note.
+///
+/// `git add` writes `.git/index.lock` and renames it onto `.git/index`. Neither
+/// is Markdown, and `index` has no extension — so the "probably a folder" guess
+/// that rescues a deleted folder would fire here and rebuild the entire vault
+/// on every staged file. Ignored areas have to be ruled out before that guess
+/// is ever reached.
+#[test]
+fn churn_inside_ignored_folders_never_triggers_a_rebuild() {
+    let root = Path::new("/vault");
+
+    let staged = classify_event(
+        root,
+        &EventKind::Modify(ModifyKind::Name(RenameMode::Both)),
+        &[root.join(".git/index.lock"), root.join(".git/index")],
+    );
+    assert!(staged.is_empty(), "git staging rebuilt the index: {staged:?}");
+
+    let pruned = classify_event(
+        root,
+        &EventKind::Remove(RemoveKind::Folder),
+        &[root.join(".git/objects/ab")],
+    );
+    assert!(pruned.is_empty(), "git gc rebuilt the index: {pruned:?}");
+
+    let dropped = classify_event(
+        root,
+        &EventKind::Remove(RemoveKind::Folder),
+        &[root.join("node_modules/pkg")],
+    );
+    assert!(dropped.is_empty(), "an ignored folder rebuilt the index: {dropped:?}");
+
+    let head = classify_event(
+        root,
+        &EventKind::Remove(RemoveKind::File),
+        &[root.join(".git/ORIG_HEAD")],
+    );
+    assert!(head.is_empty(), "a git bookkeeping file rebuilt the index: {head:?}");
+}
+
 #[test]
 fn irrelevant_events_produce_nothing_at_all() {
     let root = Path::new("/vault");
@@ -1927,4 +1967,70 @@ fn the_app_hears_an_outside_write_but_not_the_echo_of_its_own() {
             .any(|change| change.path == "theirs.md"),
         "an outside write went unreported; saw {reported_theirs:?}"
     );
+}
+
+/// React mounts an effect, tears it down, and mounts it again under
+/// StrictMode, and the teardown of the first mount lands *after* the second
+/// mount has already asked to watch. Tracking interest as a set of window
+/// labels made that second request a no-op and let the late release stop the
+/// watcher, leaving the app listening to a watcher that no longer existed —
+/// silently, on every development run.
+#[test]
+fn a_remount_that_overlaps_its_own_teardown_keeps_the_watcher_alive() {
+    let mut interest = WatchInterest::default();
+
+    // Mount one asks to watch; nobody was watching, so a watcher starts.
+    assert!(!interest.is_watched("/vault"));
+    interest.acquire("/vault", "main");
+
+    // Mount two asks before mount one's teardown arrives.
+    assert!(interest.is_watched("/vault"));
+    interest.acquire("/vault", "main");
+
+    // Mount one's teardown finally lands. Mount two still wants it.
+    assert!(!interest.release("/vault", "main"));
+    // Only when mount two goes does the watcher stop.
+    assert!(interest.release("/vault", "main"));
+}
+
+#[test]
+fn two_windows_on_one_vault_share_a_single_watcher() {
+    let mut interest = WatchInterest::default();
+
+    interest.acquire("/vault", "main");
+    interest.acquire("/vault", "second");
+
+    assert!(!interest.release("/vault", "main"), "the second window still wants it");
+    assert!(interest.release("/vault", "second"), "the last window released it");
+}
+
+#[test]
+fn releasing_something_never_acquired_stops_nothing() {
+    let mut interest = WatchInterest::default();
+
+    assert!(!interest.release("/vault", "main"));
+    interest.acquire("/vault", "main");
+    assert!(!interest.release("/other", "main"));
+    assert!(interest.release("/vault", "main"));
+}
+
+/// A window destroyed by the OS never runs its React cleanup, so its watchers
+/// would otherwise be held for the life of the process.
+#[test]
+fn closing_a_window_releases_every_watcher_it_was_holding() {
+    let mut interest = WatchInterest::default();
+
+    interest.acquire("/vault", "main");
+    interest.acquire("/vault", "second");
+    interest.acquire("/notes", "second");
+    // Whatever double-mounting that window did along the way.
+    interest.acquire("/notes", "second");
+
+    let mut stopped = interest.release_window("second");
+    stopped.sort();
+
+    // "/vault" is still held by the main window; "/notes" was only ever theirs.
+    assert_eq!(stopped, vec!["/notes".to_string()]);
+    assert!(interest.is_watched("/vault"));
+    assert!(!interest.is_watched("/notes"));
 }

@@ -361,6 +361,9 @@ pub fn open_workspace_window(app: tauri::AppHandle, root_path: String) -> Result
                 &app_for_cleanup.state::<WorkspaceWindowRoots>(),
                 &label_for_cleanup,
             );
+            // A destroyed window never runs the frontend teardown, so its file
+            // watchers have to be released from here or they outlive it.
+            crate::commands::watcher::release_window_watchers(&label_for_cleanup);
         }
     });
     register_workspace_window_root(&app.state::<WorkspaceWindowRoots>(), label, root_path);

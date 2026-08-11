@@ -453,17 +453,26 @@ export function DesktopShell() {
   // also open and has already triggered `handleWorkspaceOpened`.
   useEffect(() => {
     if (!isTauri() || !restoredWorkspacePath) return;
+    const rootPath = restoredWorkspacePath;
     const { rootPath: wikiRoot } = useWikiLinkIndexStore.getState();
-    if (wikiRoot === restoredWorkspacePath) return;
-    void workspaceDesktopApi.openWorkspace(restoredWorkspacePath).then((snapshot) => {
-      // Re-check: the explorer may have called handleWorkspaceOpened in the
-      // meantime, in which case we'd double-index. The store guards against
-      // this, but the open_workspace call is wasteful — so bail if the root
-      // already matches.
-      if (useWikiLinkIndexStore.getState().rootPath === restoredWorkspacePath) return;
-      void useSearchIndexStore.getState().indexWorkspace(restoredWorkspacePath, snapshot.files);
-      void useWikiLinkIndexStore.getState().indexWorkspace(restoredWorkspacePath, snapshot.files);
+    if (wikiRoot === rootPath) return;
+    // Switching workspaces while this read is in flight must not index the old
+    // one over the new. `indexWorkspace` stamps its own root before checking
+    // anything, so its internal guards cannot reject a stale caller — the
+    // caller has to not call. Without this, a late listing for the previous
+    // vault leaves both indexes holding its notes under its root, and every
+    // later note event for the current vault is dropped by the root guards.
+    let cancelled = false;
+    void workspaceDesktopApi.openWorkspace(rootPath).then((snapshot) => {
+      if (cancelled) return;
+      // The explorer may have indexed this same workspace in the meantime.
+      if (useWikiLinkIndexStore.getState().rootPath === rootPath) return;
+      void useSearchIndexStore.getState().indexWorkspace(rootPath, snapshot.files);
+      void useWikiLinkIndexStore.getState().indexWorkspace(rootPath, snapshot.files);
     });
+    return () => {
+      cancelled = true;
+    };
   }, [restoredWorkspacePath]);
 
   // Watch the open workspace for edits the app did not make. Both indexes and

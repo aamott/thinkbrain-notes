@@ -32,7 +32,7 @@
 //! rare miss it would fix. Nothing goes wrong permanently: the index is a
 //! disposable cache and the next change to that note corrects it.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::{Component, Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
@@ -135,12 +135,19 @@ pub fn workspace_relative_path(root: &Path, path: &Path) -> Option<String> {
 /// walking", so the watcher cannot come to a different answer than the listing
 /// that built the index in the first place.
 pub fn is_watchable_path(root: &Path, path: &Path) -> bool {
+    is_markdown_path(path) && is_in_watched_area(root, path)
+}
+
+/// Whether `path` sits somewhere in the vault that could hold notes at all.
+///
+/// Separate from [`is_watchable_path`] because a *directory* is worth reacting
+/// to without being Markdown itself. Both the note filter and the rescan
+/// escalation route through here, so an ignored area cannot be reachable by one
+/// and not the other — which is how `.git` churn once rebuilt the whole index.
+pub fn is_in_watched_area(root: &Path, path: &Path) -> bool {
     let Some(relative) = workspace_relative_path(root, path) else {
         return false;
     };
-    if !is_markdown_path(path) {
-        return false;
-    }
     relative
         .split('/')
         .all(|part| !is_hidden(part) && !IGNORED_FOLDERS.contains(&part))
@@ -150,13 +157,15 @@ fn is_hidden(name: &str) -> bool {
     name.starts_with('.')
 }
 
-/// Whether a vanished path was probably a directory rather than a note.
+/// Whether a vanished path in a watched area was probably a directory.
 ///
 /// A deleted directory is gone by the time we hear about it, so it cannot be
 /// stat'd and its notes cannot be enumerated. Extension-less is the only signal
-/// left, and guessing wrong only costs a rebuild.
-fn looks_like_directory(path: &Path) -> bool {
-    path.extension().is_none()
+/// left, and guessing wrong only costs a rebuild — but only inside an area we
+/// would have indexed, or Git's own bookkeeping files (`.git/ORIG_HEAD`,
+/// `.git/index`) would each look like a vanished folder.
+fn looks_like_watched_directory(root: &Path, path: &Path) -> bool {
+    path.extension().is_none() && is_in_watched_area(root, path)
 }
 
 /// Turns one OS event into the changes worth reporting.
@@ -180,7 +189,13 @@ pub fn classify_event(root: &Path, kind: &EventKind, paths: &[PathBuf]) -> Vec<W
 
         EventKind::Modify(_) => single(root, paths, WorkspaceChangeKind::Modified),
 
-        EventKind::Remove(RemoveKind::Folder) => vec![WorkspaceChange::rescan()],
+        EventKind::Remove(RemoveKind::Folder) => {
+            if paths.iter().any(|path| is_in_watched_area(root, path)) {
+                vec![WorkspaceChange::rescan()]
+            } else {
+                Vec::new()
+            }
+        }
         EventKind::Remove(_) => removal(root, paths),
 
         // Reads and access events say nothing about content.
@@ -206,7 +221,7 @@ fn removal(root: &Path, paths: &[PathBuf]) -> Vec<WorkspaceChange> {
             if let Some(relative) = workspace_relative_path(root, path) {
                 changes.push(WorkspaceChange::at(WorkspaceChangeKind::Deleted, relative));
             }
-        } else if looks_like_directory(path) && workspace_relative_path(root, path).is_some() {
+        } else if looks_like_watched_directory(root, path) {
             changes.push(WorkspaceChange::rescan());
         }
     }
@@ -246,7 +261,7 @@ fn classify_rename(root: &Path, paths: &[PathBuf]) -> Vec<WorkspaceChange> {
         (false, true) => single(root, &[to.clone()], WorkspaceChangeKind::Created),
         // Neither end is a note. A renamed folder moves notes we cannot name.
         (false, false) => {
-            if looks_like_directory(from) || looks_like_directory(to) {
+            if looks_like_watched_directory(root, from) || looks_like_watched_directory(root, to) {
                 vec![WorkspaceChange::rescan()]
             } else {
                 Vec::new()
@@ -331,13 +346,81 @@ fn take_self_write(path: &Path) -> bool {
 
 type WorkspaceDebouncer = Debouncer<RecommendedWatcher, RecommendedCache>;
 
-/// One live watcher plus the windows that asked for it.
-struct WatchEntry {
-    _debouncer: WorkspaceDebouncer,
-    windows: HashSet<String>,
+/// Tracks who wants which workspace watched.
+///
+/// Counted rather than merely recorded, because a window can hold more than one
+/// outstanding request at a time: React tears an effect down and sets it up
+/// again, and the teardown of the first can land after the setup of the second.
+/// A set of window labels would treat that second request as a duplicate and
+/// then let the late release stop a watcher somebody still wanted.
+#[derive(Default)]
+pub struct WatchInterest {
+    /// Workspace root -> window label -> outstanding requests from that window.
+    holders: HashMap<String, HashMap<String, u32>>,
 }
 
-static WATCHERS: Mutex<Option<HashMap<String, WatchEntry>>> = Mutex::new(None);
+impl WatchInterest {
+    /// Whether anybody is already watching `root`.
+    pub fn is_watched(&self, root: &str) -> bool {
+        self.holders.contains_key(root)
+    }
+
+    /// Registers one request from `label` to watch `root`.
+    pub fn acquire(&mut self, root: &str, label: &str) {
+        *self
+            .holders
+            .entry(root.to_string())
+            .or_default()
+            .entry(label.to_string())
+            .or_insert(0) += 1;
+    }
+
+    /// Drops one request, returning whether the last interest just went away.
+    pub fn release(&mut self, root: &str, label: &str) -> bool {
+        let Some(windows) = self.holders.get_mut(root) else {
+            return false;
+        };
+        if let Some(count) = windows.get_mut(label) {
+            *count -= 1;
+            if *count == 0 {
+                windows.remove(label);
+            }
+        }
+        if windows.is_empty() {
+            self.holders.remove(root);
+            return true;
+        }
+        false
+    }
+
+    /// Drops everything `label` held, naming the roots nobody wants any more.
+    ///
+    /// A window destroyed by the OS never runs its teardown, so without this its
+    /// watchers would be held until the process exits.
+    pub fn release_window(&mut self, label: &str) -> Vec<String> {
+        let mut released = Vec::new();
+        self.holders.retain(|root, windows| {
+            if windows.remove(label).is_none() {
+                return true;
+            }
+            if windows.is_empty() {
+                released.push(root.clone());
+                return false;
+            }
+            true
+        });
+        released
+    }
+}
+
+/// The live watchers and the interest keeping each one alive.
+#[derive(Default)]
+struct WatchState {
+    interest: WatchInterest,
+    debouncers: HashMap<String, WorkspaceDebouncer>,
+}
+
+static WATCHERS: Mutex<Option<WatchState>> = Mutex::new(None);
 
 /// Starts watching `root_path` on behalf of the calling window.
 ///
@@ -360,46 +443,51 @@ pub fn watch_workspace(
     let label = window.label().to_string();
 
     let mut guard = WATCHERS.lock().unwrap_or_else(|error| error.into_inner());
-    let watchers = guard.get_or_insert_with(HashMap::new);
+    let state = guard.get_or_insert_with(WatchState::default);
 
-    if let Some(entry) = watchers.get_mut(&key) {
-        entry.windows.insert(label);
-        return Ok(key);
+    // Start the watcher before registering interest, so a failure to start
+    // leaves nothing claiming a watcher that does not exist.
+    if !state.interest.is_watched(&key) {
+        let debouncer = spawn_debouncer(app, root.clone(), key.clone())?;
+        state.debouncers.insert(key.clone(), debouncer);
     }
-
-    let debouncer = spawn_debouncer(app, root.clone(), key.clone())?;
-    watchers.insert(
-        key.clone(),
-        WatchEntry {
-            _debouncer: debouncer,
-            windows: HashSet::from([label]),
-        },
-    );
+    state.interest.acquire(&key, &label);
     Ok(key)
 }
 
-/// Releases the calling window's interest in `root_path`.
+/// Releases one of the calling window's requests to watch `root_path`.
 ///
-/// The watcher itself stops only once no window is left watching that vault.
+/// Takes the canonical root returned by {@link watch_workspace} rather than the
+/// caller's own spelling: this runs when a workspace closes, which includes the
+/// case where the folder has just been deleted or unmounted and can no longer
+/// be canonicalized at all. Re-resolving here would fail exactly then and leak
+/// the watcher it was called to release.
 #[tauri::command]
-pub fn unwatch_workspace(window: tauri::Window, root_path: String) -> Result<(), NativeError> {
-    let root = resolve_workspace_root(&root_path)?;
-    let key = root.to_string_lossy().to_string();
-    let label = window.label();
-
+pub fn unwatch_workspace(window: tauri::Window, canonical_root: String) -> Result<(), NativeError> {
     let mut guard = WATCHERS.lock().unwrap_or_else(|error| error.into_inner());
-    let Some(watchers) = guard.as_mut() else {
+    let Some(state) = guard.as_mut() else {
         return Ok(());
     };
-    if let Some(entry) = watchers.get_mut(&key) {
-        entry.windows.remove(label);
-        if entry.windows.is_empty() {
-            // Dropping the entry drops the debouncer, which stops the thread
-            // and releases the OS handle.
-            watchers.remove(&key);
-        }
+    if state.interest.release(&canonical_root, window.label()) {
+        // Dropping the debouncer stops its thread and releases the OS handle.
+        state.debouncers.remove(&canonical_root);
     }
     Ok(())
+}
+
+/// Releases every watcher a window held, for windows the OS destroys.
+///
+/// A destroyed window never runs the frontend teardown that would otherwise
+/// call `unwatch_workspace`, so its watchers would be held until the process
+/// exits.
+pub fn release_window_watchers(label: &str) {
+    let mut guard = WATCHERS.lock().unwrap_or_else(|error| error.into_inner());
+    let Some(state) = guard.as_mut() else {
+        return;
+    };
+    for root in state.interest.release_window(label) {
+        state.debouncers.remove(&root);
+    }
 }
 
 fn spawn_debouncer(

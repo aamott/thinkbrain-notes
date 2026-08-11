@@ -107,7 +107,10 @@ export async function watchWorkspace(
 
   return () => {
     unlisten();
-    void invokeNativeCommand("unwatch_workspace", { rootPath }).catch((error: unknown) => {
+    // Released by the canonical root, not the caller's spelling: this often
+    // runs because the folder was deleted or unmounted, and re-resolving a path
+    // that no longer exists would fail exactly when releasing matters most.
+    void invokeNativeCommand("unwatch_workspace", { canonicalRoot }).catch((error: unknown) => {
       console.warn("[watcher] Failed to stop watching the workspace.", error);
     });
   };

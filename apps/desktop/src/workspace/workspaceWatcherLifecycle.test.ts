@@ -79,7 +79,7 @@ describe("the workspace watcher's lifecycle", () => {
     stop();
 
     expect(unlisten).toHaveBeenCalledTimes(1);
-    expect(invokeNativeCommand).toHaveBeenCalledWith("unwatch_workspace", { rootPath: "/vault" });
+    expect(invokeNativeCommand).toHaveBeenCalledWith("unwatch_workspace", { canonicalRoot: "/vault" });
   });
 
   it("reports a rescan to the caller so it can rebuild from disk", async () => {

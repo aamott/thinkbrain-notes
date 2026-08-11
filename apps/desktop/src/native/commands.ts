@@ -143,8 +143,9 @@ export interface NativeCommandMap {
     readonly args: { readonly rootPath: string };
     readonly result: string;
   };
+  /** Releases one watch request; takes the canonical root `watch_workspace` returned. */
   readonly unwatch_workspace: {
-    readonly args: { readonly rootPath: string };
+    readonly args: { readonly canonicalRoot: string };
     readonly result: null;
   };
   readonly read_app_settings: {
