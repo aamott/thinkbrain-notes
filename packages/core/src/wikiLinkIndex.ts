@@ -42,13 +42,21 @@ export interface WikiLinkIndex {
   readonly noteIndex: readonly NoteIndexEntry[];
 }
 
-/** Empty index, useful as a starting point for incremental builds. */
-export const EMPTY_WIKI_LINK_INDEX: WikiLinkIndex = {
+/**
+ * Empty index, useful as a starting point for incremental builds.
+ *
+ * Frozen at the outer object so a careless cast (`as Map<...>`) on the
+ * `ReadonlyMap` fields is still possible (Maps can't be truly frozen), but the
+ * `noteIndex` array and the outer shape are protected from accidental
+ * reassignment/extension. Callers that need a fresh mutable starting point
+ * should build via {@link buildWikiLinkIndex} with an empty input list.
+ */
+export const EMPTY_WIKI_LINK_INDEX: WikiLinkIndex = Object.freeze({
   forward: new Map<string, readonly string[]>(),
   backlinks: new Map<string, readonly string[]>(),
   unresolved: new Map<string, readonly string[]>(),
-  noteIndex: []
-};
+  noteIndex: Object.freeze([]) as readonly NoteIndexEntry[]
+}) as WikiLinkIndex;
 
 /**
  * Builds a {@link NoteIndexEntry} from a note's path and parsed form.
@@ -218,18 +226,23 @@ export function removeNote(
 /**
  * Adds or updates a note in the index, returning a new (immutable) index.
  *
- * Upserts the note index entry, replaces the note's forward links with the
- * freshly extracted targets, and recomputes the backlinks/unresolved reverse
- * maps. Recomputing handles the case where a note's title/alias changed and
- * links from *other* notes now resolve (or unresolve) differently.
+ * Accepts a {@link WikiLinkIndexInput} (`relativePath` + `parsedNote`) and
+ * builds the {@link NoteIndexEntry} internally via {@link buildNoteIndexEntry},
+ * so the entry and parsed note can never disagree (the previous
+ * `(index, entry, parsedNote)` signature let a caller pass a mismatched pair
+ * and silently corrupt the index). Upserts the entry, replaces the note's
+ * forward links with freshly extracted targets, and recomputes the
+ * backlinks/unresolved reverse maps. Recomputing handles the case where a
+ * note's title/alias changed and links from *other* notes now resolve (or
+ * unresolve) differently.
  */
 export function addNote(
   index: WikiLinkIndex,
-  entry: NoteIndexEntry,
-  parsedNote: ParsedNote
+  input: WikiLinkIndexInput
 ): WikiLinkIndex {
+  const entry = buildNoteIndexEntry(input);
   const forward = new Map(index.forward);
-  forward.set(entry.relativePath, dedupeTargets(parsedNote));
+  forward.set(entry.relativePath, dedupeTargets(input.parsedNote));
 
   // Upsert the note index entry by relativePath.
   const existingIdx = index.noteIndex.findIndex(

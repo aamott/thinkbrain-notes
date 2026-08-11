@@ -2,9 +2,6 @@
 
 These are random issues or shortcomings users have noted. They may or may not be mentioned in plans or fully planned out. Some are just too small to put into stories and could be wiped out in minutes, others take significant time. 
 
-## Themes
-- [x] Forest theme background is too dark. Needs a little more gray tones where right now it's straight black.
-
 ## Editor
 - [ ] Only markdown files can be edited. Any filetype that can reasonably be edited or viewed should be able to be. If a file can't be edited, clicking it should open something in the canvas with an option to open in the system's default app. 
   - Types of files: text-based (code, markdown, txt, etc.), images, videos, audio, pdf (if easy), etc.
@@ -14,7 +11,7 @@ These are random issues or shortcomings users have noted. They may or may not be
 - [ ] Themes should be able to use custom icon set per filetype and either fall back to app defaults or their own fallback.
 
 ## Other
-- [x] Remember tabs on reload. Currently all tabs close on reload/exit.
+- [ ] Save unsaved tabs on reload. Currently unsaved tab content is lost on reload.
 - [ ] Command palette fuzzy search and separate file search from command search. If you put `>` at the start of the search it searches commands. Take it away and it searches files. Optimize for tens of thousands of files. Use an ignore list of common issues, like `node_modules`.
 - [ ] Action menu items are spaced right, but their button hitboxes aren't square, they're skinny and tall. 
 
@@ -27,15 +24,9 @@ These are random issues or shortcomings users have noted. They may or may not be
 
 
 # Journal
-- [x] Replace "Add Metadata" in journal... info ico instead? Call it the info tracker? Just "Info Tracker" not Add metadata/edit
-  - Done: label renamed to "Info Tracker" (consolidated Add/Edit variants).
 - [ ] Add direct link to metadata settings to add metadata
-- [x] default to list of things, not text entry
-  - Done: new fields created inline now default to `single-select` (pill list) instead of `text`.
 - [ ] Journal popout takes longer to open depending on number of files in the workspace. Instant on empty workspace, slow on big one. Same amount of time even if you already opened it once. Explorer is slow on first open but faster after that. 
 
 
 # Other 
-- [x] make scrollbar not expand on hover. Gets in the way of tabs.
-- [x] Scroll to new tab
 - [ ] Occasionally during rebuilds, all saved settings are lost. Workspace, theme, tabs, everything. Stability issue? At the least we should be able to recover from corrupt state. Many paths of corruption fixes, backups, etc without memory leaks or flooding data or the drive. 

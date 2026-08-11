@@ -444,6 +444,27 @@ export function DesktopShell() {
   // The store's actions are workspace-scoped, so events from other windows are ignored.
   useEffect(() => useWikiLinkIndexStore.getState().subscribeToEvents(), []);
 
+  // Index the restored workspace for search and wiki-links even when the
+  // explorer panel is closed. Without this, `indexWorkspace` is only called
+  // from `handleWorkspaceOpened`, which fires via the WorkspaceExplorer's mount
+  // effect — so closing the explorer before restart leaves both indexes empty.
+  // The store's `rootPath` guard prevents double-indexing when the explorer is
+  // also open and has already triggered `handleWorkspaceOpened`.
+  useEffect(() => {
+    if (!isTauri() || !restoredWorkspacePath) return;
+    const { rootPath: wikiRoot } = useWikiLinkIndexStore.getState();
+    if (wikiRoot === restoredWorkspacePath) return;
+    void workspaceDesktopApi.openWorkspace(restoredWorkspacePath).then((snapshot) => {
+      // Re-check: the explorer may have called handleWorkspaceOpened in the
+      // meantime, in which case we'd double-index. The store guards against
+      // this, but the open_workspace call is wasteful — so bail if the root
+      // already matches.
+      if (useWikiLinkIndexStore.getState().rootPath === restoredWorkspacePath) return;
+      void useSearchIndexStore.getState().indexWorkspace(restoredWorkspacePath, snapshot.files);
+      void useWikiLinkIndexStore.getState().indexWorkspace(restoredWorkspacePath, snapshot.files);
+    });
+  }, [restoredWorkspacePath]);
+
   const handleMarkdownFileCreated = useCallback((rootPath: string, relativePath: string) => {
     if (rootPath !== restoredWorkspacePath) return;
     setWorkspaceFiles((files) => files.some((file) => file.relative_path === relativePath)

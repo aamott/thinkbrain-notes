@@ -12,12 +12,12 @@ Build a reverse index mapping each wiki-link target string to the list of notes 
 
 ## Acceptance Criteria
 
-- [ ] A data structure (in-memory map or store) maps a note's `relativePath` to the wiki-link targets it contains, and a reverse map from resolved target path to the notes that link to it.
-- [ ] The index is rebuilt on workspace open and updated incrementally on `note.saved`, `note.created`, `note.renamed`, and `note.deleted` events (same events the search index store already consumes).
-- [ ] Resolution uses `resolveWikiLinkTarget` so that links by title, alias, filename, and path all resolve correctly.
-- [ ] Unresolved targets are tracked (so a renamed note can later surface dangling links that now point at it).
-- [ ] The index lives in `packages/core` as pure data structures; the desktop app provides the event-driven lifecycle wiring.
-- [ ] Tests cover: building the index from parsed notes, resolving targets, incremental update on save/create/rename/delete, unresolved target tracking.
+- [x] A data structure (in-memory map or store) maps a note's `relativePath` to the wiki-link targets it contains, and a reverse map from resolved target path to the notes that link to it.
+- [x] The index is rebuilt on workspace open and updated incrementally on `note.saved`, `note.created`, `note.renamed`, and `note.deleted` events (same events the search index store already consumes).
+- [x] Resolution uses `resolveWikiLinkTarget` so that links by title, alias, filename, and path all resolve correctly.
+- [x] Unresolved targets are tracked (so a renamed note can later surface dangling links that now point at it).
+- [x] The index lives in `packages/core` as pure data structures; the desktop app provides the event-driven lifecycle wiring.
+- [x] Tests cover: building the index from parsed notes, resolving targets, incremental update on save/create/rename/delete, unresolved target tracking.
 
 ## References
 

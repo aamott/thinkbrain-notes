@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { NoteIndexEntry } from "@thinkbrain/core";
+import { keymap } from "@codemirror/view";
 
 import { mountPreview, type PreviewHandle } from "./harness";
 
@@ -10,6 +11,22 @@ afterEach(() => {
   preview?.destroy();
   preview = null;
 });
+
+/** Finds and runs a named keybinding in the editor's keymap facet. */
+function runKeymap(view: PreviewHandle["view"], key: string): boolean {
+  // `keymap` facet inputs are arrays; flatten to get individual bindings.
+  const bindings = (view.state.facet(keymap) as unknown[]).flat() as Array<{
+    key?: string;
+    run?: (v: PreviewHandle["view"]) => boolean | void;
+  }>;
+  for (const binding of bindings) {
+    if (binding.key === key && binding.run) {
+      const result = binding.run(view);
+      return typeof result === "boolean" ? result : false;
+    }
+  }
+  return false;
+}
 
 const NOTE_INDEX: readonly NoteIndexEntry[] = [
   {
@@ -141,5 +158,44 @@ describe("wiki link click navigation", () => {
     expect(linkEl).not.toBeNull();
     linkEl.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     expect(onOpenNote).toHaveBeenCalledWith("folder/Other.md");
+  });
+});
+
+describe("wiki link keyboard navigation", () => {
+  it("calls onOpenNote on Mod-Enter when the cursor is inside a resolved wiki link", () => {
+    const onOpenNote = vi.fn();
+    // Cursor inside [[My Note]] — "My Note" spans positions 5..12.
+    preview = mountPreview("see [[My Note]] now", 8, {
+      noteIndex: NOTE_INDEX,
+      onOpenNote
+    });
+    expect(runKeymap(preview.view, "Mod-Enter")).toBe(true);
+    expect(onOpenNote).toHaveBeenCalledTimes(1);
+    expect(onOpenNote).toHaveBeenCalledWith("My Note.md");
+  });
+
+  it("does not call onOpenNote on Mod-Enter when the cursor is not inside a wiki link", () => {
+    const onOpenNote = vi.fn();
+    preview = mountPreview("see [[My Note]] now", 0, {
+      noteIndex: NOTE_INDEX,
+      onOpenNote
+    });
+    expect(runKeymap(preview.view, "Mod-Enter")).toBe(false);
+    expect(onOpenNote).not.toHaveBeenCalled();
+  });
+
+  it("does not call onOpenNote on Mod-Enter for an unresolved wiki link", () => {
+    const onOpenNote = vi.fn();
+    preview = mountPreview("see [[Nonexistent]] now", 6, {
+      noteIndex: NOTE_INDEX,
+      onOpenNote
+    });
+    expect(runKeymap(preview.view, "Mod-Enter")).toBe(false);
+    expect(onOpenNote).not.toHaveBeenCalled();
+  });
+
+  it("does not register a Mod-Enter binding when no callback is provided", () => {
+    preview = mountPreview("see [[My Note]] now", 8, { noteIndex: NOTE_INDEX });
+    expect(runKeymap(preview.view, "Mod-Enter")).toBe(false);
   });
 });

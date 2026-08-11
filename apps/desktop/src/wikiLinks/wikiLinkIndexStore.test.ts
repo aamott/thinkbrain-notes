@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock the native command bridge so the store never hits Tauri IPC. Each test
 // configures `read_markdown_file` to return the contents it wants.
@@ -55,6 +55,10 @@ describe("useWikiLinkIndexStore", () => {
       rootPath: null
     });
     vi.mocked(invokeNativeCommand).mockReset();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it("starts with no workspace and an empty index", () => {
@@ -195,5 +199,100 @@ describe("useWikiLinkIndexStore", () => {
     expect(state.noteIndex.map((n) => n.relativePath)).not.toContain("A.md");
 
     dispose();
+  });
+
+  it("keeps the stale entry and logs an error when reindexDocument read fails", async () => {
+    mockReadFile({ "A.md": "[[B]]", "B.md": "body" });
+    await useWikiLinkIndexStore
+      .getState()
+      .indexWorkspace("/vault", [fileEntry("A.md"), fileEntry("B.md")]);
+
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    // Simulate a transient read failure (e.g. file locked by a sync tool).
+    vi.mocked(invokeNativeCommand).mockRejectedValueOnce(new Error("locked"));
+
+    await useWikiLinkIndexStore.getState().reindexDocument("/vault", "A.md");
+
+    // The stale entry must remain in the index — no data loss.
+    const state = useWikiLinkIndexStore.getState();
+    expect(state.noteIndex.map((n) => n.relativePath)).toContain("A.md");
+    expect(getBacklinksFromIndex(state.wikiLinkIndex, "B.md")).toEqual(["A.md"]);
+    // The failure is surfaced loudly, not swallowed at warn level.
+    expect(errorSpy).toHaveBeenCalled();
+  });
+
+  it("keeps the old entry when reindexRenamedDocument read fails (no data loss)", async () => {
+    mockReadFile({ "A.md": "[[B]]", "B.md": "body" });
+    await useWikiLinkIndexStore
+      .getState()
+      .indexWorkspace("/vault", [fileEntry("A.md"), fileEntry("B.md")]);
+
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    // The new path read fails; the old path must NOT be removed from the index.
+    vi.mocked(invokeNativeCommand).mockRejectedValueOnce(new Error("locked"));
+
+    await useWikiLinkIndexStore
+      .getState()
+      .reindexRenamedDocument("/vault", "B.md", "folder/B.md");
+
+    const state = useWikiLinkIndexStore.getState();
+    // B.md is still indexed — the note did not vanish.
+    expect(state.noteIndex.map((n) => n.relativePath)).toContain("B.md");
+    expect(state.noteIndex.map((n) => n.relativePath)).not.toContain("folder/B.md");
+    expect(getBacklinksFromIndex(state.wikiLinkIndex, "B.md")).toEqual(["A.md"]);
+    expect(errorSpy).toHaveBeenCalled();
+  });
+
+  it("aborts in-flight reads on workspace switch so stale results do not commit", async () => {
+    // First workspace starts indexing with a delayed read.
+    let resolveA!: (value: { relative_path: string; contents: string }) => void;
+    mockReadFile({ "A.md": "[[B]]" });
+    vi.mocked(invokeNativeCommand).mockImplementationOnce(
+      () => new Promise((resolve) => (resolveA = resolve))
+    );
+
+    const firstIndex = useWikiLinkIndexStore
+      .getState()
+      .indexWorkspace("/old", [fileEntry("A.md")]);
+
+    // Switch to a new workspace before the old read completes.
+    mockReadFile({ "C.md": "body" });
+    await useWikiLinkIndexStore.getState().indexWorkspace("/new", [fileEntry("C.md")]);
+    expect(useWikiLinkIndexStore.getState().rootPath).toBe("/new");
+    expect(useWikiLinkIndexStore.getState().noteIndex.map((n) => n.relativePath)).toEqual([
+      "C.md"
+    ]);
+
+    // Now complete the stale old-workspace read; it must not clobber the new index.
+    resolveA({ relative_path: "A.md", contents: "[[B]]" });
+    await firstIndex;
+
+    const state = useWikiLinkIndexStore.getState();
+    expect(state.rootPath).toBe("/new");
+    expect(state.noteIndex.map((n) => n.relativePath)).toEqual(["C.md"]);
+  });
+
+  it("clearWorkspace aborts in-flight indexing so it cannot commit after clear", async () => {
+    let resolveA!: (value: { relative_path: string; contents: string }) => void;
+    mockReadFile({ "A.md": "[[B]]" });
+    vi.mocked(invokeNativeCommand).mockImplementationOnce(
+      () => new Promise((resolve) => (resolveA = resolve))
+    );
+
+    const indexing = useWikiLinkIndexStore
+      .getState()
+      .indexWorkspace("/vault", [fileEntry("A.md")]);
+
+    // Close the workspace while reads are still in flight.
+    useWikiLinkIndexStore.getState().clearWorkspace();
+    expect(useWikiLinkIndexStore.getState().rootPath).toBeNull();
+
+    // Completing the stale read must not repopulate the index.
+    resolveA({ relative_path: "A.md", contents: "[[B]]" });
+    await indexing;
+
+    const state = useWikiLinkIndexStore.getState();
+    expect(state.rootPath).toBeNull();
+    expect(state.noteIndex).toEqual([]);
   });
 });

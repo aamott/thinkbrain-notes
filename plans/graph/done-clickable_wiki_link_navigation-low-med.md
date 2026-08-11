@@ -11,12 +11,12 @@ Make `[[Target]]` wiki links in the live preview editor clickable so that activa
 
 ## Acceptance Criteria
 
-- [ ] Clicking (or Ctrl/Cmd+clicking) a resolved `[[Target]]` in the editor opens the target note via the same path as selecting a file in the explorer.
-- [ ] Unresolved links (target does not match any note) are visually distinct from resolved links (e.g. `cm-link-broken` class) and are not clickable.
-- [ ] The resolver (`resolveWikiLinkTarget`) is used to map the target string to a note path at click time, using the current vault's note index.
-- [ ] The editor receives an `onOpenNote(relativePath)` callback from the shell so it can request navigation without knowing about the workspace.
-- [ ] A note index (filenames, titles, aliases) is available to the editor at runtime — either passed in as a prop or read from a store.
-- [ ] Tests cover the click handler and the resolved/unresolved visual distinction.
+- [x] Clicking (or Ctrl/Cmd+clicking) a resolved `[[Target]]` in the editor opens the target note via the same path as selecting a file in the explorer.
+- [x] Unresolved links (target does not match any note) are visually distinct from resolved links (e.g. `cm-link-broken` class) and are not clickable.
+- [x] The resolver (`resolveWikiLinkTarget`) is used to map the target string to a note path at click time, using the current vault's note index.
+- [x] The editor receives an `onOpenNote(relativePath)` callback from the shell so it can request navigation without knowing about the workspace.
+- [x] A note index (filenames, titles, aliases) is available to the editor at runtime — either passed in as a prop or read from a store.
+- [x] Tests cover the click handler and the resolved/unresolved visual distinction.
 
 ## References
 

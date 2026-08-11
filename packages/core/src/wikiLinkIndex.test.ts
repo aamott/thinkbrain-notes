@@ -18,11 +18,6 @@ function note(relativePath: string, markdown: string): WikiLinkIndexInput {
   return { relativePath, parsedNote: parseNote(markdown) };
 }
 
-/** Helper: builds a NoteIndexEntry from a path + markdown. */
-function entry(relativePath: string, markdown: string) {
-  return buildNoteIndexEntry(note(relativePath, markdown));
-}
-
 describe("buildNoteIndexEntry", () => {
   it("extracts fileName, title, and aliases from parsed notes", () => {
     const entries = [
@@ -113,7 +108,7 @@ describe("addNote (incremental)", () => {
     expect(getBacklinks(index, "B.md")).toEqual(["A.md"]);
 
     // Add a new note C that links to B.
-    const next = addNote(index, entry("C.md", "[[B]]"), parseNote("[[B]]"));
+    const next = addNote(index, note("C.md", "[[B]]"));
     expect(getForwardLinks(next, "C.md")).toEqual(["B"]);
     expect([...getBacklinks(next, "B.md")].sort()).toEqual(["A.md", "C.md"]);
   });
@@ -128,7 +123,7 @@ describe("addNote (incremental)", () => {
     expect(getBacklinks(index, "C.md")).toEqual(["A.md"]);
 
     // A is saved with new content: now only links to B.
-    const next = addNote(index, entry("A.md", "[[B]]"), parseNote("[[B]]"));
+    const next = addNote(index, note("A.md", "[[B]]"));
     expect(getForwardLinks(next, "A.md")).toEqual(["B"]);
     expect(getBacklinks(next, "B.md")).toEqual(["A.md"]);
     // C no longer has a backlink from A.
@@ -144,11 +139,7 @@ describe("addNote (incremental)", () => {
     expect(getBacklinks(index, "B.md")).toEqual(["A.md"]);
 
     // B is saved with a new title "New". Now [[Old]] is unresolved.
-    const next = addNote(
-      index,
-      entry("B.md", "---\ntitle: New\n---\nbody"),
-      parseNote("---\ntitle: New\n---\nbody")
-    );
+    const next = addNote(index, note("B.md", "---\ntitle: New\n---\nbody"));
     expect(getBacklinks(next, "B.md")).toEqual([]);
     expect(getUnresolvedReferences(next, "Old")).toEqual(["A.md"]);
   });
@@ -160,11 +151,7 @@ describe("addNote (incremental)", () => {
     expect(getUnresolvedReferences(index, "Target")).toEqual(["A.md"]);
 
     // Add a note whose filename matches the target.
-    const next = addNote(
-      index,
-      entry("Target.md", "body"),
-      parseNote("body")
-    );
+    const next = addNote(index, note("Target.md", "body"));
     expect(getUnresolvedReferences(next, "Target")).toEqual([]);
     expect(getBacklinks(next, "Target.md")).toEqual(["A.md"]);
   });

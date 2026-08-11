@@ -11,13 +11,13 @@ When the user types `[[` in the editor, show an autocomplete dropdown of note ti
 
 ## Acceptance Criteria
 
-- [ ] Typing `[[` triggers a CodeMirror autocomplete popup.
-- [ ] As the user types more characters (`[[Proj`), the results filter to notes whose filename, title, or aliases match the typed text (case-insensitive, prefix or substring match).
-- [ ] Each result shows a readable label (title if present, otherwise filename) and the note path as a detail.
-- [ ] Selecting a result inserts `[[Target]]` where `Target` is the filename without extension (matching how links are typically written).
-- [ ] Escape or clicking away dismisses the popup without inserting.
-- [ ] The autocomplete source is efficient for large vaults (debounced or cached; does not re-parse all notes on every keystroke).
-- [ ] Tests cover the source filtering and insertion behavior.
+- [x] Typing `[[` triggers a CodeMirror autocomplete popup.
+- [x] As the user types more characters (`[[Proj`), the results filter to notes whose filename, title, or aliases match the typed text (case-insensitive, prefix or substring match).
+- [x] Each result shows a readable label (title if present, otherwise filename) and the note path as a detail.
+- [x] Selecting a result inserts `[[Target]]` where `Target` is the filename without extension (matching how links are typically written).
+- [x] Escape or clicking away dismisses the popup without inserting.
+- [x] The autocomplete source is efficient for large vaults (debounced or cached; does not re-parse all notes on every keystroke).
+- [x] Tests cover the source filtering and insertion behavior.
 
 ## References
 

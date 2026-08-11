@@ -1,5 +1,6 @@
-import { autocompletion, type Completion, type CompletionContext, type CompletionResult } from "@codemirror/autocomplete";
+import { autocompletion, startCompletion, type Completion, type CompletionContext, type CompletionResult } from "@codemirror/autocomplete";
 import type { Extension } from "@codemirror/state";
+import { ViewPlugin, type ViewUpdate } from "@codemirror/view";
 import type { NoteIndexEntry } from "@thinkbrain/core";
 
 /**
@@ -70,7 +71,11 @@ function buildCompletions(query: string, notes: readonly NoteIndexEntry[]): Comp
       label: labelFor(note),
       detail: note.relativePath,
       type: "reference",
-      // Replace the entire `[[partial` (brackets included) with `[[Target]]`.
+      // `apply` includes the brackets because the result's `from` points at the
+      // first `[` (see `wikiLinkCompletionSource`), so the replacement range is
+      // the whole `[[partial`. Keep `apply` and that `from`/`to` in sync: if the
+      // range ever shrinks to just the partial text after `[[`, drop the brackets
+      // here too or they will be doubled.
       apply: `[[${target}]]`,
       rank
     });
@@ -110,11 +115,17 @@ function wikiLinkCompletionSource(notes: readonly NoteIndexEntry[]) {
     const completions = buildCompletions(query, notes);
     if (completions.length === 0) return null;
 
+    // `from`/`to` span the full `[[partial` (brackets included), which is why
+    // each completion's `apply` string also includes the `[[...]]` brackets.
+    // `filter: false` disables CodeMirror's built-in fuzzy matcher, which would
+    // otherwise use the `[[`-prefixed range text as a pattern and discard every
+    // option (no label contains `[[`). We do our own filtering in
+    // `buildCompletions` using the text *after* `[[`.
     return {
       from: before.from,
       to: context.pos,
       options: completions,
-      validFor: /^\[\[[^\]|]*$/
+      filter: false
     };
   };
 }
@@ -135,11 +146,28 @@ function wikiLinkCompletionSource(notes: readonly NoteIndexEntry[]) {
  */
 export function wikiLinkAutocomplete(noteIndex: readonly NoteIndexEntry[]): Extension {
   if (noteIndex.length === 0) return [];
-  return autocompletion({
-    override: [wikiLinkCompletionSource(noteIndex)],
-    // Wiki links are usually short; don't require a keystroke before showing.
-    activateOnTyping: true
-  });
+  return [
+    autocompletion({
+      override: [wikiLinkCompletionSource(noteIndex)],
+      // Wiki links are usually short; don't require a keystroke before showing.
+      activateOnTyping: true
+    }),
+    // `activateOnTyping` only fires for word characters, but `[` is not one,
+    // so typing `[[` does not automatically trigger the popup. This ViewPlugin
+    // watches for the `[[` sequence appearing at the cursor after a doc change
+    // and explicitly starts completion so the dropdown appears immediately.
+    ViewPlugin.fromClass(
+      class {
+        update(update: ViewUpdate) {
+          if (!update.docChanged) return;
+          const pos = update.state.selection.main.head;
+          if (pos < 2) return;
+          const before = update.state.sliceDoc(pos - 2, pos);
+          if (before === "[[") startCompletion(update.view);
+        }
+      }
+    )
+  ];
 }
 
 /**

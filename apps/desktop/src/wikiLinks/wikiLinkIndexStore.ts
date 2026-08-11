@@ -16,7 +16,6 @@
 import { create } from "zustand";
 import {
   addNote,
-  buildNoteIndexEntry,
   buildWikiLinkIndex,
   EMPTY_WIKI_LINK_INDEX,
   getBacklinks as getBacklinksFromIndex,
@@ -40,6 +39,13 @@ export { getBacklinksFromIndex };
  * React 18 strict-mode double-mount from leaking listeners.
  */
 let currentSubscription: (() => void) | null = null;
+
+/**
+ * Tracks the in-flight full-index operation so a workspace switch can abort it.
+ * Kept outside Zustand state because `AbortController` is mutable/non-serializable.
+ * Mirrors {@link useSearchIndexStore}'s `indexingAbortController`.
+ */
+let indexingAbortController: AbortController | null = null;
 
 /** State + actions exposed by the wiki-link index store. */
 export interface WikiLinkIndexStore {
@@ -81,13 +87,17 @@ export interface WikiLinkIndexStore {
  */
 async function readAndParse(
   rootPath: string,
-  relativePath: string
+  relativePath: string,
+  signal?: AbortSignal
 ): Promise<{ relativePath: string; parsedNote: ParsedNote } | null> {
   try {
     const { contents } = await invokeNativeCommand("read_markdown_file", {
       rootPath,
       relativePath
     });
+    // A superseding workspace switch may have aborted this read between the
+    // IPC round-trip and the parse step; drop the result instead of committing.
+    if (signal?.aborted) return null;
     return { relativePath, parsedNote: parseNote(contents) };
   } catch (error) {
     console.warn(
@@ -101,16 +111,16 @@ async function readAndParse(
 /**
  * Upserts a parsed note into `index` and commits the result to the store.
  *
- * Shared by `reindexDocument` and `reindexRenamedDocument`, which both build a
- * {@link NoteIndexEntry} from the parsed note and replace the index state.
+ * Shared by `reindexDocument` and `reindexRenamedDocument`, which both pass the
+ * parsed note to `addNote` (which builds the {@link NoteIndexEntry} internally)
+ * and replace the index state.
  */
 function upsertNote(
   set: (partial: Partial<WikiLinkIndexStore>) => void,
   index: WikiLinkIndex,
   parsed: { relativePath: string; parsedNote: ParsedNote }
 ): void {
-  const entry = buildNoteIndexEntry(parsed);
-  const next = addNote(index, entry, parsed.parsedNote);
+  const next = addNote(index, parsed);
   set({ wikiLinkIndex: next, noteIndex: next.noteIndex });
 }
 
@@ -120,30 +130,44 @@ export const useWikiLinkIndexStore = create<WikiLinkIndexStore>((set, get) => ({
   rootPath: null,
 
   async indexWorkspace(rootPath, files) {
+    // Abort any in-flight indexing from a previous workspace before starting.
+    indexingAbortController?.abort();
+    const controller = new AbortController();
+    indexingAbortController = controller;
+
     set({ rootPath });
     try {
       // Reads within the workspace are independent; fire them together.
       const read = await Promise.all(
-        files.map((file) => readAndParse(rootPath, file.relative_path))
+        files.map((file) => readAndParse(rootPath, file.relative_path, controller.signal))
       );
       const inputs: WikiLinkIndexInput[] = read.filter(
         (r): r is { relativePath: string; parsedNote: ParsedNote } => r !== null
       );
 
       // Guard against a superseding workspace switch overwriting stale results.
-      if (get().rootPath !== rootPath) return;
+      // The abort check covers the case where `clearWorkspace` or a newer
+      // `indexWorkspace` aborted this batch after its reads completed.
+      if (controller.signal.aborted || get().rootPath !== rootPath) return;
 
       const index = buildWikiLinkIndex(inputs);
       set({ wikiLinkIndex: index, noteIndex: index.noteIndex });
     } catch (error) {
       console.error("[wikiLinkIndexStore] Indexing failed:", error);
-      if (get().rootPath === rootPath) {
+      if (indexingAbortController === controller && get().rootPath === rootPath) {
         set({ wikiLinkIndex: EMPTY_WIKI_LINK_INDEX, noteIndex: [] });
+      }
+    } finally {
+      if (indexingAbortController === controller) {
+        indexingAbortController = null;
       }
     }
   },
 
   clearWorkspace() {
+    // Abort any in-flight indexing so a closed workspace cannot commit stale reads.
+    indexingAbortController?.abort();
+    indexingAbortController = null;
     set({
       wikiLinkIndex: EMPTY_WIKI_LINK_INDEX,
       noteIndex: [],
@@ -154,20 +178,33 @@ export const useWikiLinkIndexStore = create<WikiLinkIndexStore>((set, get) => ({
   async reindexDocument(rootPath, relativePath) {
     if (get().rootPath !== rootPath) return;
     const parsed = await readAndParse(rootPath, relativePath);
-    if (parsed === null) return;
+    if (parsed === null) {
+      // Keep the stale entry rather than silently dropping it; surface the
+      // failure loudly so the developer knows the index is out of sync.
+      console.error(
+        `[wikiLinkIndexStore] Failed to reindex "${relativePath}"; index is stale.`
+      );
+      return;
+    }
     if (get().rootPath !== rootPath) return;
     upsertNote(set, get().wikiLinkIndex, parsed);
   },
 
   async reindexRenamedDocument(rootPath, oldRelativePath, newRelativePath) {
     if (get().rootPath !== rootPath) return;
-    // Remove the old path first so stale links are cleared.
-    const afterRemove = removeNote(get().wikiLinkIndex, oldRelativePath);
-    set({ wikiLinkIndex: afterRemove, noteIndex: afterRemove.noteIndex });
-
+    // Read the new path FIRST so a read failure cannot delete the note from
+    // the index. The old entry is only removed once the new path is parsed.
     const parsed = await readAndParse(rootPath, newRelativePath);
-    if (parsed === null) return;
+    if (parsed === null) {
+      console.error(
+        `[wikiLinkIndexStore] Failed to reindex renamed "${oldRelativePath}" -> "${newRelativePath}"; keeping old entry, index is stale.`
+      );
+      return;
+    }
     if (get().rootPath !== rootPath) return;
+    // Remove the old path and add the new one in a single commit so stale
+    // links are cleared and the new entry lands atomically.
+    const afterRemove = removeNote(get().wikiLinkIndex, oldRelativePath);
     upsertNote(set, afterRemove, parsed);
   },
 

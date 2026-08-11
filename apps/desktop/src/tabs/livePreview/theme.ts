@@ -105,6 +105,19 @@ export const themeRules = {
     cursor: "pointer",
     color: "var(--tn-color-primary)"
   },
+  // Hover affordance: mouse users see the link react before clicking. Color
+  // shifts to the accent-foreground tint and the underline thickens.
+  ".cm-link-resolved:hover": {
+    color: "var(--tn-color-accent-foreground)",
+    textDecorationThickness: "2px"
+  },
+  // Focus affordance: keyboard users get a ring so the focused link is visible
+  // without a mouse. `:focus-visible` avoids showing the ring on mouse click.
+  ".cm-link-resolved:focus-visible": {
+    outline: "2px solid var(--tn-color-ring)",
+    outlineOffset: "2px",
+    borderRadius: "2px"
+  },
   ".cm-link-broken": {
     color: "var(--tn-color-muted-foreground)",
     textDecoration: "line-through",

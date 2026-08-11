@@ -4,6 +4,7 @@ import type { Extension } from "@codemirror/state";
 import {
   Decoration,
   EditorView,
+  keymap,
   ViewPlugin,
   type DecorationSet,
   type ViewUpdate
@@ -104,5 +105,38 @@ export function livePreview(options: LivePreviewOptions = {}): Extension {
       })
     : [];
 
-  return [plugin, clickHandler, livePreviewTheme];
+  // Keyboard follow for resolved wiki links. Mirrors the click handler: when
+  // the cursor is inside a `WikiLink` node, `Mod-Enter` (Cmd/Ctrl+Enter)
+  // resolves the target and calls `onOpenNote`. Returning `true` consumes the
+  // keypress so the editor does not also insert a newline; `false` lets it pass
+  // through when the cursor is not on a wiki link.
+  const keyHandler = options.onOpenNote
+    ? keymap.of([
+        {
+          key: "Mod-Enter",
+          run: (view) => {
+            const tree = syntaxTree(view.state);
+            const head = view.state.selection.main.head;
+
+            // Resolve the deepest leaf at the caret and walk up to a WikiLink.
+            let node: SyntaxNode | null = tree.resolve(head, 1);
+            while (node && node.name !== "WikiLink") {
+              node = node.parent;
+            }
+            if (!node || node.name !== "WikiLink") return false;
+
+            const targetText = extractWikiLinkTarget(node, view.state.doc);
+            if (!targetText) return false;
+
+            const resolvedPath = resolveWikiLinkTarget(targetText, options.noteIndex ?? []);
+            if (!resolvedPath || !options.onOpenNote) return false;
+
+            options.onOpenNote(resolvedPath);
+            return true;
+          }
+        }
+      ])
+    : [];
+
+  return [plugin, clickHandler, keyHandler, livePreviewTheme];
 }
