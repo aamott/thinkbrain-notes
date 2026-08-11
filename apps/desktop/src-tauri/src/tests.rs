@@ -154,7 +154,11 @@ fn temp_test_dir(name: &str) -> PathBuf {
     let path = std::env::temp_dir().join(format!("thinkbrain-notes-{name}-{unique}"));
 
     fs::create_dir_all(&path).expect("temp directory is created");
-    path
+    // Canonicalized the way production resolves a workspace root. On macOS the
+    // temp directory is a symlink (/var -> /private/var) and FSEvents reports
+    // the resolved spelling, so an uncanonicalized root would fail to match a
+    // single event path and the live watcher tests would pass vacuously.
+    path.canonicalize().expect("temp directory canonicalizes")
 }
 
 #[test]
@@ -2033,4 +2037,71 @@ fn closing_a_window_releases_every_watcher_it_was_holding() {
     assert_eq!(stopped, vec!["/notes".to_string()]);
     assert!(interest.is_watched("/vault"));
     assert!(!interest.is_watched("/notes"));
+}
+
+/// One path can produce several events of different kinds in a single batch —
+/// a delete followed by a recreate, or on macOS a write that sets both the
+/// content and metadata flags and so arrives as two `Modify` events. The first
+/// of them claimed the app's expected echo and the rest were reported as
+/// outside changes, which on macOS meant every in-app save came straight back
+/// as somebody else's edit.
+#[test]
+fn a_batch_that_repeats_a_path_claims_the_echo_once_for_the_whole_batch() {
+    use notify::event::{DataChange, MetadataKind};
+    use notify_debouncer_full::DebouncedEvent;
+
+    let root = temp_test_dir("watcher-multi-kind");
+    let note = root.join("saved.md");
+    let at = Instant::now();
+
+    let batch = vec![
+        DebouncedEvent::new(
+            notify::Event::new(EventKind::Modify(ModifyKind::Data(DataChange::Content)))
+                .add_path(note.clone()),
+            at,
+        ),
+        DebouncedEvent::new(
+            notify::Event::new(EventKind::Modify(ModifyKind::Metadata(MetadataKind::Any)))
+                .add_path(note.clone()),
+            at,
+        ),
+    ];
+
+    // The app wrote this note once and expects its echo.
+    record_self_write(&note);
+    let reported = collect_changes(&root, &batch);
+
+    let _ = fs::remove_dir_all(&root);
+    assert_eq!(
+        reported,
+        Vec::new(),
+        "the app reported its own save as an outside edit"
+    );
+}
+
+/// FSEvents cannot pair the two halves of a rename, so macOS reports one
+/// `Name(Any)` event carrying a single path — which may be either end. Treating
+/// every unpaired rename as a removal told the app that a note dragged *into*
+/// the vault had been deleted, dropping a file that is sitting right there.
+#[test]
+fn an_unpairable_rename_is_judged_by_what_is_actually_on_disk() {
+    let root = temp_test_dir("watcher-rename-any");
+    let arrived = root.join("arrived.md");
+    fs::write(&arrived, "# dragged in\n").expect("note is written");
+    let departed = root.join("departed.md");
+
+    let landed = classify_event(
+        &root,
+        &EventKind::Modify(ModifyKind::Name(RenameMode::Any)),
+        &[arrived.clone()],
+    );
+    let left = classify_event(
+        &root,
+        &EventKind::Modify(ModifyKind::Name(RenameMode::Any)),
+        &[departed],
+    );
+
+    let _ = fs::remove_dir_all(&root);
+    assert_eq!(landed.first().map(|change| change.kind), Some(WorkspaceChangeKind::Created));
+    assert_eq!(left.first().map(|change| change.kind), Some(WorkspaceChangeKind::Deleted));
 }

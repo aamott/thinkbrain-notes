@@ -12,6 +12,7 @@ mod tests;
 pub use error::NativeError;
 
 use crate::commands::workspace::WorkspaceWindowRoots;
+use tauri::Manager;
 
 /// Works around WebKitGTK's DMA-BUF renderer aborting on the NVIDIA driver.
 ///
@@ -36,6 +37,22 @@ pub fn run() {
 
     tauri::Builder::default()
         .manage(WorkspaceWindowRoots::default())
+        .setup(|app| {
+            // Windows opened later register this themselves, but the window
+            // declared in tauri.conf.json exists before any command runs. A
+            // destroyed window never runs the frontend teardown, so without
+            // this its file watchers outlive it whenever another window keeps
+            // the process alive.
+            for (label, window) in app.webview_windows().into_iter() {
+                let label = label.to_string();
+                window.on_window_event(move |event| {
+                    if matches!(event, tauri::WindowEvent::Destroyed) {
+                        crate::commands::watcher::release_window_watchers(&label);
+                    }
+                });
+            }
+            Ok(())
+        })
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .invoke_handler(app_command_handlers!())

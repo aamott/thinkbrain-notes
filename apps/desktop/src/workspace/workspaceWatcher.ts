@@ -19,6 +19,14 @@ import { invokeNativeCommand } from "../native/commands";
 /** The native event carrying a settled batch of changes. */
 const WORKSPACE_CHANGED_EVENT = "workspace://changed";
 
+/**
+ * How many changes are worth applying individually before rebuilding instead.
+ *
+ * Matches the full-index path's own batch size, which is the scale at which
+ * that path was judged worth batching in the first place.
+ */
+const MAX_INDIVIDUAL_CHANGES = 50;
+
 /** One reportable change, mirroring the native `WorkspaceChange`. */
 export interface WorkspaceChange {
   readonly kind: "created" | "modified" | "deleted" | "renamed" | "rescan";
@@ -45,6 +53,16 @@ export function applyWorkspaceChanges(
   changes: readonly WorkspaceChange[],
   onRescan: () => void
 ): void {
+  // Every change costs a read, a parse and an index write in each derived
+  // index, and nothing here throttles them. A checkout or a sync client can
+  // settle thousands at once. A full rebuild reads more, but it batches, yields
+  // between batches and can be aborted by a workspace switch — so past this
+  // point it is both cheaper and better behaved than the trickle.
+  if (changes.length > MAX_INDIVIDUAL_CHANGES) {
+    onRescan();
+    return;
+  }
+
   for (const change of changes) {
     switch (change.kind) {
       case "created":

@@ -32,7 +32,7 @@
 //! rare miss it would fix. Nothing goes wrong permanently: the index is a
 //! disposable cache and the next change to that note corrects it.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Component, Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
@@ -185,7 +185,7 @@ pub fn classify_event(root: &Path, kind: &EventKind, paths: &[PathBuf]) -> Vec<W
         EventKind::Modify(ModifyKind::Name(RenameMode::To)) => {
             single(root, paths, WorkspaceChangeKind::Created)
         }
-        EventKind::Modify(ModifyKind::Name(_)) => classify_rename(root, paths),
+        EventKind::Modify(ModifyKind::Name(_)) => classify_unpaired_rename(root, paths),
 
         EventKind::Modify(_) => single(root, paths, WorkspaceChangeKind::Modified),
 
@@ -226,6 +226,26 @@ fn removal(root: &Path, paths: &[PathBuf]) -> Vec<WorkspaceChange> {
         }
     }
     changes
+}
+
+/// A rename the platform could not pair, carrying just one of its two ends.
+///
+/// FSEvents cannot correlate the halves of a rename, so macOS reports a single
+/// unlabelled event that may name either the old path or the new one. Only the
+/// disk can say which: treating every one of them as a removal told the app
+/// that a note dragged *into* the vault had been deleted.
+fn classify_unpaired_rename(root: &Path, paths: &[PathBuf]) -> Vec<WorkspaceChange> {
+    if let [only] = paths {
+        if is_watchable_path(root, only) {
+            let kind = if only.exists() {
+                WorkspaceChangeKind::Created
+            } else {
+                WorkspaceChangeKind::Deleted
+            };
+            return single(root, paths, kind);
+        }
+    }
+    classify_rename(root, paths)
 }
 
 /// A rename, which the caches can only follow when both ends are notes.
@@ -290,6 +310,15 @@ impl SelfWriteLog {
     pub fn record_at(&self, path: &Path, at: Instant) {
         let mut guard = self.expected.lock().unwrap_or_else(|error| error.into_inner());
         let entries = guard.get_or_insert_with(HashMap::new);
+        // Sweep here, because a query only ever prunes the one path it asks
+        // about and some records are never queried at all: a folder delete
+        // becomes a rescan before the log is consulted, a rename's old path is
+        // never looked up, and a write that fails records an echo that cannot
+        // happen. Left alone the map would grow for the life of the process.
+        entries.retain(|_, times| {
+            times.retain(|recorded| at.duration_since(*recorded) <= SELF_WRITE_TTL);
+            !times.is_empty()
+        });
         entries.entry(path.to_path_buf()).or_default().push(at);
     }
 
@@ -551,6 +580,13 @@ pub(crate) fn collect_changes(
     events: &[notify_debouncer_full::DebouncedEvent],
 ) -> Vec<WorkspaceChange> {
     let mut changes: Vec<WorkspaceChange> = Vec::new();
+    // Paths already recognised as our own within this batch. One path can
+    // appear more than once with different kinds — a delete then a recreate, or
+    // on macOS a write reported once for content and again for metadata — and
+    // the expected echo covers the write, not each event describing it. Without
+    // this, the first event claimed the record and every later one was reported
+    // as somebody else's edit.
+    let mut claimed: HashSet<String> = HashSet::new();
 
     for event in events {
         if event.need_rescan() {
@@ -560,7 +596,11 @@ pub(crate) fn collect_changes(
             if change.kind == WorkspaceChangeKind::Rescan {
                 return vec![WorkspaceChange::rescan()];
             }
+            if claimed.contains(&change.path) {
+                continue;
+            }
             if is_own_echo(root, &change) {
+                claimed.insert(change.path.clone());
                 continue;
             }
             if !changes.contains(&change) {

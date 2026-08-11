@@ -123,6 +123,36 @@ describe("translating outside edits into the app's own note events", () => {
     ]);
   });
 
+  /**
+   * Each change costs a read, a parse and an index write, per derived index,
+   * with nothing throttling them. A checkout or a sync client can settle
+   * thousands at once. The full-index path already batches, yields and can be
+   * aborted, so past a point the honest thing is to use it.
+   */
+  it("rebuilds rather than trickle when a batch is too large to apply one by one", () => {
+    const flood = Array.from({ length: 200 }, (_, index) => ({
+      kind: "modified" as const,
+      path: `notes/${index}.md`
+    }));
+
+    const { emitted, onRescan } = apply(flood);
+
+    expect(onRescan).toHaveBeenCalledTimes(1);
+    expect(emitted).toEqual([]);
+  });
+
+  it("still applies an ordinary batch one change at a time", () => {
+    const ordinary = Array.from({ length: 12 }, (_, index) => ({
+      kind: "modified" as const,
+      path: `notes/${index}.md`
+    }));
+
+    const { emitted, onRescan } = apply(ordinary);
+
+    expect(onRescan).not.toHaveBeenCalled();
+    expect(emitted).toHaveLength(12);
+  });
+
   it("ignores a change kind it does not recognise rather than throwing", () => {
     const { emitted, onRescan } = apply([
       { kind: "teleported" as WorkspaceChange["kind"], path: "a.md" },
