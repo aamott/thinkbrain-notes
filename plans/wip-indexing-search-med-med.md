@@ -41,6 +41,23 @@ rebuildable and lives in OS app-data, never in the vault.
   per-workspace `rusqlite::Connection` from `SEARCH_CONNECTIONS`. Nothing
   removes a handle when a workspace closes; revisit only if that matters.
 
+## Known limits of the watcher
+
+- **Only verified on Linux.** The crate is cross-platform and both the paired
+  and unpaired rename shapes are handled, but CI runs `ubuntu-latest` only, so
+  macOS and Windows are portable by construction rather than by evidence.
+- **A symlinked folder inside the vault is reported twice and never suppressed.**
+  `notify` follows symlinks while the app records the canonical path, so the
+  recorded write and the reported event disagree. Costs a redundant reindex, not
+  a missed change.
+- **An in-app folder delete or rename rebuilds the index.** Deliberate: the OS
+  names only the folder, so the notes inside it cannot be enumerated to drop
+  them individually. This also fixes a standing bug where deleting a folder in
+  the app left every note inside it in the index.
+- **An outside write inside the same debounce window as one of ours is missed**
+  until that note changes again — the two are genuinely indistinguishable. See
+  the module docs in `watcher.rs`.
+
 ## Status
 
 - ✅ Native SQLite FTS5 index (schema, upsert, delete, clear, search) — `apps/desktop/src-tauri/src/commands/search.rs`
