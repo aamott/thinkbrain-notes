@@ -63,10 +63,14 @@ export const workspaceDesktopApi: WorkspaceDesktopApi = {
   createWorkspaceFolder(rootPath, relativePath) {
     return invokeNativeCommand("create_workspace_folder", { rootPath, relativePath });
   },
-  renameWorkspaceEntry(rootPath, relativePath, newRelativePath) {
-    return invokeNativeCommand("rename_workspace_entry", { rootPath, relativePath, newRelativePath });
+  async renameWorkspaceEntry(rootPath, relativePath, newRelativePath) {
+    const entry = await invokeNativeCommand("rename_workspace_entry", { rootPath, relativePath, newRelativePath });
+    appEvents.emit("note.renamed", { rootPath, oldRelativePath: relativePath, newRelativePath });
+    return entry;
   },
-  deleteWorkspaceEntry(rootPath, relativePath) {
-    return invokeNativeCommand("delete_workspace_entry", { rootPath, relativePath });
+  async deleteWorkspaceEntry(rootPath, relativePath) {
+    const result = await invokeNativeCommand("delete_workspace_entry", { rootPath, relativePath });
+    appEvents.emit("note.deleted", { rootPath, relativePath });
+    return result;
   }
 };

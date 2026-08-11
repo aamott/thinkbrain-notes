@@ -41,11 +41,11 @@ rebuildable and lives in OS app-data, never in the vault.
 
 - ✅ Native SQLite FTS5 index (schema, upsert, delete, clear, search) — `apps/desktop/src-tauri/src/commands/search.rs`
 - ✅ Per-workspace cache path resolution in OS app-data — `apps/desktop/src-tauri/src/commands/search.rs` (`resolve_index_db_path`, `stable_workspace_hash`)
-- ⬜ Frontend indexing service (batched, abortable, progress) — no service is wired yet; `apps/desktop/src/search/SearchPanel.tsx` and `searchPanelModel.ts` expose the placeholder state machine.
-- ⬜ Background indexer hook on workspace open — workspace opening/tree consumption remains in `apps/desktop/src/workspace/WorkspaceExplorer.tsx`; index lifecycle wiring is still open.
-- ⬜ Incremental upsert/remove on in-app mutations — native commands exist in `apps/desktop/src-tauri/src/commands/search.rs`; the frontend mutation bridge is still open.
-- ⬜ Search UI backend wiring (debounced type-ahead and snippets) — `apps/desktop/src/search/SearchPanel.tsx` and `searchPanelModel.ts` currently report search unavailable.
-- ⬜ Native command bridge and frontend types — native `index_documents`/`search_index`/`clear_index`/`remove_index_document` are registered in `apps/desktop/src-tauri/src/commands/mod.rs`; `apps/desktop/src/native/commands.ts` is not wired to them yet.
+- ✅ Frontend indexing service (batched, abortable, progress) — `apps/desktop/src/search/searchService.ts` (`createSearchService`, `indexWorkspace`, `indexDocument`, `removeDocument`, `search`)
+- ✅ Background indexer hook on workspace open — `apps/desktop/src/search/searchIndexStore.ts` (`indexWorkspace` called from `DesktopShell.handleWorkspaceOpened`); aborts in-flight indexing on workspace switch
+- ✅ Incremental upsert/remove on in-app mutations — `searchIndexStore.subscribeToEvents()` wired in `DesktopShell`; listens to `note.saved`/`note.created`/`note.renamed`/`note.deleted` events from `workspaceAdapter`/`workspaceDocumentAdapter`
+- ✅ Search UI backend wiring (debounced type-ahead and snippets) — `apps/desktop/src/search/SearchPanel.tsx` reads `useSearchIndexStore` status, debounces 300ms, queries via `searchService.search`, renders snippets
+- ✅ Native command bridge and frontend types — `apps/desktop/src/native/commands.ts` types (`NativeDocumentInput`, `NativeSearchHit`) and `invokeNativeCommand` wrappers for `index_documents`/`search_index`/`clear_index`/`remove_index_document`
 - ⬜ Structured frontmatter records and facet queries (D41) — `pending-frontmatter_metadata_facets-high-hard.md`
 - ⬜ File watcher for external edits (OI-003), including index updates — `pending-file_watcher-low-med.md`
 - ⬜ Connection pooling / managed SQLite state (OI-004) — `pending-connection_pooling-low-med.md`

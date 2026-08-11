@@ -2,8 +2,9 @@
 export interface SearchHit {
   readonly relativePath: string;
   readonly fileName: string;
-  readonly line: number;
-  readonly preview: string;
+  readonly title: string | null;
+  readonly snippet: string;
+  readonly score: number;
 }
 
 /** Lifecycle states for the search index. */

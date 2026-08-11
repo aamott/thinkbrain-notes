@@ -25,6 +25,7 @@ import {
   type PersistedTab
 } from "../settings/desktopState";
 import { useTheme } from "../settings/theme-context";
+import { useSearchIndexStore } from "../search/searchIndexStore";
 import { useSettingsStore } from "../settings/settingsStore";
 import {
   createEditorTab,
@@ -326,6 +327,7 @@ export function DesktopShell() {
     setWorkspaceFiles(snapshot.files);
     const recentPaths = updateRecentWorkspacePaths(rootPath);
     void gitService.detectRepository(rootPath);
+    void useSearchIndexStore.getState().indexWorkspace(rootPath, snapshot.files);
     persistDesktopState({ lastWorkspacePath: rootPath, recentWorkspacePaths: recentPaths });
   }, [persistDesktopState, updateRecentWorkspacePaths]);
 
@@ -333,6 +335,7 @@ export function DesktopShell() {
     setRestoredWorkspacePath(null);
     setWorkspaceName(null);
     setWorkspaceFiles([]);
+    useSearchIndexStore.getState().clearWorkspace();
     persistDesktopState({ lastWorkspacePath: null });
   }, [persistDesktopState]);
 
@@ -408,6 +411,10 @@ export function DesktopShell() {
     if (loaded && workspaceRootPath === restoredWorkspacePath) return;
     void useSettingsStore.getState().loadSettings(restoredWorkspacePath);
   }, [restoredWorkspacePath]);
+
+  // Subscribe the search index to note mutation events for incremental updates.
+  // The store's actions are workspace-scoped, so events from other windows are ignored.
+  useEffect(() => useSearchIndexStore.getState().subscribeToEvents(), []);
 
   const handleMarkdownFileCreated = useCallback((rootPath: string, relativePath: string) => {
     if (rootPath !== restoredWorkspacePath) return;
@@ -612,7 +619,7 @@ export function DesktopShell() {
 
   return (
     <main
-      className="grid grid-rows-[2.25rem_minmax(0,1fr)_1.5rem] h-full min-w-[46rem] max-[760px]:min-w-0 overflow-hidden bg-background text-foreground"
+      className="grid grid-rows-[2.25rem_minmax(0,1fr)_1.5rem] h-full min-w-184 max-[760px]:min-w-0 overflow-hidden bg-background text-foreground"
       ref={rootRef}
       aria-label="ThinkBrain desktop workspace"
     >
@@ -663,7 +670,7 @@ export function DesktopShell() {
           </>
         )}
 
-        <section className="flex flex-col flex-auto min-w-[15rem]" aria-label="Note workspace">
+        <section className="flex flex-col flex-auto min-w-60" aria-label="Note workspace">
           <article className="flex flex-1 flex-col min-h-0 overflow-auto bg-editor">
             <div className="flex-[0_0_2rem] border-b border-border text-muted-foreground text-[0.72rem] py-[0.55rem] px-[0.9rem]">
               {workspaceName ?? "Workspace"}{" "}

@@ -34,3 +34,57 @@ describe("workspace open events", () => {
     subscription.dispose();
   });
 });
+
+describe("note rename events", () => {
+  it("emits note.renamed after a successful rename", async () => {
+    const renamed = vi.fn();
+    const subscription = appEvents.on("note.renamed", renamed);
+
+    await workspaceDesktopApi.renameWorkspaceEntry("/vault", "old.md", "new.md");
+
+    expect(renamed).toHaveBeenCalledWith({
+      rootPath: "/vault",
+      oldRelativePath: "old.md",
+      newRelativePath: "new.md"
+    });
+    subscription.dispose();
+  });
+
+  it("emits nothing when the native rename fails", async () => {
+    vi.mocked(invokeNativeCommand).mockRejectedValueOnce(new Error("gone"));
+    const renamed = vi.fn();
+    const subscription = appEvents.on("note.renamed", renamed);
+
+    await expect(
+      workspaceDesktopApi.renameWorkspaceEntry("/vault", "old.md", "new.md")
+    ).rejects.toThrow("gone");
+
+    expect(renamed).not.toHaveBeenCalled();
+    subscription.dispose();
+  });
+});
+
+describe("note delete events", () => {
+  it("emits note.deleted after a successful delete", async () => {
+    const deleted = vi.fn();
+    const subscription = appEvents.on("note.deleted", deleted);
+
+    await workspaceDesktopApi.deleteWorkspaceEntry("/vault", "gone.md");
+
+    expect(deleted).toHaveBeenCalledWith({ rootPath: "/vault", relativePath: "gone.md" });
+    subscription.dispose();
+  });
+
+  it("emits nothing when the native delete fails", async () => {
+    vi.mocked(invokeNativeCommand).mockRejectedValueOnce(new Error("gone"));
+    const deleted = vi.fn();
+    const subscription = appEvents.on("note.deleted", deleted);
+
+    await expect(
+      workspaceDesktopApi.deleteWorkspaceEntry("/vault", "gone.md")
+    ).rejects.toThrow("gone");
+
+    expect(deleted).not.toHaveBeenCalled();
+    subscription.dispose();
+  });
+});
