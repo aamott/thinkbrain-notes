@@ -63,6 +63,23 @@ const mount = async (
   return container;
 };
 
+/**
+ * Emits a change event and waits for the reload it schedules.
+ *
+ * The container coalesces a burst of events into one listing by deferring past
+ * the pending microtasks, so a test has to let that turn of the event loop run
+ * before the grid can have caught up.
+ */
+const emitAndSettle = async <Name extends "note.created" | "note.deleted" | "note.renamed">(
+  event: Name,
+  payload: Parameters<typeof appEvents.emit<Name>>[1]
+): Promise<void> => {
+  await act(async () => {
+    appEvents.emit(event, payload);
+    await Promise.resolve();
+  });
+};
+
 /** The grid draws a dot per entry; the count is spoken in the cell's name. */
 const dayName = (host: HTMLDivElement, day: number): string | null =>
   host
@@ -147,11 +164,9 @@ describe("the calendar's freshness", () => {
     expect(dayName(host, 7)).toContain("1 journal entry");
 
     entries = ["2026-08-07-1802.md", "2026-08-07-1930.md"];
-    await act(async () => {
-      appEvents.emit("note.created", {
-        rootPath: "/vault",
-        relativePath: "journal/2026-08-07-1930.md"
-      });
+    await emitAndSettle("note.created", {
+      rootPath: "/vault",
+      relativePath: "journal/2026-08-07-1930.md"
     });
 
     expect(dayName(host, 7)).toContain("2 journal entries");
@@ -165,11 +180,9 @@ describe("the calendar's freshness", () => {
     expect(dayName(host, 7)).toContain("2 journal entries");
 
     entries = ["2026-08-07-1802.md"];
-    await act(async () => {
-      appEvents.emit("note.deleted", {
-        rootPath: "/vault",
-        relativePath: "journal/2026-08-07-1930.md"
-      });
+    await emitAndSettle("note.deleted", {
+      rootPath: "/vault",
+      relativePath: "journal/2026-08-07-1930.md"
     });
 
     expect(dayName(host, 7)).toContain("1 journal entry");
@@ -183,12 +196,10 @@ describe("the calendar's freshness", () => {
     expect(dayName(host, 7)).toContain("1 journal entry");
 
     entries = [];
-    await act(async () => {
-      appEvents.emit("note.renamed", {
-        rootPath: "/vault",
-        oldRelativePath: "journal/2026-08-07-1802.md",
-        newRelativePath: "notes/moved.md"
-      });
+    await emitAndSettle("note.renamed", {
+      rootPath: "/vault",
+      oldRelativePath: "journal/2026-08-07-1802.md",
+      newRelativePath: "notes/moved.md"
     });
 
     expect(dayName(host, 7)).toContain("0 journal entries");

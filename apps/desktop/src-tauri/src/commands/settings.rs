@@ -97,14 +97,30 @@ pub fn check_app_settings_precondition(
     current: Option<&str>,
     expected: Option<&str>,
 ) -> Result<(), NativeError> {
+    check_settings_precondition(
+        current,
+        expected,
+        "settings.app_conflict",
+        "The application settings changed while this one was being saved.",
+    )
+}
+
+/// The check itself, shared by both documents.
+///
+/// Two writers that disagree about what is on disk is one situation, not two;
+/// only the name of the document differs, and that is what the code and message
+/// carry.
+fn check_settings_precondition(
+    current: Option<&str>,
+    expected: Option<&str>,
+    code: &str,
+    message: &str,
+) -> Result<(), NativeError> {
     if current == expected {
         return Ok(());
     }
 
-    Err(NativeError::new(
-        "settings.app_conflict",
-        "The application settings changed while this one was being saved.",
-    ))
+    Err(NativeError::new(code, message))
 }
 
 
@@ -180,9 +196,10 @@ pub fn read_workspace_settings(
     app: tauri::AppHandle,
     root_path: String,
 ) -> Result<Option<String>, NativeError> {
-    let _settings_lock = WORKSPACE_SETTINGS_MUTATION_LOCK
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    // Deliberately unlocked. Writes land by rename, so a reader never sees a
+    // half-written file, and the lock exists only to hold a write's own
+    // read-check-write together. Taking it here would make one workspace's
+    // write block an unrelated workspace's read for no gain.
     read_settings_file(&resolve_workspace_settings_path(&app, &root_path)?)
 }
 
@@ -198,14 +215,12 @@ pub fn check_workspace_settings_precondition(
     current: Option<&str>,
     expected: Option<&str>,
 ) -> Result<(), NativeError> {
-    if current == expected {
-        return Ok(());
-    }
-
-    Err(NativeError::new(
+    check_settings_precondition(
+        current,
+        expected,
         "settings.workspace_conflict",
         "The workspace settings changed while this one was being saved.",
-    ))
+    )
 }
 
 

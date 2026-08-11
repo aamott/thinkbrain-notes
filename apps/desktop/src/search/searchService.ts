@@ -144,23 +144,30 @@ export function createSearchService(): SearchService {
         }
 
         const batch = files.slice(start, start + batchSize);
-        const documents: NativeDocumentInput[] = [];
 
-        for (const file of batch) {
-          try {
-            const { contents } = await invokeNativeCommand("read_markdown_file", {
-              rootPath,
-              relativePath: file.relative_path
-            });
-            documents.push(buildDocumentInput(file.relative_path, file.file_name, contents));
-          } catch (error) {
-            // Skip unreadable/unparseable notes but keep indexing the rest.
-            console.warn(
-              `[searchService] Skipping "${file.relative_path}" during indexing:`,
-              error
-            );
-          }
-        }
+        // The reads within a batch are independent, so they go out together.
+        // Awaited one at a time, time-to-searchable grew with the note count
+        // rather than with the batch count — a round trip per note on the path
+        // that runs every time a workspace opens.
+        const read = await Promise.all(
+          batch.map(async (file): Promise<NativeDocumentInput | null> => {
+            try {
+              const { contents } = await invokeNativeCommand("read_markdown_file", {
+                rootPath,
+                relativePath: file.relative_path
+              });
+              return buildDocumentInput(file.relative_path, file.file_name, contents);
+            } catch (error) {
+              // Skip unreadable/unparseable notes but keep indexing the rest.
+              console.warn(
+                `[searchService] Skipping "${file.relative_path}" during indexing:`,
+                error
+              );
+              return null;
+            }
+          })
+        );
+        const documents = read.filter((document): document is NativeDocumentInput => document !== null);
 
         if (documents.length > 0) {
           await invokeNativeCommand("index_documents", { rootPath, documents });

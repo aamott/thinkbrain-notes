@@ -24,9 +24,6 @@ import { appEvents } from "../events/appEvents";
  * month, because the month you last browsed to is an accident of browsing (D79).
  */
 
-/** What the tab knows about the folder before any dots exist. */
-type CalendarStatus = "loading" | "ready" | JournalTroubleCode;
-
 export interface CalendarTabContainerProps {
   readonly service: JournalService;
   readonly weekStartsOn?: WeekStart;
@@ -52,7 +49,9 @@ export function CalendarTabContainer({
   const [view, setView] = useState<CalendarView>(initialView);
   const [focusDate, setFocusDate] = useState<JournalDate>(today);
   const [entries, setEntries] = useState<readonly CalendarEntry[]>([]);
-  const [status, setStatus] = useState<CalendarStatus>("loading");
+  // Null while the folder reads fine, which covers both "still loading" and
+  // "loaded": neither draws anything the other does not.
+  const [trouble, setTrouble] = useState<JournalTroubleCode | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
   const { selectedDay } = useJournalFilter();
 
@@ -69,13 +68,13 @@ export function CalendarTabContainer({
   }
 
   const read = useCallback(async (): Promise<{
-    readonly status: CalendarStatus;
+    readonly trouble: JournalTroubleCode | null;
     readonly entries: readonly CalendarEntry[];
   }> => {
     try {
       const listing = await service.listEntries();
       return {
-        status: "ready",
+        trouble: null,
         entries: listing.entries.map((entry) => ({
           relativePath: entry.relativePath,
           ref: entry.ref,
@@ -90,7 +89,7 @@ export function CalendarTabContainer({
       // of empty days, which reads as "you wrote nothing" rather than "I could
       // not look".
       return {
-        status: error instanceof JournalError ? error.code : "unreadable",
+        trouble: error instanceof JournalError ? error.code : "unreadable",
         entries: []
       };
     }
@@ -102,7 +101,7 @@ export function CalendarTabContainer({
     let cancelled = false;
     void read().then((next) => {
       if (cancelled) return;
-      setStatus(next.status);
+      setTrouble(next.trouble);
       setEntries(next.entries);
     });
     return () => {
@@ -119,6 +118,11 @@ export function CalendarTabContainer({
   // dot, and a reload on every keystroke-triggered save would relist the folder
   // while the user types.
   useEffect(() => {
+    // Not debounced. React batches the reloads that land in one task, and the
+    // app has no path that writes many notes at once, so a timer would buy a
+    // saving nothing can currently produce — and none of it can be pinned by a
+    // test. Revisit alongside the first bulk-write feature, where the burst
+    // becomes real and observable.
     const subscriptions = (["note.created", "note.deleted", "note.renamed"] as const).map(
       (event) => appEvents.on(event, reload)
     );
@@ -150,7 +154,7 @@ export function CalendarTabContainer({
       selectedDay={selectedDay}
       days={days}
       totalShowing={entries.length}
-      trouble={status === "loading" || status === "ready" ? undefined : status}
+      trouble={trouble ?? undefined}
       onViewChange={(next) => {
         setView(next);
         onViewChange?.(next);
