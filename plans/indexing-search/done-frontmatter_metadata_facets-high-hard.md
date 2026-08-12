@@ -52,25 +52,25 @@ is acceptable if it shares the platform index's lifecycle and disposal boundary.
 
 ## Acceptance criteria
 
-- [ ] Index records carry arbitrary parsed frontmatter keys and supported scalar/list values;
+- [x] Index records carry arbitrary parsed frontmatter keys and supported scalar/list values;
       no journal-specific keys, mood scale or activity taxonomy are embedded.
-- [ ] Facet and metadata-filter queries accept workspace root, path prefix and requested
+- [x] Facet and metadata-filter queries accept workspace root, path prefix and requested
       field keys/values; all predicates must match one document per D43, and results include
       deterministic distinct values plus matching paths for D16 search.
-- [ ] List values are flattened for multi-select facets; strings and numbers round-trip without
+- [x] List values are flattened for multi-select facets; strings and numbers round-trip without
       product-specific interpretation.
-- [ ] Rebuild and incremental create/save/rename/delete paths keep metadata facets consistent
+- [x] Rebuild and incremental create/save/rename/delete paths keep metadata facets consistent
       with the existing search index lifecycle.
-- [ ] Malformed or unsupported frontmatter never breaks document indexing; typed diagnostics
+- [x] Malformed or unsupported frontmatter never breaks document indexing; typed diagnostics
       identify skipped metadata while ordinary search remains available.
-- [ ] Schema changes are safe for existing disposable databases; a rebuild fully restores search
+- [x] Schema changes are safe for existing disposable databases; a rebuild fully restores search
       and facet data from Markdown files.
-- [ ] Index unavailable/failure is represented explicitly; no API falls back to reading every
+- [x] Index unavailable/failure is represented explicitly; no API falls back to reading every
       source file and no feature-owned cache is introduced.
-- [ ] Tests cover path-prefix isolation, requested-key/value isolation, strings, numbers,
+- [x] Tests cover path-prefix isolation, requested-key/value isolation, strings, numbers,
       lists, duplicate values, combined metadata filters, updates, deletes, rebuilds, malformed
       frontmatter and unavailable index.
-- [ ] `pnpm lint`, `pnpm typecheck`, `pnpm test` and focused Rust tests pass.
+- [x] `pnpm lint`, `pnpm typecheck`, `pnpm test` and focused Rust tests pass.
 
 ## Non-goals
 

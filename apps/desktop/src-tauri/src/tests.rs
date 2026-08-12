@@ -129,6 +129,7 @@ fn record(
         tags: tags.iter().map(|tag| tag.to_string()).collect(),
         aliases: aliases.iter().map(|alias| alias.to_string()).collect(),
         body: body.to_string(),
+        metadata: Vec::new(),
     }
 }
 
@@ -861,7 +862,7 @@ fn rebuild_replaces_previous_index_contents() {
     )
     .expect("first index");
 
-    clear_documents(&connection).expect("index clears");
+    clear_documents(&mut connection).expect("index clears");
     index_document_records(
         &mut connection,
         &[record("new.md", "new.md", None, &[], &[], "fresh content")],
@@ -888,7 +889,7 @@ fn deleting_a_document_removes_it_from_search() {
     )
     .expect("document indexes");
 
-    delete_document(&connection, "removable.md").expect("document deletes");
+    delete_document(&mut connection, "removable.md").expect("document deletes");
 
     assert!(result_paths(&connection, "delete").is_empty());
 }

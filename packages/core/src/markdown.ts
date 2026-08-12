@@ -1,6 +1,14 @@
 import { parseFrontmatter, serializeFrontmatter } from "./frontmatter";
 import { uniqueStrings } from "./settings/internal";
-import type { MarkdownTask, ParsedNote, SerializableNote, WikiLink } from "./note-model";
+import type {
+  IndexMetadataField,
+  IndexMetadataValue,
+  MarkdownTask,
+  NoteDiagnostic,
+  ParsedNote,
+  SerializableNote,
+  WikiLink
+} from "./note-model";
 
 const INLINE_TAG_PATTERN = /(^|[^A-Za-z0-9_/-])#([A-Za-z0-9][A-Za-z0-9_/-]*)/g;
 const WIKI_LINK_PATTERN = /\[\[([^\]|]+?)(?:\|([^\]]+?))?\]\]/g;
@@ -18,18 +26,74 @@ const TASK_PATTERN = /^\s*-\s+\[([ xX])\](?:\s+(.*))?$/;
 export function parseNote(markdown: string): ParsedNote {
   const frontmatterResult = parseFrontmatter(markdown);
   const maskedMarkdown = maskMarkdown(markdown, frontmatterResult.frontmatter);
+  const diagnostics = [...frontmatterResult.diagnostics];
 
   const inlineTags = extractInlineTags(maskedMarkdown);
   const tags = uniqueStrings([...frontmatterResult.metadata.tags, ...inlineTags]);
 
   return {
     ...frontmatterResult,
+    diagnostics,
     inlineTags,
     tags,
     aliases: frontmatterResult.metadata.aliases,
+    indexMetadata: collectIndexMetadata(frontmatterResult.metadata, diagnostics),
     wikiLinks: extractWikiLinks(maskedMarkdown),
     tasks: extractMarkdownTasks(maskedMarkdown, markdown)
   };
+}
+
+function collectIndexMetadata(
+  metadata: Readonly<Record<string, unknown>>,
+  diagnostics: NoteDiagnostic[]
+): IndexMetadataField[] {
+  const fields: IndexMetadataField[] = [];
+
+  for (const [key, rawValue] of Object.entries(metadata).sort(([left], [right]) =>
+    left < right ? -1 : left > right ? 1 : 0
+  )) {
+    const rawValues = Array.isArray(rawValue) ? rawValue : [rawValue];
+    const values: IndexMetadataValue[] = [];
+    const seen = new Set<string>();
+    let unsupportedCount = 0;
+
+    for (const value of rawValues) {
+      if (!isIndexMetadataValue(value)) {
+        unsupportedCount += 1;
+        continue;
+      }
+
+      const identity = `${typeof value}:${String(value)}`;
+      if (!seen.has(identity)) {
+        seen.add(identity);
+        values.push(value);
+      }
+    }
+
+    if (unsupportedCount > 0) {
+      diagnostics.push({
+        code: Array.isArray(rawValue)
+          ? "frontmatter_metadata_unsupported_list_item"
+          : "frontmatter_metadata_unsupported_value",
+        message: Array.isArray(rawValue)
+          ? `Frontmatter field "${key}" contains ${unsupportedCount} metadata ${
+              unsupportedCount === 1 ? "value" : "values"
+            } that cannot be indexed.`
+          : `Frontmatter field "${key}" has a value that cannot be indexed.`,
+        severity: "warning"
+      });
+    }
+
+    if (values.length > 0) {
+      fields.push({ key, values });
+    }
+  }
+
+  return fields;
+}
+
+function isIndexMetadataValue(value: unknown): value is IndexMetadataValue {
+  return typeof value === "string" || (typeof value === "number" && Number.isFinite(value));
 }
 
 /**

@@ -20,10 +20,18 @@ import {
   AbortError,
   createSearchService,
   type IndexProgress,
+  type MetadataQuery,
+  type MetadataQueryData,
   type SearchService
 } from "./searchService";
 
-export type { IndexProgress } from "./searchService";
+export type {
+  IndexProgress,
+  MetadataFacet,
+  MetadataPredicate,
+  MetadataQuery,
+  MetadataQueryData
+} from "./searchService";
 
 /** Lifecycle status of the search index for the current workspace. */
 export type SearchIndexStatus =
@@ -31,6 +39,14 @@ export type SearchIndexStatus =
   | { readonly kind: "indexing"; readonly progress: IndexProgress | null }
   | { readonly kind: "ready" }
   | { readonly kind: "error"; readonly message: string };
+
+export type MetadataIndexQueryResult =
+  | ({ readonly kind: "available" } & MetadataQueryData)
+  | {
+      readonly kind: "unavailable";
+      readonly reason: "no-workspace" | "indexing" | "workspace-mismatch";
+    }
+  | { readonly kind: "failure"; readonly message: string };
 
 /** State + actions exposed by the search index store. */
 export interface SearchIndexStore {
@@ -53,6 +69,7 @@ export interface SearchIndexStore {
     oldRelativePath: string,
     newRelativePath: string
   ): Promise<void>;
+  queryMetadata(rootPath: string, query: MetadataQuery): Promise<MetadataIndexQueryResult>;
   /**
    * Subscribes to app-wide note mutation events and keeps the index in sync.
    * Returns a disposal function that unsubscribes all listeners.
@@ -154,7 +171,43 @@ export const useSearchIndexStore = create<SearchIndexStore>((set, get) => ({
     }
   },
 
+  async queryMetadata(rootPath, query) {
+    const availability = metadataQueryAvailability(get(), rootPath);
+    if (availability) return availability;
+
+    try {
+      const result = await searchService.queryMetadata(rootPath, query);
+      const currentAvailability = metadataQueryAvailability(get(), rootPath);
+      return currentAvailability ?? { kind: "available", ...result };
+    } catch (error) {
+      const currentAvailability = metadataQueryAvailability(get(), rootPath);
+      if (currentAvailability) return currentAvailability;
+      const message = error instanceof Error ? error.message : String(error);
+      console.error("[searchIndexStore] Metadata query failed:", error);
+      return { kind: "failure", message };
+    }
+  },
+
   subscribeToEvents() {
     return subscribeIndexToNoteEvents(get);
   }
 }));
+
+function metadataQueryAvailability(
+  state: Pick<SearchIndexStore, "rootPath" | "status">,
+  rootPath: string
+): Exclude<MetadataIndexQueryResult, { readonly kind: "available" }> | null {
+  if (state.rootPath === null || state.status.kind === "no-workspace") {
+    return { kind: "unavailable", reason: "no-workspace" };
+  }
+  if (state.rootPath !== rootPath) {
+    return { kind: "unavailable", reason: "workspace-mismatch" };
+  }
+  if (state.status.kind === "error") {
+    return { kind: "failure", message: state.status.message };
+  }
+  if (state.status.kind === "indexing") {
+    return { kind: "unavailable", reason: "indexing" };
+  }
+  return null;
+}

@@ -46,10 +46,18 @@ export interface MarkdownTask {
   readonly endOffset: number;
 }
 
+export type IndexMetadataValue = string | number;
+
+export interface IndexMetadataField {
+  readonly key: string;
+  readonly values: readonly IndexMetadataValue[];
+}
+
 export interface ParsedNote extends FrontmatterParseResult {
   readonly inlineTags: readonly string[];
   readonly tags: readonly string[];
   readonly aliases: readonly string[];
+  readonly indexMetadata: readonly IndexMetadataField[];
   readonly wikiLinks: readonly WikiLink[];
   readonly tasks: readonly MarkdownTask[];
 }

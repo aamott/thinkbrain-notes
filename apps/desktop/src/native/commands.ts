@@ -127,6 +127,15 @@ export interface NativeCommandMap {
     };
     readonly result: readonly NativeSearchHit[];
   };
+  readonly query_index_metadata: {
+    readonly args: {
+      readonly rootPath: string;
+      readonly pathPrefix: string;
+      readonly facetKeys: readonly string[];
+      readonly predicates: readonly NativeMetadataPredicate[];
+    };
+    readonly result: NativeMetadataQueryResult;
+  };
   readonly clear_index: {
     readonly args: { readonly rootPath: string };
     readonly result: null;
@@ -335,6 +344,7 @@ export interface NativeDocumentInput {
   readonly tags: readonly string[];
   readonly aliases: readonly string[];
   readonly body: string;
+  readonly metadata: readonly NativeMetadataField[];
 }
 
 export interface NativeSearchHit {
@@ -343,6 +353,28 @@ export interface NativeSearchHit {
   readonly title?: string;
   readonly snippet: string;
   readonly score: number;
+}
+
+export type NativeMetadataValue = string | number;
+
+export interface NativeMetadataField {
+  readonly key: string;
+  readonly values: readonly NativeMetadataValue[];
+}
+
+export interface NativeMetadataPredicate {
+  readonly key: string;
+  readonly value: NativeMetadataValue;
+}
+
+export interface NativeMetadataFacet {
+  readonly key: string;
+  readonly values: readonly NativeMetadataValue[];
+}
+
+export interface NativeMetadataQueryResult {
+  readonly facets: readonly NativeMetadataFacet[];
+  readonly matching_paths: readonly string[];
 }
 
 export async function invokeNativeCommand<TCommand extends NativeCommandName>(

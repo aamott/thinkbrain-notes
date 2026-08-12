@@ -56,6 +56,7 @@ macro_rules! app_command_handlers {
             $crate::commands::workspace::delete_workspace_entry,
             $crate::commands::search::index_documents,
             $crate::commands::search::search_index,
+            $crate::commands::search::query_index_metadata,
             $crate::commands::search::clear_index,
             $crate::commands::search::remove_index_document,
             $crate::commands::settings::read_app_settings,
@@ -74,4 +75,3 @@ macro_rules! app_command_handlers {
         ]
     };
 }
-

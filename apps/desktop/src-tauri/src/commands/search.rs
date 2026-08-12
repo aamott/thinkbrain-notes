@@ -1,13 +1,24 @@
-use crate::error::NativeError;
-use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
-use std::collections::HashMap;
-
-use rusqlite::{params, Connection};
-use std::fs;
-use tauri::Manager;
 use crate::commands::workspace::{resolve_workspace_root, stable_workspace_hash};
+use crate::error::NativeError;
+use rusqlite::{params, Connection, Transaction};
+use serde::{Deserialize, Serialize};
+use std::{
+    collections::HashMap,
+    fs,
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
+use tauri::Manager;
+
+mod metadata;
+#[cfg(test)]
+mod metadata_tests;
+
+pub use metadata::{MetadataField, MetadataPredicate, MetadataQueryResult};
+use metadata::{
+    clear_document_metadata, delete_document_metadata, init_metadata_schema,
+    replace_document_metadata,
+};
 
 static SEARCH_CONNECTIONS: Mutex<Option<HashMap<String, Arc<Mutex<Connection>>>>> = Mutex::new(None);
 
@@ -47,6 +58,8 @@ pub struct DocumentRecord {
     pub aliases: Vec<String>,
     #[serde(default)]
     pub body: String,
+    #[serde(default)]
+    pub metadata: Vec<MetadataField>,
 }
 
 
@@ -101,13 +114,41 @@ pub fn search_index(
     })
 }
 
+#[tauri::command]
+pub fn query_index_metadata(
+    app: tauri::AppHandle,
+    root_path: String,
+    path_prefix: String,
+    facet_keys: Vec<String>,
+    predicates: Vec<MetadataPredicate>,
+) -> Result<MetadataQueryResult, NativeError> {
+    let connection_pool = get_search_connection(&app, &root_path)?;
+    let connection = connection_pool.lock().unwrap();
+
+    metadata::query_metadata(
+        &connection,
+        &metadata::MetadataQuery {
+            path_prefix,
+            facet_keys,
+            predicates,
+        },
+    )
+    .map_err(|error| {
+        NativeError::with_details(
+            "index.metadata_query_failed",
+            "Failed to query workspace metadata.",
+            error.to_string(),
+        )
+    })
+}
+
 
 #[tauri::command]
 pub fn clear_index(app: tauri::AppHandle, root_path: String) -> Result<(), NativeError> {
     let connection_pool = get_search_connection(&app, &root_path)?;
-    let connection = connection_pool.lock().unwrap();
+    let mut connection = connection_pool.lock().unwrap();
 
-    clear_documents(&connection).map_err(|error| {
+    clear_documents(&mut connection).map_err(|error| {
         NativeError::with_details(
             "index.clear_failed",
             "Failed to clear the workspace index.",
@@ -124,9 +165,9 @@ pub fn remove_index_document(
     path: String,
 ) -> Result<(), NativeError> {
     let connection_pool = get_search_connection(&app, &root_path)?;
-    let connection = connection_pool.lock().unwrap();
+    let mut connection = connection_pool.lock().unwrap();
 
-    delete_document(&connection, &path).map_err(|error| {
+    delete_document(&mut connection, &path).map_err(|error| {
         NativeError::with_details(
             "index.remove_failed",
             "Failed to remove a document from the workspace index.",
@@ -210,17 +251,17 @@ pub fn init_index_schema(connection: &Connection) -> rusqlite::Result<()> {
             body,
             tokenize = 'unicode61 remove_diacritics 1'
         );",
-    )
+    )?;
+    init_metadata_schema(connection)
 }
 
 
-/// Inserts or replaces a single document keyed by its workspace-relative path.
-pub fn upsert_document(connection: &Connection, record: &DocumentRecord) -> rusqlite::Result<()> {
-    connection.execute(
+fn upsert_document(transaction: &Transaction<'_>, record: &DocumentRecord) -> rusqlite::Result<()> {
+    transaction.execute(
         "DELETE FROM documents_fts WHERE path = ?1",
         params![record.path],
     )?;
-    connection.execute(
+    transaction.execute(
         "INSERT INTO documents_fts (path, file_name, title, tags, aliases, body)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
         params![
@@ -232,24 +273,27 @@ pub fn upsert_document(connection: &Connection, record: &DocumentRecord) -> rusq
             record.body,
         ],
     )?;
+    replace_document_metadata(transaction, &record.path, &record.metadata)?;
 
     Ok(())
 }
 
 
 /// Removes a single document from the index by path. No-op if absent.
-pub fn delete_document(connection: &Connection, path: &str) -> rusqlite::Result<()> {
-    connection.execute("DELETE FROM documents_fts WHERE path = ?1", params![path])?;
-
-    Ok(())
+pub fn delete_document(connection: &mut Connection, path: &str) -> rusqlite::Result<()> {
+    let transaction = connection.transaction()?;
+    delete_document_metadata(&transaction, path)?;
+    transaction.execute("DELETE FROM documents_fts WHERE path = ?1", params![path])?;
+    transaction.commit()
 }
 
 
 /// Clears every indexed document, used to rebuild the cache from scratch.
-pub fn clear_documents(connection: &Connection) -> rusqlite::Result<()> {
-    connection.execute("DELETE FROM documents_fts", [])?;
-
-    Ok(())
+pub fn clear_documents(connection: &mut Connection) -> rusqlite::Result<()> {
+    let transaction = connection.transaction()?;
+    clear_document_metadata(&transaction)?;
+    transaction.execute("DELETE FROM documents_fts", [])?;
+    transaction.commit()
 }
 
 
@@ -341,5 +385,3 @@ pub fn build_fts_match_query(raw: &str) -> Option<String> {
 
     Some(clauses.join(" "))
 }
-
-

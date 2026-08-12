@@ -1,8 +1,9 @@
-import { parseNote } from "@thinkbrain/core";
+import { parseNote, type IndexMetadataValue } from "@thinkbrain/core";
 import {
   invokeNativeCommand,
   type NativeDocumentInput,
   type NativeMarkdownFileEntry,
+  type NativeMetadataQueryResult,
   type NativeSearchHit
 } from "../native/commands";
 
@@ -38,6 +39,27 @@ export interface SearchResult {
   readonly score: number;
 }
 
+export interface MetadataPredicate {
+  readonly key: string;
+  readonly value: IndexMetadataValue;
+}
+
+export interface MetadataQuery {
+  readonly pathPrefix: string;
+  readonly facetKeys: readonly string[];
+  readonly predicates: readonly MetadataPredicate[];
+}
+
+export interface MetadataFacet {
+  readonly key: string;
+  readonly values: readonly IndexMetadataValue[];
+}
+
+export interface MetadataQueryData {
+  readonly facets: readonly MetadataFacet[];
+  readonly matchingPaths: readonly string[];
+}
+
 /** Options for batch indexing. */
 export interface IndexOptions {
   /** Number of documents per native `index_documents` call. Defaults to 50. */
@@ -67,6 +89,8 @@ export interface SearchService {
 
   /** Searches the index and returns ranked results. */
   search(rootPath: string, query: string, limit?: number): Promise<readonly SearchResult[]>;
+
+  queryMetadata(rootPath: string, query: MetadataQuery): Promise<MetadataQueryData>;
 }
 
 /**
@@ -88,7 +112,8 @@ function buildDocumentInput(
     title: parsed.metadata.title,
     tags: parsed.tags,
     aliases: parsed.aliases,
-    body: parsed.body
+    body: parsed.body,
+    metadata: parsed.indexMetadata
   };
 }
 
@@ -103,6 +128,13 @@ function toSearchResult(hit: NativeSearchHit): SearchResult {
     title: hit.title ?? null,
     snippet: hit.snippet,
     score: hit.score
+  };
+}
+
+function toMetadataQueryData(result: NativeMetadataQueryResult): MetadataQueryData {
+  return {
+    facets: result.facets,
+    matchingPaths: result.matching_paths
   };
 }
 
@@ -207,6 +239,16 @@ export function createSearchService(): SearchService {
     async search(rootPath, query, limit) {
       const hits = await invokeNativeCommand("search_index", { rootPath, query, limit });
       return hits.map(toSearchResult);
+    },
+
+    async queryMetadata(rootPath, query) {
+      const result = await invokeNativeCommand("query_index_metadata", {
+        rootPath,
+        pathPrefix: query.pathPrefix,
+        facetKeys: query.facetKeys,
+        predicates: query.predicates
+      });
+      return toMetadataQueryData(result);
     }
   };
 }

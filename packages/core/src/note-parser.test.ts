@@ -30,7 +30,13 @@ Body with #inline-tag and [[Some Note]] plus [[Other Note|Display Text]].
 - [x] Add tests
 `);
 
-    expect(parsed.diagnostics).toEqual([]);
+    expect(parsed.diagnostics).toEqual([
+      {
+        code: "frontmatter_metadata_unsupported_value",
+        message: 'Frontmatter field "review" has a value that cannot be indexed.',
+        severity: "warning"
+      }
+    ]);
     expect(parsed.body).toContain("Body with #inline-tag");
     expect(parsed.metadata).toMatchObject({
       title: "Example Note",
@@ -46,6 +52,14 @@ Body with #inline-tag and [[Some Note]] plus [[Other Note|Display Text]].
     expect(parsed.inlineTags).toEqual(["inline-tag"]);
     expect(parsed.tags).toEqual(["project", "daily", "inline-tag"]);
     expect(parsed.aliases).toEqual(["Scratchpad"]);
+    expect(parsed.indexMetadata).toEqual([
+      { key: "aliases", values: ["Scratchpad"] },
+      { key: "created_at", values: ["2026-06-17T12:00:00Z"] },
+      { key: "status", values: ["draft"] },
+      { key: "tags", values: ["project", "daily"] },
+      { key: "title", values: ["Example Note"] },
+      { key: "updated_at", values: ["2026-06-17T12:30:00Z"] }
+    ]);
     expect(parsed.wikiLinks).toEqual([
       {
         target: "Some Note",
@@ -93,6 +107,92 @@ Body with #inline-tag and [[Some Note]] plus [[Other Note|Display Text]].
     });
     expect(parsed.tags).toEqual(["tag"]);
     expect(parsed.diagnostics).toEqual([]);
+  });
+
+  it("flattens distinct string and number frontmatter values for indexing", () => {
+    const parsed = parseNote(`---
+project: Atlas
+rating: 4.5
+activities: [walk, read, walk]
+scores: [1, 2, 1]
+---
+Body`);
+
+    expect(parsed.indexMetadata).toEqual([
+      { key: "activities", values: ["walk", "read"] },
+      { key: "project", values: ["Atlas"] },
+      { key: "rating", values: [4.5] },
+      { key: "scores", values: [1, 2] }
+    ]);
+    expect(parsed.diagnostics).toEqual([]);
+  });
+
+  it("reports and skips unsupported frontmatter metadata without losing supported values", () => {
+    const parsed = parseNote(`---
+project: Atlas
+published: true
+review:
+  owner: user
+mixed: [kept, 3, false, [nested]]
+---
+Searchable body`);
+
+    expect(parsed.indexMetadata).toEqual([
+      { key: "mixed", values: ["kept", 3] },
+      { key: "project", values: ["Atlas"] }
+    ]);
+    expect(parsed.body).toBe("Searchable body");
+    expect(parsed.diagnostics).toEqual([
+      {
+        code: "frontmatter_metadata_unsupported_list_item",
+        message: 'Frontmatter field "mixed" contains 2 metadata values that cannot be indexed.',
+        severity: "warning"
+      },
+      {
+        code: "frontmatter_metadata_unsupported_value",
+        message: 'Frontmatter field "published" has a value that cannot be indexed.',
+        severity: "warning"
+      },
+      {
+        code: "frontmatter_metadata_unsupported_value",
+        message: 'Frontmatter field "review" has a value that cannot be indexed.',
+        severity: "warning"
+      }
+    ]);
+  });
+
+  it("keeps string and number identities while skipping empty and null values", () => {
+    const parsed = parseNote(`---
+identity: [1, "1", 1]
+empty: []
+missing:
+---
+Body`);
+
+    expect(parsed.indexMetadata).toEqual([{ key: "identity", values: [1, "1"] }]);
+    expect(parsed.diagnostics).toEqual([
+      {
+        code: "frontmatter_metadata_unsupported_value",
+        message: 'Frontmatter field "missing" has a value that cannot be indexed.',
+        severity: "warning"
+      }
+    ]);
+  });
+
+  it("keeps malformed frontmatter searchable with no indexed metadata", () => {
+    const markdown = "---\ntitle: [unterminated\n---\nSearchable body";
+    const parsed = parseNote(markdown);
+
+    expect(parsed.indexMetadata).toEqual([]);
+    expect(parsed.body).toBe(markdown);
+    expect(parsed.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "frontmatter_yaml_error",
+          severity: "error"
+        })
+      ])
+    );
   });
 
   it("returns a loud fallback for malformed YAML frontmatter", () => {
