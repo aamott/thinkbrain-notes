@@ -63,30 +63,37 @@ export function applyWorkspaceChanges(
     return;
   }
 
+  // Nothing announced here was written by this app: the Rust side claims the
+  // echo of each of our own writes before the batch is sent. Consumers that
+  // would act destructively on a save — an open editor re-reading the file —
+  // need that distinction, and this is the only place that can make it.
+  const origin = "external" as const;
+
   for (const change of changes) {
     switch (change.kind) {
       case "created":
-        appEvents.emit("note.created", { rootPath, relativePath: change.path });
+        appEvents.emit("note.created", { rootPath, relativePath: change.path, origin });
         break;
       case "modified":
         // An outside edit and an in-app save are the same fact: the bytes
         // changed. Reusing `note.saved` is what keeps consumers unchanged.
-        appEvents.emit("note.saved", { rootPath, relativePath: change.path });
+        appEvents.emit("note.saved", { rootPath, relativePath: change.path, origin });
         break;
       case "deleted":
-        appEvents.emit("note.deleted", { rootPath, relativePath: change.path });
+        appEvents.emit("note.deleted", { rootPath, relativePath: change.path, origin });
         break;
       case "renamed":
         if (change.oldPath === undefined) {
           // Without an origin there is no entry to move, but the file is real
           // and unindexed; treating it as new beats dropping it.
-          appEvents.emit("note.created", { rootPath, relativePath: change.path });
+          appEvents.emit("note.created", { rootPath, relativePath: change.path, origin });
           break;
         }
         appEvents.emit("note.renamed", {
           rootPath,
           oldRelativePath: change.oldPath,
-          newRelativePath: change.path
+          newRelativePath: change.path,
+          origin
         });
         break;
       case "rescan":

@@ -9,6 +9,7 @@ import {
   type WorkspaceTreeNode
 } from "./workspaceExplorerModel";
 import { workspaceDesktopApi, type WorkspaceDesktopApi } from "./workspaceAdapter";
+import { subscribeExplorerToNoteChanges } from "./workspaceExplorerRefresh";
 import {
   DEFAULT_WORKSPACE_SETTINGS,
   readWorkspaceSettings,
@@ -204,6 +205,21 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
       void loadWorkspace(initialWorkspacePath, true);
     }
   }, [initialWorkspacePath, loadWorkspace]);
+
+  // Follow the folder, not just this window's own edits. A `git pull`, a sync
+  // client or another editor changes what the workspace holds without the
+  // explorer having done anything, and the tree would keep showing the old
+  // listing until it was refreshed by hand. `refreshEntries` is the same path
+  // every in-app create, rename and delete already takes, so entries no note
+  // event can name — folders, images, canvases — come back correct too.
+  useEffect(
+    () =>
+      subscribeExplorerToNoteChanges(
+        () => rootPathRef.current,
+        () => void refreshEntries()
+      ),
+    [refreshEntries]
+  );
 
   // Command palette "New note" focuses a create-file input at the workspace
   // root. Handled in an effect with a pending-request ref so a request that

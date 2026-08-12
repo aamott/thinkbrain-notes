@@ -33,7 +33,7 @@ describe("translating outside edits into the app's own note events", () => {
     const { emitted } = apply([{ kind: "created", path: "notes/new.md" }]);
 
     expect(emitted).toEqual([
-      { event: "note.created", payload: { rootPath: "/vault", relativePath: "notes/new.md" } }
+      { event: "note.created", payload: { rootPath: "/vault", relativePath: "notes/new.md", origin: "external" } }
     ]);
   });
 
@@ -45,7 +45,7 @@ describe("translating outside edits into the app's own note events", () => {
     const { emitted } = apply([{ kind: "modified", path: "notes/edited.md" }]);
 
     expect(emitted).toEqual([
-      { event: "note.saved", payload: { rootPath: "/vault", relativePath: "notes/edited.md" } }
+      { event: "note.saved", payload: { rootPath: "/vault", relativePath: "notes/edited.md", origin: "external" } }
     ]);
   });
 
@@ -53,7 +53,7 @@ describe("translating outside edits into the app's own note events", () => {
     const { emitted } = apply([{ kind: "deleted", path: "notes/gone.md" }]);
 
     expect(emitted).toEqual([
-      { event: "note.deleted", payload: { rootPath: "/vault", relativePath: "notes/gone.md" } }
+      { event: "note.deleted", payload: { rootPath: "/vault", relativePath: "notes/gone.md", origin: "external" } }
     ]);
   });
 
@@ -68,7 +68,8 @@ describe("translating outside edits into the app's own note events", () => {
         payload: {
           rootPath: "/vault",
           oldRelativePath: "notes/old.md",
-          newRelativePath: "notes/new.md"
+          newRelativePath: "notes/new.md",
+          origin: "external"
         }
       }
     ]);
@@ -119,7 +120,7 @@ describe("translating outside edits into the app's own note events", () => {
     const { emitted } = apply([{ kind: "renamed", path: "notes/new.md" }]);
 
     expect(emitted).toEqual([
-      { event: "note.created", payload: { rootPath: "/vault", relativePath: "notes/new.md" } }
+      { event: "note.created", payload: { rootPath: "/vault", relativePath: "notes/new.md", origin: "external" } }
     ]);
   });
 
@@ -153,6 +154,26 @@ describe("translating outside edits into the app's own note events", () => {
     expect(emitted).toHaveLength(12);
   });
 
+  /**
+   * Every event from here describes a write the app did not make — the Rust
+   * side has already swallowed the echoes of our own. Saying so is what lets an
+   * open editor reload without also re-reading the file over the keystrokes
+   * that produced its own save.
+   */
+  it("marks every change as coming from outside the app", () => {
+    const { emitted } = apply([
+      { kind: "created", path: "a.md" },
+      { kind: "modified", path: "b.md" },
+      { kind: "deleted", path: "c.md" },
+      { kind: "renamed", path: "e.md", oldPath: "d.md" }
+    ]);
+
+    expect(emitted).toHaveLength(4);
+    for (const entry of emitted) {
+      expect(entry.payload).toMatchObject({ origin: "external" });
+    }
+  });
+
   it("ignores a change kind it does not recognise rather than throwing", () => {
     const { emitted, onRescan } = apply([
       { kind: "teleported" as WorkspaceChange["kind"], path: "a.md" },
@@ -161,7 +182,7 @@ describe("translating outside edits into the app's own note events", () => {
 
     expect(onRescan).not.toHaveBeenCalled();
     expect(emitted).toEqual([
-      { event: "note.created", payload: { rootPath: "/vault", relativePath: "b.md" } }
+      { event: "note.created", payload: { rootPath: "/vault", relativePath: "b.md", origin: "external" } }
     ]);
   });
 });

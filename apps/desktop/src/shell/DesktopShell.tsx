@@ -33,14 +33,22 @@ import {
   createEditorTab,
   createStaticTab,
   desktopTabReducer,
+  editorTabId,
   initialDesktopTabState,
   type DesktopTab
 } from "../tabs/tabModel";
+import { subscribeToNoteChanges } from "../events/noteChangeSubscription";
 import { workspaceDocumentApi } from "../workspace/workspaceDocumentAdapter";
 import { workspaceDesktopApi } from "../workspace/workspaceAdapter";
 import { loadWorkspaceDocument, saveWorkspaceDocument } from "../workspace/workspaceDocumentModel";
 import { watchWorkspace } from "../workspace/workspaceWatcher";
 import { addWorkspaceFile, removeWorkspaceFile } from "./workspaceFileList";
+import {
+  applyReloadedDocument,
+  documentsToReload,
+  moveDocumentView,
+  type OpenDocument
+} from "./externalDocumentSync";
 import { ActivityBar } from "./ActivityBar";
 import { DirtyCloseDialog } from "./DirtyCloseDialog";
 import { ResizeHandle } from "./ResizeHandle";
@@ -57,6 +65,9 @@ export function DesktopShell() {
   const [tabState, dispatchTabs] = useReducer(desktopTabReducer, initialDesktopTabState);
   const [documents, setDocuments] = useState<Record<string, DocumentViewState>>({});
   const documentsRef = useRef(documents);
+  // Read by the outside-change subscription, which outlives any one set of
+  // tabs and must not be rebuilt every time one opens or closes.
+  const tabStateRef = useRef(tabState);
   const paletteRestoreFocusRef = useRef<HTMLElement | null>(null);
   const [leftPanel, setLeftPanel] = useState<LeftPanel | null>("explorer");
   const [rightPanel, setRightPanel] = useState<RightPanel | null>(null);
@@ -92,6 +103,10 @@ export function DesktopShell() {
   useEffect(() => {
     documentsRef.current = documents;
   }, [documents]);
+
+  useEffect(() => {
+    tabStateRef.current = tabState;
+  }, [tabState]);
 
   // Clean up document view-state entries when their tabs are closed. The tab
   // reducer (`removeTab`) only drops the tab from the tabs array; the documents
@@ -162,6 +177,29 @@ export function DesktopShell() {
               ? { phase: "ready", contents: result.document.contents, error: null }
               : { phase: "error", contents: "", error: result.message }
           }));
+        }
+      );
+    },
+    []
+  );
+
+  /**
+   * Re-reads a note that changed on disk into the tab already showing it.
+   *
+   * Unlike `loadDocumentIntoView` this never blanks the tab first: the tab has
+   * readable text now, and flashing it empty to fetch text it probably still
+   * has would be worse than the staleness being fixed. A failed read leaves the
+   * tab as it is for the same reason.
+   */
+  const reloadDocumentInPlace = useCallback(
+    (tabId: string, rootPath: string, relativePath: string) => {
+      const expectedContents = documentsRef.current[tabId]?.contents ?? "";
+      void loadWorkspaceDocument(workspaceDocumentApi, { rootPath, relativePath }).then(
+        (result) => {
+          if (!result.ok) return;
+          setDocuments((current) =>
+            applyReloadedDocument(current, tabId, expectedContents, result.document.contents)
+          );
         }
       );
     },
@@ -514,6 +552,52 @@ export function DesktopShell() {
     };
   }, [restoredWorkspacePath]);
 
+  // Keep open editor tabs level with the files they are showing. A tab is a
+  // copy of a file taken when it opened, and nothing used to tell the shell
+  // that copy had gone stale — a note edited in another program stayed on
+  // screen as it was, and saving from that tab put the old text back over the
+  // newer file.
+  useEffect(() => {
+    if (!restoredWorkspacePath) return;
+    const rootPath = restoredWorkspacePath;
+
+    return subscribeToNoteChanges(
+      () => rootPath,
+      (change) => {
+        // A tab is identified by the path of its file, so a rename moves the
+        // tab rather than changing what it holds. This is not only about
+        // outside renames: renaming from the explorer left the tab pointing at
+        // a path nothing lived at, and saving it recreated the old file.
+        if (change.kind === "renamed") {
+          const from = { rootPath, relativePath: change.oldRelativePath };
+          const to = { rootPath, relativePath: change.newRelativePath };
+          const fromTabId = editorTabId(from);
+          if (!tabStateRef.current.tabs.some((tab) => tab.id === fromTabId)) return;
+          setDocuments((current) => moveDocumentView(current, fromTabId, editorTabId(to)));
+          dispatchTabs({ type: "retarget", from, to });
+          return;
+        }
+
+        const openDocuments: readonly OpenDocument[] = tabStateRef.current.tabs.flatMap((tab) => {
+          const resource = tab.resource;
+          if (tab.kind !== "editor" || !resource?.rootPath || !resource.relativePath) return [];
+          return [
+            {
+              tabId: tab.id,
+              rootPath: resource.rootPath,
+              relativePath: resource.relativePath,
+              isDirty: Boolean(tab.isDirty)
+            }
+          ];
+        });
+
+        for (const target of documentsToReload(openDocuments, change)) {
+          reloadDocumentInPlace(target.tabId, target.rootPath, target.relativePath);
+        }
+      }
+    );
+  }, [reloadDocumentInPlace, restoredWorkspacePath]);
+
   const handleMarkdownFileCreated = useCallback((rootPath: string, relativePath: string) => {
     if (rootPath !== restoredWorkspacePath) return;
     setWorkspaceFiles((files) => addWorkspaceFile(files, relativePath));
@@ -527,27 +611,31 @@ export function DesktopShell() {
   useEffect(() => {
     if (!restoredWorkspacePath) return;
     const rootPath = restoredWorkspacePath;
-    const forThisWorkspace = (eventRoot: string) => eventRoot === rootPath;
 
-    const disposables = [
-      appEvents.on("note.created", ({ rootPath: eventRoot, relativePath }) => {
-        if (!forThisWorkspace(eventRoot)) return;
-        setWorkspaceFiles((files) => addWorkspaceFile(files, relativePath));
-      }),
-      appEvents.on("note.deleted", ({ rootPath: eventRoot, relativePath }) => {
-        if (!forThisWorkspace(eventRoot)) return;
-        setWorkspaceFiles((files) => removeWorkspaceFile(files, relativePath));
-      }),
-      appEvents.on("note.renamed", ({ rootPath: eventRoot, oldRelativePath, newRelativePath }) => {
-        if (!forThisWorkspace(eventRoot)) return;
-        setWorkspaceFiles((files) =>
-          addWorkspaceFile(removeWorkspaceFile(files, oldRelativePath), newRelativePath)
-        );
-      })
-    ];
-    return () => {
-      for (const disposable of disposables) void disposable.dispose();
-    };
+    return subscribeToNoteChanges(
+      () => rootPath,
+      (change) => {
+        switch (change.kind) {
+          case "created":
+            setWorkspaceFiles((files) => addWorkspaceFile(files, change.relativePath));
+            break;
+          case "deleted":
+            setWorkspaceFiles((files) => removeWorkspaceFile(files, change.relativePath));
+            break;
+          case "renamed":
+            setWorkspaceFiles((files) =>
+              addWorkspaceFile(
+                removeWorkspaceFile(files, change.oldRelativePath),
+                change.newRelativePath
+              )
+            );
+            break;
+          case "saved":
+            // The list holds names, and a save does not change one.
+            break;
+        }
+      }
+    );
   }, [restoredWorkspacePath]);
 
   /**

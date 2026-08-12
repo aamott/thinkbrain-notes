@@ -53,7 +53,9 @@ describe("the workspace watcher's lifecycle", () => {
     });
 
     // Heard, and re-announced under the root the stores are keyed by.
-    expect(seen).toEqual([{ rootPath: "/link/vault", relativePath: "a.md" }]);
+    expect(seen).toEqual([
+      { rootPath: "/link/vault", relativePath: "a.md", origin: "external" }
+    ]);
     void subscription.dispose();
   });
 

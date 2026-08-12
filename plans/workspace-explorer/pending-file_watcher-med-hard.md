@@ -16,11 +16,94 @@ maintenance.
 - If an open editor tab represents a file changed externally, prompt the user to
   reload it (or auto-reload if unmodified).
 
+## Architecture comparison (2026-08-12)
+
+### How the tree should learn about a change
+
+The explorer holds a flat `entries` array for the whole workspace (no lazy
+loading) and rebuilds the tree with a `useMemo`. Every in-app create, rename and
+delete already refreshes it the same way: `runWithRefresh` re-lists the folder
+through `listWorkspaceEntries` and dispatches `opened`.
+
+- **A. Subscribe to note events, call the existing `refreshEntries`, coalesced.**
+  Reuses the path in-app edits already take, so folders, non-Markdown files and
+  the per-workspace `showHidden` preference stay correct for free. One native
+  listing per burst.
+- **B. Patch `entries` from the event payloads.** No I/O, but note events only
+  describe Markdown files. A new folder, a PDF or a `.canvas` file produces no
+  event, so the tree would be *partly* fresh — worse than uniformly stale — and
+  it would have to synthesise entry fields the events do not carry.
+- **C. Move `entries` into a shared Zustand store.** A real refactor for no gain
+  here: the shell's list is Markdown-only and the explorer's is every entry.
+
+**Chosen: A.** Smallest change, and correct for entries the events cannot name.
+
+### Telling our own writes apart from someone else's
+
+`note.saved` is emitted both by `writeMarkdownDocument` after an in-app save and
+by the watcher for an outside edit. The editor must reload for the second and
+must not for the first — re-reading the file we just wrote would overwrite
+keystrokes typed while the write was in flight.
+
+- **D. Add `origin: "local" | "external"` to the note events.** One optional
+  field; absent means `"local"`, so a future emitter that forgets it costs
+  freshness rather than data. Consumers that do not care ignore it.
+- **E. Compare disk contents against the buffer.** No contract change, but a
+  read on every save and it still cannot see the in-flight-typing race.
+- **F. A separate `note.changedExternally` event.** Cleanest split, but the
+  watcher would emit two events per outside edit and the vocabulary grows for
+  one consumer.
+
+**Chosen: D.**
+
+### Prerequisite refactor
+
+Three places now subscribe to the same four note events with the same root
+guard: both index stores (already shared via `subscribeIndexToNoteEvents`), the
+shell's `workspaceFiles` effect, and — with this story — the explorer and the
+editor. That is the fourth and fifth copy. A single `subscribeToNoteChanges`
+in `events/` is written first and the shell's effect moves onto it.
+
+Likewise there is no shared debounce: `SearchPanel`, `autosaveScheduler` and
+`tabModel` each hand-roll one. This story adds a `lib/debounce.ts` rather than a
+fourth. Migrating the existing three is deliberately left out of scope.
+
 ## Acceptance Criteria
 
-- [ ] Explorer tree updates automatically on file add/delete/rename events from
+- [x] Explorer tree updates automatically on file add/delete/rename events from
       the indexing-search watcher.
-- [ ] Active editor tab reloads content if its file changes externally.
-- [ ] Explorer ignores events for closed or superseded workspaces.
-- [ ] No second watcher, debounce loop, or FTS5/index update path is introduced
+- [x] Active editor tab reloads content if its file changes externally — every
+      open tab, in fact, not only the one on screen. A tab with unsaved edits is
+      left alone; see the scope split below.
+- [x] Explorer ignores events for closed or superseded workspaces.
+- [x] No second watcher, debounce loop, or FTS5/index update path is introduced
       in this epic.
+
+## Fixed along the way
+
+Renaming a note from the explorer left any tab showing it pointing at a path
+nothing lived at, because a tab's identity is built from its file's path and
+nothing re-pointed it. Saving that tab wrote the note back under its old name.
+This predates the watcher and applied to in-app renames; following a rename is
+the same work whichever program made it, so `retarget` handles both.
+
+## Scope split
+
+A tab with unsaved edits whose file changed underneath needs the user to choose
+between the two versions, which is a new UI surface and needs a mockup signed
+off before it is built. So this story lands in two parts:
+
+1. **No new UI** — tree refresh, reload of a tab with no unsaved edits, and
+   re-pointing a tab whose file was renamed outside the app.
+2. **Gated on a mockup** — the prompt for a tab with unsaved edits.
+
+Until part 2 lands, a tab with unsaved edits is left exactly as it is: stale,
+but never silently overwritten by the reload.
+
+## Out of scope, and worth a story of its own
+
+`write_markdown_file` overwrites blind — it takes no `expected` precondition,
+unlike the settings writes, which go through `documentChain`. So saving a tab
+whose file changed underneath still overwrites the outside edit, whether or not
+the tab was reloaded. Closing that needs a Rust change and belongs with the
+conflict prompt, not here.
