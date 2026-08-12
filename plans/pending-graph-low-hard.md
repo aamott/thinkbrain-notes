@@ -1,7 +1,8 @@
 # Graph
 
 > Future epic (low urgency, stub). Backlinks and graph view built on top of the
-> wiki-link index. Read `plans/app-vision.md` and `plans/wip-note-model-low-hard.md` before
+> wiki-link index. The backlinks panel is elevated to medium urgency; the rest
+> remains low. Read `plans/app-vision.md` and `plans/wip-note-model-low-hard.md` before
 > starting any story here.
 
 ## Goal
@@ -83,7 +84,7 @@ future epics; this epic uses only explicit wiki-link edges.
 - ⬜ Wiki-link index for backlinks — reverse index (target → linking notes) — see
   `pending-wiki_link_index-med-med.md`
 - ⬜ Backlinks panel — list notes linking to the active note — see
-  `pending-backlinks_panel-low-med.md`
+  `pending-backlinks_panel-med-med.md` (elevated to medium urgency)
 - ⬜ Automatic link update on rename — rewrite `[[old]]` → `[[new]]` across the vault — see
   `pending-automatic_link_update_on_rename-med-hard.md`
 - ⬜ Graph view — visual network of notes and wiki-link edges — see

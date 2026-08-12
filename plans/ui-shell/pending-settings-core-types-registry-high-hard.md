@@ -1,7 +1,5 @@
 # Story 1: Settings Core Types + Registry + Built-in Modules
 
-**Status:** pending · **Urgency:** high · **Difficulty:** hard
-
 ## Epic
 
 Part of [Modular Settings System](./pending-modular_settings_system-med-hard.md).

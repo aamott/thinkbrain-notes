@@ -134,11 +134,15 @@ resolution remain later separate Git stories and are not dependencies of MVP.
 - ⬜ Read-only inline diff viewer — `plans/git-integration/pending-inline_diff_viewer-high-med.md`
 - ⬜ Extension-host registration seam only — `plans/git-integration/pending-extension_host_registration_seam-high-med.md`
 
-Later, explicitly separate and not MVP blockers:
+Later, promoted to pending (medium urgency) per user priority on automatic
+syncing:
 
-- ⬜ Automatic sync policy — `plans/git-integration/later-automatic_git_sync-high-hard.md`
-- ⬜ File watchers/status refresh — `plans/git-integration/later-git_file_watchers-med-hard.md`
-- ⬜ Conflict detection/resolution — `plans/git-integration/later-git_conflict_resolution-high-hard.md`
+- ⬜ Automatic sync policy — `plans/git-integration/pending-automatic_git_sync-med-hard.md`
+- ⬜ File watchers/status refresh — `plans/git-integration/pending-git_file_watchers-med-hard.md`
+- ⬜ Git conflict detection/resolution — `plans/git-integration/pending-git_conflict_resolution-med-hard.md`
+- ⬜ Cloud sync conflict auto-merge (OneDrive/Google Drive/SyncThing) —
+  `plans/git-integration/pending-cloud_sync_conflict_resolution-med-hard.md`
+  (STOP gate open; Git-in-background is a discovery question, not a decision)
 
 The five foundational stories above are done, but this epic's remaining
 integration items are still pending.

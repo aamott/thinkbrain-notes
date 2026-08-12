@@ -6,8 +6,6 @@
 tab registration, view-mode persistence (D56/D79/D80) and the D57 phone layout all shipped
 2026-08-08. Remaining: metadata predicates in the grid, waiting on D41.
 
-**Status:** pending · **Urgency:** high · **Difficulty:** hard
-
 ## Epic
 
 Part of [Journal & Calendar](../pending-journal-calendar-high-hard.md).

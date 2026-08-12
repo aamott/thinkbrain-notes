@@ -1,7 +1,5 @@
 # Story: Android Scaffold
 
-**Status:** pending · **Urgency:** low · **Difficulty:** easy
-
 ## Goal
 
 Run `tauri android init` to scaffold the Android target. Verify the app builds

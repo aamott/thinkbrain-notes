@@ -1,7 +1,5 @@
 # Story: Mobile Tauri Config
 
-**Status:** pending · **Urgency:** low · **Difficulty:** easy
-
 ## Goal
 
 Configure mobile-specific Tauri settings and platform capability declarations.

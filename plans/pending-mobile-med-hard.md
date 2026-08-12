@@ -1,18 +1,23 @@
 # Mobile
 
-> Tauri Mobile — a future epic, not yet started. Mobile is a responsive variant
-> of the desktop app, not a separate app. Read `plans/app-vision.md` and
-> `plans/technical-decisions.md` (Platform section) before starting any story
-> here.
+> Tauri Mobile epic. **Android is the priority target; iOS follows later.**
+> Mobile is a responsive variant of the desktop app, not a separate app. Read
+> `plans/app-vision.md` and `plans/technical-decisions.md` (Platform section)
+> before starting any story here. Urgency is medium — elevated from low, but
+> balanced against in-progress core epics.
 
 ## Goal
 
-Ship Android and iOS builds of the existing desktop app via Tauri v2's mobile
-support. Tauri Mobile uses the same webview stack as desktop, so the entire
-React frontend, `packages/ui`, CodeMirror 6, and the adapter pattern are reused
-as-is. Mobile is a responsive layout of the same codebase — phone-first on
-small screens, multi-panel on large screens — not a separate app, separate UI
-layer, or separate adapter set.
+Ship Android builds of the existing desktop app via Tauri v2's mobile support,
+with iOS following in a later phase. Tauri Mobile uses the same webview stack
+as desktop, so the entire React frontend, `packages/ui`, CodeMirror 6, and the
+adapter pattern are reused as-is. Mobile is a responsive layout of the same
+codebase — phone-first on small screens, multi-panel on large screens — not a
+separate app, separate UI layer, or separate adapter set.
+
+**Android-first sequencing:** the responsive layout, Tauri mobile config,
+Android scaffold, and CodeMirror mobile testing stories ship first. The iOS
+scaffold is deferred until Android is stable.
 
 ## Scope
 
@@ -106,12 +111,18 @@ No other epic blocks this one. Resolve only adapter gaps actually proven by mobi
 
 ## Status
 
+**Phase 1 — Android (medium urgency):**
+
 - ⬜ Responsive layout breakpoints (CSS Modules + shared `--tn-*` tokens,
-  phone-first on small screens)
+  phone-first on small screens) — `mobile/pending-responsive_layout-med-med.md`
 - ⬜ Touch-friendly navigation (bottom tabs, swipe gestures, 44px touch targets)
-- ⬜ `tauri android init` — scaffold Android target
-- ⬜ `tauri ios init` — scaffold iOS target (requires macOS)
+- ⬜ `tauri android init` — scaffold Android target — `mobile/pending-android_scaffold-med-easy.md`
 - ⬜ Mobile Tauri config (soft capability declarations and unavailable
-  desktop-only commands)
-- ⬜ CodeMirror mobile testing and fixes (scrolling, IME, touch selection)
+  desktop-only commands) — `mobile/pending-mobile_tauri_config-med-easy.md`
+- ⬜ CodeMirror mobile testing and fixes (scrolling, IME, touch selection) —
+  `mobile/pending-codemirror_mobile_testing-med-med.md`
 - ⬜ Reuse current Tauri adapters; raise only proven cross-cutting adapter gaps through maintenance
+
+**Phase 2 — iOS (low urgency, deferred until Android is stable):**
+
+- ⬜ `tauri ios init` — scaffold iOS target (requires macOS) — `mobile/pending-ios_scaffold-low-easy.md`

@@ -1,13 +1,15 @@
-# Later: Automatic Git Sync Policy
+# Automatic Git Sync Policy
 
 > **REPLAN NEEDED:** Git sync should replace built-in Git entirely, not layer on
-> top. See `plans/wip-git-integration-low-hard.md` before implementing.
+> top. See `plans/wip-git-integration-low-hard.md` before implementing. Promoted
+> from `later-` to `pending-` (medium urgency) per user priority on automatic
+> syncing.
 
 ## Boundary
 
-Deferred beyond basic MVP Git. Define opt-in scheduled/background sync (fetch,
-pull, commit/push policy) only after the extension-host seam exists. This story
-must not be pulled into Source Control completion, commit, branch, or diff work.
+Define opt-in scheduled/background sync (fetch, pull, commit/push policy) after
+the extension-host seam exists. This story must not be pulled into Source
+Control completion, commit, branch, or diff work.
 
 ## Discovery and STOP gate
 

@@ -1,7 +1,5 @@
 # Story: CodeMirror Mobile Testing
 
-**Status:** pending · **Urgency:** low · **Difficulty:** med
-
 ## Goal
 
 Test and fix CodeMirror 6 on the mobile webview. Known issues:

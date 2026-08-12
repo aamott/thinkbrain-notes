@@ -1,12 +1,14 @@
-# Later: Git Conflict Detection and Resolution
+# Git Conflict Detection and Resolution
 
 > **REPLAN NEEDED:** Git sync should replace built-in Git entirely, not layer on
-> top. See `plans/wip-git-integration-low-hard.md` before implementing.
+> top. See `plans/wip-git-integration-low-hard.md` before implementing. Promoted
+> from `later-` to `pending-` (medium urgency) per user priority on automatic
+> syncing and merge UI.
 
 ## Boundary
 
-Deferred advanced conflict detection and three-way resolution UI. MVP may surface
-a typed conflict/non-zero error, but must not edit conflict markers, write merge
+Advanced conflict detection and three-way resolution UI. MVP may surface a
+typed conflict/non-zero error, but must not edit conflict markers, write merge
 results, or pretend `git pull` exists.
 
 ## Discovery and STOP gate

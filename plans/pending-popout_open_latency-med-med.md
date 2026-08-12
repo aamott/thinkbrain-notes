@@ -1,7 +1,5 @@
 # Story: Popout Open Latency
 
-**Status:** pending · **Urgency:** med · **Difficulty:** med
-
 ## Problem
 
 Opening any left popout takes noticeably longer than it should; the editor is fast, so this is

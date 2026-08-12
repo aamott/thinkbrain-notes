@@ -1,7 +1,5 @@
 # Story: Journal/Calendar Extension-Host Integration
 
-**Status:** pending · **Urgency:** med · **Difficulty:** med
-
 ## Epic
 
 Part of [Journal & Calendar](../pending-journal-calendar-high-hard.md). Owns only contribution/lifecycle wiring; journal behavior, Markdown storage, and UI remain in the feature stories. Coordinates with `plans/extensions/pending-beta_builtin_extensions-med-med.md`.

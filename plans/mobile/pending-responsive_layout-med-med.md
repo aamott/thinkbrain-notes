@@ -1,7 +1,5 @@
 # Story: Responsive Layout Breakpoints
 
-**Status:** pending · **Urgency:** low · **Difficulty:** med
-
 ## Goal
 
 Add responsive breakpoints to the desktop shell so it adapts to phone screens.

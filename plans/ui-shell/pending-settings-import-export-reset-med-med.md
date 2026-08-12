@@ -1,7 +1,5 @@
 # Story 6: Settings Import/Export + Per-Section Reset
 
-**Status:** pending · **Urgency:** med · **Difficulty:** med
-
 ## Epic
 
 Part of [Modular Settings System](./pending-modular_settings_system-med-hard.md).

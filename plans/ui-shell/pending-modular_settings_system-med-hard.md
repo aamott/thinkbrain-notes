@@ -1,7 +1,5 @@
 # Modular Settings System
 
-**Status:** pending · **Urgency:** high · **Difficulty:** hard
-
 ## Goal
 
 Replace the current minimal settings implementation with a declarative,

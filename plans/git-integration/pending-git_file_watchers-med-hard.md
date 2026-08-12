@@ -1,11 +1,12 @@
-# Later: Git File Watchers and Status Refresh
+# Git File Watchers and Status Refresh
 
 > **REPLAN NEEDED:** Git sync should replace built-in Git entirely, not layer on
-> top. See `plans/wip-git-integration-low-hard.md` before implementing.
+> top. See `plans/wip-git-integration-low-hard.md` before implementing. Promoted
+> from `later-` to `pending-` (medium urgency).
 
 ## Boundary
 
-Deferred background file watching/polling for workspace and `.git` changes. Basic
+Background file watching/polling for workspace and `.git` changes. Basic
 MVP uses explicit/panel-open refresh only; this story must not add automatic status
 refresh while implementing the panel or diff viewer.
 
