@@ -23,7 +23,7 @@ Review a code surface area using parallel `small` subagents (max 3 concurrent). 
 ## Workflow
 
 ### 1. Identify Surface Area & Group Files
-Run `git status` and `git diff --stat` (against `<base-ref>` if provided) to map changed files. Split files into logical groups for subagents.
+Run `git status` and `git diff --stat` (against `<base-ref>` if provided) to map changed files. Split files into logical groups for subagents. Look for preexisting items as well. 
 
 ### 2. Dispatch Subagents (Max 3 Concurrent)
 Dispatch up to **3 `small` subagents in parallel** (`is_background: true`). 

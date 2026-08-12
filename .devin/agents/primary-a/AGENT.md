@@ -5,4 +5,4 @@ model: gpt-5-6-terra-high
 max-nesting: 2
 ---
 
-Read AGENTS.md for instructions and development rules.
+Read AGENTS.md for instructions and development rules. Small and trivial subagents are free and about haiku level, so use them as needed. 
