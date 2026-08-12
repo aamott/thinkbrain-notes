@@ -48,3 +48,26 @@ are offered.
 
 - `ui-shell/pending-generic_file_viewers-med-med.md` must ship the viewer
   components before files can be opened in-app.
+
+## What the file watcher will need (added 2026-08-12)
+
+The watcher and the note events are Markdown-only, so as soon as other file
+types become editable they will go stale in exactly the way this epic's watcher
+story just fixed for notes:
+
+- `is_watchable_path` in `commands/watcher.rs` is
+  `is_markdown_path(path) && is_in_watched_area(root, path)`. Widening it is one
+  line, but the decision behind it is not: watching every non-hidden file in a
+  vault means watching whatever a user has dropped in it. `IGNORED_FOLDERS`
+  covers some of that; a vault holding a checked-out repo would want more.
+- The event vocabulary is `note.*`, and extensions consume it as a public
+  contract. A `.ts` file is not a note. Either widen what `note.*` means or add
+  a parallel `file.*` set — worth deciding before more consumers are built on
+  it, not after.
+
+The rest of the sync work carries over unchanged: `subscribeToNoteChanges`,
+`planDocumentSync`, `applyReloadedDocument`, `moveDocumentView` and the tab
+`retarget` action are all indifferent to extension. Only
+`reloadDocumentInPlace`'s read is Markdown-gated, through
+`read_markdown_file` — which this story already plans to replace with
+`read_workspace_file`.
