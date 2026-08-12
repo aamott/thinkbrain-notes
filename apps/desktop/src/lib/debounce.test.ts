@@ -83,6 +83,36 @@ describe("a debounced call", () => {
     expect(run).not.toHaveBeenCalled();
   });
 
+  /**
+   * Most of these coalesce work that carries a value — the widths of a panel
+   * being dragged, the tabs to write down. The last call before the wait runs
+   * out is the one that describes the world now.
+   */
+  it("runs with the value from the last call in the burst", () => {
+    const run = vi.fn<(width: number) => void>();
+    const schedule = createDebounced(run, 100);
+
+    schedule(200);
+    schedule(240);
+    schedule(280);
+    vi.advanceTimersByTime(100);
+
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(run).toHaveBeenCalledWith(280);
+  });
+
+  it("forgets the value of a cancelled call", () => {
+    const run = vi.fn<(width: number) => void>();
+    const schedule = createDebounced(run, 100);
+
+    schedule(200);
+    schedule.cancel();
+    schedule(999);
+    vi.advanceTimersByTime(100);
+
+    expect(run).toHaveBeenCalledWith(999);
+  });
+
   /** Cancelling is teardown, not a permanent stop. */
   it("still accepts calls after a cancel", () => {
     const run = vi.fn();

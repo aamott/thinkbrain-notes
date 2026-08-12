@@ -35,7 +35,8 @@ import {
   desktopTabReducer,
   editorTabId,
   initialDesktopTabState,
-  type DesktopTab
+  type DesktopTab,
+  type DesktopTabState
 } from "../tabs/tabModel";
 import { subscribeToNoteChanges } from "../events/noteChangeSubscription";
 import { workspaceDocumentApi } from "../workspace/workspaceDocumentAdapter";
@@ -52,12 +53,19 @@ import {
 import { ActivityBar } from "./ActivityBar";
 import { DirtyCloseDialog } from "./DirtyCloseDialog";
 import { ResizeHandle } from "./ResizeHandle";
+import { createDebounced, type Debounced } from "../lib/debounce";
 import { isSelectableRightPanel, type BottomPanel, type DocumentViewState, type LeftPanel, type RightPanel } from "./shellTypes";
 import { StatusBar } from "./StatusBar";
 import { TabContent } from "./TabContent";
 import { TitleBar } from "./TitleBar";
 
 type PanelSide = "left" | "right";
+
+/** How long a burst of tab opens and closes settles before it is written down. */
+const TAB_PERSIST_DELAY_MS = 400;
+
+/** How long a drag settles before its final width is written down. */
+const PANEL_WIDTH_PERSIST_DELAY_MS = 300;
 
 export function DesktopShell() {
   const paletteCommands = useDesktopCommands();
@@ -79,10 +87,6 @@ export function DesktopShell() {
   const leftWidthRef = useRef(leftWidth);
   const rightWidthRef = useRef(rightWidth);
   const resizeCleanupRef = useRef<(() => void) | null>(null);
-  const panelWidthSaveTimersRef = useRef<Record<PanelSide, ReturnType<typeof setTimeout> | null>>({
-    left: null,
-    right: null
-  });
   const [restoredWorkspacePath, setRestoredWorkspacePath] = useState<string | null>(null);
   const [workspaceName, setWorkspaceName] = useState<string | null>(null);
   const [workspaceFiles, setWorkspaceFiles] = useState<readonly NativeMarkdownFileEntry[]>([]);
@@ -288,32 +292,42 @@ export function DesktopShell() {
    * Skipped until state restoration completes so restored tabs don't
    * immediately trigger a redundant save.
    */
-  const tabSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveTabs = useMemo(
+    () =>
+      createDebounced<DesktopTabState>((tabs) => {
+        persistDesktopState({
+          openTabs: tabs.tabs.map(tabToPersisted),
+          activeTabId: tabs.activeTabId
+        });
+      }, TAB_PERSIST_DELAY_MS),
+    [persistDesktopState]
+  );
   useEffect(() => {
     if (!stateRestored || !isTauri()) return;
-    if (tabSaveTimerRef.current !== null) clearTimeout(tabSaveTimerRef.current);
-    tabSaveTimerRef.current = setTimeout(() => {
-      tabSaveTimerRef.current = null;
-      persistDesktopState({
-        openTabs: tabState.tabs.map(tabToPersisted),
-        activeTabId: tabState.activeTabId
-      });
-    }, 400);
-  }, [tabState, stateRestored, persistDesktopState]);
+    saveTabs(tabState);
+  }, [saveTabs, stateRestored, tabState]);
 
   /**
    * Coalesces rapid resize updates so a drag writes its final width once rather
    * than rewriting the app-settings file for every pointer movement.
    */
-  const schedulePanelWidthPersistence = useCallback((side: PanelSide, width: number) => {
-    const pendingTimer = panelWidthSaveTimersRef.current[side];
-    if (pendingTimer !== null) clearTimeout(pendingTimer);
-
-    panelWidthSaveTimersRef.current[side] = setTimeout(() => {
-      panelWidthSaveTimersRef.current[side] = null;
-      persistDesktopState(side === "left" ? { leftPanelWidth: width } : { rightPanelWidth: width });
-    }, 300);
-  }, [persistDesktopState]);
+  const savePanelWidth = useMemo(
+    (): Record<PanelSide, Debounced<number>> => ({
+      left: createDebounced<number>(
+        (width) => persistDesktopState({ leftPanelWidth: width }),
+        PANEL_WIDTH_PERSIST_DELAY_MS
+      ),
+      right: createDebounced<number>(
+        (width) => persistDesktopState({ rightPanelWidth: width }),
+        PANEL_WIDTH_PERSIST_DELAY_MS
+      )
+    }),
+    [persistDesktopState]
+  );
+  const schedulePanelWidthPersistence = useCallback(
+    (side: PanelSide, width: number) => savePanelWidth[side](width),
+    [savePanelWidth]
+  );
 
   /** Applies and schedules persistence for a safe dock width. */
   const updatePanelWidth = useCallback((side: PanelSide, requestedWidth: number) => {
@@ -347,13 +361,11 @@ export function DesktopShell() {
 
   // Cancel deferred writes and an active drag if the shell unmounts.
   useEffect(() => () => {
-    for (const side of ["left", "right"] as const) {
-      const pendingTimer = panelWidthSaveTimersRef.current[side];
-      if (pendingTimer !== null) clearTimeout(pendingTimer);
-    }
-    if (tabSaveTimerRef.current !== null) clearTimeout(tabSaveTimerRef.current);
+    savePanelWidth.left.cancel();
+    savePanelWidth.right.cancel();
+    saveTabs.cancel();
     resizeCleanupRef.current?.();
-  }, []);
+  }, [savePanelWidth, saveTabs]);
 
   const selectLeftPanel = useCallback((target: LeftPanel) => {
     setLeftPanel((panel) => {
