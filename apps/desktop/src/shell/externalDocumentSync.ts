@@ -24,27 +24,33 @@ export interface OpenDocument {
   readonly isDirty: boolean;
 }
 
-/** A tab whose contents should be read from disk again. */
-export interface ReloadTarget {
-  readonly tabId: string;
-  readonly rootPath: string;
-  readonly relativePath: string;
-}
+/** What an open tab needs doing about a file that changed underneath it. */
+export type DocumentSyncAction =
+  /** Nothing unsaved is at stake, so take what is on disk. */
+  | {
+      readonly kind: "reload";
+      readonly tabId: string;
+      readonly rootPath: string;
+      readonly relativePath: string;
+    }
+  /** Two versions exist and only the user knows which one matters. */
+  | { readonly kind: "conflict"; readonly tabId: string };
 
 /**
- * Returns the open tabs that should be re-read because of `change`.
+ * Decides what `change` means for each open tab.
  *
- * Only an outside write to a file some tab is showing qualifies, and only when
- * that tab has no unsaved edits.
+ * Only an outside write to a file some tab is showing means anything here. A
+ * tab with no unsaved edits can simply take the newer text; a tab with unsaved
+ * edits cannot, because that text exists nowhere else.
  *
  * Args:
  *   openDocuments: Every editor tab currently open, in this workspace.
  *   change: One note change, already filtered to this workspace.
  */
-export function documentsToReload(
+export function planDocumentSync(
   openDocuments: readonly OpenDocument[],
   change: NoteChange
-): readonly ReloadTarget[] {
+): readonly DocumentSyncAction[] {
   // A creation has no tab yet, a deletion leaves the buffer as the last copy of
   // the text, and a rename moves the tab rather than changing what it holds.
   if (change.kind !== "saved") return [];
@@ -54,8 +60,47 @@ export function documentsToReload(
   if (change.origin !== "external") return [];
 
   return openDocuments
-    .filter((document) => document.relativePath === change.relativePath && !document.isDirty)
-    .map(({ tabId, rootPath, relativePath }) => ({ tabId, rootPath, relativePath }));
+    .filter((document) => document.relativePath === change.relativePath)
+    .map(({ tabId, rootPath, relativePath, isDirty }) =>
+      isDirty
+        ? ({ kind: "conflict", tabId } as const)
+        : ({ kind: "reload", tabId, rootPath, relativePath } as const)
+    );
+}
+
+/** Notes that `tabId` is waiting on the user to choose between two versions. */
+export function markConflict(
+  conflicts: ReadonlySet<string>,
+  tabId: string
+): ReadonlySet<string> {
+  if (conflicts.has(tabId)) return conflicts;
+  return new Set(conflicts).add(tabId);
+}
+
+/** Forgets `tabId`'s conflict, once answered or made moot by a save. */
+export function clearConflict(
+  conflicts: ReadonlySet<string>,
+  tabId: string
+): ReadonlySet<string> {
+  if (!conflicts.has(tabId)) return conflicts;
+  const next = new Set(conflicts);
+  next.delete(tabId);
+  return next;
+}
+
+/**
+ * Drops conflicts for tabs that are no longer open.
+ *
+ * A closed tab cannot answer, and the flag would come back to life if the same
+ * file were opened again — a tab's id is built from its path.
+ */
+export function pruneConflicts(
+  conflicts: ReadonlySet<string>,
+  openTabIds: ReadonlySet<string>
+): ReadonlySet<string> {
+  if (conflicts.size === 0) return conflicts;
+  const next = new Set([...conflicts].filter((tabId) => openTabIds.has(tabId)));
+  return next.size === conflicts.size ? conflicts : next;
 }
 
 /**

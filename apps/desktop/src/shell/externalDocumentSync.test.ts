@@ -3,8 +3,11 @@ import { describe, expect, it } from "vitest";
 import type { NoteChange } from "../events/noteChangeSubscription";
 import {
   applyReloadedDocument,
-  documentsToReload,
+  clearConflict,
+  markConflict,
   moveDocumentView,
+  planDocumentSync,
+  pruneConflicts,
   type OpenDocument
 } from "./externalDocumentSync";
 import type { DocumentViewState } from "./shellTypes";
@@ -30,19 +33,19 @@ const savedExternally = (relativePath: string): NoteChange => ({
   origin: "external"
 });
 
-describe("deciding which open notes to re-read from disk", () => {
-  it("re-reads a note that changed underneath its tab", () => {
+describe("deciding what to do about a note that changed on disk", () => {
+  it("re-reads a note whose tab has nothing unsaved in it", () => {
     const open = [openDocument("notes/a.md"), openDocument("notes/b.md")];
 
-    expect(documentsToReload(open, savedExternally("notes/b.md"))).toEqual([
-      { tabId: "editor:notes/b.md", rootPath: ROOT, relativePath: "notes/b.md" }
+    expect(planDocumentSync(open, savedExternally("notes/b.md"))).toEqual([
+      { kind: "reload", tabId: "editor:notes/b.md", rootPath: ROOT, relativePath: "notes/b.md" }
     ]);
   });
 
   it("leaves a note that is not open alone", () => {
     const open = [openDocument("notes/a.md")];
 
-    expect(documentsToReload(open, savedExternally("notes/elsewhere.md"))).toEqual([]);
+    expect(planDocumentSync(open, savedExternally("notes/elsewhere.md"))).toEqual([]);
   });
 
   /**
@@ -55,33 +58,35 @@ describe("deciding which open notes to re-read from disk", () => {
     const open = [openDocument("notes/a.md")];
     const ourOwnSave: NoteChange = { kind: "saved", relativePath: "notes/a.md", origin: "local" };
 
-    expect(documentsToReload(open, ourOwnSave)).toEqual([]);
+    expect(planDocumentSync(open, ourOwnSave)).toEqual([]);
   });
 
   /**
    * Unsaved edits are the one thing that cannot be recovered from disk, so a
-   * dirty tab is never overwritten. The user is asked instead — until that
-   * prompt exists, the tab is simply left as it is.
+   * dirty tab is never overwritten. Two versions now exist and only the user
+   * knows which matters, so the tab is flagged and they are asked.
    */
-  it("never overwrites a tab with unsaved edits", () => {
+  it("asks about a tab with unsaved edits rather than overwriting it", () => {
     const open = [openDocument("notes/a.md", true)];
 
-    expect(documentsToReload(open, savedExternally("notes/a.md"))).toEqual([]);
+    expect(planDocumentSync(open, savedExternally("notes/a.md"))).toEqual([
+      { kind: "conflict", tabId: "editor:notes/a.md" }
+    ]);
   });
 
   it("re-reads a background tab, not only the one on screen", () => {
     const open = [openDocument("notes/a.md"), openDocument("notes/b.md")];
 
-    const reloads = documentsToReload(open, savedExternally("notes/a.md"));
+    const planned = planDocumentSync(open, savedExternally("notes/a.md"));
 
-    expect(reloads.map((target) => target.tabId)).toEqual(["editor:notes/a.md"]);
+    expect(planned.map((action) => action.tabId)).toEqual(["editor:notes/a.md"]);
   });
 
   it("ignores a note that appeared, since nothing has it open yet", () => {
     const open = [openDocument("notes/a.md")];
     const created: NoteChange = { kind: "created", relativePath: "notes/a.md", origin: "external" };
 
-    expect(documentsToReload(open, created)).toEqual([]);
+    expect(planDocumentSync(open, created)).toEqual([]);
   });
 
   /**
@@ -93,7 +98,7 @@ describe("deciding which open notes to re-read from disk", () => {
     const open = [openDocument("notes/a.md")];
     const deleted: NoteChange = { kind: "deleted", relativePath: "notes/a.md", origin: "external" };
 
-    expect(documentsToReload(open, deleted)).toEqual([]);
+    expect(planDocumentSync(open, deleted)).toEqual([]);
   });
 
   it("does not re-read on a rename, which moves the tab rather than its text", () => {
@@ -105,11 +110,11 @@ describe("deciding which open notes to re-read from disk", () => {
       origin: "external"
     };
 
-    expect(documentsToReload(open, renamed)).toEqual([]);
+    expect(planDocumentSync(open, renamed)).toEqual([]);
   });
 
   it("has nothing to do when no note is open", () => {
-    expect(documentsToReload([], savedExternally("notes/a.md"))).toEqual([]);
+    expect(planDocumentSync([], savedExternally("notes/a.md"))).toEqual([]);
   });
 });
 
@@ -208,5 +213,47 @@ describe("moving a tab's text when its file is renamed", () => {
     const before = { same: ready("text") };
 
     expect(moveDocumentView(before, "same", "same")).toBe(before);
+  });
+});
+
+describe("tracking which tabs are waiting on an answer", () => {
+  it("remembers a tab that needs one", () => {
+    expect(markConflict(new Set(), "a")).toEqual(new Set(["a"]));
+  });
+
+  it("stays the same set when a tab is already flagged", () => {
+    const before = new Set(["a"]);
+
+    expect(markConflict(before, "a")).toBe(before);
+  });
+
+  it("forgets a tab once it has been answered", () => {
+    expect(clearConflict(new Set(["a", "b"]), "a")).toEqual(new Set(["b"]));
+  });
+
+  it("stays the same set when clearing a tab that was never flagged", () => {
+    const before = new Set(["a"]);
+
+    expect(clearConflict(before, "b")).toBe(before);
+  });
+
+  /**
+   * A closed tab cannot answer, and its flag would come back to life if a tab
+   * for the same file were opened again — the id is built from the path.
+   */
+  it("forgets tabs that have been closed", () => {
+    expect(pruneConflicts(new Set(["a", "b"]), new Set(["b"]))).toEqual(new Set(["b"]));
+  });
+
+  it("stays the same set when every flagged tab is still open", () => {
+    const before = new Set(["a"]);
+
+    expect(pruneConflicts(before, new Set(["a", "b"]))).toBe(before);
+  });
+
+  it("stays the same set when nothing is flagged", () => {
+    const before: ReadonlySet<string> = new Set();
+
+    expect(pruneConflicts(before, new Set(["a"]))).toBe(before);
   });
 });

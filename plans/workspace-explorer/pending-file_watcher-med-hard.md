@@ -1,5 +1,7 @@
 # Native File Watcher
 
+**Status: done.** Kept until the follow-ups below are filed.
+
 ## Goal
 
 Consume the external file-change events owned by indexing-search so the explorer
@@ -74,7 +76,7 @@ fourth. Migrating the existing three is deliberately left out of scope.
       the indexing-search watcher.
 - [x] Active editor tab reloads content if its file changes externally — every
       open tab, in fact, not only the one on screen. A tab with unsaved edits is
-      left alone; see the scope split below.
+      asked about instead; see the scope split below.
 - [x] Explorer ignores events for closed or superseded workspaces.
 - [x] No second watcher, debounce loop, or FTS5/index update path is introduced
       in this epic.
@@ -97,8 +99,23 @@ off before it is built. So this story lands in two parts:
    re-pointing a tab whose file was renamed outside the app.
 2. **Gated on a mockup** — the prompt for a tab with unsaved edits.
 
-Until part 2 lands, a tab with unsaved edits is left exactly as it is: stale,
-but never silently overwritten by the reload.
+Both parts have landed. Part 2 is the `StaleDocumentBanner`: non-modal, one per
+affected tab, `role="status"` with a polite live region so a screen reader hears
+it without the keyboard being taken away mid-sentence. "Keep mine" only
+dismisses — overwriting the newer file takes the same deliberate save it always
+took, rather than falling out of clearing a message. Saving the tab, or closing
+it, settles the conflict too.
+
+Rejected at sign-off: a modal like the unsaved-close dialog (takes the keyboard
+for something the user did not do, and a `git pull` across several open notes
+queues one per note), and an ambient tab mark plus status-bar count (quietest
+signal for the loudest problem, and the amber dot would have to share the tab
+with the unsaved-changes dot). Mockup: `assets/stale-tab-prompt-mockup.html`.
+
+Deferred with the pick: no side-by-side compare button — it needs a diff view,
+and `git-integration/pending-inline_diff_viewer-high-med.md` already plans one
+worth reusing. And a silent reload says nothing at all, since a tab with no
+unsaved edits was showing a copy of the file and now shows the file.
 
 ## Out of scope, and worth a story of its own
 

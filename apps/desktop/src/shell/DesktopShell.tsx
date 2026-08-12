@@ -46,13 +46,17 @@ import { watchWorkspace } from "../workspace/workspaceWatcher";
 import { addWorkspaceFile, removeWorkspaceFile } from "./workspaceFileList";
 import {
   applyReloadedDocument,
-  documentsToReload,
+  clearConflict,
+  markConflict,
   moveDocumentView,
+  planDocumentSync,
+  pruneConflicts,
   type OpenDocument
 } from "./externalDocumentSync";
 import { ActivityBar } from "./ActivityBar";
 import { DirtyCloseDialog } from "./DirtyCloseDialog";
 import { ResizeHandle } from "./ResizeHandle";
+import { StaleDocumentBanner } from "./StaleDocumentBanner";
 import { createDebounced, type Debounced } from "../lib/debounce";
 import { isSelectableRightPanel, type BottomPanel, type DocumentViewState, type LeftPanel, type RightPanel } from "./shellTypes";
 import { StatusBar } from "./StatusBar";
@@ -73,6 +77,9 @@ export function DesktopShell() {
   const [tabState, dispatchTabs] = useReducer(desktopTabReducer, initialDesktopTabState);
   const [documents, setDocuments] = useState<Record<string, DocumentViewState>>({});
   const documentsRef = useRef(documents);
+  // Tabs whose file changed on disk while they held unsaved edits, waiting on
+  // the user to choose between the two versions.
+  const [conflicts, setConflicts] = useState<ReadonlySet<string>>(new Set());
   // Read by the outside-change subscription, which outlives any one set of
   // tabs and must not be rebuilt every time one opens or closes.
   const tabStateRef = useRef(tabState);
@@ -130,6 +137,12 @@ export function DesktopShell() {
     setDocuments(next);
   }
 
+  // The same cleanup for conflict flags. A closed tab cannot answer, and the
+  // flag would come back to life if the same file were reopened — a tab's id is
+  // built from its path.
+  const prunedConflicts = pruneConflicts(conflicts, openTabIds);
+  if (prunedConflicts !== conflicts) setConflicts(prunedConflicts);
+
   // The same cleanup for what the editors themselves parked. An unmount cannot
   // tell a switch away from a close, so the editor parks its cursor and undo
   // history either way and the shell — which knows which tabs are left — drops
@@ -137,6 +150,8 @@ export function DesktopShell() {
   useEffect(() => {
     releaseEditorStatesExcept(openTabIds);
   }, [openTabIds]);
+
+
 
   // Whether a settings tab is currently open. Derived once so the dirty-sync
   // effect below can depend on a stable boolean instead of the entire `tabs`
@@ -603,8 +618,12 @@ export function DesktopShell() {
           ];
         });
 
-        for (const target of documentsToReload(openDocuments, change)) {
-          reloadDocumentInPlace(target.tabId, target.rootPath, target.relativePath);
+        for (const action of planDocumentSync(openDocuments, change)) {
+          if (action.kind === "conflict") {
+            setConflicts((current) => markConflict(current, action.tabId));
+            continue;
+          }
+          reloadDocumentInPlace(action.tabId, action.rootPath, action.relativePath);
         }
       }
     );
@@ -745,8 +764,32 @@ export function DesktopShell() {
       }
     }));
     if (!hasNewerEdits) dispatchTabs({ type: "setDirty", tabId: tab.id, isDirty: false });
+    // Saving settles any conflict this tab was holding: the user answered it by
+    // writing their version, and the file is now theirs.
+    setConflicts((current) => clearConflict(current, tab.id));
     return true;
   }, []);
+
+  /** Dismisses a conflict, leaving the tab's unsaved edits exactly as they are. */
+  const keepMyVersion = useCallback((tabId: string) => {
+    setConflicts((current) => clearConflict(current, tabId));
+  }, []);
+
+  /**
+   * Throws away the tab's unsaved edits and shows what is on disk.
+   *
+   * Uses the ordinary load rather than the in-place re-read: this is a
+   * deliberate discard, so the brief loading state is honest, and the in-place
+   * path would refuse anyway — its whole job is to not overwrite edits.
+   */
+  const loadDiskVersion = useCallback((tab: DesktopTab) => {
+    const rootPath = tab.resource?.rootPath;
+    const relativePath = tab.resource?.relativePath;
+    if (!rootPath || !relativePath) return;
+    setConflicts((current) => clearConflict(current, tab.id));
+    dispatchTabs({ type: "setDirty", tabId: tab.id, isDirty: false });
+    loadDocumentIntoView(tab.id, rootPath, relativePath);
+  }, [loadDocumentIntoView]);
 
   const activeTab = tabState.tabs.find((tab) => tab.id === tabState.activeTabId) ?? null;
   const activeDocument = activeTab ? documents[activeTab.id] : undefined;
@@ -908,6 +951,13 @@ export function DesktopShell() {
                 </>
               )}
             </div>
+            {activeTab && conflicts.has(activeTab.id) && (
+              <StaleDocumentBanner
+                fileName={activeTab.title}
+                onKeepMine={() => keepMyVersion(activeTab.id)}
+                onLoadFromDisk={() => loadDiskVersion(activeTab)}
+              />
+            )}
             <TabContent tab={activeTab} document={activeDocument} onChange={updateDocument} onSave={saveDocument} noteIndex={noteIndex} onOpenNote={onOpenNote} />
           </article>
           {bottomPanel && (
