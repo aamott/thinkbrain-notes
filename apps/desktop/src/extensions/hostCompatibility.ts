@@ -18,5 +18,5 @@ export const HOST_API_VERSION = "1.0.0";
 export const HOST_COMPATIBILITY: CompatibilityHost = {
   apiVersion: HOST_API_VERSION,
   platform: "desktop",
-  capabilities: ["commands", "panels", "editorHooks", "settings"]
+  capabilities: ["commands", "panels", "editorHooks", "editorHeaders", "tabs", "events", "workspace", "settings"]
 };

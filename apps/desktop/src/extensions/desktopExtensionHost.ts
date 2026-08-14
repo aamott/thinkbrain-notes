@@ -174,7 +174,7 @@ export interface DesktopExtensionHost extends Omit<ExtensionHost, "register"> {
   registerAndActivate(extension: DesktopExtensionDefinition): Promise<Disposable>;
 }
 
-const LOCAL_KEY_PATTERN = /^[A-Za-z][A-Za-z0-9_-]*(?:\.[A-Za-z][A-Za-z0-9_-]*)*$/;
+const DOTTED_IDENTIFIER_PATTERN = /^[A-Za-z][A-Za-z0-9_-]*(?:\.[A-Za-z][A-Za-z0-9_-]*)*$/;
 const RELATIVE_ID_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 
 function assertRelativeId(kind: string, id: string): void {
@@ -214,7 +214,7 @@ function settingsModuleId(extensionId: string): string {
 }
 
 function assertLocalKey(key: string): void {
-  if (typeof key !== "string" || !LOCAL_KEY_PATTERN.test(key)) {
+  if (typeof key !== "string" || !DOTTED_IDENTIFIER_PATTERN.test(key)) {
     throw new Error(`Setting key "${key}" must be a relative extension-local key.`);
   }
 }
@@ -230,10 +230,8 @@ function fullSettingKey(extensionId: string, key: string): { fullKey: string; de
   return { fullKey, definition };
 }
 
-const SECTION_ID_PATTERN = /^[A-Za-z][A-Za-z0-9_-]*(?:\.[A-Za-z][A-Za-z0-9_-]*)*$/;
-
 function namespaceSectionId(moduleId: string, sectionId: string): string {
-  if (!SECTION_ID_PATTERN.test(sectionId)) {
+  if (!DOTTED_IDENTIFIER_PATTERN.test(sectionId)) {
     throw new Error(`Setting section id "${sectionId}" must be a dotted identifier.`);
   }
   return sectionId === moduleId || sectionId.startsWith(`${moduleId}.`)
@@ -343,42 +341,29 @@ function createDesktopExtensionContext(
     }
   };
 
+  const registerPrefixed = <T extends { readonly id: string }>(
+    registry: { register(item: T): Disposable },
+    kind: string
+  ): ((item: T) => Disposable) => (item) => {
+    assertActive();
+    return own(context, registry.register({
+      ...item,
+      id: prefixId(context.extensionId, kind, item.id)
+    }));
+  };
+
   return {
     extensionId: context.extensionId,
     subscriptions: context.subscriptions,
-    commands: {
-      register: (command) => {
-        assertActive();
-        return own(context, registries.commands.register({
-          ...command,
-          id: prefixId(context.extensionId, "Command", command.id)
-        }));
-      }
-    },
+    commands: { register: registerPrefixed(registries.commands, "Command") },
     panels: {
       register: (panel) => {
         assertActive();
         return own(context, registries.panels.register(toPanelContribution(context.extensionId, panel)));
       }
     },
-    editorHooks: {
-      register: (hook) => {
-        assertActive();
-        return own(context, registries.editorHooks.register({
-          ...hook,
-          id: prefixId(context.extensionId, "Editor hook", hook.id)
-        }));
-      }
-    },
-    editorHeaders: {
-      register: (header) => {
-        assertActive();
-        return own(context, registries.editorHeaders.register({
-          ...header,
-          id: prefixId(context.extensionId, "Editor header", header.id)
-        }));
-      }
-    },
+    editorHooks: { register: registerPrefixed(registries.editorHooks, "Editor hook") },
+    editorHeaders: { register: registerPrefixed(registries.editorHeaders, "Editor header") },
     tabs: {
       register: (tab) => {
         assertActive();

@@ -11,7 +11,12 @@ import {
 import { desktopCommandRegistry, type DesktopCommandContext } from "../commands/commandRegistry";
 import { desktopPanelRegistry, type DesktopPanelContext } from "../panels/panelRegistry";
 import { builtInExtensions, type BuiltInExtension } from "./builtins";
-import { desktopExtensionHost, type DesktopExtensionHost } from "./desktopExtensionHost";
+import {
+  desktopExtensionHost,
+  type DesktopExtensionActivation,
+  type DesktopExtensionContext,
+  type DesktopExtensionHost
+} from "./desktopExtensionHost";
 import { HOST_COMPATIBILITY } from "./hostCompatibility";
 import { createLazyExtensionPanel } from "./LazyExtensionPanel";
 import {
@@ -163,6 +168,20 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
     }
   };
 
+  /** Registers with the host, then activates on startup or installs stubs. */
+  const registerAndStub = (
+    state: EntryState,
+    activate: DesktopExtensionActivation,
+    deactivate?: (context: DesktopExtensionContext) => void | Promise<void>
+  ): void => {
+    state.registration = host.register({ id: state.manifest.id, activate, deactivate });
+    if (hasStartupActivation(state.manifest)) {
+      void ensureActive(state).catch(() => undefined);
+    } else {
+      registerStubs(state);
+    }
+  };
+
   /** Disposes everything one extension owns, in reverse of registration. */
   const disposeEntry = async (state: EntryState): Promise<void> => {
     disposeStubs(state);
@@ -210,14 +229,7 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
       continue;
     }
 
-    state.registration = host.register({ id: manifest.id, activate: extension.activate });
-
-    if (hasStartupActivation(manifest)) {
-      void ensureActive(state).catch(() => undefined);
-      continue;
-    }
-
-    registerStubs(state);
+    registerAndStub(state, extension.activate);
   }
 
   // A cached snapshot keeps `entries()` referentially stable between changes,
@@ -276,17 +288,7 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
       };
       states.set(state.manifest.id, state);
 
-      state.registration = host.register({
-        id: state.manifest.id,
-        activate: extension.activate,
-        deactivate: extension.deactivate
-      });
-
-      if (hasStartupActivation(state.manifest)) {
-        void ensureActive(state).catch(() => undefined);
-      } else {
-        registerStubs(state);
-      }
+      registerAndStub(state, extension.activate, extension.deactivate);
 
       rebuildSnapshot();
     },

@@ -1,6 +1,23 @@
 /**
  * ACP Tauri command and event interface.
  *
+ * @internal WIP — scaffolding for the pending ACP host work. NOT used by any
+ * production component yet (only tests import this). The contract below has
+ * DIVERGED from `plans/ai/pending-agent_registry-low-med.md` and must be
+ * rewritten to match the plan before wiring in:
+ *   - Command name: `agent_detect` → plan specifies `agent_list_available`.
+ *   - Field names: `id/label/binary/acpArgs/acpSupport/installed` → plan
+ *     specifies `agentId/displayName/available/acpMode/version?`.
+ *   - Security boundary: `AgentDescriptor` currently exposes `binary` and
+ *     `acpArgs` to the renderer; the plan requires the renderer to receive
+ *     only an opaque `agentId` (no shell strings or args).
+ *   - Session commands: `agent_spawn`/`agent_prompt`/`agent_cancel`/
+ *     `agent_close` → plan (`pending-acp_host_runtime-med-hard.md`) uses
+ *     `agent_session_new`/`agent_session_close` as separate commands.
+ *
+ * TODO(pending-agent_registry): rewrite to match the plan contract from day
+ * one rather than carrying this divergent shape forward.
+ *
  * This file defines the contract between the renderer and the Rust ACP host.
  * The Rust side (owned by a separate story — see
  * `plans/ai/pending-agent_chat_text_streaming_mvp-high-hard.md`) implements
