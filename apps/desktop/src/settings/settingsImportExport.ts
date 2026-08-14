@@ -26,7 +26,7 @@ import {
   CURRENT_SETTINGS_VERSION,
   isRecord,
   type SettingDefinition,
-  type SettingType
+  validateSettings
 } from "@thinkbrain/core";
 
 import { appSettingsRegistry, useSettingsStore } from "./settingsStore";
@@ -122,45 +122,21 @@ export interface ImportResult {
 }
 
 /**
- * Checks whether an imported value matches the setting's declared type.
- *
- * For `enum` settings, the value must be one of the declared `options`. For
- * `number`, the value must be a finite number within the definition's `min`/
- * `max` range (if declared). For `path` and `string`, the value must be a
- * string. For `boolean`, the value must be a boolean.
+ * Checks whether an imported value matches the setting's declared type, range,
+ * and enum constraints by delegating to the canonical core validator. This
+ * avoids duplicating `checkType`/`checkRange`/`checkEnum` from
+ * `@thinkbrain/core` (which had already drifted — the core validator accepts
+ * `null` for `path` settings, the local copy did not).
  *
  * Args:
  *   def: The setting definition to validate against.
  *   value: The imported value to check.
  *
  * Returns:
- *   `true` if the value is valid for the definition's type and constraints.
+ *   `true` if the core validator produces no diagnostics for this value.
  */
 function isValueTypeValid(def: SettingDefinition, value: unknown): boolean {
-  const type: SettingType = def.type;
-  switch (type) {
-    case "boolean":
-      return typeof value === "boolean";
-    case "number":
-      if (typeof value !== "number" || !Number.isFinite(value)) return false;
-      // Enforce declared min/max range so obviously out-of-range values are
-      // not staged. Unbounded sides default to ±Infinity.
-      return (
-        value >= (def.min ?? -Infinity) && value <= (def.max ?? Infinity)
-      );
-    case "string":
-    case "path":
-      // Paths are strings; the portability warning is handled at export time.
-      return typeof value === "string";
-    case "enum":
-      return (
-        typeof value === "string" &&
-        Boolean(def.options?.includes(value))
-      );
-    default:
-      // Unknown setting types are rejected to fail loudly.
-      return false;
-  }
+  return validateSettings(appSettingsRegistry, { [def.key]: value }).length === 0;
 }
 
 /**

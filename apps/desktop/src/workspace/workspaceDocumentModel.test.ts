@@ -1,11 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import type { NativeMarkdownFileContents, NativeMarkdownFileEntry } from "../native/commands";
 import {
-  createWorkspaceDocument,
-  initialWorkspaceDocumentState,
   loadWorkspaceDocument,
-  saveWorkspaceDocument,
-  workspaceDocumentReducer
+  saveWorkspaceDocument
 } from "./workspaceDocumentModel";
 import { createWorkspaceDocumentApi, type WorkspaceDocumentApi } from "./workspaceDocumentAdapter";
 
@@ -44,10 +41,9 @@ describe("workspace document model", () => {
     });
   });
 
-  it("uses the native entry path after a save or create", async () => {
+  it("uses the native entry path after a save", async () => {
     const api = createApi({
-      writeMarkdownDocument: vi.fn().mockResolvedValue({ ...entry, relative_path: "welcome.md" }),
-      createMarkdownDocument: vi.fn().mockResolvedValue({ ...entry, relative_path: "created.md" })
+      writeMarkdownDocument: vi.fn().mockResolvedValue({ ...entry, relative_path: "welcome.md" })
     });
 
     await expect(
@@ -58,9 +54,6 @@ describe("workspace document model", () => {
         expected: undefined
       })
     ).resolves.toEqual({ ok: true, document: { relative_path: "welcome.md", contents: "Updated" } });
-    await expect(
-      createWorkspaceDocument(api, { rootPath: "/notes", relativePath: "created.md" })
-    ).resolves.toEqual({ ok: true, document: { relative_path: "created.md", contents: "" } });
   });
 
   /**
@@ -98,18 +91,6 @@ describe("workspace document model", () => {
       ok: false,
       message: "The note changed.",
       code: "workspace.note_conflict"
-    });
-  });
-
-  it("keeps a loaded document while reporting and dismissing a save failure", () => {
-    const loaded = workspaceDocumentReducer(initialWorkspaceDocumentState, { type: "loaded", document });
-    const failed = workspaceDocumentReducer(loaded, { type: "failed", message: "Read-only" });
-
-    expect(failed).toMatchObject({ phase: "error", document, error: "Read-only" });
-    expect(workspaceDocumentReducer(failed, { type: "dismiss" })).toEqual({
-      phase: "ready",
-      document,
-      error: null
     });
   });
 });

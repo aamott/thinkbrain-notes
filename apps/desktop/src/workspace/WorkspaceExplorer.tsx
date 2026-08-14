@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useId, useMemo, useReducer, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, type RefObject } from "react";
+import { memo, useCallback, useEffect, useId, useMemo, useReducer, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { Check, ChevronDown, Folder, FolderOpen, FolderPlus, MoreHorizontal } from "lucide-react";
 import type { NativeWorkspaceEntry, NativeWorkspaceSnapshot } from "../native/commands";
 import {
@@ -17,6 +17,7 @@ import {
 } from "./workspaceSettings";
 import { WorkspaceFileIcon } from "./WorkspaceFileIcon";
 import { cn } from "../lib/utils";
+import { handleMenuKeyDown } from "../shell/menuKeyboard";
 
 export interface WorkspaceExplorerProps {
   readonly api?: WorkspaceDesktopApi;
@@ -923,45 +924,6 @@ function InlineNameInput({
 }
 
 // ---- Context menu ----
-
-/**
- * Shared keyboard navigation for menu-like components whose items are
- * `<button role="menuitem">` elements rendered inside a container ref.
- * Handles ArrowDown/ArrowUp (with wrap-around), Home, End, and Escape.
- * The Escape close behavior is supplied via `onClose` so callers can plug
- * in their own close semantics (e.g. restoring focus to a trigger button).
- */
-function handleMenuKeyDown(
-  event: ReactKeyboardEvent,
-  menuRef: RefObject<HTMLDivElement | null>,
-  onClose: () => void
-): void {
-  const items = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>("button[role='menuitem']") ?? []);
-  if (!items.length) return;
-  const index = items.indexOf(document.activeElement as HTMLButtonElement);
-  switch (event.key) {
-    case "ArrowDown":
-      event.preventDefault();
-      items[(index + 1) % items.length]?.focus();
-      break;
-    case "ArrowUp":
-      event.preventDefault();
-      items[(index - 1 + items.length) % items.length]?.focus();
-      break;
-    case "Home":
-      event.preventDefault();
-      items[0]?.focus();
-      break;
-    case "End":
-      event.preventDefault();
-      items[items.length - 1]?.focus();
-      break;
-    case "Escape":
-      event.preventDefault();
-      onClose();
-      break;
-  }
-}
 
 type ContextMenuTarget =
   | { readonly kind: "background" }
