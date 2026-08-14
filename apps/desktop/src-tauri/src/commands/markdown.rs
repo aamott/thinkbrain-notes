@@ -5,9 +5,12 @@ use std::path::{Path, PathBuf};
 
 use std::fs;
 
+const MAX_MARKDOWN_DEPTH: usize = 20;
+
 use crate::commands::workspace::{
-    entry_metadata, normalize_relative_path, resolve_workspace_entry_path,
-    resolve_workspace_root, WORKSPACE_ENTRY_MUTATION_LOCK,
+    entry_metadata, is_ignored_entry_name, normalize_relative_path,
+    resolve_workspace_entry_path, resolve_workspace_root, MAX_WORKSPACE_ENTRIES,
+    WORKSPACE_ENTRY_MUTATION_LOCK,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -304,7 +307,7 @@ pub fn collect_markdown_file_entries(
     files: &mut Vec<MarkdownFileEntry>,
     depth: usize,
 ) -> Result<(), NativeError> {
-    if depth > 20 || files.len() > 10_000 {
+    if depth > MAX_MARKDOWN_DEPTH || files.len() > MAX_WORKSPACE_ENTRIES {
         return Ok(());
     }
 
@@ -327,7 +330,7 @@ pub fn collect_markdown_file_entries(
         let path = entry.path();
         
         let name = entry.file_name().to_string_lossy().to_string();
-        if name.starts_with('.') || ["node_modules", "target", "dist", "vendor"].contains(&name.as_str()) {
+        if is_ignored_entry_name(&name) {
             continue;
         }
 

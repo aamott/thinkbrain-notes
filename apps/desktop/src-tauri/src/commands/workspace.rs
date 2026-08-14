@@ -13,7 +13,14 @@ use crate::commands::markdown::{MarkdownFileEntry, list_markdown_file_entries, i
 use crate::commands::watcher::record_self_write;
 
 pub const IGNORED_FOLDERS: &[&str] = &["node_modules", "target", "dist", "vendor"];
-const MAX_WORKSPACE_ENTRIES: usize = 10_000;
+pub(crate) const MAX_WORKSPACE_ENTRIES: usize = 10_000;
+
+/// True for vault entries the explorer, markdown walker, and watcher all skip:
+/// dotfiles plus the configured ignored-folder list. Centralized so the three
+/// cannot drift.
+pub fn is_ignored_entry_name(name: &str) -> bool {
+    is_hidden_name(name) || IGNORED_FOLDERS.contains(&name)
+}
 
 pub static WORKSPACE_ENTRY_MUTATION_LOCK: Mutex<()> = Mutex::new(());
 static WORKSPACE_WINDOW_SEQUENCE: AtomicU64 = AtomicU64::new(1);
@@ -342,6 +349,9 @@ pub fn open_workspace_window(app: tauri::AppHandle, root_path: String) -> Result
     let root = resolve_workspace_root(&root_path)?;
     let label = next_workspace_window_label();
     let root_path = root.to_string_lossy().into_owned();
+    // Register the root before build so the frontend's first
+    // `window_workspace_root` call cannot race past registration.
+    register_workspace_window_root(&app.state::<WorkspaceWindowRoots>(), label.clone(), root_path);
     let window =
         tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::App("index.html".into()))
             .title(describe_workspace(&root).name)
@@ -368,7 +378,6 @@ pub fn open_workspace_window(app: tauri::AppHandle, root_path: String) -> Result
             );
         }),
     );
-    register_workspace_window_root(&app.state::<WorkspaceWindowRoots>(), label, root_path);
     Ok(())
 }
 

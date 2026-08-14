@@ -44,7 +44,7 @@ use serde::Serialize;
 use tauri::Emitter;
 
 use crate::commands::markdown::is_markdown_path;
-use crate::commands::workspace::{resolve_workspace_root, IGNORED_FOLDERS};
+use crate::commands::workspace::{is_ignored_entry_name, resolve_workspace_root};
 use crate::error::NativeError;
 
 /// How long an unclaimed self-write record keeps suppressing.
@@ -150,11 +150,7 @@ pub fn is_in_watched_area(root: &Path, path: &Path) -> bool {
     };
     relative
         .split('/')
-        .all(|part| !is_hidden(part) && !IGNORED_FOLDERS.contains(&part))
-}
-
-fn is_hidden(name: &str) -> bool {
-    name.starts_with('.')
+        .all(|part| !is_ignored_entry_name(part))
 }
 
 /// Whether a vanished path in a watched area was probably a directory.
