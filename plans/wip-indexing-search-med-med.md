@@ -8,7 +8,8 @@ rebuildable and lives in OS app-data, never in the vault.
 
 - Background workspace indexing on open (batched, abortable, non-blocking).
 - Incremental index upsert/remove on in-app create, save, rename, delete.
-- Full-text search across filename, title, tags, aliases, and body text.
+- Full-text search across filename, title, tags, aliases, and body text, scoped
+  to the whole workspace or to one folder.
 - Structured frontmatter indexing and facet queries for feature-owned filters (D41).
 - Search UI panel with debounced type-ahead and result snippets.
 - Per-workspace SQLite FTS5 cache stored in the OS app-data directory.
@@ -37,9 +38,27 @@ rebuildable and lives in OS app-data, never in the vault.
   in-app edit produces, so the search index, wiki-link index and calendar all
   stay fresh without knowing a watcher exists. App writes record an expected
   echo so the watcher does not re-report the app's own saves.
+- **A folder scope is part of the query, never a filter on its results.** Both
+  `search_index` and `query_index_metadata` take a `pathPrefix` and apply it in
+  SQL, sharing one definition of what a prefix means (`path_prefix_sql` in
+  `search/metadata.rs`) so the two cannot drift. A caller that filtered
+  afterwards would be handed whatever of its folder outranked the rest of the
+  vault — few notes, or none, wherever the folder is a small share of it, and
+  nothing would say so. An absent prefix searches everywhere, which is what a
+  search box over a workspace wants.
 - **Pooled connections, never evicted (OI-004).** Index commands share a
   per-workspace `rusqlite::Connection` from `SEARCH_CONNECTIONS`. Nothing
   removes a handle when a workspace closes; revisit only if that matters.
+
+## Known limits of search
+
+- **A result cap, still silent.** `search_index` returns 50 hits by default and
+  never more than 200. That suits a ranked type-ahead list, where the tail is
+  not what the user is reading, but not a caller using search as a filter: the
+  journal panel asks for the ceiling and a query matching more entries than
+  that hides the rest without saying so. Path scoping made the cap reachable
+  rather than removing it. Raising or lifting it wants a caller that says it
+  wants every match — a paths-only query, without the snippet each hit carries.
 
 ## Known limits of the watcher
 
@@ -64,6 +83,7 @@ rebuildable and lives in OS app-data, never in the vault.
 ## Status
 
 - ✅ Native SQLite FTS5 index (schema, upsert, delete, clear, search) — `apps/desktop/src-tauri/src/commands/search.rs`
+- ✅ Folder-scoped full-text search — `search_index` takes an optional `pathPrefix` (`SearchQuery` in `search.rs`), shared with the metadata queries via `path_prefix_sql`; `searchService.search(root, query, { pathPrefix, limit })` carries it, and the journal panel scopes to its own root
 - ✅ Per-workspace cache path resolution in OS app-data — `apps/desktop/src-tauri/src/commands/search.rs` (`resolve_index_db_path`, `stable_workspace_hash`)
 - ✅ Frontend indexing service (batched, abortable, progress) — `apps/desktop/src/search/searchService.ts` (`createSearchService`, `indexWorkspace`, `indexDocument`, `removeDocument`, `search`)
 - ✅ Background indexer hook on workspace open — `apps/desktop/src/search/searchIndexStore.ts` (`indexWorkspace` called from `DesktopShell.handleWorkspaceOpened`); aborts in-flight indexing on workspace switch

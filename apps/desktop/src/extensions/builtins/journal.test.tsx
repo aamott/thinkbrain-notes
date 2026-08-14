@@ -9,7 +9,12 @@ vi.mock("../../native/commands", () => ({
   invokeNativeCommand: vi.fn<() => Promise<unknown>>()
 }));
 
-import { activateJournal, journalManifest } from "./journal";
+import {
+  activateJournal,
+  journalManifest,
+  JOURNAL_SEARCH_LIMIT,
+  searchJournalEntries
+} from "./journal";
 import { createDesktopExtensionHost } from "../desktopExtensionHost";
 import { createDesktopTabRegistry } from "../../tabs/tabRegistry";
 import { desktopCommandRegistry } from "../../commands/commandRegistry";
@@ -196,5 +201,42 @@ describe("the metadata widget and the settings behind it", () => {
     expect(add?.textContent).toBe("Info Tracker");
     await act(async () => add?.click());
     expect(host.textContent).toContain("Mood");
+  });
+});
+
+describe("journal search", () => {
+  /**
+   * The panel filters its rows by the paths this returns, so a hit that the
+   * index left out is an entry the user is told does not match. Scoping the
+   * query is what keeps the limit counting journal entries instead of whatever
+   * the rest of the vault ranked above them.
+   */
+  it("asks the index only about the journal folder", async () => {
+    const search = vi.fn(async () => [
+      {
+        relativePath: "journal/2026-08-13.md",
+        fileName: "2026-08-13.md",
+        title: null,
+        snippet: "…standup…",
+        score: -1
+      }
+    ]);
+
+    await expect(searchJournalEntries(search, "/vault", "journal", "standup")).resolves.toEqual(
+      new Set(["journal/2026-08-13.md"])
+    );
+    expect(search).toHaveBeenCalledWith("/vault", "standup", {
+      pathPrefix: "journal",
+      limit: JOURNAL_SEARCH_LIMIT
+    });
+  });
+
+  it("matches nothing while there is no index to ask", async () => {
+    const search = vi.fn();
+
+    await expect(searchJournalEntries(search, null, "journal", "standup")).resolves.toEqual(
+      new Set()
+    );
+    expect(search).not.toHaveBeenCalled();
   });
 });

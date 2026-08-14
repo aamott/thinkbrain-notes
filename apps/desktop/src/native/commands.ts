@@ -124,6 +124,8 @@ export interface NativeCommandMap {
     readonly args: {
       readonly rootPath: string;
       readonly query: string;
+      /** Workspace-relative folder to search inside. Absent searches the vault. */
+      readonly pathPrefix?: string;
       readonly limit?: number;
     };
     readonly result: readonly NativeSearchHit[];

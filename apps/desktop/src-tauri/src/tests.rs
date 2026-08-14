@@ -140,8 +140,15 @@ fn in_memory_index() -> Connection {
 }
 
 fn result_paths(connection: &Connection, query: &str) -> Vec<String> {
-    search_documents(connection, query, 50)
-        .expect("search succeeds")
+    search_documents(
+        connection,
+        &SearchQuery {
+            text: query,
+            path_prefix: "",
+            limit: 50,
+        },
+    )
+    .expect("search succeeds")
         .into_iter()
         .map(|hit| hit.path)
         .collect()
@@ -912,15 +919,125 @@ fn malformed_and_empty_queries_do_not_panic_or_error() {
 
     // Empty / whitespace-only input yields no results without touching SQLite.
     assert!(build_fts_match_query("   ").is_none());
-    assert!(search_documents(&connection, "", 50)
-        .expect("empty query is safe")
-        .is_empty());
+    assert!(search_documents(
+        &connection,
+        &SearchQuery {
+            text: "",
+            path_prefix: "",
+            limit: 50
+        }
+    )
+    .expect("empty query is safe")
+    .is_empty());
 
     // FTS5 special syntax must be neutralized rather than raising an error.
     for malformed in ["\"", "*", "AND OR", "tag:", "(unbalanced", "a -b \"c"] {
-        search_documents(&connection, malformed, 50)
-            .unwrap_or_else(|error| panic!("query {malformed:?} should not error: {error}"));
+        search_documents(
+            &connection,
+            &SearchQuery {
+                text: malformed,
+                path_prefix: "",
+                limit: 50,
+            },
+        )
+        .unwrap_or_else(|error| panic!("query {malformed:?} should not error: {error}"));
     }
+}
+
+/// The defect this closes: `LIMIT` ran against the whole vault, so a caller
+/// asking about one folder got whatever of it survived a vault-wide ranking.
+/// Scope has to be part of the query, not a filter applied to its output.
+#[test]
+fn a_path_prefix_scopes_the_search_before_the_limit_applies() {
+    let mut connection = in_memory_index();
+    index_document_records(
+        &mut connection,
+        &[
+            record("Notes/a.md", "a.md", None, &[], &[], "standup"),
+            record("Notes/b.md", "b.md", None, &[], &[], "standup"),
+            record("Notes/c.md", "c.md", None, &[], &[], "standup"),
+            record("Journal/2026-08-13.md", "2026-08-13.md", None, &[], &[], "standup"),
+        ],
+    )
+    .expect("documents index");
+
+    let hits = search_documents(
+        &connection,
+        &SearchQuery {
+            text: "standup",
+            path_prefix: "Journal",
+            limit: 2,
+        },
+    )
+    .expect("search succeeds");
+
+    assert_eq!(
+        hits.iter().map(|hit| hit.path.as_str()).collect::<Vec<_>>(),
+        vec!["Journal/2026-08-13.md"]
+    );
+}
+
+#[test]
+fn a_path_prefix_matches_whole_folders_not_names_that_merely_start_with_it() {
+    let mut connection = in_memory_index();
+    index_document_records(
+        &mut connection,
+        &[
+            record("Journal/today.md", "today.md", None, &[], &[], "entry"),
+            record("Journal-archive/old.md", "old.md", None, &[], &[], "entry"),
+            record("Journalling.md", "Journalling.md", None, &[], &[], "entry"),
+        ],
+    )
+    .expect("documents index");
+
+    // Leading and trailing slashes are trimmed, the way the metadata queries
+    // already treat a prefix, so "/Journal/" and "Journal" name one folder.
+    for prefix in ["Journal", "/Journal/"] {
+        let hits = search_documents(
+            &connection,
+            &SearchQuery {
+                text: "entry",
+                path_prefix: prefix,
+                limit: 50,
+            },
+        )
+        .expect("search succeeds");
+
+        assert_eq!(
+            hits.iter().map(|hit| hit.path.as_str()).collect::<Vec<_>>(),
+            vec!["Journal/today.md"],
+            "prefix {prefix:?} should name a folder, not a spelling"
+        );
+    }
+}
+
+#[test]
+fn an_empty_path_prefix_searches_the_whole_workspace() {
+    let mut connection = in_memory_index();
+    index_document_records(
+        &mut connection,
+        &[
+            record("Journal/today.md", "today.md", None, &[], &[], "entry"),
+            record("Notes/other.md", "other.md", None, &[], &[], "entry"),
+        ],
+    )
+    .expect("documents index");
+
+    let mut paths = search_documents(
+        &connection,
+        &SearchQuery {
+            text: "entry",
+            path_prefix: "",
+            limit: 50,
+        },
+    )
+    .expect("search succeeds")
+    .into_iter()
+    .map(|hit| hit.path)
+    .collect::<Vec<_>>();
+    paths.sort();
+
+    assert_eq!(paths, vec!["Journal/today.md", "Notes/other.md"]);
 }
 
 #[test]

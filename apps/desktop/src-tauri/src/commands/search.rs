@@ -16,8 +16,8 @@ mod metadata_tests;
 
 pub use metadata::{MetadataField, MetadataPredicate, MetadataQueryResult};
 use metadata::{
-    clear_document_metadata, delete_document_metadata, init_metadata_schema,
-    replace_document_metadata,
+    clear_document_metadata, delete_document_metadata, init_metadata_schema, normalize_path_prefix,
+    path_prefix_sql, replace_document_metadata,
 };
 
 static SEARCH_CONNECTIONS: Mutex<Option<HashMap<String, Arc<Mutex<Connection>>>>> = Mutex::new(None);
@@ -63,6 +63,19 @@ pub struct DocumentRecord {
 }
 
 
+/// What one full-text search asks for.
+///
+/// A struct rather than three positional arguments because two of the three are
+/// easy to mix up at a call site and neither is obvious read back: `""` means
+/// the whole workspace, and the limit is a count of notes, not of characters.
+pub struct SearchQuery<'a> {
+    /// Raw user input, sanitized into an FTS5 expression before it reaches SQL.
+    pub text: &'a str,
+    /// Workspace-relative folder to search inside. `""` searches everywhere.
+    pub path_prefix: &'a str,
+    pub limit: usize,
+}
+
 /// A ranked search match returned to the frontend.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct SearchHit {
@@ -99,13 +112,23 @@ pub fn search_index(
     app: tauri::AppHandle,
     root_path: String,
     query: String,
+    path_prefix: Option<String>,
     limit: Option<u32>,
 ) -> Result<Vec<SearchHit>, NativeError> {
     let connection_pool = get_search_connection(&app, &root_path)?;
     let connection = connection_pool.lock().unwrap();
-    let resolved_limit = limit.unwrap_or(50).clamp(1, 200) as usize;
 
-    search_documents(&connection, &query, resolved_limit).map_err(|error| {
+    search_documents(
+        &connection,
+        &SearchQuery {
+            text: &query,
+            // Absent means the whole workspace, which is what a search box over
+            // a vault wants; only a caller with a folder in mind passes one.
+            path_prefix: path_prefix.as_deref().unwrap_or(""),
+            limit: limit.unwrap_or(50).clamp(1, 200) as usize,
+        },
+    )
+    .map_err(|error| {
         NativeError::with_details(
             "index.search_failed",
             "Failed to search the workspace index.",
@@ -322,15 +345,17 @@ pub fn index_document_records(
 /// can never raise an error. Returns `bm25`-ordered matches (best first).
 pub fn search_documents(
     connection: &Connection,
-    query: &str,
-    limit: usize,
+    query: &SearchQuery<'_>,
 ) -> rusqlite::Result<Vec<SearchHit>> {
-    let match_query = match build_fts_match_query(query) {
+    let match_query = match build_fts_match_query(query.text) {
         Some(value) => value,
         None => return Ok(Vec::new()),
     };
 
-    let mut statement = connection.prepare(
+    // The scope belongs in the query, beside the MATCH, so `LIMIT` counts notes
+    // the caller asked for. Filtering the results afterwards would rank the
+    // whole workspace first and hand back whatever of the folder survived.
+    let mut statement = connection.prepare(&format!(
         "SELECT path,
                 file_name,
                 title,
@@ -338,21 +363,30 @@ pub fn search_documents(
                 bm25(documents_fts) AS score
          FROM documents_fts
          WHERE documents_fts MATCH ?1
+           AND {}
          ORDER BY score
-         LIMIT ?2",
+         LIMIT ?3",
+        path_prefix_sql("path", 2)
+    ))?;
+
+    let rows = statement.query_map(
+        params![
+            match_query,
+            normalize_path_prefix(query.path_prefix),
+            query.limit as i64
+        ],
+        |row| {
+            let title: String = row.get(2)?;
+
+            Ok(SearchHit {
+                path: row.get(0)?,
+                file_name: row.get(1)?,
+                title: if title.is_empty() { None } else { Some(title) },
+                snippet: row.get(3)?,
+                score: row.get(4)?,
+            })
+        },
     )?;
-
-    let rows = statement.query_map(params![match_query, limit as i64], |row| {
-        let title: String = row.get(2)?;
-
-        Ok(SearchHit {
-            path: row.get(0)?,
-            file_name: row.get(1)?,
-            title: if title.is_empty() { None } else { Some(title) },
-            snippet: row.get(3)?,
-            score: row.get(4)?,
-        })
-    })?;
 
     let mut hits = Vec::new();
 

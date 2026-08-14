@@ -1,5 +1,6 @@
 use super::{
     clear_documents, delete_document, index_document_records, init_index_schema, search_documents,
+    SearchQuery,
     DocumentRecord,
 };
 use super::metadata::{
@@ -258,11 +259,18 @@ fn schema_migrates_an_existing_fts_only_cache() {
     init_index_schema(&connection).expect("schema migrates");
 
     assert_eq!(
-        search_documents(&connection, "legacy", 50)
-            .expect("search succeeds")
-            .into_iter()
-            .map(|hit| hit.path)
-            .collect::<Vec<String>>(),
+        search_documents(
+            &connection,
+            &SearchQuery {
+                text: "legacy",
+                path_prefix: "",
+                limit: 50
+            }
+        )
+        .expect("search succeeds")
+        .into_iter()
+        .map(|hit| hit.path)
+        .collect::<Vec<String>>(),
         vec!["legacy.md"]
     );
     assert_eq!(

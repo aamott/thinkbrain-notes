@@ -3,8 +3,9 @@
 **Status:** 🟨 core service implemented (`apps/desktop/src/journal/journalService.ts`,
 path expansion in `packages/core/src/journal/paths.ts`) · **Urgency:** high · **Difficulty:** med
 
-Remaining: lazy first-line previews, search delegation, and wiring the service to settings
-and the panel.
+Remaining: lazy first-line previews, which wait on the panel story's list
+virtualization (D13). Search delegation, settings wiring and panel wiring have
+all landed; so have the D41 facets this story depended on.
 
 ## Epic
 
@@ -42,16 +43,28 @@ Resolved 2026-08-07 against the shipped index and D41. No new infrastructure is 
 |---|---|---|
 | Entry list, dates, grouping, Undated (D36), calendar dots (D29) | `list_workspace_entries` — paths only | one tree walk |
 | First-line preview (D9) | `read_markdown_file`, **lazy per visible row**, memoised | ~20-40 reads, not thousands |
-| Full-text search (D16) | existing `search_index(rootPath, query, limit)`, hits filtered to the journal root | already shipped |
+| Full-text search (D16) | `search_index(rootPath, query, pathPrefix, limit)`, scoped to the journal root | already shipped |
 | Metadata filter values (D16/D41) | platform index facet query | indexing dependency |
 
 Because D13 virtualizes the list, fetch and memoise previews only for visible rows; do not prefetch the folder or block first paint (render the date first, then fill the preview). Delegate search to `search_index`, filtering hits to the journal root; if that is too coarse, add a native path-prefix argument through the indexing epic, not a journal-owned index. The disposable, rebuildable app FTS5 cache is never source of truth.
 
 **Resolved 2026-08-11:** the native file watcher now reports outside changes as `note.*` events, so an externally-created entry reaches both the tree-walk list and search without reindexing by hand.
 
+**Resolved 2026-08-13:** filtering hits to the journal root was too coarse, and
+the escape hatch above was taken. `search_index` ranked and cut off the whole
+vault before the panel filtered, so a query with plenty of matches outside the
+journal returned few journal entries or none, silently — the more the user
+wrote elsewhere, the worse journal search got. It now takes a `pathPrefix`,
+applied in SQL beside the `MATCH`, sharing the metadata queries' definition of
+a prefix. The panel asks for the native ceiling of 200 hits; a query matching
+more entries than that still hides the rest, which is recorded under "Known
+limits of search" in the indexing epic rather than fixed here.
+
 ### Metadata facets — platform dependency
 
-D41 assigns structured-frontmatter facets to the platform-owned disposable index. This story may expose them through its UI-independent boundary but does not own the index schema or native command. Facets are blocked on `plans/indexing-search/pending-frontmatter_metadata_facets-high-hard.md`; listing, date filters, lazy previews, and search are not. If unavailable, return a typed unavailable result—never scan every file or create a journal cache.
+D41 assigns structured-frontmatter facets to the platform-owned disposable index. This story may expose them through its UI-independent boundary but does not own the index schema or native command. If unavailable, return a typed unavailable result—never scan every file or create a journal cache.
+
+**No longer blocked (2026-08-13):** `plans/indexing-search/done-frontmatter_metadata_facets-high-hard.md` shipped `query_index_metadata`, and `searchIndexStore.queryMetadata` returns the typed available/unavailable/failure results this asks for.
 
 ## Goal
 
@@ -90,7 +103,7 @@ Implement a typed, UI-independent service that resolves dates/paths, detects sam
 - Data-model story (approved `JournalEntryRef`, `parseJournalFilename`, `buildNewEntryFrontmatter`).
 - Existing `WorkspaceDocumentApi`, `WorkspaceDesktopApi`, `loadWorkspaceDocument`, `saveWorkspaceDocument`, and native error shape.
 - Existing frontmatter mutation policy (`created_at` at creation, `updated_at` on explicit save).
-- D41 metadata facets depend on `plans/indexing-search/pending-frontmatter_metadata_facets-high-hard.md`; other service work does not.
+- D41 metadata facets depended on `plans/indexing-search/done-frontmatter_metadata_facets-high-hard.md`, which has shipped; other service work never did.
 
 ## Acceptance criteria
 

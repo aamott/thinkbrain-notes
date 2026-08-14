@@ -60,6 +60,22 @@ export interface MetadataQueryData {
   readonly matchingPaths: readonly string[];
 }
 
+/** Narrows what a single search asks the index about. */
+export interface SearchOptions {
+  /**
+   * Workspace-relative folder to search inside; absent searches the whole
+   * vault, which is what a search box over a workspace wants.
+   *
+   * A caller with a folder in mind has to say so here rather than filter the
+   * results, because {@link SearchOptions.limit} is applied by the query: a
+   * folder holding a small share of the vault's notes would otherwise be
+   * outranked out of its own results.
+   */
+  readonly pathPrefix?: string;
+  /** Maximum hits to return. The native side defaults to 50 and caps at 200. */
+  readonly limit?: number;
+}
+
 /** Options for batch indexing. */
 export interface IndexOptions {
   /** Number of documents per native `index_documents` call. Defaults to 50. */
@@ -88,7 +104,11 @@ export interface SearchService {
   clearIndex(rootPath: string): Promise<void>;
 
   /** Searches the index and returns ranked results. */
-  search(rootPath: string, query: string, limit?: number): Promise<readonly SearchResult[]>;
+  search(
+    rootPath: string,
+    query: string,
+    options?: SearchOptions
+  ): Promise<readonly SearchResult[]>;
 
   queryMetadata(rootPath: string, query: MetadataQuery): Promise<MetadataQueryData>;
 }
@@ -236,8 +256,13 @@ export function createSearchService(): SearchService {
       return invokeNativeCommand("clear_index", { rootPath }).then(() => undefined);
     },
 
-    async search(rootPath, query, limit) {
-      const hits = await invokeNativeCommand("search_index", { rootPath, query, limit });
+    async search(rootPath, query, options) {
+      const hits = await invokeNativeCommand("search_index", {
+        rootPath,
+        query,
+        pathPrefix: options?.pathPrefix,
+        limit: options?.limit
+      });
       return hits.map(toSearchResult);
     },
 

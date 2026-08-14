@@ -173,13 +173,39 @@ pub(super) fn query_metadata(
     })
 }
 
+/// The SQL that scopes a path column to a folder, as one definition.
+///
+/// Both the metadata queries and the full-text search scope the same way, and
+/// they have to agree: a prefix names a folder (or the note itself), never a
+/// spelling, so `Journal` must not reach into `Journal-archive`. Written twice
+/// the two would drift, and the drift would be a wrong result set rather than
+/// anything that fails to build.
+///
+/// An empty prefix means the whole workspace, so a caller that does not scope
+/// pays nothing.
+pub(super) fn path_prefix_sql(column: &str, parameter: usize) -> String {
+    format!(
+        "(?{parameter} = '' \
+         OR {column} = ?{parameter} \
+         OR substr({column}, 1, length(?{parameter}) + 1) = ?{parameter} || '/')"
+    )
+}
+
+/// Puts a caller's prefix in the spelling {@link path_prefix_sql} compares
+/// against: indexed paths are workspace-relative and unslashed at both ends,
+/// so `/Journal/` and `Journal` have to name the same folder.
+pub(super) fn normalize_path_prefix(prefix: &str) -> String {
+    prefix.trim_matches('/').to_string()
+}
+
 fn build_matching_sql(query: &MetadataQuery) -> (String, Vec<Value>) {
-    let mut sql = String::from(
+    let mut sql = format!(
         "SELECT DISTINCT d.path
          FROM documents_fts AS d
-         WHERE (?1 = '' OR d.path = ?1 OR substr(d.path, 1, length(?1) + 1) = ?1 || '/')",
+         WHERE {}",
+        path_prefix_sql("d.path", 1)
     );
-    let mut values = vec![Value::Text(query.path_prefix.trim_matches('/').to_string())];
+    let mut values = vec![Value::Text(normalize_path_prefix(&query.path_prefix))];
 
     for predicate in &query.predicates {
         let key_parameter = values.len() + 1;

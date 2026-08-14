@@ -7,7 +7,7 @@ import { journalSettingsSchema } from "../../journal/journalSettings";
 import { registerJournalControls } from "../../journal/JournalFieldDefinitionsControl";
 import { CalendarTabContainer } from "../../journal/CalendarTabContainer";
 import { useSearchIndexStore } from "../../search/searchIndexStore";
-import { searchService } from "../../search/searchService";
+import { searchService, type SearchService } from "../../search/searchService";
 import { MetadataWidgetContainer } from "../../journal/MetadataWidgetContainer";
 import { parseFieldDefinitions } from "../../journal/journalSettings";
 import type { DesktopExtensionContext } from "../desktopExtensionHost";
@@ -50,6 +50,43 @@ export const journalManifest: ExtensionManifest = {
 
 /** Default matches D64's `root`; used until the setting is read. */
 const DEFAULT_ROOT = "journal";
+
+/**
+ * Hits the journal asks the index for, at the native ceiling.
+ *
+ * The panel wants membership rather than a ranking — every entry that matches,
+ * so it can filter its rows — and a search box's default of 50 is far short of
+ * that for a journal kept for a year. This is still a cap: a query matching
+ * more than this many entries hides the rest, silently. Raising the native
+ * ceiling belongs to the search story, not here.
+ */
+export const JOURNAL_SEARCH_LIMIT = 200;
+
+/**
+ * Asks the platform index which journal entries match, and nothing else.
+ *
+ * Scoping is the whole point of the folder argument: the limit is applied by
+ * the query, so an unscoped search ranks the entire vault first and hands back
+ * whichever journal entries survived. In a vault where the journal is a small
+ * share of the notes, that is most of them gone with nothing said.
+ *
+ * Answers with no matches at all while there is no index, rather than every
+ * entry: the panel disables its search box in that state (D41), and a set
+ * standing in for "ask again later" would show rows as though they matched.
+ */
+export async function searchJournalEntries(
+  search: SearchService["search"],
+  indexRoot: string | null,
+  journalRoot: string,
+  query: string
+): Promise<ReadonlySet<string>> {
+  if (indexRoot === null) return new Set();
+  const hits = await search(indexRoot, query, {
+    pathPrefix: journalRoot,
+    limit: JOURNAL_SEARCH_LIMIT
+  });
+  return new Set(hits.map((hit) => hit.relativePath));
+}
 
 /**
  * Resolves the `startOfWeek` setting to a `WeekStart` (0=Sunday, 1=Monday).
@@ -251,11 +288,15 @@ export function activateJournal(context: DesktopExtensionContext): void {
     const indexRoot = useSearchIndexStore((state) => state.rootPath);
 
     const searchEntries = useCallback(
-      async (query: string): Promise<ReadonlySet<string>> => {
-        if (indexRoot === null) return new Set();
-        const hits = await searchService.search(indexRoot, query);
-        return new Set(hits.map((hit) => hit.relativePath));
-      },
+      (query: string): Promise<ReadonlySet<string>> =>
+        // The folder is read per call, like the service's own `root`: it is
+        // workspace-scoped (D45), so it changes under a running panel.
+        searchJournalEntries(
+          searchService.search,
+          indexRoot,
+          normalizeRoot(context.settings.get<string>("root") ?? DEFAULT_ROOT),
+          query
+        ),
       [indexRoot]
     );
 
