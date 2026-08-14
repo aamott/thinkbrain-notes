@@ -1,7 +1,0 @@
-- name: `open_workspace_window` registers the window root *after* `WebviewWindowBuilder::build` succeeds — frontend loads before registration
-- file: /media/adam/extex/projects/thinkbrain-notes/apps/desktop/src-tauri/src/commands/workspace.rs
-- lines: 340-371
-- description: In `open_workspace_window`, the order is: build the window (line 345-355), attach the destroy handler (358-368), then `register_workspace_window_root` (line 369). The new window's frontend begins loading as soon as `build()` returns, and the frontend will call `window_workspace_root` (line 374-380) during startup to know which vault it represents. There is a window where the frontend has loaded but the root is not yet registered, so `window_workspace_root` returns `None` and the new window cannot resolve its workspace until the registration call lands. In practice this is a few microseconds and the frontend likely retries, but the order should be inverted: register first, then build (or register inside the `build`'s `setup` callback). The destroy handler is safe to attach after build because a destroy that fast is implausible.
-
-  Also note: `register_workspace_window_root` and `unregister_workspace_window_root` are `pub` and used only here and in tests — they could be `pub(crate)` to shrink the public surface, but that's cosmetic.
-- verification: read lines 340-371; `window_workspace_root` (374-380) reads from the same `WorkspaceWindowRoots` map that line 369 writes to. The map is managed in `lib.rs:39` and read by the new window's frontend on load.
