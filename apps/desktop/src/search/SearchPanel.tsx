@@ -4,7 +4,6 @@ import { Unavailable } from "../shell/Unavailable";
 import { cn } from "../lib/utils";
 import { searchService, type SearchResult } from "./searchService";
 import { useSearchIndexStore } from "./searchIndexStore";
-import type { SearchHit } from "./searchPanelModel";
 
 /** Module-scoped search service singleton backing the panel. */
 
@@ -32,7 +31,7 @@ export function SearchPanel({ rootPath, onOpenFile }: SearchPanelProps) {
 
   // UI-specific state kept local: the query, results, and search load/error.
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<readonly SearchHit[]>([]);
+  const [results, setResults] = useState<readonly SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
 
@@ -71,7 +70,7 @@ export function SearchPanel({ rootPath, onOpenFile }: SearchPanelProps) {
       setIsSearching(true);
       setSearchError(null);
       try {
-        const hits: readonly SearchResult[] = await searchService.search(rootPath, trimmed);
+        const hits = await searchService.search(rootPath, trimmed);
         if (requestId !== requestIdRef.current) return;
         setResults(hits);
       } catch (error) {
@@ -151,7 +150,7 @@ export function SearchPanel({ rootPath, onOpenFile }: SearchPanelProps) {
           </p>
         ) : (
           <ul className="flex flex-col gap-2 list-none p-0 m-0">
-            {results.map((hit: SearchHit) => (
+            {results.map((hit) => (
               <li key={hit.relativePath}>
                 <button
                   type="button"

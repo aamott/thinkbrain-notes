@@ -25,3 +25,4 @@
 
 - verification: Read `editorHeaderRegistry.ts` lines 40-57. The factory body is a single `return createContributionRegistry(initialHeaders)`. Grepped `createDesktopEditorHeaderRegistry` — used in `editorHeaderRegistry.tsx` (default param), `editorHeaderRegistry.test.tsx`, `desktopExtensionHost.ts`, and tests. The type alias `DesktopEditorHeaderRegistry` is used in `editorHeaderRegistry.tsx`.
 - savings: ~4 lines if factory is removed and singleton uses `createContributionRegistry` directly; ~2 lines if factory body is inlined.
+- resolution: Deferred — high cost, low reward. The factory body is already a single-line passthrough, and the name is imported by `editorHeaderRegistry.test.tsx` and `desktopExtensionHost.test.ts` (12+4 call sites) to construct isolated registries. Removing it would force updating both test files to call `createContributionRegistry<DesktopEditorHeaderContribution>()` directly for ~0 net line savings.

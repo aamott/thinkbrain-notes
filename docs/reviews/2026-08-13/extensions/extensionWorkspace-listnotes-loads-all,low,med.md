@@ -22,3 +22,4 @@
     `listWorkspaceEntries` with the full root. The native command signature
     (`workspaceAdapter.ts` line 12) takes only `(rootPath, includeHidden)` — no
     prefix parameter exists today.
+- resolution: Deferred — high cost, low reward. Requires a Rust-side change to add a prefix filter to the `list_workspace_entries` Tauri command (and adapter signature), plus threading the option through. The current client-side filter is correct and only a perf concern for large vaults; not worth the cross-layer churn right now.

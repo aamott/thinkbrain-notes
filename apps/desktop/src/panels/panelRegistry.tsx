@@ -130,18 +130,6 @@ export function isBuiltInLeftPanel(id: string): id is BuiltInLeftPanel {
 }
 
 /**
- * Runtime guard narrowing an arbitrary id to a built-in right panel id.
- *
- * See {@link isBuiltInLeftPanel} for the rationale.
- */
-export function isBuiltInRightPanel(id: string): id is BuiltInRightPanel {
-  return id === "outline"
-    || id === "backlinks"
-    || id === "properties"
-    || id === "assistant";
-}
-
-/**
  * A button a panel contributes to its own header.
  *
  * Data rather than markup, so an extension that mounted plain DOM contributes
@@ -337,19 +325,6 @@ export function createDesktopPanelRegistry(
 export const desktopPanelRegistry = createDesktopPanelRegistry();
 
 /**
- * Invokes a contribution's React factory with the wide registry context.
- * The side-specific popouts call `contribution.factory(context)` directly
- * for the side-narrowed compile-time check; this helper is for registry
- * internals and tests that don't choose a side.
- */
-export function renderDesktopPanel(
-  panel: DesktopPanelContribution,
-  context: DesktopPanelContext
-): ReactNode {
-  return panel.factory(context);
-}
-
-/**
  * Render-safe lookup that returns the contribution or `undefined` instead of
  * throwing. Use this in React render paths so an unregistered id degrades to a
  * fallback instead of unmounting the shell.
@@ -358,16 +333,6 @@ export function getDesktopPanelOrUndefined(
   id: DesktopPanelId
 ): DesktopPanelContribution | undefined {
   return desktopPanelRegistry.get(id);
-}
-
-/** Registered left-side panels for activity-bar rendering. Cast is sound: entries were registered narrow. */
-export function getLeftPanelContributions(): readonly LeftPanelContribution[] {
-  return desktopPanelRegistry.entriesBySide("left") as readonly LeftPanelContribution[];
-}
-
-/** Registered right-side panels for title-bar/popout rendering. Cast is sound: entries were registered narrow. */
-export function getRightPanelContributions(): readonly RightPanelContribution[] {
-  return desktopPanelRegistry.entriesBySide("right") as readonly RightPanelContribution[];
 }
 
 /**

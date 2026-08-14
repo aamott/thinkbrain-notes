@@ -8,11 +8,7 @@ import {
   createDesktopPanelRegistry,
   desktopPanelRegistry,
   getDesktopPanelOrUndefined,
-  getLeftPanelContributions,
-  getRightPanelContributions,
   isBuiltInLeftPanel,
-  isBuiltInRightPanel,
-  renderDesktopPanel,
   type BuiltInLeftPanel,
   type BuiltInRightPanel,
   type DesktopPanelContext,
@@ -98,14 +94,14 @@ describe("desktop panel registry", () => {
       "properties",
       "assistant"
     ]);
-    expect(getLeftPanelContributions().map((panel) => panel.id)).toEqual([
+    expect(desktopPanelRegistry.entriesBySide("left").map((panel) => panel.id)).toEqual([
       "explorer",
       "search",
       "source-control",
       "tags",
       "extensions"
     ]);
-    expect(getRightPanelContributions().map((panel) => panel.id)).toEqual([
+    expect(desktopPanelRegistry.entriesBySide("right").map((panel) => panel.id)).toEqual([
       "outline",
       "backlinks",
       "properties",
@@ -139,7 +135,7 @@ describe("desktop panel registry", () => {
 
   it("renders a panel through its typed React factory", () => {
     const panel = contribution("search");
-    expect(renderToStaticMarkup(renderDesktopPanel(panel, context))).toBe("<span>search</span>");
+    expect(renderToStaticMarkup(panel.factory(context))).toBe("<span>search</span>");
   });
 
   it("drives left and right popout rendering from registered contributions", () => {
@@ -196,23 +192,16 @@ describe("desktop panel registry", () => {
     // not leak into shell selection state.
     expect(registry.get("extension.calendar")?.label).toBe("Calendar");
     expect(getDesktopPanelOrUndefined("extension.calendar")?.label).toBeUndefined();
-    // The extension id is not a built-in left/right panel, so it cannot narrow
+    // The extension id is not a built-in left panel, so it cannot narrow
     // to selectable shell state.
     expect(isBuiltInLeftPanel("extension.calendar")).toBe(false);
-    expect(isBuiltInRightPanel("extension.calendar")).toBe(false);
   });
 
-  it("narrows built-in side ids via the type guards", () => {
+  it("narrows built-in left ids via the type guard", () => {
     for (const id of ["explorer", "search", "source-control", "tags", "extensions"] as const) {
       expect(isBuiltInLeftPanel(id)).toBe(true);
-      expect(isBuiltInRightPanel(id)).toBe(false);
-    }
-    for (const id of ["outline", "backlinks", "properties", "assistant"] as const) {
-      expect(isBuiltInRightPanel(id)).toBe(true);
-      expect(isBuiltInLeftPanel(id)).toBe(false);
     }
     expect(isBuiltInLeftPanel("outline")).toBe(false);
-    expect(isBuiltInRightPanel("explorer")).toBe(false);
   });
 
   // Type-level fixtures: misspelled built-in ids must be rejected by the
@@ -328,14 +317,14 @@ describe("desktop panel registry", () => {
     expect("onOpenSearchResult" in seenRight[0]!).toBe(false);
   });
 
-  it("renders the side-narrowed factories through the wide registry render helper", () => {
+  it("renders the side-narrowed factories through the wide registry context", () => {
     const leftSpy = spyContribution("left-wide", "left", ({ rootPath }) => <span>{rootPath}</span>);
     const rightSpy = spyContribution("right-wide", "right", ({ documentContents }) => <span>{documentContents}</span>);
     expect(
-      renderToStaticMarkup(renderDesktopPanel(leftSpy, { ...context, rootPath: "/notes" }))
+      renderToStaticMarkup(leftSpy.factory({ ...context, rootPath: "/notes" }))
     ).toBe("<span>/notes</span>");
     expect(
-      renderToStaticMarkup(renderDesktopPanel(rightSpy, { ...context, documentContents: "doc" }))
+      renderToStaticMarkup(rightSpy.factory({ ...context, documentContents: "doc" }))
     ).toBe("<span>doc</span>");
   });
 });

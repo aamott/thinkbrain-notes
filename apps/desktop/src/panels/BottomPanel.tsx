@@ -29,18 +29,6 @@ const bottomPanelProviders: Record<BottomPanelId, BottomPanelProvider> = {
   }
 };
 
-/** Renders an honest terminal capability boundary without exposing execution controls. */
-function TerminalPanel({ provider }: { readonly provider: BottomPanelProvider }) {
-  return <Unavailable className="items-start justify-start p-0 text-left" title="Terminal" description={provider.unavailableMessage} />;
-}
-
-/**
- * Renders content for the selected provider while honoring its availability.
- */
-function BottomPanelContent({ provider }: { readonly provider: BottomPanelProvider }) {
-  return <TerminalPanel provider={provider} />;
-}
-
 /**
  * Bottom dock surface extracted from DesktopShell.
  *
@@ -83,7 +71,8 @@ export function BottomPanel({ active, onChange, onClose }: BottomPanelProps) {
         </button>
       </div>
       <div id={contentId} className="h-[calc(100%-2rem)] overflow-auto p-[0.65rem_0.85rem] font-mono text-xs leading-[1.6]" role="tabpanel" aria-labelledby={tabId}>
-        <BottomPanelContent provider={provider} />
+        {/* Terminal is the only wired surface today; render its capability boundary directly. */}
+        <Unavailable className="items-start justify-start p-0 text-left" title="Terminal" description={provider.unavailableMessage} />
       </div>
     </section>
   );

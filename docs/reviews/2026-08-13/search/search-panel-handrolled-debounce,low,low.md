@@ -22,3 +22,4 @@
     `lib/debounce.ts` exports `createDebounced` and its header explicitly lists the cases it was made to replace.
     grep `createDebounced` shows other consumers; SearchPanel.tsx is not among them.
 - savings: ~10-12 lines if the panel adopts `createDebounced` and keeps the `requestId` guard separately; main value is removing one more hand-rolled timer.
+- resolution: Deferred — high cost, low reward. The hand-rolled timer carries two responsibilities createDebounced does not provide: a requestId guard for stale-result suppression (orthogonal to debouncing, stays as a useRef either way) and an empty-query delay=0 short-circuit (createDebounced always waits delayMs). The finding itself flags this as a compaction opportunity, not a bug, and notes consolidation is worth it only if createDebounced grows a leading-edge option or the panel moves to a reducer. Adopting createDebounced today would not save lines once the wrappers are added.

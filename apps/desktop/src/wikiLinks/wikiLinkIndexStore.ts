@@ -19,7 +19,6 @@ import {
   addNote,
   buildWikiLinkIndex,
   EMPTY_WIKI_LINK_INDEX,
-  getBacklinks as getBacklinksFromIndex,
   removeNote,
   parseNote,
   type NoteIndexEntry,
@@ -29,9 +28,6 @@ import {
 } from "@thinkbrain/core";
 import { subscribeIndexToNoteEvents } from "../events/noteIndexSubscription";
 import { invokeNativeCommand, type NativeMarkdownFileEntry } from "../native/commands";
-
-/** Re-export so consumers can import selectors from the store module. */
-export { getBacklinksFromIndex };
 
 /**
  * Tracks the current event subscription so `subscribeToEvents` is idempotent.
@@ -226,13 +222,3 @@ export const useWikiLinkIndexStore = create<WikiLinkIndexStore>((set, get) => ({
     };
   }
 }));
-
-/**
- * Selects the backlinks for a note from the current index.
- *
- * Returns the relative paths of every note that links to `relativePath`, or an
- * empty array when no workspace is open or nothing links to the note.
- */
-export function selectBacklinks(relativePath: string): readonly string[] {
-  return getBacklinksFromIndex(useWikiLinkIndexStore.getState().wikiLinkIndex, relativePath);
-}

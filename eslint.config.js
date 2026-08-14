@@ -1,8 +1,17 @@
 import js from "@eslint/js";
 import reactHooks from "eslint-plugin-react-hooks";
 import reactRefresh from "eslint-plugin-react-refresh";
+import tailwindcss from "eslint-plugin-tailwindcss";
 import globals from "globals";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import tseslint from "typescript-eslint";
+
+// Resolve the Tailwind v4 CSS entry relative to this config file so the
+// eslint-plugin-tailwindcss `cssConfigPath` is correct regardless of which
+// package the linted file lives in (the plugin otherwise resolves relative
+// to each file's nearest package.json directory).
+const repoRoot = path.dirname(fileURLToPath(import.meta.url));
 
 export default tseslint.config(
   {
@@ -70,6 +79,28 @@ export default tseslint.config(
         "warn",
         { "allowConstantExport": true }
       ]
+    }
+  },
+  {
+    // Tailwind CSS class-conflict detection — mirrors the `cssConflict`
+    // warnings shown by the Tailwind IntelliSense extension, but runnable
+    // from `pnpm lint` / `scripts/qa.sh`. Scoped to the packages that
+    // actually emit Tailwind classes; `cssConfigPath` points at the v4
+    // entry that defines the `@theme inline` token mapping. Kept as `warn`
+    // during the initial cleanup pass; bump to `error` once clean.
+    // See docs/reviews or AGENTS.md for the promotion checklist.
+    files: [
+      "apps/desktop/src/**/*.{ts,tsx}",
+      "packages/ui/src/**/*.{ts,tsx}"
+    ],
+    plugins: { tailwindcss },
+    settings: {
+      tailwindcss: {
+        cssConfigPath: path.resolve(repoRoot, "apps/desktop/src/index.css")
+      }
+    },
+    rules: {
+      "tailwindcss/no-contradicting-classname": "warn"
     }
   }
 );
