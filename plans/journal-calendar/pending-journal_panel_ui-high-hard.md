@@ -6,10 +6,13 @@ Shipped: `journalViewModel.ts` (all fourteen states, pure), `JournalPanel.tsx` (
 `JournalPanelContainer.tsx` (state + service), `MetadataWidget.tsx`, and registration through
 `extensions/builtins/journal.tsx`.
 
-Remaining: list virtualization (D13), search/facets (waiting on D41), collapse persistence
-(D53), and the two shell affordances noted below. The widget now registers through D44's slot
-and edits the open document — not the file — so the user's Save stays the only thing that writes. First-line previews now load after paint, newest 60 first — scoping
-them to the visible range waits on virtualization.
+Remaining: metadata facets in the panel's filter row, and the two shell affordances noted
+below. The widget now registers through D44's slot and edits the open document — not the file
+— so the user's Save stays the only thing that writes.
+
+Landed 2026-08-13: list virtualization (D13), first-line previews scoped to the visible rows,
+and collapse persistence (D53). Search is scoped to the journal folder natively — see
+`plans/wip-indexing-search-med-med.md`.
 
 ## Epic
 
@@ -122,8 +125,8 @@ chrome would be the inconsistent choice. **Product owner: say the word and I wil
 - [ ] Popout is a navigator: every entry row opens in the main editor as a normal tab; no inline editing in the popout.
 - [ ] Popout header follows D71/D75: New entry (the only filled control) with Today and Open calendar beside it, then search, then the filter row with the control right-aligned (D73). No group-by control. Focus order: overflow, New entry, Today, Open calendar, search, filter, chips, list.
 - [ ] "Today" opens the most recent entry for today's date or creates a new one; never appends to an existing file (D18).
-- [ ] List renders as a flat virtualized stream with collapsible year + month headers, non-indented (D37, D39); list handles thousands of entries without layout thrash (D13). **Grouping and collapse are done; virtualization is not — every row renders today.**
-- [ ] Rows render from filename-derived dates alone; first-line previews load lazily for
+- [x] List renders as a flat virtualized stream with collapsible year + month headers, non-indented (D37, D39); list handles thousands of entries without layout thrash (D13). The window arithmetic is `lib/listWindow.ts`, apart from React and the DOM so its edge cases are testable; the panel measures one row of each visual class and reports which entries are drawn.
+- [x] Rows render from filename-derived dates alone; first-line previews load lazily for
       visible rows only and never block first paint (see the listing strategy in
       `pending-journal_service_daily_notes-high-med.md`).
 - [ ] Undated is a pinned collapsed category with a count and is absent when empty; non-Markdown files are silently excluded from the popout (D32/D36).
@@ -136,6 +139,32 @@ chrome would be the inconsistent choice. **Product owner: say the word and I wil
 - [ ] CSS uses co-located CSS Modules and `--tn-*` tokens; no inline styles except runtime panel-dimension CSSOM custom properties on the panel root.
 - [ ] Desktop tests cover rendering, service failures, creating/opening notes, dirty-state behavior, panel toggling, filter emphasis, facet values, index-unavailable degradation, and malformed-frontmatter notice.
 - [ ] `DesktopPanelContext` gap (workspace listing / index access) is resolved and documented before the panel factory body is merged.
+
+## Decisions taken while building it
+
+**An entry row reserves its preview's line.** A row that grew a line when its
+first line arrived would shove every row below it down mid-scroll, and the
+window is computed from row heights, so the list would be measuring itself
+against a shape it no longer had. The line is drawn blank from the start. This
+also removes jitter that was already visible before virtualization.
+
+**Row heights are derived, then measured — never assumed.** A `JournalRow`
+already says which of three visual classes it is, so the height of a row is
+known from the row. The panel measures one row of each class from what it just
+laid out, because a row's height is not ours to decide: the coarse-pointer
+minimum (D76), the width tiers (D55/D72), the user's font size and the
+platform's scrollbars all move it. Estimates cover the first frame only.
+
+**The spacer divs carry an inline height**, which the CSS acceptance criterion
+below otherwise forbids. It is the same exception that criterion already makes
+for runtime panel dimensions: the height of the rows that are not drawn is a
+number computed per scroll, and there is no class that can express it.
+
+**Collapse state is bounded by the recent-workspace list.** Stored per workspace
+in desktop state (D53) at schema 5, keyed by view id so the explorer tree can
+use the same row later. A vault the app has forgotten how to reopen has no panel
+left to restore, so its collapsed groups go with it — one policy rather than two
+that can disagree.
 
 ## Validation
 

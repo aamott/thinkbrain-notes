@@ -3,9 +3,12 @@
 **Status:** 🟨 core service implemented (`apps/desktop/src/journal/journalService.ts`,
 path expansion in `packages/core/src/journal/paths.ts`) · **Urgency:** high · **Difficulty:** med
 
-Remaining: lazy first-line previews, which wait on the panel story's list
-virtualization (D13). Search delegation, settings wiring and panel wiring have
-all landed; so have the D41 facets this story depended on.
+Remaining: nothing this story owns. Lazy first-line previews landed with the
+panel story's virtualization on 2026-08-13; search delegation, settings wiring
+and panel wiring were already in, and the D41 facets this depended on have
+shipped. The open D30 question below — what a backfilled date does to the
+same-minute counter — is the last thing here, and it is a decision rather than
+code.
 
 ## Epic
 
@@ -118,9 +121,11 @@ Implement a typed, UI-independent service that resolves dates/paths, detects sam
 - [ ] `listJournalEntries` reads **no file contents** — dates come from filenames (D20); it
       applies D42 and sorts date-only before timed entries, and a 1,000-entry test asserts zero
       `read_markdown_file` calls.
-- [ ] First-line previews are fetched lazily for visible rows only and memoised; a test
-      asserts previews are not prefetched for off-screen entries.
-- [ ] Metadata facet/filter queries delegate to D41, AND predicates within one entry per D43, return matching paths for D16 search-within-filter, and return typed unavailable state without scans or a journal cache.
+- [x] First-line previews are fetched lazily for visible rows only and memoised; a test
+      asserts previews are not prefetched for off-screen entries. The panel reports which
+      entries are drawn; what came back is kept with the listing it was read from, and an
+      entry with no first line is recorded as such so a scroll does not ask again.
+- [x] Metadata facet/filter queries delegate to D41, AND predicates within one entry per D43, return matching paths for D16 search-within-filter, and return typed unavailable state without scans or a journal cache.
 - [ ] Tests cover: today's entry, same-minute collision (counter 2 and 3), past-date path expansion, invalid path segments, workspace unavailable, open/list no-rewrite, unknown frontmatter survival.
 - [ ] `pnpm lint`, `pnpm typecheck`, `pnpm test` all pass.
 

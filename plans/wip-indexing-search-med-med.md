@@ -50,6 +50,18 @@ rebuildable and lives in OS app-data, never in the vault.
   per-workspace `rusqlite::Connection` from `SEARCH_CONNECTIONS`. Nothing
   removes a handle when a workspace closes; revisit only if that matters.
 
+## Reusable pieces this epic produced
+
+- **`apps/desktop/src/lib/listWindow.ts`** — which rows of a long list are worth
+  drawing, and how much space to leave for the ones that are not. Knows nothing
+  about React or the DOM: it takes row heights and a scroll position and returns
+  indices. Written for the journal panel (D13), but the explorer tree, the
+  search results panel and the outline panel all render every row today and have
+  the same problem.
+- **Per-workspace, per-view collapsed groups in desktop state** (schema 5, D53).
+  Keyed by view id rather than named for the journal, so the explorer tree's
+  expansion — which is also lost on every restart — can take the same row.
+
 ## Known limits of search
 
 - **A result cap, still silent.** `search_index` returns 50 hits by default and
