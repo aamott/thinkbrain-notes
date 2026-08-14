@@ -1,0 +1,9 @@
+- name: `write_settings_file` temp filename uses nanosecond timestamp — collision-prone and not `mkstemp`
+- file: /media/adam/extex/projects/thinkbrain-notes/apps/desktop/src-tauri/src/commands/settings.rs
+- lines: 804-826
+- description: The atomic-write helper generates a temp filename from `SystemTime::now().duration_since(UNIX_EPOCH).as_nanos()` joined as `.{nanos}.tmp` in the same directory, writes it, then `fs::rename` over the target. Two concerns:
+  1. **Collision**: two concurrent writes (different processes, or the same process under the separate `APP_SETTINGS_MUTATION_LOCK` vs `WORKSPACE_SETTINGS_MUTATION_LOCK`) can produce the same nanosecond on platforms with low-resolution clocks (Windows `SystemTime` resolution is ~15ms in some configurations). The locks prevent same-process same-file races, but a same-process app-settings write and a workspace-settings write share the *same* `settings/` directory and could collide on `.{nanos}.tmp` if they happen to land in the same nanosecond — unlikely but the temp name is not unique to the target file. Use `tempfile::NamedTempFile` in the target's directory, or include the target filename stem in the temp name (e.g. `.app.{nanos}.tmp` vs `.workspace-{hash}.{nanos}.tmp`).
+  2. **No `fsync`**: the temp file is written and renamed but never `fsync`'d, so a crash after the rename may leave a zero-length file on some filesystems (the rename is atomic but the data may still be in the page cache). For settings this is low-impact but worth noting alongside the git/index paths which have the same pattern.
+
+  Not a blocker; the collision risk is low because of the locks, but the temp-name namespace is shared across both settings documents and a stem prefix would make it self-documenting.
+- verification: read lines 804-826; confirmed both `write_app_settings` and `write_workspace_settings` route through this single helper, and both target files live in `settings_dir` (line 314).
