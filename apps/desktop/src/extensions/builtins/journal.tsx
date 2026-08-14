@@ -112,7 +112,7 @@ function resolveWeekStart(setting: string | undefined): 0 | 1 {
 
 export function activateJournal(context: DesktopExtensionContext): void {
   context.settings.registerSchema(journalSettingsSchema);
-  registerJournalControls();
+  context.subscriptions.add(registerJournalControls());
 
   const service = createJournalService({
     workspace: context.workspace,
@@ -350,7 +350,6 @@ export function activateJournal(context: DesktopExtensionContext): void {
     kind: "calendar",
     label: "Journal calendar",
     isAvailable: true,
-    availability: "available",
     factory: () => <CalendarTabRoot />
   });
 

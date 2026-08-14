@@ -53,10 +53,7 @@ export function activateNoteStats(context: DesktopExtensionContext): void {
     icon: "∑",
     side: "right",
     factory: (panelContext: DesktopPanelContext) => {
-      const wordsPerMinute = context.settings.get<number>("wordsPerMinute") ?? FALLBACK_WPM;
-      const showReadingTime = context.settings.get<boolean>("showReadingTime") ?? true;
-      const stats = computeNoteStats(panelContext.documentContents, wordsPerMinute);
-
+      // Null check first: no point computing stats when no note is open.
       if (panelContext.documentContents === null) {
         return (
           <div className="p-4">
@@ -66,6 +63,10 @@ export function activateNoteStats(context: DesktopExtensionContext): void {
           </div>
         );
       }
+
+      const wordsPerMinute = context.settings.get<number>("wordsPerMinute") ?? FALLBACK_WPM;
+      const showReadingTime = context.settings.get<boolean>("showReadingTime") ?? true;
+      const stats = computeNoteStats(panelContext.documentContents, wordsPerMinute);
 
       return (
         <div className="p-4" aria-label="Note statistics">

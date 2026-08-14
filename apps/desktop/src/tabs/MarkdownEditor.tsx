@@ -193,7 +193,6 @@ export function MarkdownEditor({
   // without recreating the state, so cursor, scroll, and undo history survive.
   useEffect(() => {
     livePreviewRef.current = livePreview;
-    noteIndexRef.current = noteIndex;
     const view = viewRef.current;
     if (!view) return;
     view.dispatch({

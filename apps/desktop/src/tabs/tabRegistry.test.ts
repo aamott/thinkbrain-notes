@@ -6,10 +6,10 @@ describe("desktop tab registry", () => {
   it("provides supported first-party views and explicit unavailable views", () => {
     const registry = createDesktopTabRegistry();
 
-    expect(registry.get("editor")).toMatchObject({ isAvailable: true, availability: "available" });
-    expect(registry.get("preview")).toMatchObject({ isAvailable: true, availability: "available" });
-    expect(registry.get("settings")).toMatchObject({ isAvailable: true, availability: "available" });
-    expect(registry.get("graph")).toMatchObject({ isAvailable: false, availability: "unavailable" });
+    expect(registry.get("editor")).toMatchObject({ isAvailable: true });
+    expect(registry.get("preview")).toMatchObject({ isAvailable: true });
+    expect(registry.get("settings")).toMatchObject({ isAvailable: true });
+    expect(registry.get("graph")).toMatchObject({ isAvailable: false });
     expect(registry.get("browser")?.unavailableMessage).toContain("unavailable");
   });
 
@@ -18,8 +18,7 @@ describe("desktop tab registry", () => {
     const extension = {
       kind: "extension.calendar",
       label: "Calendar",
-      isAvailable: true,
-      availability: "available" as const
+      isAvailable: true
     };
 
     registry.register(extension);
@@ -33,8 +32,7 @@ describe("contributed tab renderers", () => {
   const calendar = {
     kind: "journal.calendar",
     label: "Calendar",
-    isAvailable: true,
-    availability: "available" as const
+    isAvailable: true
   };
 
   it("returns a handle that unregisters the view", () => {

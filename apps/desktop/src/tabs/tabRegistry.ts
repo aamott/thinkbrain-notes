@@ -23,7 +23,6 @@ export interface DesktopTabContext {
  * Markdown editor branch and report a missing document.
  */
 export interface DesktopTabView extends TabRegistration {
-  readonly availability: "available" | "unavailable";
   readonly unavailableMessage?: string;
   readonly factory?: (context: DesktopTabContext) => ReactNode;
 }
@@ -41,33 +40,28 @@ export const builtInDesktopTabViews: readonly DesktopTabView[] = [
   {
     kind: "editor",
     label: "Markdown editor",
-    isAvailable: true,
-    availability: "available"
+    isAvailable: true
   },
   {
     kind: "preview",
     label: "Markdown preview",
-    isAvailable: true,
-    availability: "available"
+    isAvailable: true
   },
   {
     kind: "settings",
     label: "Settings",
-    isAvailable: true,
-    availability: "available"
+    isAvailable: true
   },
   {
     kind: "graph",
     label: "Graph",
     isAvailable: false,
-    availability: "unavailable",
     unavailableMessage: "Graph visualization is unavailable until link indexing is connected."
   },
   {
     kind: "browser",
     label: "Browser",
     isAvailable: false,
-    availability: "unavailable",
     unavailableMessage: "Browser tabs are unavailable until the desktop web view is connected."
   }
 ];

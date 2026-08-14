@@ -6,6 +6,7 @@ import {
   type ExtensionHost,
   type ExtensionStatus,
   type ExtensionStatusEntry,
+  type SettingDefinition,
   type SettingSection,
   type SettingsModule
 } from "@thinkbrain/core";
@@ -218,14 +219,15 @@ function assertLocalKey(key: string): void {
   }
 }
 
-function fullSettingKey(extensionId: string, key: string): string {
+function fullSettingKey(extensionId: string, key: string): { fullKey: string; definition: SettingDefinition } {
   assertLocalKey(key);
   const moduleId = settingsModuleId(extensionId);
   const fullKey = `${moduleId}.${key}`;
-  if (!appSettingsRegistry.getDefinition(fullKey)) {
+  const definition = appSettingsRegistry.getDefinition(fullKey);
+  if (!definition) {
     throw new Error(`Setting key "${key}" is not registered by extension "${extensionId}".`);
   }
-  return fullKey;
+  return { fullKey, definition };
 }
 
 const SECTION_ID_PATTERN = /^[A-Za-z][A-Za-z0-9_-]*(?:\.[A-Za-z][A-Za-z0-9_-]*)*$/;
@@ -261,8 +263,8 @@ function namespaceSchema(moduleId: string, schema: DesktopExtensionSettingsSchem
   };
 }
 
-function own(context: ExtensionContext, disposable: Disposable, assertActive: () => void): Disposable {
-  assertActive();
+/** Adds a disposable to the activation scope. Callers must have already called `assertActive`. */
+function own(context: ExtensionContext, disposable: Disposable): Disposable {
   return context.subscriptions.add(disposable);
 }
 
@@ -310,26 +312,25 @@ function createDesktopExtensionContext(
     registerSchema: (schema) => {
       assertActive();
       const registration = appSettingsRegistry.register(namespaceSchema(moduleId, schema));
-      return own(context, registration, assertActive);
+      return own(context, registration);
     },
     get: <T>(key: string): T | undefined => {
       assertActive();
-      const fullKey = fullSettingKey(context.extensionId, key);
+      const { fullKey, definition } = fullSettingKey(context.extensionId, key);
       const state = useSettingsStore.getState();
-      return effectiveSettingValue(state, appSettingsRegistry.getDefinition(fullKey), fullKey) as T | undefined;
+      return effectiveSettingValue(state, definition, fullKey) as T | undefined;
     },
     set: (key, value) => {
       // Validates synchronously and persists asynchronously (D81): a foreign key
       // is a programming error and must fail even for a caller that never
       // awaits, while the write itself has no Save bar to wait for.
       assertActive();
-      const fullKey = fullSettingKey(context.extensionId, key);
+      const { fullKey } = fullSettingKey(context.extensionId, key);
       return useSettingsStore.getState().setSettingImmediately(fullKey, value);
     },
     onDidChange: (key, listener) => {
       assertActive();
-      const fullKey = fullSettingKey(context.extensionId, key);
-      const definition = appSettingsRegistry.getDefinition(fullKey);
+      const { fullKey, definition } = fullSettingKey(context.extensionId, key);
       let previous = effectiveSettingValue(useSettingsStore.getState(), definition, fullKey);
       const subscription = useSettingsStore.subscribe((state) => {
         const next = effectiveSettingValue(state, definition, fullKey);
@@ -338,7 +339,7 @@ function createDesktopExtensionContext(
         previous = next;
         listener(next, old);
       });
-      return own(context, { dispose: subscription }, assertActive);
+      return own(context, { dispose: subscription });
     }
   };
 
@@ -351,17 +352,13 @@ function createDesktopExtensionContext(
         return own(context, registries.commands.register({
           ...command,
           id: prefixId(context.extensionId, "Command", command.id)
-        }), assertActive);
+        }));
       }
     },
     panels: {
       register: (panel) => {
         assertActive();
-        return own(
-          context,
-          registries.panels.register(toPanelContribution(context.extensionId, panel)),
-          assertActive
-        );
+        return own(context, registries.panels.register(toPanelContribution(context.extensionId, panel)));
       }
     },
     editorHooks: {
@@ -370,7 +367,7 @@ function createDesktopExtensionContext(
         return own(context, registries.editorHooks.register({
           ...hook,
           id: prefixId(context.extensionId, "Editor hook", hook.id)
-        }), assertActive);
+        }));
       }
     },
     editorHeaders: {
@@ -379,7 +376,7 @@ function createDesktopExtensionContext(
         return own(context, registries.editorHeaders.register({
           ...header,
           id: prefixId(context.extensionId, "Editor header", header.id)
-        }), assertActive);
+        }));
       }
     },
     tabs: {
@@ -387,7 +384,7 @@ function createDesktopExtensionContext(
         assertActive();
         const kind = prefixId(context.extensionId, "Tab", tab.kind);
         ownKinds.add(kind);
-        return own(context, registries.tabs.register({ ...tab, kind }), assertActive);
+        return own(context, registries.tabs.register({ ...tab, kind }));
       },
       open: (kind, title) => {
         assertActive();
@@ -405,7 +402,7 @@ function createDesktopExtensionContext(
     events: {
       on: (event, listener) => {
         assertActive();
-        return own(context, appEvents.on(event, listener), assertActive);
+        return own(context, appEvents.on(event, listener));
       }
     },
     workspace: extensionWorkspace,

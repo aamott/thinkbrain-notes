@@ -4,7 +4,8 @@ import {
   parseExtensionManifest,
   type CompatibilityHost,
   type Disposable,
-  type ExtensionManifest
+  type ExtensionManifest,
+  type ManifestDiagnostic
 } from "@thinkbrain/core";
 
 import { desktopCommandRegistry, type DesktopCommandContext } from "../commands/commandRegistry";
@@ -22,6 +23,10 @@ import {
   type ExtensionSource,
   type ExtensionBootstrap
 } from "./bootstrapRef";
+
+/** Maps manifest diagnostics to bootstrap reasons (used for failed manifests and load diagnostics). */
+const toReasons = (diagnostics: readonly ManifestDiagnostic[]): readonly BootstrapReason[] =>
+  diagnostics.map((d) => ({ code: d.code, message: d.message, severity: d.severity }));
 
 export type {
   BootstrapEntry,
@@ -45,8 +50,6 @@ export { getExtensionBootstrap } from "./bootstrapRef";
  * Extensions can also be added while the app runs — see `addLocalExtension` —
  * which the shell picks up through the registries' subscriptions.
  */
-
-export { HOST_API_VERSION } from "./hostCompatibility";
 
 export interface BootstrapOptions {
   readonly host?: DesktopExtensionHost;
@@ -182,11 +185,7 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
         name: extension.manifest.name || "(invalid manifest)",
         status: "incompatible",
         source: "built-in",
-        reasons: diagnostics.map((diagnostic) => ({
-          code: diagnostic.code,
-          message: diagnostic.message,
-          severity: diagnostic.severity
-        }))
+        reasons: toReasons(diagnostics)
       });
       continue;
     }
@@ -270,11 +269,7 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
         status: "registered",
         // Load diagnostics ride along as reasons so the Extensions panel shows
         // an author why, for example, a declared panel did not appear.
-        reasons: diagnostics.map((diagnostic) => ({
-          code: diagnostic.code,
-          message: diagnostic.message,
-          severity: diagnostic.severity
-        })),
+        reasons: toReasons(diagnostics),
         stubs: [],
         registration: null,
         activation: undefined

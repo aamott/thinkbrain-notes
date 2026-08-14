@@ -256,7 +256,6 @@ describe("workspace and tab contributions", () => {
         kind: "calendar",
         label: "Calendar",
         isAvailable: true,
-        availability: "available",
         factory: () => null
       });
     }));
@@ -275,8 +274,7 @@ describe("workspace and tab contributions", () => {
       context.tabs.register({
         kind: "Calendar View",
         label: "Calendar",
-        isAvailable: true,
-        availability: "available"
+        isAvailable: true
       });
     }));
 
@@ -301,7 +299,6 @@ describe("workspace and tab contributions", () => {
         kind: "calendar",
         label: "Calendar",
         isAvailable: true,
-        availability: "available",
         factory: () => null
       });
       context.tabs.open("calendar", "August 2026");
@@ -347,7 +344,6 @@ describe("workspace and tab contributions", () => {
         kind: "calendar",
         label: "Calendar",
         isAvailable: true,
-        availability: "available",
         factory: () => null
       });
     }));

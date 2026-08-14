@@ -13,6 +13,7 @@
 import type { WorkspaceDesktopApi } from "../workspace/workspaceAdapter";
 import type { WorkspaceDocumentApi } from "../workspace/workspaceDocumentAdapter";
 import type { WorkspaceBridge } from "./workspaceBridge";
+import { WINDOWS_ABSOLUTE } from "@thinkbrain/core";
 
 /** A note found by {@link DesktopExtensionWorkspace.listNotes}. */
 export interface ExtensionNote {
@@ -51,8 +52,6 @@ export interface ExtensionWorkspaceOptions {
   readonly getBridge: () => WorkspaceBridge | null;
   readonly entries: Pick<WorkspaceDesktopApi, "listWorkspaceEntries" | "renameWorkspaceEntry" | "deleteWorkspaceEntry">;
 }
-
-const WINDOWS_ABSOLUTE = /^[A-Za-z]:[\\/]/;
 
 /** Rejects anything that is not a path inside the workspace. */
 function assertRelativePath(relativePath: string): void {

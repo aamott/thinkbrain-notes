@@ -88,7 +88,17 @@ export function createLocalExtensions(options: LocalExtensionsOptions): LocalExt
     const result = await loader.load(directory);
     if (!result.extension) return { loaded: false, diagnostics: result.diagnostics };
 
-    bootstrap.addLocalExtension(result.extension, result.diagnostics);
+    try {
+      bootstrap.addLocalExtension(result.extension, result.diagnostics);
+    } catch (error: unknown) {
+      // Concurrent `add`s of the same directory (or two directories bundling
+      // the same extension id) can both pass the `add` pre-check and reach here;
+      // `addLocalExtension` throws synchronously on a duplicate id. Convert the
+      // throw into a failed outcome so the caller sees a clear message instead
+      // of a raw "already registered" error escaping `add`.
+      const message = error instanceof Error ? error.message : String(error);
+      return { loaded: false, diagnostics: [{ code: "extension_already_registered", message, severity: "error" }] };
+    }
     return { loaded: true, diagnostics: result.diagnostics };
   };
 
