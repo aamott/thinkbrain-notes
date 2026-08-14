@@ -7,6 +7,7 @@ import { useState } from "react";
 
 import { registerControl, type ControlProps } from "../settings/controlRegistry";
 import { deriveFieldKey } from "./fieldKey";
+import { FieldDefinitionsJson } from "./FieldDefinitionsJson";
 import { FIELD_DEFINITIONS_CONTROL, parseFieldDefinitions } from "./journalSettings";
 
 /**
@@ -131,8 +132,6 @@ export function JournalFieldDefinitionsControl({
   // A value this form cannot draw opens in JSON, so nobody is locked out of
   // their own setting by a control that will not render it.
   const [json, setJson] = useState(false);
-  const [jsonDraft, setJsonDraft] = useState(stored);
-  const [jsonError, setJsonError] = useState<string | null>(null);
 
   const fields = parsed.definitions;
   const write = (next: readonly (JournalFieldDefinition | Record<string, unknown>)[]): void => {
@@ -357,42 +356,15 @@ export function JournalFieldDefinitionsControl({
   }
 
   // ---- the JSON escape hatch ----------------------------------------------
-
   if (json || unreadable) {
     return (
-      <div className="flex flex-col gap-2">
-        <textarea
-          className="min-h-[7rem] w-full rounded border border-border bg-input p-2 font-mono text-xs text-foreground"
-          aria-label={`${definition.label}, JSON`}
-          spellCheck={false}
-          disabled={disabled}
-          value={json ? jsonDraft : stored}
-          onChange={(event) => {
-            const next = event.target.value;
-            setJsonDraft(next);
-            setJson(true);
-            const result = parseFieldDefinitions(next);
-            if (result.diagnostics.length > 0) {
-              setJsonError(result.diagnostics[0]?.message ?? "That isn't valid.");
-              return;
-            }
-            setJsonError(null);
-            onChange(next);
-          }}
-        />
-        {(jsonError ?? (unreadable ? parsed.diagnostics[0]?.message : null)) && (
-          <p role="alert" className="m-0 text-xs text-danger">
-            {jsonError ?? parsed.diagnostics[0]?.message}
-          </p>
-        )}
-        {!unreadable && (
-          <div>
-            <button type="button" onClick={() => setJson(false)} className={LINK}>
-              Back to the list
-            </button>
-          </div>
-        )}
-      </div>
+      <FieldDefinitionsJson
+        definition={definition}
+        stored={stored}
+        disabled={disabled}
+        onChange={onChange}
+        onBack={() => setJson(false)}
+      />
     );
   }
 
@@ -503,10 +475,7 @@ export function JournalFieldDefinitionsControl({
           </button>
           <button
             type="button"
-            onClick={() => {
-              setJsonDraft(stored);
-              setJson(true);
-            }}
+            onClick={() => setJson(true)}
             className={LINK}
           >
             Edit as JSON

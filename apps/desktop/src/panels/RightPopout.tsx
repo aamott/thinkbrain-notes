@@ -1,13 +1,7 @@
 import { useMemo } from "react";
 import { type RightPanel } from "../shell/shellTypes";
-import { Unavailable } from "../shell/Unavailable";
-import { PanelTitle } from "./PanelTitle";
-import {
-  getDesktopPanelOrUndefined,
-  MountedPanel,
-  useRightPanelContributions,
-  type RightPanelContext
-} from "./panelRegistry";
+import { Popout } from "./Popout";
+import { useRightPanelContributions, type RightPanelContext } from "./panelRegistry";
 
 type RightPopoutProps = {
   /** Currently active right activity bar panel. */
@@ -19,59 +13,14 @@ type RightPopoutProps = {
 };
 
 /**
- * Right dock popout for the desktop shell.
- *
- * Stateful inspector contributions remain mounted through activity-bar switches;
- * the registry supplies their React factories while this component preserves the
- * fixed-width dock and responsive overlay behavior.
+ * Right dock popout for the desktop shell. Layout and contribution rendering
+ * live in the shared `Popout`; only the right-side context is constructed here.
  */
 export function RightPopout({ panel, rootPath, documentContents }: RightPopoutProps) {
   const rightPanels = useRightPanelContributions();
-  const contribution = getDesktopPanelOrUndefined(panel);
-  // Stable across parent renders, for the same reason as `LeftPopout`: a fresh
-  // object re-renders every kept-mounted panel, and the outline and properties
-  // panels re-read the whole document when they render. Only the right-side
-  // state is constructed here — no fabricated explorer/search state, so a right
-  // factory cannot silently call a no-op explorer/search callback.
   const context: RightPanelContext = useMemo(
     () => ({ rootPath, documentContents }),
     [rootPath, documentContents]
   );
-
-  if (!contribution) {
-    return (
-      <aside
-        className="flex flex-col min-w-0 overflow-hidden bg-sidebar border-l border-border flex-[0_0_var(--tn-shell-right-width)] max-[760px]:absolute max-[760px]:top-0 max-[760px]:bottom-0 max-[760px]:right-0 max-[760px]:z-30 max-[760px]:shadow-lg"
-        aria-label="Panel not available"
-      >
-        <Unavailable
-          title="Panel not available"
-          description={`Panel '${panel}' is not registered.`}
-        />
-      </aside>
-    );
-  }
-
-  return (
-    <aside
-      className="flex flex-col min-w-0 overflow-hidden bg-sidebar border-l border-border flex-[0_0_var(--tn-shell-right-width)] max-[760px]:absolute max-[760px]:top-0 max-[760px]:bottom-0 max-[760px]:right-0 max-[760px]:z-30 max-[760px]:shadow-lg"
-      aria-label={`${contribution.label} panel`}
-    >
-      <PanelTitle title={contribution.label} actions={contribution.actions} />
-      {rightPanels.map((panelContribution) => {
-        const isActive = panelContribution.id === panel;
-        if (!isActive && !panelContribution.keepMounted) return null;
-        const isAvailable = panelContribution.availability?.(context) ?? true;
-        return (
-          <MountedPanel
-            key={panelContribution.id}
-            contribution={panelContribution}
-            context={context}
-            isActive={isActive}
-            isAvailable={isAvailable}
-          />
-        );
-      })}
-    </aside>
-  );
+  return <Popout side="right" panel={panel} context={context} contributions={rightPanels} />;
 }

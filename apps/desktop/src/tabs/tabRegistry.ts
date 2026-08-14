@@ -74,12 +74,9 @@ export function createDesktopTabRegistry(
   initialViews: readonly DesktopTabView[] = builtInDesktopTabViews
 ): DesktopTabRegistry {
   const coreRegistry = createTabRegistry();
+  // Extra desktop-only fields keyed by kind; core is the source of truth for
+  // existence and ordering, so `get`/`entries` gate on core registrations.
   const views = new Map<TabKind, DesktopTabView>();
-  const listeners = new Set<() => void>();
-
-  const changed = (): void => {
-    for (const listener of listeners) listener();
-  };
 
   const register = (view: DesktopTabView): Disposable => {
     const registration: TabRegistration = {
@@ -87,20 +84,27 @@ export function createDesktopTabRegistry(
       label: view.label,
       isAvailable: view.isAvailable
     };
-    const coreHandle = coreRegistry.register(registration);
+    // Update desktop state before core fires subscribers so they see the view.
+    const previous = views.get(view.kind);
     views.set(view.kind, view);
-    changed();
+    let coreHandle: Disposable;
+    try {
+      coreHandle = coreRegistry.register(registration);
+    } catch (error) {
+      if (previous === undefined) views.delete(view.kind);
+      else views.set(view.kind, previous);
+      throw error;
+    }
     let disposed = false;
 
     return {
       dispose: (): void => {
         if (disposed) return;
         disposed = true;
+        // Core fires subscribers here; entries() derives from core so the
+        // removed view is already absent before we clean up `views`.
         coreHandle.dispose();
-        // Only drop our own view: a later owner of the same kind must survive
-        // a late dispose of the earlier handle.
         if (views.get(view.kind) === view) views.delete(view.kind);
-        changed();
       }
     };
   };
@@ -110,18 +114,16 @@ export function createDesktopTabRegistry(
   return {
     register,
     get(kind) {
-      // Delegate the existence check to the platform-neutral registry so its
-      // duplicate-kind ownership invariant remains the single source of truth.
       return coreRegistry.get(kind) ? views.get(kind) : undefined;
     },
     entries() {
-      return [...views.values()];
+      return coreRegistry
+        .entries()
+        .map((r) => views.get(r.kind))
+        .filter((v): v is DesktopTabView => v !== undefined);
     },
     subscribe(listener) {
-      listeners.add(listener);
-      return () => {
-        listeners.delete(listener);
-      };
+      return coreRegistry.subscribe(listener);
     }
   };
 }

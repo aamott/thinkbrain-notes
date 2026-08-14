@@ -81,24 +81,7 @@ export function livePreview(options: LivePreviewOptions = {}): Extension {
           if (!resolvedEl) return false;
 
           const pos = view.posAtDOM(resolvedEl);
-          const tree = syntaxTree(view.state);
-
-          // Walk up from the clicked position to find the enclosing WikiLink
-          // node. `tree.resolve` returns the deepest leaf; `parent` chains up.
-          let node: SyntaxNode | null = tree.resolve(pos, 1);
-          while (node && node.name !== "WikiLink") {
-            node = node.parent;
-          }
-          if (!node || node.name !== "WikiLink") return false;
-
-          // Extract the target string from the WikiLink node.
-          const targetText = extractWikiLinkTarget(node, view.state.doc);
-          if (!targetText) return false;
-
-          const resolvedPath = resolveWikiLinkTarget(targetText, options.noteIndex ?? []);
-          if (!resolvedPath || !options.onOpenNote) return false;
-
-          options.onOpenNote(resolvedPath);
+          if (!openWikiLinkAt(view, pos, options)) return false;
           event.preventDefault();
           return true;
         }
@@ -114,29 +97,24 @@ export function livePreview(options: LivePreviewOptions = {}): Extension {
     ? keymap.of([
         {
           key: "Mod-Enter",
-          run: (view) => {
-            const tree = syntaxTree(view.state);
-            const head = view.state.selection.main.head;
-
-            // Resolve the deepest leaf at the caret and walk up to a WikiLink.
-            let node: SyntaxNode | null = tree.resolve(head, 1);
-            while (node && node.name !== "WikiLink") {
-              node = node.parent;
-            }
-            if (!node || node.name !== "WikiLink") return false;
-
-            const targetText = extractWikiLinkTarget(node, view.state.doc);
-            if (!targetText) return false;
-
-            const resolvedPath = resolveWikiLinkTarget(targetText, options.noteIndex ?? []);
-            if (!resolvedPath || !options.onOpenNote) return false;
-
-            options.onOpenNote(resolvedPath);
-            return true;
-          }
+          run: (view) => openWikiLinkAt(view, view.state.selection.main.head, options)
         }
       ])
     : [];
 
   return [plugin, clickHandler, keyHandler, livePreviewTheme];
+}
+
+/** Resolves a wiki link at `pos` and calls `onOpenNote`. Returns true if handled. */
+function openWikiLinkAt(view: EditorView, pos: number, options: LivePreviewOptions): boolean {
+  const tree = syntaxTree(view.state);
+  let node: SyntaxNode | null = tree.resolve(pos, 1);
+  while (node && node.name !== "WikiLink") node = node.parent;
+  if (!node || node.name !== "WikiLink") return false;
+  const targetText = extractWikiLinkTarget(node, view.state.doc);
+  if (!targetText) return false;
+  const resolvedPath = resolveWikiLinkTarget(targetText, options.noteIndex ?? []);
+  if (!resolvedPath || !options.onOpenNote) return false;
+  options.onOpenNote(resolvedPath);
+  return true;
 }

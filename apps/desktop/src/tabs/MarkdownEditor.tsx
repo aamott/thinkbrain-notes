@@ -178,6 +178,7 @@ export function MarkdownEditor({
   }, [livePreviewCompartment, wikiLinkAutocompleteCompartment, stateKey]);
 
   useEffect(() => {
+    valueRef.current = value;
     const view = viewRef.current;
     if (!view) return;
     const change = minimalChange(view.state.doc.toString(), value);
