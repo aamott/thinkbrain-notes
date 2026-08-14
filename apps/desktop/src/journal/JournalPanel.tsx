@@ -448,7 +448,7 @@ export function JournalPanel({
           onClick={() => setPendingDelete(null)}
         >
           <div
-            className="max-w-[20rem] rounded-small border border-border bg-popover p-4 shadow-soft"
+            className="max-w-xs rounded-small border border-border bg-popover p-4 shadow-soft"
             onClick={(e) => e.stopPropagation()}
           >
             <p className="m-0 mb-1 text-sm font-semibold">Delete this entry?</p>

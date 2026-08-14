@@ -52,7 +52,7 @@ export function TabContent({ tab, document, onChange, onSave, noteIndex, onOpenN
 
   if (!tab) {
     return (
-      <div className="grid grid-cols-[3.2rem_minmax(0,1fr)] py-[1.1rem] font-mono text-[0.84rem] leading-[1.65]">
+      <div className="grid grid-cols-[3.2rem_minmax(0,1fr)] py-[1.1rem] font-mono text-[0.84rem] leading-1.65">
         <span className="text-muted-foreground pr-[0.8rem] text-right select-none">1</span>
         <pre className={cn("m-0 overflow-visible whitespace-pre-wrap")}>
           {`# Welcome to ThinkBrain\n\nOpen a workspace, then select a Markdown file to start editing it.`}
@@ -98,7 +98,7 @@ export function TabContent({ tab, document, onChange, onSave, noteIndex, onOpenN
 
   if (tab.kind === "preview") {
     return (
-      <div className="my-8 mx-auto max-w-[42rem] px-8 leading-[1.6]">
+      <div className="my-8 mx-auto max-w-2xl px-8 leading-1.6">
         <h1 className="text-[2rem]">Preview unavailable</h1>
         <p>Open a Markdown note to view its rendered preview.</p>
       </div>

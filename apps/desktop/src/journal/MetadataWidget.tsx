@@ -200,7 +200,7 @@ export function MetadataWidget({
   );
 
   return (
-    <div className="mx-auto max-w-[34rem] px-5 pt-4">
+    <div className="mx-auto max-w-136 px-5 pt-4">
       <div className="flex flex-wrap items-baseline gap-2 border-b border-border pb-2">
         <span className="text-[0.82rem] font-semibold">{formatJournalLongDate(date, true)}</span>
         {!expanded && set.length > 0 && (

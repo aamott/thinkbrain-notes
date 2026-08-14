@@ -176,7 +176,7 @@ export function ThemePicker() {
         id="theme-picker-select"
         value={selectValue}
         onChange={handleChange}
-        className="mt-1 max-w-[24rem] rounded-small border border-border bg-surface px-2 py-1 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="mt-1 max-w-sm rounded-small border border-border bg-surface px-2 py-1 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <optgroup label="Base">
           <option value="system">System</option>

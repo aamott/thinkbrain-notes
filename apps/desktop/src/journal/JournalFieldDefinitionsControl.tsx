@@ -408,7 +408,7 @@ export function JournalFieldDefinitionsControl({
             </div>
           ) : (
             <div key={field.id} className={ROW}>
-              <span className="min-w-[5rem] text-xs font-semibold">{field.label}</span>
+              <span className="min-w-20 text-xs font-semibold">{field.label}</span>
               <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
                 {summarise(field)}
               </span>

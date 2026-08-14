@@ -40,7 +40,7 @@ export function StaleDocumentBanner({
       className="flex flex-wrap items-center gap-3 py-[0.6rem] px-[0.9rem] border-b border-warning/40 bg-warning/10"
     >
       <AlertTriangle className="shrink-0 size-[1.05rem] text-warning" aria-hidden="true" />
-      <p className="flex-1 min-w-[16rem] m-0 text-xs text-foreground">
+      <p className="flex-1 min-w-3xs m-0 text-xs text-foreground">
         <b className="font-semibold">
           {fileName} changed on disk while you were editing it.
         </b>{" "}

@@ -100,7 +100,11 @@ export default tseslint.config(
       }
     },
     rules: {
-      "tailwindcss/no-contradicting-classname": "warn"
+      "tailwindcss/no-contradicting-classname": "warn",
+      // Autofixable (🔧): rewrites arbitrary values that have an exact
+      // built-in equivalent (e.g. `py-[0.625rem]` → `py-2.5`). Safe to run
+      // with `eslint --fix`; the suggested classes are byte-equivalent.
+      "tailwindcss/no-unnecessary-arbitrary-value": "warn"
     }
   }
 );

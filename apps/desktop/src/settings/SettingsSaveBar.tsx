@@ -125,7 +125,7 @@ export function SettingsSaveBar() {
     <div
       className={cn(
         "sticky bottom-0 z-10 flex items-center justify-end gap-[0.45rem]",
-        "border-t border-border bg-surface px-4 py-[0.5rem]"
+        "border-t border-border bg-surface px-4 py-2"
       )}
       role="toolbar"
       aria-label="Settings actions"

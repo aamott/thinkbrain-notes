@@ -18,7 +18,7 @@ export function TextControl({ definition, value, onChange, disabled }: ControlPr
       value={typeof value === "string" ? value : String(value ?? "")}
       disabled={disabled}
       onChange={(e) => onChange(e.target.value)}
-      className={`w-full max-w-[24rem] ${inputClassName}`}
+      className={`w-full max-w-sm ${inputClassName}`}
     />
   );
 }

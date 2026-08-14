@@ -25,7 +25,7 @@ export function SelectControl({ definition, value, onChange, disabled }: Control
       value={selected}
       disabled={disabled}
       onChange={(e) => onChange(e.target.value)}
-      className={`w-full max-w-[24rem] ${inputClassName}`}
+      className={`w-full max-w-sm ${inputClassName}`}
     >
       {!valueMatchesOption && (
         <option value="" disabled>

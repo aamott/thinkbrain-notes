@@ -85,7 +85,7 @@ export function AssistantPanel() {
           onSubmit={(event) => event.preventDefault()}
         >
           <textarea
-            className="min-h-[60px] w-full resize-none border-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+            className="min-h-15 w-full resize-none border-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
             disabled
             placeholder="Connect an agent to ask about your notes"
             aria-label="Assistant message"

@@ -178,7 +178,7 @@ export function SettingsContent() {
 
   return (
     <div ref={containerRef} className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-      <div className="mx-auto w-full max-w-[40rem] px-6 py-4">
+      <div className="mx-auto w-full max-w-160 px-6 py-4">
         <div className="mb-2 flex items-center gap-2">
           <h2 className="text-base font-semibold text-foreground">{sectionLabel}</h2>
           <button

@@ -32,7 +32,7 @@ export function PathControl({ definition, value, onChange, disabled }: ControlPr
   }
 
   return (
-    <div className="flex w-full max-w-[24rem] items-center gap-2">
+    <div className="flex w-full max-w-sm items-center gap-2">
       <input
         type="text"
         id={definition.key}

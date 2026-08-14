@@ -95,5 +95,5 @@ function PaletteOption({ id, active, disabled = false, onClick, children }: {
   readonly onClick: () => void;
   readonly children: React.ReactNode;
 }) {
-  return <button id={id} className={cn("flex w-full cursor-pointer items-center justify-between gap-4 rounded-small border-0 px-[0.65rem] py-[0.58rem] text-left text-[0.8125rem] text-foreground hover:bg-accent", active ? "bg-accent" : "bg-transparent", disabled && "opacity-[0.55]")} type="button" role="option" aria-selected={active} data-unavailable={disabled || undefined} onClick={onClick} tabIndex={-1}>{children}</button>;
+  return <button id={id} className={cn("flex w-full cursor-pointer items-center justify-between gap-4 rounded-small border-0 px-[0.65rem] py-[0.58rem] text-left text-[0.8125rem] text-foreground hover:bg-accent", active ? "bg-accent" : "bg-transparent", disabled && "opacity-0.55")} type="button" role="option" aria-selected={active} data-unavailable={disabled || undefined} onClick={onClick} tabIndex={-1}>{children}</button>;
 }

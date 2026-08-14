@@ -463,7 +463,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
       <header className="flex min-h-16 items-center justify-between gap-3 px-3 py-[0.625rem] border-b border-border">
         <div className="min-w-0">
           <p className="mb-[0.125rem] text-muted-foreground text-[0.625rem] font-bold tracking-[0.08em] leading-none uppercase">Workspace</p>
-          <h2 className="max-w-[11rem] m-0 overflow-hidden text-[0.8125rem] font-[650] leading-tight truncate">{state.snapshot?.workspace.name ?? "No workspace open"}</h2>
+          <h2 className="max-w-44 m-0 overflow-hidden text-[0.8125rem] font-[650] leading-tight truncate">{state.snapshot?.workspace.name ?? "No workspace open"}</h2>
         </div>
         <div className="relative">
           <button
@@ -491,7 +491,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
                 onClick={() => setMoreMenuOpen(false)}
               />
               <div
-                className="absolute right-0 top-full mt-1 z-50 min-w-[11rem] border border-border rounded-small bg-popover py-1 text-popover-foreground shadow-soft"
+                className="absolute right-0 top-full mt-1 z-50 min-w-44 border border-border rounded-small bg-popover py-1 text-popover-foreground shadow-soft"
                 role="menu"
                 aria-label="More actions"
                 onKeyDown={(event) => {
@@ -548,7 +548,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
             {state.snapshot?.workspace.root_path}
           </p>
           {actionError && (
-            <p className="m-0 px-3 py-[0.4rem] border-b border-[color-mix(in_srgb,var(--color-destructive)_45%,var(--color-border))] text-danger bg-[color-mix(in_srgb,var(--color-destructive)_9%,transparent)] text-[0.6875rem] leading-[1.4]" role="alert">{actionError}</p>
+            <p className="m-0 px-3 py-[0.4rem] border-b border-[color-mix(in_srgb,var(--color-destructive)_45%,var(--color-border))] text-danger bg-[color-mix(in_srgb,var(--color-destructive)_9%,transparent)] text-[0.6875rem] leading-1.4" role="alert">{actionError}</p>
           )}
           {tree.length === 0 && !creating ? (
             <StatusState message="This workspace is empty. Right-click to create a new file or folder." />
@@ -979,7 +979,7 @@ function WorkspaceContextMenu({ menu, onClose, onStartCreate, onStartRename, onR
   return (
     <div
       ref={menuRef}
-      className="fixed z-20 min-w-[11rem] border border-border rounded-small bg-popover shadow-soft py-1 text-xs"
+      className="fixed z-20 min-w-44 border border-border rounded-small bg-popover shadow-soft py-1 text-xs"
       role="menu"
       aria-label="Workspace actions"
       style={{ left: `${position.x}px`, top: `${position.y}px` }}
@@ -1063,7 +1063,7 @@ function DeleteConfirmDialog({ entry, onCancel, onConfirm }: {
         onMouseDown={(event) => event.stopPropagation()}
       >
         <h2 className="m-0 text-base font-semibold">Delete {isFolder ? "folder" : "file"}?</h2>
-        <p id={descriptionId} className="m-0 text-muted-foreground text-[0.8rem] leading-[1.45]">
+        <p id={descriptionId} className="m-0 text-muted-foreground text-[0.8rem] leading-1.45">
           {isFolder
             ? `"${entry.name}" and all of its contents will be permanently removed.`
             : `"${entry.name}" will be permanently removed.`}

@@ -34,7 +34,7 @@ export function FieldDefinitionsJson({
   return (
     <div className="flex flex-col gap-2">
       <textarea
-        className="min-h-[7rem] w-full rounded border border-border bg-input p-2 font-mono text-xs text-foreground"
+        className="min-h-28 w-full rounded border border-border bg-input p-2 font-mono text-xs text-foreground"
         aria-label={`${definition.label}, JSON`}
         spellCheck={false}
         disabled={disabled}
