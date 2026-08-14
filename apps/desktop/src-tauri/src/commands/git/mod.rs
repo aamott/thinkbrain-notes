@@ -5,6 +5,13 @@ use std::path::Path;
 use std::process::{Command, Output, Stdio};
 use crate::commands::workspace::{resolve_workspace_root, WORKSPACE_ENTRY_MUTATION_LOCK, resolve_workspace_entry_path};
 
+mod porcelain;
+#[allow(unused_imports)]
+pub use porcelain::{
+    bounded_git_text, git_command_failed, git_run_error, git_status_parse_error,
+    non_empty_git_text, parse_git_status_porcelain_v1,
+};
+
 
 const GIT_COMMAND_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 const MAX_GIT_DETAILS_LENGTH: usize = 4_096;
@@ -376,139 +383,6 @@ pub fn update_git_index_with(
     }
 
     Ok(())
-}
-
-
-/// Parses Git's `status --porcelain=v1 -z` output.
-///
-/// A normal record is `XY path\\0`. Rename and copy records include a second
-/// NUL-delimited source path after the destination path; this API exposes the
-/// destination path because it is the path that now exists in the workspace.
-pub fn parse_git_status_porcelain_v1(output: &str) -> Result<Vec<GitStatusEntry>, NativeError> {
-    let records: Vec<&str> = output.split('\0').collect();
-    let mut entries = Vec::new();
-    let mut record_index = 0;
-
-    while record_index < records.len() {
-        let record = records[record_index];
-        if record.is_empty() {
-            record_index += 1;
-            continue;
-        }
-
-        let bytes = record.as_bytes();
-
-        if bytes.len() < 4 || bytes[2] != b' ' {
-            return Err(git_status_parse_error("a record did not contain `XY path`"));
-        }
-
-        let path = &record[3..];
-        if path.is_empty() {
-            return Err(git_status_parse_error("a record did not include a path"));
-        }
-
-        let index_status = record[0..1].to_string();
-        let worktree_status = record[1..2].to_string();
-        let has_source_path = matches!(index_status.as_str(), "R" | "C")
-            || matches!(worktree_status.as_str(), "R" | "C");
-
-        if has_source_path {
-            record_index += 1;
-            let Some(source_path) = records.get(record_index) else {
-                return Err(git_status_parse_error(
-                    "a rename or copy record did not include its source path",
-                ));
-            };
-
-            if source_path.is_empty() {
-                return Err(git_status_parse_error(
-                    "a rename or copy record included an empty source path",
-                ));
-            }
-        }
-
-        entries.push(GitStatusEntry {
-            path: path.to_string(),
-            index_status,
-            worktree_status,
-        });
-        record_index += 1;
-    }
-
-    entries.sort_by(|left, right| {
-        left.path
-            .cmp(&right.path)
-            .then_with(|| left.index_status.cmp(&right.index_status))
-            .then_with(|| left.worktree_status.cmp(&right.worktree_status))
-    });
-
-    Ok(entries)
-}
-
-
-pub fn git_status_parse_error(reason: &str) -> NativeError {
-    NativeError::with_details(
-        "git.command_failed",
-        "Git returned an unexpected failure.",
-        format!("read the workspace Git status; invalid porcelain v1 output: {reason}"),
-    )
-}
-
-
-pub fn git_run_error(action: &str, error: GitRunError) -> NativeError {
-    match error {
-        GitRunError::NotFound(error) => NativeError::with_details(
-            "git.not_installed",
-            "Git is not installed or is unavailable on PATH.",
-            error.to_string(),
-        ),
-        GitRunError::TimedOut => NativeError::with_details(
-            "git.command_timeout",
-            "Git did not finish before the command timeout.",
-            action,
-        ),
-        GitRunError::Io(error) => NativeError::with_details(
-            "git.command_failed",
-            "Failed to run a Git command.",
-            format!("{action}: {error}"),
-        ),
-    }
-}
-
-
-pub fn git_command_failed(action: &str, output: &GitCommandOutput) -> NativeError {
-    let stdout = bounded_git_text(&output.stdout);
-    let stderr = bounded_git_text(&output.stderr);
-    let details = match (stdout.is_empty(), stderr.is_empty()) {
-        (true, true) => format!("{action}; exit status {:?}", output.exit_code),
-        (false, true) => format!("{action}; stdout: {stdout}"),
-        (true, false) => format!("{action}; stderr: {stderr}"),
-        (false, false) => format!("{action}; stdout: {stdout}; stderr: {stderr}"),
-    };
-
-    NativeError::with_details(
-        "git.command_failed",
-        "Git returned an unexpected failure.",
-        bounded_git_text(&details),
-    )
-}
-
-
-pub fn non_empty_git_text(value: &str) -> Option<String> {
-    let value = value.trim();
-    (!value.is_empty()).then(|| bounded_git_text(value))
-}
-
-
-pub fn bounded_git_text(value: &str) -> String {
-    let mut characters = value.chars();
-    let truncated: String = characters.by_ref().take(MAX_GIT_DETAILS_LENGTH).collect();
-
-    if characters.next().is_some() {
-        format!("{truncated}…")
-    } else {
-        truncated
-    }
 }
 
 

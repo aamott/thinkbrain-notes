@@ -27,10 +27,7 @@ pub fn get_search_connection(
     root_path: &str,
 ) -> Result<Arc<Mutex<Connection>>, NativeError> {
     let mut lock = SEARCH_CONNECTIONS.lock().unwrap();
-    if lock.is_none() {
-        *lock = Some(HashMap::new());
-    }
-    let pool = lock.as_mut().unwrap();
+    let pool = lock.get_or_insert_with(HashMap::new);
     if let Some(conn) = pool.get(root_path) {
         return Ok(conn.clone());
     }

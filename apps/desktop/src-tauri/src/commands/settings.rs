@@ -107,34 +107,12 @@ pub fn read_app_settings(app: tauri::AppHandle) -> Result<Option<String>, Native
 }
 
 
-/// Refuses a write computed from a document that is no longer on disk.
-///
-/// The app document has three writers. `update_desktop_state` and
-/// `update_app_theme` read and write inside a single locked command each, so
-/// nothing can land between their read and their write and they stay correct
-/// without a precondition. `write_app_settings` is different: the store reads
-/// the document (`read_app_settings`) on one IPC round trip and writes it on
-/// another, so a desktop-state update or a theme change — or another window's
-/// save — can land in between. Carrying the document the revision was computed
-/// from turns that silent loss into a refusal the caller can recompute against.
-pub fn check_app_settings_precondition(
-    current: Option<&str>,
-    expected: Option<&str>,
-) -> Result<(), NativeError> {
-    check_settings_precondition(
-        current,
-        expected,
-        "settings.app_conflict",
-        "The application settings changed while this one was being saved.",
-    )
-}
-
 /// The check itself, shared by both documents.
 ///
 /// Two writers that disagree about what is on disk is one situation, not two;
 /// only the name of the document differs, and that is what the code and message
 /// carry.
-fn check_settings_precondition(
+pub(crate) fn check_settings_precondition(
     current: Option<&str>,
     expected: Option<&str>,
     code: &str,
@@ -163,7 +141,12 @@ pub fn write_app_settings(
     // only worth anything if no other writer can land between it and the write
     // it guards.
     let current = read_settings_file(&settings_path)?;
-    check_app_settings_precondition(current.as_deref(), expected.as_deref())?;
+    check_settings_precondition(
+        current.as_deref(),
+        expected.as_deref(),
+        "settings.app_conflict",
+        "The application settings changed while this one was being saved.",
+    )?;
 
     write_settings_file(&settings_path, &contents)
 }
@@ -228,26 +211,6 @@ pub fn read_workspace_settings(
 }
 
 
-/// Refuses a write computed from a document that is no longer on disk.
-///
-/// The workspace file has more than one writer and none of them owns all of it,
-/// so each reads, merges its own keys and writes the whole document back. Two
-/// of those sequences interleaved lose whichever landed first. Carrying the
-/// document the revision was computed from turns that silent loss into a
-/// refusal the caller can retry against what is actually there.
-pub fn check_workspace_settings_precondition(
-    current: Option<&str>,
-    expected: Option<&str>,
-) -> Result<(), NativeError> {
-    check_settings_precondition(
-        current,
-        expected,
-        "settings.workspace_conflict",
-        "The workspace settings changed while this one was being saved.",
-    )
-}
-
-
 #[tauri::command]
 pub fn write_workspace_settings(
     app: tauri::AppHandle,
@@ -263,7 +226,12 @@ pub fn write_workspace_settings(
     // Read and write under one lock: the check is only worth anything if no
     // other write can land between it and the write it guards.
     let current = read_settings_file(&settings_path)?;
-    check_workspace_settings_precondition(current.as_deref(), expected.as_deref())?;
+    check_settings_precondition(
+        current.as_deref(),
+        expected.as_deref(),
+        "settings.workspace_conflict",
+        "The workspace settings changed while this one was being saved.",
+    )?;
 
     write_settings_file(&settings_path, &contents)
 }
@@ -325,8 +293,6 @@ pub fn update_desktop_state_contents(
     let next = apply_desktop_state_update(current, update);
 
     app_settings.insert(DESKTOP_STATE_KEY.to_string(), serialize_desktop_state(next));
-    app_settings.remove("lastWorkspacePath");
-    app_settings.remove("explorerOpen");
 
     serialize_app_settings_record(app_settings)
 }
@@ -392,18 +358,7 @@ pub fn read_desktop_state(app_settings: &Map<String, Value>) -> DesktopState {
         .get(DESKTOP_STATE_KEY)
         .and_then(Value::as_object)
         .map(read_versioned_desktop_state)
-        .unwrap_or_else(|| {
-            // Only the two fields the flat schema ever had, so an unrelated
-            // app setting sharing a name with a desktop-state field cannot be
-            // mistaken for one.
-            let mut legacy = Map::new();
-            for key in ["lastWorkspacePath", "explorerOpen"] {
-                if let Some(value) = app_settings.get(key) {
-                    legacy.insert(key.to_string(), value.clone());
-                }
-            }
-            create_desktop_state(&legacy)
-        })
+        .unwrap_or_else(default_desktop_state)
 }
 
 
@@ -805,8 +760,14 @@ pub fn write_settings_file(path: &Path, contents: &str) -> Result<(), NativeErro
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_nanos();
-    
-    let temp_path = parent.join(format!(".{}.tmp", unique));
+    // Include the target filename stem so app and workspace writes — which
+    // share the same `settings/` directory — never collide on the temp name
+    // even if their nanosecond timestamps happen to match.
+    let stem = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("settings");
+    let temp_path = parent.join(format!(".{stem}.{unique}.tmp"));
     fs::write(&temp_path, contents).map_err(|error| {
         NativeError::with_details(
             "settings.write_failed",

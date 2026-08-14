@@ -179,12 +179,8 @@ pub fn classify_event(root: &Path, kind: &EventKind, paths: &[PathBuf]) -> Vec<W
         EventKind::Modify(ModifyKind::Name(RenameMode::Both)) => classify_rename(root, paths),
         // Some platforms report the two halves of a rename separately, with no
         // way to pair them. Each half is complete on its own.
-        EventKind::Modify(ModifyKind::Name(RenameMode::From)) => {
-            removal(root, paths)
-        }
-        EventKind::Modify(ModifyKind::Name(RenameMode::To)) => {
-            single(root, paths, WorkspaceChangeKind::Created)
-        }
+        EventKind::Modify(ModifyKind::Name(RenameMode::From)) => removal(root, paths),
+        EventKind::Modify(ModifyKind::Name(RenameMode::To)) => single(root, paths, WorkspaceChangeKind::Created),
         EventKind::Modify(ModifyKind::Name(_)) => classify_unpaired_rename(root, paths),
 
         EventKind::Modify(_) => single(root, paths, WorkspaceChangeKind::Modified),
@@ -517,6 +513,41 @@ pub fn release_window_watchers(label: &str) {
     for root in state.interest.release_window(label) {
         state.debouncers.remove(&root);
     }
+}
+
+/// Registers the canonical "what happens when a window dies" cleanup on a
+/// window.
+///
+/// Every window needs its file watchers released when the OS destroys it
+/// (the frontend teardown never runs in that case). Workspace windows *also*
+/// need their entry in `WorkspaceWindowRoots` removed; pass an `extra_cleanup`
+/// closure for that, or `None` for the main window declared in
+/// `tauri.conf.json`, which is never registered as a workspace window.
+///
+/// Centralizing the policy here means a reader only has to look in one place
+/// to know the full cleanup, instead of finding a near-duplicate closure in
+/// both `lib.rs` and `workspace.rs`.
+pub fn attach_window_destroy_cleanup<F>(
+    window: &tauri::WebviewWindow,
+    label: String,
+    extra_cleanup: Option<F>,
+) where
+    F: FnOnce() + Send + 'static,
+{
+    // `on_window_event` requires `Fn` (it may be invoked for many event kinds),
+    // but the destroy cleanup is one-shot. Wrap the closure in a `Mutex` so the
+    // `Fn` closure can `take()` it on the single `Destroyed` event.
+    let extra_cleanup = std::sync::Mutex::new(extra_cleanup);
+    window.on_window_event(move |event| {
+        if matches!(event, tauri::WindowEvent::Destroyed) {
+            if let Some(extra) = extra_cleanup.lock().ok().and_then(|mut g| g.take()) {
+                extra();
+            }
+            // A destroyed window never runs the frontend teardown, so its file
+            // watchers have to be released from here or they outlive it.
+            release_window_watchers(&label);
+        }
+    });
 }
 
 fn spawn_debouncer(

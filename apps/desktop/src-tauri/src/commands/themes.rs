@@ -119,6 +119,12 @@ pub fn ensure_themes_directory(themes_dir: &Path) -> Result<(), NativeError> {
 /// before bundling) are logged and skipped rather than failing the whole
 /// command — the picker still works, just without those presets.
 ///
+/// Copy failures (disk full, permissions) are collected across all presets so
+/// every copy is attempted, then surfaced as a typed `NativeError` listing the
+/// failed filenames. Resource-resolution failures (dev mode without bundling)
+/// are still logged and skipped, since they are expected in `cargo test` and
+/// unbundled dev runs.
+///
 /// Args:
 ///   app: Tauri handle used to resolve bundled resource paths.
 ///   themes_dir: Destination directory (already created).
@@ -126,6 +132,7 @@ pub fn seed_missing_presets(
     app: &tauri::AppHandle,
     themes_dir: &Path,
 ) -> Result<(), NativeError> {
+    let mut copy_failures: Vec<String> = Vec::new();
     for preset_file_name in PRESET_THEME_FILES {
         let destination = themes_dir.join(preset_file_name);
         // Never overwrite an existing file — preserves user edits to a preset
@@ -150,15 +157,25 @@ pub fn seed_missing_presets(
             continue;
         }
 
-        // Copy the file. A failure on one preset does not abort the others.
+        // Copy the file. A failure on one preset does not abort the others, but
+        // is collected and surfaced after the loop instead of swallowed.
         if let Err(error) = fs::copy(&resource_path, &destination) {
             eprintln!(
                 "[themes] failed to copy preset {preset_file_name}: {error}"
             );
+            copy_failures.push(format!("{preset_file_name}: {error}"));
         }
     }
 
-    Ok(())
+    if copy_failures.is_empty() {
+        Ok(())
+    } else {
+        Err(NativeError::with_details(
+            "themes.preset_copy_failed",
+            "One or more bundled preset themes could not be copied into the themes directory.",
+            copy_failures.join("; "),
+        ))
+    }
 }
 
 /// Lists and parses every `.tbtheme.json` file in the directory.
@@ -272,17 +289,9 @@ fn stem_name(path: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::SystemTime;
 
-    /// Creates a unique temp directory for a test and returns its path.
     fn temp_test_dir(name: &str) -> PathBuf {
-        let unique = SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("time is after epoch")
-            .as_nanos();
-        let path = std::env::temp_dir().join(format!("thinkbrain-themes-{name}-{unique}"));
-        fs::create_dir_all(&path).expect("temp directory is created");
-        path
+        crate::tests::make_temp_test_dir(name, "themes", false)
     }
 
     #[test]

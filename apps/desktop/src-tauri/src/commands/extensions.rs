@@ -179,17 +179,10 @@ pub fn read_extension_file(directory: String, relative_path: String) -> Result<S
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::SystemTime;
 
     /// Creates a unique temp directory for a test and returns its path.
     fn temp_test_dir(name: &str) -> PathBuf {
-        let unique = SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("time is after epoch")
-            .as_nanos();
-        let path = std::env::temp_dir().join(format!("thinkbrain-extensions-{name}-{unique}"));
-        fs::create_dir_all(&path).expect("temp directory is created");
-        path
+        crate::tests::make_temp_test_dir(name, "extensions", false)
     }
 
     #[test]

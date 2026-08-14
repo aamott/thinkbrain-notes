@@ -154,19 +154,31 @@ fn result_paths(connection: &Connection, query: &str) -> Vec<String> {
         .collect()
 }
 
-fn temp_test_dir(name: &str) -> PathBuf {
+/// Creates a unique temp directory for a test and returns its path.
+///
+/// `prefix` selects the directory-name prefix (`thinkbrain-{prefix}-{unique}`)
+/// so callers can keep their existing namespace. `canonicalize` should be true
+/// for tests that exercise the live watcher: on macOS the temp directory is a
+/// symlink (`/var` -> `/private/var`) and FSEvents reports the resolved
+/// spelling, so an uncanonicalized root would fail to match a single event
+/// path and the live watcher tests would pass vacuously.
+pub(crate) fn make_temp_test_dir(name: &str, prefix: &str, canonicalize: bool) -> PathBuf {
     let unique = SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .expect("time is after epoch")
         .as_nanos();
-    let path = std::env::temp_dir().join(format!("thinkbrain-notes-{name}-{unique}"));
+    let path = std::env::temp_dir().join(format!("thinkbrain-{prefix}-{name}-{unique}"));
 
     fs::create_dir_all(&path).expect("temp directory is created");
-    // Canonicalized the way production resolves a workspace root. On macOS the
-    // temp directory is a symlink (/var -> /private/var) and FSEvents reports
-    // the resolved spelling, so an uncanonicalized root would fail to match a
-    // single event path and the live watcher tests would pass vacuously.
-    path.canonicalize().expect("temp directory canonicalizes")
+    if canonicalize {
+        path.canonicalize().expect("temp directory canonicalizes")
+    } else {
+        path
+    }
+}
+
+fn temp_test_dir(name: &str) -> PathBuf {
+    make_temp_test_dir(name, "notes", true)
 }
 
 #[test]
@@ -471,6 +483,29 @@ fn git_status_rejects_malformed_porcelain_with_a_typed_error() {
         .unwrap_or_default()
         .contains("invalid porcelain v1 output"));
     fs::remove_dir_all(root).expect("temp malformed status directory is cleaned up");
+}
+
+#[test]
+fn git_status_rejects_unknown_porcelain_status_codes() {
+    let root = temp_test_dir("git-status-bad-code");
+    // `Z` is not a porcelain v1 status code; the parser should fail loudly
+    // instead of forwarding `Z` to the frontend as a status.
+    let runner = MockGitRunner::new([Ok(git_output(true, Some(0), "Z  bogus.md\0", ""))]);
+
+    let error = git_status_with(&runner, &root).expect_err("unknown status code is rejected");
+
+    assert_eq!(error.code, "git.command_failed");
+    assert!(error
+        .details
+        .as_deref()
+        .unwrap_or_default()
+        .contains("invalid porcelain v1 output"));
+    assert!(error
+        .details
+        .as_deref()
+        .unwrap_or_default()
+        .contains("unknown status code"));
+    fs::remove_dir_all(root).expect("temp bad-code status directory is cleaned up");
 }
 
 #[test]
@@ -1155,8 +1190,10 @@ fn desktop_state_update_merges_concurrent_mrus_and_preserves_app_settings() {
         settings["extensionSettings"]["timer"]["enabled"],
         serde_json::json!(true)
     );
-    assert!(settings.get("lastWorkspacePath").is_none());
-    assert!(settings.get("explorerOpen").is_none());
+    // Legacy flat-schema keys are no longer migrated/removed — they are
+    // preserved as unrelated app settings (DESKTOP_STATE_VERSION >= 5).
+    assert_eq!(settings["lastWorkspacePath"], serde_json::json!(legacy_path));
+    assert_eq!(settings["explorerOpen"], serde_json::json!(false));
     assert_eq!(
         settings["desktopState"],
         serde_json::json!({
@@ -1611,16 +1648,20 @@ fn markdown_commands_reject_symlink_escapes_from_the_workspace() {
 fn workspace_settings_write_is_refused_when_the_file_moved_underneath_it() {
     // Another window wrote between this window's read and its write, so the
     // document it revised is no longer the one on disk.
-    assert!(check_workspace_settings_precondition(
+    assert!(check_settings_precondition(
         Some("{\"showHidden\":true}"),
-        Some("{\"fieldDefinitions\":[]}")
+        Some("{\"fieldDefinitions\":[]}"),
+        "settings.workspace_conflict",
+        "The workspace settings changed while this one was being saved.",
     )
     .is_err());
 
     // Nobody interfered.
-    assert!(check_workspace_settings_precondition(
+    assert!(check_settings_precondition(
         Some("{\"showHidden\":true}"),
-        Some("{\"showHidden\":true}")
+        Some("{\"showHidden\":true}"),
+        "settings.workspace_conflict",
+        "The workspace settings changed while this one was being saved.",
     )
     .is_ok());
 }
@@ -1628,38 +1669,62 @@ fn workspace_settings_write_is_refused_when_the_file_moved_underneath_it() {
 #[test]
 fn workspace_settings_write_treats_an_absent_file_as_a_precondition_of_its_own() {
     // The first writer read nothing and expects to still find nothing.
-    assert!(check_workspace_settings_precondition(None, None).is_ok());
+    assert!(check_settings_precondition(
+        None,
+        None,
+        "settings.workspace_conflict",
+        "The workspace settings changed while this one was being saved.",
+    )
+    .is_ok());
 
     // A file appeared where this writer saw none.
-    assert!(check_workspace_settings_precondition(Some("{}"), None).is_err());
+    assert!(check_settings_precondition(
+        Some("{}"),
+        None,
+        "settings.workspace_conflict",
+        "The workspace settings changed while this one was being saved.",
+    )
+    .is_err());
 
     // The file this writer read has since been removed.
-    assert!(check_workspace_settings_precondition(None, Some("{}")).is_err());
+    assert!(check_settings_precondition(
+        None,
+        Some("{}"),
+        "settings.workspace_conflict",
+        "The workspace settings changed while this one was being saved.",
+    )
+    .is_err());
 }
 
 #[test]
 fn app_settings_write_is_refused_when_desktop_state_changed_underneath_it() {
     // `update_desktop_state` landed (a tab opened) between the store's read and
     // its write, so the document the store revised is no longer the one on disk.
-    assert!(check_app_settings_precondition(
+    assert!(check_settings_precondition(
         Some("{\"desktopState\":{\"openTabs\":[\"a\"]}}"),
-        Some("{\"desktopState\":{\"openTabs\":[]}}")
+        Some("{\"desktopState\":{\"openTabs\":[]}}"),
+        "settings.app_conflict",
+        "The application settings changed while this one was being saved.",
     )
     .is_err());
 
     // Nobody interfered.
-    assert!(check_app_settings_precondition(
+    assert!(check_settings_precondition(
         Some("{\"appearance.theme\":\"dark\"}"),
-        Some("{\"appearance.theme\":\"dark\"}")
+        Some("{\"appearance.theme\":\"dark\"}"),
+        "settings.app_conflict",
+        "The application settings changed while this one was being saved.",
     )
     .is_ok());
 }
 
 #[test]
 fn app_settings_write_treats_an_absent_file_as_a_precondition_of_its_own() {
-    assert!(check_app_settings_precondition(None, None).is_ok());
-    assert!(check_app_settings_precondition(Some("{}"), None).is_err());
-    assert!(check_app_settings_precondition(None, Some("{}")).is_err());
+    let app_code = "settings.app_conflict";
+    let app_msg = "The application settings changed while this one was being saved.";
+    assert!(check_settings_precondition(None, None, app_code, app_msg).is_ok());
+    assert!(check_settings_precondition(Some("{}"), None, app_code, app_msg).is_err());
+    assert!(check_settings_precondition(None, Some("{}"), app_code, app_msg).is_err());
 }
 
 #[test]

@@ -355,17 +355,19 @@ pub fn open_workspace_window(app: tauri::AppHandle, root_path: String) -> Result
             })?;
     let app_for_cleanup = app.clone();
     let label_for_cleanup = label.clone();
-    window.on_window_event(move |event| {
-        if matches!(event, tauri::WindowEvent::Destroyed) {
+    // Workspace windows need both their `WorkspaceWindowRoots` entry and their
+    // file watchers cleaned up on destroy. The watcher module owns the destroy
+    // policy; the extra closure handles the workspace-specific half.
+    crate::commands::watcher::attach_window_destroy_cleanup(
+        &window,
+        label_for_cleanup.clone(),
+        Some(move || {
             unregister_workspace_window_root(
                 &app_for_cleanup.state::<WorkspaceWindowRoots>(),
                 &label_for_cleanup,
             );
-            // A destroyed window never runs the frontend teardown, so its file
-            // watchers have to be released from here or they outlive it.
-            crate::commands::watcher::release_window_watchers(&label_for_cleanup);
-        }
-    });
+        }),
+    );
     register_workspace_window_root(&app.state::<WorkspaceWindowRoots>(), label, root_path);
     Ok(())
 }
