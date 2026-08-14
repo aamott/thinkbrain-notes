@@ -43,9 +43,12 @@ rebuildable and lives in OS app-data, never in the vault.
 
 ## Known limits of the watcher
 
-- **Only verified on Linux.** The crate is cross-platform and both the paired
-  and unpaired rename shapes are handled, but CI runs `ubuntu-latest` only, so
-  macOS and Windows are portable by construction rather than by evidence.
+- **Not verified on Windows.** Exercised by hand on Linux and macOS (2026-08-13,
+  which is what closed out the two FSEvents defects fixed blind); both the paired
+  and unpaired rename shapes are handled. CI still runs `ubuntu-latest` only, so
+  Windows remains portable by construction rather than by evidence — its rename
+  shape and its refusal to remove an open file are the parts least like the two
+  that have been seen working.
 - **A symlinked folder inside the vault is reported twice and never suppressed.**
   `notify` follows symlinks while the app records the canonical path, so the
   recorded write and the reported event disagree. Costs a redundant reindex, not
