@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
   CURRENT_SETTINGS_VERSION,
   DEFAULT_APP_SETTINGS,
-  migrateSettings,
   parseAppSettings,
   serializeAppSettings
 } from "./settings";
@@ -85,16 +84,16 @@ describe("app settings", () => {
   });
 
   it("migrates fabricated v0 settings into the current schema", () => {
-    expect(
-      migrateSettings(
-        {
-          theme: "dark",
-          fontSize: 20,
-          lineWrapping: false
-        },
-        0
-      )
-    ).toEqual({
+    const result = parseAppSettings(
+      JSON.stringify({
+        theme: "dark",
+        fontSize: 20,
+        lineWrapping: false
+      })
+    );
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.settings).toEqual({
       version: CURRENT_SETTINGS_VERSION,
       theme: "dark",
       editor: {

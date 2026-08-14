@@ -5,8 +5,8 @@
  * They operate on a flat `fullKey -> value` record driven by the registry,
  * while preserving the `desktopState` nested key and any other non-setting keys
  * in the same JSON document. The legacy `parseAppSettings` /
- * `serializeAppSettings` / `migrateSettings` remain intact so `desktopState.ts`
- * and existing tests keep working.
+ * `serializeAppSettings` remain intact so `desktopState.ts` and existing tests
+ * keep working.
  */
 
 import type { SettingsRegistry } from "./registry";

@@ -44,6 +44,8 @@ export interface TabRegistry {
   register(registration: TabRegistration): Disposable;
   get(kind: TabKind): TabRegistration | undefined;
   entries(): readonly TabRegistration[];
+  /** Observes registrations and disposals. */
+  subscribe(listener: () => void): () => void;
 }
 
 /**
@@ -55,6 +57,11 @@ export interface TabRegistry {
  */
 export function createTabRegistry(): TabRegistry {
   const registrations = new Map<TabKind, TabRegistration>();
+  const listeners = new Set<() => void>();
+
+  const changed = (): void => {
+    for (const listener of listeners) listener();
+  };
 
   return {
     register(registration) {
@@ -63,6 +70,7 @@ export function createTabRegistry(): TabRegistry {
       }
 
       registrations.set(registration.kind, registration);
+      changed();
       let disposed = false;
 
       return {
@@ -73,6 +81,7 @@ export function createTabRegistry(): TabRegistry {
           // must survive a late dispose of the earlier handle.
           if (registrations.get(registration.kind) === registration) {
             registrations.delete(registration.kind);
+            changed();
           }
         }
       };
@@ -82,6 +91,12 @@ export function createTabRegistry(): TabRegistry {
     },
     entries() {
       return [...registrations.values()];
+    },
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
     }
   };
 }

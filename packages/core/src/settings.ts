@@ -46,13 +46,6 @@ export interface AppSettings {
   readonly editor: EditorSettings;
 }
 
-export interface WorkspaceSettings {
-  readonly version: typeof CURRENT_SETTINGS_VERSION;
-  readonly editor: {
-    readonly defaultFolder: string | null;
-  };
-}
-
 export interface ParseSettingsResult {
   readonly settings: AppSettings;
   readonly diagnostics: readonly SettingsDiagnostic[];
@@ -75,13 +68,6 @@ export const DEFAULT_APP_SETTINGS: AppSettings = Object.freeze({
   editor: Object.freeze({
     fontSize: DEFAULT_EDITOR_FONT_SIZE,
     lineWrapping: true
-  })
-});
-
-export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = Object.freeze({
-  version: CURRENT_SETTINGS_VERSION,
-  editor: Object.freeze({
-    defaultFolder: null
   })
 });
 
@@ -181,25 +167,6 @@ export function parseAppSettings(rawJson: string | null): ParseSettingsResult {
   }
 
   return normalizeAppSettings(candidate);
-}
-
-/**
- * Migrates an app settings-like object to the current settings version.
- *
- * Args:
- *   unknownObj: User-provided settings object to migrate.
- *   fromVersion: Version declared by the settings object. Missing versions are
- *     treated as v0 by `parseAppSettings` before this function is called.
- *
- * Returns:
- *   A current-version settings object with invalid field values replaced by
- *   defaults. Use `parseAppSettings` when diagnostics are required.
- */
-export function migrateSettings(
-  unknownObj: unknown,
-  fromVersion: number
-): AppSettings {
-  return normalizeAppSettings(migrateSettingsObject(unknownObj, fromVersion)).settings;
 }
 
 function migrateSettingsObject(
