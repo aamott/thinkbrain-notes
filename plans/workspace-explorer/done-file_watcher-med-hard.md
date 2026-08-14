@@ -119,8 +119,13 @@ unsaved edits was showing a copy of the file and now shows the file.
 
 ## Out of scope, and worth a story of its own
 
-`write_markdown_file` overwrites blind — it takes no `expected` precondition,
+`write_markdown_file` overwrote blind — it took no `expected` precondition,
 unlike the settings writes, which go through `documentChain`. So saving a tab
-whose file changed underneath still overwrites the outside edit, whether or not
-the tab was reloaded. Closing that needs a Rust change and belongs with the
+whose file changed underneath still overwrote the outside edit, whether or not
+the tab was reloaded. Closing that needed a Rust change and belonged with the
 conflict prompt, not here.
+
+Since closed by `indexing-search/done-conflict_safe_note_writes-med-med.md`,
+which also revised "Keep mine" above: it now re-reads the file and re-points the
+tab's precondition at it, because dismissing alone would leave every subsequent
+save refused against the version the user had just declined.
