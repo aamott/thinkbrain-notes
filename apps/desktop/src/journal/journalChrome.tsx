@@ -70,30 +70,26 @@ export function JournalTrouble({
   onChooseFolder,
   onOpenSettings
 }: JournalTroubleProps) {
-  switch (status) {
-    case "no-workspace":
-      return (
-        <EmptyState
-          title="Open a folder to start journaling."
-          actions={[{ label: "Open folder…", run: onChooseFolder }]}
-        />
-      );
-    case "invalid-root":
-      return (
-        <EmptyState
-          title="The journal folder setting isn't a valid path."
-          actions={[{ label: "Open settings", run: onOpenSettings }]}
-        />
-      );
-    case "unreadable":
-      return (
-        <EmptyState
-          title="Can't read the journal folder."
-          actions={[
-            { label: "Retry", run: onRetry },
-            { label: "Choose a different folder…", run: onChooseFolder }
-          ]}
-        />
-      );
-  }
+  // Three failure modes, each with its approved copy (D63). Built per render
+  // because the callbacks close over the host's affordances; the literal is the
+  // single source of the copy, so the two switch statements that used to drift
+  // (D63) cannot.
+  const COPY: Record<JournalTroubleCode, { title: string; actions: { label: string; run: (() => void) | undefined }[] }> = {
+    "no-workspace": {
+      title: "Open a folder to start journaling.",
+      actions: [{ label: "Open folder…", run: onChooseFolder }]
+    },
+    "invalid-root": {
+      title: "The journal folder setting isn't a valid path.",
+      actions: [{ label: "Open settings", run: onOpenSettings }]
+    },
+    unreadable: {
+      title: "Can't read the journal folder.",
+      actions: [
+        { label: "Retry", run: onRetry },
+        { label: "Choose a different folder…", run: onChooseFolder }
+      ]
+    }
+  };
+  return <EmptyState {...COPY[status]} />;
 }

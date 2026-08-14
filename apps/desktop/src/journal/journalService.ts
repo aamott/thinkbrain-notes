@@ -2,6 +2,7 @@ import {
   buildNewEntryFrontmatter,
   compareJournalEntries,
   formatJournalDate,
+  normalizeRoot,
   parseJournalFilename,
   resolveNewEntryPath,
   toJournalDate,
@@ -103,14 +104,18 @@ export function createJournalService(options: JournalServiceOptions): JournalSer
   const requireRoot = (): string => {
     if (workspace.rootPath() === null) throw new JournalError("no-workspace", NO_WORKSPACE, undefined);
     const configured = root();
-    if (
-      typeof configured !== "string" ||
-      configured.trim() === "" ||
-      configured.split(/[\\/]/).includes("..")
-    ) {
+    if (typeof configured !== "string" || configured.trim() === "") {
       throw new JournalError("invalid-root", INVALID_ROOT, String(configured));
     }
-    return configured;
+    // Share one canonical root form with `resolveNewEntryPath` (which calls
+    // `normalizeRoot` via `journalEntryFolder`): a configured root with a
+    // trailing slash or backslashes otherwise lists from one form and writes to
+    // another, so an entry that was just created can fail to appear in the list.
+    try {
+      return normalizeRoot(configured);
+    } catch (cause: unknown) {
+      throw new JournalError("invalid-root", INVALID_ROOT, String(configured), { cause });
+    }
   };
 
   const listFolder = async (folder: string): Promise<readonly ExtensionNote[]> => {

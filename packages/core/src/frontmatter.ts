@@ -1,6 +1,7 @@
 import { parseDocument, stringify } from "yaml";
 
-import { isRecord, uniqueStrings } from "./settings/internal";
+import { isRecord } from "./settings/internal";
+import { uniqueStrings } from "./lib/strings";
 import type {
   FrontmatterParseResult,
   NoteDiagnostic,

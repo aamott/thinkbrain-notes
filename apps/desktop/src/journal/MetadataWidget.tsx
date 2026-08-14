@@ -1,5 +1,6 @@
 import {
   fieldChoices,
+  journalWeekday,
   MONTHS,
   type JournalDate,
   type JournalFieldDefinition,
@@ -57,25 +58,17 @@ const WEEKDAYS = [
 ] as const;
 
 /**
- * `Friday, August 7, 2026` (D74).
+ * `Friday, August 7, 2026` (D74) or `Friday, August 7` (D78).
  *
- * The year stays: the frontmatter date is the backup record if a file is
- * renamed, so it has to be readable on the page.
+ * One function for both spellings: the dateline keeps the year (the frontmatter
+ * date is the backup record if a file is renamed), the sheet's own name drops
+ * it because the dateline behind it is still carrying it and a dialog name is
+ * read aloud every time focus enters.
  */
-function formatLongDate(date: JournalDate): string {
-  const weekday = WEEKDAYS[new Date(Date.UTC(date.year, date.month - 1, date.day)).getUTCDay()];
-  return `${weekday}, ${MONTHS[date.month - 1]} ${date.day}, ${date.year}`;
-}
-
-/**
- * `Friday, August 7` — the sheet's own name (D78).
- *
- * No year: the dateline behind the sheet is still carrying it, and a dialog
- * name is read aloud every time focus enters.
- */
-function formatSheetDate(date: JournalDate): string {
-  const weekday = WEEKDAYS[new Date(Date.UTC(date.year, date.month - 1, date.day)).getUTCDay()];
-  return `${weekday}, ${MONTHS[date.month - 1]} ${date.day}`;
+function formatJournalLongDate(date: JournalDate, withYear: boolean): string {
+  const weekday = WEEKDAYS[journalWeekday(date)];
+  const base = `${weekday}, ${MONTHS[date.month - 1]} ${date.day}`;
+  return withYear ? `${base}, ${date.year}` : base;
 }
 
 function formatValue(value: JournalFieldValue): string {
@@ -188,7 +181,9 @@ export function MetadataWidget({
 
   const notice = diagnostics.find(
     (diagnostic) =>
-      diagnostic.code === "journal_date_mismatch" || diagnostic.code.startsWith("frontmatter")
+      diagnostic.code === "journal_date_mismatch" ||
+      diagnostic.code === "journal_date_unreadable" ||
+      diagnostic.code.startsWith("frontmatter")
   );
 
   const addRow = (
@@ -207,7 +202,7 @@ export function MetadataWidget({
   return (
     <div className="mx-auto max-w-[34rem] px-5 pt-4">
       <div className="flex flex-wrap items-baseline gap-2 border-b border-border pb-2">
-        <span className="text-[0.82rem] font-semibold">{formatLongDate(date)}</span>
+        <span className="text-[0.82rem] font-semibold">{formatJournalLongDate(date, true)}</span>
         {!expanded && set.length > 0 && (
           <span className="text-[0.82rem] text-muted-foreground">· {set.join(" · ")}</span>
         )}
@@ -265,7 +260,7 @@ export function MetadataWidget({
 
       {expanded && touch && (
         <MetadataBottomSheet
-          title={formatSheetDate(date)}
+          title={formatJournalLongDate(date, false)}
           definitions={shown}
           values={values}
           onSet={onSet}

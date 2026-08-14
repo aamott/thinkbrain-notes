@@ -58,6 +58,16 @@ const fromUtc = (value: Date): JournalDate => ({
   day: value.getUTCDate()
 });
 
+/**
+ * Weekday index (0-6, Sunday-first) for a journal date, computed in UTC so the
+ * calendar label never shifts with the host's timezone (D19). The single source
+ * of truth for the weekday arithmetic the renderer used to inline in five
+ * places.
+ */
+export function journalWeekday(date: JournalDate): number {
+  return toUtc(date).getUTCDay();
+}
+
 const daysInMonth = (year: number, month: number): number =>
   new Date(Date.UTC(year, month, 0)).getUTCDate();
 

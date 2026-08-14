@@ -150,6 +150,7 @@ export function CalendarTabContainer({
       view={view}
       focusDate={focusDate}
       weekStartsOn={weekStartsOn}
+      grid={grid}
       today={today}
       selectedDay={selectedDay}
       days={days}

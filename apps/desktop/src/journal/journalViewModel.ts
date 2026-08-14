@@ -1,6 +1,7 @@
 import {
   compareJournalEntries,
   formatJournalDate,
+  journalWeekday,
   MONTHS,
   WEEKDAYS,
   type JournalDate
@@ -87,7 +88,7 @@ const monthKey = (date: JournalDate): string =>
 
 /** `Fri 7` — the weekday earns its space by making the list read as days (D35). */
 function dateLabel(date: JournalDate): string {
-  const weekday = WEEKDAYS[new Date(Date.UTC(date.year, date.month - 1, date.day)).getUTCDay()];
+  const weekday = WEEKDAYS[journalWeekday(date)];
   return `${weekday} ${date.day}`;
 }
 

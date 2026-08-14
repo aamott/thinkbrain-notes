@@ -2,7 +2,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { CalendarDay, JournalDate } from "@thinkbrain/core";
+import { calendarGrid, type CalendarDay, type JournalDate } from "@thinkbrain/core";
 
 import { CalendarTab, type CalendarTabProps } from "./CalendarTab";
 
@@ -36,10 +36,14 @@ const render = async (overrides: Partial<CalendarTabProps> = {}): Promise<HTMLDi
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
+  const view = overrides.view ?? "month";
+  const focusDate = overrides.focusDate ?? date("2026-08-12");
+  const weekStartsOn = overrides.weekStartsOn ?? 0;
   const props: CalendarTabProps = {
-    view: "month",
-    focusDate: date("2026-08-12"),
-    weekStartsOn: 0,
+    view,
+    focusDate,
+    weekStartsOn,
+    grid: overrides.grid ?? calendarGrid({ view, date: focusDate, weekStartsOn }),
     today: date("2026-08-12"),
     selectedDay: null,
     days: new Map([["2026-08-07", day(8)]]),

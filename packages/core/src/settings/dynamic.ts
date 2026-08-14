@@ -13,6 +13,7 @@ import type { SettingsRegistry } from "./registry";
 import { extractDefaults } from "./defaults";
 import { validateSettings } from "./validation";
 import type { SettingsDiagnostic } from "../settings";
+import type { SettingScope } from "./types";
 import {
   CURRENT_SETTINGS_VERSION,
   getErrorMessage,
@@ -158,25 +159,29 @@ export function parseDynamicAppSettings(
 }
 
 /**
- * Serializes dynamic app settings back to JSON, preserving non-setting keys.
+ * Serializes dynamic settings for a single scope back to JSON, preserving
+ * non-setting keys.
  *
- * The output keeps `version: CURRENT_SETTINGS_VERSION`, the flat setting keys,
- * and the nested `desktopState` object (plus any other non-setting keys) from
- * `existingRawJson`. Pretty-printed with 2-space indent and a trailing newline,
- * matching the existing `serializeAppSettings` style.
+ * The output keeps `version: CURRENT_SETTINGS_VERSION`, the flat setting keys
+ * for the given scope, and any other non-setting keys (e.g. `desktopState`,
+ * extension metadata) from `existingRawJson`. Pretty-printed with 2-space
+ * indent and a trailing newline, matching the existing `serializeAppSettings`
+ * style.
  *
  * Args:
- *   values: Flat `fullKey -> value` map of app-scoped settings to write.
+ *   values: Flat `fullKey -> value` map of settings to write.
  *   registry: The settings registry (used to identify known setting keys).
+ *   scope: Which scope's definitions to include in the known-key set.
  *   existingRawJson: The current raw JSON document (may be null/invalid); its
- *     `desktopState` and other non-setting keys are preserved.
+ *     non-setting keys are preserved.
  *
  * Returns:
  *   Canonical JSON string with settings + preserved non-setting keys.
  */
-export function serializeDynamicAppSettings(
+export function serializeDynamicSettings(
   values: Record<string, unknown>,
   registry: SettingsRegistry,
+  scope: SettingScope,
   existingRawJson: string | null
 ): string {
   // Start from the existing raw document (if parseable) to preserve non-setting
@@ -197,7 +202,7 @@ export function serializeDynamicAppSettings(
   // setting keys from the base before writing the new values.
   const knownSettingKeys = new Set<string>();
   for (const def of registry.getAllDefinitions()) {
-    if (def.scope === "app") knownSettingKeys.add(def.key);
+    if (def.scope === scope) knownSettingKeys.add(def.key);
   }
 
   // Remove old setting keys from the base (they'll be replaced below), but keep
@@ -219,6 +224,19 @@ export function serializeDynamicAppSettings(
   base.version = CURRENT_SETTINGS_VERSION;
 
   return `${JSON.stringify(base, null, 2)}\n`;
+}
+
+/**
+ * Serializes dynamic app settings back to JSON, preserving non-setting keys.
+ *
+ * Thin wrapper over {@link serializeDynamicSettings} for the `"app"` scope.
+ */
+export function serializeDynamicAppSettings(
+  values: Record<string, unknown>,
+  registry: SettingsRegistry,
+  existingRawJson: string | null
+): string {
+  return serializeDynamicSettings(values, registry, "app", existingRawJson);
 }
 
 /**

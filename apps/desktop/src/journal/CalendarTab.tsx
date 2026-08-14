@@ -1,9 +1,10 @@
 import {
-  calendarGrid,
   formatJournalDate,
+  journalWeekday,
   shiftCalendar,
   WEEKDAYS,
   type CalendarDay,
+  type CalendarGrid,
   type CalendarView,
   type JournalDate,
   type WeekStart
@@ -39,6 +40,9 @@ export interface CalendarTabProps {
   /** Any day inside the span being shown. */
   readonly focusDate: JournalDate;
   readonly weekStartsOn: WeekStart;
+  /** Precomputed grid for the current view/focus/weekStart — passed from the
+   *  container so the work happens once per render, not twice. */
+  readonly grid: CalendarGrid;
   readonly today: JournalDate;
   readonly selectedDay: JournalDate | null;
   /** Aggregated days, keyed by `YYYY-MM-DD`. Missing means no entries. */
@@ -80,7 +84,7 @@ function DayCell({
   readonly register: (element: HTMLButtonElement | null) => void;
 }) {
   const count = day?.count ?? 0;
-  const label = `${WEEKDAYS[new Date(Date.UTC(date.year, date.month - 1, date.day)).getUTCDay()]}, ${date.day}`;
+  const label = `${WEEKDAYS[journalWeekday(date)]}, ${date.day}`;
 
   return (
     <button
@@ -95,8 +99,7 @@ function DayCell({
       onClick={onSelect}
       className={[
         "flex min-h-[4.4rem] flex-col gap-1 border-b border-r border-border p-1.5 text-left cursor-pointer",
-        isSelected ? "bg-accent outline outline-2 -outline-offset-2 outline-ring" : "",
-        isFocused ? "" : ""
+        isSelected ? "bg-accent outline outline-2 -outline-offset-2 outline-ring" : ""
       ].join(" ")}
     >
       <span
@@ -130,6 +133,7 @@ export function CalendarTab({
   view,
   focusDate,
   weekStartsOn,
+  grid,
   today,
   selectedDay,
   days,
@@ -142,7 +146,6 @@ export function CalendarTab({
   onChooseFolder,
   onOpenSettings
 }: CalendarTabProps) {
-  const grid = calendarGrid({ view, date: focusDate, weekStartsOn });
   const cellsRef = useRef(new Map<string, HTMLButtonElement>());
   const [pendingFocus, setPendingFocus] = useState<string | null>(null);
 
@@ -167,8 +170,8 @@ export function CalendarTab({
       ArrowRight: () => move("day", 1),
       ArrowUp: () => move("week", -1),
       ArrowDown: () => move("week", 1),
-      Home: () => move("day", -((new Date(Date.UTC(focusDate.year, focusDate.month - 1, focusDate.day)).getUTCDay() - weekStartsOn + 7) % 7)),
-      End: () => move("day", 6 - ((new Date(Date.UTC(focusDate.year, focusDate.month - 1, focusDate.day)).getUTCDay() - weekStartsOn + 7) % 7)),
+      Home: () => move("day", -((journalWeekday(focusDate) - weekStartsOn + 7) % 7)),
+      End: () => move("day", 6 - ((journalWeekday(focusDate) - weekStartsOn + 7) % 7)),
       PageUp: () => move(shift ? "year" : "month", -1),
       PageDown: () => move(shift ? "year" : "month", 1)
     };

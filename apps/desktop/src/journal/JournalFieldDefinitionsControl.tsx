@@ -525,6 +525,6 @@ export function JournalFieldDefinitionsControl({
  * box and warns.
  */
 // eslint-disable-next-line react-refresh/only-export-components -- registration shim, no JSX
-export function registerJournalControls(): void {
-  registerControl(FIELD_DEFINITIONS_CONTROL, JournalFieldDefinitionsControl);
+export function registerJournalControls() {
+  return registerControl(FIELD_DEFINITIONS_CONTROL, JournalFieldDefinitionsControl);
 }

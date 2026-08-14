@@ -58,7 +58,12 @@ export interface JournalPanelProps {
   readonly search: string;
   /** False when the platform index is unavailable (D16/D41). */
   readonly searchAvailable: boolean;
-  readonly facetsAvailable: boolean;
+  /**
+   * A transient action failure (rename/delete/create that did not take). Shown
+   * as a banner so the user knows why their action was undone by the reload,
+   * not just logged for the developer. Cleared by the container after a pause.
+   */
+  readonly actionError?: string | null;
   readonly chips: readonly JournalChip[];
   readonly onSearchChange: (value: string) => void;
   readonly onNewEntry: () => void;
@@ -219,7 +224,7 @@ export function JournalPanel({
   view,
   search,
   searchAvailable,
-  facetsAvailable,
+  actionError,
   chips,
   onSearchChange,
   onNewEntry,
@@ -445,23 +450,11 @@ export function JournalPanel({
             </span>
           </p>
         )}
-        <button
-          type="button"
-          disabled={!facetsAvailable}
-          aria-label={
-            view.activeFilterCount > 0
-              ? `Filter entries, ${view.activeFilterCount} filters active`
-              : "Filter entries"
-          }
-          className={`${ACTION} flex items-center gap-1.5 disabled:opacity-50`}
-        >
-          Filter
-          {view.activeFilterCount > 0 && (
-            <span className="grid h-4 min-w-4 place-items-center rounded-full bg-primary px-1 text-[0.6rem] font-bold text-primary-foreground tabular-nums">
-              {view.activeFilterCount}
-            </span>
-          )}
-        </button>
+        {/* The "Filter" button is omitted until facets ship: a permanently
+            disabled button with a count badge that can never appear is a dead
+            affordance, and the panel's own D-pattern says a button that does
+            nothing is worse than no button (line 87). The active-filter count
+            stays visible above while the chip row carries the dismissals. */}
       </div>
 
       {chips.length > 0 && (
@@ -596,6 +589,18 @@ export function JournalPanel({
           <p className="m-0 text-muted-foreground">
             Browsing and the date filter still work. Metadata filters need the index.
           </p>
+        </div>
+      )}
+      {actionError && (
+        // A rename/delete/create that failed used to vanish into the console:
+        // the reload undid it and the user saw the row reappear with no clue
+        // why. This banner is the user-facing half of "fail loudly" (AGENTS.md).
+        <div
+          role="alert"
+          className="mx-2 mb-1.5 rounded-small border-l-[3px] border-l-danger bg-muted px-2 py-1.5 text-[0.7rem]"
+        >
+          <p className="m-0 font-semibold">That didn't work.</p>
+          <p className="m-0 text-muted-foreground break-all">{actionError}</p>
         </div>
       )}
       {header}

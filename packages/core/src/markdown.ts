@@ -1,5 +1,5 @@
 import { parseFrontmatter, serializeFrontmatter } from "./frontmatter";
-import { uniqueStrings } from "./settings/internal";
+import { uniqueStrings } from "./lib/strings";
 import type {
   IndexMetadataField,
   IndexMetadataValue,

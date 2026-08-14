@@ -48,7 +48,6 @@ const render = async (overrides: Partial<JournalPanelProps> = {}): Promise<HTMLD
     view: viewOf(["2026-08-07-1802.md"]),
     search: "",
     searchAvailable: true,
-    facetsAvailable: true,
     chips: [],
     onSearchChange: () => undefined,
     onNewEntry: () => undefined,
@@ -106,17 +105,22 @@ describe("journal panel header (D71/D75)", () => {
     expect(onOpenCalendar).toHaveBeenCalledOnce();
   });
 
-  it("puts the active filter count in the filter button's accessible name", async () => {
-    // The badge alone is not enough for a screen-reader user (D31).
+  it("surfaces the active filter count via the chip row and showing/of status", async () => {
+    // The Filter button was removed (it was a dead affordance while facets wait
+    // on the platform index); the active-filter count is still announced via
+    // the chip row's dismiss buttons and the "Showing N of M" status (D31).
     const host = await render({
-      view: { ...viewOf(["2026-08-07-1802.md"]), activeFilterCount: 2 },
+      view: { ...viewOf(["2026-08-07-1802.md"]), showing: 1, total: 1431, activeFilterCount: 2 },
       chips: [
         { id: "day", label: "August 7" },
         { id: "context", label: "context: running" }
       ]
     });
 
-    expect(button(host, "Filter entries, 2 filters active")).toBeDefined();
+    expect(button(host, "Remove filter: August 7")).toBeDefined();
+    expect(button(host, "Remove filter: context: running")).toBeDefined();
+    expect(host.textContent).toContain("Showing 1");
+    expect(host.textContent).toContain("1,431");
   });
 
   it("states how many entries are showing when a filter is active", async () => {
@@ -145,7 +149,7 @@ describe("journal panel header (D71/D75)", () => {
   });
 
   it("disables search and filters when the index is unavailable, and says why", async () => {
-    const host = await render({ searchAvailable: false, facetsAvailable: false });
+    const host = await render({ searchAvailable: false });
 
     expect(host.querySelector("input")?.disabled).toBe(true);
     expect(host.textContent).toContain("Search is unavailable");

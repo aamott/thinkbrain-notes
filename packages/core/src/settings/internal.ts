@@ -29,9 +29,7 @@ export function getErrorMessage(error: unknown): string {
 }
 
 /** De-duplicates a list of strings, preserving first-occurrence order. */
-export function uniqueStrings(values: readonly string[]): string[] {
-  return Array.from(new Set(values));
-}
+export { uniqueStrings } from "../lib/strings";
 
 /** Compile-time exhaustiveness guard for `SettingType`. Throws on unknown types. */
 export function assertNeverSettingType(def: never): never {

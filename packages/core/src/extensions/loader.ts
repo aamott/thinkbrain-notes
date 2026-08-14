@@ -10,6 +10,7 @@
  */
 
 import type { ManifestDiagnostic } from "./manifest";
+import { WINDOWS_ABSOLUTE } from "./pathGuards";
 
 /** The entry module's contract with the host. */
 export interface ExtensionModule<Activate, Deactivate> {
@@ -30,7 +31,6 @@ export interface ExtensionModuleResult<Activate, Deactivate> {
 
 /** Entry modules are pre-bundled ESM; nothing else is imported at runtime. */
 const JAVASCRIPT_ENTRY = /\.m?js$/;
-const WINDOWS_ABSOLUTE = /^[A-Za-z]:[\\/]/;
 
 const error = (code: string, message: string): ManifestDiagnostic => ({
   code,

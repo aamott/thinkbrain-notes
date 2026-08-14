@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { JournalPanel, type JournalChip } from "./JournalPanel";
 import { selectJournalDay, useJournalFilter } from "./journalFilterStore";
@@ -81,6 +81,25 @@ export function JournalPanelContainer({
     readonly previews: ReadonlyMap<string, string | null>;
   }>({ listing: null, previews: new Map() });
   const [search, setSearch] = useState("");
+  // A transient action-error banner: shown when a rename/delete/create fails so
+  // the user knows why the reload undid their action, then cleared after a
+  // pause. Errors used to vanish into `console.error` only.
+  const [actionError, setActionError] = useState<string | null>(null);
+  const actionErrorTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showActionError = useCallback((message: string): void => {
+    if (actionErrorTimer.current !== null) clearTimeout(actionErrorTimer.current);
+    setActionError(message);
+    // Long enough to read, short enough not to linger after the user moves on.
+    actionErrorTimer.current = setTimeout(() => {
+      actionErrorTimer.current = null;
+      setActionError(null);
+    }, 6000);
+  }, []);
+  useEffect(() => {
+    return () => {
+      if (actionErrorTimer.current !== null) clearTimeout(actionErrorTimer.current);
+    };
+  }, []);
   // The answer is kept with the question it answered, so a result for a query
   // the user has already moved on from is ignored rather than shown as a filter
   // of the new one. Deriving it also keeps the effect from setting state
@@ -233,7 +252,16 @@ export function JournalPanelContainer({
   const run = (action: () => Promise<unknown>): void => {
     void action()
       .catch((error: unknown) => {
+        // Fail loudly for the developer (console) AND for the user (banner):
+        // a reload undoes a failed rename/delete, and without a surface signal
+        // the user sees the row reappear and has no idea why their action was
+        // undone.
         console.error("[journal] Action failed.", error);
+        const detail =
+          error instanceof Error && error.message.length > 0
+            ? error.message
+            : "The folder was reloaded; your change did not take.";
+        showActionError(detail);
       })
       // Reload either way: after a failure the panel should show what is
       // actually true now — an unreadable folder, or a list without the entry.
@@ -251,9 +279,7 @@ export function JournalPanelContainer({
       view={view}
       search={search}
       searchAvailable={indexAvailable && searchEntries !== undefined}
-      // Facets need frontmatter in the index, which is its own story; the
-      // full-text index landing does not make them available.
-      facetsAvailable={false}
+      actionError={actionError}
       chips={chips}
       onSearchChange={setSearch}
       onNewEntry={() => run(() => service.createEntry())}
