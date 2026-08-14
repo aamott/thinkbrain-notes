@@ -1,6 +1,7 @@
 
 use crate::error::NativeError;
 use serde::Deserialize;
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use std::sync::Mutex;
@@ -17,7 +18,7 @@ static WORKSPACE_SETTINGS_MUTATION_LOCK: Mutex<()> = Mutex::new(());
 const APP_THEME_KEY: &str = "theme";
 const SUPPORTED_APP_THEMES: [&str; 3] = ["system", "light", "dark"];
 const DESKTOP_STATE_KEY: &str = "desktopState";
-const DESKTOP_STATE_VERSION: u64 = 4;
+const DESKTOP_STATE_VERSION: u64 = 5;
 const MAX_RECENT_WORKSPACES: usize = 12;
 const MIN_PANEL_WIDTH: f64 = 224.0;
 const MAX_PANEL_WIDTH: f64 = 480.0;
@@ -34,6 +35,19 @@ pub struct PersistedTab {
     pub root_path: Option<String>,
     #[serde(default)]
     pub relative_path: Option<String>,
+}
+
+/// One view's collapsed groups, in one workspace (D53).
+///
+/// Targeted rather than a whole map, because two windows on two vaults write
+/// this without knowing about each other: sending the entire map would make
+/// each of them overwrite what the other had just recorded.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CollapsedGroupsUpdate {
+    pub workspace_path: String,
+    pub view_id: String,
+    pub collapsed: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -57,6 +71,8 @@ pub struct DesktopStateUpdate {
     pub open_tabs: Option<Vec<PersistedTab>>,
     #[serde(default)]
     pub active_tab_id: Option<Option<String>>,
+    #[serde(default)]
+    pub collapsed_groups: Option<CollapsedGroupsUpdate>,
 }
 
 
@@ -71,7 +87,15 @@ pub struct DesktopState {
     development_extension_directories: Vec<String>,
     open_tabs: Vec<PersistedTab>,
     active_tab_id: Option<String>,
+    /// Workspace path -> view id -> the group keys collapsed in it (D53).
+    workspace_views: WorkspaceViews,
 }
+
+/// Per-workspace, per-view collapsed group keys.
+///
+/// A `BTreeMap` so the document serializes the same way twice, which keeps a
+/// settings file out of a diff it did not earn.
+pub type WorkspaceViews = BTreeMap<String, BTreeMap<String, Vec<String>>>;
 
 
 #[tauri::command]
@@ -369,17 +393,16 @@ pub fn read_desktop_state(app_settings: &Map<String, Value>) -> DesktopState {
         .and_then(Value::as_object)
         .map(read_versioned_desktop_state)
         .unwrap_or_else(|| {
-            create_desktop_state(
-                app_settings.get("lastWorkspacePath"),
-                None,
-                app_settings.get("explorerOpen"),
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-            )
+            // Only the two fields the flat schema ever had, so an unrelated
+            // app setting sharing a name with a desktop-state field cannot be
+            // mistaken for one.
+            let mut legacy = Map::new();
+            for key in ["lastWorkspacePath", "explorerOpen"] {
+                if let Some(value) = app_settings.get(key) {
+                    legacy.insert(key.to_string(), value.clone());
+                }
+            }
+            create_desktop_state(&legacy)
         })
 }
 
@@ -395,17 +418,7 @@ pub fn read_versioned_desktop_state(state: &Map<String, Value>) -> DesktopState 
         return default_desktop_state();
     }
 
-    create_desktop_state(
-        state.get("lastWorkspacePath"),
-        state.get("recentWorkspacePaths"),
-        state.get("explorerOpen"),
-        state.get("leftPanelWidth"),
-        state.get("rightPanelWidth"),
-        state.get("bottomPanelOpen"),
-        state.get("developmentExtensionDirectories"),
-        state.get("openTabs"),
-        state.get("activeTabId"),
-    )
+    create_desktop_state(state)
 }
 
 
@@ -426,6 +439,11 @@ pub fn apply_desktop_state_update(current: DesktopState, update: DesktopStateUpd
         ),
         None => promote_recent_workspace(current.recent_workspace_paths, recent_path.as_deref()),
     };
+    let workspace_views = apply_collapsed_groups(
+        current.workspace_views,
+        update.collapsed_groups,
+        &recent_workspace_paths,
+    );
 
     DesktopState {
         last_workspace_path,
@@ -449,25 +467,45 @@ pub fn apply_desktop_state_update(current: DesktopState, update: DesktopStateUpd
             Some(id) => id.filter(|id| !id.is_empty()),
             None => current.active_tab_id,
         },
+        workspace_views,
     }
 }
 
 
-pub fn create_desktop_state(
-    last_workspace_path: Option<&Value>,
-    recent_workspace_paths: Option<&Value>,
-    explorer_open: Option<&Value>,
-    left_panel_width: Option<&Value>,
-    right_panel_width: Option<&Value>,
-    bottom_panel_open: Option<&Value>,
-    development_extension_directories: Option<&Value>,
-    open_tabs: Option<&Value>,
-    active_tab_id: Option<&Value>,
-) -> DesktopState {
-    let last_workspace_path = last_workspace_path
+/// Records one view's collapsed groups and forgets the workspaces we no longer
+/// remember.
+///
+/// The bound is the recent-workspace list rather than one of its own: a vault
+/// the app has already forgotten how to reopen has no panel left to restore, so
+/// tying the two together means there is one policy to reason about instead of
+/// two that can disagree.
+fn apply_collapsed_groups(
+    mut views: WorkspaceViews,
+    update: Option<CollapsedGroupsUpdate>,
+    remembered: &[String],
+) -> WorkspaceViews {
+    // Canonicalized the way the remembered paths are, or the two spellings of a
+    // symlinked vault would never match and the state would be pruned the moment
+    // it was written.
+    if let Some(update) = update {
+        if let Some(workspace_path) = nonempty_workspace_path(&update.workspace_path) {
+            views
+                .entry(workspace_path)
+                .or_default()
+                .insert(update.view_id, update.collapsed);
+        }
+    }
+
+    views.retain(|workspace_path, _| remembered.iter().any(|known| known == workspace_path));
+    views
+}
+
+
+pub fn create_desktop_state(state: &Map<String, Value>) -> DesktopState {
+    let last_workspace_path = state.get("lastWorkspacePath")
         .and_then(Value::as_str)
         .and_then(nonempty_workspace_path);
-    let recent_workspace_paths = recent_workspace_paths
+    let recent_workspace_paths = state.get("recentWorkspacePaths")
         .and_then(Value::as_array)
         .map(|paths| {
             normalize_workspace_paths(
@@ -484,11 +522,11 @@ pub fn create_desktop_state(
     DesktopState {
         last_workspace_path,
         recent_workspace_paths,
-        explorer_open: explorer_open.and_then(Value::as_bool).unwrap_or(true),
-        left_panel_width: read_panel_width(left_panel_width, DEFAULT_LEFT_PANEL_WIDTH),
-        right_panel_width: read_panel_width(right_panel_width, DEFAULT_RIGHT_PANEL_WIDTH),
-        bottom_panel_open: bottom_panel_open.and_then(Value::as_bool).unwrap_or(false),
-        development_extension_directories: development_extension_directories
+        explorer_open: state.get("explorerOpen").and_then(Value::as_bool).unwrap_or(true),
+        left_panel_width: read_panel_width(state.get("leftPanelWidth"), DEFAULT_LEFT_PANEL_WIDTH),
+        right_panel_width: read_panel_width(state.get("rightPanelWidth"), DEFAULT_RIGHT_PANEL_WIDTH),
+        bottom_panel_open: state.get("bottomPanelOpen").and_then(Value::as_bool).unwrap_or(false),
+        development_extension_directories: state.get("developmentExtensionDirectories")
             .and_then(Value::as_array)
             .map(|directories| {
                 normalize_extension_directories(
@@ -500,12 +538,48 @@ pub fn create_desktop_state(
                 )
             })
             .unwrap_or_default(),
-        open_tabs: read_persisted_tabs(open_tabs),
-        active_tab_id: active_tab_id
+        open_tabs: read_persisted_tabs(state.get("openTabs")),
+        active_tab_id: state.get("activeTabId")
             .and_then(Value::as_str)
             .filter(|id| !id.is_empty())
             .map(str::to_owned),
+        workspace_views: read_workspace_views(state.get("workspaceViews")),
     }
+}
+
+
+/// Reads the stored collapsed groups, skipping anything malformed.
+///
+/// A hand-edited or truncated settings file must cost the user a group that
+/// reopened, never a panel that will not draw.
+fn read_workspace_views(value: Option<&Value>) -> WorkspaceViews {
+    let Some(Value::Object(workspaces)) = value else {
+        return WorkspaceViews::new();
+    };
+
+    workspaces
+        .iter()
+        .filter_map(|(workspace_path, views)| {
+            let views = views.as_object()?;
+            Some((
+                workspace_path.clone(),
+                views
+                    .iter()
+                    .filter_map(|(view_id, collapsed)| {
+                        Some((
+                            view_id.clone(),
+                            collapsed
+                                .as_array()?
+                                .iter()
+                                .filter_map(Value::as_str)
+                                .map(str::to_owned)
+                                .collect(),
+                        ))
+                    })
+                    .collect(),
+            ))
+        })
+        .collect()
 }
 
 
@@ -520,6 +594,7 @@ pub fn default_desktop_state() -> DesktopState {
         development_extension_directories: Vec::new(),
         open_tabs: Vec::new(),
         active_tab_id: None,
+        workspace_views: WorkspaceViews::new(),
     }
 }
 
@@ -612,6 +687,33 @@ pub fn serialize_desktop_state(state: DesktopState) -> Value {
                 .recent_workspace_paths
                 .into_iter()
                 .map(Value::String)
+                .collect(),
+        ),
+    );
+    serialized.insert(
+        "workspaceViews".to_string(),
+        Value::Object(
+            state
+                .workspace_views
+                .into_iter()
+                .map(|(workspace_path, views)| {
+                    (
+                        workspace_path,
+                        Value::Object(
+                            views
+                                .into_iter()
+                                .map(|(view_id, collapsed)| {
+                                    (
+                                        view_id,
+                                        Value::Array(
+                                            collapsed.into_iter().map(Value::String).collect(),
+                                        ),
+                                    )
+                                })
+                                .collect(),
+                        ),
+                    )
+                })
                 .collect(),
         ),
     );

@@ -269,6 +269,12 @@ export interface NativeDesktopStateUpdate {
   readonly developmentExtensionDirectories?: readonly string[];
   readonly openTabs?: readonly NativePersistedTab[];
   readonly activeTabId?: string | null;
+  /** Mirrors `settings::CollapsedGroupsUpdate` on the Rust side (D53). */
+  readonly collapsedGroups?: {
+    readonly workspacePath: string;
+    readonly viewId: string;
+    readonly collapsed: readonly string[];
+  };
 }
 
 /** Mirrors `settings::PersistedTab` on the Rust side (settings.rs). */

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  collapsedGroups,
   DEFAULT_DESKTOP_STATE,
   DESKTOP_STATE_KEY,
   loadDesktopState,
@@ -157,7 +158,7 @@ describe("desktop state persistence", () => {
       editor: { fontSize: 18, lineWrapping: false },
       extensionSettings: { "example.timer": { enabled: true } },
       [DESKTOP_STATE_KEY]: {
-        version: 4,
+        version: 5,
         lastWorkspacePath: "/notes/legacy",
         recentWorkspacePaths: ["/notes/legacy"],
         explorerOpen: true,
@@ -189,7 +190,7 @@ describe("desktop state persistence", () => {
 
     expect(getWrittenSettings(gateway)).toEqual({
       [DESKTOP_STATE_KEY]: {
-        version: 4,
+        version: 5,
         lastWorkspacePath: "/notes/new",
         recentWorkspacePaths: ["/notes/new"],
         explorerOpen: false,
@@ -198,7 +199,8 @@ describe("desktop state persistence", () => {
         bottomPanelOpen: false,
         developmentExtensionDirectories: [],
         openTabs: [],
-        activeTabId: null
+        activeTabId: null,
+        workspaceViews: {}
       }
     });
   });
@@ -255,7 +257,7 @@ describe("desktop state persistence", () => {
     const gateway = createGateway(
       JSON.stringify({
         [DESKTOP_STATE_KEY]: {
-          version: 4,
+          version: 5,
           recentWorkspacePaths: ["/notes/one", "/notes/legacy"]
         }
       })
@@ -275,7 +277,7 @@ describe("desktop state persistence", () => {
   it("treats an empty activeTabId as cleared, the way the native path does", async () => {
     const gateway = createGateway(
       JSON.stringify({
-        [DESKTOP_STATE_KEY]: { version: 4, activeTabId: "tab-1" }
+        [DESKTOP_STATE_KEY]: { version: 5, activeTabId: "tab-1" }
       })
     );
 
@@ -405,3 +407,70 @@ function getWrittenSettings(gateway: DesktopStateGateway & {
   const [contents] = gateway.writeAppSettings.mock.calls[0] as [string];
   return JSON.parse(contents) as Record<string, unknown>;
 }
+
+describe("collapsed groups (D53)", () => {
+  /**
+   * Not settings and not the vault: what a user collapsed in a panel is not a
+   * preference they configured, and churning the settings document on every
+   * toggle would collide with the writes that are.
+   */
+  it("keeps a view's collapsed groups per workspace", () => {
+    const state = parseDesktopState(
+      JSON.stringify({
+        desktopState: {
+          version: 5,
+          workspaceViews: {
+            "/vault": { journal: ["2026", "2026-08"] },
+            "/other": { journal: ["2025"] }
+          }
+        }
+      })
+    );
+
+    expect(collapsedGroups(state, "/vault", "journal")).toEqual(["2026", "2026-08"]);
+    expect(collapsedGroups(state, "/other", "journal")).toEqual(["2025"]);
+    // A workspace or view nothing was stored for has everything open, which is
+    // the same answer as a stored empty list — and the right default either way.
+    expect(collapsedGroups(state, "/vault", "explorer")).toEqual([]);
+    expect(collapsedGroups(state, "/unknown", "journal")).toEqual([]);
+    expect(collapsedGroups(state, null, "journal")).toEqual([]);
+  });
+
+  it("reads a hand-edited document without refusing to draw", () => {
+    const state = parseDesktopState(
+      JSON.stringify({
+        desktopState: {
+          version: 5,
+          workspaceViews: {
+            "/vault": { journal: ["2026", 7, null], broken: "not a list" },
+            "/other": "not an object"
+          }
+        }
+      })
+    );
+
+    expect(collapsedGroups(state, "/vault", "journal")).toEqual(["2026"]);
+    expect(collapsedGroups(state, "/vault", "broken")).toEqual([]);
+    expect(collapsedGroups(state, "/other", "journal")).toEqual([]);
+  });
+
+  /**
+   * The version bump must not cost the user their open tabs. A document written
+   * by the previous schema is read, not replaced with defaults.
+   */
+  it("keeps what the previous schema stored", () => {
+    const state = parseDesktopState(
+      JSON.stringify({
+        desktopState: {
+          version: 4,
+          leftPanelWidth: 300,
+          openTabs: [{ id: "tab-1", title: "Note", kind: "editor" }]
+        }
+      })
+    );
+
+    expect(state.leftPanelWidth).toBe(300);
+    expect(state.openTabs).toHaveLength(1);
+    expect(state.workspaceViews).toEqual({});
+  });
+});

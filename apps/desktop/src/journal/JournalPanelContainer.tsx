@@ -38,6 +38,13 @@ export interface JournalPanelContainerProps {
    * typing and does nothing is worse than one that says it is unavailable.
    */
   readonly searchEntries?: (query: string) => Promise<ReadonlySet<string>>;
+  /**
+   * The collapsed year and month groups, when something outside remembers them
+   * across restarts (D53). Left out, the panel keeps them for its own lifetime,
+   * which is what the tests and any host without desktop state get.
+   */
+  readonly collapsed?: ReadonlySet<string>;
+  readonly onCollapsedChange?: (next: ReadonlySet<string>) => void;
   readonly onOpenSettings?: () => void;
   readonly onChooseFolder?: () => void;
   readonly onOpenCalendar: () => void;
@@ -47,13 +54,16 @@ export function JournalPanelContainer({
   service,
   indexAvailable = false,
   searchEntries,
+  collapsed: controlledCollapsed,
+  onCollapsedChange,
   onOpenSettings,
   onChooseFolder,
   onOpenCalendar
 }: JournalPanelContainerProps) {
   const [status, setStatus] = useState<JournalStatus>("loading");
   const [listing, setListing] = useState<JournalListing | null>(null);
-  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
+  const [ownCollapsed, setOwnCollapsed] = useState<ReadonlySet<string>>(new Set());
+  const collapsed = controlledCollapsed ?? ownCollapsed;
   const [expandedUndated, setExpandedUndated] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
   const [visibleEntries, setVisibleEntries] = useState<readonly string[]>([]);
@@ -215,7 +225,8 @@ export function JournalPanelContainer({
     const next = new Set(collapsed);
     if (next.has(key)) next.delete(key);
     else next.add(key);
-    setCollapsed(next);
+    if (onCollapsedChange) onCollapsedChange(next);
+    else setOwnCollapsed(next);
   };
 
   /** Runs a service call that changes the folder, then refreshes the list. */

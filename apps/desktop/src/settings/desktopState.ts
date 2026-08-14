@@ -1,7 +1,7 @@
 import { invokeNativeCommand } from "../native/commands";
 import { isRecord } from "@thinkbrain/core";
 
-export const DESKTOP_STATE_VERSION = 4;
+export const DESKTOP_STATE_VERSION = 5;
 export const DESKTOP_STATE_KEY = "desktopState";
 export const MAX_RECENT_WORKSPACES = 12;
 export const MIN_PANEL_WIDTH = 224;
@@ -18,6 +18,25 @@ export interface PersistedTab {
   readonly relativePath?: string;
 }
 
+/**
+ * Per-workspace, per-view collapsed group keys (D53).
+ *
+ * What a user collapsed in a panel is not a preference they configured, so it
+ * lives here rather than in their settings — that document now takes
+ * conflict-safe writes, and churning it on every toggle would collide with the
+ * writes that are preferences. Nor in the vault: it describes this machine.
+ */
+export type WorkspaceViews = Readonly<
+  Record<string, Readonly<Record<string, readonly string[]>>>
+>;
+
+/** One view's collapsed groups, in one workspace. */
+export interface CollapsedGroupsUpdate {
+  readonly workspacePath: string;
+  readonly viewId: string;
+  readonly collapsed: readonly string[];
+}
+
 export interface DesktopState {
   readonly version: typeof DESKTOP_STATE_VERSION;
   readonly lastWorkspacePath: string | null;
@@ -29,6 +48,7 @@ export interface DesktopState {
   readonly developmentExtensionDirectories: readonly string[];
   readonly openTabs: readonly PersistedTab[];
   readonly activeTabId: string | null;
+  readonly workspaceViews: WorkspaceViews;
 }
 
 export interface DesktopStateUpdate {
@@ -41,6 +61,12 @@ export interface DesktopStateUpdate {
   readonly developmentExtensionDirectories?: readonly string[];
   readonly openTabs?: readonly PersistedTab[];
   readonly activeTabId?: string | null;
+  /**
+   * Targeted rather than the whole map, because two windows on two vaults write
+   * this without knowing about each other: sending the entire map would make
+   * each of them overwrite what the other had just recorded.
+   */
+  readonly collapsedGroups?: CollapsedGroupsUpdate;
 }
 
 export interface DesktopStateGateway {
@@ -65,7 +91,8 @@ export const DEFAULT_DESKTOP_STATE: DesktopState = Object.freeze({
   bottomPanelOpen: false,
   developmentExtensionDirectories: [],
   openTabs: [],
-  activeTabId: null
+  activeTabId: null,
+  workspaceViews: {}
 });
 
 const nativeDesktopStateGateway: DesktopStateGateway = {
@@ -171,13 +198,14 @@ function readDesktopState(appSettings: Readonly<Record<string, unknown>>): Deskt
 function readVersionedDesktopState(storedState: Readonly<Record<string, unknown>>): DesktopState {
   const version = storedState.version;
 
+  // Every earlier schema is readable — each version only ever added fields, and
+  // a missing one falls back to its default. Written as a comparison rather than
+  // a list of accepted numbers so bumping the version cannot silently start
+  // throwing away the documents the previous one wrote.
   if (
     version !== undefined &&
-    version !== 0 &&
-    version !== 1 &&
-    version !== 2 &&
-    version !== 3 &&
-    version !== DESKTOP_STATE_VERSION
+    !(typeof version === "number" && Number.isInteger(version) && version >= 0 &&
+      version <= DESKTOP_STATE_VERSION)
   ) {
     return DEFAULT_DESKTOP_STATE;
   }
@@ -213,8 +241,30 @@ function applyDesktopStateUpdate(
         ? state.developmentExtensionDirectories
         : update.developmentExtensionDirectories,
     openTabs: update.openTabs === undefined ? state.openTabs : update.openTabs,
-    activeTabId: update.activeTabId === undefined ? state.activeTabId : update.activeTabId
+    activeTabId: update.activeTabId === undefined ? state.activeTabId : update.activeTabId,
+    workspaceViews: applyCollapsedGroups(state.workspaceViews, update.collapsedGroups)
   });
+}
+
+/**
+ * Records one view's collapsed groups.
+ *
+ * Unlike the native path this does not prune workspaces the app has forgotten:
+ * this branch only runs for a caller-supplied gateway without
+ * `updateDesktopState`, which the shipped app never takes.
+ */
+function applyCollapsedGroups(
+  views: WorkspaceViews,
+  update: CollapsedGroupsUpdate | undefined
+): WorkspaceViews {
+  if (update === undefined) return views;
+  return {
+    ...views,
+    [update.workspacePath]: {
+      ...views[update.workspacePath],
+      [update.viewId]: update.collapsed
+    }
+  };
 }
 
 function createDesktopState(value: Readonly<Record<string, unknown>>): DesktopState {
@@ -237,8 +287,45 @@ function createDesktopState(value: Readonly<Record<string, unknown>>): DesktopSt
       value.developmentExtensionDirectories
     ),
     openTabs: readPersistedTabs(value.openTabs),
-    activeTabId: readNonEmptyString(value.activeTabId)
+    activeTabId: readNonEmptyString(value.activeTabId),
+    workspaceViews: readWorkspaceViews(value.workspaceViews)
   };
+}
+
+/**
+ * Reads the stored collapsed groups, skipping anything malformed.
+ *
+ * A hand-edited or truncated document must cost the user a group that reopened,
+ * never a panel that will not draw.
+ */
+function readWorkspaceViews(value: unknown): WorkspaceViews {
+  if (!isRecord(value)) return {};
+  const views: Record<string, Record<string, readonly string[]>> = {};
+  for (const [workspacePath, stored] of Object.entries(value)) {
+    if (!isRecord(stored)) continue;
+    const byView: Record<string, readonly string[]> = {};
+    for (const [viewId, collapsed] of Object.entries(stored)) {
+      if (!Array.isArray(collapsed)) continue;
+      byView[viewId] = collapsed.filter((key): key is string => typeof key === "string");
+    }
+    views[workspacePath] = byView;
+  }
+  return views;
+}
+
+/**
+ * The groups collapsed in one view of one workspace, or none.
+ *
+ * A workspace nothing was stored for reads the same as one stored empty: every
+ * group open, which is the right answer for a panel opened for the first time.
+ */
+export function collapsedGroups(
+  state: DesktopState,
+  workspacePath: string | null,
+  viewId: string
+): readonly string[] {
+  if (workspacePath === null) return [];
+  return state.workspaceViews[workspacePath]?.[viewId] ?? [];
 }
 
 /**

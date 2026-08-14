@@ -1160,9 +1160,10 @@ fn desktop_state_update_merges_concurrent_mrus_and_preserves_app_settings() {
     assert_eq!(
         settings["desktopState"],
         serde_json::json!({
-            "version": 4,
+            "version": 5,
             "lastWorkspacePath": one_path,
             "recentWorkspacePaths": [two_path, legacy_path, one_path],
+            "workspaceViews": {},
             "explorerOpen": true,
             "leftPanelWidth": 352.0,
             "rightPanelWidth": 480.0,
@@ -2326,4 +2327,106 @@ fn an_unpairable_rename_is_judged_by_what_is_actually_on_disk() {
     let _ = fs::remove_dir_all(&root);
     assert_eq!(landed.first().map(|change| change.kind), Some(WorkspaceChangeKind::Created));
     assert_eq!(left.first().map(|change| change.kind), Some(WorkspaceChangeKind::Deleted));
+}
+
+/// D53: a group the user collapsed stays collapsed, per workspace, in desktop
+/// state rather than in their settings or in the vault.
+#[test]
+fn collapsed_groups_are_kept_per_workspace_and_per_view() {
+    // Real directories, because a workspace path is canonicalized before it is
+    // stored — an imaginary one would be dropped and prove nothing.
+    let first_root = temp_test_dir("collapse_first");
+    let second_root = temp_test_dir("collapse_second");
+    let first_path = first_root.to_string_lossy().to_string();
+    let second_path = second_root.to_string_lossy().to_string();
+
+    let collapse = |contents: Option<&str>, workspace: &str, view: &str, keys: Vec<String>| {
+        update_desktop_state_contents(
+            contents,
+            DesktopStateUpdate {
+                last_workspace_path: Some(Some(workspace.to_string())),
+                collapsed_groups: Some(CollapsedGroupsUpdate {
+                    workspace_path: workspace.to_string(),
+                    view_id: view.to_string(),
+                    collapsed: keys,
+                }),
+                ..Default::default()
+            },
+        )
+        .expect("desktop-state update succeeds")
+    };
+
+    let stored = collapse(
+        None,
+        &first_path,
+        "journal",
+        vec!["2026".to_string(), "2026-08".to_string()],
+    );
+    // A second vault must not overwrite the first: two windows write this field
+    // without knowing about each other.
+    let stored = collapse(Some(&stored), &second_path, "journal", vec!["2025".to_string()]);
+
+    // A second view of the same vault sits beside the first rather than
+    // replacing it: the explorer tree has the same problem and will want a row
+    // here, and one write must not take the other's.
+    let stored = collapse(Some(&stored), &first_path, "explorer", vec!["notes".to_string()]);
+
+    let settings: Value = serde_json::from_str(&stored).expect("serialized settings are valid");
+    let views = &settings["desktopState"]["workspaceViews"];
+    assert_eq!(views[&first_path]["journal"], serde_json::json!(["2026", "2026-08"]));
+    assert_eq!(views[&first_path]["explorer"], serde_json::json!(["notes"]));
+    assert_eq!(views[&second_path]["journal"], serde_json::json!(["2025"]));
+
+    // Reopening a group writes a shorter list, and an empty one is a real answer
+    // rather than an absent one — every group is open.
+    let reopened = collapse(Some(&stored), &first_path, "journal", Vec::new());
+    let settings: Value = serde_json::from_str(&reopened).expect("serialized settings are valid");
+    assert_eq!(
+        settings["desktopState"]["workspaceViews"][&first_path]["journal"],
+        serde_json::json!([])
+    );
+
+    fs::remove_dir_all(&first_root).ok();
+    fs::remove_dir_all(&second_root).ok();
+}
+
+/// The stored views follow the recent-workspace list rather than carrying a
+/// bound of their own, so a vault the app has forgotten stops costing anything.
+#[test]
+fn collapsed_groups_are_dropped_for_a_workspace_no_longer_remembered() {
+    let root = temp_test_dir("collapse_forgotten");
+    let path = root.to_string_lossy().to_string();
+
+    let stored = update_desktop_state_contents(
+        None,
+        DesktopStateUpdate {
+            last_workspace_path: Some(Some(path.clone())),
+            collapsed_groups: Some(CollapsedGroupsUpdate {
+                workspace_path: path.clone(),
+                view_id: "journal".to_string(),
+                collapsed: vec!["2026".to_string()],
+            }),
+            ..Default::default()
+        },
+    )
+    .expect("desktop-state update succeeds");
+
+    let settings: Value = serde_json::from_str(&stored).expect("serialized settings are valid");
+    assert!(settings["desktopState"]["workspaceViews"][&path].is_object());
+
+    // Forgetting the vault takes what was collapsed in it: there is no panel
+    // left to restore, and one policy is easier to reason about than two.
+    fs::remove_dir_all(&root).ok();
+    let forgotten = update_desktop_state_contents(
+        Some(&stored),
+        DesktopStateUpdate {
+            last_workspace_path: Some(None),
+            recent_workspace_paths: Some(Vec::new()),
+            ..Default::default()
+        },
+    )
+    .expect("update succeeds");
+
+    let settings: Value = serde_json::from_str(&forgotten).expect("serialized settings are valid");
+    assert_eq!(settings["desktopState"]["workspaceViews"], serde_json::json!({}));
 }

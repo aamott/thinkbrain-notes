@@ -398,3 +398,47 @@ describe("searching the journal", () => {
     expect(searchEntries).toHaveBeenCalledWith("salt");
   });
 });
+
+describe("collapse state that outlives the panel (D53)", () => {
+  const render = async (
+    props: Partial<Parameters<typeof JournalPanelContainer>[0]>
+  ): Promise<HTMLDivElement> => {
+    container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
+    await act(async () =>
+      root?.render(
+        <JournalPanelContainer
+          service={props.service ?? service()}
+          onOpenCalendar={() => undefined}
+          collapsed={props.collapsed}
+          onCollapsedChange={props.onCollapsedChange}
+        />
+      )
+    );
+    return container;
+  };
+
+  it("draws the groups it was told are collapsed", async () => {
+    const host = await render({ collapsed: new Set(["2026"]) });
+
+    expect(host.textContent).not.toContain("6:02 PM");
+    expect(
+      [...host.querySelectorAll('[role="treeitem"]')].find(
+        (row) => row.getAttribute("aria-label") === "2026, 1 entry"
+      )?.getAttribute("aria-expanded")
+    ).toBe("false");
+  });
+
+  it("hands a toggle outward instead of keeping it, when someone is listening", async () => {
+    const onCollapsedChange = vi.fn();
+    const host = await render({ collapsed: new Set(), onCollapsedChange });
+
+    await click(host, "2026, 1 entry");
+
+    expect(onCollapsedChange).toHaveBeenCalledWith(new Set(["2026"]));
+    // The panel does not also keep its own copy: the row is still open, because
+    // what is collapsed is now whatever the listener says it is.
+    expect(host.textContent).toContain("6:02 PM");
+  });
+});

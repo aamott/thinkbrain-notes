@@ -8,6 +8,7 @@ import { registerJournalControls } from "../../journal/JournalFieldDefinitionsCo
 import { CalendarTabContainer } from "../../journal/CalendarTabContainer";
 import { useSearchIndexStore } from "../../search/searchIndexStore";
 import { searchService, type SearchService } from "../../search/searchService";
+import { useCollapsedGroups } from "../../journal/journalCollapse";
 import { MetadataWidgetContainer } from "../../journal/MetadataWidgetContainer";
 import { parseFieldDefinitions } from "../../journal/journalSettings";
 import type { DesktopExtensionContext } from "../desktopExtensionHost";
@@ -286,6 +287,8 @@ export function activateJournal(context: DesktopExtensionContext): void {
   function JournalPanelRoot() {
     const indexStatus = useSearchIndexStore((state) => state.status.kind);
     const indexRoot = useSearchIndexStore((state) => state.rootPath);
+    // D53: what the user collapsed outlives the panel, per workspace.
+    const [collapsed, setCollapsed] = useCollapsedGroups("journal");
 
     const searchEntries = useCallback(
       (query: string): Promise<ReadonlySet<string>> =>
@@ -308,6 +311,8 @@ export function activateJournal(context: DesktopExtensionContext): void {
         onOpenCalendar={openCalendar}
         indexAvailable={indexStatus === "ready"}
         searchEntries={searchEntries}
+        collapsed={collapsed}
+        onCollapsedChange={setCollapsed}
       />
     );
   }
