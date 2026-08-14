@@ -1,8 +1,38 @@
-import { useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import {
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent
+} from "react";
 
+import { listWindow, rowOffsets } from "../lib/listWindow";
 import { ContextMenu, MenuButton, type ContextMenuState } from "../shell/ContextMenu";
 import { ACTION, EmptyState, JournalTrouble, TOUCH } from "./journalChrome";
-import type { JournalRow, JournalView } from "./journalViewModel";
+import {
+  ESTIMATED_ROW_HEIGHTS,
+  journalRowHeights,
+  type JournalRow,
+  type JournalRowHeights,
+  type JournalView
+} from "./journalViewModel";
+
+/**
+ * Rows drawn beyond each edge of the viewport.
+ *
+ * Enough that a flick of the wheel lands on a drawn row rather than on the gap
+ * before the next render, and few enough that the saving is the point.
+ */
+const OVERSCAN = 4;
+
+/**
+ * Viewport assumed until the list has been laid out and can be asked.
+ *
+ * Only ever wrong for the first frame, and wrong in the safe direction: a
+ * generous guess draws rows that turn out to be off screen, where a mean one
+ * would leave the bottom of a short panel blank until the measurement landed.
+ */
+const ESTIMATED_VIEWPORT = 640;
 
 /**
  * The journal popout: a navigator, never a writing surface (D9).
@@ -64,6 +94,8 @@ function rowName(row: JournalRow): string {
 
 function Row({
   row,
+  index,
+  rowCount,
   focused,
   onActivate,
   onContextMenu,
@@ -73,6 +105,9 @@ function Row({
   onRenameCancel
 }: {
   readonly row: JournalRow;
+  /** Position in the whole list, not in the drawn slice. */
+  readonly index: number;
+  readonly rowCount: number;
   readonly focused: boolean;
   readonly onActivate: () => void;
   readonly onContextMenu?: (event: ReactMouseEvent) => void;
@@ -112,6 +147,13 @@ function Row({
       aria-level={level}
       aria-label={rowName(row)}
       aria-expanded={isHeader ? !row.collapsed : undefined}
+      // The rows outside the window are missing from the DOM, not from the
+      // list. Without these a screen reader counts what it can see and tells
+      // the user the list ends where the drawn slice does.
+      aria-setsize={rowCount}
+      aria-posinset={index + 1}
+      data-row-index={index}
+      data-row-kind={row.kind}
       tabIndex={focused ? 0 : -1}
       onClick={onActivate}
       onContextMenu={onContextMenu}
@@ -149,12 +191,15 @@ function Row({
               </span>
             )}
           </span>
-          {/* Absent until the row is visible and its first line has loaded. */}
-          {row.preview && (
-            <span className="block truncate text-[0.72rem] text-muted-foreground">
-              {row.preview}
-            </span>
-          )}
+          {/*
+            Always drawn, blank until the first line loads. A row that grew a
+            line when its preview arrived would shove every row below it down
+            mid-scroll, and the window is computed from row heights, so the
+            list would be measuring itself against a shape it no longer has.
+          */}
+          <span className="block truncate text-[0.72rem] text-muted-foreground">
+            {row.preview ?? "\u00a0"}
+          </span>
         </>
       )}
     </button>
@@ -185,6 +230,9 @@ export function JournalPanel({
   const [focusedRow, setFocusedRow] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
   const [lastRowCount, setLastRowCount] = useState(view.rows.length);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [viewport, setViewport] = useState(ESTIMATED_VIEWPORT);
+  const [rowHeights, setRowHeights] = useState<JournalRowHeights>(ESTIMATED_ROW_HEIGHTS);
   // Context menu for entry rows (right-click / long-press). Null when closed.
   const [contextMenu, setContextMenu] = useState<{ state: ContextMenuState; entryPath: string } | null>(null);
   // Inline rename state. Null when inactive.
@@ -199,11 +247,98 @@ export function JournalPanel({
     if (focusedRow >= view.rows.length) setFocusedRow(Math.max(0, view.rows.length - 1));
   }
 
+  const offsets = useMemo(
+    () => rowOffsets(journalRowHeights(view.rows, rowHeights)),
+    [view.rows, rowHeights]
+  );
+  const drawn = listWindow(offsets, scrollTop, viewport, OVERSCAN);
+
+  /**
+   * Takes the viewport and one row of each kind from what was just laid out.
+   *
+   * Measured rather than assumed because a row's height is not ours to decide:
+   * the coarse-pointer minimum (D76), the width tiers (D55/D72), the user's
+   * font size and the platform's scrollbars all move it. Only rows inside the
+   * window can be measured, so a kind currently scrolled out keeps its last
+   * known height — right, since it had one when it was last drawn.
+   *
+   * Deliberately runs after every render rather than on a dependency list: what
+   * it reads is the laid-out DOM, which no list of values describes. It settles
+   * because it only sets state when a number actually changed, so the second
+   * pass over an unchanged layout writes nothing and the chain stops.
+   */
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useLayoutEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+    if (list.clientHeight > 0 && list.clientHeight !== viewport) setViewport(list.clientHeight);
+
+    const measure = (kind: string, fallback: number): number =>
+      list.querySelector<HTMLElement>(`[data-row-kind="${kind}"]`)?.offsetHeight || fallback;
+    const next: JournalRowHeights = {
+      year: measure("year", rowHeights.year),
+      month: measure("month", rowHeights.month),
+      entry: measure("entry", rowHeights.entry)
+    };
+    if (
+      next.year !== rowHeights.year ||
+      next.month !== rowHeights.month ||
+      next.entry !== rowHeights.entry
+    ) {
+      setRowHeights(next);
+    }
+  });
+
+  /**
+   * Re-measures when the panel is resized rather than re-rendered.
+   *
+   * Dragging the sidebar wider or the window taller changes how many rows fit
+   * without changing a single prop, so nothing above would run: the list would
+   * keep drawing a screenful for the height it had when it was first laid out,
+   * leaving the bottom of a grown panel blank.
+   */
+  useLayoutEffect(() => {
+    const list = listRef.current;
+    if (!list || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      setViewport((current) => (list.clientHeight > 0 ? list.clientHeight : current));
+    });
+    observer.observe(list);
+    return () => observer.disconnect();
+  }, [view.state]);
+
+  /**
+   * Puts the keyboard on the row the roving tabindex just moved to, once it has
+   * been drawn.
+   *
+   * Focus cannot happen in the handler that moved it: past the edge of the
+   * drawn slice there is no element yet, and a roving tabindex landing on
+   * nothing drops the user out of the list. So the move scrolls, and this
+   * claims the row on the render that scroll produced.
+   */
+  const wantsFocus = useRef(false);
+  useLayoutEffect(() => {
+    if (!wantsFocus.current) return;
+    const row = listRef.current?.querySelector<HTMLElement>(`[data-row-index="${focusedRow}"]`);
+    if (!row) return;
+    wantsFocus.current = false;
+    row.focus();
+  });
+
   const move = (delta: number): void => {
     const next = Math.min(Math.max(focusedRow + delta, 0), view.rows.length - 1);
     setFocusedRow(next);
-    const rows = listRef.current?.querySelectorAll<HTMLElement>('[role="treeitem"]');
-    rows?.[next]?.focus();
+    wantsFocus.current = true;
+
+    const list = listRef.current;
+    if (!list) return;
+    const top = offsets[next] ?? 0;
+    const bottom = offsets[next + 1] ?? top;
+    if (top < list.scrollTop) list.scrollTop = top;
+    else if (bottom > list.scrollTop + list.clientHeight) {
+      list.scrollTop = bottom - list.clientHeight;
+    }
+    setScrollTop(list.scrollTop);
   };
 
   const activate = (row: JournalRow): void => {
@@ -367,6 +502,7 @@ export function JournalPanel({
             role="tree"
             aria-label="Journal entries"
             className="min-h-0 flex-1 overflow-auto"
+            onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
             onKeyDown={(event) => {
               if (event.key === "ArrowDown") {
                 event.preventDefault();
@@ -377,27 +513,43 @@ export function JournalPanel({
               }
             }}
           >
-            {view.rows.map((row, index) => (
-              <Row
-                key={row.key}
-                row={row}
-                focused={index === focusedRow}
-                onActivate={() => activate(row)}
-                onContextMenu={
-                  row.collapsed === null && (onRenameEntry || onDeleteEntry)
-                    ? (event) => showContextMenu(event, row.key)
-                    : undefined
-                }
-                renaming={
-                  row.collapsed === null && renaming?.path === row.key
-                    ? { draft: renaming.draft }
-                    : undefined
-                }
-                onRenameChange={(value) => setRenaming({ path: row.key, draft: value })}
-                onRenameCommit={commitRename}
-                onRenameCancel={() => setRenaming(null)}
-              />
-            ))}
+            {/*
+              The rows outside the window are not drawn, so these stand in for
+              their height. Without them the scrollbar would measure a screenful
+              instead of the list, and scrolling would end after one page.
+            */}
+            <div aria-hidden="true" data-list-space="leading" style={{ height: drawn.leadingSpace }} />
+            {view.rows.slice(drawn.startIndex, drawn.endIndex).map((row, offset) => {
+              const index = drawn.startIndex + offset;
+              return (
+                <Row
+                  key={row.key}
+                  row={row}
+                  index={index}
+                  rowCount={view.rows.length}
+                  focused={index === focusedRow}
+                  onActivate={() => activate(row)}
+                  onContextMenu={
+                    row.collapsed === null && (onRenameEntry || onDeleteEntry)
+                      ? (event) => showContextMenu(event, row.key)
+                      : undefined
+                  }
+                  renaming={
+                    row.collapsed === null && renaming?.path === row.key
+                      ? { draft: renaming.draft }
+                      : undefined
+                  }
+                  onRenameChange={(value) => setRenaming({ path: row.key, draft: value })}
+                  onRenameCommit={commitRename}
+                  onRenameCancel={() => setRenaming(null)}
+                />
+              );
+            })}
+            <div
+              aria-hidden="true"
+              data-list-space="trailing"
+              style={{ height: drawn.trailingSpace }}
+            />
           </div>
         );
     }

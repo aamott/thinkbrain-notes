@@ -245,3 +245,44 @@ export function buildJournalView(input: JournalViewInput): JournalView {
     activeFilterCount: input.activeFilterCount
   };
 }
+
+/**
+ * How tall a row of each visual class is, in pixels.
+ *
+ * Three classes, not five kinds: a year header, any other header, and an entry
+ * row — which is what {@link JournalRow} already distinguishes visually, so the
+ * height of a row is known from the row itself and never has to be measured
+ * per row. Undated sits with the month headers, and an undated entry with the
+ * entries, because that is how each is drawn.
+ */
+export interface JournalRowHeights {
+  readonly year: number;
+  readonly month: number;
+  readonly entry: number;
+}
+
+/**
+ * Stand-in heights until the panel has measured a real row.
+ *
+ * Roughly a compact desktop row at the default font size. Being wrong costs a
+ * scrollbar that is the wrong length for one frame, not a wrong row: the window
+ * is recomputed from measured heights as soon as there is something to measure,
+ * and every layout — the coarse-pointer minimum of D76 above all — changes them.
+ */
+export const ESTIMATED_ROW_HEIGHTS: JournalRowHeights = {
+  year: 26,
+  month: 26,
+  entry: 40
+};
+
+/** The height of each row in order, for `rowOffsets`. */
+export function journalRowHeights(
+  rows: readonly JournalRow[],
+  heights: JournalRowHeights
+): readonly number[] {
+  return rows.map((row) => {
+    if (row.kind === "year") return heights.year;
+    if (row.kind === "month" || row.kind === "undated") return heights.month;
+    return heights.entry;
+  });
+}

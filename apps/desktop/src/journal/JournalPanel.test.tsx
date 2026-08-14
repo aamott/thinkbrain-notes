@@ -235,6 +235,96 @@ describe("journal panel list", () => {
   });
 });
 
+describe("journal panel list at scale (D13)", () => {
+  /** 500 entries across August 2026, one per hour, so every filename differs. */
+  const manyNames = Array.from({ length: 500 }, (_, index) => {
+    const day = String(1 + Math.floor(index / 24)).padStart(2, "0");
+    const hour = String(index % 24).padStart(2, "0");
+    return `2026-08-${day}-${hour}00.md`;
+  });
+
+  const treeitems = (host: HTMLElement): readonly Element[] => [
+    ...host.querySelectorAll('[role="treeitem"]')
+  ];
+
+  const spaceAbove = (host: HTMLElement): string =>
+    host.querySelector<HTMLElement>('[data-list-space="leading"]')?.style.height ?? "";
+
+  it("draws a screenful of a long list rather than all of it", async () => {
+    const host = await render({ view: viewOf(manyNames) });
+
+    // 500 entries plus a year and a month header is 502 rows; a screenful is a
+    // small fraction of that, and the exact count follows the estimated heights.
+    // A screenful, not four rows and not five hundred: the lower bound is what
+    // keeps the estimated viewport honest, since a test DOM reports no height
+    // and the estimate is the only thing standing in for one.
+    expect(treeitems(host).length).toBeGreaterThan(12);
+    expect(treeitems(host).length).toBeLessThan(50);
+
+    // The rest of the list is still there as height, or the scrollbar would
+    // measure a screenful and scrolling would stop after one page.
+    const below = host.querySelector<HTMLElement>('[data-list-space="trailing"]');
+    expect(Number.parseFloat(below?.style.height ?? "0")).toBeGreaterThan(10_000);
+  });
+
+  /**
+   * A row that grows a line when its preview arrives shoves every row below it
+   * down, mid-scroll, and leaves the window measuring a shape the list no
+   * longer has. So the line is there from the start, blank.
+   */
+  it("holds the preview's line before the preview arrives", async () => {
+    const host = await render({ view: viewOf(["2026-08-07-1802.md"]) });
+    const entry = host.querySelector('[data-row-kind="entry"]');
+
+    const previewLine = entry?.querySelector(".truncate");
+    expect(previewLine).not.toBeNull();
+    expect(previewLine?.textContent).toBe("\u00a0");
+  });
+
+  /**
+   * The rows are gone from the DOM, not from the list. Without these a screen
+   * reader announces "1 of 20" partway down a list of hundreds, and the user is
+   * told the list ends where the window does.
+   */
+  it("tells assistive tech the size of the list it is showing a slice of", async () => {
+    const host = await render({ view: viewOf(manyNames) });
+    const rows = treeitems(host);
+
+    for (const row of rows) {
+      expect(row.getAttribute("aria-setsize")).toBe("502");
+    }
+    expect(rows[0]?.getAttribute("aria-posinset")).toBe("1");
+    expect(rows[1]?.getAttribute("aria-posinset")).toBe("2");
+  });
+
+  it("draws a different slice once scrolled, keeping the space above it", async () => {
+    const host = await render({ view: viewOf(manyNames) });
+    const list = host.querySelector<HTMLElement>('[role="tree"]');
+    if (!list) throw new Error("The list did not render.");
+
+    expect(spaceAbove(host)).toBe("0px");
+
+    list.scrollTop = 4000;
+    await act(async () => {
+      list.dispatchEvent(new Event("scroll", { bubbles: true }));
+    });
+
+    const first = Number(treeitems(host)[0]?.getAttribute("aria-posinset"));
+    expect(first).toBeGreaterThan(1);
+    expect(Number.parseFloat(spaceAbove(host))).toBeGreaterThan(0);
+  });
+
+  it("draws a short list whole, with no space held either side", async () => {
+    const host = await render({ view: viewOf(["2026-08-07-1802.md"]) });
+
+    expect(treeitems(host)).toHaveLength(3);
+    expect(spaceAbove(host)).toBe("0px");
+    expect(
+      host.querySelector<HTMLElement>('[data-list-space="trailing"]')?.style.height
+    ).toBe("0px");
+  });
+});
+
 describe("journal panel states", () => {
   it("offers to open a folder when no workspace is open", async () => {
     const onChooseFolder = vi.fn();
