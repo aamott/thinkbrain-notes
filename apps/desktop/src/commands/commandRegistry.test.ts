@@ -17,6 +17,7 @@ const commandContext: DesktopCommandContext = {
   toggleBottomPanel: () => undefined,
   toggleLivePreview: () => undefined,
   revealPanel: () => undefined,
+  revealLeftPanel: () => undefined,
   openSettings: () => undefined,
   rebuildIndex: () => undefined,
   closePalette: () => undefined
@@ -35,17 +36,17 @@ describe("desktop command registry", () => {
     expect(registry.get("toggle-explorer")?.title).toBe("Toggle Explorer");
     expect(registry.get("open-file")?.keybinding).toBe("Ctrl/Cmd+P");
     expect(registry.get("rebuild-index")?.availability).toBe("available");
+    expect(registry.get("open-source-control")?.availability).toBe("available");
+    expect(registry.get("open-extensions")?.availability).toBe("available");
   });
 
   it("makes feature-owned commands explicitly unavailable with their prerequisite", () => {
     const unavailable = builtInDesktopCommands.filter((command) => command.availability === "unavailable");
 
-    expect(unavailable).toHaveLength(4);
+    expect(unavailable).toHaveLength(2);
     expect(unavailable).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: "open-file", prerequisite: "native file picker" }),
-      expect.objectContaining({ id: "open-graph", prerequisite: "link indexing" }),
-      expect.objectContaining({ id: "open-source-control", prerequisite: "source-control integration" }),
-      expect.objectContaining({ id: "open-extensions", prerequisite: "extension host" })
+      expect.objectContaining({ id: "open-graph", prerequisite: "link indexing" })
     ]));
     expect(unavailable.every((command) => Boolean(command.unavailableMessage))).toBe(true);
   });

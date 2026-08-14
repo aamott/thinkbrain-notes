@@ -9,9 +9,9 @@
  */
 
 import {
-  CURRENT_SETTINGS_VERSION,
   extractDefaults,
   isRecord,
+  serializeDynamicSettings,
   type SettingsRegistry
 } from "@thinkbrain/core";
 
@@ -54,36 +54,14 @@ export function parseDynamicWorkspaceSettings(
 /**
  * Serializes workspace settings back to JSON, preserving non-setting keys from
  * the existing raw document (e.g. `version`, extension keys).
+ *
+ * Thin wrapper over the shared core {@link serializeDynamicSettings} for the
+ * `"workspace"` scope.
  */
 export function serializeDynamicWorkspaceSettings(
   values: Record<string, unknown>,
   registry: SettingsRegistry,
   existingRawJson: string | null
 ): string {
-  const base: Record<string, unknown> = {};
-  if (existingRawJson !== null) {
-    try {
-      const parsed: unknown = JSON.parse(existingRawJson);
-      if (isRecord(parsed)) Object.assign(base, parsed);
-    } catch {
-      // Malformed: start fresh.
-    }
-  }
-
-  const knownSettingKeys = new Set<string>();
-  for (const def of registry.getAllDefinitions()) {
-    if (def.scope === "workspace") {
-      knownSettingKeys.add(def.key);
-    }
-  }
-
-  for (const key of Object.keys(base)) {
-    if (knownSettingKeys.has(key)) delete base[key];
-  }
-  for (const [key, value] of Object.entries(values)) {
-    if (knownSettingKeys.has(key)) base[key] = value;
-  }
-  base.version = CURRENT_SETTINGS_VERSION;
-
-  return `${JSON.stringify(base, null, 2)}\n`;
+  return serializeDynamicSettings(values, registry, "workspace", existingRawJson);
 }

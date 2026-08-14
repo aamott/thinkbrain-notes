@@ -41,7 +41,7 @@ import {
   type ThemeFile
 } from "@thinkbrain/core";
 
-import { useSettingsStore } from "./settingsStore";
+import { appSettingsRegistry, resolveEffectiveValue, useSettingsStore } from "./settingsStore";
 import { readThemeFile } from "./themeAdapter";
 import { readPickedFile, writeJsonViaSaveDialog } from "./importExportFiles";
 
@@ -165,10 +165,16 @@ export function buildThemeExportPayload(): ThemeExportPayload {
  */
 export async function buildThemeExport(): Promise<ThemeExportPayload> {
   const state = useSettingsStore.getState();
-  const configured =
-    "appearance.themeFile" in state.stagedChanges
-      ? state.stagedChanges["appearance.themeFile"]
-      : state.appValues["appearance.themeFile"];
+  // Resolve the effective themeFile path via the shared precedence rule
+  // (staged > appValues > registry default of null). Avoids the inline-copy
+  // drift where the manual version omitted the default fallback.
+  const configured = resolveEffectiveValue(
+    "appearance.themeFile",
+    state.stagedChanges,
+    state.appValues,
+    state.workspaceValues,
+    appSettingsRegistry.getDefinition("appearance.themeFile")
+  );
 
   if (typeof configured === "string" && configured.length > 0) {
     const source = await readThemeFile(configured);

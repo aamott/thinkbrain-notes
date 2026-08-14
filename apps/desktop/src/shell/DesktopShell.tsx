@@ -38,6 +38,7 @@ import {
   type DesktopTab,
   type DesktopTabState
 } from "../tabs/tabModel";
+import { desktopTabRegistry } from "../tabs/tabRegistry";
 import { subscribeToNoteChanges } from "../events/noteChangeSubscription";
 import { workspaceDocumentApi } from "../workspace/workspaceDocumentAdapter";
 import { workspaceDesktopApi } from "../workspace/workspaceAdapter";
@@ -63,6 +64,7 @@ import { DirtyCloseDialog } from "./DirtyCloseDialog";
 import { ResizeHandle } from "./ResizeHandle";
 import { StaleDocumentBanner } from "./StaleDocumentBanner";
 import { createDebounced, type Debounced } from "../lib/debounce";
+import { isBuiltInLeftPanel } from "../panels/panelRegistry";
 import { isSelectableRightPanel, type BottomPanel, type DocumentViewState, type LeftPanel, type RightPanel } from "./shellTypes";
 import { StatusBar } from "./StatusBar";
 import { TabContent } from "./TabContent";
@@ -714,6 +716,13 @@ export function DesktopShell() {
       revealPanel: (panelId: string) => {
         if (isSelectableRightPanel(panelId)) setRightPanel(panelId);
       },
+      // Narrow the unconstrained string against the live left-panel registry
+      // before it reaches shell state, mirroring `revealPanel`'s guard for the
+      // right side. A typo or stale id from a deactivated extension is dropped
+      // instead of persisting as an id nothing renders.
+      revealLeftPanel: (panelId: string) => {
+        if (isBuiltInLeftPanel(panelId)) selectLeftPanel(panelId);
+      },
       openSettings: openSettingsTab,
       rebuildIndex: () => updateBottomPanel("terminal"),
       closePalette
@@ -1102,5 +1111,12 @@ function restoreTab(persisted: PersistedTab, fallbackRootPath: string | null): D
     if (!rootPath || !relativePath) return null;
     return createEditorTab({ rootPath, relativePath });
   }
-  return createStaticTab(persisted.kind as Exclude<import("@thinkbrain/core").TabKind, "editor">, persisted.title);
+  // Validate the persisted static kind against the tab registry before casting.
+  // A stale or corrupted persisted state with an unknown kind is skipped rather
+  // than silently producing a broken tab that renders an Unavailable placeholder.
+  if (desktopTabRegistry.get(persisted.kind) === undefined) return null;
+  return createStaticTab(
+    persisted.kind as Exclude<import("@thinkbrain/core").TabKind, "editor">,
+    persisted.title
+  );
 }

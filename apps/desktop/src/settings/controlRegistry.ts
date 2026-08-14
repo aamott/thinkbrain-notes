@@ -13,7 +13,7 @@
  */
 
 import type { ComponentType } from "react";
-import type { SettingDefinition, SettingType } from "@thinkbrain/core";
+import type { Disposable, SettingDefinition, SettingType } from "@thinkbrain/core";
 
 import { ToggleControl } from "./controls/ToggleControl";
 import { TextControl } from "./controls/TextControl";
@@ -61,8 +61,14 @@ const controlRegistry = new Map<string, ComponentType<ControlProps>>();
 export function registerControl(
   key: string,
   component: ComponentType<ControlProps>
-): void {
+): Disposable {
   controlRegistry.set(key, component);
+  return {
+    dispose: () => {
+      // Only remove if still our component; another caller may have replaced it.
+      if (controlRegistry.get(key) === component) controlRegistry.delete(key);
+    }
+  };
 }
 
 /**

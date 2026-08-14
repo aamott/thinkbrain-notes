@@ -36,6 +36,8 @@ export interface DesktopCommandContext {
   readonly toggleLivePreview: () => void;
   /** Reveals a panel by its fully-qualified id, opening its side popout. */
   readonly revealPanel: (panelId: string) => void;
+  /** Reveals a left-side panel (explorer, search, source-control, extensions). */
+  readonly revealLeftPanel: (panelId: string) => void;
   readonly openSettings: () => void;
   readonly rebuildIndex: () => void;
   readonly closePalette: (restoreFocus?: boolean) => void;
@@ -184,21 +186,21 @@ export const builtInDesktopCommands: readonly DesktopCommand[] = [
     unavailableMessage: "Graph is unavailable until link indexing is connected.",
     handler: () => undefined
   }),
-  unavailable({
+  available({
     id: "open-source-control",
     title: "Open source control",
     keywords: ["git", "changes", "commit"],
-    prerequisite: "source-control integration",
-    unavailableMessage: "Source control is unavailable until Git integration is connected.",
-    handler: () => undefined
+    handler: withClosePalette(({ revealLeftPanel }) => {
+      revealLeftPanel("source-control");
+    })
   }),
-  unavailable({
+  available({
     id: "open-extensions",
     title: "Open extensions",
     keywords: ["plugins", "add-ons"],
-    prerequisite: "extension host",
-    unavailableMessage: "Extensions are unavailable until the extension host is connected.",
-    handler: () => undefined
+    handler: withClosePalette(({ revealLeftPanel }) => {
+      revealLeftPanel("extensions");
+    })
   })
 ];
 

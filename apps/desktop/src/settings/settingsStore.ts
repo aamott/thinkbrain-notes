@@ -417,11 +417,13 @@ export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettin
         return { success: true, diagnostics: [] };
       }
 
+      // Partition staged changes by scope once; reused for validation and writes.
+      const { app: appStaged, workspace: workspaceStaged } = partitionByScope(appSettingsRegistry, staged);
+
       // Build the full effective values map for validation: merge loaded values
       // with staged changes so validators see the complete picture.
-      const { app: appStagedApp, workspace: appStagedWorkspace } = partitionByScope(appSettingsRegistry, staged);
-      const appEffective = { ...state.appValues, ...appStagedApp };
-      const workspaceEffective = { ...(state.workspaceValues ?? {}), ...appStagedWorkspace };
+      const appEffective = { ...state.appValues, ...appStaged };
+      const workspaceEffective = { ...(state.workspaceValues ?? {}), ...workspaceStaged };
 
       // Validate all effective values (both scopes).
       const diagnostics = validateSettings(appSettingsRegistry, {
@@ -435,8 +437,6 @@ export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettin
       }
 
       try {
-        // Partition staged changes by scope; only write the scope that has changes.
-        const { app: appStaged, workspace: workspaceStaged } = partitionByScope(appSettingsRegistry, staged);
 
         // Compute the merged *values* up front — they depend only on staged
         // changes and loaded values, not on disk, so a failure of either write

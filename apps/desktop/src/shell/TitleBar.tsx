@@ -157,7 +157,6 @@ export function TitleBar({
             </div>
           );
         })}
-        <button className="bg-transparent border-0 cursor-pointer text-xl h-full min-w-[2.25rem]" aria-label="Open a new tab">+</button>
       </nav>
 
       {/* Right action group — panel toggles. */}

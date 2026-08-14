@@ -31,12 +31,3 @@ export const scheduleAutosave = createDebounced<() => Promise<unknown>>(
   },
   AUTOSAVE_DELAY_MS
 );
-
-/**
- * Drops any pending autosave.
- *
- * Intended for tests that need to reset the module-level timer between cases.
- */
-export function clearAutosaveTimer(): void {
-  scheduleAutosave.cancel();
-}
