@@ -5,53 +5,15 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
-  type RefObject,
 } from "react";
 
 import { cn } from "../lib/utils";
+import { handleMenuKeyDown } from "./menuKeyboard";
 
 /** Position of a context menu, in viewport coordinates. */
 export interface ContextMenuState {
   readonly x: number;
   readonly y: number;
-}
-
-/**
- * Shared keyboard navigation for context menus: ArrowUp/Down with wrap,
- * Home/End jumps, and Escape closes. Internal to this module.
- */
-function handleMenuKeyDown(
-  event: ReactKeyboardEvent,
-  menuRef: RefObject<HTMLDivElement | null>,
-  onClose: () => void
-): void {
-  const items = Array.from(
-    menuRef.current?.querySelectorAll<HTMLButtonElement>("button[role='menuitem']") ?? []
-  );
-  if (!items.length) return;
-  const index = items.indexOf(document.activeElement as HTMLButtonElement);
-  switch (event.key) {
-    case "ArrowDown":
-      event.preventDefault();
-      items[(index + 1) % items.length]?.focus();
-      break;
-    case "ArrowUp":
-      event.preventDefault();
-      items[(index - 1 + items.length) % items.length]?.focus();
-      break;
-    case "Home":
-      event.preventDefault();
-      items[0]?.focus();
-      break;
-    case "End":
-      event.preventDefault();
-      items[items.length - 1]?.focus();
-      break;
-    case "Escape":
-      event.preventDefault();
-      onClose();
-      break;
-  }
 }
 
 /**

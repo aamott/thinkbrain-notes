@@ -3,8 +3,8 @@ import type { PanelAction } from "./panelRegistry";
 /**
  * Compact header bar for shell panels.
  *
- * Renders an uppercase tracked title, any actions the panel contributes, and a
- * trailing "more actions" affordance. Used at the top of left/right dock panels.
+ * Renders an uppercase tracked title and any actions the panel contributes.
+ * Used at the top of left/right dock panels.
  *
  * Actions are data, not markup: a panel supplies a label, a glyph, and a
  * callback. That keeps the header identical whether the panel behind it is a
@@ -49,12 +49,6 @@ export function PanelTitle({
             {action.icon}
           </button>
         ))}
-        <button
-          className="bg-transparent border-0 cursor-pointer px-1 text-[0.68rem] text-muted-foreground hover:text-foreground"
-          aria-label={`More ${title} actions`}
-        >
-          •••
-        </button>
       </div>
     </div>
   );
