@@ -85,7 +85,7 @@ fn resolve_extension_file(directory: &str, relative_path: &str) -> Result<PathBu
         NativeError::with_details(
             "extensions.directory_unavailable",
             "Extension directory could not be read.",
-            error.to_string(),
+            error,
         )
     })?;
 
@@ -101,7 +101,7 @@ fn resolve_extension_file(directory: &str, relative_path: &str) -> Result<PathBu
         NativeError::with_details(
             "extensions.file_unavailable",
             format!("Extension file \"{relative_path}\" could not be read."),
-            error.to_string(),
+            error,
         )
     })?;
 
@@ -141,7 +141,7 @@ pub fn read_extension_file(directory: String, relative_path: String) -> Result<S
         NativeError::with_details(
             "extensions.file_unavailable",
             "Extension file could not be read.",
-            error.to_string(),
+            error,
         )
     })?;
 
@@ -151,7 +151,7 @@ pub fn read_extension_file(directory: String, relative_path: String) -> Result<S
         NativeError::with_details(
             "extensions.file_unavailable",
             "Extension file could not be read.",
-            error.to_string(),
+            error,
         )
     })?;
 
@@ -169,7 +169,7 @@ pub fn read_extension_file(directory: String, relative_path: String) -> Result<S
         NativeError::with_details(
             "extensions.file_unavailable",
             "Extension file is not valid UTF-8 text or could not be read.",
-            error.to_string(),
+            error,
         )
     })?;
 

@@ -32,3 +32,4 @@
     — only matches in panelRegistry.tsx (definitions) and *.test.tsx files.
     `grep -rn "isBuiltInLeftPanel\|isBuiltInRightPanel" . --glob='!*.test.*'`
     — no matches outside the definition file.
+- resolution: Deferred — high cost, low reward. Finding is stale: 4 of 5 named exports (renderDesktopPanel, getLeftPanelContributions, getRightPanelContributions, isBuiltInRightPanel) no longer exist in panelRegistry.tsx. The remaining export, isBuiltInLeftPanel, has a production caller in DesktopShell.tsx (line 724) and is not dead. Nothing to remove.

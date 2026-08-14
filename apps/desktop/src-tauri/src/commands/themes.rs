@@ -83,7 +83,7 @@ pub fn themes_dir(app: &tauri::AppHandle) -> Result<PathBuf, NativeError> {
         NativeError::with_details(
             "themes.app_data_unavailable",
             "Failed to resolve the application data directory.",
-            error.to_string(),
+            error,
         )
     })?;
     Ok(themes_dir_path(&app_data_dir))
@@ -104,7 +104,7 @@ pub fn ensure_themes_directory(themes_dir: &Path) -> Result<(), NativeError> {
         NativeError::with_details(
             "themes.create_dir_failed",
             "Failed to create the themes directory.",
-            error.to_string(),
+            error,
         )
     })
 }
@@ -189,7 +189,7 @@ pub fn list_theme_entries(themes_dir: &Path) -> Result<Vec<ThemeEntry>, NativeEr
         NativeError::with_details(
             "themes.read_dir_failed",
             "Failed to read the themes directory.",
-            error.to_string(),
+            error,
         )
     })?;
 
@@ -236,7 +236,7 @@ pub fn read_theme_file(path: String) -> Result<Option<String>, NativeError> {
             NativeError::with_details(
                 "themes.read_failed",
                 "Failed to read the theme file.",
-                error.to_string(),
+                error,
             )
         })
 }

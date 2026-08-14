@@ -1,6 +1,6 @@
 
 use crate::error::NativeError;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
@@ -25,15 +25,15 @@ const MAX_PANEL_WIDTH: f64 = 480.0;
 const DEFAULT_LEFT_PANEL_WIDTH: f64 = 288.0;
 const DEFAULT_RIGHT_PANEL_WIDTH: f64 = 320.0;
 
-#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct PersistedTab {
     pub id: String,
     pub title: String,
     pub kind: String,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub root_path: Option<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub relative_path: Option<String>,
 }
 
@@ -76,8 +76,11 @@ pub struct DesktopStateUpdate {
 }
 
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DesktopState {
+    #[serde(skip_deserializing)]
+    version: u64,
     last_workspace_path: Option<String>,
     recent_workspace_paths: Vec<String>,
     explorer_open: bool,
@@ -242,7 +245,7 @@ pub fn resolve_app_settings_path(app: &tauri::AppHandle) -> Result<PathBuf, Nati
         NativeError::with_details(
             "settings.app_data_unavailable",
             "Failed to resolve the application data directory.",
-            error.to_string(),
+            error,
         )
     })?;
 
@@ -259,7 +262,7 @@ pub fn resolve_workspace_settings_path(
         NativeError::with_details(
             "settings.app_data_unavailable",
             "Failed to resolve the application data directory.",
-            error.to_string(),
+            error,
         )
     })?;
 
@@ -339,7 +342,7 @@ pub fn serialize_app_settings_record(
             NativeError::with_details(
                 "settings.serialize_failed",
                 "Failed to serialize the application settings.",
-                error.to_string(),
+                error,
             )
         })
 }
@@ -401,6 +404,7 @@ pub fn apply_desktop_state_update(current: DesktopState, update: DesktopStateUpd
     );
 
     DesktopState {
+        version: DESKTOP_STATE_VERSION,
         last_workspace_path,
         recent_workspace_paths,
         explorer_open: update.explorer_open.unwrap_or(current.explorer_open),
@@ -475,6 +479,7 @@ pub fn create_desktop_state(state: &Map<String, Value>) -> DesktopState {
         .unwrap_or_else(|| promote_recent_workspace(Vec::new(), last_workspace_path.as_deref()));
 
     DesktopState {
+        version: DESKTOP_STATE_VERSION,
         last_workspace_path,
         recent_workspace_paths,
         explorer_open: state.get("explorerOpen").and_then(Value::as_bool).unwrap_or(true),
@@ -540,6 +545,7 @@ fn read_workspace_views(value: Option<&Value>) -> WorkspaceViews {
 
 pub fn default_desktop_state() -> DesktopState {
     DesktopState {
+        version: DESKTOP_STATE_VERSION,
         last_workspace_path: None,
         recent_workspace_paths: Vec::new(),
         explorer_open: true,
@@ -626,92 +632,8 @@ pub fn promote_recent_workspace(paths: Vec<String>, path: Option<&str>) -> Vec<S
 
 
 pub fn serialize_desktop_state(state: DesktopState) -> Value {
-    let mut serialized = Map::new();
-    serialized.insert("version".to_string(), Value::from(DESKTOP_STATE_VERSION));
-    serialized.insert(
-        "lastWorkspacePath".to_string(),
-        state
-            .last_workspace_path
-            .map(Value::String)
-            .unwrap_or(Value::Null),
-    );
-    serialized.insert(
-        "recentWorkspacePaths".to_string(),
-        Value::Array(
-            state
-                .recent_workspace_paths
-                .into_iter()
-                .map(Value::String)
-                .collect(),
-        ),
-    );
-    serialized.insert(
-        "workspaceViews".to_string(),
-        Value::Object(
-            state
-                .workspace_views
-                .into_iter()
-                .map(|(workspace_path, views)| {
-                    (
-                        workspace_path,
-                        Value::Object(
-                            views
-                                .into_iter()
-                                .map(|(view_id, collapsed)| {
-                                    (
-                                        view_id,
-                                        Value::Array(
-                                            collapsed.into_iter().map(Value::String).collect(),
-                                        ),
-                                    )
-                                })
-                                .collect(),
-                        ),
-                    )
-                })
-                .collect(),
-        ),
-    );
-    serialized.insert("explorerOpen".to_string(), Value::Bool(state.explorer_open));
-    serialized.insert("leftPanelWidth".to_string(), Value::from(state.left_panel_width));
-    serialized.insert("rightPanelWidth".to_string(), Value::from(state.right_panel_width));
-    serialized.insert("bottomPanelOpen".to_string(), Value::Bool(state.bottom_panel_open));
-    serialized.insert(
-        "developmentExtensionDirectories".to_string(),
-        Value::Array(
-            state
-                .development_extension_directories
-                .into_iter()
-                .map(Value::String)
-                .collect(),
-        ),
-    );
-    serialized.insert(
-        "openTabs".to_string(),
-        Value::Array(state.open_tabs.into_iter().map(serialize_persisted_tab).collect()),
-    );
-    serialized.insert(
-        "activeTabId".to_string(),
-        state
-            .active_tab_id
-            .map(Value::String)
-            .unwrap_or(Value::Null),
-    );
-    Value::Object(serialized)
-}
-
-fn serialize_persisted_tab(tab: PersistedTab) -> Value {
-    let mut serialized = Map::new();
-    serialized.insert("id".to_string(), Value::String(tab.id));
-    serialized.insert("title".to_string(), Value::String(tab.title));
-    serialized.insert("kind".to_string(), Value::String(tab.kind));
-    if let Some(root_path) = tab.root_path {
-        serialized.insert("rootPath".to_string(), Value::String(root_path));
-    }
-    if let Some(relative_path) = tab.relative_path {
-        serialized.insert("relativePath".to_string(), Value::String(relative_path));
-    }
-    Value::Object(serialized)
+    serde_json::to_value(&state)
+        .expect("desktop state fields are serializable (primitives, strings, BTreeMap, Vec)")
 }
 
 fn read_persisted_tabs(value: Option<&Value>) -> Vec<PersistedTab> {
@@ -734,7 +656,7 @@ pub fn read_settings_file(path: &Path) -> Result<Option<String>, NativeError> {
         Err(error) => Err(NativeError::with_details(
             "settings.read_failed",
             "Failed to read the settings file.",
-            error.to_string(),
+            error,
         )),
     }
 }
@@ -752,7 +674,7 @@ pub fn write_settings_file(path: &Path, contents: &str) -> Result<(), NativeErro
         NativeError::with_details(
             "settings.create_dir_failed",
             "Failed to create the settings directory.",
-            error.to_string(),
+            error,
         )
     })?;
 
@@ -772,7 +694,7 @@ pub fn write_settings_file(path: &Path, contents: &str) -> Result<(), NativeErro
         NativeError::with_details(
             "settings.write_failed",
             "Failed to write to temporary settings file.",
-            error.to_string(),
+            error,
         )
     })?;
     
@@ -781,7 +703,7 @@ pub fn write_settings_file(path: &Path, contents: &str) -> Result<(), NativeErro
         NativeError::with_details(
             "settings.write_failed",
             "Failed to rename temporary settings file.",
-            error.to_string(),
+            error,
         )
     })?;
 

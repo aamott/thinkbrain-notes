@@ -120,7 +120,7 @@ pub fn git_run_error(action: &str, error: GitRunError) -> NativeError {
         GitRunError::NotFound(error) => NativeError::with_details(
             "git.not_installed",
             "Git is not installed or is unavailable on PATH.",
-            error.to_string(),
+            error,
         ),
         GitRunError::TimedOut => NativeError::with_details(
             "git.command_timeout",

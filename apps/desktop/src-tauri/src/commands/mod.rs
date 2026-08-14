@@ -190,6 +190,6 @@ mod tests {
         sorted.sort();
         let unique: std::collections::BTreeSet<&&str> = sorted.iter().collect();
         assert_eq!(unique.len(), APP_COMMAND_PATHS.len(), "APP_COMMAND_PATHS has duplicates");
-        assert_eq!(APP_COMMAND_PATHS.len(), 38, "expected 38 registered commands");
+        assert_eq!(APP_COMMAND_PATHS.len(), 37, "expected 37 registered commands");
     }
 }

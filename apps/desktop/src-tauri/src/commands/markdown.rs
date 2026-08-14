@@ -4,11 +4,10 @@ use serde::Serialize;
 use std::path::{Path, PathBuf};
 
 use std::fs;
-use std::time::UNIX_EPOCH;
 
 use crate::commands::workspace::{
-    normalize_relative_path, resolve_workspace_entry_path, resolve_workspace_root,
-    WORKSPACE_ENTRY_MUTATION_LOCK,
+    entry_metadata, normalize_relative_path, resolve_workspace_entry_path,
+    resolve_workspace_root, WORKSPACE_ENTRY_MUTATION_LOCK,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -47,7 +46,7 @@ pub fn read_markdown_file(
         NativeError::with_details(
             "workspace.read_failed",
             "Failed to read the Markdown file.",
-            error.to_string(),
+            error,
         )
     })?;
 
@@ -121,7 +120,7 @@ pub fn write_markdown_document(
         NativeError::with_details(
             "workspace.write_failed",
             "Failed to write the Markdown file.",
-            error.to_string(),
+            error,
         )
     })?;
 
@@ -168,7 +167,7 @@ pub fn create_markdown_file(
             NativeError::with_details(
                 "workspace.create_parent_failed",
                 "Failed to create the note folder.",
-                error.to_string(),
+                error,
             )
         })?;
     }
@@ -178,7 +177,7 @@ pub fn create_markdown_file(
         NativeError::with_details(
             "workspace.create_failed",
             "Failed to create the Markdown file.",
-            error.to_string(),
+            error,
         )
     })?;
 
@@ -216,7 +215,7 @@ pub fn rename_markdown_file(
             NativeError::with_details(
                 "workspace.create_parent_failed",
                 "Failed to create the destination folder.",
-                error.to_string(),
+                error,
             )
         })?;
     }
@@ -227,7 +226,7 @@ pub fn rename_markdown_file(
         NativeError::with_details(
             "workspace.rename_failed",
             "Failed to rename the Markdown file.",
-            error.to_string(),
+            error,
         )
     })?;
 
@@ -257,7 +256,7 @@ pub fn delete_markdown_file(app: tauri::AppHandle, root_path: String, relative_p
         NativeError::with_details(
             "workspace.delete_failed",
             "Failed to delete the Markdown file.",
-            error.to_string(),
+            error,
         )
     })?;
 
@@ -313,7 +312,7 @@ pub fn collect_markdown_file_entries(
         NativeError::with_details(
             "workspace.list_failed",
             "Failed to list Markdown files in the workspace.",
-            error.to_string(),
+            error,
         )
     })?;
 
@@ -322,7 +321,7 @@ pub fn collect_markdown_file_entries(
             NativeError::with_details(
                 "workspace.list_failed",
                 "Failed to inspect a workspace file.",
-                error.to_string(),
+                error,
             )
         })?;
         let path = entry.path();
@@ -336,7 +335,7 @@ pub fn collect_markdown_file_entries(
             NativeError::with_details(
                 "workspace.list_failed",
                 "Failed to inspect a workspace file type.",
-                error.to_string(),
+                error,
             )
         })?;
 
@@ -352,42 +351,14 @@ pub fn collect_markdown_file_entries(
 
 
 pub fn markdown_file_entry(root: &Path, file_path: &Path) -> Result<MarkdownFileEntry, NativeError> {
-    let relative_path = file_path
-        .strip_prefix(root)
-        .map_err(|error| {
-            NativeError::with_details(
-                "workspace.invalid_path",
-                "File path is outside the workspace.",
-                error.to_string(),
-            )
-        })?
-        .to_string_lossy()
-        .replace('\\', "/");
-    let metadata = fs::metadata(file_path).map_err(|error| {
-        NativeError::with_details(
-            "workspace.metadata_failed",
-            "Failed to read Markdown file metadata.",
-            error.to_string(),
-        )
-    })?;
-    let updated_at = metadata
-        .modified()
-        .ok()
-        .and_then(|modified| modified.duration_since(UNIX_EPOCH).ok())
-        .map(|duration| duration.as_millis() as u64);
+    let metadata = entry_metadata(root, file_path)?;
 
     Ok(MarkdownFileEntry {
-        file_name: file_path
-            .file_name()
-            .map(|file_name| file_name.to_string_lossy().to_string())
-            .unwrap_or_else(|| relative_path.clone()),
-        parent_path: Path::new(&relative_path)
-            .parent()
-            .map(|parent| parent.to_string_lossy().replace('\\', "/"))
-            .unwrap_or_default(),
-        relative_path,
-        byte_size: metadata.len(),
-        updated_at,
+        file_name: metadata.file_name,
+        parent_path: metadata.parent_path,
+        relative_path: metadata.relative_path,
+        byte_size: metadata.byte_size,
+        updated_at: metadata.updated_at,
     })
 }
 

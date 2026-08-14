@@ -585,7 +585,7 @@ fn spawn_debouncer(
         NativeError::with_details(
             "watcher.start_failed",
             "Could not watch the workspace folder for outside changes.",
-            error.to_string(),
+            error,
         )
     })?;
 
@@ -595,7 +595,7 @@ fn spawn_debouncer(
             NativeError::with_details(
                 "watcher.start_failed",
                 "Could not watch the workspace folder for outside changes.",
-                error.to_string(),
+                error,
             )
         })?;
 

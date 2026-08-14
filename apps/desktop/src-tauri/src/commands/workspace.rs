@@ -168,7 +168,7 @@ pub fn create_workspace_file(
             NativeError::with_details(
                 "workspace.create_parent_failed",
                 "Failed to create the destination folder.",
-                error.to_string(),
+                error,
             )
         })?;
     }
@@ -188,7 +188,7 @@ pub fn create_workspace_file(
                 NativeError::with_details(
                     "workspace.create_failed",
                     "Failed to create the file.",
-                    error.to_string(),
+                    error,
                 )
             }
         })?;
@@ -197,7 +197,7 @@ pub fn create_workspace_file(
             NativeError::with_details(
                 "workspace.create_failed",
                 "Failed to create the file.",
-                error.to_string(),
+                error,
             )
         })?;
 
@@ -229,7 +229,7 @@ pub fn create_workspace_folder(
         NativeError::with_details(
             "workspace.create_failed",
             "Failed to create the folder.",
-            error.to_string(),
+            error,
         )
     })?;
 
@@ -279,7 +279,7 @@ pub fn rename_workspace_entry(
             NativeError::with_details(
                 "workspace.create_parent_failed",
                 "Failed to create the destination folder.",
-                error.to_string(),
+                error,
             )
         })?;
     }
@@ -291,7 +291,7 @@ pub fn rename_workspace_entry(
         NativeError::with_details(
             "workspace.rename_failed",
             "Failed to rename the workspace entry.",
-            error.to_string(),
+            error,
         )
     })?;
 
@@ -331,7 +331,7 @@ pub fn delete_workspace_entry(root_path: String, relative_path: String) -> Resul
         NativeError::with_details(
             "workspace.delete_failed",
             "Failed to delete the workspace entry.",
-            error.to_string(),
+            error,
         )
     })
 }
@@ -350,7 +350,7 @@ pub fn open_workspace_window(app: tauri::AppHandle, root_path: String) -> Result
                 NativeError::with_details(
                     "workspace.window_failed",
                     "Failed to create a workspace window.",
-                    error.to_string(),
+                    error,
                 )
             })?;
     let app_for_cleanup = app.clone();
@@ -396,7 +396,7 @@ pub fn resolve_workspace_root(root_path: &str) -> Result<PathBuf, NativeError> {
         NativeError::with_details(
             "workspace.open_failed",
             "Failed to open the workspace folder.",
-            error.to_string(),
+            error,
         )
     })?;
 
@@ -433,7 +433,7 @@ pub fn resolve_workspace_entry_path(root: &Path, relative_path: &str) -> Result<
             NativeError::with_details(
                 "workspace.invalid_path",
                 "Failed to resolve the workspace entry.",
-                error.to_string(),
+                error,
             )
         })?;
         if !canonical.starts_with(root) {
@@ -462,7 +462,7 @@ pub fn resolve_workspace_entry_path(root: &Path, relative_path: &str) -> Result<
         NativeError::with_details(
             "workspace.invalid_path",
             "Failed to resolve the workspace entry.",
-            error.to_string(),
+            error,
         )
     })?;
     if !canonical_ancestor.starts_with(root) {
@@ -561,7 +561,7 @@ pub fn collect_workspace_entries(
         NativeError::with_details(
             "workspace.list_failed",
             "Failed to list the workspace contents.",
-            error.to_string(),
+            error,
         )
     })?;
 
@@ -574,7 +574,7 @@ pub fn collect_workspace_entries(
             NativeError::with_details(
                 "workspace.list_failed",
                 "Failed to inspect a workspace entry.",
-                error.to_string(),
+                error,
             )
         })?;
         let name = entry.file_name().to_string_lossy().into_owned();
@@ -588,7 +588,7 @@ pub fn collect_workspace_entries(
             NativeError::with_details(
                 "workspace.list_failed",
                 "Failed to inspect a workspace entry type.",
-                error.to_string(),
+                error,
             )
         })?;
 
@@ -610,13 +610,39 @@ pub fn collect_workspace_entries(
 
 /// Builds a `WorkspaceEntry` for a folder or file from filesystem metadata.
 pub fn workspace_entry(root: &Path, path: &Path, is_dir: bool) -> Result<WorkspaceEntry, NativeError> {
+    let metadata = entry_metadata(root, path)?;
+
+    Ok(WorkspaceEntry {
+        name: metadata.file_name,
+        parent_path: metadata.parent_path,
+        kind: if is_dir { "directory" } else { "file" }.to_string(),
+        is_markdown: !is_dir && is_markdown_path(path),
+        byte_size: if is_dir { 0 } else { metadata.byte_size },
+        updated_at: metadata.updated_at,
+        relative_path: metadata.relative_path,
+    })
+}
+
+
+/// Shared filesystem-derived fields for a workspace entry.
+pub struct EntryMetadata {
+    pub relative_path: String,
+    pub file_name: String,
+    pub parent_path: String,
+    pub byte_size: u64,
+    pub updated_at: Option<u64>,
+}
+
+/// Reads the shared metadata block (relative path, file name, parent path, byte size, mtime)
+/// used by both `workspace_entry` and `markdown_file_entry`.
+pub fn entry_metadata(root: &Path, path: &Path) -> Result<EntryMetadata, NativeError> {
     let relative_path = path
         .strip_prefix(root)
         .map_err(|error| {
             NativeError::with_details(
                 "workspace.invalid_path",
                 "Entry path is outside the workspace.",
-                error.to_string(),
+                error,
             )
         })?
         .to_string_lossy()
@@ -625,7 +651,7 @@ pub fn workspace_entry(root: &Path, path: &Path, is_dir: bool) -> Result<Workspa
         NativeError::with_details(
             "workspace.metadata_failed",
             "Failed to read workspace entry metadata.",
-            error.to_string(),
+            error,
         )
     })?;
     let updated_at = metadata
@@ -633,21 +659,21 @@ pub fn workspace_entry(root: &Path, path: &Path, is_dir: bool) -> Result<Workspa
         .ok()
         .and_then(|modified| modified.duration_since(UNIX_EPOCH).ok())
         .map(|duration| duration.as_millis() as u64);
+    let file_name = path
+        .file_name()
+        .map(|file_name| file_name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| relative_path.clone());
+    let parent_path = Path::new(&relative_path)
+        .parent()
+        .map(|parent| parent.to_string_lossy().replace('\\', "/"))
+        .unwrap_or_default();
 
-    Ok(WorkspaceEntry {
-        name: path
-            .file_name()
-            .map(|file_name| file_name.to_string_lossy().into_owned())
-            .unwrap_or_else(|| relative_path.clone()),
-        parent_path: Path::new(&relative_path)
-            .parent()
-            .map(|parent| parent.to_string_lossy().replace('\\', "/"))
-            .unwrap_or_default(),
-        kind: if is_dir { "directory" } else { "file" }.to_string(),
-        is_markdown: !is_dir && is_markdown_path(path),
-        byte_size: if is_dir { 0 } else { metadata.len() },
-        updated_at,
+    Ok(EntryMetadata {
         relative_path,
+        file_name,
+        parent_path,
+        byte_size: metadata.len(),
+        updated_at,
     })
 }
 
