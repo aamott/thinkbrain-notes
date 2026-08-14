@@ -596,7 +596,6 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
               ))}
             </ul>
           )}
-          <p className="m-0 px-3 py-2 border-t border-border text-muted-foreground text-[0.625rem] leading-[1.35]">Right-click files, folders, or the background for actions.</p>
         </div>
       )}
 
