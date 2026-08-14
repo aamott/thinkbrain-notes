@@ -184,6 +184,85 @@ describe("first-line previews", () => {
     expect(host.textContent).toContain("Fri 7");
     expect(host.textContent).not.toContain("late");
   });
+
+  /** 500 entries across August 2026, one per hour, so every filename differs. */
+  const manyNames = Array.from({ length: 500 }, (_, index) => {
+    const day = String(1 + Math.floor(index / 24)).padStart(2, "0");
+    const hour = String(index % 24).padStart(2, "0");
+    return `2026-08-${day}-${hour}00.md`;
+  });
+
+  const manyEntries = service({
+    listEntries: async () => listing(manyNames)
+  });
+
+  it("reads a first line only for the rows on screen", async () => {
+    const readPreview = vi.fn<JournalService["readPreview"]>(async () => "A line.");
+    const host = await mount({
+      service: service({ listEntries: manyEntries.listEntries, readPreview })
+    });
+
+    await act(async () => {});
+
+    // A ten-year journal must never read ten years of files to draw one screen.
+    expect(readPreview.mock.calls.length).toBeGreaterThan(0);
+    expect(readPreview.mock.calls.length).toBeLessThan(50);
+    // And what it did read is what the window is showing: the list runs newest
+    // first, so the newest entry is read and the oldest is not touched.
+    expect(readPreview).toHaveBeenCalledWith("journal/2026-08-21-1900.md");
+    expect(readPreview).not.toHaveBeenCalledWith("journal/2026-08-01-0000.md");
+    // Only entries have a first line to read; a year or month header has a group
+    // key where a path would be, and reading it would be a round trip to nothing.
+    const asked = readPreview.mock.calls.map(([path]) => path);
+    expect(asked.every((path) => path.startsWith("journal/"))).toBe(true);
+    expect(host.textContent).toContain("A line.");
+  });
+
+  it("reads the rows a scroll brought into view, and no row twice", async () => {
+    const readPreview = vi.fn<JournalService["readPreview"]>(async () => "A line.");
+    const host = await mount({
+      service: service({ listEntries: manyEntries.listEntries, readPreview })
+    });
+    await act(async () => {});
+    const before = readPreview.mock.calls.length;
+
+    const list = host.querySelector<HTMLElement>('[role="tree"]');
+    if (!list) throw new Error("The list did not render.");
+    list.scrollTop = 4000;
+    await act(async () => {
+      list.dispatchEvent(new Event("scroll", { bubbles: true }));
+    });
+    await act(async () => {});
+
+    const read = readPreview.mock.calls.map(([path]) => path);
+    expect(read.length).toBeGreaterThan(before);
+    expect(new Set(read).size).toBe(read.length);
+  });
+
+  /**
+   * An entry whose first line could not be read must not be asked for again on
+   * every scroll that passes over it — an unreadable file would otherwise cost a
+   * round trip a frame.
+   */
+  it("does not keep re-reading an entry that had no first line", async () => {
+    const readPreview = vi.fn<JournalService["readPreview"]>(async () => null);
+    const host = await mount({
+      service: service({ listEntries: manyEntries.listEntries, readPreview })
+    });
+    await act(async () => {});
+    const first = readPreview.mock.calls.length;
+
+    const list = host.querySelector<HTMLElement>('[role="tree"]');
+    list!.scrollTop = 40;
+    await act(async () => {
+      list!.dispatchEvent(new Event("scroll", { bubbles: true }));
+    });
+    await act(async () => {});
+
+    const read = readPreview.mock.calls.map(([path]) => path);
+    expect(new Set(read).size).toBe(read.length);
+    expect(readPreview.mock.calls.length).toBeLessThan(first * 2);
+  });
 });
 
 describe("the shared day filter (D25/D60)", () => {

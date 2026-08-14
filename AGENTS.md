@@ -77,7 +77,7 @@ Filename grammar: `[NN-]status-name[-urgency]-difficulty.md`
 ## Reviews
 Review findings are stored in `docs/reviews/` with filename format `YYYY-MM-DD/finding_name-urgency-difficulty.md`. Check validity before implementing and avoid duplication. Findings are deleted upon being addressed.
 
-## Optional: Repomix
+## Repomix
 
 For major or cross-cutting refactors, `npx repomix --compress` can help map dependencies before editing. Use `--include` for a focused area; treat `repomix-output.xml` as generated and regenerate it when useful.
 
@@ -89,7 +89,7 @@ For major or cross-cutting refactors, `npx repomix --compress` can help map depe
 ## Rules/suggestions
 - Never commit/push without explicit user approval. Recommend commit message and what to try out.
 - Never change AGENTS.md (this file) without explicit user direction and approval. (Exception: `## File Map`)
-- Write compact, maintainable and optimized code. Shorter code is easier to read faster.
+- Write compact, maintainable, optimized code. Shorter code is easier to read.
 - Avoid large files. Never over 800 lines. Break up earlier rather than later when it's already big. 
 
 ## Unique Terminology

@@ -67,7 +67,8 @@ export interface JournalViewInput {
   readonly matchingPaths: ReadonlySet<string> | null;
   /** Chips currently shown, for the empty-result copy. */
   readonly activeFilterCount: number;
-  readonly previews: ReadonlyMap<string, string>;
+  /** First lines already read; `null` records one that had none. */
+  readonly previews: ReadonlyMap<string, string | null>;
 }
 
 export interface JournalView {

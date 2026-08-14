@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -68,6 +69,14 @@ export interface JournalPanelProps {
   readonly onRenameEntry?: (relativePath: string, newRelativePath: string) => void;
   /** Deletes an entry. Omitted where the host cannot delete files. */
   readonly onDeleteEntry?: (relativePath: string) => void;
+  /**
+   * The entries currently drawn, so their first lines can be read (D9).
+   *
+   * The panel is the only thing that knows which rows are on screen, and it
+   * reports paths rather than indices so nothing upstream has to know how the
+   * list is windowed. Called only when the set changes, never per frame.
+   */
+  readonly onVisibleEntriesChange?: (relativePaths: readonly string[]) => void;
   readonly onToggleGroup: (key: string) => void;
   readonly onRemoveChip: (id: string) => void;
   readonly onClearFilters: () => void;
@@ -219,6 +228,7 @@ export function JournalPanel({
   onOpenEntry,
   onRenameEntry,
   onDeleteEntry,
+  onVisibleEntriesChange,
   onToggleGroup,
   onRemoveChip,
   onClearFilters,
@@ -306,6 +316,29 @@ export function JournalPanel({
     observer.observe(list);
     return () => observer.disconnect();
   }, [view.state]);
+
+  /**
+   * Tells whoever is listening which entries are drawn, when that changes.
+   *
+   * Keyed on the paths themselves rather than the window's indices: collapsing
+   * a group changes every index below it without changing which files are on
+   * screen, and re-reading those files would be work for nothing.
+   */
+  const visibleEntries = useMemo(
+    () =>
+      view.rows
+        .slice(drawn.startIndex, drawn.endIndex)
+        .filter((row) => row.kind === "entry" || row.kind === "undated-entry")
+        .map((row) => row.key),
+    [view.rows, drawn.startIndex, drawn.endIndex]
+  );
+  const visibleKey = visibleEntries.join("\n");
+  const reported = useRef<string | null>(null);
+  useEffect(() => {
+    if (visibleKey === reported.current) return;
+    reported.current = visibleKey;
+    onVisibleEntriesChange?.(visibleEntries);
+  }, [visibleKey, visibleEntries, onVisibleEntriesChange]);
 
   /**
    * Puts the keyboard on the row the roving tabindex just moved to, once it has

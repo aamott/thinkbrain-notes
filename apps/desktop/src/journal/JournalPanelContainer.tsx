@@ -14,8 +14,13 @@ import { JournalError, type JournalListing, type JournalService } from "./journa
  * file owns the parts that need one.
  */
 
-/** How many entries get a preview before virtualization exists to scope it. */
-const PREVIEW_LIMIT = 60;
+/**
+ * First lines read at once.
+ *
+ * Enough that a screenful arrives in a couple of rounds, few enough not to
+ * flood the IPC bridge and hold up whatever else wants it.
+ */
+const PREVIEW_CONCURRENCY = 8;
 
 /** A pause long enough to mean "done typing", short enough not to feel laggy. */
 const SEARCH_DEBOUNCE_MS = 200;
@@ -51,7 +56,20 @@ export function JournalPanelContainer({
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
   const [expandedUndated, setExpandedUndated] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
-  const [previews, setPreviews] = useState<ReadonlyMap<string, string>>(new Map());
+  const [visibleEntries, setVisibleEntries] = useState<readonly string[]>([]);
+  /**
+   * First lines already read, kept with the listing they were read from.
+   *
+   * `null` is a real value here: it records an entry whose first line came back
+   * empty or unreadable, so a row that has nothing to show is not asked for
+   * again every time a scroll passes over it. Pairing the map with its listing
+   * is what drops them when the folder is re-read, without an effect that has
+   * to notice and clear.
+   */
+  const [previewState, setPreviewState] = useState<{
+    readonly listing: JournalListing | null;
+    readonly previews: ReadonlyMap<string, string | null>;
+  }>({ listing: null, previews: new Map() });
   const [search, setSearch] = useState("");
   // The answer is kept with the question it answered, so a result for a query
   // the user has already moved on from is ignored rather than shown as a filter
@@ -94,40 +112,53 @@ export function JournalPanelContainer({
     };
   }, [read, reloadToken]);
 
-  // First lines are read after the list is on screen, newest first and capped:
-  // the rows must never wait on file reads, and a ten-year journal must never
-  // read ten years of files to draw one screen. Reads are batched in parallel
-  // (capped to avoid flooding the IPC bridge) so 60 previews don't take 60
-  // sequential round-trips.
+  // A re-read folder is a different set of files, so what was read from the last
+  // one is dropped. Adjusted during render rather than in an effect: an effect
+  // would draw one frame of the new listing wearing the old listing's previews.
+  if (previewState.listing !== listing) {
+    setPreviewState({ listing, previews: new Map() });
+  }
+  const previews = previewState.previews;
+
+  /**
+   * Reads the first line of the entries the panel says are on screen (D9).
+   *
+   * Scoped to the window rather than to the newest N: the rows must never wait
+   * on file reads, and a ten-year journal must never read ten years of files to
+   * draw one screen. Reads go out in parallel batches so a screenful does not
+   * cost a screenful of sequential round trips.
+   */
   useEffect(() => {
-    if (!listing) return;
+    const missing = visibleEntries.filter((path) => !previews.has(path));
+    if (missing.length === 0) return;
     let cancelled = false;
-    const wanted = listing.entries
-      .slice(-PREVIEW_LIMIT)
-      .reverse()
-      .map((entry) => entry.relativePath);
 
     void (async () => {
-      const CONCURRENCY = 8;
-      const loaded = new Map<string, string>();
-      for (let i = 0; i < wanted.length; i += CONCURRENCY) {
+      const loaded: (readonly [string, string | null])[] = [];
+      for (let start = 0; start < missing.length; start += PREVIEW_CONCURRENCY) {
         if (cancelled) return;
-        const batch = wanted.slice(i, i + CONCURRENCY);
-        const results = await Promise.all(
-          batch.map(async (path) => [path, await service.readPreview(path)] as const)
+        const batch = missing.slice(start, start + PREVIEW_CONCURRENCY);
+        loaded.push(
+          ...(await Promise.all(
+            batch.map(async (path) => [path, await service.readPreview(path)] as const)
+          ))
         );
-        if (cancelled) return;
-        for (const [path, preview] of results) {
-          if (preview !== null) loaded.set(path, preview);
-        }
       }
-      if (!cancelled) setPreviews(loaded);
+      if (cancelled) return;
+      setPreviewState((current) => {
+        // The folder was re-read while these were in flight; they describe files
+        // from a listing nothing is showing any more.
+        if (current.listing !== listing) return current;
+        const next = new Map(current.previews);
+        for (const [path, preview] of loaded) next.set(path, preview);
+        return { listing: current.listing, previews: next };
+      });
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [listing, service]);
+  }, [visibleEntries, previews, service, listing]);
 
   const query = search.trim();
   const searching = indexAvailable && searchEntries !== undefined && query !== "";
@@ -220,6 +251,7 @@ export function JournalPanelContainer({
       onOpenEntry={(relativePath) => run(() => service.openEntry(relativePath))}
       onRenameEntry={(relativePath, newRelativePath) => run(() => service.renameEntry(relativePath, newRelativePath))}
       onDeleteEntry={(relativePath) => run(() => service.deleteEntry(relativePath))}
+      onVisibleEntriesChange={setVisibleEntries}
       onToggleGroup={toggle}
       onRemoveChip={() => selectJournalDay(null)}
       onClearFilters={() => selectJournalDay(null)}
