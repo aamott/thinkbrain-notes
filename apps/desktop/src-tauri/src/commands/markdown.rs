@@ -8,6 +8,7 @@ use std::time::UNIX_EPOCH;
 
 use crate::commands::workspace::{
     normalize_relative_path, resolve_workspace_entry_path, resolve_workspace_root,
+    WORKSPACE_ENTRY_MUTATION_LOCK,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -63,15 +64,56 @@ pub fn write_markdown_file(
     root_path: String,
     relative_path: String,
     contents: String,
+    expected: Option<String>,
 ) -> Result<MarkdownFileEntry, NativeError> {
-    let root = resolve_workspace_root(&root_path)?;
-    let file_path = resolve_markdown_file_path(&root, &relative_path)?;
+    write_markdown_document(&root_path, &relative_path, contents, expected.as_deref())
+}
+
+
+/// Writes a note, optionally refusing if it is not what the caller last read.
+///
+/// A note has writers the app cannot see — a sync client, an editor in another
+/// window, the user's own shell — and until this precondition existed a save
+/// put the tab's text over whatever they had written, without anyone being
+/// told. `expected` carries the text the caller computed its version from, so
+/// that loss becomes a refusal the caller can put to the user.
+///
+/// `expected: None` means *unchecked*, which is the opposite of what `None`
+/// means for the settings documents (there, an absent file is itself something
+/// to expect). The difference is deliberate: a note always exists by the time
+/// this runs, and callers with no read behind them — extension writes, scripted
+/// edits — have nothing to expect. Leaving the check opt-in is what lets the
+/// shell send one on every save without paying for an extra read.
+///
+/// Split from the command so it can be tested: the `AppHandle` a `#[tauri::command]`
+/// takes is unavailable to a unit test, and a comparison tested on its own would
+/// not show that a refused write leaves the file alone.
+pub fn write_markdown_document(
+    root_path: &str,
+    relative_path: &str,
+    contents: String,
+    expected: Option<&str>,
+) -> Result<MarkdownFileEntry, NativeError> {
+    let root = resolve_workspace_root(root_path)?;
+    let file_path = resolve_markdown_file_path(&root, relative_path)?;
+
+    // Held across the read, the check and the write. A check that another
+    // in-process writer could land inside would only narrow the window it was
+    // added to close; this is the lock the entry mutations already take, so a
+    // rename or delete cannot slip in either.
+    let _mutation_lock = WORKSPACE_ENTRY_MUTATION_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
 
     if !file_path.is_file() {
         return Err(NativeError::new(
             "workspace.file_missing",
             "Cannot write a Markdown file that does not exist.",
         ));
+    }
+
+    if let Some(expected) = expected {
+        check_note_write_precondition(&file_path, expected)?;
     }
 
     record_self_write(&file_path);
@@ -84,6 +126,23 @@ pub fn write_markdown_file(
     })?;
 
     markdown_file_entry(&root, &file_path)
+}
+
+
+/// Refuses a write computed from text the file no longer holds.
+///
+/// An unreadable file counts as a mismatch rather than an error of its own: the
+/// caller's answer is the same either way — do not overwrite — and reporting it
+/// as a read failure would send them down a path that cannot help.
+fn check_note_write_precondition(file_path: &Path, expected: &str) -> Result<(), NativeError> {
+    if fs::read_to_string(file_path).ok().as_deref() == Some(expected) {
+        return Ok(());
+    }
+
+    Err(NativeError::new(
+        "workspace.note_conflict",
+        "The note changed on disk while it was being edited.",
+    ))
 }
 
 

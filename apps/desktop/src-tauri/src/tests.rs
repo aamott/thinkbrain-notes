@@ -1544,6 +1544,110 @@ fn app_settings_write_treats_an_absent_file_as_a_precondition_of_its_own() {
     assert!(check_app_settings_precondition(None, Some("{}")).is_err());
 }
 
+#[test]
+fn note_write_is_refused_when_the_file_changed_underneath_it() {
+    let root = temp_test_dir("note-write-conflict");
+    let note = root.join("draft.md");
+    fs::write(&note, "what the tab was opened with").expect("note is written");
+
+    // Something else — a sync client, another window — rewrote the file after
+    // this tab read it.
+    fs::write(&note, "what is there now").expect("outside write lands");
+
+    let refused = write_markdown_document(
+        &root.to_string_lossy(),
+        "draft.md",
+        "what the tab holds".to_string(),
+        Some("what the tab was opened with"),
+    )
+    .expect_err("a save computed from a stale read is refused");
+    assert_eq!(refused.code, "workspace.note_conflict");
+
+    // The refusal has to be total: a partial write would lose the newer text
+    // just as surely as the overwrite it replaced.
+    assert_eq!(
+        fs::read_to_string(&note).expect("note is still readable"),
+        "what is there now"
+    );
+
+    fs::remove_dir_all(root).expect("temp note-conflict directory is cleaned up");
+}
+
+#[test]
+fn note_write_goes_through_when_the_file_is_what_the_caller_last_read() {
+    let root = temp_test_dir("note-write-match");
+    let note = root.join("draft.md");
+    fs::write(&note, "on disk").expect("note is written");
+
+    write_markdown_document(
+        &root.to_string_lossy(),
+        "draft.md",
+        "edited".to_string(),
+        Some("on disk"),
+    )
+    .expect("a save against an untouched file goes through");
+    assert_eq!(
+        fs::read_to_string(&note).expect("note is readable"),
+        "edited"
+    );
+
+    fs::remove_dir_all(root).expect("temp note-match directory is cleaned up");
+}
+
+#[cfg(unix)]
+#[test]
+fn note_write_is_refused_when_the_file_cannot_be_read_to_check() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let root = temp_test_dir("note-write-unreadable");
+    let note = root.join("draft.md");
+    fs::write(&note, "on disk").expect("note is written");
+    fs::set_permissions(&note, fs::Permissions::from_mode(0o000)).expect("note is made unreadable");
+
+    // Whatever the precondition said, it cannot be shown to hold. Overwriting
+    // on the strength of a check that did not happen is the one outcome that
+    // loses data, so an unreadable file is treated as a mismatch rather than
+    // reported as a read failure — the caller's move is the same either way.
+    let refused = write_markdown_document(
+        &root.to_string_lossy(),
+        "draft.md",
+        "mine".to_string(),
+        Some("on disk"),
+    )
+    .expect_err("a write it cannot verify is refused");
+    assert_eq!(refused.code, "workspace.note_conflict");
+
+    fs::set_permissions(&note, fs::Permissions::from_mode(0o600)).expect("note is made readable");
+    assert_eq!(
+        fs::read_to_string(&note).expect("note is readable again"),
+        "on disk"
+    );
+
+    fs::remove_dir_all(root).expect("temp note-unreadable directory is cleaned up");
+}
+
+#[test]
+fn note_write_without_a_precondition_still_overwrites() {
+    // `None` means "unchecked" here, the opposite of what it means for the
+    // settings documents, where an absent file is itself a precondition. A note
+    // always exists by the time this command runs, and callers that never read
+    // it — extension writes, scripted edits — have no text to expect. Keeping
+    // the check opt-in is what lets the shell send one on every save without
+    // an extra read, and what leaves those callers working as before.
+    let root = temp_test_dir("note-write-unchecked");
+    let note = root.join("draft.md");
+    fs::write(&note, "on disk").expect("note is written");
+
+    write_markdown_document(&root.to_string_lossy(), "draft.md", "replaced".to_string(), None)
+        .expect("an unchecked save goes through");
+    assert_eq!(
+        fs::read_to_string(&note).expect("note is readable"),
+        "replaced"
+    );
+
+    fs::remove_dir_all(root).expect("temp note-unchecked directory is cleaned up");
+}
+
 // ---------------------------------------------------------------------------
 // File watcher
 // ---------------------------------------------------------------------------
