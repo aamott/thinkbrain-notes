@@ -58,7 +58,12 @@ export function workspaceDocumentReducer(
 
 export type WorkspaceDocumentResult =
   | { readonly ok: true; readonly document: NativeMarkdownFileContents }
-  | { readonly ok: false; readonly message: string };
+  /**
+   * The code travels with the message because not every failure means the same
+   * thing to the caller. A refused save is a question for the user; a failed one
+   * is an error to report. Nothing in the message distinguishes them.
+   */
+  | { readonly ok: false; readonly message: string; readonly code: string };
 
 /** Loads a Markdown document through an injected desktop boundary. */
 export async function loadWorkspaceDocument(
@@ -68,7 +73,7 @@ export async function loadWorkspaceDocument(
   try {
     return { ok: true, document: await api.readMarkdownDocument(request) };
   } catch (error) {
-    return { ok: false, message: workspaceDocumentErrorMessage(error) };
+    return workspaceDocumentFailure(error);
   }
 }
 
@@ -81,7 +86,7 @@ export async function saveWorkspaceDocument(
     const entry = await api.writeMarkdownDocument(request);
     return { ok: true, document: documentFromEntry(entry, request.contents) };
   } catch (error) {
-    return { ok: false, message: workspaceDocumentErrorMessage(error) };
+    return workspaceDocumentFailure(error);
   }
 }
 
@@ -94,13 +99,25 @@ export async function createWorkspaceDocument(
     const entry = await api.createMarkdownDocument(request);
     return { ok: true, document: documentFromEntry(entry, request.contents ?? "") };
   } catch (error) {
-    return { ok: false, message: workspaceDocumentErrorMessage(error) };
+    return workspaceDocumentFailure(error);
   }
 }
 
 export function workspaceDocumentErrorMessage(error: unknown): string {
   const normalized = normalizeNativeError(error);
   return normalized.message.trim() || "The Markdown document could not be updated.";
+}
+
+/**
+ * The one place a failure result is built, so no path can carry a message
+ * without the code that tells the caller what to do about it.
+ */
+function workspaceDocumentFailure(error: unknown): WorkspaceDocumentResult {
+  return {
+    ok: false,
+    message: workspaceDocumentErrorMessage(error),
+    code: normalizeNativeError(error).code
+  };
 }
 
 function documentFromEntry(

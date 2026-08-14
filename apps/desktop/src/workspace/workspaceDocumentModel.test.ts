@@ -54,7 +54,8 @@ describe("workspace document model", () => {
       saveWorkspaceDocument(api, {
         rootPath: "/notes",
         relativePath: "Notes/welcome.md",
-        contents: "Updated"
+        contents: "Updated",
+        expected: undefined
       })
     ).resolves.toEqual({ ok: true, document: { relative_path: "welcome.md", contents: "Updated" } });
     await expect(
@@ -62,12 +63,42 @@ describe("workspace document model", () => {
     ).resolves.toEqual({ ok: true, document: { relative_path: "created.md", contents: "" } });
   });
 
+  /**
+   * The code travels with the message because not every failure means the same
+   * thing to the caller: a refused save is a question for the user, while a
+   * failed one is an error to report. Only the code tells them apart.
+   */
   it("returns normalized failures without throwing into UI consumers", async () => {
     const api = createApi({ readMarkdownDocument: vi.fn().mockRejectedValue("Access denied") });
 
     await expect(
       loadWorkspaceDocument(api, { rootPath: "/notes", relativePath: "private.md" })
-    ).resolves.toEqual({ ok: false, message: "Access denied" });
+    ).resolves.toEqual({
+      ok: false,
+      message: "Access denied",
+      code: "desktop.native_bridge_error"
+    });
+  });
+
+  it("reports a refused save under its own code, not as a write failure", async () => {
+    const api = createApi({
+      writeMarkdownDocument: vi
+        .fn()
+        .mockRejectedValue({ code: "workspace.note_conflict", message: "The note changed." })
+    });
+
+    await expect(
+      saveWorkspaceDocument(api, {
+        rootPath: "/notes",
+        relativePath: "Notes/welcome.md",
+        contents: "Mine",
+        expected: "stale"
+      })
+    ).resolves.toEqual({
+      ok: false,
+      message: "The note changed.",
+      code: "workspace.note_conflict"
+    });
   });
 
   it("keeps a loaded document while reporting and dismissing a save failure", () => {
@@ -91,13 +122,15 @@ describe("createWorkspaceDocumentApi", () => {
     await api.writeMarkdownDocument({
       rootPath: "/notes",
       relativePath: "Notes/welcome.md",
-      contents: "Updated"
+      contents: "Updated",
+      expected: "On disk"
     });
 
     expect(commandInvoker).toHaveBeenCalledWith("write_markdown_file", {
       rootPath: "/notes",
       relativePath: "Notes/welcome.md",
-      contents: "Updated"
+      contents: "Updated",
+      expected: "On disk"
     });
   });
 });

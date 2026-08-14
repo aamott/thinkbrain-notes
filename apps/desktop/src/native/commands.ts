@@ -56,6 +56,7 @@ export interface NativeCommandMap {
       readonly rootPath: string;
       readonly relativePath: string;
       readonly contents: string;
+      readonly expected?: string;
     };
     readonly result: NativeMarkdownFileEntry;
   };

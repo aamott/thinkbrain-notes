@@ -13,6 +13,18 @@ export interface WorkspaceMarkdownDocumentRef {
 
 export interface WorkspaceMarkdownDocumentWrite extends WorkspaceMarkdownDocumentRef {
   readonly contents: string;
+  /**
+   * The text on disk this save was computed from. If the file no longer holds
+   * it the write is refused with `workspace.note_conflict` rather than putting
+   * these contents over someone else's.
+   *
+   * `undefined` means *unchecked*, for callers with no read behind them —
+   * extension writes, scripted edits. Required rather than optional so that is
+   * a choice someone made and can be read in the call, not something a caller
+   * can leave out by accident: forgetting it would quietly restore the blind
+   * overwrite this exists to stop, and nothing at runtime would say so.
+   */
+  readonly expected: string | undefined;
 }
 
 export interface WorkspaceMarkdownDocumentCreate extends WorkspaceMarkdownDocumentRef {
@@ -51,11 +63,12 @@ export function createWorkspaceDocumentApi(
     readMarkdownDocument({ rootPath, relativePath }) {
       return commandInvoker("read_markdown_file", { rootPath, relativePath });
     },
-    async writeMarkdownDocument({ rootPath, relativePath, contents }) {
+    async writeMarkdownDocument({ rootPath, relativePath, contents, expected }) {
       const written = await commandInvoker("write_markdown_file", {
         rootPath,
         relativePath,
-        contents
+        contents,
+        expected
       });
       appEvents.emit("note.saved", { rootPath, relativePath });
       return written;

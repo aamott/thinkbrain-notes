@@ -45,12 +45,17 @@ import { loadWorkspaceDocument, saveWorkspaceDocument } from "../workspace/works
 import { watchWorkspace } from "../workspace/workspaceWatcher";
 import { addWorkspaceFile, removeWorkspaceFile } from "./workspaceFileList";
 import {
+  anchorDiskContents,
+  applyRefusedSave,
   applyReloadedDocument,
+  applySavedDocument,
   clearConflict,
   markConflict,
   moveDocumentView,
+  NOTE_CONFLICT_ERROR_CODE,
   planDocumentSync,
   pruneConflicts,
+  saveablePrecondition,
   type OpenDocument
 } from "./externalDocumentSync";
 import { ActivityBar } from "./ActivityBar";
@@ -186,15 +191,20 @@ export function DesktopShell() {
     (tabId: string, rootPath: string, relativePath: string) => {
       setDocuments((current) => ({
         ...current,
-        [tabId]: { phase: "loading", contents: "", error: null }
+        [tabId]: { phase: "loading", contents: "", diskContents: null, error: null }
       }));
       void loadWorkspaceDocument(workspaceDocumentApi, { rootPath, relativePath }).then(
         (result) => {
           setDocuments((current) => ({
             ...current,
             [tabId]: result.ok
-              ? { phase: "ready", contents: result.document.contents, error: null }
-              : { phase: "error", contents: "", error: result.message }
+              ? {
+                  phase: "ready",
+                  contents: result.document.contents,
+                  diskContents: result.document.contents,
+                  error: null
+                }
+              : { phase: "error", contents: "", diskContents: null, error: result.message }
           }));
         }
       );
@@ -729,13 +739,21 @@ export function DesktopShell() {
    * Marks the view as saving, writes through the workspace document adapter,
    * and only clears the dirty flag when no newer edits landed mid-flight.
    *
+   * The write carries the text the tab was last level with on disk, so a file
+   * something else has rewritten refuses this save instead of losing it. That
+   * covers the case the conflict banner cannot: the banner only appears if the
+   * watcher saw the change and the tab was already dirty, whereas the
+   * precondition is checked on every save whatever the tab knew.
+   *
    * @returns `true` when the write succeeded.
    */
   const saveDocument = useCallback(async (tab: DesktopTab): Promise<boolean> => {
     const document = documentsRef.current[tab.id];
     const rootPath = tab.resource?.rootPath;
     const relativePath = tab.resource?.relativePath;
-    if (!document || !rootPath || !relativePath || document.phase === "loading") return false;
+    if (!document || !rootPath || !relativePath) return false;
+    const expected = saveablePrecondition(document);
+    if (expected === null) return false;
 
     setDocuments((current) => ({
       ...current,
@@ -744,9 +762,17 @@ export function DesktopShell() {
     const result = await saveWorkspaceDocument(workspaceDocumentApi, {
       rootPath,
       relativePath,
-      contents: document.contents
+      contents: document.contents,
+      expected
     });
     if (!result.ok) {
+      // A refusal is not a failure to report. The tab keeps the user's text and
+      // its dirty flag, and the banner puts the choice to them instead.
+      if (result.code === NOTE_CONFLICT_ERROR_CODE) {
+        setDocuments((current) => applyRefusedSave(current, tab.id));
+        setConflicts((current) => markConflict(current, tab.id));
+        return false;
+      }
       setDocuments((current) => ({
         ...current,
         [tab.id]: { ...(current[tab.id] ?? document), phase: "error", error: result.message }
@@ -755,14 +781,7 @@ export function DesktopShell() {
     }
 
     const hasNewerEdits = documentsRef.current[tab.id]?.contents !== document.contents;
-    setDocuments((current) => ({
-      ...current,
-      [tab.id]: {
-        phase: "ready",
-        contents: current[tab.id]?.contents ?? result.document.contents,
-        error: null
-      }
-    }));
+    setDocuments((current) => applySavedDocument(current, tab.id, document.contents));
     if (!hasNewerEdits) dispatchTabs({ type: "setDirty", tabId: tab.id, isDirty: false });
     // Saving settles any conflict this tab was holding: the user answered it by
     // writing their version, and the file is now theirs.
@@ -770,9 +789,28 @@ export function DesktopShell() {
     return true;
   }, []);
 
-  /** Dismisses a conflict, leaving the tab's unsaved edits exactly as they are. */
-  const keepMyVersion = useCallback((tabId: string) => {
-    setConflicts((current) => clearConflict(current, tabId));
+  /**
+   * Keeps the tab's unsaved edits and stops asking about the change on disk.
+   *
+   * Dismissing the banner is only half of it. The tab still computes its saves
+   * from the version the user just declined, so without re-reading the file the
+   * next save would be refused and this same notice would come back — with no
+   * way through it. Re-anchoring is not the same as forcing the write: a
+   * further change landing after this point is still caught.
+   *
+   * A failed read leaves the tab anchored where it was, so the save that
+   * follows is refused rather than blind. Being asked twice is the safe way to
+   * be wrong here.
+   */
+  const keepMyVersion = useCallback((tab: DesktopTab) => {
+    setConflicts((current) => clearConflict(current, tab.id));
+    const rootPath = tab.resource?.rootPath;
+    const relativePath = tab.resource?.relativePath;
+    if (!rootPath || !relativePath) return;
+    void loadWorkspaceDocument(workspaceDocumentApi, { rootPath, relativePath }).then((result) => {
+      if (!result.ok) return;
+      setDocuments((current) => anchorDiskContents(current, tab.id, result.document.contents));
+    });
   }, []);
 
   /**
@@ -954,7 +992,7 @@ export function DesktopShell() {
             {activeTab && conflicts.has(activeTab.id) && (
               <StaleDocumentBanner
                 fileName={activeTab.title}
-                onKeepMine={() => keepMyVersion(activeTab.id)}
+                onKeepMine={() => keepMyVersion(activeTab)}
                 onLoadFromDisk={() => loadDiskVersion(activeTab)}
               />
             )}

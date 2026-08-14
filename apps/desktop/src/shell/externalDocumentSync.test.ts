@@ -2,18 +2,24 @@ import { describe, expect, it } from "vitest";
 
 import type { NoteChange } from "../events/noteChangeSubscription";
 import {
+  anchorDiskContents,
+  applyRefusedSave,
   applyReloadedDocument,
+  applySavedDocument,
   clearConflict,
   markConflict,
   moveDocumentView,
   planDocumentSync,
   pruneConflicts,
+  saveablePrecondition,
   type OpenDocument
 } from "./externalDocumentSync";
 import type { DocumentViewState } from "./shellTypes";
 
-const ready = (contents: string): DocumentViewState => ({
+/** A tab with no unsaved edits: what it shows is what disk holds. */
+const ready = (contents: string, diskContents: string = contents): DocumentViewState => ({
   contents,
+  diskContents,
   phase: "ready",
   error: null
 });
@@ -124,7 +130,12 @@ describe("putting a re-read note back into its tab", () => {
 
     const after = applyReloadedDocument(before, "a", "old", "new");
 
-    expect(after.a).toEqual({ contents: "new", phase: "ready", error: null });
+    expect(after.a).toEqual({
+      contents: "new",
+      diskContents: "new",
+      phase: "ready",
+      error: null
+    });
   });
 
   /**
@@ -167,17 +178,202 @@ describe("putting a re-read note back into its tab", () => {
    * bytes. The tab's own read is the one that should finish.
    */
   it("leaves a tab that is still loading to its own read", () => {
-    const before = { a: { contents: "", phase: "loading", error: null } as DocumentViewState };
+    const before = {
+      a: { contents: "", diskContents: null, phase: "loading", error: null } as DocumentViewState
+    };
 
     expect(applyReloadedDocument(before, "a", "", "new")).toBe(before);
   });
 
   it("does not quietly replace a read error with text", () => {
     const before = {
-      a: { contents: "", phase: "error", error: "Permission denied" } as DocumentViewState
+      a: {
+        contents: "",
+        diskContents: null,
+        phase: "error",
+        error: "Permission denied"
+      } as DocumentViewState
     };
 
     expect(applyReloadedDocument(before, "a", "", "new")).toBe(before);
+  });
+
+  /**
+   * The tab is showing the right text but believes disk holds something else,
+   * so the next save would be refused over a difference nobody can see. Cannot
+   * arise through the shell — only a clean tab is ever re-read, and a clean
+   * tab's two texts agree — but the correction is a line, and being wrong here
+   * looks to the user like a save that refuses for no reason.
+   */
+  it("corrects what a tab believes disk holds even with nothing to redraw", () => {
+    const before = { a: ready("same", "stale") };
+
+    expect(applyReloadedDocument(before, "a", "same", "same").a?.diskContents).toBe("same");
+  });
+});
+
+describe("what a save from a tab is allowed to claim", () => {
+  it("claims the text the tab is level with on disk", () => {
+    expect(saveablePrecondition(ready("typed", "on disk"))).toBe("on disk");
+  });
+
+  /**
+   * An empty file is a real state, and saving over one is a real thing to do.
+   * Confusing it with "nothing was read" would refuse a legitimate save.
+   */
+  it("can claim an empty file", () => {
+    expect(saveablePrecondition(ready("typed", ""))).toBe("");
+  });
+
+  /**
+   * Nothing was ever read here, so the buffer is not a version of the file. The
+   * failed-load case is the one that bites: its buffer is empty, and saving it
+   * would put nothing over a file the shell could not even read.
+   */
+  it("refuses a tab whose read never landed", () => {
+    const failed: DocumentViewState = {
+      contents: "",
+      diskContents: null,
+      phase: "error",
+      error: "Permission denied"
+    };
+
+    expect(saveablePrecondition(failed)).toBeNull();
+  });
+
+  /**
+   * A read is already in flight and about to replace this buffer, so saving now
+   * races it: whichever lands second wins, and if the read started before the
+   * write it puts the pre-write text back over what was just saved. Refusing is
+   * separate from the check above — a view can be mid-read and still know what
+   * disk held before it started.
+   */
+  it("refuses a tab still being read", () => {
+    const loading: DocumentViewState = {
+      contents: "text",
+      diskContents: "on disk",
+      phase: "loading",
+      error: null
+    };
+
+    expect(saveablePrecondition(loading)).toBeNull();
+  });
+});
+
+describe("settling a tab after its save", () => {
+  /**
+   * Disk now holds what was *sent*, which is not always what the tab shows: a
+   * save is a round trip and the user can type through it. Recording the buffer
+   * instead would leave the tab claiming a version that was never written, and
+   * the next save would be refused over the user's own keystrokes.
+   */
+  it("records what was written, not what has been typed since", () => {
+    const before = { a: ready("typed during the save", "before the save") };
+
+    const after = applySavedDocument(before, "a", "what was sent");
+
+    expect(after.a).toEqual({
+      contents: "typed during the save",
+      diskContents: "what was sent",
+      phase: "ready",
+      error: null
+    });
+  });
+
+  it("clears an error the retry has now settled", () => {
+    const before = {
+      a: { contents: "text", diskContents: "old", phase: "error", error: "Disk full" } as DocumentViewState
+    };
+
+    expect(applySavedDocument(before, "a", "text").a).toEqual({
+      contents: "text",
+      diskContents: "text",
+      phase: "ready",
+      error: null
+    });
+  });
+
+  /** Closing a tab mid-save must not bring it back; the write still landed. */
+  it("does not resurrect a tab closed while its save was in flight", () => {
+    const before = { b: ready("other") };
+
+    expect(applySavedDocument(before, "a", "written")).toBe(before);
+  });
+});
+
+describe("settling a tab after a refused save", () => {
+  /**
+   * A refusal is not a failure. The text is still the user's only copy and they
+   * are being asked a question about it, so the tab goes back to something they
+   * can keep typing in rather than showing an error they cannot act on.
+   */
+  it("returns the tab to a state the user can go on typing in", () => {
+    const before = {
+      a: { contents: "mine", diskContents: "stale", phase: "saving", error: null } as DocumentViewState
+    };
+
+    expect(applyRefusedSave(before, "a").a).toEqual({
+      contents: "mine",
+      diskContents: "stale",
+      phase: "ready",
+      error: null
+    });
+  });
+
+  /**
+   * Anchoring it to what disk holds now would silently arm the next save to
+   * overwrite — the opposite of what refusing it was for. Only the user
+   * choosing "keep mine" may move this.
+   */
+  it("leaves the tab still claiming the version that was refused", () => {
+    const before = { a: ready("mine", "stale") };
+
+    expect(applyRefusedSave(before, "a").a?.diskContents).toBe("stale");
+  });
+
+  it("ignores a tab closed while its save was in flight", () => {
+    const before = { b: ready("other") };
+
+    expect(applyRefusedSave(before, "a")).toBe(before);
+  });
+});
+
+describe("re-anchoring a tab to what disk holds", () => {
+  /**
+   * "Keep mine" leaves the buffer exactly as the user typed it. What it must
+   * change is the text the *precondition* is computed from — otherwise the save
+   * that follows is refused against the version they just declined, and the
+   * notice they dismissed comes straight back.
+   */
+  it("changes what disk is believed to hold without touching the buffer", () => {
+    const before = { a: ready("mine", "theirs") };
+
+    const after = anchorDiskContents(before, "a", "theirs and then some");
+
+    expect(after.a).toEqual({
+      contents: "mine",
+      diskContents: "theirs and then some",
+      phase: "ready",
+      error: null
+    });
+  });
+
+  it("ignores a tab that has since been closed", () => {
+    const before = { b: ready("other") };
+
+    expect(anchorDiskContents(before, "a", "text")).toBe(before);
+  });
+
+  it("changes nothing when the belief is already right", () => {
+    const before = { a: ready("mine", "theirs") };
+
+    expect(anchorDiskContents(before, "a", "theirs")).toBe(before);
+  });
+
+  it("leaves the other tabs untouched", () => {
+    const before = { a: ready("mine", "theirs"), b: ready("elsewhere") };
+
+    expect(anchorDiskContents(before, "a", "newer").b).toBe(before.b);
   });
 });
 

@@ -63,6 +63,18 @@ export interface BottomPanelProvider {
 /** Lifecycle + contents of a single open Markdown document view. */
 export type DocumentViewState = {
   readonly contents: string;
+  /**
+   * The text this view was last level with on disk, sent as the precondition on
+   * the next save so a file something else has rewritten is refused rather than
+   * overwritten. It moves on every load, re-read and successful save — not only
+   * at open — since each of those is a moment the two are known to agree.
+   *
+   * `null` means the view never got that far: a load still running, or one that
+   * failed. A save then has nothing truthful to expect, so it does not happen at
+   * all — the alternative is writing an empty buffer over a file the shell was
+   * never able to read.
+   */
+  readonly diskContents: string | null;
   readonly phase: "loading" | "ready" | "saving" | "error";
   readonly error: string | null;
 };

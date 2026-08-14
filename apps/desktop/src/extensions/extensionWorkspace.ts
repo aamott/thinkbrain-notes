@@ -106,7 +106,11 @@ export function createExtensionWorkspace(
 
     writeNote: async (relativePath, contents) => {
       const rootPath = resolve(relativePath);
-      await documents.writeMarkdownDocument({ rootPath, relativePath, contents });
+      // Unchecked: an extension writing a note has not read it through anything
+      // that tracks what disk held, so it has nothing to expect. Giving these
+      // writes a precondition of their own is a separate question from the one
+      // the editor's saves answer.
+      await documents.writeMarkdownDocument({ rootPath, relativePath, contents, expected: undefined });
     },
 
     createNote: async (relativePath, contents) => {

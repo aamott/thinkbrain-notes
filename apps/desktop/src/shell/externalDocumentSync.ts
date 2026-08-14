@@ -15,6 +15,14 @@
 import type { NoteChange } from "../events/noteChangeSubscription";
 import type { DocumentViewState } from "./shellTypes";
 
+/**
+ * What the native side calls a save it refused because the file had changed.
+ *
+ * Distinct from a write that failed: nothing is wrong, and there is nothing to
+ * retry — there are two versions and the user has to say which one they want.
+ */
+export const NOTE_CONFLICT_ERROR_CODE = "workspace.note_conflict";
+
 /** An editor tab and the file it is showing. */
 export interface OpenDocument {
   readonly tabId: string;
@@ -133,9 +141,105 @@ export function applyReloadedDocument(
   // own already under way.
   if (current.phase !== "ready") return documents;
   if (current.contents !== expectedContents) return documents;
-  if (current.contents === contents) return documents;
+  // Nothing to redraw *and* nothing to correct. Both halves matter: a tab
+  // showing the right text while believing disk holds something else would have
+  // its next save refused over a difference nobody can see.
+  if (current.contents === contents && current.diskContents === contents) return documents;
 
-  return { ...documents, [tabId]: { contents, phase: "ready", error: null } };
+  return {
+    ...documents,
+    [tabId]: { contents, diskContents: contents, phase: "ready", error: null }
+  };
+}
+
+
+/**
+ * The text a save from this view must claim to be replacing, or `null` when the
+ * view must not be saved at all.
+ *
+ * Both `null` cases are views that were never read successfully, so their
+ * buffer is not a version of the file. The failed load is the one that bites:
+ * its buffer is empty, and writing it would put nothing over a file the shell
+ * could not even read.
+ */
+export function saveablePrecondition(document: DocumentViewState): string | null {
+  if (document.phase === "loading") return null;
+  return document.diskContents;
+}
+
+
+/**
+ * Settles a tab once its save has landed.
+ *
+ * `writtenContents` is what was sent, which is not always what the tab shows —
+ * a save is a round trip and the user can type through it. Recording the buffer
+ * instead would leave the tab claiming a version that was never written, and
+ * the next save would then be refused over the user's own keystrokes.
+ */
+export function applySavedDocument(
+  documents: Record<string, DocumentViewState>,
+  tabId: string,
+  writtenContents: string
+): Record<string, DocumentViewState> {
+  const current = documents[tabId];
+  // Closed while the save was in flight. The write still landed; there is just
+  // no longer a tab to settle, and re-adding one would only be pruned again.
+  if (!current) return documents;
+
+  return {
+    ...documents,
+    [tabId]: {
+      contents: current.contents,
+      diskContents: writtenContents,
+      phase: "ready",
+      error: null
+    }
+  };
+}
+
+
+/**
+ * Settles a tab whose save was refused because the file had changed.
+ *
+ * Not an error state: the text is still the user's only copy and they are being
+ * asked which version they want, so the tab goes back to something they can
+ * keep typing in. What it must *not* do is re-anchor to the newer file — that
+ * would quietly arm the next save to overwrite it, which is the opposite of
+ * what refusing this one was for.
+ */
+export function applyRefusedSave(
+  documents: Record<string, DocumentViewState>,
+  tabId: string
+): Record<string, DocumentViewState> {
+  const current = documents[tabId];
+  if (!current) return documents;
+
+  return { ...documents, [tabId]: { ...current, phase: "ready", error: null } };
+}
+
+
+/**
+ * Re-points a tab's precondition at what disk holds, leaving the buffer alone.
+ *
+ * This is what "keep mine" costs. Dismissing the notice is not enough on its
+ * own: the tab would still be computing its saves from the version the user
+ * just declined, so the next one would be refused and the notice they dismissed
+ * would come straight back, every time, with no way through.
+ *
+ * Re-anchoring is not the same as forcing the write. The next save is checked
+ * against this text, so a *further* change landing after the user chose is
+ * still caught — which is the whole point of having asked them.
+ */
+export function anchorDiskContents(
+  documents: Record<string, DocumentViewState>,
+  tabId: string,
+  diskContents: string
+): Record<string, DocumentViewState> {
+  const current = documents[tabId];
+  if (!current) return documents;
+  if (current.diskContents === diskContents) return documents;
+
+  return { ...documents, [tabId]: { ...current, diskContents } };
 }
 
 /**

@@ -11,7 +11,12 @@ describe("workspace document events", () => {
     const saved = vi.fn();
     const subscription = appEvents.on("note.saved", saved);
 
-    await api.writeMarkdownDocument({ rootPath: "/vault", relativePath: "a.md", contents: "x" });
+    await api.writeMarkdownDocument({
+      rootPath: "/vault",
+      relativePath: "a.md",
+      contents: "x",
+      expected: undefined
+    });
 
     expect(saved).toHaveBeenCalledWith({ rootPath: "/vault", relativePath: "a.md" });
     subscription.dispose();
@@ -28,6 +33,30 @@ describe("workspace document events", () => {
     subscription.dispose();
   });
 
+  /**
+   * The precondition is what stops a save putting the tab's text over a newer
+   * file, so it has to survive the trip through this boundary — dropped here it
+   * would fail open, silently, in exactly the case it exists for.
+   */
+  it("carries the text the caller expects to find on disk", async () => {
+    const invoke = vi.fn(async () => entry);
+    const api = createWorkspaceDocumentApi(invoke as never);
+
+    await api.writeMarkdownDocument({
+      rootPath: "/vault",
+      relativePath: "a.md",
+      contents: "x",
+      expected: "what was read"
+    });
+
+    expect(invoke).toHaveBeenCalledWith("write_markdown_file", {
+      rootPath: "/vault",
+      relativePath: "a.md",
+      contents: "x",
+      expected: "what was read"
+    });
+  });
+
   it("emits nothing when the native write fails", async () => {
     const api = createWorkspaceDocumentApi(
       vi.fn(async () => {
@@ -38,7 +67,12 @@ describe("workspace document events", () => {
     const subscription = appEvents.on("note.saved", saved);
 
     await expect(
-      api.writeMarkdownDocument({ rootPath: "/vault", relativePath: "a.md", contents: "x" })
+      api.writeMarkdownDocument({
+        rootPath: "/vault",
+        relativePath: "a.md",
+        contents: "x",
+        expected: undefined
+      })
     ).rejects.toThrow("disk full");
 
     expect(saved).not.toHaveBeenCalled();

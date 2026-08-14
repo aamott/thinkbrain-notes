@@ -7,6 +7,11 @@ import { AlertTriangle } from "lucide-react";
  * file, silently, because nothing is at stake. Here two versions exist and only
  * the user knows which one matters.
  *
+ * Raised from two places: the watcher noticing the change while the tab sat
+ * there, and a save the native side refused because the file was no longer what
+ * the tab claimed. The second is the backstop — it catches the change whether
+ * or not the watcher saw it.
+ *
  * Deliberately not a modal, unlike {@link DirtyCloseDialog}. The user did not
  * ask for this and may be mid-sentence, so it neither takes focus nor traps it;
  * `role="status"` with a polite live region lets a screen reader announce it
@@ -19,7 +24,11 @@ export function StaleDocumentBanner({
   onLoadFromDisk
 }: {
   readonly fileName: string;
-  /** Dismisses the notice. Deliberately does not write — see the story. */
+  /**
+   * Keeps the unsaved edits and stops asking. Deliberately does not write:
+   * replacing the newer file takes the same deliberate save it always took,
+   * rather than falling out of dismissing a message.
+   */
   readonly onKeepMine: () => void;
   /** Replaces the tab's text with what is on disk, discarding the edits. */
   readonly onLoadFromDisk: () => void;
