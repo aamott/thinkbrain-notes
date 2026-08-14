@@ -1,4 +1,4 @@
-import { parseNote, type IndexMetadataValue } from "@thinkbrain/core";
+import { type IndexMetadataValue, type ParsedNote } from "@thinkbrain/core";
 import {
   invokeNativeCommand,
   type NativeDocumentInput,
@@ -6,6 +6,7 @@ import {
   type NativeMetadataQueryResult,
   type NativeSearchHit
 } from "../native/commands";
+import { readAndParseNote } from "../native/noteParsing";
 
 /** Default number of documents indexed per native `index_documents` call. */
 const DEFAULT_BATCH_SIZE = 50;
@@ -114,18 +115,17 @@ export interface SearchService {
 }
 
 /**
- * Builds a {@link NativeDocumentInput} from raw markdown contents.
+ * Builds a {@link NativeDocumentInput} from a parsed note.
  *
- * Parses the note to extract frontmatter title, combined tags, and aliases,
- * then maps them onto the camelCase shape expected by the native `index_documents`
- * command (serde maps these to the Rust struct's snake_case fields).
+ * Maps the parsed note's frontmatter title, combined tags, and aliases onto
+ * the camelCase shape expected by the native `index_documents` command (serde
+ * maps these to the Rust struct's snake_case fields).
  */
 function buildDocumentInput(
   relativePath: string,
   fileName: string,
-  contents: string
+  parsed: ParsedNote
 ): NativeDocumentInput {
-  const parsed = parseNote(contents);
   return {
     path: relativePath,
     fileName,
@@ -203,20 +203,15 @@ export function createSearchService(): SearchService {
         // that runs every time a workspace opens.
         const read = await Promise.all(
           batch.map(async (file): Promise<NativeDocumentInput | null> => {
-            try {
-              const { contents } = await invokeNativeCommand("read_markdown_file", {
-                rootPath,
-                relativePath: file.relative_path
-              });
-              return buildDocumentInput(file.relative_path, file.file_name, contents);
-            } catch (error) {
-              // Skip unreadable/unparseable notes but keep indexing the rest.
-              console.warn(
-                `[searchService] Skipping "${file.relative_path}" during indexing:`,
-                error
-              );
-              return null;
-            }
+            const parsed = await readAndParseNote(
+              rootPath,
+              file.relative_path,
+              signal,
+              "searchService"
+            );
+            return parsed === null
+              ? null
+              : buildDocumentInput(file.relative_path, file.file_name, parsed);
           })
         );
         const documents = read.filter((document): document is NativeDocumentInput => document !== null);
@@ -236,12 +231,10 @@ export function createSearchService(): SearchService {
     },
 
     async indexDocument(rootPath, relativePath) {
-      const { contents } = await invokeNativeCommand("read_markdown_file", {
-        rootPath,
-        relativePath
-      });
+      const parsed = await readAndParseNote(rootPath, relativePath, undefined, "searchService");
+      if (parsed === null) return;
       const fileName = relativePath.split("/").pop() ?? relativePath;
-      const document = buildDocumentInput(relativePath, fileName, contents);
+      const document = buildDocumentInput(relativePath, fileName, parsed);
       // FTS5 upsert (DELETE+INSERT) makes this safe for re-indexing existing docs.
       await invokeNativeCommand("index_documents", { rootPath, documents: [document] });
     },

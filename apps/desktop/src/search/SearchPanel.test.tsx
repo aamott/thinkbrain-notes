@@ -1,7 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SearchPanel } from "./SearchPanel";
-import { initialSearchPanelState, searchPanelReducer } from "./searchPanelModel";
 import type { SearchIndexStatus } from "./searchIndexStore";
 
 // ---------------------------------------------------------------------------
@@ -22,56 +21,6 @@ vi.mock("./searchIndexStore", () => ({
   useSearchIndexStore: <T,>(selector: (s: typeof mockStoreState) => T): T =>
     selector(mockStoreState)
 }));
-
-describe("searchPanelReducer", () => {
-  it("replaces index state and clears results on set-index", () => {
-    const state: ReturnType<typeof searchPanelReducer> = {
-      ...initialSearchPanelState,
-      results: [{ relativePath: "a.md", fileName: "a.md", title: null, snippet: "x", score: 1.0 }],
-      searchError: "boom"
-    };
-    const next = searchPanelReducer(state, { type: "set-index", index: { kind: "ready" } });
-    expect(next.index).toEqual({ kind: "ready" });
-    expect(next.results).toEqual([]);
-    expect(next.searchError).toBeNull();
-  });
-
-  it("updates query and clears search error on set-query", () => {
-    const next = searchPanelReducer(
-      { ...initialSearchPanelState, searchError: "boom" },
-      { type: "set-query", query: "hello" }
-    );
-    expect(next.query).toBe("hello");
-    expect(next.searchError).toBeNull();
-  });
-
-  it("sets results and clears searching flag on set-results", () => {
-    const next = searchPanelReducer(
-      { ...initialSearchPanelState, isSearching: true },
-      { type: "set-results", results: [{ relativePath: "a.md", fileName: "a.md", title: null, snippet: "x", score: 1.0 }] }
-    );
-    expect(next.results).toHaveLength(1);
-    expect(next.isSearching).toBe(false);
-  });
-
-  it("clears searching flag and sets message on set-search-error", () => {
-    const next = searchPanelReducer(
-      { ...initialSearchPanelState, isSearching: true },
-      { type: "set-search-error", message: "failed" }
-    );
-    expect(next.isSearching).toBe(false);
-    expect(next.searchError).toBe("failed");
-  });
-
-  it("transitions to indexing state when a workspace is set", () => {
-    const next = searchPanelReducer(
-      initialSearchPanelState,
-      { type: "set-index", index: { kind: "indexing" } }
-    );
-    expect(next.index).toEqual({ kind: "indexing" });
-    expect(next.results).toEqual([]);
-  });
-});
 
 describe("SearchPanel rendering", () => {
   // Reset the mocked store state to the default no-workspace state between

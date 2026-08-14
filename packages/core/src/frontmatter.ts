@@ -135,29 +135,21 @@ export function normalizeNoteMetadata(
     }
   }
 
-  const title = normalizeOptionalString(fields.title, "title", diagnostics);
-  const status = normalizeOptionalString(fields.status, "status", diagnostics);
-  const createdAt = normalizeOptionalString(fields.created_at, "created_at", diagnostics);
-  const updatedAt = normalizeOptionalString(fields.updated_at, "updated_at", diagnostics);
-
-  if (title !== undefined) {
-    metadata.title = title;
+  const optionalStringFields = ["title", "status", "created_at", "updated_at"] as const;
+  for (const field of optionalStringFields) {
+    const value = normalizeOptionalString(fields[field], field, diagnostics);
+    if (value !== undefined) {
+      metadata[field] = value;
+    }
   }
 
-  if (status !== undefined) {
-    metadata.status = status;
-  }
-
-  if (createdAt !== undefined) {
-    metadata.created_at = createdAt;
-  }
-
-  if (updatedAt !== undefined) {
-    metadata.updated_at = updatedAt;
-  }
-
-  metadata.tags = normalizeStringList(fields.tags, "tags", diagnostics, normalizeTagName);
-  metadata.aliases = normalizeStringList(fields.aliases, "aliases", diagnostics, normalizeAlias);
+  metadata.tags = normalizeStringList(
+    fields.tags,
+    "tags",
+    diagnostics,
+    (v) => normalizeStringItem(v, /^#+/)
+  );
+  metadata.aliases = normalizeStringList(fields.aliases, "aliases", diagnostics, normalizeStringItem);
 
   return metadata as NoteMetadata;
 }
@@ -292,12 +284,8 @@ function normalizeStringList(
   return uniqueStrings(normalizedValues);
 }
 
-function normalizeTagName(value: string): string | null {
-  const trimmed = value.trim().replace(/^#+/, "");
-  return trimmed.length > 0 ? trimmed : null;
-}
-
-function normalizeAlias(value: string): string | null {
-  const trimmed = value.trim();
+/** Trims a string list item; optionally strips a leading pattern (e.g. `#` from tags). */
+function normalizeStringItem(value: string, strip?: RegExp): string | null {
+  const trimmed = strip ? value.trim().replace(strip, "") : value.trim();
   return trimmed.length > 0 ? trimmed : null;
 }

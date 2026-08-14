@@ -150,19 +150,8 @@ export function extractWikiLinks(markdownBody: string): WikiLink[] {
 
     links.push(
       displayText
-        ? {
-            target,
-            displayText,
-            position,
-            startOffset,
-            endOffset
-          }
-        : {
-            target,
-            position,
-            startOffset,
-            endOffset
-          }
+        ? { target, displayText, position, startOffset, endOffset }
+        : { target, position, startOffset, endOffset }
     );
   }
 
@@ -220,6 +209,9 @@ function collectMatches(
   return uniqueStrings(values);
 }
 
+/** Replaces every non-newline character with a space (length- and line-preserving mask). */
+const blankNonNewlines = (text: string): string => text.replace(/[^\r\n]/g, " ");
+
 function maskMarkdown(markdown: string, frontmatter: { raw: string; endOffset: number } | null): string {
   let masked = markdown;
 
@@ -230,18 +222,17 @@ function maskMarkdown(markdown: string, frontmatter: { raw: string; endOffset: n
     // against this masked text but describes a position in the original, so
     // dropping the fences would shift them all by the fences' width.
     const block = markdown.slice(0, frontmatter.endOffset);
-    masked = block.replace(/[^\r\n]/g, " ") + masked.slice(frontmatter.endOffset);
+    masked = blankNonNewlines(block) + masked.slice(frontmatter.endOffset);
   }
 
   // Mask fenced code blocks (e.g., ```lang ... ``` or ~~~ ... ~~~)
-  masked = masked.replace(/^( {0,3})(`{3,}|~{3,})[^\n]*(?:\n([^]*?))?(?:\n[ \t]*\2[ \t]*$|(?![^]))/gm, (match) => {
-    return match.replace(/[^\r\n]/g, " ");
-  });
+  masked = masked.replace(
+    /^( {0,3})(`{3,}|~{3,})[^\n]*(?:\n([^]*?))?(?:\n[ \t]*\2[ \t]*$|(?![^]))/gm,
+    blankNonNewlines
+  );
 
   // Mask inline code snippets
-  masked = masked.replace(/(`+)((?:[^`\n]|\n(?!\n))+?)\1/g, (match) => {
-    return match.replace(/[^\r\n]/g, " ");
-  });
+  masked = masked.replace(/(`+)((?:[^`\n]|\n(?!\n))+?)\1/g, blankNonNewlines);
 
   return masked;
 }

@@ -24,6 +24,11 @@ export interface DisposableStore extends Disposable {
 const isPromiseLike = (value: void | Promise<void>): value is Promise<void> =>
   typeof value === "object" && value !== null && "then" in value;
 
+/** Clears a cached disposal promise once it settles (fulfilled or rejected). */
+const resetOnSettle = (p: Promise<void>, reset: () => void): void => {
+  void p.then(reset, reset);
+};
+
 /** Creates a reverse-order, idempotent collection of owned resources. */
 export function createDisposableStore(): DisposableStore {
   const resources: Disposable[] = [];
@@ -90,14 +95,9 @@ export function createDisposableStore(): DisposableStore {
       }
     });
     const completedDisposal = disposalPromise;
-    void completedDisposal.then(
-      () => {
-        if (disposalPromise === completedDisposal) disposalPromise = undefined;
-      },
-      () => {
-        if (disposalPromise === completedDisposal) disposalPromise = undefined;
-      }
-    );
+    resetOnSettle(completedDisposal, () => {
+      if (disposalPromise === completedDisposal) disposalPromise = undefined;
+    });
     return completedDisposal;
   };
 
@@ -449,14 +449,9 @@ export function createExtensionHost(): ExtensionHost {
       }
     })();
     const completedDisposal = hostDisposalPromise;
-    void completedDisposal.then(
-      () => {
-        if (hostDisposalPromise === completedDisposal) hostDisposalPromise = undefined;
-      },
-      () => {
-        if (hostDisposalPromise === completedDisposal) hostDisposalPromise = undefined;
-      }
-    );
+    resetOnSettle(completedDisposal, () => {
+      if (hostDisposalPromise === completedDisposal) hostDisposalPromise = undefined;
+    });
     return completedDisposal;
   };
 

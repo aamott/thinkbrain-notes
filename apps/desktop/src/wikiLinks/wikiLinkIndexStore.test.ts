@@ -190,6 +190,7 @@ describe("useWikiLinkIndexStore", () => {
     // Wait for the async reindex to settle.
     await Promise.resolve();
     await Promise.resolve();
+    await Promise.resolve();
     let state = useWikiLinkIndexStore.getState();
     expect(state.noteIndex.map((n) => n.relativePath)).toContain("C.md");
 

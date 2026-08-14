@@ -18,11 +18,10 @@ import { subscribeIndexToNoteEvents } from "../events/noteIndexSubscription";
 import type { NativeMarkdownFileEntry } from "../native/commands";
 import {
   AbortError,
-  createSearchService,
+  searchService,
   type IndexProgress,
   type MetadataQuery,
-  type MetadataQueryData,
-  type SearchService
+  type MetadataQueryData
 } from "./searchService";
 
 export type {
@@ -72,19 +71,25 @@ export interface SearchIndexStore {
   queryMetadata(rootPath: string, query: MetadataQuery): Promise<MetadataIndexQueryResult>;
   /**
    * Subscribes to app-wide note mutation events and keeps the index in sync.
-   * Returns a disposal function that unsubscribes all listeners.
+   * Idempotent: calling it again disposes the previous subscription before
+   * creating a new one, so React 18 strict-mode double-mount does not leak
+   * listeners. Returns a disposal function that unsubscribes all listeners.
    */
   subscribeToEvents(): () => void;
 }
-
-/** Module-scoped search service singleton backing the store. */
-const searchService: SearchService = createSearchService();
 
 /**
  * Tracks the in-flight full-index operation so a workspace switch can abort it.
  * Kept outside Zustand state because `AbortController` is mutable/non-serializable.
  */
 let indexingAbortController: AbortController | null = null;
+
+/**
+ * Tracks the current event subscription so `subscribeToEvents` is idempotent.
+ * A second call disposes the first before creating a new one, preventing
+ * React 18 strict-mode double-mount from leaking listeners.
+ */
+let currentSubscription: (() => void) | null = null;
 
 export const useSearchIndexStore = create<SearchIndexStore>((set, get) => ({
   status: { kind: "no-workspace" },
@@ -189,7 +194,15 @@ export const useSearchIndexStore = create<SearchIndexStore>((set, get) => ({
   },
 
   subscribeToEvents() {
-    return subscribeIndexToNoteEvents(get);
+    // Dispose any existing subscription before creating a new one.
+    if (currentSubscription) currentSubscription();
+
+    const dispose = subscribeIndexToNoteEvents(get);
+    currentSubscription = dispose;
+    return () => {
+      dispose();
+      currentSubscription = null;
+    };
   }
 }));
 

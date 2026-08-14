@@ -136,6 +136,12 @@ const UNSAFE_VALUE_PATTERN = /[;{}@]|\/\*/;
 // Parsing
 // ---------------------------------------------------------------------------
 
+/** Builds a `theme: null` result with a single structural-failure error diagnostic. */
+const structuralFailure = (code: string, message: string, path: string): ParseThemeResult => ({
+  theme: null,
+  diagnostics: [{ code, message, severity: "error", path }]
+});
+
 /**
  * Parses a raw `.tbtheme.json` string into a validated theme document.
  *
@@ -185,48 +191,29 @@ export function parseThemeFile(rawJson: string): ParseThemeResult {
   // fundamentally broken and we return null rather than a half-built theme.
   const name = readName(parsed);
   if (name === null) {
-    return {
-      theme: null,
-      diagnostics: [
-        {
-          code: "theme.name.missing",
-          message: "Theme `name` is required and must be a non-empty string.",
-          severity: "error",
-          path: "name"
-        }
-      ]
-    };
+    return structuralFailure(
+      "theme.name.missing",
+      "Theme `name` is required and must be a non-empty string.",
+      "name"
+    );
   }
 
   const base = readBase(parsed);
   if (base === null) {
-    return {
-      theme: null,
-      diagnostics: [
-        {
-          code: "theme.base.invalid",
-          message:
-            "Theme `base` is required and must be \"light\" or \"dark\" (custom themes cannot use \"system\").",
-          severity: "error",
-          path: "base"
-        }
-      ]
-    };
+    return structuralFailure(
+      "theme.base.invalid",
+      "Theme `base` is required and must be \"light\" or \"dark\" (custom themes cannot use \"system\").",
+      "base"
+    );
   }
 
   const version = readVersion(parsed);
   if (version === null) {
-    return {
-      theme: null,
-      diagnostics: [
-        {
-          code: "theme.version.invalid",
-          message: "Theme `version`, if present, must be a non-negative integer.",
-          severity: "error",
-          path: "version"
-        }
-      ]
-    };
+    return structuralFailure(
+      "theme.version.invalid",
+      "Theme `version`, if present, must be a non-negative integer.",
+      "version"
+    );
   }
 
   // Tokens are optional. Validate each entry and collect diagnostics.

@@ -9,7 +9,7 @@
  * watcher saw another program make it.
  *
  * The store is deliberately thin: parsing and native IPC (reading files) are
- * routed through `invokeNativeCommand` and `parseNote` from `@thinkbrain/core`.
+ * routed through `readAndParseNote` in `native/`.
  * UI consumers (backlinks panel, graph view) read `noteIndex` and call
  * `getBacklinks` to compute edges without re-parsing every note on each query.
  */
@@ -20,14 +20,17 @@ import {
   buildWikiLinkIndex,
   EMPTY_WIKI_LINK_INDEX,
   removeNote,
-  parseNote,
   type NoteIndexEntry,
   type ParsedNote,
   type WikiLinkIndex,
   type WikiLinkIndexInput
 } from "@thinkbrain/core";
 import { subscribeIndexToNoteEvents } from "../events/noteIndexSubscription";
-import { invokeNativeCommand, type NativeMarkdownFileEntry } from "../native/commands";
+import { type NativeMarkdownFileEntry } from "../native/commands";
+import { readAndParseNote } from "../native/noteParsing";
+
+/** Default number of files read per batch during full indexing. */
+const DEFAULT_BATCH_SIZE = 50;
 
 /**
  * Tracks the current event subscription so `subscribeToEvents` is idempotent.
@@ -76,7 +79,7 @@ export interface WikiLinkIndexStore {
 }
 
 /**
- * Reads and parses a single markdown file from the workspace.
+ * Reads and parses a single markdown file, tagged with its relative path.
  *
  * Returns `null` when the file cannot be read or parsed so a single corrupt
  * note cannot abort the whole index; the caller skips `null` entries.
@@ -86,22 +89,8 @@ async function readAndParse(
   relativePath: string,
   signal?: AbortSignal
 ): Promise<{ relativePath: string; parsedNote: ParsedNote } | null> {
-  try {
-    const { contents } = await invokeNativeCommand("read_markdown_file", {
-      rootPath,
-      relativePath
-    });
-    // A superseding workspace switch may have aborted this read between the
-    // IPC round-trip and the parse step; drop the result instead of committing.
-    if (signal?.aborted) return null;
-    return { relativePath, parsedNote: parseNote(contents) };
-  } catch (error) {
-    console.warn(
-      `[wikiLinkIndexStore] Skipping "${relativePath}" during indexing:`,
-      error
-    );
-    return null;
-  }
+  const parsedNote = await readAndParseNote(rootPath, relativePath, signal, "wikiLinkIndexStore");
+  return parsedNote === null ? null : { relativePath, parsedNote };
 }
 
 /**
@@ -133,13 +122,25 @@ export const useWikiLinkIndexStore = create<WikiLinkIndexStore>((set, get) => ({
 
     set({ rootPath });
     try {
-      // Reads within the workspace are independent; fire them together.
-      const read = await Promise.all(
-        files.map((file) => readAndParse(rootPath, file.relative_path, controller.signal))
-      );
-      const inputs: WikiLinkIndexInput[] = read.filter(
-        (r): r is { relativePath: string; parsedNote: ParsedNote } => r !== null
-      );
+      // Batch reads (mirroring searchService) so large vaults do not saturate
+      // the IPC channel with thousands of concurrent reads. Yield between
+      // batches to keep the UI responsive.
+      const inputs: WikiLinkIndexInput[] = [];
+      for (let start = 0; start < files.length; start += DEFAULT_BATCH_SIZE) {
+        // Honor abort between batches so a cancelled re-index stops promptly.
+        if (controller.signal.aborted) return;
+
+        const batch = files.slice(start, start + DEFAULT_BATCH_SIZE);
+        const read = await Promise.all(
+          batch.map((file) => readAndParse(rootPath, file.relative_path, controller.signal))
+        );
+        for (const r of read) {
+          if (r !== null) inputs.push(r);
+        }
+
+        // Yield to the event loop between batches to keep the UI responsive.
+        await Promise.resolve();
+      }
 
       // Guard against a superseding workspace switch overwriting stale results.
       // The abort check covers the case where `clearWorkspace` or a newer
