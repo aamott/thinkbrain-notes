@@ -125,17 +125,22 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
       let includeHidden = showHiddenRef.current;
       try {
         const settings = await readWorkspaceSettings(rootPath);
+        if (rootPathRef.current !== rootPath) return;
         includeHidden = settings.showHidden;
         setShowHidden(settings.showHidden);
         showHiddenRef.current = settings.showHidden;
       } catch {
+        if (rootPathRef.current !== rootPath) return;
         // Keep the in-memory default; the toggle still works for this session.
       }
       const snapshot = await api.openWorkspace(rootPath);
+      if (rootPathRef.current !== rootPath) return;
       const entries = await api.listWorkspaceEntries(rootPath, includeHidden);
+      if (rootPathRef.current !== rootPath) return;
       dispatch({ type: "opened", snapshot, entries });
       onWorkspaceOpened?.(rootPath, snapshot);
     } catch (error) {
+      if (rootPathRef.current !== rootPath) return;
       dispatch({ type: "failed", message: workspaceErrorMessage(error) });
       if (restoring) onWorkspaceUnavailable?.(rootPath);
     }
