@@ -225,11 +225,12 @@ pub fn list_theme_entries(themes_dir: &Path) -> Result<Vec<ThemeEntry>, NativeEr
 /// Returns:
 ///   The file contents as a string, or `None` if the file does not exist.
 #[tauri::command]
-pub fn read_theme_file(path: String) -> Result<Option<String>, NativeError> {
+pub fn read_theme_file(app: tauri::AppHandle, path: String) -> Result<Option<String>, NativeError> {
     let path = Path::new(&path);
     if !path.exists() {
         return Ok(None);
     }
+    let path = resolve_theme_file_path(&themes_dir(&app)?, path)?;
     fs::read_to_string(path)
         .map(Some)
         .map_err(|error| {
@@ -239,6 +240,33 @@ pub fn read_theme_file(path: String) -> Result<Option<String>, NativeError> {
                 error,
             )
         })
+}
+
+/// Resolves an existing theme file and rejects paths outside the themes directory.
+fn resolve_theme_file_path(themes_dir: &Path, path: &Path) -> Result<PathBuf, NativeError> {
+    let canonical_themes_dir = themes_dir.canonicalize().map_err(|error| {
+        NativeError::with_details(
+            "themes.read_failed",
+            "Failed to resolve the themes directory.",
+            error,
+        )
+    })?;
+    let canonical_path = path.canonicalize().map_err(|error| {
+        NativeError::with_details(
+            "themes.read_failed",
+            "Failed to resolve the theme file.",
+            error,
+        )
+    })?;
+
+    if !canonical_path.starts_with(&canonical_themes_dir) {
+        return Err(NativeError::new(
+            "themes.path_outside_themes_dir",
+            "Theme file path must stay inside the themes directory.",
+        ));
+    }
+
+    Ok(canonical_path)
 }
 
 /// Returns true if the path has the `.tbtheme.json` extension (case-sensitive).
@@ -389,6 +417,21 @@ mod tests {
         assert!(!is_theme_file(&PathBuf::from("/tmp/themes/app.json")));
         assert!(!is_theme_file(&PathBuf::from("/tmp/themes/notes.md")));
         assert!(!is_theme_file(&PathBuf::from("/tmp/themes/forest-dark.json")));
+    }
+
+    #[test]
+    fn resolve_theme_file_path_rejects_traversal() {
+        let temp = temp_test_dir("path-traversal");
+        let themes = temp.join("themes");
+        fs::create_dir_all(&themes).expect("themes dir created");
+        let outside = temp.join("secret.tbtheme.json");
+        fs::write(&outside, "secret").expect("outside file written");
+
+        let error = resolve_theme_file_path(&themes, &themes.join("../secret.tbtheme.json"))
+            .expect_err("traversal is rejected");
+
+        assert_eq!(error.code, "themes.path_outside_themes_dir");
+        fs::remove_dir_all(temp).expect("cleanup");
     }
 
     #[test]
