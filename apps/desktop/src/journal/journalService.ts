@@ -156,6 +156,12 @@ export function createJournalService(options: JournalServiceOptions): JournalSer
    */
   const writtenPaths = new Set<string>();
   const writtenByDay = new Map<string, string>();
+  const removeWrittenPath = (relativePath: string): void => {
+    writtenPaths.delete(relativePath);
+    for (const [day, path] of writtenByDay) {
+      if (path === relativePath) writtenByDay.delete(day);
+    }
+  };
 
   /**
    * Runs entry creation one at a time.
@@ -229,10 +235,16 @@ export function createJournalService(options: JournalServiceOptions): JournalSer
 
   const renameEntry = async (relativePath: string, newRelativePath: string): Promise<void> => {
     await workspace.renameNote(relativePath, newRelativePath);
+    writtenPaths.delete(relativePath);
+    writtenPaths.add(newRelativePath);
+    for (const [day, path] of writtenByDay) {
+      if (path === relativePath) writtenByDay.set(day, newRelativePath);
+    }
   };
 
   const deleteEntry = async (relativePath: string): Promise<void> => {
     await workspace.deleteNote(relativePath);
+    removeWrittenPath(relativePath);
   };
 
   /**

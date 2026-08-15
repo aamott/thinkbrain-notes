@@ -24,6 +24,8 @@ const setup = (options: { notes?: readonly ExtensionNote[]; root?: string; now?:
     openNote: vi.fn(async (path: string) => {
       opened.push(path);
     }),
+    renameNote: vi.fn(async () => undefined),
+    deleteNote: vi.fn(async () => undefined),
     readNote: vi.fn(async () => "")
   };
   const service = createJournalService({
@@ -251,6 +253,8 @@ describe("a listing that has not caught up", () => {
       openNote: vi.fn(async (path: string) => {
         opened.push(path);
       }),
+      renameNote: vi.fn(async () => undefined),
+      deleteNote: vi.fn(async () => undefined),
       readNote: vi.fn(async () => "")
     };
     const service = createJournalService({
@@ -298,5 +302,26 @@ describe("a listing that has not caught up", () => {
     await service.createEntry({ year: 2026, month: 8, day: 6 });
 
     expect(created).toHaveLength(2);
+  });
+
+  it("creates a replacement after deleting an unlisted entry", async () => {
+    const { service, created } = stale();
+    const first = await service.createEntry();
+
+    await service.deleteEntry(first);
+    await service.openToday();
+
+    expect(created).toHaveLength(2);
+  });
+
+  it("opens an unlisted renamed entry at its new path", async () => {
+    const { service, opened } = stale();
+    const first = await service.createEntry();
+    const renamed = "journal/2026/08/2026-08-07-renamed.md";
+
+    await service.renameEntry(first, renamed);
+    await service.openToday();
+
+    expect(opened.at(-1)).toBe(renamed);
   });
 });

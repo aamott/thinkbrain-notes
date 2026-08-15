@@ -1435,7 +1435,7 @@ fn rename_workspace_entry_moves_files_and_creates_destination_parents() {
     )
     .expect("source file is created");
 
-    let renamed = rename_workspace_entry(
+    let renamed = rename_workspace_entry_for_test(
         root.to_string_lossy().to_string(),
         "draft.md".to_string(),
         "Archive/draft.md".to_string(),
@@ -1447,7 +1447,7 @@ fn rename_workspace_entry_moves_files_and_creates_destination_parents() {
     assert!(root.join("Archive").join("draft.md").is_file());
 
     // Renaming a missing entry fails loudly.
-    let missing = rename_workspace_entry(
+    let missing = rename_workspace_entry_for_test(
         root.to_string_lossy().to_string(),
         "ghost.md".to_string(),
         "Archive/ghost.md".to_string(),
@@ -1462,7 +1462,7 @@ fn rename_workspace_entry_moves_files_and_creates_destination_parents() {
         None,
     )
     .expect("destination file is created");
-    let collision = rename_workspace_entry(
+    let collision = rename_workspace_entry_for_test(
         root.to_string_lossy().to_string(),
         "Archive/draft.md".to_string(),
         "other.md".to_string(),
@@ -1483,13 +1483,13 @@ fn delete_workspace_entry_removes_files_and_folders_recursively() {
     )
     .expect("nested file is created");
 
-    delete_workspace_entry(root.to_string_lossy().to_string(), "Folder".to_string())
+    delete_workspace_entry_for_test(root.to_string_lossy().to_string(), "Folder".to_string())
         .expect("folder is deleted recursively");
 
     assert!(!root.join("Folder").exists());
 
     let missing =
-        delete_workspace_entry(root.to_string_lossy().to_string(), "Folder".to_string());
+        delete_workspace_entry_for_test(root.to_string_lossy().to_string(), "Folder".to_string());
     assert!(missing.is_err());
     assert_eq!(missing.unwrap_err().code, "workspace.file_missing");
 
@@ -1519,7 +1519,7 @@ fn workspace_entry_commands_reject_paths_that_escape_the_workspace_root() {
         "workspace.invalid_path"
     );
 
-    let rename_source_escape = rename_workspace_entry(
+    let rename_source_escape = rename_workspace_entry_for_test(
         root.to_string_lossy().to_string(),
         "../outside.md".to_string(),
         "renamed.md".to_string(),
@@ -1531,7 +1531,7 @@ fn workspace_entry_commands_reject_paths_that_escape_the_workspace_root() {
     );
 
     fs::write(root.join("source.md"), "body").expect("rename source is created");
-    let rename_destination_escape = rename_workspace_entry(
+    let rename_destination_escape = rename_workspace_entry_for_test(
         root.to_string_lossy().to_string(),
         "source.md".to_string(),
         "../outside.md".to_string(),
@@ -1543,7 +1543,7 @@ fn workspace_entry_commands_reject_paths_that_escape_the_workspace_root() {
     );
     assert!(root.join("source.md").exists());
 
-    let delete_escape = delete_workspace_entry(
+    let delete_escape = delete_workspace_entry_for_test(
         root.to_string_lossy().to_string(),
         "../outside.md".to_string(),
     );
@@ -1574,7 +1574,7 @@ fn workspace_entry_commands_reject_symlink_escapes_via_canonicalization() {
 
     // Deleting through the symlink would delete outside the workspace.
     fs::write(outside.join("target.md"), "body").expect("outside file is created");
-    let delete_attempt = delete_workspace_entry(
+    let delete_attempt = delete_workspace_entry_for_test(
         root.to_string_lossy().to_string(),
         "escape/target.md".to_string(),
     );
@@ -1597,7 +1597,7 @@ fn rename_workspace_entry_treats_source_equal_destination_as_a_noop() {
     .expect("source file is created");
 
     // Same relative path on both sides: succeed without touching the file.
-    let result = rename_workspace_entry(
+    let result = rename_workspace_entry_for_test(
         root.to_string_lossy().to_string(),
         "draft.md".to_string(),
         "draft.md".to_string(),

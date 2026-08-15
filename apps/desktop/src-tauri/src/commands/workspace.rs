@@ -250,16 +250,38 @@ pub fn create_workspace_folder(
 /// (source == destination) succeeds without touching the filesystem.
 #[tauri::command]
 pub fn rename_workspace_entry(
+    app: tauri::AppHandle,
     root_path: String,
     relative_path: String,
     new_relative_path: String,
 ) -> Result<WorkspaceEntry, NativeError> {
-    let root = resolve_workspace_root(&root_path)?;
+    let is_markdown = is_markdown_path(Path::new(&relative_path));
+    let entry = rename_workspace_entry_impl(&root_path, &relative_path, &new_relative_path)?;
+
+    if is_markdown {
+        if let Err(error) = crate::commands::search::remove_index_document(
+            app,
+            root_path,
+            relative_path.clone(),
+        ) {
+            eprintln!("[workspace] failed to remove search index for {relative_path}: {error}");
+        }
+    }
+
+    Ok(entry)
+}
+
+fn rename_workspace_entry_impl(
+    root_path: &str,
+    relative_path: &str,
+    new_relative_path: &str,
+) -> Result<WorkspaceEntry, NativeError> {
+    let root = resolve_workspace_root(root_path)?;
     let _mutation_lock = WORKSPACE_ENTRY_MUTATION_LOCK
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
-    let source_path = resolve_workspace_entry_path(&root, &relative_path)?;
-    let destination_path = resolve_workspace_entry_path(&root, &new_relative_path)?;
+    let source_path = resolve_workspace_entry_path(&root, relative_path)?;
+    let destination_path = resolve_workspace_entry_path(&root, new_relative_path)?;
 
     if !source_path.exists() {
         return Err(NativeError::new(
@@ -305,6 +327,15 @@ pub fn rename_workspace_entry(
     workspace_entry(&root, &destination_path, is_dir)
 }
 
+#[cfg(test)]
+pub fn rename_workspace_entry_for_test(
+    root_path: String,
+    relative_path: String,
+    new_relative_path: String,
+) -> Result<WorkspaceEntry, NativeError> {
+    rename_workspace_entry_impl(&root_path, &relative_path, &new_relative_path)
+}
+
 
 /// Deletes any workspace file or folder. Folders are removed recursively so
 /// the explorer can delete a populated folder in one action. The path is
@@ -313,12 +344,33 @@ pub fn rename_workspace_entry(
 /// are not separately resolved, so this is safe for trusted local workspaces
 /// but should not be exposed to untrusted remote roots.
 #[tauri::command]
-pub fn delete_workspace_entry(root_path: String, relative_path: String) -> Result<(), NativeError> {
-    let root = resolve_workspace_root(&root_path)?;
+pub fn delete_workspace_entry(
+    app: tauri::AppHandle,
+    root_path: String,
+    relative_path: String,
+) -> Result<(), NativeError> {
+    let is_markdown = is_markdown_path(Path::new(&relative_path));
+    delete_workspace_entry_impl(&root_path, &relative_path)?;
+
+    if is_markdown {
+        if let Err(error) = crate::commands::search::remove_index_document(
+            app,
+            root_path,
+            relative_path.clone(),
+        ) {
+            eprintln!("[workspace] failed to remove search index for {relative_path}: {error}");
+        }
+    }
+
+    Ok(())
+}
+
+fn delete_workspace_entry_impl(root_path: &str, relative_path: &str) -> Result<(), NativeError> {
+    let root = resolve_workspace_root(root_path)?;
     let _mutation_lock = WORKSPACE_ENTRY_MUTATION_LOCK
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
-    let entry_path = resolve_workspace_entry_path(&root, &relative_path)?;
+    let entry_path = resolve_workspace_entry_path(&root, relative_path)?;
 
     if !entry_path.exists() {
         return Err(NativeError::new(
@@ -341,6 +393,14 @@ pub fn delete_workspace_entry(root_path: String, relative_path: String) -> Resul
             error,
         )
     })
+}
+
+#[cfg(test)]
+pub fn delete_workspace_entry_for_test(
+    root_path: String,
+    relative_path: String,
+) -> Result<(), NativeError> {
+    delete_workspace_entry_impl(&root_path, &relative_path)
 }
 
 
@@ -708,5 +768,3 @@ pub fn stable_workspace_hash(input: &str) -> u64 {
 
     hash
 }
-
-
