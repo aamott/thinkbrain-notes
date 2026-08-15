@@ -460,16 +460,16 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
 
   return (
     <section className={cn("flex min-h-0 flex-1 flex-col text-sidebar-foreground bg-sidebar font-sans", className)} aria-label="Workspace explorer" aria-busy={isBusy}>
-      <header className="flex min-h-16 items-center justify-between gap-3 px-3 py-[0.625rem] border-b border-border">
+      <header className="flex min-h-16 items-center justify-between gap-3 px-3 py-2.5 border-b border-border">
         <div className="min-w-0">
-          <p className="mb-[0.125rem] text-muted-foreground text-[0.625rem] font-bold tracking-[0.08em] leading-none uppercase">Workspace</p>
+          <p className="mb-0.5 text-muted-foreground text-[0.625rem] font-bold tracking-[0.08em] leading-none uppercase">Workspace</p>
           <h2 className="max-w-44 m-0 overflow-hidden text-[0.8125rem] font-[650] leading-tight truncate">{state.snapshot?.workspace.name ?? "No workspace open"}</h2>
         </div>
         <div className="relative">
           <button
             type="button"
             className={cn(
-              "flex flex-none items-center justify-center w-[1.6rem] h-[1.6rem] border-0 rounded-small text-muted-foreground bg-transparent cursor-pointer font-inherit focus-visible:outline-2 focus-visible:outline-ring focus-visible:-outline-offset-1 [&>svg]:w-[0.95rem] [&>svg]:h-[0.95rem] [&>svg]:stroke-current",
+              "flex flex-none items-center justify-center w-[1.6rem] h-[1.6rem] border-0 rounded-small text-muted-foreground bg-transparent cursor-pointer font-inherit focus-visible:outline-2 focus-visible:outline-ring focus-visible:-outline-offset-1 [&>svg]:stroke-current",
               "not-aria-disabled:hover:bg-[color-mix(in_srgb,var(--color-accent)_58%,transparent)]",
               moreMenuOpen && "text-sidebar-foreground"
             )}
@@ -478,7 +478,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
             disabled={state.phase !== "ready"}
             onClick={() => setMoreMenuOpen((v) => !v)}
           >
-            <MoreHorizontal aria-hidden="true" />
+            <MoreHorizontal aria-hidden="true" className="size-[0.95rem]" />
           </button>
           {moreMenuOpen && (
             <>
@@ -504,7 +504,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
                 <button
                   type="button"
                   role="menuitem"
-                  className="flex w-full items-center justify-between gap-2 border-0 px-3 py-[0.4rem] bg-transparent cursor-pointer font-inherit text-xs text-left text-foreground hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
+                  className="flex w-full items-center justify-between gap-2 border-0 px-3 py-[0.4rem] cursor-pointer font-inherit text-xs text-left text-foreground hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
                   // The "show hidden" toggle keeps the menu open so the user
                   // can see the checkmark flip and the tree update beneath it.
                   onClick={() => void toggleShowHidden()}
@@ -516,7 +516,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
                 <button
                   type="button"
                   role="menuitem"
-                  className="flex w-full items-center gap-2 border-0 px-3 py-[0.4rem] bg-transparent cursor-pointer font-inherit text-xs text-left text-foreground hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
+                  className="flex w-full items-center gap-2 border-0 px-3 py-[0.4rem] cursor-pointer font-inherit text-xs text-left text-foreground hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
                   onClick={() => { setMoreMenuOpen(false); startCreate("", "folder"); }}
                 >
                   <span>New folder</span>
@@ -524,7 +524,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
                 <button
                   type="button"
                   role="menuitem"
-                  className="flex w-full items-center gap-2 border-0 px-3 py-[0.4rem] bg-transparent cursor-pointer font-inherit text-xs text-left text-foreground hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
+                  className="flex w-full items-center gap-2 border-0 px-3 py-[0.4rem] cursor-pointer font-inherit text-xs text-left text-foreground hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
                   onClick={() => { setMoreMenuOpen(false); startCreate("", "file"); }}
                 >
                   <span>New file</span>
@@ -554,7 +554,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
             <StatusState message="This workspace is empty. Right-click to create a new file or folder." />
           ) : (
             <ul
-              className="min-h-0 flex-1 m-0 overflow-auto py-[0.375rem] list-none [scrollbar-color:var(--color-border)_transparent] [scrollbar-width:thin]"
+              className="min-h-0 flex-1 m-0 overflow-auto py-1.5 list-none [scrollbar-color:var(--color-border)_transparent] [scrollbar-width:thin]"
               role="tree"
               aria-label={`${state.snapshot?.workspace.name} files`}
               onKeyDown={handleTreeKeyDown}
@@ -750,7 +750,7 @@ const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
         <button
           ref={buttonRef}
           className={cn(
-            "flex w-full min-w-0 items-center gap-1.5 py-[0.265rem] pr-3 border-0 text-sidebar-foreground bg-transparent font-inherit text-xs leading-tight text-left aria-disabled:cursor-default not-aria-disabled:cursor-pointer not-aria-disabled:hover:bg-[color-mix(in_srgb,var(--color-accent)_58%,transparent)] not-aria-disabled:focus-visible:bg-[color-mix(in_srgb,var(--color-accent)_58%,transparent)] focus-visible:outline-none",
+            "flex w-full min-w-0 items-center gap-1.5 py-[0.265rem] pr-3 border-0 text-sidebar-foreground font-inherit text-xs leading-tight text-left aria-disabled:cursor-default not-aria-disabled:cursor-pointer not-aria-disabled:hover:bg-[color-mix(in_srgb,var(--color-accent)_58%,transparent)] not-aria-disabled:focus-visible:bg-[color-mix(in_srgb,var(--color-accent)_58%,transparent)] focus-visible:outline-none",
             isHiddenEntry && "opacity-60"
           )}
           type="button"
@@ -769,14 +769,14 @@ const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
           }}
           aria-label={isDirectory ? `${isExpanded ? "Collapse" : "Expand"} ${node.entry.name}` : isMarkdownFile ? `Open ${node.entry.name}` : undefined}
         >
-          <span className="w-[0.625rem] flex-none text-muted-foreground text-center [&>svg]:w-[0.9rem] [&>svg]:h-[0.9rem] [&>svg]:stroke-current" aria-hidden="true">{isDirectory ? (isExpanded ? <FolderOpen /> : <Folder />) : <WorkspaceFileIcon name={node.entry.name} />}</span>
+          <span className="w-2.5 flex-none text-muted-foreground text-center [&>svg]:w-[0.9rem] [&>svg]:h-[0.9rem] [&>svg]:stroke-current" aria-hidden="true">{isDirectory ? (isExpanded ? <FolderOpen /> : <Folder />) : <WorkspaceFileIcon name={node.entry.name} />}</span>
           <span className="min-w-0 truncate">{node.entry.name}</span>
         </button>
       )}
       {isDirectory && isExpanded && (
         <>
           {isCreatingHere && (
-            <ul role="group" className="m-0 pl-[0.875rem] list-none">
+            <ul role="group" className="m-0 pl-3.5 list-none">
               <InlineNameInput
                 depth={depth + 1}
                 icon={creating!.kind === "folder" ? <Folder /> : <WorkspaceFileIcon name="" />}
@@ -790,7 +790,7 @@ const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
             </ul>
           )}
           {node.children.length > 0 && (
-            <ul role="group" className="m-0 pl-[0.875rem] list-none">
+            <ul role="group" className="m-0 pl-3.5 list-none">
               {node.children.map((child) => (
                 <WorkspaceTreeItem
                   key={child.entry.relative_path}
@@ -899,10 +899,10 @@ function InlineNameInput({
         handleSubmit();
       }}
     >
-      <span className="w-[0.625rem] flex-none text-muted-foreground text-center [&>svg]:w-[0.9rem] [&>svg]:h-[0.9rem] [&>svg]:stroke-current" aria-hidden="true">{icon}</span>
+      <span className="w-2.5 flex-none text-muted-foreground text-center [&>svg]:w-[0.9rem] [&>svg]:h-[0.9rem] [&>svg]:stroke-current" aria-hidden="true">{icon}</span>
       <input
         ref={inputRef}
-        className="min-w-0 flex-1 border border-input rounded-small px-[0.3rem] py-[0.125rem] text-foreground bg-background font-inherit text-xs focus-visible:outline-2 focus-visible:outline-ring focus-visible:-outline-offset-1"
+        className="min-w-0 flex-1 border border-input rounded-small px-[0.3rem] py-0.5 text-foreground bg-background font-inherit text-xs focus-visible:outline-2 focus-visible:outline-ring focus-visible:-outline-offset-1"
         value={value}
         disabled={disabled || submitting}
         placeholder={placeholder}
@@ -1009,7 +1009,7 @@ function MenuButton({ label, danger = false, onClick }: {
     <button
       type="button"
       className={cn(
-        "flex w-full items-center gap-2 border-0 px-3 py-[0.4rem] bg-transparent cursor-pointer font-inherit text-xs text-left hover:bg-accent focus-visible:bg-accent focus-visible:outline-none",
+        "flex w-full items-center gap-2 border-0 px-3 py-[0.4rem] cursor-pointer font-inherit text-xs text-left hover:bg-accent focus-visible:bg-accent focus-visible:outline-none",
         danger ? "text-danger" : "text-foreground"
       )}
       role="menuitem"
@@ -1097,7 +1097,7 @@ function ErrorState({ message, onDismiss }: { readonly message: string; readonly
     <div className="m-3 p-5 border border-[color-mix(in_srgb,var(--color-destructive)_45%,var(--color-border))] rounded-small text-danger bg-[color-mix(in_srgb,var(--color-destructive)_9%,transparent)] text-xs leading-normal" role="alert">
       <strong className="block mb-1 text-sidebar-foreground text-[0.8125rem]">Could not open workspace</strong>
       <p className="m-0">{message}</p>
-      <button type="button" className="mt-[0.625rem] border border-current rounded-small px-[0.4375rem] py-1 text-inherit bg-transparent cursor-pointer font-inherit text-[0.6875rem] hover:bg-[color-mix(in_srgb,currentColor_12%,transparent)]" onClick={onDismiss}>Dismiss</button>
+      <button type="button" className="mt-2.5 border border-current rounded-small px-[0.4375rem] py-1 text-inherit cursor-pointer font-inherit text-[0.6875rem] hover:bg-[color-mix(in_srgb,currentColor_12%,transparent)]" onClick={onDismiss}>Dismiss</button>
     </div>
   );
 }
@@ -1146,7 +1146,7 @@ export function WorkspaceSelector({ currentPath, paths, onSelect, onAdd }: { rea
     <div ref={selectorRef} className="relative mt-auto border-t border-border">
       <button
         ref={triggerRef}
-        className="flex w-full min-w-0 items-center gap-[0.45rem] border-0 text-sidebar-foreground bg-transparent cursor-pointer font-inherit text-xs text-left px-3 py-[0.65rem] [&>svg]:w-[0.9rem] [&>svg]:h-[0.9rem] [&>svg]:stroke-current [&>svg:last-child]:ml-auto"
+        className="flex w-full min-w-0 items-center gap-[0.45rem] border-0 text-sidebar-foreground cursor-pointer font-inherit text-xs text-left px-3 py-[0.65rem] [&>svg]:w-[0.9rem] [&>svg]:h-[0.9rem] [&>svg]:stroke-current [&>svg:last-child]:ml-auto"
         type="button"
         aria-controls={menuId}
         aria-expanded={open}
@@ -1163,7 +1163,7 @@ export function WorkspaceSelector({ currentPath, paths, onSelect, onAdd }: { rea
             <button
               key={path}
               type="button"
-              className="flex w-full min-w-0 items-center gap-[0.45rem] border-0 text-sidebar-foreground bg-transparent cursor-pointer font-inherit text-xs text-left px-2 py-[0.45rem] rounded-small hover:bg-accent focus-visible:bg-accent focus-visible:outline-none [&>svg]:w-[0.9rem] [&>svg]:h-[0.9rem] [&>svg]:stroke-current"
+              className="flex w-full min-w-0 items-center gap-[0.45rem] border-0 text-sidebar-foreground cursor-pointer font-inherit text-xs text-left px-2 py-[0.45rem] rounded-small hover:bg-accent focus-visible:bg-accent focus-visible:outline-none [&>svg]:w-[0.9rem] [&>svg]:h-[0.9rem] [&>svg]:stroke-current"
               role="menuitem"
               aria-current={path === currentPath ? "true" : undefined}
               title={path}
@@ -1178,7 +1178,7 @@ export function WorkspaceSelector({ currentPath, paths, onSelect, onAdd }: { rea
           ))}
           <button
             type="button"
-            className="flex w-full min-w-0 items-center gap-[0.45rem] border-0 text-sidebar-foreground bg-transparent cursor-pointer font-inherit text-xs text-left px-2 py-[0.45rem] rounded-small hover:bg-accent focus-visible:bg-accent focus-visible:outline-none [&>svg]:w-[0.9rem] [&>svg]:h-[0.9rem] [&>svg]:stroke-current"
+            className="flex w-full min-w-0 items-center gap-[0.45rem] border-0 text-sidebar-foreground cursor-pointer font-inherit text-xs text-left px-2 py-[0.45rem] rounded-small hover:bg-accent focus-visible:bg-accent focus-visible:outline-none [&>svg]:w-[0.9rem] [&>svg]:h-[0.9rem] [&>svg]:stroke-current"
             role="menuitem"
             onClick={() => { closeMenu(true); onAdd(); }}
           >
