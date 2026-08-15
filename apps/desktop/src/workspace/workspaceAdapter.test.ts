@@ -35,6 +35,19 @@ describe("workspace open events", () => {
   });
 });
 
+describe("note create events", () => {
+  it("emits note.created after a successful Markdown create", async () => {
+    vi.mocked(invokeNativeCommand).mockResolvedValueOnce({ is_markdown: true } as never);
+    const created = vi.fn();
+    const subscription = appEvents.on("note.created", created);
+
+    await workspaceDesktopApi.createWorkspaceFile("/vault", "new.md");
+
+    expect(created).toHaveBeenCalledWith({ rootPath: "/vault", relativePath: "new.md" });
+    subscription.dispose();
+  });
+});
+
 describe("note rename events", () => {
   it("emits note.renamed after a successful rename", async () => {
     const renamed = vi.fn();

@@ -57,8 +57,10 @@ export const workspaceDesktopApi: WorkspaceDesktopApi = {
   windowWorkspaceRoot() {
     return invokeNativeCommand("window_workspace_root");
   },
-  createWorkspaceFile(rootPath, relativePath, contents) {
-    return invokeNativeCommand("create_workspace_file", { rootPath, relativePath, contents });
+  async createWorkspaceFile(rootPath, relativePath, contents) {
+    const entry = await invokeNativeCommand("create_workspace_file", { rootPath, relativePath, contents });
+    if (entry.is_markdown) appEvents.emit("note.created", { rootPath, relativePath });
+    return entry;
   },
   createWorkspaceFolder(rootPath, relativePath) {
     return invokeNativeCommand("create_workspace_folder", { rootPath, relativePath });
