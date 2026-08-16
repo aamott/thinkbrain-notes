@@ -16,7 +16,10 @@ export function handleMenuKeyDown(
   onClose: () => void
 ): void {
   const items = Array.from(
-    menuRef.current?.querySelectorAll<HTMLButtonElement>("button[role='menuitem']") ?? []
+    // Prefix-matched so a checkable item (`menuitemcheckbox`) is navigable on
+    // the same terms as a plain one; a menu that skipped them would leave the
+    // arrow keys stepping over half its contents.
+    menuRef.current?.querySelectorAll<HTMLButtonElement>("button[role^='menuitem']") ?? []
   );
   if (!items.length) return;
   const index = items.indexOf(document.activeElement as HTMLButtonElement);

@@ -5,6 +5,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
+  type RefObject,
 } from "react";
 
 import { cn } from "../lib/utils";
@@ -24,10 +25,20 @@ export interface ContextMenuState {
 export function ContextMenu({
   state,
   onClose,
+  anchorRef,
   children,
 }: {
   readonly state: ContextMenuState;
   readonly onClose: () => void;
+  /**
+   * The control that opened the menu, where one exists.
+   *
+   * A menu opened by a toggle has to know its own trigger: without this the
+   * press that closes it counts as an outside click first, and the menu shuts
+   * and reopens in the same gesture. A menu raised by a right-click has no
+   * such control and leaves this out.
+   */
+  readonly anchorRef?: RefObject<HTMLElement | null>;
   readonly children: ReactNode;
 }) {
   const menuRef = useRef<HTMLDivElement>(null);
@@ -52,13 +63,18 @@ export function ContextMenu({
   // Close on outside click.
   useEffect(() => {
     const handlePointerDown = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (
+        menuRef.current &&
+        !menuRef.current.contains(target) &&
+        !anchorRef?.current?.contains(target)
+      ) {
         onClose();
       }
     };
     window.addEventListener("pointerdown", handlePointerDown);
     return () => window.removeEventListener("pointerdown", handlePointerDown);
-  }, [onClose]);
+  }, [onClose, anchorRef]);
 
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     handleMenuKeyDown(event, menuRef, onClose);
@@ -101,6 +117,39 @@ export function MenuButton({
       role="menuitem"
       onClick={onClick}
     >
+      {label}
+    </button>
+  );
+}
+
+/**
+ * A menu item that stays open and carries its own on/off state.
+ *
+ * The tick is drawn rather than spoken: `aria-checked` already says whether the
+ * item is on, so letting the glyph into the accessible name would have a screen
+ * reader announce it twice.
+ */
+export function MenuCheckbox({
+  label,
+  checked,
+  onClick,
+}: {
+  readonly label: string;
+  readonly checked: boolean;
+  readonly onClick: (event: ReactMouseEvent) => void;
+}) {
+  return (
+    <button
+      type="button"
+      className="flex w-full items-center gap-2 border-0 px-3 py-[0.4rem] bg-transparent cursor-pointer font-inherit text-xs text-left text-foreground hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
+      role="menuitemcheckbox"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={onClick}
+    >
+      <span aria-hidden="true" className="w-3">
+        {checked ? "✓" : ""}
+      </span>
       {label}
     </button>
   );
