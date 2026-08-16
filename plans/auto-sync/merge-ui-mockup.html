@@ -864,6 +864,246 @@
     border-top:1px solid var(--border-soft);
   }
 
+  /* ============ SECTION: mobile ============ */
+  .phone-row{
+    display:flex;
+    gap:28px;
+    justify-content:center;
+    flex-wrap:wrap;
+    align-items:flex-start;
+  }
+  .phone-unit{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    width:336px;
+    max-width:100%;
+  }
+  .phone-frame{
+    width:336px;
+    max-width:100%;
+    height:660px;
+    background:var(--bg);
+    border:1px solid var(--border);
+    border-radius:34px;
+    box-shadow:var(--shadow-window);
+    padding:12px 10px;
+    position:relative;
+    overflow:hidden;
+  }
+  .phone-notch{
+    position:absolute;
+    top:12px; left:50%;
+    transform:translateX(-50%);
+    width:84px; height:18px;
+    background:#05060a;
+    border-radius:12px;
+    z-index:5;
+  }
+  .phone-screen{
+    width:100%;
+    height:100%;
+    background:var(--bg);
+    border-radius:24px;
+    overflow:hidden;
+    display:flex;
+    flex-direction:column;
+    position:relative;
+  }
+  .phone-statusbar{
+    height:34px;
+    flex-shrink:0;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:0 20px 0 16px;
+    font-size:11px;
+    font-weight:600;
+    color:var(--text-dim);
+    background:var(--bg);
+  }
+  .phone-statusbar .sb-icons{display:flex; align-items:center; gap:4px; color:var(--text-dim);}
+  .phone-statusbar svg{width:13px; height:13px;}
+  .phone-appbar{
+    padding:10px 14px 12px;
+    border-bottom:1px solid var(--border-soft);
+    background:var(--panel);
+    flex-shrink:0;
+  }
+  .phone-appbar .title-row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:8px;
+  }
+  .phone-appbar h4{font-size:14.5px; font-weight:700; margin:0;}
+  .phone-appbar .back{color:var(--text-faint); display:flex; align-items:center; gap:6px; font-size:12.5px;}
+  .phone-appbar .back svg{width:15px; height:15px;}
+  .phone-body{
+    flex:1;
+    overflow-y:auto;
+    background:var(--bg);
+    padding:12px 12px 14px;
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+  }
+  .phone-tabbar{
+    height:58px;
+    flex-shrink:0;
+    background:var(--panel);
+    border-top:1px solid var(--border);
+    display:flex;
+    align-items:center;
+    justify-content:space-around;
+    padding-bottom:6px;
+  }
+  .phone-tabbar .ptab{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:3px;
+    font-size:9.5px;
+    color:var(--text-faint);
+  }
+  .phone-tabbar .ptab.active{color:var(--accent-2);}
+  .phone-tabbar .ptab svg{width:18px; height:18px;}
+  .phone-tabbar .ptab .badge-dot{
+    position:relative;
+  }
+  .phone-tabbar .ptab .badge-dot::after{
+    content:"";
+    position:absolute;
+    top:-2px; right:-4px;
+    width:8px; height:8px;
+    border-radius:50%;
+    background:var(--warn);
+    border:1.5px solid var(--panel);
+  }
+
+  /* mobile conflict cards reuse .conflict-card etc; a few touch-sized tweaks */
+  .phone-body .conflict-card{padding:14px;}
+  .phone-body .card-actions .btn{padding:11px 12px; font-size:13px;}
+  .phone-body .thumb-row{flex-direction:column;}
+  .phone-body .thumb-frame{height:96px;}
+
+  /* mobile merge view: stacked versions */
+  .mv-title{
+    font-size:13.5px;
+    font-weight:700;
+    color:var(--text);
+    padding:2px 2px 0;
+  }
+  .mv-sub{
+    font-size:11px;
+    color:var(--text-faint);
+    padding:0 2px 4px;
+  }
+  .mv-version-block{
+    border-radius:var(--radius-md);
+    overflow:hidden;
+    border:1px solid var(--border);
+  }
+  .mv-version-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:10px 12px;
+    gap:8px;
+  }
+  .mv-version-head.a{background:var(--left-soft); border-bottom:1px solid var(--left-border);}
+  .mv-version-head.b{background:var(--right-soft); border-bottom:1px solid var(--right-border);}
+  .mv-version-head .txt b{display:block; font-size:12.5px; font-weight:700;}
+  .mv-version-head .txt span{display:block; font-size:10.5px; color:var(--text-faint); margin-top:1px;}
+  .mv-version-head .time-chip{font-size:10px;}
+  .mv-chunk{
+    background:var(--editor);
+    padding:12px;
+  }
+  .mv-chunk .chunk-text{font-size:12px; line-height:1.6;}
+  .mv-choice-stack{
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    margin-top:12px;
+  }
+  .mv-choice-stack .choice-chip{
+    width:100%;
+    justify-content:center;
+    padding:12px 14px;
+    border-radius:10px;
+    font-size:13px;
+  }
+  .mv-identical{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:9px 12px;
+    background:rgba(255,255,255,0.02);
+    border:1px solid var(--border-soft);
+    border-radius:var(--radius-sm);
+    color:var(--text-faint);
+    font-size:11px;
+  }
+  .mv-identical svg{width:13px; height:13px; flex-shrink:0;}
+  .mv-result{
+    background:var(--editor-2);
+    border:1px solid var(--border);
+    border-radius:var(--radius-md);
+    padding:12px 14px;
+    font-family:var(--font-mono);
+    font-size:11.5px;
+    line-height:1.65;
+    color:var(--text);
+  }
+  .mv-result h5{font-family:var(--font-ui); font-size:12.5px; margin:0 0 6px; font-weight:700;}
+  .mv-result p{margin:0 0 6px; color:var(--text-dim);}
+  .mv-stickybar{
+    flex-shrink:0;
+    border-top:1px solid var(--border);
+    background:var(--panel);
+    padding:10px 14px 14px;
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+  }
+  .mv-stickybar .reassure{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    font-size:10.5px;
+    color:var(--text-faint);
+    justify-content:center;
+    text-align:center;
+  }
+  .mv-stickybar .reassure svg{width:12px; height:12px; flex-shrink:0; color:var(--accent-2);}
+  .mv-stickybar .btn-done{width:100%; padding:13px; font-size:13px; border-radius:10px;}
+
+  /* mobile status + history screen */
+  .phone-sync-pill{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding:5px 11px;
+    border-radius:20px;
+    font-size:11px;
+    font-weight:700;
+  }
+  .phone-sync-pill.warn{background:var(--warn-soft); color:var(--warn);}
+  .phone-sync-pill svg{width:12px; height:12px;}
+  .phone-body .history-list{padding:0;}
+  .phone-body .history-row{padding:11px 4px;}
+  .phone-body .history-detail{padding:4px 4px 8px 27px;}
+  .phone-body .history-file-row{padding:8px 4px;}
+  .phone-section-title{
+    font-size:11px;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:0.06em;
+    color:var(--text-faint);
+    padding:6px 2px 0;
+  }
+
   @media (max-width: 980px){
     .conflicts-body{flex-direction:column; height:auto;}
     .conflicts-sidebar{width:100%; border-right:none; border-bottom:1px solid var(--border);}
@@ -1397,6 +1637,302 @@ Marcus to <span class="add">sync directly</span> with the design team about the 
       </div>
     </div>
     <div class="caption">History reads like a diary of what happened, not a log file. Every entry can be expanded to see exactly which files changed, with a one-click <b>Restore</b> for peace of mind.</div>
+  </div>
+
+  <!-- ================= SECTION: MOBILE ================= -->
+  <div class="section-block">
+    <div class="section-label">
+      <span class="num">M</span>
+      <h2>On your phone</h2>
+      <span class="sub">Same ThinkBrain Notes app, one codebase — panes that sit side by side on desktop stack vertically here</span>
+    </div>
+
+    <div class="phone-row">
+
+      <!-- PHONE 1: Conflicts list, full screen -->
+      <div class="phone-unit">
+        <div class="phone-frame">
+          <div class="phone-notch"></div>
+          <div class="phone-screen">
+            <div class="phone-statusbar">
+              <span>9:41</span>
+              <div class="sb-icons">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 8.5a15 15 0 0 1 20 0M5.5 12a10 10 0 0 1 13 0M9 15.5a5 5 0 0 1 6 0"/><circle cx="12" cy="19" r="1"/></svg>
+                <svg viewBox="0 0 24 24" fill="currentColor"><rect x="1" y="7" width="18" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="3" y="9" width="12" height="6" rx="1"/><rect x="20" y="10" width="2" height="4" rx="1"/></svg>
+              </div>
+            </div>
+            <div class="phone-appbar">
+              <div class="title-row">
+                <h4>Needs your attention</h4>
+                <span class="chip">2</span>
+              </div>
+              <div style="font-size:11px; color:var(--text-faint); line-height:1.5;">These notes changed on more than one device. Tap a card to compare and choose.</div>
+            </div>
+            <div class="phone-body">
+
+              <!-- Card A: Markdown note -->
+              <div class="conflict-card">
+                <div class="row1">
+                  <div class="file-icon md">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+                  </div>
+                  <div>
+                    <div class="conflict-name">Meeting Notes.md</div>
+                    <div class="conflict-sub">Edited on two devices</div>
+                  </div>
+                </div>
+                <div style="display:flex; align-items:center; gap:8px; margin:10px 0 12px; flex-wrap:wrap;">
+                  <span class="chip onedrive">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M7.5 15.5a4 4 0 0 1-.4-7.98A5.5 5.5 0 0 1 17.7 9.3 3.75 3.75 0 0 1 17.5 16.8H7.5z"/></svg>
+                    Synced via OneDrive
+                  </span>
+                  <span class="chip">2 versions</span>
+                </div>
+                <div class="card-actions">
+                  <button class="btn btn-primary btn-block">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 14h6v6M20 10h-6V4M4 14l6.5-6.5M20 10l-6.5 6.5"/></svg>
+                    Review
+                  </button>
+                </div>
+              </div>
+
+              <!-- Card B: image -->
+              <div class="conflict-card">
+                <div class="row1">
+                  <div class="file-icon img">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+                  </div>
+                  <div>
+                    <div class="conflict-name">diagram.png</div>
+                    <div class="conflict-sub">Changed in two places</div>
+                  </div>
+                </div>
+
+                <div class="thumb-row">
+                  <div class="thumb">
+                    <div class="thumb-frame left">
+                      <div class="fake-diagram">
+                        <div class="fd-box" style="left:6%; top:18%; width:34%; height:24%;"></div>
+                        <div class="fd-box" style="left:58%; top:14%; width:36%; height:22%;"></div>
+                        <div class="fd-line" style="left:40%; top:29%; width:19%;"></div>
+                      </div>
+                    </div>
+                    <div class="thumb-meta"><b>This phone</b>214 KB · Aug 12, 4:08 PM</div>
+                  </div>
+                  <div class="thumb">
+                    <div class="thumb-frame right">
+                      <div class="fake-diagram alt">
+                        <div class="fd-box" style="left:6%; top:14%; width:30%; height:22%;"></div>
+                        <div class="fd-box" style="left:52%; top:12%; width:42%; height:24%;"></div>
+                        <div class="fd-line" style="left:35%; top:26%; width:18%;"></div>
+                      </div>
+                    </div>
+                    <div class="thumb-meta"><b>From OneDrive</b>238 KB · Aug 13, 8:52 AM</div>
+                  </div>
+                </div>
+
+                <div class="card-actions" style="flex-direction:column;">
+                  <button class="btn btn-secondary btn-block">Keep this phone's</button>
+                  <button class="btn btn-secondary btn-block">Keep OneDrive's</button>
+                  <button class="btn btn-primary btn-block">Keep both</button>
+                </div>
+              </div>
+
+            </div>
+            <div class="phone-tabbar">
+              <div class="ptab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3h9l3 3v15H6z"/></svg>Notes</div>
+              <div class="ptab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>Search</div>
+              <div class="ptab active"><span class="badge-dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12a9 9 0 0 1-15.5 6.3M3 12a9 9 0 0 1 15.5-6.3"/><path d="M21 3v6h-6M3 21v-6h6"/></svg></span>Sync</div>
+              <div class="ptab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/></svg>Settings</div>
+            </div>
+          </div>
+        </div>
+        <div class="caption">Full-screen triage list — the same plain-language cards as desktop, just stacked and touch-sized. Labels stay <b>source-based</b>: "this phone" instead of "this computer."</div>
+      </div>
+
+      <!-- PHONE 2: Merge view, stacked (the important one) -->
+      <div class="phone-unit">
+        <div class="phone-frame">
+          <div class="phone-notch"></div>
+          <div class="phone-screen">
+            <div class="phone-statusbar">
+              <span>9:41</span>
+              <div class="sb-icons">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 8.5a15 15 0 0 1 20 0M5.5 12a10 10 0 0 1 13 0M9 15.5a5 5 0 0 1 6 0"/><circle cx="12" cy="19" r="1"/></svg>
+                <svg viewBox="0 0 24 24" fill="currentColor"><rect x="1" y="7" width="18" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="3" y="9" width="12" height="6" rx="1"/><rect x="20" y="10" width="2" height="4" rx="1"/></svg>
+              </div>
+            </div>
+            <div class="phone-appbar">
+              <div class="back">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 18l-6-6 6-6"/></svg>
+                Needs your attention
+              </div>
+            </div>
+            <div class="phone-body">
+
+              <div class="mv-title">Meeting Notes.md</div>
+              <div class="mv-sub">Two versions exist — review the highlighted part below.</div>
+
+              <div class="mv-version-block">
+                <div class="mv-version-head a">
+                  <div class="txt"><b>On this phone</b><span>Adam's iPhone</span></div>
+                  <span class="chip time-chip">Today, 8:47 AM</span>
+                </div>
+              </div>
+
+              <div class="mv-identical">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>
+                14 identical lines collapsed
+              </div>
+
+              <div class="mv-chunk" style="border:1px solid var(--left-border); border-radius:var(--radius-sm);">
+                <div class="chunk-text">## Action items
+
+Marcus to <del>follow up with</del> the design team about the new icon set before Friday.</div>
+              </div>
+
+              <div class="mv-version-block">
+                <div class="mv-version-head b">
+                  <div class="txt"><b>From OneDrive</b><span>Desktop PC · synced just now</span></div>
+                  <span class="chip time-chip">Today, 9:12 AM</span>
+                </div>
+              </div>
+
+              <div class="mv-chunk" style="border:1px solid var(--right-border); border-radius:var(--radius-sm);">
+                <div class="chunk-text">## Action items
+
+Marcus to <span class="add">sync directly</span> with the design team about the new icon set before <span class="add">next Wednesday's review</span>.</div>
+              </div>
+
+              <div class="mv-choice-stack">
+                <span class="choice-chip">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="4" y="4" width="16" height="16" rx="3"/></svg>
+                  Keep this phone's
+                </span>
+                <span class="choice-chip selected">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
+                  Keep OneDrive's
+                </span>
+                <span class="choice-chip ghost">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="4" y="4" width="7" height="16" rx="1"/><rect x="13" y="4" width="7" height="16" rx="1"/></svg>
+                  Keep both
+                </span>
+              </div>
+
+              <div class="phone-section-title">Result — this is what will be saved</div>
+              <div class="mv-result">
+                <h5>Q3 Roadmap Sync — Aug 11</h5>
+                <p>Attendees: Adam, Priya, Marcus.</p>
+                <p><b>Action items</b><br>Marcus to <span class="merged-mark">sync directly</span> with the design team about the new icon set before <span class="merged-mark">next Wednesday's review</span>.</p>
+              </div>
+
+            </div>
+            <div class="mv-stickybar">
+              <div class="reassure">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 3 6v6c0 5 4 8.5 9 10 5-1.5 9-5 9-10V6z"/></svg>
+                You can always undo — previous versions are kept in History.
+              </div>
+              <button class="btn btn-primary btn-done">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg>
+                Done — save merged note
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="caption">The centerpiece, stacked: version A sits directly above version B instead of beside it, and the three choices become full-width, thumb-height chips — <b>Keep this phone's / Keep OneDrive's / Keep both</b>. Same source-based wording as desktop, never "left" or "right."</div>
+      </div>
+
+      <!-- PHONE 3: Status + history -->
+      <div class="phone-unit">
+        <div class="phone-frame">
+          <div class="phone-notch"></div>
+          <div class="phone-screen">
+            <div class="phone-statusbar">
+              <span>9:41</span>
+              <div class="sb-icons">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 8.5a15 15 0 0 1 20 0M5.5 12a10 10 0 0 1 13 0M9 15.5a5 5 0 0 1 6 0"/><circle cx="12" cy="19" r="1"/></svg>
+                <svg viewBox="0 0 24 24" fill="currentColor"><rect x="1" y="7" width="18" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="3" y="9" width="12" height="6" rx="1"/><rect x="20" y="10" width="2" height="4" rx="1"/></svg>
+              </div>
+            </div>
+            <div class="phone-appbar">
+              <div class="title-row">
+                <h4>Sync</h4>
+                <span class="phone-sync-pill warn">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 9v4M12 17h.01M10.3 3.9 2.7 17a2 2 0 0 0 1.7 3h15.2a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>
+                  1 item needs attention
+                </span>
+              </div>
+            </div>
+            <div class="phone-body">
+
+              <div class="phone-section-title">History</div>
+              <div class="history-list">
+
+                <div class="history-entry expanded">
+                  <div class="history-row">
+                    <div class="history-dot"></div>
+                    <div class="htext">
+                      <div class="htitle">Today, 9:31 AM — 3 notes updated</div>
+                      <div class="hsub">Combined changes from Desktop PC and this phone</div>
+                    </div>
+                    <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M9 18l6-6-6-6"/></svg>
+                  </div>
+                  <div class="history-detail">
+                    <div class="history-file-row">
+                      <div class="fname">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+                        Meeting Notes.md — two versions combined
+                      </div>
+                      <span class="fmeta">9:31 AM</span>
+                      <button class="btn btn-ghost btn-sm">Restore</button>
+                    </div>
+                    <div class="history-file-row">
+                      <div class="fname">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+                        diagram.png — kept both copies
+                      </div>
+                      <span class="fmeta">9:30 AM</span>
+                      <button class="btn btn-ghost btn-sm">Restore</button>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="history-entry">
+                  <div class="history-row">
+                    <div class="history-dot muted"></div>
+                    <div class="htext">
+                      <div class="htitle">Yesterday — Restored "Trip Ideas" to an earlier version</div>
+                      <div class="hsub">You chose the 6:40 PM version from Aug 12</div>
+                    </div>
+                    <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M9 18l6-6-6-6"/></svg>
+                  </div>
+                </div>
+
+                <div class="history-entry">
+                  <div class="history-row">
+                    <div class="history-dot muted"></div>
+                    <div class="htext">
+                      <div class="htitle">Aug 12 — 5 notes updated</div>
+                      <div class="hsub">Synced automatically, no decisions needed</div>
+                    </div>
+                    <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M9 18l6-6-6-6"/></svg>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+            <div class="phone-tabbar">
+              <div class="ptab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3h9l3 3v15H6z"/></svg>Notes</div>
+              <div class="ptab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>Search</div>
+              <div class="ptab active"><span class="badge-dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12a9 9 0 0 1-15.5 6.3M3 12a9 9 0 0 1 15.5-6.3"/><path d="M21 3v6h-6M3 21v-6h6"/></svg></span>Sync</div>
+              <div class="ptab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/></svg>Settings</div>
+            </div>
+          </div>
+        </div>
+        <div class="caption">Top app bar carries the same amber attention pill as desktop's status bar. Below it, the friendly <b>Sync History</b> list is identical in tone — one expanded entry with a one-tap <b>Restore</b>.</div>
+      </div>
+
+    </div>
   </div>
 
   <!-- ================= SECTION 5 ================= -->
