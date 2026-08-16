@@ -22,7 +22,13 @@ export type DesktopTabAction =
   | { readonly type: "requestClose"; readonly tabId: string }
   | { readonly type: "discardClose"; readonly tabId: string }
   | { readonly type: "completeSaveAndClose"; readonly tabId: string }
-  | { readonly type: "cancelClose"; readonly tabId: string };
+  | { readonly type: "cancelClose"; readonly tabId: string }
+  /** The file a tab is showing was renamed or moved, here or outside the app. */
+  | {
+      readonly type: "retarget";
+      readonly from: Required<TabResource>;
+      readonly to: Required<TabResource>;
+    };
 
 export const initialDesktopTabState: DesktopTabState = {
   tabs: [],
@@ -76,10 +82,17 @@ export function desktopTabReducer(
       return state.tabs.some((tab) => tab.id === action.tabId)
         ? { ...state, activeTabId: action.tabId }
         : state;
-    case "setDirty":
+    case "setDirty": {
+      // Compare against the normalized target so dispatching `isDirty: false`
+      // on a tab whose `isDirty` is already `undefined` is a no-op. Without
+      // this, `undefined === false` is `false` and the reducer churns the
+      // tabs array on every settings-tab open, triggering an extra re-render
+      // and a debounced desktop-state persistence write.
+      const target = action.isDirty || undefined;
       return updateTab(state, action.tabId, (tab) =>
-        tab.isDirty === action.isDirty ? tab : { ...tab, isDirty: action.isDirty || undefined }
+        tab.isDirty === target ? tab : { ...tab, isDirty: target }
       );
+    }
     case "requestClose": {
       const tab = state.tabs.find((candidate) => candidate.id === action.tabId);
       if (!tab) return state;
@@ -95,7 +108,45 @@ export function desktopTabReducer(
       return state.closeRequest?.tabId === action.tabId
         ? { ...state, closeRequest: null }
         : state;
+    case "retarget":
+      return retargetTab(state, action.from, action.to);
   }
+}
+
+/**
+ * Points the tab showing `from` at `to` instead.
+ *
+ * A tab's id is built from the path of its file, so following a rename means
+ * replacing the tab rather than editing it — and carrying over everything keyed
+ * by the old id: which tab is selected, and any close decision waiting on it.
+ * Its unsaved edits come with it; the text has not changed, only its name.
+ */
+function retargetTab(
+  state: DesktopTabState,
+  from: Required<TabResource>,
+  to: Required<TabResource>
+): DesktopTabState {
+  const oldId = editorTabId(from);
+  const existing = state.tabs.find((tab) => tab.id === oldId);
+  if (!existing) return state;
+
+  const moved: DesktopTab = {
+    ...createEditorTab(to),
+    ...(existing.isDirty ? { isDirty: existing.isDirty } : {})
+  };
+
+  const tabs = state.tabs
+    // Renaming one open note over another leaves one file, so it leaves one
+    // tab. Dropping the tab already there keeps ids unique — the shell keys a
+    // tab's loaded contents by them.
+    .filter((tab) => tab.id !== moved.id || tab.id === oldId)
+    .map((tab) => (tab.id === oldId ? moved : tab));
+
+  return {
+    tabs,
+    activeTabId: state.activeTabId === oldId ? moved.id : state.activeTabId,
+    closeRequest: state.closeRequest?.tabId === oldId ? { tabId: moved.id } : state.closeRequest
+  };
 }
 
 function updateTab(

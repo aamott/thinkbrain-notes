@@ -2,10 +2,33 @@
 
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+// Mock the Tauri core `isTauri` check so we can toggle the mount-load branch.
+vi.mock("@tauri-apps/api/core", () => ({
+  isTauri: vi.fn<() => boolean>()
+}));
+
+// Mock the workspace adapter so `windowWorkspaceRoot` is controllable.
+vi.mock("../workspace/workspaceAdapter", () => ({
+  workspaceDesktopApi: {
+    windowWorkspaceRoot: vi.fn<() => Promise<string | null>>()
+  }
+}));
+
+// Mock native commands so `loadSettings` (via the native gateway) doesn't hit
+// Tauri IPC. Returns null by default (no settings files on disk).
+vi.mock("../native/commands", () => ({
+  invokeNativeCommand: vi.fn<() => Promise<unknown>>()
+}));
+
+import { isTauri } from "@tauri-apps/api/core";
+import { workspaceDesktopApi } from "../workspace/workspaceAdapter";
+import { invokeNativeCommand } from "../native/commands";
 import { SettingsTab } from "./SettingsTab";
 import { useSettingsStore, appSettingsRegistry } from "./settingsStore";
+import { setExtensionBootstrap } from "../extensions/bootstrapRef";
+import { setWorkspaceBridge } from "../extensions/workspaceBridge";
 import { registerControl, type ControlProps } from "./controlRegistry";
 
 /**
@@ -33,6 +56,12 @@ const SEEDED_APP_VALUES: Record<string, unknown> = {
 };
 
 beforeEach(() => {
+  // `isTauri` is false by default so the mount effect is a no-op for existing
+  // tests. The remount-persistence test overrides this to true.
+  vi.mocked(isTauri).mockReturnValue(false);
+  vi.mocked(workspaceDesktopApi.windowWorkspaceRoot).mockResolvedValue(null);
+  vi.mocked(invokeNativeCommand).mockResolvedValue(null);
+
   // Reset the singleton store to a clean, loaded state before each test.
   useSettingsStore.setState({
     appValues: { ...SEEDED_APP_VALUES },
@@ -55,6 +84,9 @@ afterEach(async () => {
   container?.remove();
   root = null;
   container = null;
+  vi.mocked(isTauri).mockReset();
+  vi.mocked(workspaceDesktopApi.windowWorkspaceRoot).mockReset();
+  vi.mocked(invokeNativeCommand).mockReset();
 });
 
 /**
@@ -300,5 +332,117 @@ describe("SettingsTab", () => {
     const banner = el.querySelector('[role="alert"]');
     expect(banner).not.toBeNull();
     expect(banner?.textContent).toContain("disk on fire");
+  });
+
+  it("preserves staged changes across unmount/remount (Tauri)", async () => {
+    // Simulate a Tauri environment so the mount-load effect runs.
+    vi.mocked(isTauri).mockReturnValue(true);
+    const WORKSPACE_ROOT = "/test/workspace";
+    vi.mocked(workspaceDesktopApi.windowWorkspaceRoot).mockResolvedValue(WORKSPACE_ROOT);
+    // No settings files on disk — loadSettings populates defaults only.
+    vi.mocked(invokeNativeCommand).mockResolvedValue(null);
+
+    // First mount: triggers loadSettings, which sets loaded=true and
+    // workspaceRootPath=WORKSPACE_ROOT.
+    await renderSettingsTab();
+    expect(useSettingsStore.getState().loaded).toBe(true);
+    expect(useSettingsStore.getState().workspaceRootPath).toBe(WORKSPACE_ROOT);
+
+    // Capture the native-command call count after the initial load.
+    const callsAfterFirstMount = vi.mocked(invokeNativeCommand).mock.calls.length;
+
+    // Stage an unsaved change (simulating user editing a setting).
+    useSettingsStore.setState({
+      activeSection: "editor.display",
+      stagedChanges: { "editor.fontSize": 99 },
+      isDirty: true,
+      dirtyCount: 1
+    });
+    expect(useSettingsStore.getState().stagedChanges["editor.fontSize"]).toBe(99);
+
+    // Unmount the settings tab (simulates switching to another tab).
+    await act(async () => root?.unmount());
+    root = null;
+
+    // Remount the settings tab (simulates switching back). Without the fix,
+    // the mount effect would call loadSettings again, clearing stagedChanges.
+    await renderSettingsTab();
+
+    // Staged changes must survive the remount.
+    const staged = useSettingsStore.getState().stagedChanges;
+    expect(staged["editor.fontSize"]).toBe(99);
+    expect(useSettingsStore.getState().isDirty).toBe(true);
+
+    // loadSettings must NOT have been called again on remount (no additional
+    // native command invocations for read_app_settings / read_workspace_settings).
+    expect(vi.mocked(invokeNativeCommand).mock.calls.length).toBe(callsAfterFirstMount);
+  });
+});
+
+describe("SettingsTab and lazy extensions", () => {
+  /**
+   * The bug this covers: the journal registers its settings when it activates,
+   * and it activates lazily, so opening Settings without having opened the
+   * journal first showed no Journal section at all — nothing to configure, and
+   * no hint that anything was missing.
+   */
+  it("wakes every extension so their sections exist", async () => {
+    const activateAll = vi.fn(async () => undefined);
+    setExtensionBootstrap({
+      entries: () => [],
+      activateAll,
+      addLocalExtension: () => undefined,
+      removeLocalExtension: async () => undefined,
+      subscribe: () => () => undefined,
+      dispose: async () => undefined
+    });
+
+    await renderSettingsTab();
+
+    expect(activateAll).toHaveBeenCalled();
+    setExtensionBootstrap(null);
+  });
+});
+
+describe("finding the workspace a setting belongs to", () => {
+  /**
+   * The bug this covers: only a *secondary* workspace window registers a root
+   * natively, so in the main window `windowWorkspaceRoot` is null even with a
+   * vault open. Settings then loaded with no workspace, and every
+   * workspace-scoped setting — the journal folder, the metadata fields — could
+   * be staged and never saved: Save did nothing and the bar stayed dirty.
+   */
+  it("falls back to the shell's open workspace", async () => {
+    vi.mocked(isTauri).mockReturnValue(true);
+    vi.mocked(workspaceDesktopApi.windowWorkspaceRoot).mockResolvedValue(null);
+    useSettingsStore.setState({ loaded: false, workspaceRootPath: null });
+    setWorkspaceBridge({
+      rootPath: "/vault",
+      openNote: () => undefined,
+      openTab: () => undefined
+    });
+
+    await renderSettingsTab();
+    await act(async () => undefined);
+
+    expect(useSettingsStore.getState().workspaceRootPath).toBe("/vault");
+    setWorkspaceBridge(null);
+  });
+
+  it("prefers the window's own root when it has one", async () => {
+    vi.mocked(isTauri).mockReturnValue(true);
+    vi.mocked(workspaceDesktopApi.windowWorkspaceRoot).mockResolvedValue("/window-vault");
+    useSettingsStore.setState({ loaded: false, workspaceRootPath: null });
+    setWorkspaceBridge({
+      rootPath: "/vault",
+      openNote: () => undefined,
+      openTab: () => undefined
+    });
+
+    await renderSettingsTab();
+    await act(async () => undefined);
+
+    expect(useSettingsStore.getState().workspaceRootPath).toBe("/window-vault");
+    setWorkspaceBridge(null);
   });
 });

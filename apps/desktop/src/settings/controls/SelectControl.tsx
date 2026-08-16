@@ -4,7 +4,7 @@
  * Renders a `<select>` with `<option>` elements from `definition.options`.
  */
 
-import type { ControlProps } from "../controlRegistry";
+import { inputClassName, type ControlProps } from "../controlRegistry";
 
 /**
  * A controlled `<select>` dropdown. Options come from `definition.options`
@@ -25,7 +25,7 @@ export function SelectControl({ definition, value, onChange, disabled }: Control
       value={selected}
       disabled={disabled}
       onChange={(e) => onChange(e.target.value)}
-      className="w-full max-w-[24rem] rounded-small border border-border bg-surface px-2 py-1 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+      className={`w-full max-w-sm ${inputClassName}`}
     >
       {!valueMatchesOption && (
         <option value="" disabled>

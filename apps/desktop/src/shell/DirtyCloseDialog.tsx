@@ -111,7 +111,7 @@ export function DirtyCloseDialog({
         onKeyDown={handleKeyDown}
       >
         <h2 className="m-0 text-base font-semibold">Save changes to {tab.title}?</h2>
-        <p className="m-0 text-muted-foreground text-xs leading-[1.45]">Closing this tab without saving will discard your edits.</p>
+        <p className="m-0 text-muted-foreground text-xs leading-1.45">Closing this tab without saving will discard your edits.</p>
         <div className="flex flex-wrap justify-end gap-[0.45rem]">
           <button
             type="button"

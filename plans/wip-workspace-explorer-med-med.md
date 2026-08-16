@@ -41,27 +41,29 @@ default application.
 - **Tree stays virtualized.** react-arborist is already in use; drag-and-drop
   should use its built-in DnD (currently disabled via `disableDrag`/
   `disableDrop`) rather than a separate DnD library.
+- **Search/index ownership stays in indexing-search.** That epic owns the FTS5
+  backend, index lifecycle, and index updates. Explorer stories only consume
+  watcher/index events to refresh tree or editor UI; they do not add a second
+  watcher or FTS5 backend.
 
 ## Status
 
-- ✅ fresh-shell workspace open, restore, and read-only explorer — see
-  `plans/workspace-explorer/done-fresh_shell_workspace_open-high-med.md`
-- ✅ Markdown CRUD UI integration in the fresh shell — see
-  `plans/workspace-explorer/done-fresh_markdown_crud_ui-high-hard.md`
+- ✅ fresh-shell workspace open, restore, and read-only explorer
+- ✅ Markdown CRUD UI integration in the fresh shell
 - ✅ Full-vault tree integration (folders + non-Markdown files, read-only) —
   rebuilt against `list_workspace_entries` in the fresh shell
 - ✅ Dot-prefixed entries hidden by default — `lib.rs` `is_hidden_name`
-- ✅ Explorer icons, workspace selector, and multi-window workspace sessions — see
-  `plans/workspace-explorer/done-explorer_workspace_selector-high-hard.md` and
-  `plans/workspace-explorer/done-multi_window_workspace_sessions-high-hard.md`
+- ✅ Explorer icons, workspace selector, and multi-window workspace sessions
 - ⬜ Non-Markdown file operations (open / rename / delete) — see
   `pending-non_markdown_file_ops-med-med.md`
 - ⬜ Drag-and-drop move in the file tree — see
   `pending-drag_and_drop_move-med-hard.md`
-- ⬜ New-folder action — see `pending-new_folder_action-med-med.md`
-- ⬜ Show-hidden toggle for dot-prefixed entries — see
-  `pending-show_hidden_toggle-med-med.md`
-- ⬜ Native file watcher (external changes sync) — see
-  `pending-file_watcher-med-hard.md`
-- ⬜ SQLite FTS5 full-text search backend — see
-  `pending-fts5_search_backend-low-hard.md`
+- ✅ New-folder action
+- ✅ Show-hidden toggle for dot-prefixed entries
+- ⬜ Explorer tree/editor consumption of external file-change events — see
+  `pending-file_watcher-med-hard.md`; watcher lifecycle and index updates belong
+  to `plans/wip-indexing-search-med-med.md`.
+- FTS5 backend/index lifecycle is owned by indexing-search — see
+  `plans/wip-indexing-search-med-med.md`; retain
+  `pending-fts5_search_backend-low-hard.md` as the explorer/UI integration note
+  only.

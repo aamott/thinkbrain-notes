@@ -11,14 +11,37 @@ Future extensions include:
   - Other
 
 ## File Map
-- **`apps/desktop/`** - Desktop Application (React UI & Tauri Rust Host). See [apps/desktop/AGENTS.md](file:///media/adam/extex/projects/thinkbrain-notes/apps/desktop/AGENTS.md).
-  - **`apps/desktop/src/`** - Frontend UI & Client State. See [apps/desktop/src/AGENTS.md](file:///media/adam/extex/projects/thinkbrain-notes/apps/desktop/src/AGENTS.md).
-  - **`apps/desktop/src-tauri/`** - Tauri Rust Backend & ACP Host. See [apps/desktop/src-tauri/AGENTS.md](file:///media/adam/extex/projects/thinkbrain-notes/apps/desktop/src-tauri/AGENTS.md).
-- **`packages/core/`** - Core Domain Models & Parsing (Platform-Agnostic TS). See [packages/core/AGENTS.md](file:///media/adam/extex/projects/thinkbrain-notes/packages/core/AGENTS.md).
-- **`packages/ui/`** - Design System & Component Library (Tailwind v4 & shadcn). See [packages/ui/AGENTS.md](file:///media/adam/extex/projects/thinkbrain-notes/packages/ui/AGENTS.md).
-- **`plans/`** - Architecture epics, feature specs, and task tracking.
-- **`scripts/`** - Project scripts (`scripts/qa.sh` for lint/typecheck/tests).
-- **`docs/`** - Subagent review logs and known issue trackers.
+
+Keep map up to date. Relative filepaths. Concise.
+
+```
+apps/desktop/  # React UI + Tauri Rust host (See apps/desktop/AGENTS.md)
+├─ src/  # Frontend UI & client state (See apps/desktop/src/AGENTS.md)
+│  ├─ agent/  # Assistant panel (ACP renderer boundary)
+│  ├─ commands/  # Command palette & registry
+│  ├─ events/  # App-wide event bus
+│  ├─ extensions/  # Extension host, bootstrap, builtins, loader
+│  ├─ git/  # Git service & source-control panel
+│  ├─ lib/  # Shared renderer utils
+│  ├─ native/  # Tauri bridge: commands, dialogs, fs, assets
+│  ├─ panels/  # Left/right popouts, bottom panel, outline
+│  ├─ search/  # Search panel & model
+│  ├─ settings/  # Settings UI, theme provider, desktop state
+│  ├─ shell/  # DesktopShell, activity bar, title bar, status bar
+│  ├─ tabs/  # Tab model, registry, editor, live preview
+│  └─ workspace/  # Explorer, document adapter, workspace model
+├─ src-tauri/  # Rust backend & ACP host (See apps/desktop/src-tauri/AGENTS.md)
+│  └─ src/commands/  # Tauri commands: extensions, git, markdown, search, settings, themes, workspace
+│     └─ search/  # Structured metadata facet storage, queries, and focused tests
+├─ e2e/  # Playwright E2E specs
+└─ demo/  # Demo fixtures
+packages/core/  # Platform-agnostic TS: note model, markdown, frontmatter, settings, layout, extensions (See packages/core/AGENTS.md)
+packages/ui/  # Design system: tokens, shadcn components (See packages/ui/AGENTS.md)
+plans/  # Epics, feature specs, task tracking (See ## Plans below)
+scripts/  # qa.sh, rust-env.sh, with-rust-env.sh
+docs/  # Reviews, known issues, superpowers specs
+examples/extensions/  # Sample extension (hello-notes)
+```
 
 ## Core Architecture
 - **Layer Separation**: `packages/core` is strictly platform-agnostic. UI components never call Tauri/Rust directly; all native communication is routed through `apps/desktop/src/native/` adapters.
@@ -30,15 +53,47 @@ Future extensions include:
 - Run `./scripts/qa.sh` or `pnpm lint` and `pnpm typecheck` before completing tasks.
 - Avoid `any` types; prefer strict types or `unknown`.
 - Fail loudly: log errors clearly and return typed results.
-- Never commit automatically. Always hand off to the user with a recommended commit message and UI-facing manual test steps.
 
 ## Development & Launching
 - To run the Tauri desktop app in development mode, use `pnpm desktop:tauri dev` in the project root. Note: `pnpm dev` only launches the web UI, so always use `pnpm desktop:tauri dev` to test native functionality.
 
-## Build Tooling (Linux)
-- The Rust backend is configured for fast builds via `.cargo/config.toml`:
-  - **sccache** caches compiled crate artifacts across builds/checkouts. Install: `sudo apt install sccache`.
-  - **mold** is a high-speed linker invoked via clang (`-fuse-ld=mold`). Install: `sudo apt install mold clang`.
-- Both are required for optimal Linux dev/release compile times. If unavailable, sccache emits a benign warning (override with `RUSTC_WRAPPER=` empty); mold flags are gated to `x86_64-unknown-linux-gnu`.
-- Profiles: `[profile.dev]` prioritizes compile speed (`line-tables-only` debuginfo, incremental); `[profile.release]` prioritizes runtime speed and small binaries (thin LTO, `codegen-units=1`, symbol stripping).
-- Check sccache hit rate with `sccache --show-stats`.
+
+## Plans
+List relevant folder to see task status. Keep filenames updated to reflect current status. Review after milestones. Delete tasks after review, or fix status if work is not complete. Add action items from review as stories unless they are immediately fixable. Plans should be concise. Avoid duplicating info in files and long worklogs. 
+
+**Plan Folder**
+
+Filename grammar: `[NN-]status-name[-urgency]-difficulty.md`
+(`NN` = optional 2-digit order; urgency optional, defaults to med)
+```
+./plans/
+├── status-epic_name-urgency-difficulty.md
+├── epic_name/
+│   └── [NN-]status-story_name-urgency-difficulty.md
+└── other_tasks/ # bugs, chores, etc.
+    └── status-task_name-urgency-difficulty.md
+```
+
+## Reviews
+Review findings are stored in `docs/reviews/` with filename format `YYYY-MM-DD/finding_name-urgency-difficulty.md`. Check validity before implementing and avoid duplication. Findings are deleted upon being addressed.
+
+## Repomix
+
+For major or cross-cutting refactors, `npx repomix --compress` can help map dependencies before editing. Use `--include` for a focused area; treat `repomix-output.xml` as generated and regenerate it when useful.
+
+## Build Tooling (Linux, optional)
+- Rust builds auto-enable `sccache`/`mold`/`clang` if installed (no setup). Suggested: `sudo apt install sccache mold clang`. Details in `scripts/rust-env.sh`.
+- Build profiles live in `apps/desktop/src-tauri/Cargo.toml`: `[profile.dev]` favors compile speed, `[profile.release]` favors runtime speed + small binaries.
+
+
+## Rules/suggestions
+- Never commit/push without explicit user approval. Recommend commit message and what to try out.
+- Never change AGENTS.md (this file) without explicit user direction and approval. (Exception: `## File Map`)
+- Write compact, maintainable, optimized code. Shorter code is easier to read.
+- Avoid large files. Never over 800 lines. Break up earlier rather than later when it's already big. 
+
+## Unique Terminology
+- Action bar: Left screen, contains buttons for different features.
+  - Contains: Explorer, search, tags, extensions `side: "left"` (journal, etc), and an extensions menu. Settings at bottom.
+- Action items menu: Top right menu, contains buttons for different features.
+  - Contains: Outline, properties, backlinks, and extensions `side: "right"` (agent chat, etc).

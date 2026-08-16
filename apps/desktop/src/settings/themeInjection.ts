@@ -9,7 +9,14 @@
  * layer that overrides individual `--tn-*` color tokens.
  *
  * This module is DOM-only and side-effectful; parsing/validation lives in
- * `@thinkbrain/core`'s `parseThemeFile`. SSR/test safety is provided by a
+ * `@thinkbrain/core`'s `parseThemeFile`. In particular, `parseThemeFile`
+ * rejects token values that contain `;`, `{`, `}`, `@`, or a CSS comment
+ * opener — characters that would let a value break out of the single
+ * declaration this module interpolates it into — and reports the rejection
+ * through its diagnostics, since this module has no diagnostics channel of
+ * its own. `buildThemeCss` below trusts that guarantee rather than
+ * re-validating; it is the reason values can be inserted as plain string
+ * interpolation. SSR/test safety is provided by a
  * `typeof document === "undefined"` guard, though this is a desktop app and
  * the guard is purely defensive.
  */
@@ -25,8 +32,9 @@ const STYLE_ELEMENT_ID = "tn-custom-theme";
  * Each token entry becomes a CSS variable declaration (`key: value;`), and the
  * whole rule is scoped under `:root[data-thinkbrain-theme="<base>"]` so the
  * overrides only apply when the matching base palette is active. Values are
- * inserted as-is — they are CSS color strings produced by `parseThemeFile`,
- * which already validated them as non-empty strings.
+ * inserted as-is — `parseThemeFile` already validated them as non-empty and
+ * free of `;`/`{`/`}`/`@`/comment characters, so nothing here can break out of
+ * the declaration it's placed in.
  *
  * Args:
  *   theme: The parsed theme document.
@@ -37,7 +45,8 @@ const STYLE_ELEMENT_ID = "tn-custom-theme";
 function buildThemeCss(theme: ThemeFile): string {
   const declarations: string[] = [];
   for (const [token, value] of Object.entries(theme.tokens)) {
-    // Values are validated non-empty strings from parseThemeFile; insert as-is.
+    // Values are validated by parseThemeFile (non-empty, no breakout
+    // characters); insert as-is.
     declarations.push(`  ${token}: ${value};`);
   }
   // Empty token maps are valid (a theme that only fixes the base palette);

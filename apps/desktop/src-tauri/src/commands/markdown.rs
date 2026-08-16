@@ -1,11 +1,16 @@
+use crate::commands::watcher::record_self_write;
 use crate::error::NativeError;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 
 use std::fs;
-use std::time::UNIX_EPOCH;
 
-use crate::commands::workspace::{resolve_workspace_root, normalize_relative_path};
+const MAX_MARKDOWN_DEPTH: usize = 20;
+
+use crate::commands::workspace::{
+    entry_metadata, is_ignored_entry_name, normalize_relative_path, resolve_workspace_entry_path,
+    resolve_workspace_root, MAX_WORKSPACE_ENTRIES, WORKSPACE_ENTRY_MUTATION_LOCK,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct MarkdownFileEntry {
@@ -16,13 +21,11 @@ pub struct MarkdownFileEntry {
     pub updated_at: Option<u64>,
 }
 
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct MarkdownFileContents {
     pub relative_path: String,
     pub contents: String,
 }
-
 
 #[tauri::command]
 pub fn list_markdown_files(root_path: String) -> Result<Vec<MarkdownFileEntry>, NativeError> {
@@ -30,7 +33,6 @@ pub fn list_markdown_files(root_path: String) -> Result<Vec<MarkdownFileEntry>, 
 
     list_markdown_file_entries(&root)
 }
-
 
 #[tauri::command]
 pub fn read_markdown_file(
@@ -43,7 +45,7 @@ pub fn read_markdown_file(
         NativeError::with_details(
             "workspace.read_failed",
             "Failed to read the Markdown file.",
-            error.to_string(),
+            error,
         )
     })?;
 
@@ -53,16 +55,51 @@ pub fn read_markdown_file(
     })
 }
 
-
 #[tauri::command]
 pub fn write_markdown_file(
     _app: tauri::AppHandle,
     root_path: String,
     relative_path: String,
     contents: String,
+    expected: Option<String>,
 ) -> Result<MarkdownFileEntry, NativeError> {
-    let root = resolve_workspace_root(&root_path)?;
-    let file_path = resolve_markdown_file_path(&root, &relative_path)?;
+    write_markdown_document(&root_path, &relative_path, contents, expected.as_deref())
+}
+
+/// Writes a note, optionally refusing if it is not what the caller last read.
+///
+/// A note has writers the app cannot see — a sync client, an editor in another
+/// window, the user's own shell — and until this precondition existed a save
+/// put the tab's text over whatever they had written, without anyone being
+/// told. `expected` carries the text the caller computed its version from, so
+/// that loss becomes a refusal the caller can put to the user.
+///
+/// `expected: None` means *unchecked*, which is the opposite of what `None`
+/// means for the settings documents (there, an absent file is itself something
+/// to expect). The difference is deliberate: a note always exists by the time
+/// this runs, and callers with no read behind them — extension writes, scripted
+/// edits — have nothing to expect. Leaving the check opt-in is what lets the
+/// shell send one on every save without paying for an extra read.
+///
+/// Split from the command so it can be tested: the `AppHandle` a `#[tauri::command]`
+/// takes is unavailable to a unit test, and a comparison tested on its own would
+/// not show that a refused write leaves the file alone.
+pub fn write_markdown_document(
+    root_path: &str,
+    relative_path: &str,
+    contents: String,
+    expected: Option<&str>,
+) -> Result<MarkdownFileEntry, NativeError> {
+    let root = resolve_workspace_root(root_path)?;
+    let file_path = resolve_markdown_file_path(&root, relative_path)?;
+
+    // Held across the read, the check and the write. A check that another
+    // in-process writer could land inside would only narrow the window it was
+    // added to close; this is the lock the entry mutations already take, so a
+    // rename or delete cannot slip in either.
+    let _mutation_lock = WORKSPACE_ENTRY_MUTATION_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
 
     if !file_path.is_file() {
         return Err(NativeError::new(
@@ -71,17 +108,37 @@ pub fn write_markdown_file(
         ));
     }
 
+    if let Some(expected) = expected {
+        check_note_write_precondition(&file_path, expected)?;
+    }
+
+    record_self_write(&file_path);
     fs::write(&file_path, contents).map_err(|error| {
         NativeError::with_details(
             "workspace.write_failed",
             "Failed to write the Markdown file.",
-            error.to_string(),
+            error,
         )
     })?;
 
     markdown_file_entry(&root, &file_path)
 }
 
+/// Refuses a write computed from text the file no longer holds.
+///
+/// An unreadable file counts as a mismatch rather than an error of its own: the
+/// caller's answer is the same either way — do not overwrite — and reporting it
+/// as a read failure would send them down a path that cannot help.
+fn check_note_write_precondition(file_path: &Path, expected: &str) -> Result<(), NativeError> {
+    if fs::read_to_string(file_path).ok().as_deref() == Some(expected) {
+        return Ok(());
+    }
+
+    Err(NativeError::new(
+        "workspace.note_conflict",
+        "The note changed on disk while it was being edited.",
+    ))
+}
 
 #[tauri::command]
 pub fn create_markdown_file(
@@ -105,22 +162,22 @@ pub fn create_markdown_file(
             NativeError::with_details(
                 "workspace.create_parent_failed",
                 "Failed to create the note folder.",
-                error.to_string(),
+                error,
             )
         })?;
     }
 
+    record_self_write(&file_path);
     fs::write(&file_path, contents.unwrap_or_default()).map_err(|error| {
         NativeError::with_details(
             "workspace.create_failed",
             "Failed to create the Markdown file.",
-            error.to_string(),
+            error,
         )
     })?;
 
     markdown_file_entry(&root, &file_path)
 }
-
 
 #[tauri::command]
 pub fn rename_markdown_file(
@@ -152,27 +209,35 @@ pub fn rename_markdown_file(
             NativeError::with_details(
                 "workspace.create_parent_failed",
                 "Failed to create the destination folder.",
-                error.to_string(),
+                error,
             )
         })?;
     }
 
+    record_self_write(&file_path);
+    record_self_write(&new_file_path);
     fs::rename(&file_path, &new_file_path).map_err(|error| {
         NativeError::with_details(
             "workspace.rename_failed",
             "Failed to rename the Markdown file.",
-            error.to_string(),
+            error,
         )
     })?;
 
-    let _ = crate::commands::search::remove_index_document(app, root_path, relative_path);
+    let index_path = relative_path.clone();
+    if let Err(error) = crate::commands::search::remove_index_document(app, root_path, index_path) {
+        eprintln!("[markdown] failed to remove search index for {relative_path}: {error}");
+    }
 
     markdown_file_entry(&root, &new_file_path)
 }
 
-
 #[tauri::command]
-pub fn delete_markdown_file(app: tauri::AppHandle, root_path: String, relative_path: String) -> Result<(), NativeError> {
+pub fn delete_markdown_file(
+    app: tauri::AppHandle,
+    root_path: String,
+    relative_path: String,
+) -> Result<(), NativeError> {
     let root = resolve_workspace_root(&root_path)?;
     let file_path = resolve_markdown_file_path(&root, &relative_path)?;
 
@@ -183,21 +248,27 @@ pub fn delete_markdown_file(app: tauri::AppHandle, root_path: String, relative_p
         ));
     }
 
+    record_self_write(&file_path);
     fs::remove_file(&file_path).map_err(|error| {
         NativeError::with_details(
             "workspace.delete_failed",
             "Failed to delete the Markdown file.",
-            error.to_string(),
+            error,
         )
     })?;
 
-    let _ = crate::commands::search::remove_index_document(app, root_path, relative_path);
+    let index_path = relative_path.clone();
+    if let Err(error) = crate::commands::search::remove_index_document(app, root_path, index_path) {
+        eprintln!("[markdown] failed to remove search index for {relative_path}: {error}");
+    }
 
     Ok(())
 }
 
-
-pub fn resolve_markdown_file_path(root: &Path, relative_path: &str) -> Result<PathBuf, NativeError> {
+pub fn resolve_markdown_file_path(
+    root: &Path,
+    relative_path: &str,
+) -> Result<PathBuf, NativeError> {
     let normalized = normalize_relative_path(relative_path)?;
     let path = root.join(normalized);
 
@@ -208,9 +279,13 @@ pub fn resolve_markdown_file_path(root: &Path, relative_path: &str) -> Result<Pa
         ));
     }
 
-    Ok(path)
+    // `normalize_relative_path` rejects `..`, but it cannot see symlinks: a
+    // link inside the vault still resolves outside it, which would let these
+    // commands read, overwrite or delete arbitrary files. Defer to the entry
+    // resolver, which canonicalizes and verifies containment for both existing
+    // targets and not-yet-created ones.
+    resolve_workspace_entry_path(root, relative_path)
 }
-
 
 pub fn list_markdown_file_entries(root: &Path) -> Result<Vec<MarkdownFileEntry>, NativeError> {
     let mut files = Vec::new();
@@ -220,14 +295,13 @@ pub fn list_markdown_file_entries(root: &Path) -> Result<Vec<MarkdownFileEntry>,
     Ok(files)
 }
 
-
 pub fn collect_markdown_file_entries(
     root: &Path,
     current: &Path,
     files: &mut Vec<MarkdownFileEntry>,
     depth: usize,
 ) -> Result<(), NativeError> {
-    if depth > 20 || files.len() > 10_000 {
+    if depth > MAX_MARKDOWN_DEPTH || files.len() > MAX_WORKSPACE_ENTRIES {
         return Ok(());
     }
 
@@ -235,7 +309,7 @@ pub fn collect_markdown_file_entries(
         NativeError::with_details(
             "workspace.list_failed",
             "Failed to list Markdown files in the workspace.",
-            error.to_string(),
+            error,
         )
     })?;
 
@@ -244,13 +318,13 @@ pub fn collect_markdown_file_entries(
             NativeError::with_details(
                 "workspace.list_failed",
                 "Failed to inspect a workspace file.",
-                error.to_string(),
+                error,
             )
         })?;
         let path = entry.path();
         
         let name = entry.file_name().to_string_lossy().to_string();
-        if name.starts_with('.') || ["node_modules", "target", "dist", "vendor"].contains(&name.as_str()) {
+        if is_ignored_entry_name(&name) {
             continue;
         }
 
@@ -258,7 +332,7 @@ pub fn collect_markdown_file_entries(
             NativeError::with_details(
                 "workspace.list_failed",
                 "Failed to inspect a workspace file type.",
-                error.to_string(),
+                error,
             )
         })?;
 
@@ -272,47 +346,20 @@ pub fn collect_markdown_file_entries(
     Ok(())
 }
 
-
-pub fn markdown_file_entry(root: &Path, file_path: &Path) -> Result<MarkdownFileEntry, NativeError> {
-    let relative_path = file_path
-        .strip_prefix(root)
-        .map_err(|error| {
-            NativeError::with_details(
-                "workspace.invalid_path",
-                "File path is outside the workspace.",
-                error.to_string(),
-            )
-        })?
-        .to_string_lossy()
-        .replace('\\', "/");
-    let metadata = fs::metadata(file_path).map_err(|error| {
-        NativeError::with_details(
-            "workspace.metadata_failed",
-            "Failed to read Markdown file metadata.",
-            error.to_string(),
-        )
-    })?;
-    let updated_at = metadata
-        .modified()
-        .ok()
-        .and_then(|modified| modified.duration_since(UNIX_EPOCH).ok())
-        .map(|duration| duration.as_millis() as u64);
+pub fn markdown_file_entry(
+    root: &Path,
+    file_path: &Path,
+) -> Result<MarkdownFileEntry, NativeError> {
+    let metadata = entry_metadata(root, file_path)?;
 
     Ok(MarkdownFileEntry {
-        file_name: file_path
-            .file_name()
-            .map(|file_name| file_name.to_string_lossy().to_string())
-            .unwrap_or_else(|| relative_path.clone()),
-        parent_path: Path::new(&relative_path)
-            .parent()
-            .map(|parent| parent.to_string_lossy().replace('\\', "/"))
-            .unwrap_or_default(),
-        relative_path,
-        byte_size: metadata.len(),
-        updated_at,
+        file_name: metadata.file_name,
+        parent_path: metadata.parent_path,
+        relative_path: metadata.relative_path,
+        byte_size: metadata.byte_size,
+        updated_at: metadata.updated_at,
     })
 }
-
 
 pub fn is_markdown_path(path: &Path) -> bool {
     path.extension()
@@ -322,5 +369,3 @@ pub fn is_markdown_path(path: &Path) -> bool {
         })
         .unwrap_or(false)
 }
-
-

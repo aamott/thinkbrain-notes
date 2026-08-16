@@ -18,13 +18,13 @@ test("activity bar toggles between the explorer and search panels", async ({ pag
   await expect(page.getByRole("complementary", { name: "Search panel" })).toBeVisible();
   await expect(page.getByText("Open a workspace to search its notes.")).toBeVisible();
 
-  await page.getByRole("button", { name: "Explorer" }).click();
+  await page.getByRole("button", { name: "Explorer", exact: true }).click();
   await expect(page.getByRole("complementary", { name: "Explorer panel" })).toBeVisible();
   await expect(page.getByText("ThinkBrain will show the current folder hierarchy without changing any files.")).toBeVisible();
 
-  await page.getByRole("button", { name: "Explorer" }).click();
+  await page.getByRole("button", { name: "Explorer", exact: true }).click();
   await expect(page.getByRole("complementary", { name: "Explorer panel" })).not.toBeVisible();
-  await page.getByRole("button", { name: "Explorer" }).click();
+  await page.getByRole("button", { name: "Explorer", exact: true }).click();
   await expect(page.getByRole("complementary", { name: "Explorer panel" })).toBeVisible();
 });
 

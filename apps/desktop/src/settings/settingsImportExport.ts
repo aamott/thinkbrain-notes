@@ -26,12 +26,11 @@ import {
   CURRENT_SETTINGS_VERSION,
   isRecord,
   type SettingDefinition,
-  type SettingType
+  validateSettings
 } from "@thinkbrain/core";
 
 import { appSettingsRegistry, useSettingsStore } from "./settingsStore";
-import { saveFilePath, pickFilePath } from "../native/dialogs";
-import { writeTextFileNative, readTextFileNative } from "../native/fs";
+import { readPickedFile, writeJsonViaSaveDialog } from "./importExportFiles";
 
 // ---------------------------------------------------------------------------
 // Export.
@@ -99,14 +98,13 @@ export function buildExportPayload(): ExportPayload {
  *   json: The JSON string to write (from `buildExportPayload`).
  *
  * Returns:
- *   `true` if the file was written, `false` if the user cancelled the dialog
- *   or the runtime is not Tauri.
+ *   `true` if the file was written, `false` if the user cancelled the dialog.
+ *
+ * Throws:
+ *   Error if a path was chosen and the write failed, so the caller can say so.
  */
 export async function writeExportFile(json: string): Promise<boolean> {
-  const path = await saveFilePath("Export settings", "thinkbrain-settings.json");
-  if (path === null) return false;
-
-  return writeTextFileNative(path, json);
+  return await writeJsonViaSaveDialog("Export settings", "thinkbrain-settings.json", json);
 }
 
 // ---------------------------------------------------------------------------
@@ -124,46 +122,21 @@ export interface ImportResult {
 }
 
 /**
- * Checks whether an imported value matches the setting's declared type.
- *
- * For `enum` settings, the value must be one of the declared `options`. For
- * `number`, the value must be a finite number within the definition's `min`/
- * `max` range (if declared). For `path` and `string`, the value must be a
- * string. For `boolean`, the value must be a boolean.
+ * Checks whether an imported value matches the setting's declared type, range,
+ * and enum constraints by delegating to the canonical core validator. This
+ * avoids duplicating `checkType`/`checkRange`/`checkEnum` from
+ * `@thinkbrain/core` (which had already drifted — the core validator accepts
+ * `null` for `path` settings, the local copy did not).
  *
  * Args:
  *   def: The setting definition to validate against.
  *   value: The imported value to check.
  *
  * Returns:
- *   `true` if the value is valid for the definition's type and constraints.
+ *   `true` if the core validator produces no diagnostics for this value.
  */
 function isValueTypeValid(def: SettingDefinition, value: unknown): boolean {
-  const type: SettingType = def.type;
-  switch (type) {
-    case "boolean":
-      return typeof value === "boolean";
-    case "number":
-      if (typeof value !== "number" || !Number.isFinite(value)) return false;
-      // Enforce declared min/max range so obviously out-of-range values are
-      // not staged. Unbounded sides default to ±Infinity.
-      return (
-        value >= (def.min ?? -Infinity) && value <= (def.max ?? Infinity)
-      );
-    case "string":
-      return typeof value === "string";
-    case "path":
-      // Paths are strings; the portability warning is handled at export time.
-      return typeof value === "string";
-    case "enum":
-      return (
-        typeof value === "string" &&
-        Boolean(def.options?.includes(value))
-      );
-    default:
-      // Unknown setting types are rejected to fail loudly.
-      return false;
-  }
+  return validateSettings(appSettingsRegistry, { [def.key]: value }).length === 0;
 }
 
 /**
@@ -206,29 +179,27 @@ function extractSettingsMap(parsed: unknown): Record<string, unknown> | null {
  *
  * Returns:
  *   The {@link ImportResult} with counts, or `null` if the user cancelled the
- *   dialog or the file could not be read.
+ *   dialog.
+ *
+ * Throws:
+ *   Error if a file was chosen and could not be read or made sense of. A
+ *   corrupt file is not an empty import, and the caller has to be able to tell
+ *   the two apart to say anything useful about either.
  */
 export async function importSettings(): Promise<ImportResult | null> {
-  const path = await pickFilePath("Import settings");
-  if (path === null) return null;
-
-  const raw = await readTextFileNative(path);
-  if (raw === null) return null;
+  const picked = await readPickedFile("Import settings");
+  if (picked === null) return null;
 
   let parsed: unknown;
   try {
-    parsed = JSON.parse(raw);
+    parsed = JSON.parse(picked.contents);
   } catch {
-    // Malformed JSON — fail loudly. Returning a zero-count success would
-    // silently mask an unreadable/corrupt file as "nothing to import".
-    return null;
+    throw new Error(`"${picked.path}" is not valid JSON.`);
   }
 
   const settingsMap = extractSettingsMap(parsed);
   if (settingsMap === null) {
-    // Malformed document structure (e.g. canonical wrapper without a
-    // `settings` field). Fail loudly rather than reporting an empty import.
-    return null;
+    throw new Error(`"${picked.path}" is not a settings export.`);
   }
 
   const store = useSettingsStore.getState();

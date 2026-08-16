@@ -18,12 +18,7 @@ export class NativeCommandError extends Error {
   }
 }
 
-export interface ShellStatus {
-  readonly appName: string;
-  readonly shellVersion: string;
-  readonly ready: boolean;
-}
-
+/** Rust-shaped status returned by the `desktop_shell_status` IPC command. */
 interface NativeShellStatus {
   readonly app_name: string;
   readonly shell_version: string;
@@ -61,6 +56,7 @@ export interface NativeCommandMap {
       readonly rootPath: string;
       readonly relativePath: string;
       readonly contents: string;
+      readonly expected?: string;
     };
     readonly result: NativeMarkdownFileEntry;
   };
@@ -128,9 +124,20 @@ export interface NativeCommandMap {
     readonly args: {
       readonly rootPath: string;
       readonly query: string;
+      /** Workspace-relative folder to search inside. Absent searches the vault. */
+      readonly pathPrefix?: string;
       readonly limit?: number;
     };
     readonly result: readonly NativeSearchHit[];
+  };
+  readonly query_index_metadata: {
+    readonly args: {
+      readonly rootPath: string;
+      readonly pathPrefix: string;
+      readonly facetKeys: readonly string[];
+      readonly predicates: readonly NativeMetadataPredicate[];
+    };
+    readonly result: NativeMetadataQueryResult;
   };
   readonly clear_index: {
     readonly args: { readonly rootPath: string };
@@ -143,12 +150,31 @@ export interface NativeCommandMap {
     };
     readonly result: null;
   };
+  /** Starts watching a workspace; resolves with the canonical root events carry. */
+  readonly watch_workspace: {
+    readonly args: { readonly rootPath: string };
+    readonly result: string;
+  };
+  /** Releases one watch request; takes the canonical root `watch_workspace` returned. */
+  readonly unwatch_workspace: {
+    readonly args: { readonly canonicalRoot: string };
+    readonly result: null;
+  };
   readonly read_app_settings: {
     readonly args: undefined;
     readonly result: string | null;
   };
   readonly write_app_settings: {
-    readonly args: { readonly contents: string };
+    readonly args: {
+      readonly contents: string;
+      /**
+       * The document this write was computed from — `null` when the file was
+       * absent. The host writes only if that is still what is on disk, so a
+       * `desktopState` write racing this save cannot be reverted by it. See
+       * `settings/appSettingsFile.ts`.
+       */
+      readonly expected: string | null;
+    };
     readonly result: null;
   };
   readonly update_desktop_state: {
@@ -168,6 +194,13 @@ export interface NativeCommandMap {
     readonly args: {
       readonly rootPath: string;
       readonly contents: string;
+      /**
+       * The document this write was computed from — `null` when the file was
+       * absent. The host writes only if that is still what is on disk, so a
+       * second window cannot lose the first one's keys. See
+       * `workspace/workspaceSettingsFile.ts`.
+       */
+      readonly expected: string | null;
     };
     readonly result: null;
   };
@@ -185,6 +218,13 @@ export interface NativeCommandMap {
   readonly read_theme_file: {
     readonly args: { readonly path: string };
     readonly result: string | null;
+  };
+  // Reads one file inside a locally loaded extension directory. The Rust side
+  // canonicalizes both paths and rejects anything resolving outside the
+  // directory, including an escaping symlink.
+  readonly read_extension_file: {
+    readonly args: { readonly directory: string; readonly relativePath: string };
+    readonly result: string;
   };
   readonly git_availability: {
     readonly args: undefined;
@@ -214,8 +254,6 @@ export interface NativeCommandMap {
 
 export type NativeCommandName = keyof NativeCommandMap;
 
-type ShellStatusInvoker = () => Promise<NativeShellStatus>;
-
 export interface NativeWorkspaceDescriptor {
   readonly root_path: string;
   readonly name: string;
@@ -228,6 +266,24 @@ export interface NativeDesktopStateUpdate {
   readonly leftPanelWidth?: number;
   readonly rightPanelWidth?: number;
   readonly bottomPanelOpen?: boolean;
+  readonly developmentExtensionDirectories?: readonly string[];
+  readonly openTabs?: readonly NativePersistedTab[];
+  readonly activeTabId?: string | null;
+  /** Mirrors `settings::CollapsedGroupsUpdate` on the Rust side (D53). */
+  readonly collapsedGroups?: {
+    readonly workspacePath: string;
+    readonly viewId: string;
+    readonly collapsed: readonly string[];
+  };
+}
+
+/** Mirrors `settings::PersistedTab` on the Rust side (settings.rs). */
+export interface NativePersistedTab {
+  readonly id: string;
+  readonly title: string;
+  readonly kind: string;
+  readonly rootPath?: string;
+  readonly relativePath?: string;
 }
 
 export interface NativeMarkdownFileEntry {
@@ -297,6 +353,7 @@ export interface NativeDocumentInput {
   readonly tags: readonly string[];
   readonly aliases: readonly string[];
   readonly body: string;
+  readonly metadata: readonly NativeMetadataField[];
 }
 
 export interface NativeSearchHit {
@@ -305,6 +362,28 @@ export interface NativeSearchHit {
   readonly title?: string;
   readonly snippet: string;
   readonly score: number;
+}
+
+export type NativeMetadataValue = string | number;
+
+export interface NativeMetadataField {
+  readonly key: string;
+  readonly values: readonly NativeMetadataValue[];
+}
+
+export interface NativeMetadataPredicate {
+  readonly key: string;
+  readonly value: NativeMetadataValue;
+}
+
+export interface NativeMetadataFacet {
+  readonly key: string;
+  readonly values: readonly NativeMetadataValue[];
+}
+
+export interface NativeMetadataQueryResult {
+  readonly facets: readonly NativeMetadataFacet[];
+  readonly matching_paths: readonly string[];
 }
 
 export async function invokeNativeCommand<TCommand extends NativeCommandName>(
@@ -320,19 +399,6 @@ export async function invokeNativeCommand<TCommand extends NativeCommandName>(
   } catch (error) {
     throw normalizeNativeError(error);
   }
-}
-
-export async function getDesktopShellStatus(
-  commandInvoker: ShellStatusInvoker = () =>
-    invokeNativeCommand("desktop_shell_status")
-): Promise<ShellStatus> {
-  const status = await commandInvoker();
-
-  return {
-    appName: status.app_name,
-    shellVersion: status.shell_version,
-    ready: status.ready
-  };
 }
 
 export function normalizeNativeError(error: unknown): NativeCommandError {

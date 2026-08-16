@@ -1,7 +1,8 @@
 # Graph
 
 > Future epic (low urgency, stub). Backlinks and graph view built on top of the
-> wiki-link index. Read `plans/app-vision.md` and `plans/wip-note-model-low-hard.md` before
+> wiki-link index. The backlinks panel is elevated to medium urgency; the rest
+> remains low. Read `plans/app-vision.md` and `plans/wip-note-model-low-hard.md` before
 > starting any story here.
 
 ## Goal
@@ -53,11 +54,12 @@ Non-goals (out of scope for this epic):
   (`packages/core/src/note-model.ts`), `extractWikiLinks`
   (`packages/core/src/markdown.ts`), aliases in `NoteMetadata`.
 - `indexing-search` (MVP core done) — the wiki-link index that backlinks and
-  graph edges are derived from. Note: `plans/indexing-search/` still has
-  pending follow-up stories (file watcher, connection pooling); those are
-  enhancements and do not block this epic, but the epic file
-  `plans/wip-indexing-search-med-med.md` appears to be missing despite the folder existing
-  — see Inconsistencies below.
+  graph edges are derived from. `plans/indexing-search/` retains three pending
+  follow-ups — structured frontmatter records and facet queries
+  (`pending-frontmatter_metadata_facets-high-hard.md`), an external-edit file
+  watcher (`pending-file_watcher-low-med.md`), and managed SQLite connection
+  pooling (`pending-connection_pooling-low-med.md`). These are enhancements and
+  do not block this epic.
 
 No other epic blocks this one. `semantic-search` and `ai` are independent
 future epics; this epic uses only explicit wiki-link edges.
@@ -71,19 +73,20 @@ future epics; this epic uses only explicit wiki-link edges.
 - Manual / E2E: open a vault with linked notes, verify backlinks panel and
   graph render correct nodes/edges; verify filters narrow the graph.
 
-## Inconsistencies
-
-- `plans/wip-indexing-search-med-med.md` epic file is missing while `plans/indexing-search/`
-  still contains pending stories. Per the planning rules the epic file should
-  exist until all Status items are done. Flagged for the manager to resolve
-  (restore the epic file or confirm the follow-ups were re-homed).
-
 ## Status
 
-- ⬜ Backlinks panel — list notes linking to the active note — see
-  `pending-backlinks_panel-low-med.md`
-- ⬜ Link target resolution (aliases + path normalization) — see
+- ✅ Link target resolution (aliases + path normalization) — see
   `pending-link_target_resolution-low-med.md`
+- ⬜ Clickable wiki-link navigation — click `[[Target]]` to open the note — see
+  `pending-clickable_wiki_link_navigation-low-med.md`
+- ⬜ Wiki-link autocomplete — `[[` triggers a note picker — see
+  `pending-wiki_link_autocomplete-med-med.md`
+- ⬜ Wiki-link index for backlinks — reverse index (target → linking notes) — see
+  `pending-wiki_link_index-med-med.md`
+- ⬜ Backlinks panel — list notes linking to the active note — see
+  `pending-backlinks_panel-med-med.md` (elevated to medium urgency)
+- ⬜ Automatic link update on rename — rewrite `[[old]]` → `[[new]]` across the vault — see
+  `pending-automatic_link_update_on_rename-med-hard.md`
 - ⬜ Graph view — visual network of notes and wiki-link edges — see
   `pending-graph_view-low-hard.md`
 - ⬜ Local graph around active note — see `pending-local_graph-low-hard.md`

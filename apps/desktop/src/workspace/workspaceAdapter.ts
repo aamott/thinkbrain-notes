@@ -4,6 +4,7 @@ import {
   type NativeWorkspaceEntry,
   type NativeWorkspaceSnapshot
 } from "../native/commands";
+import { appEvents } from "../events/appEvents";
 
 export interface WorkspaceDesktopApi {
   pickWorkspaceDirectory(): Promise<string | null>;
@@ -39,8 +40,13 @@ export const workspaceDesktopApi: WorkspaceDesktopApi = {
 
     return typeof selection === "string" ? selection : null;
   },
-  openWorkspace(rootPath) {
-    return invokeNativeCommand("open_workspace", { rootPath });
+  // Every workspace load funnels through here — explicit opens and startup
+  // restores alike — so this is the one place `workspace.opened` can be
+  // emitted without missing a path.
+  async openWorkspace(rootPath) {
+    const snapshot = await invokeNativeCommand("open_workspace", { rootPath });
+    appEvents.emit("workspace.opened", { rootPath });
+    return snapshot;
   },
   listWorkspaceEntries(rootPath, includeHidden) {
     return invokeNativeCommand("list_workspace_entries", { rootPath, includeHidden });
@@ -51,16 +57,22 @@ export const workspaceDesktopApi: WorkspaceDesktopApi = {
   windowWorkspaceRoot() {
     return invokeNativeCommand("window_workspace_root");
   },
-  createWorkspaceFile(rootPath, relativePath, contents) {
-    return invokeNativeCommand("create_workspace_file", { rootPath, relativePath, contents });
+  async createWorkspaceFile(rootPath, relativePath, contents) {
+    const entry = await invokeNativeCommand("create_workspace_file", { rootPath, relativePath, contents });
+    if (entry.is_markdown) appEvents.emit("note.created", { rootPath, relativePath });
+    return entry;
   },
   createWorkspaceFolder(rootPath, relativePath) {
     return invokeNativeCommand("create_workspace_folder", { rootPath, relativePath });
   },
-  renameWorkspaceEntry(rootPath, relativePath, newRelativePath) {
-    return invokeNativeCommand("rename_workspace_entry", { rootPath, relativePath, newRelativePath });
+  async renameWorkspaceEntry(rootPath, relativePath, newRelativePath) {
+    const entry = await invokeNativeCommand("rename_workspace_entry", { rootPath, relativePath, newRelativePath });
+    appEvents.emit("note.renamed", { rootPath, oldRelativePath: relativePath, newRelativePath });
+    return entry;
   },
-  deleteWorkspaceEntry(rootPath, relativePath) {
-    return invokeNativeCommand("delete_workspace_entry", { rootPath, relativePath });
+  async deleteWorkspaceEntry(rootPath, relativePath) {
+    const result = await invokeNativeCommand("delete_workspace_entry", { rootPath, relativePath });
+    appEvents.emit("note.deleted", { rootPath, relativePath });
+    return result;
   }
 };

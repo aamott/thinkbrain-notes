@@ -1,0 +1,42 @@
+# Story: Safe Writes, Corruption Detection, and Recovery UI
+
+## Goal
+
+Atomic, crash-safe note saves; corruption detection on open; minimal recovery
+UI. First slice of the data-safety epic — no snapshot retention, vault scan, or
+repair flow yet.
+
+## Acceptance Criteria
+
+- [ ] Every save writes a temp file then renames over the target; a crash
+      mid-write leaves the previous file intact.
+- [ ] Previous version kept briefly as a backup (location/retention TBD by
+      discovery).
+- [ ] Opening detects truncation, encoding errors, and unexpected empty
+      results from non-empty files.
+- [ ] Corruption routes to a recovery UI (not a silent empty editor) showing
+      what was detected and offering the last backup if available.
+- [ ] Honest messaging only — never claim data is safe when it isn't.
+- [ ] No app caches or backups in the vault's app-data directory.
+- [ ] Vitest covers atomic writes, detection cases, and recovery states.
+- [ ] `pnpm lint`, `pnpm typecheck`, `pnpm test` pass.
+
+## Discovery (resolve before implementation)
+
+- Backup location: `.thinkbrain-backups/` in the vault, OS temp, or app-data?
+  Vault-adjacent is most recoverable but may sync to cloud drives.
+- Retention: count-based or time-based?
+- Detection on every open, or only on parse failure?
+
+## Likely files
+
+- `apps/desktop/src/workspace/workspaceDocumentAdapter.ts` — atomic save path
+- `packages/core/src/note-model.ts` / `markdown.ts` — detection helpers (pure)
+- `apps/desktop/src/tabs/` — recovery UI
+- `apps/desktop/src-tauri/src/commands/` — native temp/rename if needed
+
+## References
+
+- `plans/pending-data_safety-med-hard.md` — epic
+- `plans/app-vision.md` — User data separation, Bring your own sync
+- `plans/wip-note-model-low-hard.md` — note model and save path

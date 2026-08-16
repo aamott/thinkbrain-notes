@@ -1,5 +1,0 @@
-- name: Refactor git command runner execution, remove unused macro, and batch git index path arguments
-- file: /media/adam/extex/projects/thinkbrain-notes/apps/desktop/src-tauri/src/commands/git.rs
-- lines: 1, 100-113, 179-195, 337-371
-- description: 1) Line 1 contains `#![allow(unused)]` which globally suppresses compiler warnings and masks unused imports (such as `PathBuf`). Remove `#![allow(unused)]` and prune unused imports. 2) `SystemGitRunner::run` (lines 179-195) uses a busy-wait polling loop with `thread::sleep(10ms)` up to 5 seconds to await process completion. This blocks worker threads with constant polling. Replace with non-polling subprocess wait or standard timeout mechanism. 3) `stage_git_files_with` and `unstage_git_files_with` via `update_git_index_with` (lines 337-371) pass arbitrary path vectors directly to command args (`git add -- p1 p2...`). Passing large file lists will exceed OS `ARG_MAX` command line limit. Implement argument batching for staging/unstaging operations.
-- verification: Code inspection of git.rs lines 1, 100-113, 179-195, 337-371.

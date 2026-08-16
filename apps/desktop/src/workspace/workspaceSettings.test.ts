@@ -45,3 +45,64 @@ describe("workspaceSettings", () => {
     });
   });
 });
+
+describe("writing without destroying the rest of the file", () => {
+  /**
+   * The workspace settings file is shared: the settings store writes every
+   * workspace-scoped setting into it, including the journal's metadata fields.
+   * A writer that serialises only its own key wipes everyone else's — the
+   * reported symptom was journal fields vanishing on restart.
+   */
+  it("keeps keys it does not own", async () => {
+    invokeNativeCommand.mockReset();
+    invokeNativeCommand.mockImplementation(async (command) =>
+      command === "read_workspace_settings"
+        ? JSON.stringify({
+            version: 1,
+            "extension-journal-calendar.fieldDefinitions": "[{\"id\":\"mood\"}]"
+          })
+        : null
+    );
+
+    await writeWorkspaceSettings("/vault", { showHidden: true });
+
+    const write = invokeNativeCommand.mock.calls.find(
+      ([command]) => command === "write_workspace_settings"
+    );
+    expect(JSON.parse(String((write?.[1] as { contents: string }).contents))).toEqual({
+      version: 1,
+      "extension-journal-calendar.fieldDefinitions": "[{\"id\":\"mood\"}]",
+      showHidden: true
+    });
+  });
+
+  it("still writes its own key when there is no file yet", async () => {
+    invokeNativeCommand.mockReset();
+    invokeNativeCommand.mockResolvedValue(null);
+
+    await writeWorkspaceSettings("/vault", { showHidden: false });
+
+    const write = invokeNativeCommand.mock.calls.find(
+      ([command]) => command === "write_workspace_settings"
+    );
+    expect(JSON.parse(String((write?.[1] as { contents: string }).contents))).toEqual({
+      showHidden: false
+    });
+  });
+
+  it("does not lose its own write when the existing file is malformed", async () => {
+    invokeNativeCommand.mockReset();
+    invokeNativeCommand.mockImplementation(async (command) =>
+      command === "read_workspace_settings" ? "{not json" : null
+    );
+
+    await writeWorkspaceSettings("/vault", { showHidden: true });
+
+    const write = invokeNativeCommand.mock.calls.find(
+      ([command]) => command === "write_workspace_settings"
+    );
+    expect(JSON.parse(String((write?.[1] as { contents: string }).contents))).toEqual({
+      showHidden: true
+    });
+  });
+});

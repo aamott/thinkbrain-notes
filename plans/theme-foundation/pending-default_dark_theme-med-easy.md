@@ -20,7 +20,7 @@ Ensure dark theme values are complete and intentional, not just fallback.
 
 ## File References
 
-- `packages/ui/src/styles/tokens.css:1-15` — current `:root` (implicit dark)
-- `packages/ui/src/styles/tokens.css:36-38` — empty `[data-thinkbrain-theme="dark"]` block
-- `apps/desktop/src/styles.css:88` — hardcoded activity bar color
-- `apps/desktop/src/styles.css:608` — hardcoded status bar color
+- `packages/ui/src/styles/tokens.css` — `:root` and
+  `[data-thinkbrain-theme="dark"]` token definitions
+- `apps/desktop/src/main.tsx` — imports the shared token stylesheet.
+- `apps/desktop/src/index.css` — global app reset/base stylesheet.

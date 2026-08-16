@@ -5,19 +5,20 @@
  * They operate on a flat `fullKey -> value` record driven by the registry,
  * while preserving the `desktopState` nested key and any other non-setting keys
  * in the same JSON document. The legacy `parseAppSettings` /
- * `serializeAppSettings` / `migrateSettings` remain intact so `desktopState.ts`
- * and existing tests keep working.
+ * `serializeAppSettings` remain intact so `desktopState.ts` and existing tests
+ * keep working.
  */
 
 import type { SettingsRegistry } from "./registry";
 import { extractDefaults } from "./defaults";
-import { getModuleIdFromKey } from "./registry";
 import { validateSettings } from "./validation";
 import type { SettingsDiagnostic } from "../settings";
+import type { SettingScope } from "./types";
 import {
   CURRENT_SETTINGS_VERSION,
   getErrorMessage,
-  isRecord
+  isRecord,
+  readSettingsVersion
 } from "./internal";
 
 /** Result of parsing the dynamic app settings document. */
@@ -105,7 +106,7 @@ export function parseDynamicAppSettings(
   // defaults + an error diagnostic, mirroring the legacy `readSettingsVersion`
   // strict check. Skipped migration steps emit warning diagnostics that are
   // surfaced alongside the parse result.
-  const versionRead = readDynamicSettingsVersion(parsed);
+  const versionRead = readSettingsVersion(parsed);
   if (versionRead.diagnostic) {
     return {
       values: defaults,
@@ -136,8 +137,10 @@ export function parseDynamicAppSettings(
   // are ignored so stale/misspelled entries don't leak into the settings model.
   const values: Record<string, unknown> = { ...defaults };
   for (const def of registry.getAllDefinitions()) {
-    const module = registry.getModule(getModuleIdFromKey(def.key));
-    if (!module || module.scope !== "app") continue;
+    // Scope is a property of the setting, not of the module it arrived in: an
+    // app-scoped module may hold a per-workspace setting, and that setting must
+    // not travel in the app file (D45).
+    if (def.scope !== "app") continue;
     if (def.key in record) {
       values[def.key] = record[def.key];
     }
@@ -156,25 +159,29 @@ export function parseDynamicAppSettings(
 }
 
 /**
- * Serializes dynamic app settings back to JSON, preserving non-setting keys.
+ * Serializes dynamic settings for a single scope back to JSON, preserving
+ * non-setting keys.
  *
- * The output keeps `version: CURRENT_SETTINGS_VERSION`, the flat setting keys,
- * and the nested `desktopState` object (plus any other non-setting keys) from
- * `existingRawJson`. Pretty-printed with 2-space indent and a trailing newline,
- * matching the existing `serializeAppSettings` style.
+ * The output keeps `version: CURRENT_SETTINGS_VERSION`, the flat setting keys
+ * for the given scope, and any other non-setting keys (e.g. `desktopState`,
+ * extension metadata) from `existingRawJson`. Pretty-printed with 2-space
+ * indent and a trailing newline, matching the existing `serializeAppSettings`
+ * style.
  *
  * Args:
- *   values: Flat `fullKey -> value` map of app-scoped settings to write.
+ *   values: Flat `fullKey -> value` map of settings to write.
  *   registry: The settings registry (used to identify known setting keys).
+ *   scope: Which scope's definitions to include in the known-key set.
  *   existingRawJson: The current raw JSON document (may be null/invalid); its
- *     `desktopState` and other non-setting keys are preserved.
+ *     non-setting keys are preserved.
  *
  * Returns:
  *   Canonical JSON string with settings + preserved non-setting keys.
  */
-export function serializeDynamicAppSettings(
+export function serializeDynamicSettings(
   values: Record<string, unknown>,
   registry: SettingsRegistry,
+  scope: SettingScope,
   existingRawJson: string | null
 ): string {
   // Start from the existing raw document (if parseable) to preserve non-setting
@@ -195,10 +202,7 @@ export function serializeDynamicAppSettings(
   // setting keys from the base before writing the new values.
   const knownSettingKeys = new Set<string>();
   for (const def of registry.getAllDefinitions()) {
-    const module = registry.getModule(getModuleIdFromKey(def.key));
-    if (module && module.scope === "app") {
-      knownSettingKeys.add(def.key);
-    }
+    if (def.scope === scope) knownSettingKeys.add(def.key);
   }
 
   // Remove old setting keys from the base (they'll be replaced below), but keep
@@ -220,6 +224,19 @@ export function serializeDynamicAppSettings(
   base.version = CURRENT_SETTINGS_VERSION;
 
   return `${JSON.stringify(base, null, 2)}\n`;
+}
+
+/**
+ * Serializes dynamic app settings back to JSON, preserving non-setting keys.
+ *
+ * Thin wrapper over {@link serializeDynamicSettings} for the `"app"` scope.
+ */
+export function serializeDynamicAppSettings(
+  values: Record<string, unknown>,
+  registry: SettingsRegistry,
+  existingRawJson: string | null
+): string {
+  return serializeDynamicSettings(values, registry, "app", existingRawJson);
 }
 
 /**
@@ -250,7 +267,7 @@ function migrateDynamicSettingsObject(
   record: Readonly<Record<string, unknown>>,
   registry: SettingsRegistry
 ): { record: Record<string, unknown>; diagnostics: SettingsDiagnostic[] } {
-  const fromVersion = readDynamicSettingsVersion(record).version;
+  const fromVersion = readSettingsVersion(record).version;
   let value: Record<string, unknown> = { ...record };
   const diagnostics: SettingsDiagnostic[] = [];
 
@@ -260,7 +277,7 @@ function migrateDynamicSettingsObject(
 
   for (const step of migrations) {
     if (step.fromVersion < fromVersion) continue;
-    const currentVersion = readDynamicSettingsVersion(value).version;
+    const currentVersion = readSettingsVersion(value).version;
     if (currentVersion !== step.fromVersion) {
       // Skip if the record's version doesn't match this step's expected source.
       // This is lenient compared to the legacy strict check, but the dynamic
@@ -280,54 +297,4 @@ function migrateDynamicSettingsObject(
 
   value.version = CURRENT_SETTINGS_VERSION;
   return { record: value, diagnostics };
-}
-
-/**
- * Reads the `version` field from a raw record, defaulting to 0 (unversioned).
- *
- * Mirrors the legacy `readSettingsVersion` strict check: a version newer than
- * `CURRENT_SETTINGS_VERSION` is rejected with an error diagnostic so the caller
- * can fall back to defaults rather than silently "migrating" a future document
- * down to v0. A malformed version (non-integer, negative) yields a
- * `settings.version.invalid` error diagnostic and is treated as v0.
- */
-function readDynamicSettingsVersion(
-  value: Readonly<Record<string, unknown>>
-): { version: number; diagnostic?: SettingsDiagnostic } {
-  const version = value.version;
-
-  if (version === undefined) {
-    return { version: 0 };
-  }
-
-  if (
-    typeof version !== "number" ||
-    !Number.isInteger(version) ||
-    version < 0
-  ) {
-    return {
-      version: 0,
-      diagnostic: {
-        code: "settings.version.invalid",
-        message:
-          "Application settings version must be a non-negative integer; defaults were used.",
-        severity: "error",
-        path: "version"
-      }
-    };
-  }
-
-  if (version > CURRENT_SETTINGS_VERSION) {
-    return {
-      version,
-      diagnostic: {
-        code: "settings.version.unsupported",
-        message: `Application settings version ${version} is newer than supported version ${CURRENT_SETTINGS_VERSION}; defaults were used.`,
-        severity: "error",
-        path: "version"
-      }
-    };
-  }
-
-  return { version };
 }

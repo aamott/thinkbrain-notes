@@ -41,9 +41,10 @@ import {
   type ThemeFile
 } from "@thinkbrain/core";
 
-import { useSettingsStore } from "./settingsStore";
-import { saveFilePath, pickFilePath } from "../native/dialogs";
-import { writeTextFileNative, readTextFileNative } from "../native/fs";
+import { appSettingsRegistry, useSettingsStore } from "./settingsStore";
+import { resolveEffectiveValue } from "./settingsHelpers";
+import { readThemeFile } from "./themeAdapter";
+import { readPickedFile, writeJsonViaSaveDialog } from "./importExportFiles";
 
 // ---------------------------------------------------------------------------
 // DOM access (split out for testability).
@@ -149,6 +150,44 @@ export function buildThemeExportPayload(): ThemeExportPayload {
 }
 
 /**
+ * Builds the payload to export, preferring the active theme file's own bytes.
+ *
+ * A snapshot is taken from `getComputedStyle`, which reports resolved values:
+ * a token authored as `var(--tn-color-accent)` or `color-mix(...)` comes back
+ * as the colour it produced, and the authoring structure is gone. That is the
+ * right answer when the user is on a built-in palette — there is no source file
+ * to be faithful to. When they are running a theme file, that file already says
+ * exactly what they see, so exporting it verbatim round-trips where a snapshot
+ * of it silently would not.
+ *
+ * Falls back to the snapshot when the file cannot be read or no longer parses:
+ * a broken source is worth less than a working snapshot, and refusing to export
+ * at all helps nobody.
+ */
+export async function buildThemeExport(): Promise<ThemeExportPayload> {
+  const state = useSettingsStore.getState();
+  // Resolve the effective themeFile path via the shared precedence rule
+  // (staged > appValues > registry default of null). Avoids the inline-copy
+  // drift where the manual version omitted the default fallback.
+  const configured = resolveEffectiveValue(
+    "appearance.themeFile",
+    state.stagedChanges,
+    state.appValues,
+    state.workspaceValues,
+    appSettingsRegistry.getDefinition("appearance.themeFile")
+  );
+
+  if (typeof configured === "string" && configured.length > 0) {
+    const source = await readThemeFile(configured);
+    if (source !== null && parseThemeFile(source).theme !== null) {
+      return { json: source };
+    }
+  }
+
+  return buildThemeExportPayload();
+}
+
+/**
  * Opens a native save dialog and writes the theme JSON to the chosen path.
  *
  * Args:
@@ -163,17 +202,7 @@ export function buildThemeExportPayload(): ThemeExportPayload {
  *   a non-event the caller can ignore.
  */
 export async function writeThemeExportFile(json: string): Promise<boolean> {
-  const path = await saveFilePath("Export theme", "theme.tbtheme.json");
-  if (path === null) return false; // user cancelled
-
-  const written = await writeTextFileNative(path, json);
-  if (!written) {
-    // Fail loudly: surface write failures (disk full, permission denied) as
-    // thrown errors so the caller can show a status message. Cancel (above)
-    // returns false — a non-event the caller can ignore.
-    throw new Error("Failed to write theme file.");
-  }
-  return true;
+  return await writeJsonViaSaveDialog("Export theme", "theme.tbtheme.json", json);
 }
 
 // ---------------------------------------------------------------------------
@@ -208,17 +237,11 @@ export interface ImportThemeResult {
  */
 export async function importTheme(): Promise<ImportThemeResult | null> {
   // Filter to `.tbtheme.json` files so the dialog only shows theme files.
-  const path = await pickFilePath("Import theme", ["tbtheme.json"]);
-  if (path === null) return null; // user cancelled
+  const picked = await readPickedFile("Import theme", ["tbtheme.json"]);
+  if (picked === null) return null; // user cancelled
 
-  const raw = await readTextFileNative(path);
-  if (raw === null) {
-    // Fail loudly: surface read failures as thrown errors so the caller can
-    // show a status message. Cancel (above) returns null — a non-event.
-    throw new Error("Failed to read theme file.");
-  }
-
-  const result = parseThemeFile(raw);
+  const { path, contents } = picked;
+  const result = parseThemeFile(contents);
 
   if (result.theme !== null) {
     // Successful parse: stage the file path so ThemeProvider loads it. The path

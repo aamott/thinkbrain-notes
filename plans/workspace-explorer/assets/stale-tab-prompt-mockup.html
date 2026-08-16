@@ -1,0 +1,669 @@
+<title>Stale Tab Prompt</title>
+<style>
+  /* ---- Page palette. Light on bare :root, per artifact theme rules. ------ */
+  :root {
+    color-scheme: light;
+
+    /* Page chrome: a cool neutral, biased toward the app's violet accent, so
+       the document reads as separate from the app screenshots inside it. */
+    --page-bg: hsl(240 20% 98%);
+    --page-fg: hsl(240 30% 14%);
+    --page-muted: hsl(240 8% 44%);
+    --page-rule: hsl(240 14% 89%);
+    --page-frame: hsl(240 14% 84%);
+    --page-mark: hsl(262 60% 46%);
+
+    /* The app's own tokens, copied from packages/ui/src/styles/tokens.css so
+       the mockups render in the real thing rather than an approximation. */
+    --tn-background: hsl(0 0% 100%);
+    --tn-foreground: hsl(222 47% 11%);
+    --tn-surface: hsl(220 16% 97%);
+    --tn-border: hsl(220 13% 91%);
+    --tn-muted-fg: hsl(220 9% 46%);
+    --tn-primary: hsl(262 83% 58%);
+    --tn-primary-fg: hsl(0 0% 100%);
+    --tn-editor: hsl(0 0% 100%);
+    --tn-titlebar: hsl(0 0% 97%);
+    --tn-statusbar: hsl(262 83% 58%);
+    --tn-statusbar-fg: hsl(0 0% 100%);
+    --tn-tab-active: hsl(0 0% 100%);
+    --tn-tab-inactive: hsl(220 16% 94%);
+    --tn-tab-active-fg: hsl(222 47% 11%);
+    --tn-tab-inactive-fg: hsl(220 9% 46%);
+    --tn-warning: hsl(38 92% 42%);
+    --tn-warning-tint: hsl(38 92% 96%);
+    --tn-warning-edge: hsl(38 60% 78%);
+    --tn-shadow: 0 18px 50px rgb(0 0 0 / 12%);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+
+      --page-bg: hsl(240 10% 8%);
+      --page-fg: hsl(240 10% 94%);
+      --page-muted: hsl(240 6% 62%);
+      --page-rule: hsl(240 8% 20%);
+      --page-frame: hsl(240 8% 26%);
+      --page-mark: hsl(152 55% 58%);
+
+      --tn-background: hsl(0 0% 7%);
+      --tn-foreground: hsl(0 0% 98%);
+      --tn-surface: hsl(0 0% 10%);
+      --tn-border: hsl(0 0% 18%);
+      --tn-muted-fg: hsl(0 0% 60%);
+      --tn-primary: hsl(152 60% 38%);
+      --tn-primary-fg: hsl(0 0% 100%);
+      --tn-editor: hsl(0 0% 7%);
+      --tn-titlebar: hsl(0 0% 9%);
+      --tn-statusbar: hsl(0 0% 12%);
+      --tn-statusbar-fg: hsl(0 0% 98%);
+      --tn-tab-active: hsl(0 0% 7%);
+      --tn-tab-inactive: hsl(0 0% 12%);
+      --tn-tab-active-fg: hsl(0 0% 98%);
+      --tn-tab-inactive-fg: hsl(0 0% 60%);
+      --tn-warning: hsl(38 92% 50%);
+      --tn-warning-tint: hsl(38 40% 12%);
+      --tn-warning-edge: hsl(38 40% 28%);
+      --tn-shadow: 0 18px 50px rgb(0 0 0 / 45%);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+
+    --page-bg: hsl(240 10% 8%);
+    --page-fg: hsl(240 10% 94%);
+    --page-muted: hsl(240 6% 62%);
+    --page-rule: hsl(240 8% 20%);
+    --page-frame: hsl(240 8% 26%);
+    --page-mark: hsl(152 55% 58%);
+
+    --tn-background: hsl(0 0% 7%);
+    --tn-foreground: hsl(0 0% 98%);
+    --tn-surface: hsl(0 0% 10%);
+    --tn-border: hsl(0 0% 18%);
+    --tn-muted-fg: hsl(0 0% 60%);
+    --tn-primary: hsl(152 60% 38%);
+    --tn-primary-fg: hsl(0 0% 100%);
+    --tn-editor: hsl(0 0% 7%);
+    --tn-titlebar: hsl(0 0% 9%);
+    --tn-statusbar: hsl(0 0% 12%);
+    --tn-statusbar-fg: hsl(0 0% 98%);
+    --tn-tab-active: hsl(0 0% 7%);
+    --tn-tab-inactive: hsl(0 0% 12%);
+    --tn-tab-active-fg: hsl(0 0% 98%);
+    --tn-tab-inactive-fg: hsl(0 0% 60%);
+    --tn-warning: hsl(38 92% 50%);
+    --tn-warning-tint: hsl(38 40% 12%);
+    --tn-warning-edge: hsl(38 40% 28%);
+    --tn-shadow: 0 18px 50px rgb(0 0 0 / 45%);
+  }
+
+  /* ---- Page ------------------------------------------------------------- */
+  :root {
+    --sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+
+  body {
+    background: var(--page-bg);
+    color: var(--page-fg);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    display: flex;
+    flex-direction: column;
+    gap: 3.5rem;
+    max-width: 54rem;
+    margin: 0 auto;
+    padding: 3rem 1.5rem 5rem;
+  }
+
+  .prose {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+    max-width: 40rem;
+  }
+
+  h1 {
+    font-size: clamp(1.6rem, 1.2rem + 1.6vw, 2.1rem);
+    line-height: 1.2;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    text-wrap: balance;
+  }
+
+  h2 {
+    font-size: 1.15rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+  }
+
+  p { max-width: 40rem; }
+
+  .lede { font-size: 1.05rem; color: var(--page-muted); }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--page-mark);
+  }
+
+  code {
+    font-family: var(--mono);
+    font-size: 0.87em;
+    padding: 0.1em 0.34em;
+    border-radius: 0.25rem;
+    background: color-mix(in srgb, var(--page-fg) 8%, transparent);
+  }
+
+  .head {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    padding-bottom: 2rem;
+    border-bottom: 1px solid var(--page-rule);
+  }
+
+  /* ---- One option ------------------------------------------------------- */
+  .option {
+    display: flex;
+    flex-direction: column;
+    gap: 1.1rem;
+  }
+
+  .option-head {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .option-name {
+    display: flex;
+    align-items: baseline;
+    gap: 0.7rem;
+    flex-wrap: wrap;
+  }
+
+  .pick {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 0.15rem 0.45rem;
+    border-radius: 0.25rem;
+    color: var(--tn-primary-fg);
+    background: var(--tn-primary);
+  }
+
+  .tradeoffs {
+    display: grid;
+    gap: 0.5rem 1.5rem;
+    grid-template-columns: max-content 1fr;
+    max-width: 42rem;
+    font-size: 0.92rem;
+  }
+
+  .tradeoffs dt {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--page-muted);
+    padding-top: 0.28rem;
+  }
+
+  .tradeoffs dd { color: var(--page-fg); }
+
+  /* ---- The app mockup frame --------------------------------------------- */
+  .mock {
+    overflow: hidden;
+    border: 1px solid var(--page-frame);
+    border-radius: 0.6rem;
+    box-shadow: var(--tn-shadow);
+    background: var(--tn-background);
+    color: var(--tn-foreground);
+    font-size: 13px;
+    line-height: 1.5;
+    position: relative;
+  }
+
+  .titlebar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: var(--tn-titlebar);
+    border-bottom: 1px solid var(--tn-border);
+    font-size: 11.5px;
+    color: var(--tn-muted-fg);
+  }
+
+  .lights { display: flex; gap: 0.3rem; }
+  .lights i {
+    width: 0.55rem;
+    height: 0.55rem;
+    border-radius: 50%;
+    background: var(--tn-border);
+  }
+
+  .tabstrip {
+    display: flex;
+    background: var(--tn-tab-inactive);
+    border-bottom: 1px solid var(--tn-border);
+  }
+
+  .tab {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.5rem 0.85rem;
+    font-size: 12px;
+    color: var(--tn-tab-inactive-fg);
+    border-right: 1px solid var(--tn-border);
+    white-space: nowrap;
+  }
+
+  .tab.is-active {
+    background: var(--tn-tab-active);
+    color: var(--tn-tab-active-fg);
+  }
+
+  .dot {
+    width: 0.42rem;
+    height: 0.42rem;
+    border-radius: 50%;
+    background: currentColor;
+    flex: none;
+  }
+
+  .dot.is-stale { background: var(--tn-warning); }
+
+  .body { display: flex; min-height: 12rem; }
+
+  .editor {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: var(--tn-editor);
+    min-width: 0;
+  }
+
+  .doc {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    padding: 1.1rem 1.4rem;
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.65;
+  }
+
+  .doc .h { font-weight: 600; font-size: 13px; }
+  .doc .dim { color: var(--tn-muted-fg); }
+  .caret {
+    display: inline-block;
+    width: 1px;
+    height: 1em;
+    margin-left: 1px;
+    background: var(--tn-foreground);
+    vertical-align: text-bottom;
+  }
+
+  .statusbar {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.32rem 0.75rem;
+    font-size: 11px;
+    background: var(--tn-statusbar);
+    color: var(--tn-statusbar-fg);
+  }
+
+  .statusbar .right { margin-left: auto; display: flex; gap: 1rem; align-items: center; }
+
+  .status-alert {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.05rem 0.4rem;
+    border-radius: 0.25rem;
+    background: color-mix(in srgb, var(--tn-warning) 88%, black);
+    color: hsl(0 0% 100%);
+  }
+
+  /* ---- The banner (option A) -------------------------------------------- */
+  .banner {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    flex-wrap: wrap;
+    padding: 0.6rem 0.9rem;
+    background: var(--tn-warning-tint);
+    border-bottom: 1px solid var(--tn-warning-edge);
+  }
+
+  .banner-icon {
+    flex: none;
+    width: 1.05rem;
+    height: 1.05rem;
+    color: var(--tn-warning);
+  }
+
+  .banner-text {
+    flex: 1 1 16rem;
+    min-width: 0;
+    font-size: 12px;
+    color: var(--tn-foreground);
+  }
+
+  .banner-text b { font-weight: 600; }
+  .banner-text span { display: block; color: var(--tn-muted-fg); font-size: 11.5px; }
+
+  .banner-actions { display: flex; gap: 0.4rem; flex: none; }
+
+  .btn {
+    font: inherit;
+    font-size: 11.5px;
+    padding: 0.28rem 0.6rem;
+    border-radius: 0.25rem;
+    border: 1px solid var(--tn-border);
+    background: var(--tn-background);
+    color: var(--tn-foreground);
+    cursor: pointer;
+  }
+
+  .btn.is-primary {
+    background: var(--tn-primary);
+    border-color: var(--tn-primary);
+    color: var(--tn-primary-fg);
+  }
+
+  .btn:focus-visible {
+    outline: 2px solid var(--tn-primary);
+    outline-offset: 2px;
+  }
+
+  /* ---- The modal (option B) --------------------------------------------- */
+  .scrim {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding-top: 3.5rem;
+    background: rgb(0 0 0 / 42%);
+  }
+
+  .dialog {
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+    width: min(24rem, calc(100% - 3rem));
+    padding: 1.1rem;
+    border: 1px solid var(--tn-border);
+    border-radius: 0.5rem;
+    background: var(--tn-background);
+    box-shadow: var(--tn-shadow);
+  }
+
+  .dialog h3 { font-size: 13.5px; font-weight: 600; }
+  .dialog p { font-size: 11.5px; color: var(--tn-muted-fg); line-height: 1.45; }
+  .dialog .row { display: flex; justify-content: flex-end; gap: 0.4rem; flex-wrap: wrap; }
+
+  /* ---- Questions -------------------------------------------------------- */
+  .questions {
+    display: flex;
+    flex-direction: column;
+    gap: 1.4rem;
+    padding: 1.6rem;
+    border: 1px solid var(--page-rule);
+    border-radius: 0.6rem;
+    background: color-mix(in srgb, var(--page-fg) 3%, transparent);
+  }
+
+  .question { display: flex; flex-direction: column; gap: 0.3rem; }
+  .question h3 { font-size: 0.95rem; font-weight: 600; }
+  .question p { font-size: 0.92rem; color: var(--page-muted); }
+  .question .rec { color: var(--page-fg); }
+  .question .rec b { font-weight: 600; }
+
+  @media (max-width: 34rem) {
+    .tradeoffs { grid-template-columns: 1fr; gap: 0.15rem; }
+    .tradeoffs dd { margin-bottom: 0.5rem; }
+  }
+</style>
+
+<main class="page">
+  <header class="head">
+    <p class="eyebrow">Mockup for sign-off · workspace-explorer · file watcher</p>
+    <h1>What to show when a note changes on disk while you are editing it</h1>
+    <p class="lede">
+      The watcher now tells the app about writes it did not make. A tab with no
+      unsaved edits just reloads, silently, and needs nothing on screen. A tab
+      holding unsaved edits is the case that needs you: two versions of the note
+      exist, and only you know which one matters.
+    </p>
+    <p>
+      Three ways to raise it, in the app's real tokens. Pick one and I will
+      build it — the rest of the story is already in.
+    </p>
+  </header>
+
+  <section class="option">
+    <div class="option-head">
+      <div class="option-name">
+        <h2>Banner above the text</h2>
+        <span class="pick">Recommended</span>
+      </div>
+      <p class="eyebrow">Non-modal · stays until answered</p>
+    </div>
+
+    <div class="mock">
+      <div class="titlebar">
+        <span class="lights"><i></i><i></i><i></i></span>
+        <span>research — ThinkBrain</span>
+      </div>
+      <div class="tabstrip">
+        <div class="tab">index.md</div>
+        <div class="tab is-active"><span class="dot"></span>attention-costs.md</div>
+        <div class="tab">reading-log.md</div>
+      </div>
+      <div class="banner">
+        <svg class="banner-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 9v4" />
+          <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
+          <path d="M12 17h.01" />
+        </svg>
+        <p class="banner-text">
+          <b>This note changed on disk while you were editing it.</b>
+          <span>You have unsaved edits, so nothing has been replaced.</span>
+        </p>
+        <span class="banner-actions">
+          <button type="button" class="btn">Keep mine</button>
+          <button type="button" class="btn is-primary">Load the disk version</button>
+        </span>
+      </div>
+      <div class="body">
+        <div class="editor">
+          <div class="doc">
+            <span class="h"># Attention costs</span>
+            <span>Switching tasks is not free. The cost is not the switch —</span>
+            <span>it is the reconstruction of context on the other side.<span class="caret"></span></span>
+            <span class="dim">- [[Interruption recovery]]</span>
+            <span class="dim">- [[Deep work]]</span>
+          </div>
+        </div>
+      </div>
+      <div class="statusbar">
+        <span>research</span>
+        <span class="right"><span>Markdown</span><span>Ln 3, Col 58</span></span>
+      </div>
+    </div>
+
+    <dl class="tradeoffs">
+      <dt>Costs</dt>
+      <dd>A strip of vertical space until you answer it.</dd>
+      <dt>Risk</dt>
+      <dd>You can keep typing and ignore it. Saving then still overwrites the newer file — see the first question below.</dd>
+      <dt>Scales</dt>
+      <dd>One banner per affected tab, each on its own tab. A sync client touching thirty notes produces no pile-up.</dd>
+    </dl>
+  </section>
+
+  <section class="option">
+    <div class="option-head">
+      <h2>Modal, like the unsaved-close prompt</h2>
+      <p class="eyebrow">Blocking · matches the existing dialog</p>
+    </div>
+
+    <div class="mock">
+      <div class="titlebar">
+        <span class="lights"><i></i><i></i><i></i></span>
+        <span>research — ThinkBrain</span>
+      </div>
+      <div class="tabstrip">
+        <div class="tab">index.md</div>
+        <div class="tab is-active"><span class="dot"></span>attention-costs.md</div>
+        <div class="tab">reading-log.md</div>
+      </div>
+      <div class="body">
+        <div class="editor">
+          <div class="doc">
+            <span class="h"># Attention costs</span>
+            <span>Switching tasks is not free. The cost is not the switch —</span>
+            <span>it is the reconstruction of context on the other side.</span>
+            <span class="dim">- [[Interruption recovery]]</span>
+            <span class="dim">- [[Deep work]]</span>
+          </div>
+        </div>
+      </div>
+      <div class="statusbar">
+        <span>research</span>
+        <span class="right"><span>Markdown</span><span>Ln 3, Col 58</span></span>
+      </div>
+      <div class="scrim">
+        <section class="dialog" role="dialog" aria-modal="true" aria-label="Note changed on disk">
+          <h3>attention-costs.md changed on disk</h3>
+          <p>
+            Something outside ThinkBrain wrote to this note while you were
+            editing it. Your unsaved edits are still here and have not been
+            replaced.
+          </p>
+          <div class="row">
+            <button type="button" class="btn">Keep mine</button>
+            <button type="button" class="btn is-primary">Load the disk version</button>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <dl class="tradeoffs">
+      <dt>Costs</dt>
+      <dd>Takes the keyboard mid-sentence, for something you did not do.</dd>
+      <dt>Risk</dt>
+      <dd>A <code>git pull</code> or a sync client touching several open notes queues one modal per note.</dd>
+      <dt>Scales</dt>
+      <dd>Badly, and the app already has one blocking dialog competing for the same moment.</dd>
+    </dl>
+  </section>
+
+  <section class="option">
+    <div class="option-head">
+      <h2>A mark on the tab and a status-bar count</h2>
+      <p class="eyebrow">Ambient · you go to it</p>
+    </div>
+
+    <div class="mock">
+      <div class="titlebar">
+        <span class="lights"><i></i><i></i><i></i></span>
+        <span>research — ThinkBrain</span>
+      </div>
+      <div class="tabstrip">
+        <div class="tab">index.md</div>
+        <div class="tab is-active"><span class="dot is-stale"></span>attention-costs.md</div>
+        <div class="tab"><span class="dot is-stale"></span>reading-log.md</div>
+      </div>
+      <div class="body">
+        <div class="editor">
+          <div class="doc">
+            <span class="h"># Attention costs</span>
+            <span>Switching tasks is not free. The cost is not the switch —</span>
+            <span>it is the reconstruction of context on the other side.<span class="caret"></span></span>
+            <span class="dim">- [[Interruption recovery]]</span>
+            <span class="dim">- [[Deep work]]</span>
+          </div>
+        </div>
+      </div>
+      <div class="statusbar">
+        <span>research</span>
+        <span class="right">
+          <span class="status-alert">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+              <path d="M12 9v4" /><path d="M12 17h.01" />
+              <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" stroke-width="2" />
+            </svg>
+            2 notes changed on disk
+          </span>
+          <span>Markdown</span>
+          <span>Ln 3, Col 58</span>
+        </span>
+      </div>
+    </div>
+
+    <dl class="tradeoffs">
+      <dt>Costs</dt>
+      <dd>Nothing on screen moves, and nothing interrupts.</dd>
+      <dt>Risk</dt>
+      <dd>Easy to miss — and missing it is exactly the case where you overwrite someone else's edit. The amber dot also has to share the tab with the unsaved-changes dot.</dd>
+      <dt>Scales</dt>
+      <dd>Best of the three, but it is the quietest signal for the loudest problem.</dd>
+    </dl>
+  </section>
+
+  <section class="questions">
+    <p class="eyebrow">Open questions — answer with the pick</p>
+
+    <div class="question">
+      <h3>Should “Keep mine” write my version to disk straight away?</h3>
+      <p class="rec">
+        <b>My answer: no — it dismisses, and saving stays a separate deliberate act.</b>
+        Overwriting someone else's work should take the same keystroke it always
+        takes, not be a side effect of clearing a notice.
+      </p>
+      <p>
+        Worth knowing either way: <code>write_markdown_file</code> overwrites
+        blind, so a later save from this tab replaces the newer file whichever
+        button you press here. Closing that needs a Rust change and is written
+        up as its own story.
+      </p>
+    </div>
+
+    <div class="question">
+      <h3>Should there be a third button that shows the two versions side by side?</h3>
+      <p class="rec">
+        <b>My answer: not yet.</b> It needs a diff view, and the git epic already
+        has one planned (<code>inline_diff_viewer</code>). Better to reuse that
+        when it exists than to build a second one here.
+      </p>
+    </div>
+
+    <div class="question">
+      <h3>Should a silent reload say anything at all?</h3>
+      <p class="rec">
+        <b>My answer: no.</b> A tab with no unsaved edits was showing a copy of
+        the file; now it shows the file. That is what the tab is for, and a
+        notice for it would fire on every <code>git pull</code>.
+      </p>
+    </div>
+  </section>
+</main>

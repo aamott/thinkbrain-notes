@@ -20,7 +20,6 @@ values.
 
 ## File References
 
-- `apps/desktop/src/styles.css:24-34` — current partial light overrides
-- `apps/desktop/src/styles.css:88` — hardcoded activity bar color
-- `apps/desktop/src/styles.css:608` — hardcoded status bar color
-- `packages/ui/src/styles/tokens.css` — target location for consolidated tokens
+- `packages/ui/src/styles/tokens.css` — consolidated light token definitions
+- `apps/desktop/src/main.tsx` — imports the shared token stylesheet.
+- `apps/desktop/src/index.css` — global app reset/base stylesheet.

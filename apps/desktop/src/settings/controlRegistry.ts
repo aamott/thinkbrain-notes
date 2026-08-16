@@ -13,13 +13,17 @@
  */
 
 import type { ComponentType } from "react";
-import type { SettingDefinition, SettingType } from "@thinkbrain/core";
+import type { Disposable, SettingDefinition, SettingType } from "@thinkbrain/core";
 
 import { ToggleControl } from "./controls/ToggleControl";
 import { TextControl } from "./controls/TextControl";
 import { NumberControl } from "./controls/NumberControl";
 import { SelectControl } from "./controls/SelectControl";
 import { PathControl } from "./controls/PathControl";
+
+/** Shared input className for text/number/select/path controls. */
+export const inputClassName =
+  "rounded-small border border-border bg-surface px-2 py-1 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50";
 
 /**
  * Props every setting control receives.
@@ -57,8 +61,14 @@ const controlRegistry = new Map<string, ComponentType<ControlProps>>();
 export function registerControl(
   key: string,
   component: ComponentType<ControlProps>
-): void {
+): Disposable {
   controlRegistry.set(key, component);
+  return {
+    dispose: () => {
+      // Only remove if still our component; another caller may have replaced it.
+      if (controlRegistry.get(key) === component) controlRegistry.delete(key);
+    }
+  };
 }
 
 /**

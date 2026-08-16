@@ -11,6 +11,7 @@
 import type { SettingsRegistry } from "./registry";
 import type { SettingDefinition } from "./types";
 import type { SettingsDiagnostic } from "../settings";
+import { assertNeverSettingType } from "./internal";
 
 /**
  * Validates a flat `fullKey -> value` map against the registry's definitions.
@@ -112,7 +113,7 @@ function checkType(
       }
       return undefined;
     default:
-      return undefined;
+      return assertNeverSettingType(def);
   }
 }
 

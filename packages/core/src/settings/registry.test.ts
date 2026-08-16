@@ -21,6 +21,20 @@ function registryWithBuiltIns(): SettingsRegistry {
   return registry;
 }
 
+/** Wraps a dynamic definition as an extension schema for runtime guard tests. */
+function moduleWithDynamicDefinition(definition: unknown): SettingsModule {
+  return {
+    id: "schema-safety",
+    label: "Schema safety",
+    scope: "app",
+    sections: [{
+      id: "schema-safety.section",
+      label: "Schema safety",
+      settings: [definition]
+    }]
+  } as unknown as SettingsModule;
+}
+
 describe("settings registry", () => {
   it("registers modules and exposes them via getAllModules/getModule", () => {
     const registry = registryWithBuiltIns();
@@ -54,6 +68,11 @@ describe("settings registry", () => {
     expect(lineWrapping?.type).toBe("boolean");
     expect(lineWrapping?.default).toBe(true);
 
+    const livePreview = registry.getDefinition("editor.livePreview");
+    expect(livePreview?.type).toBe("boolean");
+    expect(livePreview?.default).toBe(true);
+    expect(livePreview?.section).toBe("editor.display");
+
     expect(registry.getDefinition("appearance.missing")).toBeUndefined();
   });
 
@@ -66,13 +85,224 @@ describe("settings registry", () => {
     );
   });
 
+  it("rejects empty and non-lowercase kebab-case module ids", () => {
+    const registry = createSettingsRegistry();
+    for (const id of ["", "Editor", "editor.foo", "-editor", "editor-", "editor__view"]) {
+      expect(() => registry.register({
+        id,
+        label: "Invalid",
+        scope: "app",
+        sections: []
+      })).toThrow("Invalid settings module id");
+    }
+  });
+
+  it("rejects a dynamic definition with a default of the wrong type", () => {
+    const registry = createSettingsRegistry();
+
+    expect(() => registry.register(moduleWithDynamicDefinition({
+      key: "value",
+      type: "number",
+      default: "16",
+      scope: "app",
+      section: "schema-safety.section",
+      label: "Value",
+      description: "A dynamically supplied value."
+    }))).toThrow(/Invalid default.*finite number.*received string/);
+  });
+
+  it("rejects enum definitions with missing or empty options", () => {
+    const missingOptions = {
+      key: "value",
+      type: "enum",
+      default: "one",
+      scope: "app",
+      section: "schema-safety.section",
+      label: "Value",
+      description: "A dynamically supplied value."
+    };
+    const emptyOptions = { ...missingOptions, options: [] };
+
+    expect(() => createSettingsRegistry().register(
+      moduleWithDynamicDefinition(missingOptions)
+    )).toThrow(/options must be a non-empty array/);
+    expect(() => createSettingsRegistry().register(
+      moduleWithDynamicDefinition(emptyOptions)
+    )).toThrow(/options must not be empty/);
+  });
+
+  it("rejects an enum default that is not one of its options", () => {
+    const registry = createSettingsRegistry();
+
+    expect(() => registry.register(moduleWithDynamicDefinition({
+      key: "value",
+      type: "enum",
+      options: ["one", "two"],
+      default: "three",
+      scope: "app",
+      section: "schema-safety.section",
+      label: "Value",
+      description: "A dynamically supplied value."
+    }))).toThrow(/default "three" is not one of \[one, two\]/);
+  });
+
+  it("accepts null as a path default", () => {
+    const registry = createSettingsRegistry();
+    registry.register(moduleWithDynamicDefinition({
+      key: "value",
+      type: "path",
+      default: null,
+      scope: "app",
+      section: "schema-safety.section",
+      label: "Value",
+      description: "A dynamically supplied value."
+    }));
+
+    expect(registry.getDefinition("schema-safety.value")?.default).toBeNull();
+  });
+
+  it("disposes exactly one module, releases its sections, and allows re-registration", () => {
+    const registry = createSettingsRegistry();
+    const firstModule: SettingsModule = {
+      id: "first-module",
+      label: "First",
+      scope: "app",
+      sections: [{
+        id: "shared.section",
+        label: "Shared",
+        settings: [{
+          key: "value",
+          type: "string",
+          label: "Value",
+          description: "First value",
+          default: "first",
+          scope: "app",
+          section: "shared.section"
+        }]
+      }]
+    };
+    const secondModule: SettingsModule = {
+      id: "second-module",
+      label: "Second",
+      scope: "app",
+      sections: [{
+        id: "second.section",
+        label: "Second",
+        settings: []
+      }]
+    };
+    const firstRegistration = registry.register(firstModule);
+    registry.register(secondModule);
+
+    firstRegistration.dispose();
+    firstRegistration.dispose();
+    expect(registry.getAllModules().map((module) => module.id)).toEqual(["second-module"]);
+    expect(registry.getDefinitionsForSection("shared.section")).toEqual([]);
+    expect(registry.getModule("second-module")).toBe(secondModule);
+
+    const replacementRegistration = registry.register(firstModule);
+    expect(registry.getAllModules().map((module) => module.id)).toEqual([
+      "second-module",
+      "first-module"
+    ]);
+    expect(registry.getDefinition("first-module.value")?.default).toBe("first");
+    replacementRegistration.dispose();
+  });
+
+  it("retains order across getAllModules/getModulesByScope/getAllDefinitions after disposal", () => {
+    // Regression for the registry lookup type-safety story: the ordered
+    // enumeration paths must not silently drop or duplicate entries when a
+    // module is disposed, and remaining modules must keep their order.
+    const registry = createSettingsRegistry();
+    const moduleA: SettingsModule = {
+      id: "mod-a",
+      label: "A",
+      scope: "app",
+      sections: [{
+        id: "mod-a.section",
+        label: "A Section",
+        settings: [{
+          key: "value",
+          type: "string",
+          label: "Value",
+          description: "A value",
+          default: "a",
+          scope: "app",
+          section: "mod-a.section"
+        }]
+      }]
+    };
+    const moduleB: SettingsModule = {
+      id: "mod-b",
+      label: "B",
+      scope: "app",
+      sections: [{
+        id: "mod-b.section",
+        label: "B Section",
+        settings: [{
+          key: "value",
+          type: "string",
+          label: "Value",
+          description: "B value",
+          default: "b",
+          scope: "app",
+          section: "mod-b.section"
+        }]
+      }]
+    };
+    const moduleC: SettingsModule = {
+      id: "mod-c",
+      label: "C",
+      scope: "workspace",
+      sections: [{
+        id: "mod-c.section",
+        label: "C Section",
+        settings: []
+      }]
+    };
+    const aHandle = registry.register(moduleA);
+    registry.register(moduleB);
+    registry.register(moduleC);
+
+    aHandle.dispose();
+    aHandle.dispose(); // idempotent: must not disturb moduleB or moduleC.
+
+    expect(registry.getAllModules().map((m) => m.id)).toEqual(["mod-b", "mod-c"]);
+    expect(registry.getModulesByScope("app").map((m) => m.id)).toEqual(["mod-b"]);
+    expect(registry.getModulesByScope("workspace").map((m) => m.id)).toEqual([
+      "mod-c"
+    ]);
+    expect(registry.getAllDefinitions().map((d) => d.key)).toEqual([
+      "mod-b.value"
+    ]);
+    expect(registry.getDefinition("mod-a.value")).toBeUndefined();
+    expect(registry.getDefinitionsForSection("mod-a.section")).toEqual([]);
+  });
+
+  it("rejects duplicate section ids, including empty sections", () => {
+    const registry = createSettingsRegistry();
+    const module: SettingsModule = {
+      id: "duplicate-sections",
+      label: "Duplicate",
+      scope: "app",
+      sections: [
+        { id: "empty", label: "Empty" },
+        { id: "empty", label: "Again" }
+      ]
+    };
+
+    expect(() => registry.register(module)).toThrow('Duplicate section id "empty"');
+    expect(registry.getModule("duplicate-sections")).toBeUndefined();
+  });
+
   it("returns definitions for a section id", () => {
     const registry = registryWithBuiltIns();
 
     const displayDefs = registry.getDefinitionsForSection("editor.display");
     expect(displayDefs.map((def) => def.key)).toEqual([
       "editor.fontSize",
-      "editor.lineWrapping"
+      "editor.lineWrapping",
+      "editor.livePreview"
     ]);
 
     const themeDefs = registry.getDefinitionsForSection("appearance.theme");
@@ -107,6 +337,134 @@ describe("settings registry", () => {
 
     expect(registry.getMigrations()).toEqual([migration]);
   });
+
+  it("throws when two modules register the same section id", () => {
+    const registry = createSettingsRegistry();
+    const moduleA: SettingsModule = {
+      id: "module-a",
+      label: "A",
+      scope: "app",
+      sections: [{ id: "shared.section", label: "Shared" }]
+    };
+    const moduleB: SettingsModule = {
+      id: "module-b",
+      label: "B",
+      scope: "app",
+      sections: [{ id: "shared.section", label: "Shared" }]
+    };
+    registry.register(moduleA);
+
+    expect(() => registry.register(moduleB)).toThrow(
+      "already registered by another"
+    );
+  });
+
+  it("throws when one module has two settings resolving to the same full key", () => {
+    const registry = createSettingsRegistry();
+    const module: SettingsModule = {
+      id: "dup-keys",
+      label: "Dup",
+      scope: "app",
+      sections: [{
+        id: "dup-keys.section",
+        label: "Section",
+        settings: [
+          {
+            key: "value",
+            type: "string",
+            default: "first",
+            scope: "app",
+            section: "dup-keys.section",
+            label: "First",
+            description: "First value"
+          },
+          {
+            key: "value",
+            type: "string",
+            default: "second",
+            scope: "app",
+            section: "dup-keys.section",
+            label: "Second",
+            description: "Second value"
+          }
+        ]
+      }]
+    };
+
+    expect(() => registry.register(module)).toThrow("Duplicate setting key");
+  });
+
+  it("rejects migrations with negative fromVersion or toVersion", () => {
+    const registry = createSettingsRegistry();
+
+    expect(() =>
+      registry.registerMigration({
+        fromVersion: -1,
+        toVersion: 1,
+        migrate: (value) => value
+      })
+    ).toThrow("non-negative");
+    expect(() =>
+      registry.registerMigration({
+        fromVersion: 0,
+        toVersion: -1,
+        migrate: (value) => value
+      })
+    ).toThrow("non-negative");
+  });
+
+  it("rejects migrations where fromVersion >= toVersion", () => {
+    const registry = createSettingsRegistry();
+
+    expect(() =>
+      registry.registerMigration({
+        fromVersion: 2,
+        toVersion: 2,
+        migrate: (value) => value
+      })
+    ).toThrow("must be less than");
+    expect(() =>
+      registry.registerMigration({
+        fromVersion: 3,
+        toVersion: 1,
+        migrate: (value) => value
+      })
+    ).toThrow("must be less than");
+  });
+
+  it("rejects migrations with a duplicate fromVersion", () => {
+    const registry = createSettingsRegistry();
+    registry.registerMigration({
+      fromVersion: 0,
+      toVersion: 1,
+      migrate: (value) => value
+    });
+
+    expect(() =>
+      registry.registerMigration({
+        fromVersion: 0,
+        toVersion: 2,
+        migrate: (value) => value
+      })
+    ).toThrow("already registered");
+  });
+
+  it("rejects migrations whose range overlaps an existing migration range", () => {
+    const registry = createSettingsRegistry();
+    registry.registerMigration({
+      fromVersion: 0,
+      toVersion: 2,
+      migrate: (value) => value
+    });
+
+    expect(() =>
+      registry.registerMigration({
+        fromVersion: 1,
+        toVersion: 3,
+        migrate: (value) => value
+      })
+    ).toThrow("overlaps existing range [0, 2)");
+  });
 });
 
 describe("extractDefaults", () => {
@@ -118,6 +476,7 @@ describe("extractDefaults", () => {
       "appearance.themeFile": null,
       "editor.fontSize": 16,
       "editor.lineWrapping": true,
+      "editor.livePreview": true,
       "settings.autosave": false
     });
   });

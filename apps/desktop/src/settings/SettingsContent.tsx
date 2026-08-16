@@ -25,30 +25,11 @@ import type { SettingDefinition, SettingsDiagnostic } from "@thinkbrain/core";
 import { Unavailable } from "../shell/Unavailable";
 import { cn } from "../lib/utils";
 import { appSettingsRegistry, useSettingsStore } from "./settingsStore";
+import { resolveEffectiveValue } from "./settingsHelpers";
 import { getControlForDefinition } from "./controlRegistry";
 import { subscribeSettingHighlight } from "./settingHighlight";
 import { findSectionLabelAcrossModules } from "./sectionUtils";
 import { ThemePicker, ThemeToolbar } from "./ThemeSectionControls";
-
-/**
- * Computes the effective value for a setting key from the raw store fields.
- *
- * Resolution order: staged > appValues > workspaceValues > definition default.
- * This mirrors `SettingsStoreState.getEffectiveValue` but is computed inline
- * during render so React re-renders when the selected fields change.
- */
-export function computeEffectiveValue(
-  key: string,
-  defaultValue: unknown,
-  staged: Record<string, unknown>,
-  appValues: Record<string, unknown>,
-  workspaceValues: Record<string, unknown> | null
-): unknown {
-  if (key in staged) return staged[key];
-  if (key in appValues) return appValues[key];
-  if (workspaceValues && key in workspaceValues) return workspaceValues[key];
-  return defaultValue;
-}
 
 /**
  * Renders a single setting row: label, description, control, and any inline
@@ -198,7 +179,7 @@ export function SettingsContent() {
 
   return (
     <div ref={containerRef} className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-      <div className="mx-auto w-full max-w-[40rem] px-6 py-4">
+      <div className="mx-auto w-full max-w-160 px-6 py-4">
         <div className="mb-2 flex items-center gap-2">
           <h2 className="text-base font-semibold text-foreground">{sectionLabel}</h2>
           <button
@@ -242,12 +223,12 @@ export function SettingsContent() {
               <SettingRow
                 key={definition.key}
                 definition={definition}
-                value={computeEffectiveValue(
+                value={resolveEffectiveValue(
                   definition.key,
-                  definition.default,
                   stagedChanges,
                   appValues,
-                  workspaceValues
+                  workspaceValues,
+                  definition
                 )}
                 onChange={(value) => stageChange(definition.key, value)}
                 diagnostics={validationDiagnostics.filter(

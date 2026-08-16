@@ -64,7 +64,9 @@
   --radius-medium: var(--tn-radius-medium);
   --radius-large: var(--tn-radius-large);
   --font-sans: var(--tn-font-sans);
+  --font-mono: var(--tn-font-mono);
   --shadow-soft: var(--tn-shadow-soft);
+  --shadow-panel: var(--tn-shadow-panel);
 }
 
 @layer base {
@@ -107,6 +109,24 @@
   textarea:focus-visible {
     outline: 2px solid var(--tn-color-ring);
     outline-offset: -2px;
+  }
+
+  /* Scrollbar: static width so it never expands on hover (the native WebView
+     overlay scrollbar auto-expands and gets in the way of the tab strip).
+     Width stays constant; only the thumb color shifts subtly on hover. */
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--tn-color-border);
+    border-radius: 2px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--tn-color-muted-foreground);
   }
 }
 

@@ -83,7 +83,7 @@ pub fn themes_dir(app: &tauri::AppHandle) -> Result<PathBuf, NativeError> {
         NativeError::with_details(
             "themes.app_data_unavailable",
             "Failed to resolve the application data directory.",
-            error.to_string(),
+            error,
         )
     })?;
     Ok(themes_dir_path(&app_data_dir))
@@ -104,7 +104,7 @@ pub fn ensure_themes_directory(themes_dir: &Path) -> Result<(), NativeError> {
         NativeError::with_details(
             "themes.create_dir_failed",
             "Failed to create the themes directory.",
-            error.to_string(),
+            error,
         )
     })
 }
@@ -119,13 +119,17 @@ pub fn ensure_themes_directory(themes_dir: &Path) -> Result<(), NativeError> {
 /// before bundling) are logged and skipped rather than failing the whole
 /// command — the picker still works, just without those presets.
 ///
+/// Copy failures (disk full, permissions) are collected across all presets so
+/// every copy is attempted, then surfaced as a typed `NativeError` listing the
+/// failed filenames. Resource-resolution failures (dev mode without bundling)
+/// are still logged and skipped, since they are expected in `cargo test` and
+/// unbundled dev runs.
+///
 /// Args:
 ///   app: Tauri handle used to resolve bundled resource paths.
 ///   themes_dir: Destination directory (already created).
-pub fn seed_missing_presets(
-    app: &tauri::AppHandle,
-    themes_dir: &Path,
-) -> Result<(), NativeError> {
+pub fn seed_missing_presets(app: &tauri::AppHandle, themes_dir: &Path) -> Result<(), NativeError> {
+    let mut copy_failures: Vec<String> = Vec::new();
     for preset_file_name in PRESET_THEME_FILES {
         let destination = themes_dir.join(preset_file_name);
         // Never overwrite an existing file — preserves user edits to a preset
@@ -136,9 +140,10 @@ pub fn seed_missing_presets(
 
         // Resolve the bundled resource path. In dev mode (before bundling), the
         // resource may not exist; skip it rather than failing the whole command.
-        let resource_path = app
-            .path()
-            .resolve(format!("presets/themes/{preset_file_name}"), BaseDirectory::Resource);
+        let resource_path = app.path().resolve(
+            format!("presets/themes/{preset_file_name}"),
+            BaseDirectory::Resource,
+        );
         let Ok(resource_path) = resource_path else {
             // Resource not bundled (typical in `cargo test` and dev runs without
             // a built bundle). Skip — the picker still lists user-added themes.
@@ -146,19 +151,30 @@ pub fn seed_missing_presets(
             continue;
         };
         if !resource_path.exists() {
-            eprintln!("[themes] resource path does not exist: {}", resource_path.display());
+            eprintln!(
+                "[themes] resource path does not exist: {}",
+                resource_path.display()
+            );
             continue;
         }
 
-        // Copy the file. A failure on one preset does not abort the others.
+        // Copy the file. A failure on one preset does not abort the others, but
+        // is collected and surfaced after the loop instead of swallowed.
         if let Err(error) = fs::copy(&resource_path, &destination) {
-            eprintln!(
-                "[themes] failed to copy preset {preset_file_name}: {error}"
-            );
+            eprintln!("[themes] failed to copy preset {preset_file_name}: {error}");
+            copy_failures.push(format!("{preset_file_name}: {error}"));
         }
     }
 
-    Ok(())
+    if copy_failures.is_empty() {
+        Ok(())
+    } else {
+        Err(NativeError::with_details(
+            "themes.preset_copy_failed",
+            "One or more bundled preset themes could not be copied into the themes directory.",
+            copy_failures.join("; "),
+        ))
+    }
 }
 
 /// Lists and parses every `.tbtheme.json` file in the directory.
@@ -172,7 +188,7 @@ pub fn list_theme_entries(themes_dir: &Path) -> Result<Vec<ThemeEntry>, NativeEr
         NativeError::with_details(
             "themes.read_dir_failed",
             "Failed to read the themes directory.",
-            error.to_string(),
+            error,
         )
     })?;
 
@@ -208,20 +224,46 @@ pub fn list_theme_entries(themes_dir: &Path) -> Result<Vec<ThemeEntry>, NativeEr
 /// Returns:
 ///   The file contents as a string, or `None` if the file does not exist.
 #[tauri::command]
-pub fn read_theme_file(path: String) -> Result<Option<String>, NativeError> {
+pub fn read_theme_file(app: tauri::AppHandle, path: String) -> Result<Option<String>, NativeError> {
     let path = Path::new(&path);
     if !path.exists() {
         return Ok(None);
     }
-    fs::read_to_string(path)
-        .map(Some)
-        .map_err(|error| {
+    let path = resolve_theme_file_path(&themes_dir(&app)?, path)?;
+    fs::read_to_string(path).map(Some).map_err(|error| {
             NativeError::with_details(
                 "themes.read_failed",
                 "Failed to read the theme file.",
-                error.to_string(),
+                error,
             )
         })
+}
+
+/// Resolves an existing theme file and rejects paths outside the themes directory.
+fn resolve_theme_file_path(themes_dir: &Path, path: &Path) -> Result<PathBuf, NativeError> {
+    let canonical_themes_dir = themes_dir.canonicalize().map_err(|error| {
+        NativeError::with_details(
+            "themes.read_failed",
+            "Failed to resolve the themes directory.",
+            error,
+        )
+    })?;
+    let canonical_path = path.canonicalize().map_err(|error| {
+        NativeError::with_details(
+            "themes.read_failed",
+            "Failed to resolve the theme file.",
+            error,
+        )
+    })?;
+
+    if !canonical_path.starts_with(&canonical_themes_dir) {
+        return Err(NativeError::new(
+            "themes.path_outside_themes_dir",
+            "Theme file path must stay inside the themes directory.",
+        ));
+    }
+
+    Ok(canonical_path)
 }
 
 /// Returns true if the path has the `.tbtheme.json` extension (case-sensitive).
@@ -255,10 +297,7 @@ fn read_theme_name(path: &Path) -> Option<String> {
 /// Returns the filename stem (without the `.tbtheme.json` extension) as a
 /// fallback display name.
 fn stem_name(path: &Path) -> String {
-    let file_name = path
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("theme");
+    let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("theme");
     file_name
         .strip_suffix(&format!(".{THEME_EXTENSION}"))
         .unwrap_or(file_name)
@@ -272,26 +311,15 @@ fn stem_name(path: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::SystemTime;
 
-    /// Creates a unique temp directory for a test and returns its path.
     fn temp_test_dir(name: &str) -> PathBuf {
-        let unique = SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("time is after epoch")
-            .as_nanos();
-        let path = std::env::temp_dir().join(format!("thinkbrain-themes-{name}-{unique}"));
-        fs::create_dir_all(&path).expect("temp directory is created");
-        path
+        crate::tests::make_temp_test_dir(name, "themes", false)
     }
 
     #[test]
     fn themes_dir_path_lives_under_app_data() {
         let app_data_dir = PathBuf::from("/tmp/thinkbrain-app-data");
-        assert_eq!(
-            themes_dir_path(&app_data_dir),
-            app_data_dir.join("themes")
-        );
+        assert_eq!(themes_dir_path(&app_data_dir), app_data_dir.join("themes"));
     }
 
     #[test]
@@ -335,8 +363,7 @@ mod tests {
         .expect("theme file written");
 
         // Write a broken JSON file — should fall back to the filename stem.
-        fs::write(themes.join("broken.tbtheme.json"), "not json")
-            .expect("broken file written");
+        fs::write(themes.join("broken.tbtheme.json"), "not json").expect("broken file written");
 
         // Write a non-theme file — should be ignored.
         fs::write(themes.join("notes.md"), "hello").expect("non-theme file written");
@@ -363,8 +390,7 @@ mod tests {
         fs::write(themes.join("app.json"), "{}").expect("json file written");
         // A directory whose name happens to end with the extension — must be
         // ignored (it is not a file).
-        fs::create_dir_all(themes.join("weird.tbtheme.json"))
-            .expect("directory created");
+        fs::create_dir_all(themes.join("weird.tbtheme.json")).expect("directory created");
 
         let entries = list_theme_entries(&themes).expect("listing succeeds");
         assert!(entries.is_empty());
@@ -379,7 +405,24 @@ mod tests {
         )));
         assert!(!is_theme_file(&PathBuf::from("/tmp/themes/app.json")));
         assert!(!is_theme_file(&PathBuf::from("/tmp/themes/notes.md")));
-        assert!(!is_theme_file(&PathBuf::from("/tmp/themes/forest-dark.json")));
+        assert!(!is_theme_file(&PathBuf::from(
+            "/tmp/themes/forest-dark.json"
+        )));
+    }
+
+    #[test]
+    fn resolve_theme_file_path_rejects_traversal() {
+        let temp = temp_test_dir("path-traversal");
+        let themes = temp.join("themes");
+        fs::create_dir_all(&themes).expect("themes dir created");
+        let outside = temp.join("secret.tbtheme.json");
+        fs::write(&outside, "secret").expect("outside file written");
+
+        let error = resolve_theme_file_path(&themes, &themes.join("../secret.tbtheme.json"))
+            .expect_err("traversal is rejected");
+
+        assert_eq!(error.code, "themes.path_outside_themes_dir");
+        fs::remove_dir_all(temp).expect("cleanup");
     }
 
     #[test]
@@ -416,8 +459,7 @@ mod tests {
         let no_name = temp.join("no-name.tbtheme.json");
         fs::write(&no_name, r#"{"base":"dark","version":1}"#).expect("written");
         let empty_name = temp.join("empty-name.tbtheme.json");
-        fs::write(&empty_name, r#"{"name":"   ","base":"dark","version":1}"#)
-            .expect("written");
+        fs::write(&empty_name, r#"{"name":"   ","base":"dark","version":1}"#).expect("written");
         let not_json = temp.join("not-json.tbtheme.json");
         fs::write(&not_json, "not json").expect("written");
 

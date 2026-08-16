@@ -178,6 +178,15 @@ async function loadSourceControlState(
   }
 }
 
+/** Maps a non-`status` Git status result to a panel state, surfacing Git unavailability distinctly. */
+function mapGitStatusFailure(
+  result: Exclude<GitStatusResult, { kind: "status" }>
+): SourceControlPanelState {
+  return result.kind === "git-unavailable"
+    ? { kind: "git-missing", message: result.message }
+    : { kind: "error", message: result.message };
+}
+
 async function repositoryState(
   rootPath: string,
   branch: string | null,
@@ -189,9 +198,7 @@ async function repositoryState(
     return { kind: "repository", branch, status: result.status, initialized };
   }
 
-  return result.kind === "git-unavailable"
-    ? { kind: "git-missing", message: result.message }
-    : { kind: "error", message: result.message };
+  return mapGitStatusFailure(result);
 }
 
 function refreshedRepositoryState(
@@ -201,9 +208,7 @@ function refreshedRepositoryState(
   if (result.kind === "status") {
     return { ...state, actionError: undefined, status: result.status, isRefreshing: false };
   }
-  return result.kind === "git-unavailable"
-    ? { kind: "git-missing", message: result.message }
-    : { kind: "error", message: result.message };
+  return mapGitStatusFailure(result);
 }
 
 export function SourceControlPanelContent({
@@ -255,7 +260,7 @@ export function SourceControlPanelContent({
         </EmptyState>
       )}
       {state.kind === "repository" && (
-        <div className="flex flex-1 flex-col gap-[.8rem] py-[.85rem] px-[.75rem]">
+        <div className="flex flex-1 flex-col gap-[.8rem] py-[.85rem] px-3">
           <div className="items-center flex gap-2 justify-between">
             <h2 className="text-foreground text-[.82rem] m-0 mb-[.45rem] tracking-[.06em] uppercase">Repository</h2>
             <div className="items-center flex gap-2">
@@ -278,7 +283,7 @@ export function SourceControlPanelContent({
               </button>
             </div>
           </div>
-          {state.initialized && <p aria-live="polite" role="status" className="m-0 max-w-[18rem] text-muted-foreground text-[.72rem]">Repository initialized.</p>}
+          {state.initialized && <p aria-live="polite" role="status" className="m-0 max-w-2xs text-muted-foreground text-[.72rem]">Repository initialized.</p>}
           {state.actionError && <p className="bg-[color-mix(in_srgb,var(--tn-color-destructive)_9%,transparent)] border border-[color-mix(in_srgb,var(--tn-color-destructive)_45%,var(--tn-color-border))] rounded-small text-danger text-[.72rem] m-0 py-2 px-[.6rem]" role="alert">{state.actionError}</p>}
           <dl className="border border-border rounded-small m-0">
             <div className="grid grid-cols-[5rem_minmax(0,1fr)]">
@@ -444,7 +449,7 @@ function EmptyState({
   return (
     <div className="items-center text-muted-foreground flex flex-1 flex-col justify-center leading-normal m-0 p-6 text-center">
       <h2 className="text-foreground text-[.82rem] m-0 mb-[.45rem]">{title}</h2>
-      <div className="m-0 max-w-[18rem]" role={alert ? "alert" : undefined}>{children}</div>
+      <div className="m-0 max-w-2xs" role={alert ? "alert" : undefined}>{children}</div>
     </div>
   );
 }

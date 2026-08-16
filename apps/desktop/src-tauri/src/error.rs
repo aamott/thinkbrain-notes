@@ -32,14 +32,12 @@ impl NativeError {
     pub fn with_details(
         code: impl Into<String>,
         message: impl Into<String>,
-        details: impl Into<String>,
+        details: impl std::fmt::Display,
     ) -> Self {
         Self {
             code: code.into(),
             message: message.into(),
-            details: Some(details.into()),
+            details: Some(details.to_string()),
         }
     }
 }
-
-

@@ -12,15 +12,15 @@
 import { useCallback, useEffect, useState, type ChangeEvent } from "react";
 import { Download, Upload } from "lucide-react";
 import { cn } from "../lib/utils";
-import { useSettingsStore } from "./settingsStore";
+import { appSettingsRegistry, useSettingsStore } from "./settingsStore";
+import { resolveEffectiveValue } from "./settingsHelpers";
 import { listThemes, type ThemeEntry } from "./themeAdapter";
 import {
-  buildThemeExportPayload,
+  buildThemeExport,
   writeThemeExportFile,
   importTheme,
   type ImportThemeResult
 } from "./themeImportExport";
-import { computeEffectiveValue } from "./SettingsContent";
 import { useTransientStatus } from "./useTransientStatus";
 
 /**
@@ -106,25 +106,29 @@ export function ThemePicker() {
     };
   }, []);
 
-  // Compute the effective themeFile value (staged > app > workspace > default).
-  // The default is `null` (no custom theme) per the settings registry.
-  const themeFileValue = computeEffectiveValue(
+  // Compute the effective themeFile value (staged > app > default). The
+  // default is `null` (no custom theme) per the settings registry. Both
+  // appearance.theme and appearance.themeFile are app-scoped, so a workspace
+  // file cannot override them — resolveEffectiveValue enforces that.
+  const themeFileDef = appSettingsRegistry.getDefinition("appearance.themeFile");
+  const themeFileValue = resolveEffectiveValue(
     "appearance.themeFile",
-    null,
     stagedChanges,
     appValues,
-    workspaceValues
+    workspaceValues,
+    themeFileDef
   );
 
   // The unified select's value: if a theme file is active (non-null string),
   // use its path; otherwise fall back to the effective base `appearance.theme`
   // value (defaulting to "system" if somehow not a string).
-  const themeValue = computeEffectiveValue(
+  const themeDef = appSettingsRegistry.getDefinition("appearance.theme");
+  const themeValue = resolveEffectiveValue(
     "appearance.theme",
-    "system",
     stagedChanges,
     appValues,
-    workspaceValues
+    workspaceValues,
+    themeDef
   );
   const selectValue =
     typeof themeFileValue === "string" && themeFileValue !== ""
@@ -173,7 +177,7 @@ export function ThemePicker() {
         id="theme-picker-select"
         value={selectValue}
         onChange={handleChange}
-        className="mt-1 max-w-[24rem] rounded-small border border-border bg-surface px-2 py-1 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="mt-1 max-w-sm rounded-small border border-border bg-surface px-2 py-1 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <optgroup label="Base">
           <option value="system">System</option>
@@ -221,8 +225,8 @@ export function ThemeToolbar() {
    * Shows a status message on success or failure.
    */
   const handleExport = useCallback((): void => {
-    const { json } = buildThemeExportPayload();
-    void writeThemeExportFile(json)
+    void buildThemeExport()
+      .then(({ json }) => writeThemeExportFile(json))
       .then((written) => {
         if (written) {
           status.show("Theme exported.");

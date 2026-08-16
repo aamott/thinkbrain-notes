@@ -65,17 +65,12 @@ export async function listThemes(): Promise<readonly ThemeEntry[]> {
  *   path: Absolute filesystem path to the `.tbtheme.json` file.
  *
  * Returns:
- *   The file contents as a string, or `null` if the file does not exist or the
- *   native bridge is unavailable. Read errors are swallowed here and surfaced
- *   by the caller (`ThemeProvider`) via its `.catch` handler — returning `null`
- *   would conflate "missing" with "broken", so we re-throw nothing and let the
- *   caller's catch handle native errors.
+ *   The file contents as a string, or `null` if running outside Tauri (tests,
+ *   web preview) where there is no native bridge. Native read errors are NOT
+ *   swallowed — they propagate to the caller (`ThemeProvider`) so its `.catch`
+ *   handler can surface "broken" distinctly from "missing" or "non-Tauri".
  */
 export async function readThemeFile(path: string): Promise<string | null> {
   if (!isTauri()) return null;
-  try {
-    return await invokeNativeCommand("read_theme_file", { path });
-  } catch {
-    return null;
-  }
+  return invokeNativeCommand("read_theme_file", { path });
 }

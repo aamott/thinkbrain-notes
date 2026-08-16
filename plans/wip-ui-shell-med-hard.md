@@ -1,8 +1,7 @@
 # UI Shell
 
-> Adopt `mockup_v3/` as the desktop UI reference. It is a visual/interaction
-> specification, not production code: translate it to the established React,
-> CSS Module, Tauri, and shared-token architecture.
+> The desktop UI shell is a visual/interaction specification translated to the
+> established React, CSS Module, Tauri, and shared-token architecture.
 
 ## Goal
 
@@ -13,7 +12,7 @@ reused rather than recreated from mock data.
 
 ## Scope
 
-**In scope:** mockup-v3 shell chrome; token migration; left/right popouts;
+**In scope:** shell chrome; token migration; left/right popouts;
 pluggable tabs; command palette; theme control; resizable layout persistence;
 and the bottom panel.
 
@@ -32,7 +31,7 @@ command palette, tabs, active tab, and panel widths. Persist user preferences
 through the existing settings/Tauri path to OS app-data. Do not persist open
 document contents or any layout data in the vault.
 
-Translate the mockup into these boundaries:
+Organize the shell into these boundaries:
 
 ```text
 apps/desktop/src/
@@ -58,7 +57,8 @@ decision and capability/CSP design.
 ### Panels and dependencies
 
 The left popout wires the existing `WorkspaceExplorer`, `SearchPanel`, and
-`SettingsPanel`; source control is a status-aware `git-integration` boundary,
+settings surfaces (`SettingsContent`/`ThemeSectionControls`); source control is a
+status-aware `git-integration` boundary,
 and tags/extensions remain unavailable until their epics are active. The right
 popout owns outline/properties presentation; backlinks consume index data only
 when the graph/indexing work exposes it. The assistant panel is an integration
@@ -66,11 +66,12 @@ point for the `ai` epic, not a hand-built chat UI.
 
 ### Tokens, styling, and dynamic dimensions
 
-Merge the mockup's chrome surfaces into `packages/ui/src/styles/tokens.css`
+Keep chrome surfaces in `packages/ui/src/styles/tokens.css`
 using the `--tn-*` prefix, with light and dark values for title bar, activity
-bar, sidebar, editor, panel, status bar, and active/inactive tabs. Replace the
-monolithic `apps/desktop/src/styles.css` shell rules with co-located CSS
-Modules; keep only reset, app root, and third-party editor overrides global.
+bar, sidebar, editor, panel, status bar, and active/inactive tabs. Translate
+Tailwind utility classes into co-located CSS Modules backed by those variables;
+keep only reset, app root, and third-party editor overrides global. The current
+production source still uses utility classes, so this migration remains pending.
 
 Panel widths are state in pixels, clamped in the resize controller and applied
 to the shell root with scoped CSSOM custom properties. This is the approved
@@ -89,35 +90,28 @@ the persisted app setting and `data-thinkbrain-theme`.
 
 ## Status
 
-- ✅ fresh-shell startup and browser-harness wiring — see
-  `plans/ui-shell/done-fresh_shell_launch_wiring-high-med.md`
-- ✅ persisted Explorer visibility and workspace restoration — see
-  `workspace-explorer/done-fresh_shell_workspace_open-high-med.md`
-- ✅ a new shell rebuild from `mockup_v3/` is complete — see
-  `plans/ui-shell/done-mockup_v3_shell_rebuild-high-hard.md`
-- ✅ shell token and CSS Module migration — see
-  `plans/ui-shell/done-shell_tokens_and_css_modules-high-hard.md`
-- ⬜ desktop shell composition (panel separation) — rolled back by `b2124ee "UI
-  Cleanup"`; see `plans/ui-shell/pending-desktop_shell_composition-high-hard.md`
-- ✅ tab model, registry, and tab strip — see
-  `plans/ui-shell/done-tab_content_registry-high-hard.md`
-- ⬜ left popout integration — see
-  `plans/ui-shell/pending-left_popout_integration-high-med.md`
-- ⬜ inspector/right popout integration — see
-  `plans/ui-shell/pending-right_popout_inspectors-med-med.md`
-- ✅ command palette and workspace file navigation — see
-  `plans/ui-shell/done-command_palette_and_navigation-high-med.md`
-- ⬜ resizable layout and OS app-data persistence — see
-  `plans/ui-shell/pending-resizable_panel_persistence-med-med.md`
-- ⬜ theme control in the new shell — see
-  `plans/ui-shell/pending-shell_theme_control-high-easy.md`
-- ⬜ bottom panel framework and status integration — see
-  `plans/ui-shell/pending-bottom_panel_framework-low-med.md`
+- ✅ fresh-shell startup and browser-harness wiring
+- ✅ persisted Explorer visibility and workspace restoration
+- ✅ fresh shell rebuild
+- ⬜ shell token and CSS Module migration — production JSX still uses Tailwind
+  utility classes; see
+  `plans/theme-foundation/pending-surface_styling_migration-med-med.md`
+- ✅ desktop shell composition (panel separation) — rebuilt after the earlier
+  rollback
+- ✅ tab model, registry, and tab strip
+- ✅ left popout integration
+- ✅ inspector/right popout integration
+- ✅ command palette and workspace file navigation
+- ✅ resizable layout and OS app-data persistence
+- ✅ theme control in the new shell
+- ✅ bottom panel framework and status integration
 - ⬜ generic file viewer tabs (code editor, image/audio/video viewers) — see
   `plans/ui-shell/pending-generic_file_viewers-med-med.md`
-- ⬜ semi-preview markdown editor (live preview with inline source on focus) — see
-  `plans/ui-shell/pending-semi_preview_editor-med-hard.md`
+- ✅ semi-preview markdown editor (live preview with inline source on focus);
+  implementation lives in `apps/desktop/src/tabs/livePreview/` (design docs:
+  `docs/superpowers/specs/2026-08-06-markdown-live-preview-design.md` and
+  `docs/superpowers/plans/2026-08-06-markdown-live-preview.md`).
 - ⬜ modular settings system (declarative, auto-populating settings tab) — see
-  `plans/ui-shell/pending-modular_settings_system-med-med.md`
-- ❌ prior movable-action/slot and layout-editing stories described `mockup2.htm`,
-  not `mockup_v3/`; they were superseded and removed.
+  `plans/ui-shell/pending-modular_settings_system-med-hard.md`
+- ❌ prior movable-action/slot and layout-editing stories were superseded and
+  removed.

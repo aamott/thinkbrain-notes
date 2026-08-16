@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { ThemeProvider } from "../settings/ThemeProvider";
 import { DesktopShell } from "./DesktopShell";
 import { StatusBar } from "./StatusBar";
-import { leftActions } from "./shellTypes";
+import { desktopPanelRegistry } from "../panels/panelRegistry";
 
 /**
  * Renders the shell to static markup.
@@ -44,23 +44,26 @@ describe("DesktopShell composition", () => {
     expect(markup).toContain('aria-label="Workspace sections"');
     // Active buttons emit aria-current between aria-label and title, so assert
     // each attribute independently rather than as a contiguous substring.
-    for (const action of leftActions) {
+    const leftPanels = desktopPanelRegistry.entriesBySide("left");
+    for (const action of leftPanels) {
       expect(markup).toContain(`aria-label="${action.label}"`);
       expect(markup).toContain(`title="${action.label}"`);
     }
-    expect(leftActions).toHaveLength(5);
+    expect(leftPanels).toHaveLength(5);
     expect(markup).toContain('aria-label="Settings"');
     expect(markup).toContain('title="Settings"');
   });
 
-  it("keeps the editor region and both dock landmarks in the layout", () => {
+  it("keeps the editor region and left dock landmark in the layout", () => {
     const markup = shellMarkup();
 
     expect(markup).toContain('aria-label="Note workspace"');
     expect(markup).toContain('aria-label="Explorer panel"');
-    expect(markup).toContain('aria-label="Outline panel"');
+    // The right dock is collapsed by default, so neither its panel nor its
+    // resize handle should be present on first render.
+    expect(markup).not.toContain('aria-label="Outline panel"');
     expect(markup).toContain('aria-label="Resize left panel. Use arrow keys to resize."');
-    expect(markup).toContain('aria-label="Resize right panel. Use arrow keys to resize."');
+    expect(markup).not.toContain('aria-label="Resize right panel. Use arrow keys to resize."');
   });
 
   it("reports an empty workspace in the status bar before a workspace is opened", () => {

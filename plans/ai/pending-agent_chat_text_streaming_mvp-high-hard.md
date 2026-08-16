@@ -1,118 +1,73 @@
 # Agent Chat Text Streaming MVP
 
+## Status
+
+⬜ Renderer/runtime integration only. Host lifecycle is in `pending-acp_host_runtime-med-hard.md`; agent detection is in `pending-agent_registry-low-med.md`.
+
+## Product questions — STOP before UI
+
+Confirm: (1) what unavailable state should appear when no ACP agent is detected, (2) whether one assistant panel can switch agents while a run is active, (3) whether the first MVP exposes retry/abort labels or only controls, and (4) whether a user-created thread is the unit that owns an ACP session. **STOP:** no chat mockup or implementation until these answers are recorded. Preserve the completed panel foundation layout; do not invent provider selectors or MCP toggles here.
+
 ## Goal
 
-Wire the assistant panel to a real ACP agent end-to-end for text streaming.
-Rust owns the ACP protocol and process lifecycle; the renderer owns the
-assistant-ui runtime and UI. Ship text-only first; tool calls, permissions,
-plans, and MCP servers follow under `acp_capabilities_and_permissions` and
-later stories.
+Connect the existing assistant panel to a Rust ACP session for text-only streaming. Preserve ACP message semantics and keep the renderer free of ACP SDK/process/provider code.
 
-## Architecture
+## Exact likely files
 
-### ACP protocol lives in Rust (not the renderer)
+- `apps/desktop/src/agent/acpThreadAdapter.ts` — session/request filtering, abort mapping.
+- `apps/desktop/src/agent/AssistantPanel.tsx` and `src/panels/AssistantPanelSurface.tsx` — runtime injection and configured/unavailable states after STOP.
+- `apps/desktop/src/native/commands.ts` and new `src/native/acp.ts` — typed command/listen adapters.
+- `apps/desktop/src/agent/acpThreadAdapter.test.ts`, `AssistantPanel.test.tsx`, and Tauri event adapter tests.
+- `apps/desktop/src-tauri/src/commands/acp.rs` only for command/event DTO compatibility; lifecycle logic remains the host story.
 
-The Rust side owns the full ACP client lifecycle using the official
-`agent-client-protocol` Rust crate: `initialize`, `session/new`,
-`session/prompt`, `session/update` reading, `session/cancel`. It emits typed
-Tauri events filtered by session ID. The renderer never imports
-`@agentclientprotocol/sdk` — it only calls Tauri commands and listens for
-events. This respects the ACP skill's "host is deterministic" principle from
-day one and avoids throwaway renderer-side protocol code.
+## Rust/frontend contracts and event names
 
-The `@agentclientprotocol/sdk@1.2.1` dependency in `apps/desktop/package.json`
-becomes unused by this story; remove it once the Rust side is wired.
+`onNew` calls `agent_prompt` with `{acpSessionId, threadId, text}`; abort maps to `agent_cancel({acpSessionId, requestId})`. Session creation/selection calls `agent_spawn`/`agent_session_new` through `src/native/acp.ts`.
 
-### Runtime path: useExternalStoreRuntime
+Subscribe to `agent://session-update`, typed `{sessionId, requestId, sequence, update}`. MVP consumes only ACP text deltas and terminal/stop updates, appending text to one assistant text part; `agent://error` is typed `{sessionId, requestId, code, message, retryable}`. Events for another session/request or a duplicate sequence are ignored. Unknown ACP updates are logged through a redacted adapter and not rendered.
 
-The renderer uses assistant-ui's `useExternalStoreRuntime` directly. The
-adapter owns `messages` state, `onNew(message)` sends a Tauri command to
-prompt the agent, and incoming Tauri events (`agent://session-update`) append
-to / update the assistant message.
+## Dependencies and order
 
-Rationale:
+1. AI contracts story.
+2. ACP host can expose a mock/session command contract; use a fake event source before the real process.
+3. Agent registry story provides detected agent state.
+4. Product STOP above, then UI/runtime wiring.
+5. History is intentionally separate and can follow this story.
 
-1. ACP in Rust means the renderer talks to an agent process, not an LLM
-   provider. There is no transport/provider-abstraction layer in the
-   renderer.
-2. ACP `session/update` has `Plan`, `AvailableCommandsUpdate`,
-   `CurrentModeUpdate`, `ConfigOptionUpdate`, `SessionInfoUpdate`,
-   `UsageUpdate`, `ToolCallUpdate`, and `request_permission`.
-   `useExternalStoreRuntime` models these as first-class `ThreadMessageLike`
-   parts.
-3. An ACP session is server-side state owned by the agent.
-   `useExternalStoreRuntime` lets the renderer reflect that state without
-   claiming ownership of message history.
-4. Fewer layers: ACP event → Tauri event → `ThreadMessageLike` directly.
+## Tests
 
-### Process spawning: custom Rust commands (not tauri-plugin-shell)
+- Normal delta ordering and concatenation; duplicate/out-of-order/session-mismatched events.
+- Cancel via `AbortSignal`, host error, disconnect, empty output, and retryable versus terminal error.
+- Composer disabled/enabled state and accessible unavailable/error/loading states.
+- No provider/ACP secret in message content, adapter logs, or event fixture.
+- No real process spawn in CI; mock Tauri commands/events only.
 
-`tauri-plugin-shell` grants arbitrary command execution — the opposite of
-AGENTS.md's capability-based sandbox. Custom `agent_spawn`/`agent_prompt`/
-`agent_cancel` commands only spawn preconfigured agent binaries from the
-registry. This is a new privileged native capability, surfaced here per the
-"architectural decisions" rule.
+## Manual checks
 
-### Agent autodetection
+Run a mock ACP agent and then a configured local agent. Send text, verify incremental output, abort, close/reopen the panel, and confirm another session's events cannot alter the transcript.
 
-Detect installed agents by probing PATH: `mistral`, `devin`, `codex`,
-`cursor`. Default to Mistral Vibe (`mistral vibe --acp`) — ACP by default.
-Devin also supports ACP by default. Cursor and Codex typically require an
-extension; the registry records that so the UI prompts instead of silently
-failing. Detection is best-effort and non-blocking.
+## Consent, local/cloud, and mobile constraints
 
-## Acceptance Criteria
+ACP agent auth is agent-owned; Thinkbrain must not request or display its credential. Agent filesystem/terminal consent is not implemented here. Tauri Mobile uses the same adapter and chat runtime; verify soft-keyboard composer behavior, narrow panel scrolling, app suspension cancellation, and no desktop PATH assumptions.
 
-- [ ] `agentRegistry.ts` detects installed agents by probing PATH, records
-      their ACP invocation commands and whether ACP is default or
-      extension-required, defaults to Mistral Vibe when present.
-- [ ] Rust `agent-client-protocol` crate integrated into `src-tauri`. Owns
-      `initialize`, `session/new` (cwd = active workspace root),
-      `session/prompt` (last user message as `ContentBlock::Text`),
-      `session/update` reading until stop, `session/cancel`. Emits typed
-      Tauri events filtered by session ID.
-- [ ] Tauri commands `agent_spawn`, `agent_prompt`, `agent_cancel` registered
-      in `src-tauri/capabilities/` with narrow scope. No arbitrary command
-      execution exposed. Spawns only registry-configured agent binaries.
-- [ ] `acpThreadAdapter.ts` uses `useExternalStoreRuntime` from
-      `@assistant-ui/react`. `onNew` calls a Tauri `agent_prompt` command.
-      Incoming `agent://session-update` events update the assistant message
-      in place. `AgentMessageChunk` text appends to a text part;
-      `session/update` stop ends the run. Non-text update types ignored in
-      MVP (logged, not rendered). Does NOT import `@agentclientprotocol/sdk`.
-- [ ] `AssistantPanel.tsx` uses the `useExternalStoreRuntime` adapter →
-      `AssistantRuntimeProvider`. Composer input enabled when an agent is
-      detected; disabled with a clear message when none is found. Existing
-      visual layout preserved.
-- [ ] Session IDs explicit and persisted in OS app-data (not the vault). One
-      UI thread maps to one ACP session.
-- [ ] No provider credentials reach the renderer. The agent process owns its
-      own auth; the host only transports NDJSON.
-- [ ] `@agentclientprotocol/sdk` removed from `apps/desktop/package.json`
-      once the Rust side is wired.
-- [ ] Tests cover: agent registry detection, adapter text streaming
-      (normal/cancel/error), session filtering. Mock agent in tests — no
-      real process spawning in CI.
+## Acceptance criteria
 
-## Out of Scope
+- [ ] The chat runtime maps only session-filtered ACP text deltas/terminal states into one assistant text part.
+- [ ] Abort, disconnect, duplicate/out-of-order events, errors, unavailable state, and composer accessibility are deterministic and tested.
+- [ ] Renderer has no ACP SDK/process/provider/secret path and mobile uses shared adapters safely.
 
-- Tool call rendering, `session/request_permission` UI, plan rendering, MCP
-  server configuration UI (`pending-acp_capabilities_and_permissions`).
-- Provider/model configuration and native model gateway
-  (`pending-provider_configuration_and_gateway`).
-- Thread history persistence beyond session ID
-  (`pending-assistant_ui_desktop_thread`).
-- Context-aware chat (`pending-context_aware_chat`).
+## Automated validation
 
-## References
+Run adapter/component/native-event tests with fake commands/events, `pnpm lint`, `pnpm typecheck`, and `pnpm build`.
 
-- `plans/wip-ai-low-hard.md` — AI epic and architecture decisions
-- `.agents/skills/acp/SKILL.md` — ACP integration guidance
-- `apps/desktop/src/agent/AssistantPanel.tsx` — current panel (visual done)
-- `apps/desktop/src/native/commands.ts` — existing Tauri command pattern
-- `apps/desktop/src-tauri/src/lib.rs` — existing Rust command registrations
-- `apps/desktop/src-tauri/capabilities/default.json` — capability config
-- ACP Rust SDK: https://github.com/agentclientprotocol/rust-sdk
-- ACP spec: https://agentclientprotocol.com
-- assistant-ui external store docs:
-  https://www.assistant-ui.com/docs/runtimes/external-store
+## Manual desktop/mobile checks
+
+Desktop: mock and approved local stream, abort, reopen, and cross-session filtering. Mobile: test keyboard, narrow scrolling, suspension cancellation, and unavailable state.
+
+## Non-goals
+
+No provider gateway, model chat, history persistence, tools/plans/MCP rendering, `session/request_permission`, context injection, host planning/editing/merge logic, arbitrary process execution, or extension installation.
+
+## Handoff expectations
+
+Deliver runtime adapter, fake event fixtures, component/accessibility tests, manual desktop/mobile report, and unresolved UX answers.

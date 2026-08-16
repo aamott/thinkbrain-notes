@@ -1,6 +1,9 @@
 # Importable Themes
 
-**Status:** pending · **Urgency:** medium · **Difficulty:** hard
+**Status:** in progress · **Urgency:** medium · **Difficulty:** hard
+
+Core parsing, application, and import/export flows are implemented; strict CSS
+color-value validation remains open.
 
 ## Goal
 

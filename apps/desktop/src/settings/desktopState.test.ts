@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  collapsedGroups,
   DEFAULT_DESKTOP_STATE,
   DESKTOP_STATE_KEY,
   loadDesktopState,
@@ -157,13 +158,15 @@ describe("desktop state persistence", () => {
       editor: { fontSize: 18, lineWrapping: false },
       extensionSettings: { "example.timer": { enabled: true } },
       [DESKTOP_STATE_KEY]: {
-        version: 3,
+        version: 5,
         lastWorkspacePath: "/notes/legacy",
         recentWorkspacePaths: ["/notes/legacy"],
         explorerOpen: true,
         leftPanelWidth: 288,
         rightPanelWidth: 320,
-        bottomPanelOpen: false
+        bottomPanelOpen: false,
+        openTabs: [],
+        activeTabId: null
       }
     });
     expect(written).not.toHaveProperty("lastWorkspacePath");
@@ -187,13 +190,17 @@ describe("desktop state persistence", () => {
 
     expect(getWrittenSettings(gateway)).toEqual({
       [DESKTOP_STATE_KEY]: {
-        version: 3,
+        version: 5,
         lastWorkspacePath: "/notes/new",
         recentWorkspacePaths: ["/notes/new"],
         explorerOpen: false,
         leftPanelWidth: 288,
         rightPanelWidth: 320,
-        bottomPanelOpen: false
+        bottomPanelOpen: false,
+        developmentExtensionDirectories: [],
+        openTabs: [],
+        activeTabId: null,
+        workspaceViews: {}
       }
     });
   });
@@ -246,6 +253,39 @@ describe("desktop state persistence", () => {
     });
   });
 
+  it("merges an explicitly provided recentWorkspacePaths list with the current stored list", async () => {
+    const gateway = createGateway(
+      JSON.stringify({
+        [DESKTOP_STATE_KEY]: {
+          version: 5,
+          recentWorkspacePaths: ["/notes/one", "/notes/legacy"]
+        }
+      })
+    );
+
+    await expect(
+      saveDesktopState({ recentWorkspacePaths: ["/notes/two", "/notes/legacy"] }, gateway)
+    ).resolves.toMatchObject({
+      recentWorkspacePaths: ["/notes/two", "/notes/legacy", "/notes/one"]
+    });
+  });
+
+  /**
+   * The native path treats an empty id as no id at all. This path has to agree,
+   * or the fallback persists a tab id no tab can ever have.
+   */
+  it("treats an empty activeTabId as cleared, the way the native path does", async () => {
+    const gateway = createGateway(
+      JSON.stringify({
+        [DESKTOP_STATE_KEY]: { version: 5, activeTabId: "tab-1" }
+      })
+    );
+
+    await expect(saveDesktopState({ activeTabId: "" }, gateway)).resolves.toMatchObject({
+      activeTabId: null
+    });
+  });
+
   it("keeps known recent workspaces when the current root is cleared", async () => {
     const gateway = createGateway(
       JSON.stringify({
@@ -295,6 +335,60 @@ describe("desktop state persistence", () => {
       bottomPanelOpen: true
     });
   });
+
+  it("parses stored development extension directories, dropping junk entries", () => {
+    expect(
+      parseDesktopState(
+        JSON.stringify({
+          [DESKTOP_STATE_KEY]: {
+            version: 3,
+            developmentExtensionDirectories: ["/ext/one", "", 7, "/ext/two", "/ext/one"]
+          }
+        })
+      )
+    ).toEqual({
+      ...DEFAULT_DESKTOP_STATE,
+      developmentExtensionDirectories: ["/ext/one", "/ext/two"]
+    });
+  });
+
+  it("saves development extension directories without touching other state", async () => {
+    const gateway = createGateway(
+      JSON.stringify({
+        theme: "dark",
+        [DESKTOP_STATE_KEY]: { version: 3, explorerOpen: false }
+      })
+    );
+
+    const saved = await saveDesktopState(
+      { developmentExtensionDirectories: ["/ext/one"] },
+      gateway
+    );
+
+    expect(saved.developmentExtensionDirectories).toEqual(["/ext/one"]);
+    expect(saved.explorerOpen).toBe(false);
+    const written = getWrittenSettings(gateway);
+    expect(written.theme).toBe("dark");
+    expect(
+      (written[DESKTOP_STATE_KEY] as Record<string, unknown>).developmentExtensionDirectories
+    ).toEqual(["/ext/one"]);
+  });
+
+  /**
+   * `write_app_settings` now refuses a write whose `expected` no longer
+   * matches what is on disk (see `appSettingsFile.ts`). The fallback path has
+   * no `updateDesktopState` command to do its read-modify-write atomically, so
+   * it must pass what it read as `expected` itself or every fallback write
+   * would be rejected outright once a settings file already exists.
+   */
+  it("sends what it read as the write's precondition", async () => {
+    const raw = JSON.stringify({ theme: "dark" });
+    const gateway = createGateway(raw);
+
+    await saveDesktopState({ explorerOpen: false }, gateway);
+
+    expect(gateway.writeAppSettings).toHaveBeenCalledWith(expect.any(String), raw);
+  });
 });
 
 function createGateway(contents: string | null): DesktopStateGateway & {
@@ -313,3 +407,70 @@ function getWrittenSettings(gateway: DesktopStateGateway & {
   const [contents] = gateway.writeAppSettings.mock.calls[0] as [string];
   return JSON.parse(contents) as Record<string, unknown>;
 }
+
+describe("collapsed groups (D53)", () => {
+  /**
+   * Not settings and not the vault: what a user collapsed in a panel is not a
+   * preference they configured, and churning the settings document on every
+   * toggle would collide with the writes that are.
+   */
+  it("keeps a view's collapsed groups per workspace", () => {
+    const state = parseDesktopState(
+      JSON.stringify({
+        desktopState: {
+          version: 5,
+          workspaceViews: {
+            "/vault": { journal: ["2026", "2026-08"] },
+            "/other": { journal: ["2025"] }
+          }
+        }
+      })
+    );
+
+    expect(collapsedGroups(state, "/vault", "journal")).toEqual(["2026", "2026-08"]);
+    expect(collapsedGroups(state, "/other", "journal")).toEqual(["2025"]);
+    // A workspace or view nothing was stored for has everything open, which is
+    // the same answer as a stored empty list — and the right default either way.
+    expect(collapsedGroups(state, "/vault", "explorer")).toEqual([]);
+    expect(collapsedGroups(state, "/unknown", "journal")).toEqual([]);
+    expect(collapsedGroups(state, null, "journal")).toEqual([]);
+  });
+
+  it("reads a hand-edited document without refusing to draw", () => {
+    const state = parseDesktopState(
+      JSON.stringify({
+        desktopState: {
+          version: 5,
+          workspaceViews: {
+            "/vault": { journal: ["2026", 7, null], broken: "not a list" },
+            "/other": "not an object"
+          }
+        }
+      })
+    );
+
+    expect(collapsedGroups(state, "/vault", "journal")).toEqual(["2026"]);
+    expect(collapsedGroups(state, "/vault", "broken")).toEqual([]);
+    expect(collapsedGroups(state, "/other", "journal")).toEqual([]);
+  });
+
+  /**
+   * The version bump must not cost the user their open tabs. A document written
+   * by the previous schema is read, not replaced with defaults.
+   */
+  it("keeps what the previous schema stored", () => {
+    const state = parseDesktopState(
+      JSON.stringify({
+        desktopState: {
+          version: 4,
+          leftPanelWidth: 300,
+          openTabs: [{ id: "tab-1", title: "Note", kind: "editor" }]
+        }
+      })
+    );
+
+    expect(state.leftPanelWidth).toBe(300);
+    expect(state.openTabs).toHaveLength(1);
+    expect(state.workspaceViews).toEqual({});
+  });
+});

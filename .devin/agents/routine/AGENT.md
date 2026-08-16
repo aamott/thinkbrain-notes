@@ -1,7 +1,8 @@
 ---
 name: routine
-description: Medium-low difficulty tier. Smaller routine feature implementation. Unlimited use. 
-model: glm-5.2
+description: Medium-low difficulty tier. Smaller routine feature implementation.
+model: gpt-5-6-luna-high
+max-nesting: 2
 ---
 
 Read AGENTS.md for instructions and development rules.

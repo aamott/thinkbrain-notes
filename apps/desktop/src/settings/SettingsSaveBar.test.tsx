@@ -5,6 +5,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SettingsSaveBar } from "./SettingsSaveBar";
+import { pickFilePath, saveFilePath } from "../native/dialogs";
+import { readTextFileNative, writeTextFileNative } from "../native/fs";
 import { SettingsContent } from "./SettingsContent";
 import { useSettingsStore } from "./settingsStore";
 
@@ -345,5 +347,73 @@ describe("SettingsContent per-section reset button", () => {
 
     const { resetSection } = useSettingsStore.getState();
     expect(resetSection).toHaveBeenCalledWith("editor.display");
+  });
+});
+
+/**
+ * Export and import each have three outcomes, not two: it worked, the user
+ * dismissed the dialog, or it failed. Reporting nothing on the last two ran
+ * them together and let a failed export look exactly like a cancelled one.
+ */
+describe("SettingsSaveBar export/import outcomes", () => {
+  const statusOf = (host: HTMLElement): string | null =>
+    host.querySelector('[role="status"]')?.textContent ?? null;
+
+  const clickExport = async (host: HTMLElement): Promise<void> => {
+    const button = host.querySelector('[aria-label="Export settings"]');
+    if (!button) throw new Error("No export button.");
+    await click(button);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+  };
+
+  const clickImport = async (host: HTMLElement): Promise<void> => {
+    const button = host.querySelector('[aria-label="Import settings"]');
+    if (!button) throw new Error("No import button.");
+    await click(button);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+  };
+
+  it("says so when the settings file cannot be written", async () => {
+    vi.mocked(saveFilePath).mockResolvedValue("/tmp/settings.json");
+    vi.mocked(writeTextFileNative).mockResolvedValue(false);
+    const host = await render(<SettingsSaveBar />);
+
+    await clickExport(host);
+
+    expect(statusOf(host)).toMatch(/export failed/i);
+  });
+
+  it("stays quiet when the user dismisses the save dialog", async () => {
+    vi.mocked(saveFilePath).mockResolvedValue(null);
+    const host = await render(<SettingsSaveBar />);
+
+    await clickExport(host);
+
+    expect(statusOf(host)).toBeNull();
+  });
+
+  it("says so when the chosen settings file cannot be read", async () => {
+    vi.mocked(pickFilePath).mockResolvedValue("/tmp/settings.json");
+    vi.mocked(readTextFileNative).mockResolvedValue(null);
+    const host = await render(<SettingsSaveBar />);
+
+    await clickImport(host);
+
+    expect(statusOf(host)).toMatch(/import failed/i);
+  });
+
+  it("stays quiet when the user dismisses the open dialog", async () => {
+    vi.mocked(pickFilePath).mockResolvedValue(null);
+    const host = await render(<SettingsSaveBar />);
+
+    await clickImport(host);
+
+    expect(statusOf(host)).toBeNull();
   });
 });

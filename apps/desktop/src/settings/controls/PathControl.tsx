@@ -11,7 +11,7 @@ import { useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { FolderOpen } from "lucide-react";
 import { pickFilePath } from "../../native/dialogs";
-import type { ControlProps } from "../controlRegistry";
+import { inputClassName, type ControlProps } from "../controlRegistry";
 
 /**
  * A path input with a native browse button.
@@ -32,14 +32,14 @@ export function PathControl({ definition, value, onChange, disabled }: ControlPr
   }
 
   return (
-    <div className="flex w-full max-w-[24rem] items-center gap-2">
+    <div className="flex w-full max-w-sm items-center gap-2">
       <input
         type="text"
         id={definition.key}
         value={pathValue}
         disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
-        className="flex-1 rounded-small border border-border bg-surface px-2 py-1 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+        className={`flex-1 ${inputClassName}`}
       />
       <button
         type="button"

@@ -40,6 +40,7 @@ const SEEDED_APP_VALUES: Record<string, unknown> = {
   "appearance.themeFile": null,
   "editor.fontSize": 16,
   "editor.lineWrapping": true,
+  "editor.livePreview": true,
   "settings.autosave": false
 };
 
@@ -127,8 +128,9 @@ describe("buildExportPayload", () => {
     expect(keys).toContain("appearance.themeFile");
     expect(keys).toContain("editor.fontSize");
     expect(keys).toContain("editor.lineWrapping");
+    expect(keys).toContain("editor.livePreview");
     // No workspace-scoped keys exist in the built-in modules.
-    expect(keys).toHaveLength(5);
+    expect(keys).toHaveLength(6);
   });
 });
 
@@ -264,12 +266,24 @@ describe("importSettings", () => {
     expect(result!.ignored).toBe(0);
   });
 
-  it("returns null for malformed JSON (fail-loud)", async () => {
+  /**
+   * A corrupt file is not an empty import. Returning `null` here made it
+   * indistinguishable from a dismissed dialog, so the caller stayed silent on
+   * both and the user was told nothing about a file that could not be used.
+   */
+  it("throws on malformed JSON rather than reporting nothing imported", async () => {
     vi.mocked(pickFilePath).mockResolvedValue("/tmp/import.json");
     vi.mocked(readTextFileNative).mockResolvedValue("not valid json {{{");
 
-    const result = await importSettings();
+    await expect(importSettings()).rejects.toThrow(/not valid JSON/i);
+  });
 
-    expect(result).toBeNull();
+  it("throws when the document is not a settings export", async () => {
+    vi.mocked(pickFilePath).mockResolvedValue("/tmp/import.json");
+    // A wrapper carrying a version but no `settings` — the shape an export
+    // truncated mid-write would have.
+    vi.mocked(readTextFileNative).mockResolvedValue(JSON.stringify({ version: 1 }));
+
+    await expect(importSettings()).rejects.toThrow(/not a settings export/i);
   });
 });

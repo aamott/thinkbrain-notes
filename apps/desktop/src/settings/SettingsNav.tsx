@@ -154,6 +154,41 @@ function ModuleGroup({
 }
 
 /**
+ * Renders a scope group ("Application" / "Workspace"): a treeitem header with
+ * the scope label, wrapping a `<ul role="group">` of `ModuleGroup`s. Both
+ * scope blocks share this structure; only the label and module list differ.
+ */
+function ScopeGroup({
+  label,
+  modules,
+  activeSection,
+  onSelect
+}: {
+  readonly label: string;
+  readonly modules: readonly SettingsModule[];
+  readonly activeSection: string | null;
+  readonly onSelect: (id: string) => void;
+}) {
+  return (
+    <li role="treeitem" aria-expanded="true" className="list-none">
+      <div className="px-1 py-1 text-xs font-semibold uppercase tracking-wide text-foreground">
+        {label}
+      </div>
+      <ul role="group" className="m-0 p-0">
+        {modules.map((module) => (
+          <ModuleGroup
+            key={module.id}
+            module={module}
+            activeSection={activeSection}
+            onSelect={onSelect}
+          />
+        ))}
+      </ul>
+    </li>
+  );
+}
+
+/**
  * Builds the "Module > Section" path label for a setting definition.
  *
  * The module id is the segment before the first dot of the full key. The
@@ -308,38 +343,20 @@ export function SettingsNav() {
         <SearchResults results={results} onSelect={handleResultSelect} />
       ) : (
       <ul role="tree" className="m-0 flex flex-col gap-1 p-0">
-        <li role="treeitem" aria-expanded="true" className="list-none">
-          <div className="px-1 py-1 text-xs font-semibold uppercase tracking-wide text-foreground">
-            Application
-          </div>
-          <ul role="group" className="m-0 p-0">
-            {appModules.map((module) => (
-              <ModuleGroup
-                key={module.id}
-                module={module}
-                activeSection={activeSection}
-                onSelect={setActiveSection}
-              />
-            ))}
-          </ul>
-        </li>
+        <ScopeGroup
+          label="Application"
+          modules={appModules}
+          activeSection={activeSection}
+          onSelect={setActiveSection}
+        />
 
         {workspaceValues !== null && workspaceModules.length > 0 && (
-          <li role="treeitem" aria-expanded="true" className="list-none">
-            <div className="px-1 py-1 text-xs font-semibold uppercase tracking-wide text-foreground">
-              Workspace
-            </div>
-            <ul role="group" className="m-0 p-0">
-              {workspaceModules.map((module) => (
-                <ModuleGroup
-                  key={module.id}
-                  module={module}
-                  activeSection={activeSection}
-                  onSelect={setActiveSection}
-                />
-              ))}
-            </ul>
-          </li>
+          <ScopeGroup
+            label="Workspace"
+            modules={workspaceModules}
+            activeSection={activeSection}
+            onSelect={setActiveSection}
+          />
         )}
       </ul>
       )}

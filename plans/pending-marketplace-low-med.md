@@ -1,29 +1,31 @@
 # Marketplace
 
 > Extension discovery and installation. A future stub epic — not yet started.
-> Read `plans/app-vision.md` before any work here. This epic cannot start until
-> the `extensions` epic delivers the capability sandbox and install mechanism.
+> Read `plans/app-vision.md` before any work here. This epic is explicitly
+> deferred beyond the trusted-local beta; it requires a separate trust/signing
+> decision before remote discovery or installation is considered.
 
 ## Goal
 
-Let users discover, install, update, and manage extensions from a static
-registry or direct URL/file sources — without compromising the local-first,
-privacy, and user-owns-their-data principles. No proprietary cloud backend:
-the registry is a static, fetchable index, and direct install (URL/file) is
-always available as a fallback.
+Let users eventually discover, install, update, and manage extensions from a
+static registry or direct file source — without compromising the local-first,
+privacy, and user-owns-their-data principles. This is not a beta promise:
+install-from-URL, remote discovery, signing, marketplace, and strong isolation
+are deferred until a separate trust decision. No proprietary cloud backend is
+assumed.
 
 ## Scope
 
 In scope:
 
-- static extension registry (fetchable index of available extensions)
-- extension marketplace / manager UI (browse, search, detail view)
-- extension metadata and signed packages
-- extension update flow (check for updates, update, rollback)
+- static extension registry (fetchable index of available extensions; deferred)
+- extension marketplace / manager UI (browse, search, detail view; deferred)
+- extension metadata and signed packages (requires a future trust decision)
+- extension update flow (check for updates, update, rollback; deferred)
 
-Install from URL/file and the install mechanism itself are owned by the
-`extensions` epic. This epic consumes that mechanism for registry-driven
-discovery and updates.
+The `extensions` epic owns trusted local-directory loading and may later own
+file installation. URL installation, remote discovery, signing, and marketplace
+UX are not available in the beta and must not be treated as existing mechanisms.
 
 Non-goals (out of scope):
 
@@ -36,49 +38,48 @@ Non-goals (out of scope):
 
 ### Builds on the `extensions` epic
 
-This epic is a consumer of the `extensions` epic's capability sandbox and
-install mechanism. It does not redefine sandboxing, manifest format, or
-permission declarations — those are owned by `extensions`. Marketplace work
-must not weaken the capability sandbox or introduce unrestricted filesystem
-access (per AGENTS.md and the security principle in the archived
-`pending-extensions-low-hard.md`: no third-party code receives unrestricted filesystem access).
+This epic is a future consumer of the `extensions` epic's manifest and trusted
+local/file-install decisions. It does not redefine compatibility gates, manifest
+format, or lifecycle ownership. Marketplace work must not imply that soft
+capability declarations provide hostile-extension isolation; any stronger trust
+or isolation model requires a new explicit decision.
 
 ### Boundary with `extensions`
 
 Resolved split:
 
-- `extensions` owns the install *mechanism*, sandbox, manifest format,
-  permission enforcement, install-from-URL, and install-from-file.
-- `marketplace` owns discovery, the registry *UX*, the update flow, and the
-  signing/trust layer.
+- `extensions` owns trusted local-directory loading, the manifest format,
+  compatibility gates, lifecycle cleanup, and any later install-from-file flow.
+- `marketplace` may later own discovery, registry UX, update flow, and signing /
+  trust design; none is a beta prerequisite.
 
 ### Static registry, not a hosted store
 
-The registry is a static, fetchable index (e.g. a JSON manifest hosted at a
-URL or mirrored via Git). No proprietary cloud backend. This matches the
-"bring your own sync" / no-vendor-lock-in principles. Direct install from URL
-or local file is always available alongside the registry, so users are never
-forced through a single source.
+A future registry may be a static, fetchable index (e.g. a JSON manifest
+hosted at a URL or mirrored via Git). No proprietary cloud backend is assumed.
+Direct URL discovery/install is explicitly deferred; local file install is a
+later trusted-code flow, not a beta guarantee.
 
 ### Signing and metadata
 
-Installed extensions carry metadata (manifest fields from `extensions`) plus a
-signature for integrity verification. Signature scheme is to be designed when
-this epic starts; it must be compatible with the `extensions` sandbox and must
-not require a centralized authority for direct (URL/file) installs.
+A future marketplace may add signatures and metadata, but signing is deferred
+and not required by the trusted-local beta. Any signature scheme must be
+reviewed alongside remote-code trust and stronger isolation rather than being
+mistaken for a capability gate.
 
 ### User-data separation
 
 Registry cache, installed-extension metadata, and update state live in OS
-app-data — never in the vault. The vault stays Markdown + attachments only.
+app-data — never in the vault. User-owned vault files follow `app-vision.md`:
+Markdown, attachments, and the explicit `.canvas` JSON document exception.
 
 ## Dependencies
 
 - **`extensions` (prerequisite, not yet started)** — must deliver the
-  capability sandbox, `extension.json` manifest, install mechanism, and
-  permission declarations before this epic can implement anything. This epic
-  is blocked until `extensions` is in place.
-- desktop shell / native command bridge (done) — Tauri native commands for
+  `extension.json` manifest, trusted local loading, lifecycle cleanup, and any
+  approved file-install mechanism before this epic can implement anything.
+  This epic remains deferred beyond the beta.
+- desktop shell / native command bridge (done) — future native commands for
   fetch/install/verify operations.
 
 No other epic blocks this one, but it cannot start without `extensions`.

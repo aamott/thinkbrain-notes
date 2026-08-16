@@ -1,5 +1,0 @@
-- name: Harden settings persistence with atomic writes and synchronized reads
-- file: /media/adam/extex/projects/thinkbrain-notes/apps/desktop/src-tauri/src/commands/settings.rs
-- lines: 1-371
-- description: 1) Remove `#![allow(unused)]` on line 1 and prune unused imports. 2) `write_settings_file` (lines 345-368) directly writes to the settings file using `fs::write`. If a crash occurs mid-write, settings files can be corrupted. Implement atomic write-and-replace (write to temporary file then atomic rename). 3) `read_app_settings` (lines 38-40) reads `app.json` without acquiring `APP_SETTINGS_MUTATION_LOCK`, creating a race condition where a concurrent `write_app_settings` or `update_desktop_state` could cause partial reads or file lock failures. Acquire the lock or rely on atomic file replacement.
-- verification: Code inspection of settings.rs lines 1, 38-49, 57-66, and 345-368.

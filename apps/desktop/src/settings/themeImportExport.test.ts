@@ -30,9 +30,15 @@ vi.mock("../native/fs", () => ({
 }));
 
 // Import the mocked functions AFTER vi.mock so we get the mock implementations.
+vi.mock("./themeAdapter", () => ({
+  readThemeFile: vi.fn<(path: string) => Promise<string | null>>()
+}));
+
+import { readThemeFile } from "./themeAdapter";
 import { saveFilePath, pickFilePath } from "../native/dialogs";
 import { writeTextFileNative, readTextFileNative } from "../native/fs";
 import {
+  buildThemeExport,
   buildThemeExportPayload,
   writeThemeExportFile,
   importTheme,
@@ -389,5 +395,79 @@ describe("importTheme", () => {
       "appearance.themeFile",
       "/tmp/warned.tbtheme.json"
     );
+  });
+});
+
+/**
+ * `getComputedStyle` returns resolved values, so a snapshot export flattens
+ * `var()` aliases and `color-mix()` formulas to the colours they happen to
+ * produce. When the user is running a theme file, that file is already a
+ * faithful copy of what they see — exporting its bytes round-trips, and
+ * exporting a snapshot of it quietly does not.
+ */
+describe("exporting while a theme file is active", () => {
+  const THEME_SOURCE = JSON.stringify(
+    {
+      name: "Hand Authored",
+      base: "dark",
+      version: 1,
+      tokens: { "--tn-color-primary": "var(--tn-color-accent)" }
+    },
+    null,
+    2
+  );
+
+  it("hands back the file's own bytes rather than a flattened snapshot", async () => {
+    vi.mocked(readThemeFile).mockResolvedValue(THEME_SOURCE);
+    useSettingsStore.setState({
+      loaded: true,
+      appValues: { "appearance.themeFile": "/tmp/hand.tbtheme.json" },
+      stagedChanges: {}
+    });
+
+    const { json } = await buildThemeExport();
+
+    expect(json).toBe(THEME_SOURCE);
+    expect(json).toContain("var(--tn-color-accent)");
+  });
+
+  it("snapshots the document when no theme file is active", async () => {
+    useSettingsStore.setState({
+      loaded: true,
+      appValues: { "appearance.themeFile": null },
+      stagedChanges: {}
+    });
+
+    const { json } = await buildThemeExport();
+
+    expect(JSON.parse(json)).toMatchObject({ name: "Exported Theme" });
+  });
+
+  /** An unreadable file is no reason to refuse the export outright. */
+  it("falls back to a snapshot when the file cannot be read", async () => {
+    vi.mocked(readThemeFile).mockResolvedValue(null);
+    useSettingsStore.setState({
+      loaded: true,
+      appValues: { "appearance.themeFile": "/tmp/gone.tbtheme.json" },
+      stagedChanges: {}
+    });
+
+    const { json } = await buildThemeExport();
+
+    expect(JSON.parse(json)).toMatchObject({ name: "Exported Theme" });
+  });
+
+  /** A file that no longer parses would export a broken theme verbatim. */
+  it("falls back to a snapshot when the file no longer parses", async () => {
+    vi.mocked(readThemeFile).mockResolvedValue("not json {{{");
+    useSettingsStore.setState({
+      loaded: true,
+      appValues: { "appearance.themeFile": "/tmp/broken.tbtheme.json" },
+      stagedChanges: {}
+    });
+
+    const { json } = await buildThemeExport();
+
+    expect(JSON.parse(json)).toMatchObject({ name: "Exported Theme" });
   });
 });

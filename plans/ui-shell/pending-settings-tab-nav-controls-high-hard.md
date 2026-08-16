@@ -1,7 +1,5 @@
 # Story 3: Settings Tab UI — Nav + Content + Standard Controls
 
-**Status:** pending · **Urgency:** high · **Difficulty:** hard
-
 ## Epic
 
 Part of [Modular Settings System](./pending-modular_settings_system-med-hard.md).
@@ -77,6 +75,10 @@ control registry with all standard control components. Replace the current
       are standard form elements in the native tab order.
 - [ ] Built-in settings (theme, fontSize, lineWrapping) render with working
       controls and stage changes in the store.
+- [ ] Production settings UI styling uses co-located CSS Modules backed by shared
+      `--tn-*` tokens, with no Tailwind utility classes or inline styles. This
+      styling migration remains pending and is cross-referenced with
+      `plans/theme-foundation/pending-surface_styling_migration-med-med.md`.
 - [ ] Component tests for: nav tree rendering, active section highlighting,
       control auto-generation by type, control registry override, stageChange
       on control interaction.
@@ -90,13 +92,18 @@ control registry with all standard control components. Replace the current
 - `packages/core/src/settings/registry.ts` — registry from story 1.
 - `packages/core/src/settings/types.ts` — types from story 1.
 - `apps/desktop/src/lib/utils.ts` — `cn` for class merging.
-- `packages/ui/src/styles/tokens.css` — Tailwind v4 tokens.
+- `packages/ui/src/styles/tokens.css` — shared `--tn-*` token source of truth.
+- `plans/theme-foundation/pending-surface_styling_migration-med-med.md` —
+  binding CSS Modules/shared-token surface migration.
 - `apps/desktop/src/agent/AssistantPanel.tsx` — popover pattern reference.
 
 ## Implementation Notes
 
-- Use Tailwind v4 tokens (`--tn-*`) for all colors. No hardcoded RGB values.
-- Use `cn` from `../lib/utils` for conditional class merging.
+- Use co-located CSS Modules backed by shared `--tn-*` tokens for all
+  production styling; do not add Tailwind utility classes or inline styles.
+  No hardcoded RGB values. The existing surface-styling migration story remains
+  the source of truth for completing this migration.
+- Use `cn` from `../lib/utils` for conditional class merging where needed.
 - Use lucide-react icons for any icons (e.g. `ChevronRight`/`ChevronDown` for
   collapsible subsections).
 - The left nav should be scrollable (overflow-y-auto) for long section lists.

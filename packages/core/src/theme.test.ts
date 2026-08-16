@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -52,6 +54,16 @@ describe("parseThemeFile - valid input", () => {
     expect(result.diagnostics).toEqual([]);
     expect(result.theme).not.toBeNull();
     expect(result.theme!.tokens).toEqual({});
+  });
+
+  it("defaults version to the current schema version when omitted, with no diagnostics", () => {
+    const result = parseThemeFile(
+      JSON.stringify({ name: "No Version", base: "light" })
+    );
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.theme).not.toBeNull();
+    expect(result.theme!.version).toBe(1);
   });
 
   it("returns only the tokens that were overridden", () => {
@@ -144,13 +156,6 @@ describe("parseThemeFile - structural failures (theme is null)", () => {
     const result = parseThemeFile(buildJson({ base: "neon" }));
     expect(result.theme).toBeNull();
     expect(result.diagnostics[0]!.code).toBe("theme.base.invalid");
-  });
-
-  it("returns null theme when version is missing", () => {
-    const result = parseThemeFile(buildJson({ version: undefined }));
-    expect(result.theme).toBeNull();
-    expect(result.diagnostics[0]!.code).toBe("theme.version.invalid");
-    expect(result.diagnostics[0]!.path).toBe("version");
   });
 
   it("returns null theme when version is negative", () => {
@@ -282,9 +287,73 @@ describe("parseThemeFile - token-level diagnostics (theme still returned)", () =
   });
 });
 
+describe("parseThemeFile - CSS-injection-unsafe token values", () => {
+  it.each([
+    ["semicolon breakout", "red; } * { color: red"],
+    ["brace breakout", "red } .evil { color: red"],
+    ["open brace", "red { color: red"],
+    ["at-rule injection", "red; @import url(evil.css)"],
+    ["comment sequence", "red /* } .evil {"]
+  ])("errors and drops a value containing a %s", (_label, value) => {
+    const result = parseThemeFile(
+      buildJson({
+        tokens: {
+          "--tn-color-background": value,
+          "--tn-color-foreground": "hsl(0 0% 98%)"
+        }
+      })
+    );
+
+    expect(result.theme).not.toBeNull();
+    expect(result.theme!.tokens).toEqual({
+      "--tn-color-foreground": "hsl(0 0% 98%)"
+    });
+    expect(result.diagnostics).toHaveLength(1);
+    expect(result.diagnostics[0]!.code).toBe("theme.token.value_unsafe");
+    expect(result.diagnostics[0]!.severity).toBe("error");
+    expect(result.diagnostics[0]!.path).toBe("tokens.--tn-color-background");
+  });
+
+  it.each([
+    ["hex", "#1a2b3c"],
+    ["short hex with alpha", "#1a2b3cff"],
+    ["hsl", "hsl(152 60% 38%)"],
+    ["rgb with alpha slash", "rgb(0 0 0 / 42%)"],
+    ["oklch", "oklch(0.7 0.15 150)"],
+    ["color-mix", "color-mix(in srgb, red 50%, blue)"],
+    ["var reference", "var(--tn-color-primary)"],
+    ["named color", "rebeccapurple"]
+  ])("keeps a legitimate %s value", (_label, value) => {
+    const result = parseThemeFile(
+      buildJson({ tokens: { "--tn-color-background": value } })
+    );
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.theme!.tokens).toEqual({ "--tn-color-background": value });
+  });
+});
+
 describe("KNOWN_THEME_TOKENS", () => {
-  it("contains exactly 44 tokens", () => {
-    expect(KNOWN_THEME_TOKENS).toHaveLength(44);
+  it("matches the --tn-color-* custom properties declared in packages/ui/src/styles/tokens.css", () => {
+    // Regression guard for drift: tokens.css is the source of truth, this
+    // array is a manual copy for platform-agnostic validation. If someone
+    // adds/renames/removes a token in the CSS without updating this array,
+    // this test fails instead of the mismatch silently degrading to
+    // "unknown token" warnings on import.
+    const cssPath = new URL(
+      "../../ui/src/styles/tokens.css",
+      import.meta.url
+    );
+    const css = readFileSync(cssPath, "utf8");
+
+    const declared = new Set<string>();
+    for (const line of css.split("\n")) {
+      const match = /^\s*(--tn-color-[a-z0-9-]+):/.exec(line);
+      if (match) declared.add(match[1]!);
+    }
+
+    expect(declared.size).toBeGreaterThan(0);
+    expect(new Set(KNOWN_THEME_TOKENS)).toEqual(declared);
   });
 
   it("every token starts with --tn-color-", () => {

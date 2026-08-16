@@ -4,6 +4,7 @@ import {
   type NativeMarkdownFileContents,
   type NativeMarkdownFileEntry
 } from "../native/commands";
+import { appEvents } from "../events/appEvents";
 
 export interface WorkspaceMarkdownDocumentRef {
   readonly rootPath: string;
@@ -12,6 +13,18 @@ export interface WorkspaceMarkdownDocumentRef {
 
 export interface WorkspaceMarkdownDocumentWrite extends WorkspaceMarkdownDocumentRef {
   readonly contents: string;
+  /**
+   * The text on disk this save was computed from. If the file no longer holds
+   * it the write is refused with `workspace.note_conflict` rather than putting
+   * these contents over someone else's.
+   *
+   * `undefined` means *unchecked*, for callers with no read behind them —
+   * extension writes, scripted edits. Required rather than optional so that is
+   * a choice someone made and can be read in the call, not something a caller
+   * can leave out by accident: forgetting it would quietly restore the blind
+   * overwrite this exists to stop, and nothing at runtime would say so.
+   */
+  readonly expected: string | undefined;
 }
 
 export interface WorkspaceMarkdownDocumentCreate extends WorkspaceMarkdownDocumentRef {
@@ -38,6 +51,10 @@ type WorkspaceDocumentCommandInvoker = <TCommand extends WorkspaceDocumentComman
 /**
  * Creates the workspace document boundary used by UI consumers. It deliberately
  * owns the native command names and their camelCase Tauri argument shapes.
+ *
+ * Every save and create in the app funnels through here — shell saves,
+ * extension workspace writes, explorer flows — so this is the one place that
+ * can emit `note.saved` and `note.created` without any path being missed.
  */
 export function createWorkspaceDocumentApi(
   commandInvoker: WorkspaceDocumentCommandInvoker = invokeNativeCommand
@@ -46,11 +63,24 @@ export function createWorkspaceDocumentApi(
     readMarkdownDocument({ rootPath, relativePath }) {
       return commandInvoker("read_markdown_file", { rootPath, relativePath });
     },
-    writeMarkdownDocument({ rootPath, relativePath, contents }) {
-      return commandInvoker("write_markdown_file", { rootPath, relativePath, contents });
+    async writeMarkdownDocument({ rootPath, relativePath, contents, expected }) {
+      const written = await commandInvoker("write_markdown_file", {
+        rootPath,
+        relativePath,
+        contents,
+        expected
+      });
+      appEvents.emit("note.saved", { rootPath, relativePath });
+      return written;
     },
-    createMarkdownDocument({ rootPath, relativePath, contents }) {
-      return commandInvoker("create_markdown_file", { rootPath, relativePath, contents });
+    async createMarkdownDocument({ rootPath, relativePath, contents }) {
+      const created = await commandInvoker("create_markdown_file", {
+        rootPath,
+        relativePath,
+        contents
+      });
+      appEvents.emit("note.created", { rootPath, relativePath });
+      return created;
     }
   };
 }

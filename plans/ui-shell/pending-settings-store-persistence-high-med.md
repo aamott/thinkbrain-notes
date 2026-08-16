@@ -1,7 +1,5 @@
 # Story 2: Settings Store + Persistence Evolution
 
-**Status:** pending · **Urgency:** high · **Difficulty:** med
-
 ## Epic
 
 Part of [Modular Settings System](./pending-modular_settings_system-med-hard.md).

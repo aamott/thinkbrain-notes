@@ -13,7 +13,11 @@
  */
 
 import { create } from "zustand";
-import { invokeNativeCommand } from "../native/commands";
+import { readAppSettingsDocument, updateAppSettingsDocument } from "./appSettingsFile";
+import {
+  readWorkspaceSettingsDocument,
+  updateWorkspaceSettingsDocument
+} from "../workspace/workspaceSettingsFile";
 import {
   appearanceModule,
   createSettingsRegistry,
@@ -21,8 +25,7 @@ import {
   settingsModule,
   validateSettings,
   type SettingsDiagnostic,
-  type SettingsRegistry,
-  type SettingScope
+  type SettingsRegistry
 } from "@thinkbrain/core";
 import {
   parseDynamicAppSettings,
@@ -33,6 +36,11 @@ import {
   parseDynamicWorkspaceSettings,
   serializeDynamicWorkspaceSettings
 } from "./workspaceSettingsSerialization";
+import {
+  computeDirty,
+  effectiveSettingValue,
+  partitionByScope
+} from "./settingsHelpers";
 
 // ---------------------------------------------------------------------------
 // Registry instance with built-in modules registered.
@@ -63,21 +71,38 @@ appSettingsRegistry.register(settingsModule);
  */
 export interface SettingsStoreGateway {
   readAppSettings(): Promise<string | null>;
-  writeAppSettings(contents: string): Promise<void>;
+  /**
+   * Revises the app-settings document and returns what was written.
+   *
+   * A document rather than a payload: `update_desktop_state` and
+   * `update_app_theme` write to the same file on every tab open, panel resize,
+   * or theme change, so this store has to serialize against the document as it
+   * is at the moment of writing rather than the copy it read at load. `revise`
+   * runs inside the document's own update chain (see `appSettingsFile.ts`).
+   */
+  writeAppSettings(revise: (current: string | null) => string): Promise<string>;
   readWorkspaceSettings(rootPath: string): Promise<string | null>;
-  writeWorkspaceSettings(rootPath: string, contents: string): Promise<void>;
+  /**
+   * Revises the workspace document and returns what was written.
+   *
+   * A document rather than a payload: this store is one of two writers to the
+   * file, so it has to serialize against the document as it is at the moment of
+   * writing rather than the copy it read when the workspace opened. `revise`
+   * runs inside the file's own update chain (see `workspaceSettingsFile.ts`).
+   */
+  writeWorkspaceSettings(
+    rootPath: string,
+    revise: (current: string | null) => string
+  ): Promise<string>;
 }
 
 /** Default gateway backed by native Tauri commands. */
 const nativeSettingsGateway: SettingsStoreGateway = {
-  readAppSettings: () => invokeNativeCommand("read_app_settings"),
-  async writeAppSettings(contents) {
-    await invokeNativeCommand("write_app_settings", { contents });
-  },
-  readWorkspaceSettings: (rootPath) => invokeNativeCommand("read_workspace_settings", { rootPath }),
-  async writeWorkspaceSettings(rootPath, contents) {
-    await invokeNativeCommand("write_workspace_settings", { rootPath, contents });
-  }
+  readAppSettings: () => readAppSettingsDocument(),
+  writeAppSettings: (revise) => updateAppSettingsDocument(revise),
+  readWorkspaceSettings: (rootPath) => readWorkspaceSettingsDocument(rootPath),
+  writeWorkspaceSettings: (rootPath, revise) =>
+    updateWorkspaceSettingsDocument(rootPath, revise)
 };
 
 // ---------------------------------------------------------------------------
@@ -132,26 +157,14 @@ export interface SettingsStoreState {
   setActiveSection(id: string | null): void;
   setSearchQuery(query: string): void;
   getEffectiveValue(key: string): unknown;
-}
-
-// ---------------------------------------------------------------------------
-// Helpers.
-// ---------------------------------------------------------------------------
-
-/**
- * Returns the scope of a setting key from the registry, or undefined if the key
- * is unknown.
- */
-function scopeOfKey(registry: SettingsRegistry, key: string): SettingScope | undefined {
-  return registry.getDefinition(key)?.scope;
-}
-
-/**
- * Computes the dirty flag and count from the staged changes map.
- */
-function computeDirty(staged: Record<string, unknown>): { isDirty: boolean; dirtyCount: number } {
-  const keys = Object.keys(staged);
-  return { isDirty: keys.length > 0, dirtyCount: keys.length };
+  /**
+   * Stages a single setting and saves immediately.
+   *
+   * Used by palette commands, where there is no Save bar to press. Any other
+   * staged edits are persisted alongside it — acceptable because the Settings
+   * tab and the palette are not usually driven at the same time.
+   */
+  setSettingImmediately(key: string, value: unknown): Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -296,18 +309,13 @@ export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettin
         return { success: true, diagnostics: [] };
       }
 
+      // Partition staged changes by scope once; reused for validation and writes.
+      const { app: appStaged, workspace: workspaceStaged } = partitionByScope(appSettingsRegistry, staged);
+
       // Build the full effective values map for validation: merge loaded values
       // with staged changes so validators see the complete picture.
-      const appEffective = { ...state.appValues };
-      const workspaceEffective = { ...(state.workspaceValues ?? {}) };
-      for (const [key, value] of Object.entries(staged)) {
-        const scope = scopeOfKey(appSettingsRegistry, key);
-        if (scope === "workspace") {
-          workspaceEffective[key] = value;
-        } else {
-          appEffective[key] = value;
-        }
-      }
+      const appEffective = { ...state.appValues, ...appStaged };
+      const workspaceEffective = { ...(state.workspaceValues ?? {}), ...workspaceStaged };
 
       // Validate all effective values (both scopes).
       const diagnostics = validateSettings(appSettingsRegistry, {
@@ -321,62 +329,77 @@ export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettin
       }
 
       try {
-        // Partition staged changes by scope; only write the scope that has changes.
-        const appStaged: Record<string, unknown> = {};
-        const workspaceStaged: Record<string, unknown> = {};
-        for (const [key, value] of Object.entries(staged)) {
-          const scope = scopeOfKey(appSettingsRegistry, key);
-          if (scope === "workspace") {
-            workspaceStaged[key] = value;
-          } else {
-            appStaged[key] = value;
-          }
-        }
 
-        // Compute the serialized payloads and merged values BEFORE issuing any
-        // gateway write. We do not call `set()` until BOTH writes succeed, so a
-        // failure of either write leaves the store consistent with the
-        // last-known-good state (the disk may be partially updated, but the
-        // store's stagedChanges / loaded values stay intact and the user can
-        // retry). This avoids the partial-commit inconsistency where the app
-        // write succeeded and `appValues` was updated but `stagedChanges` was
-        // never cleared because the workspace write threw afterwards.
-        let appMerged: Record<string, unknown> | null = null;
-        let appSerialized: string | null = null;
-        if (Object.keys(appStaged).length > 0) {
-          appMerged = { ...state.appValues, ...appStaged };
-          appSerialized = serializeDynamicAppSettings(
-            appMerged,
-            appSettingsRegistry,
-            state.rawAppSettingsJson
-          );
-        }
-
-        let workspaceMerged: Record<string, unknown> | null = null;
-        let workspaceSerialized: string | null = null;
-        if (Object.keys(workspaceStaged).length > 0 && state.workspaceRootPath !== null) {
-          workspaceMerged = { ...(state.workspaceValues ?? {}), ...workspaceStaged };
-          workspaceSerialized = serializeDynamicWorkspaceSettings(
-            workspaceMerged,
-            appSettingsRegistry,
-            state.rawWorkspaceSettingsJson
-          );
-        }
+        // Compute the merged *values* up front — they depend only on staged
+        // changes and loaded values, not on disk, so a failure of either write
+        // still leaves the store consistent with the last-known-good state
+        // (the disk may be partially updated, but stagedChanges / loaded
+        // values stay intact and the user can retry). This avoids the
+        // partial-commit inconsistency where the app write succeeded and
+        // `appValues` was updated but `stagedChanges` was never cleared
+        // because the workspace write threw afterwards.
+        //
+        // Neither document's *serialization* can be prepared this far ahead,
+        // though: `desktopState` (app) and the explorer's keys (workspace)
+        // have writers outside this store, so each has to serialize against
+        // whatever is on disk when its write actually runs rather than the
+        // copy read at load or workspace-open. Serialization therefore
+        // happens inside each write, and `appSerialized` / `workspaceSerialized`
+        // are what landed.
+        const appMerged: Record<string, unknown> | null =
+          Object.keys(appStaged).length > 0 ? { ...state.appValues, ...appStaged } : null;
+        const workspaceMerged: Record<string, unknown> | null =
+          Object.keys(workspaceStaged).length > 0 && state.workspaceRootPath !== null
+            ? { ...(state.workspaceValues ?? {}), ...workspaceStaged }
+            : null;
 
         // Issue both gateway writes first. If either throws, we skip ALL
         // `set()` calls below and surface a clear saveError to the caller.
-        if (appSerialized !== null) {
-          await gateway.writeAppSettings(appSerialized);
+        let appSerialized: string | null = null;
+        if (appMerged !== null) {
+          const values = appMerged;
+          appSerialized = await gateway.writeAppSettings((current) =>
+            serializeDynamicAppSettings(values, appSettingsRegistry, current)
+          );
         }
-        if (workspaceSerialized !== null && state.workspaceRootPath !== null) {
-          await gateway.writeWorkspaceSettings(state.workspaceRootPath, workspaceSerialized);
+        let workspaceSerialized: string | null = null;
+        if (workspaceMerged !== null && state.workspaceRootPath !== null) {
+          workspaceSerialized = await gateway.writeWorkspaceSettings(
+            state.workspaceRootPath,
+            (current) =>
+              serializeDynamicWorkspaceSettings(workspaceMerged, appSettingsRegistry, current)
+          );
         }
 
         // Both writes succeeded — now commit the new state atomically.
+        //
+        // Clear only the keys this save actually persisted, at the value it
+        // persisted. Edits staged while the gateway writes were in flight are
+        // not covered by those writes, so blanking `stagedChanges` wholesale
+        // would drop them silently and leave `isDirty` false, hiding the loss.
+        // A key re-staged mid-flight with a different value keeps its new value.
+        //
+        // A workspace-scoped edit made with no workspace open has nowhere to go:
+        // it stays staged rather than being cleared, so the value survives until
+        // a workspace opens instead of vanishing on a "successful" save. It is
+        // also reported as a failure below — a Save that persists nothing and
+        // says it worked leaves the user pressing a button that does nothing.
+        const persisted = new Set<string>([
+          ...(appSerialized !== null ? Object.keys(appStaged) : []),
+          ...(workspaceSerialized !== null ? Object.keys(workspaceStaged) : [])
+        ]);
+        const remaining = { ...get().stagedChanges };
+        for (const [key, savedValue] of Object.entries(staged)) {
+          if (persisted.has(key) && key in remaining && Object.is(remaining[key], savedValue)) {
+            delete remaining[key];
+          }
+        }
+        const remainingCount = Object.keys(remaining).length;
+
         const next: Partial<SettingsStoreState> = {
-          stagedChanges: {},
-          isDirty: false,
-          dirtyCount: 0,
+          stagedChanges: remaining,
+          isDirty: remainingCount > 0,
+          dirtyCount: remainingCount,
           validationDiagnostics: [],
           saveError: null
         };
@@ -388,6 +411,16 @@ export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettin
           next.workspaceValues = workspaceMerged;
           next.rawWorkspaceSettingsJson = workspaceSerialized;
         }
+        const stranded = Object.keys(workspaceStaged).filter((key) => !persisted.has(key));
+        if (stranded.length > 0) {
+          set({
+            ...next,
+            saveError:
+              "These settings belong to a workspace, and no workspace is open. Open one to save them."
+          });
+          return { success: false, diagnostics: [] };
+        }
+
         set(next);
         return { success: true, diagnostics: [] };
       } catch (error) {
@@ -444,13 +477,15 @@ export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettin
      * else loaded value (app or workspace), else the registry default.
      */
     getEffectiveValue(key: string): unknown {
-      const state = get();
-      if (key in state.stagedChanges) return state.stagedChanges[key];
-      if (key in state.appValues) return state.appValues[key];
-      if (state.workspaceValues && key in state.workspaceValues) {
-        return state.workspaceValues[key];
+      return effectiveSettingValue(get(), appSettingsRegistry.getDefinition(key), key);
+    },
+
+    async setSettingImmediately(key: string, value: unknown): Promise<void> {
+      get().stageChange(key, value);
+      const result = await get().saveSettings();
+      if (!result.success) {
+        console.error(`[settingsStore] Failed to persist "${key}".`, result.diagnostics);
       }
-      return appSettingsRegistry.getDefinition(key)?.default;
     }
   }));
 }

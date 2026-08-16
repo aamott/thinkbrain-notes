@@ -3,7 +3,8 @@ import type { ReactNode } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { parseThemeFile, type ThemeBase } from "@thinkbrain/core";
 import { type AppTheme, ThemeProviderContext, type ThemeProviderState } from "./theme-context";
-import { useSettingsStore } from "./settingsStore";
+import { appSettingsRegistry, useSettingsStore } from "./settingsStore";
+import { resolveEffectiveValue } from "./settingsHelpers";
 import { readThemeFile } from "./themeAdapter";
 import { injectThemeOverrides, removeThemeOverrides } from "./themeInjection";
 
@@ -67,13 +68,17 @@ export function ThemeProvider({
   const loadSettings = useSettingsStore((s) => s.loadSettings);
   const stageChange = useSettingsStore((s) => s.stageChange);
 
-  const themeFromStore =
-    "appearance.theme" in staged
-      ? staged["appearance.theme"]
-      : "appearance.theme" in appValues
-        ? appValues["appearance.theme"]
-        : "system";
-
+  // Resolve effective values via the shared pure helper so the precedence rule
+  // (staged > appValues > registry default) stays in one place. See the comment
+  // above on why we subscribe to the raw maps rather than calling the store's
+  // `getEffectiveValue` action inside a selector.
+  const themeFromStore = resolveEffectiveValue(
+    "appearance.theme",
+    staged,
+    appValues,
+    null,
+    appSettingsRegistry.getDefinition("appearance.theme")
+  );
   // Resolve the display theme: use the store value once loaded, else the prop
   // default. The store value is `unknown` (typed as the registry default), so
   // coerce to the AppTheme string union.
@@ -84,12 +89,13 @@ export function ThemeProvider({
   // Resolve the effective themeFile path with the same staged > appValues >
   // default pattern. Default is null (no custom theme). A staged non-string
   // value (e.g. null) clears the file.
-  const themeFileFromStore =
-    "appearance.themeFile" in staged
-      ? staged["appearance.themeFile"]
-      : "appearance.themeFile" in appValues
-        ? appValues["appearance.themeFile"]
-        : null;
+  const themeFileFromStore = resolveEffectiveValue(
+    "appearance.themeFile",
+    staged,
+    appValues,
+    null,
+    appSettingsRegistry.getDefinition("appearance.themeFile")
+  );
   const themeFile: string | null =
     loaded && typeof themeFileFromStore === "string" && themeFileFromStore.length > 0
       ? themeFileFromStore

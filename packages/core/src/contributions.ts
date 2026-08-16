@@ -1,0 +1,210 @@
+/**
+ * Platform-agnostic contribution contracts and registries.
+ *
+ * Applications provide their own view, editor-extension, and keybinding types
+ * when they consume these contracts. This module intentionally has no knowledge
+ * of a UI toolkit, editor implementation, or host platform.
+ */
+
+import type { Disposable } from "./lifecycle";
+
+/** A contribution with the identifier used for registry lookup. */
+export interface IdentifiedContribution {
+  /** Stable identifier unique within a registry. */
+  readonly id: string;
+}
+
+/**
+ * An ordered registry for contributions of one type.
+ *
+ * Registration order is preserved by {@link ContributionRegistry.entries}. A
+ * registry rejects duplicate identifiers immediately rather than silently
+ * replacing the earlier contribution.
+ */
+export interface ContributionRegistry<T extends IdentifiedContribution> {
+  /** Registers a contribution and returns a handle that unregisters that contribution. */
+  register(contribution: T): Disposable;
+  /** Returns the contribution for an identifier, or `undefined` when absent. */
+  get(id: string): T | undefined;
+  /**
+   * Returns a frozen snapshot of contributions in registration order.
+   *
+   * The reference is stable until the registry changes, so the result can be
+   * read directly by a `useSyncExternalStore` subscriber without looping.
+   */
+  entries(): readonly T[];
+  /**
+   * Observes registrations and disposals.
+   *
+   * @param listener Called after each change, once per change.
+   * @returns A function that removes the listener.
+   */
+  subscribe(listener: () => void): () => void;
+}
+
+/**
+ * Creates an ordered contribution registry.
+ *
+ * Initial contributions are registered in array order and are subject to the
+ * same duplicate-identifier checks as later registrations.
+ *
+ * @param initialContributions Contributions to register before returning.
+ * @returns A fresh registry containing the initial contributions.
+ */
+export function createContributionRegistry<T extends IdentifiedContribution>(
+  initialContributions: readonly T[] = []
+): ContributionRegistry<T> {
+  const contributions = new Map<string, T>();
+  const order: string[] = [];
+  const listeners = new Set<() => void>();
+  let snapshot: readonly T[] | null = null;
+
+  /**
+   * Remembers the index at which a contribution was disposed so a
+   * re-registration with the same id can restore its original position
+   * instead of appending to the end. This keeps stub-to-real swaps stable
+   * (e.g. extension panel activation) without changing the visible order.
+   */
+  const previousPositions = new Map<string, number>();
+
+  /** Invalidates the cached snapshot and notifies subscribers of one change. */
+  const changed = (): void => {
+    snapshot = null;
+    for (const listener of listeners) listener();
+  };
+
+  const register = (contribution: T): Disposable => {
+    if (contributions.has(contribution.id)) {
+      throw new Error(
+        `A contribution is already registered for id "${contribution.id}".`
+      );
+    }
+
+    contributions.set(contribution.id, contribution);
+    const previousPos = previousPositions.get(contribution.id);
+    if (previousPos !== undefined) {
+      order.splice(Math.min(previousPos, order.length), 0, contribution.id);
+      previousPositions.delete(contribution.id);
+    } else {
+      order.push(contribution.id);
+    }
+    changed();
+    let disposed = false;
+
+    return {
+      dispose: (): void => {
+        if (disposed) {
+          return;
+        }
+        disposed = true;
+        if (contributions.get(contribution.id) === contribution) {
+          const index = order.indexOf(contribution.id);
+          if (index >= 0) {
+            previousPositions.set(contribution.id, index);
+            order.splice(index, 1);
+          }
+          contributions.delete(contribution.id);
+          changed();
+        }
+      }
+    };
+  };
+
+  for (const contribution of initialContributions) {
+    register(contribution);
+  }
+
+  /**
+   * Returns the contribution for an ordered id, throwing a descriptive error
+   * if the map/order invariant is broken instead of silently dropping the entry.
+   */
+  const requireOrdered = (id: string): T => {
+    const entry = contributions.get(id);
+    if (!entry) {
+      throw new Error(
+        `Registry invariant broken: "${id}" is in order but not in contributions map.`
+      );
+    }
+    return entry;
+  };
+
+  return {
+    register,
+    get: (id: string): T | undefined => contributions.get(id),
+    entries: (): readonly T[] =>
+      (snapshot ??= Object.freeze(order.map(requireOrdered))),
+    subscribe: (listener: () => void): (() => void) => {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    }
+  };
+}
+
+/** A command handler result; commands may complete synchronously or asynchronously. */
+export type CommandHandler<Payload = void> = (
+  payload: Payload
+) => void | Promise<void>;
+
+/** A command exposed to the application command palette or keybinding layer. */
+export interface CommandContribution<Payload = void>
+  extends IdentifiedContribution {
+  /** Human-readable command name. */
+  readonly title: string;
+  /** Optional platform-specific keybinding expression. Display + future global binding; not yet bound globally by the host. */
+  readonly keybinding?: string;
+  /** Invoked by the host after it supplies the command payload. */
+  readonly handler: CommandHandler<Payload>;
+}
+
+/** Produces a panel view for a host-defined context. */
+export type PanelFactory<View, Context> = (context: Context) => View;
+
+/** A registered activity/sidebar panel without a UI-framework dependency. */
+export interface PanelContribution<View, Context = unknown>
+  extends IdentifiedContribution {
+  /** Human-readable panel label. */
+  readonly label: string;
+  /** Host-defined icon identifier, not an icon component. */
+  readonly icon: string;
+  /** Side on which the panel is placed. */
+  readonly side: "left" | "right";
+  /** Creates the host-specific panel view. */
+  readonly factory: PanelFactory<View, Context>;
+  /** Determines whether the panel's backing capability is currently usable. Advisory metadata emitted as `data-panel-available`; factories own their unavailable-state rendering. */
+  readonly availability?: (context: Context) => boolean;
+}
+
+/** Produces editor extensions from host-defined payload and context values. */
+export type EditorExtensionFactory<Extension, Payload = void, Context = unknown> = (
+  payload: Payload,
+  context: Context
+) => readonly Extension[];
+
+/** Produces editor keybindings from host-defined payload and context values. */
+export type EditorKeybindingFactory<
+  Keybinding,
+  Payload = void,
+  Context = unknown
+> = (payload: Payload, context: Context) => readonly Keybinding[];
+
+/**
+ * A contribution to an editor's extension and keybinding assembly pipeline.
+ *
+ * Hosts can sort entries by `order` before invoking factories. The registry's
+ * own order remains stable and is useful as a deterministic tie-breaker.
+ */
+export interface EditorHookContribution<
+  Extension,
+  Keybinding,
+  Payload = void,
+  Context = unknown
+> extends IdentifiedContribution {
+  /** Lower values run first; equal values retain registration order. */
+  readonly order: number;
+  /** Factory for host-specific editor extensions. */
+  readonly extensions?: EditorExtensionFactory<Extension, Payload, Context>;
+  /** Factory for host-specific editor keybindings. */
+  readonly keybindings?: EditorKeybindingFactory<Keybinding, Payload, Context>;
+}

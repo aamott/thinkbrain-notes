@@ -1,7 +1,5 @@
 # Story 5: Settings Search/Filter
 
-**Status:** pending · **Urgency:** med · **Difficulty:** med
-
 ## Epic
 
 Part of [Modular Settings System](./pending-modular_settings_system-med-hard.md).

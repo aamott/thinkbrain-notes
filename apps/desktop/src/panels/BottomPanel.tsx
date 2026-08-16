@@ -29,18 +29,6 @@ const bottomPanelProviders: Record<BottomPanelId, BottomPanelProvider> = {
   }
 };
 
-/** Renders an honest terminal capability boundary without exposing execution controls. */
-function TerminalPanel({ provider }: { readonly provider: BottomPanelProvider }) {
-  return <Unavailable className="items-start justify-start p-0 text-left" title="Terminal" description={provider.unavailableMessage} />;
-}
-
-/**
- * Renders content for the selected provider while honoring its availability.
- */
-function BottomPanelContent({ provider }: { readonly provider: BottomPanelProvider }) {
-  return <TerminalPanel provider={provider} />;
-}
-
 /**
  * Bottom dock surface extracted from DesktopShell.
  *
@@ -53,14 +41,14 @@ export function BottomPanel({ active, onChange, onClose }: BottomPanelProps) {
   const contentId = `bottom-panel-content-${active}`;
 
   return (
-    <section className="flex-[0_0_12rem] min-h-[7rem] min-w-0 overflow-hidden border-t border-border bg-panel motion-reduce:transition-none" aria-label="Bottom panel">
+    <section className="flex-[0_0_12rem] min-h-28 min-w-0 overflow-hidden border-t border-border bg-panel motion-reduce:transition-none" aria-label="Bottom panel">
       <div className="flex h-8 min-w-0 items-center overflow-x-auto border-b border-border" role="tablist" aria-label="Bottom panel tabs">
         {bottomPanelItems.map((item) => (
           <button
             key={item}
             id={`bottom-panel-tab-${item}`}
             className={cn(
-              "h-full shrink-0 cursor-pointer border-0 border-b-2 border-b-transparent bg-transparent px-[0.7rem] text-[0.65rem] tracking-[0.05em] text-muted-foreground uppercase hover:border-b-primary hover:text-foreground",
+              "h-full shrink-0 cursor-pointer border-0 border-b-2 border-b-transparent bg-transparent px-[0.7rem] text-[0.65rem] tracking-wider text-muted-foreground uppercase hover:border-b-primary hover:text-foreground",
               active === item && "border-b-primary text-foreground"
             )}
             type="button"
@@ -82,8 +70,9 @@ export function BottomPanel({ active, onChange, onClose }: BottomPanelProps) {
           ×
         </button>
       </div>
-      <div id={contentId} className="h-[calc(100%-2rem)] overflow-auto p-[0.65rem_0.85rem] font-mono text-xs leading-[1.6]" role="tabpanel" aria-labelledby={tabId}>
-        <BottomPanelContent provider={provider} />
+      <div id={contentId} className="h-[calc(100%-2rem)] overflow-auto p-[0.65rem_0.85rem] font-mono text-xs leading-1.6" role="tabpanel" aria-labelledby={tabId}>
+        {/* Terminal is the only wired surface today; render its capability boundary directly. */}
+        <Unavailable className="items-start justify-start p-0 text-left" title="Terminal" description={provider.unavailableMessage} />
       </div>
     </section>
   );

@@ -1,31 +1,21 @@
-# Core Adapter Interfaces (Prerequisite)
+# Core Adapter Interfaces (Holding Item)
 
 ## Goal
 
-Define the platform adapter interfaces in `packages/core` that `apps/desktop`
-implements: `FileSystemAdapter`, `SearchAdapter`, `AppPathsAdapter`,
-`GitAdapter`, `SettingsAdapter`. These are the prerequisite for clean
-separation and testability, and for refactoring the desktop app onto the
-adapter contract.
+Assess proven cross-cutting adapter gaps without launching a blanket five-adapter
+refactor. Mobile reuses the existing Tauri adapters and does not make this a
+prerequisite. Feature-specific adapter work remains in its owning epic.
 
-Note: mobile is now a Tauri Mobile build target of `apps/desktop/` (same
-webview, same codebase), not a separate app. Mobile reuses the same Tauri
-adapters as desktop — there are no separate Expo/native adapter implementations
-to write. The adapter interfaces are still needed for clean separation between
-`packages/core` and the Tauri layer.
-
-This story is the bridge between the current desktop-direct-Tauri architecture
-and the cross-platform hub-and-spoke contract described in
-`technical-decisions.md`. It may belong in a separate refactor epic rather than
-`mobile` — the manager should decide.
+If multiple owners demonstrate the same boundary gap, re-home a narrowly scoped
+interface/refactor to a platform or architecture owner before implementation.
 
 ## Acceptance Criteria
 
-- [ ] `FileSystemAdapter`, `SearchAdapter`, `AppPathsAdapter`, `GitAdapter`,
-      `SettingsAdapter` interfaces are defined in `packages/core`.
-- [ ] Interfaces contain no DOM, Node-only, or Tauri types.
-- [ ] Desktop app is refactored to implement these adapters (or a follow-up
-      story tracks that work).
+- [ ] Inventory current filesystem, search, app-path, Git, and settings boundaries
+      and identify only duplicated platform coupling that cannot stay feature-owned.
+- [ ] Record owner and scope for each proven shared gap; reject speculative interfaces.
+- [ ] Any approved `packages/core` interface contains no DOM, Node-only, or Tauri types.
+- [ ] Broad desktop refactoring is not performed from this maintenance holding item.
 - [ ] `packages/core` remains platform-agnostic (`pnpm typecheck` passes).
 
 ## References
@@ -33,4 +23,4 @@ and the cross-platform hub-and-spoke contract described in
 - `plans/technical-decisions.md` — Platform, Repository Structure sections
 - `apps/desktop/src/native/commands.ts` — current direct-Tauri bridge
 - `packages/core/src/index.ts` — where interfaces should live
-- `plans/pending-mobile-low-hard.md` — prerequisite note
+- `plans/pending-mobile-low-hard.md` — mobile reuses current adapters and is not blocked by this holding item

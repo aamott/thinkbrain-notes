@@ -3,6 +3,7 @@
 // unchanged (consumers import from "@thinkbrain/core" which sources from here).
 export {
   parseDynamicAppSettings,
+  serializeDynamicSettings,
   serializeDynamicAppSettings,
   type ParseDynamicAppSettingsResult
 } from "./settings/dynamic";
@@ -15,7 +16,8 @@ export {
 import {
   CURRENT_SETTINGS_VERSION,
   getErrorMessage,
-  isRecord
+  isRecord,
+  readSettingsVersion
 } from "./settings/internal";
 export { CURRENT_SETTINGS_VERSION };
 
@@ -44,13 +46,6 @@ export interface AppSettings {
   readonly editor: EditorSettings;
 }
 
-export interface WorkspaceSettings {
-  readonly version: typeof CURRENT_SETTINGS_VERSION;
-  readonly editor: {
-    readonly defaultFolder: string | null;
-  };
-}
-
 export interface ParseSettingsResult {
   readonly settings: AppSettings;
   readonly diagnostics: readonly SettingsDiagnostic[];
@@ -73,13 +68,6 @@ export const DEFAULT_APP_SETTINGS: AppSettings = Object.freeze({
   editor: Object.freeze({
     fontSize: DEFAULT_EDITOR_FONT_SIZE,
     lineWrapping: true
-  })
-});
-
-export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = Object.freeze({
-  version: CURRENT_SETTINGS_VERSION,
-  editor: Object.freeze({
-    defaultFolder: null
   })
 });
 
@@ -181,25 +169,6 @@ export function parseAppSettings(rawJson: string | null): ParseSettingsResult {
   return normalizeAppSettings(candidate);
 }
 
-/**
- * Migrates an app settings-like object to the current settings version.
- *
- * Args:
- *   unknownObj: User-provided settings object to migrate.
- *   fromVersion: Version declared by the settings object. Missing versions are
- *     treated as v0 by `parseAppSettings` before this function is called.
- *
- * Returns:
- *   A current-version settings object with invalid field values replaced by
- *   defaults. Use `parseAppSettings` when diagnostics are required.
- */
-export function migrateSettings(
-  unknownObj: unknown,
-  fromVersion: number
-): AppSettings {
-  return normalizeAppSettings(migrateSettingsObject(unknownObj, fromVersion)).settings;
-}
-
 function migrateSettingsObject(
   unknownObj: unknown,
   fromVersion: number
@@ -224,7 +193,7 @@ function migrateSettingsObject(
       continue;
     }
 
-    if (step.fromVersion !== readRequiredVersion(value)) {
+    if (step.fromVersion !== (typeof value.version === "number" ? value.version : 0)) {
       throw new RangeError(
         `Expected settings version ${step.fromVersion} before migrating to ${step.toVersion}.`
       );
@@ -291,47 +260,6 @@ function normalizeAppSettings(value: unknown): ParseSettingsResult {
     },
     diagnostics
   };
-}
-
-function readSettingsVersion(value: Readonly<Record<string, unknown>>): {
-  readonly version: number;
-  readonly diagnostic?: SettingsDiagnostic;
-} {
-  const version = value.version;
-
-  if (version === undefined) {
-    return { version: 0 };
-  }
-
-  if (typeof version !== "number" || !Number.isInteger(version) || version < 0) {
-    return {
-      version: 0,
-      diagnostic: {
-        code: "settings.version.invalid",
-        message: "Application settings version must be a non-negative integer; defaults were used.",
-        severity: "error",
-        path: "version"
-      }
-    };
-  }
-
-  if (version > CURRENT_SETTINGS_VERSION) {
-    return {
-      version,
-      diagnostic: {
-        code: "settings.version.unsupported",
-        message: `Application settings version ${version} is newer than supported version ${CURRENT_SETTINGS_VERSION}; defaults were used.`,
-        severity: "error",
-        path: "version"
-      }
-    };
-  }
-
-  return { version };
-}
-
-function readRequiredVersion(value: Readonly<Record<string, unknown>>): number {
-  return typeof value.version === "number" ? value.version : 0;
 }
 
 function readTheme(

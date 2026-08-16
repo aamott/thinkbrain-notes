@@ -19,7 +19,7 @@ export function Unavailable({
   return (
     <div className={cn("flex flex-1 flex-col items-center justify-center p-8 text-center text-muted-foreground", className)}>
       <strong className="text-foreground text-[0.95rem]">{title}</strong>
-      <p className="text-xs leading-[1.5] max-w-[22rem]">{description}</p>
+      <p className="text-xs leading-normal max-w-88">{description}</p>
     </div>
   );
 }

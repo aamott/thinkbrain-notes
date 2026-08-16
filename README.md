@@ -49,6 +49,10 @@ limit is exhausted. Close watcher-heavy programs or ask an administrator to
 raise `fs.inotify.max_user_instances`; this is a host setting, not an app
 configuration. `pnpm desktop:run` remains the non-live-reload alternative.
 
+### Build Tooling (Linux, optional)
+
+Rust builds auto-enable `sccache`/`mold`/`clang` if installed (no setup). Suggested: `sudo apt install sccache mold clang`. See [AGENTS.md](AGENTS.md#build-tooling-linux-optional) for details.
+
 ## Validation
 
 Run these before opening a change:
@@ -68,9 +72,7 @@ pnpm build
    and `.agents/AGENTS.md` before changing an area.
 2. Keep Markdown files as the source of truth. Settings, indexes, credentials,
    layout, and chat history belong in OS app-data, never in a workspace.
-3. Production desktop UI uses CSS Modules and shared `--tn-*` tokens. The
-   `mockup_v3/` directory is a reference only; do not import or copy it into
-   production.
+3. Production desktop UI uses CSS Modules and shared `--tn-*` tokens.
 4. Add or update the relevant epic story, implement with focused tests, and run
    the validation commands above. Do not suppress failures.
 

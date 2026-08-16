@@ -28,14 +28,14 @@ describe("extractHeadings", () => {
 });
 
 describe("OutlinePanel", () => {
-  it("renders a navigable nested heading list", () => {
+  it("renders a nested heading list", () => {
     const markup = renderToStaticMarkup(
-      <OutlinePanel contents={"# Overview\n## Details"} onNavigate={() => undefined} />,
+      <OutlinePanel contents={"# Overview\n## Details"} />,
     );
 
     expect(markup).toContain('aria-label="Note outline"');
-    expect(markup).toContain('aria-label="Go to line 1: Overview"');
-    expect(markup).toContain('aria-label="Go to line 2: Details"');
+    expect(markup).toContain("Overview");
+    expect(markup).toContain("Details");
     expect(markup).toContain("<ul");
   });
 

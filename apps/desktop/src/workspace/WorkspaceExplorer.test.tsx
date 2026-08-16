@@ -4,8 +4,17 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { WorkspaceSelector } from "./WorkspaceExplorer";
+import type { NativeWorkspaceSnapshot } from "../native/commands";
+import { WorkspaceExplorer, WorkspaceSelector } from "./WorkspaceExplorer";
 import { WorkspaceFileIcon } from "./WorkspaceFileIcon";
+import { workspaceDesktopApi, type WorkspaceDesktopApi } from "./workspaceAdapter";
+import { readWorkspaceSettings, type WorkspaceSettings } from "./workspaceSettings";
+
+vi.mock("./workspaceSettings", () => ({
+  DEFAULT_WORKSPACE_SETTINGS: { showHidden: false },
+  readWorkspaceSettings: vi.fn(() => Promise.resolve({ showHidden: false })),
+  writeWorkspaceSettings: vi.fn(() => Promise.resolve())
+}));
 
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
@@ -36,6 +45,21 @@ async function renderSelector() {
   });
 
   return { onAdd, onSelect };
+}
+
+async function renderExplorer(api: WorkspaceDesktopApi, initialWorkspacePath?: string) {
+  container = document.createElement("div");
+  document.body.append(container);
+  root = createRoot(container);
+  await act(async () => {
+    root?.render(
+      <WorkspaceExplorer
+        api={api}
+        initialWorkspacePath={initialWorkspacePath}
+        recentWorkspacePaths={["/notes/previous"]}
+      />
+    );
+  });
 }
 
 async function click(element: Element) {
@@ -116,6 +140,55 @@ describe("WorkspaceExplorer presentation", () => {
     });
     expect(container?.querySelector("[role='menu']")).toBeNull();
     expect(document.activeElement).toBe(trigger);
+  });
+
+  it("finishes loading an initial workspace after the opening render", async () => {
+    let resolveSettings!: (settings: WorkspaceSettings) => void;
+    vi.mocked(readWorkspaceSettings).mockReturnValueOnce(new Promise((resolve) => {
+      resolveSettings = resolve;
+    }));
+    const snapshot: NativeWorkspaceSnapshot = {
+      workspace: { root_path: "/notes/current", name: "current" },
+      files: []
+    };
+    const openWorkspace = vi.fn(() => Promise.resolve(snapshot));
+    const listWorkspaceEntries = vi.fn(() => Promise.resolve([]));
+    const api = { ...workspaceDesktopApi, openWorkspace, listWorkspaceEntries };
+
+    await renderExplorer(api, "/notes/current");
+    expect(container?.textContent).toContain("Reading workspace entries");
+
+    await act(async () => {
+      resolveSettings({ showHidden: false });
+      await Promise.resolve();
+    });
+
+    expect(openWorkspace).toHaveBeenCalledWith("/notes/current");
+    expect(listWorkspaceEntries).toHaveBeenCalledWith("/notes/current", false);
+    expect(container?.textContent).toContain("current");
+    expect(container?.textContent).toContain("This workspace is empty");
+  });
+
+  it("routes recent and added workspaces through the window launch flow", async () => {
+    const pickWorkspaceDirectory = vi.fn(() => Promise.resolve<string | null>("/notes/new"));
+    const openWorkspaceWindow = vi.fn(() => Promise.resolve());
+    const api = { ...workspaceDesktopApi, pickWorkspaceDirectory, openWorkspaceWindow };
+    await renderExplorer(api);
+
+    const trigger = container?.querySelector<HTMLButtonElement>("button[aria-haspopup='menu']");
+    if (!trigger) throw new Error("Workspace selector trigger was not rendered.");
+    await click(trigger);
+    const previous = Array.from(container?.querySelectorAll<HTMLButtonElement>("[role='menuitem']") ?? [])
+      .find((button) => button.textContent?.includes("previous"));
+    if (!previous) throw new Error("Known workspace was not rendered.");
+    await click(previous);
+    expect(openWorkspaceWindow).toHaveBeenCalledWith("/notes/previous");
+
+    await click(trigger);
+    const actions = Array.from(container?.querySelectorAll<HTMLButtonElement>("[role='menuitem']") ?? []);
+    await click(actions.at(-1)!);
+    expect(pickWorkspaceDirectory).toHaveBeenCalledOnce();
+    expect(openWorkspaceWindow).toHaveBeenCalledWith("/notes/new");
   });
 });
 

@@ -1,0 +1,762 @@
+<title>Journal entry — adding a field, hiding frontmatter — mockup v1</title>
+<style>
+  /* ============================================================
+     PAGE TOKENS — the review sheet's own palette.
+     Deliberately neutral-cool so it never competes with the app
+     tokens rendered inside the figures. The only accent is the
+     redline ochre, used exclusively for annotation.
+     ============================================================ */
+  :root {
+    --ground: #f6f7f9;
+    --surface: #ffffff;
+    --surface-sunk: #eef0f4;
+    --ink: #141922;
+    --ink-muted: #5c6675;
+    --rule: #dee2e9;
+    --rule-soft: #e9ecf1;
+    --redline: #a9642f;
+    --redline-soft: #f2e6da;
+
+    --serif: ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+    /* ---- App tokens (light). Copied from packages/ui/src/styles/tokens.css ---- */
+    --tn-color-background: hsl(0 0% 100%);
+    --tn-color-foreground: hsl(222 47% 11%);
+    --tn-color-border: hsl(220 13% 91%);
+    --tn-color-input: hsl(220 13% 91%);
+    --tn-color-muted: hsl(220 14% 96%);
+    --tn-color-muted-foreground: hsl(220 9% 46%);
+    --tn-color-secondary: hsl(220 14% 96%);
+    --tn-color-secondary-foreground: hsl(222 47% 11%);
+    --tn-color-primary: hsl(262 83% 58%);
+    --tn-color-primary-foreground: hsl(0 0% 100%);
+    --tn-color-accent: hsl(262 83% 96%);
+    --tn-color-accent-foreground: hsl(262 83% 40%);
+    --tn-color-danger: hsl(0 84% 38%);
+    --tn-color-warning: hsl(38 92% 42%);
+    --tn-color-activitybar: hsl(220 16% 93%);
+    --tn-color-activitybar-foreground: hsl(220 9% 40%);
+    --tn-color-activitybar-active: hsl(262 83% 58%);
+    --tn-color-sidebar: hsl(220 16% 97%);
+    --tn-color-sidebar-foreground: hsl(222 47% 11%);
+    --tn-color-editor: hsl(0 0% 100%);
+    --tn-color-editor-foreground: hsl(222 47% 11%);
+    --tn-color-tab-active: hsl(0 0% 100%);
+    --tn-color-tab-inactive: hsl(220 16% 94%);
+    --tn-color-tab-active-foreground: hsl(222 47% 11%);
+    --tn-color-tab-inactive-foreground: hsl(220 9% 46%);
+    --tn-radius-small: 0.25rem;
+    --tn-radius-medium: 0.5rem;
+    --tn-font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --tn-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+
+  /* Page palette, dark. Guarded so an explicit light choice beats a dark OS. */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #11141a;
+      --surface: #171b22;
+      --surface-sunk: #1e232b;
+      --ink: #e6e9ee;
+      --ink-muted: #98a2b1;
+      --rule: #262c35;
+      --rule-soft: #1f242c;
+      --redline: #d69a62;
+      --redline-soft: #2b2018;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #11141a;
+    --surface: #171b22;
+    --surface-sunk: #1e232b;
+    --ink: #e6e9ee;
+    --ink-muted: #98a2b1;
+    --rule: #262c35;
+    --rule-soft: #1f242c;
+    --redline: #d69a62;
+    --redline-soft: #2b2018;
+  }
+
+  /* ---- App tokens (dark). Applied to .tn-dark always, and to any
+     theme-following figure when the viewer is in dark mode. ---- */
+  .tn-dark,
+  :root[data-theme="dark"] .tn-auto {
+    --tn-color-background: hsl(0 0% 7%);
+    --tn-color-foreground: hsl(0 0% 98%);
+    --tn-color-border: hsl(0 0% 18%);
+    --tn-color-input: hsl(0 0% 18%);
+    --tn-color-muted: hsl(0 0% 16%);
+    --tn-color-muted-foreground: hsl(0 0% 60%);
+    --tn-color-secondary: hsl(0 0% 16%);
+    --tn-color-secondary-foreground: hsl(0 0% 98%);
+    --tn-color-primary: hsl(152 60% 38%);
+    --tn-color-primary-foreground: hsl(0 0% 100%);
+    --tn-color-accent: hsl(152 40% 18%);
+    --tn-color-accent-foreground: hsl(152 60% 55%);
+    --tn-color-danger: hsl(0 72% 62%);
+    --tn-color-warning: hsl(38 92% 50%);
+    --tn-color-activitybar: hsl(0 0% 11%);
+    --tn-color-activitybar-foreground: hsl(0 0% 60%);
+    --tn-color-activitybar-active: hsl(152 60% 45%);
+    --tn-color-sidebar: hsl(0 0% 9%);
+    --tn-color-sidebar-foreground: hsl(0 0% 98%);
+    --tn-color-editor: hsl(0 0% 7%);
+    --tn-color-editor-foreground: hsl(0 0% 98%);
+    --tn-color-tab-active: hsl(0 0% 7%);
+    --tn-color-tab-inactive: hsl(0 0% 12%);
+    --tn-color-tab-active-foreground: hsl(0 0% 98%);
+    --tn-color-tab-inactive-foreground: hsl(0 0% 60%);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .tn-auto {
+      --tn-color-background: hsl(0 0% 7%);
+      --tn-color-foreground: hsl(0 0% 98%);
+      --tn-color-border: hsl(0 0% 18%);
+      --tn-color-input: hsl(0 0% 18%);
+      --tn-color-muted: hsl(0 0% 16%);
+      --tn-color-muted-foreground: hsl(0 0% 60%);
+      --tn-color-secondary: hsl(0 0% 16%);
+      --tn-color-secondary-foreground: hsl(0 0% 98%);
+      --tn-color-primary: hsl(152 60% 38%);
+      --tn-color-primary-foreground: hsl(0 0% 100%);
+      --tn-color-accent: hsl(152 40% 18%);
+      --tn-color-accent-foreground: hsl(152 60% 55%);
+      --tn-color-danger: hsl(0 72% 62%);
+      --tn-color-warning: hsl(38 92% 50%);
+      --tn-color-activitybar: hsl(0 0% 11%);
+      --tn-color-activitybar-foreground: hsl(0 0% 60%);
+      --tn-color-activitybar-active: hsl(152 60% 45%);
+      --tn-color-sidebar: hsl(0 0% 9%);
+      --tn-color-sidebar-foreground: hsl(0 0% 98%);
+      --tn-color-editor: hsl(0 0% 7%);
+      --tn-color-editor-foreground: hsl(0 0% 98%);
+      --tn-color-tab-active: hsl(0 0% 7%);
+      --tn-color-tab-inactive: hsl(0 0% 12%);
+      --tn-color-tab-active-foreground: hsl(0 0% 98%);
+      --tn-color-tab-inactive-foreground: hsl(0 0% 60%);
+    }
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 17px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .sheet { max-width: 78rem; margin: 0 auto; padding: clamp(2rem, 5vw, 4.5rem) clamp(1rem, 4vw, 3rem) 6rem; }
+
+  .masthead { border-bottom: 1px solid var(--rule); padding-bottom: 2.5rem; }
+  .eyebrow {
+    font-family: var(--sans);
+    font-size: 0.7rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--redline);
+    margin: 0 0 1.25rem;
+  }
+  h1 {
+    font-size: clamp(2.2rem, 5vw, 3.4rem);
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    font-weight: 600;
+    margin: 0 0 1rem;
+    text-wrap: balance;
+  }
+  .standfirst { font-size: 1.15rem; color: var(--ink-muted); max-width: 46ch; margin: 0 0 2rem; }
+  .facts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+    gap: 1.25rem 2rem;
+    font-family: var(--sans);
+    font-size: 0.85rem;
+    line-height: 1.5;
+  }
+  .facts dt {
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    margin-bottom: 0.3rem;
+  }
+  .facts dd { margin: 0; }
+
+  section { margin-top: 4.5rem; }
+  .block { display: grid; grid-template-columns: 8.5rem minmax(0, 1fr); gap: 0 2.5rem; align-items: start; }
+  .gutter {
+    font-family: var(--sans);
+    font-size: 0.68rem;
+    line-height: 1.7;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    text-align: right;
+    padding-top: 0.55rem;
+    border-right: 1px solid var(--rule-soft);
+    padding-right: 1rem;
+  }
+  .gutter b { display: block; color: var(--redline); font-weight: 600; letter-spacing: 0.08em; }
+  .col { min-width: 0; }
+
+  h2 {
+    font-size: clamp(1.5rem, 3vw, 2rem);
+    line-height: 1.15;
+    letter-spacing: -0.015em;
+    font-weight: 600;
+    margin: 0 0 0.75rem;
+    text-wrap: balance;
+  }
+  h3 {
+    font-family: var(--sans);
+    font-size: 0.78rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-weight: 650;
+    margin: 2.5rem 0 0.9rem;
+  }
+  p { margin: 0 0 1rem; max-width: 68ch; }
+  .col > p:last-child { margin-bottom: 0; }
+  code { font-family: var(--mono); font-size: 0.82em; background: var(--surface-sunk); padding: 0.1em 0.35em; border-radius: 3px; }
+  strong { font-weight: 650; }
+  ul.notes { margin: 0 0 1rem; padding-left: 1.1rem; max-width: 68ch; }
+  ul.notes li { margin-bottom: 0.5rem; }
+
+  figure { margin: 1.75rem 0 0; }
+  figcaption { font-family: var(--sans); font-size: 0.78rem; line-height: 1.5; color: var(--ink-muted); margin-top: 0.85rem; max-width: 62ch; }
+  .figrow { display: flex; flex-wrap: wrap; gap: 1.5rem; align-items: flex-start; }
+  .scroller { overflow-x: auto; padding-bottom: 0.5rem; }
+  .plate { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 1.25rem; display: inline-block; }
+  .platelabel {
+    font-family: var(--sans);
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    margin-bottom: 0.75rem;
+    display: flex;
+    gap: 0.5rem;
+    align-items: baseline;
+  }
+  .platelabel .n { color: var(--redline); font-weight: 650; }
+
+  /* ============================================================
+     THE NOTE — real app tokens, the editor's own measure.
+     ============================================================ */
+  .note {
+    width: var(--note-w, 27rem);
+    font-family: var(--tn-font-sans);
+    background: var(--tn-color-editor);
+    color: var(--tn-color-editor-foreground);
+    border: 1px solid var(--tn-color-border);
+    border-radius: var(--tn-radius-medium);
+    overflow: hidden;
+    font-size: 13px;
+  }
+  .note .tabbar {
+    display: flex;
+    background: var(--tn-color-tab-inactive);
+    border-bottom: 1px solid var(--tn-color-border);
+    font-size: 11.5px;
+  }
+  .note .tab {
+    padding: 0.4rem 0.7rem;
+    background: var(--tn-color-tab-active);
+    color: var(--tn-color-tab-active-foreground);
+    border-right: 1px solid var(--tn-color-border);
+    font-family: var(--tn-font-mono);
+    font-size: 10.5px;
+  }
+  .note .body { padding: 0.9rem 1.1rem 1.3rem; }
+
+  /* the dateline */
+  .dateline {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.5rem;
+    border-bottom: 1px solid var(--tn-color-border);
+    padding-bottom: 0.45rem;
+  }
+  .dateline .day { font-size: 13.5px; font-weight: 650; }
+  .dateline .vals { font-size: 13.5px; color: var(--tn-color-muted-foreground); }
+  .dateline .act {
+    margin-left: auto;
+    font-size: 11px;
+    color: var(--tn-color-muted-foreground);
+    border: 1px solid var(--tn-color-border);
+    border-radius: var(--tn-radius-small);
+    padding: 0.05rem 0.35rem;
+  }
+
+  /* the expanded field list */
+  .fields { display: flex; flex-direction: column; gap: 0.5rem; padding: 0.7rem 0; border-bottom: 1px solid var(--tn-color-border); }
+  .frow { display: grid; grid-template-columns: 6.5rem minmax(0, 1fr); align-items: center; gap: 0.5rem; }
+  .frow .lab { font-size: 11px; color: var(--tn-color-muted-foreground); }
+  .pills { display: flex; flex-wrap: wrap; gap: 0.25rem; align-items: center; }
+  .pill {
+    border: 1px solid var(--tn-color-border);
+    border-radius: 999px;
+    padding: 0.1rem 0.5rem;
+    font-size: 11.5px;
+    color: var(--tn-color-muted-foreground);
+  }
+  .pill.on { background: var(--tn-color-accent); color: var(--tn-color-accent-foreground); border-color: transparent; font-weight: 650; }
+  .pill.extra { border-style: dashed; }
+  .pill.add { border-style: dashed; }
+  .inp {
+    border: 1px solid var(--tn-color-input);
+    background: var(--tn-color-background);
+    border-radius: var(--tn-radius-small);
+    padding: 0.2rem 0.4rem;
+    font-size: 12px;
+    min-height: 1.6rem;
+    display: inline-flex;
+    align-items: center;
+  }
+  .inp.caret::after { content: ""; width: 1px; height: 1em; background: var(--tn-color-foreground); margin-left: 1px; }
+  .sub { grid-column: 2; font-size: 10.5px; color: var(--tn-color-muted-foreground); }
+  .sub u { text-underline-offset: 2px; }
+
+  /* the add-a-field row and its dropdown */
+  .addrow { position: relative; padding-top: 0.15rem; }
+  .addbtn {
+    font-size: 11.5px;
+    color: var(--tn-color-muted-foreground);
+    border: 1px dashed var(--tn-color-border);
+    border-radius: var(--tn-radius-small);
+    padding: 0.2rem 0.5rem;
+    display: inline-block;
+  }
+  .menu {
+    margin-top: 0.3rem;
+    border: 1px solid var(--tn-color-border);
+    border-radius: var(--tn-radius-small);
+    background: var(--tn-color-background);
+    box-shadow: 0 6px 18px rgb(0 0 0 / 0.12);
+    overflow: hidden;
+    width: 15rem;
+  }
+  .menu .opt { padding: 0.35rem 0.55rem; font-size: 12px; display: flex; gap: 0.4rem; align-items: baseline; }
+  .menu .opt + .opt { border-top: 1px solid var(--tn-color-border); }
+  .menu .opt.on { background: var(--tn-color-accent); color: var(--tn-color-accent-foreground); }
+  .menu .opt .kind { margin-left: auto; font-size: 10.5px; color: var(--tn-color-muted-foreground); }
+  .menu .opt.on .kind { color: inherit; opacity: 0.8; }
+  .menu .head { padding: 0.3rem 0.55rem; font-size: 10px; text-transform: uppercase; letter-spacing: 0.09em; color: var(--tn-color-muted-foreground); background: var(--tn-color-muted); }
+  .menu .new { font-family: var(--tn-font-mono); font-size: 10.5px; }
+  .err { font-size: 10.5px; color: var(--tn-color-danger); padding: 0.3rem 0.55rem; }
+
+  /* prose + raw frontmatter */
+  .prose { font-family: var(--tn-font-sans); font-size: 13px; padding-top: 0.7rem; }
+  .prose p { margin: 0 0 0.5rem; }
+  .fm {
+    font-family: var(--tn-font-mono);
+    font-size: 11px;
+    line-height: 1.55;
+    color: var(--tn-color-muted-foreground);
+    background: var(--tn-color-muted);
+    border-left: 2px solid var(--tn-color-border);
+    padding: 0.35rem 0.5rem;
+    margin: 0.55rem 0 0;
+    white-space: pre;
+  }
+  .fm.live { border-left-color: var(--tn-color-primary); color: var(--tn-color-foreground); }
+  .cursor { display: inline-block; width: 1px; height: 1em; background: var(--tn-color-foreground); vertical-align: text-bottom; }
+
+  table.words {
+    border-collapse: collapse;
+    font-family: var(--sans);
+    font-size: 0.85rem;
+    width: 100%;
+    max-width: 44rem;
+    margin-top: 0.5rem;
+  }
+  table.words th, table.words td { text-align: left; padding: 0.55rem 0.8rem 0.55rem 0; border-bottom: 1px solid var(--rule-soft); vertical-align: top; }
+  table.words th { font-size: 0.68rem; letter-spacing: 0.09em; text-transform: uppercase; color: var(--ink-muted); font-weight: 600; }
+
+  .ask {
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--redline);
+    background: var(--surface);
+    border-radius: 0 8px 8px 0;
+    padding: 1.1rem 1.25rem;
+    margin: 1.25rem 0 0;
+  }
+  .ask h4 { font-family: var(--sans); font-size: 0.8rem; margin: 0 0 0.5rem; font-weight: 650; }
+  .ask p { font-size: 0.95rem; margin: 0 0 0.6rem; }
+  .ask p:last-child { margin-bottom: 0; }
+  .ask .rec {
+    font-family: var(--sans);
+    font-size: 0.78rem;
+    color: var(--redline);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    font-weight: 650;
+  }
+
+  @media (max-width: 46rem) {
+    .block { grid-template-columns: 1fr; gap: 1rem; }
+    .gutter { text-align: left; border-right: 0; border-left: 2px solid var(--redline-soft); padding: 0 0 0 0.75rem; }
+    .gutter b { display: inline; margin-right: 0.6rem; }
+  }
+</style>
+
+<div class="sheet">
+
+  <header class="masthead">
+    <p class="eyebrow">Journal · the entry · mockup v1 · for D34 sign-off</p>
+    <h1>Recording something new, and not reading it twice</h1>
+    <p class="standfirst">
+      Two small things on the page you actually write on: adding a field without leaving it, and
+      hiding the block that already says what the dateline says.
+    </p>
+    <dl class="facts">
+      <div><dt>Covers</dt><dd>Adding a field from an entry · hiding frontmatter in live preview</dd></div>
+      <div><dt>Governed by</dt><dd>D24 collapsed by default · D50 never repair · D85 unconfigured keys · D4 your vocabulary</dd></div>
+      <div><dt>Storage</dt><dd>Unchanged — a field written here is an ordinary frontmatter key</dd></div>
+      <div><dt>New components</dt><dd>None; a row on the existing editor and a live-preview decoration</dd></div>
+    </dl>
+  </header>
+
+  <section>
+    <div class="block">
+      <div class="gutter"><b>Why</b> today</div>
+      <div class="col">
+        <h2>Where a new field has to start today</h2>
+        <p>
+          In Settings, or by typing frontmatter by hand. Both work, and neither is where you are
+          when the thought arrives. You are on the entry, you want to note the weather, and the
+          only route is a different screen.
+        </p>
+        <p>
+          Meanwhile the metadata is on screen twice — once as the dateline, once as the raw block
+          the dateline is a rendering of.
+        </p>
+
+        <figure>
+          <div class="plate">
+            <div class="platelabel"><span class="n">0</span> shipped today</div>
+            <div class="note tn-auto">
+              <div class="tabbar"><span class="tab">2026-08-08-0914.md</span></div>
+              <div class="body">
+                <div class="dateline">
+                  <span class="day">Saturday, August 8, 2026</span>
+                  <span class="vals">· happy</span>
+                  <span class="act">Edit</span>
+                </div>
+                <p class="fm">---
+date: 2026-08-08
+mood: happy
+---</p>
+                <div class="prose"><p>Bread needed more salt.</p></div>
+              </div>
+            </div>
+          </div>
+          <figcaption>
+            The dateline reads it correctly and the block repeats it. Neither is wrong; together
+            they are noise on a page whose job is what you wrote.
+          </figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="block">
+      <div class="gutter"><b>1</b> add a field<br /><b>D85</b> promote later</div>
+      <div class="col">
+        <h2>Adding a field where you are</h2>
+        <p>
+          One row at the bottom of the expanded dateline. Open it and you get the fields you have
+          already set up but have not used on this entry; type something else and you get that,
+          as a new key on this note.
+        </p>
+
+        <figure>
+          <div class="scroller"><div class="figrow">
+
+            <div class="plate">
+              <div class="platelabel"><span class="n">1</span> expanded, with the new row</div>
+              <div class="note tn-auto" style="--note-w: 25rem">
+                <div class="body">
+                  <div class="dateline">
+                    <span class="day">Saturday, August 8, 2026</span>
+                    <span class="act">Done</span>
+                  </div>
+                  <div class="fields">
+                    <div class="frow">
+                      <span class="lab">Mood</span>
+                      <span class="pills">
+                        <span class="pill">rough</span><span class="pill">okay</span><span class="pill on">good</span><span class="pill add">＋</span>
+                      </span>
+                    </div>
+                    <div class="frow">
+                      <span class="lab">Energy</span>
+                      <span class="inp" style="max-width: 5rem">7</span>
+                    </div>
+                    <div class="addrow"><span class="addbtn">＋ Add a field</span></div>
+                  </div>
+                  <div class="prose"><p>Bread needed more salt.</p></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="plate">
+              <div class="platelabel"><span class="n">2</span> the picker, nothing typed</div>
+              <div class="note tn-auto" style="--note-w: 25rem">
+                <div class="body">
+                  <div class="fields">
+                    <div class="addrow">
+                      <span class="inp caret" style="width: 15rem">&nbsp;</span>
+                      <div class="menu">
+                        <div class="head">Your fields</div>
+                        <div class="opt on">Context <span class="kind">pick several</span></div>
+                        <div class="opt">Note to self <span class="kind">a few words</span></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="plate">
+              <div class="platelabel"><span class="n">3</span> typing something new</div>
+              <div class="note tn-auto" style="--note-w: 25rem">
+                <div class="body">
+                  <div class="fields">
+                    <div class="addrow">
+                      <span class="inp caret" style="width: 15rem">Weather</span>
+                      <div class="menu">
+                        <div class="head">New field, on this entry</div>
+                        <div class="opt on">
+                          Weather <span class="new">weather:</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div></div>
+          <figcaption>
+            The list holds only fields not already on this entry — offering one twice would be
+            offering to overwrite it. The key it will write is shown before it is written.
+          </figcaption>
+        </figure>
+
+        <figure>
+          <div class="scroller"><div class="figrow">
+
+            <div class="plate">
+              <div class="platelabel"><span class="n">4</span> the new field, on the note</div>
+              <div class="note tn-auto" style="--note-w: 25rem">
+                <div class="body">
+                  <div class="fields">
+                    <div class="frow">
+                      <span class="lab">Mood</span>
+                      <span class="pills"><span class="pill">rough</span><span class="pill">okay</span><span class="pill on">good</span><span class="pill add">＋</span></span>
+                    </div>
+                    <div class="frow">
+                      <span class="lab">weather</span>
+                      <span class="inp caret" style="max-width: 9rem">drizzle</span>
+                    </div>
+                    <span class="sub">Not one of your fields yet. <u>Add it</u></span>
+                    <div class="addrow"><span class="addbtn">＋ Add a field</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="plate">
+              <div class="platelabel"><span class="n">5</span> a name the app already owns</div>
+              <div class="note tn-auto" style="--note-w: 25rem">
+                <div class="body">
+                  <div class="fields">
+                    <div class="addrow">
+                      <span class="inp caret" style="width: 15rem">Tags</span>
+                      <div class="menu">
+                        <div class="err">
+                          <code>tags</code> is already used by the app itself. Try another name.
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div></div>
+          <figcaption>
+            A field made here is a plain frontmatter key and free text — nothing is written to
+            your settings. It arrives marked exactly as D85 marks any key the settings do not
+            know, with the same one-tap <em>Add it</em> when you decide it is a keeper.
+          </figcaption>
+        </figure>
+
+        <h3>Why free text, and not a kind chooser here</h3>
+        <p>
+          Asking "is this one from a list, several from a list, a number, or a few words?" on the
+          page you came to write on is the settings form wearing a disguise. Free text records
+          anything and mangles nothing; when the field earns a place in your settings, that is
+          where its shape gets chosen. A number typed into a free-text field is still a number
+          when you promote it.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="block">
+      <div class="gutter"><b>2</b> hide the block<br /><b>D50</b> show what broke</div>
+      <div class="col">
+        <h2>Not reading the same thing twice</h2>
+        <p>
+          Live preview already hides <code>#</code> and <code>**</code> and shows them back when
+          the cursor arrives. Frontmatter should keep the same bargain instead of being the one
+          piece of syntax that stays raw.
+        </p>
+
+        <figure>
+          <div class="scroller"><div class="figrow">
+
+            <div class="plate">
+              <div class="platelabel"><span class="n">6</span> hidden</div>
+              <div class="note tn-auto" style="--note-w: 24rem">
+                <div class="body">
+                  <div class="dateline">
+                    <span class="day">Saturday, August 8, 2026</span>
+                    <span class="vals">· good · 7</span>
+                    <span class="act">Edit</span>
+                  </div>
+                  <div class="prose">
+                    <p>Bread needed more salt.</p>
+                    <p>Second loaf tomorrow, 2% by weight.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="plate">
+              <div class="platelabel"><span class="n">7</span> cursor inside — revealed</div>
+              <div class="note tn-auto" style="--note-w: 24rem">
+                <div class="body">
+                  <div class="dateline">
+                    <span class="day">Saturday, August 8, 2026</span>
+                    <span class="vals">· good · 7</span>
+                    <span class="act">Edit</span>
+                  </div>
+                  <p class="fm live">---
+date: 2026-08-08
+mood: good<span class="cursor"></span>
+energy: 7
+---</p>
+                  <div class="prose"><p>Bread needed more salt.</p></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="plate">
+              <div class="platelabel"><span class="n">8</span> malformed — never hidden</div>
+              <div class="note tn-auto" style="--note-w: 24rem">
+                <div class="body">
+                  <div class="dateline">
+                    <span class="day">Saturday, August 8, 2026</span>
+                    <span class="act">Edit</span>
+                  </div>
+                  <p class="fm">---
+date: 2026-08-08
+mood: [good
+---</p>
+                  <div class="prose"><p>Bread needed more salt.</p></div>
+                </div>
+              </div>
+            </div>
+
+          </div></div>
+          <figcaption>
+            Plate 8 is the rule that matters: a block the parser could not read stays visible.
+            Hiding it would hide the evidence, and the dateline cannot stand in for a block it
+            could not understand either.
+          </figcaption>
+        </figure>
+
+        <table class="words">
+          <tr><th>Situation</th><th>What you see</th></tr>
+          <tr><td>Live preview on, frontmatter reads cleanly</td><td>Nothing — the dateline has it</td></tr>
+          <tr><td>Cursor inside the block</td><td>The raw block, as with any other source</td></tr>
+          <tr><td>Frontmatter malformed</td><td>The raw block, always</td></tr>
+          <tr><td>Live preview off</td><td>Exactly what you see today</td></tr>
+          <tr><td>A note with no frontmatter</td><td>Nothing added, nothing changed</td></tr>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="block">
+      <div class="gutter"><b>Sign-off</b><br />D34</div>
+      <div class="col">
+        <h2>Three things to decide</h2>
+
+        <div class="ask">
+          <h4>1 · Where does <em>＋ Add a field</em> live?</h4>
+          <p>
+            The mockup puts it at the bottom of the expanded dateline, so it appears only once you
+            have opened the metadata. The alternative is always visible on the collapsed dateline,
+            one click closer but permanently on a page meant to be mostly prose.
+          </p>
+          <p class="rec">Recommendation — inside the expanded editor, as drawn</p>
+        </div>
+
+        <div class="ask">
+          <h4>2 · Does a field made from a note ask for its kind?</h4>
+          <p>
+            Drawn as free text, with the shape chosen later if you promote it in Settings. Asking
+            here means putting the settings form on the writing page.
+          </p>
+          <p class="rec">Recommendation — free text, promote to choose a shape</p>
+        </div>
+
+        <div class="ask">
+          <h4>3 · Hide frontmatter in every note, or only journal entries?</h4>
+          <p>
+            Drawn as every note with live preview on. Hiding it only where a journal dateline is
+            showing would make the editor's appearance depend on which extension happens to be
+            active — hard to explain, harder to predict.
+          </p>
+          <p>
+            The cost is that a non-journal note with frontmatter you care about needs a click to
+            see it. Live preview already makes that trade for every other piece of syntax.
+          </p>
+          <p class="rec">Recommendation — every note, revealed on cursor</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="block">
+      <div class="gutter"><b>Next</b></div>
+      <div class="col">
+        <h2>After this</h2>
+        <p>
+          Sign these off and both are small: the add-a-field row is one component on an editor
+          that already exists, and hiding frontmatter is a decoration in a live-preview module
+          that already finds the block and already knows how to reveal source under the cursor.
+        </p>
+        <p>
+          Still open elsewhere: search and metadata filters wait on the platform index (D41), and
+          the mobile accessibility checklist needs a pass on real devices.
+        </p>
+      </div>
+    </div>
+  </section>
+
+</div>

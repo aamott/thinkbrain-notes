@@ -19,7 +19,7 @@ must not block the editor.
 
 ## References
 
-- `apps/desktop/src/search/searchService.ts` — `indexDocument`, `removeIndexedDocument`, `indexWorkspace`
-- `apps/desktop/src/search/useWorkspaceIndexer.ts` — abortable background index hook
-- `apps/desktop/src-tauri/src/lib.rs` — `upsert_document`, `delete_document`
+- `plans/wip-indexing-search-med-med.md` — indexing-search epic and incremental indexing foundation
+- `apps/desktop/src-tauri/src/commands/search.rs` — shipped native `index_documents` and `remove_index_document` commands
+- A future typed frontend bridge remains planned for native index commands; background index lifecycle wiring is still open and no hook file is assigned.
 - `plans/pending-semantic-search-low-hard.md` — Architecture Decisions (indexing stays non-blocking)

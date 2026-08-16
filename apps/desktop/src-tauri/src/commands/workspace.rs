@@ -2,17 +2,28 @@ use crate::error::NativeError;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 
-use std::sync::{Mutex, atomic::{AtomicU64, Ordering}};
+use crate::commands::markdown::{is_markdown_path, list_markdown_file_entries, MarkdownFileEntry};
+use crate::commands::watcher::record_self_write;
 use std::collections::HashMap;
 use std::fs;
-use std::time::UNIX_EPOCH;
-use std::path::Component;
-use tauri::Manager;
 use std::io::Write;
-use crate::commands::markdown::{MarkdownFileEntry, list_markdown_file_entries, is_markdown_path};
+use std::path::Component;
+use std::sync::{
+    atomic::{AtomicU64, Ordering},
+    Mutex,
+};
+use std::time::UNIX_EPOCH;
+use tauri::Manager;
 
-const IGNORED_FOLDERS: &[&str] = &["node_modules", "target", "dist", "vendor"];
-const MAX_WORKSPACE_ENTRIES: usize = 10_000;
+pub const IGNORED_FOLDERS: &[&str] = &["node_modules", "target", "dist", "vendor"];
+pub(crate) const MAX_WORKSPACE_ENTRIES: usize = 10_000;
+
+/// True for vault entries the explorer, markdown walker, and watcher all skip:
+/// dotfiles plus the configured ignored-folder list. Centralized so the three
+/// cannot drift.
+pub fn is_ignored_entry_name(name: &str) -> bool {
+    is_hidden_name(name) || IGNORED_FOLDERS.contains(&name)
+}
 
 pub static WORKSPACE_ENTRY_MUTATION_LOCK: Mutex<()> = Mutex::new(());
 static WORKSPACE_WINDOW_SEQUENCE: AtomicU64 = AtomicU64::new(1);
@@ -27,15 +38,17 @@ pub fn next_workspace_window_label() -> String {
     )
 }
 
-
-pub fn register_workspace_window_root(roots: &WorkspaceWindowRoots, label: String, root_path: String) {
+pub fn register_workspace_window_root(
+    roots: &WorkspaceWindowRoots,
+    label: String,
+    root_path: String,
+) {
     roots
         .0
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
         .insert(label, root_path);
 }
-
 
 pub fn workspace_window_root(roots: &WorkspaceWindowRoots, label: &str) -> Option<String> {
     roots
@@ -46,7 +59,6 @@ pub fn workspace_window_root(roots: &WorkspaceWindowRoots, label: &str) -> Optio
         .cloned()
 }
 
-
 pub fn unregister_workspace_window_root(roots: &WorkspaceWindowRoots, label: &str) {
     roots
         .0
@@ -55,7 +67,6 @@ pub fn unregister_workspace_window_root(roots: &WorkspaceWindowRoots, label: &st
         .remove(label);
 }
 
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ShellStatus {
     pub app_name: String,
@@ -63,20 +74,17 @@ pub struct ShellStatus {
     pub ready: bool,
 }
 
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct WorkspaceDescriptor {
     pub root_path: String,
     pub name: String,
 }
 
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct WorkspaceSnapshot {
     pub workspace: WorkspaceDescriptor,
     pub files: Vec<MarkdownFileEntry>,
 }
-
 
 /// A single file-manager entry: a folder or a file of any type.
 ///
@@ -94,7 +102,6 @@ pub struct WorkspaceEntry {
     pub updated_at: Option<u64>,
 }
 
-
 #[tauri::command]
 pub fn desktop_shell_status() -> Result<ShellStatus, NativeError> {
     Ok(ShellStatus {
@@ -104,17 +111,32 @@ pub fn desktop_shell_status() -> Result<ShellStatus, NativeError> {
     })
 }
 
-
 #[tauri::command]
-pub fn open_workspace(root_path: String) -> Result<WorkspaceSnapshot, NativeError> {
+pub fn open_workspace(
+    app: tauri::AppHandle,
+    root_path: String,
+) -> Result<WorkspaceSnapshot, NativeError> {
     let root = resolve_workspace_root(&root_path)?;
+
+    // Grant `asset://` reads for this vault only. The static scope in
+    // tauri.conf.json is empty, so the renderer can reach nothing until a
+    // workspace is deliberately opened, and then only inside it. This is what
+    // lets live preview render vault-relative images without handing the
+    // webview the whole filesystem.
+    if let Err(error) = app.asset_protocol_scope().allow_directory(&root, true) {
+        // Not fatal: the workspace still opens, images just fall back to alt
+        // text. Fail loudly so the cause is visible rather than mysterious.
+        eprintln!(
+            "[workspace] failed to grant asset scope for {}: {error}",
+            root.display()
+        );
+    }
 
     Ok(WorkspaceSnapshot {
         workspace: describe_workspace(&root),
         files: list_markdown_file_entries(&root)?,
     })
 }
-
 
 #[tauri::command]
 pub fn list_workspace_entries(
@@ -128,7 +150,6 @@ pub fn list_workspace_entries(
 
     Ok(entries)
 }
-
 
 /// Creates a workspace file of any type. Unlike `create_markdown_file`, this
 /// powers the explorer's "New file" context action on arbitrary folders and
@@ -150,11 +171,12 @@ pub fn create_workspace_file(
             NativeError::with_details(
                 "workspace.create_parent_failed",
                 "Failed to create the destination folder.",
-                error.to_string(),
+                error,
             )
         })?;
     }
 
+    record_self_write(&file_path);
     let mut file = fs::OpenOptions::new()
         .write(true)
         .create_new(true)
@@ -169,7 +191,7 @@ pub fn create_workspace_file(
                 NativeError::with_details(
                     "workspace.create_failed",
                     "Failed to create the file.",
-                    error.to_string(),
+                    error,
                 )
             }
         })?;
@@ -178,13 +200,12 @@ pub fn create_workspace_file(
             NativeError::with_details(
                 "workspace.create_failed",
                 "Failed to create the file.",
-                error.to_string(),
+                error,
             )
         })?;
 
     workspace_entry(&root, &file_path, false)
 }
-
 
 /// Creates a workspace folder (including any missing parents). Refuses to
 /// overwrite an existing entry so the explorer can surface a clear conflict.
@@ -210,13 +231,12 @@ pub fn create_workspace_folder(
         NativeError::with_details(
             "workspace.create_failed",
             "Failed to create the folder.",
-            error.to_string(),
+            error,
         )
     })?;
 
     workspace_entry(&root, &folder_path, true)
 }
-
 
 /// Renames or moves any workspace file or folder. The destination path is
 /// normalized the same way as the source, and missing parent folders are
@@ -224,16 +244,36 @@ pub fn create_workspace_folder(
 /// (source == destination) succeeds without touching the filesystem.
 #[tauri::command]
 pub fn rename_workspace_entry(
+    app: tauri::AppHandle,
     root_path: String,
     relative_path: String,
     new_relative_path: String,
 ) -> Result<WorkspaceEntry, NativeError> {
-    let root = resolve_workspace_root(&root_path)?;
+    let is_markdown = is_markdown_path(Path::new(&relative_path));
+    let entry = rename_workspace_entry_impl(&root_path, &relative_path, &new_relative_path)?;
+
+    if is_markdown {
+        if let Err(error) =
+            crate::commands::search::remove_index_document(app, root_path, relative_path.clone())
+        {
+            eprintln!("[workspace] failed to remove search index for {relative_path}: {error}");
+        }
+    }
+
+    Ok(entry)
+}
+
+fn rename_workspace_entry_impl(
+    root_path: &str,
+    relative_path: &str,
+    new_relative_path: &str,
+) -> Result<WorkspaceEntry, NativeError> {
+    let root = resolve_workspace_root(root_path)?;
     let _mutation_lock = WORKSPACE_ENTRY_MUTATION_LOCK
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
-    let source_path = resolve_workspace_entry_path(&root, &relative_path)?;
-    let destination_path = resolve_workspace_entry_path(&root, &new_relative_path)?;
+    let source_path = resolve_workspace_entry_path(&root, relative_path)?;
+    let destination_path = resolve_workspace_entry_path(&root, new_relative_path)?;
 
     if !source_path.exists() {
         return Err(NativeError::new(
@@ -260,23 +300,33 @@ pub fn rename_workspace_entry(
             NativeError::with_details(
                 "workspace.create_parent_failed",
                 "Failed to create the destination folder.",
-                error.to_string(),
+                error,
             )
         })?;
     }
 
+    record_self_write(&source_path);
+    record_self_write(&destination_path);
     let is_dir = source_path.is_dir();
     fs::rename(&source_path, &destination_path).map_err(|error| {
         NativeError::with_details(
             "workspace.rename_failed",
             "Failed to rename the workspace entry.",
-            error.to_string(),
+            error,
         )
     })?;
 
     workspace_entry(&root, &destination_path, is_dir)
 }
 
+#[cfg(test)]
+pub fn rename_workspace_entry_for_test(
+    root_path: String,
+    relative_path: String,
+    new_relative_path: String,
+) -> Result<WorkspaceEntry, NativeError> {
+    rename_workspace_entry_impl(&root_path, &relative_path, &new_relative_path)
+}
 
 /// Deletes any workspace file or folder. Folders are removed recursively so
 /// the explorer can delete a populated folder in one action. The path is
@@ -285,12 +335,31 @@ pub fn rename_workspace_entry(
 /// are not separately resolved, so this is safe for trusted local workspaces
 /// but should not be exposed to untrusted remote roots.
 #[tauri::command]
-pub fn delete_workspace_entry(root_path: String, relative_path: String) -> Result<(), NativeError> {
-    let root = resolve_workspace_root(&root_path)?;
+pub fn delete_workspace_entry(
+    app: tauri::AppHandle,
+    root_path: String,
+    relative_path: String,
+) -> Result<(), NativeError> {
+    let is_markdown = is_markdown_path(Path::new(&relative_path));
+    delete_workspace_entry_impl(&root_path, &relative_path)?;
+
+    if is_markdown {
+        if let Err(error) =
+            crate::commands::search::remove_index_document(app, root_path, relative_path.clone())
+        {
+            eprintln!("[workspace] failed to remove search index for {relative_path}: {error}");
+        }
+    }
+
+    Ok(())
+}
+
+fn delete_workspace_entry_impl(root_path: &str, relative_path: &str) -> Result<(), NativeError> {
+    let root = resolve_workspace_root(root_path)?;
     let _mutation_lock = WORKSPACE_ENTRY_MUTATION_LOCK
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
-    let entry_path = resolve_workspace_entry_path(&root, &relative_path)?;
+    let entry_path = resolve_workspace_entry_path(&root, relative_path)?;
 
     if !entry_path.exists() {
         return Err(NativeError::new(
@@ -299,6 +368,7 @@ pub fn delete_workspace_entry(root_path: String, relative_path: String) -> Resul
         ));
     }
 
+    record_self_write(&entry_path);
     let remove_result = if entry_path.is_dir() {
         fs::remove_dir_all(&entry_path)
     } else {
@@ -309,17 +379,31 @@ pub fn delete_workspace_entry(root_path: String, relative_path: String) -> Resul
         NativeError::with_details(
             "workspace.delete_failed",
             "Failed to delete the workspace entry.",
-            error.to_string(),
+            error,
         )
     })
 }
 
+#[cfg(test)]
+pub fn delete_workspace_entry_for_test(
+    root_path: String,
+    relative_path: String,
+) -> Result<(), NativeError> {
+    delete_workspace_entry_impl(&root_path, &relative_path)
+}
 
 #[tauri::command]
 pub fn open_workspace_window(app: tauri::AppHandle, root_path: String) -> Result<(), NativeError> {
     let root = resolve_workspace_root(&root_path)?;
     let label = next_workspace_window_label();
-    let root_path = root.to_string_lossy().to_string();
+    let root_path = root.to_string_lossy().into_owned();
+    // Register the root before build so the frontend's first
+    // `window_workspace_root` call cannot race past registration.
+    register_workspace_window_root(
+        &app.state::<WorkspaceWindowRoots>(),
+        label.clone(),
+        root_path,
+    );
     let window =
         tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::App("index.html".into()))
             .title(describe_workspace(&root).name)
@@ -328,23 +412,26 @@ pub fn open_workspace_window(app: tauri::AppHandle, root_path: String) -> Result
                 NativeError::with_details(
                     "workspace.window_failed",
                     "Failed to create a workspace window.",
-                    error.to_string(),
+                    error,
                 )
             })?;
     let app_for_cleanup = app.clone();
     let label_for_cleanup = label.clone();
-    window.on_window_event(move |event| {
-        if matches!(event, tauri::WindowEvent::Destroyed) {
+    // Workspace windows need both their `WorkspaceWindowRoots` entry and their
+    // file watchers cleaned up on destroy. The watcher module owns the destroy
+    // policy; the extra closure handles the workspace-specific half.
+    crate::commands::watcher::attach_window_destroy_cleanup(
+        &window,
+        label_for_cleanup.clone(),
+        Some(move || {
             unregister_workspace_window_root(
                 &app_for_cleanup.state::<WorkspaceWindowRoots>(),
                 &label_for_cleanup,
             );
-        }
-    });
-    register_workspace_window_root(&app.state::<WorkspaceWindowRoots>(), label, root_path);
+        }),
+    );
     Ok(())
 }
-
 
 #[tauri::command]
 pub fn window_workspace_root(
@@ -353,7 +440,6 @@ pub fn window_workspace_root(
 ) -> Option<String> {
     workspace_window_root(&roots, window.label())
 }
-
 
 pub fn resolve_workspace_root(root_path: &str) -> Result<PathBuf, NativeError> {
     let root = PathBuf::from(root_path);
@@ -369,7 +455,7 @@ pub fn resolve_workspace_root(root_path: &str) -> Result<PathBuf, NativeError> {
         NativeError::with_details(
             "workspace.open_failed",
             "Failed to open the workspace folder.",
-            error.to_string(),
+            error,
         )
     })?;
 
@@ -383,7 +469,6 @@ pub fn resolve_workspace_root(root_path: &str) -> Result<PathBuf, NativeError> {
     Ok(canonical_root)
 }
 
-
 /// Resolves an arbitrary workspace entry path (file or folder) and validates
 /// that it stays inside the workspace root. Unlike
 /// [`resolve_markdown_file_path`], this accepts any extension and is used by
@@ -395,7 +480,10 @@ pub fn resolve_workspace_root(root_path: &str) -> Result<PathBuf, NativeError> {
 /// not-yet-existing targets (e.g. a `create_workspace_file` destination), the
 /// deepest existing ancestor is canonicalized and prefix-checked instead,
 /// because `canonicalize` requires the path to exist.
-pub fn resolve_workspace_entry_path(root: &Path, relative_path: &str) -> Result<PathBuf, NativeError> {
+pub fn resolve_workspace_entry_path(
+    root: &Path,
+    relative_path: &str,
+) -> Result<PathBuf, NativeError> {
     let normalized = normalize_relative_path(relative_path)?;
     let path = root.join(normalized);
 
@@ -406,7 +494,7 @@ pub fn resolve_workspace_entry_path(root: &Path, relative_path: &str) -> Result<
             NativeError::with_details(
                 "workspace.invalid_path",
                 "Failed to resolve the workspace entry.",
-                error.to_string(),
+                error,
             )
         })?;
         if !canonical.starts_with(root) {
@@ -435,7 +523,7 @@ pub fn resolve_workspace_entry_path(root: &Path, relative_path: &str) -> Result<
         NativeError::with_details(
             "workspace.invalid_path",
             "Failed to resolve the workspace entry.",
-            error.to_string(),
+            error,
         )
     })?;
     if !canonical_ancestor.starts_with(root) {
@@ -452,7 +540,6 @@ pub fn resolve_workspace_entry_path(root: &Path, relative_path: &str) -> Result<
     })?;
     Ok(canonical_ancestor.join(tail))
 }
-
 
 pub fn normalize_relative_path(relative_path: &str) -> Result<String, NativeError> {
     // Tauri receives paths from every supported desktop platform. Normalize
@@ -502,17 +589,15 @@ pub fn normalize_relative_path(relative_path: &str) -> Result<String, NativeErro
     Ok(parts.join("/"))
 }
 
-
 pub fn describe_workspace(root: &Path) -> WorkspaceDescriptor {
     WorkspaceDescriptor {
-        root_path: root.to_string_lossy().to_string(),
+        root_path: root.to_string_lossy().into_owned(),
         name: root
             .file_name()
-            .map(|name| name.to_string_lossy().to_string())
-            .unwrap_or_else(|| root.to_string_lossy().to_string()),
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| root.to_string_lossy().into_owned()),
     }
 }
-
 
 /// Recursively collects every visible folder and file under the workspace.
 ///
@@ -534,7 +619,7 @@ pub fn collect_workspace_entries(
         NativeError::with_details(
             "workspace.list_failed",
             "Failed to list the workspace contents.",
-            error.to_string(),
+            error,
         )
     })?;
 
@@ -547,10 +632,10 @@ pub fn collect_workspace_entries(
             NativeError::with_details(
                 "workspace.list_failed",
                 "Failed to inspect a workspace entry.",
-                error.to_string(),
+                error,
             )
         })?;
-        let name = entry.file_name().to_string_lossy().to_string();
+        let name = entry.file_name().to_string_lossy().into_owned();
 
         if !include_hidden && is_hidden_name(&name) {
             continue;
@@ -561,7 +646,7 @@ pub fn collect_workspace_entries(
             NativeError::with_details(
                 "workspace.list_failed",
                 "Failed to inspect a workspace entry type.",
-                error.to_string(),
+                error,
             )
         })?;
 
@@ -580,16 +665,44 @@ pub fn collect_workspace_entries(
     Ok(())
 }
 
-
 /// Builds a `WorkspaceEntry` for a folder or file from filesystem metadata.
-pub fn workspace_entry(root: &Path, path: &Path, is_dir: bool) -> Result<WorkspaceEntry, NativeError> {
+pub fn workspace_entry(
+    root: &Path,
+    path: &Path,
+    is_dir: bool,
+) -> Result<WorkspaceEntry, NativeError> {
+    let metadata = entry_metadata(root, path)?;
+
+    Ok(WorkspaceEntry {
+        name: metadata.file_name,
+        parent_path: metadata.parent_path,
+        kind: if is_dir { "directory" } else { "file" }.to_string(),
+        is_markdown: !is_dir && is_markdown_path(path),
+        byte_size: if is_dir { 0 } else { metadata.byte_size },
+        updated_at: metadata.updated_at,
+        relative_path: metadata.relative_path,
+    })
+}
+
+/// Shared filesystem-derived fields for a workspace entry.
+pub struct EntryMetadata {
+    pub relative_path: String,
+    pub file_name: String,
+    pub parent_path: String,
+    pub byte_size: u64,
+    pub updated_at: Option<u64>,
+}
+
+/// Reads the shared metadata block (relative path, file name, parent path, byte size, mtime)
+/// used by both `workspace_entry` and `markdown_file_entry`.
+pub fn entry_metadata(root: &Path, path: &Path) -> Result<EntryMetadata, NativeError> {
     let relative_path = path
         .strip_prefix(root)
         .map_err(|error| {
             NativeError::with_details(
                 "workspace.invalid_path",
                 "Entry path is outside the workspace.",
-                error.to_string(),
+                error,
             )
         })?
         .to_string_lossy()
@@ -598,7 +711,7 @@ pub fn workspace_entry(root: &Path, path: &Path, is_dir: bool) -> Result<Workspa
         NativeError::with_details(
             "workspace.metadata_failed",
             "Failed to read workspace entry metadata.",
-            error.to_string(),
+            error,
         )
     })?;
     let updated_at = metadata
@@ -606,30 +719,28 @@ pub fn workspace_entry(root: &Path, path: &Path, is_dir: bool) -> Result<Workspa
         .ok()
         .and_then(|modified| modified.duration_since(UNIX_EPOCH).ok())
         .map(|duration| duration.as_millis() as u64);
+    let file_name = path
+        .file_name()
+        .map(|file_name| file_name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| relative_path.clone());
+    let parent_path = Path::new(&relative_path)
+        .parent()
+        .map(|parent| parent.to_string_lossy().replace('\\', "/"))
+        .unwrap_or_default();
 
-    Ok(WorkspaceEntry {
-        name: path
-            .file_name()
-            .map(|file_name| file_name.to_string_lossy().to_string())
-            .unwrap_or_else(|| relative_path.clone()),
-        parent_path: Path::new(&relative_path)
-            .parent()
-            .map(|parent| parent.to_string_lossy().replace('\\', "/"))
-            .unwrap_or_default(),
-        kind: if is_dir { "directory" } else { "file" }.to_string(),
-        is_markdown: !is_dir && is_markdown_path(path),
-        byte_size: if is_dir { 0 } else { metadata.len() },
-        updated_at,
+    Ok(EntryMetadata {
         relative_path,
+        file_name,
+        parent_path,
+        byte_size: metadata.len(),
+        updated_at,
     })
 }
-
 
 /// Reports whether an entry name should be hidden (dot-prefixed, e.g. `.git`).
 pub fn is_hidden_name(name: &str) -> bool {
     name.starts_with('.')
 }
-
 
 /// Computes a deterministic 64-bit FNV-1a hash for workspace cache filenames.
 ///
@@ -646,5 +757,3 @@ pub fn stable_workspace_hash(input: &str) -> u64 {
 
     hash
 }
-
-

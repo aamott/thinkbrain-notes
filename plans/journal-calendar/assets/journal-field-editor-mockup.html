@@ -1,0 +1,1026 @@
+<title>Journal metadata fields — mockup v1</title>
+<style>
+  /* ============================================================
+     PAGE TOKENS — the review sheet's own palette.
+     Deliberately neutral-cool so it never competes with the app
+     tokens rendered inside the figures. The only accent is the
+     redline ochre, used exclusively for annotation.
+     ============================================================ */
+  :root {
+    --ground: #f6f7f9;
+    --surface: #ffffff;
+    --surface-sunk: #eef0f4;
+    --ink: #141922;
+    --ink-muted: #5c6675;
+    --rule: #dee2e9;
+    --rule-soft: #e9ecf1;
+    --redline: #a9642f;
+    --redline-soft: #f2e6da;
+
+    --serif: ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+    /* ---- App tokens (light). Copied from packages/ui/src/styles/tokens.css ---- */
+    --tn-color-background: hsl(0 0% 100%);
+    --tn-color-foreground: hsl(222 47% 11%);
+    --tn-color-border: hsl(220 13% 91%);
+    --tn-color-input: hsl(220 13% 91%);
+    --tn-color-muted: hsl(220 14% 96%);
+    --tn-color-muted-foreground: hsl(220 9% 46%);
+    --tn-color-secondary: hsl(220 14% 96%);
+    --tn-color-secondary-foreground: hsl(222 47% 11%);
+    --tn-color-primary: hsl(262 83% 58%);
+    --tn-color-primary-foreground: hsl(0 0% 100%);
+    --tn-color-accent: hsl(262 83% 96%);
+    --tn-color-accent-foreground: hsl(262 83% 40%);
+    --tn-color-danger: hsl(0 84% 38%);
+    --tn-color-warning: hsl(38 92% 42%);
+    --tn-color-activitybar: hsl(220 16% 93%);
+    --tn-color-activitybar-foreground: hsl(220 9% 40%);
+    --tn-color-activitybar-active: hsl(262 83% 58%);
+    --tn-color-sidebar: hsl(220 16% 97%);
+    --tn-color-sidebar-foreground: hsl(222 47% 11%);
+    --tn-color-editor: hsl(0 0% 100%);
+    --tn-color-editor-foreground: hsl(222 47% 11%);
+    --tn-color-tab-active: hsl(0 0% 100%);
+    --tn-color-tab-inactive: hsl(220 16% 94%);
+    --tn-color-tab-active-foreground: hsl(222 47% 11%);
+    --tn-color-tab-inactive-foreground: hsl(220 9% 46%);
+    --tn-radius-small: 0.25rem;
+    --tn-radius-medium: 0.5rem;
+    --tn-font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --tn-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+
+  /* Page palette, dark. Guarded so an explicit light choice beats a dark OS. */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #11141a;
+      --surface: #171b22;
+      --surface-sunk: #1e232b;
+      --ink: #e6e9ee;
+      --ink-muted: #98a2b1;
+      --rule: #262c35;
+      --rule-soft: #1f242c;
+      --redline: #d69a62;
+      --redline-soft: #2b2018;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #11141a;
+    --surface: #171b22;
+    --surface-sunk: #1e232b;
+    --ink: #e6e9ee;
+    --ink-muted: #98a2b1;
+    --rule: #262c35;
+    --rule-soft: #1f242c;
+    --redline: #d69a62;
+    --redline-soft: #2b2018;
+  }
+
+  /* ---- App tokens (dark). Applied to .tn-dark always, and to any
+     theme-following figure when the viewer is in dark mode. ---- */
+  .tn-dark,
+  :root[data-theme="dark"] .tn-auto {
+    --tn-color-background: hsl(0 0% 7%);
+    --tn-color-foreground: hsl(0 0% 98%);
+    --tn-color-border: hsl(0 0% 18%);
+    --tn-color-input: hsl(0 0% 18%);
+    --tn-color-muted: hsl(0 0% 16%);
+    --tn-color-muted-foreground: hsl(0 0% 60%);
+    --tn-color-secondary: hsl(0 0% 16%);
+    --tn-color-secondary-foreground: hsl(0 0% 98%);
+    --tn-color-primary: hsl(152 60% 38%);
+    --tn-color-primary-foreground: hsl(0 0% 100%);
+    --tn-color-accent: hsl(152 40% 18%);
+    --tn-color-accent-foreground: hsl(152 60% 55%);
+    --tn-color-danger: hsl(0 72% 62%);
+    --tn-color-warning: hsl(38 92% 50%);
+    --tn-color-activitybar: hsl(0 0% 11%);
+    --tn-color-activitybar-foreground: hsl(0 0% 60%);
+    --tn-color-activitybar-active: hsl(152 60% 45%);
+    --tn-color-sidebar: hsl(0 0% 9%);
+    --tn-color-sidebar-foreground: hsl(0 0% 98%);
+    --tn-color-editor: hsl(0 0% 7%);
+    --tn-color-editor-foreground: hsl(0 0% 98%);
+    --tn-color-tab-active: hsl(0 0% 7%);
+    --tn-color-tab-inactive: hsl(0 0% 12%);
+    --tn-color-tab-active-foreground: hsl(0 0% 98%);
+    --tn-color-tab-inactive-foreground: hsl(0 0% 60%);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .tn-auto {
+      --tn-color-background: hsl(0 0% 7%);
+      --tn-color-foreground: hsl(0 0% 98%);
+      --tn-color-border: hsl(0 0% 18%);
+      --tn-color-input: hsl(0 0% 18%);
+      --tn-color-muted: hsl(0 0% 16%);
+      --tn-color-muted-foreground: hsl(0 0% 60%);
+      --tn-color-secondary: hsl(0 0% 16%);
+      --tn-color-secondary-foreground: hsl(0 0% 98%);
+      --tn-color-primary: hsl(152 60% 38%);
+      --tn-color-primary-foreground: hsl(0 0% 100%);
+      --tn-color-accent: hsl(152 40% 18%);
+      --tn-color-accent-foreground: hsl(152 60% 55%);
+      --tn-color-danger: hsl(0 72% 62%);
+      --tn-color-warning: hsl(38 92% 50%);
+      --tn-color-activitybar: hsl(0 0% 11%);
+      --tn-color-activitybar-foreground: hsl(0 0% 60%);
+      --tn-color-activitybar-active: hsl(152 60% 45%);
+      --tn-color-sidebar: hsl(0 0% 9%);
+      --tn-color-sidebar-foreground: hsl(0 0% 98%);
+      --tn-color-editor: hsl(0 0% 7%);
+      --tn-color-editor-foreground: hsl(0 0% 98%);
+      --tn-color-tab-active: hsl(0 0% 7%);
+      --tn-color-tab-inactive: hsl(0 0% 12%);
+      --tn-color-tab-active-foreground: hsl(0 0% 98%);
+      --tn-color-tab-inactive-foreground: hsl(0 0% 60%);
+    }
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 17px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .sheet {
+    max-width: 78rem;
+    margin: 0 auto;
+    padding: clamp(2rem, 5vw, 4.5rem) clamp(1rem, 4vw, 3rem) 6rem;
+  }
+
+  /* ---------------- masthead ---------------- */
+  .masthead { border-bottom: 1px solid var(--rule); padding-bottom: 2.5rem; }
+  .eyebrow {
+    font-family: var(--sans);
+    font-size: 0.7rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--redline);
+    margin: 0 0 1.25rem;
+  }
+  h1 {
+    font-size: clamp(2.2rem, 5vw, 3.4rem);
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    font-weight: 600;
+    margin: 0 0 1rem;
+    text-wrap: balance;
+  }
+  .standfirst {
+    font-size: 1.15rem;
+    color: var(--ink-muted);
+    max-width: 46ch;
+    margin: 0 0 2rem;
+  }
+  .facts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+    gap: 1.25rem 2rem;
+    font-family: var(--sans);
+    font-size: 0.85rem;
+    line-height: 1.5;
+  }
+  .facts dt {
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    margin-bottom: 0.3rem;
+  }
+  .facts dd { margin: 0; }
+
+  /* ---------------- section grid with redline gutter ---------------- */
+  section { margin-top: 4.5rem; }
+  .block {
+    display: grid;
+    grid-template-columns: 8.5rem minmax(0, 1fr);
+    gap: 0 2.5rem;
+    align-items: start;
+  }
+  .gutter {
+    font-family: var(--sans);
+    font-size: 0.68rem;
+    line-height: 1.7;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    text-align: right;
+    padding-top: 0.55rem;
+    border-right: 1px solid var(--rule-soft);
+    padding-right: 1rem;
+  }
+  .gutter b { display: block; color: var(--redline); font-weight: 600; letter-spacing: 0.08em; }
+  .col { min-width: 0; }
+
+  h2 {
+    font-size: clamp(1.5rem, 3vw, 2rem);
+    line-height: 1.15;
+    letter-spacing: -0.015em;
+    font-weight: 600;
+    margin: 0 0 0.75rem;
+    text-wrap: balance;
+  }
+  h3 {
+    font-family: var(--sans);
+    font-size: 0.78rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-weight: 650;
+    margin: 2.5rem 0 0.9rem;
+    color: var(--ink);
+  }
+  p { margin: 0 0 1rem; max-width: 68ch; }
+  .col > p:last-child { margin-bottom: 0; }
+  code {
+    font-family: var(--mono);
+    font-size: 0.82em;
+    background: var(--surface-sunk);
+    padding: 0.1em 0.35em;
+    border-radius: 3px;
+  }
+  strong { font-weight: 650; }
+
+  ul.notes { margin: 0 0 1rem; padding-left: 1.1rem; max-width: 68ch; }
+  ul.notes li { margin-bottom: 0.5rem; }
+
+  /* ---------------- figures ---------------- */
+  figure { margin: 1.75rem 0 0; }
+  figcaption {
+    font-family: var(--sans);
+    font-size: 0.78rem;
+    line-height: 1.5;
+    color: var(--ink-muted);
+    margin-top: 0.85rem;
+    max-width: 62ch;
+  }
+  .figrow { display: flex; flex-wrap: wrap; gap: 1.5rem; align-items: flex-start; }
+  .scroller { overflow-x: auto; padding-bottom: 0.5rem; }
+  .plate {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    padding: 1.25rem;
+    display: inline-block;
+  }
+  .platelabel {
+    font-family: var(--sans);
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    margin-bottom: 0.75rem;
+    display: flex;
+    gap: 0.5rem;
+    align-items: baseline;
+  }
+  .platelabel .n { color: var(--redline); font-weight: 650; }
+
+  /* ============================================================
+     THE SETTINGS SURFACE — real app tokens inside every figure.
+     Mirrors SettingsContent.tsx: a 40rem measure, a label, a
+     description, then the control.
+     ============================================================ */
+  .set {
+    width: var(--set-w, 34rem);
+    font-family: var(--tn-font-sans);
+    background: var(--tn-color-background);
+    color: var(--tn-color-foreground);
+    border: 1px solid var(--tn-color-border);
+    border-radius: var(--tn-radius-medium);
+    padding: 1rem 1.1rem;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .set .slabel { font-size: 13px; font-weight: 650; display: block; }
+  .set .sdesc {
+    font-size: 11.5px;
+    color: var(--tn-color-muted-foreground);
+    margin: 0.15rem 0 0.7rem;
+    line-height: 1.5;
+  }
+
+  /* ---- the JSON control we ship today ---- */
+  .json {
+    font-family: var(--tn-font-mono);
+    font-size: 11px;
+    line-height: 1.6;
+    background: var(--tn-color-input);
+    color: var(--tn-color-foreground);
+    border: 1px solid var(--tn-color-border);
+    border-radius: var(--tn-radius-small);
+    padding: 0.55rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+    min-height: 6.5rem;
+  }
+
+  /* ---- the field list ---- */
+  .flist { border: 1px solid var(--tn-color-border); border-radius: var(--tn-radius-small); }
+  .frow {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.5rem 0.6rem;
+    border-bottom: 1px solid var(--tn-color-border);
+    min-height: 2.75rem;
+  }
+  .frow:last-child { border-bottom: 0; }
+  .frow .fname { font-weight: 650; min-width: 5.5rem; }
+  .frow .fkind { color: var(--tn-color-muted-foreground); font-size: 12px; min-width: 0; flex: 1; }
+  .frow .fkind b { font-weight: 550; color: var(--tn-color-foreground); }
+  .frow .facts2 { display: flex; gap: 0.3rem; margin-left: auto; }
+  .linkish {
+    background: none;
+    border: 0;
+    color: var(--tn-color-muted-foreground);
+    font: inherit;
+    font-size: 12px;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    padding: 0.25rem 0.3rem;
+  }
+  .danger { color: var(--tn-color-danger); }
+
+  /* ---- buttons ---- */
+  .btn {
+    font: inherit;
+    font-size: 12px;
+    border: 1px solid var(--tn-color-border);
+    background: var(--tn-color-background);
+    color: var(--tn-color-foreground);
+    border-radius: var(--tn-radius-small);
+    padding: 0.35rem 0.7rem;
+    min-height: 1.75rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+  .btn.primary {
+    background: var(--tn-color-primary);
+    color: var(--tn-color-primary-foreground);
+    border-color: transparent;
+    font-weight: 650;
+  }
+  .btn.ghost { border-color: transparent; color: var(--tn-color-muted-foreground); }
+  .btn[disabled] { opacity: 0.5; }
+
+  /* ---- the add / edit card ---- */
+  .card {
+    border: 1px solid var(--tn-color-border);
+    border-radius: var(--tn-radius-small);
+    padding: 0.8rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    background: var(--tn-color-muted);
+  }
+  .card .ctitle { font-weight: 650; font-size: 12px; }
+  .q { display: flex; flex-direction: column; gap: 0.35rem; }
+  .q > .qlab { font-size: 12px; font-weight: 550; }
+  .field-in {
+    border: 1px solid var(--tn-color-input);
+    background: var(--tn-color-background);
+    border-radius: var(--tn-radius-small);
+    padding: 0.4rem 0.5rem;
+    font-size: 13px;
+    min-height: 2rem;
+    display: flex;
+    align-items: center;
+  }
+  .field-in.caret::after {
+    content: "";
+    width: 1px;
+    height: 1em;
+    background: var(--tn-color-foreground);
+    margin-left: 1px;
+  }
+  .hint { font-size: 11px; color: var(--tn-color-muted-foreground); }
+  .hint code {
+    background: var(--tn-color-muted);
+    font-family: var(--tn-font-mono);
+    font-size: 10.5px;
+    padding: 0.05em 0.3em;
+  }
+  .err { font-size: 11.5px; color: var(--tn-color-danger); }
+  .warn { font-size: 11.5px; color: var(--tn-color-warning); }
+
+  /* ---- the kind chooser ---- */
+  .kinds { display: flex; flex-direction: column; gap: 0.25rem; }
+  .kind {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    border: 1px solid var(--tn-color-border);
+    border-radius: var(--tn-radius-small);
+    padding: 0.45rem 0.55rem;
+    background: var(--tn-color-background);
+    min-height: 2.4rem;
+  }
+  .kind.on {
+    border-color: var(--tn-color-accent-foreground);
+    background: var(--tn-color-accent);
+    color: var(--tn-color-accent-foreground);
+    font-weight: 650;
+  }
+  .kind .dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 1px solid var(--tn-color-muted-foreground);
+    flex: none;
+  }
+  .kind.on .dot {
+    border-color: currentColor;
+    box-shadow: inset 0 0 0 3px var(--tn-color-accent);
+    background: currentColor;
+  }
+  .kind .eg { margin-left: auto; font-size: 11px; font-weight: 400; opacity: 0.75; }
+
+  /* ---- choice chips ---- */
+  .chips { display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: center; }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    border: 1px solid var(--tn-color-border);
+    border-radius: 999px;
+    padding: 0.2rem 0.55rem;
+    font-size: 12px;
+    background: var(--tn-color-background);
+    min-height: 1.7rem;
+  }
+  .chip .x { color: var(--tn-color-muted-foreground); font-size: 11px; }
+  .chip.add { border-style: dashed; color: var(--tn-color-muted-foreground); }
+  .rowend { display: flex; gap: 0.4rem; justify-content: flex-end; }
+
+  /* ---- confirm strip ---- */
+  .confirm {
+    border: 1px solid var(--tn-color-border);
+    border-left: 3px solid var(--tn-color-warning);
+    border-radius: var(--tn-radius-small);
+    padding: 0.6rem 0.7rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    background: var(--tn-color-muted);
+  }
+  .confirm .ctext { font-size: 12px; }
+
+  .empty { color: var(--tn-color-muted-foreground); font-size: 12px; }
+
+  /* ---------------- tables ---------------- */
+  table.words {
+    border-collapse: collapse;
+    font-family: var(--sans);
+    font-size: 0.85rem;
+    width: 100%;
+    max-width: 46rem;
+    margin-top: 0.5rem;
+  }
+  table.words th,
+  table.words td {
+    text-align: left;
+    padding: 0.55rem 0.8rem 0.55rem 0;
+    border-bottom: 1px solid var(--rule-soft);
+    vertical-align: top;
+  }
+  table.words th {
+    font-size: 0.68rem;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    font-weight: 600;
+  }
+  table.words code { font-size: 0.78rem; }
+
+  /* ---------------- the question block ---------------- */
+  .ask {
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--redline);
+    background: var(--surface);
+    border-radius: 0 8px 8px 0;
+    padding: 1.1rem 1.25rem;
+    margin: 1.25rem 0 0;
+  }
+  .ask h4 {
+    font-family: var(--sans);
+    font-size: 0.8rem;
+    letter-spacing: 0.02em;
+    margin: 0 0 0.5rem;
+    font-weight: 650;
+  }
+  .ask p { font-size: 0.95rem; margin: 0 0 0.6rem; }
+  .ask p:last-child { margin-bottom: 0; }
+  .ask .rec {
+    font-family: var(--sans);
+    font-size: 0.78rem;
+    color: var(--redline);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    font-weight: 650;
+  }
+
+  @media (max-width: 46rem) {
+    .block { grid-template-columns: 1fr; gap: 1rem; }
+    .gutter {
+      text-align: left;
+      border-right: 0;
+      border-left: 2px solid var(--redline-soft);
+      padding: 0 0 0 0.75rem;
+    }
+    .gutter b { display: inline; margin-right: 0.6rem; }
+  }
+</style>
+
+<div class="sheet">
+
+  <header class="masthead">
+    <p class="eyebrow">Journal · settings · mockup v1 · for D34 sign-off</p>
+    <h1>Setting up the things you want to record</h1>
+    <p class="standfirst">
+      The fields are the journal's one piece of real configuration. Today they are a box of
+      JSON. This is what they should be instead.
+    </p>
+    <dl class="facts">
+      <div><dt>Replaces</dt><dd>The <code>journal-field-definitions</code> JSON textarea</dd></div>
+      <div><dt>Governed by</dt><dd>D49 storage shape · D48 reserved keys · D50 lenient reads · D4 the vocabulary is yours</dd></div>
+      <div><dt>Storage</dt><dd>Unchanged — one string setting holding the same JSON array</dd></div>
+      <div><dt>New components</dt><dd>None outside the control itself</dd></div>
+    </dl>
+  </header>
+
+  <section>
+    <div class="block">
+      <div class="gutter"><b>Why</b> today</div>
+      <div class="col">
+        <h2>What it looks like now</h2>
+        <p>
+          To record a mood on an entry you have to type a JSON array, with the right keys, in the
+          right shape, quoted correctly. Get a comma wrong and it refuses to save — correctly, but
+          without telling you where. There is no Add button, because there is nothing to add
+          <em>to</em>: it is a text box with a spell-checker's manners.
+        </p>
+
+        <figure>
+          <div class="plate">
+            <div class="platelabel"><span class="n">0</span> shipped today</div>
+            <div class="set tn-auto">
+              <span class="slabel">Metadata fields</span>
+              <p class="sdesc">
+                Fields you can record on an entry. Defined per workspace, falling back to your
+                global fields.
+              </p>
+              <div class="json">[{"id":"mood","label":"Mood","type":"single-select","options":["rough","okay","good"]},{"id":"energy","label":"Energy","type":"number"}]</div>
+              <p class="hint" style="margin-top: 0.5rem">Mood — single-select (rough, okay, good)</p>
+            </div>
+          </div>
+          <figcaption>
+            The summary underneath is honest and useless: it tells you what you already typed. The
+            list of valid <code>type</code> values appears nowhere.
+          </figcaption>
+        </figure>
+
+        <p>
+          D49 fixed how these are <em>stored</em> — one string setting holding a JSON array,
+          rendered by a custom control. It said nothing about how they are edited, and the custom
+          control is exactly the seam that lets the editing surface be a form. Everything below
+          writes the same JSON to the same setting.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="block">
+      <div class="gutter"><b>D49</b> same storage<br /><b>D4</b> your words</div>
+      <div class="col">
+        <h2>The list, and adding to it</h2>
+        <p>
+          The whole control is a list of what you record, and a button to add to it. A field is
+          three questions: what to call it, what kind of thing it is, and — for the two list
+          kinds — what the choices are.
+        </p>
+
+        <figure>
+          <div class="scroller"><div class="figrow">
+
+            <div class="plate">
+              <div class="platelabel"><span class="n">1</span> nothing set up yet</div>
+              <div class="set tn-auto" style="--set-w: 25rem">
+                <span class="slabel">Metadata fields</span>
+                <p class="sdesc">Things you record about a day, beyond what you write.</p>
+                <div class="flist">
+                  <div class="frow"><span class="empty">Nothing yet — entries are just the date and what you write, which is a fine way to journal.</span></div>
+                </div>
+                <div class="rowend" style="margin-top: 0.6rem; justify-content: space-between">
+                  <button class="btn primary">＋ Add a field</button>
+                  <button class="linkish">Edit as JSON</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="plate">
+              <div class="platelabel"><span class="n">2</span> three fields set up</div>
+              <div class="set tn-auto" style="--set-w: 25rem">
+                <span class="slabel">Metadata fields</span>
+                <p class="sdesc">Things you record about a day, beyond what you write.</p>
+                <div class="flist">
+                  <div class="frow">
+                    <span class="fname">Mood</span>
+                    <span class="fkind">Pick one — <b>rough · okay · good</b></span>
+                    <span class="facts2"><button class="linkish">Edit</button><button class="linkish danger">Remove</button></span>
+                  </div>
+                  <div class="frow">
+                    <span class="fname">Energy</span>
+                    <span class="fkind">A number</span>
+                    <span class="facts2"><button class="linkish">Edit</button><button class="linkish danger">Remove</button></span>
+                  </div>
+                  <div class="frow">
+                    <span class="fname">Context</span>
+                    <span class="fkind">Pick several — <b>baking · reading · running</b></span>
+                    <span class="facts2"><button class="linkish">Edit</button><button class="linkish danger">Remove</button></span>
+                  </div>
+                </div>
+                <div class="rowend" style="margin-top: 0.6rem; justify-content: space-between">
+                  <button class="btn primary">＋ Add a field</button>
+                  <button class="linkish">Edit as JSON</button>
+                </div>
+              </div>
+            </div>
+
+          </div></div>
+          <figcaption>
+            The order of the rows is the order the fields appear on an entry, so the list is also
+            how you arrange them.
+          </figcaption>
+        </figure>
+
+        <figure>
+          <div class="scroller"><div class="figrow">
+
+            <div class="plate">
+              <div class="platelabel"><span class="n">3</span> adding one</div>
+              <div class="set tn-auto" style="--set-w: 25rem">
+                <div class="card">
+                  <span class="ctitle">New field</span>
+
+                  <div class="q">
+                    <span class="qlab">What do you want to call it?</span>
+                    <span class="field-in caret">Mood</span>
+                    <span class="hint">Saved in your notes as <code>mood</code> · <button class="linkish" style="font-size: 11px">Change</button></span>
+                  </div>
+
+                  <div class="q">
+                    <span class="qlab">What kind of thing is it?</span>
+                    <div class="kinds">
+                      <span class="kind on"><span class="dot"></span>Pick one from a list<span class="eg">good</span></span>
+                      <span class="kind"><span class="dot"></span>Pick several from a list<span class="eg">baking, reading</span></span>
+                      <span class="kind"><span class="dot"></span>A number<span class="eg">7</span></span>
+                      <span class="kind"><span class="dot"></span>A few words<span class="eg">Try 2% salt</span></span>
+                    </div>
+                  </div>
+
+                  <div class="q">
+                    <span class="qlab">What are the choices?</span>
+                    <div class="chips">
+                      <span class="chip">rough <span class="x">✕</span></span>
+                      <span class="chip">okay <span class="x">✕</span></span>
+                      <span class="chip">good <span class="x">✕</span></span>
+                      <span class="chip add">＋ add a choice</span>
+                    </div>
+                  </div>
+
+                  <div class="rowend">
+                    <button class="btn ghost">Cancel</button>
+                    <button class="btn primary">Add field</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="plate">
+              <div class="platelabel"><span class="n">4</span> a number needs no choices</div>
+              <div class="set tn-auto" style="--set-w: 25rem">
+                <div class="card">
+                  <span class="ctitle">New field</span>
+                  <div class="q">
+                    <span class="qlab">What do you want to call it?</span>
+                    <span class="field-in caret">Energy</span>
+                    <span class="hint">Saved in your notes as <code>energy</code> · <button class="linkish" style="font-size: 11px">Change</button></span>
+                  </div>
+                  <div class="q">
+                    <span class="qlab">What kind of thing is it?</span>
+                    <div class="kinds">
+                      <span class="kind"><span class="dot"></span>Pick one from a list<span class="eg">good</span></span>
+                      <span class="kind"><span class="dot"></span>Pick several from a list<span class="eg">baking, reading</span></span>
+                      <span class="kind on"><span class="dot"></span>A number<span class="eg">7</span></span>
+                      <span class="kind"><span class="dot"></span>A few words<span class="eg">Try 2% salt</span></span>
+                    </div>
+                  </div>
+                  <div class="rowend">
+                    <button class="btn ghost">Cancel</button>
+                    <button class="btn primary">Add field</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div></div>
+          <figcaption>
+            The choices question appears only for the two list kinds, and each kind carries an
+            example of what it records rather than a definition of what it is. The examples are
+            illustrative text in the control, not fields we ship — D4 keeps the vocabulary yours.
+          </figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="block">
+      <div class="gutter"><b>D48</b> reserved<br /><b>D49</b> key rules</div>
+      <div class="col">
+        <h2>The key, and when it bites</h2>
+        <p>
+          Every field has a key — the word that actually appears in your note's frontmatter. It
+          has rules: lowercase, no spaces, and it can't be one the app already uses for something
+          else. Nobody should have to know any of that, so the key is derived from the name and
+          shown as small print. Click <em>Change</em> only if you care.
+        </p>
+
+        <figure>
+          <div class="scroller"><div class="figrow">
+
+            <div class="plate">
+              <div class="platelabel"><span class="n">5</span> the name collides with a reserved key</div>
+              <div class="set tn-auto" style="--set-w: 24rem">
+                <div class="card">
+                  <span class="ctitle">New field</span>
+                  <div class="q">
+                    <span class="qlab">What do you want to call it?</span>
+                    <span class="field-in caret">Tags</span>
+                    <span class="err">
+                      <code>tags</code> is already used by the app itself. Give this one a
+                      different name, or set its key by hand.
+                    </span>
+                  </div>
+                  <div class="rowend">
+                    <button class="btn ghost">Cancel</button>
+                    <button class="btn primary" disabled>Add field</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="plate">
+              <div class="platelabel"><span class="n">6</span> a list with no choices</div>
+              <div class="set tn-auto" style="--set-w: 24rem">
+                <div class="card">
+                  <span class="ctitle">New field</span>
+                  <div class="q">
+                    <span class="qlab">What do you want to call it?</span>
+                    <span class="field-in">Weather</span>
+                    <span class="hint">Saved in your notes as <code>weather</code></span>
+                  </div>
+                  <div class="q">
+                    <span class="qlab">What are the choices?</span>
+                    <div class="chips"><span class="chip add">＋ add a choice</span></div>
+                    <span class="err">Add at least one choice, or make this <em>a few words</em> instead.</span>
+                  </div>
+                  <div class="rowend">
+                    <button class="btn ghost">Cancel</button>
+                    <button class="btn primary" disabled>Add field</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="plate">
+              <div class="platelabel"><span class="n">7</span> setting the key by hand</div>
+              <div class="set tn-auto" style="--set-w: 24rem">
+                <div class="card">
+                  <span class="ctitle">Editing Mood</span>
+                  <div class="q">
+                    <span class="qlab">What do you want to call it?</span>
+                    <span class="field-in">How I felt</span>
+                  </div>
+                  <div class="q">
+                    <span class="qlab">Saved in your notes as</span>
+                    <span class="field-in caret" style="font-family: var(--tn-font-mono); font-size: 12px">mood</span>
+                    <span class="hint">Lowercase letters, numbers, <code>-</code> and <code>_</code>.</span>
+                    <span class="warn">
+                      Notes already using <code>mood</code> stay linked to this field. Change the
+                      key and they won't be.
+                    </span>
+                  </div>
+                  <div class="rowend">
+                    <button class="btn ghost">Cancel</button>
+                    <button class="btn primary">Save field</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div></div>
+          <figcaption>
+            Renaming is safe and re-keying is not, so only the second one warns. Plate 7 also shows
+            the case that makes the split worth having: you can rename <em>Mood</em> to
+            <em>How I felt</em> without touching a single note.
+          </figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="block">
+      <div class="gutter"><b>D50</b> never repair</div>
+      <div class="col">
+        <h2>Removing a field doesn't remove anything you wrote</h2>
+        <p>
+          D50 says the app reads leniently and never repairs. So removing a field stops offering
+          it on new entries — it does not go into 300 notes and delete a line. That is a good
+          decision and a surprising one, so the confirmation says it out loud rather than leaving
+          you to find out.
+        </p>
+
+        <figure>
+          <div class="scroller"><div class="figrow">
+
+            <div class="plate">
+              <div class="platelabel"><span class="n">8</span> removing</div>
+              <div class="set tn-auto" style="--set-w: 25rem">
+                <div class="flist">
+                  <div class="frow">
+                    <span class="fname">Mood</span>
+                    <span class="fkind">Pick one — <b>rough · okay · good</b></span>
+                    <span class="facts2"><button class="linkish">Edit</button><button class="linkish danger">Remove</button></span>
+                  </div>
+                  <div class="frow" style="display: block">
+                    <div class="confirm">
+                      <span class="ctext">
+                        Remove <strong>Energy</strong>? It won't be offered on new entries.
+                        Anything you've already recorded stays in your notes exactly as it is.
+                      </span>
+                      <div class="rowend">
+                        <button class="btn ghost">Cancel</button>
+                        <button class="btn primary">Remove</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="frow">
+                    <span class="fname">Context</span>
+                    <span class="fkind">Pick several — <b>baking · reading · running</b></span>
+                    <span class="facts2"><button class="linkish">Edit</button><button class="linkish danger">Remove</button></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="plate">
+              <div class="platelabel"><span class="n">9</span> changing a field's kind</div>
+              <div class="set tn-auto" style="--set-w: 24rem">
+                <div class="card">
+                  <span class="ctitle">Editing Energy</span>
+                  <div class="q">
+                    <span class="qlab">What kind of thing is it?</span>
+                    <div class="kinds">
+                      <span class="kind on"><span class="dot"></span>Pick one from a list<span class="eg">good</span></span>
+                      <span class="kind"><span class="dot"></span>A number<span class="eg">7</span></span>
+                    </div>
+                    <span class="warn">
+                      Numbers you've already recorded stay as they are. They'll still show on the
+                      entry, marked as not matching this field.
+                    </span>
+                  </div>
+                  <div class="rowend">
+                    <button class="btn ghost">Cancel</button>
+                    <button class="btn primary">Save field</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div></div>
+          <figcaption>
+            Plate 9 is D50 spelled out: a value that contradicts its field's kind is kept verbatim,
+            flagged, and left out of filters — never quietly converted.
+          </figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="block">
+      <div class="gutter"><b>Words</b></div>
+      <div class="col">
+        <h2>The words on screen</h2>
+        <p>
+          The single change that matters most is not the layout — it is refusing to say
+          <code>single-select</code> to somebody who wants to record how their day went.
+        </p>
+        <table class="words">
+          <tr><th>Stored as (D49, unchanged)</th><th>Shown as</th><th>Example given</th></tr>
+          <tr><td><code>single-select</code></td><td>Pick one from a list</td><td>good</td></tr>
+          <tr><td><code>multi-select</code></td><td>Pick several from a list</td><td>baking, reading</td></tr>
+          <tr><td><code>number</code></td><td>A number</td><td>7</td></tr>
+          <tr><td><code>text</code></td><td>A few words</td><td>Try 2% salt</td></tr>
+          <tr><td><code>id</code></td><td>Saved in your notes as</td><td><code>mood</code></td></tr>
+          <tr><td><code>options</code></td><td>What are the choices?</td><td>chips</td></tr>
+        </table>
+
+        <h3>What it writes</h3>
+        <p>
+          Byte for byte what today's control writes, into the same workspace-scoped setting. The
+          JSON escape hatch stays at the bottom of the list for anyone who wants it, so nothing
+          that works today stops working.
+        </p>
+        <div class="plate" style="display: block; max-width: 40rem">
+          <div class="json tn-auto" style="min-height: 0">[
+  { "id": "mood", "label": "Mood", "type": "single-select",
+    "options": ["rough", "okay", "good"] },
+  { "id": "energy", "label": "Energy", "type": "number" }
+]</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="block">
+      <div class="gutter"><b>Sign-off</b><br />D34</div>
+      <div class="col">
+        <h2>Three things to decide</h2>
+
+        <div class="ask">
+          <h4>1 · Do the kind names land?</h4>
+          <p>
+            <em>Pick one from a list · Pick several from a list · A number · A few words</em>, each
+            with an example beside it. These are the words a first-time user reads, so they matter
+            more than anything else on the page.
+          </p>
+          <p class="rec">Recommendation — ship these words, and change them the moment they trip somebody up</p>
+        </div>
+
+        <div class="ask">
+          <h4>2 · Should the key be visible by default?</h4>
+          <p>
+            The mockup shows <em>Saved in your notes as <code>mood</code></em> as small print under
+            the name, always. The alternative is hiding it until you click Change.
+          </p>
+          <p>
+            It is one more thing on screen for someone who will never open a <code>.md</code> file
+            in a text editor. But this is a local-first app whose whole promise is that your notes
+            are your files — quietly writing a word into them and not saying which word seems like
+            the wrong kind of tidy.
+          </p>
+          <p class="rec">Recommendation — always visible, small</p>
+        </div>
+
+        <div class="ask">
+          <h4>3 · Starter presets: yes or no?</h4>
+          <p>
+            The fastest possible setup is a button that creates Mood, Energy and Context for you.
+            It is also the app shipping a mood vocabulary, which is exactly what <strong>D4</strong>
+            forbids — the values are meant to be yours, with no scale we invented.
+          </p>
+          <p>
+            My read is that the examples beside each kind are a hint, while a one-tap preset is a
+            taxonomy. But this is your product call, and if you want the presets it becomes a new
+            decision that narrows D4 rather than something I quietly slip past it.
+          </p>
+          <p class="rec">Recommendation — no presets; keep the examples</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="block">
+      <div class="gutter"><b>Next</b></div>
+      <div class="col">
+        <h2>After this</h2>
+        <p>
+          Sign these off and I write the story, then build it: the control is one file plus its
+          tests, the setting shape does not change, and nothing else in the journal has to move.
+          The JSON textarea survives as the escape hatch behind <em>Edit as JSON</em>.
+        </p>
+        <p>
+          Still open elsewhere and unaffected: search and metadata filters wait on the platform
+          index (D41), and the mobile accessibility checklist needs a pass on real devices.
+        </p>
+      </div>
+    </div>
+  </section>
+
+</div>

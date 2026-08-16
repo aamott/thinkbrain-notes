@@ -1,7 +1,5 @@
 # Story: iOS Scaffold
 
-**Status:** pending · **Urgency:** low · **Difficulty:** easy
-
 ## Goal
 
 Run `tauri ios init` to scaffold the iOS target. Requires macOS + Xcode.

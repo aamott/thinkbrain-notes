@@ -19,7 +19,7 @@ query path that hybrid search builds on.
 
 ## References
 
-- `apps/desktop/src/search/searchService.ts` — `searchWorkspace`, `SearchResult`
-- `apps/desktop/src/native/commands.ts` — `NativeSearchHit`, `NativeCommandMap`
-- `apps/desktop/src-tauri/src/lib.rs` — native command pattern, `NativeError`
+- `plans/wip-indexing-search-med-med.md` — indexing-search epic and FTS5 query foundation
+- `apps/desktop/src-tauri/src/commands/search.rs` — shipped native search backend and `SearchHit`
+- A future typed frontend bridge remains planned for native search commands; no bridge file is assigned yet.
 - `plans/pending-semantic-search-low-hard.md` — Scope (semantic similarity query and ranking)

@@ -9,17 +9,17 @@ import type { DesktopCommand } from "./commandRegistry";
 const availableCommand: DesktopCommand = {
   id: "open-settings",
   title: "Open settings",
-  intent: { type: "open-settings" },
   availability: "available",
-  shortcut: "⌘,"
+  shortcut: "⌘,",
+  handler: () => undefined
 };
 
 const unavailableCommand: DesktopCommand = {
   id: "unavailable",
   title: "Unavailable command",
-  intent: { type: "rebuild-index" },
   availability: "unavailable",
-  unavailableMessage: "Unavailable for this workspace."
+  unavailableMessage: "Unavailable for this workspace.",
+  handler: () => undefined
 };
 
 let root: Root | null = null;

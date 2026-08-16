@@ -8,9 +8,9 @@
 
 An open, privacy-first knowledge workspace inspired by Obsidian and VS Code.
 
-Users own their files. No proprietary note format. Everything is stored as
-normal Markdown files. The project scales from a lightweight note editor into a
-complete knowledge platform.
+Users own their files. Notes use normal Markdown with no proprietary note format;
+user-owned `.canvas` JSON is the explicit whiteboard-document exception. The project
+scales from a lightweight note editor into a complete knowledge platform.
 
 ## Core Principles
 
@@ -27,8 +27,8 @@ clever code.
 
 **Privacy** — User owns their data. No telemetry by default. No vendor lock-in.
 
-**Git Friendly** — Projects are normal folders. Files are normal Markdown.
-Compatible with Git, GitHub, GitLab, etc.
+**Git Friendly** — Projects are normal folders. Notes are Markdown; user-owned
+`.canvas` documents are plain JSON. Both are compatible with Git and external sync.
 
 **AI Native** — AI should enhance workflows. AI is optional. Local models are
 fully supported. Cloud providers are optional.
@@ -43,11 +43,11 @@ fully supported. Cloud providers are optional.
 | Mobile (Phase 2) | Tauri Mobile (same webview as desktop) |
 | Editor | CodeMirror 6 |
 | Native backend | Rust |
-| Storage | Markdown files + JSON config |
+| Storage | Markdown files + JSON config; secrets via native OS store |
 | Search index | SQLite FTS5 (ephemeral cache, never source of truth) |
 | Git | System Git (invoked via Rust) |
-| AI | Local and remote providers (deferred) |
-| Extensions | Internal API (V1); capability-based sandbox |
+| AI | Extension-based; local and remote providers (deferred) |
+| Extensions | Trusted local same-context modules (beta); soft capability gates |
 
 ## Architecture
 
@@ -74,8 +74,9 @@ Tauri adapters. There is no `apps/mobile/` directory.
 search UI / backlinks / future graph. The index is always rebuildable from disk.
 
 **User data separation**: App data (settings, index, cache) never goes in the
-vault. Vault = Markdown files + attachments only. App data lives in OS
-`AppData`/config directories.
+vault. Vault = Markdown files + attachments, plus user-owned `.canvas` JSON
+documents as an explicit vault-file exception. Canvas settings, cache, and
+viewport/session state live in OS `AppData`/config directories.
 
 **Bring your own sync**: No cloud sync. Users rely on OneDrive/Syncthing/Git.
 No proprietary cloud backend assumptions.
@@ -88,7 +89,6 @@ settings, and perform basic Git operations.
 
 **In scope:**
 - Desktop app (Tauri + React + TS + Vite)
-- Mobile App
 - Workspace folder opening
 - File explorer (Markdown + read-only non-Markdown)
 - Note CRUD (create, rename, delete, read, write)
@@ -101,7 +101,8 @@ settings, and perform basic Git operations.
 - Test/lint/typecheck/build workflow
 
 **Quality bar:**
-- User files remain normal Markdown files.
+- User note files remain normal Markdown files; user-owned `.canvas` documents
+  are the explicit plain-JSON vault exception.
 - The app must work offline.
 - The editor opens quickly even if indexing is still running.
 - Search/index data is rebuildable from disk.

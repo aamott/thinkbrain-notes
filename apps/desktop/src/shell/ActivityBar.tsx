@@ -1,5 +1,6 @@
+import { useLeftPanelContributions } from "../panels/panelRegistry";
 import { IconButton } from "./IconButton";
-import { type LeftPanel, leftActions } from "./shellTypes";
+import { type LeftPanel } from "./shellTypes";
 
 /**
  * Vertical activity bar rendered on the far left of the desktop shell.
@@ -22,17 +23,19 @@ export function ActivityBar({
   onSelectLeftPanel,
   onOpenSettings
 }: ActivityBarProps) {
+  const leftPanels = useLeftPanelContributions();
+
   return (
     <aside
       className="flex flex-col justify-between flex-[0_0_3rem] bg-activitybar border-r border-border py-[0.4rem]"
       aria-label="Workspace sections"
     >
       <div>
-        {leftActions.map((action) => (
+        {leftPanels.map((action) => (
           <IconButton
             key={action.id}
             label={action.label}
-            symbol={action.symbol}
+            symbol={action.icon}
             active={leftPanel === action.id}
             onClick={() => onSelectLeftPanel(action.id)}
           />

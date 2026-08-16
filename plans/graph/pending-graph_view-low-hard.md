@@ -30,6 +30,9 @@ Depends on link target resolution (`pending-link_target_resolution`).
 
 - `packages/core/src/note-model.ts` — `WikiLink`, `NoteMetadata`
 - `packages/core/src/markdown.ts` — `extractWikiLinks`
-- `apps/desktop/src/search/searchService.ts` — index access pattern
+- `plans/wip-indexing-search-med-med.md` — indexing-search epic and index lifecycle
+- `apps/desktop/src-tauri/src/commands/search.rs` — shipped native index backend
+- A future typed frontend bridge remains planned for native index access; no bridge
+  file is assigned yet.
 - `plans/pending-graph-low-hard.md` — this epic
 - `plans/graph/pending-link_target_resolution-low-med.md` — prerequisite

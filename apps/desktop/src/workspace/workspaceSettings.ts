@@ -1,4 +1,9 @@
-import { invokeNativeCommand } from "../native/commands";
+import { isRecord } from "@thinkbrain/core";
+
+import {
+  readWorkspaceSettingsDocument,
+  updateWorkspaceSettingsDocument
+} from "./workspaceSettingsFile";
 
 /**
  * Per-workspace preferences persisted via the native
@@ -35,18 +40,33 @@ export function parseWorkspaceSettings(raw: string | null | undefined): Workspac
  * when the host has no document yet or the document is malformed.
  */
 export async function readWorkspaceSettings(rootPath: string): Promise<WorkspaceSettings> {
-  const raw = await invokeNativeCommand("read_workspace_settings", { rootPath });
-  return parseWorkspaceSettings(raw);
+  return parseWorkspaceSettings(await readWorkspaceSettingsDocument(rootPath));
 }
 
 /**
- * Persists `settings` for `rootPath`. The host performs an atomic write of the
- * supplied JSON document; callers are responsible for read-modify-write when
- * partial updates are needed.
+ * Persists `settings` for `rootPath`, keeping every other key in the file.
+ *
+ * The read-modify-write goes through {@link updateWorkspaceSettingsDocument}
+ * rather than happening here because the file is shared: the settings store
+ * writes every workspace-scoped setting into it, including the journal's
+ * metadata fields. Serialising only this module's own key replaced the whole
+ * document with `{"showHidden": …}` and silently deleted the rest — which is
+ * how journal fields disappeared on restart.
+ *
+ * A document that will not parse is treated as absent: there is nothing to
+ * preserve, and refusing to write would strand the preference instead.
  */
 export async function writeWorkspaceSettings(rootPath: string, settings: WorkspaceSettings): Promise<void> {
-  await invokeNativeCommand("write_workspace_settings", {
-    rootPath,
-    contents: JSON.stringify(settings)
+  await updateWorkspaceSettingsDocument(rootPath, (raw) => {
+    let base: Record<string, unknown> = {};
+    if (typeof raw === "string" && raw.trim() !== "") {
+      try {
+        const parsed: unknown = JSON.parse(raw);
+        if (isRecord(parsed)) base = parsed;
+      } catch {
+        // Malformed: fall through with an empty base.
+      }
+    }
+    return JSON.stringify({ ...base, ...settings });
   });
 }

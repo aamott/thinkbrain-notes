@@ -1,5 +1,0 @@
-- name: Optimize SQLite search index connections and query building
-- file: /media/adam/extex/projects/thinkbrain-notes/apps/desktop/src-tauri/src/commands/search.rs
-- lines: 1-319
-- description: 1) `#![allow(unused)]` on line 1 suppresses warnings across the module, masking unused imports such as `std::path::Path`. Remove attribute and cleanup unused imports. 2) Commands `index_documents`, `search_index`, `clear_index`, `remove_index_document` open and initialize SQLite connections on every invocation (`open_index_connection`, lines 50, 69, 84, 102). This creates significant overhead during search-as-you-type or batch reindexing. Use Tauri managed state or a connection pool to reuse SQLite connections per workspace. 3) `build_fts_match_query` (lines 301-316) appends `*` to all tokens after stripping double quotes. Adding FTS index optimization (`PRAGMA optimize` or `INSERT INTO documents_fts(documents_fts) VALUES('optimize');`) after batch indexing will improve query execution efficiency.
-- verification: Code inspection of search.rs lines 1-4, 50-102, and 301-316.

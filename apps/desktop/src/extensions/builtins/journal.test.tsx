@@ -1,0 +1,323 @@
+// @vitest-environment happy-dom
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+// Keeps the settings save off Tauri IPC; the journal's own reads go through the
+// workspace bridge, not these commands.
+vi.mock("../../native/commands", () => ({
+  invokeNativeCommand: vi.fn<() => Promise<unknown>>()
+}));
+
+import {
+  activateJournal,
+  journalManifest,
+  JOURNAL_SEARCH_LIMIT,
+  searchJournalEntries,
+  journalFacetValues,
+  journalMetadataMatches
+} from "./journal";
+import { createDesktopExtensionHost } from "../desktopExtensionHost";
+import { createDesktopTabRegistry } from "../../tabs/tabRegistry";
+import { desktopCommandRegistry } from "../../commands/commandRegistry";
+import { desktopPanelRegistry } from "../../panels/panelRegistry";
+import { desktopEditorHeaderRegistry } from "../../tabs/editorHeaderRegistry.ts";
+import { appSettingsRegistry, useSettingsStore } from "../../settings/settingsStore";
+
+let host: ReturnType<typeof createDesktopExtensionHost> | null = null;
+let root: Root | null = null;
+let container: HTMLDivElement | null = null;
+
+afterEach(async () => {
+  await act(async () => root?.unmount());
+  container?.remove();
+  root = null;
+  container = null;
+  await host?.dispose();
+  host = null;
+  useSettingsStore.setState({
+    appValues: {},
+    workspaceValues: null,
+    workspaceRootPath: null,
+    stagedChanges: {},
+    isDirty: false,
+    dirtyCount: 0
+  });
+});
+
+const activate = async () => {
+  const tabs = createDesktopTabRegistry([]);
+  host = createDesktopExtensionHost({ tabs });
+  host.register({ id: journalManifest.id, trusted: true, activate: activateJournal });
+  await host.activate(journalManifest.id);
+  return tabs;
+};
+
+const VIEW_KEY = "extension-journal-calendar.calendarDefaultView";
+
+/** Renders the contributed calendar tab the way the shell's TabContent does. */
+const mount = async (tabs: ReturnType<typeof createDesktopTabRegistry>): Promise<HTMLDivElement> => {
+  const factory = tabs.get("journal-calendar.calendar")?.factory;
+  if (!factory) throw new Error("The calendar tab registered without a factory.");
+  container = document.createElement("div");
+  document.body.append(container);
+  root = createRoot(container);
+  await act(async () => {
+    root?.render(factory({ rootPath: "/vault", tabId: "calendar-1" }));
+  });
+  return container;
+};
+
+describe("journal built-in", () => {
+  it("declares the ids D47 fixed", () => {
+    expect(journalManifest.id).toBe("journal-calendar");
+    expect(journalManifest.contributes?.panels?.[0]?.id).toBe("journal");
+    expect(journalManifest.contributes?.commands?.map((command) => command.id)).toEqual([
+      "new-entry",
+      "today",
+      "open-calendar"
+    ]);
+  });
+
+  it("activates lazily, on its view or any of its commands (D65)", () => {
+    expect(journalManifest.activationEvents).toEqual([
+      "onView:journal",
+      "onCommand:new-entry",
+      "onCommand:today",
+      "onCommand:open-calendar"
+    ]);
+  });
+
+  it("registers the popout on the left, under a prefixed id", async () => {
+    await activate();
+
+    const panel = desktopPanelRegistry.get("journal-calendar.journal");
+    expect(panel?.side).toBe("left");
+    expect(panel?.label).toBe("Journal");
+  });
+
+  it("contributes no panel header actions, because D71 moved them into the panel", async () => {
+    await activate();
+
+    expect(desktopPanelRegistry.get("journal-calendar.journal")?.actions).toBeUndefined();
+  });
+
+  it("registers all three commands", async () => {
+    await activate();
+
+    for (const id of ["new-entry", "today", "open-calendar"]) {
+      expect(desktopCommandRegistry.get(`journal-calendar.${id}`)).toBeDefined();
+    }
+  });
+
+  it("registers the journal's settings module", async () => {
+    await activate();
+
+    expect(appSettingsRegistry.getModule("extension-journal-calendar")).toBeDefined();
+    expect(appSettingsRegistry.getDefinition("extension-journal-calendar.root")?.scope).toBe(
+      "workspace"
+    );
+  });
+
+  it("registers the calendar as an available tab kind with a renderer", async () => {
+    const tabs = await activate();
+
+    const calendar = tabs.get("journal-calendar.calendar");
+    expect(calendar?.isAvailable).toBe(true);
+    expect(typeof calendar?.factory).toBe("function");
+  });
+
+  it("opens the calendar in the view this workspace last used (D79/D80)", async () => {
+    const tabs = await activate();
+    useSettingsStore.getState().stageChange(VIEW_KEY, "week");
+
+    const host = await mount(tabs);
+
+    expect(host.querySelector('[role="radio"][aria-checked="true"]')?.getAttribute("aria-label"))
+      .toBe("Week");
+  });
+
+  it("persists the view the strip switches to", async () => {
+    const tabs = await activate();
+    // Workspace-scoped (D80), so the write needs a workspace to land in.
+    useSettingsStore.setState({ workspaceRootPath: "/vault", workspaceValues: {} });
+    const host = await mount(tabs);
+
+    const week = host.querySelector<HTMLButtonElement>('button[aria-label="Week"]');
+    await act(async () => week?.click());
+
+    expect(useSettingsStore.getState().getEffectiveValue(VIEW_KEY)).toBe("week");
+  });
+
+  it("hands everything back when it deactivates", async () => {
+    await activate();
+    await host?.deactivate(journalManifest.id);
+
+    expect(desktopPanelRegistry.get("journal-calendar.journal")).toBeUndefined();
+    expect(desktopCommandRegistry.get("journal-calendar.today")).toBeUndefined();
+    expect(appSettingsRegistry.getModule("extension-journal-calendar")).toBeUndefined();
+  });
+});
+
+describe("the metadata widget and the settings behind it", () => {
+  const FIELDS_KEY = "extension-journal-calendar.fieldDefinitions";
+
+  const mountHeader = async (): Promise<HTMLDivElement> => {
+    const header = desktopEditorHeaderRegistry.get("journal-calendar.metadata-widget");
+    if (!header) throw new Error("The metadata widget did not register.");
+    container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
+    await act(async () => {
+      root?.render(
+        header.render({
+          rootPath: "/vault",
+          relativePath: "journal/2026/08/2026-08-07-1802.md",
+          contents: "---\ndate: 2026-08-07\n---\n\nBread.\n"
+        })
+      );
+    });
+    return container;
+  };
+
+  /**
+   * A field added in Settings has to appear on the note that is already open.
+   * Nothing re-renders the editor when a setting changes, so without a
+   * subscription the new field stays invisible until the user types.
+   */
+  it("picks up a field added while a note is open", async () => {
+    await activate();
+    const host = await mountHeader();
+    expect(host.textContent).not.toContain("Mood");
+
+    await act(async () => {
+      useSettingsStore.getState().stageChange(
+        FIELDS_KEY,
+        JSON.stringify([{ id: "mood", label: "Mood", type: "text" }])
+      );
+    });
+
+    // The affordance only exists once there is a field to fill in, and the
+    // label itself appears when it is expanded.
+    const add = host.querySelector<HTMLButtonElement>("button");
+    expect(add?.textContent).toBe("Info Tracker");
+    await act(async () => add?.click());
+    expect(host.textContent).toContain("Mood");
+  });
+});
+
+describe("journal search", () => {
+  /**
+   * The panel filters its rows by the paths this returns, so a hit that the
+   * index left out is an entry the user is told does not match. Scoping the
+   * query is what keeps the limit counting journal entries instead of whatever
+   * the rest of the vault ranked above them.
+   */
+  it("asks the index only about the journal folder", async () => {
+    const search = vi.fn(async () => [
+      {
+        relativePath: "journal/2026-08-13.md",
+        fileName: "2026-08-13.md",
+        title: null,
+        snippet: "…standup…",
+        score: -1
+      }
+    ]);
+
+    await expect(searchJournalEntries(search, "/vault", "journal", "standup")).resolves.toEqual(
+      new Set(["journal/2026-08-13.md"])
+    );
+    expect(search).toHaveBeenCalledWith("/vault", "standup", {
+      pathPrefix: "journal",
+      limit: JOURNAL_SEARCH_LIMIT
+    });
+  });
+
+  it("matches nothing while there is no index to ask", async () => {
+    const search = vi.fn();
+
+    await expect(searchJournalEntries(search, null, "journal", "standup")).resolves.toEqual(
+      new Set()
+    );
+    expect(search).not.toHaveBeenCalled();
+  });
+});
+
+describe("journal metadata filters", () => {
+  const definitions = [
+    { id: "mood", label: "Mood", type: "single-select" as const },
+    { id: "rating", label: "Rating", type: "number" as const }
+  ];
+
+  const available = (facets: readonly { key: string; values: readonly string[] }[]) =>
+    vi.fn(async () => ({ kind: "available" as const, facets, matchingPaths: [] }));
+
+  it("asks the whole folder for its values, so a choice never hides the alternatives", async () => {
+    const queryMetadata = available([{ key: "mood", values: ["good", "tired"] }]);
+
+    const facets = await journalFacetValues(queryMetadata, "/vault", "journal", definitions);
+
+    expect(queryMetadata).toHaveBeenCalledWith("/vault", {
+      pathPrefix: "journal",
+      facetKeys: ["mood", "rating"],
+      // Deliberately unfiltered: the index computes facet values over what a
+      // query matched, so predicates here would drop the values not yet chosen.
+      predicates: []
+    });
+    expect(facets).toEqual([{ key: "mood", label: "Mood", values: ["good", "tired"] }]);
+  });
+
+  it("labels a field the user stopped configuring with its frontmatter key (D45)", async () => {
+    const queryMetadata = available([{ key: "weather", values: ["rain"] }]);
+
+    const facets = await journalFacetValues(queryMetadata, "/vault", "journal", definitions);
+
+    expect(facets).toEqual([{ key: "weather", label: "weather", values: ["rain"] }]);
+  });
+
+  it("offers nothing rather than guessing when the index cannot answer", async () => {
+    const queryMetadata = vi.fn(async () => ({
+      kind: "unavailable" as const,
+      reason: "indexing" as const
+    }));
+
+    await expect(
+      journalFacetValues(queryMetadata, "/vault", "journal", definitions)
+    ).resolves.toEqual([]);
+  });
+
+  it("does not ask at all when no fields are configured", async () => {
+    const queryMetadata = available([]);
+
+    await expect(journalFacetValues(queryMetadata, "/vault", "journal", [])).resolves.toEqual([]);
+    expect(queryMetadata).not.toHaveBeenCalled();
+  });
+
+  it("asks for matching paths without paying for facet values it already has", async () => {
+    const queryMetadata = vi.fn(async () => ({
+      kind: "available" as const,
+      facets: [],
+      matchingPaths: ["journal/2026-08-13.md"]
+    }));
+
+    const paths = await journalMetadataMatches(queryMetadata, "/vault", "journal", [
+      { key: "mood", value: "good" }
+    ]);
+
+    expect(queryMetadata).toHaveBeenCalledWith("/vault", {
+      pathPrefix: "journal",
+      facetKeys: [],
+      predicates: [{ key: "mood", value: "good" }]
+    });
+    expect(paths).toEqual(new Set(["journal/2026-08-13.md"]));
+  });
+
+  it("matches nothing while there is no index to ask", async () => {
+    const queryMetadata = vi.fn();
+
+    await expect(
+      journalMetadataMatches(queryMetadata, null, "journal", [{ key: "mood", value: "good" }])
+    ).resolves.toEqual(new Set());
+    expect(queryMetadata).not.toHaveBeenCalled();
+  });
+});
