@@ -14,19 +14,22 @@ mod metadata;
 #[cfg(test)]
 mod metadata_tests;
 
-pub use metadata::{MetadataField, MetadataPredicate, MetadataQueryResult};
 use metadata::{
     clear_document_metadata, delete_document_metadata, init_metadata_schema, normalize_path_prefix,
     path_prefix_sql, replace_document_metadata,
 };
+pub use metadata::{MetadataField, MetadataPredicate, MetadataQueryResult};
 
-static SEARCH_CONNECTIONS: Mutex<Option<HashMap<String, Arc<Mutex<Connection>>>>> = Mutex::new(None);
+static SEARCH_CONNECTIONS: Mutex<Option<HashMap<String, Arc<Mutex<Connection>>>>> =
+    Mutex::new(None);
 
 pub fn get_search_connection(
     app: &tauri::AppHandle,
     root_path: &str,
 ) -> Result<Arc<Mutex<Connection>>, NativeError> {
-    let mut lock = SEARCH_CONNECTIONS.lock().unwrap_or_else(|error| error.into_inner());
+    let mut lock = SEARCH_CONNECTIONS
+        .lock()
+        .unwrap_or_else(|error| error.into_inner());
     let pool = lock.get_or_insert_with(HashMap::new);
     if let Some(conn) = pool.get(root_path) {
         return Ok(conn.clone());
@@ -59,7 +62,6 @@ pub struct DocumentRecord {
     pub metadata: Vec<MetadataField>,
 }
 
-
 /// What one full-text search asks for.
 ///
 /// A struct rather than three positional arguments because two of the three are
@@ -84,7 +86,6 @@ pub struct SearchHit {
     pub score: f64,
 }
 
-
 #[tauri::command]
 pub fn index_documents(
     app: tauri::AppHandle,
@@ -92,7 +93,9 @@ pub fn index_documents(
     documents: Vec<DocumentRecord>,
 ) -> Result<usize, NativeError> {
     let connection_pool = get_search_connection(&app, &root_path)?;
-    let mut connection = connection_pool.lock().unwrap_or_else(|error| error.into_inner());
+    let mut connection = connection_pool
+        .lock()
+        .unwrap_or_else(|error| error.into_inner());
 
     index_document_records(&mut connection, &documents).map_err(|error| {
         NativeError::with_details(
@@ -103,7 +106,6 @@ pub fn index_documents(
     })
 }
 
-
 #[tauri::command]
 pub fn search_index(
     app: tauri::AppHandle,
@@ -113,7 +115,9 @@ pub fn search_index(
     limit: Option<u32>,
 ) -> Result<Vec<SearchHit>, NativeError> {
     let connection_pool = get_search_connection(&app, &root_path)?;
-    let connection = connection_pool.lock().unwrap_or_else(|error| error.into_inner());
+    let connection = connection_pool
+        .lock()
+        .unwrap_or_else(|error| error.into_inner());
 
     search_documents(
         &connection,
@@ -143,7 +147,9 @@ pub fn query_index_metadata(
     predicates: Vec<MetadataPredicate>,
 ) -> Result<MetadataQueryResult, NativeError> {
     let connection_pool = get_search_connection(&app, &root_path)?;
-    let connection = connection_pool.lock().unwrap_or_else(|error| error.into_inner());
+    let connection = connection_pool
+        .lock()
+        .unwrap_or_else(|error| error.into_inner());
 
     metadata::query_metadata(
         &connection,
@@ -162,11 +168,12 @@ pub fn query_index_metadata(
     })
 }
 
-
 #[tauri::command]
 pub fn clear_index(app: tauri::AppHandle, root_path: String) -> Result<(), NativeError> {
     let connection_pool = get_search_connection(&app, &root_path)?;
-    let mut connection = connection_pool.lock().unwrap_or_else(|error| error.into_inner());
+    let mut connection = connection_pool
+        .lock()
+        .unwrap_or_else(|error| error.into_inner());
 
     clear_documents(&mut connection).map_err(|error| {
         NativeError::with_details(
@@ -177,7 +184,6 @@ pub fn clear_index(app: tauri::AppHandle, root_path: String) -> Result<(), Nativ
     })
 }
 
-
 #[tauri::command]
 pub fn remove_index_document(
     app: tauri::AppHandle,
@@ -185,7 +191,9 @@ pub fn remove_index_document(
     path: String,
 ) -> Result<(), NativeError> {
     let connection_pool = get_search_connection(&app, &root_path)?;
-    let mut connection = connection_pool.lock().unwrap_or_else(|error| error.into_inner());
+    let mut connection = connection_pool
+        .lock()
+        .unwrap_or_else(|error| error.into_inner());
 
     delete_document(&mut connection, &path).map_err(|error| {
         NativeError::with_details(
@@ -195,7 +203,6 @@ pub fn remove_index_document(
         )
     })
 }
-
 
 /// Opens (creating if needed) the SQLite FTS5 cache for a workspace.
 ///
@@ -225,12 +232,14 @@ pub fn open_index_connection(
     Ok(connection)
 }
 
-
 /// Resolves the per-workspace index database path inside the app-data dir.
 ///
 /// Each workspace gets its own cache file named from a stable hash of the
 /// canonicalized workspace root, so distinct vaults never collide.
-pub fn resolve_index_db_path(app: &tauri::AppHandle, root_path: &str) -> Result<PathBuf, NativeError> {
+pub fn resolve_index_db_path(
+    app: &tauri::AppHandle,
+    root_path: &str,
+) -> Result<PathBuf, NativeError> {
     let canonical_root = resolve_workspace_root(root_path)?;
     let app_data_dir = app.path().app_data_dir().map_err(|error| {
         NativeError::with_details(
@@ -254,7 +263,6 @@ pub fn resolve_index_db_path(app: &tauri::AppHandle, root_path: &str) -> Result<
     Ok(index_dir.join(format!("workspace-{workspace_key:016x}.sqlite3")))
 }
 
-
 /// Creates the FTS5 virtual table backing search. Idempotent.
 ///
 /// Every searchable field (filename, title, tags, aliases, body) is a column so
@@ -274,7 +282,6 @@ pub fn init_index_schema(connection: &Connection) -> rusqlite::Result<()> {
     )?;
     init_metadata_schema(connection)
 }
-
 
 fn upsert_document(transaction: &Transaction<'_>, record: &DocumentRecord) -> rusqlite::Result<()> {
     transaction.execute(
@@ -298,7 +305,6 @@ fn upsert_document(transaction: &Transaction<'_>, record: &DocumentRecord) -> ru
     Ok(())
 }
 
-
 /// Removes a single document from the index by path. No-op if absent.
 pub fn delete_document(connection: &mut Connection, path: &str) -> rusqlite::Result<()> {
     let transaction = connection.transaction()?;
@@ -307,7 +313,6 @@ pub fn delete_document(connection: &mut Connection, path: &str) -> rusqlite::Res
     transaction.commit()
 }
 
-
 /// Clears every indexed document, used to rebuild the cache from scratch.
 pub fn clear_documents(connection: &mut Connection) -> rusqlite::Result<()> {
     let transaction = connection.transaction()?;
@@ -315,7 +320,6 @@ pub fn clear_documents(connection: &mut Connection) -> rusqlite::Result<()> {
     transaction.execute("DELETE FROM documents_fts", [])?;
     transaction.commit()
 }
-
 
 /// Upserts many records inside a single transaction for fast (re)indexing.
 pub fn index_document_records(
@@ -328,13 +332,15 @@ pub fn index_document_records(
         upsert_document(&transaction, record)?;
     }
 
-    transaction.execute("INSERT INTO documents_fts(documents_fts) VALUES('optimize');", [])?;
+    transaction.execute(
+        "INSERT INTO documents_fts(documents_fts) VALUES('optimize');",
+        [],
+    )?;
 
     transaction.commit()?;
 
     Ok(records.len())
 }
-
 
 /// Runs a ranked full-text search across all indexed columns.
 ///
@@ -393,7 +399,6 @@ pub fn search_documents(
 
     Ok(hits)
 }
-
 
 /// Builds a safe FTS5 MATCH expression from arbitrary user input.
 ///

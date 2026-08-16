@@ -192,8 +192,7 @@ fn shell_status_reports_ready_desktop_shell() {
 
 #[test]
 fn git_availability_returns_the_installed_version_from_a_bounded_command() {
-    let runner =
-        MockGitRunner::new([Ok(git_output(true, Some(0), "git version 2.47.1\n", ""))]);
+    let runner = MockGitRunner::new([Ok(git_output(true, Some(0), "git version 2.47.1\n", ""))]);
 
     let availability = git_availability_with(&runner).expect("Git check succeeds");
 
@@ -991,7 +990,14 @@ fn a_path_prefix_scopes_the_search_before_the_limit_applies() {
             record("Notes/a.md", "a.md", None, &[], &[], "standup"),
             record("Notes/b.md", "b.md", None, &[], &[], "standup"),
             record("Notes/c.md", "c.md", None, &[], &[], "standup"),
-            record("Journal/2026-08-13.md", "2026-08-13.md", None, &[], &[], "standup"),
+            record(
+                "Journal/2026-08-13.md",
+                "2026-08-13.md",
+                None,
+                &[],
+                &[],
+                "standup",
+            ),
         ],
     )
     .expect("documents index");
@@ -1144,9 +1150,18 @@ fn desktop_state_update_merges_concurrent_mrus_and_preserves_app_settings() {
     std::fs::create_dir_all(&two).unwrap();
     std::fs::create_dir_all(&legacy).unwrap();
 
-    let one_path = crate::commands::workspace::resolve_workspace_root(&one.to_string_lossy()).unwrap().to_string_lossy().to_string();
-    let two_path = crate::commands::workspace::resolve_workspace_root(&two.to_string_lossy()).unwrap().to_string_lossy().to_string();
-    let legacy_path = crate::commands::workspace::resolve_workspace_root(&legacy.to_string_lossy()).unwrap().to_string_lossy().to_string();
+    let one_path = crate::commands::workspace::resolve_workspace_root(&one.to_string_lossy())
+        .unwrap()
+        .to_string_lossy()
+        .to_string();
+    let two_path = crate::commands::workspace::resolve_workspace_root(&two.to_string_lossy())
+        .unwrap()
+        .to_string_lossy()
+        .to_string();
+    let legacy_path = crate::commands::workspace::resolve_workspace_root(&legacy.to_string_lossy())
+        .unwrap()
+        .to_string_lossy()
+        .to_string();
 
     let first_json = serde_json::json!({
         "theme": "dark",
@@ -1159,10 +1174,7 @@ fn desktop_state_update_merges_concurrent_mrus_and_preserves_app_settings() {
         Some(&first_json.to_string()),
         DesktopStateUpdate {
             last_workspace_path: Some(Some(one_path.clone())),
-            recent_workspace_paths: Some(vec![
-                one_path.clone(),
-                legacy_path.clone(),
-            ]),
+            recent_workspace_paths: Some(vec![one_path.clone(), legacy_path.clone()]),
             left_panel_width: Some(352.0),
             bottom_panel_open: Some(true),
             ..Default::default()
@@ -1173,10 +1185,7 @@ fn desktop_state_update_merges_concurrent_mrus_and_preserves_app_settings() {
     let second = update_desktop_state_contents(
         Some(&first),
         DesktopStateUpdate {
-            recent_workspace_paths: Some(vec![
-                two_path.clone(),
-                legacy_path.clone(),
-            ]),
+            recent_workspace_paths: Some(vec![two_path.clone(), legacy_path.clone()]),
             explorer_open: Some(true),
             right_panel_width: Some(512.0),
             ..Default::default()
@@ -1192,7 +1201,10 @@ fn desktop_state_update_merges_concurrent_mrus_and_preserves_app_settings() {
     );
     // Legacy flat-schema keys are no longer migrated/removed — they are
     // preserved as unrelated app settings (DESKTOP_STATE_VERSION >= 5).
-    assert_eq!(settings["lastWorkspacePath"], serde_json::json!(legacy_path));
+    assert_eq!(
+        settings["lastWorkspacePath"],
+        serde_json::json!(legacy_path)
+    );
     assert_eq!(settings["explorerOpen"], serde_json::json!(false));
     assert_eq!(
         settings["desktopState"],
@@ -1259,10 +1271,8 @@ fn desktop_state_without_extension_directories_defaults_to_empty() {
         "desktopState": { "version": 3, "explorerOpen": true }
     });
 
-    let updated = update_desktop_state_contents(
-        Some(&existing.to_string()),
-        DesktopStateUpdate::default(),
-    )
+    let updated =
+        update_desktop_state_contents(Some(&existing.to_string()), DesktopStateUpdate::default())
     .expect("desktop-state update succeeds");
 
     let settings: Value = serde_json::from_str(&updated).expect("serialized settings are valid");
@@ -1286,7 +1296,10 @@ fn desktop_state_active_tab_id_explicit_null_clears_instead_of_restoring_current
     .expect("desktop-state update succeeds");
 
     let settings: Value = serde_json::from_str(&stored).expect("serialized settings are valid");
-    assert_eq!(settings["desktopState"]["activeTabId"], serde_json::json!("tab-1"));
+    assert_eq!(
+        settings["desktopState"]["activeTabId"],
+        serde_json::json!("tab-1")
+    );
 
     let cleared = update_desktop_state_contents(
         Some(&stored),
@@ -1301,14 +1314,14 @@ fn desktop_state_active_tab_id_explicit_null_clears_instead_of_restoring_current
     assert_eq!(settings["desktopState"]["activeTabId"], Value::Null);
 
     // An update that omits the field entirely keeps the current value.
-    let restored = update_desktop_state_contents(
-        Some(&stored),
-        DesktopStateUpdate::default(),
-    )
+    let restored = update_desktop_state_contents(Some(&stored), DesktopStateUpdate::default())
     .expect("desktop-state update succeeds");
 
     let settings: Value = serde_json::from_str(&restored).expect("serialized settings are valid");
-    assert_eq!(settings["desktopState"]["activeTabId"], serde_json::json!("tab-1"));
+    assert_eq!(
+        settings["desktopState"]["activeTabId"],
+        serde_json::json!("tab-1")
+    );
 }
 
 #[test]
@@ -1347,7 +1360,8 @@ fn app_theme_update_replaces_theme_and_preserves_other_settings() {
 
     // A missing settings file still yields a valid document with only the theme.
     let created = update_app_theme_contents(None, "light").expect("theme update seeds settings");
-    let created_settings: Value = serde_json::from_str(&created).expect("seeded settings are valid");
+    let created_settings: Value =
+        serde_json::from_str(&created).expect("seeded settings are valid");
     assert_eq!(created_settings, serde_json::json!({ "theme": "light" }));
 
     for theme in ["system", "light", "dark"] {
@@ -1631,7 +1645,10 @@ fn markdown_commands_reject_symlink_escapes_from_the_workspace() {
         root.to_string_lossy().to_string(),
         "innocent.md".to_string(),
     );
-    assert!(read_escape.is_err(), "reading through a symlink must be refused");
+    assert!(
+        read_escape.is_err(),
+        "reading through a symlink must be refused"
+    );
     assert_eq!(read_escape.unwrap_err().code, "workspace.invalid_path");
 
     assert_eq!(
@@ -1821,7 +1838,12 @@ fn note_write_without_a_precondition_still_overwrites() {
     let note = root.join("draft.md");
     fs::write(&note, "on disk").expect("note is written");
 
-    write_markdown_document(&root.to_string_lossy(), "draft.md", "replaced".to_string(), None)
+    write_markdown_document(
+        &root.to_string_lossy(),
+        "draft.md",
+        "replaced".to_string(),
+        None,
+    )
         .expect("an unchecked save goes through");
     assert_eq!(
         fs::read_to_string(&note).expect("note is readable"),
@@ -1844,17 +1866,29 @@ fn only_markdown_inside_the_vault_is_worth_waking_the_index_for() {
     let root = Path::new("/vault");
 
     assert!(is_watchable_path(root, &root.join("notes/today.md")));
-    assert!(is_watchable_path(root, &root.join("deep/nested/note.markdown")));
+    assert!(is_watchable_path(
+        root,
+        &root.join("deep/nested/note.markdown")
+    ));
 
     // Not a note.
     assert!(!is_watchable_path(root, &root.join("image.png")));
     assert!(!is_watchable_path(root, &root.join("notes")));
     // The editor's own scratch files and version control.
-    assert!(!is_watchable_path(root, &root.join(".obsidian/workspace.md")));
-    assert!(!is_watchable_path(root, &root.join(".git/COMMIT_EDITMSG.md")));
+    assert!(!is_watchable_path(
+        root,
+        &root.join(".obsidian/workspace.md")
+    ));
+    assert!(!is_watchable_path(
+        root,
+        &root.join(".git/COMMIT_EDITMSG.md")
+    ));
     assert!(!is_watchable_path(root, &root.join("notes/.hidden.md")));
     // Build output the workspace listing already refuses to walk.
-    assert!(!is_watchable_path(root, &root.join("node_modules/pkg/readme.md")));
+    assert!(!is_watchable_path(
+        root,
+        &root.join("node_modules/pkg/readme.md")
+    ));
     // Outside the vault entirely.
     assert!(!is_watchable_path(root, Path::new("/elsewhere/note.md")));
 }
@@ -2019,7 +2053,10 @@ fn churn_inside_ignored_folders_never_triggers_a_rebuild() {
         &EventKind::Modify(ModifyKind::Name(RenameMode::Both)),
         &[root.join(".git/index.lock"), root.join(".git/index")],
     );
-    assert!(staged.is_empty(), "git staging rebuilt the index: {staged:?}");
+    assert!(
+        staged.is_empty(),
+        "git staging rebuilt the index: {staged:?}"
+    );
 
     let pruned = classify_event(
         root,
@@ -2033,14 +2070,20 @@ fn churn_inside_ignored_folders_never_triggers_a_rebuild() {
         &EventKind::Remove(RemoveKind::Folder),
         &[root.join("node_modules/pkg")],
     );
-    assert!(dropped.is_empty(), "an ignored folder rebuilt the index: {dropped:?}");
+    assert!(
+        dropped.is_empty(),
+        "an ignored folder rebuilt the index: {dropped:?}"
+    );
 
     let head = classify_event(
         root,
         &EventKind::Remove(RemoveKind::File),
         &[root.join(".git/ORIG_HEAD")],
     );
-    assert!(head.is_empty(), "a git bookkeeping file rebuilt the index: {head:?}");
+    assert!(
+        head.is_empty(),
+        "a git bookkeeping file rebuilt the index: {head:?}"
+    );
 }
 
 #[test]
@@ -2292,8 +2335,14 @@ fn two_windows_on_one_vault_share_a_single_watcher() {
     interest.acquire("/vault", "main");
     interest.acquire("/vault", "second");
 
-    assert!(!interest.release("/vault", "main"), "the second window still wants it");
-    assert!(interest.release("/vault", "second"), "the last window released it");
+    assert!(
+        !interest.release("/vault", "main"),
+        "the second window still wants it"
+    );
+    assert!(
+        interest.release("/vault", "second"),
+        "the last window released it"
+    );
 }
 
 #[test]
@@ -2390,8 +2439,14 @@ fn an_unpairable_rename_is_judged_by_what_is_actually_on_disk() {
     );
 
     let _ = fs::remove_dir_all(&root);
-    assert_eq!(landed.first().map(|change| change.kind), Some(WorkspaceChangeKind::Created));
-    assert_eq!(left.first().map(|change| change.kind), Some(WorkspaceChangeKind::Deleted));
+    assert_eq!(
+        landed.first().map(|change| change.kind),
+        Some(WorkspaceChangeKind::Created)
+    );
+    assert_eq!(
+        left.first().map(|change| change.kind),
+        Some(WorkspaceChangeKind::Deleted)
+    );
 }
 
 /// D53: a group the user collapsed stays collapsed, per workspace, in desktop
@@ -2429,16 +2484,29 @@ fn collapsed_groups_are_kept_per_workspace_and_per_view() {
     );
     // A second vault must not overwrite the first: two windows write this field
     // without knowing about each other.
-    let stored = collapse(Some(&stored), &second_path, "journal", vec!["2025".to_string()]);
+    let stored = collapse(
+        Some(&stored),
+        &second_path,
+        "journal",
+        vec!["2025".to_string()],
+    );
 
     // A second view of the same vault sits beside the first rather than
     // replacing it: the explorer tree has the same problem and will want a row
     // here, and one write must not take the other's.
-    let stored = collapse(Some(&stored), &first_path, "explorer", vec!["notes".to_string()]);
+    let stored = collapse(
+        Some(&stored),
+        &first_path,
+        "explorer",
+        vec!["notes".to_string()],
+    );
 
     let settings: Value = serde_json::from_str(&stored).expect("serialized settings are valid");
     let views = &settings["desktopState"]["workspaceViews"];
-    assert_eq!(views[&first_path]["journal"], serde_json::json!(["2026", "2026-08"]));
+    assert_eq!(
+        views[&first_path]["journal"],
+        serde_json::json!(["2026", "2026-08"])
+    );
     assert_eq!(views[&first_path]["explorer"], serde_json::json!(["notes"]));
     assert_eq!(views[&second_path]["journal"], serde_json::json!(["2025"]));
 
@@ -2493,5 +2561,8 @@ fn collapsed_groups_are_dropped_for_a_workspace_no_longer_remembered() {
     .expect("update succeeds");
 
     let settings: Value = serde_json::from_str(&forgotten).expect("serialized settings are valid");
-    assert_eq!(settings["desktopState"]["workspaceViews"], serde_json::json!({}));
+    assert_eq!(
+        settings["desktopState"]["workspaceViews"],
+        serde_json::json!({})
+    );
 }

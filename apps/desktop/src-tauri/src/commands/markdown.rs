@@ -8,9 +8,8 @@ use std::fs;
 const MAX_MARKDOWN_DEPTH: usize = 20;
 
 use crate::commands::workspace::{
-    entry_metadata, is_ignored_entry_name, normalize_relative_path,
-    resolve_workspace_entry_path, resolve_workspace_root, MAX_WORKSPACE_ENTRIES,
-    WORKSPACE_ENTRY_MUTATION_LOCK,
+    entry_metadata, is_ignored_entry_name, normalize_relative_path, resolve_workspace_entry_path,
+    resolve_workspace_root, MAX_WORKSPACE_ENTRIES, WORKSPACE_ENTRY_MUTATION_LOCK,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -22,13 +21,11 @@ pub struct MarkdownFileEntry {
     pub updated_at: Option<u64>,
 }
 
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct MarkdownFileContents {
     pub relative_path: String,
     pub contents: String,
 }
-
 
 #[tauri::command]
 pub fn list_markdown_files(root_path: String) -> Result<Vec<MarkdownFileEntry>, NativeError> {
@@ -36,7 +33,6 @@ pub fn list_markdown_files(root_path: String) -> Result<Vec<MarkdownFileEntry>, 
 
     list_markdown_file_entries(&root)
 }
-
 
 #[tauri::command]
 pub fn read_markdown_file(
@@ -59,7 +55,6 @@ pub fn read_markdown_file(
     })
 }
 
-
 #[tauri::command]
 pub fn write_markdown_file(
     _app: tauri::AppHandle,
@@ -70,7 +65,6 @@ pub fn write_markdown_file(
 ) -> Result<MarkdownFileEntry, NativeError> {
     write_markdown_document(&root_path, &relative_path, contents, expected.as_deref())
 }
-
 
 /// Writes a note, optionally refusing if it is not what the caller last read.
 ///
@@ -130,7 +124,6 @@ pub fn write_markdown_document(
     markdown_file_entry(&root, &file_path)
 }
 
-
 /// Refuses a write computed from text the file no longer holds.
 ///
 /// An unreadable file counts as a mismatch rather than an error of its own: the
@@ -146,7 +139,6 @@ fn check_note_write_precondition(file_path: &Path, expected: &str) -> Result<(),
         "The note changed on disk while it was being edited.",
     ))
 }
-
 
 #[tauri::command]
 pub fn create_markdown_file(
@@ -186,7 +178,6 @@ pub fn create_markdown_file(
 
     markdown_file_entry(&root, &file_path)
 }
-
 
 #[tauri::command]
 pub fn rename_markdown_file(
@@ -241,9 +232,12 @@ pub fn rename_markdown_file(
     markdown_file_entry(&root, &new_file_path)
 }
 
-
 #[tauri::command]
-pub fn delete_markdown_file(app: tauri::AppHandle, root_path: String, relative_path: String) -> Result<(), NativeError> {
+pub fn delete_markdown_file(
+    app: tauri::AppHandle,
+    root_path: String,
+    relative_path: String,
+) -> Result<(), NativeError> {
     let root = resolve_workspace_root(&root_path)?;
     let file_path = resolve_markdown_file_path(&root, &relative_path)?;
 
@@ -271,8 +265,10 @@ pub fn delete_markdown_file(app: tauri::AppHandle, root_path: String, relative_p
     Ok(())
 }
 
-
-pub fn resolve_markdown_file_path(root: &Path, relative_path: &str) -> Result<PathBuf, NativeError> {
+pub fn resolve_markdown_file_path(
+    root: &Path,
+    relative_path: &str,
+) -> Result<PathBuf, NativeError> {
     let normalized = normalize_relative_path(relative_path)?;
     let path = root.join(normalized);
 
@@ -291,7 +287,6 @@ pub fn resolve_markdown_file_path(root: &Path, relative_path: &str) -> Result<Pa
     resolve_workspace_entry_path(root, relative_path)
 }
 
-
 pub fn list_markdown_file_entries(root: &Path) -> Result<Vec<MarkdownFileEntry>, NativeError> {
     let mut files = Vec::new();
     collect_markdown_file_entries(root, root, &mut files, 0)?;
@@ -299,7 +294,6 @@ pub fn list_markdown_file_entries(root: &Path) -> Result<Vec<MarkdownFileEntry>,
 
     Ok(files)
 }
-
 
 pub fn collect_markdown_file_entries(
     root: &Path,
@@ -352,8 +346,10 @@ pub fn collect_markdown_file_entries(
     Ok(())
 }
 
-
-pub fn markdown_file_entry(root: &Path, file_path: &Path) -> Result<MarkdownFileEntry, NativeError> {
+pub fn markdown_file_entry(
+    root: &Path,
+    file_path: &Path,
+) -> Result<MarkdownFileEntry, NativeError> {
     let metadata = entry_metadata(root, file_path)?;
 
     Ok(MarkdownFileEntry {
@@ -365,7 +361,6 @@ pub fn markdown_file_entry(root: &Path, file_path: &Path) -> Result<MarkdownFile
     })
 }
 
-
 pub fn is_markdown_path(path: &Path) -> bool {
     path.extension()
         .and_then(|extension| extension.to_str())
@@ -374,5 +369,3 @@ pub fn is_markdown_path(path: &Path) -> bool {
         })
         .unwrap_or(false)
 }
-
-

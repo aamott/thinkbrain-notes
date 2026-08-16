@@ -148,9 +148,7 @@ pub fn is_in_watched_area(root: &Path, path: &Path) -> bool {
     let Some(relative) = workspace_relative_path(root, path) else {
         return false;
     };
-    relative
-        .split('/')
-        .all(|part| !is_ignored_entry_name(part))
+    relative.split('/').all(|part| !is_ignored_entry_name(part))
 }
 
 /// Whether a vanished path in a watched area was probably a directory.
@@ -176,7 +174,9 @@ pub fn classify_event(root: &Path, kind: &EventKind, paths: &[PathBuf]) -> Vec<W
         // Some platforms report the two halves of a rename separately, with no
         // way to pair them. Each half is complete on its own.
         EventKind::Modify(ModifyKind::Name(RenameMode::From)) => removal(root, paths),
-        EventKind::Modify(ModifyKind::Name(RenameMode::To)) => single(root, paths, WorkspaceChangeKind::Created),
+        EventKind::Modify(ModifyKind::Name(RenameMode::To)) => {
+            single(root, paths, WorkspaceChangeKind::Created)
+        }
         EventKind::Modify(ModifyKind::Name(_)) => classify_unpaired_rename(root, paths),
 
         EventKind::Modify(_) => single(root, paths, WorkspaceChangeKind::Modified),
@@ -300,7 +300,10 @@ impl SelfWriteLog {
 
     /// Notes that the app just wrote `path` and expects one echo for it.
     pub fn record_at(&self, path: &Path, at: Instant) {
-        let mut guard = self.expected.lock().unwrap_or_else(|error| error.into_inner());
+        let mut guard = self
+            .expected
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let entries = guard.get_or_insert_with(HashMap::new);
         // Sweep here, because a query only ever prunes the one path it asks
         // about and some records are never queried at all: a folder delete
@@ -326,7 +329,10 @@ impl SelfWriteLog {
     /// Expired records are dropped rather than claimed, so a write whose echo
     /// never arrived cannot silently swallow a later external edit either.
     pub fn take_at(&self, path: &Path, now: Instant) -> bool {
-        let mut guard = self.expected.lock().unwrap_or_else(|error| error.into_inner());
+        let mut guard = self
+            .expected
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let Some(entries) = guard.as_mut() else {
             return false;
         };
@@ -552,10 +558,7 @@ fn spawn_debouncer(
     key: String,
 ) -> Result<WorkspaceDebouncer, NativeError> {
     let handler_root = root.clone();
-    let mut debouncer = new_debouncer(
-        DEBOUNCE_WINDOW,
-        None,
-        move |result: DebounceEventResult| {
+    let mut debouncer = new_debouncer(DEBOUNCE_WINDOW, None, move |result: DebounceEventResult| {
             let changes = match result {
                 Ok(events) => collect_changes(&handler_root, &events),
                 // A watcher error means the stream is no longer trustworthy;
@@ -575,8 +578,7 @@ fn spawn_debouncer(
             if let Err(error) = app.emit(WORKSPACE_CHANGED_EVENT, payload) {
                 eprintln!("[watcher] failed to deliver workspace changes: {error}");
             }
-        },
-    )
+    })
     .map_err(|error| {
         NativeError::with_details(
             "watcher.start_failed",

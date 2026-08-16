@@ -134,7 +134,10 @@ fn resolve_extension_file(directory: &str, relative_path: &str) -> Result<PathBu
 ///   The file's contents, or a `NativeError` when the path escapes the
 ///   directory, the file is missing, or it is too large to be an entry module.
 #[tauri::command]
-pub fn read_extension_file(directory: String, relative_path: String) -> Result<String, NativeError> {
+pub fn read_extension_file(
+    directory: String,
+    relative_path: String,
+) -> Result<String, NativeError> {
     let path = resolve_extension_file(&directory, &relative_path)?;
 
     let mut file = fs::File::open(&path).map_err(|error| {
@@ -207,8 +210,10 @@ mod tests {
         fs::create_dir_all(dir.join("dist")).expect("subdirectory is created");
         fs::write(dir.join("dist/main.js"), "bundled").expect("entry is written");
 
-        let contents =
-            read_extension_file(dir.to_string_lossy().into_owned(), "dist/main.js".to_string())
+        let contents = read_extension_file(
+            dir.to_string_lossy().into_owned(),
+            "dist/main.js".to_string(),
+        )
                 .expect("file is read");
 
         assert_eq!(contents, "bundled");
@@ -236,8 +241,10 @@ mod tests {
     fn rejects_an_absolute_relative_path() {
         let dir = temp_test_dir("absolute");
 
-        let error =
-            read_extension_file(dir.to_string_lossy().into_owned(), "/etc/hostname".to_string())
+        let error = read_extension_file(
+            dir.to_string_lossy().into_owned(),
+            "/etc/hostname".to_string(),
+        )
                 .expect_err("absolute path is rejected");
 
         assert_eq!(error.code, "extensions.invalid_path");
@@ -256,8 +263,10 @@ mod tests {
     fn reports_a_missing_file() {
         let dir = temp_test_dir("missing");
 
-        let error =
-            read_extension_file(dir.to_string_lossy().into_owned(), "extension.js".to_string())
+        let error = read_extension_file(
+            dir.to_string_lossy().into_owned(),
+            "extension.js".to_string(),
+        )
                 .expect_err("missing file is reported");
 
         assert_eq!(error.code, "extensions.file_unavailable");
@@ -284,8 +293,10 @@ mod tests {
         fs::write(&outside, "secret").expect("outside file is written");
         std::os::unix::fs::symlink(&outside, dir.join("extension.js")).expect("symlink is created");
 
-        let error =
-            read_extension_file(dir.to_string_lossy().into_owned(), "extension.js".to_string())
+        let error = read_extension_file(
+            dir.to_string_lossy().into_owned(),
+            "extension.js".to_string(),
+        )
                 .expect_err("escaping symlink is rejected");
 
         assert_eq!(error.code, "extensions.invalid_path");
@@ -304,10 +315,7 @@ mod tests {
             .expect("oversized content is written");
         drop(file);
 
-        let error = read_extension_file(
-            dir.to_string_lossy().into_owned(),
-            "huge.js".to_string(),
-        )
+        let error = read_extension_file(dir.to_string_lossy().into_owned(), "huge.js".to_string())
         .expect_err("oversized file is rejected");
 
         assert_eq!(error.code, "extensions.file_too_large");
@@ -321,10 +329,8 @@ mod tests {
 
         fs::write(&invalid, b"\x80\x81\x82\x83").expect("non-UTF-8 content is written");
 
-        let error = read_extension_file(
-            dir.to_string_lossy().into_owned(),
-            "binary.js".to_string(),
-        )
+        let error =
+            read_extension_file(dir.to_string_lossy().into_owned(), "binary.js".to_string())
         .expect_err("non-UTF-8 file is rejected");
 
         assert_eq!(error.code, "extensions.file_unavailable");

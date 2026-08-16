@@ -1,14 +1,13 @@
-
 use crate::error::NativeError;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use std::sync::Mutex;
-use std::fs;
-use tauri::Manager;
-use serde_json::{Map, Value};
 use crate::commands::workspace::{resolve_workspace_root, stable_workspace_hash};
+use serde_json::{Map, Value};
+use std::fs;
+use std::sync::Mutex;
+use tauri::Manager;
 
 static APP_SETTINGS_MUTATION_LOCK: Mutex<()> = Mutex::new(());
 
@@ -75,7 +74,6 @@ pub struct DesktopStateUpdate {
     pub collapsed_groups: Option<CollapsedGroupsUpdate>,
 }
 
-
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DesktopState {
@@ -100,7 +98,6 @@ pub struct DesktopState {
 /// settings file out of a diff it did not earn.
 pub type WorkspaceViews = BTreeMap<String, BTreeMap<String, Vec<String>>>;
 
-
 #[tauri::command]
 pub fn read_app_settings(app: tauri::AppHandle) -> Result<Option<String>, NativeError> {
     let _settings_lock = APP_SETTINGS_MUTATION_LOCK
@@ -108,7 +105,6 @@ pub fn read_app_settings(app: tauri::AppHandle) -> Result<Option<String>, Native
         .unwrap_or_else(|poisoned| poisoned.into_inner());
     read_settings_file(&resolve_app_settings_path(&app)?)
 }
-
 
 /// The check itself, shared by both documents.
 ///
@@ -127,7 +123,6 @@ pub(crate) fn check_settings_precondition(
 
     Err(NativeError::new(code, message))
 }
-
 
 #[tauri::command]
 pub fn write_app_settings(
@@ -154,7 +149,6 @@ pub fn write_app_settings(
     write_settings_file(&settings_path, &contents)
 }
 
-
 /// Reads, revises, and writes `desktopState` inside one locked command, so it
 /// needs no `expected` precondition: unlike `write_app_settings` there is no
 /// second IPC round trip in which another writer could land. See
@@ -174,7 +168,6 @@ pub fn update_desktop_state(
     write_settings_file(&settings_path, &contents)?;
     Ok(contents)
 }
-
 
 /// Persists the application theme without rewriting unrelated settings.
 ///
@@ -200,7 +193,6 @@ pub fn update_app_theme(app: tauri::AppHandle, theme: String) -> Result<String, 
     Ok(updated)
 }
 
-
 #[tauri::command]
 pub fn read_workspace_settings(
     app: tauri::AppHandle,
@@ -212,7 +204,6 @@ pub fn read_workspace_settings(
     // write block an unrelated workspace's read for no gain.
     read_settings_file(&resolve_workspace_settings_path(&app, &root_path)?)
 }
-
 
 #[tauri::command]
 pub fn write_workspace_settings(
@@ -239,7 +230,6 @@ pub fn write_workspace_settings(
     write_settings_file(&settings_path, &contents)
 }
 
-
 pub fn resolve_app_settings_path(app: &tauri::AppHandle) -> Result<PathBuf, NativeError> {
     let app_data_dir = app.path().app_data_dir().map_err(|error| {
         NativeError::with_details(
@@ -251,7 +241,6 @@ pub fn resolve_app_settings_path(app: &tauri::AppHandle) -> Result<PathBuf, Nati
 
     Ok(app_settings_path(&app_data_dir))
 }
-
 
 pub fn resolve_workspace_settings_path(
     app: &tauri::AppHandle,
@@ -269,11 +258,9 @@ pub fn resolve_workspace_settings_path(
     Ok(workspace_settings_path(&app_data_dir, &canonical_root))
 }
 
-
 pub fn app_settings_path(app_data_dir: &Path) -> PathBuf {
     settings_dir(app_data_dir).join("app.json")
 }
-
 
 pub fn workspace_settings_path(app_data_dir: &Path, canonical_root: &Path) -> PathBuf {
     let workspace_key = stable_workspace_hash(&canonical_root.to_string_lossy());
@@ -281,11 +268,9 @@ pub fn workspace_settings_path(app_data_dir: &Path, canonical_root: &Path) -> Pa
     settings_dir(app_data_dir).join(format!("workspace-{workspace_key:016x}.json"))
 }
 
-
 pub fn settings_dir(app_data_dir: &Path) -> PathBuf {
     app_data_dir.join("settings")
 }
-
 
 pub fn update_desktop_state_contents(
     contents: Option<&str>,
@@ -299,7 +284,6 @@ pub fn update_desktop_state_contents(
 
     serialize_app_settings_record(app_settings)
 }
-
 
 /// Replaces only the top-level `theme` field of an app-settings document.
 ///
@@ -330,7 +314,6 @@ pub fn update_app_theme_contents(
     serialize_app_settings_record(app_settings)
 }
 
-
 /// Serializes an app-settings record using the canonical on-disk shape:
 /// pretty-printed JSON terminated by a single trailing newline.
 pub fn serialize_app_settings_record(
@@ -347,14 +330,12 @@ pub fn serialize_app_settings_record(
         })
 }
 
-
 pub fn parse_app_settings_record(contents: Option<&str>) -> Map<String, Value> {
     contents
         .and_then(|contents| serde_json::from_str::<Value>(contents).ok())
         .and_then(|value| value.as_object().cloned())
         .unwrap_or_default()
 }
-
 
 pub fn read_desktop_state(app_settings: &Map<String, Value>) -> DesktopState {
     app_settings
@@ -364,10 +345,11 @@ pub fn read_desktop_state(app_settings: &Map<String, Value>) -> DesktopState {
         .unwrap_or_else(default_desktop_state)
 }
 
-
 pub fn read_versioned_desktop_state(state: &Map<String, Value>) -> DesktopState {
     let supported_version = match state.get("version") {
-        Some(Value::Number(version)) => version.as_u64().is_some_and(|version| version <= DESKTOP_STATE_VERSION),
+        Some(Value::Number(version)) => version
+            .as_u64()
+            .is_some_and(|version| version <= DESKTOP_STATE_VERSION),
         None => true,
         _ => false,
     };
@@ -379,8 +361,10 @@ pub fn read_versioned_desktop_state(state: &Map<String, Value>) -> DesktopState 
     create_desktop_state(state)
 }
 
-
-pub fn apply_desktop_state_update(current: DesktopState, update: DesktopStateUpdate) -> DesktopState {
+pub fn apply_desktop_state_update(
+    current: DesktopState,
+    update: DesktopStateUpdate,
+) -> DesktopState {
     let recent_path = update
         .last_workspace_path
         .as_ref()
@@ -416,7 +400,9 @@ pub fn apply_desktop_state_update(current: DesktopState, update: DesktopStateUpd
             .right_panel_width
             .map(clamp_panel_width)
             .unwrap_or(current.right_panel_width),
-        bottom_panel_open: update.bottom_panel_open.unwrap_or(current.bottom_panel_open),
+        bottom_panel_open: update
+            .bottom_panel_open
+            .unwrap_or(current.bottom_panel_open),
         development_extension_directories: update
             .development_extension_directories
             .map(normalize_extension_directories)
@@ -429,7 +415,6 @@ pub fn apply_desktop_state_update(current: DesktopState, update: DesktopStateUpd
         workspace_views,
     }
 }
-
 
 /// Records one view's collapsed groups and forgets the workspaces we no longer
 /// remember.
@@ -459,12 +444,13 @@ fn apply_collapsed_groups(
     views
 }
 
-
 pub fn create_desktop_state(state: &Map<String, Value>) -> DesktopState {
-    let last_workspace_path = state.get("lastWorkspacePath")
+    let last_workspace_path = state
+        .get("lastWorkspacePath")
         .and_then(Value::as_str)
         .and_then(nonempty_workspace_path);
-    let recent_workspace_paths = state.get("recentWorkspacePaths")
+    let recent_workspace_paths = state
+        .get("recentWorkspacePaths")
         .and_then(Value::as_array)
         .map(|paths| {
             normalize_workspace_paths(
@@ -482,11 +468,21 @@ pub fn create_desktop_state(state: &Map<String, Value>) -> DesktopState {
         version: DESKTOP_STATE_VERSION,
         last_workspace_path,
         recent_workspace_paths,
-        explorer_open: state.get("explorerOpen").and_then(Value::as_bool).unwrap_or(true),
+        explorer_open: state
+            .get("explorerOpen")
+            .and_then(Value::as_bool)
+            .unwrap_or(true),
         left_panel_width: read_panel_width(state.get("leftPanelWidth"), DEFAULT_LEFT_PANEL_WIDTH),
-        right_panel_width: read_panel_width(state.get("rightPanelWidth"), DEFAULT_RIGHT_PANEL_WIDTH),
-        bottom_panel_open: state.get("bottomPanelOpen").and_then(Value::as_bool).unwrap_or(false),
-        development_extension_directories: state.get("developmentExtensionDirectories")
+        right_panel_width: read_panel_width(
+            state.get("rightPanelWidth"),
+            DEFAULT_RIGHT_PANEL_WIDTH,
+        ),
+        bottom_panel_open: state
+            .get("bottomPanelOpen")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        development_extension_directories: state
+            .get("developmentExtensionDirectories")
             .and_then(Value::as_array)
             .map(|directories| {
                 normalize_extension_directories(
@@ -499,14 +495,14 @@ pub fn create_desktop_state(state: &Map<String, Value>) -> DesktopState {
             })
             .unwrap_or_default(),
         open_tabs: read_persisted_tabs(state.get("openTabs")),
-        active_tab_id: state.get("activeTabId")
+        active_tab_id: state
+            .get("activeTabId")
             .and_then(Value::as_str)
             .filter(|id| !id.is_empty())
             .map(str::to_owned),
         workspace_views: read_workspace_views(state.get("workspaceViews")),
     }
 }
-
 
 /// Reads the stored collapsed groups, skipping anything malformed.
 ///
@@ -542,7 +538,6 @@ fn read_workspace_views(value: Option<&Value>) -> WorkspaceViews {
         .collect()
 }
 
-
 pub fn default_desktop_state() -> DesktopState {
     DesktopState {
         version: DESKTOP_STATE_VERSION,
@@ -559,7 +554,6 @@ pub fn default_desktop_state() -> DesktopState {
     }
 }
 
-
 /// Deduplicates extension directories without touching the filesystem.
 ///
 /// Unlike workspace paths these are deliberately not canonicalized: a
@@ -575,19 +569,18 @@ pub fn normalize_extension_directories(directories: Vec<String>) -> Vec<String> 
     normalized
 }
 
-
 pub fn nonempty_workspace_path(path: &str) -> Option<String> {
     if path.is_empty() {
         return None;
     }
-    resolve_workspace_root(path).map(|p| p.to_string_lossy().to_string()).ok()
+    resolve_workspace_root(path)
+        .map(|p| p.to_string_lossy().to_string())
+        .ok()
 }
-
 
 pub fn clamp_panel_width(width: f64) -> f64 {
     width.clamp(MIN_PANEL_WIDTH, MAX_PANEL_WIDTH)
 }
-
 
 pub fn read_panel_width(value: Option<&Value>, fallback: f64) -> f64 {
     value
@@ -597,20 +590,20 @@ pub fn read_panel_width(value: Option<&Value>, fallback: f64) -> f64 {
         .unwrap_or(fallback)
 }
 
-
 pub fn normalize_workspace_paths(paths: Vec<String>, fallback: Option<&str>) -> Vec<String> {
-    let resolved_paths: Vec<String> = paths.into_iter().filter_map(|p| nonempty_workspace_path(&p)).collect();
+    let resolved_paths: Vec<String> = paths
+        .into_iter()
+        .filter_map(|p| nonempty_workspace_path(&p))
+        .collect();
     let resolved_fallback = fallback.and_then(nonempty_workspace_path);
     promote_recent_workspace(resolved_paths, resolved_fallback.as_deref())
 }
-
 
 pub fn merge_recent_workspace_paths(current: &[String], incoming: Vec<String>) -> Vec<String> {
     let mut merged = incoming;
     merged.extend(current.iter().cloned());
     promote_recent_workspace(merged, None)
 }
-
 
 pub fn promote_recent_workspace(paths: Vec<String>, path: Option<&str>) -> Vec<String> {
     let mut recent = Vec::with_capacity(MAX_RECENT_WORKSPACES);
@@ -630,7 +623,6 @@ pub fn promote_recent_workspace(paths: Vec<String>, path: Option<&str>) -> Vec<S
     recent
 }
 
-
 pub fn serialize_desktop_state(state: DesktopState) -> Value {
     serde_json::to_value(&state)
         .expect("desktop state fields are serializable (primitives, strings, BTreeMap, Vec)")
@@ -648,7 +640,6 @@ fn read_persisted_tabs(value: Option<&Value>) -> Vec<PersistedTab> {
         .unwrap_or_default()
 }
 
-
 pub fn read_settings_file(path: &Path) -> Result<Option<String>, NativeError> {
     match fs::read_to_string(path) {
         Ok(contents) => Ok(Some(contents)),
@@ -660,7 +651,6 @@ pub fn read_settings_file(path: &Path) -> Result<Option<String>, NativeError> {
         )),
     }
 }
-
 
 pub fn write_settings_file(path: &Path, contents: &str) -> Result<(), NativeError> {
     let parent = path.parent().ok_or_else(|| {
@@ -709,4 +699,3 @@ pub fn write_settings_file(path: &Path, contents: &str) -> Result<(), NativeErro
 
     Ok(())
 }
-

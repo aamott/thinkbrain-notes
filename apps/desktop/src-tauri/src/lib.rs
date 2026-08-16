@@ -3,8 +3,8 @@
 //! Main entry point for the Tauri desktop application, registering application state,
 //! plugins, and command handlers.
 
-mod error;
 mod commands;
+mod error;
 
 #[cfg(test)]
 mod tests;
@@ -60,5 +60,3 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("failed to run Thinkbrain Notes desktop shell");
 }
-
-

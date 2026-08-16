@@ -2,15 +2,18 @@ use crate::error::NativeError;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 
-use std::sync::{Mutex, atomic::{AtomicU64, Ordering}};
+use crate::commands::markdown::{is_markdown_path, list_markdown_file_entries, MarkdownFileEntry};
+use crate::commands::watcher::record_self_write;
 use std::collections::HashMap;
 use std::fs;
-use std::time::UNIX_EPOCH;
-use std::path::Component;
-use tauri::Manager;
 use std::io::Write;
-use crate::commands::markdown::{MarkdownFileEntry, list_markdown_file_entries, is_markdown_path};
-use crate::commands::watcher::record_self_write;
+use std::path::Component;
+use std::sync::{
+    atomic::{AtomicU64, Ordering},
+    Mutex,
+};
+use std::time::UNIX_EPOCH;
+use tauri::Manager;
 
 pub const IGNORED_FOLDERS: &[&str] = &["node_modules", "target", "dist", "vendor"];
 pub(crate) const MAX_WORKSPACE_ENTRIES: usize = 10_000;
@@ -35,15 +38,17 @@ pub fn next_workspace_window_label() -> String {
     )
 }
 
-
-pub fn register_workspace_window_root(roots: &WorkspaceWindowRoots, label: String, root_path: String) {
+pub fn register_workspace_window_root(
+    roots: &WorkspaceWindowRoots,
+    label: String,
+    root_path: String,
+) {
     roots
         .0
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
         .insert(label, root_path);
 }
-
 
 pub fn workspace_window_root(roots: &WorkspaceWindowRoots, label: &str) -> Option<String> {
     roots
@@ -54,7 +59,6 @@ pub fn workspace_window_root(roots: &WorkspaceWindowRoots, label: &str) -> Optio
         .cloned()
 }
 
-
 pub fn unregister_workspace_window_root(roots: &WorkspaceWindowRoots, label: &str) {
     roots
         .0
@@ -63,7 +67,6 @@ pub fn unregister_workspace_window_root(roots: &WorkspaceWindowRoots, label: &st
         .remove(label);
 }
 
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ShellStatus {
     pub app_name: String,
@@ -71,20 +74,17 @@ pub struct ShellStatus {
     pub ready: bool,
 }
 
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct WorkspaceDescriptor {
     pub root_path: String,
     pub name: String,
 }
 
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct WorkspaceSnapshot {
     pub workspace: WorkspaceDescriptor,
     pub files: Vec<MarkdownFileEntry>,
 }
-
 
 /// A single file-manager entry: a folder or a file of any type.
 ///
@@ -102,7 +102,6 @@ pub struct WorkspaceEntry {
     pub updated_at: Option<u64>,
 }
 
-
 #[tauri::command]
 pub fn desktop_shell_status() -> Result<ShellStatus, NativeError> {
     Ok(ShellStatus {
@@ -111,7 +110,6 @@ pub fn desktop_shell_status() -> Result<ShellStatus, NativeError> {
         ready: true,
     })
 }
-
 
 #[tauri::command]
 pub fn open_workspace(
@@ -140,7 +138,6 @@ pub fn open_workspace(
     })
 }
 
-
 #[tauri::command]
 pub fn list_workspace_entries(
     root_path: String,
@@ -153,7 +150,6 @@ pub fn list_workspace_entries(
 
     Ok(entries)
 }
-
 
 /// Creates a workspace file of any type. Unlike `create_markdown_file`, this
 /// powers the explorer's "New file" context action on arbitrary folders and
@@ -211,7 +207,6 @@ pub fn create_workspace_file(
     workspace_entry(&root, &file_path, false)
 }
 
-
 /// Creates a workspace folder (including any missing parents). Refuses to
 /// overwrite an existing entry so the explorer can surface a clear conflict.
 #[tauri::command]
@@ -243,7 +238,6 @@ pub fn create_workspace_folder(
     workspace_entry(&root, &folder_path, true)
 }
 
-
 /// Renames or moves any workspace file or folder. The destination path is
 /// normalized the same way as the source, and missing parent folders are
 /// created so a drag-into-collapsed-folder style move succeeds. A no-op rename
@@ -259,11 +253,9 @@ pub fn rename_workspace_entry(
     let entry = rename_workspace_entry_impl(&root_path, &relative_path, &new_relative_path)?;
 
     if is_markdown {
-        if let Err(error) = crate::commands::search::remove_index_document(
-            app,
-            root_path,
-            relative_path.clone(),
-        ) {
+        if let Err(error) =
+            crate::commands::search::remove_index_document(app, root_path, relative_path.clone())
+        {
             eprintln!("[workspace] failed to remove search index for {relative_path}: {error}");
         }
     }
@@ -336,7 +328,6 @@ pub fn rename_workspace_entry_for_test(
     rename_workspace_entry_impl(&root_path, &relative_path, &new_relative_path)
 }
 
-
 /// Deletes any workspace file or folder. Folders are removed recursively so
 /// the explorer can delete a populated folder in one action. The path is
 /// normalized and verified to stay inside the workspace root for literal
@@ -353,11 +344,9 @@ pub fn delete_workspace_entry(
     delete_workspace_entry_impl(&root_path, &relative_path)?;
 
     if is_markdown {
-        if let Err(error) = crate::commands::search::remove_index_document(
-            app,
-            root_path,
-            relative_path.clone(),
-        ) {
+        if let Err(error) =
+            crate::commands::search::remove_index_document(app, root_path, relative_path.clone())
+        {
             eprintln!("[workspace] failed to remove search index for {relative_path}: {error}");
         }
     }
@@ -403,7 +392,6 @@ pub fn delete_workspace_entry_for_test(
     delete_workspace_entry_impl(&root_path, &relative_path)
 }
 
-
 #[tauri::command]
 pub fn open_workspace_window(app: tauri::AppHandle, root_path: String) -> Result<(), NativeError> {
     let root = resolve_workspace_root(&root_path)?;
@@ -411,7 +399,11 @@ pub fn open_workspace_window(app: tauri::AppHandle, root_path: String) -> Result
     let root_path = root.to_string_lossy().into_owned();
     // Register the root before build so the frontend's first
     // `window_workspace_root` call cannot race past registration.
-    register_workspace_window_root(&app.state::<WorkspaceWindowRoots>(), label.clone(), root_path);
+    register_workspace_window_root(
+        &app.state::<WorkspaceWindowRoots>(),
+        label.clone(),
+        root_path,
+    );
     let window =
         tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::App("index.html".into()))
             .title(describe_workspace(&root).name)
@@ -441,7 +433,6 @@ pub fn open_workspace_window(app: tauri::AppHandle, root_path: String) -> Result
     Ok(())
 }
 
-
 #[tauri::command]
 pub fn window_workspace_root(
     window: tauri::WebviewWindow,
@@ -449,7 +440,6 @@ pub fn window_workspace_root(
 ) -> Option<String> {
     workspace_window_root(&roots, window.label())
 }
-
 
 pub fn resolve_workspace_root(root_path: &str) -> Result<PathBuf, NativeError> {
     let root = PathBuf::from(root_path);
@@ -479,7 +469,6 @@ pub fn resolve_workspace_root(root_path: &str) -> Result<PathBuf, NativeError> {
     Ok(canonical_root)
 }
 
-
 /// Resolves an arbitrary workspace entry path (file or folder) and validates
 /// that it stays inside the workspace root. Unlike
 /// [`resolve_markdown_file_path`], this accepts any extension and is used by
@@ -491,7 +480,10 @@ pub fn resolve_workspace_root(root_path: &str) -> Result<PathBuf, NativeError> {
 /// not-yet-existing targets (e.g. a `create_workspace_file` destination), the
 /// deepest existing ancestor is canonicalized and prefix-checked instead,
 /// because `canonicalize` requires the path to exist.
-pub fn resolve_workspace_entry_path(root: &Path, relative_path: &str) -> Result<PathBuf, NativeError> {
+pub fn resolve_workspace_entry_path(
+    root: &Path,
+    relative_path: &str,
+) -> Result<PathBuf, NativeError> {
     let normalized = normalize_relative_path(relative_path)?;
     let path = root.join(normalized);
 
@@ -549,7 +541,6 @@ pub fn resolve_workspace_entry_path(root: &Path, relative_path: &str) -> Result<
     Ok(canonical_ancestor.join(tail))
 }
 
-
 pub fn normalize_relative_path(relative_path: &str) -> Result<String, NativeError> {
     // Tauri receives paths from every supported desktop platform. Normalize
     // separators before `Path::components` so Windows input is validated the
@@ -598,7 +589,6 @@ pub fn normalize_relative_path(relative_path: &str) -> Result<String, NativeErro
     Ok(parts.join("/"))
 }
 
-
 pub fn describe_workspace(root: &Path) -> WorkspaceDescriptor {
     WorkspaceDescriptor {
         root_path: root.to_string_lossy().into_owned(),
@@ -608,7 +598,6 @@ pub fn describe_workspace(root: &Path) -> WorkspaceDescriptor {
             .unwrap_or_else(|| root.to_string_lossy().into_owned()),
     }
 }
-
 
 /// Recursively collects every visible folder and file under the workspace.
 ///
@@ -676,9 +665,12 @@ pub fn collect_workspace_entries(
     Ok(())
 }
 
-
 /// Builds a `WorkspaceEntry` for a folder or file from filesystem metadata.
-pub fn workspace_entry(root: &Path, path: &Path, is_dir: bool) -> Result<WorkspaceEntry, NativeError> {
+pub fn workspace_entry(
+    root: &Path,
+    path: &Path,
+    is_dir: bool,
+) -> Result<WorkspaceEntry, NativeError> {
     let metadata = entry_metadata(root, path)?;
 
     Ok(WorkspaceEntry {
@@ -691,7 +683,6 @@ pub fn workspace_entry(root: &Path, path: &Path, is_dir: bool) -> Result<Workspa
         relative_path: metadata.relative_path,
     })
 }
-
 
 /// Shared filesystem-derived fields for a workspace entry.
 pub struct EntryMetadata {
@@ -746,12 +737,10 @@ pub fn entry_metadata(root: &Path, path: &Path) -> Result<EntryMetadata, NativeE
     })
 }
 
-
 /// Reports whether an entry name should be hidden (dot-prefixed, e.g. `.git`).
 pub fn is_hidden_name(name: &str) -> bool {
     name.starts_with('.')
 }
-
 
 /// Computes a deterministic 64-bit FNV-1a hash for workspace cache filenames.
 ///

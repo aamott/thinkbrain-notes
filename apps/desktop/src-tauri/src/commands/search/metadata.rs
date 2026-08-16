@@ -80,7 +80,10 @@ pub(super) fn replace_document_metadata(
     path: &str,
     fields: &[MetadataField],
 ) -> rusqlite::Result<()> {
-    connection.execute("DELETE FROM document_metadata WHERE path = ?1", params![path])?;
+    connection.execute(
+        "DELETE FROM document_metadata WHERE path = ?1",
+        params![path],
+    )?;
 
     let mut statement = connection.prepare_cached(
         "INSERT OR IGNORE INTO document_metadata(path, field_key, value_type, value_text)
@@ -100,7 +103,10 @@ pub(super) fn delete_document_metadata(
     connection: &Connection,
     path: &str,
 ) -> rusqlite::Result<()> {
-    connection.execute("DELETE FROM document_metadata WHERE path = ?1", params![path])?;
+    connection.execute(
+        "DELETE FROM document_metadata WHERE path = ?1",
+        params![path],
+    )?;
     Ok(())
 }
 

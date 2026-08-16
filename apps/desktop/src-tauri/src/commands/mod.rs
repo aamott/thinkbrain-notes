@@ -20,12 +20,12 @@
 
 pub mod extensions;
 pub mod git;
-pub mod workspace;
 pub mod markdown;
 pub mod search;
 pub mod settings;
 pub mod themes;
 pub mod watcher;
+pub mod workspace;
 
 /// Macro aggregating all Tauri IPC invoke handlers for registration in `tauri::Builder`.
 ///
@@ -189,7 +189,15 @@ mod tests {
         let mut sorted = APP_COMMAND_PATHS.to_vec();
         sorted.sort();
         let unique: std::collections::BTreeSet<&&str> = sorted.iter().collect();
-        assert_eq!(unique.len(), APP_COMMAND_PATHS.len(), "APP_COMMAND_PATHS has duplicates");
-        assert_eq!(APP_COMMAND_PATHS.len(), 37, "expected 37 registered commands");
+        assert_eq!(
+            unique.len(),
+            APP_COMMAND_PATHS.len(),
+            "APP_COMMAND_PATHS has duplicates"
+        );
+        assert_eq!(
+            APP_COMMAND_PATHS.len(),
+            37,
+            "expected 37 registered commands"
+        );
     }
 }

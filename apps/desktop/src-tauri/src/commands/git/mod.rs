@@ -1,9 +1,11 @@
 use crate::error::NativeError;
 use serde::Serialize;
+use std::io::Read;
 use std::path::Path;
 
 use std::process::{Command, Output, Stdio};
 use crate::commands::workspace::{resolve_workspace_root, WORKSPACE_ENTRY_MUTATION_LOCK, resolve_workspace_entry_path};
+use std::time::{Duration, Instant};
 
 mod porcelain;
 #[allow(unused_imports)]
@@ -173,23 +175,50 @@ impl GitRunner for SystemGitRunner {
             command.current_dir(directory);
         }
 
-        let child = command.spawn().map_err(|error| {
+        let mut child = command.spawn().map_err(|error| {
             if error.kind() == std::io::ErrorKind::NotFound {
                 GitRunError::NotFound(error)
             } else {
                 GitRunError::Io(error)
             }
         })?;
-
-        let (tx, rx) = std::sync::mpsc::channel();
-        std::thread::spawn(move || {
-            let _ = tx.send(child.wait_with_output());
+        let mut stdout = child.stdout.take().expect("stdout is piped");
+        let mut stderr = child.stderr.take().expect("stderr is piped");
+        let stdout_reader = std::thread::spawn(move || {
+            let mut output = Vec::new();
+            stdout.read_to_end(&mut output).map(|_| output)
         });
+        let stderr_reader = std::thread::spawn(move || {
+            let mut output = Vec::new();
+            stderr.read_to_end(&mut output).map(|_| output)
+        });
+        let deadline = Instant::now() + GIT_COMMAND_TIMEOUT;
 
-        match rx.recv_timeout(GIT_COMMAND_TIMEOUT) {
-            Ok(Ok(output)) => Ok(git_command_output(output)),
-            Ok(Err(e)) => Err(GitRunError::Io(e)),
-            Err(_) => Err(GitRunError::TimedOut),
+        loop {
+            match child.try_wait() {
+                Ok(Some(status)) => {
+                    let stdout = stdout_reader
+                        .join()
+                        .map_err(|_| GitRunError::Io(std::io::Error::other("stdout reader panicked")))?
+                        .map_err(GitRunError::Io)?;
+                    let stderr = stderr_reader
+                        .join()
+                        .map_err(|_| GitRunError::Io(std::io::Error::other("stderr reader panicked")))?
+                        .map_err(GitRunError::Io)?;
+                    return Ok(git_command_output(Output { status, stdout, stderr }));
+                }
+                Ok(None) if Instant::now() < deadline => {
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+                Ok(None) => {
+                    child.kill().map_err(GitRunError::Io)?;
+                    child.wait().map_err(GitRunError::Io)?;
+                    let _ = stdout_reader.join();
+                    let _ = stderr_reader.join();
+                    return Err(GitRunError::TimedOut);
+                }
+                Err(error) => return Err(GitRunError::Io(error)),
+            }
         }
     }
 }

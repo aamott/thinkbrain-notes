@@ -1,11 +1,10 @@
-use super::{
-    clear_documents, delete_document, index_document_records, init_index_schema, search_documents,
-    SearchQuery,
-    DocumentRecord,
-};
 use super::metadata::{
     query_metadata, MetadataFacet, MetadataField, MetadataPredicate, MetadataQuery, MetadataValue,
     INDEX_SCHEMA_VERSION,
+};
+use super::{
+    clear_documents, delete_document, index_document_records, init_index_schema, search_documents,
+    DocumentRecord, SearchQuery,
 };
 use rusqlite::Connection;
 use serde_json::Number;

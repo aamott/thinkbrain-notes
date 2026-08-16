@@ -5,9 +5,8 @@
 //! parser is a pure function on a string; the helpers here are shared by both
 //! the runner/operations in `mod.rs` and the parser in this file.
 
-use crate::error::NativeError;
 use super::{GitCommandOutput, GitRunError, GitStatusEntry, MAX_GIT_DETAILS_LENGTH};
-
+use crate::error::NativeError;
 
 /// Parses Git's `status --porcelain=v1 -z` output.
 ///
@@ -105,7 +104,6 @@ fn is_valid_status_pair(x: u8, y: u8) -> bool {
     PORCELAIN_V1_STATUS_CODES.contains(&x) && PORCELAIN_V1_STATUS_CODES.contains(&y)
 }
 
-
 pub fn git_status_parse_error(reason: &str) -> NativeError {
     NativeError::with_details(
         "git.command_failed",
@@ -113,7 +111,6 @@ pub fn git_status_parse_error(reason: &str) -> NativeError {
         format!("read the workspace Git status; invalid porcelain v1 output: {reason}"),
     )
 }
-
 
 pub fn git_run_error(action: &str, error: GitRunError) -> NativeError {
     match error {
@@ -135,7 +132,6 @@ pub fn git_run_error(action: &str, error: GitRunError) -> NativeError {
     }
 }
 
-
 pub fn git_command_failed(action: &str, output: &GitCommandOutput) -> NativeError {
     let stdout = bounded_git_text(&output.stdout);
     let stderr = bounded_git_text(&output.stderr);
@@ -153,12 +149,10 @@ pub fn git_command_failed(action: &str, output: &GitCommandOutput) -> NativeErro
     )
 }
 
-
 pub fn non_empty_git_text(value: &str) -> Option<String> {
     let value = value.trim();
     (!value.is_empty()).then(|| bounded_git_text(value))
 }
-
 
 pub fn bounded_git_text(value: &str) -> String {
     let mut characters = value.chars();
