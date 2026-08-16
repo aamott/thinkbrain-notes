@@ -11,7 +11,8 @@ import { listWindow, rowOffsets } from "../lib/listWindow";
 import { ContextMenu, MenuButton, type ContextMenuState } from "../shell/ContextMenu";
 import { EmptyState, JournalTrouble } from "./journalChrome";
 import { Row } from "./JournalRow";
-import { JournalPanelHeader, type JournalChip } from "./JournalPanelHeader";
+import { JournalPanelHeader } from "./JournalPanelHeader";
+import type { JournalChip, JournalFacet, JournalPredicate } from "./journalFacets";
 
 export type { JournalChip };
 import {
@@ -63,6 +64,12 @@ export interface JournalPanelProps {
    */
   readonly actionError?: string | null;
   readonly chips: readonly JournalChip[];
+  /** Fields and values the index found, for the filter menu (D41). */
+  readonly facets?: readonly JournalFacet[];
+  readonly predicates?: readonly JournalPredicate[];
+  /** False when the index cannot answer; the filter says so rather than lying. */
+  readonly filtersAvailable?: boolean;
+  readonly onToggleFilter?: (predicate: JournalPredicate) => void;
   readonly onSearchChange: (value: string) => void;
   readonly onNewEntry: () => void;
   readonly onToday: () => void;
@@ -103,6 +110,10 @@ export function JournalPanel({
   searchAvailable,
   actionError,
   chips,
+  facets = [],
+  predicates = [],
+  filtersAvailable = false,
+  onToggleFilter = () => undefined,
   onSearchChange,
   onNewEntry,
   onToday,
@@ -289,10 +300,14 @@ export function JournalPanel({
       search={search}
       searchAvailable={searchAvailable}
       chips={chips}
+      facets={facets}
+      predicates={predicates}
+      filtersAvailable={filtersAvailable}
       onSearchChange={onSearchChange}
       onNewEntry={onNewEntry}
       onToday={onToday}
       onOpenCalendar={onOpenCalendar}
+      onToggleFilter={onToggleFilter}
       onRemoveChip={onRemoveChip}
       onClearFilters={onClearFilters}
     />

@@ -1,4 +1,9 @@
-import { normalizeRoot, parseFrontmatter, type ExtensionManifest } from "@thinkbrain/core";
+import {
+  normalizeRoot,
+  parseFrontmatter,
+  type ExtensionManifest,
+  type JournalFieldDefinition
+} from "@thinkbrain/core";
 import { useCallback, useMemo, useSyncExternalStore } from "react";
 
 import { JournalPanelContainer } from "../../journal/JournalPanelContainer";
@@ -6,8 +11,16 @@ import { createJournalService } from "../../journal/journalService";
 import { journalSettingsSchema } from "../../journal/journalSettings";
 import { registerJournalControls } from "../../journal/JournalFieldDefinitionsControl";
 import { CalendarTabContainer } from "../../journal/CalendarTabContainer";
-import { useSearchIndexStore } from "../../search/searchIndexStore";
-import { searchService, type SearchService } from "../../search/searchService";
+import {
+  useSearchIndexStore,
+  type MetadataIndexQueryResult
+} from "../../search/searchIndexStore";
+import {
+  searchService,
+  type MetadataQuery,
+  type SearchService
+} from "../../search/searchService";
+import type { JournalFacet, JournalPredicate } from "../../journal/journalFacets";
 import { useCollapsedGroups } from "../../journal/journalCollapse";
 import { MetadataWidgetContainer } from "../../journal/MetadataWidgetContainer";
 import { parseFieldDefinitions } from "../../journal/journalSettings";
@@ -89,6 +102,76 @@ export async function searchJournalEntries(
   return new Set(hits.map((hit) => hit.relativePath));
 }
 
+/** What the panel needs of {@link useSearchIndexStore.queryMetadata}, and no more. */
+type QueryMetadata = (
+  rootPath: string,
+  query: MetadataQuery
+) => Promise<MetadataIndexQueryResult>;
+
+/** Read rather than subscribed: a query is an event, not a rendered value. */
+const queryMetadata: QueryMetadata = (rootPath, query) =>
+  useSearchIndexStore.getState().queryMetadata(rootPath, query);
+
+/**
+ * The fields and values the journal folder holds, for the filter menu (D41).
+ *
+ * Asked without predicates on purpose: the index computes facet values over the
+ * entries a query matched, so passing the active filters would narrow `mood` to
+ * the one value already chosen and leave no way to pick another. The vocabulary
+ * belongs to the folder; only the matching set belongs to the filters.
+ *
+ * A field the user has stopped configuring keeps its frontmatter key as its
+ * label (D45) — the entries still carry the values, so the filter still offers
+ * them.
+ */
+export async function journalFacetValues(
+  queryMetadata: QueryMetadata,
+  indexRoot: string | null,
+  journalRoot: string,
+  definitions: readonly JournalFieldDefinition[]
+): Promise<readonly JournalFacet[]> {
+  const facetKeys = definitions.map((definition) => definition.id);
+  // Nothing configured is nothing to ask about: the query would return empty
+  // facets at the cost of a round trip.
+  if (indexRoot === null || facetKeys.length === 0) return [];
+
+  const result = await queryMetadata(indexRoot, {
+    pathPrefix: journalRoot,
+    facetKeys,
+    predicates: []
+  });
+  if (result.kind !== "available") return [];
+
+  return result.facets.map((facet) => ({
+    key: facet.key,
+    label: definitions.find((definition) => definition.id === facet.key)?.label ?? facet.key,
+    values: facet.values
+  }));
+}
+
+/**
+ * The entries satisfying every active predicate (D43).
+ *
+ * Asks for no facet values: the menu already has them, and the native side
+ * skips the second query entirely when none are wanted.
+ */
+export async function journalMetadataMatches(
+  queryMetadata: QueryMetadata,
+  indexRoot: string | null,
+  journalRoot: string,
+  predicates: readonly JournalPredicate[]
+): Promise<ReadonlySet<string>> {
+  if (indexRoot === null) return new Set();
+  const result = await queryMetadata(indexRoot, {
+    pathPrefix: journalRoot,
+    facetKeys: [],
+    predicates
+  });
+  // Nothing matched is the honest answer for a filter that could not be run:
+  // the panel disables the control in that state, so no new filter can be set.
+  return result.kind === "available" ? new Set(result.matchingPaths) : new Set();
+}
+
 /**
  * Resolves the `startOfWeek` setting to a `WeekStart` (0=Sunday, 1=Monday).
  *
@@ -114,11 +197,16 @@ export function activateJournal(context: DesktopExtensionContext): void {
   context.settings.registerSchema(journalSettingsSchema);
   context.subscriptions.add(registerJournalControls());
 
+  /**
+   * Read on every call rather than captured: the folder is workspace-scoped
+   * (D45), so it changes under a running panel when the vault changes.
+   */
+  const journalRoot = (): string =>
+    normalizeRoot(context.settings.get<string>("root") ?? DEFAULT_ROOT);
+
   const service = createJournalService({
     workspace: context.workspace,
-    // Read on every call rather than captured: the folder is workspace-scoped
-    // (D45), so it changes under a running panel when the vault changes.
-    root: () => normalizeRoot(context.settings.get<string>("root") ?? DEFAULT_ROOT),
+    root: journalRoot,
     now: () => new Date()
   });
 
@@ -141,8 +229,7 @@ export function activateJournal(context: DesktopExtensionContext): void {
    */
   const belongsHere = (relativePath: string | null, contents: string): boolean => {
     if (relativePath === null) return false;
-    const root = normalizeRoot(context.settings.get<string>("root") ?? DEFAULT_ROOT);
-    if (relativePath.startsWith(`${root}/`)) return true;
+    if (relativePath.startsWith(`${journalRoot()}/`)) return true;
     const configured = definitions();
     if (configured.length === 0) return false;
     const metadata = parseFrontmatter(contents).metadata;
@@ -292,14 +379,22 @@ export function activateJournal(context: DesktopExtensionContext): void {
 
     const searchEntries = useCallback(
       (query: string): Promise<ReadonlySet<string>> =>
-        // The folder is read per call, like the service's own `root`: it is
-        // workspace-scoped (D45), so it changes under a running panel.
-        searchJournalEntries(
-          searchService.search,
-          indexRoot,
-          normalizeRoot(context.settings.get<string>("root") ?? DEFAULT_ROOT),
-          query
-        ),
+        searchJournalEntries(searchService.search, indexRoot, journalRoot(), query),
+      [indexRoot]
+    );
+
+    // The fields the user configured decide what there is to filter by; the
+    // index decides which values those fields actually hold.
+    const configured = useDefinitions();
+    const parsed = useMemo(() => parseFieldDefinitions(configured).definitions, [configured]);
+    const loadFacets = useCallback(
+      (): Promise<readonly JournalFacet[]> =>
+        journalFacetValues(queryMetadata, indexRoot, journalRoot(), parsed),
+      [indexRoot, parsed]
+    );
+    const matchEntries = useCallback(
+      (predicates: readonly JournalPredicate[]): Promise<ReadonlySet<string>> =>
+        journalMetadataMatches(queryMetadata, indexRoot, journalRoot(), predicates),
       [indexRoot]
     );
 
@@ -311,6 +406,8 @@ export function activateJournal(context: DesktopExtensionContext): void {
         onOpenCalendar={openCalendar}
         indexAvailable={indexStatus === "ready"}
         searchEntries={searchEntries}
+        loadFacets={loadFacets}
+        matchEntries={matchEntries}
         collapsed={collapsed}
         onCollapsedChange={setCollapsed}
       />

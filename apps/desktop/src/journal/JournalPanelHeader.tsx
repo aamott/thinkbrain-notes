@@ -1,11 +1,9 @@
 import { ACTION, TOUCH } from "./journalChrome";
+import { JournalFilterControl } from "./JournalFilterControl";
+import type { JournalChip, JournalFacet, JournalPredicate } from "./journalFacets";
 import type { JournalView } from "./journalViewModel";
 
-/** One dismissible active filter (D60). */
-export interface JournalChip {
-  readonly id: string;
-  readonly label: string;
-}
+export type { JournalChip };
 
 /**
  * Journal panel header: actions, search, and the active-filter chip row (D71/D75).
@@ -18,10 +16,14 @@ export function JournalPanelHeader({
   search,
   searchAvailable,
   chips,
+  facets,
+  predicates,
+  filtersAvailable,
   onSearchChange,
   onNewEntry,
   onToday,
   onOpenCalendar,
+  onToggleFilter,
   onRemoveChip,
   onClearFilters
 }: {
@@ -29,10 +31,14 @@ export function JournalPanelHeader({
   readonly search: string;
   readonly searchAvailable: boolean;
   readonly chips: readonly JournalChip[];
+  readonly facets: readonly JournalFacet[];
+  readonly predicates: readonly JournalPredicate[];
+  readonly filtersAvailable: boolean;
   readonly onSearchChange: (value: string) => void;
   readonly onNewEntry: () => void;
   readonly onToday: () => void;
   readonly onOpenCalendar: () => void;
+  readonly onToggleFilter: (predicate: JournalPredicate) => void;
   readonly onRemoveChip: (id: string) => void;
   readonly onClearFilters: () => void;
 }) {
@@ -80,11 +86,12 @@ export function JournalPanelHeader({
             </span>
           </p>
         )}
-        {/* The "Filter" button is omitted until facets ship: a permanently
-            disabled button with a count badge that can never appear is a dead
-            affordance, and the panel's own D-pattern says a button that does
-            nothing is worse than no button (line 87). The active-filter count
-            stays visible above while the chip row carries the dismissals. */}
+        <JournalFilterControl
+          facets={facets}
+          predicates={predicates}
+          available={filtersAvailable}
+          onToggle={onToggleFilter}
+        />
       </div>
 
       {chips.length > 0 && (

@@ -51,9 +51,9 @@ const mount = async (props: Partial<Parameters<typeof JournalPanelContainer>[0]>
   await act(async () =>
     root?.render(
       <JournalPanelContainer
+        {...props}
         service={props.service ?? service()}
         onOpenCalendar={props.onOpenCalendar ?? (() => undefined)}
-        indexAvailable={props.indexAvailable}
       />
     )
   );
@@ -440,5 +440,131 @@ describe("collapse state that outlives the panel (D53)", () => {
     // The panel does not also keep its own copy: the row is still open, because
     // what is collapsed is now whatever the listener says it is.
     expect(host.textContent).toContain("6:02 PM");
+  });
+});
+
+describe("metadata filters", () => {
+  const twoEntries = service({
+    listEntries: async () => listing(["2026-08-07-1802.md", "2026-08-08-0900.md"])
+  });
+  const facets = [{ key: "mood", label: "Mood", values: ["good", "tired"] }] as const;
+
+  const filtered = async (
+    props: Partial<Parameters<typeof JournalPanelContainer>[0]> = {}
+  ): Promise<HTMLDivElement> =>
+    mount({
+      service: twoEntries,
+      indexAvailable: true,
+      loadFacets: async () => facets,
+      matchEntries: async () => new Set<string>(),
+      ...props
+    });
+
+  it("offers the values the index found, not a list of our own", async () => {
+    const host = await filtered();
+
+    await click(host, "Filter entries");
+
+    expect(host.textContent).toContain("Mood");
+    expect(
+      [...host.querySelectorAll("button")].map((button) => button.getAttribute("aria-label"))
+    ).toContain("Mood good");
+  });
+
+  it("shows only the entries the index matched, and says how many", async () => {
+    const matchEntries = vi.fn(async () => new Set(["journal/2026-08-08-0900.md"]));
+    const host = await filtered({ matchEntries });
+
+    await click(host, "Filter entries");
+    await click(host, "Mood good");
+
+    expect(matchEntries).toHaveBeenCalledWith([{ key: "mood", value: "good" }]);
+    expect(host.textContent).toContain("9:00 AM");
+    expect(host.textContent).not.toContain("6:02 PM");
+    expect(host.textContent).toContain("Showing 1");
+    expect(host.textContent).toContain("of 2 entries");
+  });
+
+  it("runs the search inside the filter rather than beside it (D16)", async () => {
+    // The search matches one entry the filter excludes; only the overlap shows.
+    const host = await filtered({
+      searchEntries: async () =>
+        new Set(["journal/2026-08-07-1802.md", "journal/2026-08-08-0900.md"]),
+      matchEntries: async () => new Set(["journal/2026-08-07-1802.md"])
+    });
+
+    await click(host, "Filter entries");
+    await click(host, "Mood good");
+    const field = host.querySelector<HTMLInputElement>("input");
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(
+        field,
+        "salt"
+      );
+      field?.dispatchEvent(new Event("input", { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 260));
+    });
+
+    expect(host.textContent).toContain("6:02 PM");
+    expect(host.textContent).not.toContain("9:00 AM");
+  });
+
+  it("names each active filter in a chip that removes it", async () => {
+    const host = await filtered({ matchEntries: async () => new Set() });
+
+    await click(host, "Filter entries");
+    await click(host, "Mood good");
+    expect(host.textContent).toContain("Mood good");
+
+    await click(host, "Remove filter: Mood good");
+
+    expect(host.textContent).toContain("6:02 PM");
+    expect(host.textContent).toContain("9:00 AM");
+  });
+
+  it("clears the metadata filters along with everything else", async () => {
+    const host = await filtered({ matchEntries: async () => new Set() });
+
+    await click(host, "Filter entries");
+    await click(host, "Mood good");
+    await click(host, "Clear all");
+
+    expect(host.textContent).toContain("6:02 PM");
+    expect(host.textContent).toContain("9:00 AM");
+    expect(host.textContent).not.toContain("Showing");
+  });
+
+  it("asks again for the values when the folder has been re-read", async () => {
+    // A new entry can carry a value nothing in the folder had before.
+    const loadFacets = vi.fn(async () => facets);
+    const host = await filtered({ loadFacets });
+    const before = loadFacets.mock.calls.length;
+
+    await click(host, "New journal entry");
+
+    expect(loadFacets.mock.calls.length).toBeGreaterThan(before);
+  });
+
+  it("stops applying a filter the index can no longer answer", async () => {
+    const host = await filtered({ matchEntries: async () => new Set() });
+    await click(host, "Filter entries");
+    await click(host, "Mood good");
+    expect(host.textContent).not.toContain("6:02 PM");
+
+    await act(async () =>
+      root?.render(
+        <JournalPanelContainer
+          service={twoEntries}
+          indexAvailable={false}
+          loadFacets={async () => facets}
+          matchEntries={async () => new Set()}
+          onOpenCalendar={() => undefined}
+        />
+      )
+    );
+
+    // Nothing claims to be filtering by something it cannot check.
+    expect(host.textContent).toContain("6:02 PM");
+    expect(host.textContent).not.toContain("Mood good");
   });
 });

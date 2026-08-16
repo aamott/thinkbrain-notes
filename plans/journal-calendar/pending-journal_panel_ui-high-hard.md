@@ -6,13 +6,17 @@ Shipped: `journalViewModel.ts` (all fourteen states, pure), `JournalPanel.tsx` (
 `JournalPanelContainer.tsx` (state + service), `MetadataWidget.tsx`, and registration through
 `extensions/builtins/journal.tsx`.
 
-Remaining: metadata facets in the panel's filter row, and the two shell affordances noted
-below. The widget now registers through D44's slot and edits the open document — not the file
-— so the user's Save stays the only thing that writes.
+Remaining: the two shell affordances noted below — `Open folder…` and `Open settings`, which
+the extension API has no route to yet. The widget now registers through D44's slot and edits
+the open document — not the file — so the user's Save stays the only thing that writes.
 
 Landed 2026-08-13: list virtualization (D13), first-line previews scoped to the visible rows,
 and collapse persistence (D53). Search is scoped to the journal folder natively — see
 `plans/wip-indexing-search-med-med.md`.
+
+Landed 2026-08-16: the metadata filter (D16/D41/D43) — `JournalFilterControl.tsx` right-aligned
+in the filter row (D73), values from the platform index, predicates ANDed within one entry, and
+search running inside the resulting set. The arithmetic is `journalFacets.ts`, pure.
 
 ## Epic
 
@@ -123,15 +127,15 @@ chrome would be the inconsistent choice. **Product owner: say the word and I wil
 
 - [ ] Journal popout registers local panel id `journal` (`journal-calendar.journal`) through `context.panels.register(...)` with `side: "left"`; no direct registry mutation (D47).
 - [ ] Popout is a navigator: every entry row opens in the main editor as a normal tab; no inline editing in the popout.
-- [ ] Popout header follows D71/D75: New entry (the only filled control) with Today and Open calendar beside it, then search, then the filter row with the control right-aligned (D73). No group-by control. Focus order: overflow, New entry, Today, Open calendar, search, filter, chips, list.
+- [x] Popout header follows D71/D75: New entry (the only filled control) with Today and Open calendar beside it, then search, then the filter row with the control right-aligned (D73). No group-by control. Focus order: overflow, New entry, Today, Open calendar, search, filter, chips, list.
 - [ ] "Today" opens the most recent entry for today's date or creates a new one; never appends to an existing file (D18).
 - [x] List renders as a flat virtualized stream with collapsible year + month headers, non-indented (D37, D39); list handles thousands of entries without layout thrash (D13). The window arithmetic is `lib/listWindow.ts`, apart from React and the DOM so its edge cases are testable; the panel measures one row of each visual class and reports which entries are drawn.
 - [x] Rows render from filename-derived dates alone; first-line previews load lazily for
       visible rows only and never block first paint (see the listing strategy in
       `pending-journal_service_daily_notes-high-med.md`).
 - [ ] Undated is a pinned collapsed category with a count and is absent when empty; non-Markdown files are silently excluded from the popout (D32/D36).
-- [ ] Active filters show count badge + chip row + "showing N of M" string; a muted-only indicator is a defect (D16).
-- [ ] Metadata facet values and paths come from D41 queries; all active predicates match within one entry per D43, and D16 search runs inside that entry set. Index unavailable disables only facets with explicit status and never scans files.
+- [x] Active filters show count badge + chip row + "showing N of M" string; a muted-only indicator is a defect (D16). The count is in the filter button's accessible name as well as its badge, and every predicate has its own dismissible chip.
+- [x] Metadata facet values and paths come from D41 queries; all active predicates match within one entry per D43, and D16 search runs inside that entry set. Index unavailable disables only facets with explicit status and never scans files.
 - [x] Metadata widget registers as `metadata-widget` through D44's observable React editor-header registry, appears in already-open editors, disposes cleanly, follows D28 triggers, starts as D35's dateline in D74's long form with the year, and expands to the form.
 - [x] Malformed frontmatter shows a non-blocking notice, as does a date that disagrees with the filename; neither rewrites anything. Edits are a single-key textual change, so key order, comments and quoting survive (`frontmatterEdit.ts`).
 - [ ] All fourteen UI states are handled with the approved mockup's copy and recovery actions; no fake/placeholder data ships.
@@ -159,6 +163,27 @@ platform's scrollbars all move it. Estimates cover the first frame only.
 below otherwise forbids. It is the same exception that criterion already makes
 for runtime panel dimensions: the height of the rows that are not drawn is a
 number computed per scroll, and there is no class that can express it.
+
+**The filter's values are asked for unfiltered, its matches are not.** The
+index computes facet values over the entries a query matched, so asking with the
+active predicates in place would return `mood good` as the only mood the moment
+it was ticked — the alternatives would vanish and there would be no way back to
+them without clearing the filter. So the panel asks twice, and the two questions
+have different lifetimes: the vocabulary belongs to the folder and is re-read
+when the folder is, while the matching set belongs to the predicates and is
+re-read when they change. Neither query is wasted — the native side skips
+computing facets entirely when none are asked for.
+
+**A filter the index cannot check is not shown as active.** While the index is
+away the predicates stay in memory but count for nothing: no chip, no badge, no
+filtering. A chip claiming a filter is in force while every entry is listed is a
+lie the user cannot see through, and dropping the predicates outright would
+punish them for a reindex they did not ask for. The menu closes with the index
+rather than staying open over values nothing can act on.
+
+**"Clear all" clears the search box too.** It sits under the chip row and reads
+as clearing the filters, but leaving a typed query filtering the list would
+answer a question the user just withdrew.
 
 **Collapse state is bounded by the recent-workspace list.** Stored per workspace
 in desktop state (D53) at schema 5, keyed by view id so the explorer tree can

@@ -46,6 +46,14 @@ rebuildable and lives in OS app-data, never in the vault.
   vault — few notes, or none, wherever the folder is a small share of it, and
   nothing would say so. An absent prefix searches everywhere, which is what a
   search box over a workspace wants.
+- **Facet values describe the matching set, not the folder.** `query_metadata`
+  computes its facets over the entries the predicates matched, which is what a
+  drill-down wants and is not what a menu of alternatives wants: with `mood
+  good` in the predicates, `mood` comes back holding only `good`. A caller
+  offering values to choose between asks twice — once with no predicates for
+  the vocabulary, once with them for the matching set — and pays little for it,
+  since a query naming no facet keys skips the facet SQL entirely. The journal
+  panel does exactly that.
 - **Pooled connections, never evicted (OI-004).** Index commands share a
   per-workspace `rusqlite::Connection` from `SEARCH_CONNECTIONS`. Nothing
   removes a handle when a workspace closes; revisit only if that matters.

@@ -1,6 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { JournalPanel, type JournalChip } from "./JournalPanel";
+import { JournalPanel } from "./JournalPanel";
+import {
+  intersectPaths,
+  predicateChips,
+  predicateId,
+  togglePredicate,
+  type JournalChip,
+  type JournalFacet,
+  type JournalPredicate
+} from "./journalFacets";
 import { selectJournalDay, useJournalFilter } from "./journalFilterStore";
 import { buildJournalView, type JournalStatus } from "./journalViewModel";
 import { formatJournalDate } from "@thinkbrain/core";
@@ -25,6 +34,9 @@ const PREVIEW_CONCURRENCY = 8;
 /** A pause long enough to mean "done typing", short enough not to feel laggy. */
 const SEARCH_DEBOUNCE_MS = 200;
 
+/** One identity for "no predicates", so a render with none is not a new question. */
+const EMPTY_PREDICATES: readonly JournalPredicate[] = [];
+
 export interface JournalPanelContainerProps {
   readonly service: JournalService;
   /** False until the platform index is ready for this workspace (D41). */
@@ -38,6 +50,24 @@ export interface JournalPanelContainerProps {
    * typing and does nothing is worse than one that says it is unavailable.
    */
   readonly searchEntries?: (query: string) => Promise<ReadonlySet<string>>;
+  /**
+   * The fields and values the index holds for this folder (D41).
+   *
+   * Asked for the folder as a whole rather than for what is currently filtered:
+   * the index computes facet values over the entries a query matched, so a
+   * narrowed list would drop `mood tired` the moment `mood good` was ticked and
+   * leave no way back to it.
+   */
+  readonly loadFacets?: () => Promise<readonly JournalFacet[]>;
+  /**
+   * The entries satisfying every active predicate (D43).
+   *
+   * Arrives with {@link JournalPanelContainerProps.loadFacets}: a menu that can
+   * be ticked but changes nothing is worse than no menu.
+   */
+  readonly matchEntries?: (
+    predicates: readonly JournalPredicate[]
+  ) => Promise<ReadonlySet<string>>;
   /**
    * The collapsed year and month groups, when something outside remembers them
    * across restarts (D53). Left out, the panel keeps them for its own lifetime,
@@ -54,6 +84,8 @@ export function JournalPanelContainer({
   service,
   indexAvailable = false,
   searchEntries,
+  loadFacets,
+  matchEntries,
   collapsed: controlledCollapsed,
   onCollapsedChange,
   onOpenSettings,
@@ -106,6 +138,14 @@ export function JournalPanelContainer({
   // synchronously, which `react-hooks/set-state-in-effect` rightly rejects.
   const [matches, setMatches] = useState<{
     readonly query: string;
+    readonly paths: ReadonlySet<string>;
+  } | null>(null);
+  const [facets, setFacets] = useState<readonly JournalFacet[]>([]);
+  const [predicates, setPredicates] = useState<readonly JournalPredicate[]>([]);
+  // Keyed by the predicate list it answered, compared by identity — which is
+  // exactly what `active` below preserves across renders.
+  const [metadataMatches, setMetadataMatches] = useState<{
+    readonly of: readonly JournalPredicate[];
     readonly paths: ReadonlySet<string>;
   } | null>(null);
   const { selectedDay } = useJournalFilter();
@@ -189,13 +229,69 @@ export function JournalPanelContainer({
     };
   }, [visibleEntries, previews, service, listing]);
 
+  const filtersAvailable =
+    indexAvailable && loadFacets !== undefined && matchEntries !== undefined;
+  /**
+   * The predicates actually in force.
+   *
+   * Empty while the index cannot answer them: a chip claiming to filter by a
+   * value nothing is checking is a lie the user cannot see through. They come
+   * back with the index, because the panel never threw them away.
+   */
+  const active = useMemo(
+    () => (filtersAvailable ? predicates : EMPTY_PREDICATES),
+    [filtersAvailable, predicates]
+  );
+
+  // Re-asked when the folder is re-read: a new entry can carry a value no entry
+  // had before, and a deleted one can take the last of its own.
+  useEffect(() => {
+    if (!filtersAvailable || loadFacets === undefined || listing === null) return;
+    let cancelled = false;
+    void loadFacets()
+      .then((found) => {
+        if (!cancelled) setFacets(found);
+      })
+      .catch((error: unknown) => {
+        console.error("[journal] Reading filter values failed.", error);
+        // Offering nothing is honest; offering a stale vocabulary is not.
+        if (!cancelled) setFacets([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [filtersAvailable, loadFacets, listing]);
+
+  // `listing` is a dependency without being read: a re-read folder can hold a
+  // new entry that satisfies the filter, and nothing else would ask again.
+  useEffect(() => {
+    if (active.length === 0 || matchEntries === undefined) return;
+    let cancelled = false;
+    void matchEntries(active)
+      .then((paths) => {
+        if (!cancelled) setMetadataMatches({ of: active, paths });
+      })
+      .catch((error: unknown) => {
+        // As with search: fail loudly, but never strand the list behind a
+        // filter that could not be computed.
+        console.error("[journal] Filtering by metadata failed.", error);
+        if (!cancelled) setMetadataMatches(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [active, matchEntries, listing]);
+
   const query = search.trim();
   const searching = indexAvailable && searchEntries !== undefined && query !== "";
   // `null` means no content filter at all, which is not the same as a query
   // that matched nothing — that one has to read as "no matches" (D52). A query
   // still in flight also filters nothing, rather than showing the last one's.
-  const matchingPaths =
-    searching && matches?.query === query ? matches.paths : null;
+  const searchPaths = searching && matches?.query === query ? matches.paths : null;
+  const metadataPaths =
+    active.length > 0 && metadataMatches?.of === active ? metadataMatches.paths : null;
+  // D16: the search runs inside the filter, not beside it.
+  const matchingPaths = intersectPaths(searchPaths, metadataPaths);
 
   // Typing is not a query. Each one is a round trip to the index, so the panel
   // waits for a pause before asking, and drops an answer that arrives after the
@@ -231,7 +327,7 @@ export function JournalPanelContainer({
     collapsed,
     expandedUndated,
     selectedDay,
-    activeFilterCount: (selectedDay ? 1 : 0) + (matchingPaths === null ? 0 : 1),
+    activeFilterCount: (selectedDay ? 1 : 0) + (searchPaths === null ? 0 : 1) + active.length,
     matchingPaths,
     previews
   });
@@ -270,9 +366,18 @@ export function JournalPanelContainer({
 
   // Dismissing the day chip clears the calendar's selection in step (D60),
   // because they are one piece of state rather than two that agree.
-  const chips: readonly JournalChip[] = selectedDay
-    ? [{ id: "day", label: formatJournalDate(selectedDay) }]
-    : [];
+  const chips: readonly JournalChip[] = [
+    ...(selectedDay ? [{ id: "day", label: formatJournalDate(selectedDay) }] : []),
+    ...predicateChips(active, facets)
+  ];
+
+  const clearFilters = (): void => {
+    selectJournalDay(null);
+    setPredicates([]);
+    // "Clear all" that left the search box filtering would be answering a
+    // question the user just withdrew.
+    setSearch("");
+  };
 
   return (
     <JournalPanel
@@ -281,6 +386,12 @@ export function JournalPanelContainer({
       searchAvailable={indexAvailable && searchEntries !== undefined}
       actionError={actionError}
       chips={chips}
+      facets={facets}
+      predicates={active}
+      filtersAvailable={filtersAvailable}
+      onToggleFilter={(predicate) =>
+        setPredicates((current) => togglePredicate(current, predicate))
+      }
       onSearchChange={setSearch}
       onNewEntry={() => run(() => service.createEntry())}
       onToday={() => run(() => service.openToday())}
@@ -290,8 +401,11 @@ export function JournalPanelContainer({
       onDeleteEntry={(relativePath) => run(() => service.deleteEntry(relativePath))}
       onVisibleEntriesChange={setVisibleEntries}
       onToggleGroup={toggle}
-      onRemoveChip={() => selectJournalDay(null)}
-      onClearFilters={() => selectJournalDay(null)}
+      onRemoveChip={(id) => {
+        if (id === "day") selectJournalDay(null);
+        else setPredicates((current) => current.filter((one) => predicateId(one) !== id));
+      }}
+      onClearFilters={clearFilters}
       onRetry={() => {
         setStatus("loading");
         reload();
