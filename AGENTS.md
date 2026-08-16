@@ -59,7 +59,7 @@ examples/extensions/  # Sample extension (hello-notes)
 
 
 ## Plans
-List relevant folder to see task status. Keep filenames updated to reflect current status. Review after milestones. Delete tasks after review, or fix status if work is not complete. Add action items from review as stories unless they are immediately fixable. Plans should be concise. Avoid duplicating info in files and long worklogs. 
+List relevant folder to see task status. Keep filenames updated to reflect current status. Review after milestones. Delete tasks after review, or fix status if work is not complete. Add action items from review as stories unless they are immediately fixable. Plans should be concise. Avoid duplicating info in files and long worklogs. Compare file layouts and architectures before starting work.
 
 **Plan Folder**
 
