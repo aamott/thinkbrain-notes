@@ -102,16 +102,14 @@ export function parseDynamicAppSettings(
   }
 
   // Run migrations on the raw record (version-tracked), then extract settings.
-  // A future version (> CURRENT_SETTINGS_VERSION) is rejected up front with
-  // defaults + an error diagnostic, mirroring the legacy `readSettingsVersion`
-  // strict check. Skipped migration steps emit warning diagnostics that are
-  // surfaced alongside the parse result.
+  // Only an error gives up on the document: a version this build cannot make
+  // sense of at all (`settings.version.invalid`) says nothing about what the
+  // rest of it means, while a merely newer one is a warning and the keys below
+  // are still read. Skipped migration steps emit warnings too.
   const versionRead = readSettingsVersion(parsed);
-  if (versionRead.diagnostic) {
-    return {
-      values: defaults,
-      diagnostics: [versionRead.diagnostic]
-    };
+  const versionDiagnostics = versionRead.diagnostic ? [versionRead.diagnostic] : [];
+  if (versionRead.diagnostic?.severity === "error") {
+    return { values: defaults, diagnostics: versionDiagnostics };
   }
 
   let record: Record<string, unknown>;
@@ -154,7 +152,7 @@ export function parseDynamicAppSettings(
 
   return {
     values,
-    diagnostics: [...migrationDiagnostics, ...validationDiagnostics]
+    diagnostics: [...versionDiagnostics, ...migrationDiagnostics, ...validationDiagnostics]
   };
 }
 
@@ -162,8 +160,9 @@ export function parseDynamicAppSettings(
  * Serializes dynamic settings for a single scope back to JSON, preserving
  * non-setting keys.
  *
- * The output keeps `version: CURRENT_SETTINGS_VERSION`, the flat setting keys
- * for the given scope, and any other non-setting keys (e.g. `desktopState`,
+ * The output keeps the document's version (never below
+ * `CURRENT_SETTINGS_VERSION`, never lower than it already was), the flat setting
+ * keys for the given scope, and any other non-setting keys (e.g. `desktopState`,
  * extension metadata) from `existingRawJson`. Pretty-printed with 2-space
  * indent and a trailing newline, matching the existing `serializeAppSettings`
  * style.
@@ -220,8 +219,14 @@ export function serializeDynamicSettings(
     }
   }
 
-  // Always stamp the current version.
-  base.version = CURRENT_SETTINGS_VERSION;
+  // Stamp the current version, but never a lower one than the document already
+  // carried. An older build writing "version 1" over a v2 document would tell
+  // the next v2 build its own file had been migrated backwards, and the v2
+  // migration would run a second time over data that had already had it.
+  base.version = Math.max(
+    readSettingsVersion(base).version,
+    CURRENT_SETTINGS_VERSION
+  );
 
   return `${JSON.stringify(base, null, 2)}\n`;
 }

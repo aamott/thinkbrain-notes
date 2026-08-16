@@ -65,3 +65,78 @@ describe("scope is a property of the setting, not its module (D45)", () => {
     expect(Object.keys(JSON.parse(written))).not.toContain(`${MODULE_ID}.fields`);
   });
 });
+
+/**
+ * Running a newer build and then an older one is an ordinary week here, and it
+ * used to cost the user every setting they had: the older build rejected the
+ * newer document outright and the next save wrote defaults over it. A version
+ * it does not recognize means "there may be more here than I understand", not
+ * "there is nothing here".
+ */
+describe("a document from a newer build", () => {
+  const newer = JSON.stringify({
+    version: 99,
+    "editor.fontSize": 22,
+    "some.future.key": { kept: true }
+  });
+  let registration: { dispose: () => void } | null = null;
+
+  beforeEach(() => {
+    registration = appSettingsRegistry.register({
+      id: "editor",
+      label: "Editor",
+      scope: "app",
+      sections: [
+        {
+          id: "editor.display",
+          label: "Display",
+          settings: [
+            {
+              key: "fontSize",
+              type: "number",
+              label: "Font size",
+              description: "Editor font size in pixels.",
+              default: 16,
+              scope: "app",
+              section: "editor.display"
+            }
+          ]
+        }
+      ]
+    });
+  });
+
+  afterEach(() => {
+    registration?.dispose();
+    registration = null;
+  });
+
+  it("is read for the settings this build does understand", () => {
+    const result = parseDynamicAppSettings(newer, appSettingsRegistry);
+
+    expect(result.values["editor.fontSize"]).toBe(22);
+  });
+
+  it("says so as a warning, rather than an error claiming defaults were used", () => {
+    const result = parseDynamicAppSettings(newer, appSettingsRegistry);
+    const diagnostic = result.diagnostics.find(
+      (entry) => entry.code === "settings.version.unsupported"
+    );
+
+    expect(diagnostic?.severity).toBe("warning");
+    expect(diagnostic?.message).not.toContain("defaults were used");
+  });
+
+  it("keeps its version and its unknown keys when this build writes it back", () => {
+    const written: Record<string, unknown> = JSON.parse(
+      serializeDynamicAppSettings({ "editor.fontSize": 14 }, appSettingsRegistry, newer)
+    );
+
+    // Stamping the version down would tell the newer build its own document had
+    // been migrated backwards, and it would stop running the migration that
+    // fills whatever `some.future.key` feeds.
+    expect(written.version).toBe(99);
+    expect(written["some.future.key"]).toEqual({ kept: true });
+    expect(written["editor.fontSize"]).toBe(14);
+  });
+});

@@ -345,16 +345,23 @@ pub fn read_desktop_state(app_settings: &Map<String, Value>) -> DesktopState {
         .unwrap_or_else(default_desktop_state)
 }
 
+/// Reads stored desktop state at whatever schema wrote it.
+///
+/// Every schema here is additive, so a document is readable in both directions:
+/// a field an older version never wrote falls back to its default, and one a
+/// newer version added is simply not read. Only a `version` that is not a
+/// version at all is grounds to give up, because then nothing can be said about
+/// the rest of the record. Rejecting a merely *newer* document is how running a
+/// newer build and then an older one — an ordinary branch switch — used to lose
+/// the workspace, the open tabs and the panel layout in one write.
 pub fn read_versioned_desktop_state(state: &Map<String, Value>) -> DesktopState {
-    let supported_version = match state.get("version") {
-        Some(Value::Number(version)) => version
-            .as_u64()
-            .is_some_and(|version| version <= DESKTOP_STATE_VERSION),
+    let readable = match state.get("version") {
+        Some(Value::Number(version)) => version.as_u64().is_some(),
         None => true,
         _ => false,
     };
 
-    if !supported_version {
+    if !readable {
         return default_desktop_state();
     }
 
@@ -640,16 +647,60 @@ fn read_persisted_tabs(value: Option<&Value>) -> Vec<PersistedTab> {
         .unwrap_or_default()
 }
 
+/// Reads a settings document, setting aside anything unparseable first.
+///
+/// Every reader above this falls back to defaults when a document will not
+/// parse, and the next write then replaces the file — so a document that goes
+/// bad takes the workspace, the theme, the open tabs and every preference with
+/// it, with nothing left to recover from. Moving it to `<stem>.corrupt.json`
+/// before returning "nothing stored" costs one file and keeps the bytes.
+///
+/// One slot per document, overwritten: corruption that repeats must not fill
+/// the disk with copies, and the newest is the one worth having. An empty file
+/// is not corruption — it stored nothing — so it is read as absent and leaves
+/// no quarantine behind.
 pub fn read_settings_file(path: &Path) -> Result<Option<String>, NativeError> {
-    match fs::read_to_string(path) {
-        Ok(contents) => Ok(Some(contents)),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(error) => Err(NativeError::with_details(
-            "settings.read_failed",
-            "Failed to read the settings file.",
-            error,
-        )),
+    let contents = match fs::read_to_string(path) {
+        Ok(contents) => contents,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => {
+            return Err(NativeError::with_details(
+                "settings.read_failed",
+                "Failed to read the settings file.",
+                error,
+            ))
+        }
+    };
+
+    if contents.trim().is_empty() {
+        return Ok(None);
     }
+
+    if serde_json::from_str::<Value>(&contents).is_ok() {
+        return Ok(Some(contents));
+    }
+
+    quarantine_settings_file(path);
+    Ok(None)
+}
+
+/// Moves an unparseable document aside, best effort.
+///
+/// A failure here must not stop the app from starting: the user is already
+/// losing their settings, and refusing to load would turn that into a window
+/// that will not open.
+fn quarantine_settings_file(path: &Path) {
+    let (Some(parent), Some(stem)) = (path.parent(), path.file_stem().and_then(|s| s.to_str()))
+    else {
+        return;
+    };
+
+    let quarantine = parent.join(format!("{stem}.corrupt.json"));
+    if let Err(error) = fs::rename(path, &quarantine) {
+        eprintln!("Failed to set aside unreadable settings at {path:?}: {error}");
+        return;
+    }
+    eprintln!("Unreadable settings at {path:?} were set aside as {quarantine:?}.");
 }
 
 pub fn write_settings_file(path: &Path, contents: &str) -> Result<(), NativeError> {

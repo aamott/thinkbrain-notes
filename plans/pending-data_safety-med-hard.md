@@ -60,3 +60,7 @@ Non-goals:
 
 - ⬜ Focused first story: safe writes + corruption detection + recovery UI —
   `data-safety/pending-safe_writes_corruption_detection-med-hard.md`
+- 🟨 Settings survive a downgrade, and corruption is recoverable —
+  `data-safety/pending-settings_survive_a_downgrade-med-med.md`. Not notes, but
+  the same failure: a document the app could not fully read was replaced instead
+  of kept. The recovery UI it needs is the one the story above owns.

@@ -29,4 +29,5 @@ These are random issues or shortcomings users have noted. They may or may not be
 
 
 # Other 
-- [ ] Occasionally during rebuilds, all saved settings are lost. Workspace, theme, tabs, everything. Stability issue? At the least we should be able to recover from corrupt state. Many paths of corruption fixes, backups, etc without memory leaks or flooding data or the drive. 
+- [~] Occasionally during rebuilds, all saved settings are lost. Workspace, theme, tabs, everything. Stability issue? At the least we should be able to recover from corrupt state. Many paths of corruption fixes, backups, etc without memory leaks or flooding data or the drive. 
+  - Two causes fixed in `plans/data-safety/pending-settings_survive_a_downgrade-med-med.md`: a document from a newer build was discarded rather than read (a branch switch does this), and an unparseable one was overwritten rather than set aside. Still open there: telling the user in-app, and a `desktopState` field written only by the newer build.

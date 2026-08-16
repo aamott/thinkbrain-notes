@@ -1140,6 +1140,48 @@ fn settings_write_creates_parent_directory_and_round_trips() {
     fs::remove_dir_all(temp_dir).expect("temp settings directory is cleaned up");
 }
 
+/// A settings document nobody can parse is about to be replaced by whatever the
+/// app writes next, and everything in it is gone for good. Setting it aside
+/// first costs one file and makes the loss recoverable by hand.
+#[test]
+fn a_settings_document_that_cannot_be_parsed_is_set_aside_before_it_is_replaced() {
+    let temp_dir = temp_test_dir("corrupt");
+    let settings_path = temp_dir.join("settings").join("app.json");
+    fs::create_dir_all(settings_path.parent().unwrap()).unwrap();
+    fs::write(&settings_path, "{\"theme\": \"dark\", trunc").unwrap();
+
+    assert_eq!(
+        read_settings_file(&settings_path).expect("corrupt settings read succeeds"),
+        None
+    );
+    assert_eq!(
+        fs::read_to_string(temp_dir.join("settings").join("app.corrupt.json")).unwrap(),
+        "{\"theme\": \"dark\", trunc"
+    );
+    assert!(!settings_path.exists());
+
+    fs::remove_dir_all(temp_dir).expect("temp settings directory is cleaned up");
+}
+
+/// An empty file says nothing was ever stored, so there is nothing to preserve.
+/// Quarantining it would leave a useless file behind after every first run that
+/// was interrupted.
+#[test]
+fn an_empty_settings_document_is_read_as_absent_rather_than_set_aside() {
+    let temp_dir = temp_test_dir("empty");
+    let settings_path = temp_dir.join("settings").join("app.json");
+    fs::create_dir_all(settings_path.parent().unwrap()).unwrap();
+    fs::write(&settings_path, "  \n").unwrap();
+
+    assert_eq!(
+        read_settings_file(&settings_path).expect("empty settings read succeeds"),
+        None
+    );
+    assert!(!temp_dir.join("settings").join("app.corrupt.json").exists());
+
+    fs::remove_dir_all(temp_dir).expect("temp settings directory is cleaned up");
+}
+
 #[test]
 fn desktop_state_update_merges_concurrent_mrus_and_preserves_app_settings() {
     let temp_dir = temp_test_dir("state_merge");
@@ -1280,6 +1322,46 @@ fn desktop_state_without_extension_directories_defaults_to_empty() {
         settings["desktopState"]["developmentExtensionDirectories"],
         serde_json::json!([])
     );
+}
+
+/// A branch switch runs a newer build and then an older one. Treating the newer
+/// build's document as unreadable threw away the workspace, the open tabs and
+/// the panel layout in one write; every schema here is additive, so the older
+/// build can read all of it but the fields it has never heard of.
+#[test]
+fn desktop_state_from_a_newer_build_is_read_rather_than_discarded() {
+    let existing = serde_json::json!({
+        "desktopState": {
+            "version": 99,
+            "explorerOpen": false,
+            "leftPanelWidth": 352.0,
+            "somethingLaterAdded": "not understood here"
+        }
+    });
+
+    let updated =
+        update_desktop_state_contents(Some(&existing.to_string()), DesktopStateUpdate::default())
+            .expect("desktop-state update succeeds");
+
+    let settings: Value = serde_json::from_str(&updated).expect("serialized settings are valid");
+    // Both differ from their defaults, so reading them back is the proof.
+    assert_eq!(settings["desktopState"]["explorerOpen"], false);
+    assert_eq!(settings["desktopState"]["leftPanelWidth"], 352.0);
+}
+
+#[test]
+fn desktop_state_with_a_version_that_is_not_a_version_falls_back_to_defaults() {
+    let existing = serde_json::json!({
+        "desktopState": { "version": "five", "explorerOpen": false, "leftPanelWidth": 352.0 }
+    });
+
+    let updated =
+        update_desktop_state_contents(Some(&existing.to_string()), DesktopStateUpdate::default())
+            .expect("desktop-state update succeeds");
+
+    let settings: Value = serde_json::from_str(&updated).expect("serialized settings are valid");
+    assert_eq!(settings["desktopState"]["explorerOpen"], true);
+    assert_eq!(settings["desktopState"]["leftPanelWidth"], 288.0);
 }
 
 #[test]

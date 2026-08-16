@@ -49,15 +49,38 @@ describe("desktop state persistence", () => {
     });
   });
 
-  it("uses defaults for unsupported state versions", () => {
+  /**
+   * Running a newer build and then an older one — a branch switch, a rebuild —
+   * used to lose the workspace, the open tabs and the panel layout, because a
+   * version this build had not reached was treated as unreadable. Each version
+   * has only ever added fields, so a newer document is readable for everything
+   * this build knows; what it added is what gets left behind.
+   */
+  it("reads a document from a newer build rather than discarding it", () => {
     expect(
       parseDesktopState(
         JSON.stringify({
           [DESKTOP_STATE_KEY]: {
             version: 99,
             lastWorkspacePath: "/notes/future",
-            explorerOpen: false
+            explorerOpen: false,
+            somethingLaterAdded: "not understood here"
           }
+        })
+      )
+    ).toEqual({
+      ...DEFAULT_DESKTOP_STATE,
+      lastWorkspacePath: "/notes/future",
+      recentWorkspacePaths: ["/notes/future"],
+      explorerOpen: false
+    });
+  });
+
+  it("still uses defaults when the version itself is not a version", () => {
+    expect(
+      parseDesktopState(
+        JSON.stringify({
+          [DESKTOP_STATE_KEY]: { version: "five", lastWorkspacePath: "/notes/broken" }
         })
       )
     ).toEqual(DEFAULT_DESKTOP_STATE);

@@ -198,15 +198,14 @@ function readDesktopState(appSettings: Readonly<Record<string, unknown>>): Deskt
 function readVersionedDesktopState(storedState: Readonly<Record<string, unknown>>): DesktopState {
   const version = storedState.version;
 
-  // Every earlier schema is readable — each version only ever added fields, and
-  // a missing one falls back to its default. Written as a comparison rather than
-  // a list of accepted numbers so bumping the version cannot silently start
-  // throwing away the documents the previous one wrote.
-  if (
-    version !== undefined &&
-    !(typeof version === "number" && Number.isInteger(version) && version >= 0 &&
-      version <= DESKTOP_STATE_VERSION)
-  ) {
+  // Every schema is readable in both directions — each version only ever added
+  // fields, so a missing one falls back to its default and one this build has
+  // not heard of is simply not read. A *newer* document is the one that used to
+  // cost the most: running a newer build and then an older one is a branch
+  // switch, and rejecting the document lost the workspace, the tabs and the
+  // layout in one go. Only a version that is not a version at all is grounds to
+  // give up, because then nothing can be said about the rest of the record.
+  if (version !== undefined && !(typeof version === "number" && Number.isInteger(version) && version >= 0)) {
     return DEFAULT_DESKTOP_STATE;
   }
 

@@ -57,10 +57,14 @@ export interface SettingsVersionDiagnostic {
  *
  * Defaults to version 0 (unversioned) when the field is absent. A malformed
  * version (non-integer, negative) yields a `settings.version.invalid` error
- * diagnostic and is treated as v0. A version newer than
- * `CURRENT_SETTINGS_VERSION` is rejected with a `settings.version.unsupported`
- * error diagnostic so the caller can fall back to defaults rather than
- * silently "migrating" a future document down to v0.
+ * diagnostic and is treated as v0: nothing can be said about what the rest of
+ * that document means.
+ *
+ * A version merely *newer* than `CURRENT_SETTINGS_VERSION` is different, and is
+ * a warning. The document is intact and was written by a build that only added
+ * to it, so every key this build knows is still readable; what it cannot do is
+ * run migrations it does not have. Rejecting it outright is how running a newer
+ * build and then an older one used to cost the user every setting they had.
  */
 export function readSettingsVersion(
   value: Readonly<Record<string, unknown>>
@@ -88,8 +92,8 @@ export function readSettingsVersion(
       version,
       diagnostic: {
         code: "settings.version.unsupported",
-        message: `Application settings version ${version} is newer than supported version ${CURRENT_SETTINGS_VERSION}; defaults were used.`,
-        severity: "error",
+        message: `Application settings version ${version} was written by a newer build than this one (version ${CURRENT_SETTINGS_VERSION}); anything it added is kept but not understood here.`,
+        severity: "warning",
         path: "version"
       }
     };
