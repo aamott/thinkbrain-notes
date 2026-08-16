@@ -1,0 +1,1473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ThinkBrain Notes — Sync &amp; Merge UI Mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #0f111a;
+    --panel: #161925;
+    --panel-2: #12141d;
+    --activity-bar: #0d0e16;
+    --editor: #1a1d29;
+    --editor-2: #1e2130;
+    --statusbar: #0e7c86;
+    --border: #262b3d;
+    --border-soft: #1f2333;
+    --text: #e6e8f0;
+    --text-dim: #9aa0b4;
+    --text-faint: #6b7288;
+    --accent: #5fb9c9;
+    --accent-2: #7dd3e0;
+    --accent-soft: rgba(95,185,201,0.14);
+    --left-color: #7aa2f7;
+    --left-soft: rgba(122,162,247,0.12);
+    --left-border: rgba(122,162,247,0.4);
+    --right-color: #c48fef;
+    --right-soft: rgba(196,143,239,0.12);
+    --right-border: rgba(196,143,239,0.4);
+    --good: #6bd08f;
+    --good-soft: rgba(107,208,143,0.14);
+    --warn: #e8b85f;
+    --warn-soft: rgba(232,184,95,0.14);
+    --danger: #ea8080;
+    --radius-lg: 16px;
+    --radius-md: 10px;
+    --radius-sm: 7px;
+    --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+    --shadow-window: 0 24px 60px -12px rgba(0,0,0,0.55), 0 4px 16px -4px rgba(0,0,0,0.4);
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(circle at 15% 8%, rgba(95,185,201,0.06), transparent 40%),
+      radial-gradient(circle at 85% 92%, rgba(196,143,239,0.05), transparent 45%),
+      #0a0b12;
+    color:var(--text);
+    font-family:var(--font-ui);
+    -webkit-font-smoothing:antialiased;
+    line-height:1.5;
+  }
+
+  ::selection{background:rgba(95,185,201,0.35);}
+
+  /* ---------- Page scaffold ---------- */
+  .page{
+    max-width:1180px;
+    margin:0 auto;
+    padding:56px 28px 90px;
+  }
+  .intro{
+    text-align:center;
+    margin-bottom:56px;
+  }
+  .intro .kicker{
+    font-size:12.5px;
+    font-weight:700;
+    letter-spacing:0.12em;
+    text-transform:uppercase;
+    color:var(--accent-2);
+    margin-bottom:10px;
+  }
+  .intro h1{
+    font-size:32px;
+    font-weight:800;
+    margin:0 0 12px;
+    letter-spacing:-0.01em;
+  }
+  .intro p{
+    color:var(--text-dim);
+    font-size:15px;
+    max-width:640px;
+    margin:0 auto;
+  }
+
+  .section-block{
+    margin-bottom:72px;
+  }
+  .section-label{
+    display:flex;
+    align-items:baseline;
+    gap:12px;
+    margin-bottom:18px;
+    padding-left:4px;
+  }
+  .section-label .num{
+    font-family:var(--font-mono);
+    font-size:13px;
+    color:var(--text-faint);
+    font-weight:600;
+  }
+  .section-label h2{
+    font-size:15px;
+    font-weight:700;
+    margin:0;
+    color:var(--text);
+    letter-spacing:0.01em;
+  }
+  .section-label .sub{
+    color:var(--text-faint);
+    font-size:13px;
+    margin-left:2px;
+  }
+
+  /* ---------- Window chrome ---------- */
+  .window{
+    background:var(--bg);
+    border-radius:var(--radius-lg);
+    border:1px solid var(--border);
+    box-shadow:var(--shadow-window);
+    overflow:hidden;
+  }
+  .window-titlebar{
+    height:38px;
+    background:linear-gradient(180deg, #14151f, #101119);
+    border-bottom:1px solid var(--border);
+    display:flex;
+    align-items:center;
+    padding:0 14px;
+    gap:8px;
+    flex-shrink:0;
+  }
+  .dot{width:12px;height:12px;border-radius:50%;}
+  .dot.red{background:#ea6a6a;}
+  .dot.yellow{background:#e8c15f;}
+  .dot.green{background:#6bd08f;}
+  .window-title{
+    flex:1;
+    text-align:center;
+    font-size:12.5px;
+    color:var(--text-faint);
+    font-weight:500;
+    margin-right:52px;
+  }
+  .caption{
+    text-align:center;
+    margin-top:14px;
+    color:var(--text-faint);
+    font-size:13px;
+    padding:0 20px;
+  }
+  .caption b{color:var(--text-dim); font-weight:600;}
+
+  /* ---------- App shell shared pieces ---------- */
+  .app-shell{
+    display:flex;
+    height:100%;
+  }
+  .activity-bar{
+    width:52px;
+    background:var(--activity-bar);
+    border-right:1px solid var(--border);
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding:14px 0;
+    gap:6px;
+    flex-shrink:0;
+  }
+  .activity-item{
+    width:38px;
+    height:38px;
+    border-radius:9px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    color:var(--text-faint);
+    position:relative;
+    cursor:default;
+  }
+  .activity-item svg{width:19px;height:19px;}
+  .activity-item.active{
+    background:rgba(95,185,201,0.14);
+    color:var(--accent-2);
+  }
+  .activity-item .badge{
+    position:absolute;
+    top:-2px; right:-2px;
+    background:var(--warn);
+    color:#231a05;
+    font-size:10px;
+    font-weight:800;
+    width:17px;height:17px;
+    border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    border:2px solid var(--activity-bar);
+  }
+  .activity-spacer{flex:1;}
+
+  .status-bar{
+    height:26px;
+    background:#101319;
+    border-top:1px solid var(--border);
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:0 12px;
+    font-size:11.5px;
+    color:var(--text-dim);
+    flex-shrink:0;
+  }
+  .status-left, .status-right{display:flex;align-items:center;gap:14px;}
+  .status-pill{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    padding:2px 9px;
+    border-radius:20px;
+    font-weight:600;
+    font-size:11px;
+  }
+  .status-pill.warn{background:var(--warn-soft); color:var(--warn);}
+  .status-pill.good{background:var(--good-soft); color:var(--good);}
+
+  svg{display:block;}
+
+  /* ============ SECTION 1: shell strip ============ */
+  .shell-strip-body{
+    display:flex;
+    flex-direction:column;
+  }
+  .shell-strip-row{
+    display:flex;
+    height:120px;
+  }
+  .shell-strip-row .filler{
+    flex:1;
+    background:
+      linear-gradient(180deg, var(--panel-2), var(--bg));
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    color:var(--text-faint);
+    font-size:12.5px;
+    border-right:1px solid var(--border-soft);
+  }
+  .status-variants{
+    display:flex;
+    flex-direction:column;
+  }
+  .status-variants .status-bar{padding:0 16px;}
+  .status-variants .status-bar + .status-bar{border-top:1px solid var(--border-soft);}
+
+  /* ============ SECTION 2: conflicts panel ============ */
+  .conflicts-body{
+    display:flex;
+    height:640px;
+  }
+  .conflicts-sidebar{
+    width:340px;
+    background:var(--panel);
+    border-right:1px solid var(--border);
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+  }
+  .conflicts-header{
+    padding:16px 16px 12px;
+    border-bottom:1px solid var(--border-soft);
+  }
+  .conflicts-header .title{
+    font-size:14px;
+    font-weight:700;
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin-bottom:4px;
+  }
+  .conflicts-header .desc{
+    font-size:12px;
+    color:var(--text-faint);
+    line-height:1.5;
+  }
+  .conflicts-list{
+    flex:1;
+    overflow-y:auto;
+    padding:12px;
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+  }
+  .conflict-card{
+    background:var(--panel-2);
+    border:1px solid var(--border);
+    border-radius:var(--radius-md);
+    padding:13px 14px;
+  }
+  .conflict-card .row1{
+    display:flex;
+    align-items:flex-start;
+    gap:10px;
+    margin-bottom:8px;
+  }
+  .file-icon{
+    width:30px;height:30px;
+    border-radius:7px;
+    display:flex;align-items:center;justify-content:center;
+    flex-shrink:0;
+  }
+  .file-icon.md{background:rgba(122,162,247,0.15); color:var(--left-color);}
+  .file-icon.img{background:rgba(232,184,95,0.15); color:var(--warn);}
+  .file-icon.canvas{background:rgba(196,143,239,0.15); color:var(--right-color);}
+  .file-icon svg{width:16px;height:16px;}
+  .conflict-name{font-size:13.5px;font-weight:600;color:var(--text);}
+  .conflict-sub{font-size:11.5px;color:var(--text-faint);margin-top:2px;}
+  .chip{
+    display:inline-flex;
+    align-items:center;
+    gap:5px;
+    font-size:10.5px;
+    font-weight:600;
+    padding:3px 8px;
+    border-radius:20px;
+    color:var(--text-dim);
+    background:rgba(255,255,255,0.05);
+    border:1px solid var(--border);
+    white-space:nowrap;
+  }
+  .chip svg{width:11px;height:11px;}
+  .chip.onedrive{color:#7bb0ff; border-color:rgba(123,176,255,0.3); background:rgba(123,176,255,0.08);}
+
+  .btn{
+    font-family:var(--font-ui);
+    border:none;
+    border-radius:8px;
+    font-weight:600;
+    cursor:default;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:6px;
+  }
+  .btn-primary{
+    background:var(--accent);
+    color:#0a1c1f;
+  }
+  .btn-secondary{
+    background:rgba(255,255,255,0.06);
+    color:var(--text);
+    border:1px solid var(--border);
+  }
+  .btn-ghost{
+    background:transparent;
+    color:var(--text-dim);
+    border:1px solid var(--border);
+  }
+  .btn-sm{padding:6px 12px; font-size:12px;}
+  .btn-block{width:100%;}
+
+  .card-actions{display:flex; gap:8px; margin-top:2px;}
+  .card-actions .btn{flex:1;}
+
+  .thumb-row{
+    display:flex;
+    gap:10px;
+    margin:10px 0;
+  }
+  .thumb{
+    flex:1;
+    border-radius:8px;
+    overflow:hidden;
+    border:1px solid var(--border);
+  }
+  .thumb-frame{
+    height:74px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    position:relative;
+    overflow:hidden;
+  }
+  .thumb-frame.left{background:linear-gradient(135deg,#1a2740,#111726);}
+  .thumb-frame.right{background:linear-gradient(135deg,#241a37,#171122);}
+  .thumb-meta{
+    padding:6px 8px;
+    background:var(--panel-2);
+    font-size:10.5px;
+    color:var(--text-faint);
+    border-top:1px solid var(--border-soft);
+  }
+  .thumb-meta b{color:var(--text-dim); font-weight:600; display:block; font-size:10px; margin-bottom:1px;}
+
+  /* fake diagram art drawn with CSS */
+  .fake-diagram{position:relative; width:70%; height:70%;}
+  .fd-box{
+    position:absolute;
+    border:1.5px solid rgba(122,162,247,0.7);
+    border-radius:4px;
+    background:rgba(122,162,247,0.12);
+  }
+  .fd-line{
+    position:absolute;
+    background:rgba(122,162,247,0.5);
+    height:1.5px;
+  }
+  .fake-diagram.alt .fd-box{border-color:rgba(196,143,239,0.7); background:rgba(196,143,239,0.12);}
+  .fake-diagram.alt .fd-line{background:rgba(196,143,239,0.5);}
+
+  .empty-state-note{
+    display:flex;
+    align-items:flex-start;
+    gap:8px;
+    background:rgba(255,255,255,0.03);
+    border:1px dashed var(--border);
+    border-radius:8px;
+    padding:10px 11px;
+    font-size:11.5px;
+    color:var(--text-faint);
+    line-height:1.5;
+    margin:8px 0 10px;
+  }
+  .empty-state-note svg{width:14px;height:14px; flex-shrink:0; margin-top:1px; color:var(--warn);}
+
+  .conflicts-canvas{
+    flex:1;
+    background:
+      radial-gradient(circle at 30% 20%, rgba(95,185,201,0.04), transparent 45%),
+      var(--bg);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    flex-direction:column;
+    gap:14px;
+    color:var(--text-faint);
+    padding:40px;
+    text-align:center;
+  }
+  .conflicts-canvas .icon-wrap{
+    width:64px;height:64px;
+    border-radius:50%;
+    background:var(--panel-2);
+    border:1px solid var(--border);
+    display:flex;align-items:center;justify-content:center;
+    color:var(--accent-2);
+  }
+  .conflicts-canvas .icon-wrap svg{width:28px;height:28px;}
+  .conflicts-canvas h3{color:var(--text-dim); font-size:14.5px; font-weight:600; margin:0;}
+  .conflicts-canvas p{font-size:12.5px; max-width:280px; margin:0;}
+
+  /* ============ SECTION 3: merge editor centerpiece ============ */
+  .merge-body{
+    display:flex;
+    height:auto;
+  }
+  .merge-activity{flex-shrink:0;}
+  .merge-main{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    min-width:0;
+  }
+  .tabbar{
+    display:flex;
+    background:var(--panel-2);
+    border-bottom:1px solid var(--border);
+    padding-left:2px;
+  }
+  .tab{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:10px 16px;
+    font-size:12.5px;
+    color:var(--text-faint);
+    border-right:1px solid var(--border-soft);
+    background:var(--panel-2);
+  }
+  .tab.active{
+    background:var(--bg);
+    color:var(--text);
+    font-weight:500;
+    border-top:2px solid var(--accent);
+  }
+  .tab svg{width:13px;height:13px;}
+  .tab .dot-mod{width:6px;height:6px;border-radius:50%;background:var(--warn);}
+
+  .merge-scroll{
+    background:var(--bg);
+    padding:26px 32px 40px;
+  }
+
+  .merge-banner{
+    display:flex;
+    align-items:center;
+    gap:14px;
+    background:linear-gradient(135deg, rgba(95,185,201,0.1), rgba(196,143,239,0.06));
+    border:1px solid var(--border);
+    border-radius:var(--radius-md);
+    padding:16px 20px;
+    margin-bottom:24px;
+  }
+  .merge-banner .icon-circle{
+    width:42px;height:42px;
+    border-radius:50%;
+    background:var(--accent-soft);
+    color:var(--accent-2);
+    display:flex;align-items:center;justify-content:center;
+    flex-shrink:0;
+  }
+  .merge-banner .icon-circle svg{width:20px;height:20px;}
+  .merge-banner h3{font-size:15.5px; font-weight:700; margin:0 0 3px;}
+  .merge-banner p{font-size:12.5px; color:var(--text-dim); margin:0;}
+
+  .merge-columns-head{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:20px;
+    margin-bottom:14px;
+  }
+  .col-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:12px 16px;
+    border-radius:var(--radius-md) var(--radius-md) 0 0;
+  }
+  .col-head.left{background:var(--left-soft); border:1px solid var(--left-border); border-bottom:none;}
+  .col-head.right{background:var(--right-soft); border:1px solid var(--right-border); border-bottom:none;}
+  .col-head-title{display:flex; align-items:center; gap:9px;}
+  .col-head-title .device-icon{
+    width:26px;height:26px;border-radius:7px;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .col-head.left .device-icon{background:rgba(122,162,247,0.22); color:var(--left-color);}
+  .col-head.right .device-icon{background:rgba(196,143,239,0.22); color:var(--right-color);}
+  .col-head-title .device-icon svg{width:14px;height:14px;}
+  .col-head-title .txt b{display:block; font-size:13.5px; font-weight:700;}
+  .col-head-title .txt span{display:block; font-size:11px; color:var(--text-faint); margin-top:1px;}
+  .col-head .time-chip{
+    font-size:10.5px;
+    font-weight:600;
+    color:var(--text-dim);
+    background:rgba(0,0,0,0.2);
+    padding:4px 9px;
+    border-radius:20px;
+    white-space:nowrap;
+  }
+
+  .diff-frame{
+    border-radius:0 0 var(--radius-md) var(--radius-md);
+    border:1px solid var(--border);
+    background:var(--editor);
+    overflow:hidden;
+    margin-bottom:26px;
+  }
+
+  .identical-block{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:12px 20px;
+    color:var(--text-faint);
+    font-size:12px;
+    border-bottom:1px solid var(--border-soft);
+    background:rgba(255,255,255,0.015);
+  }
+  .identical-block svg{width:14px;height:14px; flex-shrink:0;}
+  .identical-block .lines{
+    font-family:var(--font-mono);
+    color:var(--text-faint);
+    opacity:0.55;
+    font-size:11.5px;
+    flex:1;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+
+  .chunk-pair{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    border-bottom:1px solid var(--border-soft);
+  }
+  .chunk-pair:last-child{border-bottom:none;}
+  .chunk-side{
+    padding:16px 20px;
+    border-right:1px solid var(--border-soft);
+    position:relative;
+  }
+  .chunk-side:last-child{border-right:none;}
+  .chunk-side.highlight-left{background:rgba(122,162,247,0.07);}
+  .chunk-side.highlight-right{background:rgba(196,143,239,0.07);}
+  .chunk-text{
+    font-family:var(--font-mono);
+    font-size:12.5px;
+    line-height:1.7;
+    color:var(--text);
+    white-space:pre-wrap;
+  }
+  .chunk-text .add{background:rgba(107,208,143,0.18); color:#a6e8ba; border-radius:3px; padding:0 2px;}
+  .chunk-text del{background:rgba(234,128,128,0.16); color:#f0a8a8; border-radius:3px; padding:0 2px; text-decoration:line-through;}
+
+  .chunk-choice-row{
+    display:flex;
+    gap:8px;
+    margin-top:12px;
+  }
+  .choice-chip{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding:7px 13px;
+    border-radius:20px;
+    font-size:12px;
+    font-weight:600;
+    border:1px solid var(--border);
+    background:rgba(255,255,255,0.04);
+    color:var(--text-dim);
+    cursor:default;
+  }
+  .choice-chip svg{width:12px;height:12px;}
+  .choice-chip.selected{
+    background:var(--good-soft);
+    color:var(--good);
+    border-color:rgba(107,208,143,0.4);
+  }
+  .choice-chip.selected svg{color:var(--good);}
+  .choice-chip.ghost{opacity:0.55;}
+
+  .resolved-tag{
+    position:absolute;
+    top:14px; right:18px;
+    display:flex;
+    align-items:center;
+    gap:5px;
+    font-size:10.5px;
+    font-weight:700;
+    color:var(--good);
+    background:var(--good-soft);
+    padding:3px 9px;
+    border-radius:20px;
+  }
+  .resolved-tag svg{width:11px;height:11px;}
+  .pending-tag{
+    position:absolute;
+    top:14px; right:18px;
+    display:flex;
+    align-items:center;
+    gap:5px;
+    font-size:10.5px;
+    font-weight:700;
+    color:var(--warn);
+    background:var(--warn-soft);
+    padding:3px 9px;
+    border-radius:20px;
+  }
+  .pending-tag svg{width:11px;height:11px;}
+
+  .result-section-label{
+    display:flex;
+    align-items:center;
+    gap:9px;
+    margin-bottom:12px;
+  }
+  .result-section-label .live-dot{
+    width:7px;height:7px;border-radius:50%;background:var(--good);
+    box-shadow:0 0 0 3px var(--good-soft);
+  }
+  .result-section-label h4{font-size:13px; font-weight:700; margin:0; letter-spacing:0.01em;}
+  .result-section-label span{font-size:11.5px; color:var(--text-faint);}
+
+  .result-pane{
+    background:var(--editor-2);
+    border:1px solid var(--border);
+    border-radius:var(--radius-md);
+    padding:22px 26px;
+    font-family:var(--font-mono);
+    font-size:13px;
+    line-height:1.75;
+    color:var(--text);
+    margin-bottom:22px;
+  }
+  .result-pane h5{font-family:var(--font-ui); font-size:15px; margin:0 0 12px; color:var(--text); font-weight:700;}
+  .result-pane p{margin:0 0 10px; color:var(--text-dim);}
+  .result-pane .merged-mark{background:rgba(107,208,143,0.14); border-radius:3px; padding:0 2px;}
+  .result-pane .pending-mark{background:rgba(232,184,95,0.14); border-radius:3px; padding:0 2px; opacity:0.8;}
+
+  .merge-footer{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:14px;
+    padding-top:6px;
+  }
+  .merge-footer .reassure{
+    display:flex;
+    align-items:center;
+    gap:7px;
+    font-size:12px;
+    color:var(--text-faint);
+  }
+  .merge-footer .reassure svg{width:14px; height:14px; flex-shrink:0; color:var(--accent-2);}
+  .btn-done{
+    padding:13px 26px;
+    font-size:13.5px;
+    border-radius:10px;
+    box-shadow:0 8px 20px -6px rgba(95,185,201,0.5);
+  }
+  .btn-done svg{width:15px; height:15px;}
+
+  /* ============ SECTION 4: history drawer ============ */
+  .history-body{
+    background:var(--panel);
+    padding:0;
+  }
+  .history-head{
+    padding:18px 22px 14px;
+    border-bottom:1px solid var(--border-soft);
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+  }
+  .history-head h3{font-size:15px; margin:0; font-weight:700; display:flex; align-items:center; gap:9px;}
+  .history-head h3 svg{width:16px;height:16px; color:var(--accent-2);}
+  .history-list{padding:14px 22px 22px; display:flex; flex-direction:column; gap:4px;}
+  .history-entry{
+    border-radius:var(--radius-md);
+    overflow:hidden;
+  }
+  .history-row{
+    display:flex;
+    align-items:center;
+    gap:14px;
+    padding:13px 14px;
+    cursor:default;
+  }
+  .history-row:hover{background:rgba(255,255,255,0.02);}
+  .history-dot{
+    width:9px;height:9px;border-radius:50%;
+    background:var(--accent);
+    flex-shrink:0;
+    box-shadow:0 0 0 4px var(--accent-soft);
+  }
+  .history-dot.muted{background:var(--text-faint); box-shadow:0 0 0 4px rgba(255,255,255,0.04);}
+  .history-row .htext{flex:1;}
+  .history-row .htext .htitle{font-size:13px; font-weight:600; color:var(--text);}
+  .history-row .htext .hsub{font-size:11.5px; color:var(--text-faint); margin-top:1px;}
+  .history-row .chevron{color:var(--text-faint); width:14px; height:14px; transition:transform 0.15s;}
+  .history-entry.expanded .chevron{transform:rotate(90deg);}
+
+  .history-detail{
+    background:var(--panel-2);
+    border-top:1px solid var(--border-soft);
+    padding:6px 14px 12px 37px;
+    display:flex;
+    flex-direction:column;
+    gap:2px;
+  }
+  .history-file-row{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:9px 8px;
+    border-radius:8px;
+  }
+  .history-file-row:hover{background:rgba(255,255,255,0.03);}
+  .history-file-row .fname{
+    flex:1;
+    font-size:12.5px;
+    color:var(--text-dim);
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .history-file-row .fname svg{width:13px;height:13px; color:var(--text-faint); flex-shrink:0;}
+  .history-file-row .fmeta{font-size:11px; color:var(--text-faint);}
+
+  /* ============ SECTION 5: alternatives ============ */
+  .alt-strip{
+    display:grid;
+    grid-template-columns:1fr 1fr 1fr;
+    gap:20px;
+  }
+  .alt-card{
+    background:var(--panel-2);
+    border:1px solid var(--border);
+    border-radius:var(--radius-md);
+    padding:16px;
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+  }
+  .alt-card.recommended{
+    border-color:rgba(107,208,143,0.5);
+    background:linear-gradient(180deg, rgba(107,208,143,0.06), var(--panel-2) 40%);
+    box-shadow:0 0 0 1px rgba(107,208,143,0.15), 0 12px 30px -10px rgba(107,208,143,0.15);
+  }
+  .alt-label{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+  }
+  .alt-label .name{font-size:13px; font-weight:700; color:var(--text);}
+  .rec-badge{
+    font-size:10px;
+    font-weight:800;
+    letter-spacing:0.04em;
+    color:#0a1c11;
+    background:var(--good);
+    padding:3px 8px;
+    border-radius:20px;
+  }
+  .wireframe{
+    height:130px;
+    border-radius:8px;
+    background:
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.025) 0px, rgba(255,255,255,0.025) 1px, transparent 1px, transparent 22px),
+      #14151f;
+    border:1px dashed var(--border);
+    position:relative;
+    overflow:hidden;
+  }
+  .wf-box{
+    position:absolute;
+    border:1.5px dashed rgba(255,255,255,0.28);
+    border-radius:4px;
+    background:rgba(255,255,255,0.03);
+  }
+  .wf-line{
+    position:absolute;
+    height:1.5px;
+    background:rgba(255,255,255,0.18);
+    border-radius:1px;
+  }
+  .wf-btn{
+    position:absolute;
+    border-radius:20px;
+    background:rgba(95,185,201,0.25);
+    border:1px solid rgba(95,185,201,0.4);
+  }
+
+  .alt-pc{
+    font-size:11.5px;
+    line-height:1.55;
+    color:var(--text-dim);
+  }
+  .alt-pc .pro{color:var(--good);}
+  .alt-pc .con{color:var(--danger);}
+  .alt-pc b{font-weight:700;}
+
+  footer.end-note{
+    text-align:center;
+    color:var(--text-faint);
+    font-size:12px;
+    margin-top:60px;
+    padding-top:24px;
+    border-top:1px solid var(--border-soft);
+  }
+
+  @media (max-width: 980px){
+    .conflicts-body{flex-direction:column; height:auto;}
+    .conflicts-sidebar{width:100%; border-right:none; border-bottom:1px solid var(--border);}
+    .merge-columns-head, .chunk-pair{grid-template-columns:1fr;}
+    .chunk-side{border-right:none; border-bottom:1px solid var(--border-soft);}
+    .alt-strip{grid-template-columns:1fr;}
+  }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <div class="intro">
+    <div class="kicker">ThinkBrain Notes · Design Review</div>
+    <h1>Sync &amp; Merge — UI Mockup</h1>
+    <p>A friendly, jargon-free way to resolve the rare moments when a note changes on two devices at once. Scroll through the full flow below — sidebar, merge screen, history, and the alternatives we considered.</p>
+  </div>
+
+  <!-- ================= SECTION 1 ================= -->
+  <div class="section-block">
+    <div class="section-label">
+      <span class="num">01</span>
+      <h2>Shell context</h2>
+      <span class="sub">Activity bar badge &amp; status bar states</span>
+    </div>
+
+    <div class="window">
+      <div class="window-titlebar">
+        <div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div>
+        <div class="window-title">ThinkBrain Notes</div>
+      </div>
+      <div class="shell-strip-body">
+        <div class="shell-strip-row">
+          <div class="activity-bar" style="height:100%;">
+            <div class="activity-item" title="Notes">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3h9l3 3v15H6z"/><path d="M14 3v4h4"/><path d="M9 12h6M9 16h6M9 8h3"/></svg>
+            </div>
+            <div class="activity-item" title="Search">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+            </div>
+            <div class="activity-item active" title="Sync">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12a9 9 0 0 1-15.5 6.3M3 12a9 9 0 0 1 15.5-6.3"/><path d="M21 3v6h-6M3 21v-6h6"/></svg>
+              <div class="badge">3</div>
+            </div>
+            <div class="activity-item" title="Canvas">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+            </div>
+            <div class="activity-spacer"></div>
+            <div class="activity-item" title="Settings">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            </div>
+          </div>
+          <div class="filler">Activity bar — Sync icon shows a badge whenever notes need your attention</div>
+        </div>
+        <div class="status-variants">
+          <div class="status-bar">
+            <div class="status-left">
+              <span>Meeting Notes.md</span>
+              <span>Markdown</span>
+            </div>
+            <div class="status-right">
+              <span class="status-pill warn">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 9v4M12 17h.01M10.3 3.9 2.7 17a2 2 0 0 0 1.7 3h15.2a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>
+                3 items need attention
+              </span>
+              <span>Ln 12, Col 4</span>
+            </div>
+          </div>
+          <div class="status-bar">
+            <div class="status-left">
+              <span>Trip Ideas.md</span>
+              <span>Markdown</span>
+            </div>
+            <div class="status-right">
+              <span class="status-pill good">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg>
+                All synced · 9:31 AM
+              </span>
+              <span>Ln 1, Col 1</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="caption">Left: the <b>attention state</b> — an amber pill names exactly how many items need a decision. Right: the calm, default <b>all-synced</b> state with a timestamp for reassurance.</div>
+  </div>
+
+  <!-- ================= SECTION 2 ================= -->
+  <div class="section-block">
+    <div class="section-label">
+      <span class="num">02</span>
+      <h2>Conflicts panel</h2>
+      <span class="sub">Sidebar list — one card per item, plain-language explanations</span>
+    </div>
+
+    <div class="window">
+      <div class="window-titlebar">
+        <div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div>
+        <div class="window-title">ThinkBrain Notes — Needs Your Attention</div>
+      </div>
+      <div class="app-shell conflicts-body">
+        <div class="activity-bar">
+          <div class="activity-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3h9l3 3v15H6z"/><path d="M14 3v4h4"/><path d="M9 12h6M9 16h6M9 8h3"/></svg></div>
+          <div class="activity-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></div>
+          <div class="activity-item active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12a9 9 0 0 1-15.5 6.3M3 12a9 9 0 0 1 15.5-6.3"/><path d="M21 3v6h-6M3 21v-6h6"/></svg><div class="badge">3</div></div>
+          <div class="activity-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></div>
+          <div class="activity-spacer"></div>
+          <div class="activity-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82"/></svg></div>
+        </div>
+
+        <div class="conflicts-sidebar">
+          <div class="conflicts-header">
+            <div class="title">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--accent-2)"><path d="M21 12a9 9 0 0 1-15.5 6.3M3 12a9 9 0 0 1 15.5-6.3"/><path d="M21 3v6h-6M3 21v-6h6"/></svg>
+              Needs your attention
+            </div>
+            <div class="desc">These notes changed on more than one device. Take a look and choose which version to keep — nothing is deleted until you decide.</div>
+          </div>
+
+          <div class="conflicts-list">
+
+            <!-- Card A: Markdown note -->
+            <div class="conflict-card">
+              <div class="row1">
+                <div class="file-icon md">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+                </div>
+                <div>
+                  <div class="conflict-name">Meeting Notes.md</div>
+                  <div class="conflict-sub">Edited on two devices</div>
+                </div>
+              </div>
+              <div style="display:flex; align-items:center; gap:8px; margin:10px 0 12px;">
+                <span class="chip onedrive">
+                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M7.5 15.5a4 4 0 0 1-.4-7.98A5.5 5.5 0 0 1 17.7 9.3 3.75 3.75 0 0 1 17.5 16.8H7.5z" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+                  Synced via OneDrive
+                </span>
+                <span class="chip">2 versions</span>
+              </div>
+              <div class="card-actions">
+                <button class="btn btn-primary btn-sm btn-block">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 14h6v6M20 10h-6V4M4 14l6.5-6.5M20 10l-6.5 6.5"/></svg>
+                  Review
+                </button>
+              </div>
+            </div>
+
+            <!-- Card B: image -->
+            <div class="conflict-card">
+              <div class="row1">
+                <div class="file-icon img">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+                </div>
+                <div>
+                  <div class="conflict-name">diagram.png</div>
+                  <div class="conflict-sub">Changed in two places</div>
+                </div>
+              </div>
+
+              <div class="thumb-row">
+                <div class="thumb">
+                  <div class="thumb-frame left">
+                    <div class="fake-diagram">
+                      <div class="fd-box" style="left:6%; top:18%; width:34%; height:24%;"></div>
+                      <div class="fd-box" style="left:58%; top:14%; width:36%; height:22%;"></div>
+                      <div class="fd-box" style="left:26%; top:58%; width:40%; height:26%;"></div>
+                      <div class="fd-line" style="left:40%; top:29%; width:19%;"></div>
+                      <div class="fd-line" style="left:44%; top:35%; width:2%; height:24px; transform:rotate(90deg); transform-origin:left top;"></div>
+                    </div>
+                  </div>
+                  <div class="thumb-meta"><b>This computer</b>214 KB · Aug 12, 4:08 PM</div>
+                </div>
+                <div class="thumb">
+                  <div class="thumb-frame right">
+                    <div class="fake-diagram alt">
+                      <div class="fd-box" style="left:6%; top:14%; width:30%; height:22%;"></div>
+                      <div class="fd-box" style="left:52%; top:12%; width:42%; height:24%;"></div>
+                      <div class="fd-box" style="left:20%; top:56%; width:30%; height:24%;"></div>
+                      <div class="fd-box" style="left:58%; top:58%; width:26%; height:22%;"></div>
+                      <div class="fd-line" style="left:35%; top:26%; width:18%;"></div>
+                      <div class="fd-line" style="left:35%; top:56%; width:22%;"></div>
+                    </div>
+                  </div>
+                  <div class="thumb-meta"><b>From OneDrive</b>238 KB · Aug 13, 8:52 AM</div>
+                </div>
+              </div>
+
+              <div class="card-actions">
+                <button class="btn btn-secondary btn-sm">Keep this</button>
+                <button class="btn btn-secondary btn-sm">Keep this</button>
+                <button class="btn btn-primary btn-sm">Keep both</button>
+              </div>
+            </div>
+
+            <!-- Card C: canvas -->
+            <div class="conflict-card">
+              <div class="row1">
+                <div class="file-icon canvas">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="8" height="6" rx="1"/><rect x="13" y="4" width="8" height="6" rx="1"/><rect x="3" y="14" width="8" height="6" rx="1"/><rect x="13" y="14" width="8" height="6" rx="1"/></svg>
+                </div>
+                <div>
+                  <div class="conflict-name">Product Roadmap.canvas</div>
+                  <div class="conflict-sub">Edited on two devices</div>
+                </div>
+              </div>
+
+              <div class="empty-state-note">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01M10.3 3.9 2.7 17a2 2 0 0 0 1.7 3h15.2a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>
+                Visual compare isn't available yet for whiteboards. You can keep whichever version you trust more, or keep both as separate boards.
+              </div>
+
+              <div class="card-actions">
+                <button class="btn btn-secondary btn-sm">Keep newest</button>
+                <button class="btn btn-primary btn-sm">Keep both</button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <div class="conflicts-canvas">
+          <div class="icon-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3h9l3 3v15H6z"/><path d="M14 3v4h4"/><path d="M9 12h6M9 16h6M9 8h3"/></svg>
+          </div>
+          <h3>Pick a note to open it</h3>
+          <p>Choose a card on the left, or select "Review" to compare the two versions side by side.</p>
+        </div>
+      </div>
+    </div>
+    <div class="caption">The sidebar treats every item type differently: <b>text notes</b> get a full "Review" flow, <b>images</b> get side-by-side thumbnails, and <b>whiteboards</b> get an honest explanation instead of a broken diff.</div>
+  </div>
+
+  <!-- ================= SECTION 3: CENTERPIECE ================= -->
+  <div class="section-block">
+    <div class="section-label">
+      <span class="num">03</span>
+      <h2>Merge view — the centerpiece</h2>
+      <span class="sub">Full editor tab · side-by-side compare · live result preview</span>
+    </div>
+
+    <div class="window">
+      <div class="window-titlebar">
+        <div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div>
+        <div class="window-title">ThinkBrain Notes — Meeting Notes.md</div>
+      </div>
+      <div class="app-shell merge-body">
+        <div class="activity-bar merge-activity">
+          <div class="activity-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3h9l3 3v15H6z"/><path d="M14 3v4h4"/><path d="M9 12h6M9 16h6M9 8h3"/></svg></div>
+          <div class="activity-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></div>
+          <div class="activity-item active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12a9 9 0 0 1-15.5 6.3M3 12a9 9 0 0 1 15.5-6.3"/><path d="M21 3v6h-6M3 21v-6h6"/></svg><div class="badge">3</div></div>
+          <div class="activity-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></div>
+          <div class="activity-spacer"></div>
+          <div class="activity-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/></svg></div>
+        </div>
+
+        <div class="merge-main">
+          <div class="tabbar">
+            <div class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h9l3 3v15H6z"/></svg>Trip Ideas.md</div>
+            <div class="tab active">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--accent-2)"><path d="M4 14h6v6M20 10h-6V4M4 14l6.5-6.5M20 10l-6.5 6.5"/></svg>
+              Meeting Notes.md — Compare versions
+              <span class="dot-mod"></span>
+            </div>
+          </div>
+
+          <div class="merge-scroll">
+
+            <div class="merge-banner">
+              <div class="icon-circle">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 14h6v6M20 10h-6V4M4 14l6.5-6.5M20 10l-6.5 6.5"/></svg>
+              </div>
+              <div>
+                <h3>Two versions of this note exist</h3>
+                <p>Someone (probably you!) edited "Meeting Notes.md" on another device before this one finished syncing. Go through each highlighted section below and choose what to keep — most of the note is identical and already collapsed.</p>
+              </div>
+            </div>
+
+            <div class="merge-columns-head">
+              <div class="col-head left">
+                <div class="col-head-title">
+                  <div class="device-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M2 20h20M9 16v4M15 16v4"/></svg></div>
+                  <div class="txt"><b>On this computer</b><span>Adam's Laptop</span></div>
+                </div>
+                <span class="time-chip">Today, 8:47 AM</span>
+              </div>
+              <div class="col-head right">
+                <div class="col-head-title">
+                  <div class="device-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7.5 15.5a4 4 0 0 1-.4-7.98A5.5 5.5 0 0 1 17.7 9.3 3.75 3.75 0 0 1 17.5 16.8H7.5z"/></svg></div>
+                  <div class="txt"><b>From OneDrive</b><span>Desktop PC · synced just now</span></div>
+                </div>
+                <span class="time-chip">Today, 9:12 AM</span>
+              </div>
+            </div>
+
+            <div class="diff-frame">
+
+              <div class="identical-block">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>
+                <span class="lines"># Q3 Roadmap Sync — Aug 11 · Attendees: Adam, Priya, Marcus · Same on both versions</span>
+                <span class="chip" style="flex-shrink:0;">14 identical lines</span>
+              </div>
+
+              <!-- Chunk 1: resolved -->
+              <div class="chunk-pair" style="position:relative;">
+                <span class="resolved-tag">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
+                  Resolved
+                </span>
+                <div class="chunk-side highlight-left">
+                  <div class="chunk-text">## Action items
+
+Marcus to <del>follow up with</del> the design team about the new icon set before Friday.</div>
+                  <div class="chunk-choice-row">
+                    <span class="choice-chip">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+                      Keep this computer's
+                    </span>
+                    <span class="choice-chip selected">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
+                      Keep OneDrive's
+                    </span>
+                    <span class="choice-chip ghost">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="4" y="4" width="7" height="16" rx="1"/><rect x="13" y="4" width="7" height="16" rx="1"/></svg>
+                      Keep both
+                    </span>
+                  </div>
+                </div>
+                <div class="chunk-side highlight-right">
+                  <div class="chunk-text">## Action items
+
+Marcus to <span class="add">sync directly</span> with the design team about the new icon set before <span class="add">next Wednesday's review</span>.</div>
+                  <div class="chunk-choice-row">
+                    <span class="choice-chip">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+                      Keep this computer's
+                    </span>
+                    <span class="choice-chip selected">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
+                      Keep OneDrive's
+                    </span>
+                    <span class="choice-chip ghost">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="4" y="4" width="7" height="16" rx="1"/><rect x="13" y="4" width="7" height="16" rx="1"/></svg>
+                      Keep both
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="identical-block">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>
+                <span class="lines">Priya to share the updated budget sheet with finance. Next check-in scheduled for Aug 18.</span>
+                <span class="chip" style="flex-shrink:0;">6 identical lines</span>
+              </div>
+
+              <!-- Chunk 2: pending -->
+              <div class="chunk-pair" style="position:relative;">
+                <span class="pending-tag">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+                  Waiting on you
+                </span>
+                <div class="chunk-side highlight-left">
+                  <div class="chunk-text">## Open questions
+
+- Do we need legal review before <span class="add">the partner announcement</span>?
+- Budget still pending sign-off from finance.</div>
+                  <div class="chunk-choice-row">
+                    <span class="choice-chip">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+                      Keep this computer's
+                    </span>
+                    <span class="choice-chip">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>
+                      Keep OneDrive's
+                    </span>
+                    <span class="choice-chip">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="4" y="4" width="7" height="16" rx="1"/><rect x="13" y="4" width="7" height="16" rx="1"/></svg>
+                      Keep both
+                    </span>
+                  </div>
+                </div>
+                <div class="chunk-side highlight-right">
+                  <div class="chunk-text">## Open questions
+
+- Do we need legal review before <span class="add">going public</span>?
+- <span class="add">Marcus flagged that finance may push this to Q4 — needs a decision by Friday.</span></div>
+                  <div class="chunk-choice-row">
+                    <span class="choice-chip">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+                      Keep this computer's
+                    </span>
+                    <span class="choice-chip">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>
+                      Keep OneDrive's
+                    </span>
+                    <span class="choice-chip">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="4" y="4" width="7" height="16" rx="1"/><rect x="13" y="4" width="7" height="16" rx="1"/></svg>
+                      Keep both
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            <div class="result-section-label">
+              <div class="live-dot"></div>
+              <h4>Result — this is what will be saved</h4>
+              <span>Updates automatically as you choose</span>
+            </div>
+
+            <div class="result-pane">
+              <h5>Q3 Roadmap Sync — Aug 11</h5>
+              <p>Attendees: Adam, Priya, Marcus.</p>
+              <p><b>Action items</b><br>Marcus to <span class="merged-mark">sync directly</span> with the design team about the new icon set before <span class="merged-mark">next Wednesday's review</span>. Priya to share the updated budget sheet with finance. Next check-in scheduled for Aug 18.</p>
+              <p><b>Open questions</b><br>- Do we need legal review before <span class="pending-mark">the partner announcement</span>? <span style="font-family:var(--font-ui); font-size:11px; color:var(--warn); font-weight:600;">← still deciding</span><br>- Budget still pending sign-off from finance.</p>
+            </div>
+
+            <div class="merge-footer">
+              <div class="reassure">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 3 6v6c0 5 4 8.5 9 10 5-1.5 9-5 9-10V6z"/></svg>
+                You can always undo — previous versions are kept in History.
+              </div>
+              <button class="btn btn-primary btn-done">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg>
+                Done — save merged note
+              </button>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="caption">The heart of the experience: unchanged text collapses into a quiet one-line summary so attention goes only where it's needed. Each differing paragraph gets its own <b>Keep this computer's / Keep OneDrive's / Keep both</b> choice, and the <b>Result</b> pane always shows the real outcome before saving.</div>
+  </div>
+
+  <!-- ================= SECTION 4 ================= -->
+  <div class="section-block">
+    <div class="section-label">
+      <span class="num">04</span>
+      <h2>Sync History drawer</h2>
+      <span class="sub">Friendly log of past syncs and one-click restores</span>
+    </div>
+
+    <div class="window">
+      <div class="window-titlebar">
+        <div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div>
+        <div class="window-title">History</div>
+      </div>
+      <div class="history-body">
+        <div class="history-head">
+          <h3>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="9"/></svg>
+            Sync History
+          </h3>
+          <span class="chip">Last 7 days</span>
+        </div>
+        <div class="history-list">
+
+          <div class="history-entry expanded">
+            <div class="history-row">
+              <div class="history-dot"></div>
+              <div class="htext">
+                <div class="htitle">Today, 9:31 AM — 3 notes updated</div>
+                <div class="hsub">Combined changes from Desktop PC and Adam's Laptop</div>
+              </div>
+              <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M9 18l6-6-6-6"/></svg>
+            </div>
+            <div class="history-detail">
+              <div class="history-file-row">
+                <div class="fname">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+                  Meeting Notes.md — two versions combined
+                </div>
+                <span class="fmeta">9:31 AM</span>
+                <button class="btn btn-ghost btn-sm">Restore</button>
+              </div>
+              <div class="history-file-row">
+                <div class="fname">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+                  diagram.png — kept both copies
+                </div>
+                <span class="fmeta">9:30 AM</span>
+                <button class="btn btn-ghost btn-sm">Restore</button>
+              </div>
+              <div class="history-file-row">
+                <div class="fname">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+                  Weekly Grocery List.md — updated from OneDrive
+                </div>
+                <span class="fmeta">9:28 AM</span>
+                <button class="btn btn-ghost btn-sm">Restore</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="history-entry">
+            <div class="history-row">
+              <div class="history-dot muted"></div>
+              <div class="htext">
+                <div class="htitle">Yesterday — Restored "Trip Ideas" to an earlier version</div>
+                <div class="hsub">You chose the 6:40 PM version from Aug 12</div>
+              </div>
+              <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M9 18l6-6-6-6"/></svg>
+            </div>
+          </div>
+
+          <div class="history-entry">
+            <div class="history-row">
+              <div class="history-dot muted"></div>
+              <div class="htext">
+                <div class="htitle">Aug 12 — 5 notes updated</div>
+                <div class="hsub">Synced automatically, no decisions needed</div>
+              </div>
+              <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M9 18l6-6-6-6"/></svg>
+            </div>
+          </div>
+
+          <div class="history-entry">
+            <div class="history-row">
+              <div class="history-dot muted"></div>
+              <div class="htext">
+                <div class="htitle">Aug 10 — Kept both versions of "diagram.png"</div>
+                <div class="hsub">Saved as diagram.png and diagram (from OneDrive).png</div>
+              </div>
+              <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M9 18l6-6-6-6"/></svg>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+    <div class="caption">History reads like a diary of what happened, not a log file. Every entry can be expanded to see exactly which files changed, with a one-click <b>Restore</b> for peace of mind.</div>
+  </div>
+
+  <!-- ================= SECTION 5 ================= -->
+  <div class="section-block">
+    <div class="section-label">
+      <span class="num">05</span>
+      <h2>Alternatives considered</h2>
+      <span class="sub">Three directions explored before landing on the mock above</span>
+    </div>
+
+    <div class="alt-strip">
+
+      <div class="alt-card">
+        <div class="alt-label"><span class="name">Option A — Modal wizard</span></div>
+        <div class="wireframe">
+          <div class="wf-box" style="left:20%; top:10%; width:60%; height:80%; background:rgba(255,255,255,0.05);"></div>
+          <div class="wf-line" style="left:28%; top:22%; width:44%;"></div>
+          <div class="wf-line" style="left:28%; top:32%; width:30%;"></div>
+          <div class="wf-box" style="left:28%; top:42%; width:44%; height:24%;"></div>
+          <div class="wf-btn" style="left:28%; top:72%; width:20%; height:12%;"></div>
+          <div class="wf-btn" style="left:52%; top:72%; width:20%; height:12%;"></div>
+        </div>
+        <div class="alt-pc">
+          <span class="pro">Pro:</span> forces focus, one decision at a time.<br>
+          <span class="con">Con:</span> blocks the whole app and feels alarming — like an error dialog.
+        </div>
+      </div>
+
+      <div class="alt-card">
+        <div class="alt-label"><span class="name">Option B — Side-panel only</span></div>
+        <div class="wireframe">
+          <div class="wf-box" style="left:4%; top:8%; width:34%; height:84%;"></div>
+          <div class="wf-line" style="left:8%; top:16%; width:26%;"></div>
+          <div class="wf-line" style="left:8%; top:24%; width:20%;"></div>
+          <div class="wf-box" style="left:42%; top:8%; width:54%; height:84%; background:transparent; border-style:dotted;"></div>
+          <div class="wf-line" style="left:46%; top:18%; width:22%;"></div>
+          <div class="wf-line" style="left:70%; top:18%; width:22%;"></div>
+          <div class="wf-btn" style="left:8%; top:70%; width:26%; height:10%;"></div>
+        </div>
+        <div class="alt-pc">
+          <span class="pro">Pro:</span> lightweight, stays out of the way.<br>
+          <span class="con">Con:</span> cramped for long notes — hard to read a full mini-diff in a narrow rail.
+        </div>
+      </div>
+
+      <div class="alt-card recommended">
+        <div class="alt-label">
+          <span class="name">Option C — Cards + full merge tab</span>
+          <span class="rec-badge">RECOMMENDED</span>
+        </div>
+        <div class="wireframe" style="border-color:rgba(107,208,143,0.4);">
+          <div class="wf-box" style="left:4%; top:8%; width:26%; height:84%; border-color:rgba(107,208,143,0.5);"></div>
+          <div class="wf-line" style="left:8%; top:16%; width:18%; background:rgba(107,208,143,0.4);"></div>
+          <div class="wf-box" style="left:34%; top:8%; width:31%; height:84%; border-color:rgba(122,162,247,0.5); background:rgba(122,162,247,0.06);"></div>
+          <div class="wf-box" style="left:67%; top:8%; width:29%; height:84%; border-color:rgba(196,143,239,0.5); background:rgba(196,143,239,0.06);"></div>
+          <div class="wf-line" style="left:38%; top:18%; width:20%; background:rgba(122,162,247,0.4);"></div>
+          <div class="wf-line" style="left:71%; top:18%; width:20%; background:rgba(196,143,239,0.4);"></div>
+          <div class="wf-btn" style="left:38%; top:60%; width:14%; height:9%; background:rgba(107,208,143,0.25); border-color:rgba(107,208,143,0.4);"></div>
+        </div>
+        <div class="alt-pc">
+          <span class="pro">Pro:</span> plenty of room to read, non-blocking, matches editor mental model.<br>
+          <span class="con">Con:</span> more screens to build — a card list <i>and</i> a full tab view.
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <footer class="end-note">ThinkBrain Notes — Sync &amp; Merge mockup · static HTML, no build step · for design review only</footer>
+
+</div>
+
+</body>
+</html>
