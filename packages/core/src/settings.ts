@@ -142,12 +142,15 @@ export function parseAppSettings(rawJson: string | null): ParseSettingsResult {
     };
   }
 
+  // Only an error gives up on the document; a version merely newer than this
+  // build's is a warning and the fields below are still read. Kept identical to
+  // the registry-backed reader in `./settings/dynamic.ts` on purpose: two
+  // readers of the same document that disagree about this is how one of them
+  // quietly reintroduces the loss the other fixed.
   const versionResult = readSettingsVersion(parsed);
-  if (versionResult.diagnostic) {
-    return {
-      settings: DEFAULT_APP_SETTINGS,
-      diagnostics: [versionResult.diagnostic]
-    };
+  const versionDiagnostics = versionResult.diagnostic ? [versionResult.diagnostic] : [];
+  if (versionResult.diagnostic?.severity === "error") {
+    return { settings: DEFAULT_APP_SETTINGS, diagnostics: versionDiagnostics };
   }
 
   let candidate: Record<string, unknown>;
@@ -166,7 +169,11 @@ export function parseAppSettings(rawJson: string | null): ParseSettingsResult {
     };
   }
 
-  return normalizeAppSettings(candidate);
+  const normalized = normalizeAppSettings(candidate);
+  return {
+    ...normalized,
+    diagnostics: [...versionDiagnostics, ...normalized.diagnostics]
+  };
 }
 
 function migrateSettingsObject(
@@ -181,10 +188,11 @@ function migrateSettingsObject(
     throw new RangeError("Application settings version must be a non-negative integer.");
   }
 
+  // A document from a newer build has nothing to migrate forward: every step
+  // here runs from an older version to a newer one, and there is no step from a
+  // version this build has never heard of. Read it as it stands.
   if (fromVersion > CURRENT_SETTINGS_VERSION) {
-    throw new RangeError(
-      `Application settings version ${fromVersion} is newer than supported version ${CURRENT_SETTINGS_VERSION}.`
-    );
+    return { ...unknownObj };
   }
 
   let value: Record<string, unknown> = { ...unknownObj };

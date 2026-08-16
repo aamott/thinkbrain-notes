@@ -103,6 +103,41 @@ describe("app settings", () => {
     });
   });
 
+  /**
+   * The same contract the registry-backed reader keeps: a version this build has
+   * not reached means "there may be more here than I understand", not "there is
+   * nothing here". Two readers of the same document disagreeing about that is
+   * how one of them quietly reintroduces the loss the other fixed.
+   */
+  it("reads a document from a newer build rather than discarding it", () => {
+    const result = parseAppSettings(
+      JSON.stringify({
+        version: CURRENT_SETTINGS_VERSION + 1,
+        theme: "dark",
+        editor: { fontSize: 18, lineWrapping: false },
+        somethingLaterAdded: "not understood here"
+      })
+    );
+
+    expect(result.settings.theme).toBe("dark");
+    expect(result.settings.editor.fontSize).toBe(18);
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        code: "settings.version.unsupported",
+        severity: "warning"
+      })
+    ]);
+  });
+
+  it("still uses defaults when the version itself is not a version", () => {
+    const result = parseAppSettings(JSON.stringify({ version: "one", theme: "dark" }));
+
+    expect(result.settings).toEqual(DEFAULT_APP_SETTINGS);
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({ code: "settings.version.invalid", severity: "error" })
+    ]);
+  });
+
   it("serializes settings as stable pretty JSON", () => {
     expect(
       serializeAppSettings({

@@ -90,7 +90,30 @@ pub struct DesktopState {
     active_tab_id: Option<String>,
     /// Workspace path -> view id -> the group keys collapsed in it (D53).
     workspace_views: WorkspaceViews,
+    /// Whatever a newer build wrote here that this one has no name for.
+    ///
+    /// Carried through verbatim so a downgrade costs nothing: this build reads
+    /// the fields it knows, writes them back, and hands the rest along
+    /// untouched for the build that understands them.
+    #[serde(flatten)]
+    unknown_fields: Map<String, Value>,
 }
+
+/// The keys this build writes itself; everything else in a stored document is
+/// somebody else's and travels in `unknown_fields`.
+const DESKTOP_STATE_KEYS: [&str; 11] = [
+    "version",
+    "lastWorkspacePath",
+    "recentWorkspacePaths",
+    "explorerOpen",
+    "leftPanelWidth",
+    "rightPanelWidth",
+    "bottomPanelOpen",
+    "developmentExtensionDirectories",
+    "openTabs",
+    "activeTabId",
+    "workspaceViews",
+];
 
 /// Per-workspace, per-view collapsed group keys.
 ///
@@ -395,7 +418,11 @@ pub fn apply_desktop_state_update(
     );
 
     DesktopState {
-        version: DESKTOP_STATE_VERSION,
+        // Both carried from the document being updated, not reset to this
+        // build's own: an update is a revision of what is there, and what is
+        // there may have come from a build that knew more.
+        version: current.version,
+        unknown_fields: current.unknown_fields,
         last_workspace_path,
         recent_workspace_paths,
         explorer_open: update.explorer_open.unwrap_or(current.explorer_open),
@@ -472,7 +499,15 @@ pub fn create_desktop_state(state: &Map<String, Value>) -> DesktopState {
         .unwrap_or_else(|| promote_recent_workspace(Vec::new(), last_workspace_path.as_deref()));
 
     DesktopState {
-        version: DESKTOP_STATE_VERSION,
+        // Never stamped down. Now that the fields a newer build added travel
+        // with the document, writing this build's lower version over it would
+        // be the one remaining lie: it would tell that build its own document
+        // had been migrated backwards and make it run the migration twice.
+        version: state
+            .get("version")
+            .and_then(Value::as_u64)
+            .unwrap_or(DESKTOP_STATE_VERSION)
+            .max(DESKTOP_STATE_VERSION),
         last_workspace_path,
         recent_workspace_paths,
         explorer_open: state
@@ -508,6 +543,11 @@ pub fn create_desktop_state(state: &Map<String, Value>) -> DesktopState {
             .filter(|id| !id.is_empty())
             .map(str::to_owned),
         workspace_views: read_workspace_views(state.get("workspaceViews")),
+        unknown_fields: state
+            .iter()
+            .filter(|(key, _)| !DESKTOP_STATE_KEYS.contains(&key.as_str()))
+            .map(|(key, value)| (key.clone(), value.clone()))
+            .collect(),
     }
 }
 
@@ -558,6 +598,7 @@ pub fn default_desktop_state() -> DesktopState {
         open_tabs: Vec::new(),
         active_tab_id: None,
         workspace_views: WorkspaceViews::new(),
+        unknown_fields: Map::new(),
     }
 }
 

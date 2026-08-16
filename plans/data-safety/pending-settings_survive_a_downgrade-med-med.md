@@ -36,11 +36,20 @@ evidence.
   true — newer, kept, not understood here — instead of an error claiming defaults
   were used. Only a `version` that is not a version at all still gives up, since
   then nothing can be said about the rest of the record.
-- **The version is never stamped down** in the app-settings document. That
-  document already preserves keys it does not recognize, so an older build can
-  round-trip a newer one losing nothing; writing "version 1" over a v2 document
-  would tell the next v2 build its own file had been migrated backwards and make
-  it run the v2 migration a second time.
+- **A downgrade round-trip is lossless.** Both documents now carry the fields a
+  newer build added: the app-settings document already preserved keys it did not
+  recognize, and `desktopState` gained a `#[serde(flatten)]` extras map so Rust —
+  which owns every production write to it — hands them along untouched. Neither
+  document's version is stamped down any more, which only became safe once the
+  unknown fields travelled with it: writing "version 5" over a v6 document would
+  tell the next v6 build its own file had been migrated backwards and make it run
+  that migration a second time.
+
+- **Both readers of the app-settings document agree.** The registry-backed
+  `parseDynamicAppSettings` and the legacy `parseAppSettings` were fixed
+  together. The legacy one has no callers left in the repo but is exported from
+  `@thinkbrain/core`, and leaving the old behaviour in it would have let anyone
+  who wired it up reintroduce exactly the loss this story fixed.
 - **An unparseable document is set aside before it is replaced.**
   `read_settings_file` moves it to `<stem>.corrupt.json` and reports nothing
   stored. One slot per document, overwritten, so repeated corruption cannot fill
@@ -52,7 +61,10 @@ evidence.
 - [x] A desktop-state document from a newer build keeps the workspace, tabs and
       panel layout this build understands, in both the TypeScript and Rust paths.
 - [x] An app-settings document from a newer build keeps its settings, its
-      unknown keys and its version.
+      unknown keys and its version — through both `parseDynamicAppSettings` and
+      the legacy `parseAppSettings`.
+- [x] A desktop-state document from a newer build survives a write by an older
+      build with its unknown fields and its version intact.
 - [x] A `version` that is not a non-negative integer still falls back to defaults.
 - [x] An unparseable settings document is moved to `<stem>.corrupt.json` and the
       app starts with defaults rather than refusing to open.
@@ -62,13 +74,12 @@ evidence.
 
 ## Deliberately not in this story
 
-- **Unknown-field passthrough for `desktopState`.** The app-settings document
-  preserves keys it does not recognize; `desktopState` does not, because both
-  `createDesktopState` and Rust's `create_desktop_state` build a fresh record.
-  A downgrade round-trip therefore still drops fields only the newer build wrote
-  — everything else survives, which is the difference between losing a feature's
-  state and losing all of it. Closing the gap wants a `#[serde(flatten)]` extras
-  map in Rust and a matching passthrough in TypeScript, and it is separable.
+- **TypeScript's `desktopState` reader still reports this build's version** and
+  drops unknown fields when it rebuilds the record. It costs nothing today:
+  Rust's `update_desktop_state` owns every write in the shipped app, and the
+  TypeScript write path runs only for a caller-supplied gateway the app never
+  uses. Mirroring it would widen `DesktopState.version` from a literal type and
+  churn the expectations in a suite that has no bug to fix.
 - **A recovery UI.** Surfacing a quarantined document, offering to restore it, and
   reporting what was detected belong to
   `pending-safe_writes_corruption_detection-med-hard.md`, which owns that surface
@@ -82,11 +93,20 @@ evidence.
 
 ## Validation
 
-- `packages/core` — 46 settings tests; three new for the newer-document contract.
+- `packages/core` — 348 tests; five new for the newer-document contract, across
+  both the registry-backed and legacy readers.
 - `apps/desktop` — 1095 tests; the desktop-state suite now asserts a newer
   document is read and a malformed version is not.
-- `apps/desktop/src-tauri` — 114 tests; four new (newer document, non-version
-  version, quarantine, empty file). `cargo clippy --all-targets` is clean.
+- `apps/desktop/src-tauri` — 115 tests; five new (newer document read, newer
+  document written back, non-version version, quarantine, empty file).
+  `cargo clippy --all-targets` is clean.
 - Mutation-checked: removing the readable guard, dropping the version diagnostic
   from the parse result, skipping the quarantine rename, and stamping the version
-  down each fail a test.
+  down — on either document — each fail a test.
+
+## Verifying it by hand
+
+Set `desktopState.version` in `~/.local/share/com.thinkbrain.notes/settings/app.json`
+to `99`, add a key inside `desktopState` this build has never written, and launch.
+The workspace, tabs and panel widths come back, and the added key is still there
+after the app writes. Before this branch, all of it was gone.

@@ -1349,6 +1349,40 @@ fn desktop_state_from_a_newer_build_is_read_rather_than_discarded() {
     assert_eq!(settings["desktopState"]["leftPanelWidth"], 352.0);
 }
 
+/// Reading a newer document is only half of it: this build then writes the
+/// document back, and anything it rebuilt from scratch would drop whatever the
+/// newer build had added. Carrying the unknown fields through — and leaving the
+/// version where it was — makes the round trip lossless, so switching branches
+/// costs nothing at all rather than costing the newest feature's state.
+#[test]
+fn desktop_state_from_a_newer_build_survives_a_write_by_this_one() {
+    let existing = serde_json::json!({
+        "desktopState": {
+            "version": 99,
+            "explorerOpen": false,
+            "somethingLaterAdded": { "kept": true }
+        }
+    });
+
+    let updated = update_desktop_state_contents(
+        Some(&existing.to_string()),
+        DesktopStateUpdate {
+            bottom_panel_open: Some(true),
+            ..Default::default()
+        },
+    )
+    .expect("desktop-state update succeeds");
+
+    let settings: Value = serde_json::from_str(&updated).expect("serialized settings are valid");
+    assert_eq!(
+        settings["desktopState"]["somethingLaterAdded"],
+        serde_json::json!({ "kept": true })
+    );
+    assert_eq!(settings["desktopState"]["version"], 99);
+    assert_eq!(settings["desktopState"]["bottomPanelOpen"], true);
+    assert_eq!(settings["desktopState"]["explorerOpen"], false);
+}
+
 #[test]
 fn desktop_state_with_a_version_that_is_not_a_version_falls_back_to_defaults() {
     let existing = serde_json::json!({
