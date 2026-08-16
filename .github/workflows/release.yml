@@ -90,6 +90,13 @@ jobs:
         uses: tauri-apps/tauri-action@v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Signs the updater artifacts. The app only accepts an update signed
+          # by the key whose public half is compiled into it
+          # (`plugins.updater.pubkey` in tauri.conf.json), so losing this key
+          # means no installed copy can ever be updated again — back it up
+          # somewhere that is not this repository.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "ThinkBrain Notes ${{ github.ref_name }}"

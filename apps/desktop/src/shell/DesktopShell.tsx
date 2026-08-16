@@ -42,6 +42,9 @@ import { ActivityBar } from "./ActivityBar";
 import { DirtyCloseDialog } from "./DirtyCloseDialog";
 import { ResizeHandle } from "./ResizeHandle";
 import { StaleDocumentBanner } from "./StaleDocumentBanner";
+import { UpdateBanner } from "./UpdateBanner";
+import { useAppUpdate } from "./useAppUpdate";
+import { checkForUpdate, relaunchApp } from "./appUpdater";
 import { isBuiltInLeftPanel } from "../panels/panelRegistry";
 import { isSelectableRightPanel, type DocumentViewState, type RightPanel } from "./shellTypes";
 import { StatusBar } from "./StatusBar";
@@ -68,6 +71,10 @@ export function DesktopShell() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const { theme, setTheme } = useTheme();
   const resizeCleanupRef = useRef<(() => void) | null>(null);
+
+  // Looks once per window for a newer version. Silent when there is none,
+  // and silent about a check it could not make at all.
+  const update = useAppUpdate(checkForUpdate, relaunchApp);
 
   // Subscribe to the settings store's dirty flag so the settings tab shows the
   // dirty dot when staged changes exist. This re-renders DesktopShell when
@@ -564,7 +571,7 @@ export function DesktopShell() {
 
   return (
     <main
-      className="grid grid-rows-[2.25rem_minmax(0,1fr)_1.5rem] h-full min-w-184 max-[760px]:min-w-0 overflow-hidden bg-background text-foreground"
+      className="grid grid-rows-[2.25rem_auto_minmax(0,1fr)_1.5rem] h-full min-w-184 max-[760px]:min-w-0 overflow-hidden bg-background text-foreground"
       ref={rootRef}
       aria-label="ThinkBrain desktop workspace"
     >
@@ -577,6 +584,11 @@ export function DesktopShell() {
         onToggleRightPanel={(panel) => setRightPanel((current) => current === panel ? null : panel)}
         onOpenCommandPalette={openPalette}
       />
+
+      {/* Its own grid row, which collapses to nothing while there is no update
+          to offer. Above the workspace rather than inside a tab: this is about
+          the app, not about the note anyone happens to be reading. */}
+      <UpdateBanner state={update.state} onInstall={update.install} onDismiss={update.dismiss} />
 
       <div className="flex min-h-0 max-[760px]:relative">
         <ActivityBar

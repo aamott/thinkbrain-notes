@@ -35,7 +35,15 @@ pub fn run() {
     #[cfg(target_os = "linux")]
     disable_dmabuf_renderer_on_nvidia();
 
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+
+    // Desktop only, matching the dependency gate in Cargo.toml: the updater has
+    // no mobile implementation, and an Android build has no business shipping
+    // one anyway — that store owns updates there.
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
+
+    builder
         .manage(WorkspaceWindowRoots::default())
         .setup(|app| {
             // Windows opened later register this themselves, but the window
@@ -56,6 +64,7 @@ pub fn run() {
         })
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_process::init())
         .invoke_handler(app_command_handlers!())
         .run(tauri::generate_context!())
         .expect("failed to run Thinkbrain Notes desktop shell");

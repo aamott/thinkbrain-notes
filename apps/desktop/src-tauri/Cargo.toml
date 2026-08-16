@@ -22,6 +22,13 @@ serde_json = "1"
 tauri = { version = "2", features = ["protocol-asset"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
+tauri-plugin-process = "2"
+
+# The updater is desktop-only upstream, and this crate also builds for Android.
+# Gating it here rather than in `[dependencies]` keeps the mobile build from
+# trying to compile a plugin that has no mobile implementation.
+[target.'cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))'.dependencies]
+tauri-plugin-updater = "2"
 
 # ---------------------------------------------------------------------------
 # Build profiles

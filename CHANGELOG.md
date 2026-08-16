@@ -25,12 +25,18 @@ the calendar — is a cache it can throw away and rebuild.
   validation, import/export and per-section reset.
 - **Extensions** — load one from a local directory; it can contribute panels,
   editor headers and commands.
+- **Updates** — the app checks once at launch and offers to install a newer
+  version. Updates are signed, and only one signed by this project's key is
+  accepted.
 
 ### Known limits
 
-- **Binaries are unsigned.** macOS and Windows will both warn that the developer
-  is unidentified.
+- **Binaries are not code-signed.** macOS and Windows will both warn that the
+  developer is unidentified. This is separate from update signing above, which
+  proves an update came from this project but says nothing to the OS.
 - **Windows is untested.** The file watcher has been exercised by hand on Linux
   and macOS only; CI builds Linux alone.
 - **Search results are capped** at 200 matches, and nothing says so when a query
   matches more.
+- **Installing an update restarts the app** without checking for unsaved edits.
+  Save before accepting one.
