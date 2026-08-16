@@ -117,6 +117,17 @@ jobs:
             ---
 
             Binaries are unsigned. On macOS and Windows you will see the standard "unidentified developer" prompt — see your OS docs to bypass it for now.
-          releaseDraft: false
-          prerelease: false
+          # Published by hand, after the artifacts are looked at.
+          #
+          # Only one of these four builds — Linux — has ever run in CI, which is
+          # `ubuntu-latest` for both of its jobs; the two macOS targets and
+          # Windows are exercised nowhere else. A tag that fails on one of them
+          # should not leave a half-built release sitting in public, and a tag
+          # that succeeds is still worth opening a binary from before anyone
+          # else does. Once a release has gone out cleanly this can become
+          # `false` and the whole thing can publish itself.
+          releaseDraft: true
+          # A tag ending in `-rc`/`-beta`/`-alpha` marks itself as one, so a dry
+          # run does not have to look like the real thing.
+          prerelease: ${{ contains(github.ref_name, '-') }}
           args: ${{ matrix.args }}
