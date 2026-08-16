@@ -2430,7 +2430,7 @@ fn an_unpairable_rename_is_judged_by_what_is_actually_on_disk() {
     let landed = classify_event(
         &root,
         &EventKind::Modify(ModifyKind::Name(RenameMode::Any)),
-        &[arrived.clone()],
+        std::slice::from_ref(&arrived),
     );
     let left = classify_event(
         &root,

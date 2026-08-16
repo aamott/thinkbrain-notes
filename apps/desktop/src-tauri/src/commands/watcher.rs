@@ -269,8 +269,8 @@ fn classify_rename(root: &Path, paths: &[PathBuf]) -> Vec<WorkspaceChange> {
                 _ => vec![WorkspaceChange::rescan()],
             }
         }
-        (true, false) => single(root, &[from.clone()], WorkspaceChangeKind::Deleted),
-        (false, true) => single(root, &[to.clone()], WorkspaceChangeKind::Created),
+        (true, false) => single(root, std::slice::from_ref(from), WorkspaceChangeKind::Deleted),
+        (false, true) => single(root, std::slice::from_ref(to), WorkspaceChangeKind::Created),
         // Neither end is a note. A renamed folder moves notes we cannot name.
         (false, false) => {
             if looks_like_watched_directory(root, from) || looks_like_watched_directory(root, to) {
