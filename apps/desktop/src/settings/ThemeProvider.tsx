@@ -3,7 +3,8 @@ import type { ReactNode } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { parseThemeFile, type ThemeBase } from "@thinkbrain/core";
 import { type AppTheme, ThemeProviderContext, type ThemeProviderState } from "./theme-context";
-import { appSettingsRegistry, resolveEffectiveValue, useSettingsStore } from "./settingsStore";
+import { appSettingsRegistry, useSettingsStore } from "./settingsStore";
+import { resolveEffectiveValue } from "./settingsHelpers";
 import { readThemeFile } from "./themeAdapter";
 import { injectThemeOverrides, removeThemeOverrides } from "./themeInjection";
 

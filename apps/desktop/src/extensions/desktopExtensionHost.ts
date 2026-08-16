@@ -39,9 +39,9 @@ import { getWorkspaceBridge } from "./workspaceBridge";
 import type { DesktopEditorHookContribution } from "../tabs/editorHookRegistry";
 import {
   appSettingsRegistry,
-  effectiveSettingValue,
   useSettingsStore
 } from "../settings/settingsStore";
+import { effectiveSettingValue } from "../settings/settingsHelpers";
 
 /** A command definition whose identifier is relative to the owning extension. */
 export type DesktopExtensionCommand = Omit<DesktopCommand, "id"> & { readonly id: string };

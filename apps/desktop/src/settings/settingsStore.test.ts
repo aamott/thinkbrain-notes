@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { createSettingsStore, resolveEffectiveValue, type SettingsStoreGateway } from "./settingsStore";
+import { createSettingsStore, type SettingsStoreGateway } from "./settingsStore";
 import { appSettingsRegistry } from "./settingsStore";
+import { resolveEffectiveValue } from "./settingsHelpers";
 import { extractDefaults, type SettingDefinition } from "@thinkbrain/core";
 
 /**

@@ -41,7 +41,8 @@ import {
   type ThemeFile
 } from "@thinkbrain/core";
 
-import { appSettingsRegistry, resolveEffectiveValue, useSettingsStore } from "./settingsStore";
+import { appSettingsRegistry, useSettingsStore } from "./settingsStore";
+import { resolveEffectiveValue } from "./settingsHelpers";
 import { readThemeFile } from "./themeAdapter";
 import { readPickedFile, writeJsonViaSaveDialog } from "./importExportFiles";
 

@@ -12,7 +12,8 @@
 import { useCallback, useEffect, useState, type ChangeEvent } from "react";
 import { Download, Upload } from "lucide-react";
 import { cn } from "../lib/utils";
-import { useSettingsStore, resolveEffectiveValue, appSettingsRegistry } from "./settingsStore";
+import { appSettingsRegistry, useSettingsStore } from "./settingsStore";
+import { resolveEffectiveValue } from "./settingsHelpers";
 import { listThemes, type ThemeEntry } from "./themeAdapter";
 import {
   buildThemeExport,
