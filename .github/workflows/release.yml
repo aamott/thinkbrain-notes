@@ -6,8 +6,11 @@ name: release
 # from apps/desktop/src-tauri/tauri.conf.json and builds the bundle targets
 # configured there.
 #
-# Binaries are unsigned (no code-signing/notarization secrets are wired up yet),
-# so macOS/Windows users will see the standard "unidentified developer" prompt.
+# Two different signatures are in play, and only one of them exists. Updater
+# artifacts are signed with the project's minisign key so an installed app can
+# tell a real update from anything else. OS code-signing and notarization are
+# not wired up, so macOS and Windows still show the "unidentified developer"
+# prompt on first launch.
 
 on:
   push:
@@ -101,38 +104,32 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: "ThinkBrain Notes ${{ github.ref_name }}"
           releaseBody: |
-            The first feature-complete local-first knowledge workspace — open Markdown files, zero database lock-in, extensible, cross-platform.
+            A local-first Markdown workspace. Your notes stay ordinary `.md` files on disk, and everything built on top of them — the search index, the link graph, the calendar — is a cache the app can throw away and rebuild.
 
-            ## Highlights
+            ## In this release
 
-            **Markdown editor with live preview** — Full CodeMirror editor with wiki-link autocomplete, clickable `[[links]]`, vault-relative image rendering, and a live preview mode. Save protection guards against losing unsaved edits, and conflict-safe writes refuse to overwrite a file that changed underneath you.
+            **Editor** — CodeMirror with live preview, wiki-link autocomplete and navigation, and vault-relative images. Writes refuse to overwrite a file that changed underneath them.
 
-            **Workspace explorer** — VS Code-style file tree with full CRUD, multi-window workspace sessions with MRU tab tracking, show-hidden toggle, and a native file watcher that keeps the tree and open tabs in sync with external edits (VS Code, `git pull`, SyncThing).
+            **Explorer** — file tree with full CRUD, multi-window workspaces, and a native watcher that keeps the tree, the open tabs and the index in step with edits made outside the app.
 
-            **Extensions platform** — Load extensions from local directories with a manifest, compatibility, and activation lifecycle. Extensions contribute panels, editor headers, and commands through typed contribution points, and get a notes API plus disposable tabs. Ships with a `hello-notes` sample extension pinned by E2E tests.
+            **Search** — full-text search over the vault or one folder, plus typed filters over frontmatter fields.
 
-            **Search & indexing** — Full-text search scoped to folders, backed by a disposable platform-owned index that rebuilds fully from Markdown. Frontmatter metadata facets support typed filter queries over arbitrary fields.
+            **Journal and calendar** — dated entries as plain notes, filterable by what they record.
 
-            **Wiki-link foundation** — Platform-agnostic link resolver, reverse-link index, autocomplete, and clickable navigation — the base for backlinks and graph view.
+            **Themes and settings** — importable themes, and searchable settings with validation, import/export and per-section reset.
 
-            **Modular themes & settings** — Importable theme files with preset themes and a theme picker. Modular settings system with search, filter, dirty-state validation, import/export, and per-section reset.
+            **Extensions** — load one from a local directory; it can contribute panels, editor headers and commands.
 
-            **Journal & calendar** — Journal data model with a frontmatter contract, calendar view, metadata tracking, and entries searchable through the platform index.
+            **Updates** — the app checks once at launch and offers to install a newer version. Updates are signed, and only one signed by this project's key is accepted.
 
-            **Cross-platform foundation** — Tauri v2 desktop host (macOS, Windows, Linux) with an ACP agent host runtime, plus an Android scaffold. GitHub Actions CI runs lint, tests, E2E, and Rust tests.
+            ## Known limits
 
-            ---
+            - **Binaries are not code-signed.** macOS and Windows will both warn that the developer is unidentified. That is separate from the update signing above, which proves an update came from this project but says nothing to the OS.
+            - **Windows is untested.** The file watcher has been exercised by hand on Linux and macOS only, and CI builds Linux alone.
+            - **Search results are capped** at 200 matches, and nothing says so when a query matches more.
+            - **Installing an update restarts the app** without checking for unsaved edits. Save before accepting one.
 
-            Binaries are unsigned. On macOS and Windows you will see the standard "unidentified developer" prompt — see your OS docs to bypass it for now.
-          # Published by hand, after the artifacts are looked at.
-          #
-          # Only one of these four builds — Linux — has ever run in CI, which is
-          # `ubuntu-latest` for both of its jobs; the two macOS targets and
-          # Windows are exercised nowhere else. A tag that fails on one of them
-          # should not leave a half-built release sitting in public, and a tag
-          # that succeeds is still worth opening a binary from before anyone
-          # else does. Once a release has gone out cleanly this can become
-          # `false` and the whole thing can publish itself.
+            Full notes: [CHANGELOG.md](https://github.com/aamott/thinkbrain-notes/blob/main/CHANGELOG.md)
           releaseDraft: true
           # A tag ending in `-rc`/`-beta`/`-alpha` marks itself as one, so a dry
           # run does not have to look like the real thing.
