@@ -7,4 +7,5 @@
 
 pub mod bootstrap;
 pub mod hidden_repo;
+pub mod pending;
 pub mod snapshot;
