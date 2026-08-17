@@ -3,7 +3,7 @@
 Newest first. Versions follow [semver](https://semver.org), except that before
 1.0 a minor bump may still change behaviour.
 
-## 0.1.0 — unreleased
+## 0.1.0 — 2026-08-16
 
 First release.
 

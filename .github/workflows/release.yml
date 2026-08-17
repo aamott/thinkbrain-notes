@@ -134,4 +134,10 @@ jobs:
           # A tag ending in `-rc`/`-beta`/`-alpha` marks itself as one, so a dry
           # run does not have to look like the real thing.
           prerelease: ${{ contains(github.ref_name, '-') }}
+          # Label every asset with its OS and architecture so a downloader can
+          # tell at a glance which file is theirs. Produces names like
+          # `Thinkbrain Notes-0.1.0-macos-aarch64.dmg` and
+          # `Thinkbrain Notes-0.1.0-windows-x86_64.exe`. Placeholders are
+          # documented in tauri-action's README.
+          assetNamePattern: '[name]-[version]-[platform]-[arch][ext]'
           args: ${{ matrix.args }}
