@@ -8,6 +8,7 @@
 //! - `markdown`: Content reading, writing, creation, renaming, and listing of markdown files.
 //! - `search`: Full-text document indexing and search query execution.
 //! - `settings`: Application-level and workspace-level configuration reading and writing.
+//! - `sync`: Auto Sync native layer — the hidden per-workspace repository.
 //! - `themes`: Discovery and listing of `.tbtheme.json` theme files in the app-data themes directory.
 //! - `extensions`: Contained reads of files inside a locally loaded extension directory.
 //! - `watcher`: Watches the open workspace for edits made outside the app and reports them.
@@ -21,6 +22,7 @@ pub mod extensions;
 pub mod markdown;
 pub mod search;
 pub mod settings;
+pub mod sync;
 pub mod themes;
 pub mod watcher;
 pub mod workspace;

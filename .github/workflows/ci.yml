@@ -108,3 +108,59 @@ jobs:
         run: |
           source scripts/rust-env.sh
           cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml
+
+  # Cross-compile gate for the sync layer.
+  #
+  # Auto Sync bets on gix specifically because it compiles for Android and iOS,
+  # where a system `git` binary does not exist. That bet is only worth anything
+  # if it is checked: gix's HTTPS transport pulls in `aws-lc-sys`, a C and
+  # assembly BoringSSL fork, so "pure Rust" stops being true at the TLS layer
+  # and the mobile toolchains are the only place that shows up.
+  #
+  # `cargo check` on the `gix` package alone, not the whole crate: Tauri's own
+  # mobile build needs an SDK, a linker and a generated project, none of which
+  # this gate is asking about. If gix stops cross-compiling, sync stops being
+  # portable, and that is worth knowing on the commit that causes it.
+  sync-cross-compile:
+    name: Sync layer cross-compiles (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-linux-android
+            platform: ubuntu-latest
+          - target: aarch64-apple-ios
+            platform: macos-latest
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      # aws-lc-sys builds C and assembly for the target, so it needs the NDK's
+      # cross-compiler. The runner ships one; this points cc-rs at it.
+      - name: Point cc at the Android NDK
+        if: matrix.target == 'aarch64-linux-android'
+        run: |
+          TOOLCHAIN="$ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          echo "CC_aarch64_linux_android=$TOOLCHAIN/aarch64-linux-android21-clang" >> "$GITHUB_ENV"
+          echo "AR_aarch64_linux_android=$TOOLCHAIN/llvm-ar" >> "$GITHUB_ENV"
+          echo "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$TOOLCHAIN/aarch64-linux-android21-clang" >> "$GITHUB_ENV"
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+          key: ${{ matrix.target }}
+
+      - name: Check gix for the target
+        run: |
+          cargo check -p gix \
+            --manifest-path apps/desktop/src-tauri/Cargo.toml \
+            --target ${{ matrix.target }}
