@@ -86,7 +86,6 @@ describe("desktop panel registry", () => {
     expect(builtInDesktopPanels.map((panel) => panel.id)).toEqual([
       "explorer",
       "search",
-      "source-control",
       "tags",
       "extensions",
       "outline",
@@ -97,7 +96,6 @@ describe("desktop panel registry", () => {
     expect(desktopPanelRegistry.entriesBySide("left").map((panel) => panel.id)).toEqual([
       "explorer",
       "search",
-      "source-control",
       "tags",
       "extensions"
     ]);
@@ -198,7 +196,7 @@ describe("desktop panel registry", () => {
   });
 
   it("narrows built-in left ids via the type guard", () => {
-    for (const id of ["explorer", "search", "source-control", "tags", "extensions"] as const) {
+    for (const id of ["explorer", "search", "tags", "extensions"] as const) {
       expect(isBuiltInLeftPanel(id)).toBe(true);
     }
     expect(isBuiltInLeftPanel("outline")).toBe(false);

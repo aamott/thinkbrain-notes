@@ -55,19 +55,6 @@ vi.mock("../workspace/workspaceDocumentAdapter", () => ({
   }
 }));
 
-// Mock the git service so `gitService.detectRepository` (called in
-// handleWorkspaceOpened) is a no-op if ever reached.
-vi.mock("../git/gitService", () => ({
-  gitService: {
-    detectRepository: vi.fn(() => Promise.resolve()),
-    getAvailability: vi.fn(),
-    getStatus: vi.fn(),
-    stageFiles: vi.fn(),
-    unstageFiles: vi.fn(),
-    initializeRepository: vi.fn()
-  }
-}));
-
 // Spy on the tab reducer to count setDirty dispatches WITHOUT altering reducer
 // semantics. The spy delegates to the real implementation via importActual, so
 // state transitions are identical to production — only the call log is

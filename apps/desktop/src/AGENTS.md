@@ -5,7 +5,6 @@ Frontend user interface application built with React, Vite, and Zustand.
 ## Module Map
 - **`agent/`**: AI assistant UI panel (`AssistantPanel.tsx`). Consumes Tauri events directly.
 - **`commands/`**: Command palette UI modal & registry (`CommandPalette.tsx`, `commandRegistry.ts`, `commandPaletteModel.ts`).
-- **`git/`**: Git UI panels and status (`SourceControlPanel.tsx`, `gitService.ts`, `sourceControlRequestGate.ts`).
 - **`native/`**: Tauri bridge adapters (`commands.ts`). **Isolate all Rust calls here.**
 - **`search/`**: Workspace search panel UI and state (`SearchPanel.tsx`).
 - **`settings/`**: Desktop settings state & theme (`desktopState.ts`, `ThemeProvider.tsx`).

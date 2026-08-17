@@ -276,78 +276,11 @@ test("shell exposes labelled landmarks and keyboard-accessible controls", async 
 test("unavailable sections retain their owning panel", async ({ page }) => {
   await page.goto("/");
 
-  await page.getByRole("button", { name: "Source control" }).click();
+  await page.getByRole("button", { name: "Tags" }).click();
 
-  await expect(page.getByRole("complementary", { name: "Source control panel" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Source control" })).toBeVisible();
-  await expect(page.getByText("Open a workspace to view its Git repository information.")).toBeVisible();
-});
-
-test("source control reports the active workspace repository", async ({ page }) => {
-  await page.addInitScript(() => {
-    const appWindow = window as Window & {
-      isTauri?: boolean;
-      __TAURI_INTERNALS__?: { invoke: (command: string, args: Record<string, unknown>) => Promise<unknown> };
-    };
-    appWindow.isTauri = true;
-    appWindow.__TAURI_INTERNALS__ = {
-      async invoke(command, args) {
-        if (command === "plugin:dialog|open") return "/workspace/repository";
-        if (command === "window_workspace_root") return "/workspace/repository";
-        if (command === "read_app_settings") return null;
-        if (command === "write_app_settings") return null;
-        if (command === "open_workspace") return { workspace: { root_path: String(args.rootPath), name: "repository" }, files: [] };
-        if (command === "list_workspace_entries") return [];
-        if (command === "git_availability") return { available: true, version: "git version 2.50.0" };
-        if (command === "detect_git_repository") return { is_repository: true, branch: "main" };
-        if (command === "git_status") return [
-          { path: "staged.md", index_status: "A", worktree_status: " " },
-          { path: "changed.md", index_status: " ", worktree_status: "M" },
-          { path: "draft.md", index_status: "?", worktree_status: "?" }
-        ];
-        throw new Error(`Unexpected native command: ${command}`);
-      }
-    };
-  });
-
-  await page.goto("/");
-  await page.getByRole("button", { name: "Source control" }).click();
-  await expect(page.getByText("Repository", { exact: true })).toBeVisible();
-  await expect(page.getByText("main", { exact: true })).toBeVisible();
-  await expect(page.getByRole("region", { name: "Staged files" })).toContainText("staged.md");
-  await expect(page.getByRole("region", { name: "Changed files" })).toContainText("changed.md");
-  await expect(page.getByRole("region", { name: "Untracked files" })).toContainText("draft.md");
-});
-
-test("source control initializes a workspace repository", async ({ page }) => {
-  await page.addInitScript(() => {
-    const appWindow = window as Window & {
-      isTauri?: boolean;
-      __TAURI_INTERNALS__?: { invoke: (command: string, args: Record<string, unknown>) => Promise<unknown> };
-    };
-    appWindow.isTauri = true;
-    appWindow.__TAURI_INTERNALS__ = {
-      async invoke(command, args) {
-        if (command === "plugin:dialog|open") return "/workspace/new-repository";
-        if (command === "window_workspace_root") return "/workspace/new-repository";
-        if (command === "read_app_settings") return null;
-        if (command === "write_app_settings") return null;
-        if (command === "open_workspace") return { workspace: { root_path: String(args.rootPath), name: "new-repository" }, files: [] };
-        if (command === "list_workspace_entries") return [];
-        if (command === "git_availability") return { available: true, version: "git version 2.50.0" };
-        if (command === "detect_git_repository") return { is_repository: false, branch: null };
-        if (command === "initialize_git_repository") return { is_repository: true, branch: null };
-        if (command === "git_status") return [];
-        throw new Error(`Unexpected native command: ${command}`);
-      }
-    };
-  });
-
-  await page.goto("/");
-  await page.getByRole("button", { name: "Source control" }).click();
-  await page.getByRole("button", { name: "Initialize repository" }).click();
-  await expect(page.getByText("Repository initialized.")).toBeVisible();
-  await expect(page.getByText("Detached HEAD", { exact: true })).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "Tags panel" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Tags" })).toBeVisible();
+  await expect(page.getByText("Tags will appear here once note indexing is available.")).toBeVisible();
 });
 
 test("assistant and bottom panel toggles preserve the editor", async ({ page }) => {

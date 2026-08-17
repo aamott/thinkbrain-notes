@@ -30,13 +30,11 @@ describe("desktop command registry", () => {
     expect(registry.entries().map((command) => command.id)).toEqual([
       "open-file", "new-note", "search", "toggle-live-preview", "toggle-theme",
       "toggle-explorer", "toggle-outline", "toggle-assistant", "toggle-bottom-panel",
-      "open-settings", "rebuild-index", "open-graph", "open-source-control",
-      "open-extensions"
+      "open-settings", "rebuild-index", "open-graph", "open-extensions"
     ]);
     expect(registry.get("toggle-explorer")?.title).toBe("Toggle Explorer");
     expect(registry.get("open-file")?.keybinding).toBe("Ctrl/Cmd+P");
     expect(registry.get("rebuild-index")?.availability).toBe("available");
-    expect(registry.get("open-source-control")?.availability).toBe("available");
     expect(registry.get("open-extensions")?.availability).toBe("available");
   });
 

@@ -19,7 +19,6 @@ export type DesktopCommandId =
   | "open-settings"
   | "rebuild-index"
   | "open-graph"
-  | "open-source-control"
   | "open-extensions"
   | (string & {});
 
@@ -36,7 +35,7 @@ export interface DesktopCommandContext {
   readonly toggleLivePreview: () => void;
   /** Reveals a panel by its fully-qualified id, opening its side popout. */
   readonly revealPanel: (panelId: string) => void;
-  /** Reveals a left-side panel (explorer, search, source-control, extensions). */
+  /** Reveals a left-side panel (explorer, search, extensions). */
   readonly revealLeftPanel: (panelId: string) => void;
   readonly openSettings: () => void;
   readonly rebuildIndex: () => void;
@@ -185,14 +184,6 @@ export const builtInDesktopCommands: readonly DesktopCommand[] = [
     prerequisite: "link indexing",
     unavailableMessage: "Graph is unavailable until link indexing is connected.",
     handler: () => undefined
-  }),
-  available({
-    id: "open-source-control",
-    title: "Open source control",
-    keywords: ["git", "changes", "commit"],
-    handler: withClosePalette(({ revealLeftPanel }) => {
-      revealLeftPanel("source-control");
-    })
   }),
   available({
     id: "open-extensions",

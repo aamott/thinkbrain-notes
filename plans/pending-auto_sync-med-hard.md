@@ -1,11 +1,12 @@
 # Auto Sync
 
-> Reviewed 2026-08-16; all decisions settled. Supersedes
+> Reviewed 2026-08-16; approved 2026-08-16, all decisions settled. Supersedes
 > `wip-git-integration-low-hard.md` + `plans/git-integration/` — that work is
-> **removed, not migrated** (delete epic, stories, `git.rs`, `gitService.ts`,
-> `SourceControlPanel.tsx` + panel registration). On approval: rename this file
-> to `pending-`, update `app-vision.md` and `technical-decisions.md`
-> (system Git → bundled gix).
+> **removed, not migrated**. The plan docs were already gone; the code
+> (`gitService.ts`, `SourceControlPanel.tsx`, panel registration) is deleted in
+> story 1. `app-vision.md` now says bundled gix; there is no
+> `technical-decisions.md` to update — it was deleted in an earlier cleanup,
+> and these decisions live here instead.
 
 ## Vision
 
@@ -98,6 +99,7 @@ conflicts · block-level Markdown merge · reconcile-text · cloud provider APIs
 
 ## Status
 
-- ⬜ All stories pending.
-- On approval: delete old git-integration epic/stories/code; reconcile
-  `app-vision.md` + `technical-decisions.md`; rename to `pending-`.
+- ✅ Approved; `app-vision.md` reconciled; old git-integration code removed.
+- ⬜ All eight stories pending. Story 1 is split: a `gix` build spike across
+  every target first (the one thing that can invalidate the whole plan), then
+  the hidden repo, auto-commit and checkpoint API.

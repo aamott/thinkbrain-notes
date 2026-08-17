@@ -8,5 +8,5 @@ Tauri v2 desktop wrapper containing the React frontend user interface and the Ru
 - **`e2e/`** - End-to-end Playwright tests for desktop application scenarios.
 
 ## Rules & Boundaries
-- **Process Isolation**: The renderer (`src/`) runs in a web context; the native backend (`src-tauri/`) handles filesystem, Git, and ACP host execution.
+- **Process Isolation**: The renderer (`src/`) runs in a web context; the native backend (`src-tauri/`) handles filesystem, watcher, and ACP host execution.
 - **IPC Boundary**: UI components must never invoke Tauri Rust IPC functions directly. All IPC invocations must pass through `apps/desktop/src/native/` bridge adapters.

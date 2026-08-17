@@ -4,7 +4,6 @@
 //! and the Rust backend.
 //!
 //! Submodules:
-//! - `git`: Git repository discovery, status, staging, and unstaging commands.
 //! - `workspace`: Vault/workspace window lifecycle, file and directory hierarchy operations.
 //! - `markdown`: Content reading, writing, creation, renaming, and listing of markdown files.
 //! - `search`: Full-text document indexing and search query execution.
@@ -19,7 +18,6 @@
 //! - State Safety: Desktop state and workspace window mappings use synchronized thread-safe primitives.
 
 pub mod extensions;
-pub mod git;
 pub mod markdown;
 pub mod search;
 pub mod settings;
@@ -41,12 +39,6 @@ macro_rules! app_command_handlers {
         tauri::generate_handler![
             $crate::commands::workspace::desktop_shell_status,
             $crate::commands::workspace::open_workspace,
-            $crate::commands::git::git_availability,
-            $crate::commands::git::detect_git_repository,
-            $crate::commands::git::initialize_git_repository,
-            $crate::commands::git::git_status,
-            $crate::commands::git::stage_git_files,
-            $crate::commands::git::unstage_git_files,
             $crate::commands::markdown::list_markdown_files,
             $crate::commands::workspace::list_workspace_entries,
             $crate::commands::markdown::read_markdown_file,
@@ -90,12 +82,6 @@ macro_rules! app_command_handlers {
 pub const APP_COMMAND_PATHS: &[&str] = &[
     "workspace::desktop_shell_status",
     "workspace::open_workspace",
-    "git::git_availability",
-    "git::detect_git_repository",
-    "git::initialize_git_repository",
-    "git::git_status",
-    "git::stage_git_files",
-    "git::unstage_git_files",
     "markdown::list_markdown_files",
     "workspace::list_workspace_entries",
     "markdown::read_markdown_file",
@@ -149,13 +135,6 @@ mod tests {
         assert!(APP_COMMAND_PATHS.contains(&"workspace::delete_workspace_entry"));
         assert!(APP_COMMAND_PATHS.contains(&"workspace::open_workspace_window"));
         assert!(APP_COMMAND_PATHS.contains(&"workspace::window_workspace_root"));
-        // Git
-        assert!(APP_COMMAND_PATHS.contains(&"git::git_availability"));
-        assert!(APP_COMMAND_PATHS.contains(&"git::detect_git_repository"));
-        assert!(APP_COMMAND_PATHS.contains(&"git::initialize_git_repository"));
-        assert!(APP_COMMAND_PATHS.contains(&"git::git_status"));
-        assert!(APP_COMMAND_PATHS.contains(&"git::stage_git_files"));
-        assert!(APP_COMMAND_PATHS.contains(&"git::unstage_git_files"));
         // Markdown
         assert!(APP_COMMAND_PATHS.contains(&"markdown::list_markdown_files"));
         assert!(APP_COMMAND_PATHS.contains(&"markdown::read_markdown_file"));
@@ -196,8 +175,8 @@ mod tests {
         );
         assert_eq!(
             APP_COMMAND_PATHS.len(),
-            37,
-            "expected 37 registered commands"
+            31,
+            "expected 31 registered commands"
         );
     }
 }
