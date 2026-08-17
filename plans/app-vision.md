@@ -45,7 +45,7 @@ fully supported. Cloud providers are optional.
 | Native backend | Rust |
 | Storage | Markdown files + JSON config; secrets via native OS store |
 | Search index | SQLite FTS5 (ephemeral cache, never source of truth) |
-| Git | System Git (invoked via Rust) |
+| Sync | Bundled gix (no system Git; must compile for desktop and mobile) |
 | AI | Extension-based; local and remote providers (deferred) |
 | Extensions | Trusted local same-context modules (beta); soft capability gates |
 
@@ -78,14 +78,18 @@ vault. Vault = Markdown files + attachments, plus user-owned `.canvas` JSON
 documents as an explicit vault-file exception. Canvas settings, cache, and
 viewport/session state live in OS `AppData`/config directories.
 
-**Bring your own sync**: No cloud sync. Users rely on OneDrive/Syncthing/Git.
-No proprietary cloud backend assumptions.
+**Bring your own sync**: No proprietary cloud backend, ever. Whatever the user
+already runs — OneDrive, Google Drive, Syncthing — moves the files; the app's
+job is to notice the conflict copies those daemons leave behind and help
+resolve them. Git is the one transport the app drives itself, through a
+bundled gix rather than a `git` binary the user may not have. Both are one
+feature (`plans/pending-auto_sync-med-hard.md`), not two.
 
 ## MVP Scope
 
 Build a fast, local-first desktop Markdown workspace where a user can open a
-folder, browse notes, edit Markdown files, search notes, configure basic
-settings, and perform basic Git operations.
+folder, browse notes, edit Markdown files, search notes, and configure basic
+settings.
 
 **In scope:**
 - Desktop app (Tauri + React + TS + Vite)
@@ -96,7 +100,6 @@ settings, and perform basic Git operations.
 - YAML frontmatter parsing (tags, aliases, wiki-links)
 - Basic full-text search (SQLite FTS5)
 - JSON application settings (stored in OS app-data)
-- Basic Git integration (system Git: status, stage, commit, branch, init)
 - Built-in theme foundation (CSS variables, light/dark)
 - Test/lint/typecheck/build workflow
 
@@ -120,6 +123,7 @@ epic is deleted.
 
 ## Reference Documents
 
-- `plans/technical-decisions.md` — cross-cutting technical decisions
-- `plans/testing-strategy.md` — testing approach and validation commands
-- `.agents/AGENTS.md` — architecture rules, planning system, styling, linting
+- `AGENTS.md` — architecture rules, planning system, styling, linting. Each
+  package carries its own alongside it (`apps/desktop/`, `packages/core/`, …).
+- Cross-cutting decisions live in the epic that owns them, not a central
+  register — a single decisions file drifted out of date and was removed.

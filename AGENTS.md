@@ -4,7 +4,7 @@ Open, local-first knowledge workspace inspired by Obsidian & VS Code. Standard M
 
 Future extensions include: 
 - ACP Agent Chat
-- Git sync (manual and automatic)
+- Auto Sync: git push/pull via bundled gix, plus rescue of cloud-daemon conflict files
 - Automatic conflict resolution for
   - OneDrive
   - SyncThing
@@ -21,7 +21,6 @@ apps/desktop/  # React UI + Tauri Rust host (See apps/desktop/AGENTS.md)
 │  ├─ commands/  # Command palette & registry
 │  ├─ events/  # App-wide event bus
 │  ├─ extensions/  # Extension host, bootstrap, builtins, loader
-│  ├─ git/  # Git service & source-control panel
 │  ├─ lib/  # Shared renderer utils
 │  ├─ native/  # Tauri bridge: commands, dialogs, fs, assets
 │  ├─ panels/  # Left/right popouts, bottom panel, outline
@@ -31,7 +30,7 @@ apps/desktop/  # React UI + Tauri Rust host (See apps/desktop/AGENTS.md)
 │  ├─ tabs/  # Tab model, registry, editor, live preview
 │  └─ workspace/  # Explorer, document adapter, workspace model
 ├─ src-tauri/  # Rust backend & ACP host (See apps/desktop/src-tauri/AGENTS.md)
-│  └─ src/commands/  # Tauri commands: extensions, git, markdown, search, settings, themes, workspace
+│  └─ src/commands/  # Tauri commands: extensions, markdown, search, settings, themes, watcher, workspace
 │     └─ search/  # Structured metadata facet storage, queries, and focused tests
 ├─ e2e/  # Playwright E2E specs
 └─ demo/  # Demo fixtures

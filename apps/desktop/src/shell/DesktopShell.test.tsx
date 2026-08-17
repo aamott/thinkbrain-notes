@@ -49,7 +49,7 @@ describe("DesktopShell composition", () => {
       expect(markup).toContain(`aria-label="${action.label}"`);
       expect(markup).toContain(`title="${action.label}"`);
     }
-    expect(leftPanels).toHaveLength(5);
+    expect(leftPanels).toHaveLength(4);
     expect(markup).toContain('aria-label="Settings"');
     expect(markup).toContain('title="Settings"');
   });

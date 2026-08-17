@@ -2,7 +2,6 @@ import { isTauri } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch } from "react";
 import { subscribeToNoteChanges } from "../events/noteChangeSubscription";
 import { setWorkspaceBridge } from "../extensions/workspaceBridge";
-import { gitService } from "../git/gitService";
 import { createDebounced, type Debounced } from "../lib/debounce";
 import type { NativeMarkdownFileEntry, NativeWorkspaceSnapshot } from "../native/commands";
 import {
@@ -231,7 +230,6 @@ export function useWorkspaceLifecycle({
     setWorkspaceName(snapshot.workspace.name);
     setWorkspaceFiles(snapshot.files);
     const recentPaths = updateRecentWorkspacePaths(rootPath);
-    void gitService.detectRepository(rootPath);
     void useSearchIndexStore.getState().indexWorkspace(rootPath, snapshot.files);
     void useWikiLinkIndexStore.getState().indexWorkspace(rootPath, snapshot.files);
     persistDesktopState({ lastWorkspacePath: rootPath, recentWorkspacePaths: recentPaths });

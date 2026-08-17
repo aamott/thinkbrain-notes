@@ -1,11 +1,13 @@
 # Auto Sync
 
-> Reviewed 2026-08-16; all decisions settled. Supersedes
+> Reviewed 2026-08-16; approved 2026-08-16, all decisions settled. Supersedes
 > `wip-git-integration-low-hard.md` + `plans/git-integration/` — that work is
-> **removed, not migrated** (delete epic, stories, `git.rs`, `gitService.ts`,
-> `SourceControlPanel.tsx` + panel registration). On approval: rename this file
-> to `pending-`, update `app-vision.md` and `technical-decisions.md`
-> (system Git → bundled gix).
+> **removed, not migrated**. The plan docs were already gone; the code
+> (`gitService.ts`, `SourceControlPanel.tsx`, the Rust `commands/git` module,
+> panel registration) is already deleted. `app-vision.md` now says bundled gix;
+> there is no
+> `technical-decisions.md` to update — it was deleted in an earlier cleanup,
+> and these decisions live here instead.
 
 ## Vision
 
@@ -80,6 +82,8 @@ conflicts · block-level Markdown merge · reconcile-text · cloud provider APIs
 
 ## Stories (`plans/auto-sync/`, dependency order)
 
+0. `pending-gix_build_spike-high-med.md` — does gix compile everywhere we
+   ship, and can a repo in app-data treat the vault as its worktree
 1. `pending-gix_engine_hidden_repo-high-hard.md` — engine, hidden repo,
    bootstrap matrix, auto-commit, checkpoint API
 2. `pending-cloud_conflict_detection-high-med.md` — pattern table, watcher
@@ -98,6 +102,7 @@ conflicts · block-level Markdown merge · reconcile-text · cloud provider APIs
 
 ## Status
 
-- ⬜ All stories pending.
-- On approval: delete old git-integration epic/stories/code; reconcile
-  `app-vision.md` + `technical-decisions.md`; rename to `pending-`.
+- ✅ Approved; `app-vision.md` reconciled; old git-integration code removed.
+- ✅ Story 0 (the `gix` build spike, split off the front of story 1). gix
+  cross-compiles for Android and iOS, and CI keeps it that way.
+- ⬜ Stories 1–8 pending.

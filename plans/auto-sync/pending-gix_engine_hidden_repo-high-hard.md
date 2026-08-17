@@ -1,14 +1,15 @@
 # gix Engine + Hidden Repo
 
-Story 1 of `wip-auto_sync-med-hard.md`. Foundation for everything else.
+Story 1 of `pending-auto_sync-med-hard.md`. Foundation for everything else.
+The `gix` dependency, and the hidden repo's separate-worktree layout, are proven
+in story 0 (`pending-gix_build_spike-high-med.md`) — start from `hidden_repo.rs`
+as it stands rather than from nothing.
 
 ## Scope
 
-- Add `gix` dependency (rustls, no OpenSSL). New module
-  `src-tauri/src/commands/sync/` (`hidden_repo.rs` first).
-- One hidden gix repo per workspace in OS app-data, keyed by workspace
-  identity. Created lazily on first workspace open. Tracks vault content;
-  vault itself gets no `.git`.
+- ✅ `gix` dependency and `src-tauri/src/commands/sync/hidden_repo.rs` (story 0).
+- Key the hidden repo by workspace identity and create it lazily on first
+  workspace open — story 0 proved the layout, but nothing calls it yet.
 - **Auto-commit:** batch vault changes (from `workspace://changed`, echo
   suppression already applied) and commit on idle. Template message:
   `Sync <local datetime> — <n> notes changed`.
@@ -32,13 +33,13 @@ Story 1 of `wip-auto_sync-med-hard.md`. Foundation for everything else.
 
 ## Acceptance
 
-- [ ] Hidden repo created lazily; zero files written inside vault
+- [x] Zero files written inside the vault (story 0)
+- [ ] Hidden repo keyed by workspace identity and created lazily on open
 - [ ] Edits produce commits with correct file sets + template messages
 - [ ] `checkpoint()` returns restorable commit; covered by tests
 - [ ] All four bootstrap cases covered by tests; own-`.git` vault untouched
 - [ ] 10k-file vault: initial snapshot and idle commit stay off the UI thread
-- [ ] Old system-git code (`git.rs`, `gitService.ts`, `SourceControlPanel.tsx`,
-      panel registration, tests) removed; `plans/git-integration/` deleted
+- [x] Old system-git code and plans removed
 
 ## Status
 

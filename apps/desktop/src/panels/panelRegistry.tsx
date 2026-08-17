@@ -5,7 +5,6 @@ import {
   type PanelFactory
 } from "@thinkbrain/core";
 import { useMemo, useSyncExternalStore, type ReactNode } from "react";
-import { SourceControlPanel } from "../git/SourceControlPanel";
 import { SearchPanel } from "../search/SearchPanel";
 import { ExtensionsPanel } from "../extensions/ExtensionsPanel";
 import { Unavailable } from "../shell/Unavailable";
@@ -43,7 +42,6 @@ export interface DesktopPanelContext extends LeftPanelContext, RightPanelContext
 export type BuiltInDesktopPanelId =
   | "explorer"
   | "search"
-  | "source-control"
   | "tags"
   | "extensions"
   | "outline"
@@ -62,7 +60,6 @@ export type BuiltInDesktopPanelId =
 export type BuiltInLeftPanel =
   | "explorer"
   | "search"
-  | "source-control"
   | "tags"
   | "extensions";
 
@@ -124,7 +121,6 @@ export type RightPanel = BuiltInRightPanel | ExtensionPanelId;
 export function isBuiltInLeftPanel(id: string): id is BuiltInLeftPanel {
   return id === "explorer"
     || id === "search"
-    || id === "source-control"
     || id === "tags"
     || id === "extensions";
 }
@@ -210,15 +206,6 @@ export const builtInDesktopPanels: readonly (LeftPanelContribution | RightPanelC
     factory: ({ onOpenSearchResult, rootPath }) => (
       <SearchPanel rootPath={rootPath} onOpenFile={onOpenSearchResult} />
     )
-  },
-  {
-    id: "source-control",
-    label: "Source control",
-    icon: "⑂",
-    side: "left",
-    keepMounted: true,
-    availability: () => true,
-    factory: ({ rootPath }) => <SourceControlPanel rootPath={rootPath} />
   },
   {
     id: "tags",

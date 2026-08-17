@@ -15,8 +15,8 @@ describe("command palette filtering", () => {
       "toggle-live-preview", "toggle-theme", "toggle-explorer", "toggle-outline",
       "toggle-assistant", "toggle-bottom-panel"
     ]);
-    expect(filterDesktopCommands(builtInDesktopCommands, "git").map((command) => command.id)).toEqual([
-      "open-source-control"
+    expect(filterDesktopCommands(builtInDesktopCommands, "plugins").map((command) => command.id)).toEqual([
+      "open-extensions"
     ]);
   });
 
@@ -26,7 +26,7 @@ describe("command palette filtering", () => {
       activeIndex: 0,
       activeItem: null
     });
-    expect(getCommandPaletteResults({ query: "open", activeIndex: 8 }, builtInDesktopCommands, []).activeIndex).toBe(4);
+    expect(getCommandPaletteResults({ query: "open", activeIndex: 8 }, builtInDesktopCommands, []).activeIndex).toBe(3);
   });
 
   it("resets selection when changing the query", () => {
