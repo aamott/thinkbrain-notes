@@ -31,9 +31,59 @@ const TICK: Duration = Duration::from_millis(500);
 struct Registry {
     interest: WatchInterest,
     engines: HashMap<String, Arc<Engine>>,
+    /// One lock per workspace, held while that workspace is being bootstrapped.
+    ///
+    /// Bootstrapping walks and hashes the whole vault, so it must not happen
+    /// under the global lock — every other workspace's open, close and sweep
+    /// would wait behind it. But two windows opening the *same* vault at once
+    /// must not both create its repository, so they queue here instead.
+    lanes: HashMap<String, Arc<Mutex<()>>>,
     /// Whether the sweeper thread is running. It outlives individual engines
     /// and simply idles when the map is empty.
     sweeping: bool,
+}
+
+impl Registry {
+    /// The queue for bootstrapping `key`, created on first use.
+    fn lane(&mut self, key: &str) -> Arc<Mutex<()>> {
+        Arc::clone(self.lanes.entry(key.to_string()).or_default())
+    }
+
+    /// Registers one window's interest, reporting whether an engine was there.
+    fn hold(&mut self, key: &str, label: &str) -> bool {
+        if !self.engines.contains_key(key) {
+            return false;
+        }
+        self.interest.acquire(key, label);
+        true
+    }
+
+    /// Takes on `engine` for `key`, unless someone got there first.
+    ///
+    /// Two windows opening one vault can both come back from the lane with an
+    /// engine. Keeping the first means keeping the one that may already have
+    /// changes noted against it; the second is dropped having recorded nothing.
+    fn adopt(&mut self, key: &str, label: &str, engine: Arc<Engine>) {
+        self.engines.entry(key.to_string()).or_insert(engine);
+        self.interest.acquire(key, label);
+    }
+
+    /// Releases one window's interest, yielding the engine nobody wants now.
+    fn release(&mut self, key: &str, label: &str) -> Option<Arc<Engine>> {
+        self.interest
+            .release(key, label)
+            .then(|| self.engines.remove(key))
+            .flatten()
+    }
+
+    /// Releases everything `label` held, yielding the engines left over.
+    fn release_window(&mut self, label: &str) -> Vec<Arc<Engine>> {
+        self.interest
+            .release_window(label)
+            .into_iter()
+            .filter_map(|key| self.engines.remove(&key))
+            .collect()
+    }
 }
 
 static ENGINES: Mutex<Option<Registry>> = Mutex::new(None);
@@ -53,46 +103,81 @@ pub fn attach(
     key: &str,
     label: &str,
 ) -> Result<bool, NativeError> {
+    let lane = {
+        let mut guard = registry();
+        let state = guard.get_or_insert_with(Registry::default);
+        if state.hold(key, label) {
+            start_sweeping(state);
+            return Ok(true);
+        }
+        state.lane(key)
+    };
+
+    // Outside the global lock: bootstrapping an existing vault walks and hashes
+    // every note in it, and holding the registry through that would stall every
+    // other window's open and close, and the sweeper with them.
+    let _lane = lane.lock().unwrap_or_else(|error| error.into_inner());
+    let managed = bootstrap(app_data_dir, root)?;
+
     let mut guard = registry();
     let state = guard.get_or_insert_with(Registry::default);
-
-    if !state.engines.contains_key(key) {
-        match bootstrap(app_data_dir, root)? {
-            Managed::HasOwnGit => return Ok(false),
-            Managed::Yes(workspace) => {
-                let engine = Arc::new(Engine::new(workspace.repo));
-                // Conflicts appear while the app is closed. Someone back from a
-                // week away should not have to open each note to discover the
-                // app noticed nothing.
-                engine.note_conflicts(conflict::scan(root));
-                state.engines.insert(key.to_string(), engine);
-            }
+    match managed {
+        // Interest is deliberately not taken: there is no engine to keep alive,
+        // and holding it would leave the registry claiming to look after a vault
+        // it has promised not to touch.
+        Managed::HasOwnGit => return Ok(false),
+        Managed::Yes(workspace) => {
+            let engine = Arc::new(Engine::new(workspace.repo));
+            // Conflicts appear while the app is closed. Someone back from a
+            // week away should not have to open each note to discover the
+            // app noticed nothing.
+            engine.note_conflicts(conflict::scan(root));
+            state.adopt(key, label, engine);
         }
     }
+    start_sweeping(state);
+    Ok(true)
+}
 
-    state.interest.acquire(key, label);
+fn start_sweeping(state: &mut Registry) {
     if !state.sweeping {
         state.sweeping = true;
         spawn_sweeper();
     }
-    Ok(true)
 }
 
 /// Releases one window's interest in `key`, dropping the engine with the last.
 pub fn detach(key: &str, label: &str) {
-    let mut guard = registry();
-    let Some(state) = guard.as_mut() else { return };
-    if state.interest.release(key, label) {
-        state.engines.remove(key);
+    let engine = {
+        let mut guard = registry();
+        let Some(state) = guard.as_mut() else { return };
+        state.release(key, label)
+    };
+    if let Some(engine) = engine {
+        flush(key, &engine);
     }
 }
 
 /// Releases everything a window held, for windows the OS destroys.
 pub fn release_window(label: &str) {
-    let mut guard = registry();
-    let Some(state) = guard.as_mut() else { return };
-    for key in state.interest.release_window(label) {
-        state.engines.remove(&key);
+    let engines = {
+        let mut guard = registry();
+        let Some(state) = guard.as_mut() else { return };
+        state.release_window(label)
+    };
+    for engine in engines {
+        flush(label, &engine);
+    }
+}
+
+/// Records what the closing workspace never got the chance to settle.
+///
+/// Outside the registry lock, because it hashes and writes. There is nobody
+/// left to show a failure to, so it is logged like the sweeper's — story 5's
+/// status surface is where a recording failure becomes visible.
+fn flush(key: &str, engine: &Engine) {
+    if let Err(error) = engine.flush() {
+        eprintln!("[sync] could not record the last changes to {key}: {error:?}");
     }
 }
 
@@ -197,6 +282,115 @@ fn spawn_sweeper() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tests::make_temp_test_dir;
+
+    /// A registry of its own, so lifecycle tests do not fight each other or the
+    /// live sweeper over the process-wide one.
+    fn engine_for(name: &str) -> Arc<Engine> {
+        let app_data = make_temp_test_dir(&format!("{name}-appdata"), "sync", true);
+        let vault = make_temp_test_dir(&format!("{name}-vault"), "sync", true);
+        match bootstrap(&app_data, &vault).expect("bootstrap succeeds") {
+            Managed::Yes(workspace) => Arc::new(Engine::new(workspace.repo)),
+            Managed::HasOwnGit => panic!("the vault was expected to be managed"),
+        }
+    }
+
+    /// Two windows on one vault share one engine, and it survives until the
+    /// second one goes.
+    #[test]
+    fn an_engine_outlives_every_window_but_the_last() {
+        let mut state = Registry::default();
+        state.adopt("vault", "window-1", engine_for("registry-shared"));
+        assert!(state.hold("vault", "window-2"), "the second window shares it");
+
+        assert!(
+            state.release("vault", "window-1").is_none(),
+            "the engine was dropped while a window still had the vault open"
+        );
+        assert!(
+            state.release("vault", "window-2").is_some(),
+            "the last window closing did not yield the engine to be flushed"
+        );
+        assert!(state.engines.is_empty());
+    }
+
+    /// A window the OS destroyed never runs its teardown, so everything it held
+    /// has to come back at once — and come back, so it can be flushed.
+    #[test]
+    fn a_destroyed_window_yields_every_engine_it_held() {
+        let mut state = Registry::default();
+        state.adopt("one", "window-1", engine_for("registry-destroy-one"));
+        state.adopt("two", "window-1", engine_for("registry-destroy-two"));
+        state.adopt("two", "window-2", engine_for("registry-destroy-two-b"));
+
+        let released = state.release_window("window-1");
+
+        assert_eq!(released.len(), 1, "only the vault nobody else has open");
+        assert!(state.engines.contains_key("two"), "window-2 still has it open");
+    }
+
+    /// Bootstrapping happens outside the lock, so two windows opening one vault
+    /// can both arrive holding an engine. The first is the one that may already
+    /// have changes noted against it.
+    #[test]
+    fn a_second_engine_for_one_vault_is_turned_away() {
+        let mut state = Registry::default();
+        let first = engine_for("registry-adopt-first");
+        state.adopt("vault", "window-1", Arc::clone(&first));
+
+        state.adopt("vault", "window-2", engine_for("registry-adopt-second"));
+
+        assert!(
+            Arc::ptr_eq(&state.engines["vault"], &first),
+            "the engine that was already being used was replaced"
+        );
+    }
+
+    /// A vault with its own git repository gets no engine, so nothing may claim
+    /// to be looking after it either.
+    #[test]
+    fn a_vault_with_no_engine_is_not_held() {
+        let mut state = Registry::default();
+
+        assert!(!state.hold("vault", "window-1"));
+        assert!(!state.interest.is_watched("vault"));
+    }
+
+    /// The whole point of flushing on the way out: a note typed and the window
+    /// closed a second later is still in history.
+    ///
+    /// This goes through the real `attach`/`detach`, because the bug it guards
+    /// against is the wiring between them. The sweeper cannot be what records
+    /// the note — it only takes what has been still for `SETTLE`, and this
+    /// closes the workspace immediately.
+    #[test]
+    fn closing_the_last_window_records_what_never_settled() {
+        let app_data = make_temp_test_dir("registry-flush-appdata", "sync", true);
+        let vault = make_temp_test_dir("registry-flush-vault", "sync", true);
+        let key = vault.to_string_lossy().to_string();
+
+        assert!(attach(&app_data, &vault, &key, "window-1").expect("attaching succeeds"));
+        std::fs::write(vault.join("one.md"), "# One\n").expect("the note is written");
+        note_changes(
+            &key,
+            &vault,
+            &[change(WorkspaceChangeKind::Created, "one.md")],
+        );
+        detach(&key, "window-1");
+
+        // Opened directly rather than through `bootstrap`, which would take a
+        // first snapshot of the vault and so manufacture the very commit this
+        // is looking for.
+        let git_dir = crate::commands::sync::bootstrap::hidden_repo_path(&app_data, &key);
+        let reopened = crate::commands::sync::hidden_repo::open_or_create(&git_dir, &vault)
+            .expect("the hidden repository opens");
+        assert!(
+            super::super::snapshot::head_commit(&reopened)
+                .expect("reading the branch succeeds")
+                .is_some(),
+            "the note was lost when the window closed"
+        );
+    }
 
     fn change(kind: WorkspaceChangeKind, path: &str) -> WorkspaceChange {
         WorkspaceChange {

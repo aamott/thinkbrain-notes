@@ -114,8 +114,22 @@ fn build_tree(
 
         match std::fs::symlink_metadata(&absolute) {
             Ok(metadata) if metadata.is_file() => {
-                let file = std::fs::File::open(&absolute)
-                    .map_err(|error| failed("sync.note_read_failed", "Could not read a note to record it.", error))?;
+                let file = match std::fs::File::open(&absolute) {
+                    Ok(f) => f,
+                    // Gone between the two calls — a sync daemon deleting the
+                    // note mid-batch, which is the very thing this feature
+                    // exists for. It is a deletion to record, not a reason to
+                    // abandon every other note that settled with it.
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                        editor
+                            .remove(tree_path(&relative))
+                            .map_err(|error| failed("sync.tree_write_failed", "Could not record a deleted note.", error))?;
+                        continue;
+                    }
+                    Err(error) => {
+                        return Err(failed("sync.note_read_failed", "Could not read a note to record it.", error));
+                    }
+                };
                 let blob = repo
                     .write_blob_stream(file)
                     .map_err(|error| failed("sync.note_store_failed", "Could not store a note's contents.", error))?;
@@ -227,7 +241,10 @@ fn vault_relative(vault: &Path, path: &Path) -> Result<PathBuf, NativeError> {
         path
     };
 
-    if relative.components().any(|component| matches!(component, std::path::Component::ParentDir)) {
+    // Only a plain sequence of names, rather than "no `..`" — that let through
+    // `./note.md`, and on Windows a drive-relative `C:note.md`, which joins
+    // against whatever directory that drive happens to be sitting in.
+    if !relative.components().all(|component| matches!(component, std::path::Component::Normal(_))) {
         return Err(NativeError::new(
             "sync.path_outside_vault",
             "That file is outside this workspace's notes.",
@@ -543,5 +560,18 @@ mod tests {
             .expect("committed");
 
         assert_eq!(recorded_paths(&f.repo), ["one.md"]);
+    }
+
+    /// `..` is not the only way to name something that is not a note in this
+    /// vault. `./note.md` resolves to the right file today only because the
+    /// tree builder happens to drop the odd component on the way past.
+    #[test]
+    fn a_path_that_is_not_plainly_a_name_is_refused() {
+        let f = fixture("vault-relative-curdir");
+
+        let error = vault_relative(&f.vault, Path::new("./note.md"))
+            .expect_err("a path that is not a plain sequence of names is refused");
+
+        assert_eq!(error.code, "sync.path_outside_vault");
     }
 }

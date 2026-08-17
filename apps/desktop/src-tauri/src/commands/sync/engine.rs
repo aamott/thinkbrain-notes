@@ -38,6 +38,14 @@ pub struct Engine {
     /// daemon writes it while the app is running. The user should be told about
     /// one conflict, not two.
     conflicts: Mutex<BTreeMap<String, ConflictCopy>>,
+    /// Held for the whole of a commit, so only one is ever in flight.
+    ///
+    /// Recording reads the branch, builds a tree on it and moves the ref, and
+    /// gix refuses the move if the ref changed underneath — so two at once do
+    /// not corrupt history, they make one of them fail for no reason the user
+    /// could act on. Separate from `pending` so notes can keep arriving while a
+    /// commit is being written.
+    recording: Mutex<()>,
 }
 
 impl Engine {
@@ -46,6 +54,7 @@ impl Engine {
             repo: repo.into_sync(),
             pending: Mutex::new(PendingChanges::default()),
             conflicts: Mutex::new(BTreeMap::new()),
+            recording: Mutex::new(()),
         }
     }
 
@@ -78,9 +87,22 @@ impl Engine {
     /// file with identical contents, or an edit the user undid — records
     /// nothing, because `record` refuses an empty commit.
     pub fn record_settled(&self, now: Instant) -> Result<Option<gix::ObjectId>, NativeError> {
+        self.record(now, SETTLE)
+    }
+
+    /// Records everything outstanding, settled or not.
+    ///
+    /// For the moment a workspace closes. The settle window exists to batch a
+    /// burst of typing into one commit, not to cancel it, so the last few
+    /// seconds of edits are written rather than dropped on the way out.
+    pub fn flush(&self) -> Result<Option<gix::ObjectId>, NativeError> {
+        self.record(Instant::now(), Duration::ZERO)
+    }
+
+    fn record(&self, now: Instant, settle: Duration) -> Result<Option<gix::ObjectId>, NativeError> {
         let settled = {
             let mut pending = self.pending.lock().unwrap_or_else(|error| error.into_inner());
-            pending.take_settled(now, SETTLE)
+            pending.take_settled(now, settle)
         };
         // Cost, not correctness: `record` would reach the same answer, but the
         // sweeper asks this of every open workspace twice a second, and doing
@@ -108,7 +130,20 @@ impl Engine {
         }
 
         let message = commit_message(settled.len(), gix::date::Time::now_local_or_utc());
-        snapshot::record(&repo, &settled, &message)
+        let _recording = self.recording.lock().unwrap_or_else(|error| error.into_inner());
+        let recorded = snapshot::record(&repo, &settled, &message);
+
+        // Taking a path out of `pending` is a promise to record it. If the
+        // commit failed — a note that vanished mid-read, a folder that went
+        // away with its drive — the promise is unkept, so the paths go back and
+        // are tried again rather than quietly leaving history behind the vault.
+        if recorded.is_err() {
+            let mut pending = self.pending.lock().unwrap_or_else(|error| error.into_inner());
+            for path in settled {
+                pending.note(path, now);
+            }
+        }
+        recorded
     }
 
     /// Takes a restore point for `paths` before anything overwrites them.
@@ -318,6 +353,107 @@ mod tests {
             .record_settled(start + SETTLE + SETTLE)
             .expect("recording succeeds")
             .is_some());
+    }
+
+    /// Every commit the engine reports must be reachable from the branch it
+    /// claims to have written.
+    ///
+    /// Recording reads HEAD, builds a tree on it, and moves the ref. Two of
+    /// those interleaved both build on the *same* HEAD and both move the ref,
+    /// so the loser's commit is orphaned — the engine returns an id for work
+    /// that is no longer in history, and the notes in it are silently gone.
+    #[test]
+    fn concurrent_recording_leaves_one_unbroken_history() {
+        let f = std::sync::Arc::new(fixture("engine-record-race"));
+        let start = Instant::now();
+        for index in 0..8 {
+            write(&f.vault, &format!("note-{index}.md"), "# A note\n");
+        }
+
+        let committed: Vec<gix::ObjectId> = std::thread::scope(|scope| {
+            let handles: Vec<_> = (0..8)
+                .map(|index| {
+                    let f = std::sync::Arc::clone(&f);
+                    scope.spawn(move || {
+                        f.engine
+                            .note_changes([PathBuf::from(format!("note-{index}.md"))], start);
+                        f.engine
+                            .record_settled(start + SETTLE)
+                            .expect("recording succeeds")
+                    })
+                })
+                .collect();
+            handles
+                .into_iter()
+                .filter_map(|handle| handle.join().expect("the thread finishes"))
+                .collect()
+        });
+
+        let repo = f.engine.repo.to_thread_local();
+        let head = snapshot::head_commit(&repo)
+            .expect("reading the branch succeeds")
+            .expect("something was committed");
+        let ancestry: Vec<gix::ObjectId> = repo
+            .find_commit(head)
+            .expect("the commit exists")
+            .ancestors()
+            .all()
+            .expect("the history walks")
+            .map(|info| info.expect("the walk succeeds").id)
+            .collect();
+
+        for commit in &committed {
+            assert!(
+                ancestry.contains(commit),
+                "a commit the engine reported is not in history — it forked: \
+                 {commit} is not among {ancestry:?}"
+            );
+        }
+    }
+
+    /// Closing a window must not throw away what the user just typed. The
+    /// settle window exists to batch a burst of edits, not to cancel them.
+    #[test]
+    fn flushing_records_edits_that_have_not_settled_yet() {
+        let f = fixture("engine-flush");
+        write(&f.vault, "one.md", "# One\n");
+        f.engine.note_changes([PathBuf::from("one.md")], Instant::now());
+
+        assert_eq!(
+            f.engine.record_settled(Instant::now()).expect("recording succeeds"),
+            None,
+            "the edit should not have settled yet"
+        );
+        assert!(
+            f.engine.flush().expect("flushing succeeds").is_some(),
+            "the unsettled edit was dropped instead of recorded"
+        );
+    }
+
+    /// Taking a path out of the pending set is a promise to record it. If the
+    /// commit fails the promise is unkept, so the path has to come back — a
+    /// note dropped here is a note history never hears about again.
+    #[test]
+    fn a_batch_that_could_not_be_recorded_is_tried_again() {
+        let f = fixture("engine-retry");
+        let start = Instant::now();
+        f.engine.note_changes([PathBuf::from("../outside.md")], start);
+
+        f.engine
+            .record_settled(start + SETTLE)
+            .expect_err("recording a path outside the vault fails");
+
+        f.engine
+            .record_settled(start + SETTLE + SETTLE)
+            .expect_err("the failed batch was dropped instead of tried again");
+    }
+
+    /// Nothing pending means nothing to write, not an empty commit.
+    #[test]
+    fn flushing_an_idle_workspace_records_nothing() {
+        let f = fixture("engine-flush-idle");
+
+        assert_eq!(f.engine.flush().expect("flushing succeeds"), None);
     }
 
     /// Two windows on one vault share one engine, so recording has to be safe

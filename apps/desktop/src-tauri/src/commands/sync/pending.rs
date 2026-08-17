@@ -28,11 +28,17 @@ impl PendingChanges {
     ///
     /// Per path, not per batch: one large attachment still arriving must not
     /// hold an evening of note edits out of history.
+    ///
+    /// A backwards clock jump (NTP correction, or monotonic-clock skew on
+    /// some platforms) can make `now` earlier than a stored `last_seen`.
+    /// Clamping the elapsed to zero keeps the path pending until the
+    /// clock recovers, so the edit is neither lost nor recorded against a
+    /// future timestamp.
     pub fn take_settled(&mut self, now: Instant, settle: Duration) -> Vec<PathBuf> {
         let mut settled: Vec<PathBuf> = self
             .seen
             .iter()
-            .filter(|(_, last_seen)| now.duration_since(**last_seen) >= settle)
+            .filter(|(_, last_seen)| now.saturating_duration_since(**last_seen) >= settle)
             .map(|(path, _)| path.clone())
             .collect();
 
@@ -140,6 +146,32 @@ mod tests {
         assert_eq!(
             pending.take_settled(start + SETTLE + SETTLE, SETTLE),
             [path("big.png")]
+        );
+    }
+
+    /// A backwards clock jump (NTP correction) must not silently drop an edit
+    /// from history. While `now` is earlier than `last_seen` the note stays
+    /// pending, and once the clock recovers past the settle window it records
+    /// as normal.
+    #[test]
+    fn a_backwards_clock_jump_keeps_the_note_pending_until_the_clock_recovers() {
+        let start = Instant::now();
+        let mut pending = PendingChanges::default();
+        pending.note(path("one.md"), start);
+
+        let jumped_back = start
+            .checked_sub(Duration::from_secs(10))
+            .expect("the instant can move backwards");
+
+        assert!(
+            pending.take_settled(jumped_back, SETTLE).is_empty(),
+            "a note was recorded against a future last_seen"
+        );
+
+        assert_eq!(
+            pending.take_settled(start + SETTLE, SETTLE),
+            [path("one.md")],
+            "a note whose clock jumped back was lost instead of recorded"
         );
     }
 
