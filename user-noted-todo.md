@@ -16,6 +16,7 @@ These are random issues or shortcomings users have noted. They may or may not be
 - [ ] Action menu items are spaced right, but their button hitboxes aren't square, they're skinny and tall. 
 - [ ] Ctrl+tab to switch tabs, Ctrl+Shift+tab to switch tabs in reverse.
 - [ ] Mobile has no layout for tabs
+- [ ] Activity bar icons are super generic and need updating. Same for activity menu items. 
 
 
 ## Settings
