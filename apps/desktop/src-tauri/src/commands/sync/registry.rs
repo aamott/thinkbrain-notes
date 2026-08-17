@@ -181,6 +181,15 @@ fn flush(key: &str, engine: &Engine) {
     }
 }
 
+/// The engine recording `key`, if Auto Sync is keeping history for it.
+///
+/// A vault with its own git repository has no engine, which is what makes
+/// "resolve this conflict" refuse rather than write something it cannot undo.
+pub fn engine(key: &str) -> Option<Arc<Engine>> {
+    let guard = registry();
+    guard.as_ref()?.engines.get(key).map(Arc::clone)
+}
+
 /// Feeds watcher changes to the engine for `key`, if there is one.
 pub fn note_changes(key: &str, root: &Path, changes: &[WorkspaceChange]) {
     let engine = {
@@ -212,9 +221,14 @@ pub fn note_changes(key: &str, root: &Path, changes: &[WorkspaceChange]) {
     engine.note_conflicts(
         paths
             .iter()
+            // A copy that is no longer there is not a conflict to answer. This
+            // matters because resolving one *deletes* it, and the watcher
+            // reports that deletion — without this the conflict the user just
+            // settled would be raised again a second later.
+            .filter(|path| root.join(path).is_file())
             .filter_map(|path| {
                 conflict::pair(&conflict::relative_str(path), |original| {
-                    root.join(original).exists()
+                    root.join(original).is_file()
                 })
             })
             .collect::<Vec<_>>(),
@@ -390,6 +404,28 @@ mod tests {
                 .is_some(),
             "the note was lost when the window closed"
         );
+    }
+
+    /// Resolving a conflict deletes the copy, and the watcher reports that
+    /// deletion like any other. Pairing it again would raise the conflict the
+    /// user just answered, seconds after they answered it.
+    #[test]
+    fn a_conflict_copy_that_has_been_removed_is_not_raised_again() {
+        let app_data = make_temp_test_dir("registry-resolved-appdata", "sync", true);
+        let vault = make_temp_test_dir("registry-resolved-vault", "sync", true);
+        let key = vault.to_string_lossy().to_string();
+        let copy = "note.sync-conflict-20260816-093100-K3SDFHG.md";
+        std::fs::write(vault.join("note.md"), "# Mine\n").expect("the note is written");
+
+        assert!(attach(&app_data, &vault, &key, "window-1").expect("attaching succeeds"));
+        note_changes(&key, &vault, &[change(WorkspaceChangeKind::Deleted, copy)]);
+
+        let engine = engine(&key).expect("the vault has an engine");
+        assert!(
+            engine.conflicts().is_empty(),
+            "a conflict copy that is no longer there was raised as a conflict"
+        );
+        detach(&key, "window-1");
     }
 
     fn change(kind: WorkspaceChangeKind, path: &str) -> WorkspaceChange {

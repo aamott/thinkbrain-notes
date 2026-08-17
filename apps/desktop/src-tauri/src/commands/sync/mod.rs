@@ -9,6 +9,8 @@ pub mod bootstrap;
 pub mod conflict;
 pub mod engine;
 pub mod hidden_repo;
+pub mod merge;
 pub mod pending;
 pub mod registry;
+pub mod resolve;
 pub mod snapshot;

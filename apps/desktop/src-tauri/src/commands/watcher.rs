@@ -444,7 +444,7 @@ pub fn record_self_write(path: &Path) {
     SELF_WRITES.record_at(path, Instant::now());
 }
 
-fn take_self_write(path: &Path) -> bool {
+pub(crate) fn take_self_write(path: &Path) -> bool {
     SELF_WRITES.take_at(path, Instant::now())
 }
 

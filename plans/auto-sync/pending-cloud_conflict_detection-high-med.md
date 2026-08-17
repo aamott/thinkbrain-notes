@@ -31,8 +31,15 @@ Story 2. Turns daemon-created conflict files into conflict events.
       same keyed set, so one conflict is one conflict however often it is seen
 - [x] Conflict copies stay out of the history branch, while remaining outside
       the ignore rules so a checkpoint can still hold both sides
-- [ ] Cleanup never deletes an unresolved copy; keep-both renames correctly —
-      waiting on a resolution write to exist (story 3)
+- [x] Cleanup never deletes an unresolved copy; keep-both renames correctly —
+      story 3's `resolve.rs`. The copy is removed only after the resolution
+      write succeeds, and keep-both renames it after the provider that made it
+      (`note (Syncthing).md`), which no row in this table matches, so the pair
+      is never offered again. A name already taken counts up rather than
+      overwriting.
+      Deliberately *not* echo-suppressed, against this story's original note:
+      the copy has to leave the file list and the note has to reload in every
+      open window, and the watcher's outside-edit path already does both.
 - [ ] Conflict events reach the frontend — waiting on story 4's panel to
       receive them. `Engine::conflicts()` is what it will read.
 - [ ] Verified on Windows (OneDrive's home turf — the watcher itself is not
@@ -52,7 +59,12 @@ Story 2. Turns daemon-created conflict files into conflict events.
   discard half of it. They need fixtures before they are worth the risk —
   which matters, because OneDrive is the most likely provider a first user has.
 
+- Live detection paired a copy by checking its *original* existed and never the
+  copy itself, so a copy that had just been deleted — which is how a resolution
+  ends — was raised as a fresh conflict seconds after the user answered it.
+  Found while building story 3; fixed in `registry::note_changes`.
+
 ## Status
 
-🟨 Table, pairing, scan, live detection and the history filter done. Remaining:
-real fixtures, the frontend event, and cleanup.
+🟨 Table, pairing, scan, live detection, the history filter and cleanup done.
+Remaining: real fixtures and the frontend event.

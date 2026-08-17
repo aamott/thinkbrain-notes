@@ -33,7 +33,6 @@ const HISTORY_REF: &str = "refs/heads/main";
 /// daemon left lying in the vault, and those must never reach the user's
 /// remote — a ref outside `refs/heads/` cannot be swept up by the ordinary
 /// "push my branches" refspec.
-#[allow(dead_code, reason = "story 3's merge engine is the caller")]
 const CHECKPOINT_REF: &str = "refs/thinkbrain/checkpoints";
 
 fn failed(code: &'static str, message: &'static str, error: impl std::fmt::Display) -> NativeError {
@@ -74,7 +73,6 @@ pub fn record(
 /// changed, so nothing to name" — the caller is about to overwrite a file and
 /// needs an id. When nothing changed, the previous checkpoint already points at
 /// this exact content, so that is the honest answer.
-#[allow(dead_code, reason = "story 3's merge engine is the caller")]
 pub fn checkpoint(repo: &gix::Repository, paths: &[PathBuf]) -> Result<gix::ObjectId, NativeError> {
     let parent = head_of(repo, CHECKPOINT_REF)?;
     let base_tree = tree_of(repo, parent)?;
@@ -210,6 +208,12 @@ fn tree_of(repo: &gix::Repository, commit: Option<gix::ObjectId>) -> Result<gix:
 /// The latest commit on the vault's history branch, if there is one.
 pub fn head_commit(repo: &gix::Repository) -> Result<Option<gix::ObjectId>, NativeError> {
     head_of(repo, HISTORY_REF)
+}
+
+/// The newest restore point, or `None` if nothing has ever been checkpointed.
+#[cfg(test)]
+pub fn checkpoint_head(repo: &gix::Repository) -> Result<Option<gix::ObjectId>, NativeError> {
+    head_of(repo, CHECKPOINT_REF)
 }
 
 fn head_of(repo: &gix::Repository, reference: &str) -> Result<Option<gix::ObjectId>, NativeError> {

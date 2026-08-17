@@ -81,6 +81,19 @@ impl Engine {
         conflicts.values().cloned().collect()
     }
 
+    /// Drops a conflict from the set, because it has been answered.
+    pub fn forget_conflict(&self, copy: &str) {
+        let mut conflicts = self.conflicts.lock().unwrap_or_else(|error| error.into_inner());
+        conflicts.remove(copy);
+    }
+
+    /// A thread-local handle on the hidden repository, for tests that check
+    /// what actually landed in history.
+    #[cfg(test)]
+    pub fn repository(&self) -> gix::Repository {
+        self.repo.to_thread_local()
+    }
+
     /// Records whatever has settled, returning the commit if there was one.
     ///
     /// A settled batch that turns out to change nothing — a save that rewrote a
@@ -147,7 +160,6 @@ impl Engine {
     }
 
     /// Takes a restore point for `paths` before anything overwrites them.
-    #[allow(dead_code, reason = "story 3's merge engine is the caller")]
     pub fn checkpoint(&self, paths: &[PathBuf]) -> Result<gix::ObjectId, NativeError> {
         snapshot::checkpoint(&self.repo.to_thread_local(), paths)
     }
