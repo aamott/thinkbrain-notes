@@ -54,8 +54,45 @@ as it stands rather than from nothing.
 - [ ] 10k-file vault measured rather than argued — the design is incremental
       (see `snapshot.rs`), but no one has timed a real vault of that size
 - [x] Old system-git code and plans removed
+- [x] History holds the user's own edits, not only what other programs did to
+      the vault — see "What the review changed"
+- [x] Every kind of file a user keeps beside their notes is recorded, and
+      neither consumer walks into `node_modules`, `.git` or a dotfolder
+- [x] Closing a workspace records what has not settled yet
+- [x] Commits are serialized per engine, and a batch that fails to record is
+      tried again rather than dropped
+
+## What the review changed
+
+A review on 2026-08-16 found nineteen things. The largest was not on the list:
+
+**Auto Sync was not recording the user's own work.** Every save through the
+app announces itself so the watcher can ignore the echo, and Auto Sync read
+from that same list *after* suppression. History therefore held what other
+programs did to the vault and nothing the user typed into the app that wrote
+it. Echo suppression is now the index's alone.
+
+The review's own highest finding was the mirror of it: closing a window threw
+away whatever had not settled. Fixing that made a latent bug reachable —
+recording is not compare-and-swap-safe against itself, and the drained paths
+were already gone from the pending set, so a failed commit lost them for good.
+
+The rest: bootstrap out from under the global registry lock, a note that
+vanishes mid-batch recorded as the deletion it is, vault-relative paths
+required to be plain names, and the first snapshot no longer walking into
+ignored folders.
+
+## Known gaps
+
+- **The vanished-note branch in `build_tree` is not covered.** It needs a file
+  to disappear between two syscalls, which cannot be arranged without a race or
+  an injection seam. The branch is three lines and ships untested.
+- **The debouncer's wiring is not unit-tested.** That sync is fed `changes.all`
+  and the frontend `changes.notes` lives inside the debouncer closure, which no
+  test constructs. `Changes` names both fields, and swapping them is what
+  caused the bug above.
 
 ## Status
 
-🟨 Mechanism, bootstrap, checkpoint and auto-commit done. Remaining: the
-conflict-copy filter (needs story 2) and a measured 10k-vault run.
+🟨 Mechanism, bootstrap, checkpoint, auto-commit and the review's findings
+done. Remaining: a measured 10k-vault run.
