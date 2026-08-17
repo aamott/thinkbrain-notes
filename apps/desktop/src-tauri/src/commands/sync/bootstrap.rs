@@ -8,7 +8,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::commands::workspace::stable_workspace_hash;
+use crate::commands::workspace::{is_ignored_entry_name, stable_workspace_hash, MAX_WORKSPACE_ENTRIES};
 use crate::NativeError;
 
 use super::{hidden_repo, snapshot};
@@ -56,6 +56,11 @@ const NEVER_RECORD: [&str; 6] = [
     "~$*",
     ".~lock*",
 ];
+
+/// Maximum depth for recursive vault walking. Mirrors the markdown walker's
+/// own limit (which is private there), so a vault walks the same depth whether
+/// it is being listed or snapshotted.
+const MAX_MARKDOWN_DEPTH: usize = 20;
 
 /// Where a vault's hidden repository lives.
 ///
@@ -129,12 +134,19 @@ fn write_exclude_file(git_dir: &Path) -> Result<(), NativeError> {
 /// Every file in the vault worth recording, as vault-relative paths.
 pub fn recordable_notes(vault: &Path) -> Result<Vec<PathBuf>, NativeError> {
     let mut found = Vec::new();
-    collect(vault, vault, &mut found)?;
+    collect(vault, vault, 0, &mut found)?;
     found.sort();
     Ok(found)
 }
 
-fn collect(vault: &Path, directory: &Path, found: &mut Vec<PathBuf>) -> Result<(), NativeError> {
+fn collect(vault: &Path, directory: &Path, depth: usize, found: &mut Vec<PathBuf>) -> Result<(), NativeError> {
+    if depth > MAX_MARKDOWN_DEPTH {
+        return Err(NativeError::new(
+            "sync.vault_too_deep",
+            "This workspace's folders are nested deeper than Auto Sync can safely walk.",
+        ));
+    }
+
     let entries = std::fs::read_dir(directory).map_err(|error| {
         NativeError::with_details(
             "sync.vault_read_failed",
@@ -171,10 +183,24 @@ fn collect(vault: &Path, directory: &Path, found: &mut Vec<PathBuf>) -> Result<(
         })?;
 
         if metadata.is_dir() {
-            collect(vault, &path, found)?;
+            // Skip directories that are ignored (dotfiles and configured folders like
+            // node_modules, target, dist, vendor). This keeps history clean and matches
+            // what the rest of the app considers part of the vault.
+            if !is_ignored_entry_name(&name) {
+                collect(vault, &path, depth + 1, found)?;
+            }
         } else if metadata.is_file() {
             if let Ok(relative) = path.strip_prefix(vault) {
                 found.push(relative.to_path_buf());
+                // Counted as each note is taken, not once per folder: a vault
+                // that keeps everything in one folder would otherwise be
+                // checked exactly once, while it was still empty.
+                if found.len() > MAX_WORKSPACE_ENTRIES {
+                    return Err(NativeError::new(
+                        "sync.vault_too_many_entries",
+                        "This workspace has more notes than Auto Sync can record in one snapshot.",
+                    ));
+                }
             }
         }
     }
@@ -408,5 +434,104 @@ mod tests {
         let exclude = fs::read_to_string(git_dir.join("info/exclude")).expect("the exclude file is written");
         assert!(exclude.contains(".DS_Store"));
         assert!(exclude.contains("*.tmp"));
+    }
+
+    /// Ignored folders (dotfiles and IGNORED_FOLDERS) should be skipped during
+    /// walks. Ignored directories should not be recursed into, but non-Markdown
+    /// files beside notes should still be recorded (e.g. images, PDFs, scripts).
+    #[test]
+    fn ignored_folders_are_pruned_but_non_markdown_files_are_kept() {
+        let app_data = make_temp_test_dir("bootstrap-ignored-folders-appdata", "sync", true);
+        let vault = make_temp_test_dir("bootstrap-ignored-folders-vault", "sync", true);
+        write(&vault, "note.md", "# A note\n");
+        write(&vault, "diagram.png", "PNG data");
+        write(&vault, "script.py", "print('hello')\n");
+        write(&vault, "node_modules/lodash/index.js", "module code");
+        write(&vault, ".obsidian/config.json", "config");
+        write(&vault, "target/debug/app", "binary");
+
+        let workspace = managed(bootstrap(&app_data, &vault).expect("bootstrap succeeds"));
+
+        let paths = recorded_paths(&workspace.repo);
+        assert!(
+            paths.contains(&"note.md".to_string()),
+            "markdown note should be recorded"
+        );
+        assert!(
+            paths.contains(&"diagram.png".to_string()),
+            "non-markdown file should be recorded"
+        );
+        assert!(
+            paths.contains(&"script.py".to_string()),
+            "script file should be recorded"
+        );
+        assert!(
+            !paths.iter().any(|p| p.starts_with("node_modules/")),
+            "files in node_modules/ should not be recorded"
+        );
+        assert!(
+            !paths.iter().any(|p| p.starts_with(".obsidian/")),
+            "files in .obsidian/ should not be recorded"
+        );
+        assert!(
+            !paths.iter().any(|p| p.starts_with("target/")),
+            "files in target/ should not be recorded"
+        );
+    }
+
+    /// Deep nesting should not be walked beyond MAX_MARKDOWN_DEPTH. Vaults
+    /// nested too deeply should fail bootstrap with a clear error rather than
+    /// hang or panic.
+    #[test]
+    fn a_vault_nested_too_deeply_fails_with_depth_limit_error() {
+        let app_data = make_temp_test_dir("bootstrap-depth-appdata", "sync", true);
+        let vault = make_temp_test_dir("bootstrap-depth-vault", "sync", true);
+
+        // Create a deeply nested structure (25 levels deep, beyond MAX_MARKDOWN_DEPTH of 20)
+        let mut path = vault.clone();
+        for i in 0..25 {
+            path = path.join(format!("level{}", i));
+        }
+        fs::create_dir_all(&path).expect("deeply nested folders are created");
+        write(&path, "note.md", "# Deep note\n");
+
+        let result = bootstrap(&app_data, &vault);
+
+        match result {
+            Err(error) => {
+                assert_eq!(error.code, "sync.vault_too_deep");
+                assert!(
+                    error.message.to_lowercase().contains("deep"),
+                    "error message should mention depth limit"
+                );
+            }
+            Ok(_) => panic!("bootstrap should fail for deeply nested vault"),
+        }
+    }
+
+    /// A vault with too many entries should fail bootstrap with a clear error
+    /// rather than exhausting memory or hanging.
+    #[test]
+    fn a_vault_with_too_many_entries_fails_with_entry_cap_error() {
+        let app_data = make_temp_test_dir("bootstrap-cap-appdata", "sync", true);
+        let vault = make_temp_test_dir("bootstrap-cap-vault", "sync", true);
+
+        // Create MAX_WORKSPACE_ENTRIES + 1 files
+        for i in 0..=(MAX_WORKSPACE_ENTRIES as u32) {
+            write(&vault, &format!("note{:05}.md", i), "# Note\n");
+        }
+
+        let result = bootstrap(&app_data, &vault);
+
+        match result {
+            Err(error) => {
+                assert_eq!(error.code, "sync.vault_too_many_entries");
+                assert!(
+                    error.message.to_lowercase().contains("more notes"),
+                    "error message should mention entry count"
+                );
+            }
+            Ok(_) => panic!("bootstrap should fail for vault with too many entries"),
+        }
     }
 }

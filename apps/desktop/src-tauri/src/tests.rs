@@ -1324,32 +1324,125 @@ use std::time::{Duration, Instant};
 fn only_markdown_inside_the_vault_is_worth_waking_the_index_for() {
     let root = Path::new("/vault");
 
-    assert!(is_watchable_path(root, &root.join("notes/today.md")));
-    assert!(is_watchable_path(
+    assert!(Audience::Notes.accepts(root, &root.join("notes/today.md")));
+    assert!(Audience::Notes.accepts(
         root,
         &root.join("deep/nested/note.markdown")
     ));
 
     // Not a note.
-    assert!(!is_watchable_path(root, &root.join("image.png")));
-    assert!(!is_watchable_path(root, &root.join("notes")));
+    assert!(!Audience::Notes.accepts(root, &root.join("image.png")));
+    assert!(!Audience::Notes.accepts(root, &root.join("notes")));
     // The editor's own scratch files and version control.
-    assert!(!is_watchable_path(
+    assert!(!Audience::Notes.accepts(
         root,
         &root.join(".obsidian/workspace.md")
     ));
-    assert!(!is_watchable_path(
+    assert!(!Audience::Notes.accepts(
         root,
         &root.join(".git/COMMIT_EDITMSG.md")
     ));
-    assert!(!is_watchable_path(root, &root.join("notes/.hidden.md")));
+    assert!(!Audience::Notes.accepts(root, &root.join("notes/.hidden.md")));
     // Build output the workspace listing already refuses to walk.
-    assert!(!is_watchable_path(
+    assert!(!Audience::Notes.accepts(
         root,
         &root.join("node_modules/pkg/readme.md")
     ));
     // Outside the vault entirely.
-    assert!(!is_watchable_path(root, Path::new("/elsewhere/note.md")));
+    assert!(!Audience::Notes.accepts(root, Path::new("/elsewhere/note.md")));
+}
+
+/// History is not an index of notes — it is a record of the vault. A user who
+/// keeps a diagram, a spreadsheet or the script a note is about beside their
+/// notes expects to get them back, so a restore that could only return Markdown
+/// would not be a restore.
+#[test]
+fn history_takes_every_kind_of_file_the_index_ignores() {
+    let root = temp_test_dir("watcher-audience-everything");
+    let everything = Audience::Everything;
+
+    for name in ["image.png", "budget.xlsx", "build.py", "notes/today.md"] {
+        let path = root.join(name);
+        fs::create_dir_all(path.parent().expect("a parent")).expect("the folder exists");
+        fs::write(&path, "x").expect("the file is written");
+        assert!(
+            everything.accepts(&root, &path),
+            "history refused to record {name}"
+        );
+        }
+
+    // An extension-less *file* is a file — `Makefile`, `LICENSE`, `Dockerfile`.
+    // Only the note caches have to guess from the name alone.
+    let makefile = root.join("Makefile");
+    fs::write(&makefile, "all:").expect("the file is written");
+    assert!(everything.accepts(&root, &makefile));
+
+    // A folder's name stands for everything inside it, so naming it as a file
+    // would take the whole folder out of history.
+    assert!(!everything.accepts(&root, &root.join("notes")));
+
+    // The places neither consumer goes.
+    for name in [".obsidian/workspace.json", ".git/COMMIT_EDITMSG", "node_modules/pkg/index.js"] {
+        assert!(
+            !everything.accepts(&root, &root.join(name)),
+            "history walked into {name}"
+        );
+    }
+
+    let _ = fs::remove_dir_all(&root);
+}
+
+/// A renamed folder moves notes the event cannot name. History has to re-read
+/// the vault rather than follow the folder: recording the old name as gone
+/// would take every note under it out of history and put none of them back.
+#[test]
+fn a_renamed_folder_makes_history_re_read_the_vault() {
+    let root = temp_test_dir("watcher-folder-rename");
+    let to = root.join("new");
+    fs::create_dir_all(&to).expect("the folder exists");
+
+    let changes = classify_all(
+        &root,
+        &EventKind::Modify(ModifyKind::Name(RenameMode::Both)),
+        &[root.join("old"), to],
+    );
+
+    let _ = fs::remove_dir_all(&root);
+    assert_eq!(changes.len(), 1, "a folder rename was followed by name");
+    assert_eq!(changes[0].kind, WorkspaceChangeKind::Rescan);
+}
+
+/// The two consumers read the same events differently, and a batch has to serve
+/// both: the index hears only about the note, while history hears about the
+/// attachment beside it too.
+#[test]
+fn one_batch_tells_the_index_about_notes_and_history_about_everything() {
+    use notify_debouncer_full::DebouncedEvent;
+
+    let root = temp_test_dir("watcher-two-audiences");
+    let at = Instant::now();
+    let batch = vec![
+        DebouncedEvent::new(
+            notify::Event::new(EventKind::Create(CreateKind::File)).add_path(root.join("note.md")),
+            at,
+        ),
+        DebouncedEvent::new(
+            notify::Event::new(EventKind::Create(CreateKind::File)).add_path(root.join("chart.png")),
+            at,
+        ),
+    ];
+
+    let reported = collect_changes(&root, &batch);
+    let _ = fs::remove_dir_all(&root);
+
+    let notes: Vec<&str> = reported.notes.iter().map(|c| c.path.as_str()).collect();
+    let all: Vec<&str> = reported.all.iter().map(|c| c.path.as_str()).collect();
+    assert_eq!(notes, ["note.md"], "the index was told about a non-note");
+    assert_eq!(
+        all,
+        ["note.md", "chart.png"],
+        "history was not told about the attachment"
+    );
 }
 
 #[test]
@@ -1722,7 +1815,7 @@ fn the_app_hears_an_outside_write_but_not_the_echo_of_its_own() {
         {
             if let Ok(events) = result {
                 raw += events.len();
-                reported.extend(collect_changes(root, &events));
+                reported.extend(collect_changes(root, &events).notes);
             }
         }
         (raw, reported)
@@ -1869,9 +1962,17 @@ fn a_batch_that_repeats_a_path_claims_the_echo_once_for_the_whole_batch() {
 
     let _ = fs::remove_dir_all(&root);
     assert_eq!(
-        reported,
+        reported.notes,
         Vec::new(),
         "the app reported its own save as an outside edit"
+    );
+    // History is the opposite case. The note the user just typed was written by
+    // this app, so suppressing the app's own writes here would leave Auto Sync
+    // recording only what *other* programs did to the vault — which is to say,
+    // not the user's own work.
+    assert!(
+        !reported.all.is_empty(),
+        "the app's own save was left out of history"
     );
 }
 

@@ -129,18 +129,56 @@ pub fn workspace_relative_path(root: &Path, path: &Path) -> Option<String> {
     Some(parts.join("/"))
 }
 
-/// Whether a change to `path` is one the note caches care about.
+/// Who a batch of changes is being classified for.
 ///
-/// Reuses the workspace listing's own definitions of "a note" and "not worth
-/// walking", so the watcher cannot come to a different answer than the listing
-/// that built the index in the first place.
-pub fn is_watchable_path(root: &Path, path: &Path) -> bool {
-    is_markdown_path(path) && is_in_watched_area(root, path)
+/// Both reuse the workspace listing's own definition of "not worth walking", so
+/// the watcher cannot come to a different answer than the listing that built the
+/// index in the first place.
+///
+/// The note caches track Markdown and nothing else. Auto Sync keeps history for
+/// whatever a user puts beside their notes — a diagram, a spreadsheet, the
+/// script the note is about — because a restore that cannot bring an image back
+/// is not a restore. Both agree about what is not part of the vault at all, so
+/// neither walks into `node_modules` or `.git`.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Audience {
+    Notes,
+    Everything,
+}
+
+impl Audience {
+    pub(crate) fn accepts(self, root: &Path, path: &Path) -> bool {
+        is_in_watched_area(root, path)
+            && match self {
+                Audience::Notes => is_markdown_path(path),
+                Audience::Everything => !self.must_rescan_for(root, path),
+            }
+    }
+
+    /// Whether `path` has to become a rescan rather than be named.
+    ///
+    /// A folder's name stands for everything inside it, so a consumer that
+    /// mistakes one for a file does real damage — for history, it would take
+    /// every note in the folder out of it. The note caches can afford the old
+    /// guess, since being wrong only costs them a rebuild.
+    fn must_rescan_for(self, root: &Path, path: &Path) -> bool {
+        match self {
+            Audience::Notes => looks_like_watched_directory(root, path),
+            // Asks the disk where it can — so `Makefile` and `LICENSE` are the
+            // files they are — and keeps the extension-less guess only for a
+            // path that has already gone, which is the one case nothing can be
+            // stat'd.
+            Audience::Everything => {
+                is_in_watched_area(root, path)
+                    && (path.is_dir() || (path.extension().is_none() && !path.exists()))
+            }
+        }
+    }
 }
 
 /// Whether `path` sits somewhere in the vault that could hold notes at all.
 ///
-/// Separate from [`is_watchable_path`] because a *directory* is worth reacting
+/// Separate from [`Audience::accepts`] because a *directory* is worth reacting
 /// to without being Markdown itself. Both the note filter and the rescan
 /// escalation route through here, so an ignored area cannot be reachable by one
 /// and not the other — which is how `.git` churn once rebuilt the whole index.
@@ -167,19 +205,39 @@ fn looks_like_watched_directory(root: &Path, path: &Path) -> bool {
 /// Returns an empty vector for anything the caches do not track — reads,
 /// attribute touches, non-Markdown files, ignored folders.
 pub fn classify_event(root: &Path, kind: &EventKind, paths: &[PathBuf]) -> Vec<WorkspaceChange> {
-    match kind {
-        EventKind::Create(_) => single(root, paths, WorkspaceChangeKind::Created),
+    classify(root, kind, paths, Audience::Notes)
+}
 
-        EventKind::Modify(ModifyKind::Name(RenameMode::Both)) => classify_rename(root, paths),
+/// The same event, read for the consumer that keeps history rather than an index.
+pub(crate) fn classify_all(
+    root: &Path,
+    kind: &EventKind,
+    paths: &[PathBuf],
+) -> Vec<WorkspaceChange> {
+    classify(root, kind, paths, Audience::Everything)
+}
+
+fn classify(
+    root: &Path,
+    kind: &EventKind,
+    paths: &[PathBuf],
+    audience: Audience,
+) -> Vec<WorkspaceChange> {
+    match kind {
+        EventKind::Create(_) => single(root, paths, WorkspaceChangeKind::Created, audience),
+
+        EventKind::Modify(ModifyKind::Name(RenameMode::Both)) => {
+            classify_rename(root, paths, audience)
+        }
         // Some platforms report the two halves of a rename separately, with no
         // way to pair them. Each half is complete on its own.
-        EventKind::Modify(ModifyKind::Name(RenameMode::From)) => removal(root, paths),
+        EventKind::Modify(ModifyKind::Name(RenameMode::From)) => removal(root, paths, audience),
         EventKind::Modify(ModifyKind::Name(RenameMode::To)) => {
-            single(root, paths, WorkspaceChangeKind::Created)
+            single(root, paths, WorkspaceChangeKind::Created, audience)
         }
-        EventKind::Modify(ModifyKind::Name(_)) => classify_unpaired_rename(root, paths),
+        EventKind::Modify(ModifyKind::Name(_)) => classify_unpaired_rename(root, paths, audience),
 
-        EventKind::Modify(_) => single(root, paths, WorkspaceChangeKind::Modified),
+        EventKind::Modify(_) => single(root, paths, WorkspaceChangeKind::Modified, audience),
 
         EventKind::Remove(RemoveKind::Folder) => {
             if paths.iter().any(|path| is_in_watched_area(root, path)) {
@@ -188,7 +246,7 @@ pub fn classify_event(root: &Path, kind: &EventKind, paths: &[PathBuf]) -> Vec<W
                 Vec::new()
             }
         }
-        EventKind::Remove(_) => removal(root, paths),
+        EventKind::Remove(_) => removal(root, paths, audience),
 
         // Reads and access events say nothing about content.
         EventKind::Access(_) => Vec::new(),
@@ -196,25 +254,34 @@ pub fn classify_event(root: &Path, kind: &EventKind, paths: &[PathBuf]) -> Vec<W
     }
 }
 
-fn single(root: &Path, paths: &[PathBuf], kind: WorkspaceChangeKind) -> Vec<WorkspaceChange> {
+fn single(
+    root: &Path,
+    paths: &[PathBuf],
+    kind: WorkspaceChangeKind,
+    audience: Audience,
+) -> Vec<WorkspaceChange> {
     paths
         .iter()
-        .filter(|path| is_watchable_path(root, path))
+        .filter(|path| audience.accepts(root, path))
         .filter_map(|path| workspace_relative_path(root, path))
         .map(|relative| WorkspaceChange::at(kind, relative))
         .collect()
 }
 
 /// A removal, which may be a note or a folder full of them.
-fn removal(root: &Path, paths: &[PathBuf]) -> Vec<WorkspaceChange> {
+///
+/// The folder question is asked first: a path either consumer would name is one
+/// it has already decided is not a folder, so the order changes nothing for
+/// them and keeps the two rules from having to agree twice.
+fn removal(root: &Path, paths: &[PathBuf], audience: Audience) -> Vec<WorkspaceChange> {
     let mut changes = Vec::new();
     for path in paths {
-        if is_watchable_path(root, path) {
+        if audience.must_rescan_for(root, path) {
+            changes.push(WorkspaceChange::rescan());
+        } else if audience.accepts(root, path) {
             if let Some(relative) = workspace_relative_path(root, path) {
                 changes.push(WorkspaceChange::at(WorkspaceChangeKind::Deleted, relative));
             }
-        } else if looks_like_watched_directory(root, path) {
-            changes.push(WorkspaceChange::rescan());
         }
     }
     changes
@@ -226,18 +293,22 @@ fn removal(root: &Path, paths: &[PathBuf]) -> Vec<WorkspaceChange> {
 /// unlabelled event that may name either the old path or the new one. Only the
 /// disk can say which: treating every one of them as a removal told the app
 /// that a note dragged *into* the vault had been deleted.
-fn classify_unpaired_rename(root: &Path, paths: &[PathBuf]) -> Vec<WorkspaceChange> {
+fn classify_unpaired_rename(
+    root: &Path,
+    paths: &[PathBuf],
+    audience: Audience,
+) -> Vec<WorkspaceChange> {
     if let [only] = paths {
-        if is_watchable_path(root, only) {
+        if audience.accepts(root, only) {
             let kind = if only.exists() {
                 WorkspaceChangeKind::Created
             } else {
                 WorkspaceChangeKind::Deleted
             };
-            return single(root, paths, kind);
+            return single(root, paths, kind, audience);
         }
     }
-    classify_rename(root, paths)
+    classify_rename(root, paths, audience)
 }
 
 /// A rename, which the caches can only follow when both ends are notes.
@@ -245,15 +316,15 @@ fn classify_unpaired_rename(root: &Path, paths: &[PathBuf]) -> Vec<WorkspaceChan
 /// Renaming a note out of the vault (or to a non-Markdown name) is a deletion
 /// as far as the index is concerned; renaming a plain file *into* a note is a
 /// creation. Only note-to-note keeps the entry and moves it.
-fn classify_rename(root: &Path, paths: &[PathBuf]) -> Vec<WorkspaceChange> {
+fn classify_rename(root: &Path, paths: &[PathBuf], audience: Audience) -> Vec<WorkspaceChange> {
     let [from, to] = match paths {
         [from, to] => [from, to],
         // Not a pair we can interpret; treat each half on its own terms.
-        _ => return removal(root, paths),
+        _ => return removal(root, paths, audience),
     };
 
-    let from_watchable = is_watchable_path(root, from);
-    let to_watchable = is_watchable_path(root, to);
+    let from_watchable = audience.accepts(root, from);
+    let to_watchable = audience.accepts(root, to);
 
     match (from_watchable, to_watchable) {
         (true, true) => {
@@ -269,11 +340,21 @@ fn classify_rename(root: &Path, paths: &[PathBuf]) -> Vec<WorkspaceChange> {
                 _ => vec![WorkspaceChange::rescan()],
             }
         }
-        (true, false) => single(root, std::slice::from_ref(from), WorkspaceChangeKind::Deleted),
-        (false, true) => single(root, std::slice::from_ref(to), WorkspaceChangeKind::Created),
+        (true, false) => single(
+            root,
+            std::slice::from_ref(from),
+            WorkspaceChangeKind::Deleted,
+            audience,
+        ),
+        (false, true) => single(
+            root,
+            std::slice::from_ref(to),
+            WorkspaceChangeKind::Created,
+            audience,
+        ),
         // Neither end is a note. A renamed folder moves notes we cannot name.
         (false, false) => {
-            if looks_like_watched_directory(root, from) || looks_like_watched_directory(root, to) {
+            if audience.must_rescan_for(root, from) || audience.must_rescan_for(root, to) {
                 vec![WorkspaceChange::rescan()]
             } else {
                 Vec::new()
@@ -581,7 +662,7 @@ fn spawn_debouncer(
                 // the only safe report is "rebuild from disk".
                 Err(errors) => {
                     eprintln!("[watcher] {} error(s) watching workspace", errors.len());
-                    vec![WorkspaceChange::rescan()]
+                    Changes::rescan()
                 }
             };
             if changes.is_empty() {
@@ -589,12 +670,17 @@ fn spawn_debouncer(
             }
             // Auto Sync reads from here rather than from the frontend event:
             // a vault still has to be recorded while its window is busy, or
-            // minimised, or has no listener attached yet.
-            crate::commands::sync::registry::note_changes(&key, &handler_root, &changes);
+            // minimised, or has no listener attached yet. It takes the whole
+            // list — every file type, and the app's own writes, which are
+            // exactly the edits the user most expects to find in their history.
+            crate::commands::sync::registry::note_changes(&key, &handler_root, &changes.all);
 
+            if changes.notes.is_empty() {
+                return;
+            }
             let payload = WorkspaceChangedPayload {
                 root_path: key.clone(),
-                changes,
+                changes: changes.notes,
             };
             if let Err(error) = app.emit(WORKSPACE_CHANGED_EVENT, payload) {
                 eprintln!("[watcher] failed to deliver workspace changes: {error}");
@@ -621,6 +707,19 @@ fn spawn_debouncer(
     Ok(debouncer)
 }
 
+/// What a settled batch of OS events means to each of the two consumers.
+pub(crate) struct Changes {
+    /// The Markdown changes the note caches track, with the app's own writes
+    /// removed so the index does not chase its own tail.
+    pub(crate) notes: Vec<WorkspaceChange>,
+    /// Everything that happened in the vault, the app's own writes included.
+    ///
+    /// History has to hold the note the user just typed above all else, and in
+    /// this app that note was written by the app. Suppressing echoes here would
+    /// mean Auto Sync recorded only what *other* programs did to the vault.
+    pub(crate) all: Vec<WorkspaceChange>,
+}
+
 /// Reduces a settled batch of OS events to the changes worth sending up.
 ///
 /// Self-write echoes are dropped here rather than in `classify_event` so that
@@ -628,8 +727,9 @@ fn spawn_debouncer(
 pub(crate) fn collect_changes(
     root: &Path,
     events: &[notify_debouncer_full::DebouncedEvent],
-) -> Vec<WorkspaceChange> {
+) -> Changes {
     let mut changes: Vec<WorkspaceChange> = Vec::new();
+    let mut all: Vec<WorkspaceChange> = Vec::new();
     // Paths already recognised as our own within this batch. One path can
     // appear more than once with different kinds — a delete then a recreate, or
     // on macOS a write reported once for content and again for metadata — and
@@ -640,11 +740,23 @@ pub(crate) fn collect_changes(
 
     for event in events {
         if event.need_rescan() {
-            return vec![WorkspaceChange::rescan()];
+            return Changes::rescan();
+        }
+        // Read twice from the same events rather than filtered down from one
+        // list: the two consumers disagree about renames, and deriving one from
+        // the other would mean re-deciding what a rename meant from a path
+        // string after the event that explained it was gone.
+        for change in classify_all(root, &event.kind, &event.paths) {
+            if change.kind == WorkspaceChangeKind::Rescan {
+                return Changes::rescan();
+            }
+            if !all.contains(&change) {
+                all.push(change);
+            }
         }
         for change in classify_event(root, &event.kind, &event.paths) {
             if change.kind == WorkspaceChangeKind::Rescan {
-                return vec![WorkspaceChange::rescan()];
+                return Changes::rescan();
             }
             if claimed.contains(&change.path) {
                 continue;
@@ -659,7 +771,20 @@ pub(crate) fn collect_changes(
         }
     }
 
-    changes
+    Changes { notes: changes, all }
+}
+
+impl Changes {
+    fn rescan() -> Self {
+        Self {
+            notes: vec![WorkspaceChange::rescan()],
+            all: vec![WorkspaceChange::rescan()],
+        }
+    }
+
+    pub(crate) fn is_empty(&self) -> bool {
+        self.notes.is_empty() && self.all.is_empty()
+    }
 }
 
 /// Whether this change is the echo of a write the app just made.

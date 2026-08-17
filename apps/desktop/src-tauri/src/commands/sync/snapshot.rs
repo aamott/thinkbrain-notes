@@ -142,17 +142,26 @@ fn build_tree(
                     .upsert(tree_path(&relative), kind, blob.detach())
                     .map_err(|error| failed("sync.tree_write_failed", "Could not record a note.", error))?;
             }
-            // Anything that is not a plain file — gone, or a directory or
-            // symlink where a note used to be — is recorded as an absence. The
-            // alternative is a history that quietly keeps files the vault no
-            // longer has.
-            _ => {
+            // A folder, or a symlink standing where a note used to be. Its name
+            // in the tree stands for everything underneath it, so removing it
+            // would take the whole folder's history with it — and the watcher
+            // reports folders. Whatever is inside arrives as its own change.
+            Ok(_) => continue,
+            // Genuinely gone, which is a deletion to record. The alternative is
+            // a history that quietly keeps files the vault no longer has.
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
                 // `remove` on a path that was never recorded is not an error: a
                 // note created and deleted between two commits is simply absent
                 // from both.
                 editor
                     .remove(tree_path(&relative))
                     .map_err(|error| failed("sync.tree_write_failed", "Could not record a deleted note.", error))?;
+            }
+            // Something else is wrong — a drive that went away, a folder we may
+            // not read. Recording that as a deletion would throw notes out of
+            // history over a problem that is very likely temporary.
+            Err(error) => {
+                return Err(failed("sync.note_read_failed", "Could not read a note to record it.", error));
             }
         }
     }
@@ -560,6 +569,26 @@ mod tests {
             .expect("committed");
 
         assert_eq!(recorded_paths(&f.repo), ["one.md"]);
+    }
+
+    /// A folder is not a note, and its name in the tree stands for everything
+    /// underneath it.
+    ///
+    /// The watcher reports folders as well as files, so one arriving in a batch
+    /// must be passed over rather than treated as "not a file, therefore gone" —
+    /// that reading takes every note in the folder out of history along with it.
+    #[test]
+    fn recording_a_folder_leaves_the_notes_inside_it_alone() {
+        let f = fixture("record-folder");
+        write(&f.vault, "notes/one.md", "# One\n");
+        record(&f.repo, &[PathBuf::from("notes/one.md")], "first")
+            .expect("recording succeeds")
+            .expect("a commit is made");
+
+        record(&f.repo, &[PathBuf::from("notes")], "a folder changed")
+            .expect("recording succeeds");
+
+        assert_eq!(recorded_paths(&f.repo), ["notes/one.md"]);
     }
 
     /// `..` is not the only way to name something that is not a note in this
