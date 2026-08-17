@@ -55,13 +55,6 @@ as it stands rather than from nothing.
       (see `snapshot.rs`), but no one has timed a real vault of that size
 - [x] Old system-git code and plans removed
 
-## Known gaps
-
-- **Conflict copies reach the history branch.** The epic wants auto-commit to
-  skip them so a pushed branch stays clean, but the pattern table that
-  recognises them is story 2. Rather than invent a second, half-right list here,
-  the filter is left to that story. Invisible until story 6 gives it a remote.
-
 ## Status
 
 🟨 Mechanism, bootstrap, checkpoint and auto-commit done. Remaining: the

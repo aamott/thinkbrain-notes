@@ -80,7 +80,10 @@ pub fn bootstrap(app_data_dir: &Path, vault: &Path) -> Result<Managed, NativeErr
 
     let took_first_snapshot = snapshot::head_commit(&repo)?.is_none();
     if took_first_snapshot {
-        let notes = recordable_notes(vault)?;
+        let notes: Vec<PathBuf> = recordable_notes(vault)?
+            .into_iter()
+            .filter(|note| !super::conflict::is_conflict_copy(vault, note))
+            .collect();
         if !notes.is_empty() {
             snapshot::record(&repo, &notes, "Sync — first snapshot of this workspace")?;
         }
@@ -365,26 +368,28 @@ mod tests {
         assert_eq!(recorded_paths(&workspace.repo), ["note.md"]);
     }
 
-    /// The conflict copies a sync daemon leaves behind look like junk and are
-    /// not. Recording both sides before touching either is what makes a
-    /// resolution undoable.
+    /// A conflict copy is a daemon's mess, not a version of the user's note, so
+    /// it stays out of the history that gets pushed — otherwise their other
+    /// machine syncs it straight back down. Nothing is lost by leaving it out:
+    /// a checkpoint holds both sides before any resolution touches them, which
+    /// is exactly why these are not in the ignore rules either.
     #[test]
-    fn conflict_copies_are_recorded_rather_than_ignored() {
+    fn conflict_copies_stay_out_of_history_without_being_ignored() {
         let app_data = make_temp_test_dir("bootstrap-conflict-appdata", "sync", true);
         let vault = make_temp_test_dir("bootstrap-conflict-vault", "sync", true);
         write(&vault, "note.md", "# Mine\n");
-        write(&vault, "note-DESKTOP-AB12CD.md", "# Theirs\n");
+        write(&vault, "note.sync-conflict-20260816-093100-K3SDFHG.md", "# Theirs\n");
         write(&vault, "note (Adam's conflicted copy 2026-08-16).md", "# Theirs\n");
 
         let workspace = managed(bootstrap(&app_data, &vault).expect("bootstrap succeeds"));
 
-        assert_eq!(
-            recorded_paths(&workspace.repo),
-            [
-                "note (Adam's conflicted copy 2026-08-16).md",
-                "note-DESKTOP-AB12CD.md",
-                "note.md"
-            ]
+        assert_eq!(recorded_paths(&workspace.repo), ["note.md"]);
+
+        let git_dir = hidden_repo_path(&app_data, &vault.to_string_lossy());
+        let exclude = fs::read_to_string(git_dir.join("info/exclude")).expect("the exclude file is written");
+        assert!(
+            !exclude.contains("conflict"),
+            "conflict copies were ignored, which would put them out of reach of a checkpoint"
         );
     }
 

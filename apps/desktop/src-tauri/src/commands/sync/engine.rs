@@ -5,12 +5,14 @@
 //! changes come from: the watcher feeds it, and its own tests feed it the same
 //! way, so the recording logic is testable without a window or an event loop.
 
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use crate::NativeError;
 
+use super::conflict::ConflictCopy;
 use super::pending::{commit_message, PendingChanges};
 use super::snapshot;
 
@@ -29,6 +31,13 @@ pub struct Engine {
     /// use makes its own thread-local handle.
     repo: gix::ThreadSafeRepository,
     pending: Mutex<PendingChanges>,
+    /// Unresolved conflict copies, keyed by the copy's path.
+    ///
+    /// Keyed rather than listed because the same copy arrives twice: once from
+    /// the scan when the workspace opens, and again from the watcher if the
+    /// daemon writes it while the app is running. The user should be told about
+    /// one conflict, not two.
+    conflicts: Mutex<BTreeMap<String, ConflictCopy>>,
 }
 
 impl Engine {
@@ -36,6 +45,7 @@ impl Engine {
         Self {
             repo: repo.into_sync(),
             pending: Mutex::new(PendingChanges::default()),
+            conflicts: Mutex::new(BTreeMap::new()),
         }
     }
 
@@ -45,6 +55,21 @@ impl Engine {
         for path in paths {
             pending.note(path, at);
         }
+    }
+
+    /// Adds conflict copies to the set awaiting resolution.
+    pub fn note_conflicts(&self, found: impl IntoIterator<Item = ConflictCopy>) {
+        let mut conflicts = self.conflicts.lock().unwrap_or_else(|error| error.into_inner());
+        for copy in found {
+            conflicts.insert(copy.copy.clone(), copy);
+        }
+    }
+
+    /// The conflicts this workspace is waiting on someone to resolve.
+    #[allow(dead_code, reason = "story 4's conflict panel is the reader")]
+    pub fn conflicts(&self) -> Vec<ConflictCopy> {
+        let conflicts = self.conflicts.lock().unwrap_or_else(|error| error.into_inner());
+        conflicts.values().cloned().collect()
     }
 
     /// Records whatever has settled, returning the commit if there was one.
@@ -65,8 +90,25 @@ impl Engine {
             return Ok(None);
         }
 
+        let repo = self.repo.to_thread_local();
+
+        // A conflict copy is a daemon's mess, not a version of the user's note.
+        // Recording it would push it to their remote, where the other machine
+        // syncs it back down. Both sides are held by a checkpoint before any
+        // resolution touches them, so leaving it out of history loses nothing.
+        let settled: Vec<PathBuf> = match repo.workdir() {
+            Some(vault) => settled
+                .into_iter()
+                .filter(|path| !super::conflict::is_conflict_copy(vault, path))
+                .collect(),
+            None => settled,
+        };
+        if settled.is_empty() {
+            return Ok(None);
+        }
+
         let message = commit_message(settled.len(), gix::date::Time::now_local_or_utc());
-        snapshot::record(&self.repo.to_thread_local(), &settled, &message)
+        snapshot::record(&repo, &settled, &message)
     }
 
     /// Takes a restore point for `paths` before anything overwrites them.
@@ -191,6 +233,73 @@ mod tests {
                 .expect("recording succeeds"),
             None
         );
+    }
+
+    /// The note the user edited is recorded; the copy the daemon dropped beside
+    /// it is not.
+    #[test]
+    fn a_conflict_copy_is_not_recorded_in_history() {
+        let f = fixture("engine-conflict");
+        let start = Instant::now();
+        write(&f.vault, "note.md", "# Mine\n");
+        write(&f.vault, "note.sync-conflict-20260816-093100-K3SDFHG.md", "# Theirs\n");
+        f.engine.note_changes(
+            [
+                PathBuf::from("note.md"),
+                PathBuf::from("note.sync-conflict-20260816-093100-K3SDFHG.md"),
+            ],
+            start,
+        );
+
+        let commit = f
+            .engine
+            .record_settled(start + SETTLE)
+            .expect("recording succeeds")
+            .expect("a commit is made");
+
+        assert!(
+            message_of(&f.engine, commit).ends_with("— 1 note changed"),
+            "the conflict copy was counted: {}",
+            message_of(&f.engine, commit)
+        );
+    }
+
+    /// Nothing but a conflict copy settled, so there is nothing to record —
+    /// and certainly not an empty commit.
+    #[test]
+    fn a_batch_of_only_conflict_copies_records_nothing() {
+        let f = fixture("engine-conflict-only");
+        let start = Instant::now();
+        write(&f.vault, "note.md", "# Mine\n");
+        write(&f.vault, "note.sync-conflict-20260816-093100-K3SDFHG.md", "# Theirs\n");
+
+        f.engine.note_changes(
+            [PathBuf::from("note.sync-conflict-20260816-093100-K3SDFHG.md")],
+            start,
+        );
+
+        assert_eq!(
+            f.engine.record_settled(start + SETTLE).expect("recording succeeds"),
+            None
+        );
+    }
+
+    /// The same copy is found twice — once by the scan when the workspace
+    /// opens, once by the watcher if the daemon writes it while the app runs.
+    /// The user has one conflict, so they hear about it once.
+    #[test]
+    fn a_conflict_found_twice_is_only_one_conflict() {
+        let f = fixture("engine-conflict-dedup");
+        let copy = ConflictCopy {
+            copy: "note.sync-conflict-20260816-093100-K3SDFHG.md".to_string(),
+            original: "note.md".to_string(),
+            provider: "Syncthing",
+        };
+
+        f.engine.note_conflicts([copy.clone()]);
+        f.engine.note_conflicts([copy.clone()]);
+
+        assert_eq!(f.engine.conflicts(), [copy]);
     }
 
     #[test]

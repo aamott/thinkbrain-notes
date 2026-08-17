@@ -6,6 +6,7 @@
 //! OS app-data rather than the vault so that no sync daemon ever sees it.
 
 pub mod bootstrap;
+pub mod conflict;
 pub mod engine;
 pub mod hidden_repo;
 pub mod pending;

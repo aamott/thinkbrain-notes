@@ -18,6 +18,7 @@ use crate::commands::watcher::{WatchInterest, WorkspaceChange, WorkspaceChangeKi
 use crate::NativeError;
 
 use super::bootstrap::{bootstrap, Managed};
+use super::conflict;
 use super::engine::Engine;
 
 /// How often the sweeper looks for settled changes.
@@ -59,9 +60,12 @@ pub fn attach(
         match bootstrap(app_data_dir, root)? {
             Managed::HasOwnGit => return Ok(false),
             Managed::Yes(workspace) => {
-                state
-                    .engines
-                    .insert(key.to_string(), Arc::new(Engine::new(workspace.repo)));
+                let engine = Arc::new(Engine::new(workspace.repo));
+                // Conflicts appear while the app is closed. Someone back from a
+                // week away should not have to open each note to discover the
+                // app noticed nothing.
+                engine.note_conflicts(conflict::scan(root));
+                state.engines.insert(key.to_string(), engine);
             }
         }
     }
@@ -120,6 +124,16 @@ pub fn note_changes(key: &str, root: &Path, changes: &[WorkspaceChange]) {
         changed_paths(changes)
     };
 
+    engine.note_conflicts(
+        paths
+            .iter()
+            .filter_map(|path| {
+                conflict::pair(&conflict::relative_str(path), |original| {
+                    root.join(original).exists()
+                })
+            })
+            .collect::<Vec<_>>(),
+    );
     engine.note_changes(paths, Instant::now());
 }
 
