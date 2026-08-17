@@ -5,5 +5,6 @@
 //! the repository git sync pushes from are all the same repo, and it lives in
 //! OS app-data rather than the vault so that no sync daemon ever sees it.
 
+pub mod bootstrap;
 pub mod hidden_repo;
 pub mod snapshot;

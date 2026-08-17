@@ -43,6 +43,18 @@ fn open(git_dir: &Path) -> Result<gix::Repository, NativeError> {
 }
 
 fn create(git_dir: &Path, vault: &Path) -> Result<(), NativeError> {
+    // The repository sits a couple of levels inside app-data, and on a fresh
+    // install none of that exists yet.
+    if let Some(parent) = git_dir.parent() {
+        fs::create_dir_all(parent).map_err(|error| {
+            NativeError::with_details(
+                "sync.repo_create_failed",
+                "Could not create this workspace's sync history.",
+                error.to_string(),
+            )
+        })?;
+    }
+
     gix::init_bare(git_dir).map_err(|error| {
         NativeError::with_details(
             "sync.repo_create_failed",

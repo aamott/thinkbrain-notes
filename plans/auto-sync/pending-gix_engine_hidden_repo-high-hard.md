@@ -34,13 +34,18 @@ as it stands rather than from nothing.
 ## Acceptance
 
 - [x] Zero files written inside the vault (story 0)
-- [ ] Hidden repo keyed by workspace identity and created lazily on open
+- [x] Hidden repo keyed by workspace identity (same stable hash the workspace
+      settings file uses) and created on first open — `bootstrap.rs`
 - [x] Changes are recorded as commits with the right file sets — `snapshot.rs`,
       index-free: blob → tree editor over the last commit's tree → commit, so
       recording costs the paths that changed rather than the whole vault
 - [ ] Template messages come from the auto-commit caller (lifecycle sub-story)
 - [ ] `checkpoint()` returns restorable commit; covered by tests
-- [ ] All four bootstrap cases covered by tests; own-`.git` vault untouched
+- [x] Bootstrap cases covered: empty vault, vault of existing notes (snapshotted
+      whole), reopen (no re-walk), own-`.git` vault untouched. The remote case
+      belongs to story 6.
+- [ ] One engine per workspace, shared across windows (with the auto-commit
+      wiring, where a shared engine first means something)
 - [ ] 10k-file vault: initial snapshot and idle commit stay off the UI thread
 - [x] Old system-git code and plans removed
 

@@ -128,7 +128,7 @@ pub fn record(
     Ok(Some(commit.detach()))
 }
 
-fn head_commit(repo: &gix::Repository) -> Result<Option<gix::ObjectId>, NativeError> {
+pub fn head_commit(repo: &gix::Repository) -> Result<Option<gix::ObjectId>, NativeError> {
     match repo.find_reference(HISTORY_REF) {
         Ok(mut reference) => {
             let id = reference
