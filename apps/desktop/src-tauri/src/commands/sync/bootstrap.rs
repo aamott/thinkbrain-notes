@@ -6,11 +6,6 @@
 //! `.git` belongs to its owner, and the right behaviour is to notice and stay
 //! out of the way.
 
-// The auto-commit sub-story wires this into workspace open; until then its own
-// tests are the only caller. See
-// plans/auto-sync/pending-gix_engine_hidden_repo-high-hard.md.
-#![allow(dead_code)]
-
 use std::path::{Path, PathBuf};
 
 use crate::commands::workspace::stable_workspace_hash;
@@ -29,6 +24,7 @@ pub struct ManagedWorkspace {
     /// changed — but it is the difference between reading one note and reading
     /// ten thousand. The status surface also has something honest to say on a
     /// first open, where the wait is real.
+    #[allow(dead_code, reason = "story 5's status surface is the reader")]
     pub took_first_snapshot: bool,
 }
 
@@ -128,7 +124,7 @@ fn write_exclude_file(git_dir: &Path) -> Result<(), NativeError> {
 }
 
 /// Every file in the vault worth recording, as vault-relative paths.
-fn recordable_notes(vault: &Path) -> Result<Vec<PathBuf>, NativeError> {
+pub fn recordable_notes(vault: &Path) -> Result<Vec<PathBuf>, NativeError> {
     let mut found = Vec::new();
     collect(vault, vault, &mut found)?;
     found.sort();

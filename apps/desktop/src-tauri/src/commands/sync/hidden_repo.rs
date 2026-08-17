@@ -10,10 +10,6 @@
 //! when the repository is not bare. gix offers no separate-worktree `init`, so
 //! the repository is created bare and then un-bared here.
 
-// Story 1 wires this into workspace open; until then its own tests are the only
-// caller. See plans/pending-auto_sync-med-hard.md.
-#![allow(dead_code)]
-
 use std::fs;
 use std::io::Write;
 use std::path::Path;

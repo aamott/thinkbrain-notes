@@ -7,11 +7,6 @@
 //! attachment produces events all the way down, and recording one mid-download
 //! stores a truncated file as a version the user could later restore to.
 
-// The engine wiring is the last piece of story 1; until it lands these are
-// exercised only by their own tests. See
-// plans/auto-sync/pending-gix_engine_hidden_repo-high-hard.md.
-#![allow(dead_code)]
-
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
@@ -27,10 +22,6 @@ impl PendingChanges {
     /// Notes that `path` changed at `at`, restarting its wait.
     pub fn note(&mut self, path: PathBuf, at: Instant) {
         self.seen.insert(path, at);
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.seen.is_empty()
     }
 
     /// Removes and returns the paths that have been still for `settle`.
@@ -129,7 +120,10 @@ mod tests {
 
         pending.take_settled(start + SETTLE, SETTLE);
 
-        assert!(pending.is_empty());
+        assert!(
+            pending.take_settled(start + SETTLE * 10, SETTLE).is_empty(),
+            "a note was recorded twice"
+        );
     }
 
     /// One slow file must not hold up the rest. Otherwise a single large
@@ -143,7 +137,6 @@ mod tests {
         pending.note(path("big.png"), start + SETTLE);
 
         assert_eq!(pending.take_settled(start + SETTLE, SETTLE), [path("one.md")]);
-        assert!(!pending.is_empty(), "the unsettled file was dropped");
         assert_eq!(
             pending.take_settled(start + SETTLE + SETTLE, SETTLE),
             [path("big.png")]

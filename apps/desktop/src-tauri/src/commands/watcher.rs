@@ -41,7 +41,7 @@ use notify::event::{EventKind, ModifyKind, RemoveKind, RenameMode};
 use notify::{RecommendedWatcher, RecursiveMode};
 use notify_debouncer_full::{new_debouncer, DebounceEventResult, Debouncer, RecommendedCache};
 use serde::Serialize;
-use tauri::Emitter;
+use tauri::{Emitter, Manager};
 
 use crate::commands::markdown::is_markdown_path;
 use crate::commands::workspace::{is_ignored_entry_name, resolve_workspace_root};
@@ -475,10 +475,22 @@ pub fn watch_workspace(
     // Start the watcher before registering interest, so a failure to start
     // leaves nothing claiming a watcher that does not exist.
     if !state.interest.is_watched(&key) {
-        let debouncer = spawn_debouncer(app, root.clone(), key.clone())?;
+        let debouncer = spawn_debouncer(app.clone(), root.clone(), key.clone())?;
         state.debouncers.insert(key.clone(), debouncer);
     }
     state.interest.acquire(&key, &label);
+    drop(guard);
+
+    // Auto Sync shares this lifecycle exactly: one engine per workspace, held
+    // by window interest, released with the last window. Failing to record is
+    // not a reason to refuse to open a workspace, so a failure here is reported
+    // and the workspace opens regardless.
+    if let Ok(app_data_dir) = app.path().app_data_dir() {
+        if let Err(error) = crate::commands::sync::registry::attach(&app_data_dir, &root, &key, &label) {
+            eprintln!("[sync] could not start recording {key}: {error:?}");
+        }
+    }
+
     Ok(key)
 }
 
@@ -499,6 +511,8 @@ pub fn unwatch_workspace(window: tauri::Window, canonical_root: String) -> Resul
         // Dropping the debouncer stops its thread and releases the OS handle.
         state.debouncers.remove(&canonical_root);
     }
+    drop(guard);
+    crate::commands::sync::registry::detach(&canonical_root, window.label());
     Ok(())
 }
 
@@ -515,6 +529,8 @@ pub fn release_window_watchers(label: &str) {
     for root in state.interest.release_window(label) {
         state.debouncers.remove(&root);
     }
+    drop(guard);
+    crate::commands::sync::registry::release_window(label);
 }
 
 /// Registers the canonical "what happens when a window dies" cleanup on a
@@ -571,6 +587,11 @@ fn spawn_debouncer(
             if changes.is_empty() {
                 return;
             }
+            // Auto Sync reads from here rather than from the frontend event:
+            // a vault still has to be recorded while its window is busy, or
+            // minimised, or has no listener attached yet.
+            crate::commands::sync::registry::note_changes(&key, &handler_root, &changes);
+
             let payload = WorkspaceChangedPayload {
                 root_path: key.clone(),
                 changes,

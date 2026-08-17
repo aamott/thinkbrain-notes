@@ -39,17 +39,30 @@ as it stands rather than from nothing.
 - [x] Changes are recorded as commits with the right file sets — `snapshot.rs`,
       index-free: blob → tree editor over the last commit's tree → commit, so
       recording costs the paths that changed rather than the whole vault
-- [ ] Template messages come from the auto-commit caller (lifecycle sub-story)
+- [x] Template messages: `Sync <local datetime> — <n> notes changed`
 - [x] `checkpoint()` returns a restorable commit, on `refs/thinkbrain/checkpoints`
       rather than a branch, so conflict copies cannot reach a remote
 - [x] Bootstrap cases covered: empty vault, vault of existing notes (snapshotted
       whole), reopen (no re-walk), own-`.git` vault untouched. The remote case
       belongs to story 6.
-- [ ] One engine per workspace, shared across windows (with the auto-commit
-      wiring, where a shared engine first means something)
-- [ ] 10k-file vault: initial snapshot and idle commit stay off the UI thread
+- [x] One engine per workspace, shared across windows, held by window interest
+      and released with the last window — the watcher's own lifecycle, reused
+- [x] Auto-commit on idle, fed by the watcher rather than the frontend, so a
+      vault is recorded while its window is busy or minimised
+- [x] Recording runs on a sweeper thread, never a command handler, and holds no
+      lock while it hashes
+- [ ] 10k-file vault measured rather than argued — the design is incremental
+      (see `snapshot.rs`), but no one has timed a real vault of that size
 - [x] Old system-git code and plans removed
+
+## Known gaps
+
+- **Conflict copies reach the history branch.** The epic wants auto-commit to
+  skip them so a pushed branch stays clean, but the pattern table that
+  recognises them is story 2. Rather than invent a second, half-right list here,
+  the filter is left to that story. Invisible until story 6 gives it a remote.
 
 ## Status
 
-⬜ Pending.
+🟨 Mechanism, bootstrap, checkpoint and auto-commit done. Remaining: the
+conflict-copy filter (needs story 2) and a measured 10k-vault run.
