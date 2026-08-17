@@ -6,6 +6,7 @@ import {
 } from "@thinkbrain/core";
 import { useMemo, useSyncExternalStore, type ReactNode } from "react";
 import { SearchPanel } from "../search/SearchPanel";
+import { ConflictsPanel } from "../sync/ConflictsPanel";
 import { ExtensionsPanel } from "../extensions/ExtensionsPanel";
 import { Unavailable } from "../shell/Unavailable";
 import { AssistantPanelSurface } from "./AssistantPanelSurface";
@@ -21,6 +22,8 @@ export interface LeftPanelContext {
   readonly explorerProps: WorkspaceExplorerProps;
   /** Opens a Markdown file selected by the search panel. */
   readonly onOpenSearchResult: (relativePath: string) => void;
+  /** Opens the side-by-side comparison for a conflict, named by its copy. */
+  readonly onReviewConflict: (copyPath: string, notePath: string) => void;
 }
 
 /** State a right-side panel factory may read (inspector panels only). */
@@ -42,6 +45,7 @@ export interface DesktopPanelContext extends LeftPanelContext, RightPanelContext
 export type BuiltInDesktopPanelId =
   | "explorer"
   | "search"
+  | "conflicts"
   | "tags"
   | "extensions"
   | "outline"
@@ -60,6 +64,7 @@ export type BuiltInDesktopPanelId =
 export type BuiltInLeftPanel =
   | "explorer"
   | "search"
+  | "conflicts"
   | "tags"
   | "extensions";
 
@@ -121,6 +126,7 @@ export type RightPanel = BuiltInRightPanel | ExtensionPanelId;
 export function isBuiltInLeftPanel(id: string): id is BuiltInLeftPanel {
   return id === "explorer"
     || id === "search"
+    || id === "conflicts"
     || id === "tags"
     || id === "extensions";
 }
@@ -205,6 +211,16 @@ export const builtInDesktopPanels: readonly (LeftPanelContribution | RightPanelC
     availability: () => true,
     factory: ({ onOpenSearchResult, rootPath }) => (
       <SearchPanel rootPath={rootPath} onOpenFile={onOpenSearchResult} />
+    )
+  },
+  {
+    id: "conflicts",
+    label: "Needs your attention",
+    icon: "⇄",
+    side: "left",
+    availability: () => true,
+    factory: ({ onReviewConflict, rootPath }) => (
+      <ConflictsPanel rootPath={rootPath} onReview={onReviewConflict} />
     )
   },
   {

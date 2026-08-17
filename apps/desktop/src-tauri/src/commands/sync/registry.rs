@@ -191,11 +191,15 @@ pub fn engine(key: &str) -> Option<Arc<Engine>> {
 }
 
 /// Feeds watcher changes to the engine for `key`, if there is one.
-pub fn note_changes(key: &str, root: &Path, changes: &[WorkspaceChange]) {
+///
+/// Reports whether the batch turned up a conflict nobody has been told about,
+/// which is the caller's cue to say so — this runs on the watcher's thread,
+/// which has the handle to reach the windows with.
+pub fn note_changes(key: &str, root: &Path, changes: &[WorkspaceChange]) -> bool {
     let engine = {
         let guard = registry();
-        let Some(state) = guard.as_ref() else { return };
-        let Some(engine) = state.engines.get(key) else { return };
+        let Some(state) = guard.as_ref() else { return false };
+        let Some(engine) = state.engines.get(key) else { return false };
         Arc::clone(engine)
     };
 
@@ -211,14 +215,14 @@ pub fn note_changes(key: &str, root: &Path, changes: &[WorkspaceChange]) {
             Ok(paths) => paths,
             Err(error) => {
                 eprintln!("[sync] could not re-read the workspace after a rescan: {error:?}");
-                return;
+                return false;
             }
         }
     } else {
         changed_paths(changes)
     };
 
-    engine.note_conflicts(
+    let found_new = engine.note_conflicts(
         paths
             .iter()
             // A copy that is no longer there is not a conflict to answer. This
@@ -234,6 +238,7 @@ pub fn note_changes(key: &str, root: &Path, changes: &[WorkspaceChange]) {
             .collect::<Vec<_>>(),
     );
     engine.note_changes(paths, Instant::now());
+    found_new
 }
 
 /// The vault-relative paths a batch of changes touches.

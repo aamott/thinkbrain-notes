@@ -40,8 +40,11 @@ Story 2. Turns daemon-created conflict files into conflict events.
       Deliberately *not* echo-suppressed, against this story's original note:
       the copy has to leave the file list and the note has to reload in every
       open window, and the watcher's outside-edit path already does both.
-- [ ] Conflict events reach the frontend — waiting on story 4's panel to
-      receive them. `Engine::conflicts()` is what it will read.
+- [x] Conflict events reach the frontend — story 4. `list_conflicts` reads
+      `Engine::conflicts()`, and `sync://conflicts` says when to read it again.
+      The event carries only the workspace: a payload of conflicts would go
+      stale between being built and being read, in a feature whose whole
+      subject is two versions of the truth.
 - [ ] Verified on Windows (OneDrive's home turf — the watcher itself is not
       yet Windows-verified)
 
@@ -66,5 +69,5 @@ Story 2. Turns daemon-created conflict files into conflict events.
 
 ## Status
 
-🟨 Table, pairing, scan, live detection, the history filter and cleanup done.
-Remaining: real fixtures and the frontend event.
+🟨 Table, pairing, scan, live detection, the history filter, cleanup and the
+frontend event done. Remaining: real fixtures per provider, and Windows.

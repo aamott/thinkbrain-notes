@@ -42,14 +42,16 @@ const context: DesktopPanelContext = {
   rootPath: null,
   documentContents: null,
   explorerProps,
-  onOpenSearchResult: () => undefined
+  onOpenSearchResult: () => undefined,
+  onReviewConflict: () => undefined
 };
 
 /** Only the state a left-side factory may read. */
 const leftContext: LeftPanelContext = {
   rootPath: "/notes",
   explorerProps,
-  onOpenSearchResult: () => undefined
+  onOpenSearchResult: () => undefined,
+  onReviewConflict: () => undefined
 };
 
 /** Only the state a right-side factory may read. */
@@ -86,6 +88,7 @@ describe("desktop panel registry", () => {
     expect(builtInDesktopPanels.map((panel) => panel.id)).toEqual([
       "explorer",
       "search",
+      "conflicts",
       "tags",
       "extensions",
       "outline",
@@ -96,6 +99,7 @@ describe("desktop panel registry", () => {
     expect(desktopPanelRegistry.entriesBySide("left").map((panel) => panel.id)).toEqual([
       "explorer",
       "search",
+      "conflicts",
       "tags",
       "extensions"
     ]);
@@ -143,6 +147,7 @@ describe("desktop panel registry", () => {
         rootPath={null}
         explorerProps={context.explorerProps}
         onOpenSearchResult={context.onOpenSearchResult}
+        onReviewConflict={context.onReviewConflict}
       />
     );
     const rightMarkup = renderToStaticMarkup(
@@ -196,7 +201,7 @@ describe("desktop panel registry", () => {
   });
 
   it("narrows built-in left ids via the type guard", () => {
-    for (const id of ["explorer", "search", "tags", "extensions"] as const) {
+    for (const id of ["explorer", "search", "conflicts", "tags", "extensions"] as const) {
       expect(isBuiltInLeftPanel(id)).toBe(true);
     }
     expect(isBuiltInLeftPanel("outline")).toBe(false);

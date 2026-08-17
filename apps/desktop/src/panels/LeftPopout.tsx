@@ -11,16 +11,24 @@ type LeftPopoutProps = {
   readonly explorerProps: WorkspaceExplorerProps;
   /** Called when a search result is activated. */
   readonly onOpenSearchResult: (relativePath: string) => void;
+  /** Called when a conflict is opened for side-by-side review. */
+  readonly onReviewConflict: (copyPath: string, notePath: string) => void;
 };
 
 /**
  * Left dock popout for the desktop shell. Layout and contribution rendering
  * live in the shared `Popout`; only the left-side context is constructed here.
  */
-export function LeftPopout({ panel, rootPath, explorerProps, onOpenSearchResult }: LeftPopoutProps) {
+export function LeftPopout({
+  panel,
+  rootPath,
+  explorerProps,
+  onOpenSearchResult,
+  onReviewConflict
+}: LeftPopoutProps) {
   const context: LeftPanelContext = useMemo(
-    () => ({ rootPath, explorerProps, onOpenSearchResult }),
-    [rootPath, explorerProps, onOpenSearchResult]
+    () => ({ rootPath, explorerProps, onOpenSearchResult, onReviewConflict }),
+    [rootPath, explorerProps, onOpenSearchResult, onReviewConflict]
   );
   const leftPanels = useLeftPanelContributions();
   return <Popout side="left" panel={panel} context={context} contributions={leftPanels} />;

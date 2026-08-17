@@ -2,6 +2,15 @@ import type { Tab, TabKind, TabResource } from "@thinkbrain/core";
 
 export interface DesktopTab extends Tab {
   readonly kind: TabKind;
+  /**
+   * For a merge tab: the note both versions are of.
+   *
+   * A merge tab's `resource` names the conflict *copy*, because that is what
+   * identifies a conflict everywhere else. The note itself is still needed —
+   * to show its name, and to find an editor open on it whose unsaved text is
+   * the version the user is actually looking at.
+   */
+  readonly comparedNotePath?: string;
 }
 
 export interface CloseRequest {
@@ -51,6 +60,30 @@ export function createEditorTab(resource: Required<TabResource>): DesktopTab {
     title,
     kind: "editor",
     resource
+  };
+}
+
+/** Stable identity for the comparison of one conflict. */
+export function conflictTabId(resource: Required<TabResource>): string {
+  return `merge:${encodeURIComponent(resource.rootPath)}:${encodeURIComponent(resource.relativePath)}`;
+}
+
+/**
+ * Builds a tab comparing two versions of a note.
+ *
+ * `resource.relativePath` is the *copy* the sync daemon left behind, because
+ * that is what names a conflict everywhere else — one note can have a copy from
+ * each of two machines, and they are two separate decisions. `notePath` is the
+ * original, whose name is the one the user recognises in a tab strip.
+ */
+export function createConflictTab(resource: Required<TabResource>, notePath: string): DesktopTab {
+  const name = notePath.split("/").filter(Boolean).at(-1) ?? notePath;
+  return {
+    id: conflictTabId(resource),
+    title: `${name} — Compare versions`,
+    kind: "merge",
+    resource,
+    comparedNotePath: notePath
   };
 }
 

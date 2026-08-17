@@ -66,12 +66,18 @@ impl Engine {
         }
     }
 
-    /// Adds conflict copies to the set awaiting resolution.
-    pub fn note_conflicts(&self, found: impl IntoIterator<Item = ConflictCopy>) {
+    /// Adds conflict copies to the set awaiting resolution, reporting whether
+    /// any of them is news.
+    ///
+    /// The same copy arrives more than once — from the scan and again from the
+    /// watcher — and only the first time is worth telling anyone about.
+    pub fn note_conflicts(&self, found: impl IntoIterator<Item = ConflictCopy>) -> bool {
         let mut conflicts = self.conflicts.lock().unwrap_or_else(|error| error.into_inner());
-        for copy in found {
-            conflicts.insert(copy.copy.clone(), copy);
-        }
+        found
+            .into_iter()
+            .filter(|copy| conflicts.insert(copy.copy.clone(), copy.clone()).is_none())
+            .count()
+            > 0
     }
 
     /// The conflicts this workspace is waiting on someone to resolve.
@@ -347,6 +353,21 @@ mod tests {
         f.engine.note_conflicts([copy.clone()]);
 
         assert_eq!(f.engine.conflicts(), [copy]);
+    }
+
+    /// Seeing the same copy again is not news, and telling every window it is
+    /// would pop a notification for a conflict the user has already been shown.
+    #[test]
+    fn only_the_first_sighting_of_a_conflict_is_worth_announcing() {
+        let f = fixture("engine-conflict-news");
+        let copy = ConflictCopy {
+            copy: "note.sync-conflict-20260816-093100-K3SDFHG.md".to_string(),
+            original: "note.md".to_string(),
+            provider: "Syncthing",
+        };
+
+        assert!(f.engine.note_conflicts([copy.clone()]), "the first sighting was silent");
+        assert!(!f.engine.note_conflicts([copy]), "the same copy was announced twice");
     }
 
     #[test]

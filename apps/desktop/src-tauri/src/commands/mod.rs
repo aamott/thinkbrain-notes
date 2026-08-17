@@ -70,6 +70,7 @@ macro_rules! app_command_handlers {
             $crate::commands::workspace::window_workspace_root,
             $crate::commands::watcher::watch_workspace,
             $crate::commands::watcher::unwatch_workspace,
+            $crate::commands::sync::resolve::list_conflicts,
             $crate::commands::sync::resolve::read_conflict,
             $crate::commands::sync::resolve::resolve_conflict
         ]
@@ -115,6 +116,7 @@ pub const APP_COMMAND_PATHS: &[&str] = &[
     "workspace::window_workspace_root",
     "watcher::watch_workspace",
     "watcher::unwatch_workspace",
+    "sync::resolve::list_conflicts",
     "sync::resolve::read_conflict",
     "sync::resolve::resolve_conflict",
 ];
@@ -170,6 +172,7 @@ mod tests {
         assert!(APP_COMMAND_PATHS.contains(&"watcher::watch_workspace"));
         assert!(APP_COMMAND_PATHS.contains(&"watcher::unwatch_workspace"));
         // Sync
+        assert!(APP_COMMAND_PATHS.contains(&"sync::resolve::list_conflicts"));
         assert!(APP_COMMAND_PATHS.contains(&"sync::resolve::read_conflict"));
         assert!(APP_COMMAND_PATHS.contains(&"sync::resolve::resolve_conflict"));
 
@@ -184,8 +187,8 @@ mod tests {
         );
         assert_eq!(
             APP_COMMAND_PATHS.len(),
-            33,
-            "expected 33 registered commands"
+            34,
+            "expected 34 registered commands"
         );
     }
 }

@@ -63,6 +63,33 @@ const DEBOUNCE_WINDOW: Duration = Duration::from_millis(400);
 /// The frontend event carrying a settled batch of changes.
 pub const WORKSPACE_CHANGED_EVENT: &str = "workspace://changed";
 
+/// Sent when the set of conflicts awaiting a decision has changed.
+///
+/// Carries no conflicts of its own — only the workspace they belong to. The
+/// list is a command away, and a payload would go stale between the moment it
+/// was built and the moment a window read it, in a feature whose whole subject
+/// is two versions of the truth.
+pub const SYNC_CONFLICTS_EVENT: &str = "sync://conflicts";
+
+/// Tells every window that `root_path`'s conflicts are not what they were.
+///
+/// Both the watcher noticing a new copy and a window resolving one end here, so
+/// a second window showing the same vault updates either way.
+pub fn announce_conflicts(app: &tauri::AppHandle, root_path: &str) {
+    let payload = ConflictsChangedPayload {
+        root_path: root_path.to_string(),
+    };
+    if let Err(error) = app.emit(SYNC_CONFLICTS_EVENT, payload) {
+        eprintln!("[sync] failed to deliver the conflict list change: {error}");
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ConflictsChangedPayload {
+    root_path: String,
+}
+
 /// What happened to one path, in the vocabulary the frontend already speaks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -673,7 +700,9 @@ fn spawn_debouncer(
             // minimised, or has no listener attached yet. It takes the whole
             // list — every file type, and the app's own writes, which are
             // exactly the edits the user most expects to find in their history.
-            crate::commands::sync::registry::note_changes(&key, &handler_root, &changes.all);
+            if crate::commands::sync::registry::note_changes(&key, &handler_root, &changes.all) {
+                announce_conflicts(&app, &key);
+            }
 
             if changes.notes.is_empty() {
                 return;

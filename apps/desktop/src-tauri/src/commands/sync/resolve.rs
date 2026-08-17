@@ -48,17 +48,36 @@ pub struct Version {
     pub fingerprint: String,
 }
 
-/// A conflict, in the only form the UI ever sees.
+/// A conflict, without the line-by-line comparison.
+///
+/// What a triage card needs: both names, both sizes and dates, who made the
+/// copy, and whether a review is even possible. Both fingerprints are here too,
+/// so a card offering "keep this one" can carry out that choice without opening
+/// anything first.
+///
+/// `theirs.path` is the handle for [`read_conflict`] and [`resolve_conflict`]:
+/// a conflict is named by the copy, and the rest is derived from it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConflictSummary {
+    pub kind: Kind,
+    pub ours: Version,
+    pub theirs: Version,
+}
+
+/// A conflict, in the only form the merge view ever sees.
 ///
 /// There is no mention of where the chunks came from. A two-way comparison of a
 /// daemon's copy and a three-way merge against a real base produce the same
 /// shape, so the panel that renders this does not learn which happened.
+///
+/// Flattened over [`ConflictSummary`], so a card and an opened comparison are
+/// one shape to the frontend, with the chunks the only difference between them.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ConflictView {
-    pub kind: Kind,
-    pub ours: Version,
-    pub theirs: Version,
+    #[serde(flatten)]
+    pub summary: ConflictSummary,
     /// Empty when `kind` is binary: there is nothing to compare line by line,
     /// and the choice is between whole files.
     pub chunks: Vec<Chunk>,
@@ -91,6 +110,28 @@ pub struct Resolved {
     pub checkpoint: String,
 }
 
+/// Every conflict this workspace is waiting on someone to decide.
+///
+/// An unmanaged vault has no engine and so no conflicts to report, which is an
+/// empty list rather than an error: the panel showing nothing is the honest
+/// rendering of "Auto Sync is not looking after this folder".
+///
+/// A conflict whose files have gone since it was noticed is left out rather
+/// than failing the whole list — one unreadable pair must not hide the rest.
+#[tauri::command]
+pub fn list_conflicts(root_path: String) -> Result<Vec<ConflictSummary>, NativeError> {
+    let root = resolve_workspace_root(&root_path)?;
+    let Some(engine) = super::registry::engine(&root.to_string_lossy()) else {
+        return Ok(Vec::new());
+    };
+
+    Ok(engine
+        .conflicts()
+        .iter()
+        .filter_map(|copy| summarise(&root, &copy.copy).ok())
+        .collect())
+}
+
 #[tauri::command]
 pub fn read_conflict(
     root_path: String,
@@ -103,6 +144,7 @@ pub fn read_conflict(
 
 #[tauri::command]
 pub fn resolve_conflict(
+    app: tauri::AppHandle,
     root_path: String,
     copy_path: String,
     resolution: Resolution,
@@ -121,7 +163,12 @@ pub fn resolve_conflict(
         )
     })?;
 
-    resolve(&engine, &root, &copy_path, &resolution, &expected_ours, &expected_theirs)
+    let resolved = resolve(&engine, &root, &copy_path, &resolution, &expected_ours, &expected_theirs)?;
+    // One fewer thing waiting on the user, in every window showing this vault.
+    // The watcher will not say so on its own: it reports files, and the copy
+    // going away is precisely the event that must *not* re-raise a conflict.
+    crate::commands::watcher::announce_conflicts(&app, &key);
+    Ok(resolved)
 }
 
 /// Builds the comparison for the conflict copy at `copy_path`.
@@ -132,19 +179,23 @@ pub fn resolve_conflict(
 /// away everything typed since. The fingerprint still comes from disk: it
 /// exists to notice someone *else* writing, and the buffer is not someone else.
 pub fn view(root: &Path, copy_path: &str, buffer: Option<&str>) -> Result<ConflictView, NativeError> {
-    let pairing = pairing(root, copy_path)?;
-    let ours = load(root, &pairing.original)?;
-    let theirs = load(root, &pairing.copy)?;
-
-    let shown: &[u8] = buffer.map_or(ours.bytes.as_slice(), str::as_bytes);
-    let (kind, chunks) = merge::compare(shown, &theirs.bytes);
+    let sides = Sides::load(root, copy_path, buffer)?;
+    let (kind, chunks) = merge::compare(sides.shown(), &sides.theirs.bytes);
 
     Ok(ConflictView {
-        kind,
-        ours: version(root, &ours, OURS_LABEL.to_string(), shown)?,
-        theirs: version(root, &theirs, pairing.provider.to_string(), &theirs.bytes)?,
+        summary: sides.summarise(root, kind)?,
         chunks,
     })
+}
+
+/// The conflict at `copy_path` without comparing the two versions.
+///
+/// Deliberately does not run the diff: the triage list asks this of every
+/// outstanding conflict at once, and a card shows names, sizes and dates.
+pub fn summarise(root: &Path, copy_path: &str) -> Result<ConflictSummary, NativeError> {
+    let sides = Sides::load(root, copy_path, None)?;
+    let kind = merge::kind_of(sides.shown(), &sides.theirs.bytes);
+    sides.summarise(root, kind)
 }
 
 /// Carries out `resolution`, checkpointing both sides first.
@@ -161,8 +212,6 @@ pub fn resolve(
     expected_ours: &str,
     expected_theirs: &str,
 ) -> Result<Resolved, NativeError> {
-    let pairing = pairing(root, copy_path)?;
-
     // Held across the read, the check and every write below, and it is the same
     // lock the ordinary note writes take — so a save landing in the middle of a
     // resolution is not a race this has to reason about.
@@ -170,8 +219,9 @@ pub fn resolve(
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
 
-    let ours = load(root, &pairing.original)?;
-    let theirs = load(root, &pairing.copy)?;
+    // No buffer: the write checks and records what is on disk. An editor's
+    // unsaved text belongs in the merged contents the panel sends, not here.
+    let Sides { pairing, ours, theirs, .. } = Sides::load(root, copy_path, None)?;
     if fingerprint(&ours.bytes) != expected_ours || fingerprint(&theirs.bytes) != expected_theirs {
         return Err(NativeError::new(
             "sync.conflict_moved",
@@ -251,6 +301,44 @@ fn load(root: &Path, relative: &str) -> Result<Loaded, NativeError> {
         NativeError::with_details("sync.version_read_failed", "Could not read one of the two versions.", error)
     })?;
     Ok(Loaded { path, bytes })
+}
+
+/// Both versions of one conflict, read and ready to be compared or written.
+///
+/// Every entry point needs exactly this much — the pairing, both files, and
+/// whatever should stand in for our side — so they all start here.
+struct Sides {
+    pairing: ConflictCopy,
+    ours: Loaded,
+    theirs: Loaded,
+    /// An open editor's unsaved text, when there is one.
+    buffer: Option<Vec<u8>>,
+}
+
+impl Sides {
+    fn load(root: &Path, copy_path: &str, buffer: Option<&str>) -> Result<Self, NativeError> {
+        let pairing = pairing(root, copy_path)?;
+        Ok(Self {
+            ours: load(root, &pairing.original)?,
+            theirs: load(root, &pairing.copy)?,
+            buffer: buffer.map(|text| text.as_bytes().to_vec()),
+            pairing,
+        })
+    }
+
+    /// Our side as the user sees it: the editor buffer if one was sent, and
+    /// what is on disk otherwise.
+    fn shown(&self) -> &[u8] {
+        self.buffer.as_deref().unwrap_or(&self.ours.bytes)
+    }
+
+    fn summarise(&self, root: &Path, kind: Kind) -> Result<ConflictSummary, NativeError> {
+        Ok(ConflictSummary {
+            kind,
+            ours: version(root, &self.ours, OURS_LABEL.to_string(), self.shown())?,
+            theirs: version(root, &self.theirs, self.pairing.provider.to_string(), &self.theirs.bytes)?,
+        })
+    }
 }
 
 fn version(root: &Path, loaded: &Loaded, label: String, shown: &[u8]) -> Result<Version, NativeError> {
@@ -361,8 +449,8 @@ mod tests {
                 &self.vault,
                 COPY,
                 &resolution,
-                &seen.ours.fingerprint,
-                &seen.theirs.fingerprint,
+                &seen.summary.ours.fingerprint,
+                &seen.summary.theirs.fingerprint,
             )
         }
 
@@ -402,11 +490,11 @@ mod tests {
 
         let seen = f.view();
 
-        assert_eq!(seen.kind, Kind::Text);
-        assert_eq!(seen.ours.path, "note.md");
-        assert_eq!(seen.ours.label, "This computer");
-        assert_eq!(seen.theirs.path, COPY);
-        assert_eq!(seen.theirs.label, "Syncthing");
+        assert_eq!(seen.summary.kind, Kind::Text);
+        assert_eq!(seen.summary.ours.path, "note.md");
+        assert_eq!(seen.summary.ours.label, "This computer");
+        assert_eq!(seen.summary.theirs.path, COPY);
+        assert_eq!(seen.summary.theirs.label, "Syncthing");
         assert_eq!(
             seen.chunks,
             [
@@ -445,6 +533,24 @@ mod tests {
         }
     }
 
+    /// A triage card gets both versions and no comparison — it shows names,
+    /// sizes and dates, and the list asks this of every conflict at once.
+    ///
+    /// The fingerprints have to match the opened view's, because a card offering
+    /// "keep this one" resolves straight from them without opening anything.
+    #[test]
+    fn a_card_gets_both_versions_without_paying_for_the_chunks() {
+        let f = text_fixture("resolve-summary");
+
+        let card = summarise(&f.vault, COPY).expect("the conflict summarises");
+
+        assert_eq!(card.kind, Kind::Text);
+        assert_eq!(card.ours.path, "note.md");
+        assert_eq!(card.ours.byte_size, "# Note\nmine\nend\n".len() as u64);
+        assert_eq!(card.theirs.label, "Syncthing");
+        assert_eq!(card, f.view().summary, "a card and an opened conflict disagree");
+    }
+
     /// The version the user is looking at is the one in their editor, not the
     /// last one saved. Resolving against stale disk content would silently
     /// throw away everything typed since.
@@ -475,7 +581,7 @@ mod tests {
         let with_buffer = view(&f.vault, COPY, Some("# Note\nstill typing\nend\n"))
             .expect("the conflict is readable");
 
-        assert_eq!(with_buffer.ours.fingerprint, f.view().ours.fingerprint);
+        assert_eq!(with_buffer.summary.ours.fingerprint, f.view().summary.ours.fingerprint);
     }
 
     #[test]
@@ -620,9 +726,9 @@ mod tests {
 
         let seen = f.view();
 
-        assert_eq!(seen.kind, Kind::Binary);
+        assert_eq!(seen.summary.kind, Kind::Binary);
         assert!(seen.chunks.is_empty());
-        assert_eq!(seen.ours.byte_size, 8);
+        assert_eq!(seen.summary.ours.byte_size, 8);
     }
 
     #[test]
