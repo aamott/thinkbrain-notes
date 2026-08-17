@@ -208,9 +208,6 @@ Focused follow-up stories:
 - `plans/extensions/done-extension_lifecycle_bootstrap-low-med.md` — shipped
   manifest runtime, startup/command/view activation, desktop bootstrap, and shutdown;
   `onLanguage` remains unsupported.
-- `plans/extensions/pending-extension_api_surface-low-hard.md` — superseded
-  rollup; its focused contribution, event/task, storage, and AI/Git-hook child
-  stories own implementation.
 - `plans/extensions/pending-extension_contribution_surfaces-low-med.md` — typed
   views, menus, context menus, editor actions, and themes.
 - `plans/extensions/pending-editor_header_contribution-high-med.md` — D44 observable
@@ -298,8 +295,10 @@ are not yet formalized, the first story here should establish them.
   registered from manifests at startup and activated lazily via contribution
   stubs; `note-stats` is the first built-in and exercises commands, panels, and
   namespaced settings.
-- ⬜ API/event/background-task/data surfaces —
-  `plans/extensions/pending-extension_api_surface-low-hard.md`.
+- ⬜ API/event/background-task/data surfaces — split across
+  `pending-extension_events_tasks-low-med.md`,
+  `pending-extension_data_storage-low-med.md`, and
+  `pending-extension_feature_hooks-low-med.md`.
 - ⬜ D44 React editor-header contribution —
   `plans/extensions/pending-editor_header_contribution-high-med.md`.
 - ⬜ D45 app/workspace settings UI/persistence/uninstall —

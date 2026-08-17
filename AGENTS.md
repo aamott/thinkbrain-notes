@@ -49,7 +49,7 @@ examples/extensions/  # Sample extension (hello-notes)
 - **ACP Integration**: Tauri Rust host owns agent process lifecycle via `agent-client-protocol` crate. Renderer receives Tauri events directly.
 
 ## Quality & Conventions
-- Run `./scripts/qa.sh` or `pnpm lint` and `pnpm typecheck` before completing tasks.
+- Run `./scripts/qa.sh` before completing tasks.
 - Avoid `any` types; prefer strict types or `unknown`.
 - Fail loudly: log errors clearly and return typed results.
 

@@ -60,6 +60,5 @@ Deliver approved iterative desktop/mobile mockups, field/provider matrix, view m
 
 ## References
 
-- `plans/ai/pending-provider_configuration_and_gateway-med-hard.md`
 - `plans/ai/pending-ai_contracts_and_consent-low-hard.md`
 - `plans/ai/pending-native_secret_store_consumer_boundary-med-hard.md`

@@ -19,7 +19,7 @@ Provide an extension-scoped, app-data storage adapter for approved JSON/blob val
 ## Dependencies
 
 - Canonical extension ID, lifecycle/bootstrap, compatibility, and native app-data conventions.
-- `pending-extension_api_surface-low-hard.md` rollup and settings story for separation of non-secret settings.
+- Settings story for separation of non-secret settings.
 - Secret storage remains owned by `pending-extension_secret_storage-med-hard.md`.
 
 ## Likely files
@@ -60,6 +60,5 @@ Deliver storage contract, path/quota/retention decision, fake/native tests, clea
 
 ## References
 
-- `plans/extensions/pending-extension_api_surface-low-hard.md`
 - `plans/extensions/pending-extension_secret_storage-med-hard.md`
 - `plans/extensions/pending-extension_settings-low-med.md`

@@ -26,7 +26,7 @@ Provide extension-scoped app/extension event subscriptions and abortable backgro
 ## Dependencies
 
 - Lifecycle/bootstrap and typed core contribution conventions.
-- `pending-extension_api_surface-low-hard.md` rollup and `pending-extension_contribution_surfaces-low-med.md` only for shared scope/disposable types.
+- `pending-extension_contribution_surfaces-low-med.md` for shared scope/disposable types.
 - Native adapters only if an approved event source requires them; no feature-specific sync or AI behavior.
 
 ## Likely files
@@ -67,5 +67,4 @@ Deliver event/task decision matrix, typed contracts, fixture tests, lifecycle re
 
 ## References
 
-- `plans/extensions/pending-extension_api_surface-low-hard.md`
 - `plans/extensions/done-extension_lifecycle_bootstrap-low-med.md`

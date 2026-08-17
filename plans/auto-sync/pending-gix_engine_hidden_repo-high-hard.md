@@ -2,7 +2,7 @@
 
 Story 1 of `pending-auto_sync-med-hard.md`. Foundation for everything else.
 The `gix` dependency, and the hidden repo's separate-worktree layout, are proven
-in story 0 (`pending-gix_build_spike-high-med.md`) — start from `hidden_repo.rs`
+in the gix build spike (completed) — start from `hidden_repo.rs`
 as it stands rather than from nothing.
 
 ## Scope
@@ -34,13 +34,65 @@ as it stands rather than from nothing.
 ## Acceptance
 
 - [x] Zero files written inside the vault (story 0)
-- [ ] Hidden repo keyed by workspace identity and created lazily on open
-- [ ] Edits produce commits with correct file sets + template messages
-- [ ] `checkpoint()` returns restorable commit; covered by tests
-- [ ] All four bootstrap cases covered by tests; own-`.git` vault untouched
-- [ ] 10k-file vault: initial snapshot and idle commit stay off the UI thread
+- [x] Hidden repo keyed by workspace identity (same stable hash the workspace
+      settings file uses) and created on first open — `bootstrap.rs`
+- [x] Changes are recorded as commits with the right file sets — `snapshot.rs`,
+      index-free: blob → tree editor over the last commit's tree → commit, so
+      recording costs the paths that changed rather than the whole vault
+- [x] Template messages: `Sync <local datetime> — <n> notes changed`
+- [x] `checkpoint()` returns a restorable commit, on `refs/thinkbrain/checkpoints`
+      rather than a branch, so conflict copies cannot reach a remote
+- [x] Bootstrap cases covered: empty vault, vault of existing notes (snapshotted
+      whole), reopen (no re-walk), own-`.git` vault untouched. The remote case
+      belongs to story 6.
+- [x] One engine per workspace, shared across windows, held by window interest
+      and released with the last window — the watcher's own lifecycle, reused
+- [x] Auto-commit on idle, fed by the watcher rather than the frontend, so a
+      vault is recorded while its window is busy or minimised
+- [x] Recording runs on a sweeper thread, never a command handler, and holds no
+      lock while it hashes
+- [ ] 10k-file vault measured rather than argued — the design is incremental
+      (see `snapshot.rs`), but no one has timed a real vault of that size
 - [x] Old system-git code and plans removed
+- [x] History holds the user's own edits, not only what other programs did to
+      the vault — see "What the review changed"
+- [x] Every kind of file a user keeps beside their notes is recorded, and
+      neither consumer walks into `node_modules`, `.git` or a dotfolder
+- [x] Closing a workspace records what has not settled yet
+- [x] Commits are serialized per engine, and a batch that fails to record is
+      tried again rather than dropped
+
+## What the review changed
+
+A review on 2026-08-16 found nineteen things. The largest was not on the list:
+
+**Auto Sync was not recording the user's own work.** Every save through the
+app announces itself so the watcher can ignore the echo, and Auto Sync read
+from that same list *after* suppression. History therefore held what other
+programs did to the vault and nothing the user typed into the app that wrote
+it. Echo suppression is now the index's alone.
+
+The review's own highest finding was the mirror of it: closing a window threw
+away whatever had not settled. Fixing that made a latent bug reachable —
+recording is not compare-and-swap-safe against itself, and the drained paths
+were already gone from the pending set, so a failed commit lost them for good.
+
+The rest: bootstrap out from under the global registry lock, a note that
+vanishes mid-batch recorded as the deletion it is, vault-relative paths
+required to be plain names, and the first snapshot no longer walking into
+ignored folders.
+
+## Known gaps
+
+- **The vanished-note branch in `build_tree` is not covered.** It needs a file
+  to disappear between two syscalls, which cannot be arranged without a race or
+  an injection seam. The branch is three lines and ships untested.
+- **The debouncer's wiring is not unit-tested.** That sync is fed `changes.all`
+  and the frontend `changes.notes` lives inside the debouncer closure, which no
+  test constructs. `Changes` names both fields, and swapping them is what
+  caused the bug above.
 
 ## Status
 
-⬜ Pending.
+🟨 Mechanism, bootstrap, checkpoint, auto-commit and the review's findings
+done. Remaining: a measured 10k-vault run.

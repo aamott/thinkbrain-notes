@@ -69,5 +69,4 @@ No encrypted fallback, credentials UI, provider/ACP behavior, marketplace, insta
 
 - `plans/technical-decisions.md`
 - `plans/wip-ai-low-hard.md`
-- `plans/ai/pending-provider_configuration_and_gateway-med-hard.md`
 - `plans/extensions/pending-extension_settings-low-med.md`

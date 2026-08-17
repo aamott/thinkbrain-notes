@@ -60,7 +60,6 @@ Deliver owner-approved hook matrix, typed seam/tests, capability/disposal report
 
 ## References
 
-- `plans/extensions/pending-extension_api_surface-low-hard.md`
 - `plans/extensions/pending-beta_builtin_extensions-med-med.md`
 - `plans/wip-ai-low-hard.md`
 - `plans/wip-git-integration-low-hard.md`

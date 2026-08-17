@@ -36,7 +36,7 @@ Add only the approved typed contribution facades for views, menus, context menus
 ## Dependencies
 
 - Manifest parser, compatibility evaluator, lifecycle/bootstrap, and existing contribution registry.
-- `pending-extension_api_surface-low-hard.md` rollup and `pending-extension_events_tasks-low-med.md` only for shared disposable contracts.
+- `pending-extension_events_tasks-low-med.md` for shared disposable contracts.
 - Existing panel/tab/menu registries; no feature epic behavior.
 
 ## Likely files
@@ -77,7 +77,6 @@ Deliver the approved contribution matrix, likely-file diff, typed contracts/test
 
 ## References
 
-- `plans/extensions/pending-extension_api_surface-low-hard.md`
 - `plans/extensions/done-extension_manifest_format-low-med.md`
 - `plans/extensions/done-extension_lifecycle_bootstrap-low-med.md`
 

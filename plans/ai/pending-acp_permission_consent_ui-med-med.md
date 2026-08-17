@@ -60,6 +60,5 @@ Deliver approved iterative desktop/mobile mockups, state/copy/accessibility matr
 
 ## References
 
-- `plans/ai/pending-acp_capabilities_and_permissions-med-hard.md`
 - `plans/ai/pending-acp_capability_enforcement-med-hard.md`
 - `plans/ai/pending-acp_host_runtime-med-hard.md`

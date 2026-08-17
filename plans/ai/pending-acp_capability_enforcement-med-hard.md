@@ -60,6 +60,5 @@ Deliver official ACP spec/version note, enforcement matrix, typed Rust contracts
 
 ## References
 
-- `plans/ai/pending-acp_capabilities_and_permissions-med-hard.md`
 - `plans/ai/pending-acp_host_runtime-med-hard.md`
 - `plans/ai/pending-ai_contracts_and_consent-low-hard.md`

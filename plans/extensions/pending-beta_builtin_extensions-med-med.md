@@ -85,7 +85,6 @@ No journal/calendar, Git sync/conflict, ACP host/chat/provider, secret-store, in
 
 - `plans/pending-extensions-low-hard.md`
 - `plans/extensions/done-extension_lifecycle_bootstrap-low-med.md`
-- `plans/extensions/pending-extension_api_surface-low-hard.md`
 - `plans/extensions/pending-extension_secret_storage-med-hard.md`
 - `plans/wip-git-integration-low-hard.md`
 - `plans/wip-ai-low-hard.md`
