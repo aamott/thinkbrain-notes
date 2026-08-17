@@ -40,7 +40,8 @@ as it stands rather than from nothing.
       index-free: blob → tree editor over the last commit's tree → commit, so
       recording costs the paths that changed rather than the whole vault
 - [ ] Template messages come from the auto-commit caller (lifecycle sub-story)
-- [ ] `checkpoint()` returns restorable commit; covered by tests
+- [x] `checkpoint()` returns a restorable commit, on `refs/thinkbrain/checkpoints`
+      rather than a branch, so conflict copies cannot reach a remote
 - [x] Bootstrap cases covered: empty vault, vault of existing notes (snapshotted
       whole), reopen (no re-walk), own-`.git` vault untouched. The remote case
       belongs to story 6.

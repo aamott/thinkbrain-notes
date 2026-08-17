@@ -31,6 +31,14 @@ const AUTHOR_EMAIL: &str = "sync@thinkbrain.notes";
 /// The branch the hidden repository records vault history on.
 const HISTORY_REF: &str = "refs/heads/main";
 
+/// Where checkpoints live.
+///
+/// Deliberately not a branch. Checkpoints hold the conflict copies a sync
+/// daemon left lying in the vault, and those must never reach the user's
+/// remote — a ref outside `refs/heads/` cannot be swept up by the ordinary
+/// "push my branches" refspec.
+const CHECKPOINT_REF: &str = "refs/thinkbrain/checkpoints";
+
 fn failed(code: &'static str, message: &'static str, error: impl std::fmt::Display) -> NativeError {
     NativeError::with_details(code, message, error.to_string())
 }
@@ -49,16 +57,54 @@ pub fn record(
     paths: &[PathBuf],
     message: &str,
 ) -> Result<Option<gix::ObjectId>, NativeError> {
+    let parent = head_of(repo, HISTORY_REF)?;
+    let base_tree = tree_of(repo, parent)?;
+    let tree = build_tree(repo, base_tree, paths)?;
+
+    if tree == base_tree {
+        return Ok(None);
+    }
+
+    commit_on(repo, HISTORY_REF, message, tree, parent).map(Some)
+}
+
+/// Records the current state of `paths` as a restore point, and returns
+/// something restorable either way.
+///
+/// This is the undo in "every resolution is undoable": the merge engine takes a
+/// checkpoint of both sides before it writes either, so a wrong click is a
+/// restore rather than a loss. Unlike [`record`], it never answers "nothing
+/// changed, so nothing to name" — the caller is about to overwrite a file and
+/// needs an id. When nothing changed, the previous checkpoint already points at
+/// this exact content, so that is the honest answer.
+pub fn checkpoint(repo: &gix::Repository, paths: &[PathBuf]) -> Result<gix::ObjectId, NativeError> {
+    let parent = head_of(repo, CHECKPOINT_REF)?;
+    let base_tree = tree_of(repo, parent)?;
+    let tree = build_tree(repo, base_tree, paths)?;
+
+    if tree == base_tree {
+        if let Some(existing) = parent {
+            return Ok(existing);
+        }
+        // No checkpoint yet and nothing to store — the files named have never
+        // existed. That is still a state worth being able to restore to, so it
+        // gets a commit of its own rather than an error.
+    }
+
+    commit_on(repo, CHECKPOINT_REF, "Checkpoint before resolving a conflict", tree, parent)
+}
+
+/// Writes blobs for the paths that exist and drops the ones that do not,
+/// returning the resulting tree.
+fn build_tree(
+    repo: &gix::Repository,
+    base_tree: gix::ObjectId,
+    paths: &[PathBuf],
+) -> Result<gix::ObjectId, NativeError> {
     let vault = repo
         .workdir()
         .ok_or_else(|| NativeError::new("sync.no_worktree", "This sync history has no notes folder."))?
         .to_path_buf();
-
-    let parent = head_commit(repo)?;
-    let base_tree = match parent {
-        Some(id) => commit_tree(repo, id)?,
-        None => gix::ObjectId::empty_tree(repo.object_hash()),
-    };
 
     let mut editor = repo
         .edit_tree(base_tree)
@@ -89,9 +135,9 @@ pub fn record(
             // alternative is a history that quietly keeps files the vault no
             // longer has.
             _ => {
-                // `remove` on a path that was never recorded is not an error:
-                // a note created and deleted between two commits is simply
-                // absent from both.
+                // `remove` on a path that was never recorded is not an error: a
+                // note created and deleted between two commits is simply absent
+                // from both.
                 editor
                     .remove(tree_path(&relative))
                     .map_err(|error| failed("sync.tree_write_failed", "Could not record a deleted note.", error))?;
@@ -99,15 +145,20 @@ pub fn record(
         }
     }
 
-    let tree = editor
+    Ok(editor
         .write()
         .map_err(|error| failed("sync.tree_write_failed", "Could not record the new state.", error))?
-        .detach();
+        .detach())
+}
 
-    if tree == base_tree {
-        return Ok(None);
-    }
-
+/// Commits `tree` onto `reference`, authored by the app.
+fn commit_on(
+    repo: &gix::Repository,
+    reference: &str,
+    message: &str,
+    tree: gix::ObjectId,
+    parent: Option<gix::ObjectId>,
+) -> Result<gix::ObjectId, NativeError> {
     let signature = gix::actor::Signature {
         name: AUTHOR_NAME.into(),
         email: AUTHOR_EMAIL.into(),
@@ -118,18 +169,30 @@ pub fn record(
         .commit_as(
             signature.to_ref(&mut gix::date::parse::TimeBuf::default()),
             signature.to_ref(&mut gix::date::parse::TimeBuf::default()),
-            HISTORY_REF,
+            reference,
             message,
             tree,
             parent,
         )
         .map_err(|error| failed("sync.commit_failed", "Could not record this change.", error))?;
 
-    Ok(Some(commit.detach()))
+    Ok(commit.detach())
 }
 
+fn tree_of(repo: &gix::Repository, commit: Option<gix::ObjectId>) -> Result<gix::ObjectId, NativeError> {
+    match commit {
+        Some(id) => commit_tree(repo, id),
+        None => Ok(gix::ObjectId::empty_tree(repo.object_hash())),
+    }
+}
+
+/// The latest commit on the vault's history branch, if there is one.
 pub fn head_commit(repo: &gix::Repository) -> Result<Option<gix::ObjectId>, NativeError> {
-    match repo.find_reference(HISTORY_REF) {
+    head_of(repo, HISTORY_REF)
+}
+
+fn head_of(repo: &gix::Repository, reference: &str) -> Result<Option<gix::ObjectId>, NativeError> {
+    match repo.find_reference(reference) {
         Ok(mut reference) => {
             let id = reference
                 .peel_to_id()
@@ -251,6 +314,27 @@ mod tests {
         paths
     }
 
+    /// Every blob path in a given commit's tree.
+    fn tree_paths_of(repo: &gix::Repository, commit: gix::ObjectId) -> Vec<String> {
+        let tree = repo
+            .find_commit(commit)
+            .expect("the commit exists")
+            .tree()
+            .expect("the tree exists");
+        let mut recorder = gix::traverse::tree::Recorder::default();
+        tree.traverse()
+            .breadthfirst(&mut recorder)
+            .expect("the tree is walkable");
+        let mut paths: Vec<String> = recorder
+            .records
+            .iter()
+            .filter(|entry| entry.mode.is_blob())
+            .map(|entry| entry.filepath.to_string())
+            .collect();
+        paths.sort();
+        paths
+    }
+
     fn contents_of(repo: &gix::Repository, path: &str) -> String {
         let commit = head_commit(repo).expect("the history is readable").expect("there is a commit");
         let mut tree = repo.find_commit(commit).expect("the commit exists").tree().expect("the tree exists");
@@ -260,6 +344,100 @@ mod tests {
             .expect("the path is recorded");
         let object = entry.object().expect("the blob is readable");
         String::from_utf8(object.data.clone()).expect("the note is text")
+    }
+
+    /// A checkpoint is the undo in "every resolution is undoable". The merge
+    /// engine takes one of both sides before it writes either, so a wrong click
+    /// is a restore rather than a loss.
+    #[test]
+    fn a_checkpoint_records_the_current_state_of_the_named_notes() {
+        let f = fixture("checkpoint-records");
+        write(&f.vault, "note.md", "# Mine\n");
+        write(&f.vault, "note-DESKTOP-AB12CD.md", "# Theirs\n");
+
+        let id = checkpoint(
+            &f.repo,
+            &[PathBuf::from("note.md"), PathBuf::from("note-DESKTOP-AB12CD.md")],
+        )
+        .expect("the checkpoint is taken");
+
+        assert_eq!(
+            tree_paths_of(&f.repo, id),
+            ["note-DESKTOP-AB12CD.md", "note.md"]
+        );
+    }
+
+    /// Checkpoints hold the conflict copies a sync daemon left behind. Those
+    /// must never reach the user's remote, so they live on a ref of their own
+    /// rather than on the branch that gets pushed.
+    #[test]
+    fn a_checkpoint_leaves_the_history_branch_alone() {
+        let f = fixture("checkpoint-separate");
+        write(&f.vault, "note.md", "# One\n");
+        let history = record(&f.repo, &[PathBuf::from("note.md")], "first")
+            .expect("recorded")
+            .expect("committed");
+
+        write(&f.vault, "note-DESKTOP-AB12CD.md", "# Theirs\n");
+        checkpoint(&f.repo, &[PathBuf::from("note-DESKTOP-AB12CD.md")]).expect("checkpointed");
+
+        assert_eq!(head_commit(&f.repo).expect("readable"), Some(history));
+    }
+
+    /// Not under `refs/heads/`, so the ordinary "push my branches" refspec
+    /// story 6 will use cannot sweep it up by accident.
+    #[test]
+    fn the_checkpoint_ref_is_not_a_branch() {
+        assert!(!CHECKPOINT_REF.starts_with("refs/heads/"));
+    }
+
+    /// Each checkpoint keeps the one before it, or the second resolution of an
+    /// evening would throw away the restore point from the first.
+    #[test]
+    fn checkpoints_keep_the_ones_before_them() {
+        let f = fixture("checkpoint-chain");
+        write(&f.vault, "one.md", "# One\n");
+        let first = checkpoint(&f.repo, &[PathBuf::from("one.md")]).expect("checkpointed");
+
+        write(&f.vault, "two.md", "# Two\n");
+        let second = checkpoint(&f.repo, &[PathBuf::from("two.md")]).expect("checkpointed");
+
+        assert_ne!(first, second);
+        let parents: Vec<_> = f
+            .repo
+            .find_commit(second)
+            .expect("the commit exists")
+            .parent_ids()
+            .map(|id| id.detach())
+            .collect();
+        assert_eq!(parents, [first], "the earlier checkpoint was orphaned");
+        assert_eq!(tree_paths_of(&f.repo, second), ["one.md", "two.md"]);
+    }
+
+    /// Unlike history, a checkpoint always hands back something restorable.
+    /// The caller is about to overwrite a file and needs a restore point; "no
+    /// commit, nothing changed" would leave it with nothing to name.
+    #[test]
+    fn a_checkpoint_with_nothing_new_reuses_the_last_one() {
+        let f = fixture("checkpoint-unchanged");
+        write(&f.vault, "one.md", "# One\n");
+        let first = checkpoint(&f.repo, &[PathBuf::from("one.md")]).expect("checkpointed");
+
+        let second = checkpoint(&f.repo, &[PathBuf::from("one.md")]).expect("checkpointed");
+
+        assert_eq!(first, second);
+    }
+
+    /// Checkpointing files that are not there is not an error: the merge engine
+    /// takes a checkpoint before writing, and "this side did not exist yet" is
+    /// a state worth being able to restore to.
+    #[test]
+    fn a_first_checkpoint_of_absent_notes_still_yields_a_restore_point() {
+        let f = fixture("checkpoint-absent");
+
+        let id = checkpoint(&f.repo, &[PathBuf::from("missing.md")]).expect("checkpointed");
+
+        assert!(tree_paths_of(&f.repo, id).is_empty());
     }
 
     #[test]
