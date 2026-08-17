@@ -22,8 +22,9 @@ late. Nothing else in story 1 should start until this is green.
   was the right call; "so it is pure Rust end to end" was not. Note that the
   desktop build already carried this — `tauri-plugin-updater` depends on the
   same rustls — so it is new only for mobile.
-  If a target ever refuses to build it, the fallback is steering rustls to the
-  `ring` provider; both are C, but `ring`'s mobile support is better trodden.
+  Both mobile targets do build it, so this is a constraint to keep an eye on
+  rather than a problem. If one ever refuses, the fallback is steering rustls to
+  the `ring` provider; both are C, but `ring`'s mobile support is better trodden.
 
 - **gix has no separate-worktree `init`.** `create::Kind` is `WithWorktree` or
   `Bare`, nothing in between. The hidden repo is therefore created bare and then
@@ -50,9 +51,11 @@ late. Nothing else in story 1 should start until this is green.
       nothing into the vault; reopening finds the same repository
 - [x] Guards are mutation-tested: dropping `core.worktree`, dropping
       `core.bare`, or re-creating over an existing repo each fail a test
-- [ ] **CI proves both mobile targets.** Added but unrun — this goes green or
-      red on the first push, and a red here changes the epic, not the story.
+- [x] **CI proves both mobile targets.** `aarch64-linux-android` and
+      `aarch64-apple-ios` both green on the first run (2026-08-16), aws-lc-sys
+      included. The gate stays in `ci.yml`, so a dependency change that breaks
+      portability fails on the commit that causes it.
 
 ## Status
 
-🟨 Local half done; the mobile half is waiting on its first CI run.
+✅ Done. The gix bet is tested rather than assumed; story 1 can build on it.

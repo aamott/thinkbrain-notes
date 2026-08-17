@@ -103,6 +103,6 @@ conflicts · block-level Markdown merge · reconcile-text · cloud provider APIs
 ## Status
 
 - ✅ Approved; `app-vision.md` reconciled; old git-integration code removed.
-- 🟨 Story 0 (the `gix` build spike, split off the front of story 1) is done
-  locally; its mobile cross-compile gate is waiting on its first CI run.
+- ✅ Story 0 (the `gix` build spike, split off the front of story 1). gix
+  cross-compiles for Android and iOS, and CI keeps it that way.
 - ⬜ Stories 1–8 pending.
