@@ -35,7 +35,10 @@ as it stands rather than from nothing.
 
 - [x] Zero files written inside the vault (story 0)
 - [ ] Hidden repo keyed by workspace identity and created lazily on open
-- [ ] Edits produce commits with correct file sets + template messages
+- [x] Changes are recorded as commits with the right file sets — `snapshot.rs`,
+      index-free: blob → tree editor over the last commit's tree → commit, so
+      recording costs the paths that changed rather than the whole vault
+- [ ] Template messages come from the auto-commit caller (lifecycle sub-story)
 - [ ] `checkpoint()` returns restorable commit; covered by tests
 - [ ] All four bootstrap cases covered by tests; own-`.git` vault untouched
 - [ ] 10k-file vault: initial snapshot and idle commit stay off the UI thread

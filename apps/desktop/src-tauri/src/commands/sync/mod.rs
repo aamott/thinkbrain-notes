@@ -6,3 +6,4 @@
 //! OS app-data rather than the vault so that no sync daemon ever sees it.
 
 pub mod hidden_repo;
+pub mod snapshot;
