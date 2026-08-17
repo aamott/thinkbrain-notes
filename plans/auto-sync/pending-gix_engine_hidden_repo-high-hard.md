@@ -2,7 +2,7 @@
 
 Story 1 of `pending-auto_sync-med-hard.md`. Foundation for everything else.
 The `gix` dependency, and the hidden repo's separate-worktree layout, are proven
-in story 0 (`pending-gix_build_spike-high-med.md`) — start from `hidden_repo.rs`
+in the gix build spike (completed) — start from `hidden_repo.rs`
 as it stands rather than from nothing.
 
 ## Scope

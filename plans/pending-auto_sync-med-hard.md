@@ -82,9 +82,7 @@ conflicts · block-level Markdown merge · reconcile-text · cloud provider APIs
 
 ## Stories (`plans/auto-sync/`, dependency order)
 
-0. `pending-gix_build_spike-high-med.md` — does gix compile everywhere we
-   ship, and can a repo in app-data treat the vault as its worktree
-1. `pending-gix_engine_hidden_repo-high-hard.md` — engine, hidden repo,
+0. `pending-gix_engine_hidden_repo-high-hard.md` — engine, hidden repo,
    bootstrap matrix, auto-commit, checkpoint API
 2. `pending-cloud_conflict_detection-high-med.md` — pattern table, watcher
    integration, startup scan, cleanup protocol

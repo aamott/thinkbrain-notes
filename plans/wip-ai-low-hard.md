@@ -48,35 +48,28 @@ remote context, and replacing deterministic FTS5 search.
    (storage implementation remains the extension secret-storage owner).
 4. **ACP host/session lifecycle** —
    `plans/ai/pending-acp_host_runtime-med-hard.md`
-5. **Provider configuration and native model gateway rollup** —
-   `plans/ai/pending-provider_configuration_and_gateway-med-hard.md`
-   (superseded rollup; its focused configuration and gateway children own
-   implementation).
-6. **Provider configuration UI and metadata** —
+5. **Provider configuration UI and metadata** —
    `plans/ai/pending-provider_configuration_ui-low-med.md`
    (product-question STOP gate before UI).
-7. **Native model gateway** —
+6. **Native model gateway** —
    `plans/ai/pending-model_gateway_native-med-hard.md`
    (secret consumer only; no parallel keychain/fallback).
-8. **Agent text-streaming renderer/runtime** —
+7. **Agent text-streaming renderer/runtime** —
    `plans/ai/pending-agent_chat_text_streaming_mvp-high-hard.md`
-9. **Desktop thread and local history** —
+8. **Desktop thread and local history** —
    `plans/ai/pending-assistant_ui_desktop_thread-med-med.md`
-10. **ACP capabilities, consent, and permission requests rollup** —
-   `plans/ai/pending-acp_capabilities_and_permissions-med-hard.md`
-   (superseded rollup; native enforcement and UI children own implementation).
-11. **ACP native capability enforcement** —
+9. **ACP native capability enforcement** —
     `plans/ai/pending-acp_capability_enforcement-med-hard.md`
-12. **ACP permission-consent UI** —
+10. **ACP permission-consent UI** —
     `plans/ai/pending-acp_permission_consent_ui-med-med.md`
     (official current ACP option shapes and STOP gate required).
-13. **Opted-in model context** —
+11. **Opted-in model context** —
     `plans/ai/pending-context_aware_chat-low-med.md`
-14. **Assistant built-in registration handoff** —
+12. **Assistant built-in registration handoff** —
     `plans/ai/pending-assistant_builtin_registration-low-med.md`
     (shared extension bootstrap owns mechanics; do not edit or duplicate the
     extension/Git/journal plans).
-15. **AI-assisted discovery bridge, last** —
+13. **AI-assisted discovery bridge, last** —
     `plans/ai/pending-ai_assisted_search-low-hard.md`; semantic-search remains
     its owner and FTS5 is unchanged.
 
