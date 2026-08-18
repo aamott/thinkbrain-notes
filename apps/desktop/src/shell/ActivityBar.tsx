@@ -46,7 +46,7 @@ export function ActivityBar({
         ))}
       </div>
       <div>
-        <IconButton label="Settings" symbol="⚙" onClick={onOpenSettings} />
+        <IconButton label="Settings" symbol="settings" onClick={onOpenSettings} />
       </div>
     </aside>
   );

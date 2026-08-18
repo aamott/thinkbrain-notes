@@ -50,7 +50,7 @@ export function activateNoteStats(context: DesktopExtensionContext): void {
   context.panels.register({
     id: "stats",
     label: "Note Stats",
-    icon: "∑",
+    icon: "sum",
     side: "right",
     factory: (panelContext: DesktopPanelContext) => {
       // Null check first: no point computing stats when no note is open.

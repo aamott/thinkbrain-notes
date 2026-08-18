@@ -58,7 +58,7 @@ export const journalManifest: ExtensionManifest = {
       { id: "today", title: "Open today's journal entry" },
       { id: "open-calendar", title: "Open journal calendar" }
     ],
-    panels: [{ id: "journal", label: "Journal", icon: "◫", side: "left" }]
+    panels: [{ id: "journal", label: "Journal", icon: "calendar", side: "left" }]
   }
 };
 
@@ -355,7 +355,7 @@ export function activateJournal(context: DesktopExtensionContext): void {
   context.panels.register({
     id: "journal",
     label: "Journal",
-    icon: "◫",
+    icon: "calendar",
     side: "left",
     // No PanelActions: D71 puts New entry, Today and Open calendar in the
     // panel's own action row, leaving the chrome row to the overflow alone.

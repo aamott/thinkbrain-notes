@@ -48,6 +48,6 @@ export const noteStatsManifest: ExtensionManifest = {
   capabilities: [],
   contributes: {
     commands: [{ id: "show", title: "Show note stats" }],
-    panels: [{ id: "stats", label: "Note Stats", icon: "∑", side: "right" }]
+    panels: [{ id: "stats", label: "Note Stats", icon: "sum", side: "right" }]
   }
 };

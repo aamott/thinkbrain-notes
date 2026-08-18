@@ -209,7 +209,7 @@ export const builtInDesktopPanels: readonly (LeftPanelContribution | RightPanelC
   {
     id: "explorer",
     label: "Explorer",
-    icon: "▱",
+    icon: "files",
     side: "left",
     keepMounted: true,
     availability: () => true,
@@ -218,7 +218,7 @@ export const builtInDesktopPanels: readonly (LeftPanelContribution | RightPanelC
   {
     id: "search",
     label: "Search",
-    icon: "⌕",
+    icon: "search",
     side: "left",
     availability: () => true,
     factory: ({ onOpenSearchResult, rootPath }) => (
@@ -228,7 +228,7 @@ export const builtInDesktopPanels: readonly (LeftPanelContribution | RightPanelC
   {
     id: "conflicts",
     label: "Needs your attention",
-    icon: "⇄",
+    icon: "conflicts",
     side: "left",
     availability: () => true,
     factory: ({ onReviewConflict, rootPath }) => (
@@ -238,7 +238,7 @@ export const builtInDesktopPanels: readonly (LeftPanelContribution | RightPanelC
   {
     id: "history",
     label: "History",
-    icon: "🕘",
+    icon: "history",
     side: "left",
     availability: () => true,
     factory: ({ rootPath, versionsOf, onShowEverything }) => (
@@ -248,7 +248,7 @@ export const builtInDesktopPanels: readonly (LeftPanelContribution | RightPanelC
   {
     id: "tags",
     label: "Tags",
-    icon: "#",
+    icon: "tags",
     side: "left",
     availability: () => false,
     factory: () => (
@@ -258,14 +258,14 @@ export const builtInDesktopPanels: readonly (LeftPanelContribution | RightPanelC
   {
     id: "extensions",
     label: "Extensions",
-    icon: "⊞",
+    icon: "extensions",
     side: "left",
     factory: () => <ExtensionsPanel />
   },
   {
     id: "outline",
     label: "Outline",
-    icon: "☷",
+    icon: "outline",
     side: "right",
     keepMounted: true,
     availability: () => true,
@@ -274,7 +274,7 @@ export const builtInDesktopPanels: readonly (LeftPanelContribution | RightPanelC
   {
     id: "backlinks",
     label: "Backlinks",
-    icon: "↩",
+    icon: "backlinks",
     side: "right",
     availability: () => false,
     factory: () => (
@@ -287,7 +287,7 @@ export const builtInDesktopPanels: readonly (LeftPanelContribution | RightPanelC
   {
     id: "properties",
     label: "Properties",
-    icon: "☰",
+    icon: "properties",
     side: "right",
     keepMounted: true,
     availability: () => true,
@@ -296,7 +296,7 @@ export const builtInDesktopPanels: readonly (LeftPanelContribution | RightPanelC
   {
     id: "assistant",
     label: "Assistant",
-    icon: "✦",
+    icon: "assistant",
     side: "right",
     keepMounted: true,
     availability: () => true,

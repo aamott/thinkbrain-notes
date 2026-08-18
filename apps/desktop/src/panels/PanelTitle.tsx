@@ -1,4 +1,5 @@
 import type { PanelAction } from "./panelRegistry";
+import { PanelIcon } from "../shell/panelIcons";
 
 /**
  * Compact header bar for shell panels.
@@ -10,6 +11,10 @@ import type { PanelAction } from "./panelRegistry";
  * callback. That keeps the header identical whether the panel behind it is a
  * first-party React panel or an extension that mounted its own DOM, and it is
  * why an extension can contribute header buttons without rendering anything.
+ *
+ * `action.icon` is resolved through {@link PanelIcon}: a known name renders a
+ * themed lucide svg; an unknown string renders as a text glyph so existing
+ * extensions (e.g. `hello-notes`'s `＋`) keep working.
  */
 export function PanelTitle({
   title,
@@ -41,12 +46,12 @@ export function PanelTitle({
           <button
             key={action.id}
             type="button"
-            className="bg-transparent border-0 cursor-pointer px-1 text-muted-foreground hover:text-foreground"
+            className="bg-transparent border-0 cursor-pointer px-1 text-muted-foreground hover:text-foreground [&>svg]:w-[0.9rem] [&>svg]:h-[0.9rem] [&>svg]:stroke-current"
             aria-label={action.label}
             title={action.label}
             onClick={() => run(action)}
           >
-            {action.icon}
+            <PanelIcon name={action.icon} />
           </button>
         ))}
       </div>

@@ -1,10 +1,18 @@
 import { cn } from "../lib/utils";
+import { PanelIcon } from "./panelIcons";
 
 /**
  * Reusable activity bar icon button.
  *
  * Renders a full-width square button with a left accent border that highlights
  * when active. Used by the left and right activity bars in the desktop shell.
+ *
+ * `symbol` is a panel icon identifier resolved through {@link PanelIcon}: a
+ * known name renders a themed lucide svg; an unknown string (e.g. an
+ * extension-shipped glyph like `◫`) renders as text so existing extensions
+ * keep working. Lucide uses `stroke="currentColor"`, so the icon inherits the
+ * button's `text-activitybar-foreground` / `text-activitybar-active` color
+ * without a dedicated icon color token.
  *
  * An optional `badge` puts a count over the icon — how many things are waiting
  * behind a panel nobody has opened yet.
@@ -44,8 +52,8 @@ export function IconButton({
       aria-current={active ? "true" : undefined}
       title={named}
     >
-      <span aria-hidden="true" className="relative">
-        {symbol}
+      <span aria-hidden="true" className="relative inline-flex items-center justify-center [&>svg]:w-[1.05rem] [&>svg]:h-[1.05rem] [&>svg]:stroke-current">
+        <PanelIcon name={symbol} />
         {badge ? (
           <span
             aria-hidden="true"
