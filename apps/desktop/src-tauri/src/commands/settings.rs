@@ -3,9 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use crate::commands::workspace::{
-    resolve_app_data_dir, resolve_workspace_root, stable_workspace_hash,
-};
+use crate::commands::workspace::{resolve_workspace_root, stable_workspace_hash};
 use serde_json::{Map, Value};
 use std::fs;
 use std::sync::Mutex;
@@ -23,11 +21,6 @@ fn acquire_app_settings_lock() -> std::sync::MutexGuard<'static, ()> {
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
-fn acquire_workspace_settings_lock() -> std::sync::MutexGuard<'static, ()> {
-    WORKSPACE_SETTINGS_MUTATION_LOCK
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-}
 const APP_THEME_KEY: &str = "theme";
 const SUPPORTED_APP_THEMES: [&str; 3] = ["system", "light", "dark"];
 const DESKTOP_STATE_KEY: &str = "desktopState";

@@ -64,21 +64,6 @@ pub fn remove_search_index_entry(
     }
 }
 
-/// Resolves the OS app-data directory, mapping resolution failures to a
-/// typed `NativeError` with the given error code.
-pub fn resolve_app_data_dir(
-    app: &tauri::AppHandle,
-    error_code: &str,
-) -> Result<PathBuf, NativeError> {
-    app.path().app_data_dir().map_err(|error| {
-        NativeError::with_details(
-            error_code,
-            "Failed to resolve the application data directory.",
-            error,
-        )
-    })
-}
-
 #[derive(Default)]
 pub struct WorkspaceWindowRoots(Mutex<HashMap<String, String>>);
 
@@ -441,7 +426,7 @@ pub fn open_workspace_window(app: tauri::AppHandle, root_path: String) -> Result
     // policy; the extra closure handles the workspace-specific half.
     crate::commands::watcher::attach_window_destroy_cleanup(
         &window,
-        label_for_cleanup.clone(),
+        label,
         Some(move || {
             unregister_workspace_window_root(
                 &app_for_cleanup.state::<WorkspaceWindowRoots>(),

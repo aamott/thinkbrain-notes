@@ -87,7 +87,6 @@ impl Engine {
     }
 
     /// The conflicts this workspace is waiting on someone to resolve.
-    #[allow(dead_code, reason = "story 4's conflict panel is the reader")]
     pub fn conflicts(&self) -> Vec<ConflictCopy> {
         let conflicts = self.conflicts.lock().unwrap_or_else(|error| error.into_inner());
         conflicts.values().cloned().collect()
