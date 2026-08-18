@@ -12,6 +12,7 @@ pub mod hidden_repo;
 pub mod history;
 pub mod merge;
 pub mod pending;
+pub mod push;
 pub mod registry;
 pub mod resolve;
 pub mod settle;

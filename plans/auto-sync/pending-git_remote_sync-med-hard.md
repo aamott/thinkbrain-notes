@@ -2,10 +2,21 @@
 
 Story 6. The one active sync. Depends on stories 1, 3; UI in 4, 5.
 
+**Split, because "push/pull via gix" turned out to be half true.** gitoxide
+fetches and cannot push, so sending was written rather than called:
+
+- **6a — send pack.** `pending-send_pack-high-hard.md`. 🟩 Done.
+- **6b — the round trip.** Fetch, three-way merge against an exact base,
+  "Sync now", triggers, status. Unblocked.
+- **6c — setup and credentials.** Gated: `extensions/pending-extension_secret_storage-med-hard.md`
+  forbids choosing a keychain crate until its questions are answered. Until
+  then a token has nowhere to live that is not a plaintext file.
+
 ## Scope
 
-- **Push/pull via gix + rustls** against the hidden repo's remote. Pull
-  conflicts have an exact base → three-way merge (story 3) → merge UI.
+- ~~**Push/pull via gix + rustls**~~ — pull via gix, push via story 6a, both
+  over gix's transport. Pull conflicts have an exact base → three-way merge
+  (story 3) → merge UI.
 - **Credentials:** gix credential callbacks → direct native OS
   keychain/keystore adapter. Coordinates with
   `extensions/pending-extension_secret_storage-med-hard.md` but does not wait

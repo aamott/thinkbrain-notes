@@ -25,7 +25,7 @@ const AUTHOR_NAME: &str = "ThinkBrain Notes";
 const AUTHOR_EMAIL: &str = "sync@thinkbrain.notes";
 
 /// The branch the hidden repository records vault history on.
-const HISTORY_REF: &str = "refs/heads/main";
+pub const HISTORY_REF: &str = "refs/heads/main";
 
 /// Where checkpoints live.
 ///

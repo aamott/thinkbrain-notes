@@ -78,7 +78,7 @@ fn an_empty_vault_bootstraps_without_a_commit() {
     let app_data = make_temp_test_dir("bootstrap-empty-appdata", "sync", true);
     let vault = make_temp_test_dir("bootstrap-empty-vault", "sync", true);
 
-    let workspace = (bootstrap(&app_data, &vault).expect("bootstrap succeeds"));
+    let workspace = bootstrap(&app_data, &vault).expect("bootstrap succeeds");
 
     assert_eq!(
         snapshot::head_commit(&workspace.repo).expect("the history is readable"),
