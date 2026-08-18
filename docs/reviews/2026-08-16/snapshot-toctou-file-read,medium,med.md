@@ -1,9 +1,0 @@
-- name: TOCTOU race between symlink_metadata and File::open in build_tree
-- file: /media/adam/extex/projects/thinkbrain-notes/apps/desktop/src-tauri/src/commands/sync/snapshot.rs
-- lines: 115-130
-- description: `build_tree` calls `std::fs::symlink_metadata(&absolute)` (line 115) and, if it reports a file, separately calls `std::fs::File::open(&absolute)` (line 117) to stream the blob. If the file is deleted or replaced between these two calls — exactly the scenario this feature is built for, since cloud sync daemons (OneDrive/SyncThing) write and rename files concurrently — the `open` fails and the function returns `sync.note_read_failed`, aborting the *entire* batch. A note that the user deleted between the two syscalls should be recorded as a deletion (the `_ =>` branch on line 135), not as a fatal error.
-
-  Suggested fix: on `File::open` failure, re-stat the path; if it no longer exists (or is no longer a file), fall through to the `remove` branch instead of erroring. Alternatively, open the file first and fstat the handle, so the metadata and the bytes come from the same filesystem snapshot.
-
-  Impact: a single concurrently-deleted note in a batch of 50 settled notes fails the whole commit, and the sweeper (registry.rs line 175) only logs the error — those 50 notes stay un-recorded until the next sweep, and if the file is genuinely gone by then, `build_tree` will correctly record the deletion. So the *eventual* outcome is correct, but the failure mode is louder and slower than necessary, and the error message ("Could not read a note to record it") is misleading for a file that simply vanished.
-- verification: Read of `build_tree` lines 111-144. The gap between `symlink_metadata` (115) and `File::open` (117) is a classic TOCTOU window. No test exercises concurrent deletion during recording.

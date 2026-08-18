@@ -1,0 +1,312 @@
+use super::*;
+use crate::tests::make_temp_test_dir;
+use std::fs;
+
+fn write(root: &Path, relative: &str, contents: &str) {
+    let path = root.join(relative);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).expect("the folder exists");
+    }
+    fs::write(path, contents).expect("the file is written");
+}
+
+fn managed(result: Managed) -> ManagedWorkspace {
+    match result {
+        Managed::Yes(workspace) => *workspace,
+        Managed::HasOwnGit => panic!("the vault was expected to be managed"),
+    }
+}
+
+fn recorded_paths(repo: &gix::Repository) -> Vec<String> {
+    let Some(commit) = snapshot::head_commit(repo).expect("the history is readable") else {
+        return Vec::new();
+    };
+    let tree = repo
+        .find_commit(commit)
+        .expect("the commit exists")
+        .tree()
+        .expect("the tree exists");
+    let mut recorder = gix::traverse::tree::Recorder::default();
+    tree.traverse()
+        .breadthfirst(&mut recorder)
+        .expect("the tree is walkable");
+    let mut paths: Vec<String> = recorder
+        .records
+        .iter()
+        .filter(|entry| entry.mode.is_blob())
+        .map(|entry| entry.filepath.to_string())
+        .collect();
+    paths.sort();
+    paths
+}
+
+#[test]
+fn each_workspace_gets_its_own_hidden_repo() {
+    let app_data = Path::new("/app-data");
+
+    let one = hidden_repo_path(app_data, "/notes/work");
+    let two = hidden_repo_path(app_data, "/notes/personal");
+
+    assert_ne!(one, two, "two vaults were given the same history");
+    assert_eq!(
+        one,
+        hidden_repo_path(app_data, "/notes/work"),
+        "one vault was given two histories"
+    );
+    assert!(one.starts_with(app_data.join("sync")));
+}
+
+/// The one case where the right answer is to do nothing. A vault that is
+/// already a git repository belongs to whoever set it up, and a second tool
+/// committing into it — or beside it — is how someone loses work they were
+/// managing carefully.
+#[test]
+fn a_vault_with_its_own_git_is_left_alone() {
+    let app_data = make_temp_test_dir("bootstrap-own-git-appdata", "sync", true);
+    let vault = make_temp_test_dir("bootstrap-own-git-vault", "sync", true);
+    fs::create_dir(vault.join(".git")).expect("the vault has its own repository");
+    write(&vault, "note.md", "# A note\n");
+
+    let result = bootstrap(&app_data, &vault).expect("bootstrap decides");
+
+    assert!(matches!(result, Managed::HasOwnGit));
+    assert!(
+        !app_data.join("sync").exists(),
+        "a hidden repository was created for a vault that has its own"
+    );
+}
+
+#[test]
+fn an_empty_vault_bootstraps_without_a_commit() {
+    let app_data = make_temp_test_dir("bootstrap-empty-appdata", "sync", true);
+    let vault = make_temp_test_dir("bootstrap-empty-vault", "sync", true);
+
+    let workspace = managed(bootstrap(&app_data, &vault).expect("bootstrap succeeds"));
+
+    assert_eq!(
+        snapshot::head_commit(&workspace.repo).expect("the history is readable"),
+        None,
+        "an empty vault was given a commit with nothing in it"
+    );
+}
+
+/// A vault the user has kept for years arrives all at once. Its first
+/// commit has to be the whole thing, or the history starts with a fiction
+/// in which every existing note was created the day they installed this.
+#[test]
+fn a_vault_of_existing_notes_is_snapshotted_whole() {
+    let app_data = make_temp_test_dir("bootstrap-existing-appdata", "sync", true);
+    let vault = make_temp_test_dir("bootstrap-existing-vault", "sync", true);
+    write(&vault, "one.md", "# One\n");
+    write(&vault, "journal/2026/08-16.md", "# Today\n");
+
+    let workspace = managed(bootstrap(&app_data, &vault).expect("bootstrap succeeds"));
+
+    assert_eq!(recorded_paths(&workspace.repo), ["journal/2026/08-16.md", "one.md"]);
+}
+
+#[test]
+fn bootstrapping_again_does_not_snapshot_again() {
+    let app_data = make_temp_test_dir("bootstrap-twice-appdata", "sync", true);
+    let vault = make_temp_test_dir("bootstrap-twice-vault", "sync", true);
+    write(&vault, "one.md", "# One\n");
+
+    let first = managed(bootstrap(&app_data, &vault).expect("bootstrap succeeds"));
+    assert!(first.took_first_snapshot, "the first open did not record the vault");
+    let first_head = snapshot::head_commit(&first.repo).expect("the history is readable");
+    drop(first);
+
+    let second = managed(bootstrap(&app_data, &vault).expect("bootstrap succeeds again"));
+
+    assert!(
+        !second.took_first_snapshot,
+        "reopening the workspace re-read every note in it"
+    );
+    assert_eq!(
+        snapshot::head_commit(&second.repo).expect("the history is readable"),
+        first_head,
+        "reopening the workspace recorded the vault a second time"
+    );
+}
+
+/// Half-written files are the dangerous half of this list: a partial
+/// download recorded as a version is a version that restores to garbage.
+#[test]
+fn os_junk_and_half_written_files_are_not_recorded() {
+    let app_data = make_temp_test_dir("bootstrap-junk-appdata", "sync", true);
+    let vault = make_temp_test_dir("bootstrap-junk-vault", "sync", true);
+    write(&vault, "note.md", "# A note\n");
+    write(&vault, ".DS_Store", "junk");
+    write(&vault, "Thumbs.db", "junk");
+    write(&vault, "desktop.ini", "junk");
+    write(&vault, "note.md.tmp", "half written");
+    write(&vault, "~$note.md", "lock");
+    write(&vault, ".~lock.note.md#", "lock");
+
+    let workspace = managed(bootstrap(&app_data, &vault).expect("bootstrap succeeds"));
+
+    assert_eq!(recorded_paths(&workspace.repo), ["note.md"]);
+}
+
+/// A symlink is not a note, and following one is how a vault's history ends
+/// up holding files from outside the vault — or the same note twice.
+#[cfg(unix)]
+#[test]
+fn symlinks_are_not_followed_into_the_snapshot() {
+    let app_data = make_temp_test_dir("bootstrap-symlink-appdata", "sync", true);
+    let vault = make_temp_test_dir("bootstrap-symlink-vault", "sync", true);
+    let outside = make_temp_test_dir("bootstrap-symlink-outside", "sync", true);
+    write(&outside, "secret.md", "# Not a note of theirs\n");
+    write(&vault, "note.md", "# A note\n");
+    std::os::unix::fs::symlink(outside.join("secret.md"), vault.join("linked.md"))
+        .expect("the vault holds a symlink");
+    std::os::unix::fs::symlink(&outside, vault.join("linked-folder"))
+        .expect("the vault holds a symlinked folder");
+
+    let workspace = managed(bootstrap(&app_data, &vault).expect("bootstrap succeeds"));
+
+    assert_eq!(recorded_paths(&workspace.repo), ["note.md"]);
+}
+
+/// A conflict copy is a daemon's mess, not a version of the user's note, so
+/// it stays out of the history that gets pushed — otherwise their other
+/// machine syncs it straight back down. Nothing is lost by leaving it out:
+/// a checkpoint holds both sides before any resolution touches them, which
+/// is exactly why these are not in the ignore rules either.
+#[test]
+fn conflict_copies_stay_out_of_history_without_being_ignored() {
+    let app_data = make_temp_test_dir("bootstrap-conflict-appdata", "sync", true);
+    let vault = make_temp_test_dir("bootstrap-conflict-vault", "sync", true);
+    write(&vault, "note.md", "# Mine\n");
+    write(&vault, "note.sync-conflict-20260816-093100-K3SDFHG.md", "# Theirs\n");
+    write(&vault, "note (Adam's conflicted copy 2026-08-16).md", "# Theirs\n");
+
+    let workspace = managed(bootstrap(&app_data, &vault).expect("bootstrap succeeds"));
+
+    assert_eq!(recorded_paths(&workspace.repo), ["note.md"]);
+
+    let git_dir = hidden_repo_path(&app_data, &vault.to_string_lossy());
+    let exclude = fs::read_to_string(git_dir.join("info/exclude")).expect("the exclude file is written");
+    assert!(
+        !exclude.contains("conflict"),
+        "conflict copies were ignored, which would put them out of reach of a checkpoint"
+    );
+}
+
+/// The ignore rules live in the repository, never in the vault: a
+/// `.gitignore` the user did not create would be replicated to every device
+/// their sync daemon reaches.
+#[test]
+fn the_ignore_rules_live_in_the_repository_not_the_vault() {
+    let app_data = make_temp_test_dir("bootstrap-exclude-appdata", "sync", true);
+    let vault = make_temp_test_dir("bootstrap-exclude-vault", "sync", true);
+
+    bootstrap(&app_data, &vault).expect("bootstrap succeeds");
+
+    assert!(!vault.join(".gitignore").exists(), "the vault was given a .gitignore");
+    let git_dir = hidden_repo_path(&app_data, &vault.to_string_lossy());
+    let exclude = fs::read_to_string(git_dir.join("info/exclude")).expect("the exclude file is written");
+    assert!(exclude.contains(".DS_Store"));
+    assert!(exclude.contains("*.tmp"));
+}
+
+/// Ignored names (dotfiles, IGNORED_FOLDERS) are not part of the vault, so they
+/// stay out of history. Non-Markdown files beside notes are still recorded.
+#[test]
+fn ignored_folders_are_pruned_but_non_markdown_files_are_kept() {
+    let app_data = make_temp_test_dir("bootstrap-ignored-folders-appdata", "sync", true);
+    let vault = make_temp_test_dir("bootstrap-ignored-folders-vault", "sync", true);
+    write(&vault, "note.md", "# A note\n");
+    write(&vault, "diagram.png", "PNG data");
+    write(&vault, "script.py", "print('hello')\n");
+    write(&vault, "node_modules/lodash/index.js", "module code");
+    write(&vault, ".obsidian/config.json", "config");
+    write(&vault, "target/debug/app", "binary");
+    write(&vault, "notes/.hidden.md", "secret");
+
+    let workspace = managed(bootstrap(&app_data, &vault).expect("bootstrap succeeds"));
+
+    let paths = recorded_paths(&workspace.repo);
+    assert!(
+        paths.contains(&"note.md".to_string()),
+        "markdown note should be recorded"
+    );
+    assert!(
+        paths.contains(&"diagram.png".to_string()),
+        "non-markdown file should be recorded"
+    );
+    assert!(
+        paths.contains(&"script.py".to_string()),
+        "script file should be recorded"
+    );
+    assert!(
+        !paths.iter().any(|p| p.starts_with("node_modules/")),
+        "files in node_modules/ should not be recorded"
+    );
+    assert!(
+        !paths.iter().any(|p| p.starts_with(".obsidian/")),
+        "files in .obsidian/ should not be recorded"
+    );
+    assert!(
+        !paths.iter().any(|p| p.starts_with("target/")),
+        "files in target/ should not be recorded"
+    );
+    assert!(
+        !paths.iter().any(|p| p.contains(".hidden.md")),
+        "hidden files should not be recorded"
+    );
+}
+
+/// Deep nesting should not be walked beyond MAX_MARKDOWN_DEPTH. Vaults
+/// nested too deeply should fail bootstrap with a clear error rather than
+/// hang or panic.
+#[test]
+fn a_vault_nested_too_deeply_fails_with_depth_limit_error() {
+    let app_data = make_temp_test_dir("bootstrap-depth-appdata", "sync", true);
+    let vault = make_temp_test_dir("bootstrap-depth-vault", "sync", true);
+
+    let mut path = vault.clone();
+    for i in 0..25 {
+        path = path.join(format!("level{}", i));
+    }
+    fs::create_dir_all(&path).expect("deeply nested folders are created");
+    write(&path, "note.md", "# Deep note\n");
+
+    let result = bootstrap(&app_data, &vault);
+
+    match result {
+        Err(error) => {
+            assert_eq!(error.code, "sync.vault_too_deep");
+            assert!(
+                error.message.to_lowercase().contains("deep"),
+                "error message should mention depth limit"
+            );
+        }
+        Ok(_) => panic!("bootstrap should fail for deeply nested vault"),
+    }
+}
+
+/// A vault with too many entries should fail bootstrap with a clear error
+/// rather than exhausting memory or hanging.
+#[test]
+fn a_vault_with_too_many_entries_fails_with_entry_cap_error() {
+    let app_data = make_temp_test_dir("bootstrap-cap-appdata", "sync", true);
+    let vault = make_temp_test_dir("bootstrap-cap-vault", "sync", true);
+
+    for i in 0..=(MAX_WORKSPACE_ENTRIES as u32) {
+        write(&vault, &format!("note{:05}.md", i), "# Note\n");
+    }
+
+    let result = bootstrap(&app_data, &vault);
+
+    match result {
+        Err(error) => {
+            assert_eq!(error.code, "sync.vault_too_many_entries");
+            assert!(
+                error.message.to_lowercase().contains("more notes"),
+                "error message should mention entry count"
+            );
+        }
+        Ok(_) => panic!("bootstrap should fail for vault with too many entries"),
+    }
+}
