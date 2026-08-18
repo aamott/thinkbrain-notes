@@ -17,14 +17,16 @@ use serde::Serialize;
 use crate::commands::workspace::{resolve_workspace_root, WORKSPACE_ENTRY_MUTATION_LOCK};
 use crate::NativeError;
 
+use super::failed;
 use super::snapshot::{self, Reason};
 
 /// How far back one note's own history is searched before giving up.
 ///
 /// A note edited once a year in a vault edited hourly would otherwise walk the
 /// whole history to find nothing, on a panel someone opened by accident. The
-/// cap is generous enough that a real note's versions are all found, and the
-/// surface says when it stopped rather than implying there is nothing more.
+/// cap is generous enough that a real note's versions are all found; when a
+/// longer history is truncated by it, the reader logs that it stopped rather
+/// than returning a list that quietly looks complete.
 const SCAN: usize = 5_000;
 
 /// What happened to one note in one recorded change.
@@ -59,8 +61,7 @@ pub struct Recorded {
 }
 
 /// Where a restored version came from and what was held before it landed.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Restored {
     pub note: String,
     /// The restore point taken before the note was overwritten, so putting an
@@ -133,6 +134,17 @@ pub fn read(
         });
     }
 
+    // The cap was reached without running out of history: older versions may
+    // exist beyond it. Say so loudly rather than handing back a list that looks
+    // complete. The common case (a real note's versions all live within SCAN)
+    // never reaches here.
+    if next.is_some() && found.len() < limit {
+        eprintln!(
+            "[sync] history for {} stopped at the {SCAN}-commit scan cap; older versions may exist",
+            note.unwrap_or("the vault")
+        );
+    }
+
     Ok(found)
 }
 
@@ -167,16 +179,7 @@ pub fn restore(
     let checkpoint = snapshot::checkpoint(repo, std::slice::from_ref(&relative), Reason::VersionRestored)?;
 
     let absolute = vault.join(&relative);
-    if let Some(parent) = absolute.parent() {
-        std::fs::create_dir_all(parent).map_err(|error| {
-            failed(
-                "sync.restore_failed",
-                "Could not make room for the restored note.",
-                error,
-            )
-        })?;
-    }
-    std::fs::write(&absolute, &wanted).map_err(|error| {
+    crate::commands::workspace::write_file_atomically(&absolute, &wanted).map_err(|error| {
         failed(
             "sync.restore_failed",
             "Could not write the restored note.",
@@ -219,6 +222,11 @@ pub fn last_recorded(repo: &gix::Repository) -> Result<Option<u64>, NativeError>
 /// This is what makes "that device was simply behind" answerable without a
 /// merge base. If the other machine's file is a state ours has already passed
 /// through, ours holds everything theirs did.
+///
+/// The walk is bounded by [`SCAN`]. A `false` answer means "not within the
+/// last `SCAN` commits" rather than "never": a note whose matching version is
+/// older than that is reported as not recorded. The false negative is safe —
+/// it turns a skip into a merge — but it is not a definitive "never".
 pub fn has_recorded(
     repo: &gix::Repository,
     note: &Path,
@@ -344,10 +352,6 @@ fn unreadable(message: &'static str, error: impl std::fmt::Display) -> NativeErr
     failed("sync.history_read_failed", message, error)
 }
 
-fn failed(code: &'static str, message: &'static str, error: impl std::fmt::Display) -> NativeError {
-    NativeError::with_details(code, message, error.to_string())
-}
-
 // ---------------------------------------------------------------------------
 // Commands
 // ---------------------------------------------------------------------------
@@ -380,7 +384,7 @@ pub fn restore_version(
     root_path: String,
     note_path: String,
     change: String,
-) -> Result<Restored, NativeError> {
+) -> Result<(), NativeError> {
     // Without an engine there is no restore point, and without one this write
     // would be the single thing Auto Sync promises never to be: a change to the
     // user's notes that cannot be undone.
@@ -390,7 +394,7 @@ pub fn restore_version(
             "Auto Sync is not keeping history for this workspace, so there is nothing to put back.",
         )
     })?;
-    restore(&engine.repository(), &note_path, &change)
+    restore(&engine.repository(), &note_path, &change).map(|_| ())
 }
 
 #[tauri::command]

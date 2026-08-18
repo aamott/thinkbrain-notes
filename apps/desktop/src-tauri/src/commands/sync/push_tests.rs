@@ -363,6 +363,25 @@ fn a_refusal_from_the_far_side_is_not_read_as_success() {
     );
 }
 
+#[test]
+fn a_remote_that_requests_credentials_is_not_called_unreachable() {
+    let error = handshake_failure(gix::protocol::handshake::Error::EmptyCredentials);
+
+    assert_eq!(error.code, "sync.auth_required");
+}
+
+#[test]
+fn http_auth_statuses_are_not_called_unreachable() {
+    for status in [401, 403] {
+        let transport = transport::client::Error::Io(std::io::Error::other(format!(
+            "Received HTTP status {status}"
+        )));
+        let error = handshake_failure(gix::protocol::handshake::Error::Transport(transport));
+
+        assert_eq!(error.code, "sync.auth_required", "status {status}");
+    }
+}
+
 /// Merges are where an incomplete object set hides: the second parent's
 /// objects are not in any first-parent diff, so a history with a merge in it
 /// is the case that proves the walk, not the diff, decides what goes.

@@ -4,6 +4,9 @@ use crate::commands::sync::snapshot;
 use crate::tests::make_temp_test_dir;
 use std::fs;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 /// One device: a notes folder and the hidden repository that records it.
 struct Device {
@@ -578,6 +581,30 @@ fn a_destination_that_is_not_there_leaves_the_vault_alone() {
     assert!(
         error.code.starts_with("sync."),
         "the failure did not name itself: {error:?}"
+    );
+}
+
+/// A hung remote must not pin the per-workspace lane. The timeout returns,
+/// the cancel token is set so the worker can stop, and the next sync on that
+/// vault is free to start.
+#[test]
+fn a_hung_remote_times_out_and_releases_the_lane() {
+    let cancel = Arc::new(AtomicBool::new(false));
+    let started = Instant::now();
+    let watched = Arc::clone(&cancel);
+    let error = bounded(Duration::from_millis(80), cancel, move || {
+        while !watched.load(Ordering::Relaxed) {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        Ok(())
+    })
+    .expect_err("a hung remote must time out");
+
+    assert_eq!(error.code, "sync.remote_timeout");
+    assert!(
+        started.elapsed() < Duration::from_secs(2),
+        "the timeout did not return: {:?}",
+        started.elapsed()
     );
 }
 

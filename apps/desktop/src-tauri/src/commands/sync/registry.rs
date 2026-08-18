@@ -97,7 +97,12 @@ impl Registry {
 static ENGINES: Mutex<Option<Registry>> = Mutex::new(None);
 
 fn registry() -> std::sync::MutexGuard<'static, Option<Registry>> {
-    ENGINES.lock().unwrap_or_else(|error| error.into_inner())
+    ENGINES
+        .lock()
+        .unwrap_or_else(|error| {
+            eprintln!("[sync] registry mutex was poisoned, recovering: {error}");
+            error.into_inner()
+        })
 }
 
 /// Starts recording `root` on behalf of a window.
@@ -126,7 +131,10 @@ pub fn attach(
     // other window's open and close, and the sweeper with them. The lane keeps
     // two windows on the *same* vault from both walking it; the one that waited
     // re-checks so it does not walk it again once the first has finished.
-    let _lane = lane.lock().unwrap_or_else(|error| error.into_inner());
+    let _lane = lane.lock().unwrap_or_else(|error| {
+        eprintln!("[sync] bootstrap lane mutex was poisoned, recovering: {error}");
+        error.into_inner()
+    });
     {
         let mut guard = registry();
         let state = guard.get_or_insert_with(Registry::default);
@@ -138,15 +146,7 @@ pub fn attach(
     // A failure here is the one thing nobody could see: it was logged and the
     // window went on saying this folder keeps its own history, which is what a
     // deliberate choice looks like rather than a broken one.
-    let managed = match bootstrap(app_data_dir, root) {
-        Ok(managed) => managed,
-        Err(error) => {
-            let mut guard = registry();
-            let state = guard.get_or_insert_with(Registry::default);
-            state.failures.insert(key.to_string(), error.clone());
-            return Err(error);
-        }
-    };
+    let managed = bootstrap(app_data_dir, root).map_err(|error| remember_failure(key, error))?;
 
     let engine = Arc::new(Engine::new(managed.repo, managed.has_own_git));
     // Conflicts appear while the app is closed. Someone back from a week away
@@ -158,13 +158,21 @@ pub fn attach(
     // every other window's open and close would queue behind it. Settling also
     // reads a setting, which takes a lock of its own — under the registry's
     // that would not be slow, it would be a deadlock.
-    engine.note_conflicts(super::settle::obvious(&engine, root, conflict::scan(root)));
+    let conflicts = conflict::scan(root).map_err(|error| remember_failure(key, error))?;
+    engine.note_conflicts(super::settle::obvious(&engine, root, conflicts));
 
     let mut guard = registry();
     let state = guard.get_or_insert_with(Registry::default);
     state.adopt(key, label, engine);
     start_sweeping(state);
     Ok(())
+}
+
+fn remember_failure(key: &str, error: NativeError) -> NativeError {
+    let mut guard = registry();
+    let state = guard.get_or_insert_with(Registry::default);
+    state.failures.insert(key.to_string(), error.clone());
+    error
 }
 
 fn start_sweeping(state: &mut Registry) {
@@ -256,7 +264,18 @@ pub fn note_changes(key: &str, root: &Path, changes: &[WorkspaceChange]) -> bool
         // does, and recording still writes nothing for the notes that did not
         // actually change.
         match super::bootstrap::recordable_notes(root) {
-            Ok(paths) => paths,
+            Ok(mut paths) => {
+                // The walk only sees what is still on disk. History also has
+                // to be told about the notes that a folder rename or delete
+                // took with it, or the old names stay recorded forever.
+                match super::snapshot::recorded_blob_paths(&engine.repository()) {
+                    Ok(known) => paths.extend(known),
+                    Err(error) => {
+                        eprintln!("[sync] could not read recorded paths after a rescan: {error:?}");
+                    }
+                }
+                paths
+            }
             Err(error) => {
                 eprintln!("[sync] could not re-read the workspace after a rescan: {error:?}");
                 return false;

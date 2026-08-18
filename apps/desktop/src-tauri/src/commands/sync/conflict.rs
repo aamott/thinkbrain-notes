@@ -11,6 +11,8 @@
 
 use std::path::Path;
 
+use crate::NativeError;
+
 /// How much we actually know about a pattern.
 ///
 /// Recorded per row because it changes what the row is allowed to do. Every
@@ -83,14 +85,34 @@ fn syncthing(name: &str) -> Option<String> {
 }
 
 /// Dropbox: `note (Adam's conflicted copy 2026-08-16).md`.
+///
+/// The date is anchored so a note someone legitimately named `meeting (Adam's
+/// conflicted copy notes).md` is not paired against `meeting.md` and offered up
+/// for "resolution". The marker alone is not enough.
 fn dropbox(name: &str) -> Option<String> {
     let (stem, extension) = split_extension(name);
     let open = stem.rfind(" (")?;
     let inside = stem[open + 2..].strip_suffix(')')?;
-    if !inside.contains("conflicted copy") {
+    let after = inside.find("conflicted copy")?;
+    if !date_like(&inside[after + "conflicted copy".len()..]) {
         return None;
     }
     Some(format!("{}{}", &stem[..open], extension))
+}
+
+/// Whether `rest` begins with a Dropbox/Nextcloud conflict date
+/// (`2026-08-16`, optionally followed by a time). The marker alone is too loose
+/// — a person can name a note anything — so the date is what makes a copy a
+/// copy rather than a coincidence.
+fn date_like(rest: &str) -> bool {
+    let rest = rest.trim_start();
+    let bytes = rest.as_bytes();
+    bytes.len() >= 10
+        && bytes[..4].iter().all(|b| b.is_ascii_digit())
+        && bytes[4] == b'-'
+        && bytes[5..7].iter().all(|b| b.is_ascii_digit())
+        && bytes[7] == b'-'
+        && bytes[8..10].iter().all(|b| b.is_ascii_digit())
 }
 
 /// Ours: `note (from another device).md`, and ` 2`, ` 3` if one is already
@@ -113,7 +135,16 @@ fn another_device(name: &str) -> Option<String> {
 
 const FROM_ANOTHER_DEVICE: &str = " (from another device";
 
+/// The most numbered copies we scan for before falling back to a unique name.
+/// Bounds the work on a vault that someone has filled with thousands of
+/// `note (from another device N).md` files, rather than stating every one.
+const BESIDE_CAP: usize = 1_000;
+
 /// A free name to put another device's version of `original` beside it at.
+///
+/// The search is bounded: after `BESIDE_CAP` numbered names are all taken, a
+/// high-resolution timestamp suffix is used instead of scanning further. That
+/// keeps the work capped on a hostile or very messy vault.
 pub fn beside(original: &str, taken: impl Fn(&str) -> bool) -> String {
     let (directory, name) = match original.rfind('/') {
         Some(index) => (&original[..=index], &original[index + 1..]),
@@ -121,24 +152,39 @@ pub fn beside(original: &str, taken: impl Fn(&str) -> bool) -> String {
     };
     let (stem, extension) = split_extension(name);
 
-    let mut candidate = format!("{directory}{stem}{FROM_ANOTHER_DEVICE}){extension}");
-    let mut nth = 2;
-    while taken(&candidate) {
-        candidate = format!("{directory}{stem}{FROM_ANOTHER_DEVICE} {nth}){extension}");
-        nth += 1;
+    let unnumbered = format!("{directory}{stem}{FROM_ANOTHER_DEVICE}){extension}");
+    if !taken(&unnumbered) {
+        return unnumbered;
     }
-    candidate
+    for nth in 2..=BESIDE_CAP {
+        let candidate = format!("{directory}{stem}{FROM_ANOTHER_DEVICE} {nth}){extension}");
+        if !taken(&candidate) {
+            return candidate;
+        }
+    }
+    // Every numbered name is taken. A nanosecond stamp is unique enough in
+    // practice and keeps the search bounded rather than walking the whole vault.
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_nanos())
+        .unwrap_or(0);
+    format!("{directory}{stem}{FROM_ANOTHER_DEVICE} {stamp}){extension}")
 }
 
 /// Nextcloud: `note (conflicted copy 2026-08-16 093100).md`.
 ///
 /// Same shape as Dropbox without the owner's name, so `dropbox` already
 /// recognises it; kept as its own row so the user is told the right provider.
+/// `starts_with` is what keeps Dropbox's owner-prefixed names out of this row,
+/// and the date anchor keeps ordinary notes out of both.
 fn nextcloud(name: &str) -> Option<String> {
     let (stem, extension) = split_extension(name);
     let open = stem.rfind(" (")?;
     let inside = stem[open + 2..].strip_suffix(')')?;
     if !inside.starts_with("conflicted copy") {
+        return None;
+    }
+    if !date_like(&inside["conflicted copy".len()..]) {
         return None;
     }
     Some(format!("{}{}", &stem[..open], extension))
@@ -232,10 +278,8 @@ pub fn is_conflict_copy(vault: &Path, relative: &Path) -> bool {
 /// Run when a workspace opens: conflicts appear while the app is closed, and a
 /// user who has been away for a week should not have to touch each file to
 /// discover the app noticed nothing.
-pub fn scan(vault: &Path) -> Vec<ConflictCopy> {
-    let Ok(names) = super::bootstrap::recordable_notes(vault) else {
-        return Vec::new();
-    };
+pub fn scan(vault: &Path) -> Result<Vec<ConflictCopy>, NativeError> {
+    let names = super::bootstrap::recordable_notes(vault)?;
     let relative: Vec<String> = names.iter().map(|path| relative_str(path)).collect();
     let present: std::collections::HashSet<&str> =
         relative.iter().map(String::as_str).collect();
@@ -245,7 +289,7 @@ pub fn scan(vault: &Path) -> Vec<ConflictCopy> {
         .filter_map(|path| pair(path, |original| present.contains(original)))
         .collect();
     found.sort_by(|a, b| a.copy.cmp(&b.copy));
-    found
+    Ok(found)
 }
 
 #[cfg(test)]
@@ -370,7 +414,8 @@ mod tests {
 
     /// Ordinary notes must survive contact with this table. A false positive
     /// here tells the user their own file is a conflict and offers to delete
-    /// one side of it.
+    /// one side of it. The "conflicted copy" phrases without a date are the
+    /// ones the date anchor is there to reject.
     #[test]
     fn ordinary_notes_are_not_mistaken_for_conflicts() {
         for name in [
@@ -383,9 +428,56 @@ mod tests {
             "2026-08-16.md",
             ".hidden.md",
             "conflicted copy.md",
+            "meeting (Adam's conflicted copy notes).md",
+            "meeting (conflicted copy notes).md",
         ] {
             assert_eq!(pair(name, always), None, "{name} was mistaken for a conflict");
         }
+    }
+
+    /// The marker without the date is not a conflict, even when the original it
+    /// would pair with is right there. This is the false positive the date
+    /// anchor exists to prevent.
+    #[test]
+    fn a_conflicted_copy_phrase_without_a_date_is_not_a_conflict() {
+        let vault = make_temp_test_dir("conflict-no-date", "sync", true);
+        fs::write(vault.join("meeting.md"), "mine").expect("the note exists");
+        fs::write(
+            vault.join("meeting (Adam's conflicted copy notes).md"),
+            "theirs",
+        )
+        .expect("the copy exists");
+
+        let found = scan(&vault).expect("the vault can be scanned");
+
+        assert!(found.is_empty(), "a dateless name was treated as a conflict: {found:?}");
+    }
+
+    /// A pathological vault with every numbered name taken still gets a unique
+    /// one back, and the search does not walk the whole vault to find it.
+    #[test]
+    fn beside_falls_back_when_every_numbered_name_is_taken() {
+        let vault = make_temp_test_dir("conflict-beside-cap", "sync", true);
+        fs::write(vault.join("note.md"), "mine").expect("the note exists");
+        // Fill every numbered name the loop would try, so it has to fall back.
+        for nth in 0..=BESIDE_CAP {
+            let name = if nth == 0 {
+                "note (from another device).md".to_string()
+            } else {
+                // The loop starts at 2, but cover 1 too in case that ever changes.
+                let n = nth.max(2);
+                format!("note (from another device {n}).md")
+            };
+            fs::write(vault.join(name), "taken").expect("the taken copy exists");
+        }
+
+        let free = beside("note.md", |path| vault.join(path).exists());
+
+        assert!(!vault.join(&free).exists(), "the fallback name was not free: {free}");
+        assert!(
+            free.starts_with("note (from another device "),
+            "the fallback lost the conflict shape: {free}"
+        );
     }
 
     /// One original can collect copies from several machines at once.
@@ -401,7 +493,7 @@ mod tests {
             .expect("the copy exists");
         }
 
-        let found = scan(&vault);
+        let found = scan(&vault).expect("the vault can be scanned");
 
         assert_eq!(found.len(), 2);
         assert!(found.iter().all(|copy| copy.original == "note.md"));
@@ -419,7 +511,7 @@ mod tests {
         .expect("the copy exists");
         fs::write(vault.join("untouched.md"), "fine").expect("the note exists");
 
-        let found = scan(&vault);
+        let found = scan(&vault).expect("the vault can be scanned");
 
         assert_eq!(found.len(), 1);
         assert_eq!(found[0].original, "journal/08-16.md");
@@ -427,6 +519,16 @@ mod tests {
             found[0].copy,
             "journal/08-16.sync-conflict-20260816-093100-K3SDFHG.md"
         );
+    }
+
+    #[test]
+    fn a_scan_reports_when_the_vault_cannot_be_read() {
+        let vault = make_temp_test_dir("conflict-scan-failure", "sync", true);
+        fs::remove_dir(&vault).expect("the test vault is removed");
+
+        let error = scan(&vault).expect_err("an unreadable vault is not conflict-free");
+
+        assert_eq!(error.code, "sync.vault_read_failed");
     }
 
     /// Until someone has watched each daemon produce a real file, the table

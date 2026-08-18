@@ -15,6 +15,7 @@ use std::path::{Path, PathBuf};
 use crate::commands::workspace::{is_ignored_entry_name, stable_workspace_hash, MAX_WORKSPACE_ENTRIES};
 use crate::NativeError;
 
+use super::failed;
 use super::{hidden_repo, snapshot};
 
 /// A vault Auto Sync keeps history for.
@@ -64,6 +65,22 @@ const NEVER_RECORD: [&str; 6] = [
 /// it is being listed or snapshotted.
 const MAX_MARKDOWN_DEPTH: usize = 20;
 
+fn vault_read(error: impl std::fmt::Display) -> NativeError {
+    failed(
+        "sync.vault_read_failed",
+        "Could not read this workspace's notes.",
+        error,
+    )
+}
+
+fn exclude_write_failed(error: impl std::fmt::Display) -> NativeError {
+    failed(
+        "sync.exclude_write_failed",
+        "Could not set up this workspace's sync history.",
+        error,
+    )
+}
+
 /// Where a vault's hidden repository lives.
 ///
 /// Keyed by the same stable hash the workspace settings file uses, so one
@@ -108,13 +125,7 @@ pub fn bootstrap(app_data_dir: &Path, vault: &Path) -> Result<ManagedWorkspace, 
 /// `info/exclude` is the same rules, kept where the rest of the repository is.
 fn write_exclude_file(git_dir: &Path) -> Result<(), NativeError> {
     let info = git_dir.join("info");
-    std::fs::create_dir_all(&info).map_err(|error| {
-        NativeError::with_details(
-            "sync.exclude_write_failed",
-            "Could not set up this workspace's sync history.",
-            error.to_string(),
-        )
-    })?;
+    std::fs::create_dir_all(&info).map_err(exclude_write_failed)?;
 
     let mut contents =
         String::from("# Written by ThinkBrain Notes. Files Auto Sync never records.\n");
@@ -123,19 +134,22 @@ fn write_exclude_file(git_dir: &Path) -> Result<(), NativeError> {
         contents.push('\n');
     }
 
-    std::fs::write(info.join("exclude"), contents).map_err(|error| {
-        NativeError::with_details(
-            "sync.exclude_write_failed",
-            "Could not set up this workspace's sync history.",
-            error.to_string(),
-        )
-    })
+    std::fs::write(info.join("exclude"), contents).map_err(exclude_write_failed)
 }
 
 /// Every file in the vault worth recording, as vault-relative paths.
 pub fn recordable_notes(vault: &Path) -> Result<Vec<PathBuf>, NativeError> {
+    recordable_under(vault, vault)
+}
+
+/// Every recordable file under `directory`, still vault-relative.
+pub fn recordable_under(vault: &Path, directory: &Path) -> Result<Vec<PathBuf>, NativeError> {
+    let depth = directory
+        .strip_prefix(vault)
+        .map(|relative| relative.components().count())
+        .unwrap_or(0);
     let mut found = Vec::new();
-    collect(vault, vault, 0, &mut found)?;
+    collect(vault, directory, depth, &mut found)?;
     found.sort();
     Ok(found)
 }
@@ -148,22 +162,10 @@ fn collect(vault: &Path, directory: &Path, depth: usize, found: &mut Vec<PathBuf
         ));
     }
 
-    let entries = std::fs::read_dir(directory).map_err(|error| {
-        NativeError::with_details(
-            "sync.vault_read_failed",
-            "Could not read this workspace's notes.",
-            error.to_string(),
-        )
-    })?;
+    let entries = std::fs::read_dir(directory).map_err(vault_read)?;
 
     for entry in entries {
-        let entry = entry.map_err(|error| {
-            NativeError::with_details(
-                "sync.vault_read_failed",
-                "Could not read this workspace's notes.",
-                error.to_string(),
-            )
-        })?;
+        let entry = entry.map_err(vault_read)?;
         let path = entry.path();
         let name = entry.file_name();
         let name = name.to_string_lossy();
@@ -175,13 +177,7 @@ fn collect(vault: &Path, directory: &Path, depth: usize, found: &mut Vec<PathBuf
         // Symlinks are not followed: a link pointing outside the vault would
         // pull unrelated files into history, and one pointing back inside it
         // would record the same note twice.
-        let metadata = entry.metadata().map_err(|error| {
-            NativeError::with_details(
-                "sync.vault_read_failed",
-                "Could not read this workspace's notes.",
-                error.to_string(),
-            )
-        })?;
+        let metadata = entry.metadata().map_err(vault_read)?;
 
         if metadata.is_dir() {
             collect(vault, &path, depth + 1, found)?;

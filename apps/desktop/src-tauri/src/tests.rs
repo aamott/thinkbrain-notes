@@ -483,6 +483,27 @@ fn settings_write_creates_parent_directory_and_round_trips() {
     fs::remove_dir_all(temp_dir).expect("temp settings directory is cleaned up");
 }
 
+/// A crash mid-`fs::write` would leave a truncated file. The helper writes a
+/// sibling temp and renames over the destination, so the previous contents
+/// stay until the new ones are fully on disk.
+#[test]
+fn write_file_atomically_replaces_the_destination_and_leaves_no_temp() {
+    let temp_dir = temp_test_dir("atomic-write");
+    let path = temp_dir.join("note.md");
+    fs::write(&path, "old").expect("the previous contents are written");
+
+    write_file_atomically(&path, "new").expect("the atomic write succeeds");
+
+    assert_eq!(fs::read_to_string(&path).expect("the note is readable"), "new");
+    let leftovers: Vec<_> = fs::read_dir(&temp_dir)
+        .expect("the folder is readable")
+        .map(|entry| entry.expect("the entry is readable").file_name())
+        .collect();
+    assert_eq!(leftovers.as_slice(), [std::ffi::OsString::from("note.md")]);
+
+    fs::remove_dir_all(temp_dir).expect("temp atomic-write directory is cleaned up");
+}
+
 /// A settings document nobody can parse is about to be replaced by whatever the
 /// app writes next, and everything in it is gone for good. Setting it aside
 /// first costs one file and makes the loss recoverable by hand.

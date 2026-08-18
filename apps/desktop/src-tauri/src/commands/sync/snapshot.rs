@@ -15,6 +15,8 @@ use std::path::{Component, Path, PathBuf};
 
 use crate::NativeError;
 
+use super::failed;
+
 /// Who the hidden repository records commits as.
 ///
 /// Not the user, and deliberately not read from their git configuration: this
@@ -60,8 +62,12 @@ impl Reason {
     }
 }
 
-fn failed(code: &'static str, message: &'static str, error: impl std::fmt::Display) -> NativeError {
-    NativeError::with_details(code, message, error.to_string())
+fn history_read_failed(error: impl std::fmt::Display) -> NativeError {
+    failed(
+        "sync.history_read_failed",
+        "Could not read the sync history.",
+        error,
+    )
 }
 
 /// Records the current on-disk state of `paths` as a new commit.
@@ -141,13 +147,21 @@ fn build_tree(
         )
     })?;
 
-    for path in paths {
-        let relative = vault_relative(&vault, path)?;
+    let mut remaining: Vec<PathBuf> = paths.to_vec();
+    while let Some(path) = remaining.pop() {
+        let relative = vault_relative(&vault, &path)?;
         let absolute = vault.join(&relative);
 
         match std::fs::symlink_metadata(&absolute) {
+            Ok(metadata) if metadata.is_dir() => {
+                // A folder's name stands for everything underneath it. Expanding
+                // it here is how a rename or a rescan that only named the folder
+                // still records the notes that moved, rather than leaving the
+                // old folder in history.
+                remaining.extend(super::bootstrap::recordable_under(&vault, &absolute)?);
+            }
             Ok(metadata) if metadata.is_file() => {
-                let file = match std::fs::File::open(&absolute) {
+                let file = match open_without_following(&absolute) {
                     Ok(f) => f,
                     Err(open_error) => {
                         let still_file = match std::fs::symlink_metadata(&absolute) {
@@ -178,6 +192,20 @@ fn build_tree(
                         continue;
                     }
                 };
+                // Mode and type come from this fd, not the path-stat above:
+                // a swap between the two would otherwise record one file's
+                // bytes under another's executable bit, or follow a symlink
+                // that appeared after the check.
+                let metadata = file.metadata().map_err(|error| {
+                    failed(
+                        "sync.note_read_failed",
+                        "Could not read a note to record it.",
+                        error,
+                    )
+                })?;
+                if metadata.file_type().is_symlink() || !metadata.is_file() {
+                    continue;
+                }
                 let blob = repo.write_blob_stream(file).map_err(|error| {
                     failed(
                         "sync.note_store_failed",
@@ -196,17 +224,18 @@ fn build_tree(
                         failed("sync.tree_write_failed", "Could not record a note.", error)
                     })?;
             }
-            // A folder, or a symlink standing where a note used to be. Its name
-            // in the tree stands for everything underneath it, so removing it
-            // would take the whole folder's history with it — and the watcher
-            // reports folders. Whatever is inside arrives as its own change.
+            // A symlink standing where a note used to be is not a note.
+            // Following it is how history ends up holding files from outside
+            // the vault.
             Ok(_) => continue,
             // Genuinely gone, which is a deletion to record. The alternative is
             // a history that quietly keeps files the vault no longer has.
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
                 // `remove` on a path that was never recorded is not an error: a
                 // note created and deleted between two commits is simply absent
-                // from both.
+                // from both. A vanished folder takes every recorded note under
+                // it — `remove("notes")` would drop the whole subtree, which is
+                // the point.
                 editor.remove(tree_path(&relative)).map_err(|error| {
                     failed(
                         "sync.tree_write_failed",
@@ -351,6 +380,29 @@ pub fn head_commit(repo: &gix::Repository) -> Result<Option<gix::ObjectId>, Nati
     head_of(repo, HISTORY_REF)
 }
 
+/// Every blob the current history commit holds, so a rescan can name the
+/// notes that vanished as well as the ones still on disk.
+pub(super) fn recorded_blob_paths(repo: &gix::Repository) -> Result<Vec<PathBuf>, NativeError> {
+    let Some(commit) = head_commit(repo)? else {
+        return Ok(Vec::new());
+    };
+    let tree = repo
+        .find_commit(commit)
+        .map_err(history_read_failed)?
+        .tree()
+        .map_err(history_read_failed)?;
+    let mut recorder = gix::traverse::tree::Recorder::default();
+    tree.traverse()
+        .breadthfirst(&mut recorder)
+        .map_err(history_read_failed)?;
+    Ok(recorder
+        .records
+        .into_iter()
+        .filter(|entry| entry.mode.is_blob())
+        .map(|entry| PathBuf::from(entry.filepath.to_string()))
+        .collect())
+}
+
 /// The newest restore point, or `None` if nothing has ever been checkpointed.
 pub fn checkpoint_head(repo: &gix::Repository) -> Result<Option<gix::ObjectId>, NativeError> {
     head_of(repo, CHECKPOINT_REF)
@@ -359,21 +411,11 @@ pub fn checkpoint_head(repo: &gix::Repository) -> Result<Option<gix::ObjectId>, 
 fn head_of(repo: &gix::Repository, reference: &str) -> Result<Option<gix::ObjectId>, NativeError> {
     match repo.find_reference(reference) {
         Ok(mut reference) => {
-            let id = reference.peel_to_id().map_err(|error| {
-                failed(
-                    "sync.history_read_failed",
-                    "Could not read the sync history.",
-                    error,
-                )
-            })?;
+            let id = reference.peel_to_id().map_err(history_read_failed)?;
             Ok(Some(id.detach()))
         }
         Err(gix::reference::find::existing::Error::NotFound { .. }) => Ok(None),
-        Err(error) => Err(failed(
-            "sync.history_read_failed",
-            "Could not read the sync history.",
-            error,
-        )),
+        Err(error) => Err(history_read_failed(error)),
     }
 }
 
@@ -383,21 +425,9 @@ fn commit_tree(
 ) -> Result<gix::ObjectId, NativeError> {
     let tree = repo
         .find_commit(commit)
-        .map_err(|error| {
-            failed(
-                "sync.history_read_failed",
-                "Could not read the sync history.",
-                error,
-            )
-        })?
+        .map_err(history_read_failed)?
         .tree_id()
-        .map_err(|error| {
-            failed(
-                "sync.history_read_failed",
-                "Could not read the sync history.",
-                error,
-            )
-        })?;
+        .map_err(history_read_failed)?;
     Ok(tree.detach())
 }
 
@@ -452,6 +482,27 @@ fn tree_path(relative: &Path) -> String {
         })
         .collect::<Vec<_>>()
         .join("/")
+}
+
+/// Opens `path` without following a final-component symlink.
+///
+/// `File::open` follows, so a file swapped for a symlink after
+/// `symlink_metadata` would leak the target into history.
+fn open_without_following(path: &Path) -> std::io::Result<std::fs::File> {
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NOFOLLOW);
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        // FILE_FLAG_OPEN_REPARSE_POINT: open the link itself.
+        options.custom_flags(0x0020_0000);
+    }
+    options.open(path)
 }
 
 #[cfg(unix)]

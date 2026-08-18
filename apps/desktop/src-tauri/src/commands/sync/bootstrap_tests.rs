@@ -49,12 +49,12 @@ fn each_workspace_gets_its_own_hidden_repo() {
     assert!(one.starts_with(app_data.join("sync")));
 }
 
-/// The one case where the right answer is to do nothing. A vault that is
-/// A notes folder under someone's own version control is exactly the folder
-/// most likely to also be in a sync folder, so refusing it cost the whole
-/// feature to the people most likely to need it. Never touching their
-/// repository is a separate promise, and it keeps itself: ours lives in app
-/// data, and the walk skips every dot-directory, `.git` among them.
+/// The one case where the right answer is to do nothing. A notes folder under
+/// someone's own version control is exactly the folder most likely to also be
+/// in a sync folder, so refusing it cost the whole feature to the people most
+/// likely to need it. Never touching their repository is a separate promise,
+/// and it keeps itself: ours lives in app data, and the walk skips every
+/// dot-directory, `.git` among them.
 #[test]
 fn a_vault_with_its_own_git_is_recorded_too_and_its_repository_left_alone() {
     let app_data = make_temp_test_dir("bootstrap-own-git-appdata", "sync", true);

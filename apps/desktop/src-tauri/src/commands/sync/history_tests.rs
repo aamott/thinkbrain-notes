@@ -190,6 +190,15 @@ fn restoring_puts_the_earlier_text_back_on_disk() {
     restore(&f.repo, "note.md", &wanted).expect("the version is restored");
 
     assert_eq!(on_disk(&f, "note.md"), "the version I want back\n");
+    let leftovers: Vec<_> = fs::read_dir(&f.vault)
+        .expect("the vault is readable")
+        .map(|entry| entry.expect("the entry is readable").file_name())
+        .collect();
+    assert_eq!(
+        leftovers.as_slice(),
+        [std::ffi::OsString::from("note.md")],
+        "a restore must not leave a sibling temp behind"
+    );
 }
 
 /// The promise the merge tab makes out loud — "you can always undo" — has to

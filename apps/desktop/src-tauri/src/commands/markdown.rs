@@ -8,8 +8,9 @@ use std::fs;
 const MAX_MARKDOWN_DEPTH: usize = 20;
 
 use crate::commands::workspace::{
-    entry_metadata, is_ignored_entry_name, normalize_relative_path, resolve_workspace_entry_path,
-    resolve_workspace_root, MAX_WORKSPACE_ENTRIES, WORKSPACE_ENTRY_MUTATION_LOCK,
+    acquire_workspace_mutation_lock, ensure_parent_dir, entry_metadata, is_ignored_entry_name,
+    normalize_relative_path, remove_search_index_entry, resolve_workspace_entry_path,
+    resolve_workspace_root, MAX_WORKSPACE_ENTRIES,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -97,9 +98,7 @@ pub fn write_markdown_document(
     // in-process writer could land inside would only narrow the window it was
     // added to close; this is the lock the entry mutations already take, so a
     // rename or delete cannot slip in either.
-    let _mutation_lock = WORKSPACE_ENTRY_MUTATION_LOCK
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _mutation_lock = acquire_workspace_mutation_lock();
 
     if !file_path.is_file() {
         return Err(NativeError::new(
@@ -157,15 +156,7 @@ pub fn create_markdown_file(
         ));
     }
 
-    if let Some(parent) = file_path.parent() {
-        fs::create_dir_all(parent).map_err(|error| {
-            NativeError::with_details(
-                "workspace.create_parent_failed",
-                "Failed to create the note folder.",
-                error,
-            )
-        })?;
-    }
+    ensure_parent_dir(&file_path, "Failed to create the note folder.")?;
 
     record_self_write(&file_path);
     fs::write(&file_path, contents.unwrap_or_default()).map_err(|error| {
@@ -204,15 +195,7 @@ pub fn rename_markdown_file(
         ));
     }
 
-    if let Some(parent) = new_file_path.parent() {
-        fs::create_dir_all(parent).map_err(|error| {
-            NativeError::with_details(
-                "workspace.create_parent_failed",
-                "Failed to create the destination folder.",
-                error,
-            )
-        })?;
-    }
+    ensure_parent_dir(&new_file_path, "Failed to create the destination folder.")?;
 
     record_self_write(&file_path);
     record_self_write(&new_file_path);
@@ -224,11 +207,7 @@ pub fn rename_markdown_file(
         )
     })?;
 
-    let index_path = relative_path.clone();
-    if let Err(error) = crate::commands::search::remove_index_document(app, root_path, index_path) {
-        eprintln!("[markdown] failed to remove search index for {relative_path}: {error}");
-    }
-
+    remove_search_index_entry(app, root_path, &relative_path, "markdown");
     markdown_file_entry(&root, &new_file_path)
 }
 
@@ -257,10 +236,7 @@ pub fn delete_markdown_file(
         )
     })?;
 
-    let index_path = relative_path.clone();
-    if let Err(error) = crate::commands::search::remove_index_document(app, root_path, index_path) {
-        eprintln!("[markdown] failed to remove search index for {relative_path}: {error}");
-    }
+    remove_search_index_entry(app, root_path, &relative_path, "markdown");
 
     Ok(())
 }

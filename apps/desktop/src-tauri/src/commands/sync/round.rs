@@ -16,10 +16,13 @@
 //! the same shape a sync daemon leaves behind. That is not a shortcut: it is
 //! the shape story 3 predicted, and it means the panel, the merge view, the
 //! settle rules and the checkpoints all apply here without a line added to
-//! them. See `plans/auto-sync/pending-the_round_trip-high-hard.md`.
+//! them. See `plans/auto-sync/done-the_round_trip-high-hard.md`.
 
 use std::path::{Path, PathBuf};
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc;
+use std::sync::Arc;
+use std::time::Duration;
 
 use gix::merge::tree::{FileFavor, TreatAsUnresolved, TreeFavor};
 use gix::remote::Direction;
@@ -29,8 +32,10 @@ use serde::Serialize;
 use crate::error::NativeError;
 
 use super::conflict;
+use super::failed;
 use super::push;
 use super::snapshot::{self, HISTORY_REF as BRANCH};
+use super::unreachable;
 
 /// Where a fetched branch is put.
 ///
@@ -40,6 +45,12 @@ const REMOTE_REF: &str = "refs/thinkbrain/remote";
 
 /// The workspace setting naming where a vault syncs to.
 const SETTING: &str = "sync.destination";
+
+/// How long one fetch or push may take.
+///
+/// Held across the per-workspace lane, so a hung remote must not pin that
+/// lane forever — every later Sync Now on this vault queues behind it.
+const NETWORK: Duration = Duration::from_secs(90);
 
 /// What one round trip did.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -52,10 +63,14 @@ pub struct Synced {
     /// Objects sent onward.
     pub sent: usize,
     pub landed: push::Landed,
-}
-
-fn failed(code: &'static str, message: &'static str, error: impl std::fmt::Display) -> NativeError {
-    NativeError::with_details(code, message, error.to_string())
+    /// The conflict copies this round trip wrote beside their originals.
+    ///
+    /// Held back from the frontend (`serde(skip)`): the UI only needs the
+    /// count, and the panel learns about the copies through the engine. Kept
+    /// on the struct so `sync_now` can note them directly instead of re-walking
+    /// the vault to rediscover what this sync just wrote.
+    #[serde(skip)]
+    pub conflict_copies: Vec<conflict::ConflictCopy>,
 }
 
 /// Where this vault syncs to, if anyone has said.
@@ -75,16 +90,36 @@ pub fn destination(app_data_dir: &Path, root: &Path) -> Option<String> {
 }
 
 /// One round trip: fetch, merge, send.
+#[cfg(test)]
 pub fn once(repo: &gix::Repository, vault: &Path, destination: &str) -> Result<Synced, NativeError> {
-    let theirs = fetch(repo, destination)?;
+    trip(repo, vault, destination, Arc::new(AtomicBool::new(false)))
+}
+
+fn trip(
+    repo: &gix::Repository,
+    vault: &Path,
+    destination: &str,
+    cancel: Arc<AtomicBool>,
+) -> Result<Synced, NativeError> {
+    let theirs = {
+        let repo = repo.clone();
+        let destination = destination.to_owned();
+        let cancel = Arc::clone(&cancel);
+        bounded(NETWORK, Arc::clone(&cancel), move || {
+            fetch(&repo, &destination, &cancel)
+        })
+    }?;
     let ours = snapshot::head_commit(repo)?;
 
-    let (brought_down, asked_about) = match (ours, theirs) {
+    let (brought_down, asked_about, copies) = match (ours, theirs) {
         // Nothing to join: either they have nothing to give, or we have
         // nothing of our own and can simply take theirs.
-        (_, None) => (0, 0),
-        (None, Some(theirs)) => (adopt(repo, vault, theirs)?, 0),
-        (Some(ours), Some(theirs)) if ours == theirs => (0, 0),
+        (_, None) => (0, 0, Vec::new()),
+        (None, Some(theirs)) => {
+            let (brought_down, copies) = adopt(repo, vault, theirs)?;
+            (brought_down, copies.len(), copies)
+        }
+        (Some(ours), Some(theirs)) if ours == theirs => (0, 0, Vec::new()),
         (Some(ours), Some(theirs)) => merge(repo, vault, ours, theirs)?,
     };
 
@@ -96,15 +131,24 @@ pub fn once(repo: &gix::Repository, vault: &Path, destination: &str) -> Result<S
             asked_about,
             sent: 0,
             landed: push::Landed::Moved,
+            conflict_copies: copies,
         });
     };
-    let sent = push::send(repo, destination, BRANCH, tip)?;
+    let sent = {
+        let repo = repo.clone();
+        let destination = destination.to_owned();
+        let cancel = Arc::clone(&cancel);
+        bounded(NETWORK, cancel, move || {
+            push::send(&repo, &destination, BRANCH, tip)
+        })
+    }?;
 
     Ok(Synced {
         brought_down,
         asked_about,
         sent: sent.objects,
         landed: sent.landed,
+        conflict_copies: copies,
     })
 }
 
@@ -112,33 +156,70 @@ pub fn once(repo: &gix::Repository, vault: &Path, destination: &str) -> Result<S
 ///
 /// `None` means the far side has nothing on that branch yet, which is what a
 /// destination looks like before anyone has synced to it.
-fn fetch(repo: &gix::Repository, destination: &str) -> Result<Option<gix::ObjectId>, NativeError> {
-    let unreachable = |error: &dyn std::fmt::Display| {
-        NativeError::with_details(
-            "sync.remote_unreachable",
-            "Could not reach the place these notes sync to.",
-            error.to_string(),
-        )
-    };
-
+fn fetch(
+    repo: &gix::Repository,
+    destination: &str,
+    cancel: &Arc<AtomicBool>,
+) -> Result<Option<gix::ObjectId>, NativeError> {
     let brought = repo
         .remote_at(gix::bstr::BStr::new(destination))
-        .map_err(|error| unreachable(&error))?
+        .map_err(unreachable)?
         .with_refspecs([format!("{BRANCH}:{REMOTE_REF}").as_str()], Direction::Fetch)
-        .map_err(|error| unreachable(&error))?
+        .map_err(unreachable)?
         .with_fetch_tags(gix::remote::fetch::Tags::None)
         .connect(Direction::Fetch)
-        .map_err(|error| unreachable(&error))?
+        .map_err(unreachable)?
         .prepare_fetch(gix::progress::Discard, Default::default())
-        .map_err(|error| unreachable(&error))?
-        .receive(gix::progress::Discard, &AtomicBool::default());
+        .map_err(unreachable)?
+        .receive(gix::progress::Discard, cancel);
 
     match brought {
         Ok(_) => head_of(repo, REMOTE_REF),
         // The branch is simply not there: a destination nobody has synced to
         // yet. Nothing to bring down is not a failure to reach it.
         Err(gix::remote::fetch::Error::NoMapping { .. }) => Ok(None),
-        Err(error) => Err(unreachable(&error)),
+        Err(_) if cancel.load(Ordering::Relaxed) => Err(timed_out()),
+        Err(error) => Err(unreachable(error)),
+    }
+}
+
+fn timed_out() -> NativeError {
+    NativeError::new(
+        "sync.remote_timeout",
+        "The other end took too long to answer.",
+    )
+}
+
+/// Runs `work` on its own thread so a hung remote cannot pin the caller —
+/// and therefore the per-workspace lane — past `limit`.
+fn bounded<T: Send + 'static>(
+    limit: Duration,
+    cancel: Arc<AtomicBool>,
+    work: impl FnOnce() -> Result<T, NativeError> + Send + 'static,
+) -> Result<T, NativeError> {
+    let (tx, rx) = mpsc::sync_channel(1);
+    std::thread::Builder::new()
+        .name("thinkbrain-sync-io".into())
+        .spawn(move || {
+            let _ = tx.send(work());
+        })
+        .map_err(|error| {
+            failed(
+                "sync.remote_unreachable",
+                "Could not reach the place these notes sync to.",
+                error,
+            )
+        })?;
+    match rx.recv_timeout(limit) {
+        Ok(outcome) => outcome,
+        Err(mpsc::RecvTimeoutError::Timeout) => {
+            cancel.store(true, Ordering::Relaxed);
+            Err(timed_out())
+        }
+        Err(mpsc::RecvTimeoutError::Disconnected) => Err(NativeError::new(
+            "sync.remote_unreachable",
+            "Could not reach the place these notes sync to.",
+        )),
     }
 }
 
@@ -152,8 +233,12 @@ fn head_of(repo: &gix::Repository, reference: &str) -> Result<Option<gix::Object
 }
 
 /// Takes the other side's history wholesale, because this vault has none.
-fn adopt(repo: &gix::Repository, vault: &Path, theirs: gix::ObjectId) -> Result<usize, NativeError> {
-    let (brought_down, _) = apply(
+fn adopt(
+    repo: &gix::Repository,
+    vault: &Path,
+    theirs: gix::ObjectId,
+) -> Result<(usize, Vec<conflict::ConflictCopy>), NativeError> {
+    let (brought_down, _, copies) = apply(
         repo,
         vault,
         snapshot::tree_of(repo, None)?,
@@ -166,7 +251,15 @@ fn adopt(repo: &gix::Repository, vault: &Path, theirs: gix::ObjectId) -> Result<
         "brought down from another device",
     )
     .map_err(|error| failed("sync.commit_failed", "Could not record what arrived.", error))?;
-    Ok(brought_down)
+    Ok((brought_down, copies))
+}
+
+fn cannot(error: impl std::fmt::Display) -> NativeError {
+    failed(
+        "sync.merge_failed",
+        "Could not combine this device's notes with the other one's.",
+        error,
+    )
 }
 
 /// Joins the two histories, and says what changed and what could not be decided.
@@ -175,18 +268,10 @@ fn merge(
     vault: &Path,
     ours: gix::ObjectId,
     theirs: gix::ObjectId,
-) -> Result<(usize, usize), NativeError> {
-    let cannot = |error: &dyn std::fmt::Display| {
-        NativeError::with_details(
-            "sync.merge_failed",
-            "Could not combine this device's notes with the other one's.",
-            error.to_string(),
-        )
-    };
-
+) -> Result<(usize, usize, Vec<conflict::ConflictCopy>), NativeError> {
     let options = repo
         .tree_merge_options()
-        .map_err(|error| cannot(&error))?
+        .map_err(cannot)?
         // Resolve, never mark. `Ours` is precise: their hunks still arrive
         // wherever they do not collide with ours, and only a genuine overlap
         // keeps our wording — which is then asked about as a copy.
@@ -200,7 +285,7 @@ fn merge(
     let options = gix::merge::commit::Options::from(options).with_allow_missing_merge_base(true);
     let mut outcome = repo
         .merge_commits(ours, theirs, Default::default(), options)
-        .map_err(|error| cannot(&error))?;
+        .map_err(cannot)?;
 
     // Anything forced counts, because forcing is exactly what we asked for
     // above and exactly what a person still has to look at.
@@ -211,19 +296,22 @@ fn merge(
         .filter(|conflict| conflict.is_unresolved(TreatAsUnresolved::forced_resolution()))
         .collect();
 
-    let asked_about = leave_copies(repo, vault, &undecided)?;
+    let mut copies = leave_copies(repo, vault, &undecided)?;
+    let asked_about = copies.len();
     let merged = outcome
         .tree_merge
         .tree
         .write()
-        .map_err(|error| cannot(&error))?
+        .map_err(cannot)?
         .detach();
 
-    let (brought_down, kept_back) = apply(repo, vault, snapshot::tree_of(repo, Some(ours))?, merged)?;
+    let (brought_down, kept_back, kept_copies) =
+        apply(repo, vault, snapshot::tree_of(repo, Some(ours))?, merged)?;
+    copies.extend(kept_copies);
     let asked_about = asked_about + kept_back;
     snapshot::record_merge(repo, merged, ours, theirs, &describe(brought_down, asked_about))?;
 
-    Ok((brought_down, asked_about))
+    Ok((brought_down, asked_about, copies))
 }
 
 fn describe(brought_down: usize, asked_about: usize) -> String {
@@ -240,12 +328,17 @@ fn describe(brought_down: usize, asked_about: usize) -> String {
 /// A copy that cannot be written is not a copy that can be skipped: their
 /// wording would be nowhere, and our own would look like the only thing anyone
 /// wrote. So a failure here fails the sync.
+///
+/// Names are validated as UTF-8 here for the same reason `apply`'s [`within`]
+/// refuses them: writing a lossy-spelled copy would leave the two devices
+/// tracking different files forever. Both paths handle the same class of name
+/// the same way — refuse rather than mangle.
 fn leave_copies(
     repo: &gix::Repository,
     vault: &Path,
     undecided: &[&gix::merge::tree::Conflict],
-) -> Result<usize, NativeError> {
-    let mut left = 0;
+) -> Result<Vec<conflict::ConflictCopy>, NativeError> {
+    let mut left = Vec::new();
     for conflict in undecided {
         let (_, theirs) = conflict.changes_in_resolution();
         let (mode, id) = theirs.entry_mode_and_id();
@@ -254,8 +347,13 @@ fn leave_copies(
             // anything, so there is nothing to put beside ours.
             continue;
         }
-        let original = theirs.location().to_string();
-        let beside = conflict::beside(&original, |path| vault.join(path).exists());
+        let original = std::str::from_utf8(theirs.location()).map_err(|_| {
+            NativeError::new(
+                "sync.note_name_unreadable",
+                "A note arrived under a name this device cannot read.",
+            )
+        })?;
+        let beside = conflict::beside(original, |path| vault.join(path).exists());
         let contents = repo
             .find_object(id)
             .map_err(|error| {
@@ -268,13 +366,17 @@ fn leave_copies(
             .data
             .clone();
         put(&vault.join(&beside), &contents)?;
-        left += 1;
+        left.push(conflict::ConflictCopy {
+            copy: beside,
+            original: original.to_string(),
+            provider: "another device",
+        });
     }
     Ok(left)
 }
 
-/// Brings the vault to `after`: how many notes moved, and how many were left
-/// beside rather than written over.
+/// Brings the vault to `after`: how many notes moved, how many were left
+/// beside rather than written over, and the conflict copies that resulted.
 ///
 /// A tree diff rather than a checkout: this repository has no index and wants
 /// none, and only the paths that changed should be touched — everything else in
@@ -284,7 +386,7 @@ fn apply(
     vault: &Path,
     before: gix::ObjectId,
     after: gix::ObjectId,
-) -> Result<(usize, usize), NativeError> {
+) -> Result<(usize, usize, Vec<conflict::ConflictCopy>), NativeError> {
     use gix::diff::tree::recorder::Change;
 
     // Every name is checked before anything is written, because the names come
@@ -306,16 +408,22 @@ fn apply(
         arriving.push((within(vault, path.as_ref())?, path, blob, expected));
     }
 
-    let (mut moved, mut kept_back) = (0, 0);
+    let (mut moved, mut kept_back, mut copies) = (0, 0, Vec::new());
     for (path, relative, blob, expected) in arriving {
         // Never write over something we did not expect to find. A note someone
         // edited while this was running — or after a sync that was interrupted
         // before it could record what it had done — is theirs, and the other
         // side's version goes beside it rather than over it.
         if let Some(theirs) = unexpected(repo, &path, blob, expected)? {
-            let beside = conflict::beside(&relative.to_string(), |name| vault.join(name).exists());
+            let original = relative.to_string();
+            let beside = conflict::beside(&original, |name| vault.join(name).exists());
             put(&vault.join(&beside), &theirs)?;
             kept_back += 1;
+            copies.push(conflict::ConflictCopy {
+                copy: beside,
+                original,
+                provider: "another device",
+            });
             continue;
         }
 
@@ -338,7 +446,7 @@ fn apply(
         moved += 1;
     }
 
-    Ok((moved, kept_back))
+    Ok((moved, kept_back, copies))
 }
 
 /// The other side's bytes, when what is on disk is not what we were about to
@@ -394,16 +502,7 @@ fn contents(repo: &gix::Repository, blob: gix::ObjectId) -> Result<Vec<u8>, Nati
 }
 
 fn put(path: &Path, bytes: &[u8]) -> Result<(), NativeError> {
-    if let Some(folder) = path.parent() {
-        std::fs::create_dir_all(folder).map_err(|error| {
-            failed(
-                "sync.note_write_failed",
-                "Could not make room for a note that arrived.",
-                error,
-            )
-        })?;
-    }
-    std::fs::write(path, bytes).map_err(|error| {
+    crate::commands::workspace::write_file_atomically(path, bytes).map_err(|error| {
         failed(
             "sync.note_write_failed",
             "Could not write a note that arrived.",
@@ -431,21 +530,31 @@ pub fn sync(
     destination: &str,
 ) -> Result<Synced, NativeError> {
     let lane = super::registry::lane(key);
-    let _lane = lane.lock().unwrap_or_else(|error| error.into_inner());
+    let _lane = lane.lock().unwrap_or_else(|error| {
+        eprintln!("[sync] sync lane mutex was poisoned, recovering: {error}");
+        error.into_inner()
+    });
 
     // Whatever is still sitting in the settle window belongs in this sync.
     engine.flush()?;
 
     let repo = engine.repository();
-    let synced = once(&repo, root, destination)?;
+    let cancel = Arc::new(AtomicBool::new(false));
+    let synced = trip(&repo, root, destination, Arc::clone(&cancel))?;
     if !matches!(synced.landed, push::Landed::Refused { .. }) {
         return Ok(synced);
     }
 
-    let again = once(&repo, root, destination)?;
+    let again = trip(&repo, root, destination, cancel)?;
+    let conflict_copies = {
+        let mut all = synced.conflict_copies;
+        all.extend(again.conflict_copies);
+        all
+    };
     Ok(Synced {
         brought_down: synced.brought_down + again.brought_down,
         asked_about: synced.asked_about + again.asked_about,
+        conflict_copies,
         ..again
     })
 }
@@ -475,11 +584,19 @@ pub fn sync_now(app: tauri::AppHandle, root_path: String) -> Result<Synced, Nati
         })
     })?;
 
-    let synced = sync(&engine, &key, &root, &destination)?;
+    let mut synced = sync(&engine, &key, &root, &destination)?;
 
-    if synced.asked_about > 0 {
-        engine.note_conflicts(super::settle::obvious(&engine, &root, conflict::scan(&root)));
-        crate::commands::watcher::announce_conflicts(&app, &key);
+    // The copies this round trip wrote are known exactly — `leave_copies` and
+    // `apply`'s kept-back branch just wrote them — so they are noted directly
+    // rather than re-walking the vault to rediscover them by pattern. Conflicts
+    // that appeared while the app was closed are the watcher's and
+    // `registry::attach`'s responsibility, not this sync's.
+    let copies = std::mem::take(&mut synced.conflict_copies);
+    if !copies.is_empty() {
+        let new = engine.note_conflicts(super::settle::obvious(&engine, &root, copies));
+        if new {
+            crate::commands::watcher::announce_conflicts(&app, &key);
+        }
     }
     crate::commands::watcher::announce_sync_status(&key);
 

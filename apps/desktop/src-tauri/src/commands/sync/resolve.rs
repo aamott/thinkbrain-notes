@@ -22,6 +22,7 @@ use crate::commands::workspace::{
 };
 use crate::NativeError;
 
+use super::failed;
 use super::conflict::{self, ConflictCopy};
 use super::engine::Engine;
 use super::merge::{self, Chunk, Kind};
@@ -301,7 +302,7 @@ struct Loaded {
 fn load(root: &Path, relative: &str) -> Result<Loaded, NativeError> {
     let path = resolve_workspace_entry_path(root, relative)?;
     let bytes = std::fs::read(&path).map_err(|error| {
-        NativeError::with_details("sync.version_read_failed", "Could not read one of the two versions.", error)
+        failed("sync.version_read_failed", "Could not read one of the two versions.", error)
     })?;
     Ok(Loaded { path, bytes })
 }
@@ -371,7 +372,7 @@ fn fingerprint(bytes: &[u8]) -> String {
 
 fn put(path: &Path, bytes: &[u8]) -> Result<(), NativeError> {
     std::fs::write(path, bytes).map_err(|error| {
-        NativeError::with_details("sync.resolution_write_failed", "Could not write the resolved note.", error)
+        failed("sync.resolution_write_failed", "Could not write the resolved note.", error)
     })
 }
 
@@ -809,7 +810,8 @@ mod tests {
     #[test]
     fn a_resolved_conflict_is_no_longer_outstanding() {
         let f = text_fixture("resolve-forget");
-        f.engine.note_conflicts(conflict::scan(&f.vault));
+        f.engine
+            .note_conflicts(conflict::scan(&f.vault).expect("the vault can be scanned"));
         assert_eq!(f.engine.conflicts().len(), 1, "the conflict was not noticed");
 
         f.resolve(Resolution::KeepOurs).expect("the resolution succeeds");

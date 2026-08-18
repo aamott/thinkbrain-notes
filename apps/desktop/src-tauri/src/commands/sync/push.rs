@@ -20,7 +20,9 @@ use transport::client::{MessageKind, WriteMode};
 
 use crate::error::NativeError;
 
+use super::failed;
 use super::snapshot;
+use super::unreachable;
 
 /// The only pack version anything has spoken for twenty years.
 const PACK_VERSION: u32 = 2;
@@ -47,10 +49,6 @@ pub struct Sent {
     pub objects: usize,
 }
 
-fn failed(code: &'static str, message: &'static str, error: impl std::fmt::Display) -> NativeError {
-    NativeError::with_details(code, message, error.to_string())
-}
-
 /// The objects the remote needs in order to hold `tip`, given it already holds
 /// `already`.
 ///
@@ -72,6 +70,14 @@ pub fn carried(
     tip: gix::ObjectId,
     already: Option<gix::ObjectId>,
 ) -> Result<Vec<gix::ObjectId>, NativeError> {
+    fn history(error: impl std::fmt::Display) -> NativeError {
+        failed(
+            "sync.history_unreadable",
+            "Could not read this vault's history.",
+            error,
+        )
+    }
+
     let known = already.filter(|id| repo.find_commit(*id).is_ok());
     let mut walk = repo.rev_walk(Some(tip));
     if let Some(known) = known {
@@ -79,29 +85,15 @@ pub fn carried(
     }
     let commits = walk
         .all()
-        .map_err(|error| failed("sync.history_unreadable", "Could not read this vault's history.", error))?;
+        .map_err(history)?;
 
     let mut seen = BTreeSet::new();
     let mut carried = Vec::new();
     let mut state = gix::diff::tree::State::default();
 
     for commit in commits {
-        let commit = commit
-            .map_err(|error| {
-                failed(
-                    "sync.history_unreadable",
-                    "Could not read this vault's history.",
-                    error,
-                )
-            })?
-            .id;
-        let object = repo.find_commit(commit).map_err(|error| {
-            failed(
-                "sync.history_unreadable",
-                "Could not read this vault's history.",
-                error,
-            )
-        })?;
+        let commit = commit.map_err(history)?.id;
+        let object = repo.find_commit(commit).map_err(history)?;
         let tree = object
             .tree_id()
             .map_err(|error| {
@@ -162,6 +154,13 @@ fn newly_reachable(
 /// Every object goes out whole. Deltas would shrink a first push and save
 /// almost nothing after it, because after the first push we only ever send what
 /// changed since the last one.
+///
+/// The whole pack is materialised in memory before it is sent. That is fine for
+/// the local-first notes workload this is built for (megabytes of markdown);
+/// a vault carrying hundreds of megabytes of in-vault attachments would make a
+/// first push hold a pack of similar size in RAM. Streaming the pack to the
+/// transport, the way git does, is the hardening path if that ever becomes the
+/// target.
 pub fn pack(repo: &gix::Repository, objects: &[gix::ObjectId]) -> Result<Vec<u8>, NativeError> {
     let count = u32::try_from(objects.len()).map_err(|error| {
         failed(
@@ -257,7 +256,7 @@ pub fn send(
         Vec::new(),
         &mut gix::progress::Discard,
     )
-    .map_err(unreachable)?;
+    .map_err(handshake_failure)?;
 
     let null = gix::ObjectId::null(repo.object_hash());
     let old = greeting
@@ -341,12 +340,30 @@ fn builds_on(repo: &gix::Repository, old: gix::ObjectId, tip: gix::ObjectId) -> 
         .is_ok_and(|base| base.detach() == old)
 }
 
-fn unreachable(error: impl std::fmt::Display) -> NativeError {
-    failed(
-        "sync.remote_unreachable",
-        "Could not reach the place these notes sync to.",
-        error,
-    )
+fn handshake_failure(error: gix::protocol::handshake::Error) -> NativeError {
+    if requires_authentication(&error) {
+        failed(
+            "sync.auth_required",
+            "This remote needs a sign-in before it can receive notes.",
+            error,
+        )
+    } else {
+        unreachable(error)
+    }
+}
+
+fn requires_authentication(error: &gix::protocol::handshake::Error) -> bool {
+    match error {
+        gix::protocol::handshake::Error::EmptyCredentials
+        | gix::protocol::handshake::Error::InvalidCredentials { .. } => true,
+        gix::protocol::handshake::Error::Transport(transport::client::Error::Io(error)) => {
+            error.kind() == std::io::ErrorKind::PermissionDenied
+                || ["Received HTTP status 401", "Received HTTP status 403"]
+                    .iter()
+                    .any(|status| error.to_string().contains(status))
+        }
+        _ => false,
+    }
 }
 
 /// What the server says it did, one status line per ref plus one for the pack.

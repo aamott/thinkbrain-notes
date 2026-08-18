@@ -5492,6 +5492,7 @@ dependencies = [
  "agent-client-protocol",
  "flate2",
  "gix",
+ "libc",
  "notify",
  "notify-debouncer-full",
  "rusqlite",

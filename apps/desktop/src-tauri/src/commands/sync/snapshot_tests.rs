@@ -332,23 +332,100 @@ fn an_absolute_path_inside_the_vault_is_accepted() {
     assert_eq!(recorded_paths(&f.repo), ["one.md"]);
 }
 
-/// A folder is not a note, and its name in the tree stands for everything
-/// underneath it.
-///
-/// The watcher reports folders as well as files, so one arriving in a batch
-/// must be passed over rather than treated as "not a file, therefore gone" —
-/// that reading takes every note in the folder out of history along with it.
+/// A folder's name stands for everything underneath it, so naming one must
+/// record the notes inside rather than skip it — otherwise a rename that
+/// only reports the folder leaves the old name in history forever.
 #[test]
-fn recording_a_folder_leaves_the_notes_inside_it_alone() {
+fn recording_a_folder_records_the_notes_inside_it() {
     let f = fixture("record-folder");
+    write(&f.vault, "notes/one.md", "# One\n");
+
+    record(&f.repo, &[PathBuf::from("notes")], "a folder arrived")
+        .expect("recording succeeds")
+        .expect("a commit is made");
+
+    assert_eq!(recorded_paths(&f.repo), ["notes/one.md"]);
+}
+
+/// The watcher reports a folder rename as the two folder paths, never the
+/// notes inside. Both have to be applied or the tree keeps the old name.
+#[test]
+fn recording_a_renamed_folder_moves_the_notes_inside_it() {
+    let f = fixture("record-folder-rename");
     write(&f.vault, "notes/one.md", "# One\n");
     record(&f.repo, &[PathBuf::from("notes/one.md")], "first")
         .expect("recording succeeds")
         .expect("a commit is made");
 
-    record(&f.repo, &[PathBuf::from("notes")], "a folder changed").expect("recording succeeds");
+    fs::rename(f.vault.join("notes"), f.vault.join("journal")).expect("the folder is renamed");
+    record(
+        &f.repo,
+        &[PathBuf::from("notes"), PathBuf::from("journal")],
+        "renamed",
+    )
+    .expect("recording succeeds")
+    .expect("a commit is made");
 
-    assert_eq!(recorded_paths(&f.repo), ["notes/one.md"]);
+    assert_eq!(recorded_paths(&f.repo), ["journal/one.md"]);
+}
+
+/// A folder that is gone must take its notes with it, or a delete that the
+/// watcher only named as the folder would keep those notes in history.
+#[test]
+fn recording_a_deleted_folder_drops_the_notes_inside_it() {
+    let f = fixture("record-folder-delete");
+    write(&f.vault, "notes/one.md", "# One\n");
+    write(&f.vault, "keep.md", "# Keep\n");
+    record(
+        &f.repo,
+        &[PathBuf::from("notes/one.md"), PathBuf::from("keep.md")],
+        "first",
+    )
+    .expect("recording succeeds")
+    .expect("a commit is made");
+
+    fs::remove_dir_all(f.vault.join("notes")).expect("the folder is deleted");
+    record(&f.repo, &[PathBuf::from("notes")], "deleted")
+        .expect("recording succeeds")
+        .expect("a commit is made");
+
+    assert_eq!(recorded_paths(&f.repo), ["keep.md"]);
+}
+
+/// A symlink standing where a note used to be is not a note. Following it
+/// is how history ends up holding files from outside the vault.
+#[cfg(unix)]
+#[test]
+fn recording_a_symlink_does_not_store_its_target() {
+    let f = fixture("record-symlink");
+    write(&f.vault, "note.md", "# A note\n");
+    record(&f.repo, &[PathBuf::from("note.md")], "first")
+        .expect("recorded")
+        .expect("committed");
+
+    let outside = make_temp_test_dir("record-symlink-outside", "sync", true);
+    write(&outside, "secret.md", "# Not theirs\n");
+    fs::remove_file(f.vault.join("note.md")).expect("the note is removed");
+    std::os::unix::fs::symlink(outside.join("secret.md"), f.vault.join("note.md"))
+        .expect("the vault holds a symlink");
+
+    record(&f.repo, &[PathBuf::from("note.md")], "second").expect("recording succeeds");
+
+    assert_eq!(recorded_paths(&f.repo), ["note.md"]);
+    assert_eq!(contents_of(&f.repo, "note.md"), "# A note\n");
+}
+
+#[cfg(unix)]
+#[test]
+fn a_symlink_is_not_opened_as_its_target() {
+    let vault = make_temp_test_dir("open-symlink-vault", "sync", true);
+    let outside = make_temp_test_dir("open-symlink-outside", "sync", true);
+    write(&outside, "secret.md", "# Not theirs\n");
+    std::os::unix::fs::symlink(outside.join("secret.md"), vault.join("note.md"))
+        .expect("the vault holds a symlink");
+
+    open_without_following(&vault.join("note.md"))
+        .expect_err("a symlink must not be followed");
 }
 
 /// `..` is not the only way to name something that is not a note in this

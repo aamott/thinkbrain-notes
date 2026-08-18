@@ -31,9 +31,10 @@ use super::snapshot::Reason;
 
 /// The setting's key, and the default it has to agree with.
 ///
-/// Repeated from `packages/core/src/settings/modules/sync.ts` rather than
-/// derived, because this side answers the question before any window is
-/// listening. Changing one means changing the other.
+/// Repeated from `DEFAULT_SETTLE_AUTOMATICALLY` in
+/// `packages/core/src/settings/modules/sync.ts` rather than derived, because
+/// this side answers the question before any window is listening. Changing one
+/// means changing the other.
 const SETTING: &str = "sync.settleAutomatically";
 const SETTLE_BY_DEFAULT: bool = true;
 

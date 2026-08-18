@@ -12,7 +12,7 @@ use std::sync::{
     atomic::{AtomicU64, Ordering},
     Mutex,
 };
-use std::time::UNIX_EPOCH;
+use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::Manager;
 
 pub const IGNORED_FOLDERS: &[&str] = &["node_modules", "target", "dist", "vendor"];
@@ -27,6 +27,57 @@ pub fn is_ignored_entry_name(name: &str) -> bool {
 
 pub static WORKSPACE_ENTRY_MUTATION_LOCK: Mutex<()> = Mutex::new(());
 static WORKSPACE_WINDOW_SEQUENCE: AtomicU64 = AtomicU64::new(1);
+
+/// Acquires the workspace entry mutation lock, recovering from poison so a
+/// panicked writer does not deadlock the app.
+pub fn acquire_workspace_mutation_lock() -> std::sync::MutexGuard<'static, ()> {
+    WORKSPACE_ENTRY_MUTATION_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+/// Creates missing parent directories for a path, mapping failures to the
+/// shared `workspace.create_parent_failed` error code.
+pub fn ensure_parent_dir(path: &Path, message: &str) -> Result<(), NativeError> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|error| {
+            NativeError::with_details("workspace.create_parent_failed", message, error)
+        })?;
+    }
+    Ok(())
+}
+
+/// Removes a document from the search index, logging failures best-effort
+/// so a stale index entry never blocks a successful rename or delete.
+pub fn remove_search_index_entry(
+    app: tauri::AppHandle,
+    root_path: String,
+    relative_path: &str,
+    module: &str,
+) {
+    if let Err(error) = crate::commands::search::remove_index_document(
+        app,
+        root_path,
+        relative_path.to_string(),
+    ) {
+        eprintln!("[{module}] failed to remove search index for {relative_path}: {error}");
+    }
+}
+
+/// Resolves the OS app-data directory, mapping resolution failures to a
+/// typed `NativeError` with the given error code.
+pub fn resolve_app_data_dir(
+    app: &tauri::AppHandle,
+    error_code: &str,
+) -> Result<PathBuf, NativeError> {
+    app.path().app_data_dir().map_err(|error| {
+        NativeError::with_details(
+            error_code,
+            "Failed to resolve the application data directory.",
+            error,
+        )
+    })
+}
 
 #[derive(Default)]
 pub struct WorkspaceWindowRoots(Mutex<HashMap<String, String>>);
@@ -161,20 +212,10 @@ pub fn create_workspace_file(
     contents: Option<String>,
 ) -> Result<WorkspaceEntry, NativeError> {
     let root = resolve_workspace_root(&root_path)?;
-    let _mutation_lock = WORKSPACE_ENTRY_MUTATION_LOCK
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _mutation_lock = acquire_workspace_mutation_lock();
     let file_path = resolve_workspace_entry_path(&root, &relative_path)?;
 
-    if let Some(parent) = file_path.parent() {
-        fs::create_dir_all(parent).map_err(|error| {
-            NativeError::with_details(
-                "workspace.create_parent_failed",
-                "Failed to create the destination folder.",
-                error,
-            )
-        })?;
-    }
+    ensure_parent_dir(&file_path, "Failed to create the destination folder.")?;
 
     record_self_write(&file_path);
     let mut file = fs::OpenOptions::new()
@@ -215,9 +256,7 @@ pub fn create_workspace_folder(
     relative_path: String,
 ) -> Result<WorkspaceEntry, NativeError> {
     let root = resolve_workspace_root(&root_path)?;
-    let _mutation_lock = WORKSPACE_ENTRY_MUTATION_LOCK
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _mutation_lock = acquire_workspace_mutation_lock();
     let folder_path = resolve_workspace_entry_path(&root, &relative_path)?;
 
     if folder_path.exists() {
@@ -253,11 +292,7 @@ pub fn rename_workspace_entry(
     let entry = rename_workspace_entry_impl(&root_path, &relative_path, &new_relative_path)?;
 
     if is_markdown {
-        if let Err(error) =
-            crate::commands::search::remove_index_document(app, root_path, relative_path.clone())
-        {
-            eprintln!("[workspace] failed to remove search index for {relative_path}: {error}");
-        }
+        remove_search_index_entry(app, root_path, &relative_path, "workspace");
     }
 
     Ok(entry)
@@ -269,9 +304,7 @@ fn rename_workspace_entry_impl(
     new_relative_path: &str,
 ) -> Result<WorkspaceEntry, NativeError> {
     let root = resolve_workspace_root(root_path)?;
-    let _mutation_lock = WORKSPACE_ENTRY_MUTATION_LOCK
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _mutation_lock = acquire_workspace_mutation_lock();
     let source_path = resolve_workspace_entry_path(&root, relative_path)?;
     let destination_path = resolve_workspace_entry_path(&root, new_relative_path)?;
 
@@ -295,15 +328,7 @@ fn rename_workspace_entry_impl(
         ));
     }
 
-    if let Some(parent) = destination_path.parent() {
-        fs::create_dir_all(parent).map_err(|error| {
-            NativeError::with_details(
-                "workspace.create_parent_failed",
-                "Failed to create the destination folder.",
-                error,
-            )
-        })?;
-    }
+    ensure_parent_dir(&destination_path, "Failed to create the destination folder.")?;
 
     record_self_write(&source_path);
     record_self_write(&destination_path);
@@ -344,11 +369,7 @@ pub fn delete_workspace_entry(
     delete_workspace_entry_impl(&root_path, &relative_path)?;
 
     if is_markdown {
-        if let Err(error) =
-            crate::commands::search::remove_index_document(app, root_path, relative_path.clone())
-        {
-            eprintln!("[workspace] failed to remove search index for {relative_path}: {error}");
-        }
+        remove_search_index_entry(app, root_path, &relative_path, "workspace");
     }
 
     Ok(())
@@ -356,9 +377,7 @@ pub fn delete_workspace_entry(
 
 fn delete_workspace_entry_impl(root_path: &str, relative_path: &str) -> Result<(), NativeError> {
     let root = resolve_workspace_root(root_path)?;
-    let _mutation_lock = WORKSPACE_ENTRY_MUTATION_LOCK
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _mutation_lock = acquire_workspace_mutation_lock();
     let entry_path = resolve_workspace_entry_path(&root, relative_path)?;
 
     if !entry_path.exists() {
@@ -756,4 +775,44 @@ pub fn stable_workspace_hash(input: &str) -> u64 {
     }
 
     hash
+}
+
+/// Replaces `path` with `contents` via a sibling `.tmp` and a rename.
+///
+/// `rename` is atomic on the same filesystem, so a crash cannot leave a
+/// truncated destination. A failed persist deletes the temp file. Temp names
+/// start with `.` and end in `.tmp`, matching the names Auto Sync already
+/// refuses to record.
+pub fn write_file_atomically(path: &Path, contents: impl AsRef<[u8]>) -> std::io::Result<()> {
+    let parent = path.parent().ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "file path must include a parent directory",
+        )
+    })?;
+    fs::create_dir_all(parent)?;
+
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    // Include the target stem so two writers in one directory — app and
+    // workspace settings share `settings/` — cannot collide on the temp name
+    // even if their timestamps match.
+    let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("file");
+    let temp = parent.join(format!(".{stem}.{unique}.tmp"));
+    let persisted = fs::write(&temp, contents).and_then(|_| {
+        // Windows `rename` will not replace an existing file. Dropping the
+        // destination first is not atomic, but it still cannot leave a
+        // half-written note, which is the failure this helper exists to close.
+        #[cfg(windows)]
+        if path.exists() {
+            fs::remove_file(path)?;
+        }
+        fs::rename(&temp, path)
+    });
+    if persisted.is_err() {
+        let _ = fs::remove_file(&temp);
+    }
+    persisted
 }
