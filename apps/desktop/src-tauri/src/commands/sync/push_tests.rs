@@ -421,6 +421,39 @@ fn tree_of(repo: &gix::Repository, commit: gix::ObjectId) -> gix::ObjectId {
         .detach()
 }
 
+/// A folder inside the vault with its own `.git` is recorded by git as a
+/// gitlink: an entry whose id names a commit in *someone else's* repository,
+/// which this one has never had and cannot send. Real git skips these when it
+/// works out what a pack must carry, and so must we — otherwise one such entry
+/// anywhere in the history makes every push from then on fail outright.
+#[test]
+fn a_folder_with_its_own_repository_does_not_break_the_push() {
+    let f = fixture("push-gitlink");
+    let remote = remote("push-gitlink");
+    write(&f.vault, "one.md", "first\n");
+    let tip = record(&f, "one", &["one.md"]);
+
+    // A commit id from somewhere else entirely; nothing here can resolve it.
+    let elsewhere = fixture("push-gitlink-other");
+    write(&elsewhere.vault, "theirs.md", "not ours\n");
+    let foreign = record(&elsewhere, "theirs", &["theirs.md"]);
+
+    let mut editor = f
+        .repo
+        .edit_tree(tree_of(&f.repo, tip))
+        .expect("the tree opens for editing");
+    editor
+        .upsert("reference", gix::object::tree::EntryKind::Commit, foreign)
+        .expect("the gitlink entry is added");
+    let tree = editor.write().expect("the tree is written").detach();
+    let with_gitlink = commit(&f, "a folder of its own", tree, &[tip]);
+
+    let sent = send(&f.repo, &link(&remote), BRANCH, with_gitlink).expect("the push succeeds");
+
+    assert_eq!(sent.landed, Landed::Moved);
+    assert_eq!(remote_tip(&remote, BRANCH), Some(with_gitlink));
+}
+
 /// The restore points are ours. They are not a branch, and a push that swept
 /// them up would put someone's undo history on a server they never chose.
 #[test]

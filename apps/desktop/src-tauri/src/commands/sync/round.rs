@@ -18,7 +18,7 @@
 //! settle rules and the checkpoints all apply here without a line added to
 //! them. See `plans/auto-sync/pending-the_round_trip-high-hard.md`.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 
 use gix::merge::tree::{FileFavor, TreatAsUnresolved, TreeFavor};
@@ -153,7 +153,7 @@ fn head_of(repo: &gix::Repository, reference: &str) -> Result<Option<gix::Object
 
 /// Takes the other side's history wholesale, because this vault has none.
 fn adopt(repo: &gix::Repository, vault: &Path, theirs: gix::ObjectId) -> Result<usize, NativeError> {
-    let brought_down = apply(
+    let (brought_down, _) = apply(
         repo,
         vault,
         snapshot::tree_of(repo, None)?,
@@ -219,7 +219,8 @@ fn merge(
         .map_err(|error| cannot(&error))?
         .detach();
 
-    let brought_down = apply(repo, vault, snapshot::tree_of(repo, Some(ours))?, merged)?;
+    let (brought_down, kept_back) = apply(repo, vault, snapshot::tree_of(repo, Some(ours))?, merged)?;
+    let asked_about = asked_about + kept_back;
     snapshot::record_merge(repo, merged, ours, theirs, &describe(brought_down, asked_about))?;
 
     Ok((brought_down, asked_about))
@@ -272,7 +273,8 @@ fn leave_copies(
     Ok(left)
 }
 
-/// Brings the vault to `after`, and answers with how many notes moved.
+/// Brings the vault to `after`: how many notes moved, and how many were left
+/// beside rather than written over.
 ///
 /// A tree diff rather than a checkout: this repository has no index and wants
 /// none, and only the paths that changed should be touched — everything else in
@@ -282,36 +284,43 @@ fn apply(
     vault: &Path,
     before: gix::ObjectId,
     after: gix::ObjectId,
-) -> Result<usize, NativeError> {
+) -> Result<(usize, usize), NativeError> {
     use gix::diff::tree::recorder::Change;
 
-    let mut moved = 0;
+    // Every name is checked before anything is written, because the names come
+    // from wherever this folder syncs to and `..` is one git's tree format
+    // allows. A name that would lead out of the folder stops the whole sync: it
+    // is either hostile or broken, and neither is something to half-apply.
+    let mut arriving = Vec::new();
     for record in snapshot::changes_between(repo, &mut Default::default(), before, after)? {
-        let (mode, path, arriving) = match record {
-            Change::Addition { entry_mode, oid, path, .. }
-            | Change::Modification { entry_mode, oid, path, .. } => (entry_mode, path, Some(oid)),
-            Change::Deletion { entry_mode, path, .. } => (entry_mode, path, None),
+        let (mode, path, blob, expected) = match record {
+            Change::Addition { entry_mode, oid, path, .. } => (entry_mode, path, Some(oid), None),
+            Change::Modification { entry_mode, oid, previous_oid, path, .. } => {
+                (entry_mode, path, Some(oid), Some(previous_oid))
+            }
+            Change::Deletion { entry_mode, oid, path, .. } => (entry_mode, path, None, Some(oid)),
         };
         if !mode.is_blob() {
             continue;
         }
+        arriving.push((within(vault, path.as_ref())?, path, blob, expected));
+    }
 
-        let path = vault.join(path.to_string());
-        match arriving {
-            Some(blob) => {
-                let bytes = repo
-                    .find_object(blob)
-                    .map_err(|error| {
-                        failed(
-                            "sync.history_unreadable",
-                            "Could not read a note that arrived.",
-                            error,
-                        )
-                    })?
-                    .data
-                    .clone();
-                put(&path, &bytes)?;
-            }
+    let (mut moved, mut kept_back) = (0, 0);
+    for (path, relative, blob, expected) in arriving {
+        // Never write over something we did not expect to find. A note someone
+        // edited while this was running — or after a sync that was interrupted
+        // before it could record what it had done — is theirs, and the other
+        // side's version goes beside it rather than over it.
+        if let Some(theirs) = unexpected(repo, &path, blob, expected)? {
+            let beside = conflict::beside(&relative.to_string(), |name| vault.join(name).exists());
+            put(&vault.join(&beside), &theirs)?;
+            kept_back += 1;
+            continue;
+        }
+
+        match blob {
+            Some(blob) => put(&path, &contents(repo, blob)?)?,
             // Already gone is the state we wanted; anything else is a failure
             // worth hearing about.
             None => match std::fs::remove_file(&path) {
@@ -329,7 +338,59 @@ fn apply(
         moved += 1;
     }
 
-    Ok(moved)
+    Ok((moved, kept_back))
+}
+
+/// The other side's bytes, when what is on disk is not what we were about to
+/// replace — and `None` when writing is safe.
+fn unexpected(
+    repo: &gix::Repository,
+    path: &Path,
+    blob: Option<gix::ObjectId>,
+    expected: Option<gix::ObjectId>,
+) -> Result<Option<Vec<u8>>, NativeError> {
+    let Ok(on_disk) = std::fs::read(path) else {
+        // Nothing there to lose. A note already gone is also the state a
+        // deletion wanted.
+        return Ok(None);
+    };
+    let current = gix::objs::compute_hash(repo.object_hash(), gix::object::Kind::Blob, &on_disk)
+        .map_err(|error| failed("sync.note_write_failed", "Could not read a note before replacing it.", error))?;
+
+    if Some(current) == expected || Some(current) == blob {
+        return Ok(None);
+    }
+    match blob {
+        Some(blob) => contents(repo, blob).map(Some),
+        // They deleted a note this device has since changed. Keeping it is the
+        // safe direction, and there is nothing of theirs to put beside it.
+        None => Ok(None),
+    }
+}
+
+/// The path inside `vault` that a tree entry names, or a refusal.
+fn within(vault: &Path, path: &gix::bstr::BStr) -> Result<PathBuf, NativeError> {
+    let named = std::str::from_utf8(path).map_err(|_| {
+        NativeError::new(
+            "sync.note_name_unreadable",
+            "A note arrived under a name this device cannot read.",
+        )
+    })?;
+    Ok(vault.join(snapshot::vault_relative(vault, Path::new(named))?))
+}
+
+fn contents(repo: &gix::Repository, blob: gix::ObjectId) -> Result<Vec<u8>, NativeError> {
+    Ok(repo
+        .find_object(blob)
+        .map_err(|error| {
+            failed(
+                "sync.history_unreadable",
+                "Could not read a note that arrived.",
+                error,
+            )
+        })?
+        .data
+        .clone())
 }
 
 fn put(path: &Path, bytes: &[u8]) -> Result<(), NativeError> {

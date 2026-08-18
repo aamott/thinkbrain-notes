@@ -131,7 +131,11 @@ pub fn carried(
 
 /// Everything a commit's tree holds that its parent's did not.
 ///
-/// Deletions are left out: a note that went away needs nothing sent for it.
+/// Deletions are left out: a note that went away needs nothing sent for it. So
+/// are gitlinks — a folder with a repository of its own is recorded as an entry
+/// whose id names a commit in *that* repository, which this one has never had
+/// and could not send. Real git skips them for the same reason; looking one up
+/// here would fail the whole push over a folder nobody asked us to carry.
 fn newly_reachable(
     repo: &gix::Repository,
     state: &mut gix::diff::tree::State,
@@ -143,7 +147,10 @@ fn newly_reachable(
         snapshot::changes_between(repo, state, snapshot::tree_of(repo, parent)?, tree)?
             .into_iter()
             .filter_map(|record| match record {
-                Change::Addition { oid, .. } | Change::Modification { oid, .. } => Some(oid),
+                Change::Addition { entry_mode, oid, .. }
+                | Change::Modification { entry_mode, oid, .. } => {
+                    (!entry_mode.is_commit()).then_some(oid)
+                }
                 Change::Deletion { .. } => None,
             })
             .collect(),

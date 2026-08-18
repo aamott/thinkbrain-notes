@@ -118,6 +118,33 @@ answer to that is to say so.
 once a destination has been named — a button that can only fail reads as
 something the person already set up.
 
+## What the review changed
+
+**A destination could choose where this app wrote.** Nothing validated the
+names arriving in a tree, and git's tree format allows an entry called `..`,
+which `join` follows straight out of the folder. A test that crafted such a
+tree and pushed it wrote a file into the vault's *parent* — proved by the
+artifact it left behind. Names are now checked before anything is written, with
+the same guard recording has always used, and a name that would leave the folder
+stops the whole sync rather than being quietly skipped. The merge path happened
+to be protected already by gitoxide's own validation; taking a first history
+wholesale was not.
+
+**A note being typed into was written over.** Applying a merge trusted the disk
+to still hold what the last recorded state said. It does not, in two ordinary
+cases: someone typing during a slow sync, and a sync interrupted after it wrote
+but before it recorded. Every write now checks what is actually there, and
+anything unexpected keeps what is on disk and puts the other side's version
+beside it as a copy.
+
+**A name in no encoding was silently mangled.** Rendering a path lossily gave a
+different filename on each device, so neither could ever touch the other's. It
+is refused by name instead.
+
+**Gitlinks broke the push outright.** A folder with a repository of its own is
+recorded as an entry whose id names a commit in *that* repository. Looking it up
+here failed the whole push. Real git skips them; now so do we.
+
 ## Known gaps
 
 - **The lane is not proved by its test.** Removing it leaves the test passing:
@@ -128,6 +155,18 @@ something the person already set up.
   resolution failure and we force it to ours, but there is no version of theirs
   to leave beside it, so nothing asks. Keeping someone's writing is the safe
   direction; saying nothing about it is the gap.
+- **One unwritable note blocks the vault forever.** A name that is legal here
+  but not on Windows, or a file where a folder now belongs, fails the write and
+  aborts before the merge is recorded — so the next sync recomputes the same
+  work and fails the same way, with no way past it. This is the same question
+  story 1 left open about a note that cannot be recorded, and it wants one
+  answer for both.
+- **Symlinks and submodules never arrive.** They are skipped when the vault is
+  brought up to date, but they *are* in the tree that gets recorded, so the next
+  sync sees no change and never tries again. Silently absent on this device.
+- **A crash mid-conflict multiplies the copies.** A copy is written before the
+  merge is recorded, so an interruption between the two leaves the copy behind;
+  the next attempt sees the name taken and writes ` 2`, then ` 3`.
 - **No trigger but the button.** A debounce and a frequency cap were left until
   the round trip had been used by hand.
 - **A first sync of a large vault is silent**, as story 6a noted.

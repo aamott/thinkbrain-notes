@@ -34,6 +34,12 @@ fn write(device: &Device, relative: &str, contents: &str) {
     record(device, relative);
 }
 
+/// Writes a note without recording it, the way an unsaved edit sits on disk
+/// between the moment someone types it and the moment the sweeper notices.
+fn write_only(device: &Device, relative: &str, contents: &str) {
+    fs::write(device.vault.join(relative), contents).expect("the note is written");
+}
+
 /// Records what is on disk, the way the sweeper would have.
 fn record(device: &Device, relative: &str) {
     snapshot::record(
@@ -432,6 +438,127 @@ fn remote_tip(destination: &str) -> Option<gix::ObjectId> {
     repo.try_find_reference("refs/heads/main")
         .expect("the destination's refs are readable")
         .map(|mut found| found.peel_to_id().expect("the ref points at an object").detach())
+}
+
+/// Nothing in git's tree format forbids an entry named `..`, and `Path::join`
+/// follows it straight out of the folder. A destination someone else controls
+/// must never be able to choose where this app writes.
+/// A name this device cannot even read is not a name it should guess at.
+/// Writing it under a mangled spelling would leave the two devices tracking
+/// different files forever, each unable to touch the other's.
+#[test]
+fn a_note_whose_name_cannot_be_read_here_is_refused() {
+    let victim = device("round-unreadable-name");
+    let there = shared("round-unreadable-name");
+
+    let hostile = device("round-unreadable-name-other");
+    let blob = hostile.repo.write_blob(b"anything").expect("the blob is written").detach();
+    let root = tree_holding(
+        &hostile,
+        b"note\xff.md".to_vec(),
+        gix::object::tree::EntryKind::Blob,
+        blob,
+    );
+    let crafted = commit_of(&hostile, "a name in no encoding", root, &[]);
+    push::send(&hostile.repo, &there, BRANCH, crafted).expect("the crafted history is sent");
+
+    let error = once(&victim.repo, &victim.vault, &there).expect_err("an unreadable name is refused");
+
+    assert_eq!(error.code, "sync.note_name_unreadable");
+    assert!(files(&victim).is_empty(), "something was written anyway: {:?}", files(&victim));
+}
+
+/// Someone types into a note while a sync is running, or after one was
+/// interrupted before it could record what it had already written. Either way
+/// what is on disk is theirs, and the other device's version goes beside it.
+#[test]
+fn a_note_changed_underneath_a_sync_is_never_written_over() {
+    let one = device("round-underneath-one");
+    let two = device("round-underneath-two");
+    let there = shared("round-underneath");
+    write(&one, "note.md", "as it was\n");
+    trip(&one, &there);
+    trip(&two, &there);
+
+    write_only(&two, "note.md", "what they were typing\n");
+    write(&one, "note.md", "changed elsewhere\n");
+    trip(&one, &there);
+
+    let synced = trip(&two, &there);
+
+    assert_eq!(read(&two, "note.md"), "what they were typing\n", "someone's typing was lost");
+    assert_eq!(read(&two, "note (from another device).md"), "changed elsewhere\n");
+    assert_eq!(synced.asked_about, 1);
+}
+
+/// The route that has no merge to hide behind: a folder with nothing recorded
+/// in it yet takes the other side's history wholesale.
+#[test]
+fn a_note_named_to_escape_the_folder_is_refused() {
+    let victim = device("round-escape");
+    let there = shared("round-escape");
+
+    let hostile = device("round-escape-hostile");
+    let blob = hostile.repo.write_blob(b"escaped").expect("the blob is written").detach();
+    let inside = tree_holding(&hostile, "escaped.md", gix::object::tree::EntryKind::Blob, blob);
+    let root = tree_holding(&hostile, "..", gix::object::tree::EntryKind::Tree, inside);
+    let crafted = commit_of(&hostile, "a folder named to escape", root, &[]);
+    push::send(&hostile.repo, &there, BRANCH, crafted).expect("the crafted history is sent");
+
+    let escaped = victim
+        .vault
+        .parent()
+        .expect("the vault has a parent")
+        .join("escaped.md");
+    let error = once(&victim.repo, &victim.vault, &there).expect_err("a crafted tree is refused");
+
+    assert!(!escaped.exists(), "a note was written outside the folder: {escaped:?}");
+    assert_eq!(error.code, "sync.path_outside_vault");
+}
+
+fn tree_holding(
+    device: &Device,
+    name: impl Into<gix::bstr::BString>,
+    kind: gix::object::tree::EntryKind,
+    oid: gix::ObjectId,
+) -> gix::ObjectId {
+    device
+        .repo
+        .write_object(&gix::objs::Tree {
+            entries: vec![gix::objs::tree::Entry {
+                mode: kind.into(),
+                filename: name.into(),
+                oid,
+            }],
+        })
+        .expect("the tree is written")
+        .detach()
+}
+
+fn commit_of(
+    device: &Device,
+    message: &str,
+    tree: gix::ObjectId,
+    parents: &[gix::ObjectId],
+) -> gix::ObjectId {
+    let who = gix::actor::Signature {
+        name: "ThinkBrain Notes".into(),
+        email: "sync@thinkbrain.notes".into(),
+        time: gix::date::Time::now_utc(),
+    };
+    device
+        .repo
+        .write_object(&gix::objs::Commit {
+            tree,
+            parents: parents.iter().copied().collect(),
+            author: who.clone(),
+            committer: who,
+            encoding: None,
+            message: message.into(),
+            extra_headers: Vec::new(),
+        })
+        .expect("the commit is written")
+        .detach()
 }
 
 // ---------------------------------------------------------------------------
