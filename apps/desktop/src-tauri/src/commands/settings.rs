@@ -3,7 +3,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use crate::commands::workspace::{resolve_workspace_root, stable_workspace_hash};
+use crate::commands::workspace::{
+    resolve_app_data_dir, resolve_workspace_root, stable_workspace_hash,
+};
 use serde_json::{Map, Value};
 use std::fs;
 use std::sync::Mutex;
@@ -14,6 +16,18 @@ static APP_SETTINGS_MUTATION_LOCK: Mutex<()> = Mutex::new(());
 /// Separate from the app lock: the two documents are different files, and a
 /// workspace save has no reason to wait behind a theme change.
 static WORKSPACE_SETTINGS_MUTATION_LOCK: Mutex<()> = Mutex::new(());
+
+fn acquire_app_settings_lock() -> std::sync::MutexGuard<'static, ()> {
+    APP_SETTINGS_MUTATION_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+fn acquire_workspace_settings_lock() -> std::sync::MutexGuard<'static, ()> {
+    WORKSPACE_SETTINGS_MUTATION_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
 const APP_THEME_KEY: &str = "theme";
 const SUPPORTED_APP_THEMES: [&str; 3] = ["system", "light", "dark"];
 const DESKTOP_STATE_KEY: &str = "desktopState";
@@ -123,9 +137,7 @@ pub type WorkspaceViews = BTreeMap<String, BTreeMap<String, Vec<String>>>;
 
 #[tauri::command]
 pub fn read_app_settings(app: tauri::AppHandle) -> Result<Option<String>, NativeError> {
-    let _settings_lock = APP_SETTINGS_MUTATION_LOCK
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _settings_lock = acquire_app_settings_lock();
     read_settings_file(&resolve_app_settings_path(&app)?)
 }
 
@@ -153,9 +165,7 @@ pub fn write_app_settings(
     contents: String,
     expected: Option<String>,
 ) -> Result<(), NativeError> {
-    let _settings_lock = APP_SETTINGS_MUTATION_LOCK
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _settings_lock = acquire_app_settings_lock();
     let settings_path = resolve_app_settings_path(&app)?;
 
     // Read and check under the same lock acquisition as the write: the check is
@@ -745,49 +755,11 @@ fn quarantine_settings_file(path: &Path) {
 }
 
 pub fn write_settings_file(path: &Path, contents: &str) -> Result<(), NativeError> {
-    let parent = path.parent().ok_or_else(|| {
-        NativeError::new(
-            "settings.invalid_path",
-            "Settings file path must include a parent directory.",
-        )
-    })?;
-
-    fs::create_dir_all(parent).map_err(|error| {
-        NativeError::with_details(
-            "settings.create_dir_failed",
-            "Failed to create the settings directory.",
-            error,
-        )
-    })?;
-
-    let unique = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos();
-    // Include the target filename stem so app and workspace writes — which
-    // share the same `settings/` directory — never collide on the temp name
-    // even if their nanosecond timestamps happen to match.
-    let stem = path
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or("settings");
-    let temp_path = parent.join(format!(".{stem}.{unique}.tmp"));
-    fs::write(&temp_path, contents).map_err(|error| {
+    crate::commands::workspace::write_file_atomically(path, contents).map_err(|error| {
         NativeError::with_details(
             "settings.write_failed",
-            "Failed to write to temporary settings file.",
+            "Failed to write the settings file.",
             error,
         )
-    })?;
-    
-    fs::rename(&temp_path, path).map_err(|error| {
-        let _ = fs::remove_file(&temp_path);
-        NativeError::with_details(
-            "settings.write_failed",
-            "Failed to rename temporary settings file.",
-            error,
-        )
-    })?;
-
-    Ok(())
+    })
 }

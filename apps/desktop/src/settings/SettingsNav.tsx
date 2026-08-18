@@ -4,8 +4,10 @@
  * Renders a search input at the top, followed by either the normal
  * `role="tree"` (module → section → subsection hierarchy) or a flat results
  * list when a search query is active. Top-level tree groups are "Application"
- * (app-scoped modules) and "Workspace" (workspace-scoped modules, only when a
- * workspace is open). Clicking a section sets it as the active nav target.
+ * (settings whose scope is `"app"`) and "Workspace" (settings whose scope is
+ * `"workspace"`, only when a workspace is open). A mixed-scope module appears
+ * in both, projected to the matching settings. Clicking a section sets it as
+ * the active nav target.
  * Subsections are collapsible via a chevron toggle (local component state).
  *
  * Search filters all registry definitions by case-insensitive substring match
@@ -93,7 +95,7 @@ function SectionTreeItem({
           onClick={() => hasSettings && onSelect(section.id)}
           className={cn(
             "flex-1 truncate rounded px-1.5 py-1 text-left text-xs leading-relaxed",
-            "focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring",
+            "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
             isActive
               ? "bg-surface font-medium text-foreground"
               : "text-muted-foreground hover:bg-accent hover:text-foreground",
@@ -225,13 +227,9 @@ function buildSectionPath(definition: SettingDefinition): string {
 function filterDefinitions(query: string): readonly SettingDefinition[] {
   const trimmed = query.trim().toLowerCase();
   if (trimmed === "") return [];
-  return appSettingsRegistry.getAllDefinitions().filter((def) => {
-    return (
-      def.label.toLowerCase().includes(trimmed) ||
-      def.description.toLowerCase().includes(trimmed) ||
-      def.key.toLowerCase().includes(trimmed)
-    );
-  });
+  return appSettingsRegistry.getAllDefinitions().filter((def) =>
+    [def.label, def.description, def.key].some((field) => field.toLowerCase().includes(trimmed))
+  );
 }
 
 /**
@@ -261,7 +259,7 @@ function SearchResults({
           <button
             type="button"
             onClick={() => onSelect(def)}
-            className="flex w-full flex-col gap-0.5 rounded px-2 py-1.5 text-left hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
+            className="flex w-full flex-col gap-0.5 rounded px-2 py-1.5 text-left hover:bg-accent focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
           >
             <span className="text-xs font-medium text-foreground">
               {def.label}
@@ -283,7 +281,8 @@ function SearchResults({
  * and `setSearchQuery` from the settings store. When `searchQuery` is non-empty
  * (after trim), the tree is replaced by a flat results list. The "Workspace"
  * group only renders when `workspaceValues` is non-null (i.e. a workspace is
- * open). Modules are sourced from the module-scoped `appSettingsRegistry`.
+ * open). Modules come from `getModulesByScope`, which projects mixed-scope
+ * modules onto the matching settings.
  */
 export function SettingsNav() {
   const activeSection = useSettingsStore((s) => s.activeSection);
@@ -333,7 +332,7 @@ export function SettingsNav() {
             className={cn(
               "w-full rounded-small border border-border bg-surface py-1.5 pl-7 pr-2 text-xs text-foreground",
               "placeholder:text-muted-foreground",
-              "focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
+              "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
             )}
           />
         </div>

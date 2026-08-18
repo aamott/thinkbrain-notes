@@ -3,4 +3,8 @@
 export { appearanceModule } from "./appearance";
 export { editorModule } from "./editor";
 export { settingsModule } from "./settings";
-export { syncModule } from "./sync";
+export {
+  DEFAULT_SETTLE_AUTOMATICALLY,
+  syncModule,
+  validateSyncDestination
+} from "./sync";
