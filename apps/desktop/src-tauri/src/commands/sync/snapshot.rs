@@ -241,12 +241,26 @@ fn build_tree(
 }
 
 /// Commits `tree` onto `reference`, authored by the app.
+/// Records a merge on the history branch: one tree, two parents.
+///
+/// Everything else here writes a single line of history, because everything
+/// else is one device typing. A sync is the only thing that joins two.
+pub fn record_merge(
+    repo: &gix::Repository,
+    tree: gix::ObjectId,
+    ours: gix::ObjectId,
+    theirs: gix::ObjectId,
+    message: &str,
+) -> Result<gix::ObjectId, NativeError> {
+    commit_on(repo, HISTORY_REF, message, tree, [ours, theirs])
+}
+
 fn commit_on(
     repo: &gix::Repository,
     reference: &str,
     message: &str,
     tree: gix::ObjectId,
-    parent: Option<gix::ObjectId>,
+    parents: impl IntoIterator<Item = gix::ObjectId>,
 ) -> Result<gix::ObjectId, NativeError> {
     let signature = gix::actor::Signature {
         name: AUTHOR_NAME.into(),
@@ -261,7 +275,7 @@ fn commit_on(
             reference,
             message,
             tree,
-            parent,
+            parents,
         )
         .map_err(|error| failed("sync.commit_failed", "Could not record this change.", error))?;
 

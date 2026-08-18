@@ -19,8 +19,8 @@ use std::path::Path;
 /// marked as such rather than quietly trusted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Evidence {
-    /// A real file produced by the real daemon has been seen in this shape.
-    #[allow(dead_code, reason = "no row has earned this yet; see the story's known gaps")]
+    /// A real file in this shape has been seen — because a daemon produced one,
+    /// or because this app writes them itself.
     Fixture,
     /// Taken from documentation or reports. Believed, not witnessed.
     Documented,
@@ -93,6 +93,43 @@ fn dropbox(name: &str) -> Option<String> {
     Some(format!("{}{}", &stem[..open], extension))
 }
 
+/// Ours: `note (from another device).md`, and ` 2`, ` 3` if one is already
+/// there.
+///
+/// A pull cannot decide every note, and what it could not decide is written
+/// into the vault in the shape a sync daemon would have used — so the panel,
+/// the merge view and the settle rules all apply to it without any of them
+/// learning where it came from.
+fn another_device(name: &str) -> Option<String> {
+    let (stem, extension) = split_extension(name);
+    let open = stem.rfind(FROM_ANOTHER_DEVICE)?;
+    let counter = stem[open + FROM_ANOTHER_DEVICE.len()..].strip_suffix(')')?;
+    let numbered = counter.is_empty()
+        || counter
+            .strip_prefix(' ')
+            .is_some_and(|n| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()));
+    numbered.then(|| format!("{}{}", &stem[..open], extension))
+}
+
+const FROM_ANOTHER_DEVICE: &str = " (from another device";
+
+/// A free name to put another device's version of `original` beside it at.
+pub fn beside(original: &str, taken: impl Fn(&str) -> bool) -> String {
+    let (directory, name) = match original.rfind('/') {
+        Some(index) => (&original[..=index], &original[index + 1..]),
+        None => ("", original),
+    };
+    let (stem, extension) = split_extension(name);
+
+    let mut candidate = format!("{directory}{stem}{FROM_ANOTHER_DEVICE}){extension}");
+    let mut nth = 2;
+    while taken(&candidate) {
+        candidate = format!("{directory}{stem}{FROM_ANOTHER_DEVICE} {nth}){extension}");
+        nth += 1;
+    }
+    candidate
+}
+
 /// Nextcloud: `note (conflicted copy 2026-08-16 093100).md`.
 ///
 /// Same shape as Dropbox without the owner's name, so `dropbox` already
@@ -126,6 +163,12 @@ pub const PATTERNS: &[ConflictPattern] = &[
         provider: "Dropbox",
         evidence: Evidence::Documented,
         match_name: dropbox,
+    },
+    ConflictPattern {
+        provider: "another device",
+        // The one row that has earned it: we write these ourselves.
+        evidence: Evidence::Fixture,
+        match_name: another_device,
     },
 ];
 
@@ -222,6 +265,50 @@ mod tests {
 
         assert_eq!(found.original, "note.md");
         assert_eq!(found.provider, "Syncthing");
+    }
+
+    /// The copies a pull leaves behind go through the same table as everyone
+    /// else's, which is the whole reason story 6 needed no conflict UI.
+    #[test]
+    fn our_own_copies_are_paired_with_their_original() {
+        let found = pair("note (from another device).md", always)
+            .expect("a copy we wrote ourselves is recognised");
+
+        assert_eq!(found.original, "note.md");
+        assert_eq!(found.provider, "another device");
+    }
+
+    #[test]
+    fn a_second_copy_of_one_note_is_still_paired() {
+        let found = pair("note (from another device 2).md", always)
+            .expect("a numbered copy is recognised");
+
+        assert_eq!(found.original, "note.md");
+    }
+
+    /// The counter is the only thing allowed after the phrase. Anything else is
+    /// a name someone chose, and offering to resolve it would be a nuisance.
+    #[test]
+    fn a_note_merely_named_that_way_is_not_a_copy() {
+        assert!(pair("note (from another device of mine).md", always).is_none());
+    }
+
+    #[test]
+    fn a_copy_goes_beside_its_note_and_past_any_already_there() {
+        assert_eq!(beside("note.md", |_| false), "note (from another device).md");
+        assert_eq!(
+            beside("note.md", |name| name == "note (from another device).md"),
+            "note (from another device 2).md"
+        );
+    }
+
+    /// A folder with a dot in its name must not be mistaken for an extension.
+    #[test]
+    fn a_copy_in_a_folder_keeps_the_folder() {
+        assert_eq!(
+            beside("my.notes/one.md", |_| false),
+            "my.notes/one (from another device).md"
+        );
     }
 
     #[test]
@@ -344,13 +431,27 @@ mod tests {
 
     /// Until someone has watched each daemon produce a real file, the table
     /// says so. This fails the moment a row claims evidence it does not have.
+    ///
+    /// One row may: the copies a pull leaves are ours, so there is no daemon to
+    /// wait on and [`beside`] is the fixture. It has to prove that here, by
+    /// being recognised as what it writes.
     #[test]
     fn every_pattern_records_what_is_actually_known_about_it() {
         for pattern in PATTERNS {
+            if pattern.evidence == Evidence::Fixture {
+                let ours = beside("note.md", |_| false);
+                assert_eq!(
+                    (pattern.match_name)(&ours).as_deref(),
+                    Some("note.md"),
+                    "{} claims to have seen its own copies but does not recognise one",
+                    pattern.provider
+                );
+                continue;
+            }
             assert_eq!(
                 pattern.evidence,
                 Evidence::Documented,
-                "{} claims fixture evidence; the fixture must exist in this file",
+                "{} claims evidence the table has no name for",
                 pattern.provider
             );
         }
