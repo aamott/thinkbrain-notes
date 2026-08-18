@@ -29,6 +29,44 @@ The arc, in order:
 12. Assistant extension registration handoff.
 13. AI-assisted discovery bridge (last; semantic-search remains owner).
 
+## Feature areas to plan
+
+Each is a surface Opus 5 must decompose. Concise callouts only — not specs.
+
+- **UI design & mockup**: dev has specific instructions for the chat surface
+  (shadcn primitives, right-side placement). Planner should ask the dev for
+  these before designing; do not invent layout.
+- **Model selection**: how a user picks a model for a thread/turn. Interacts
+  with harness and profile selection.
+- **Harness selection**: initial harnesses — Claude Code (with ACP extension),
+  Codex (with ACP extension), Devin CLI, Mistral Vibe (ACP built in). Future:
+  pydantic-ai-harness and others. Planner defines the harness abstraction;
+  dev implements each.
+- **Model autodetect**: `HarnessProvider` and `list_models` are ACP standard
+  methods; Devin is compatible. Use these for autodetect, not custom probing.
+- **Model autodetect fallback**: separate per-harness. Each harness module owns
+  its fallback chain when `list_models` is unavailable or fails.
+- **Harness autodetect**: do not list a harness that isn't installed. Detection
+  is local, non-blocking, no subprocess spawn, no network.
+- **Profile selection**: a profile binds harness + model + settings presets.
+  Planner defines the profile shape and switching UX.
+- **File attachments**: how users attach files to a prompt. Uses the
+  `attachment` shadcn primitive for the chip/marker UI.
+- **Context & cost tracking**: token/context usage and cost visibility per turn
+  and per thread. Planner defines what's tracked and where it surfaces.
+- **Tool call tracking & approvals**: render tool calls in-thread; approvals
+  flow through ACP permission-consent UI (arc step 10). Planner defines the
+  in-thread affordances.
+
+### Harness module pattern (locked method)
+
+Each harness is added by a single harness module file. That module dictates
+which features are implemented and contains any workarounds or harness-specific
+code. **Any workaround must be specifically approved by the dev, one at a time.**
+None are approved during planning — only the overall method per harness is
+approved. The planner describes the method; the dev approves workarounds
+individually during implementation.
+
 ## Concrete invariants (locked)
 
 - **ACP protocol**: use the official `agent-client-protocol` Rust crate. The
