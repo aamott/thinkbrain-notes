@@ -1,5 +1,5 @@
 use super::*;
-use crate::commands::sync::bootstrap::{bootstrap, Managed};
+use crate::commands::sync::bootstrap::bootstrap;
 use crate::commands::sync::conflict::ConflictCopy;
 use crate::tests::make_temp_test_dir;
 use std::path::PathBuf;
@@ -13,12 +13,10 @@ struct Vault {
 fn vault(name: &str) -> Vault {
     let app_data = make_temp_test_dir(&format!("{name}-appdata"), "sync", true);
     let root = make_temp_test_dir(&format!("{name}-vault"), "sync", true);
-    match bootstrap(&app_data, &root).expect("bootstrap succeeds") {
-        Managed::Yes(workspace) => Vault {
-            root,
-            engine: Engine::new(workspace.repo),
-        },
-        Managed::HasOwnGit => panic!("the vault was expected to be managed"),
+    let managed = bootstrap(&app_data, &root).expect("bootstrap succeeds");
+    Vault {
+        root,
+        engine: Engine::new(managed.repo, managed.has_own_git),
     }
 }
 

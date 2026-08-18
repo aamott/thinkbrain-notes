@@ -54,6 +54,13 @@ export interface SyncStatus {
   readonly waiting: number;
   readonly attention: number;
   readonly problem: SyncProblem | null;
+  /**
+   * Whether this folder is also a git repository of the user's own.
+   *
+   * Nothing acts on it. Two histories are being kept here, and someone should
+   * hear that from the app rather than discover it.
+   */
+  readonly alongsideOwnGit: boolean;
 }
 
 /** What a window shows before it has heard anything, and if it never does. */
@@ -62,5 +69,6 @@ export const NOT_RECORDING: SyncStatus = {
   lastRecordedAt: null,
   waiting: 0,
   attention: 0,
-  problem: null
+  problem: null,
+  alongsideOwnGit: false
 };

@@ -418,7 +418,7 @@ fn keep_both(root: &Path, pairing: &ConflictCopy) -> Result<String, NativeError>
 
 #[cfg(test)]
 mod tests {
-    use super::super::bootstrap::{bootstrap, Managed};
+    use super::super::bootstrap::bootstrap;
     use super::*;
     use crate::tests::make_temp_test_dir;
     use std::fs;
@@ -473,13 +473,10 @@ mod tests {
         fs::write(vault.join("note.md"), ours).expect("the note is written");
         fs::write(vault.join(COPY), theirs).expect("the copy is written");
 
-        let workspace = match bootstrap(&app_data, &vault).expect("bootstrap succeeds") {
-            Managed::Yes(workspace) => *workspace,
-            Managed::HasOwnGit => panic!("the vault was expected to be managed"),
-        };
+        let workspace = bootstrap(&app_data, &vault).expect("bootstrap succeeds");
         Fixture {
             vault,
-            engine: Engine::new(workspace.repo),
+            engine: Engine::new(workspace.repo, workspace.has_own_git),
         }
     }
 

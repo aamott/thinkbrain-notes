@@ -53,6 +53,10 @@ vi.mock("./conflictService", () => ({
 const readHistory = vi.fn<() => Promise<readonly RecordedChange[]>>();
 
 vi.mock("./syncService", () => ({
+  // `alongsideOwnGit` on, so the sentence a folder under its own version
+  // control gets is audited like everything else.
+  readSyncStatus: () =>
+    Promise.resolve({ ...NOT_RECORDING, state: "idle", alongsideOwnGit: true }),
   readHistory: () => readHistory(),
   readConflictRate: () => Promise.resolve({ decisions: 2, recorded: 340 }),
   restoreVersion: () => Promise.resolve({ note: "n", checkpoint: "c" }),

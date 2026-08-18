@@ -11,6 +11,7 @@ import {
   restoreVersion,
   subscribeToSyncStatus
 } from "./syncService";
+import { useSyncStatus } from "./useSyncStatus";
 
 /**
  * Everything this workspace has saved, and the way back to any of it.
@@ -46,6 +47,7 @@ export function HistoryPanel({ rootPath, note, onShowEverything }: HistoryPanelP
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { alongsideOwnGit } = useSyncStatus(rootPath);
 
   /** Reads the list, changing nothing. {@link apply} is the only writer. */
   const read = useCallback(async (): Promise<Read | null> => {
@@ -137,6 +139,12 @@ export function HistoryPanel({ rootPath, note, onShowEverything }: HistoryPanelP
             ? "Every version of this note that was saved. Putting one back saves what it replaces, so you can change your mind again."
             : "Everything saved in this folder, newest first. Open one to see which notes changed and to put any of them back."}
         </p>
+        {alongsideOwnGit && (
+          <p className="mb-0 mt-2 text-[0.7rem] leading-relaxed text-muted-foreground">
+            This folder also keeps its own version history. That one is left exactly as it is —
+            what you see here is a second, separate record kept outside your notes.
+          </p>
+        )}
         {note && (
           <button type="button" className={QUIET_BUTTON + " mt-2"} onClick={onShowEverything}>
             Show everything instead

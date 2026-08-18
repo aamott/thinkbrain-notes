@@ -10,13 +10,6 @@ fn write(root: &Path, relative: &str, contents: &str) {
     fs::write(path, contents).expect("the file is written");
 }
 
-fn managed(result: Managed) -> ManagedWorkspace {
-    match result {
-        Managed::Yes(workspace) => *workspace,
-        Managed::HasOwnGit => panic!("the vault was expected to be managed"),
-    }
-}
-
 fn recorded_paths(repo: &gix::Repository) -> Vec<String> {
     let Some(commit) = snapshot::head_commit(repo).expect("the history is readable") else {
         return Vec::new();
@@ -57,22 +50,26 @@ fn each_workspace_gets_its_own_hidden_repo() {
 }
 
 /// The one case where the right answer is to do nothing. A vault that is
-/// already a git repository belongs to whoever set it up, and a second tool
-/// committing into it — or beside it — is how someone loses work they were
-/// managing carefully.
+/// A notes folder under someone's own version control is exactly the folder
+/// most likely to also be in a sync folder, so refusing it cost the whole
+/// feature to the people most likely to need it. Never touching their
+/// repository is a separate promise, and it keeps itself: ours lives in app
+/// data, and the walk skips every dot-directory, `.git` among them.
 #[test]
-fn a_vault_with_its_own_git_is_left_alone() {
+fn a_vault_with_its_own_git_is_recorded_too_and_its_repository_left_alone() {
     let app_data = make_temp_test_dir("bootstrap-own-git-appdata", "sync", true);
     let vault = make_temp_test_dir("bootstrap-own-git-vault", "sync", true);
     fs::create_dir(vault.join(".git")).expect("the vault has its own repository");
+    fs::write(vault.join(".git").join("HEAD"), "ref: refs/heads/main\n").expect("written");
     write(&vault, "note.md", "# A note\n");
 
-    let result = bootstrap(&app_data, &vault).expect("bootstrap decides");
+    let workspace = bootstrap(&app_data, &vault).expect("bootstrap succeeds");
 
-    assert!(matches!(result, Managed::HasOwnGit));
-    assert!(
-        !app_data.join("sync").exists(),
-        "a hidden repository was created for a vault that has its own"
+    assert!(workspace.has_own_git, "the second history should be declared, not hidden");
+    assert_eq!(
+        recorded_paths(&workspace.repo),
+        ["note.md"],
+        "the note is recorded and nothing of their repository is"
     );
 }
 
@@ -81,7 +78,7 @@ fn an_empty_vault_bootstraps_without_a_commit() {
     let app_data = make_temp_test_dir("bootstrap-empty-appdata", "sync", true);
     let vault = make_temp_test_dir("bootstrap-empty-vault", "sync", true);
 
-    let workspace = managed(bootstrap(&app_data, &vault).expect("bootstrap succeeds"));
+    let workspace = (bootstrap(&app_data, &vault).expect("bootstrap succeeds"));
 
     assert_eq!(
         snapshot::head_commit(&workspace.repo).expect("the history is readable"),
@@ -100,7 +97,7 @@ fn a_vault_of_existing_notes_is_snapshotted_whole() {
     write(&vault, "one.md", "# One\n");
     write(&vault, "journal/2026/08-16.md", "# Today\n");
 
-    let workspace = managed(bootstrap(&app_data, &vault).expect("bootstrap succeeds"));
+    let workspace = (bootstrap(&app_data, &vault).expect("bootstrap succeeds"));
 
     assert_eq!(recorded_paths(&workspace.repo), ["journal/2026/08-16.md", "one.md"]);
 }
@@ -111,12 +108,12 @@ fn bootstrapping_again_does_not_snapshot_again() {
     let vault = make_temp_test_dir("bootstrap-twice-vault", "sync", true);
     write(&vault, "one.md", "# One\n");
 
-    let first = managed(bootstrap(&app_data, &vault).expect("bootstrap succeeds"));
+    let first = (bootstrap(&app_data, &vault).expect("bootstrap succeeds"));
     assert!(first.took_first_snapshot, "the first open did not record the vault");
     let first_head = snapshot::head_commit(&first.repo).expect("the history is readable");
     drop(first);
 
-    let second = managed(bootstrap(&app_data, &vault).expect("bootstrap succeeds again"));
+    let second = (bootstrap(&app_data, &vault).expect("bootstrap succeeds again"));
 
     assert!(
         !second.took_first_snapshot,
@@ -143,7 +140,7 @@ fn os_junk_and_half_written_files_are_not_recorded() {
     write(&vault, "~$note.md", "lock");
     write(&vault, ".~lock.note.md#", "lock");
 
-    let workspace = managed(bootstrap(&app_data, &vault).expect("bootstrap succeeds"));
+    let workspace = (bootstrap(&app_data, &vault).expect("bootstrap succeeds"));
 
     assert_eq!(recorded_paths(&workspace.repo), ["note.md"]);
 }
@@ -163,7 +160,7 @@ fn symlinks_are_not_followed_into_the_snapshot() {
     std::os::unix::fs::symlink(&outside, vault.join("linked-folder"))
         .expect("the vault holds a symlinked folder");
 
-    let workspace = managed(bootstrap(&app_data, &vault).expect("bootstrap succeeds"));
+    let workspace = (bootstrap(&app_data, &vault).expect("bootstrap succeeds"));
 
     assert_eq!(recorded_paths(&workspace.repo), ["note.md"]);
 }
@@ -181,7 +178,7 @@ fn conflict_copies_stay_out_of_history_without_being_ignored() {
     write(&vault, "note.sync-conflict-20260816-093100-K3SDFHG.md", "# Theirs\n");
     write(&vault, "note (Adam's conflicted copy 2026-08-16).md", "# Theirs\n");
 
-    let workspace = managed(bootstrap(&app_data, &vault).expect("bootstrap succeeds"));
+    let workspace = (bootstrap(&app_data, &vault).expect("bootstrap succeeds"));
 
     assert_eq!(recorded_paths(&workspace.repo), ["note.md"]);
 
@@ -224,7 +221,7 @@ fn ignored_folders_are_pruned_but_non_markdown_files_are_kept() {
     write(&vault, "target/debug/app", "binary");
     write(&vault, "notes/.hidden.md", "secret");
 
-    let workspace = managed(bootstrap(&app_data, &vault).expect("bootstrap succeeds"));
+    let workspace = (bootstrap(&app_data, &vault).expect("bootstrap succeeds"));
 
     let paths = recorded_paths(&workspace.repo);
     assert!(

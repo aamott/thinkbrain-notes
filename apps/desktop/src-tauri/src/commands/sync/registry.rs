@@ -17,7 +17,7 @@ use std::time::{Duration, Instant};
 use crate::commands::watcher::{WatchInterest, WorkspaceChange, WorkspaceChangeKind};
 use crate::NativeError;
 
-use super::bootstrap::{bootstrap, Managed};
+use super::bootstrap::bootstrap;
 use super::conflict;
 use super::engine::Engine;
 
@@ -100,23 +100,19 @@ fn registry() -> std::sync::MutexGuard<'static, Option<Registry>> {
     ENGINES.lock().unwrap_or_else(|error| error.into_inner())
 }
 
-/// Starts recording `root` on behalf of a window, if it is ours to record.
-///
-/// Returns whether Auto Sync is keeping history — `false` means the vault has
-/// its own git repository and is being left alone, which the settings page
-/// says out loud rather than leaving as silence.
+/// Starts recording `root` on behalf of a window.
 pub fn attach(
     app_data_dir: &Path,
     root: &Path,
     key: &str,
     label: &str,
-) -> Result<bool, NativeError> {
+) -> Result<(), NativeError> {
     let lane = {
         let mut guard = registry();
         let state = guard.get_or_insert_with(Registry::default);
         if state.hold(key, label) {
             start_sweeping(state);
-            return Ok(true);
+            return Ok(());
         }
         state.lane(key)
     };
@@ -132,7 +128,7 @@ pub fn attach(
         let state = guard.get_or_insert_with(Registry::default);
         if state.hold(key, label) {
             start_sweeping(state);
-            return Ok(true);
+            return Ok(());
         }
     }
     // A failure here is the one thing nobody could see: it was logged and the
@@ -150,25 +146,13 @@ pub fn attach(
 
     let mut guard = registry();
     let state = guard.get_or_insert_with(Registry::default);
-    match managed {
-        // Interest is deliberately not taken: there is no engine to keep alive,
-        // and holding it would leave the registry claiming to look after a vault
-        // it has promised not to touch.
-        Managed::HasOwnGit => {
-            state.failures.remove(key);
-            return Ok(false);
-        }
-        Managed::Yes(workspace) => {
-            let engine = Arc::new(Engine::new(workspace.repo));
-            // Conflicts appear while the app is closed. Someone back from a
-            // week away should not have to open each note to discover the
-            // app noticed nothing.
-            engine.note_conflicts(conflict::scan(root));
-            state.adopt(key, label, engine);
-        }
-    }
+    let engine = Arc::new(Engine::new(managed.repo, managed.has_own_git));
+    // Conflicts appear while the app is closed. Someone back from a week away
+    // should not have to open each note to discover the app noticed nothing.
+    engine.note_conflicts(conflict::scan(root));
+    state.adopt(key, label, engine);
     start_sweeping(state);
-    Ok(true)
+    Ok(())
 }
 
 fn start_sweeping(state: &mut Registry) {

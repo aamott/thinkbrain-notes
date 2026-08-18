@@ -2,9 +2,13 @@
 //!
 //! Opening a vault for the first time has to work the same whether it is empty,
 //! full of notes the user has kept for years, or already a git repository of
-//! their own. The last case is the one that matters most: a vault with its own
-//! `.git` belongs to its owner, and the right behaviour is to notice and stay
-//! out of the way.
+//! their own. The last case used to be refused outright, which turned out to
+//! confuse two different things: never touching someone's own repository, and
+//! declining to keep any history for their notes. The first is right and comes
+//! for free — our repository lives in app data and the walk skips every
+//! dot-directory, `.git` included — while the second cost the whole feature to
+//! the people most likely to have a notes folder under version control.
+//! So a vault with its own `.git` is recorded like any other, and told so.
 
 use std::path::{Path, PathBuf};
 
@@ -26,17 +30,15 @@ pub struct ManagedWorkspace {
     /// first open, where the wait is real.
     #[allow(dead_code, reason = "story 5's status surface is the reader")]
     pub took_first_snapshot: bool,
+    /// Whether the vault is also a git repository of the user's own.
+    ///
+    /// Carried so a window can say so. It changes nothing about what we do:
+    /// our repository is elsewhere, and their `.git` is a dot-directory, which
+    /// the walk already skips along with every other.
+    pub has_own_git: bool,
 }
 
-/// Whether Auto Sync keeps history for a vault.
-pub enum Managed {
-    /// Auto Sync keeps this vault's history.
-    Yes(Box<ManagedWorkspace>),
-    /// The vault is already a git repository of the user's own. Auto Sync does
-    /// not open it, commit to it, or write near it — the settings page says so,
-    /// and that is the whole of the interaction.
-    HasOwnGit,
-}
+
 
 /// Names Auto Sync never records, in `.gitignore` syntax.
 ///
@@ -74,10 +76,8 @@ pub fn hidden_repo_path(app_data_dir: &Path, canonical_root: &str) -> PathBuf {
 
 /// Opens or creates the hidden repository for `vault`, taking the first
 /// snapshot if there is nothing recorded yet.
-pub fn bootstrap(app_data_dir: &Path, vault: &Path) -> Result<Managed, NativeError> {
-    if vault.join(".git").exists() {
-        return Ok(Managed::HasOwnGit);
-    }
+pub fn bootstrap(app_data_dir: &Path, vault: &Path) -> Result<ManagedWorkspace, NativeError> {
+    let has_own_git = vault.join(".git").exists();
 
     let git_dir = hidden_repo_path(app_data_dir, &vault.to_string_lossy());
     let repo = hidden_repo::open_or_create(&git_dir, vault)?;
@@ -94,10 +94,11 @@ pub fn bootstrap(app_data_dir: &Path, vault: &Path) -> Result<Managed, NativeErr
         }
     }
 
-    Ok(Managed::Yes(Box::new(ManagedWorkspace {
+    Ok(ManagedWorkspace {
         repo,
         took_first_snapshot,
-    })))
+        has_own_git,
+    })
 }
 
 /// Writes the ignore rules into the repository rather than the vault.

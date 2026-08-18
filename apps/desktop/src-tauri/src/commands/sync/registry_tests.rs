@@ -6,10 +6,8 @@ use crate::tests::make_temp_test_dir;
 fn engine_for(name: &str) -> Arc<Engine> {
     let app_data = make_temp_test_dir(&format!("{name}-appdata"), "sync", true);
     let vault = make_temp_test_dir(&format!("{name}-vault"), "sync", true);
-    match bootstrap(&app_data, &vault).expect("bootstrap succeeds") {
-        Managed::Yes(workspace) => Arc::new(Engine::new(workspace.repo)),
-        Managed::HasOwnGit => panic!("the vault was expected to be managed"),
-    }
+    let managed = bootstrap(&app_data, &vault).expect("bootstrap succeeds");
+    Arc::new(Engine::new(managed.repo, managed.has_own_git))
 }
 
 /// Two windows on one vault share one engine, and it survives until the
@@ -86,7 +84,7 @@ fn closing_the_last_window_records_what_never_settled() {
     let vault = make_temp_test_dir("registry-flush-vault", "sync", true);
     let key = vault.to_string_lossy().to_string();
 
-    assert!(attach(&app_data, &vault, &key, "window-1").expect("attaching succeeds"));
+    attach(&app_data, &vault, &key, "window-1").expect("attaching succeeds");
     std::fs::write(vault.join("one.md"), "# One\n").expect("the note is written");
     note_changes(
         &key,
@@ -117,12 +115,12 @@ fn attach_then_detach_removes_the_engine() {
     let vault = make_temp_test_dir("registry-reattach-vault", "sync", true);
     let key = vault.to_string_lossy().to_string();
 
-    assert!(attach(&app_data, &vault, &key, "reattach-1").expect("attaching succeeds"));
+    attach(&app_data, &vault, &key, "reattach-1").expect("attaching succeeds");
     assert!(engine(&key).is_some());
     detach(&key, "reattach-1");
     assert!(engine(&key).is_none(), "detach left the engine behind");
 
-    assert!(attach(&app_data, &vault, &key, "reattach-2").expect("reattaching succeeds"));
+    attach(&app_data, &vault, &key, "reattach-2").expect("reattaching succeeds");
     assert!(engine(&key).is_some(), "a second attach did not bring the engine back");
     detach(&key, "reattach-2");
 }
@@ -134,9 +132,9 @@ fn two_attaches_share_one_engine() {
     let vault = make_temp_test_dir("registry-two-vault", "sync", true);
     let key = vault.to_string_lossy().to_string();
 
-    assert!(attach(&app_data, &vault, &key, "share-1").expect("first attach succeeds"));
+    attach(&app_data, &vault, &key, "share-1").expect("first attach succeeds");
     let first = engine(&key).expect("the first window has an engine");
-    assert!(attach(&app_data, &vault, &key, "share-2").expect("second attach succeeds"));
+    attach(&app_data, &vault, &key, "share-2").expect("second attach succeeds");
     let second = engine(&key).expect("the second window has an engine");
     assert!(
         Arc::ptr_eq(&first, &second),
@@ -157,7 +155,7 @@ fn release_window_drops_that_windows_interest() {
     let vault = make_temp_test_dir("registry-release-vault", "sync", true);
     let key = vault.to_string_lossy().to_string();
 
-    assert!(attach(&app_data, &vault, &key, "gone-window").expect("attaching succeeds"));
+    attach(&app_data, &vault, &key, "gone-window").expect("attaching succeeds");
     release_window("gone-window");
     assert!(
         engine(&key).is_none(),
@@ -172,7 +170,7 @@ fn note_changes_after_detach_is_a_noop() {
     let vault = make_temp_test_dir("registry-noop-vault", "sync", true);
     let key = vault.to_string_lossy().to_string();
 
-    assert!(attach(&app_data, &vault, &key, "noop-1").expect("attaching succeeds"));
+    attach(&app_data, &vault, &key, "noop-1").expect("attaching succeeds");
     detach(&key, "noop-1");
 
     assert!(
@@ -194,7 +192,7 @@ fn the_sweeper_records_a_settled_change() {
     let vault = make_temp_test_dir("registry-sweep-vault", "sync", true);
     let key = vault.to_string_lossy().to_string();
 
-    assert!(attach(&app_data, &vault, &key, "sweep-1").expect("attaching succeeds"));
+    attach(&app_data, &vault, &key, "sweep-1").expect("attaching succeeds");
     std::fs::write(vault.join("one.md"), "# One\n").expect("the note is written");
     note_changes(
         &key,
@@ -226,7 +224,7 @@ fn a_conflict_copy_that_has_been_removed_is_not_raised_again() {
     let copy = "note.sync-conflict-20260816-093100-K3SDFHG.md";
     std::fs::write(vault.join("note.md"), "# Mine\n").expect("the note is written");
 
-    assert!(attach(&app_data, &vault, &key, "window-1").expect("attaching succeeds"));
+    attach(&app_data, &vault, &key, "window-1").expect("attaching succeeds");
     note_changes(&key, &vault, &[change(WorkspaceChangeKind::Deleted, copy)]);
 
     let engine = engine(&key).expect("the vault has an engine");
@@ -313,7 +311,7 @@ fn the_conflicts_our_own_test_script_plants_are_the_ones_we_detect() {
     plant("Roadmap.sync-conflict-20260817-215005-K3SDFHG.canvas", "{\"nodes\":[1]}\n");
 
     let key = vault.to_string_lossy().to_string();
-    assert!(attach(&app_data, &vault, &key, "planted-window").expect("attaching succeeds"));
+    attach(&app_data, &vault, &key, "planted-window").expect("attaching succeeds");
     let engine = engine(&key).expect("the vault is being recorded");
     let held = engine.conflicts();
 

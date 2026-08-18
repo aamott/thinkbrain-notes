@@ -29,8 +29,21 @@ restore from History. This is what earns the UI its casual tone.
 - **Hidden repo per workspace in OS app-data.** Never in vault, never syncs.
   Serves: git-sync repo, merge base, version history. Commits regardless of
   sync config — history/restore work offline with zero setup.
-- **Vault already containing `.git`:** detect, never touch, one settings
-  notice ("This vault has its own Git repo — Auto Sync won't touch it").
+- ~~**Vault already containing `.git`:** detect, never touch, one settings
+  notice ("This vault has its own Git repo — Auto Sync won't touch it").~~
+  **Superseded** — see "Vault already containing `.git`, revised" below.
+- **Vault already containing `.git`, revised:** record it like any other, and
+  say so. The original conflated two things: never touching someone's own
+  repository, and declining to keep any history for their notes. The first is
+  right, and it keeps itself — ours lives in app data, and the vault walk
+  already skips every dot-directory, `.git` among them, so nothing of theirs
+  is ever read or written. The second turned the whole feature off for the
+  people most likely to want it: a notes folder under version control is
+  exactly the folder most likely to also be inside a sync folder, and they
+  were getting no conflict detection, no history and no restore. The status
+  footer and the History panel now say that a second history is being kept.
+  Found by opening a vault that had a `.git` and being told nothing needed
+  attention, with no way to learn why.
 - **Merge depth: three-way only where the base is exact** (git sync — gix
   three-way merge). Cloud conflict files → **two-way**: show both versions,
   user picks/combines. No base guessing, no quiescence heuristics. Three-way

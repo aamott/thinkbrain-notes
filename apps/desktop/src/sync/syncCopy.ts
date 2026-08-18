@@ -80,8 +80,26 @@ export function recoveryFor(code: string): string {
   }
 }
 
+/**
+ * The sentence a folder that keeps its own version history gets, appended to
+ * whatever else the footer had to say.
+ *
+ * Deliberately not a warning. Nothing is wrong, and nothing of theirs is
+ * touched — it is only that two things are keeping history here, and finding
+ * that out by accident is worse than being told.
+ */
+const ALONGSIDE_OWN_GIT =
+  "This folder also keeps its own version history, which is left exactly as it is.";
+
 /** What the footer says about a workspace. */
 export function describePill(status: SyncStatus, now: Date = new Date()): PillCopy {
+  const pill = pillFor(status, now);
+  return status.alongsideOwnGit
+    ? { ...pill, detail: `${pill.detail} ${ALONGSIDE_OWN_GIT}` }
+    : pill;
+}
+
+function pillFor(status: SyncStatus, now: Date): PillCopy {
   switch (status.state) {
     case "off":
       return {

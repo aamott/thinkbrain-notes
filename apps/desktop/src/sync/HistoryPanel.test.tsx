@@ -3,11 +3,15 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { ConflictRate, RecordedChange } from "./historyTypes";
+import { NOT_RECORDING, type ConflictRate, type RecordedChange } from "./historyTypes";
 
 const readHistory = vi.fn<() => Promise<readonly RecordedChange[]>>();
 const readConflictRate = vi.fn<() => Promise<ConflictRate>>();
 const restoreVersion = vi.fn<() => Promise<unknown>>();
+
+vi.mock("./useSyncStatus", () => ({
+  useSyncStatus: () => ({ ...NOT_RECORDING, state: "idle" })
+}));
 
 vi.mock("./syncService", () => ({
   readHistory: (...args: unknown[]) => readHistory(...(args as [])),

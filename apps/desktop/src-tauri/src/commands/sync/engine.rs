@@ -48,12 +48,15 @@ pub struct Engine {
     /// could act on. Separate from `pending` so notes can keep arriving while a
     /// commit is being written.
     recording: Mutex<()>,
+    /// Whether the vault is also a git repository of the user's own.
+    has_own_git: bool,
 }
 
 impl Engine {
-    pub fn new(repo: gix::Repository) -> Self {
+    pub fn new(repo: gix::Repository, has_own_git: bool) -> Self {
         Self {
             repo: repo.into_sync(),
+            has_own_git,
             pending: Mutex::new(PendingChanges::default()),
             conflicts: Mutex::new(BTreeMap::new()),
             problem: Mutex::new(None),
@@ -88,6 +91,15 @@ impl Engine {
     pub fn conflicts(&self) -> Vec<ConflictCopy> {
         let conflicts = self.conflicts.lock().unwrap_or_else(|error| error.into_inner());
         conflicts.values().cloned().collect()
+    }
+
+    /// Whether this vault is also a git repository of the user's own.
+    ///
+    /// Nothing acts on this — it exists so a window can say that two histories
+    /// are being kept here, rather than letting someone discover the second one
+    /// by accident.
+    pub fn alongside_own_git(&self) -> bool {
+        self.has_own_git
     }
 
     /// Drops a conflict from the set, because it has been answered.

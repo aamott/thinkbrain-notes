@@ -47,6 +47,11 @@ pub struct SyncStatus {
     /// Why recording stopped, if it has. The window turns the code into a
     /// sentence about what to do next.
     pub problem: Option<NativeError>,
+    /// Whether this vault is also a git repository of the user's own.
+    ///
+    /// Two histories are being kept here, and someone should learn that from
+    /// the app rather than from noticing it.
+    pub alongside_own_git: bool,
 }
 
 /// What is keeping history for a workspace, or why nothing is.
@@ -74,6 +79,7 @@ pub fn of(recording: Recording<'_>) -> Result<SyncStatus, NativeError> {
                 waiting: 0,
                 attention: 0,
                 problem: None,
+                alongside_own_git: false,
             });
         }
         Recording::Failed(problem) => {
@@ -83,6 +89,7 @@ pub fn of(recording: Recording<'_>) -> Result<SyncStatus, NativeError> {
                 waiting: 0,
                 attention: 0,
                 problem: Some(problem),
+                alongside_own_git: false,
             });
         }
     };
@@ -105,6 +112,7 @@ pub fn of(recording: Recording<'_>) -> Result<SyncStatus, NativeError> {
         waiting,
         attention,
         problem,
+        alongside_own_git: engine.alongside_own_git(),
     })
 }
 
