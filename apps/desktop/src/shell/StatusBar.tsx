@@ -4,10 +4,16 @@
  * Extracted from DesktopShell.tsx as part of the "Desktop Shell Composition"
  * story (plans/ui-shell/pending-desktop_shell_composition-high-hard.md).
  *
- * Renders workspace metadata, problem counters, indexer status, cursor
- * position, encoding, language, and a notifications bell that opens a small
- * toast popover. The bottom-panel toggle is no longer surfaced here — the
- * panel is opened via the activity bar / command palette / Ctrl+J shortcut.
+ * Shows the open workspace, what saving versions is doing, and a notifications
+ * bell. The bottom-panel toggle is no longer surfaced here — the panel is
+ * opened via the activity bar / command palette / Ctrl+J shortcut.
+ *
+ * It used to carry counters, an indexer state, a cursor position, an
+ * indentation and an encoding, none of which were read from anything: `✓ 0 ⚠ 0`
+ * was the literal string, `Ln —, Col —` had no editor behind it, and "Indexer
+ * unavailable" was untrue by the time search shipped. A footer that reports
+ * things it cannot know teaches people to stop reading it, which is a bad habit
+ * to have taught them by the time it says saving has stopped.
  */
 
 import { useState } from "react";
@@ -30,9 +36,8 @@ type StatusBarProps = {
  * Desktop shell status bar footer.
  *
  * Layout:
- * - Left: workspace name, problem counters (✓ 0 ⚠ 0), indexer status.
+ * - Left: workspace name, then what saving versions is doing.
  * - Spacer.
- * - Right: workspace status, cursor position, indentation, encoding, language.
  * - Far right: notifications bell button opening a small toast popover.
  */
 export function StatusBar({
@@ -45,15 +50,8 @@ export function StatusBar({
   return (
     <footer className="flex items-center gap-[0.8rem] px-2 bg-statusbar text-statusbar-foreground text-[0.68rem] overflow-hidden whitespace-nowrap">
       <span className="max-[760px]:hidden">{workspaceName ?? "No workspace open"}</span>
-      <span className="max-[760px]:hidden">✓ 0 &nbsp; ⚠ 0</span>
-      <span className="max-[760px]:hidden">✦ Indexer unavailable</span>
       <SyncPill status={syncStatus} onOpen={(panel) => onOpenSyncPanel?.(panel)} />
       <span className="flex-1 max-[760px]:block" />
-      <span className="max-[760px]:hidden">{workspaceName ? "Workspace open" : "Open a workspace to begin"}</span>
-      <span className="max-[760px]:hidden">Ln —, Col —</span>
-      <span className="max-[760px]:hidden">Spaces: —</span>
-      <span className="max-[760px]:hidden">UTF-8</span>
-      <span className="max-[760px]:hidden">Markdown</span>
 
       <div className="relative">
         <button

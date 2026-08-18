@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useRef, useState, type Dispatch, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type SetStateAction } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { Check, ChevronDown, Folder, FolderPlus, MoreHorizontal } from "lucide-react";
 import type { NativeWorkspaceEntry } from "../native/commands";
 import type { WorkspaceExplorerState, WorkspaceTreeNode } from "./workspaceExplorerModel";
@@ -7,7 +7,7 @@ import { cn } from "../lib/utils";
 import { handleMenuKeyDown } from "../shell/menuKeyboard";
 import { WorkspaceTreeItem, InlineNameInput } from "./WorkspaceTree";
 import { DeleteConfirmDialog, WorkspaceContextMenu } from "./WorkspaceExplorerMenus";
-import type { ContextMenuState, ContextMenuTarget, CreateState, RenameState } from "./workspaceExplorerTypes";
+import type { ContextMenuState, CreateState, RenameState, WorkspaceExplorerActions } from "./workspaceExplorerTypes";
 
 interface WorkspaceExplorerViewProps {
   readonly className?: string;
@@ -24,30 +24,8 @@ interface WorkspaceExplorerViewProps {
   readonly moreMenuOpen: boolean;
   readonly expandedFolders: ReadonlySet<string>;
   readonly activePath: string | null;
-  readonly setActivePath: (path: string) => void;
-  readonly toggleShowHidden: () => Promise<void>;
-  readonly startCreate: (parentPath: string, kind: "file" | "folder") => void;
-  readonly submitCreate: (target: CreateState, name: string) => Promise<boolean>;
-  readonly submitRename: (target: RenameState, name: string) => Promise<boolean>;
-  readonly handleTreeKeyDown: (event: ReactKeyboardEvent<HTMLUListElement>) => void;
-  readonly handleMarkdownFileSelected: (relativePath: string) => void;
-  readonly showContextMenu: (event: ReactMouseEvent, target: ContextMenuTarget) => void;
-  readonly closeContextMenu: () => void;
-  readonly toggleFolder: (relativePath: string) => void;
-  readonly collapseFolder: (relativePath: string) => void;
-  readonly startRename: (entry: NativeWorkspaceEntry) => void;
-  readonly requestDelete: (entry: NativeWorkspaceEntry) => void;
-  readonly showVersions: (entry: NativeWorkspaceEntry) => void;
-  readonly refreshEntries: () => Promise<void>;
-  readonly openWorkspace: () => Promise<void>;
-  readonly launchWorkspace: (rootPath: string) => Promise<void>;
-  readonly confirmDelete: () => Promise<void>;
-  readonly setMoreMenuOpen: Dispatch<SetStateAction<boolean>>;
-  readonly setRenaming: (value: RenameState | null) => void;
-  readonly setCreating: (value: CreateState | null) => void;
-  readonly setPendingDelete: (value: NativeWorkspaceEntry | null) => void;
-  readonly onDismissError: () => void;
   readonly recentWorkspacePaths: readonly string[];
+  readonly actions: WorkspaceExplorerActions;
 }
 
 export function WorkspaceExplorerView({
@@ -65,30 +43,8 @@ export function WorkspaceExplorerView({
   moreMenuOpen,
   expandedFolders,
   activePath,
-  setActivePath,
-  toggleShowHidden,
-  startCreate,
-  submitCreate,
-  submitRename,
-  handleTreeKeyDown,
-  handleMarkdownFileSelected,
-  showContextMenu,
-  closeContextMenu,
-  toggleFolder,
-  collapseFolder,
-  startRename,
-  requestDelete,
-  showVersions,
-  refreshEntries,
-  openWorkspace,
-  launchWorkspace,
-  confirmDelete,
-  setMoreMenuOpen,
-  setRenaming,
-  setCreating,
-  setPendingDelete,
-  onDismissError,
-  recentWorkspacePaths
+  recentWorkspacePaths,
+  actions
 }: WorkspaceExplorerViewProps) {
   const isBusy = state.phase === "opening" || busy;
 
@@ -110,7 +66,7 @@ export function WorkspaceExplorerView({
             aria-label="More actions"
             aria-expanded={moreMenuOpen}
             disabled={state.phase !== "ready"}
-            onClick={() => setMoreMenuOpen((value) => !value)}
+            onClick={() => actions.setMoreMenuOpen((value) => !value)}
           >
             <MoreHorizontal aria-hidden="true" className="size-[0.95rem]" />
           </button>
@@ -122,7 +78,7 @@ export function WorkspaceExplorerView({
                 className="fixed inset-0 z-40 cursor-default"
                 aria-hidden="true"
                 tabIndex={-1}
-                onClick={() => setMoreMenuOpen(false)}
+                onClick={() => actions.setMoreMenuOpen(false)}
               />
               <div
                 className="absolute right-0 top-full mt-1 z-50 min-w-44 border border-border rounded-small bg-popover py-1 text-popover-foreground shadow-soft"
@@ -131,7 +87,7 @@ export function WorkspaceExplorerView({
                 onKeyDown={(event) => {
                   if (event.key === "Escape") {
                     event.preventDefault();
-                    setMoreMenuOpen(false);
+                    actions.setMoreMenuOpen(false);
                   }
                 }}
               >
@@ -141,7 +97,7 @@ export function WorkspaceExplorerView({
                   className="flex w-full items-center justify-between gap-2 border-0 px-3 py-[0.4rem] cursor-pointer font-inherit text-xs text-left text-foreground hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
                   // The "show hidden" toggle keeps the menu open so the user
                   // can see the checkmark flip and the tree update beneath it.
-                  onClick={() => void toggleShowHidden()}
+                  onClick={() => void actions.toggleShowHidden()}
                 >
                   <span>Show hidden files</span>
                   {showHidden && <Check className="size-3.5" aria-hidden="true" />}
@@ -151,7 +107,7 @@ export function WorkspaceExplorerView({
                   type="button"
                   role="menuitem"
                   className="flex w-full items-center gap-2 border-0 px-3 py-[0.4rem] cursor-pointer font-inherit text-xs text-left text-foreground hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
-                  onClick={() => { setMoreMenuOpen(false); startCreate("", "folder"); }}
+                  onClick={() => { actions.setMoreMenuOpen(false); actions.startCreate("", "folder"); }}
                 >
                   <span>New folder</span>
                 </button>
@@ -159,7 +115,7 @@ export function WorkspaceExplorerView({
                   type="button"
                   role="menuitem"
                   className="flex w-full items-center gap-2 border-0 px-3 py-[0.4rem] cursor-pointer font-inherit text-xs text-left text-foreground hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
-                  onClick={() => { setMoreMenuOpen(false); startCreate("", "file"); }}
+                  onClick={() => { actions.setMoreMenuOpen(false); actions.startCreate("", "file"); }}
                 >
                   <span>New file</span>
                 </button>
@@ -174,12 +130,12 @@ export function WorkspaceExplorerView({
       )}
       {state.phase === "empty" && <EmptyState />}
       {state.phase === "opening" && <StatusState message="Reading workspace entries…" />}
-      {state.phase === "error" && <ErrorState message={state.error ?? "The workspace could not be opened."} onDismiss={onDismissError} />}
+      {state.phase === "error" && <ErrorState message={state.error ?? "The workspace could not be opened."} onDismiss={actions.dismissError} />}
       {state.phase === "ready" && (
         <div
           className="flex min-h-0 flex-1 flex-col"
           aria-label={`${state.snapshot?.workspace.name} explorer`}
-          onContextMenu={(event) => showContextMenu(event, { kind: "background" })}
+          onContextMenu={(event) => actions.showContextMenu(event, { kind: "background" })}
         >
           <p className="m-0 overflow-hidden px-3 py-2 border-b border-border text-muted-foreground text-[0.6875rem] truncate" title={state.snapshot?.workspace.root_path}>
             {state.snapshot?.workspace.root_path}
@@ -194,7 +150,7 @@ export function WorkspaceExplorerView({
               className="min-h-0 flex-1 m-0 overflow-auto py-1.5 list-none [scrollbar-color:var(--color-border)_transparent] scrollbar-thin"
               role="tree"
               aria-label={`${state.snapshot?.workspace.name} files`}
-              onKeyDown={handleTreeKeyDown}
+              onKeyDown={actions.handleTreeKeyDown}
             >
               {creating && creating.parentPath === "" && (
                 <InlineNameInput
@@ -205,8 +161,8 @@ export function WorkspaceExplorerView({
                   focusRequest={creating.focusRequest}
                   wrapInListItem
                   disabled={busy}
-                  onSubmit={(name) => submitCreate(creating, name)}
-                  onCancel={() => setCreating(null)}
+                  onSubmit={(name) => actions.submitCreate(creating, name)}
+                  onCancel={() => actions.setCreating(null)}
                 />
               )}
               {tree.map((node, index) => (
@@ -215,21 +171,10 @@ export function WorkspaceExplorerView({
                   node={node}
                   isFirst={index === 0}
                   activePath={activePath}
-                  setActivePath={setActivePath}
-                  onMarkdownFileSelected={handleMarkdownFileSelected}
-                  onContextMenu={showContextMenu}
                   renaming={renaming}
                   creating={creating}
                   expandedFolders={expandedFolders}
-                  onToggleFolder={toggleFolder}
-                  onCollapseFolder={collapseFolder}
-                  onSubmitRename={submitRename}
-                  onSubmitCreate={submitCreate}
-                  onCancelRename={() => setRenaming(null)}
-                  onCancelCreate={() => setCreating(null)}
-                  onStartRename={startRename}
-                  onRequestDelete={requestDelete}
-                  onStartCreate={startCreate}
+                  actions={actions}
                 />
               ))}
             </ul>
@@ -238,30 +183,21 @@ export function WorkspaceExplorerView({
       )}
 
       {contextMenu && (
-        <WorkspaceContextMenu
-          menu={contextMenu}
-          onClose={closeContextMenu}
-          onStartCreate={startCreate}
-          onStartRename={startRename}
-          onRequestDelete={requestDelete}
-          onShowVersions={showVersions}
-          onRefresh={refreshEntries}
-          onOpenWorkspace={openWorkspace}
-        />
+        <WorkspaceContextMenu menu={contextMenu} actions={actions} />
       )}
 
       {pendingDelete && (
         <DeleteConfirmDialog
           entry={pendingDelete}
-          onCancel={() => setPendingDelete(null)}
-          onConfirm={() => void confirmDelete()}
+          onCancel={() => actions.setPendingDelete(null)}
+          onConfirm={() => void actions.confirmDelete()}
         />
       )}
       <WorkspaceSelector
         currentPath={workspaceRootPath}
         paths={recentWorkspacePaths}
-        onAdd={openWorkspace}
-        onSelect={launchWorkspace}
+        onAdd={actions.openWorkspace}
+        onSelect={actions.launchWorkspace}
       />
     </section>
   );

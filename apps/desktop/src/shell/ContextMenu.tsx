@@ -26,10 +26,19 @@ export function ContextMenu({
   state,
   onClose,
   anchorRef,
+  label,
   children,
 }: {
   readonly state: ContextMenuState;
   readonly onClose: () => void;
+  /**
+   * What the menu is called, for anyone who cannot see where it opened.
+   *
+   * A menu raised from a specific thing needs one — "Workspace actions" says
+   * what a list of unlabelled verbs is about. One raised from a button the
+   * reader just pressed does not, and gets none rather than a repetition.
+   */
+  readonly label?: string;
   /**
    * The control that opened the menu, where one exists.
    *
@@ -85,6 +94,7 @@ export function ContextMenu({
       ref={menuRef}
       className="fixed z-50 min-w-44 border border-border rounded-small bg-popover shadow-soft py-1 text-xs"
       role="menu"
+      aria-label={label}
       style={{ left: `${position.x}px`, top: `${position.y}px` }}
       onKeyDown={handleKeyDown}
       onClick={(event) => event.stopPropagation()}

@@ -20,7 +20,8 @@ import {
   type ContextMenuState,
   type ContextMenuTarget,
   type CreateState,
-  type RenameState
+  type RenameState,
+  type WorkspaceExplorerActions
 } from "./workspaceExplorerTypes";
 
 export interface WorkspaceExplorerProps {
@@ -460,6 +461,60 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
     setPendingDelete(entry);
   }, [closeContextMenu]);
 
+  const dismissError = useCallback(() => dispatch({ type: "dismiss" }), []);
+
+  // Memoized, and every member is already a stable callback or state setter.
+  // That is load-bearing rather than tidy: `WorkspaceTreeItem` is memoized, and
+  // a fresh object here would re-render every row in the tree on every
+  // keystroke in an inline rename.
+  const actions = useMemo<WorkspaceExplorerActions>(
+    () => ({
+      setActivePath,
+      toggleShowHidden,
+      startCreate,
+      submitCreate,
+      submitRename,
+      handleTreeKeyDown,
+      handleMarkdownFileSelected,
+      showContextMenu,
+      closeContextMenu,
+      toggleFolder,
+      collapseFolder,
+      startRename,
+      requestDelete,
+      showVersions,
+      refreshEntries,
+      openWorkspace,
+      launchWorkspace,
+      confirmDelete,
+      setMoreMenuOpen,
+      setRenaming,
+      setCreating,
+      setPendingDelete,
+      dismissError
+    }),
+    [
+      closeContextMenu,
+      collapseFolder,
+      confirmDelete,
+      dismissError,
+      handleMarkdownFileSelected,
+      handleTreeKeyDown,
+      launchWorkspace,
+      openWorkspace,
+      refreshEntries,
+      requestDelete,
+      showContextMenu,
+      showVersions,
+      startCreate,
+      startRename,
+      submitCreate,
+      submitRename,
+      toggleFolder,
+      toggleShowHidden
+    ]
+  );
+
   return (
     <WorkspaceExplorerView
       className={className}
@@ -476,30 +531,8 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
       moreMenuOpen={moreMenuOpen}
       expandedFolders={expandedFolders}
       activePath={activePath}
-      setActivePath={setActivePath}
-      toggleShowHidden={toggleShowHidden}
-      startCreate={startCreate}
-      submitCreate={submitCreate}
-      submitRename={submitRename}
-      handleTreeKeyDown={handleTreeKeyDown}
-      handleMarkdownFileSelected={handleMarkdownFileSelected}
-      showContextMenu={showContextMenu}
-      closeContextMenu={closeContextMenu}
-      toggleFolder={toggleFolder}
-      collapseFolder={collapseFolder}
-      startRename={startRename}
-      requestDelete={requestDelete}
-    showVersions={showVersions}
-      refreshEntries={refreshEntries}
-      openWorkspace={openWorkspace}
-      launchWorkspace={launchWorkspace}
-      confirmDelete={confirmDelete}
-      setMoreMenuOpen={setMoreMenuOpen}
-      setRenaming={setRenaming}
-      setCreating={setCreating}
-      setPendingDelete={setPendingDelete}
-      onDismissError={() => dispatch({ type: "dismiss" })}
       recentWorkspacePaths={recentWorkspacePaths}
+      actions={actions}
     />
   );
 });

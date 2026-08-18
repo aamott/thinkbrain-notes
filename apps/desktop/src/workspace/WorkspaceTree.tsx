@@ -1,10 +1,9 @@
-import { memo, useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { Folder, FolderOpen } from "lucide-react";
-import type { NativeWorkspaceEntry } from "../native/commands";
 import type { WorkspaceTreeNode } from "./workspaceExplorerModel";
 import { WorkspaceFileIcon } from "./WorkspaceFileIcon";
 import { cn } from "../lib/utils";
-import type { ContextMenuTarget, CreateState, RenameState } from "./workspaceExplorerTypes";
+import type { CreateState, RenameState, WorkspaceExplorerActions } from "./workspaceExplorerTypes";
 
 // ---- Tree item ----
 
@@ -13,42 +12,31 @@ export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
   depth = 0,
   isFirst = false,
   activePath,
-  setActivePath,
-  onMarkdownFileSelected,
-  onContextMenu,
   renaming,
   creating,
   expandedFolders,
-  onToggleFolder,
-  onCollapseFolder,
-  onSubmitRename,
-  onSubmitCreate,
-  onCancelRename,
-  onCancelCreate,
-  onStartRename,
-  onRequestDelete,
-  onStartCreate
+  actions
 }: {
   readonly node: WorkspaceTreeNode;
   readonly depth?: number;
   readonly isFirst?: boolean;
   readonly activePath: string | null;
-  readonly setActivePath: (path: string) => void;
-  readonly onMarkdownFileSelected: (relativePath: string) => void;
-  readonly onContextMenu: (event: ReactMouseEvent, target: ContextMenuTarget) => void;
   readonly renaming: RenameState | null;
   readonly creating: CreateState | null;
   readonly expandedFolders: ReadonlySet<string>;
-  readonly onToggleFolder: (relativePath: string) => void;
-  readonly onCollapseFolder: (relativePath: string) => void;
-  readonly onSubmitRename: (target: RenameState, newName: string) => Promise<boolean>;
-  readonly onSubmitCreate: (target: CreateState, name: string) => Promise<boolean>;
-  readonly onCancelRename: () => void;
-  readonly onCancelCreate: () => void;
-  readonly onStartRename: (entry: NativeWorkspaceEntry) => void;
-  readonly onRequestDelete: (entry: NativeWorkspaceEntry) => void;
-  readonly onStartCreate: (parentPath: string, kind: "file" | "folder") => void;
+  readonly actions: WorkspaceExplorerActions;
 }) {
+  const {
+    setActivePath,
+    handleMarkdownFileSelected,
+    showContextMenu,
+    toggleFolder,
+    collapseFolder,
+    submitRename,
+    submitCreate,
+    setRenaming,
+    setCreating
+  } = actions;
   const isDirectory = node.entry.kind === "directory";
   const isMarkdownFile = node.entry.kind === "file" && node.entry.is_markdown;
   // Dot-prefixed entries (e.g. `.git`, `.obsidian`) are visually dimmed when
@@ -78,7 +66,7 @@ export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
         event.stopPropagation();
         if (isDirectory) {
           if (!isExpanded) {
-            onToggleFolder(node.entry.relative_path);
+            toggleFolder(node.entry.relative_path);
           } else {
             const firstChild = node.children[0];
             if (firstChild) {
@@ -91,7 +79,7 @@ export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
         event.preventDefault();
         event.stopPropagation();
         if (isDirectory && isExpanded) {
-          onCollapseFolder(node.entry.relative_path);
+          collapseFolder(node.entry.relative_path);
         } else if (node.entry.parent_path) {
           setActivePath(node.entry.parent_path);
         }
@@ -101,13 +89,13 @@ export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
         event.preventDefault();
         event.stopPropagation();
         if (isDirectory) {
-          onToggleFolder(node.entry.relative_path);
+          toggleFolder(node.entry.relative_path);
         } else if (isMarkdownFile) {
-          onMarkdownFileSelected(node.entry.relative_path);
+          handleMarkdownFileSelected(node.entry.relative_path);
         }
         break;
     }
-  }, [isDirectory, isExpanded, isMarkdownFile, node, onToggleFolder, onCollapseFolder, setActivePath, onMarkdownFileSelected]);
+  }, [isDirectory, isExpanded, isMarkdownFile, node, toggleFolder, collapseFolder, setActivePath, handleMarkdownFileSelected]);
 
   return (
     <li className="m-0 p-0" role="treeitem" aria-level={depth + 1} aria-expanded={isDirectory ? isExpanded : undefined}>
@@ -120,8 +108,8 @@ export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
           ariaLabel={`Rename ${node.entry.name}`}
           focusRequest={renaming!.focusRequest}
           selectOnFocus
-          onSubmit={(name) => onSubmitRename(renaming!, name)}
-          onCancel={onCancelRename}
+          onSubmit={(name) => submitRename(renaming!, name)}
+          onCancel={() => setRenaming(null)}
         />
       ) : (
         <button
@@ -137,12 +125,12 @@ export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
           onKeyDown={handleKeyDown}
           onClick={() => {
             setActivePath(node.entry.relative_path);
-            if (isDirectory) onToggleFolder(node.entry.relative_path);
-            else if (isMarkdownFile) onMarkdownFileSelected(node.entry.relative_path);
+            if (isDirectory) toggleFolder(node.entry.relative_path);
+            else if (isMarkdownFile) handleMarkdownFileSelected(node.entry.relative_path);
           }}
           onContextMenu={(event) => {
             setActivePath(node.entry.relative_path);
-            onContextMenu(event, { kind: isDirectory ? "folder" : "file", entry: node.entry });
+            showContextMenu(event, { kind: isDirectory ? "folder" : "file", entry: node.entry });
           }}
           aria-label={isDirectory ? `${isExpanded ? "Collapse" : "Expand"} ${node.entry.name}` : isMarkdownFile ? `Open ${node.entry.name}` : undefined}
         >
@@ -161,8 +149,8 @@ export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
                 ariaLabel={creating!.kind === "folder" ? "New folder name" : "New file name"}
                 focusRequest={creating!.focusRequest}
                 wrapInListItem
-                onSubmit={(name) => onSubmitCreate(creating!, name)}
-                onCancel={onCancelCreate}
+                onSubmit={(name) => submitCreate(creating!, name)}
+                onCancel={() => setCreating(null)}
               />
             </ul>
           )}
@@ -175,21 +163,10 @@ export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
                   depth={depth + 1}
                   isFirst={false}
                   activePath={activePath}
-                  setActivePath={setActivePath}
-                  onMarkdownFileSelected={onMarkdownFileSelected}
-                  onContextMenu={onContextMenu}
                   renaming={renaming}
                   creating={creating}
                   expandedFolders={expandedFolders}
-                  onToggleFolder={onToggleFolder}
-                  onCollapseFolder={onCollapseFolder}
-                  onSubmitRename={onSubmitRename}
-                  onSubmitCreate={onSubmitCreate}
-                  onCancelRename={onCancelRename}
-                  onCancelCreate={onCancelCreate}
-                  onStartRename={onStartRename}
-                  onRequestDelete={onRequestDelete}
-                  onStartCreate={onStartCreate}
+                  actions={actions}
                 />
               ))}
             </ul>

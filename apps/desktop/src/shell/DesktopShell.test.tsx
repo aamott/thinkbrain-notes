@@ -70,7 +70,6 @@ describe("DesktopShell composition", () => {
     const markup = shellMarkup();
 
     expect(markup).toContain("No workspace open");
-    expect(markup).toContain("Open a workspace to begin");
     expect(markup).toContain('aria-label="Notifications"');
   });
 
@@ -80,7 +79,6 @@ describe("DesktopShell composition", () => {
     );
 
     expect(markup).toContain(">Field Notes</span>");
-    expect(markup).toContain("Workspace open");
     expect(markup).not.toContain("No workspace open");
   });
 
