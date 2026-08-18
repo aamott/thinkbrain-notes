@@ -1,9 +1,10 @@
 /**
  * Built-in Auto Sync module.
  *
- * Scope is `"app"` rather than per-workspace: this is a preference about how
- * much the app is trusted to decide on someone's behalf, and someone who wants
- * to be asked about everything wants that in every folder, not one at a time.
+ * Two scopes, deliberately. How much the app is trusted to decide on someone's
+ * behalf is an `"app"` preference — someone who wants to be asked about every
+ * copy wants that in every folder, not one at a time. Where a folder syncs to
+ * is a fact about that folder, so it is `"workspace"`.
  */
 
 import type { SettingsModule } from "../types";
@@ -40,6 +41,22 @@ export const syncModule: SettingsModule = {
           label: "Settle obvious conflicts without asking",
           description:
             "When another device's copy of a note is identical to yours, or holds a version yours has already been through, keep yours and tidy the copy away. Earlier versions stay in History either way. Turn this off to be asked about every copy."
+        }
+      ]
+    },
+    {
+      id: "sync.destination",
+      label: "Another device",
+      settings: [
+        {
+          key: "destination",
+          type: "string",
+          default: "",
+          scope: "workspace",
+          section: "sync.destination",
+          label: "Keep these notes in step with",
+          description:
+            "A git repository these notes are kept in step with — paste the link your host gives you. Leave it empty and nothing is sent anywhere. Earlier versions and conflicts are handled the same either way."
         }
       ]
     }

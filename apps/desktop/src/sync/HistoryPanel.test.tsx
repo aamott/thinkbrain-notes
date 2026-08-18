@@ -6,6 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NOT_RECORDING, type ConflictRate, type RecordedChange } from "./historyTypes";
 
 const readHistory = vi.fn<() => Promise<readonly RecordedChange[]>>();
+const syncNow = vi.fn<() => Promise<unknown>>();
+/** What the settings say this folder is kept in step with, if anything. */
+let destination = "";
 const readConflictRate = vi.fn<() => Promise<ConflictRate>>();
 const restoreVersion = vi.fn<() => Promise<unknown>>();
 
@@ -17,7 +20,13 @@ vi.mock("./syncService", () => ({
   readHistory: (...args: unknown[]) => readHistory(...(args as [])),
   readConflictRate: () => readConflictRate(),
   restoreVersion: (...args: unknown[]) => restoreVersion(...(args as [])),
-  subscribeToSyncStatus: () => Promise.resolve(() => undefined)
+  subscribeToSyncStatus: () => Promise.resolve(() => undefined),
+  syncNow: (...args: unknown[]) => syncNow(...(args as []))
+}));
+
+vi.mock("../settings/settingsStore", () => ({
+  useSettingsStore: (select: (state: unknown) => unknown) =>
+    select({ getEffectiveValue: () => destination })
 }));
 
 const { HistoryPanel } = await import("./HistoryPanel");
@@ -40,6 +49,13 @@ beforeEach(() => {
   readHistory.mockReset().mockResolvedValue([]);
   readConflictRate.mockReset().mockResolvedValue({ decisions: 0, settled: 0, recorded: 0 });
   restoreVersion.mockReset().mockResolvedValue({ note: "n", checkpoint: "c" });
+  syncNow.mockReset().mockResolvedValue({
+    broughtDown: 0,
+    askedAbout: 0,
+    sent: 0,
+    landed: { state: "moved" }
+  });
+  destination = "";
 });
 
 afterEach(async () => {
@@ -195,5 +211,54 @@ describe("putting a version back", () => {
 
     expect(host.textContent).toContain("deleted");
     expect(() => button(host, "Put this version back")).toThrow();
+  });
+});
+
+describe("bringing a folder in step with another device", () => {
+  /// Offering to sync a folder that syncs nowhere is a button that can only
+  /// fail, and someone would reasonably read it as a thing they had set up.
+  it("is not offered at all when this folder syncs nowhere", async () => {
+    const host = await render();
+
+    expect(host.textContent).not.toContain("in step");
+  });
+
+  it("is offered once somewhere has been named", async () => {
+    destination = "https://example.test/notes.git";
+
+    const host = await render();
+
+    expect(button(host, "Bring these notes in step now")).toBeTruthy();
+  });
+
+  it("says what arrived, and reads the list again so it shows", async () => {
+    destination = "https://example.test/notes.git";
+    syncNow.mockResolvedValue({
+      broughtDown: 2,
+      askedAbout: 0,
+      sent: 3,
+      landed: { state: "moved" }
+    });
+    const host = await render();
+    readHistory.mockResolvedValue([change()]);
+
+    await act(async () => button(host, "Bring these notes in step now").click());
+
+    expect(syncNow).toHaveBeenCalledWith("/notes");
+    expect(host.textContent).toContain("2 notes arrived");
+    expect(host.textContent).toContain("Today");
+  });
+
+  /// A sync writes to someone's notes. A failure that scrolled past silently
+  /// would leave them believing it worked.
+  it("says so when it could not happen, and says nothing changed", async () => {
+    destination = "https://example.test/notes.git";
+    syncNow.mockRejectedValue(new Error("no"));
+
+    const host = await render();
+    await act(async () => button(host, "Bring these notes in step now").click());
+
+    expect(host.textContent).toContain("could not be brought in step");
+    expect(host.textContent).toContain("Nothing was changed");
   });
 });

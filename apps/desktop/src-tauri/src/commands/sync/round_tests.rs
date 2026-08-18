@@ -53,7 +53,8 @@ fn read(device: &Device, relative: &str) -> String {
     fs::read_to_string(device.vault.join(relative)).expect("the note is on disk")
 }
 
-fn sync(device: &Device, destination: &str) -> Synced {
+/// One whole round trip, the way the command runs it.
+fn trip(device: &Device, destination: &str) -> Synced {
     once(&device.repo, &device.vault, destination).expect("the sync succeeds")
 }
 
@@ -130,7 +131,7 @@ fn a_first_sync_into_an_empty_destination_sends_everything() {
     let there = shared("round-first");
     write(&one, "one.md", "first\n");
 
-    let synced = sync(&one, &there);
+    let synced = trip(&one, &there);
 
     assert_eq!(synced.landed, push::Landed::Moved);
     assert_eq!(synced.brought_down, 0, "an empty destination had something to bring down");
@@ -143,9 +144,9 @@ fn a_second_device_brings_down_what_the_first_wrote() {
     let two = device("round-second-two");
     let there = shared("round-second");
     write(&one, "one.md", "first\n");
-    sync(&one, &there);
+    trip(&one, &there);
 
-    let synced = sync(&two, &there);
+    let synced = trip(&two, &there);
 
     assert_eq!(synced.brought_down, 1);
     assert_eq!(read(&two, "one.md"), "first\n");
@@ -157,12 +158,12 @@ fn each_device_ends_up_with_what_the_other_wrote() {
     let two = device("round-converge-two");
     let there = shared("round-converge");
     write(&one, "from-one.md", "one\n");
-    sync(&one, &there);
-    sync(&two, &there);
+    trip(&one, &there);
+    trip(&two, &there);
 
     write(&two, "from-two.md", "two\n");
-    sync(&two, &there);
-    sync(&one, &there);
+    trip(&two, &there);
+    trip(&one, &there);
 
     assert_eq!(read(&one, "from-two.md"), "two\n");
     assert_eq!(read(&two, "from-one.md"), "one\n");
@@ -174,12 +175,12 @@ fn a_note_deleted_on_one_device_goes_away_on_the_other() {
     let two = device("round-delete-two");
     let there = shared("round-delete");
     write(&one, "one.md", "first\n");
-    sync(&one, &there);
-    sync(&two, &there);
+    trip(&one, &there);
+    trip(&two, &there);
 
     remove(&one, "one.md");
-    sync(&one, &there);
-    sync(&two, &there);
+    trip(&one, &there);
+    trip(&two, &there);
 
     assert!(!two.vault.join("one.md").exists(), "the note is still there");
 }
@@ -196,14 +197,14 @@ fn different_notes_on_each_side_merge_without_asking() {
     let two = device("round-apart-two");
     let there = shared("round-apart");
     write(&one, "shared.md", "shared\n");
-    sync(&one, &there);
-    sync(&two, &there);
+    trip(&one, &there);
+    trip(&two, &there);
 
     write(&one, "mine.md", "mine\n");
-    sync(&one, &there);
+    trip(&one, &there);
     write(&two, "theirs.md", "theirs\n");
 
-    let synced = sync(&two, &there);
+    let synced = trip(&two, &there);
 
     assert_eq!(synced.asked_about, 0, "a question was asked about nothing");
     assert_eq!(synced.landed, push::Landed::Moved, "the merge was not accepted");
@@ -222,17 +223,17 @@ fn what_a_merge_joined_is_sent_on_to_everyone_else() {
     let three = device("round-onward-three");
     let there = shared("round-onward");
     write(&one, "shared.md", "shared\n");
-    sync(&one, &there);
-    sync(&two, &there);
+    trip(&one, &there);
+    trip(&two, &there);
 
     write(&one, "mine.md", "mine\n");
-    sync(&one, &there);
+    trip(&one, &there);
     write(&two, "theirs.md", "theirs\n");
-    let merged = sync(&two, &there);
+    let merged = trip(&two, &there);
 
     assert_eq!(merged.landed, push::Landed::Moved, "the merge was not accepted");
 
-    sync(&three, &there);
+    trip(&three, &there);
 
     assert_eq!(read(&three, "mine.md"), "mine\n");
     assert_eq!(read(&three, "theirs.md"), "theirs\n");
@@ -247,14 +248,14 @@ fn edits_in_different_parts_of_one_note_merge_without_asking() {
     let two = device("round-hunks-two");
     let there = shared("round-hunks");
     write(&one, "note.md", "top\nmiddle\nbottom\n");
-    sync(&one, &there);
-    sync(&two, &there);
+    trip(&one, &there);
+    trip(&two, &there);
 
     write(&one, "note.md", "top changed\nmiddle\nbottom\n");
-    sync(&one, &there);
+    trip(&one, &there);
     write(&two, "note.md", "top\nmiddle\nbottom changed\n");
 
-    let synced = sync(&two, &there);
+    let synced = trip(&two, &there);
 
     assert_eq!(synced.asked_about, 0, "a question was asked about separate edits");
     assert_eq!(read(&two, "note.md"), "top changed\nmiddle\nbottom changed\n");
@@ -268,14 +269,14 @@ fn the_same_line_changed_on_both_sides_leaves_a_copy_to_choose_from() {
     let two = device("round-clash-two");
     let there = shared("round-clash");
     write(&one, "note.md", "the line\n");
-    sync(&one, &there);
-    sync(&two, &there);
+    trip(&one, &there);
+    trip(&two, &there);
 
     write(&one, "note.md", "their wording\n");
-    sync(&one, &there);
+    trip(&one, &there);
     write(&two, "note.md", "our wording\n");
 
-    let synced = sync(&two, &there);
+    let synced = trip(&two, &there);
 
     assert_eq!(synced.asked_about, 1);
     assert_eq!(read(&two, "note.md"), "our wording\n", "our note was overwritten");
@@ -294,13 +295,13 @@ fn no_conflict_marker_is_ever_written_into_a_note() {
     let two = device("round-markers-two");
     let there = shared("round-markers");
     write(&one, "note.md", "the line\n");
-    sync(&one, &there);
-    sync(&two, &there);
+    trip(&one, &there);
+    trip(&two, &there);
 
     write(&one, "note.md", "their wording\n");
-    sync(&one, &there);
+    trip(&one, &there);
     write(&two, "note.md", "our wording\n");
-    sync(&two, &there);
+    trip(&two, &there);
 
     for name in files(&two) {
         assert!(
@@ -319,21 +320,118 @@ fn a_copy_made_by_a_pull_is_never_sent_on() {
     let three = device("round-keep-three");
     let there = shared("round-keep");
     write(&one, "note.md", "the line\n");
-    sync(&one, &there);
-    sync(&two, &there);
+    trip(&one, &there);
+    trip(&two, &there);
 
     write(&one, "note.md", "their wording\n");
-    sync(&one, &there);
+    trip(&one, &there);
     write(&two, "note.md", "our wording\n");
-    sync(&two, &there);
-    sync(&two, &there);
+    trip(&two, &there);
+    trip(&two, &there);
 
-    sync(&three, &there);
+    trip(&three, &there);
 
     assert!(
         !three.vault.join("note (from another device).md").exists(),
         "a third device was handed someone else's conflict"
     );
+}
+
+/// Someone sets sync up on their second device, and that device already has
+/// notes on it. The two histories have no shared commit anywhere, which is not
+/// a fault — it is the ordinary way a second device joins.
+#[test]
+fn two_devices_that_each_already_had_notes_are_joined() {
+    let one = device("round-join-one");
+    let two = device("round-join-two");
+    let there = shared("round-join");
+    write(&one, "from-one.md", "one\n");
+    trip(&one, &there);
+    write(&two, "from-two.md", "two\n");
+
+    let synced = trip(&two, &there);
+
+    assert_eq!(synced.asked_about, 0, "two unrelated notes were made into a question");
+    assert_eq!(read(&two, "from-one.md"), "one\n");
+    assert_eq!(read(&two, "from-two.md"), "two\n");
+}
+
+/// The same, where both devices already have a note of the same name. Nothing
+/// can decide that but a person, and neither version may be lost.
+#[test]
+fn a_note_both_devices_already_had_becomes_a_question() {
+    let one = device("round-join-clash-one");
+    let two = device("round-join-clash-two");
+    let there = shared("round-join-clash");
+    write(&one, "note.md", "written on one\n");
+    trip(&one, &there);
+    write(&two, "note.md", "written on two\n");
+
+    let synced = trip(&two, &there);
+
+    assert_eq!(synced.asked_about, 1);
+    assert_eq!(read(&two, "note.md"), "written on two\n");
+    assert_eq!(
+        read(&two, "note (from another device).md"),
+        "written on one\n"
+    );
+}
+
+/// Two windows, or one impatient double-click. Every one of them has real work
+/// to do here — the destination holds a note this device has never seen — so
+/// each thread reaches the merge, and all four have to come back agreeing with
+/// the destination about where history ended.
+///
+/// This does not prove the lane: removing it leaves the test passing, because
+/// whichever thread merges first leaves the rest with nothing to merge, and
+/// the collision needs two of them past the fetch before either commits. The
+/// lane is there for that interleaving, which this cannot reliably reach.
+#[test]
+fn two_syncs_at_once_on_one_vault_do_not_interleave() {
+    let one = device("round-at-once");
+    let elsewhere = device("round-at-once-other");
+    let there = shared("round-at-once");
+    write(&elsewhere, "theirs.md", "from the other device\n");
+    trip(&elsewhere, &there);
+    write(&one, "note.md", "first\n");
+    let engine = std::sync::Arc::new(super::super::engine::Engine::new(
+        gix::open(one.repo.path()).expect("the hidden repository reopens"),
+        false,
+    ));
+    let key = one.vault.to_string_lossy().to_string();
+
+    let outcomes: Vec<Result<Synced, crate::NativeError>> = std::thread::scope(|scope| {
+        let handles: Vec<_> = (0..4)
+            .map(|_| {
+                let engine = std::sync::Arc::clone(&engine);
+                let vault = one.vault.clone();
+                let there = there.clone();
+                let key = key.clone();
+                scope.spawn(move || sync(&engine, &key, &vault, &there))
+            })
+            .collect();
+        handles
+            .into_iter()
+            .map(|handle| handle.join().expect("the thread finishes"))
+            .collect()
+    });
+
+    for outcome in &outcomes {
+        assert!(outcome.is_ok(), "a sync collided with another: {outcome:?}");
+    }
+    assert_eq!(
+        remote_tip(&there),
+        snapshot::head_commit(&one.repo).expect("the branch is readable"),
+        "the destination and this device disagree about where history ended"
+    );
+    assert_eq!(read(&one, "theirs.md"), "from the other device\n");
+}
+
+fn remote_tip(destination: &str) -> Option<gix::ObjectId> {
+    let repo = gix::open(destination).expect("the destination opens");
+    repo.try_find_reference("refs/heads/main")
+        .expect("the destination's refs are readable")
+        .map(|mut found| found.peel_to_id().expect("the ref points at an object").detach())
 }
 
 // ---------------------------------------------------------------------------
@@ -363,7 +461,7 @@ fn syncing_an_empty_vault_to_an_empty_destination_does_nothing() {
     let one = device("round-empty");
     let there = shared("round-empty");
 
-    let synced = sync(&one, &there);
+    let synced = trip(&one, &there);
 
     assert_eq!(synced.brought_down, 0);
     assert_eq!(synced.asked_about, 0);

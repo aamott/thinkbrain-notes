@@ -29,7 +29,8 @@ use crate::error::NativeError;
 const PACK_VERSION: u32 = 2;
 
 /// What the remote did with the ref we asked it to move.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(tag = "state", rename_all = "camelCase")]
 pub enum Landed {
     /// The remote's ref now points at what we sent.
     Moved,

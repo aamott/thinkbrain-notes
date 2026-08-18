@@ -10,6 +10,7 @@ import type {
   ConflictRate as NativeConflictRate,
   RecordedChange as NativeRecordedChange,
   RestoredVersion as NativeRestoredVersion,
+  Synced as NativeSynced,
   SyncStatus as NativeSyncStatus
 } from "../sync/historyTypes";
 
@@ -226,6 +227,11 @@ export interface NativeCommandMap {
   readonly sync_conflict_rate: {
     readonly args: { readonly rootPath: string };
     readonly result: NativeConflictRate;
+  };
+  /** One round trip to wherever this workspace syncs to. */
+  readonly sync_now: {
+    readonly args: { readonly rootPath: string };
+    readonly result: NativeSynced;
   };
   readonly read_app_settings: {
     readonly args: undefined;

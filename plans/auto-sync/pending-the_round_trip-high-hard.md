@@ -89,7 +89,8 @@ Three things fall out of that for free, which is the argument for it:
       one merges rather than refusing
 - [x] A sync that cannot reach the destination leaves the vault untouched and
       says why
-- [ ] Two syncs at once on one vault do not interleave
+- [x] Two syncs at once on one vault do not interleave
+- [x] Two devices that each already had notes can be joined at all
 
 ## Not in scope
 
@@ -98,7 +99,40 @@ Three things fall out of that for free, which is the argument for it:
   worth having only once the round trip is proved by hand.
 - **Progress.** A first sync of a large vault is silent, as 6a noted.
 
+## What this story decided
+
+**An empty base rather than a refusal, when there is no shared history.** The
+concurrency test found this, not a design review: two devices that each already
+held notes have no common ancestor anywhere, and `merge_commits` says so. That
+is not an edge case — it is what setting sync up on a second device looks like
+every time. Refusing would leave someone with two folders that can never be
+joined. An empty base keeps everything from both sides and turns only the
+genuine name clashes into questions.
+
+**A refusal is retried once, and only once.** It means the destination moved
+while we were merging, and going round again merges what arrived. A third
+attempt would be a loop shaped like a race someone else keeps winning, and the
+answer to that is to say so.
+
+**The button says "bring these notes in step", not "sync".** It appears only
+once a destination has been named — a button that can only fail reads as
+something the person already set up.
+
+## Known gaps
+
+- **The lane is not proved by its test.** Removing it leaves the test passing:
+  whichever thread merges first leaves the rest nothing to merge, and a
+  collision needs two of them past the fetch before either commits. Recorded
+  the same way story 3 recorded the same limit about its mutation lock.
+- **"They deleted it, we changed it" keeps ours silently.** gitoxide calls it a
+  resolution failure and we force it to ours, but there is no version of theirs
+  to leave beside it, so nothing asks. Keeping someone's writing is the safe
+  direction; saying nothing about it is the gap.
+- **No trigger but the button.** A debounce and a frequency cap were left until
+  the round trip had been used by hand.
+- **A first sync of a large vault is silent**, as story 6a noted.
+
 ## Status
 
-🟨 The round trip itself is done and proved: fetch, merge, copies, commit, send.
-Remaining: "Sync now" and the lane that keeps two of them apart.
+🟩 Done. Fetch, merge, copies, commit, send, the lane, the setting and the
+button.

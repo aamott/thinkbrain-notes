@@ -18,13 +18,13 @@
 //! settle rules and the checkpoints all apply here without a line added to
 //! them. See `plans/auto-sync/pending-the_round_trip-high-hard.md`.
 
-#![allow(dead_code)]
-
 use std::path::Path;
 use std::sync::atomic::AtomicBool;
 
 use gix::merge::tree::{FileFavor, TreatAsUnresolved, TreeFavor};
 use gix::remote::Direction;
+
+use serde::Serialize;
 
 use crate::error::NativeError;
 
@@ -42,7 +42,8 @@ const REMOTE_REF: &str = "refs/thinkbrain/remote";
 const SETTING: &str = "sync.destination";
 
 /// What one round trip did.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Synced {
     /// Notes the other side's work changed in this vault.
     pub brought_down: usize,
@@ -187,8 +188,13 @@ fn merge(
         .with_file_favor(Some(FileFavor::Ours))
         .with_tree_favor(Some(TreeFavor::Ours));
 
+    // Two folders that each already held notes, pointed at one destination for
+    // the first time, share no history at all. Refusing would leave someone
+    // with two devices that can never be joined; an empty base keeps
+    // everything on both sides and asks about the genuine clashes.
+    let options = gix::merge::commit::Options::from(options).with_allow_missing_merge_base(true);
     let mut outcome = repo
-        .merge_commits(ours, theirs, Default::default(), options.into())
+        .merge_commits(ours, theirs, Default::default(), options)
         .map_err(|error| cannot(&error))?;
 
     // Anything forced counts, because forcing is exactly what we asked for
@@ -375,6 +381,79 @@ fn tree_of(repo: &gix::Repository, commit: gix::ObjectId) -> Result<gix::ObjectI
         .tree_id()
         .map_err(|error| failed("sync.history_unreadable", "Could not read a recorded state.", error))?
         .detach())
+}
+
+/// Syncs one workspace, start to finish.
+///
+/// Everything slow happens on the workspace's lane, so a second window and a
+/// second click queue rather than interleave — two rounds at once would both
+/// merge onto the same tip and one of them would find the branch moved from
+/// under it.
+///
+/// A refusal is worth exactly one more try: it means the destination moved
+/// while we were merging, and going round again merges what arrived. Twice is
+/// the bound — a third would be a loop shaped like a race someone else is
+/// winning, and the answer to that is to say so, not to keep trying.
+pub fn sync(
+    engine: &super::engine::Engine,
+    key: &str,
+    root: &Path,
+    destination: &str,
+) -> Result<Synced, NativeError> {
+    let lane = super::registry::lane(key);
+    let _lane = lane.lock().unwrap_or_else(|error| error.into_inner());
+
+    // Whatever is still sitting in the settle window belongs in this sync.
+    engine.flush()?;
+
+    let repo = engine.repository();
+    let synced = once(&repo, root, destination)?;
+    if !matches!(synced.landed, push::Landed::Refused { .. }) {
+        return Ok(synced);
+    }
+
+    let again = once(&repo, root, destination)?;
+    Ok(Synced {
+        brought_down: synced.brought_down + again.brought_down,
+        asked_about: synced.asked_about + again.asked_about,
+        ..again
+    })
+}
+
+/// Syncs this workspace once, now, because someone asked.
+#[tauri::command]
+pub fn sync_now(app: tauri::AppHandle, root_path: String) -> Result<Synced, NativeError> {
+    use tauri::Manager as _;
+
+    let root = crate::commands::workspace::resolve_workspace_root(&root_path)?;
+    let key = root.to_string_lossy().to_string();
+    let app_data_dir = app.path().app_data_dir().map_err(|error| {
+        failed("sync.no_app_data", "Could not find where this app keeps its files.", error)
+    })?;
+    let destination = destination(&app_data_dir, &root).ok_or_else(|| {
+        NativeError::new(
+            "sync.no_destination",
+            "This folder is not set up to sync anywhere yet.",
+        )
+    })?;
+    let engine = super::registry::engine(&key).ok_or_else(|| {
+        super::registry::failure(&key).unwrap_or_else(|| {
+            NativeError::new(
+                "sync.not_recording",
+                "This folder's history is not being kept, so there is nothing to sync.",
+            )
+        })
+    })?;
+
+    let synced = sync(&engine, &key, &root, &destination)?;
+
+    if synced.asked_about > 0 {
+        engine.note_conflicts(super::settle::obvious(&engine, &root, conflict::scan(&root)));
+        crate::commands::watcher::announce_conflicts(&app, &key);
+    }
+    crate::commands::watcher::announce_sync_status(&key);
+
+    Ok(synced)
 }
 
 #[cfg(test)]

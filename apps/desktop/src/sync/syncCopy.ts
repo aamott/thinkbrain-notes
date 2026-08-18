@@ -7,7 +7,7 @@
  */
 
 import { describeWhen } from "./conflictCard";
-import type { ChangedNote, ConflictRate, SyncStatus } from "./historyTypes";
+import type { ChangedNote, ConflictRate, Synced, SyncStatus } from "./historyTypes";
 
 /** How loudly the footer should say it. */
 export type PillTone = "quiet" | "busy" | "warn";
@@ -174,4 +174,29 @@ function pillFor(status: SyncStatus, now: Date): PillCopy {
       };
     }
   }
+}
+
+/**
+ * What one round trip did, in a sentence someone can act on.
+ *
+ * A refusal is not a failure to report as one: it means another device got
+ * there first, and the only thing to do is wait a moment. Saying "rejected"
+ * would send someone looking for a problem that is not theirs.
+ */
+export function describeSync(done: Synced): string {
+  if (done.landed.state === "refused") {
+    return "Another device was sending its own changes at the same time. Try again in a moment.";
+  }
+
+  const arrived =
+    done.broughtDown > 0
+      ? `${done.broughtDown} ${done.broughtDown === 1 ? "note" : "notes"} arrived from another device.`
+      : null;
+  const toChoose =
+    done.askedAbout > 0
+      ? `${done.askedAbout} ${done.askedAbout === 1 ? "note needs" : "notes need"} you to choose between two versions.`
+      : null;
+
+  if (!arrived && !toChoose) return "Everything here is already in step with your other devices.";
+  return [arrived, toChoose].filter(Boolean).join(" ");
 }

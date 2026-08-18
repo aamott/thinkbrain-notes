@@ -4,6 +4,7 @@ import {
   describeConflictRate,
   describeMoment,
   describePill,
+  describeSync,
   describeWhatChanged,
   recoveryFor
 } from "./syncCopy";
@@ -141,5 +142,44 @@ describe("how often this folder has needed something of you", () => {
 
     expect(text).toContain("1 saved version.");
     expect(text).toContain("1 duplicate copy was");
+  });
+});
+
+describe("describeSync", () => {
+  const moved = { state: "moved" } as const;
+
+  it("says so when there was nothing to bring down", () => {
+    const text = describeSync({ broughtDown: 0, askedAbout: 0, sent: 0, landed: moved });
+
+    expect(text).toContain("already in step");
+  });
+
+  it("counts what arrived", () => {
+    const text = describeSync({ broughtDown: 3, askedAbout: 0, sent: 4, landed: moved });
+
+    expect(text).toContain("3 notes arrived");
+    expect(text).not.toContain("choose");
+  });
+
+  it("keeps the singulars singular", () => {
+    const text = describeSync({ broughtDown: 1, askedAbout: 1, sent: 2, landed: moved });
+
+    expect(text).toContain("1 note arrived");
+    expect(text).toContain("1 note needs you to choose");
+  });
+
+  /// A refusal is someone else's timing, not this person's problem, and the
+  /// only useful instruction is to wait.
+  it("turns a refusal into something to do rather than a fault", () => {
+    const text = describeSync({
+      broughtDown: 0,
+      askedAbout: 0,
+      sent: 0,
+      landed: { state: "refused", reason: "the other end holds changes this device has not seen" }
+    });
+
+    expect(text).toContain("Try again in a moment");
+    expect(text.toLowerCase()).not.toContain("refus");
+    expect(text.toLowerCase()).not.toContain("reject");
   });
 });

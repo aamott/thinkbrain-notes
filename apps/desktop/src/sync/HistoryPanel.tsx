@@ -1,15 +1,22 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { NativeCommandError } from "../native/commands";
+import { useSettingsStore } from "../settings/settingsStore";
 import { Unavailable } from "../shell/Unavailable";
 import { noteName } from "./conflictCard";
 import type { ChangedNote, ConflictRate, RecordedChange } from "./historyTypes";
-import { describeConflictRate, describeMoment, describeWhatChanged } from "./syncCopy";
+import {
+  describeConflictRate,
+  describeMoment,
+  describeSync,
+  describeWhatChanged
+} from "./syncCopy";
 import {
   readConflictRate,
   readHistory,
   restoreVersion,
-  subscribeToSyncStatus
+  subscribeToSyncStatus,
+  syncNow
 } from "./syncService";
 import { useSyncStatus } from "./useSyncStatus";
 
@@ -47,7 +54,10 @@ export function HistoryPanel({ rootPath, note, onShowEverything }: HistoryPanelP
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
   const { alongsideOwnGit } = useSyncStatus(rootPath);
+  const destination = useSettingsStore((state) => state.getEffectiveValue("sync.destination"));
+  const keptInStep = typeof destination === "string" && destination.trim() !== "";
 
   /** Reads the list, changing nothing. {@link apply} is the only writer. */
   const read = useCallback(async (): Promise<Read | null> => {
@@ -116,6 +126,27 @@ export function HistoryPanel({ rootPath, note, onShowEverything }: HistoryPanelP
     [apply, read, rootPath]
   );
 
+  /** Brings this folder in step with wherever it syncs to, and says what moved. */
+  const bringInStep = useCallback(async () => {
+    if (!rootPath) return;
+    setSyncing(true);
+    setNotice(null);
+    setError(null);
+    let failure: string | null = null;
+    let done = null;
+    try {
+      done = await syncNow(rootPath);
+    } catch (cause) {
+      failure = messageOf(cause, "These notes could not be brought in step. Nothing was changed.");
+    }
+    // The re-read first, the report last, for the same reason a restore does
+    // it that way: the list overwrites the message it was told to show.
+    apply(await read());
+    if (failure) setError(failure);
+    else if (done) setNotice(describeSync(done));
+    setSyncing(false);
+  }, [apply, read, rootPath]);
+
   const toggle = useCallback((id: string) => {
     setOpened((current) => {
       const next = new Set(current);
@@ -145,10 +176,21 @@ export function HistoryPanel({ rootPath, note, onShowEverything }: HistoryPanelP
             what you see here is a second, separate record kept outside your notes.
           </p>
         )}
-        {note && (
+        {note ? (
           <button type="button" className={QUIET_BUTTON + " mt-2"} onClick={onShowEverything}>
             Show everything instead
           </button>
+        ) : (
+          keptInStep && (
+            <button
+              type="button"
+              className={QUIET_BUTTON + " mt-2"}
+              disabled={syncing}
+              onClick={() => void bringInStep()}
+            >
+              {syncing ? "Bringing these notes in step…" : "Bring these notes in step now"}
+            </button>
+          )
         )}
       </header>
 

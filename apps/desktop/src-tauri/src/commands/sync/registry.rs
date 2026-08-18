@@ -213,6 +213,16 @@ fn flush(key: &str, engine: &Engine) {
 ///
 /// A vault with its own git repository has no engine, which is what makes
 /// "resolve this conflict" refuse rather than write something it cannot undo.
+/// The queue for one workspace's slow work.
+///
+/// Held by anything that must not interleave with another window doing the same
+/// thing to the same vault — bootstrapping, or a sync. Taken and released here
+/// so the caller waits on the lane rather than on the whole registry.
+pub fn lane(key: &str) -> Arc<Mutex<()>> {
+    let mut guard = registry();
+    guard.get_or_insert_with(Registry::default).lane(key)
+}
+
 pub fn engine(key: &str) -> Option<Arc<Engine>> {
     let guard = registry();
     guard.as_ref()?.engines.get(key).map(Arc::clone)

@@ -80,3 +80,18 @@ export const NOT_RECORDING: SyncStatus = {
   problem: null,
   alongsideOwnGit: false
 };
+
+/** What became of the notes we tried to send on. */
+export type SyncLanded =
+  | { readonly state: "moved" }
+  | { readonly state: "refused"; readonly reason: string };
+
+/** What one round trip to another device did. */
+export interface Synced {
+  /** Notes the other side's work changed here. */
+  readonly broughtDown: number;
+  /** Notes that needed a person, left as copies beside their originals. */
+  readonly askedAbout: number;
+  readonly sent: number;
+  readonly landed: SyncLanded;
+}
