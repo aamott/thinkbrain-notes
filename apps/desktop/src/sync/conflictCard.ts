@@ -8,6 +8,9 @@
  */
 
 import type { ConflictSummary } from "./conflictTypes";
+import { noteName } from "../lib/utils";
+
+export { noteName } from "../lib/utils";
 
 /** How a card presents itself. */
 export type CardTreatment =
@@ -30,11 +33,6 @@ const PICTURE_EXTENSIONS = new Set([
   "avif",
   "svg"
 ]);
-
-/** The file name out of a workspace-relative path. */
-export function noteName(path: string): string {
-  return path.split("/").filter(Boolean).at(-1) ?? path;
-}
 
 function extensionOf(path: string): string {
   const name = noteName(path);

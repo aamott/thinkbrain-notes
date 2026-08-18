@@ -12,7 +12,6 @@ import { subscribeToSyncEvent } from "./syncEvents";
 import type {
   ConflictRate,
   RecordedChange,
-  RestoredVersion,
   Synced,
   SyncStatus
 } from "./historyTypes";
@@ -26,7 +25,7 @@ const SYNC_STATUS_EVENT = "sync://status";
  * A page rather than everything: a vault years old has thousands of recorded
  * changes, and nobody scrolls past the first screen looking for last Tuesday.
  */
-export const HISTORY_PAGE = 60;
+const HISTORY_PAGE = 60;
 
 export function readSyncStatus(rootPath: string): Promise<SyncStatus> {
   return invokeNativeCommand("sync_status", { rootPath });
@@ -63,8 +62,8 @@ export function restoreVersion(
   rootPath: string,
   notePath: string,
   change: string
-): Promise<RestoredVersion> {
-  return invokeNativeCommand("restore_version", { rootPath, notePath, change });
+): Promise<void> {
+  return invokeNativeCommand("restore_version", { rootPath, notePath, change }).then(() => undefined);
 }
 
 export function readConflictRate(rootPath: string): Promise<ConflictRate> {

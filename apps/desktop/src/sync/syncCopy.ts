@@ -21,7 +21,10 @@ export interface PillCopy {
   readonly tone: PillTone;
 }
 
-const DAY = 24 * 60 * 60 * 1000;
+/** `${n} ${n === 1 ? singular : plural}`, with plural defaulting to singular + "s". */
+function plural(n: number, singular: string, pluralForm: string = `${singular}s`): string {
+  return `${n} ${n === 1 ? singular : pluralForm}`;
+}
 
 function clockOf(at: number): string {
   return new Date(at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
@@ -42,13 +45,18 @@ export function describeMoment(at: number | null, now: Date = new Date()): strin
   if (at === null) return "Unknown";
   const today = startOfDay(now);
   if (at >= today) return `Today ${clockOf(at)}`;
-  if (at >= today - DAY) return `Yesterday ${clockOf(at)}`;
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (at >= startOfDay(yesterday)) return `Yesterday ${clockOf(at)}`;
   return describeWhen(at);
 }
 
 /** How much one recorded change touched. */
 export function describeWhatChanged(notes: readonly ChangedNote[]): string {
-  return `${notes.length} note${notes.length === 1 ? "" : "s"} updated`;
+  const kind = new Set(notes.map((note) => note.change));
+  const description =
+    kind.size !== 1 ? "changed" : kind.has("removed") ? "deleted" : kind.has("added") ? "added" : "updated";
+  return `${plural(notes.length, "note")} ${description}`;
 }
 
 /**
@@ -60,6 +68,8 @@ export function describeWhatChanged(notes: readonly ChangedNote[]): string {
  */
 export function recoveryFor(code: string): string {
   switch (code) {
+    case "sync.auth_required":
+      return "Use a remote that does not require a sign-in, or sign in when remote authentication is available.";
     case "sync.note_read_failed":
     case "sync.vault_read_failed":
       return "Check the notes folder is still connected, then edit any note to try again.";
@@ -89,7 +99,7 @@ export function recoveryFor(code: string): string {
  * of settling the obvious ones.
  */
 export function describeConflictRate(rate: ConflictRate): string {
-  const versions = `${rate.recorded} saved version${rate.recorded === 1 ? "" : "s"}`;
+  const versions = plural(rate.recorded, "saved version");
   const tidied =
     rate.settled === 0
       ? ""
@@ -128,7 +138,9 @@ function pillFor(status: SyncStatus, now: Date): PillCopy {
         symbol: "—",
         text: "Versions not saved here",
         detail:
-          "This folder keeps its own version history, so ThinkBrain is leaving it alone.",
+          status.alongsideOwnGit
+            ? "This folder keeps its own version history, so ThinkBrain is leaving it alone."
+            : "Versions of your notes are not being saved here.",
         tone: "quiet"
       };
     case "problem": {
@@ -160,8 +172,7 @@ function pillFor(status: SyncStatus, now: Date): PillCopy {
         detail: "Recent changes are being saved to this folder's version history.",
         tone: "busy"
       };
-    case "idle":
-    default: {
+    case "idle": {
       const when = status.lastRecordedAt;
       return {
         symbol: "✓",
@@ -190,11 +201,11 @@ export function describeSync(done: Synced): string {
 
   const arrived =
     done.broughtDown > 0
-      ? `${done.broughtDown} ${done.broughtDown === 1 ? "note" : "notes"} arrived from another device.`
+      ? `${plural(done.broughtDown, "note")} arrived from another device.`
       : null;
   const toChoose =
     done.askedAbout > 0
-      ? `${done.askedAbout} ${done.askedAbout === 1 ? "note needs" : "notes need"} you to choose between two versions.`
+      ? `${plural(done.askedAbout, "note needs", "notes need")} you to choose between two versions.`
       : null;
 
   if (!arrived && !toChoose) return "Everything here is already in step with your other devices.";

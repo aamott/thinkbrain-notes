@@ -46,11 +46,15 @@ describe("what one recorded change touched", () => {
         { path: "one.md", change: "updated" },
         { path: "two.md", change: "added" }
       ])
-    ).toBe("2 notes updated");
+    ).toBe("2 notes changed");
   });
 
   it("keeps the singular singular", () => {
     expect(describeWhatChanged([{ path: "one.md", change: "updated" }])).toBe("1 note updated");
+  });
+
+  it("calls a removed note deleted", () => {
+    expect(describeWhatChanged([{ path: "one.md", change: "removed" }])).toBe("1 note deleted");
   });
 });
 
@@ -86,6 +90,13 @@ describe("the status footer", () => {
   it("says out loud when this folder is not being recorded at all", () => {
     expect(describePill(NOT_RECORDING, NOW).text).toBeTruthy();
     expect(describePill(NOT_RECORDING, NOW).tone).toBe("quiet");
+    expect(describePill(NOT_RECORDING, NOW).detail).toBe("Versions of your notes are not being saved here.");
+  });
+
+  it("explains when its own history is why recording is off", () => {
+    const pill = describePill(status({ state: "off", alongsideOwnGit: true }), NOW);
+
+    expect(pill.detail).toContain("keeps its own version history");
   });
 
   /// A failure nobody can act on is a failure nobody will act on.
@@ -94,6 +105,7 @@ describe("the status footer", () => {
       "sync.note_read_failed",
       "sync.note_store_failed",
       "sync.commit_failed",
+      "sync.auth_required",
       "something.nobody.planned.for"
     ]) {
       const pill = describePill(

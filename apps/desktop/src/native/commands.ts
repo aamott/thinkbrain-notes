@@ -9,7 +9,6 @@ import type {
 import type {
   ConflictRate as NativeConflictRate,
   RecordedChange as NativeRecordedChange,
-  RestoredVersion as NativeRestoredVersion,
   Synced as NativeSynced,
   SyncStatus as NativeSyncStatus
 } from "../sync/historyTypes";
@@ -222,7 +221,7 @@ export interface NativeCommandMap {
       readonly notePath: string;
       readonly change: string;
     };
-    readonly result: NativeRestoredVersion;
+    readonly result: null;
   };
   readonly sync_conflict_rate: {
     readonly args: { readonly rootPath: string };
@@ -440,19 +439,14 @@ export function normalizeNativeError(error: unknown): NativeCommandError {
     return new NativeCommandError(error);
   }
 
-  if (error instanceof Error) {
-    return new NativeCommandError({
-      code: "desktop.native_bridge_error",
-      message: error.message
-    });
-  }
-
   return new NativeCommandError({
     code: "desktop.native_bridge_error",
     message:
-      typeof error === "string"
-        ? error
-        : "The desktop native bridge returned an unknown error."
+      error instanceof Error
+        ? error.message
+        : typeof error === "string"
+          ? error
+          : "The desktop native bridge returned an unknown error."
   });
 }
 

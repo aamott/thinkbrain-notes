@@ -49,7 +49,7 @@ examples/extensions/  # Sample extension (hello-notes)
 - **ACP Integration**: Tauri Rust host owns agent process lifecycle via `agent-client-protocol` crate. Renderer receives Tauri events directly.
 
 ## Quality & Conventions
-- Run `./scripts/qa.sh` before completing tasks.
+- Run `./scripts/qa.sh` before completing tasks. Runs all linting, formatting, and tests.
 - Avoid `any` types; prefer strict types or `unknown`.
 - Fail loudly: log errors clearly and return typed results.
 
@@ -86,7 +86,7 @@ For major or cross-cutting refactors, `npx repomix --compress` can help map depe
 
 
 ## Rules/suggestions
-- Never commit/push without explicit user approval. Recommend commit message and what to try out.
+- Never commit/push without explicit user approval. Recommend commit message and what to try out. No signatures in commit messages.
 - Never change AGENTS.md (this file) without explicit user direction and approval. (Exception: `## File Map`)
 - Write compact, maintainable, optimized code. Shorter code is easier to read.
 - Avoid large files. Never over 800 lines. Break up earlier rather than later when it's already big. 

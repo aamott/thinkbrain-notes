@@ -40,10 +40,14 @@ export function useSyncStatus(rootPath: string | null): SyncStatus {
     // and a window settling a conflict announces that too. The count in this
     // status comes from the second and the time from the first.
     for (const subscribe of [subscribeToSyncStatus, subscribeToConflictChanges]) {
-      void subscribe(refresh).then((unlisten) => {
-        if (cancelled) unlisten();
-        else stops.push(unlisten);
-      });
+      void subscribe(refresh)
+        .then((unlisten) => {
+          if (cancelled) unlisten();
+          else stops.push(unlisten);
+        })
+        .catch((cause: unknown) => {
+          if (!cancelled) console.error("[sync] could not subscribe to status updates", cause);
+        });
     }
 
     return () => {

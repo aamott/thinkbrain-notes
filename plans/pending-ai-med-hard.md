@@ -116,7 +116,7 @@ x mcp       [mcp settings] [open mcp config file]
   conflicts; it never reasons, plans, edits, or merges for an agent.
 - **Chat UI primitives**: install shadcn conversational primitives via
   `pnpm dlx shadcn@latest add message-scroller message bubble attachment marker`
-  (see https://www.infoq.com/news/2026/08/shadcn-conversational-primitives/).
+  (see https://ui.shadcn.com/docs/components/message).
   These are the building blocks for the chat surface.
 - **Extension model**: true extension, not a built-in. Installable/removable,
   registered through the extension host's canonical APIs. The extension owns
@@ -170,14 +170,12 @@ No UI mockup or implementation of these surfaces until answers are recorded.
   runtime behavior.
 - ⬜ `panelRegistry.tsx` has an `assistant` panel contribution (left-side
   framing — will need to move to right action items menu per invariants).
-- ⬜ Rust has `agent-client-protocol` (v2.0.0 or greater) in `Cargo.toml`/lock but no ACP
+- ⬜ Rust has `agent-client-protocol` in `Cargo.toml`/lock but no ACP
   module, commands, events, or lifecycle.
 - ⬜ No `packages/core/src/ai/`, provider gateway, secret consumer, history
   adapter, or consent records exist.
 
 ## What Opus 5 owns
 
-Everything not listed above: file paths, Tauri command/event names, DTO shapes,
-test matrices, acceptance checkboxes, story decomposition, dependency edges,
-and the actual planning of each arc step. This fable is the head-start, not the
-plan.
+Everything not locked above — paths, DTOs, test matrices, story decomposition —
+is the planning pass's to decide.

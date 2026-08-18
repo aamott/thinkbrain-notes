@@ -3,25 +3,27 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { NOT_RECORDING, type ConflictRate, type RecordedChange } from "./historyTypes";
+import { NativeCommandError } from "../native/commands";
+import { NOT_RECORDING, type ConflictRate, type RecordedChange, type Synced } from "./historyTypes";
 
-const readHistory = vi.fn<() => Promise<readonly RecordedChange[]>>();
-const syncNow = vi.fn<() => Promise<unknown>>();
+const readHistory = vi.fn<(rootPath: string, notePath: string | null) => Promise<readonly RecordedChange[]>>();
+const syncNow = vi.fn<(rootPath: string) => Promise<Synced>>();
 /** What the settings say this folder is kept in step with, if anything. */
 let destination = "";
-const readConflictRate = vi.fn<() => Promise<ConflictRate>>();
-const restoreVersion = vi.fn<() => Promise<unknown>>();
+const readConflictRate = vi.fn<(rootPath: string) => Promise<ConflictRate>>();
+const restoreVersion = vi.fn<(rootPath: string, notePath: string, change: string) => Promise<void>>();
+const subscribeToSyncStatus = vi.fn<() => Promise<() => void>>();
 
 vi.mock("./useSyncStatus", () => ({
   useSyncStatus: () => ({ ...NOT_RECORDING, state: "idle" })
 }));
 
 vi.mock("./syncService", () => ({
-  readHistory: (...args: unknown[]) => readHistory(...(args as [])),
-  readConflictRate: () => readConflictRate(),
-  restoreVersion: (...args: unknown[]) => restoreVersion(...(args as [])),
-  subscribeToSyncStatus: () => Promise.resolve(() => undefined),
-  syncNow: (...args: unknown[]) => syncNow(...(args as []))
+  readHistory,
+  readConflictRate,
+  restoreVersion,
+  subscribeToSyncStatus,
+  syncNow
 }));
 
 vi.mock("../settings/settingsStore", () => ({
@@ -48,7 +50,8 @@ const change = (over: Partial<RecordedChange> = {}): RecordedChange => ({
 beforeEach(() => {
   readHistory.mockReset().mockResolvedValue([]);
   readConflictRate.mockReset().mockResolvedValue({ decisions: 0, settled: 0, recorded: 0 });
-  restoreVersion.mockReset().mockResolvedValue({ note: "n", checkpoint: "c" });
+  restoreVersion.mockReset().mockResolvedValue(undefined);
+  subscribeToSyncStatus.mockReset().mockResolvedValue(() => undefined);
   syncNow.mockReset().mockResolvedValue({
     broughtDown: 0,
     askedAbout: 0,
@@ -90,13 +93,35 @@ describe("the whole workspace's history", () => {
     expect(host.textContent).toContain("Nothing saved yet");
   });
 
+  it("waits for the first read before showing an empty state", async () => {
+    let finish!: (changes: readonly RecordedChange[]) => void;
+    const pending = new Promise<readonly RecordedChange[]>((resolve) => {
+      finish = resolve;
+    });
+    readHistory.mockReturnValue(pending);
+    container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
+
+    await act(() => {
+      root?.render(<HistoryPanel rootPath="/notes" note={null} onShowEverything={() => undefined} />);
+    });
+    expect(container.textContent).not.toContain("Nothing saved yet");
+
+    finish([]);
+    await act(async () => {
+      await pending;
+    });
+    expect(container.textContent).toContain("Nothing saved yet");
+  });
+
   it("dates each saved change and counts what it touched", async () => {
     readHistory.mockResolvedValue([change()]);
 
     const host = await render();
 
     expect(host.textContent).toContain("Today");
-    expect(host.textContent).toContain("2 notes updated");
+    expect(host.textContent).toContain("2 notes changed");
   });
 
   /// The list is a summary until asked. Naming every note in every change would
@@ -107,7 +132,7 @@ describe("the whole workspace's history", () => {
     const host = await render();
     expect(host.textContent).not.toContain("Meeting Notes.md");
 
-    await act(async () => button(host, "2 notes updated").click());
+    await act(async () => button(host, "2 notes changed").click());
     expect(host.textContent).toContain("Meeting Notes.md");
   });
 
@@ -116,7 +141,7 @@ describe("the whole workspace's history", () => {
     readHistory.mockResolvedValue([change()]);
 
     const host = await render();
-    await act(async () => button(host, "2 notes updated").click());
+    await act(async () => button(host, "2 notes changed").click());
 
     expect(host.textContent).toContain("Sync 2026-08-17 09:31 — 2 notes changed");
   });
@@ -171,34 +196,51 @@ describe("one note's earlier versions", () => {
 });
 
 describe("putting a version back", () => {
-  it("names the note and the change it came from", async () => {
+  const renderRoadmapForRestore = async () => {
     readHistory.mockResolvedValue([change({ notes: [{ path: "Roadmap.md", change: "updated" }] })]);
-
     const host = await render("Roadmap.md");
     await act(async () => button(host, "Put this version back").click());
+    return host;
+  };
 
+  it("names the note and the change it came from", async () => {
+    await renderRoadmapForRestore();
     expect(restoreVersion).toHaveBeenCalledWith("/notes", "Roadmap.md", "abc123");
   });
 
   it("says it worked, and says the earlier text is still there", async () => {
-    readHistory.mockResolvedValue([change({ notes: [{ path: "Roadmap.md", change: "updated" }] })]);
-
-    const host = await render("Roadmap.md");
-    await act(async () => button(host, "Put this version back").click());
-
+    const host = await renderRoadmapForRestore();
     expect(host.querySelector('[role="status"]')?.textContent).toContain("Roadmap.md");
   });
 
   /// A refused restore wrote nothing, and the list has to go on saying so.
   it("reports a refusal without dropping the list", async () => {
-    readHistory.mockResolvedValue([change({ notes: [{ path: "Roadmap.md", change: "updated" }] })]);
     restoreVersion.mockRejectedValue(new Error("refused"));
-
-    const host = await render("Roadmap.md");
-    await act(async () => button(host, "Put this version back").click());
-
+    const host = await renderRoadmapForRestore();
     expect(host.querySelector('[role="alert"]')?.textContent).toContain("Nothing was changed");
     expect(host.textContent).toContain("Roadmap.md");
+  });
+
+  it("adds the recovery hint from a native failure", async () => {
+    restoreVersion.mockRejectedValue(
+      new NativeCommandError({
+        code: "sync.note_store_failed",
+        message: "The saved version could not be put back."
+      })
+    );
+    const host = await renderRoadmapForRestore();
+    expect(host.textContent).toContain("Check this computer has space left");
+  });
+
+  it("logs a failed history subscription instead of leaving it unhandled", async () => {
+    const cause = new Error("listen failed");
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    subscribeToSyncStatus.mockRejectedValue(cause);
+
+    await render();
+
+    expect(log).toHaveBeenCalledWith("[sync] could not subscribe to history updates", cause);
+    log.mockRestore();
   });
 
   /// A change that only deleted a note left no text to put back — offering one
@@ -207,7 +249,7 @@ describe("putting a version back", () => {
     readHistory.mockResolvedValue([change({ notes: [{ path: "Gone.md", change: "removed" }] })]);
 
     const host = await render();
-    await act(async () => button(host, "1 note updated").click());
+    await act(async () => button(host, "1 note deleted").click());
 
     expect(host.textContent).toContain("deleted");
     expect(() => button(host, "Put this version back")).toThrow();

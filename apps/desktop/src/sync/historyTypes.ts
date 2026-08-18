@@ -27,12 +27,6 @@ export interface RecordedChange {
   readonly notes: readonly ChangedNote[];
 }
 
-/** Where a restored version came from. */
-export interface RestoredVersion {
-  readonly note: string;
-  readonly checkpoint: string;
-}
-
 /** How often this vault has asked its user to choose between two versions. */
 export interface ConflictRate {
   /** Conflicts the user was asked about. */
@@ -65,8 +59,8 @@ export interface SyncStatus {
   /**
    * Whether this folder is also a git repository of the user's own.
    *
-   * Nothing acts on it. Two histories are being kept here, and someone should
-   * hear that from the app rather than discover it.
+   * The history panel and footer pill explain that both histories are being
+   * kept here, so someone hears it from the app rather than discovering it.
    */
   readonly alongsideOwnGit: boolean;
 }
@@ -84,6 +78,7 @@ export const NOT_RECORDING: SyncStatus = {
 /** What became of the notes we tried to send on. */
 export type SyncLanded =
   | { readonly state: "moved" }
+  /** Retained as a native diagnostic; the UI gives a stable, actionable message instead. */
   | { readonly state: "refused"; readonly reason: string };
 
 /** What one round trip to another device did. */
@@ -92,6 +87,10 @@ export interface Synced {
   readonly broughtDown: number;
   /** Notes that needed a person, left as copies beside their originals. */
   readonly askedAbout: number;
+  /**
+   * Objects sent onward. This is intentionally not shown as a note count:
+   * native push reports packed git objects, not notes.
+   */
   readonly sent: number;
   readonly landed: SyncLanded;
 }

@@ -95,9 +95,7 @@ Three things fall out of that for free, which is the argument for it:
 ## Not in scope
 
 - **Credentials** — story 6c, gated on the secret-storage plan.
-- **Triggers on a timer.** "Sync now" first; a debounce and a frequency cap are
-  worth having only once the round trip is proved by hand.
-- **Progress.** A first sync of a large vault is silent, as 6a noted.
+- Other gaps tracked as their own stories (see Known gaps below).
 
 ## What this story decided
 
@@ -147,29 +145,15 @@ here failed the whole push. Real git skips them; now so do we.
 
 ## Known gaps
 
-- **The lane is not proved by its test.** Removing it leaves the test passing:
-  whichever thread merges first leaves the rest nothing to merge, and a
-  collision needs two of them past the fetch before either commits. Recorded
-  the same way story 3 recorded the same limit about its mutation lock.
-- **"They deleted it, we changed it" keeps ours silently.** gitoxide calls it a
-  resolution failure and we force it to ours, but there is no version of theirs
-  to leave beside it, so nothing asks. Keeping someone's writing is the safe
-  direction; saying nothing about it is the gap.
-- **One unwritable note blocks the vault forever.** A name that is legal here
-  but not on Windows, or a file where a folder now belongs, fails the write and
-  aborts before the merge is recorded — so the next sync recomputes the same
-  work and fails the same way, with no way past it. This is the same question
-  story 1 left open about a note that cannot be recorded, and it wants one
-  answer for both.
-- **Symlinks and submodules never arrive.** They are skipped when the vault is
-  brought up to date, but they *are* in the tree that gets recorded, so the next
-  sync sees no change and never tries again. Silently absent on this device.
-- **A crash mid-conflict multiplies the copies.** A copy is written before the
-  merge is recorded, so an interruption between the two leaves the copy behind;
-  the next attempt sees the name taken and writes ` 2`, then ` 3`.
-- **No trigger but the button.** A debounce and a frequency cap were left until
-  the round trip had been used by hand.
-- **A first sync of a large vault is silent**, as story 6a noted.
+Tracked as their own stories, not kept here:
+
+- `pending-lane_test_strength-low-low.md`
+- `pending-delete_vs_change_silent_resolution-med-med.md`
+- `pending-unwritable_note_blocks_vault-high-hard.md`
+- `pending-symlink_submodule_skipped-med-med.md`
+- `pending-crash_conflict_copy_multiplication-high-hard.md`
+- `pending-sync_trigger_debounce-low-med.md`
+- `pending-large_sync_progress-low-low.md`
 
 ## Status
 

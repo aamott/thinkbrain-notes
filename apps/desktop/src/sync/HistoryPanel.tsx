@@ -1,13 +1,14 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { NativeCommandError } from "../native/commands";
+import { noteName } from "../lib/utils";
 import { useSettingsStore } from "../settings/settingsStore";
 import { Unavailable } from "../shell/Unavailable";
-import { noteName } from "./conflictCard";
-import type { ChangedNote, ConflictRate, RecordedChange } from "./historyTypes";
+import type { ChangedNote, ConflictRate, RecordedChange, Synced } from "./historyTypes";
 import {
   describeConflictRate,
   describeMoment,
+  recoveryFor,
   describeSync,
   describeWhatChanged
 } from "./syncCopy";
@@ -48,16 +49,20 @@ interface Read {
 }
 
 export function HistoryPanel({ rootPath, note, onShowEverything }: HistoryPanelProps) {
+  const queryKey = `${rootPath ?? ""}\0${note ?? ""}`;
   const [changes, setChanges] = useState<readonly RecordedChange[]>([]);
   const [rate, setRate] = useState<ConflictRate | null>(null);
   const [opened, setOpened] = useState<ReadonlySet<string>>(() => new Set());
-  const [busy, setBusy] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
+  const restoring = useRef(false);
+  const loading = loadedKey !== queryKey;
   const { alongsideOwnGit } = useSyncStatus(rootPath);
   const destination = useSettingsStore((state) => state.getEffectiveValue("sync.destination"));
-  const keptInStep = typeof destination === "string" && destination.trim() !== "";
+  const syncConfigured = typeof destination === "string" && destination.trim() !== "";
 
   /** Reads the list, changing nothing. {@link apply} is the only writer. */
   const read = useCallback(async (): Promise<Read | null> => {
@@ -78,7 +83,8 @@ export function HistoryPanel({ rootPath, note, onShowEverything }: HistoryPanelP
     if (result.changes) setChanges(result.changes);
     if (result.rate) setRate(result.rate);
     setError(result.error);
-  }, []);
+    setLoadedKey(queryKey);
+  }, [queryKey]);
 
   // One effect for the first read and every one after it. The sweeper announces
   // when it has written something, which is exactly when this list is out of
@@ -93,10 +99,14 @@ export function HistoryPanel({ rootPath, note, onShowEverything }: HistoryPanelP
     };
 
     reload();
-    void subscribeToSyncStatus(reload).then((unlisten) => {
-      if (cancelled) unlisten();
-      else stop = unlisten;
-    });
+    void subscribeToSyncStatus(reload)
+      .then((unlisten) => {
+        if (cancelled) unlisten();
+        else stop = unlisten;
+      })
+      .catch((cause: unknown) => {
+        if (!cancelled) console.error("[sync] could not subscribe to history updates", cause);
+      });
 
     return () => {
       cancelled = true;
@@ -106,8 +116,9 @@ export function HistoryPanel({ rootPath, note, onShowEverything }: HistoryPanelP
 
   const putBack = useCallback(
     async (change: RecordedChange, path: string) => {
-      if (!rootPath) return;
-      setBusy(`${change.id}:${path}`);
+      if (!rootPath || restoring.current) return;
+      restoring.current = true;
+      setBusy(true);
       setNotice(null);
       let failure: string | null = null;
       try {
@@ -115,13 +126,17 @@ export function HistoryPanel({ rootPath, note, onShowEverything }: HistoryPanelP
       } catch (cause) {
         failure = messageOf(cause, "That version could not be put back. Nothing was changed.");
       }
-      // Always after the attempt, and the report last: the re-read clears the
-      // previous message, and a failure the list overwrote would be a failure
-      // nobody was told about.
-      apply(await read());
-      if (failure) setError(failure);
-      else setNotice(`"${noteName(path)}" is back to how it was ${describeMoment(change.at).toLowerCase()}.`);
-      setBusy(null);
+      try {
+        // Always after the attempt, and the report last: the re-read clears the
+        // previous message, and a failure the list overwrote would be a failure
+        // nobody was told about.
+        apply(await read());
+        if (failure) setError(failure);
+        else setNotice(`"${noteName(path)}" is back to how it was ${describeMoment(change.at).toLowerCase()}.`);
+      } finally {
+        restoring.current = false;
+        setBusy(false);
+      }
     },
     [apply, read, rootPath]
   );
@@ -133,7 +148,7 @@ export function HistoryPanel({ rootPath, note, onShowEverything }: HistoryPanelP
     setNotice(null);
     setError(null);
     let failure: string | null = null;
-    let done = null;
+    let done: Synced | null = null;
     try {
       done = await syncNow(rootPath);
     } catch (cause) {
@@ -181,7 +196,7 @@ export function HistoryPanel({ rootPath, note, onShowEverything }: HistoryPanelP
             Show everything instead
           </button>
         ) : (
-          keptInStep && (
+          syncConfigured && (
             <button
               type="button"
               className={QUIET_BUTTON + " mt-2"}
@@ -205,7 +220,7 @@ export function HistoryPanel({ rootPath, note, onShowEverything }: HistoryPanelP
         </p>
       )}
 
-      {changes.length === 0 && error === null ? (
+      {!loading && changes.length === 0 && error === null ? (
         <Unavailable
           title={note ? "No earlier versions yet" : "Nothing saved yet"}
           description={
@@ -247,7 +262,7 @@ interface EntryProps {
   readonly open: boolean;
   /** A single note's versions are always open — there is nothing to fold away. */
   readonly collapsible: boolean;
-  readonly busy: string | null;
+  readonly busy: boolean;
   readonly onToggle: () => void;
   readonly onRestore: (path: string) => void;
 }
@@ -277,7 +292,7 @@ function Entry({ change, open, collapsible, busy, onToggle, onRestore }: EntryPr
               <NoteRow
                 key={note.path}
                 note={note}
-                busy={busy === `${change.id}:${note.path}`}
+                busy={busy}
                 onRestore={() => onRestore(note.path)}
               />
             ))}
@@ -321,5 +336,7 @@ function NoteRow({
 }
 
 function messageOf(cause: unknown, fallback: string): string {
-  return cause instanceof NativeCommandError ? cause.message : fallback;
+  return cause instanceof NativeCommandError
+    ? `${cause.message} ${recoveryFor(cause.code)}`
+    : fallback;
 }

@@ -59,7 +59,7 @@ vi.mock("./syncService", () => ({
     Promise.resolve({ ...NOT_RECORDING, state: "idle", alongsideOwnGit: true }),
   readHistory: () => readHistory(),
   readConflictRate: () => Promise.resolve({ decisions: 2, settled: 47, recorded: 340 }),
-  restoreVersion: () => Promise.resolve({ note: "n", checkpoint: "c" }),
+  restoreVersion: () => Promise.resolve(),
   subscribeToSyncStatus: () => Promise.resolve(() => undefined)
 }));
 
