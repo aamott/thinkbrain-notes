@@ -9,7 +9,9 @@ export type BuiltInTabKind =
   | "preview"
   | "settings"
   | "graph"
-  | "browser";
+  | "browser"
+  /** Two versions of one note, side by side, waiting on a decision. */
+  | "merge";
 
 /** Allows extension-owned kinds while retaining first-party autocomplete. */
 export type TabKind = BuiltInTabKind | (string & {});

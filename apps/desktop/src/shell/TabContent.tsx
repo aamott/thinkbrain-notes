@@ -7,6 +7,7 @@ import { desktopTabRegistry } from "../tabs/tabRegistry";
 import type { DesktopTab } from "../tabs/tabModel";
 import type { DocumentViewState } from "./shellTypes";
 import { SettingsTab } from "../settings/SettingsTab";
+import { MergeTab } from "../sync/MergeTab";
 import { Unavailable } from "./Unavailable";
 
 /**
@@ -19,6 +20,13 @@ type TabContentProps = {
   readonly onSave: (tab: DesktopTab) => Promise<boolean>;
   readonly noteIndex?: readonly NoteIndexEntry[];
   readonly onOpenNote?: (relativePath: string) => void;
+  /**
+   * Unsaved text of an editor open on the note a merge tab is about.
+   *
+   * Only a merge tab reads it: "this computer's version" has to be what the
+   * user is looking at, and the last save may be several paragraphs behind.
+   */
+  readonly unsavedNoteContents?: string | null;
 };
 
 /** Lazy-loaded Markdown editor; only fetched when an editor tab is rendered. */
@@ -34,7 +42,15 @@ const MarkdownEditor = lazy(async () => {
  * not yet backed by a service and show an `Unavailable` placeholder. Editor
  * tabs render the lazy-loaded `MarkdownEditor` once the document is ready.
  */
-export function TabContent({ tab, document, onChange, onSave, noteIndex, onOpenNote }: TabContentProps) {
+export function TabContent({
+  tab,
+  document,
+  onChange,
+  onSave,
+  noteIndex,
+  onOpenNote,
+  unsavedNoteContents
+}: TabContentProps) {
   // Hooks must run before any early return, so both are read up front even
   // though only the Markdown editor branch consumes them.
   const livePreview = useSettingsStore(
@@ -107,6 +123,18 @@ export function TabContent({ tab, document, onChange, onSave, noteIndex, onOpenN
 
   if (tab.kind === "settings") {
     return <SettingsTab />;
+  }
+
+  // Named by the conflict copy, which is what identifies a conflict everywhere
+  // else — one note can have a copy from each of two machines.
+  if (tab.kind === "merge") {
+    return (
+      <MergeTab
+        rootPath={rootPath ?? null}
+        copyPath={relativePath ?? null}
+        buffer={unsavedNoteContents ?? null}
+      />
+    );
   }
 
   if (!document || document.phase === "loading") {

@@ -1,3 +1,4 @@
+import type { Dispatch, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, SetStateAction } from "react";
 import type { NativeWorkspaceEntry } from "../native/commands";
 import type { WorkspaceTreeNode } from "./workspaceExplorerModel";
 
@@ -9,6 +10,45 @@ export interface ContextMenuState {
   readonly x: number;
   readonly y: number;
   readonly target: ContextMenuTarget;
+}
+
+/**
+ * Everything the explorer can be asked to do.
+ *
+ * One object rather than two dozen props. All of these are owned by
+ * `WorkspaceExplorer` and consumed by its view, its tree or its menus, and
+ * naming each one at every level meant a new action was four files of plumbing
+ * before it did anything at all.
+ *
+ * `WorkspaceExplorer` memoizes it, which is what keeps `WorkspaceTreeItem`'s
+ * own memoization worth having: a fresh object every render would re-render
+ * every row of the tree on every keystroke.
+ */
+export interface WorkspaceExplorerActions {
+  readonly setActivePath: (path: string) => void;
+  readonly toggleShowHidden: () => Promise<void>;
+  readonly startCreate: (parentPath: string, kind: "file" | "folder") => void;
+  readonly submitCreate: (target: CreateState, name: string) => Promise<boolean>;
+  readonly submitRename: (target: RenameState, name: string) => Promise<boolean>;
+  readonly handleTreeKeyDown: (event: ReactKeyboardEvent<HTMLUListElement>) => void;
+  readonly handleMarkdownFileSelected: (relativePath: string) => void;
+  readonly showContextMenu: (event: ReactMouseEvent, target: ContextMenuTarget) => void;
+  readonly closeContextMenu: () => void;
+  readonly toggleFolder: (relativePath: string) => void;
+  readonly collapseFolder: (relativePath: string) => void;
+  readonly startRename: (entry: NativeWorkspaceEntry) => void;
+  readonly requestDelete: (entry: NativeWorkspaceEntry) => void;
+  /** Lists one file's earlier versions, in the history panel. */
+  readonly showVersions: (entry: NativeWorkspaceEntry) => void;
+  readonly refreshEntries: () => Promise<void>;
+  readonly openWorkspace: () => Promise<void>;
+  readonly launchWorkspace: (rootPath: string) => Promise<void>;
+  readonly confirmDelete: () => Promise<void>;
+  readonly setMoreMenuOpen: Dispatch<SetStateAction<boolean>>;
+  readonly setRenaming: (value: RenameState | null) => void;
+  readonly setCreating: (value: CreateState | null) => void;
+  readonly setPendingDelete: (value: NativeWorkspaceEntry | null) => void;
+  readonly dismissError: () => void;
 }
 
 // State shapes used by the explorer for inline editing.

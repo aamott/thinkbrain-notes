@@ -6,6 +6,8 @@ import {
 } from "@thinkbrain/core";
 import { useMemo, useSyncExternalStore, type ReactNode } from "react";
 import { SearchPanel } from "../search/SearchPanel";
+import { ConflictsPanel } from "../sync/ConflictsPanel";
+import { HistoryPanel } from "../sync/HistoryPanel";
 import { ExtensionsPanel } from "../extensions/ExtensionsPanel";
 import { Unavailable } from "../shell/Unavailable";
 import { AssistantPanelSurface } from "./AssistantPanelSurface";
@@ -21,6 +23,16 @@ export interface LeftPanelContext {
   readonly explorerProps: WorkspaceExplorerProps;
   /** Opens a Markdown file selected by the search panel. */
   readonly onOpenSearchResult: (relativePath: string) => void;
+  /** Opens the side-by-side comparison for a conflict, named by its copy. */
+  readonly onReviewConflict: (copyPath: string, notePath: string) => void;
+  /**
+   * The note whose earlier versions the history panel should show, or `null`
+   * for the whole workspace's history. Set by "Previous versions…" in the file
+   * tree, which is why it lives out here rather than inside the panel.
+   */
+  readonly versionsOf: string | null;
+  /** Leaves one note's versions for the whole workspace's history. */
+  readonly onShowEverything: () => void;
 }
 
 /** State a right-side panel factory may read (inspector panels only). */
@@ -42,6 +54,8 @@ export interface DesktopPanelContext extends LeftPanelContext, RightPanelContext
 export type BuiltInDesktopPanelId =
   | "explorer"
   | "search"
+  | "conflicts"
+  | "history"
   | "tags"
   | "extensions"
   | "outline"
@@ -60,6 +74,8 @@ export type BuiltInDesktopPanelId =
 export type BuiltInLeftPanel =
   | "explorer"
   | "search"
+  | "conflicts"
+  | "history"
   | "tags"
   | "extensions";
 
@@ -121,6 +137,8 @@ export type RightPanel = BuiltInRightPanel | ExtensionPanelId;
 export function isBuiltInLeftPanel(id: string): id is BuiltInLeftPanel {
   return id === "explorer"
     || id === "search"
+    || id === "conflicts"
+    || id === "history"
     || id === "tags"
     || id === "extensions";
 }
@@ -205,6 +223,26 @@ export const builtInDesktopPanels: readonly (LeftPanelContribution | RightPanelC
     availability: () => true,
     factory: ({ onOpenSearchResult, rootPath }) => (
       <SearchPanel rootPath={rootPath} onOpenFile={onOpenSearchResult} />
+    )
+  },
+  {
+    id: "conflicts",
+    label: "Needs your attention",
+    icon: "⇄",
+    side: "left",
+    availability: () => true,
+    factory: ({ onReviewConflict, rootPath }) => (
+      <ConflictsPanel rootPath={rootPath} onReview={onReviewConflict} />
+    )
+  },
+  {
+    id: "history",
+    label: "History",
+    icon: "🕘",
+    side: "left",
+    availability: () => true,
+    factory: ({ rootPath, versionsOf, onShowEverything }) => (
+      <HistoryPanel rootPath={rootPath} note={versionsOf} onShowEverything={onShowEverything} />
     )
   },
   {

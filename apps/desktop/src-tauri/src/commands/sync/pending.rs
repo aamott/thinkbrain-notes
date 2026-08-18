@@ -24,6 +24,11 @@ impl PendingChanges {
         self.seen.insert(path, at);
     }
 
+    /// How many changes are waiting, settled or not.
+    pub fn len(&self) -> usize {
+        self.seen.len()
+    }
+
     /// Removes and returns the paths that have been still for `settle`.
     ///
     /// Per path, not per batch: one large attachment still arriving must not

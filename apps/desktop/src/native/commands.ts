@@ -1,5 +1,18 @@
 import { invoke } from "@tauri-apps/api/core";
 
+import type {
+  ConflictComparison as NativeConflictComparison,
+  ConflictResolution as NativeConflictResolution,
+  ConflictResolved as NativeConflictResolved,
+  ConflictSummary as NativeConflictSummary
+} from "../sync/conflictTypes";
+import type {
+  ConflictRate as NativeConflictRate,
+  RecordedChange as NativeRecordedChange,
+  RestoredVersion as NativeRestoredVersion,
+  SyncStatus as NativeSyncStatus
+} from "../sync/historyTypes";
+
 export interface NativeCommandErrorShape {
   readonly code: string;
   readonly message: string;
@@ -159,6 +172,60 @@ export interface NativeCommandMap {
   readonly unwatch_workspace: {
     readonly args: { readonly canonicalRoot: string };
     readonly result: null;
+  };
+  readonly list_conflicts: {
+    readonly args: { readonly rootPath: string };
+    readonly result: readonly NativeConflictSummary[];
+  };
+  /** `buffer` carries an open editor's unsaved text as this computer's side. */
+  readonly read_conflict: {
+    readonly args: {
+      readonly rootPath: string;
+      readonly copyPath: string;
+      readonly buffer?: string | null;
+    };
+    readonly result: NativeConflictComparison;
+  };
+  /**
+   * `expectedOurs`/`expectedTheirs` are the fingerprints the decision was made
+   * from; the write is refused if either side has moved since.
+   */
+  readonly resolve_conflict: {
+    readonly args: {
+      readonly rootPath: string;
+      readonly copyPath: string;
+      readonly resolution: NativeConflictResolution;
+      readonly expectedOurs: string;
+      readonly expectedTheirs: string;
+    };
+    readonly result: NativeConflictResolved;
+  };
+  /** What the status footer says: health, counts and when it last saved. */
+  readonly sync_status: {
+    readonly args: { readonly rootPath: string };
+    readonly result: NativeSyncStatus;
+  };
+  /** `notePath` narrows the list to one note's restorable versions. */
+  readonly sync_history: {
+    readonly args: {
+      readonly rootPath: string;
+      readonly notePath: string | null;
+      readonly limit: number;
+    };
+    readonly result: readonly NativeRecordedChange[];
+  };
+  /** Puts one note back to the version recorded in `change`. */
+  readonly restore_version: {
+    readonly args: {
+      readonly rootPath: string;
+      readonly notePath: string;
+      readonly change: string;
+    };
+    readonly result: NativeRestoredVersion;
+  };
+  readonly sync_conflict_rate: {
+    readonly args: { readonly rootPath: string };
+    readonly result: NativeConflictRate;
   };
   readonly read_app_settings: {
     readonly args: undefined;

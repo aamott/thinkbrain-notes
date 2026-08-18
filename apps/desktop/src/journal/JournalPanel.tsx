@@ -8,7 +8,7 @@ import {
 } from "react";
 
 import { listWindow, rowOffsets } from "../lib/listWindow";
-import { ContextMenu, MenuButton, type ContextMenuState } from "../shell/ContextMenu";
+import { Menu, MenuButton, type MenuPosition } from "../shell/Menu";
 import { EmptyState, JournalTrouble } from "./journalChrome";
 import { Row } from "./JournalRow";
 import { JournalPanelHeader } from "./JournalPanelHeader";
@@ -137,7 +137,7 @@ export function JournalPanel({
   const [viewport, setViewport] = useState(ESTIMATED_VIEWPORT);
   const [rowHeights, setRowHeights] = useState<JournalRowHeights>(ESTIMATED_ROW_HEIGHTS);
   // Context menu for entry rows (right-click / long-press). Null when closed.
-  const [contextMenu, setContextMenu] = useState<{ state: ContextMenuState; entryPath: string } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ state: MenuPosition; entryPath: string } | null>(null);
   // Inline rename state. Null when inactive.
   const [renaming, setRenaming] = useState<{ path: string; draft: string } | null>(null);
   // Delete confirmation. Null when inactive.
@@ -436,7 +436,7 @@ export function JournalPanel({
       {header}
       {body()}
       {contextMenu && (
-        <ContextMenu state={contextMenu.state} onClose={() => setContextMenu(null)}>
+        <Menu at={contextMenu.state} onClose={() => setContextMenu(null)}>
           <MenuButton label="Open" onClick={() => { onOpenEntry(contextMenu.entryPath); setContextMenu(null); }} />
           {onRenameEntry && (
             <MenuButton label="Rename" onClick={() => {
@@ -455,7 +455,7 @@ export function JournalPanel({
               }} />
             </>
           )}
-        </ContextMenu>
+        </Menu>
       )}
       {pendingDelete && (
         <div

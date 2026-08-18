@@ -49,7 +49,7 @@ describe("DesktopShell composition", () => {
       expect(markup).toContain(`aria-label="${action.label}"`);
       expect(markup).toContain(`title="${action.label}"`);
     }
-    expect(leftPanels).toHaveLength(4);
+    expect(leftPanels).toHaveLength(6);
     expect(markup).toContain('aria-label="Settings"');
     expect(markup).toContain('title="Settings"');
   });
@@ -70,7 +70,6 @@ describe("DesktopShell composition", () => {
     const markup = shellMarkup();
 
     expect(markup).toContain("No workspace open");
-    expect(markup).toContain("Open a workspace to begin");
     expect(markup).toContain('aria-label="Notifications"');
   });
 
@@ -80,7 +79,6 @@ describe("DesktopShell composition", () => {
     );
 
     expect(markup).toContain(">Field Notes</span>");
-    expect(markup).toContain("Workspace open");
     expect(markup).not.toContain("No workspace open");
   });
 

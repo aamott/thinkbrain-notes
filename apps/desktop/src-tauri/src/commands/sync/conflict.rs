@@ -51,7 +51,7 @@ pub struct ConflictCopy {
 ///
 /// Splits on the *last* dot, and never on a leading one, so a dotfile keeps its
 /// name intact rather than becoming an extension with an empty stem.
-fn split_extension(name: &str) -> (&str, &str) {
+pub fn split_extension(name: &str) -> (&str, &str) {
     match name.rfind('.') {
         Some(index) if index > 0 => (&name[..index], &name[index..]),
         _ => (name, ""),

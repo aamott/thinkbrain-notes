@@ -16,12 +16,15 @@ type ActivityBarProps = {
   readonly onSelectLeftPanel: (panel: LeftPanel) => void;
   /** Opens the settings entry point. */
   readonly onOpenSettings: () => void;
+  /** Counts to show over panel icons, keyed by panel id. */
+  readonly badges?: Readonly<Record<string, number>>;
 };
 
 export function ActivityBar({
   leftPanel,
   onSelectLeftPanel,
-  onOpenSettings
+  onOpenSettings,
+  badges
 }: ActivityBarProps) {
   const leftPanels = useLeftPanelContributions();
 
@@ -37,6 +40,7 @@ export function ActivityBar({
             label={action.label}
             symbol={action.icon}
             active={leftPanel === action.id}
+            badge={badges?.[action.id]}
             onClick={() => onSelectLeftPanel(action.id)}
           />
         ))}

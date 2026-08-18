@@ -1,39 +1,22 @@
-import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
+import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
 import type { NativeWorkspaceEntry } from "../native/commands";
-import { cn } from "../lib/utils";
-import { handleMenuKeyDown } from "../shell/menuKeyboard";
-import type { ContextMenuState } from "./workspaceExplorerTypes";
+import { Menu, MenuButton } from "../shell/Menu";
+import type { ContextMenuState, WorkspaceExplorerActions } from "./workspaceExplorerTypes";
 
 // ---- Context menu ----
 
-export function WorkspaceContextMenu({ menu, onClose, onStartCreate, onStartRename, onRequestDelete, onRefresh, onOpenWorkspace }: {
+/**
+ * What right-clicking in the file tree offers.
+ *
+ * Only the items live here. Where the menu sits, how it stays on screen, which
+ * item takes focus and what closes it are one behaviour shared with every other
+ * menu in the app — see `shell/Menu`.
+ */
+export function WorkspaceContextMenu({ menu, actions }: {
   readonly menu: ContextMenuState;
-  readonly onClose: () => void;
-  readonly onStartCreate: (parentPath: string, kind: "file" | "folder") => void;
-  readonly onStartRename: (entry: NativeWorkspaceEntry) => void;
-  readonly onRequestDelete: (entry: NativeWorkspaceEntry) => void;
-  readonly onRefresh: () => void;
-  readonly onOpenWorkspace: () => void;
+  readonly actions: WorkspaceExplorerActions;
 }) {
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  // Keep the menu inside the viewport.
-  const [position, setPosition] = useState({ x: menu.x, y: menu.y });
-  useEffect(() => {
-    const element = menuRef.current;
-    if (!element) return;
-    const rect = element.getBoundingClientRect();
-    const x = Math.min(menu.x, window.innerWidth - rect.width - 8);
-    const y = Math.min(menu.y, window.innerHeight - rect.height - 8);
-    setPosition({ x: Math.max(8, x), y: Math.max(8, y) });
-  }, [menu.x, menu.y]);
-
-  // Auto-focus the first item for keyboard navigation.
-  useEffect(() => {
-    const firstButton = menuRef.current?.querySelector("button");
-    firstButton?.focus();
-  }, []);
-
+  const { closeContextMenu, startCreate, startRename, requestDelete, showVersions, refreshEntries, openWorkspace } = actions;
   const target = menu.target;
   // Create actions target the folder itself (for folders) or the parent (for files).
   const createParentPath = target.kind === "folder" ? target.entry.relative_path : target.kind === "file" ? target.entry.parent_path : "";
@@ -43,51 +26,20 @@ export function WorkspaceContextMenu({ menu, onClose, onStartCreate, onStartRena
     action();
   };
 
-  const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
-    handleMenuKeyDown(event, menuRef, onClose);
-  };
-
   return (
-    <div
-      ref={menuRef}
-      className="fixed z-20 min-w-44 border border-border rounded-small bg-popover shadow-soft py-1 text-xs"
-      role="menu"
-      aria-label="Workspace actions"
-      style={{ left: `${position.x}px`, top: `${position.y}px` }}
-      onKeyDown={handleKeyDown}
-      onClick={(event) => event.stopPropagation()}
-    >
-      {target.kind === "folder" && <MenuButton label="New file" onClick={handle(() => onStartCreate(createParentPath, "file"))} />}
-      {target.kind === "folder" && <MenuButton label="New folder" onClick={handle(() => onStartCreate(createParentPath, "folder"))} />}
-      {target.kind === "background" && <MenuButton label="New file" onClick={handle(() => onStartCreate("", "file"))} />}
-      {target.kind === "background" && <MenuButton label="New folder" onClick={handle(() => onStartCreate("", "folder"))} />}
+    <Menu at={menu} onClose={closeContextMenu} label="Workspace actions">
+      {target.kind === "folder" && <MenuButton label="New file" onClick={handle(() => startCreate(createParentPath, "file"))} />}
+      {target.kind === "folder" && <MenuButton label="New folder" onClick={handle(() => startCreate(createParentPath, "folder"))} />}
+      {target.kind === "background" && <MenuButton label="New file" onClick={handle(() => startCreate("", "file"))} />}
+      {target.kind === "background" && <MenuButton label="New folder" onClick={handle(() => startCreate("", "folder"))} />}
       {target.kind !== "background" && <hr className="my-1 border-0 border-t border-border" />}
-      {target.kind !== "background" && <MenuButton label="Rename" onClick={handle(() => onStartRename(target.entry))} />}
-      {target.kind !== "background" && <MenuButton label="Delete" danger onClick={handle(() => onRequestDelete(target.entry))} />}
+      {target.kind !== "background" && <MenuButton label="Rename" onClick={handle(() => startRename(target.entry))} />}
+      {target.kind === "file" && <MenuButton label="Previous versions…" onClick={handle(() => showVersions(target.entry))} />}
+      {target.kind !== "background" && <MenuButton label="Delete" danger onClick={handle(() => requestDelete(target.entry))} />}
       {target.kind === "background" && <hr className="my-1 border-0 border-t border-border" />}
-      {target.kind === "background" && <MenuButton label="Refresh" onClick={handle(() => { onRefresh(); onClose(); })} />}
-      {target.kind === "background" && <MenuButton label="Open workspace…" onClick={handle(() => { onOpenWorkspace(); onClose(); })} />}
-    </div>
-  );
-}
-
-function MenuButton({ label, danger = false, onClick }: {
-  readonly label: string;
-  readonly danger?: boolean;
-  readonly onClick: (event: ReactMouseEvent) => void;
-}) {
-  return (
-    <button
-      type="button"
-      className={cn(
-        "flex w-full items-center gap-2 border-0 px-3 py-[0.4rem] cursor-pointer font-inherit text-xs text-left hover:bg-accent focus-visible:bg-accent focus-visible:outline-none",
-        danger ? "text-danger" : "text-foreground"
-      )}
-      role="menuitem"
-      onClick={onClick}
-    >
-      {label}
-    </button>
+      {target.kind === "background" && <MenuButton label="Refresh" onClick={handle(() => { void refreshEntries(); closeContextMenu(); })} />}
+      {target.kind === "background" && <MenuButton label="Open workspace…" onClick={handle(() => { void openWorkspace(); closeContextMenu(); })} />}
+    </Menu>
   );
 }
 

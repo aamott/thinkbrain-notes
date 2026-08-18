@@ -20,7 +20,8 @@ import {
   type ContextMenuState,
   type ContextMenuTarget,
   type CreateState,
-  type RenameState
+  type RenameState,
+  type WorkspaceExplorerActions
 } from "./workspaceExplorerTypes";
 
 export interface WorkspaceExplorerProps {
@@ -37,6 +38,8 @@ export interface WorkspaceExplorerProps {
   readonly onNewNoteFocusHandled?: () => void;
   readonly recentWorkspacePaths?: readonly string[];
   readonly onWorkspaceLaunched?: (rootPath: string) => void;
+  /** Asked for one file's earlier versions from the right-click menu. */
+  readonly onShowVersions?: (rootPath: string, relativePath: string) => void;
 }
 
 /**
@@ -54,7 +57,8 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
   newNoteFocusRequest = 0,
   onNewNoteFocusHandled,
   recentWorkspacePaths = [],
-  onWorkspaceLaunched
+  onWorkspaceLaunched,
+  onShowVersions
 }: WorkspaceExplorerProps) {
   const [state, dispatch] = useReducer(workspaceExplorerReducer, initialWorkspaceExplorerState);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
@@ -416,21 +420,14 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
     setContextMenu(null);
   }, []);
 
-  // Close the context menu on any outside interaction or Escape.
+  // Only the resize. Clicking elsewhere and pressing Escape are the menu's own
+  // business now — see `shell/Menu` — but a menu pinned to where the pointer
+  // was has nothing to stay pinned to once the window changes shape.
   useEffect(() => {
     if (!contextMenu) return;
-    const onClose = () => setContextMenu(null);
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setContextMenu(null);
-    };
-    window.addEventListener("click", onClose);
-    window.addEventListener("resize", onClose);
-    window.addEventListener("keydown", onKey);
-    return () => {
-      window.removeEventListener("click", onClose);
-      window.removeEventListener("resize", onClose);
-      window.removeEventListener("keydown", onKey);
-    };
+    const onResize = () => setContextMenu(null);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
   }, [contextMenu]);
 
   const startCreate = useCallback((parentPath: string, kind: "file" | "folder") => {
@@ -446,10 +443,70 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
     setRenaming({ entry, focusRequest: Date.now() });
   }, [closeContextMenu]);
 
+  const showVersions = useCallback((entry: NativeWorkspaceEntry) => {
+    closeContextMenu();
+    const root = rootPathRef.current;
+    if (root) onShowVersions?.(root, entry.relative_path);
+  }, [closeContextMenu, onShowVersions]);
+
   const requestDelete = useCallback((entry: NativeWorkspaceEntry) => {
     closeContextMenu();
     setPendingDelete(entry);
   }, [closeContextMenu]);
+
+  const dismissError = useCallback(() => dispatch({ type: "dismiss" }), []);
+
+  // Memoized, and every member is already a stable callback or state setter.
+  // That is load-bearing rather than tidy: `WorkspaceTreeItem` is memoized, and
+  // a fresh object here would re-render every row in the tree on every
+  // keystroke in an inline rename.
+  const actions = useMemo<WorkspaceExplorerActions>(
+    () => ({
+      setActivePath,
+      toggleShowHidden,
+      startCreate,
+      submitCreate,
+      submitRename,
+      handleTreeKeyDown,
+      handleMarkdownFileSelected,
+      showContextMenu,
+      closeContextMenu,
+      toggleFolder,
+      collapseFolder,
+      startRename,
+      requestDelete,
+      showVersions,
+      refreshEntries,
+      openWorkspace,
+      launchWorkspace,
+      confirmDelete,
+      setMoreMenuOpen,
+      setRenaming,
+      setCreating,
+      setPendingDelete,
+      dismissError
+    }),
+    [
+      closeContextMenu,
+      collapseFolder,
+      confirmDelete,
+      dismissError,
+      handleMarkdownFileSelected,
+      handleTreeKeyDown,
+      launchWorkspace,
+      openWorkspace,
+      refreshEntries,
+      requestDelete,
+      showContextMenu,
+      showVersions,
+      startCreate,
+      startRename,
+      submitCreate,
+      submitRename,
+      toggleFolder,
+      toggleShowHidden
+    ]
+  );
 
   return (
     <WorkspaceExplorerView
@@ -467,29 +524,8 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
       moreMenuOpen={moreMenuOpen}
       expandedFolders={expandedFolders}
       activePath={activePath}
-      setActivePath={setActivePath}
-      toggleShowHidden={toggleShowHidden}
-      startCreate={startCreate}
-      submitCreate={submitCreate}
-      submitRename={submitRename}
-      handleTreeKeyDown={handleTreeKeyDown}
-      handleMarkdownFileSelected={handleMarkdownFileSelected}
-      showContextMenu={showContextMenu}
-      closeContextMenu={closeContextMenu}
-      toggleFolder={toggleFolder}
-      collapseFolder={collapseFolder}
-      startRename={startRename}
-      requestDelete={requestDelete}
-      refreshEntries={refreshEntries}
-      openWorkspace={openWorkspace}
-      launchWorkspace={launchWorkspace}
-      confirmDelete={confirmDelete}
-      setMoreMenuOpen={setMoreMenuOpen}
-      setRenaming={setRenaming}
-      setCreating={setCreating}
-      setPendingDelete={setPendingDelete}
-      onDismissError={() => dispatch({ type: "dismiss" })}
       recentWorkspacePaths={recentWorkspacePaths}
+      actions={actions}
     />
   );
 });

@@ -24,14 +24,65 @@ copy review is an acceptance criterion.
 
 ## Acceptance
 
-- [ ] Every conflict kind renders correct treatment; no raw diff markers ever
-- [ ] Resolution round-trip: choose chunks → result matches preview → History
-      shows both prior versions
-- [ ] Mobile-width layout stacks correctly (browser responsive check now;
-      device testing in mobile epic)
-- [ ] Copy audit: no merge/commit/HEAD/repository/ours/theirs in user-facing
-      strings
+- [x] Every conflict kind renders correct treatment; no raw diff markers ever —
+      `conflictCard.ts` decides by name *before* content, so a `.canvas` board
+      and an `.svg` drawing are not offered a comparison they would fail at.
+      Markers cannot appear: the native side sends pairs of strings
+- [x] Resolution round-trip: choose chunks → result matches preview — the
+      preview and the save are the same function of the same state
+      (`mergeModel.ts`), and a test asserts the saved contents *is* what was
+      previewed. "History shows both prior versions" waits on story 5's drawer;
+      the checkpoint itself is covered in story 3
+- [x] Mobile-width layout stacks correctly — container queries rather than
+      viewport breakpoints, because these surfaces live in a resizable sidebar
+      whose width has nothing to do with the window's
+- [x] Copy audit: automated. `copy.test.tsx` renders every state of both
+      surfaces and fails on a git noun in what reaches the screen
+
+## What this story decided
+
+**The list is the feature, not the merge view.** Most conflicts are not worth
+opening — a picture the user recognises, a board they know they redrew — so
+every card that cannot usefully be compared carries its own decision. Only a
+note that can genuinely be reviewed gets a Review button.
+
+**Saving waits for every section.** The mockup shows Done available with a
+section still pending. It is disabled until each one is answered: the default
+would be this computer's side, and accepting it unread is exactly how someone
+loses the paragraph they wrote on the other machine.
+
+**The audit runs against pixels, not source.** `conflict.theirs.path` in code
+is fine; "theirs" on screen is not. Rendering each state and scanning the text
+is the only way to tell those apart. "Merge" and "merged" are deliberately not
+on the banned list — the mockup itself says "save merged note", and merging
+two documents is ordinary English. It is the *nouns* of git that mean nothing
+to someone who has never used one.
+
+**The editor buffer is read once, when the comparison opens.** Re-reading it
+would mean re-reading the whole comparison on every keystroke in the other tab,
+which would throw away the decisions already made.
+
+## Backend this story added
+
+- `list_conflicts` — the triage list. Deliberately does not diff: a card shows
+  names, sizes and dates, and the list asks for every conflict at once.
+- `sync://conflicts` — a change signal carrying only the workspace, so a window
+  re-reads rather than trusting a payload that went stale on the way. Emitted
+  both when a daemon drops a copy and when any window settles one.
+
+## Known gaps
+
+- **No toast.** The badge is live, and it is the durable half of "awareness";
+  a toast needs a notification surface this app does not have yet, and
+  inventing one for a single message is the wrong place to start.
+- **Image cards show sizes and dates, not thumbnails.** Reading an image out of
+  the vault into the panel needs the asset resolver that the editor uses, on a
+  path that is not a note.
+- **A merge tab stays open after it is answered**, showing that it was saved.
+  Closing it would mean a way for tab content to close its own tab, which does
+  not exist.
 
 ## Status
 
-⬜ Pending.
+🟨 Triage cards, the comparison, the result preview, the resolution write and
+the badge are done. Remaining: thumbnails, the toast, and self-closing tabs.

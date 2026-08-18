@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 
-import { ContextMenu, MenuCheckbox, type ContextMenuState } from "../shell/ContextMenu";
+import { Menu, MenuCheckbox, type MenuPosition } from "../shell/Menu";
 import { ACTION } from "./journalChrome";
 import { predicateId, type JournalFacet, type JournalPredicate } from "./journalFacets";
 
@@ -34,7 +34,7 @@ export function JournalFilterControl({
   available,
   onToggle
 }: JournalFilterControlProps) {
-  const [anchor, setAnchor] = useState<ContextMenuState | null>(null);
+  const [anchor, setAnchor] = useState<MenuPosition | null>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const active = new Set(predicates.map(predicateId));
   const count = predicates.length;
@@ -91,7 +91,7 @@ export function JournalFilterControl({
       </button>
 
       {anchor !== null && (
-        <ContextMenu state={anchor} anchorRef={trigger} onClose={close}>
+        <Menu at={anchor} anchorRef={trigger} onClose={close}>
           {shown.length === 0 && (
             <p className="m-0 px-3 py-1 text-xs text-muted-foreground">No metadata values yet.</p>
           )}
@@ -113,7 +113,7 @@ export function JournalFilterControl({
               ))}
             </div>
           ))}
-        </ContextMenu>
+        </Menu>
       )}
     </>
   );

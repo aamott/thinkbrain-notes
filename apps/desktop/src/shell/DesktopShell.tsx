@@ -8,6 +8,7 @@ import {
 import { appEvents } from "../events/appEvents";
 import { BottomPanel as BottomPanelContent } from "../panels/BottomPanel";
 import { LeftPopout } from "../panels/LeftPopout";
+import { useSyncStatus } from "../sync/useSyncStatus";
 import { RightPopout } from "../panels/RightPopout";
 import { useTheme } from "../settings/theme-context";
 import { useSettingsStore } from "../settings/settingsStore";
@@ -15,6 +16,7 @@ import { useWikiLinkIndexStore } from "../wikiLinks/wikiLinkIndexStore";
 import { releaseEditorStatesExcept } from "../tabs/editorStateCache";
 import {
   createEditorTab,
+  createConflictTab,
   createStaticTab,
   desktopTabReducer,
   editorTabId,
@@ -265,6 +267,21 @@ export function DesktopShell() {
     [restoredWorkspacePath, openMarkdownDocument]
   );
 
+  // Opens the side-by-side comparison for a conflict. Named by the copy the
+  // sync daemon left behind, which is what identifies a conflict everywhere
+  // else; the note's own path rides along so the tab can be titled after it and
+  // can find an editor open on it.
+  const reviewConflict = useCallback(
+    (copyPath: string, notePath: string) => {
+      if (!restoredWorkspacePath) return;
+      dispatchTabs({
+        type: "open",
+        tab: createConflictTab({ rootPath: restoredWorkspacePath, relativePath: copyPath }, notePath)
+      });
+    },
+    [restoredWorkspacePath]
+  );
+
   // Keep open editor tabs level with the files they are showing. A tab is a
   // copy of a file taken when it opened, and nothing used to tell the shell
   // that copy had gone stale — a note edited in another program stayed on
@@ -473,6 +490,47 @@ export function DesktopShell() {
   }, [loadDocumentIntoView]);
 
   const activeTab = tabState.tabs.find((tab) => tab.id === tabState.activeTabId) ?? null;
+
+  // Read here rather than inside the panel: the number has to be visible to
+  // someone who has never opened it, which is exactly when the panel is not
+  // mounted to count anything.
+  const syncStatus = useSyncStatus(restoredWorkspacePath ?? null);
+  const conflictBadges = useMemo<Readonly<Record<string, number>>>(() => {
+    const badges: Record<string, number> = {};
+    if (syncStatus.attention > 0) badges.conflicts = syncStatus.attention;
+    return badges;
+  }, [syncStatus.attention]);
+
+  // Which note the history panel is about. Set by "Previous versions…" in the
+  // file tree and cleared by the panel itself, so opening History from the
+  // footer is always the whole workspace rather than whatever was last asked.
+  const [versionsOf, setVersionsOf] = useState<string | null>(null);
+  const showVersionsOf = useCallback(
+    (_rootPath: string, relativePath: string) => {
+      setVersionsOf(relativePath);
+      selectLeftPanel("history");
+    },
+    [selectLeftPanel]
+  );
+  const openSyncPanel = useCallback(
+    (panel: "conflicts" | "history") => {
+      if (panel === "history") setVersionsOf(null);
+      selectLeftPanel(panel);
+    },
+    [selectLeftPanel]
+  );
+
+  // The unsaved text of an editor open on the note a merge tab is comparing.
+  // "This computer's version" has to be what the user is looking at; offering
+  // them the last save would be offering a version they can see is out of date.
+  const unsavedNoteContents = useMemo(() => {
+    const notePath = activeTab?.kind === "merge" ? activeTab.comparedNotePath : undefined;
+    if (!notePath || !restoredWorkspacePath) return null;
+    const editorId = editorTabId({ rootPath: restoredWorkspacePath, relativePath: notePath });
+    const editorTab = tabState.tabs.find((tab) => tab.id === editorId);
+    return editorTab?.isDirty ? documents[editorId]?.contents ?? null : null;
+  }, [activeTab, documents, restoredWorkspacePath, tabState.tabs]);
+
   const activeDocument = activeTab ? documents[activeTab.id] : undefined;
 
   // Global shortcuts: command palette (Ctrl/Cmd+P), explorer (Ctrl/Cmd+B),
@@ -595,6 +653,7 @@ export function DesktopShell() {
           leftPanel={leftPanel}
           onSelectLeftPanel={selectLeftPanel}
           onOpenSettings={openSettingsTab}
+          badges={conflictBadges}
         />
 
         {leftPanel && (
@@ -611,8 +670,12 @@ export function DesktopShell() {
                 onNewNoteFocusHandled: acknowledgeNewNoteFocus,
                 newNoteFocusRequest,
                 recentWorkspacePaths,
-                onWorkspaceLaunched: handleWorkspaceLaunched
+                onWorkspaceLaunched: handleWorkspaceLaunched,
+                onShowVersions: showVersionsOf
               }}
+              onReviewConflict={reviewConflict}
+              versionsOf={versionsOf}
+              onShowEverything={() => setVersionsOf(null)}
               onOpenSearchResult={(relativePath) => {
                 if (restoredWorkspacePath) openMarkdownDocument(restoredWorkspacePath, relativePath);
               }}
@@ -644,7 +707,7 @@ export function DesktopShell() {
                 onLoadFromDisk={() => loadDiskVersion(activeTab)}
               />
             )}
-            <TabContent tab={activeTab} document={activeDocument} onChange={updateDocument} onSave={saveDocument} noteIndex={noteIndex} onOpenNote={onOpenNote} />
+            <TabContent tab={activeTab} document={activeDocument} onChange={updateDocument} onSave={saveDocument} noteIndex={noteIndex} onOpenNote={onOpenNote} unsavedNoteContents={unsavedNoteContents} />
           </article>
           {bottomPanel && (
             <BottomPanelContent
@@ -675,7 +738,7 @@ export function DesktopShell() {
         )}
       </div>
 
-      <StatusBar workspaceName={workspaceName} />
+      <StatusBar workspaceName={workspaceName} syncStatus={syncStatus} onOpenSyncPanel={openSyncPanel} />
 
       {paletteOpen && (
         <CommandPalette

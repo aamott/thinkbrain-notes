@@ -53,6 +53,11 @@ export const builtInDesktopTabViews: readonly DesktopTabView[] = [
     isAvailable: true
   },
   {
+    kind: "merge",
+    label: "Compare versions",
+    isAvailable: true
+  },
+  {
     kind: "graph",
     label: "Graph",
     isAvailable: false,

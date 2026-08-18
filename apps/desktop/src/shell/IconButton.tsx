@@ -5,20 +5,32 @@ import { cn } from "../lib/utils";
  *
  * Renders a full-width square button with a left accent border that highlights
  * when active. Used by the left and right activity bars in the desktop shell.
+ *
+ * An optional `badge` puts a count over the icon — how many things are waiting
+ * behind a panel nobody has opened yet.
  */
 export function IconButton({
   label,
   symbol,
   active,
+  badge,
   className,
   onClick
 }: {
   label: string;
   symbol: string;
   active?: boolean;
+  /**
+   * A count to show over the icon, when there is something to count.
+   *
+   * Folded into the accessible name rather than left as a decoration, because
+   * a number nobody reads out is a number screen-reader users do not have.
+   */
+  badge?: number;
   className?: string;
   onClick: () => void;
 }) {
+  const named = badge ? `${label} (${badge})` : label;
   return (
     <button
       type="button"
@@ -28,11 +40,21 @@ export function IconButton({
         className
       )}
       onClick={onClick}
-      aria-label={label}
+      aria-label={named}
       aria-current={active ? "true" : undefined}
-      title={label}
+      title={named}
     >
-      <span aria-hidden="true">{symbol}</span>
+      <span aria-hidden="true" className="relative">
+        {symbol}
+        {badge ? (
+          <span
+            aria-hidden="true"
+            className="absolute -right-2.5 -top-1 min-w-4 rounded-full bg-primary px-1 text-center text-[0.6rem] leading-4 text-primary-foreground"
+          >
+            {badge}
+          </span>
+        ) : null}
+      </span>
     </button>
   );
 }

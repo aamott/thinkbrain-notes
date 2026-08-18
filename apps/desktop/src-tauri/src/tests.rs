@@ -1389,6 +1389,14 @@ fn history_takes_every_kind_of_file_the_index_ignores() {
         );
     }
 
+    // OS junk and half-written files stay out of history the same way the first snapshot leaves them out.
+    for name in ["Thumbs.db", "desktop.ini", "note.md.tmp", "~$note.md"] {
+        assert!(
+            !everything.accepts(&root, &root.join(name)),
+            "history recorded junk file {name}"
+        );
+    }
+
     let _ = fs::remove_dir_all(&root);
 }
 
@@ -1443,6 +1451,39 @@ fn one_batch_tells_the_index_about_notes_and_history_about_everything() {
         ["note.md", "chart.png"],
         "history was not told about the attachment"
     );
+}
+
+/// History records attachments, but not the junk names the first snapshot already refuses.
+#[test]
+fn history_refuses_the_same_junk_the_first_snapshot_skips() {
+    use notify_debouncer_full::DebouncedEvent;
+
+    let root = temp_test_dir("watcher-never-record");
+    let at = Instant::now();
+    let batch = vec![
+        DebouncedEvent::new(
+            notify::Event::new(EventKind::Create(CreateKind::File)).add_path(root.join("chart.png")),
+            at,
+        ),
+        DebouncedEvent::new(
+            notify::Event::new(EventKind::Create(CreateKind::File)).add_path(root.join("Thumbs.db")),
+            at,
+        ),
+        DebouncedEvent::new(
+            notify::Event::new(EventKind::Modify(ModifyKind::Data(
+                notify::event::DataChange::Content,
+            )))
+            .add_path(root.join("note.md.tmp")),
+            at,
+        ),
+    ];
+
+    let reported = collect_changes(&root, &batch);
+    let _ = fs::remove_dir_all(&root);
+
+    let all: Vec<&str> = reported.all.iter().map(|c| c.path.as_str()).collect();
+    assert_eq!(all, ["chart.png"], "history recorded a NEVER_RECORD name: {all:?}");
+    assert!(reported.notes.is_empty(), "the index was told about junk");
 }
 
 #[test]
