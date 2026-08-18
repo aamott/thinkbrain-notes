@@ -7,9 +7,8 @@
  * a window open on.
  */
 
-import { listen } from "@tauri-apps/api/event";
-
 import { invokeNativeCommand } from "../native/commands";
+import { subscribeToSyncEvent } from "./syncEvents";
 import type {
   ConflictComparison,
   ConflictResolution,
@@ -62,18 +61,7 @@ export function resolveConflict(
   });
 }
 
-/**
- * Calls `onChange` whenever this workspace's conflicts may have changed.
- *
- * The payload's workspace is deliberately not compared against `rootPath`. The
- * native side names workspaces by their canonical path, which need not match
- * the spelling this window was opened with, and a filter that got that wrong
- * would silently stop the list from ever refreshing. Re-reading the list is
- * cheap and authoritative, so an occasional re-read prompted by another
- * workspace costs one call and cannot be wrong.
- */
-export async function subscribeToConflictChanges(onChange: () => void): Promise<() => void> {
-  return listen(SYNC_CONFLICTS_EVENT, () => {
-    onChange();
-  });
+/** Calls `onChange` whenever this workspace's conflicts may have changed. */
+export function subscribeToConflictChanges(onChange: () => void): Promise<() => void> {
+  return subscribeToSyncEvent(SYNC_CONFLICTS_EVENT, onChange);
 }

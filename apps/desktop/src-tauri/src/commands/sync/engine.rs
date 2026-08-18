@@ -38,6 +38,8 @@ pub struct Engine {
     /// daemon writes it while the app is running. The user should be told about
     /// one conflict, not two.
     conflicts: Mutex<BTreeMap<String, ConflictCopy>>,
+    /// The last attempt to record that failed, cleared by the next that works.
+    problem: Mutex<Option<NativeError>>,
     /// Held for the whole of a commit, so only one is ever in flight.
     ///
     /// Recording reads the branch, builds a tree on it and moves the ref, and
@@ -54,6 +56,7 @@ impl Engine {
             repo: repo.into_sync(),
             pending: Mutex::new(PendingChanges::default()),
             conflicts: Mutex::new(BTreeMap::new()),
+            problem: Mutex::new(None),
             recording: Mutex::new(()),
         }
     }
@@ -93,9 +96,12 @@ impl Engine {
         conflicts.remove(copy);
     }
 
-    /// A thread-local handle on the hidden repository, for tests that check
-    /// what actually landed in history.
-    #[cfg(test)]
+    /// A thread-local handle on the hidden repository.
+    ///
+    /// The history and restore surfaces read through this rather than reopening
+    /// the repository by path: the engine already knows where it is, and a
+    /// second handle would be a second answer to "where does this vault's
+    /// history live".
     pub fn repository(&self) -> gix::Repository {
         self.repo.to_thread_local()
     }
@@ -162,12 +168,46 @@ impl Engine {
                 pending.note(path, now);
             }
         }
+        self.remember(&recorded);
         recorded
     }
 
+    /// Keeps a failure to record, and lets the next success clear it.
+    ///
+    /// The sweeper has nobody to show an error to, so until now one went to
+    /// stderr and the app went on looking healthy. Holding the last one here is
+    /// what lets a window say "recording stopped, and here is what to do".
+    fn remember(&self, outcome: &Result<Option<gix::ObjectId>, NativeError>) {
+        let mut problem = self.problem.lock().unwrap_or_else(|error| error.into_inner());
+        *problem = outcome.as_ref().err().cloned();
+    }
+
     /// Takes a restore point for `paths` before anything overwrites them.
-    pub fn checkpoint(&self, paths: &[PathBuf]) -> Result<gix::ObjectId, NativeError> {
-        snapshot::checkpoint(&self.repo.to_thread_local(), paths)
+    pub fn checkpoint(
+        &self,
+        paths: &[PathBuf],
+        reason: snapshot::Reason,
+    ) -> Result<gix::ObjectId, NativeError> {
+        snapshot::checkpoint(&self.repo.to_thread_local(), paths, reason)
+    }
+
+    /// How many changes are waiting to be recorded.
+    ///
+    /// What the status pill turns into "Saving…". Zero is the resting state and
+    /// the only one anybody should see for long.
+    pub fn waiting(&self) -> usize {
+        let pending = self.pending.lock().unwrap_or_else(|error| error.into_inner());
+        pending.len()
+    }
+
+    /// The last failure to record, if the one after it has not cleared it.
+    ///
+    /// Until now a failure went to stderr, where nobody has ever looked. This
+    /// is the field that turns "your notes silently stopped being recorded"
+    /// into something a window can say out loud.
+    pub fn problem(&self) -> Option<NativeError> {
+        let problem = self.problem.lock().unwrap_or_else(|error| error.into_inner());
+        problem.clone()
     }
 }
 

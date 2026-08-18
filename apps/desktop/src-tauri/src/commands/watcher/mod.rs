@@ -71,17 +71,56 @@ pub const SYNC_CONFLICTS_EVENT: &str = "sync://conflicts";
 /// Both the watcher noticing a new copy and a window resolving one end here, so
 /// a second window showing the same vault updates either way.
 pub fn announce_conflicts(app: &tauri::AppHandle, root_path: &str) {
-    let payload = ConflictsChangedPayload {
+    announce(app, SYNC_CONFLICTS_EVENT, root_path);
+}
+
+/// Sent when what the status footer would say about a workspace has changed.
+///
+/// Carries only the workspace, for the same reason the conflict event does:
+/// the answer is one command away, and a status built here would be a claim
+/// about a moment that has already passed by the time a window reads it.
+pub const SYNC_STATUS_EVENT: &str = "sync://status";
+
+/// A handle for the threads that have none of their own.
+///
+/// The sweeper is one thread serving every workspace, started long before any
+/// particular window asks anything of it, so it cannot be handed a window's
+/// handle the way the watcher's debouncer is. It is set once, by the first
+/// workspace to be watched, and never replaced — every handle reaches every
+/// window, so the first one is as good as any.
+static REACH: std::sync::Mutex<Option<tauri::AppHandle>> = std::sync::Mutex::new(None);
+
+/// Remembers a handle for the background threads to announce through.
+pub fn remember_reach(app: &tauri::AppHandle) {
+    let mut reach = REACH.lock().unwrap_or_else(|error| error.into_inner());
+    reach.get_or_insert_with(|| app.clone());
+}
+
+/// Tells every window that `root_path`'s sync status is not what it was.
+///
+/// Called from the sweeper, which has no window and no command behind it. A
+/// process with no windows yet has nothing to tell, which is silence rather
+/// than an error.
+pub fn announce_sync_status(root_path: &str) {
+    let reach = REACH.lock().unwrap_or_else(|error| error.into_inner());
+    if let Some(app) = reach.as_ref() {
+        announce(app, SYNC_STATUS_EVENT, root_path);
+    }
+}
+
+/// One shape for every "something about this workspace changed" event.
+fn announce(app: &tauri::AppHandle, event: &str, root_path: &str) {
+    let payload = WorkspaceNamedPayload {
         root_path: root_path.to_string(),
     };
-    if let Err(error) = app.emit(SYNC_CONFLICTS_EVENT, payload) {
-        eprintln!("[sync] failed to deliver the conflict list change: {error}");
+    if let Err(error) = app.emit(event, payload) {
+        eprintln!("[sync] failed to deliver {event}: {error}");
     }
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct ConflictsChangedPayload {
+struct WorkspaceNamedPayload {
     root_path: String,
 }
 

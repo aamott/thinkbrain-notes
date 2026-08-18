@@ -37,6 +37,8 @@ export interface WorkspaceExplorerProps {
   readonly onNewNoteFocusHandled?: () => void;
   readonly recentWorkspacePaths?: readonly string[];
   readonly onWorkspaceLaunched?: (rootPath: string) => void;
+  /** Asked for one file's earlier versions from the right-click menu. */
+  readonly onShowVersions?: (rootPath: string, relativePath: string) => void;
 }
 
 /**
@@ -54,7 +56,8 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
   newNoteFocusRequest = 0,
   onNewNoteFocusHandled,
   recentWorkspacePaths = [],
-  onWorkspaceLaunched
+  onWorkspaceLaunched,
+  onShowVersions
 }: WorkspaceExplorerProps) {
   const [state, dispatch] = useReducer(workspaceExplorerReducer, initialWorkspaceExplorerState);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
@@ -446,6 +449,12 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
     setRenaming({ entry, focusRequest: Date.now() });
   }, [closeContextMenu]);
 
+  const showVersions = useCallback((entry: NativeWorkspaceEntry) => {
+    closeContextMenu();
+    const root = rootPathRef.current;
+    if (root) onShowVersions?.(root, entry.relative_path);
+  }, [closeContextMenu, onShowVersions]);
+
   const requestDelete = useCallback((entry: NativeWorkspaceEntry) => {
     closeContextMenu();
     setPendingDelete(entry);
@@ -480,6 +489,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
       collapseFolder={collapseFolder}
       startRename={startRename}
       requestDelete={requestDelete}
+    showVersions={showVersions}
       refreshEntries={refreshEntries}
       openWorkspace={openWorkspace}
       launchWorkspace={launchWorkspace}

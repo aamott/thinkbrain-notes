@@ -18,12 +18,85 @@ Story 5. The trust surfaces. All work with zero sync configured.
 
 ## Acceptance
 
-- [ ] Pill reflects real state transitions; error copy includes action
-- [ ] History readable by a nonuser-of-git; expandable raw message escape
-      hatch
-- [ ] Restore round-trip test incl. restore-of-restore
-- [ ] Everything functions with no remote/cloud configured
+- [x] Pill reflects real state transitions; error copy includes action —
+      `status.rs` ranks the five states by who has to act, and `recoveryFor`
+      names something to do for every failure code including the ones nobody
+      planned for. A test walks each branch and asserts the action is there.
+- [x] History readable by a nonuser-of-git; expandable raw message escape
+      hatch — the list is dates and note counts, and "What was written down"
+      holds the record itself for anyone who would rather read that. The copy
+      audit renders every state of the panel and the footer and fails on a git
+      noun.
+- [x] Restore round-trip test incl. restore-of-restore — and the checkpoint
+      test asserts the restore point holds what was *about to be overwritten*,
+      which is the half that makes the second restore possible.
+- [x] Everything functions with no remote/cloud configured — nothing in this
+      story has a network path. A vault with its own git repository has no
+      engine, and the footer says so rather than claiming everything is saved.
+
+## What this story decided
+
+**One reader answers both questions.** "Sync History" and "previous versions of
+this note" are the same walk asked a narrower question, so they are one
+function (`history::read(repo, note, limit)`) and one panel. Two readers could
+disagree about what happened to a note, which is the one thing a history may
+never do.
+
+**The last-saved time is read from history, not remembered.** A pill that
+forgot the moment the app launched would be the least trustworthy thing on the
+screen. The head commit's time is already the answer, so nothing is persisted.
+
+**A note's version list leaves out the change that deleted it.** That change
+left no content behind, so offering it would be offering to delete the note
+again under a button labelled Restore. The version before it is the one to put
+back, and it is one row further down.
+
+**A restore is not echo-suppressed**, for the same reason resolving a conflict
+is not: the note changed under an editor that is probably open on it, and the
+watcher's outside-edit path already refreshes every window.
+
+**The conflict-rate counter is derived, not counted.** Checkpoints carry a
+fixed `Reason`, so "how often has someone had to choose between two versions"
+is a walk of an existing ref rather than a new file to keep in step with
+reality. Local only, and never sent anywhere — it exists so story 6's
+three-way-merge go/no-go is answered with this vault's evidence.
+
+## Backend this story added
+
+- `sync_status` — the footer's whole answer in one read: state, counts, when it
+  last saved, and the failure if there is one.
+- `sync_history` — recent changes newest first, or one note's restorable
+  versions. Diffs each change against its parent with the low-level tree diff,
+  which needs no index and no attribute stack, so a page of history stays a
+  page of object reads.
+- `restore_version` — reads the old version, takes a restore point of what is
+  on disk, then writes. In that order, which is what makes it undoable.
+- `sync_conflict_rate` — decisions against recorded changes.
+- `sync://status` — announced by the sweeper when a change lands or a failure
+  appears or clears, and by the watcher when a batch reaches the engine. Only
+  when the footer would read differently: the sweeper runs twice a second and
+  almost every tick is last tick's answer.
+
+## Known gaps
+
+- **A permanently unrecordable path blocks the whole vault's history.** Found
+  by this story's own status test. A failed commit puts its paths back into
+  `pending` on purpose — "the promise is unkept" — which is right for a drive
+  that came unplugged and wrong for a note that can never be read, because the
+  retry fails every 500ms forever and takes every other note's changes with it.
+  Story 5 makes it *visible* rather than silent: the footer now says "Saving
+  stopped" with something to do about it. Changing the retry policy is a story
+  1 decision (per-path failure isolation in `build_tree`) and is deliberately
+  not made here.
+- **Restore has no confirmation step.** It does not need one — the restore
+  point is taken first, so the way out is another restore — but a note with
+  unsaved edits in an open editor will have them replaced on disk, and the
+  editor reloads. The merge tab has the same shape and the same gap.
+- **Not verified on Windows**, like the rest of this feature. Two status tests
+  are Unix-only: they provoke a real recording failure by naming a note inside
+  a file, which Windows reports as "not found" rather than "not a directory".
 
 ## Status
 
-⬜ Pending.
+🟨 Pill, history, per-note versions, restore and the counter done. Remaining:
+the retry-policy decision above, and Windows.

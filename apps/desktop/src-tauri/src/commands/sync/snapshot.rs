@@ -35,6 +35,28 @@ const HISTORY_REF: &str = "refs/heads/main";
 /// "push my branches" refspec.
 const CHECKPOINT_REF: &str = "refs/thinkbrain/checkpoints";
 
+/// Why a restore point was taken.
+///
+/// A fixed set rather than a caller-supplied string, because the local
+/// conflict-rate counter reads these back: it has to tell "the user had to
+/// decide between two versions" from "the user put an older version back",
+/// and free text would make that a guess.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Reason {
+    ConflictResolved,
+    VersionRestored,
+}
+
+impl Reason {
+    /// What this checkpoint says it is, in the history that holds it.
+    pub const fn message(self) -> &'static str {
+        match self {
+            Reason::ConflictResolved => "Checkpoint before resolving a conflict",
+            Reason::VersionRestored => "Checkpoint before restoring an earlier version",
+        }
+    }
+}
+
 fn failed(code: &'static str, message: &'static str, error: impl std::fmt::Display) -> NativeError {
     NativeError::with_details(code, message, error.to_string())
 }
@@ -73,7 +95,11 @@ pub fn record(
 /// changed, so nothing to name" — the caller is about to overwrite a file and
 /// needs an id. When nothing changed, the previous checkpoint already points at
 /// this exact content, so that is the honest answer.
-pub fn checkpoint(repo: &gix::Repository, paths: &[PathBuf]) -> Result<gix::ObjectId, NativeError> {
+pub fn checkpoint(
+    repo: &gix::Repository,
+    paths: &[PathBuf],
+    reason: Reason,
+) -> Result<gix::ObjectId, NativeError> {
     let parent = head_of(repo, CHECKPOINT_REF)?;
     let base_tree = tree_of(repo, parent)?;
     let tree = build_tree(repo, base_tree, paths)?;
@@ -87,13 +113,7 @@ pub fn checkpoint(repo: &gix::Repository, paths: &[PathBuf]) -> Result<gix::Obje
         // gets a commit of its own rather than an error.
     }
 
-    commit_on(
-        repo,
-        CHECKPOINT_REF,
-        "Checkpoint before resolving a conflict",
-        tree,
-        parent,
-    )
+    commit_on(repo, CHECKPOINT_REF, reason.message(), tree, parent)
 }
 
 /// Writes blobs for the paths that exist and drops the ones that do not,
@@ -261,7 +281,6 @@ pub fn head_commit(repo: &gix::Repository) -> Result<Option<gix::ObjectId>, Nati
 }
 
 /// The newest restore point, or `None` if nothing has ever been checkpointed.
-#[cfg(test)]
 pub fn checkpoint_head(repo: &gix::Repository) -> Result<Option<gix::ObjectId>, NativeError> {
     head_of(repo, CHECKPOINT_REF)
 }
@@ -318,7 +337,7 @@ fn commit_tree(
 /// from the user, but a `..` that escaped the vault would write the user's
 /// unrelated files into sync history — worth a check even when the caller is
 /// trusted.
-fn vault_relative(vault: &Path, path: &Path) -> Result<PathBuf, NativeError> {
+pub(super) fn vault_relative(vault: &Path, path: &Path) -> Result<PathBuf, NativeError> {
     let relative = if path.is_absolute() {
         path.strip_prefix(vault).map_err(|_| {
             NativeError::new(

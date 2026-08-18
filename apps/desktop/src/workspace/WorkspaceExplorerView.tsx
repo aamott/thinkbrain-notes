@@ -37,6 +37,7 @@ interface WorkspaceExplorerViewProps {
   readonly collapseFolder: (relativePath: string) => void;
   readonly startRename: (entry: NativeWorkspaceEntry) => void;
   readonly requestDelete: (entry: NativeWorkspaceEntry) => void;
+  readonly showVersions: (entry: NativeWorkspaceEntry) => void;
   readonly refreshEntries: () => Promise<void>;
   readonly openWorkspace: () => Promise<void>;
   readonly launchWorkspace: (rootPath: string) => Promise<void>;
@@ -77,6 +78,7 @@ export function WorkspaceExplorerView({
   collapseFolder,
   startRename,
   requestDelete,
+  showVersions,
   refreshEntries,
   openWorkspace,
   launchWorkspace,
@@ -242,6 +244,7 @@ export function WorkspaceExplorerView({
           onStartCreate={startCreate}
           onStartRename={startRename}
           onRequestDelete={requestDelete}
+          onShowVersions={showVersions}
           onRefresh={refreshEntries}
           onOpenWorkspace={openWorkspace}
         />

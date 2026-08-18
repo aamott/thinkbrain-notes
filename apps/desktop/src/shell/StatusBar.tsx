@@ -13,11 +13,17 @@
 import { useState } from "react";
 import { Bell } from "lucide-react";
 import { cn } from "../lib/utils";
+import { SyncPill } from "../sync/SyncPill";
+import { NOT_RECORDING, type SyncStatus } from "../sync/historyTypes";
 
 /** Props for the {@link StatusBar} component. */
 type StatusBarProps = {
   /** Currently open workspace display name, or null when no workspace is open. */
   readonly workspaceName: string | null;
+  /** What this workspace's version saving is doing. */
+  readonly syncStatus?: SyncStatus;
+  /** Somewhere to go about what the sync pill reports. */
+  readonly onOpenSyncPanel?: (panel: "conflicts" | "history") => void;
 };
 
 /**
@@ -29,7 +35,11 @@ type StatusBarProps = {
  * - Right: workspace status, cursor position, indentation, encoding, language.
  * - Far right: notifications bell button opening a small toast popover.
  */
-export function StatusBar({ workspaceName }: StatusBarProps) {
+export function StatusBar({
+  workspaceName,
+  syncStatus = NOT_RECORDING,
+  onOpenSyncPanel
+}: StatusBarProps) {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
 
   return (
@@ -37,6 +47,7 @@ export function StatusBar({ workspaceName }: StatusBarProps) {
       <span className="max-[760px]:hidden">{workspaceName ?? "No workspace open"}</span>
       <span className="max-[760px]:hidden">✓ 0 &nbsp; ⚠ 0</span>
       <span className="max-[760px]:hidden">✦ Indexer unavailable</span>
+      <SyncPill status={syncStatus} onOpen={(panel) => onOpenSyncPanel?.(panel)} />
       <span className="flex-1 max-[760px]:block" />
       <span className="max-[760px]:hidden">{workspaceName ? "Workspace open" : "Open a workspace to begin"}</span>
       <span className="max-[760px]:hidden">Ln —, Col —</span>

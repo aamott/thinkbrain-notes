@@ -72,7 +72,11 @@ macro_rules! app_command_handlers {
             $crate::commands::watcher::unwatch_workspace,
             $crate::commands::sync::resolve::list_conflicts,
             $crate::commands::sync::resolve::read_conflict,
-            $crate::commands::sync::resolve::resolve_conflict
+            $crate::commands::sync::resolve::resolve_conflict,
+            $crate::commands::sync::history::sync_history,
+            $crate::commands::sync::history::restore_version,
+            $crate::commands::sync::history::sync_conflict_rate,
+            $crate::commands::sync::status::sync_status
         ]
     };
 }
@@ -119,6 +123,10 @@ pub const APP_COMMAND_PATHS: &[&str] = &[
     "sync::resolve::list_conflicts",
     "sync::resolve::read_conflict",
     "sync::resolve::resolve_conflict",
+    "sync::history::sync_history",
+    "sync::history::restore_version",
+    "sync::history::sync_conflict_rate",
+    "sync::status::sync_status",
 ];
 
 #[cfg(test)]
@@ -175,6 +183,10 @@ mod tests {
         assert!(APP_COMMAND_PATHS.contains(&"sync::resolve::list_conflicts"));
         assert!(APP_COMMAND_PATHS.contains(&"sync::resolve::read_conflict"));
         assert!(APP_COMMAND_PATHS.contains(&"sync::resolve::resolve_conflict"));
+        assert!(APP_COMMAND_PATHS.contains(&"sync::history::sync_history"));
+        assert!(APP_COMMAND_PATHS.contains(&"sync::history::restore_version"));
+        assert!(APP_COMMAND_PATHS.contains(&"sync::history::sync_conflict_rate"));
+        assert!(APP_COMMAND_PATHS.contains(&"sync::status::sync_status"));
 
         // Sanity: no duplicates and the count matches the macro entries.
         let mut sorted = APP_COMMAND_PATHS.to_vec();
@@ -187,7 +199,7 @@ mod tests {
         );
         assert_eq!(
             APP_COMMAND_PATHS.len(),
-            34,
+            38,
             "expected 34 registered commands"
         );
     }

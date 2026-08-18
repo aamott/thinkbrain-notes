@@ -8,7 +8,7 @@ import {
 import { appEvents } from "../events/appEvents";
 import { BottomPanel as BottomPanelContent } from "../panels/BottomPanel";
 import { LeftPopout } from "../panels/LeftPopout";
-import { useConflictCount } from "../sync/useConflictCount";
+import { useSyncStatus } from "../sync/useSyncStatus";
 import { RightPopout } from "../panels/RightPopout";
 import { useTheme } from "../settings/theme-context";
 import { useSettingsStore } from "../settings/settingsStore";
@@ -494,12 +494,31 @@ export function DesktopShell() {
   // Read here rather than inside the panel: the number has to be visible to
   // someone who has never opened it, which is exactly when the panel is not
   // mounted to count anything.
-  const conflictCount = useConflictCount(restoredWorkspacePath ?? null);
+  const syncStatus = useSyncStatus(restoredWorkspacePath ?? null);
   const conflictBadges = useMemo<Readonly<Record<string, number>>>(() => {
     const badges: Record<string, number> = {};
-    if (conflictCount > 0) badges.conflicts = conflictCount;
+    if (syncStatus.attention > 0) badges.conflicts = syncStatus.attention;
     return badges;
-  }, [conflictCount]);
+  }, [syncStatus.attention]);
+
+  // Which note the history panel is about. Set by "Previous versions…" in the
+  // file tree and cleared by the panel itself, so opening History from the
+  // footer is always the whole workspace rather than whatever was last asked.
+  const [versionsOf, setVersionsOf] = useState<string | null>(null);
+  const showVersionsOf = useCallback(
+    (_rootPath: string, relativePath: string) => {
+      setVersionsOf(relativePath);
+      selectLeftPanel("history");
+    },
+    [selectLeftPanel]
+  );
+  const openSyncPanel = useCallback(
+    (panel: "conflicts" | "history") => {
+      if (panel === "history") setVersionsOf(null);
+      selectLeftPanel(panel);
+    },
+    [selectLeftPanel]
+  );
 
   // The unsaved text of an editor open on the note a merge tab is comparing.
   // "This computer's version" has to be what the user is looking at; offering
@@ -651,9 +670,12 @@ export function DesktopShell() {
                 onNewNoteFocusHandled: acknowledgeNewNoteFocus,
                 newNoteFocusRequest,
                 recentWorkspacePaths,
-                onWorkspaceLaunched: handleWorkspaceLaunched
+                onWorkspaceLaunched: handleWorkspaceLaunched,
+                onShowVersions: showVersionsOf
               }}
               onReviewConflict={reviewConflict}
+              versionsOf={versionsOf}
+              onShowEverything={() => setVersionsOf(null)}
               onOpenSearchResult={(relativePath) => {
                 if (restoredWorkspacePath) openMarkdownDocument(restoredWorkspacePath, relativePath);
               }}
@@ -716,7 +738,7 @@ export function DesktopShell() {
         )}
       </div>
 
-      <StatusBar workspaceName={workspaceName} />
+      <StatusBar workspaceName={workspaceName} syncStatus={syncStatus} onOpenSyncPanel={openSyncPanel} />
 
       {paletteOpen && (
         <CommandPalette

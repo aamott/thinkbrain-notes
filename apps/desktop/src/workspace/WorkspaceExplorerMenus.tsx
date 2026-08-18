@@ -6,12 +6,14 @@ import type { ContextMenuState } from "./workspaceExplorerTypes";
 
 // ---- Context menu ----
 
-export function WorkspaceContextMenu({ menu, onClose, onStartCreate, onStartRename, onRequestDelete, onRefresh, onOpenWorkspace }: {
+export function WorkspaceContextMenu({ menu, onClose, onStartCreate, onStartRename, onRequestDelete, onShowVersions, onRefresh, onOpenWorkspace }: {
   readonly menu: ContextMenuState;
   readonly onClose: () => void;
   readonly onStartCreate: (parentPath: string, kind: "file" | "folder") => void;
   readonly onStartRename: (entry: NativeWorkspaceEntry) => void;
   readonly onRequestDelete: (entry: NativeWorkspaceEntry) => void;
+  /** Lists one file's earlier versions, in the history panel. */
+  readonly onShowVersions: (entry: NativeWorkspaceEntry) => void;
   readonly onRefresh: () => void;
   readonly onOpenWorkspace: () => void;
 }) {
@@ -63,6 +65,7 @@ export function WorkspaceContextMenu({ menu, onClose, onStartCreate, onStartRena
       {target.kind === "background" && <MenuButton label="New folder" onClick={handle(() => onStartCreate("", "folder"))} />}
       {target.kind !== "background" && <hr className="my-1 border-0 border-t border-border" />}
       {target.kind !== "background" && <MenuButton label="Rename" onClick={handle(() => onStartRename(target.entry))} />}
+      {target.kind === "file" && <MenuButton label="Previous versions…" onClick={handle(() => onShowVersions(target.entry))} />}
       {target.kind !== "background" && <MenuButton label="Delete" danger onClick={handle(() => onRequestDelete(target.entry))} />}
       {target.kind === "background" && <hr className="my-1 border-0 border-t border-border" />}
       {target.kind === "background" && <MenuButton label="Refresh" onClick={handle(() => { onRefresh(); onClose(); })} />}

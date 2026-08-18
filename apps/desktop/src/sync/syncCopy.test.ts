@@ -1,0 +1,107 @@
+import { describe, expect, it } from "vitest";
+
+import { describeMoment, describePill, describeWhatChanged, recoveryFor } from "./syncCopy";
+import { NOT_RECORDING, type SyncStatus } from "./historyTypes";
+
+const AT = new Date("2026-08-17T09:31:00").getTime();
+const NOW = new Date("2026-08-17T14:00:00");
+
+const status = (over: Partial<SyncStatus>): SyncStatus => ({ ...NOT_RECORDING, state: "idle", ...over });
+
+describe("when something happened", () => {
+  it("says today by name, because that is how people remember today", () => {
+    expect(describeMoment(AT, NOW)).toMatch(/^Today /);
+  });
+
+  it("says yesterday by name too", () => {
+    const yesterday = new Date("2026-08-16T16:12:00").getTime();
+
+    expect(describeMoment(yesterday, NOW)).toMatch(/^Yesterday /);
+  });
+
+  it("falls back to a date once a day name would stop helping", () => {
+    const lastWeek = new Date("2026-08-09T16:12:00").getTime();
+
+    const text = describeMoment(lastWeek, NOW);
+    expect(text).not.toMatch(/Today|Yesterday/);
+    expect(text).toContain("9");
+  });
+
+  it("does not invent a time it was not given", () => {
+    expect(describeMoment(null, NOW)).toBe("Unknown");
+  });
+});
+
+describe("what one recorded change touched", () => {
+  it("counts the notes rather than listing them", () => {
+    expect(
+      describeWhatChanged([
+        { path: "one.md", change: "updated" },
+        { path: "two.md", change: "added" }
+      ])
+    ).toBe("2 notes updated");
+  });
+
+  it("keeps the singular singular", () => {
+    expect(describeWhatChanged([{ path: "one.md", change: "updated" }])).toBe("1 note updated");
+  });
+});
+
+describe("the status footer", () => {
+  it("says everything is saved, and when", () => {
+    const pill = describePill(status({ lastRecordedAt: AT }), NOW);
+
+    expect(pill.text).toContain("All saved");
+    expect(pill.text).toContain("Today");
+  });
+
+  it("does not claim a time before anything has been saved", () => {
+    const pill = describePill(status({ lastRecordedAt: null }), NOW);
+
+    expect(pill.text).not.toMatch(/Today|Unknown/);
+  });
+
+  it("says it is still saving while changes are on their way", () => {
+    const pill = describePill(status({ state: "saving", waiting: 2 }), NOW);
+
+    expect(pill.text).toContain("Saving");
+  });
+
+  it("counts what is waiting on the user", () => {
+    expect(describePill(status({ state: "attention", attention: 2 }), NOW).text).toContain(
+      "2 items need"
+    );
+    expect(describePill(status({ state: "attention", attention: 1 }), NOW).text).toContain(
+      "1 item needs"
+    );
+  });
+
+  it("says out loud when this folder is not being recorded at all", () => {
+    expect(describePill(NOT_RECORDING, NOW).text).toBeTruthy();
+    expect(describePill(NOT_RECORDING, NOW).tone).toBe("quiet");
+  });
+
+  /// A failure nobody can act on is a failure nobody will act on.
+  it("always names something to do about a failure", () => {
+    for (const code of [
+      "sync.note_read_failed",
+      "sync.note_store_failed",
+      "sync.commit_failed",
+      "something.nobody.planned.for"
+    ]) {
+      const pill = describePill(
+        status({ state: "problem", problem: { code, message: "Could not record this change." } }),
+        NOW
+      );
+
+      expect(pill.tone).toBe("warn");
+      expect(pill.detail).toContain("Could not record this change.");
+      expect(pill.detail.length).toBeGreaterThan("Could not record this change.".length);
+      expect(recoveryFor(code)).toMatch(/[a-z]/);
+    }
+  });
+
+  it("points a problem at the recovery that suits it", () => {
+    expect(recoveryFor("sync.note_store_failed")).not.toBe(recoveryFor("sync.note_read_failed"));
+  });
+});

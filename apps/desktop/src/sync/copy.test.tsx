@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ConflictComparison, ConflictSummary } from "./conflictTypes";
+import { NOT_RECORDING, type RecordedChange, type SyncState } from "./historyTypes";
 
 /**
  * Nothing in this feature may speak git to the user.
@@ -49,8 +50,19 @@ vi.mock("./conflictService", () => ({
   subscribeToConflictChanges: () => Promise.resolve(() => undefined)
 }));
 
+const readHistory = vi.fn<() => Promise<readonly RecordedChange[]>>();
+
+vi.mock("./syncService", () => ({
+  readHistory: () => readHistory(),
+  readConflictRate: () => Promise.resolve({ decisions: 2, recorded: 340 }),
+  restoreVersion: () => Promise.resolve({ note: "n", checkpoint: "c" }),
+  subscribeToSyncStatus: () => Promise.resolve(() => undefined)
+}));
+
 const { ConflictsPanel } = await import("./ConflictsPanel");
 const { MergeTab } = await import("./MergeTab");
+const { HistoryPanel } = await import("./HistoryPanel");
+const { SyncPill } = await import("./SyncPill");
 
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
@@ -143,5 +155,63 @@ describe("nothing in this feature speaks git to the user", () => {
       "the failure",
       await render(<MergeTab rootPath="/notes" copyPath="Meeting Notes.md.copy" buffer={null} />)
     );
+  });
+
+  it("keeps the history plain, opened and closed", async () => {
+    readHistory.mockResolvedValue([
+      {
+        id: "abc123",
+        at: Date.now(),
+        message: "Sync 2026-08-17 09:31 — 2 notes changed",
+        notes: [
+          { path: "Meeting Notes.md", change: "updated" },
+          { path: "Gone.md", change: "removed" }
+        ]
+      }
+    ]);
+
+    for (const note of [null, "Meeting Notes.md"]) {
+      audit(
+        `the history for ${note ?? "everything"}`,
+        await render(
+          <HistoryPanel rootPath="/notes" note={note} onShowEverything={() => undefined} />
+        )
+      );
+    }
+  });
+
+  it("keeps the empty history plain", async () => {
+    readHistory.mockResolvedValue([]);
+
+    audit(
+      "the empty history",
+      await render(<HistoryPanel rootPath="/notes" note={null} onShowEverything={() => undefined} />)
+    );
+  });
+
+  /// Every state of the footer, including the ones that only appear when
+  /// something has gone wrong — which is exactly when jargon would land worst.
+  it("keeps the footer plain in every state it has", async () => {
+    for (const state of ["off", "idle", "saving", "attention", "problem"] as const) {
+      const status = {
+        ...NOT_RECORDING,
+        state: state as SyncState,
+        lastRecordedAt: Date.now(),
+        waiting: 1,
+        attention: 2,
+        problem:
+          state === "problem"
+            ? { code: "sync.note_read_failed", message: "A note could not be read." }
+            : null
+      };
+      const host = document.createElement("div");
+      document.body.append(host);
+      const surface = createRoot(host);
+      await act(async () => surface.render(<SyncPill status={status} onOpen={() => undefined} />));
+      const spoken = host.querySelector("button")?.getAttribute("aria-label") ?? "";
+      audit(`the footer while ${state}`, `${host.textContent ?? ""} ${spoken}`);
+      await act(async () => surface.unmount());
+      host.remove();
+    }
   });
 });

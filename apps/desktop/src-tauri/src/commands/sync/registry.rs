@@ -301,8 +301,16 @@ fn spawn_sweeper() {
             // closing a workspace.
             let now = Instant::now();
             for (key, engine) in engines {
-                if let Err(error) = engine.record_settled(now) {
+                let was_broken = engine.problem().is_some();
+                let recorded = engine.record_settled(now);
+                if let Err(error) = &recorded {
                     eprintln!("[sync] could not record changes for {key}: {error:?}");
+                }
+                // Only when the footer would read differently. This runs twice
+                // a second against every open workspace, and almost all of
+                // those ticks are the same answer as the one before.
+                if matches!(recorded, Ok(Some(_))) || engine.problem().is_some() != was_broken {
+                    crate::commands::watcher::announce_sync_status(&key);
                 }
             }
         })

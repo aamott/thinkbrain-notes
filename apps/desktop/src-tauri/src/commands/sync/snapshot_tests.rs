@@ -101,6 +101,7 @@ fn a_checkpoint_records_the_current_state_of_the_named_notes() {
             PathBuf::from("note.md"),
             PathBuf::from("note-DESKTOP-AB12CD.md"),
         ],
+        Reason::ConflictResolved,
     )
     .expect("the checkpoint is taken");
 
@@ -122,7 +123,7 @@ fn a_checkpoint_leaves_the_history_branch_alone() {
         .expect("committed");
 
     write(&f.vault, "note-DESKTOP-AB12CD.md", "# Theirs\n");
-    checkpoint(&f.repo, &[PathBuf::from("note-DESKTOP-AB12CD.md")]).expect("checkpointed");
+    checkpoint(&f.repo, &[PathBuf::from("note-DESKTOP-AB12CD.md")], Reason::ConflictResolved).expect("checkpointed");
 
     assert_eq!(head_commit(&f.repo).expect("readable"), Some(history));
 }
@@ -140,10 +141,10 @@ fn the_checkpoint_ref_is_not_a_branch() {
 fn checkpoints_keep_the_ones_before_them() {
     let f = fixture("checkpoint-chain");
     write(&f.vault, "one.md", "# One\n");
-    let first = checkpoint(&f.repo, &[PathBuf::from("one.md")]).expect("checkpointed");
+    let first = checkpoint(&f.repo, &[PathBuf::from("one.md")], Reason::ConflictResolved).expect("checkpointed");
 
     write(&f.vault, "two.md", "# Two\n");
-    let second = checkpoint(&f.repo, &[PathBuf::from("two.md")]).expect("checkpointed");
+    let second = checkpoint(&f.repo, &[PathBuf::from("two.md")], Reason::ConflictResolved).expect("checkpointed");
 
     assert_ne!(first, second);
     let parents: Vec<_> = f
@@ -164,9 +165,9 @@ fn checkpoints_keep_the_ones_before_them() {
 fn a_checkpoint_with_nothing_new_reuses_the_last_one() {
     let f = fixture("checkpoint-unchanged");
     write(&f.vault, "one.md", "# One\n");
-    let first = checkpoint(&f.repo, &[PathBuf::from("one.md")]).expect("checkpointed");
+    let first = checkpoint(&f.repo, &[PathBuf::from("one.md")], Reason::ConflictResolved).expect("checkpointed");
 
-    let second = checkpoint(&f.repo, &[PathBuf::from("one.md")]).expect("checkpointed");
+    let second = checkpoint(&f.repo, &[PathBuf::from("one.md")], Reason::ConflictResolved).expect("checkpointed");
 
     assert_eq!(first, second);
 }
@@ -178,7 +179,7 @@ fn a_checkpoint_with_nothing_new_reuses_the_last_one() {
 fn a_first_checkpoint_of_absent_notes_still_yields_a_restore_point() {
     let f = fixture("checkpoint-absent");
 
-    let id = checkpoint(&f.repo, &[PathBuf::from("missing.md")]).expect("checkpointed");
+    let id = checkpoint(&f.repo, &[PathBuf::from("missing.md")], Reason::ConflictResolved).expect("checkpointed");
 
     assert!(tree_paths_of(&f.repo, id).is_empty());
 }

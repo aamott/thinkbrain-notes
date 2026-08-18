@@ -237,10 +237,13 @@ pub fn resolve(
         ));
     }
 
-    let checkpoint = engine.checkpoint(&[
-        PathBuf::from(&pairing.original),
-        PathBuf::from(&pairing.copy),
-    ])?;
+    let checkpoint = engine.checkpoint(
+        &[
+            PathBuf::from(&pairing.original),
+            PathBuf::from(&pairing.copy),
+        ],
+        super::snapshot::Reason::ConflictResolved,
+    )?;
 
     let kept_as = match resolution {
         Resolution::KeepOurs => {

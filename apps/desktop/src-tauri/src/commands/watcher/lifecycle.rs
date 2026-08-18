@@ -137,6 +137,9 @@ pub fn watch_workspace(
     // not a reason to refuse to open a workspace, so a failure here is reported
     // and the workspace opens regardless.
     if let Ok(app_data_dir) = app.path().app_data_dir() {
+        // Before attaching, so the sweeper this may start can already reach the
+        // windows it will have news for.
+        crate::commands::watcher::remember_reach(&app);
         if let Err(error) =
             crate::commands::sync::registry::attach(&app_data_dir, &root, &key, &label)
         {
@@ -249,6 +252,9 @@ fn spawn_debouncer(
         if crate::commands::sync::registry::note_changes(&key, &handler_root, &changes.all) {
             announce_conflicts(&app, &key);
         }
+        // A batch that reached the engine is a batch on its way into history,
+        // which is the footer's "saving" state. The sweeper says when it lands.
+        crate::commands::watcher::announce_sync_status(&key);
 
         if changes.notes.is_empty() {
             return;

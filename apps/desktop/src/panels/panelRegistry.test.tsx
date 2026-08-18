@@ -43,7 +43,9 @@ const context: DesktopPanelContext = {
   documentContents: null,
   explorerProps,
   onOpenSearchResult: () => undefined,
-  onReviewConflict: () => undefined
+  onReviewConflict: () => undefined,
+      versionsOf: null,
+      onShowEverything: () => undefined
 };
 
 /** Only the state a left-side factory may read. */
@@ -51,7 +53,9 @@ const leftContext: LeftPanelContext = {
   rootPath: "/notes",
   explorerProps,
   onOpenSearchResult: () => undefined,
-  onReviewConflict: () => undefined
+  onReviewConflict: () => undefined,
+      versionsOf: null,
+      onShowEverything: () => undefined
 };
 
 /** Only the state a right-side factory may read. */
@@ -89,6 +93,7 @@ describe("desktop panel registry", () => {
       "explorer",
       "search",
       "conflicts",
+      "history",
       "tags",
       "extensions",
       "outline",
@@ -100,6 +105,7 @@ describe("desktop panel registry", () => {
       "explorer",
       "search",
       "conflicts",
+      "history",
       "tags",
       "extensions"
     ]);
@@ -148,6 +154,8 @@ describe("desktop panel registry", () => {
         explorerProps={context.explorerProps}
         onOpenSearchResult={context.onOpenSearchResult}
         onReviewConflict={context.onReviewConflict}
+        versionsOf={null}
+        onShowEverything={() => undefined}
       />
     );
     const rightMarkup = renderToStaticMarkup(
@@ -201,7 +209,7 @@ describe("desktop panel registry", () => {
   });
 
   it("narrows built-in left ids via the type guard", () => {
-    for (const id of ["explorer", "search", "conflicts", "tags", "extensions"] as const) {
+    for (const id of ["explorer", "search", "conflicts", "history", "tags", "extensions"] as const) {
       expect(isBuiltInLeftPanel(id)).toBe(true);
     }
     expect(isBuiltInLeftPanel("outline")).toBe(false);
