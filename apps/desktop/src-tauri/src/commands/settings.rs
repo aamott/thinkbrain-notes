@@ -184,9 +184,7 @@ pub fn update_desktop_state(
     app: tauri::AppHandle,
     update: DesktopStateUpdate,
 ) -> Result<String, NativeError> {
-    let _settings_lock = APP_SETTINGS_MUTATION_LOCK
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _settings_lock = acquire_app_settings_lock();
     let settings_path = resolve_app_settings_path(&app)?;
     let contents =
         update_desktop_state_contents(read_settings_file(&settings_path)?.as_deref(), update)?;
@@ -208,9 +206,7 @@ pub fn update_desktop_state(
 ///   The full serialized settings document that was written to disk.
 #[tauri::command]
 pub fn update_app_theme(app: tauri::AppHandle, theme: String) -> Result<String, NativeError> {
-    let _settings_lock = APP_SETTINGS_MUTATION_LOCK
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _settings_lock = acquire_app_settings_lock();
     let settings_path = resolve_app_settings_path(&app)?;
     let contents = read_settings_file(&settings_path)?;
     let updated = update_app_theme_contents(contents.as_deref(), &theme)?;

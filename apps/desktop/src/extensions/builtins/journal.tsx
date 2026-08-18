@@ -273,14 +273,7 @@ export function activateJournal(context: DesktopExtensionContext): void {
    * about what is configured right now.
    */
   const useDefinitions = () =>
-    useSyncExternalStore(
-      (onChange) => {
-        const subscription = context.settings.onDidChange("fieldDefinitions", onChange);
-        return () => subscription.dispose();
-      },
-      // A string snapshot, so React's identity check is the value's own.
-      () => context.settings.get<string>("fieldDefinitions") ?? "[]"
-    );
+    useWatchedSetting<string, string>("fieldDefinitions", (raw) => raw ?? "[]");
 
   function MetadataHeader({
     relativePath,

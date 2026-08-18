@@ -17,8 +17,8 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::commands::workspace::{
-    entry_metadata, resolve_workspace_entry_path, resolve_workspace_root,
-    WORKSPACE_ENTRY_MUTATION_LOCK,
+    acquire_workspace_mutation_lock, entry_metadata, resolve_workspace_entry_path,
+    resolve_workspace_root,
 };
 use crate::NativeError;
 
@@ -216,9 +216,7 @@ pub fn resolve(
     // Held across the read, the check and every write below, and it is the same
     // lock the ordinary note writes take — so a save landing in the middle of a
     // resolution is not a race this has to reason about.
-    let _mutation_lock = WORKSPACE_ENTRY_MUTATION_LOCK
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _mutation_lock = acquire_workspace_mutation_lock();
 
     // No buffer: the write checks and records what is on disk. An editor's
     // unsaved text belongs in the merged contents the panel sends, not here.
