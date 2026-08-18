@@ -326,3 +326,25 @@ fn the_conflicts_our_own_test_script_plants_are_the_ones_we_detect() {
     assert_eq!(held.len(), 3, "the startup scan should pair all three copies");
     assert!(unbuildable.is_empty(), "these copies could not be shown: {unbuildable:?}");
 }
+
+/// Settling runs while a workspace is being attached, which is also when the
+/// registry is being mutated — and it reads a preference, which takes a lock of
+/// its own. Doing that under the registry's lock deadlocked the whole app on
+/// open, silently, because the test that would have caught it did not exist.
+#[test]
+fn attaching_settles_the_obvious_copies_without_deadlocking() {
+    let app_data = make_temp_test_dir("attach-settle-appdata", "sync", true);
+    let vault = make_temp_test_dir("attach-settle-vault", "sync", true);
+    let copy = "note.sync-conflict-20260817-093100-K3SDFHG.md";
+    std::fs::write(vault.join("note.md"), "the same on both\n").expect("written");
+    std::fs::write(vault.join(copy), "the same on both\n").expect("written");
+
+    let key = vault.to_string_lossy().to_string();
+    attach(&app_data, &vault, &key, "settle-window").expect("attaching succeeds");
+    let engine = engine(&key).expect("the vault is being recorded");
+    let held = engine.conflicts();
+    detach(&key, "settle-window");
+
+    assert!(held.is_empty(), "a copy identical to the note should never be raised");
+    assert!(!vault.join(copy).exists(), "and it should have been tidied away");
+}

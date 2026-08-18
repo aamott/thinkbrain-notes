@@ -35,7 +35,15 @@ export interface RestoredVersion {
 
 /** How often this vault has asked its user to choose between two versions. */
 export interface ConflictRate {
+  /** Conflicts the user was asked about. */
   readonly decisions: number;
+  /**
+   * Conflicts that carried nothing to decide and were settled without asking.
+   *
+   * Kept apart from `decisions` because the difference between them is the
+   * number that decides whether merging against a shared base is worth it.
+   */
+  readonly settled: number;
   readonly recorded: number;
 }
 

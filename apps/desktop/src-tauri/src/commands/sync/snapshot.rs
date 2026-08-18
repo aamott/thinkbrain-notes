@@ -45,6 +45,8 @@ const CHECKPOINT_REF: &str = "refs/thinkbrain/checkpoints";
 pub enum Reason {
     ConflictResolved,
     VersionRestored,
+    /// A copy that carried nothing to decide, settled without asking.
+    DuplicateDiscarded,
 }
 
 impl Reason {
@@ -53,6 +55,7 @@ impl Reason {
         match self {
             Reason::ConflictResolved => "Checkpoint before resolving a conflict",
             Reason::VersionRestored => "Checkpoint before restoring an earlier version",
+            Reason::DuplicateDiscarded => "Checkpoint before discarding a duplicate copy",
         }
     }
 }

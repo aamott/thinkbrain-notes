@@ -107,6 +107,10 @@ pub fn attach(
     key: &str,
     label: &str,
 ) -> Result<(), NativeError> {
+    // Before any lock: settling reads a preference from here, and the paths
+    // that do it have no window to ask.
+    super::settle::remember_settings_home(app_data_dir);
+
     let lane = {
         let mut guard = registry();
         let state = guard.get_or_insert_with(Registry::default);
@@ -144,12 +148,20 @@ pub fn attach(
         }
     };
 
-    let mut guard = registry();
-    let state = guard.get_or_insert_with(Registry::default);
     let engine = Arc::new(Engine::new(managed.repo, managed.has_own_git));
     // Conflicts appear while the app is closed. Someone back from a week away
-    // should not have to open each note to discover the app noticed nothing.
-    engine.note_conflicts(conflict::scan(root));
+    // should not have to open each note to discover the app noticed nothing —
+    // nor to be handed a week of copies that turn out to say nothing.
+    //
+    // Outside the registry lock, like the bootstrap above and for the same
+    // reason: this walks the vault, reads files and can write a commit, and
+    // every other window's open and close would queue behind it. Settling also
+    // reads a setting, which takes a lock of its own — under the registry's
+    // that would not be slow, it would be a deadlock.
+    engine.note_conflicts(super::settle::obvious(&engine, root, conflict::scan(root)));
+
+    let mut guard = registry();
+    let state = guard.get_or_insert_with(Registry::default);
     state.adopt(key, label, engine);
     start_sweeping(state);
     Ok(())
@@ -244,8 +256,7 @@ pub fn note_changes(key: &str, root: &Path, changes: &[WorkspaceChange]) -> bool
         changed_paths(changes)
     };
 
-    let found_new = engine.note_conflicts(
-        paths
+    let found = paths
             .iter()
             // A copy that is no longer there is not a conflict to answer. This
             // matters because resolving one *deletes* it, and the watcher
@@ -257,8 +268,8 @@ pub fn note_changes(key: &str, root: &Path, changes: &[WorkspaceChange]) -> bool
                     root.join(original).is_file()
                 })
             })
-            .collect::<Vec<_>>(),
-    );
+            .collect::<Vec<_>>();
+    let found_new = engine.note_conflicts(super::settle::obvious(&engine, root, found));
     engine.note_changes(paths, Instant::now());
     found_new
 }

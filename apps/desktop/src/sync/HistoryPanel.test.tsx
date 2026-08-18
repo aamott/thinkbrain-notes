@@ -38,7 +38,7 @@ const change = (over: Partial<RecordedChange> = {}): RecordedChange => ({
 
 beforeEach(() => {
   readHistory.mockReset().mockResolvedValue([]);
-  readConflictRate.mockReset().mockResolvedValue({ decisions: 0, recorded: 0 });
+  readConflictRate.mockReset().mockResolvedValue({ decisions: 0, settled: 0, recorded: 0 });
   restoreVersion.mockReset().mockResolvedValue({ note: "n", checkpoint: "c" });
 });
 
@@ -107,7 +107,7 @@ describe("the whole workspace's history", () => {
 
   it("reports how often this folder has needed a decision", async () => {
     readHistory.mockResolvedValue([change()]);
-    readConflictRate.mockResolvedValue({ decisions: 2, recorded: 340 });
+    readConflictRate.mockResolvedValue({ decisions: 2, settled: 0, recorded: 340 });
 
     const host = await render();
 

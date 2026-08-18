@@ -76,7 +76,12 @@ pub struct Restored {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Rate {
+    /// Conflicts the user was asked about.
     pub decisions: usize,
+    /// Conflicts that carried nothing to decide and were settled without
+    /// asking. Kept apart from `decisions` because the difference is the
+    /// number the three-way-merge question actually turns on.
+    pub settled: usize,
     pub recorded: usize,
 }
 
@@ -188,12 +193,10 @@ pub fn restore(
 /// How many decisions this vault has asked of its user, against how many
 /// changes it has recorded.
 pub fn conflict_rate(repo: &gix::Repository) -> Result<Rate, NativeError> {
+    let checkpoints = snapshot::checkpoint_head(repo)?;
     Ok(Rate {
-        decisions: count(
-            repo,
-            snapshot::checkpoint_head(repo)?,
-            Some(Reason::ConflictResolved.message()),
-        )?,
+        decisions: count(repo, checkpoints, Some(Reason::ConflictResolved.message()))?,
+        settled: count(repo, checkpoints, Some(Reason::DuplicateDiscarded.message()))?,
         recorded: count(repo, snapshot::head_commit(repo)?, None)?,
     })
 }
@@ -204,6 +207,44 @@ pub fn conflict_rate(repo: &gix::Repository) -> Result<Rate, NativeError> {
 /// surface still says "all saved, 9:31" the moment the app is reopened.
 pub fn last_recorded(repo: &gix::Repository) -> Result<Option<u64>, NativeError> {
     Ok(read(repo, None, 1)?.first().and_then(|change| change.at))
+}
+
+/// Whether `note` has ever been recorded with exactly this content.
+///
+/// Compares the blob ids the trees already hold rather than reading any
+/// content back: two files are the same file precisely when git would store
+/// them as the same object, and asking that question costs a tree lookup
+/// rather than a read.
+///
+/// This is what makes "that device was simply behind" answerable without a
+/// merge base. If the other machine's file is a state ours has already passed
+/// through, ours holds everything theirs did.
+pub fn has_recorded(
+    repo: &gix::Repository,
+    note: &Path,
+    blob: gix::ObjectId,
+) -> Result<bool, NativeError> {
+    let mut next = snapshot::head_commit(repo)?;
+
+    for _ in 0..SCAN {
+        let Some(id) = next else { break };
+        let commit = repo
+            .find_commit(id)
+            .map_err(|error| unreadable("Could not read the sync history.", error))?;
+        next = commit.parent_ids().next().map(|parent| parent.detach());
+
+        let mut tree = commit
+            .tree()
+            .map_err(|error| unreadable("Could not read the sync history.", error))?;
+        let entry = tree
+            .peel_to_entry_by_path(note)
+            .map_err(|error| unreadable("Could not read the sync history.", error))?;
+        if entry.is_some_and(|entry| entry.object_id() == blob) {
+            return Ok(true);
+        }
+    }
+
+    Ok(false)
 }
 
 /// The contents `note` had in `change`.
@@ -372,6 +413,7 @@ pub fn sync_conflict_rate(root_path: String) -> Result<Rate, NativeError> {
     let Some(engine) = engine_for(&root_path)? else {
         return Ok(Rate {
             decisions: 0,
+            settled: 0,
             recorded: 0,
         });
     };

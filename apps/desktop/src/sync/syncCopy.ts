@@ -7,7 +7,7 @@
  */
 
 import { describeWhen } from "./conflictCard";
-import type { ChangedNote, SyncStatus } from "./historyTypes";
+import type { ChangedNote, ConflictRate, SyncStatus } from "./historyTypes";
 
 /** How loudly the footer should say it. */
 export type PillTone = "quiet" | "busy" | "warn";
@@ -78,6 +78,28 @@ export function recoveryFor(code: string): string {
     default:
       return "Close this folder and open it again to start saving versions.";
   }
+}
+
+/**
+ * How often this folder has needed something of its user, and how often it
+ * did not.
+ *
+ * The second number is the point: someone who sees "47 tidied away, none for
+ * you" learns that the app is absorbing the noise, which is the whole promise
+ * of settling the obvious ones.
+ */
+export function describeConflictRate(rate: ConflictRate): string {
+  const versions = `${rate.recorded} saved version${rate.recorded === 1 ? "" : "s"}`;
+  const tidied =
+    rate.settled === 0
+      ? ""
+      : ` ${rate.settled} duplicate cop${rate.settled === 1 ? "y was" : "ies were"} tidied away without asking.`;
+
+  if (rate.decisions === 0) {
+    return `${versions}, and you have never had to choose between two of them.${tidied}`;
+  }
+  const asked = `${rate.decisions} of them needed you to choose between two copies of a note.`;
+  return `${versions}. ${asked}${tidied}`;
 }
 
 /**

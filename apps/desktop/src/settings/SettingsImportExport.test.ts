@@ -41,7 +41,8 @@ const SEEDED_APP_VALUES: Record<string, unknown> = {
   "editor.fontSize": 16,
   "editor.lineWrapping": true,
   "editor.livePreview": true,
-  "settings.autosave": false
+  "settings.autosave": false,
+  "sync.settleAutomatically": true
 };
 
 beforeEach(() => {
@@ -129,8 +130,9 @@ describe("buildExportPayload", () => {
     expect(keys).toContain("editor.fontSize");
     expect(keys).toContain("editor.lineWrapping");
     expect(keys).toContain("editor.livePreview");
+    expect(keys).toContain("sync.settleAutomatically");
     // No workspace-scoped keys exist in the built-in modules.
-    expect(keys).toHaveLength(6);
+    expect(keys).toHaveLength(7);
   });
 });
 

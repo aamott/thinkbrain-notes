@@ -14,5 +14,6 @@ pub mod merge;
 pub mod pending;
 pub mod registry;
 pub mod resolve;
+pub mod settle;
 pub mod snapshot;
 pub mod status;

@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { describeMoment, describePill, describeWhatChanged, recoveryFor } from "./syncCopy";
+import {
+  describeConflictRate,
+  describeMoment,
+  describePill,
+  describeWhatChanged,
+  recoveryFor
+} from "./syncCopy";
 import { NOT_RECORDING, type SyncStatus } from "./historyTypes";
 
 const AT = new Date("2026-08-17T09:31:00").getTime();
@@ -103,5 +109,37 @@ describe("the status footer", () => {
 
   it("points a problem at the recovery that suits it", () => {
     expect(recoveryFor("sync.note_store_failed")).not.toBe(recoveryFor("sync.note_read_failed"));
+  });
+});
+
+describe("how often this folder has needed something of you", () => {
+  it("says plainly when it never has", () => {
+    const text = describeConflictRate({ decisions: 0, settled: 0, recorded: 340 });
+
+    expect(text).toContain("340 saved versions");
+    expect(text).toContain("never");
+  });
+
+  /// The number that makes the feature visible: someone should be able to see
+  /// that the noise is being absorbed rather than simply not happening.
+  it("reports what was tidied away separately from what was asked", () => {
+    const text = describeConflictRate({ decisions: 2, settled: 47, recorded: 340 });
+
+    expect(text).toContain("2 of them needed you");
+    expect(text).toContain("47 duplicate copies were tidied away");
+  });
+
+  it("says nothing needed you even when copies were tidied", () => {
+    const text = describeConflictRate({ decisions: 0, settled: 5, recorded: 340 });
+
+    expect(text).toContain("never");
+    expect(text).toContain("5 duplicate copies");
+  });
+
+  it("keeps the singulars singular", () => {
+    const text = describeConflictRate({ decisions: 1, settled: 1, recorded: 1 });
+
+    expect(text).toContain("1 saved version.");
+    expect(text).toContain("1 duplicate copy was");
   });
 });

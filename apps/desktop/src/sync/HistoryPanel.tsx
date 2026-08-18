@@ -4,7 +4,7 @@ import { NativeCommandError } from "../native/commands";
 import { Unavailable } from "../shell/Unavailable";
 import { noteName } from "./conflictCard";
 import type { ChangedNote, ConflictRate, RecordedChange } from "./historyTypes";
-import { describeMoment, describeWhatChanged } from "./syncCopy";
+import { describeConflictRate, describeMoment, describeWhatChanged } from "./syncCopy";
 import {
   readConflictRate,
   readHistory,
@@ -190,9 +190,7 @@ export function HistoryPanel({ rootPath, note, onShowEverything }: HistoryPanelP
 
       {rate !== null && rate.recorded > 0 && (
         <p className="m-0 border-t border-border px-3 py-2 text-[0.7rem] text-muted-foreground">
-          {rate.decisions === 0
-            ? `${rate.recorded} saved versions, and you have never had to choose between two of them.`
-            : `${rate.recorded} saved versions. ${rate.decisions} of them needed you to choose between two copies of a note.`}
+          {describeConflictRate(rate)}
         </p>
       )}
     </section>

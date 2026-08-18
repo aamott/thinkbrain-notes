@@ -23,6 +23,7 @@ import {
   createSettingsRegistry,
   editorModule,
   settingsModule,
+  syncModule,
   validateSettings,
   type SettingsDiagnostic,
   type SettingsRegistry
@@ -58,6 +59,7 @@ export const appSettingsRegistry: SettingsRegistry = createSettingsRegistry();
 appSettingsRegistry.register(appearanceModule);
 appSettingsRegistry.register(editorModule);
 appSettingsRegistry.register(settingsModule);
+appSettingsRegistry.register(syncModule);
 
 // ---------------------------------------------------------------------------
 // Gateway: abstraction over native settings I/O (for testability).
