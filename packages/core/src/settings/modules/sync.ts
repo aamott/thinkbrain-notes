@@ -56,7 +56,7 @@ export const syncModule: SettingsModule = {
           section: "sync.destination",
           label: "Keep these notes in step with",
           description:
-            "A git repository these notes are kept in step with — paste the link your host gives you. Leave it empty and nothing is sent anywhere. Earlier versions and conflicts are handled the same either way."
+            "A place these notes are kept in step with — paste the link it gives you. Leave it empty and nothing leaves this device. Earlier versions and conflicts work the same either way."
         }
       ]
     }

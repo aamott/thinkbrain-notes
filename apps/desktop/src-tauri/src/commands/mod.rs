@@ -189,7 +189,7 @@ mod tests {
         assert!(APP_COMMAND_PATHS.contains(&"sync::history::restore_version"));
         assert!(APP_COMMAND_PATHS.contains(&"sync::history::sync_conflict_rate"));
         assert!(APP_COMMAND_PATHS.contains(&"sync::status::sync_status"));
-    assert!(APP_COMMAND_PATHS.contains(&"sync::round::sync_now"));
+        assert!(APP_COMMAND_PATHS.contains(&"sync::round::sync_now"));
 
         // Sanity: no duplicates and the count matches the macro entries.
         let mut sorted = APP_COMMAND_PATHS.to_vec();

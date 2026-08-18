@@ -287,25 +287,16 @@ fn touched(
     parent: Option<gix::ObjectId>,
     commit: gix::ObjectId,
 ) -> Result<Vec<ChangedNote>, NativeError> {
-    let after = tree_of(repo, commit)?;
-    let before = parent.map(|id| tree_of(repo, id)).transpose()?;
-    let empty = repo.empty_tree();
-    let before = before.as_ref().unwrap_or(&empty);
-
-    let mut recorder = gix::diff::tree::Recorder::default();
-    gix::diff::tree(
-        gix::objs::TreeRefIter::from_bytes(&before.data, before.id.kind()),
-        gix::objs::TreeRefIter::from_bytes(&after.data, after.id.kind()),
+    let changes = snapshot::changes_between(
+        repo,
         state,
-        &repo.objects,
-        &mut recorder,
-    )
-    .map_err(|error| unreadable("Could not read what a change touched.", error))?;
+        snapshot::tree_of(repo, parent)?,
+        snapshot::tree_of(repo, Some(commit))?,
+    )?;
 
     // Only files. A folder appearing or disappearing is the notes inside it
     // arriving or leaving, and they are each listed in their own right.
-    let mut notes: Vec<ChangedNote> = recorder
-        .records
+    let mut notes: Vec<ChangedNote> = changes
         .into_iter()
         .filter_map(|record| {
             use gix::diff::tree::recorder::Change;
@@ -348,12 +339,6 @@ fn count(
     Ok(counted)
 }
 
-fn tree_of(repo: &gix::Repository, commit: gix::ObjectId) -> Result<gix::Tree<'_>, NativeError> {
-    repo.find_commit(commit)
-        .map_err(|error| unreadable("Could not read the sync history.", error))?
-        .tree()
-        .map_err(|error| unreadable("Could not read the sync history.", error))
-}
 
 fn unreadable(message: &'static str, error: impl std::fmt::Display) -> NativeError {
     failed("sync.history_read_failed", message, error)

@@ -153,7 +153,12 @@ fn head_of(repo: &gix::Repository, reference: &str) -> Result<Option<gix::Object
 
 /// Takes the other side's history wholesale, because this vault has none.
 fn adopt(repo: &gix::Repository, vault: &Path, theirs: gix::ObjectId) -> Result<usize, NativeError> {
-    let brought_down = apply(repo, vault, None, tree_of(repo, theirs)?)?;
+    let brought_down = apply(
+        repo,
+        vault,
+        snapshot::tree_of(repo, None)?,
+        snapshot::tree_of(repo, Some(theirs))?,
+    )?;
     repo.reference(
         BRANCH,
         theirs,
@@ -214,7 +219,7 @@ fn merge(
         .map_err(|error| cannot(&error))?
         .detach();
 
-    let brought_down = apply(repo, vault, Some(tree_of(repo, ours)?), merged)?;
+    let brought_down = apply(repo, vault, snapshot::tree_of(repo, Some(ours))?, merged)?;
     snapshot::record_merge(repo, merged, ours, theirs, &describe(brought_down, asked_about))?;
 
     Ok((brought_down, asked_about))
@@ -270,67 +275,39 @@ fn leave_copies(
 /// Brings the vault to `after`, and answers with how many notes moved.
 ///
 /// A tree diff rather than a checkout: this repository has no index and wants
-/// none, and only the paths that changed should be touched — everything else
-/// in the folder is the user's and none of our business.
+/// none, and only the paths that changed should be touched — everything else in
+/// the folder is the user's and none of our business.
 fn apply(
     repo: &gix::Repository,
     vault: &Path,
-    before: Option<gix::ObjectId>,
+    before: gix::ObjectId,
     after: gix::ObjectId,
 ) -> Result<usize, NativeError> {
-    let unreadable = |error: &dyn std::fmt::Display| {
-        NativeError::with_details(
-            "sync.history_unreadable",
-            "Could not read what arrived from the other device.",
-            error.to_string(),
-        )
-    };
-
-    let after = repo.find_tree(after).map_err(|error| unreadable(&error))?;
-    let before = match before {
-        Some(before) => repo.find_tree(before).map_err(|error| unreadable(&error))?,
-        None => repo.empty_tree(),
-    };
-
-    let mut recorder = gix::diff::tree::Recorder::default();
-    gix::diff::tree(
-        gix::objs::TreeRefIter::from_bytes(&before.data, before.id.kind()),
-        gix::objs::TreeRefIter::from_bytes(&after.data, after.id.kind()),
-        &mut gix::diff::tree::State::default(),
-        &repo.objects,
-        &mut recorder,
-    )
-    .map_err(|error| unreadable(&error))?;
-
     use gix::diff::tree::recorder::Change;
+
     let mut moved = 0;
-    for record in recorder.records {
-        let (mode, path, contents) = match record {
-            Change::Addition {
-                entry_mode,
-                oid,
-                path,
-                ..
-            }
-            | Change::Modification {
-                entry_mode,
-                oid,
-                path,
-                ..
-            } => (entry_mode, path, Some(oid)),
-            Change::Deletion {
-                entry_mode, path, ..
-            } => (entry_mode, path, None),
+    for record in snapshot::changes_between(repo, &mut Default::default(), before, after)? {
+        let (mode, path, arriving) = match record {
+            Change::Addition { entry_mode, oid, path, .. }
+            | Change::Modification { entry_mode, oid, path, .. } => (entry_mode, path, Some(oid)),
+            Change::Deletion { entry_mode, path, .. } => (entry_mode, path, None),
         };
         if !mode.is_blob() {
             continue;
         }
+
         let path = vault.join(path.to_string());
-        match contents {
-            Some(oid) => {
+        match arriving {
+            Some(blob) => {
                 let bytes = repo
-                    .find_object(oid)
-                    .map_err(|error| unreadable(&error))?
+                    .find_object(blob)
+                    .map_err(|error| {
+                        failed(
+                            "sync.history_unreadable",
+                            "Could not read a note that arrived.",
+                            error,
+                        )
+                    })?
                     .data
                     .clone();
                 put(&path, &bytes)?;
@@ -374,14 +351,6 @@ fn put(path: &Path, bytes: &[u8]) -> Result<(), NativeError> {
     })
 }
 
-fn tree_of(repo: &gix::Repository, commit: gix::ObjectId) -> Result<gix::ObjectId, NativeError> {
-    Ok(repo
-        .find_commit(commit)
-        .map_err(|error| failed("sync.history_unreadable", "Could not read a recorded state.", error))?
-        .tree_id()
-        .map_err(|error| failed("sync.history_unreadable", "Could not read a recorded state.", error))?
-        .detach())
-}
 
 /// Syncs one workspace, start to finish.
 ///

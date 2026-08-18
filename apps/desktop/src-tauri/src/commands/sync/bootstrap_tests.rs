@@ -97,7 +97,7 @@ fn a_vault_of_existing_notes_is_snapshotted_whole() {
     write(&vault, "one.md", "# One\n");
     write(&vault, "journal/2026/08-16.md", "# Today\n");
 
-    let workspace = (bootstrap(&app_data, &vault).expect("bootstrap succeeds"));
+    let workspace = bootstrap(&app_data, &vault).expect("bootstrap succeeds");
 
     assert_eq!(recorded_paths(&workspace.repo), ["journal/2026/08-16.md", "one.md"]);
 }
@@ -108,12 +108,12 @@ fn bootstrapping_again_does_not_snapshot_again() {
     let vault = make_temp_test_dir("bootstrap-twice-vault", "sync", true);
     write(&vault, "one.md", "# One\n");
 
-    let first = (bootstrap(&app_data, &vault).expect("bootstrap succeeds"));
+    let first = bootstrap(&app_data, &vault).expect("bootstrap succeeds");
     assert!(first.took_first_snapshot, "the first open did not record the vault");
     let first_head = snapshot::head_commit(&first.repo).expect("the history is readable");
     drop(first);
 
-    let second = (bootstrap(&app_data, &vault).expect("bootstrap succeeds again"));
+    let second = bootstrap(&app_data, &vault).expect("bootstrap succeeds again");
 
     assert!(
         !second.took_first_snapshot,
@@ -140,7 +140,7 @@ fn os_junk_and_half_written_files_are_not_recorded() {
     write(&vault, "~$note.md", "lock");
     write(&vault, ".~lock.note.md#", "lock");
 
-    let workspace = (bootstrap(&app_data, &vault).expect("bootstrap succeeds"));
+    let workspace = bootstrap(&app_data, &vault).expect("bootstrap succeeds");
 
     assert_eq!(recorded_paths(&workspace.repo), ["note.md"]);
 }
@@ -160,7 +160,7 @@ fn symlinks_are_not_followed_into_the_snapshot() {
     std::os::unix::fs::symlink(&outside, vault.join("linked-folder"))
         .expect("the vault holds a symlinked folder");
 
-    let workspace = (bootstrap(&app_data, &vault).expect("bootstrap succeeds"));
+    let workspace = bootstrap(&app_data, &vault).expect("bootstrap succeeds");
 
     assert_eq!(recorded_paths(&workspace.repo), ["note.md"]);
 }
@@ -178,7 +178,7 @@ fn conflict_copies_stay_out_of_history_without_being_ignored() {
     write(&vault, "note.sync-conflict-20260816-093100-K3SDFHG.md", "# Theirs\n");
     write(&vault, "note (Adam's conflicted copy 2026-08-16).md", "# Theirs\n");
 
-    let workspace = (bootstrap(&app_data, &vault).expect("bootstrap succeeds"));
+    let workspace = bootstrap(&app_data, &vault).expect("bootstrap succeeds");
 
     assert_eq!(recorded_paths(&workspace.repo), ["note.md"]);
 
@@ -221,7 +221,7 @@ fn ignored_folders_are_pruned_but_non_markdown_files_are_kept() {
     write(&vault, "target/debug/app", "binary");
     write(&vault, "notes/.hidden.md", "secret");
 
-    let workspace = (bootstrap(&app_data, &vault).expect("bootstrap succeeds"));
+    let workspace = bootstrap(&app_data, &vault).expect("bootstrap succeeds");
 
     let paths = recorded_paths(&workspace.repo);
     assert!(

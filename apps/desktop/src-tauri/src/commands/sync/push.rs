@@ -9,11 +9,6 @@
 //! So this module is only the protocol on top of that: which objects the far
 //! side is missing, a packfile carrying them, and reading what the server says
 //! it did. See `plans/auto-sync/pending-send_pack-high-hard.md`.
-//!
-//! Nothing calls this yet. The round trip that will — fetch, merge, "Sync now"
-//! — is story 6b; this is the half of it that had to be written rather than
-//! called, so it lands proved and on its own.
-#![allow(dead_code)]
 
 use std::collections::BTreeSet;
 use std::io::{BufRead, Write};
@@ -24,6 +19,8 @@ use transport::client::blocking_io::Transport as _;
 use transport::client::{MessageKind, WriteMode};
 
 use crate::error::NativeError;
+
+use super::snapshot;
 
 /// The only pack version anything has spoken for twenty years.
 const PACK_VERSION: u32 = 2;
@@ -134,53 +131,23 @@ pub fn carried(
 
 /// Everything a commit's tree holds that its parent's did not.
 ///
-/// Deletions are left out: a note that went away needs nothing sent for it. The
-/// diff recurses into added folders on its own, so a new folder arrives as
-/// itself and every note under it.
+/// Deletions are left out: a note that went away needs nothing sent for it.
 fn newly_reachable(
     repo: &gix::Repository,
     state: &mut gix::diff::tree::State,
     parent: Option<gix::ObjectId>,
     tree: gix::ObjectId,
 ) -> Result<Vec<gix::ObjectId>, NativeError> {
-    let unreadable = |error: &dyn std::fmt::Display| {
-        NativeError::with_details(
-            "sync.history_unreadable",
-            "Could not read what a change touched.",
-            error.to_string(),
-        )
-    };
-
-    let after = repo.find_tree(tree).map_err(|error| unreadable(&error))?;
-    let before = match parent {
-        Some(parent) => repo
-            .find_commit(parent)
-            .map_err(|error| unreadable(&error))?
-            .tree()
-            .map_err(|error| unreadable(&error))?,
-        None => repo.empty_tree(),
-    };
-
-    // Paths cost allocations and nothing here needs them; only the ids matter.
-    let mut recorder = gix::diff::tree::Recorder::default().track_location(None);
-    gix::diff::tree(
-        gix::objs::TreeRefIter::from_bytes(&before.data, before.id.kind()),
-        gix::objs::TreeRefIter::from_bytes(&after.data, after.id.kind()),
-        state,
-        &repo.objects,
-        &mut recorder,
-    )
-    .map_err(|error| unreadable(&error))?;
-
     use gix::diff::tree::recorder::Change;
-    Ok(recorder
-        .records
-        .into_iter()
-        .filter_map(|record| match record {
-            Change::Addition { oid, .. } | Change::Modification { oid, .. } => Some(oid),
-            Change::Deletion { .. } => None,
-        })
-        .collect())
+    Ok(
+        snapshot::changes_between(repo, state, snapshot::tree_of(repo, parent)?, tree)?
+            .into_iter()
+            .filter_map(|record| match record {
+                Change::Addition { oid, .. } | Change::Modification { oid, .. } => Some(oid),
+                Change::Deletion { .. } => None,
+            })
+            .collect(),
+    )
 }
 
 /// The bytes of a packfile carrying exactly `objects`, in order.
@@ -192,7 +159,7 @@ pub fn pack(repo: &gix::Repository, objects: &[gix::ObjectId]) -> Result<Vec<u8>
     let count = u32::try_from(objects.len()).map_err(|error| {
         failed(
             "sync.pack_failed",
-            "There is more history here than one push can carry.",
+            "There is more history here than one send can carry.",
             error,
         )
     })?;
@@ -212,12 +179,13 @@ pub fn pack(repo: &gix::Repository, objects: &[gix::ObjectId]) -> Result<Vec<u8>
         })?;
         entry_header(object.kind, object.data.len(), &mut out);
 
+        let unsendable = |error: std::io::Error| {
+            failed("sync.pack_failed", "Could not prepare notes to send.", error)
+        };
         let mut deflated =
             flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
-        deflated.write_all(&object.data).and_then(|()| deflated.finish()).map_err(|error| {
-            failed("sync.pack_failed", "Could not prepare notes to send.", error)
-        })
-        .map(|bytes| out.extend_from_slice(&bytes))?;
+        deflated.write_all(&object.data).map_err(unsendable)?;
+        out.extend_from_slice(&deflated.finish().map_err(unsendable)?);
     }
 
     let mut hasher = gix::hash::hasher(repo.object_hash());

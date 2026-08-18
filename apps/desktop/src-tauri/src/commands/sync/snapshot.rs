@@ -282,7 +282,8 @@ fn commit_on(
     Ok(commit.detach())
 }
 
-fn tree_of(
+/// The tree a commit recorded, or the empty tree when there is no commit.
+pub fn tree_of(
     repo: &gix::Repository,
     commit: Option<gix::ObjectId>,
 ) -> Result<gix::ObjectId, NativeError> {
@@ -290,6 +291,59 @@ fn tree_of(
         Some(id) => commit_tree(repo, id),
         None => Ok(gix::ObjectId::empty_tree(repo.object_hash())),
     }
+}
+
+/// What changed between two recorded states, exactly as git sees it.
+///
+/// One walk with three readers: history names the notes a change touched, a
+/// push names the objects the far side is missing, and a sync writes the result
+/// into someone's folder. Each wants a different slice of the same answer, and
+/// working the answer out three times was three chances to work it out
+/// differently.
+///
+/// Folders are included, and so is everything inside a folder that appeared —
+/// the walk descends into an addition rather than naming it and stopping.
+pub fn changes_between(
+    repo: &gix::Repository,
+    state: &mut gix::diff::tree::State,
+    before: gix::ObjectId,
+    after: gix::ObjectId,
+) -> Result<Vec<gix::diff::tree::recorder::Change>, NativeError> {
+    let before = tree_at(repo, before)?;
+    let after = tree_at(repo, after)?;
+
+    let mut recorder = gix::diff::tree::Recorder::default();
+    gix::diff::tree(
+        gix::objs::TreeRefIter::from_bytes(&before.data, before.id.kind()),
+        gix::objs::TreeRefIter::from_bytes(&after.data, after.id.kind()),
+        state,
+        &repo.objects,
+        &mut recorder,
+    )
+    .map_err(|error| {
+        failed(
+            "sync.history_read_failed",
+            "Could not read what a change touched.",
+            error,
+        )
+    })?;
+
+    Ok(recorder.records)
+}
+
+/// The empty tree is answered without a lookup: nothing ever writes it, so a
+/// repository that has never recorded anything does not contain it.
+fn tree_at(repo: &gix::Repository, tree: gix::ObjectId) -> Result<gix::Tree<'_>, NativeError> {
+    if tree == gix::ObjectId::empty_tree(repo.object_hash()) {
+        return Ok(repo.empty_tree());
+    }
+    repo.find_tree(tree).map_err(|error| {
+        failed(
+            "sync.history_read_failed",
+            "Could not read a recorded state.",
+            error,
+        )
+    })
 }
 
 /// The latest commit on the vault's history branch, if there is one.
