@@ -200,7 +200,7 @@ test("opens, saves, protects, and creates Markdown notes through the fresh shell
           const oldKey = String(args.relativePath);
           const newKey = String(args.newRelativePath);
           if (oldKey in documents) {
-            documents[newKey] = documents[oldKey];
+            documents[newKey] = documents[oldKey]!;
             delete documents[oldKey];
             writeDocuments(documents);
           }
@@ -400,7 +400,7 @@ test("the explorer context menu creates, renames, and deletes entries", async ({
           const newKey = String(args.newRelativePath);
           const documents = readDocuments();
           if (oldKey in documents) {
-            documents[newKey] = documents[oldKey];
+            documents[newKey] = documents[oldKey]!;
             delete documents[oldKey];
             writeDocuments(documents);
           }

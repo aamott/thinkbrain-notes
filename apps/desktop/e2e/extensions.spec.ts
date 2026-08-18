@@ -126,7 +126,7 @@ test("loads, runs, reloads, and removes an extension from a local directory", as
 
 test("restores stored extension directories at startup and reports one that fails", async ({ page }) => {
   await page.addInitScript(
-    ({ files }) => {
+    ({ files }: { files: Record<string, string> }) => {
       const appWindow = window as Window & {
         isTauri?: boolean;
         __TAURI_INTERNALS__?: { invoke: (command: string, args: Record<string, unknown>) => Promise<unknown> };
@@ -346,7 +346,7 @@ test("the hello-notes example extension loads from its shipped files and capture
   await page.exposeFunction("recordCreate", (relativePath: string) => created.push(relativePath));
 
   await page.addInitScript(
-    ({ files }) => {
+    ({ files }: { files: Record<string, string> }) => {
       const appWindow = window as Window & {
         isTauri?: boolean;
         recordCreate?: (path: string) => void;
@@ -380,6 +380,16 @@ test("the hello-notes example extension loads from its shipped files and capture
           }
           if (command === "read_app_settings") return null;
           if (command === "window_workspace_root") return "/vault";
+          if (command === "sync_status") {
+            return {
+              state: "off",
+              lastRecordedAt: null,
+              waiting: 0,
+              attention: 0,
+              problem: null,
+              alongsideOwnGit: false
+            };
+          }
           return null;
         }
       };
@@ -422,7 +432,7 @@ test("an extension creates a note and opens it through the workspace API", async
   await page.exposeFunction("recordEvent", (event: string) => events.push(event));
 
   await page.addInitScript(
-    ({ files }) => {
+    ({ files }: { files: Record<string, string> }) => {
       const appWindow = window as Window & {
         isTauri?: boolean;
         recordCreate?: (path: string) => void;
@@ -457,6 +467,16 @@ test("an extension creates a note and opens it through the workspace API", async
           // The window reports its workspace root on load, so the shell has one
           // open before the extension runs.
           if (command === "window_workspace_root") return "/vault";
+          if (command === "sync_status") {
+            return {
+              state: "off",
+              lastRecordedAt: null,
+              waiting: 0,
+              attention: 0,
+              problem: null,
+              alongsideOwnGit: false
+            };
+          }
           return null;
         }
       };
@@ -530,7 +550,7 @@ test("an extension lists notes in a folder and opens its own contributed tab", a
   await page.exposeFunction("recordNotes", (paths: string[]) => listed.push(paths));
 
   await page.addInitScript(
-    ({ files }) => {
+    ({ files }: { files: Record<string, string> }) => {
       const appWindow = window as Window & {
         isTauri?: boolean;
         __TAURI_INTERNALS__?: { invoke: (command: string, args: Record<string, unknown>) => Promise<unknown> };
@@ -566,6 +586,16 @@ test("an extension lists notes in a folder and opens its own contributed tab", a
           }
           if (command === "read_app_settings") return null;
           if (command === "window_workspace_root") return "/vault";
+          if (command === "sync_status") {
+            return {
+              state: "off",
+              lastRecordedAt: null,
+              waiting: 0,
+              attention: 0,
+              problem: null,
+              alongsideOwnGit: false
+            };
+          }
           return null;
         }
       };
