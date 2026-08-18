@@ -1,6 +1,6 @@
 import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
 import type { NativeWorkspaceEntry } from "../native/commands";
-import { ContextMenu, MenuButton } from "../shell/ContextMenu";
+import { Menu, MenuButton } from "../shell/Menu";
 import type { ContextMenuState, WorkspaceExplorerActions } from "./workspaceExplorerTypes";
 
 // ---- Context menu ----
@@ -10,7 +10,7 @@ import type { ContextMenuState, WorkspaceExplorerActions } from "./workspaceExpl
  *
  * Only the items live here. Where the menu sits, how it stays on screen, which
  * item takes focus and what closes it are one behaviour shared with every other
- * context menu in the app — see `shell/ContextMenu`.
+ * menu in the app — see `shell/Menu`.
  */
 export function WorkspaceContextMenu({ menu, actions }: {
   readonly menu: ContextMenuState;
@@ -27,7 +27,7 @@ export function WorkspaceContextMenu({ menu, actions }: {
   };
 
   return (
-    <ContextMenu state={menu} onClose={closeContextMenu} label="Workspace actions">
+    <Menu at={menu} onClose={closeContextMenu} label="Workspace actions">
       {target.kind === "folder" && <MenuButton label="New file" onClick={handle(() => startCreate(createParentPath, "file"))} />}
       {target.kind === "folder" && <MenuButton label="New folder" onClick={handle(() => startCreate(createParentPath, "folder"))} />}
       {target.kind === "background" && <MenuButton label="New file" onClick={handle(() => startCreate("", "file"))} />}
@@ -39,7 +39,7 @@ export function WorkspaceContextMenu({ menu, actions }: {
       {target.kind === "background" && <hr className="my-1 border-0 border-t border-border" />}
       {target.kind === "background" && <MenuButton label="Refresh" onClick={handle(() => { void refreshEntries(); closeContextMenu(); })} />}
       {target.kind === "background" && <MenuButton label="Open workspace…" onClick={handle(() => { void openWorkspace(); closeContextMenu(); })} />}
-    </ContextMenu>
+    </Menu>
   );
 }
 

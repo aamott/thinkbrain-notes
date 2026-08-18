@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
-import { Check, ChevronDown, Folder, FolderPlus, MoreHorizontal } from "lucide-react";
+import { useCallback, useId, useRef, useState } from "react";
+import { ChevronDown, Folder, FolderPlus, MoreHorizontal } from "lucide-react";
 import type { NativeWorkspaceEntry } from "../native/commands";
 import type { WorkspaceExplorerState, WorkspaceTreeNode } from "./workspaceExplorerModel";
 import { WorkspaceFileIcon } from "./WorkspaceFileIcon";
 import { cn } from "../lib/utils";
-import { handleMenuKeyDown } from "../shell/menuKeyboard";
+import { Menu, MenuButton, MenuCheckbox } from "../shell/Menu";
 import { WorkspaceTreeItem, InlineNameInput } from "./WorkspaceTree";
 import { DeleteConfirmDialog, WorkspaceContextMenu } from "./WorkspaceExplorerMenus";
 import type { ContextMenuState, CreateState, RenameState, WorkspaceExplorerActions } from "./workspaceExplorerTypes";
@@ -47,6 +47,9 @@ export function WorkspaceExplorerView({
   actions
 }: WorkspaceExplorerViewProps) {
   const isBusy = state.phase === "opening" || busy;
+  // The menu has to know its own trigger, or the press that closes it counts
+  // as an outside click first and it shuts and reopens in one gesture.
+  const moreButtonRef = useRef<HTMLButtonElement>(null);
 
   return (
     <section className={cn("flex min-h-0 flex-1 flex-col text-sidebar-foreground bg-sidebar font-sans", className)} aria-label="Workspace explorer" aria-busy={isBusy}>
@@ -57,6 +60,7 @@ export function WorkspaceExplorerView({
         </div>
         <div className="relative">
           <button
+            ref={moreButtonRef}
             type="button"
             className={cn(
               "flex flex-none items-center justify-center w-[1.6rem] h-[1.6rem] border-0 rounded-small text-muted-foreground bg-transparent cursor-pointer font-inherit focus-visible:outline-2 focus-visible:outline-ring focus-visible:-outline-offset-1 [&>svg]:stroke-current",
@@ -71,56 +75,29 @@ export function WorkspaceExplorerView({
             <MoreHorizontal aria-hidden="true" className="size-[0.95rem]" />
           </button>
           {moreMenuOpen && (
-            <>
-              {/* Click-away backdrop. */}
-              <button
-                type="button"
-                className="fixed inset-0 z-40 cursor-default"
-                aria-hidden="true"
-                tabIndex={-1}
-                onClick={() => actions.setMoreMenuOpen(false)}
+            <Menu
+              label="More actions"
+              className="absolute right-0 top-full mt-1 z-50"
+              anchorRef={moreButtonRef}
+              onClose={() => actions.setMoreMenuOpen(false)}
+            >
+              {/* Stays open, so the user can watch the tick flip and the tree
+                  update underneath it. */}
+              <MenuCheckbox
+                label="Show hidden files"
+                checked={showHidden}
+                onClick={() => void actions.toggleShowHidden()}
               />
-              <div
-                className="absolute right-0 top-full mt-1 z-50 min-w-44 border border-border rounded-small bg-popover py-1 text-popover-foreground shadow-soft"
-                role="menu"
-                aria-label="More actions"
-                onKeyDown={(event) => {
-                  if (event.key === "Escape") {
-                    event.preventDefault();
-                    actions.setMoreMenuOpen(false);
-                  }
-                }}
-              >
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="flex w-full items-center justify-between gap-2 border-0 px-3 py-[0.4rem] cursor-pointer font-inherit text-xs text-left text-foreground hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
-                  // The "show hidden" toggle keeps the menu open so the user
-                  // can see the checkmark flip and the tree update beneath it.
-                  onClick={() => void actions.toggleShowHidden()}
-                >
-                  <span>Show hidden files</span>
-                  {showHidden && <Check className="size-3.5" aria-hidden="true" />}
-                </button>
-                <hr className="my-1 border-0 border-t border-border" />
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="flex w-full items-center gap-2 border-0 px-3 py-[0.4rem] cursor-pointer font-inherit text-xs text-left text-foreground hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
-                  onClick={() => { actions.setMoreMenuOpen(false); actions.startCreate("", "folder"); }}
-                >
-                  <span>New folder</span>
-                </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="flex w-full items-center gap-2 border-0 px-3 py-[0.4rem] cursor-pointer font-inherit text-xs text-left text-foreground hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
-                  onClick={() => { actions.setMoreMenuOpen(false); actions.startCreate("", "file"); }}
-                >
-                  <span>New file</span>
-                </button>
-              </div>
-            </>
+              <hr className="my-1 border-0 border-t border-border" />
+              <MenuButton
+                label="New folder"
+                onClick={() => { actions.setMoreMenuOpen(false); actions.startCreate("", "folder"); }}
+              />
+              <MenuButton
+                label="New file"
+                onClick={() => { actions.setMoreMenuOpen(false); actions.startCreate("", "file"); }}
+              />
+            </Menu>
           )}
         </div>
       </header>
@@ -230,9 +207,7 @@ function ErrorState({ message, onDismiss }: { readonly message: string; readonly
 
 export function WorkspaceSelector({ currentPath, paths, onSelect, onAdd }: { readonly currentPath?: string; readonly paths: readonly string[]; readonly onSelect: (path: string) => void; readonly onAdd: () => void }) {
   const [open, setOpen] = useState(false);
-  const selectorRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
   const options = [...new Set(currentPath ? [currentPath, ...paths] : paths)];
   const closeMenu = useCallback((restoreFocus = false) => {
@@ -240,36 +215,8 @@ export function WorkspaceSelector({ currentPath, paths, onSelect, onAdd }: { rea
     if (restoreFocus) triggerRef.current?.focus();
   }, []);
 
-  useEffect(() => {
-    if (!open) return;
-    const items = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>("button[role='menuitem']") ?? []);
-    const currentItem = items.find((item) => item.getAttribute("aria-current") === "true");
-    (currentItem ?? items[0])?.focus();
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    const closeOnOutsidePointer = (event: PointerEvent) => {
-      if (!selectorRef.current?.contains(event.target as Node)) closeMenu();
-    };
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") closeMenu(true);
-    };
-    window.addEventListener("pointerdown", closeOnOutsidePointer);
-    window.addEventListener("keydown", closeOnEscape);
-    return () => {
-      window.removeEventListener("pointerdown", closeOnOutsidePointer);
-      window.removeEventListener("keydown", closeOnEscape);
-    };
-  }, [closeMenu, open]);
-
-  const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
-    // Restore focus to the trigger when Escape closes the selector menu.
-    handleMenuKeyDown(event, menuRef, () => closeMenu(true));
-  };
-
   return (
-    <div ref={selectorRef} className="relative mt-auto border-t border-border">
+    <div className="relative mt-auto border-t border-border">
       <button
         ref={triggerRef}
         className="flex w-full min-w-0 items-center gap-[0.45rem] border-0 text-sidebar-foreground cursor-pointer font-inherit text-xs text-left px-3 py-[0.65rem] [&>svg]:w-[0.9rem] [&>svg]:h-[0.9rem] [&>svg]:stroke-current [&>svg:last-child]:ml-auto"
@@ -284,34 +231,31 @@ export function WorkspaceSelector({ currentPath, paths, onSelect, onAdd }: { rea
         <ChevronDown aria-hidden="true" />
       </button>
       {open && (
-        <div ref={menuRef} id={menuId} className="absolute z-20 right-2 bottom-[calc(100%+0.35rem)] left-2 overflow-hidden border border-border rounded-small bg-popover shadow-soft p-1" role="menu" aria-label="Workspaces" onKeyDown={handleKeyDown}>
+        <Menu
+          id={menuId}
+          label="Workspaces"
+          className="absolute right-2 bottom-[calc(100%+0.35rem)] left-2 z-20"
+          anchorRef={triggerRef}
+          // Leaving by Escape puts focus back on the trigger; clicking
+          // somewhere else has already decided where focus belongs.
+          onClose={(reason) => closeMenu(reason === "escape")}
+        >
           {options.map((path) => (
-            <button
+            <MenuButton
               key={path}
-              type="button"
-              className="flex w-full min-w-0 items-center gap-[0.45rem] border-0 text-sidebar-foreground cursor-pointer font-inherit text-xs text-left px-2 py-[0.45rem] rounded-small hover:bg-accent focus-visible:bg-accent focus-visible:outline-none [&>svg]:w-[0.9rem] [&>svg]:h-[0.9rem] [&>svg]:stroke-current"
-              role="menuitem"
-              aria-current={path === currentPath ? "true" : undefined}
+              icon={<Folder />}
+              label={path.split(/[\\/]/).at(-1) ?? path}
               title={path}
-              onClick={() => {
-                closeMenu(true);
-                onSelect(path);
-              }}
-            >
-              <Folder aria-hidden="true" />
-              <span className="truncate">{path.split(/[\\/]/).at(-1)}</span>
-            </button>
+              current={path === currentPath}
+              onClick={() => { closeMenu(true); onSelect(path); }}
+            />
           ))}
-          <button
-            type="button"
-            className="flex w-full min-w-0 items-center gap-[0.45rem] border-0 text-sidebar-foreground cursor-pointer font-inherit text-xs text-left px-2 py-[0.45rem] rounded-small hover:bg-accent focus-visible:bg-accent focus-visible:outline-none [&>svg]:w-[0.9rem] [&>svg]:h-[0.9rem] [&>svg]:stroke-current"
-            role="menuitem"
+          <MenuButton
+            icon={<FolderPlus />}
+            label="Add workspace"
             onClick={() => { closeMenu(true); onAdd(); }}
-          >
-            <FolderPlus aria-hidden="true" />
-            <span>Add workspace</span>
-          </button>
-        </div>
+          />
+        </Menu>
       )}
     </div>
   );

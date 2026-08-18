@@ -420,21 +420,14 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
     setContextMenu(null);
   }, []);
 
-  // Close the context menu on any outside interaction or Escape.
+  // Only the resize. Clicking elsewhere and pressing Escape are the menu's own
+  // business now — see `shell/Menu` — but a menu pinned to where the pointer
+  // was has nothing to stay pinned to once the window changes shape.
   useEffect(() => {
     if (!contextMenu) return;
-    const onClose = () => setContextMenu(null);
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setContextMenu(null);
-    };
-    window.addEventListener("click", onClose);
-    window.addEventListener("resize", onClose);
-    window.addEventListener("keydown", onKey);
-    return () => {
-      window.removeEventListener("click", onClose);
-      window.removeEventListener("resize", onClose);
-      window.removeEventListener("keydown", onKey);
-    };
+    const onResize = () => setContextMenu(null);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
   }, [contextMenu]);
 
   const startCreate = useCallback((parentPath: string, kind: "file" | "folder") => {

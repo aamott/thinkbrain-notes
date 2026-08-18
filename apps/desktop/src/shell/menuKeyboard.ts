@@ -7,8 +7,8 @@ import type { KeyboardEvent as ReactKeyboardEvent, RefObject } from "react";
  * so callers plug in their own close semantics — e.g. restoring focus to a
  * trigger button).
  *
- * Extracted here so `shell/ContextMenu.tsx` and `workspace/WorkspaceExplorer.tsx`
- * share one implementation instead of duplicating it.
+ * Kept apart from `shell/Menu.tsx` because it is the one piece of menu
+ * behaviour a caller might want without the surface around it.
  */
 export function handleMenuKeyDown(
   event: ReactKeyboardEvent,
