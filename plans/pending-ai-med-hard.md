@@ -86,7 +86,7 @@ individually during implementation.
 - **Styling**: Tailwind utilities + `--tn-*` tokens across all AI surfaces.
   shadcn primitives are Tailwind-based; this is non-negotiable for the chat UI.
   (Supersedes any prior CSS Modules guidance for AI.)
-- **ACP reference implementation**: during dev, clone
+- **ACP reference implementation**: during dev and planning, clone
   https://github.com/agentclientprotocol/rust-sdk as a reference — it has
   examples of host/client patterns. Delete the clone when done; do not vendor
   it or add it as a dependency.

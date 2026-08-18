@@ -59,3 +59,12 @@ This was chosen over alternatives after evaluating:
 
 - `workspace-explorer/pending-non_markdown_file_ops-med-med.md` owns the
   explorer click/routing changes that feed files into these viewers.
+
+## Sequencing
+
+The `code-editor` tab kind is the high-value piece and can ship independently
+of the media viewers. Text/code editing only requires: the `code-editor` kind
+in `BuiltInTabKind`, the `inferTabKind` helper, the `CodeEditor` component, and
+`TabContent` routing. The media viewers (`image-viewer`, `audio-viewer`,
+`video-viewer`) are separable and can be deferred without blocking
+text/code editing.

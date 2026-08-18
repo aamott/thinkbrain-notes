@@ -41,33 +41,55 @@ are offered.
 - `apps/desktop/src/native/commands.ts` — may need a `read_workspace_file`
   command for reading non-Markdown text files (the existing
   `read_markdown_file` validates `.md` extension).
-- `apps/desktop/src-tauri/src/lib.rs` — add a generic `read_workspace_file`
-  Rust command alongside the existing Markdown-specific one.
+- `apps/desktop/src-tauri/src/commands/markdown.rs` — add a generic
+  `read_workspace_file` / `write_workspace_file` alongside the existing
+  Markdown-specific commands. The gate is `resolve_markdown_file_path` →
+  `is_markdown_path`; the generic commands skip that check and reuse
+  `resolve_workspace_entry_path` for containment. Create/rename/delete in
+  `workspace.rs` already accept any extension.
 
 ## Dependencies
 
 - `ui-shell/pending-generic_file_viewers-med-med.md` must ship the viewer
-  components before files can be opened in-app.
+  components before files can be opened in-app. Only the `code-editor` piece is
+  required for text/code editing; the media viewers (`image-viewer`,
+  `audio-viewer`, `video-viewer`) are separable and can be deferred.
 
-## What the file watcher will need (added 2026-08-12)
+## What the file watcher already does (verified 2026-08-17)
 
-The watcher and the note events are Markdown-only, so as soon as other file
-types become editable they will go stale in exactly the way this epic's watcher
-story just fixed for notes:
+The watcher needs no widening. It already watches the entire vault via the OS's
+native event system (`notify` — `inotify` on Linux, `FSEvents` on macOS,
+`ReadDirectoryChangesW` on Windows), recursively, in
+`commands/watcher/lifecycle.rs`. It is not polling, and it is not markdown-only
+on the watching side — the OS hands it events for every file in the vault
+regardless of extension.
 
-- `is_watchable_path` in `commands/watcher.rs` is
-  `is_markdown_path(path) && is_in_watched_area(root, path)`. Widening it is one
-  line, but the decision behind it is not: watching every non-hidden file in a
-  vault means watching whatever a user has dropped in it. `IGNORED_FOLDERS`
-  covers some of that; a vault holding a checked-out repo would want more.
-- The event vocabulary is `note.*`, and extensions consume it as a public
-  contract. A `.ts` file is not a note. Either widen what `note.*` means or add
-  a parallel `file.*` set — worth deciding before more consumers are built on
-  it, not after.
+Classification is already split into two audiences in
+`commands/watcher/classify.rs`:
 
-The rest of the sync work carries over unchanged: `subscribeToNoteChanges`,
-`planDocumentSync`, `applyReloadedDocument`, `moveDocumentView` and the tab
-`retarget` action are all indifferent to extension. Only
-`reloadDocumentInPlace`'s read is Markdown-gated, through
+- `Audience::Notes` — filters to `is_markdown_path`; feeds the `note.*` event
+  channel and the search index.
+- `Audience::Everything` — accepts any non-ignored, non-junk file; already
+  consumed by Auto Sync via the `Changes.all` list.
+
+`IGNORED_FOLDERS` (`node_modules`, `target`, `dist`, `vendor`) and dotfiles are
+already excluded by `is_ignored_entry_name` inside `is_in_watched_area`, so a
+vault holding a checked-out repo is already handled. No new ignore policy is
+needed.
+
+## The one watcher-adjacent decision: event vocabulary
+
+The `note.*` event channel is a public contract extensions consume, and a `.ts`
+file is not a note. Rather than widen `note.*` semantics, emit a parallel
+`file.*` channel for non-Markdown text files. The `Changes.all` list already
+exists in `collect_changes`; it just needs its own event alongside `note.*`,
+keeping the existing channel's semantics intact for current consumers. This is
+~30 lines of Rust plus a frontend listener.
+
+## What carries over unchanged
+
+`subscribeToNoteChanges`, `planDocumentSync`, `applyReloadedDocument`,
+`moveDocumentView` and the tab `retarget` action are all indifferent to
+extension. Only `reloadDocumentInPlace`'s read is Markdown-gated, through
 `read_markdown_file` — which this story already plans to replace with
 `read_workspace_file`.
