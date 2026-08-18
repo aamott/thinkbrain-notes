@@ -22,7 +22,7 @@ use super::history;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum State {
-    /// Auto Sync is not keeping history for this workspace.
+    /// Auto Sync is deliberately not keeping history for this workspace.
     Off,
     /// Recording has stopped, and it will not start again on its own.
     Problem,
@@ -49,16 +49,42 @@ pub struct SyncStatus {
     pub problem: Option<NativeError>,
 }
 
+/// What is keeping history for a workspace, or why nothing is.
+///
+/// Three cases rather than two, because "nothing is recording this" used to
+/// cover both a vault we deliberately left alone and one we failed to set up —
+/// and the footer said the reassuring one for both.
+pub enum Recording<'a> {
+    /// This engine is.
+    By(&'a Engine),
+    /// Nothing is, and nothing tried: the vault keeps its own history.
+    NotOurs,
+    /// Nothing is, because setting it up failed.
+    Failed(NativeError),
+}
+
 /// Everything the footer needs about one workspace.
-pub fn of(engine: Option<&Engine>) -> Result<SyncStatus, NativeError> {
-    let Some(engine) = engine else {
-        return Ok(SyncStatus {
-            state: State::Off,
-            last_recorded_at: None,
-            waiting: 0,
-            attention: 0,
-            problem: None,
-        });
+pub fn of(recording: Recording<'_>) -> Result<SyncStatus, NativeError> {
+    let engine = match recording {
+        Recording::By(engine) => engine,
+        Recording::NotOurs => {
+            return Ok(SyncStatus {
+                state: State::Off,
+                last_recorded_at: None,
+                waiting: 0,
+                attention: 0,
+                problem: None,
+            });
+        }
+        Recording::Failed(problem) => {
+            return Ok(SyncStatus {
+                state: State::Problem,
+                last_recorded_at: None,
+                waiting: 0,
+                attention: 0,
+                problem: Some(problem),
+            });
+        }
     };
 
     let problem = engine.problem();
@@ -85,7 +111,13 @@ pub fn of(engine: Option<&Engine>) -> Result<SyncStatus, NativeError> {
 #[tauri::command]
 pub fn sync_status(root_path: String) -> Result<SyncStatus, NativeError> {
     let root = resolve_workspace_root(&root_path)?;
-    of(super::registry::engine(&root.to_string_lossy()).as_deref())
+    let key = root.to_string_lossy();
+    let engine = super::registry::engine(&key);
+    of(match (&engine, super::registry::failure(&key)) {
+        (Some(engine), _) => Recording::By(engine),
+        (None, Some(problem)) => Recording::Failed(problem),
+        (None, None) => Recording::NotOurs,
+    })
 }
 
 #[cfg(test)]

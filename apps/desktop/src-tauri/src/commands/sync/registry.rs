@@ -38,6 +38,11 @@ struct Registry {
     /// would wait behind it. But two windows opening the *same* vault at once
     /// must not both create its repository, so they queue here instead.
     lanes: HashMap<String, Arc<Mutex<()>>>,
+    /// Why a workspace has no engine, when the reason was a failure.
+    ///
+    /// Without this a vault that could not be set up is indistinguishable from
+    /// one we deliberately left alone, and the footer says the reassuring one.
+    failures: HashMap<String, NativeError>,
     /// Whether the sweeper thread is running. It outlives individual engines
     /// and simply idles when the map is empty.
     sweeping: bool,
@@ -54,6 +59,7 @@ impl Registry {
         if !self.engines.contains_key(key) {
             return false;
         }
+        self.failures.remove(key);
         self.interest.acquire(key, label);
         true
     }
@@ -64,6 +70,7 @@ impl Registry {
     /// engine. Keeping the first means keeping the one that may already have
     /// changes noted against it; the second is dropped having recorded nothing.
     fn adopt(&mut self, key: &str, label: &str, engine: Arc<Engine>) {
+        self.failures.remove(key);
         self.engines.entry(key.to_string()).or_insert(engine);
         self.interest.acquire(key, label);
     }
@@ -128,7 +135,18 @@ pub fn attach(
             return Ok(true);
         }
     }
-    let managed = bootstrap(app_data_dir, root)?;
+    // A failure here is the one thing nobody could see: it was logged and the
+    // window went on saying this folder keeps its own history, which is what a
+    // deliberate choice looks like rather than a broken one.
+    let managed = match bootstrap(app_data_dir, root) {
+        Ok(managed) => managed,
+        Err(error) => {
+            let mut guard = registry();
+            let state = guard.get_or_insert_with(Registry::default);
+            state.failures.insert(key.to_string(), error.clone());
+            return Err(error);
+        }
+    };
 
     let mut guard = registry();
     let state = guard.get_or_insert_with(Registry::default);
@@ -136,7 +154,10 @@ pub fn attach(
         // Interest is deliberately not taken: there is no engine to keep alive,
         // and holding it would leave the registry claiming to look after a vault
         // it has promised not to touch.
-        Managed::HasOwnGit => return Ok(false),
+        Managed::HasOwnGit => {
+            state.failures.remove(key);
+            return Ok(false);
+        }
         Managed::Yes(workspace) => {
             let engine = Arc::new(Engine::new(workspace.repo));
             // Conflicts appear while the app is closed. Someone back from a
@@ -199,6 +220,12 @@ fn flush(key: &str, engine: &Engine) {
 pub fn engine(key: &str) -> Option<Arc<Engine>> {
     let guard = registry();
     guard.as_ref()?.engines.get(key).map(Arc::clone)
+}
+
+/// Why `key` has no engine, when the reason was a failure rather than a choice.
+pub fn failure(key: &str) -> Option<NativeError> {
+    let guard = registry();
+    guard.as_ref()?.failures.get(key).cloned()
 }
 
 /// Feeds watcher changes to the engine for `key`, if there is one.

@@ -43,7 +43,7 @@ fn a_quiet_workspace_says_when_it_last_saved() {
     v.engine.note_changes([PathBuf::from("one.md")], Instant::now());
     v.engine.flush().expect("the change is recorded");
 
-    let status = of(Some(&v.engine)).expect("the status is readable");
+    let status = of(Recording::By(&v.engine)).expect("the status is readable");
 
     assert_eq!(status.state, State::Idle);
     assert_eq!(status.waiting, 0);
@@ -55,7 +55,7 @@ fn a_quiet_workspace_says_when_it_last_saved() {
 fn a_workspace_that_has_never_been_recorded_is_still_idle() {
     let v = vault("status-fresh");
 
-    let status = of(Some(&v.engine)).expect("the status is readable");
+    let status = of(Recording::By(&v.engine)).expect("the status is readable");
 
     assert_eq!(status.state, State::Idle);
     assert_eq!(status.last_recorded_at, None);
@@ -67,7 +67,7 @@ fn a_change_that_has_not_settled_yet_shows_as_saving() {
     note(&v, "one.md", "still typing\n");
     v.engine.note_changes([PathBuf::from("one.md")], Instant::now());
 
-    let status = of(Some(&v.engine)).expect("the status is readable");
+    let status = of(Recording::By(&v.engine)).expect("the status is readable");
 
     assert_eq!(status.state, State::Saving);
     assert_eq!(status.waiting, 1);
@@ -82,7 +82,7 @@ fn a_conflict_outranks_a_change_still_being_saved() {
     v.engine.note_changes([PathBuf::from("one.md")], Instant::now());
     v.engine.note_conflicts([conflict("one.sync-conflict-1.md", "one.md")]);
 
-    let status = of(Some(&v.engine)).expect("the status is readable");
+    let status = of(Recording::By(&v.engine)).expect("the status is readable");
 
     assert_eq!(status.state, State::Attention);
     assert_eq!(status.attention, 1);
@@ -107,7 +107,7 @@ fn a_failure_to_record_outranks_everything_else() {
         .note_changes([PathBuf::from("one.md/inner.md")], Instant::now());
     v.engine.flush().expect_err("recording through a file fails");
 
-    let status = of(Some(&v.engine)).expect("the status is readable");
+    let status = of(Recording::By(&v.engine)).expect("the status is readable");
 
     assert_eq!(status.state, State::Problem);
     assert_eq!(
@@ -130,7 +130,7 @@ fn recording_again_clears_a_problem() {
     v.engine.note_changes([PathBuf::from("two.md")], Instant::now());
     v.engine.flush().expect("the next change records");
 
-    let status = of(Some(&v.engine)).expect("the status is readable");
+    let status = of(Recording::By(&v.engine)).expect("the status is readable");
 
     assert_eq!(status.state, State::Idle);
     assert!(status.problem.is_none());
@@ -140,9 +140,29 @@ fn recording_again_clears_a_problem() {
 /// better than a pill that quietly claims everything is saved.
 #[test]
 fn a_workspace_nobody_is_recording_says_so() {
-    let status = of(None).expect("the status is readable");
+    let status = of(Recording::NotOurs).expect("the status is readable");
 
     assert_eq!(status.state, State::Off);
     assert_eq!((status.waiting, status.attention), (0, 0));
     assert!(status.problem.is_none());
+}
+
+/// A vault that could not be set up used to be reported as one we chose not to
+/// record, which reads as a decision rather than a fault — and left the user
+/// with a panel that said nothing needed their attention and no way to learn
+/// why. Setting up is the one failure that happens before there is an engine
+/// to hold it, so the registry holds it instead.
+#[test]
+fn a_workspace_that_could_not_be_set_up_is_a_problem_and_not_a_choice() {
+    let status = of(Recording::Failed(NativeError::new(
+        "sync.vault_too_deep",
+        "This workspace's folders are nested deeper than Auto Sync can safely walk.",
+    )))
+    .expect("the status is readable");
+
+    assert_eq!(status.state, State::Problem);
+    assert_eq!(
+        status.problem.as_ref().map(|problem| problem.code.as_str()),
+        Some("sync.vault_too_deep")
+    );
 }

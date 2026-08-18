@@ -288,3 +288,43 @@ fn a_rescan_names_no_paths_whatever_it_carries() {
     assert!(changed_paths(&[change(WorkspaceChangeKind::Rescan, "")]).is_empty());
     assert!(changed_paths(&[change(WorkspaceChangeKind::Rescan, "one.md")]).is_empty());
 }
+
+/// The shapes `scripts/plant-conflict.sh` writes, walked the way opening a
+/// workspace walks them.
+///
+/// The script is how this feature is tried by hand, and a script that planted
+/// names the matcher does not recognise would look exactly like the feature
+/// being broken. This is what stops the two from drifting apart.
+#[test]
+fn the_conflicts_our_own_test_script_plants_are_the_ones_we_detect() {
+    let app_data = make_temp_test_dir("planted-appdata", "sync", true);
+    let vault = make_temp_test_dir("planted-vault", "sync", true);
+
+    let plant = |name: &str, contents: &str| {
+        std::fs::write(vault.join(name), contents).expect("the file is written");
+    };
+    // Stem, marker, date-time-device, extension — including a stem with a
+    // space in it and an extension that is neither `.md` nor an image.
+    plant("Meeting Notes.md", "# Q3 sync\n");
+    plant("Meeting Notes.sync-conflict-20260817-215005-K3SDFHG.md", "# Q3 sync\nelse\n");
+    plant("diagram.png", "\u{0}binary");
+    plant("diagram.sync-conflict-20260817-215005-K3SDFHG.png", "\u{0}other");
+    plant("Roadmap.canvas", "{\"nodes\":[]}\n");
+    plant("Roadmap.sync-conflict-20260817-215005-K3SDFHG.canvas", "{\"nodes\":[1]}\n");
+
+    let key = vault.to_string_lossy().to_string();
+    assert!(attach(&app_data, &vault, &key, "planted-window").expect("attaching succeeds"));
+    let engine = engine(&key).expect("the vault is being recorded");
+    let held = engine.conflicts();
+
+    // Every card the panel would draw, built the way the panel builds it.
+    let unbuildable: Vec<&str> = held
+        .iter()
+        .filter(|copy| crate::commands::sync::resolve::summarise(&vault, &copy.copy).is_err())
+        .map(|copy| copy.copy.as_str())
+        .collect();
+
+    detach(&key, "planted-window");
+    assert_eq!(held.len(), 3, "the startup scan should pair all three copies");
+    assert!(unbuildable.is_empty(), "these copies could not be shown: {unbuildable:?}");
+}

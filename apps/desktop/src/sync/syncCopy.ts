@@ -61,7 +61,16 @@ export function describeWhatChanged(notes: readonly ChangedNote[]): string {
 export function recoveryFor(code: string): string {
   switch (code) {
     case "sync.note_read_failed":
+    case "sync.vault_read_failed":
       return "Check the notes folder is still connected, then edit any note to try again.";
+    case "sync.vault_too_deep":
+      return "Some folders here are nested too deeply to keep track of. Move them nearer the top of the folder and open it again.";
+    case "sync.vault_too_many_entries":
+      return "There are too many files here to keep track of. Open a smaller folder, or split this one up.";
+    case "sync.repo_create_failed":
+    case "sync.repo_open_failed":
+    case "sync.exclude_write_failed":
+      return "Check this computer has space left, then close this folder and open it again.";
     case "sync.note_store_failed":
     case "sync.tree_write_failed":
     case "sync.commit_failed":
@@ -83,10 +92,13 @@ export function describePill(status: SyncStatus, now: Date = new Date()): PillCo
         tone: "quiet"
       };
     case "problem": {
-      const message = status.problem?.message ?? "Saving versions has stopped.";
+      const message = status.problem?.message ?? "Versions of your notes are not being saved.";
       return {
         symbol: "⚠",
-        text: "Saving stopped",
+        // Not "stopped": this is also what a folder that could never be set up
+        // says, and telling someone saving stopped when it never started sends
+        // them looking for the moment it broke.
+        text: "Not saving versions",
         detail: `${message} ${recoveryFor(status.problem?.code ?? "")}`,
         tone: "warn"
       };
