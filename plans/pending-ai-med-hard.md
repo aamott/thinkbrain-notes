@@ -67,6 +67,47 @@ None are approved during planning — only the overall method per harness is
 approved. The planner describes the method; the dev approves workarounds
 individually during implementation.
 
+### Composer bar layout (locked)
+
+Left to right, one line:
+
+1. **Attach file** (uses `attachment` shadcn primitive)
+2. **MCP settings** — gear icon with popout
+3. **Profile selector**
+4. **Model selector**
+5. **Context ring** — gray background ring + white top ring that fills up to
+   show context usage. Hover/press shows a popout with:
+   - `50% (100k / 200k) context used`
+   - Total cost
+   - Estimated time to prompt cache expires (if ACP implements it), or `eta to
+     cache expiry` if a fallback is set in settings
+6. **Harness selector**
+7. **Voice record** — low priority, followup story
+8. **Send / cancel**
+
+#### Responsive collapse (planner must be specific, not verbose)
+
+As the panel narrows, collapse in this order:
+1. Harness name → icon only (keep selector)
+2. Profile → collapses
+3. Model → truncates with `...` (browser-native ellipsis)
+
+Planner specifies exact breakpoints or container-query thresholds.
+
+#### MCP settings popout (locked)
+
+May expand later to other session settings; MCP only for now. MCPs listed top
+to bottom, each row: status bubble, MCP name, switch. Header:
+
+```
+x mcp       [mcp settings] [open mcp config file]
+```
+
+- `mcp settings` icon → settings page
+- `open mcp config file` icon → opens the MCP config file in the editor. Note:
+  this file likely lives outside the workspace in global config; the editor must
+  handle non-workspace paths.
+
 ## Concrete invariants (locked)
 
 - **ACP protocol**: use the official `agent-client-protocol` Rust crate. The
