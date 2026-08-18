@@ -57,6 +57,7 @@ Each is a surface Opus 5 must decompose. Concise callouts only — not specs.
 - **Tool call tracking & approvals**: render tool calls in-thread; approvals
   flow through ACP permission-consent UI (arc step 10). Planner defines the
   in-thread affordances.
+- **Slash commands**: support for `available_commands_update` in ACP.
 
 ### Harness module pattern (locked method)
 
@@ -110,7 +111,7 @@ x mcp       [mcp settings] [open mcp config file]
 
 ## Concrete invariants (locked)
 
-- **ACP protocol**: use the official `agent-client-protocol` Rust crate. The
+- **ACP protocol**: use the official `agent-client-protocol` Rust crate (v2.0.0 or greater). The
   host is deterministic — it transports, validates, enforces, returns
   conflicts; it never reasons, plans, edits, or merges for an agent.
 - **Chat UI primitives**: install shadcn conversational primitives via
@@ -169,7 +170,7 @@ No UI mockup or implementation of these surfaces until answers are recorded.
   runtime behavior.
 - ⬜ `panelRegistry.tsx` has an `assistant` panel contribution (left-side
   framing — will need to move to right action items menu per invariants).
-- ⬜ Rust has `agent-client-protocol = "1.2"` in `Cargo.toml`/lock but no ACP
+- ⬜ Rust has `agent-client-protocol` (v2.0.0 or greater) in `Cargo.toml`/lock but no ACP
   module, commands, events, or lifecycle.
 - ⬜ No `packages/core/src/ai/`, provider gateway, secret consumer, history
   adapter, or consent records exist.
