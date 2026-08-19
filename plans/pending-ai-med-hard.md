@@ -109,6 +109,46 @@ x mcp       [mcp settings] [open mcp config file]
   this file likely lives outside the workspace in global config; the editor must
   handle non-workspace paths.
 
+### Chat message types & layout
+
+Three kinds of messages in the thread:
+
+1. **User messages** — rendered in a chat bubble.
+2. **Agent responses** — not in a bubble. Markdown-formatted. Contain a mix of
+   content types (see below).
+3. **Other notes** — host-injected contextual notices like "Your recent
+   terminal commands:", "Your recently changed files:", etc. These come from
+   the host, not the agent. Planner defines the full set.
+Line after agent chat shows options to copy, fork chat, show stats from that message.Symbols on bottom right of overall response.
+
+#### Expandable tabs menu (above the input composer)
+
+Conditionally shown on top of input composer (where the user types). Tabs along the bottom of the menu area:
+
+- **Files changed** — aggregate list of `filename +x -y` (icon + lines
+  added/removed) across all file writes in the session/turn. If 10 edits are
+  made across 5 files, the tab lists those 5 files with cumulative totals.
+  Buttons: **reject all** and **accept all**. Zeros on accept/reject.
+  - **Reject all**
+  - **Accept all**
+- **Subagents** — list of active subagents; clicking one scrolls to that subagent's
+  position in the chat.
+- Other tabs may be added later.
+
+Rules:
+- All tabs minimized by default.
+- A tab doesn't show unless it has content.
+- If no tabs have content, the tabs area doesn't render at all (saves chat
+  space).
+
+#### Agent response content types (designed by dev, planner asks)
+
+Agent responses are markdown formatted text and don't look like they're in a bubble. They contain tool calls, subagents, thinking, and anything else ACP can allow. 
+- **Tool call** — shows all info available via ACP, with a permission prompt.
+  Primary button is blue with a dropdown attached on the right to select the
+  action: `allow`, `always allow <command>`, etc. Ex: `Accept <`
+  - **File write** — Shows lines added/removed count + top 4 changed lines.
+
 ## Concrete invariants (locked)
 
 - **ACP protocol**: use the official `agent-client-protocol` Rust crate (v2.0.0 or greater). The
@@ -118,11 +158,7 @@ x mcp       [mcp settings] [open mcp config file]
   `pnpm dlx shadcn@latest add message-scroller message bubble attachment marker`
   (see https://ui.shadcn.com/docs/components/message).
   These are the building blocks for the chat surface.
-- **Extension model**: true extension, not a built-in. Installable/removable,
-  registered through the extension host's canonical APIs. The extension owns
-  the assistant panel contribution, chat behavior, and a scoped credential
-  consumer capability — not OS secret storage, ACP process lifecycle, or
-  provider transport.
+- **Extension model**: Eventually a true extension, not a built-in. Installable/removable, registered through the extension host's canonical APIs. 
 - **Placement**: right action items menu, icon present, pops out from the right
   by default. Not in the left action bar.
 - **Styling**: Tailwind utilities + `--tn-*` tokens across all AI surfaces.
