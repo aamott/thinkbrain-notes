@@ -22,9 +22,11 @@
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
+use crate::error::lock_or_recover;
 use crate::NativeError;
 
 use super::conflict::ConflictCopy;
+use super::failed;
 use super::engine::Engine;
 use super::history;
 use super::snapshot::Reason;
@@ -47,7 +49,7 @@ static SETTINGS_HOME: Mutex<Option<PathBuf>> = Mutex::new(None);
 
 /// Remembers where to look for the setting, for the paths that have no window.
 pub fn remember_settings_home(app_data_dir: &Path) {
-    let mut home = SETTINGS_HOME.lock().unwrap_or_else(|error| error.into_inner());
+    let mut home = lock_or_recover(&SETTINGS_HOME);
     home.get_or_insert_with(|| app_data_dir.to_path_buf());
 }
 
@@ -58,7 +60,7 @@ pub fn remember_settings_home(app_data_dir: &Path) {
 /// moment at which a stale answer would be most annoying.
 fn enabled() -> bool {
     let home = {
-        let home = SETTINGS_HOME.lock().unwrap_or_else(|error| error.into_inner());
+        let home = lock_or_recover(&SETTINGS_HOME);
         home.clone()
     };
     enabled_in(home.as_deref())
@@ -149,21 +151,12 @@ fn settle(
 /// The id git would store these bytes under, which is also the only question
 /// worth asking about whether two files are the same file.
 fn blob_of(bytes: &[u8]) -> Result<gix::ObjectId, NativeError> {
-    gix::objs::compute_hash(gix::hash::Kind::Sha1, gix::object::Kind::Blob, bytes).map_err(|error| {
-        NativeError::with_details(
-            "sync.version_read_failed",
-            "Could not compare the two versions.",
-            error.to_string(),
-        )
-    })
+    gix::objs::compute_hash(gix::hash::Kind::Sha1, gix::object::Kind::Blob, bytes)
+        .map_err(|error| failed("sync.version_read_failed", "Could not compare the two versions.", error))
 }
 
 fn read_failed(error: std::io::Error) -> NativeError {
-    NativeError::with_details(
-        "sync.version_read_failed",
-        "Could not read one of the two versions.",
-        error.to_string(),
-    )
+    failed("sync.version_read_failed", "Could not read one of the two versions.", error)
 }
 
 #[cfg(test)]

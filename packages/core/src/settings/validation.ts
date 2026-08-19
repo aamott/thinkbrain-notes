@@ -117,6 +117,14 @@ function checkType(
   }
 }
 
+/** Builds a range-violation diagnostic for a setting definition. */
+const rangeError = (def: SettingDefinition, message: string): SettingsDiagnostic => ({
+  code: "settings.range.invalid",
+  message,
+  severity: "error",
+  path: def.key
+});
+
 /** Verifies a number value respects `min`/`max` bounds (inclusive). */
 function checkRange(
   def: SettingDefinition,
@@ -129,29 +137,14 @@ function checkRange(
   // min` is also true, and either way the value is not a usable setting).
   // Reject non-finite numbers explicitly; NaN is already caught by checkType.
   if (!Number.isFinite(value)) {
-    return {
-      code: "settings.range.invalid",
-      message: `Value ${value} is not a finite number.`,
-      severity: "error",
-      path: def.key
-    };
+    return rangeError(def, `Value ${value} is not a finite number.`);
   }
 
   if (def.min !== undefined && value < def.min) {
-    return {
-      code: "settings.range.invalid",
-      message: `Value ${value} is below the minimum of ${def.min}.`,
-      severity: "error",
-      path: def.key
-    };
+    return rangeError(def, `Value ${value} is below the minimum of ${def.min}.`);
   }
   if (def.max !== undefined && value > def.max) {
-    return {
-      code: "settings.range.invalid",
-      message: `Value ${value} is above the maximum of ${def.max}.`,
-      severity: "error",
-      path: def.key
-    };
+    return rangeError(def, `Value ${value} is above the maximum of ${def.max}.`);
   }
   return undefined;
 }

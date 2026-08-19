@@ -376,11 +376,7 @@ fn put(path: &Path, bytes: &[u8]) -> Result<(), NativeError> {
 
 fn discard(path: &Path) -> Result<(), NativeError> {
     std::fs::remove_file(path).map_err(|error| {
-        NativeError::with_details(
-            "sync.conflict_cleanup_failed",
-            "The note was resolved, but the extra copy could not be removed.",
-            error,
-        )
+        failed("sync.conflict_cleanup_failed", "The note was resolved, but the extra copy could not be removed.", error)
     })
 }
 
@@ -404,11 +400,7 @@ fn keep_both(root: &Path, pairing: &ConflictCopy) -> Result<String, NativeError>
             continue;
         }
         std::fs::rename(root.join(&pairing.copy), &target).map_err(|error| {
-            NativeError::with_details(
-                "sync.conflict_cleanup_failed",
-                "Both versions were kept, but the copy could not be renamed.",
-                error,
-            )
+            failed("sync.conflict_cleanup_failed", "Both versions were kept, but the copy could not be renamed.", error)
         })?;
         return Ok(candidate);
     }

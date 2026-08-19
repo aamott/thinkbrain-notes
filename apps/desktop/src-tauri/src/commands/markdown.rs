@@ -7,6 +7,12 @@ use std::fs;
 
 const MAX_MARKDOWN_DEPTH: usize = 20;
 
+/// Builds a `NativeError::with_details` from a static code/message and a
+/// displayable error, matching the shared pattern used across command modules.
+fn failed(code: &'static str, message: &'static str, error: impl std::fmt::Display) -> NativeError {
+    NativeError::with_details(code, message, error.to_string())
+}
+
 use crate::commands::workspace::{
     acquire_workspace_mutation_lock, ensure_parent_dir, entry_metadata, is_ignored_entry_name,
     normalize_relative_path, remove_search_index_entry, resolve_workspace_entry_path,
@@ -42,13 +48,8 @@ pub fn read_markdown_file(
 ) -> Result<MarkdownFileContents, NativeError> {
     let root = resolve_workspace_root(&root_path)?;
     let file_path = resolve_markdown_file_path(&root, &relative_path)?;
-    let contents = fs::read_to_string(&file_path).map_err(|error| {
-        NativeError::with_details(
-            "workspace.read_failed",
-            "Failed to read the Markdown file.",
-            error,
-        )
-    })?;
+    let contents = fs::read_to_string(&file_path)
+        .map_err(|error| failed("workspace.read_failed", "Failed to read the Markdown file.", error))?;
 
     Ok(MarkdownFileContents {
         relative_path: normalize_relative_path(&relative_path)?,
@@ -112,13 +113,8 @@ pub fn write_markdown_document(
     }
 
     record_self_write(&file_path);
-    fs::write(&file_path, contents).map_err(|error| {
-        NativeError::with_details(
-            "workspace.write_failed",
-            "Failed to write the Markdown file.",
-            error,
-        )
-    })?;
+    fs::write(&file_path, contents)
+        .map_err(|error| failed("workspace.write_failed", "Failed to write the Markdown file.", error))?;
 
     markdown_file_entry(&root, &file_path)
 }
@@ -159,13 +155,8 @@ pub fn create_markdown_file(
     ensure_parent_dir(&file_path, "Failed to create the note folder.")?;
 
     record_self_write(&file_path);
-    fs::write(&file_path, contents.unwrap_or_default()).map_err(|error| {
-        NativeError::with_details(
-            "workspace.create_failed",
-            "Failed to create the Markdown file.",
-            error,
-        )
-    })?;
+    fs::write(&file_path, contents.unwrap_or_default())
+        .map_err(|error| failed("workspace.create_failed", "Failed to create the Markdown file.", error))?;
 
     markdown_file_entry(&root, &file_path)
 }
@@ -199,13 +190,8 @@ pub fn rename_markdown_file(
 
     record_self_write(&file_path);
     record_self_write(&new_file_path);
-    fs::rename(&file_path, &new_file_path).map_err(|error| {
-        NativeError::with_details(
-            "workspace.rename_failed",
-            "Failed to rename the Markdown file.",
-            error,
-        )
-    })?;
+    fs::rename(&file_path, &new_file_path)
+        .map_err(|error| failed("workspace.rename_failed", "Failed to rename the Markdown file.", error))?;
 
     remove_search_index_entry(app, root_path, &relative_path, "markdown");
     markdown_file_entry(&root, &new_file_path)
@@ -228,13 +214,8 @@ pub fn delete_markdown_file(
     }
 
     record_self_write(&file_path);
-    fs::remove_file(&file_path).map_err(|error| {
-        NativeError::with_details(
-            "workspace.delete_failed",
-            "Failed to delete the Markdown file.",
-            error,
-        )
-    })?;
+    fs::remove_file(&file_path)
+        .map_err(|error| failed("workspace.delete_failed", "Failed to delete the Markdown file.", error))?;
 
     remove_search_index_entry(app, root_path, &relative_path, "markdown");
 
@@ -281,35 +262,22 @@ pub fn collect_markdown_file_entries(
         return Ok(());
     }
 
-    let entries = fs::read_dir(current).map_err(|error| {
-        NativeError::with_details(
-            "workspace.list_failed",
-            "Failed to list Markdown files in the workspace.",
-            error,
-        )
-    })?;
+    let entries = fs::read_dir(current)
+        .map_err(|error| failed("workspace.list_failed", "Failed to list Markdown files in the workspace.", error))?;
 
     for entry in entries {
         let entry = entry.map_err(|error| {
-            NativeError::with_details(
-                "workspace.list_failed",
-                "Failed to inspect a workspace file.",
-                error,
-            )
+            failed("workspace.list_failed", "Failed to inspect a workspace file.", error)
         })?;
         let path = entry.path();
-        
+
         let name = entry.file_name().to_string_lossy().to_string();
         if is_ignored_entry_name(&name) {
             continue;
         }
 
         let file_type = entry.file_type().map_err(|error| {
-            NativeError::with_details(
-                "workspace.list_failed",
-                "Failed to inspect a workspace file type.",
-                error,
-            )
+            failed("workspace.list_failed", "Failed to inspect a workspace file type.", error)
         })?;
 
         if file_type.is_dir() {

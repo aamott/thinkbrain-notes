@@ -1,5 +1,6 @@
 import { ArrowDownToLine } from "lucide-react";
 
+import { bannerButtonClass, bannerButtonPrimaryClass } from "./bannerButton";
 import type { UpdateState } from "./useAppUpdate";
 
 /**
@@ -59,7 +60,7 @@ export function UpdateBanner({
             <span className="flex shrink-0 gap-[0.4rem]">
               <button
                 type="button"
-                className="border border-border rounded-small py-[0.28rem] px-[0.6rem] text-foreground bg-surface cursor-pointer font-inherit text-[0.72rem]"
+                className={bannerButtonClass}
                 onClick={onDismiss}
               >
                 {state.kind === "failed" ? "Dismiss" : "Not now"}
@@ -67,7 +68,7 @@ export function UpdateBanner({
               {state.kind === "available" && (
                 <button
                   type="button"
-                  className="border border-primary rounded-small py-[0.28rem] px-[0.6rem] text-primary-foreground bg-primary cursor-pointer font-inherit text-[0.72rem]"
+                  className={bannerButtonPrimaryClass}
                   onClick={onInstall}
                 >
                   Install and restart

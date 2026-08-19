@@ -1,19 +1,9 @@
 import { useMemo, useSyncExternalStore } from "react";
 import {
-  type DesktopEditorHeaderContribution,
   type DesktopEditorHeaderRegistry,
   type EditorHeaderContext,
   desktopEditorHeaderRegistry
 } from "./editorHeaderRegistry";
-
-/** Subscribes to a registry's contributions for the lifetime of a component. */
-function useEditorHeaders(
-  registry: DesktopEditorHeaderRegistry
-): readonly DesktopEditorHeaderContribution[] {
-  // `entries()` returns a stable frozen snapshot until the registry changes,
-  // which is exactly the contract useSyncExternalStore needs.
-  return useSyncExternalStore(registry.subscribe, registry.entries, registry.entries);
-}
 
 /**
  * Renders every contribution that applies to the open document.
@@ -28,7 +18,9 @@ export function EditorHeaderSlot({
   readonly context: EditorHeaderContext;
   readonly registry?: DesktopEditorHeaderRegistry;
 }) {
-  const headers = useEditorHeaders(registry);
+  // `entries()` returns a stable frozen snapshot until the registry changes,
+  // which is exactly the contract useSyncExternalStore needs.
+  const headers = useSyncExternalStore(registry.subscribe, registry.entries, registry.entries);
   // Memoize the applies filter: `context.contents` changes on every keystroke,
   // and `applies` callbacks (e.g. `belongsHere`) may parse frontmatter. The
   // filter result is stable for the same (headers, context) pair.

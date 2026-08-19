@@ -34,6 +34,16 @@ interface SemanticVersion {
   readonly patch: number;
 }
 
+/** Pushes a compatibility reason onto the supplied list. */
+const addReason = (
+  reasons: CompatibilityReason[],
+  code: CompatibilityReason["code"],
+  message: string,
+  severity: CompatibilityReason["severity"]
+): void => {
+  reasons.push({ code, message, severity });
+};
+
 function parseVersion(value: string): SemanticVersion | null {
   const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(value.trim());
   if (!match) return null;
@@ -89,43 +99,48 @@ export function evaluateCompatibility(
 
   const hostVersion = parseVersion(host.apiVersion);
   if (!hostVersion) {
-    reasons.push({
-      code: "api-version",
-      message: `Host api version "${host.apiVersion}" is not a valid semantic version.`,
-      severity: "error"
-    });
+    addReason(
+      reasons,
+      "api-version",
+      `Host api version "${host.apiVersion}" is not a valid semantic version.`,
+      "error"
+    );
   } else {
     const result = satisfies(hostVersion, manifest.apiVersion);
     if (result === null) {
-      reasons.push({
-        code: "api-version",
-        message: `Unsupported apiVersion range "${manifest.apiVersion}". Use *, x.y.z, ^x.y.z, or ~x.y.z.`,
-        severity: "error"
-      });
+      addReason(
+        reasons,
+        "api-version",
+        `Unsupported apiVersion range "${manifest.apiVersion}". Use *, x.y.z, ^x.y.z, or ~x.y.z.`,
+        "error"
+      );
     } else if (!result) {
-      reasons.push({
-        code: "api-version",
-        message: `Requires host api ${manifest.apiVersion}, but this host is ${host.apiVersion}.`,
-        severity: "error"
-      });
+      addReason(
+        reasons,
+        "api-version",
+        `Requires host api ${manifest.apiVersion}, but this host is ${host.apiVersion}.`,
+        "error"
+      );
     }
   }
 
   if (!manifest.engines.platform.includes(host.platform)) {
-    reasons.push({
-      code: "platform",
-      message: `Supports ${manifest.engines.platform.join(", ")}, but this host is ${host.platform}.`,
-      severity: "error"
-    });
+    addReason(
+      reasons,
+      "platform",
+      `Supports ${manifest.engines.platform.join(", ")}, but this host is ${host.platform}.`,
+      "error"
+    );
   }
 
   for (const capability of manifest.capabilities) {
     if (!host.capabilities.includes(capability)) {
-      reasons.push({
-        code: "capability",
-        message: `Capability "${capability}" is unavailable on this host; features using it may not work.`,
-        severity: "warning"
-      });
+      addReason(
+        reasons,
+        "capability",
+        `Capability "${capability}" is unavailable on this host; features using it may not work.`,
+        "warning"
+      );
     }
   }
 

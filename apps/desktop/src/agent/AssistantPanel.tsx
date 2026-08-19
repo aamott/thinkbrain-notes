@@ -156,14 +156,16 @@ export function AssistantPanel() {
                                 type="button"
                                 role="switch"
                                 aria-checked={enabled}
-                                data-checked={enabled}
                                 onClick={() =>
                                   setServerEnabled((prev) => ({
                                     ...prev,
                                     [server.id]: !enabled,
                                   }))
                                 }
-                                className="flex h-4 w-7 items-center rounded-full bg-secondary px-0.5 data-[checked=true]:bg-primary"
+                                className={cn(
+                                  "flex h-4 w-7 items-center rounded-full px-0.5 transition-colors",
+                                  enabled ? "bg-primary" : "bg-secondary",
+                                )}
                               >
                                 <span
                                   className={cn(
@@ -246,5 +248,3 @@ export function AssistantPanel() {
     </section>
   );
 }
-
-export default AssistantPanel;

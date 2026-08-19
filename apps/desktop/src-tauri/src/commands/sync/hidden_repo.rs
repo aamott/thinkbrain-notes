@@ -16,6 +16,8 @@ use std::path::Path;
 
 use crate::NativeError;
 
+use super::failed;
+
 /// Opens the hidden repository for a vault, creating it on first use.
 ///
 /// `git_dir` is the app-data location holding the repository itself; `vault` is
@@ -29,13 +31,8 @@ pub fn open_or_create(git_dir: &Path, vault: &Path) -> Result<gix::Repository, N
 }
 
 fn open(git_dir: &Path) -> Result<gix::Repository, NativeError> {
-    gix::open(git_dir).map_err(|error| {
-        NativeError::with_details(
-            "sync.repo_open_failed",
-            "Could not open this workspace's sync history.",
-            error,
-        )
-    })
+    gix::open(git_dir)
+        .map_err(|error| failed("sync.repo_open_failed", "Could not open this workspace's sync history.", error))
 }
 
 fn create(git_dir: &Path, vault: &Path) -> Result<(), NativeError> {
@@ -43,20 +40,12 @@ fn create(git_dir: &Path, vault: &Path) -> Result<(), NativeError> {
     // install none of that exists yet.
     if let Some(parent) = git_dir.parent() {
         fs::create_dir_all(parent).map_err(|error| {
-            NativeError::with_details(
-                "sync.repo_create_failed",
-                "Could not create this workspace's sync history.",
-                error.to_string(),
-            )
+            failed("sync.repo_create_failed", "Could not create this workspace's sync history.", error)
         })?;
     }
 
     gix::init_bare(git_dir).map_err(|error| {
-        NativeError::with_details(
-            "sync.repo_create_failed",
-            "Could not create this workspace's sync history.",
-            error,
-        )
+        failed("sync.repo_create_failed", "Could not create this workspace's sync history.", error)
     })?;
 
     point_at_worktree(git_dir, vault)
@@ -71,34 +60,30 @@ fn create(git_dir: &Path, vault: &Path) -> Result<(), NativeError> {
 /// as bare on the next open.
 fn point_at_worktree(git_dir: &Path, vault: &Path) -> Result<(), NativeError> {
     let config_path = git_dir.join("config");
-    let failed = |error: String| {
-        NativeError::with_details(
-            "sync.repo_create_failed",
-            "Could not point this workspace's sync history at its notes.",
-            error,
-        )
+    let config_failed = |error: String| {
+        failed("sync.repo_create_failed", "Could not point this workspace's sync history at its notes.", error)
     };
 
     let mut config =
         gix::config::File::from_path_no_includes(config_path.clone(), gix::config::Source::Local)
-            .map_err(|error| failed(error.to_string()))?;
+            .map_err(|error| config_failed(error.to_string()))?;
 
     config
         .set_raw_value("core.bare", "false")
-        .map_err(|error| failed(error.to_string()))?;
+        .map_err(|error| config_failed(error.to_string()))?;
     config
         .set_raw_value("core.worktree", vault.to_string_lossy().as_ref())
-        .map_err(|error| failed(error.to_string()))?;
+        .map_err(|error| config_failed(error.to_string()))?;
 
     let mut written = Vec::new();
     config
         .write_to(&mut written)
-        .map_err(|error| failed(error.to_string()))?;
+        .map_err(|error| config_failed(error.to_string()))?;
 
-    let mut file = fs::File::create(&config_path).map_err(|error| failed(error.to_string()))?;
+    let mut file = fs::File::create(&config_path).map_err(|error| config_failed(error.to_string()))?;
     file.write_all(&written)
-        .map_err(|error| failed(error.to_string()))?;
-    file.sync_all().map_err(|error| failed(error.to_string()))?;
+        .map_err(|error| config_failed(error.to_string()))?;
+    file.sync_all().map_err(|error| config_failed(error.to_string()))?;
 
     Ok(())
 }

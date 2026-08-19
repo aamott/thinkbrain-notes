@@ -10,6 +10,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
+use crate::error::lock_or_recover;
 use crate::NativeError;
 
 use super::conflict::ConflictCopy;
@@ -66,7 +67,7 @@ impl Engine {
 
     /// Notes that `paths` changed, restarting each one's wait.
     pub fn note_changes(&self, paths: impl IntoIterator<Item = PathBuf>, at: Instant) {
-        let mut pending = self.pending.lock().unwrap_or_else(|error| error.into_inner());
+        let mut pending = lock_or_recover(&self.pending);
         for path in paths {
             pending.note(path, at);
         }
@@ -78,7 +79,7 @@ impl Engine {
     /// The same copy arrives more than once — from the scan and again from the
     /// watcher — and only the first time is worth telling anyone about.
     pub fn note_conflicts(&self, found: impl IntoIterator<Item = ConflictCopy>) -> bool {
-        let mut conflicts = self.conflicts.lock().unwrap_or_else(|error| error.into_inner());
+        let mut conflicts = lock_or_recover(&self.conflicts);
         found
             .into_iter()
             .filter(|copy| conflicts.insert(copy.copy.clone(), copy.clone()).is_none())
@@ -88,7 +89,7 @@ impl Engine {
 
     /// The conflicts this workspace is waiting on someone to resolve.
     pub fn conflicts(&self) -> Vec<ConflictCopy> {
-        let conflicts = self.conflicts.lock().unwrap_or_else(|error| error.into_inner());
+        let conflicts = lock_or_recover(&self.conflicts);
         conflicts.values().cloned().collect()
     }
 
@@ -103,7 +104,7 @@ impl Engine {
 
     /// Drops a conflict from the set, because it has been answered.
     pub fn forget_conflict(&self, copy: &str) {
-        let mut conflicts = self.conflicts.lock().unwrap_or_else(|error| error.into_inner());
+        let mut conflicts = lock_or_recover(&self.conflicts);
         conflicts.remove(copy);
     }
 
@@ -137,7 +138,7 @@ impl Engine {
 
     fn record(&self, now: Instant, settle: Duration) -> Result<Option<gix::ObjectId>, NativeError> {
         let settled = {
-            let mut pending = self.pending.lock().unwrap_or_else(|error| error.into_inner());
+            let mut pending = lock_or_recover(&self.pending);
             pending.take_settled(now, settle)
         };
         // Cost, not correctness: `record` would reach the same answer, but the
@@ -166,7 +167,7 @@ impl Engine {
         }
 
         let message = commit_message(settled.len(), gix::date::Time::now_local_or_utc());
-        let _recording = self.recording.lock().unwrap_or_else(|error| error.into_inner());
+        let _recording = lock_or_recover(&self.recording);
         let recorded = snapshot::record(&repo, &settled, &message);
 
         // Taking a path out of `pending` is a promise to record it. If the
@@ -174,7 +175,7 @@ impl Engine {
         // away with its drive — the promise is unkept, so the paths go back and
         // are tried again rather than quietly leaving history behind the vault.
         if recorded.is_err() {
-            let mut pending = self.pending.lock().unwrap_or_else(|error| error.into_inner());
+            let mut pending = lock_or_recover(&self.pending);
             for path in settled {
                 pending.note(path, now);
             }
@@ -189,7 +190,7 @@ impl Engine {
     /// stderr and the app went on looking healthy. Holding the last one here is
     /// what lets a window say "recording stopped, and here is what to do".
     fn remember(&self, outcome: &Result<Option<gix::ObjectId>, NativeError>) {
-        let mut problem = self.problem.lock().unwrap_or_else(|error| error.into_inner());
+        let mut problem = lock_or_recover(&self.problem);
         *problem = outcome.as_ref().err().cloned();
     }
 
@@ -207,7 +208,7 @@ impl Engine {
     /// What the status pill turns into "Saving…". Zero is the resting state and
     /// the only one anybody should see for long.
     pub fn waiting(&self) -> usize {
-        let pending = self.pending.lock().unwrap_or_else(|error| error.into_inner());
+        let pending = lock_or_recover(&self.pending);
         pending.len()
     }
 
@@ -217,7 +218,7 @@ impl Engine {
     /// is the field that turns "your notes silently stopped being recorded"
     /// into something a window can say out loud.
     pub fn problem(&self) -> Option<NativeError> {
-        let problem = self.problem.lock().unwrap_or_else(|error| error.into_inner());
+        let problem = lock_or_recover(&self.problem);
         problem.clone()
     }
 }

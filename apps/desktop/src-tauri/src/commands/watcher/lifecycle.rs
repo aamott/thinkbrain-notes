@@ -10,7 +10,7 @@ use notify_debouncer_full::{new_debouncer, DebounceEventResult, Debouncer, Recom
 use tauri::{Emitter, Manager};
 
 use crate::commands::workspace::resolve_workspace_root;
-use crate::error::NativeError;
+use crate::error::{lock_or_recover, NativeError};
 
 use super::{
     announce_conflicts, collect_changes, Changes, WorkspaceChangedPayload, WORKSPACE_CHANGED_EVENT,
@@ -120,7 +120,7 @@ pub fn watch_workspace(
     let key = root.to_string_lossy().to_string();
     let label = window.label().to_string();
 
-    let mut guard = WATCHERS.lock().unwrap_or_else(|error| error.into_inner());
+    let mut guard = lock_or_recover(&WATCHERS);
     let state = guard.get_or_insert_with(WatchState::default);
 
     // Start the watcher before registering interest, so a failure to start
@@ -163,7 +163,7 @@ pub fn unwatch_workspace(window: tauri::Window, canonical_root: String) -> Resul
     // would leave a gap where a vault edit is seen by neither the flush
     // nor the watcher.
     crate::commands::sync::registry::detach(&canonical_root, window.label());
-    let mut guard = WATCHERS.lock().unwrap_or_else(|error| error.into_inner());
+    let mut guard = lock_or_recover(&WATCHERS);
     let Some(state) = guard.as_mut() else {
         return Ok(());
     };
@@ -181,7 +181,7 @@ pub fn unwatch_workspace(window: tauri::Window, canonical_root: String) -> Resul
 pub fn release_window_watchers(label: &str) {
     // Same ordering as unwatch_workspace: flush before the watcher is gone.
     crate::commands::sync::registry::release_window(label);
-    let mut guard = WATCHERS.lock().unwrap_or_else(|error| error.into_inner());
+    let mut guard = lock_or_recover(&WATCHERS);
     let Some(state) = guard.as_mut() else {
         return;
     };
@@ -223,6 +223,14 @@ pub fn attach_window_destroy_cleanup<F>(
             release_window_watchers(&label);
         }
     });
+}
+
+fn watcher_start_failed(error: impl std::fmt::Display) -> NativeError {
+    NativeError::with_details(
+        "watcher.start_failed",
+        "Could not watch the workspace folder for outside changes.",
+        error,
+    )
 }
 
 fn spawn_debouncer(
@@ -267,23 +275,11 @@ fn spawn_debouncer(
             eprintln!("[watcher] failed to deliver workspace changes: {error}");
         }
     })
-    .map_err(|error| {
-        NativeError::with_details(
-            "watcher.start_failed",
-            "Could not watch the workspace folder for outside changes.",
-            error,
-        )
-    })?;
+    .map_err(watcher_start_failed)?;
 
     debouncer
         .watch(&root, RecursiveMode::Recursive)
-        .map_err(|error| {
-            NativeError::with_details(
-                "watcher.start_failed",
-                "Could not watch the workspace folder for outside changes.",
-                error,
-            )
-        })?;
+        .map_err(watcher_start_failed)?;
 
     Ok(debouncer)
 }

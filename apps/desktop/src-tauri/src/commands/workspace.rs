@@ -1,4 +1,4 @@
-use crate::error::NativeError;
+use crate::error::{lock_or_recover, NativeError};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 
@@ -17,6 +17,12 @@ use tauri::Manager;
 
 pub const IGNORED_FOLDERS: &[&str] = &["node_modules", "target", "dist", "vendor"];
 pub(crate) const MAX_WORKSPACE_ENTRIES: usize = 10_000;
+
+/// Builds a `NativeError::with_details` from a static code/message and a
+/// displayable error, matching the shared pattern used across command modules.
+fn failed(code: &'static str, message: &'static str, error: impl std::fmt::Display) -> NativeError {
+    NativeError::with_details(code, message, error.to_string())
+}
 
 /// True for vault entries the explorer, markdown walker, and watcher all skip:
 /// dotfiles plus the configured ignored-folder list. Centralized so the three
@@ -79,28 +85,15 @@ pub fn register_workspace_window_root(
     label: String,
     root_path: String,
 ) {
-    roots
-        .0
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .insert(label, root_path);
+    lock_or_recover(&roots.0).insert(label, root_path);
 }
 
 pub fn workspace_window_root(roots: &WorkspaceWindowRoots, label: &str) -> Option<String> {
-    roots
-        .0
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .get(label)
-        .cloned()
+    lock_or_recover(&roots.0).get(label).cloned()
 }
 
 pub fn unregister_workspace_window_root(roots: &WorkspaceWindowRoots, label: &str) {
-    roots
-        .0
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .remove(label);
+    lock_or_recover(&roots.0).remove(label);
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -214,21 +207,11 @@ pub fn create_workspace_file(
                     "A file already exists at that path.",
                 )
             } else {
-                NativeError::with_details(
-                    "workspace.create_failed",
-                    "Failed to create the file.",
-                    error,
-                )
+                failed("workspace.create_failed", "Failed to create the file.", error)
             }
         })?;
     file.write_all(contents.unwrap_or_default().as_bytes())
-        .map_err(|error| {
-            NativeError::with_details(
-                "workspace.create_failed",
-                "Failed to create the file.",
-                error,
-            )
-        })?;
+        .map_err(|error| failed("workspace.create_failed", "Failed to create the file.", error))?;
 
     workspace_entry(&root, &file_path, false)
 }
@@ -251,13 +234,8 @@ pub fn create_workspace_folder(
         ));
     }
 
-    fs::create_dir_all(&folder_path).map_err(|error| {
-        NativeError::with_details(
-            "workspace.create_failed",
-            "Failed to create the folder.",
-            error,
-        )
-    })?;
+    fs::create_dir_all(&folder_path)
+        .map_err(|error| failed("workspace.create_failed", "Failed to create the folder.", error))?;
 
     workspace_entry(&root, &folder_path, true)
 }
@@ -318,13 +296,8 @@ fn rename_workspace_entry_impl(
     record_self_write(&source_path);
     record_self_write(&destination_path);
     let is_dir = source_path.is_dir();
-    fs::rename(&source_path, &destination_path).map_err(|error| {
-        NativeError::with_details(
-            "workspace.rename_failed",
-            "Failed to rename the workspace entry.",
-            error,
-        )
-    })?;
+    fs::rename(&source_path, &destination_path)
+        .map_err(|error| failed("workspace.rename_failed", "Failed to rename the workspace entry.", error))?;
 
     workspace_entry(&root, &destination_path, is_dir)
 }
@@ -380,11 +353,7 @@ fn delete_workspace_entry_impl(root_path: &str, relative_path: &str) -> Result<(
     };
 
     remove_result.map_err(|error| {
-        NativeError::with_details(
-            "workspace.delete_failed",
-            "Failed to delete the workspace entry.",
-            error,
-        )
+        failed("workspace.delete_failed", "Failed to delete the workspace entry.", error)
     })
 }
 
@@ -412,13 +381,7 @@ pub fn open_workspace_window(app: tauri::AppHandle, root_path: String) -> Result
         tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::App("index.html".into()))
             .title(describe_workspace(&root).name)
             .build()
-            .map_err(|error| {
-                NativeError::with_details(
-                    "workspace.window_failed",
-                    "Failed to create a workspace window.",
-                    error,
-                )
-            })?;
+            .map_err(|error| failed("workspace.window_failed", "Failed to create a workspace window.", error))?;
     let app_for_cleanup = app.clone();
     let label_for_cleanup = label.clone();
     // Workspace windows need both their `WorkspaceWindowRoots` entry and their
@@ -455,13 +418,9 @@ pub fn resolve_workspace_root(root_path: &str) -> Result<PathBuf, NativeError> {
         ));
     }
 
-    let canonical_root = root.canonicalize().map_err(|error| {
-        NativeError::with_details(
-            "workspace.open_failed",
-            "Failed to open the workspace folder.",
-            error,
-        )
-    })?;
+    let canonical_root = root
+        .canonicalize()
+        .map_err(|error| failed("workspace.open_failed", "Failed to open the workspace folder.", error))?;
 
     if !canonical_root.is_dir() {
         return Err(NativeError::new(
@@ -494,13 +453,9 @@ pub fn resolve_workspace_entry_path(
     // For existing entries, canonicalize the full path and verify it stays
     // inside the (already canonical) workspace root.
     if path.exists() {
-        let canonical = path.canonicalize().map_err(|error| {
-            NativeError::with_details(
-                "workspace.invalid_path",
-                "Failed to resolve the workspace entry.",
-                error,
-            )
-        })?;
+        let canonical = path
+            .canonicalize()
+            .map_err(|error| failed("workspace.invalid_path", "Failed to resolve the workspace entry.", error))?;
         if !canonical.starts_with(root) {
             return Err(NativeError::new(
                 "workspace.invalid_path",
@@ -523,13 +478,9 @@ pub fn resolve_workspace_entry_path(
             ));
         }
     }
-    let canonical_ancestor = ancestor.canonicalize().map_err(|error| {
-        NativeError::with_details(
-            "workspace.invalid_path",
-            "Failed to resolve the workspace entry.",
-            error,
-        )
-    })?;
+    let canonical_ancestor = ancestor
+        .canonicalize()
+        .map_err(|error| failed("workspace.invalid_path", "Failed to resolve the workspace entry.", error))?;
     if !canonical_ancestor.starts_with(root) {
         return Err(NativeError::new(
             "workspace.invalid_path",
@@ -619,13 +570,8 @@ pub fn collect_workspace_entries(
         return Ok(());
     }
 
-    let dir = fs::read_dir(current).map_err(|error| {
-        NativeError::with_details(
-            "workspace.list_failed",
-            "Failed to list the workspace contents.",
-            error,
-        )
-    })?;
+    let dir = fs::read_dir(current)
+        .map_err(|error| failed("workspace.list_failed", "Failed to list the workspace contents.", error))?;
 
     for entry in dir {
         if entries.len() >= MAX_WORKSPACE_ENTRIES {
@@ -633,11 +579,7 @@ pub fn collect_workspace_entries(
         }
 
         let entry = entry.map_err(|error| {
-            NativeError::with_details(
-                "workspace.list_failed",
-                "Failed to inspect a workspace entry.",
-                error,
-            )
+            failed("workspace.list_failed", "Failed to inspect a workspace entry.", error)
         })?;
         let name = entry.file_name().to_string_lossy().into_owned();
 
@@ -647,11 +589,7 @@ pub fn collect_workspace_entries(
 
         let path = entry.path();
         let file_type = entry.file_type().map_err(|error| {
-            NativeError::with_details(
-                "workspace.list_failed",
-                "Failed to inspect a workspace entry type.",
-                error,
-            )
+            failed("workspace.list_failed", "Failed to inspect a workspace entry type.", error)
         })?;
 
         if file_type.is_dir() && IGNORED_FOLDERS.contains(&name.as_str()) {
@@ -702,22 +640,11 @@ pub struct EntryMetadata {
 pub fn entry_metadata(root: &Path, path: &Path) -> Result<EntryMetadata, NativeError> {
     let relative_path = path
         .strip_prefix(root)
-        .map_err(|error| {
-            NativeError::with_details(
-                "workspace.invalid_path",
-                "Entry path is outside the workspace.",
-                error,
-            )
-        })?
+        .map_err(|error| failed("workspace.invalid_path", "Entry path is outside the workspace.", error))?
         .to_string_lossy()
         .replace('\\', "/");
-    let metadata = fs::metadata(path).map_err(|error| {
-        NativeError::with_details(
-            "workspace.metadata_failed",
-            "Failed to read workspace entry metadata.",
-            error,
-        )
-    })?;
+    let metadata = fs::metadata(path)
+        .map_err(|error| failed("workspace.metadata_failed", "Failed to read workspace entry metadata.", error))?;
     let updated_at = metadata
         .modified()
         .ok()

@@ -142,6 +142,17 @@ const structuralFailure = (code: string, message: string, path: string): ParseTh
   diagnostics: [{ code, message, severity: "error", path }]
 });
 
+/** Pushes a per-token diagnostic keyed under `tokens.<key>`. */
+const tokenDiagnostic = (
+  diagnostics: ThemeDiagnostic[],
+  key: string,
+  code: string,
+  message: string,
+  severity: ThemeDiagnosticSeverity
+): void => {
+  diagnostics.push({ code, message, severity, path: `tokens.${key}` });
+};
+
 /**
  * Parses a raw `.tbtheme.json` string into a validated theme document.
  *
@@ -274,10 +285,7 @@ function readVersion(record: Readonly<Record<string, unknown>>): number | null {
   if (value === undefined) {
     return CURRENT_THEME_VERSION;
   }
-  if (typeof value !== "number" || !Number.isFinite(value)) {
-    return null;
-  }
-  if (!Number.isInteger(value) || value < 0) {
+  if (typeof value !== "number" || !Number.isFinite(value) || !Number.isInteger(value) || value < 0) {
     return null;
   }
   return value;
@@ -322,24 +330,26 @@ function readTokens(value: unknown): {
   for (const [key, rawValue] of Object.entries(value)) {
     // Key namespace check: anything outside --tn-* is a hard error.
     if (!key.startsWith(TOKEN_PREFIX)) {
-      diagnostics.push({
-        code: "theme.token.unknown_namespace",
-        message: `Token key "${key}" must start with "--tn-"; token was dropped.`,
-        severity: "error",
-        path: `tokens.${key}`
-      });
+      tokenDiagnostic(
+        diagnostics,
+        key,
+        "theme.token.unknown_namespace",
+        `Token key "${key}" must start with "--tn-"; token was dropped.`,
+        "error"
+      );
       continue;
     }
 
     // Known-token check: --tn-* but not in the canonical list is a warning.
     // We still drop it so the serialized theme only carries recognized tokens.
     if (!KNOWN_TOKEN_SET.has(key)) {
-      diagnostics.push({
-        code: "theme.token.unknown",
-        message: `Token "${key}" is not a recognized theme token; token was dropped.`,
-        severity: "warning",
-        path: `tokens.${key}`
-      });
+      tokenDiagnostic(
+        diagnostics,
+        key,
+        "theme.token.unknown",
+        `Token "${key}" is not a recognized theme token; token was dropped.`,
+        "warning"
+      );
       continue;
     }
 
@@ -347,22 +357,24 @@ function readTokens(value: unknown): {
     // color* is intentionally not judged here (core is platform-agnostic);
     // the desktop layer can add real color-syntax validation if desired.
     if (typeof rawValue !== "string") {
-      diagnostics.push({
-        code: "theme.token.value_not_string",
-        message: `Token "${key}" value must be a string; token was dropped.`,
-        severity: "error",
-        path: `tokens.${key}`
-      });
+      tokenDiagnostic(
+        diagnostics,
+        key,
+        "theme.token.value_not_string",
+        `Token "${key}" value must be a string; token was dropped.`,
+        "error"
+      );
       continue;
     }
 
     if (rawValue.length === 0) {
-      diagnostics.push({
-        code: "theme.token.value_empty",
-        message: `Token "${key}" value must not be empty; token was dropped.`,
-        severity: "error",
-        path: `tokens.${key}`
-      });
+      tokenDiagnostic(
+        diagnostics,
+        key,
+        "theme.token.value_empty",
+        `Token "${key}" value must not be empty; token was dropped.`,
+        "error"
+      );
       continue;
     }
 
@@ -374,14 +386,14 @@ function readTokens(value: unknown): {
     // is the only place that can report the rejection back to the user; the
     // desktop layer has no diagnostics channel of its own.
     if (UNSAFE_VALUE_PATTERN.test(rawValue)) {
-      diagnostics.push({
-        code: "theme.token.value_unsafe",
-        message:
-          `Token "${key}" value contains characters that could break out of ` +
+      tokenDiagnostic(
+        diagnostics,
+        key,
+        "theme.token.value_unsafe",
+        `Token "${key}" value contains characters that could break out of ` +
           'its CSS declaration (";", "{", "}", "@", or a comment); token was dropped.',
-        severity: "error",
-        path: `tokens.${key}`
-      });
+        "error"
+      );
       continue;
     }
 

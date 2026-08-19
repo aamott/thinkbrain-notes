@@ -78,7 +78,7 @@ export function AddFieldRow({ available, existingKeys, onAdd, readOnly = false }
         disabled={readOnly}
         aria-label="Add a field"
         onClick={() => setOpen(true)}
-        className="self-start rounded-small border border-dashed border-border px-2 py-0.5 text-[0.7rem] text-muted-foreground cursor-pointer hover:text-foreground disabled:opacity-50 disabled:cursor-default"
+        className="self-start rounded-small border border-dashed border-border px-2 py-0.5 text-[0.7rem] text-muted-foreground cursor-pointer hover:text-foreground disabled:opacity-50"
       >
         ＋ Add a field
       </button>

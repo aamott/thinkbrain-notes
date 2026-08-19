@@ -5,6 +5,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
+use crate::error::lock_or_recover;
+
 /// How long an unclaimed self-write record keeps suppressing.
 ///
 /// Comfortably longer than the debounce window, so a real echo is always still
@@ -26,10 +28,7 @@ impl SelfWriteLog {
 
     /// Notes that the app just wrote `path` and expects one echo for it.
     pub fn record_at(&self, path: &Path, at: Instant) {
-        let mut guard = self
-            .expected
-            .lock()
-            .unwrap_or_else(|error| error.into_inner());
+        let mut guard = lock_or_recover(&self.expected);
         let entries = guard.get_or_insert_with(HashMap::new);
         // Sweep here, because a query only ever prunes the one path it asks
         // about and some records are never queried at all: a folder delete
@@ -55,10 +54,7 @@ impl SelfWriteLog {
     /// Expired records are dropped rather than claimed, so a write whose echo
     /// never arrived cannot silently swallow a later external edit either.
     pub fn take_at(&self, path: &Path, now: Instant) -> bool {
-        let mut guard = self
-            .expected
-            .lock()
-            .unwrap_or_else(|error| error.into_inner());
+        let mut guard = lock_or_recover(&self.expected);
         let Some(entries) = guard.as_mut() else {
             return false;
         };

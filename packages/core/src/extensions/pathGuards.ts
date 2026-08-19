@@ -9,8 +9,3 @@
 
 /** Matches a Windows drive-letter absolute path, e.g. `C:\` or `D:/`. */
 export const WINDOWS_ABSOLUTE = /^[A-Za-z]:[\\/]/;
-
-/** True when `path` is a Windows drive-letter absolute path. */
-export function isWindowsAbsolutePath(path: string): boolean {
-  return WINDOWS_ABSOLUTE.test(path);
-}

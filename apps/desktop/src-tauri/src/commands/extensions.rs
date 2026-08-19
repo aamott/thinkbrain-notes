@@ -23,6 +23,12 @@ use std::path::{Component, Path, PathBuf};
 /// webview by mistake.
 const MAX_EXTENSION_FILE_BYTES: u64 = 8 * 1024 * 1024;
 
+/// Builds a `NativeError::with_details` from a static code/message and a
+/// displayable error, matching the shared pattern used across command modules.
+fn failed(code: &'static str, message: &'static str, error: impl std::fmt::Display) -> NativeError {
+    NativeError::with_details(code, message, error.to_string())
+}
+
 /// Rejects a relative path that is absolute, empty, or leaves the directory.
 fn normalize_extension_relative_path(relative_path: &str) -> Result<PathBuf, NativeError> {
     // Manifests are hand-authored and may use either separator; normalize before
@@ -81,13 +87,9 @@ fn resolve_extension_file(directory: &str, relative_path: &str) -> Result<PathBu
         ));
     }
 
-    let canonical_root = root.canonicalize().map_err(|error| {
-        NativeError::with_details(
-            "extensions.directory_unavailable",
-            "Extension directory could not be read.",
-            error,
-        )
-    })?;
+    let canonical_root = root
+        .canonicalize()
+        .map_err(|error| failed("extensions.directory_unavailable", "Extension directory could not be read.", error))?;
 
     if !canonical_root.is_dir() {
         return Err(NativeError::new(
@@ -140,23 +142,14 @@ pub fn read_extension_file(
 ) -> Result<String, NativeError> {
     let path = resolve_extension_file(&directory, &relative_path)?;
 
-    let mut file = fs::File::open(&path).map_err(|error| {
-        NativeError::with_details(
-            "extensions.file_unavailable",
-            "Extension file could not be read.",
-            error,
-        )
-    })?;
+    let mut file = fs::File::open(&path)
+        .map_err(|error| failed("extensions.file_unavailable", "Extension file could not be read.", error))?;
 
     // Metadata retrieved from the open file handle is bound to the same
     // inode that passed the containment check, preventing TOCTOU races.
-    let metadata = file.metadata().map_err(|error| {
-        NativeError::with_details(
-            "extensions.file_unavailable",
-            "Extension file could not be read.",
-            error,
-        )
-    })?;
+    let metadata = file
+        .metadata()
+        .map_err(|error| failed("extensions.file_unavailable", "Extension file could not be read.", error))?;
 
     if metadata.len() > MAX_EXTENSION_FILE_BYTES {
         return Err(NativeError::new(
@@ -168,13 +161,8 @@ pub fn read_extension_file(
     // Reading from the same file handle ensures the bytes come from the
     // same inode that passed the size check.
     let mut contents = String::new();
-    file.read_to_string(&mut contents).map_err(|error| {
-        NativeError::with_details(
-            "extensions.file_unavailable",
-            "Extension file is not valid UTF-8 text or could not be read.",
-            error,
-        )
-    })?;
+    file.read_to_string(&mut contents)
+        .map_err(|error| failed("extensions.file_unavailable", "Extension file is not valid UTF-8 text or could not be read.", error))?;
 
     Ok(contents)
 }
