@@ -7,7 +7,6 @@ import {
   FolderOpen,
   Mic,
   Paperclip,
-  Server,
   Settings,
   Users,
   X,
@@ -461,14 +460,11 @@ export function AssistantPanel() {
           </form>
         </div>
 
-        <div className="mt-1.5 flex gap-4 px-1 text-[11px] text-muted-foreground">
+        {/* Status footer — workspace name + future status indicators. */}
+        <div className="mt-1.5 flex items-center gap-4 px-1 text-[11px] text-muted-foreground">
           <div className="flex items-center gap-1">
             <FolderOpen className="size-3" />
             <span className="truncate">thinkbrain-notes</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <Server className="size-3" />
-            <span className="truncate">Local</span>
           </div>
         </div>
       </div>
