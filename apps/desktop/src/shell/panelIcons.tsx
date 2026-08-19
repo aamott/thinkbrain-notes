@@ -21,11 +21,15 @@ import {
   ArrowLeftRight,
   Blocks,
   Calendar,
-  Clock,
+  CalendarCheck2,
+  CalendarDays,
   Files,
+  Filter,
   History,
   Link,
   List,
+  Notebook,
+  NotebookPen,
   Plus,
   Pencil,
   RefreshCw,
@@ -56,11 +60,17 @@ export const panelIcons: Readonly<Record<string, LucideIcon>> = {
   settings: Settings,
   // Panel header actions
   refresh: RefreshCw,
-  "go-to-today": Clock,
+  // "Today" = a calendar with today's date checked. Visually distinct from
+  // CalendarDays (the grid) used by the Open-calendar button beside it.
+  "go-to-today": CalendarCheck2,
+  filter: Filter,
   plus: Plus,
   pencil: Pencil,
   // Extension panels (named examples)
   calendar: Calendar,
+  "calendar-days": CalendarDays,
+  notebook: Notebook,
+  "notebook-pen": NotebookPen,
   sum: Sigma
 };
 

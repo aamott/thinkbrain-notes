@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 
 import { Menu, MenuCheckbox, type MenuPosition } from "../shell/Menu";
+import { PanelIcon } from "../shell/panelIcons";
 import { ACTION } from "./journalChrome";
 import { predicateId, type JournalFacet, type JournalPredicate } from "./journalFacets";
 
@@ -79,6 +80,7 @@ export function JournalFilterControl({
         }}
         className={`${ACTION} inline-flex items-center gap-1 disabled:opacity-60 disabled:cursor-default`}
       >
+        <PanelIcon name="filter" className="w-[0.7rem] h-[0.7rem] translate-y-px" />
         Filter
         {count > 0 && (
           <span
