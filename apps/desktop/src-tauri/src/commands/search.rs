@@ -99,8 +99,13 @@ pub fn index_documents(
     let connection_pool = get_search_connection(&app, &root_path)?;
     let mut connection = lock_or_recover(&connection_pool);
 
-    index_document_records(&mut connection, &documents)
-        .map_err(|error| failed("index.write_failed", "Failed to update the search index.", error))
+    index_document_records(&mut connection, &documents).map_err(|error| {
+        failed(
+            "index.write_failed",
+            "Failed to update the search index.",
+            error,
+        )
+    })
 }
 
 #[tauri::command]
@@ -124,7 +129,13 @@ pub fn search_index(
             limit: limit.unwrap_or(50).clamp(1, 200) as usize,
         },
     )
-    .map_err(|error| failed("index.search_failed", "Failed to search the workspace index.", error))
+    .map_err(|error| {
+        failed(
+            "index.search_failed",
+            "Failed to search the workspace index.",
+            error,
+        )
+    })
 }
 
 #[tauri::command]
@@ -146,7 +157,13 @@ pub fn query_index_metadata(
             predicates,
         },
     )
-    .map_err(|error| failed("index.metadata_query_failed", "Failed to query workspace metadata.", error))
+    .map_err(|error| {
+        failed(
+            "index.metadata_query_failed",
+            "Failed to query workspace metadata.",
+            error,
+        )
+    })
 }
 
 #[tauri::command]
@@ -154,8 +171,13 @@ pub fn clear_index(app: tauri::AppHandle, root_path: String) -> Result<(), Nativ
     let connection_pool = get_search_connection(&app, &root_path)?;
     let mut connection = lock_or_recover(&connection_pool);
 
-    clear_documents(&mut connection)
-        .map_err(|error| failed("index.clear_failed", "Failed to clear the workspace index.", error))
+    clear_documents(&mut connection).map_err(|error| {
+        failed(
+            "index.clear_failed",
+            "Failed to clear the workspace index.",
+            error,
+        )
+    })
 }
 
 #[tauri::command]
@@ -168,7 +190,11 @@ pub fn remove_index_document(
     let mut connection = lock_or_recover(&connection_pool);
 
     delete_document(&mut connection, &path).map_err(|error| {
-        failed("index.remove_failed", "Failed to remove a document from the workspace index.", error)
+        failed(
+            "index.remove_failed",
+            "Failed to remove a document from the workspace index.",
+            error,
+        )
     })
 }
 
@@ -181,11 +207,21 @@ pub fn open_index_connection(
     root_path: &str,
 ) -> Result<Connection, NativeError> {
     let db_path = resolve_index_db_path(app, root_path)?;
-    let connection = Connection::open(&db_path)
-        .map_err(|error| failed("index.open_failed", "Failed to open the search index database.", error))?;
+    let connection = Connection::open(&db_path).map_err(|error| {
+        failed(
+            "index.open_failed",
+            "Failed to open the search index database.",
+            error,
+        )
+    })?;
 
-    init_index_schema(&connection)
-        .map_err(|error| failed("index.schema_failed", "Failed to initialize the search index schema.", error))?;
+    init_index_schema(&connection).map_err(|error| {
+        failed(
+            "index.schema_failed",
+            "Failed to initialize the search index schema.",
+            error,
+        )
+    })?;
 
     Ok(connection)
 }
@@ -200,12 +236,21 @@ pub fn resolve_index_db_path(
 ) -> Result<PathBuf, NativeError> {
     let canonical_root = resolve_workspace_root(root_path)?;
     let app_data_dir = app.path().app_data_dir().map_err(|error| {
-        failed("index.app_data_unavailable", "Failed to resolve the application data directory.", error)
+        failed(
+            "index.app_data_unavailable",
+            "Failed to resolve the application data directory.",
+            error,
+        )
     })?;
     let index_dir = app_data_dir.join("index");
 
-    fs::create_dir_all(&index_dir)
-        .map_err(|error| failed("index.create_dir_failed", "Failed to create the search index directory.", error))?;
+    fs::create_dir_all(&index_dir).map_err(|error| {
+        failed(
+            "index.create_dir_failed",
+            "Failed to create the search index directory.",
+            error,
+        )
+    })?;
 
     let workspace_key = stable_workspace_hash(&canonical_root.to_string_lossy());
 

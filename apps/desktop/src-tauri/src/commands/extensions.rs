@@ -87,9 +87,13 @@ fn resolve_extension_file(directory: &str, relative_path: &str) -> Result<PathBu
         ));
     }
 
-    let canonical_root = root
-        .canonicalize()
-        .map_err(|error| failed("extensions.directory_unavailable", "Extension directory could not be read.", error))?;
+    let canonical_root = root.canonicalize().map_err(|error| {
+        failed(
+            "extensions.directory_unavailable",
+            "Extension directory could not be read.",
+            error,
+        )
+    })?;
 
     if !canonical_root.is_dir() {
         return Err(NativeError::new(
@@ -142,14 +146,23 @@ pub fn read_extension_file(
 ) -> Result<String, NativeError> {
     let path = resolve_extension_file(&directory, &relative_path)?;
 
-    let mut file = fs::File::open(&path)
-        .map_err(|error| failed("extensions.file_unavailable", "Extension file could not be read.", error))?;
+    let mut file = fs::File::open(&path).map_err(|error| {
+        failed(
+            "extensions.file_unavailable",
+            "Extension file could not be read.",
+            error,
+        )
+    })?;
 
     // Metadata retrieved from the open file handle is bound to the same
     // inode that passed the containment check, preventing TOCTOU races.
-    let metadata = file
-        .metadata()
-        .map_err(|error| failed("extensions.file_unavailable", "Extension file could not be read.", error))?;
+    let metadata = file.metadata().map_err(|error| {
+        failed(
+            "extensions.file_unavailable",
+            "Extension file could not be read.",
+            error,
+        )
+    })?;
 
     if metadata.len() > MAX_EXTENSION_FILE_BYTES {
         return Err(NativeError::new(
@@ -161,8 +174,13 @@ pub fn read_extension_file(
     // Reading from the same file handle ensures the bytes come from the
     // same inode that passed the size check.
     let mut contents = String::new();
-    file.read_to_string(&mut contents)
-        .map_err(|error| failed("extensions.file_unavailable", "Extension file is not valid UTF-8 text or could not be read.", error))?;
+    file.read_to_string(&mut contents).map_err(|error| {
+        failed(
+            "extensions.file_unavailable",
+            "Extension file is not valid UTF-8 text or could not be read.",
+            error,
+        )
+    })?;
 
     Ok(contents)
 }
@@ -202,7 +220,7 @@ mod tests {
             dir.to_string_lossy().into_owned(),
             "dist/main.js".to_string(),
         )
-                .expect("file is read");
+        .expect("file is read");
 
         assert_eq!(contents, "bundled");
         fs::remove_dir_all(dir).expect("cleanup");
@@ -233,7 +251,7 @@ mod tests {
             dir.to_string_lossy().into_owned(),
             "/etc/hostname".to_string(),
         )
-                .expect_err("absolute path is rejected");
+        .expect_err("absolute path is rejected");
 
         assert_eq!(error.code, "extensions.invalid_path");
         fs::remove_dir_all(dir).expect("cleanup");
@@ -255,7 +273,7 @@ mod tests {
             dir.to_string_lossy().into_owned(),
             "extension.js".to_string(),
         )
-                .expect_err("missing file is reported");
+        .expect_err("missing file is reported");
 
         assert_eq!(error.code, "extensions.file_unavailable");
         fs::remove_dir_all(dir).expect("cleanup");
@@ -285,7 +303,7 @@ mod tests {
             dir.to_string_lossy().into_owned(),
             "extension.js".to_string(),
         )
-                .expect_err("escaping symlink is rejected");
+        .expect_err("escaping symlink is rejected");
 
         assert_eq!(error.code, "extensions.invalid_path");
         fs::remove_file(outside).ok();
@@ -304,7 +322,7 @@ mod tests {
         drop(file);
 
         let error = read_extension_file(dir.to_string_lossy().into_owned(), "huge.js".to_string())
-        .expect_err("oversized file is rejected");
+            .expect_err("oversized file is rejected");
 
         assert_eq!(error.code, "extensions.file_too_large");
         fs::remove_dir_all(dir).expect("cleanup");
@@ -319,7 +337,7 @@ mod tests {
 
         let error =
             read_extension_file(dir.to_string_lossy().into_owned(), "binary.js".to_string())
-        .expect_err("non-UTF-8 file is rejected");
+                .expect_err("non-UTF-8 file is rejected");
 
         assert_eq!(error.code, "extensions.file_unavailable");
         fs::remove_dir_all(dir).expect("cleanup");

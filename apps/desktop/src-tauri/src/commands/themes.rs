@@ -86,7 +86,11 @@ pub fn list_themes(app: tauri::AppHandle) -> Result<Vec<ThemeEntry>, NativeError
 ///   The absolute path to the themes directory.
 pub fn themes_dir(app: &tauri::AppHandle) -> Result<PathBuf, NativeError> {
     let app_data_dir = app.path().app_data_dir().map_err(|error| {
-        failed("themes.app_data_unavailable", "Failed to resolve the application data directory.", error)
+        failed(
+            "themes.app_data_unavailable",
+            "Failed to resolve the application data directory.",
+            error,
+        )
     })?;
     Ok(themes_dir_path(&app_data_dir))
 }
@@ -102,8 +106,13 @@ pub fn themes_dir_path(app_data_dir: &Path) -> PathBuf {
 ///
 /// Idempotent: a no-op if the directory already exists.
 pub fn ensure_themes_directory(themes_dir: &Path) -> Result<(), NativeError> {
-    fs::create_dir_all(themes_dir)
-        .map_err(|error| failed("themes.create_dir_failed", "Failed to create the themes directory.", error))
+    fs::create_dir_all(themes_dir).map_err(|error| {
+        failed(
+            "themes.create_dir_failed",
+            "Failed to create the themes directory.",
+            error,
+        )
+    })
 }
 
 /// Copies any missing bundled preset themes into the themes directory.
@@ -181,8 +190,13 @@ pub fn seed_missing_presets(app: &tauri::AppHandle, themes_dir: &Path) -> Result
 pub fn list_theme_entries(themes_dir: &Path) -> Result<Vec<ThemeEntry>, NativeError> {
     let mut entries: Vec<ThemeEntry> = Vec::new();
 
-    let dir_entries = fs::read_dir(themes_dir)
-        .map_err(|error| failed("themes.read_dir_failed", "Failed to read the themes directory.", error))?;
+    let dir_entries = fs::read_dir(themes_dir).map_err(|error| {
+        failed(
+            "themes.read_dir_failed",
+            "Failed to read the themes directory.",
+            error,
+        )
+    })?;
 
     for entry in dir_entries.filter_map(|e| e.ok()) {
         let path = entry.path();
@@ -223,18 +237,30 @@ pub fn read_theme_file(app: tauri::AppHandle, path: String) -> Result<Option<Str
     }
     let path = resolve_theme_file_path(&themes_dir(&app)?, path)?;
     fs::read_to_string(path).map(Some).map_err(|error| {
-        failed("themes.read_failed", "Failed to read the theme file.", error)
+        failed(
+            "themes.read_failed",
+            "Failed to read the theme file.",
+            error,
+        )
     })
 }
 
 /// Resolves an existing theme file and rejects paths outside the themes directory.
 fn resolve_theme_file_path(themes_dir: &Path, path: &Path) -> Result<PathBuf, NativeError> {
-    let canonical_themes_dir = themes_dir
-        .canonicalize()
-        .map_err(|error| failed("themes.read_failed", "Failed to resolve the themes directory.", error))?;
-    let canonical_path = path
-        .canonicalize()
-        .map_err(|error| failed("themes.read_failed", "Failed to resolve the theme file.", error))?;
+    let canonical_themes_dir = themes_dir.canonicalize().map_err(|error| {
+        failed(
+            "themes.read_failed",
+            "Failed to resolve the themes directory.",
+            error,
+        )
+    })?;
+    let canonical_path = path.canonicalize().map_err(|error| {
+        failed(
+            "themes.read_failed",
+            "Failed to resolve the theme file.",
+            error,
+        )
+    })?;
 
     if !canonical_path.starts_with(&canonical_themes_dir) {
         return Err(NativeError::new(

@@ -70,9 +70,9 @@ fn result_paths(connection: &Connection, query: &str) -> Vec<String> {
         },
     )
     .expect("search succeeds")
-        .into_iter()
-        .map(|hit| hit.path)
-        .collect()
+    .into_iter()
+    .map(|hit| hit.path)
+    .collect()
 }
 
 /// Creates a unique temp directory for a test and returns its path.
@@ -494,7 +494,10 @@ fn write_file_atomically_replaces_the_destination_and_leaves_no_temp() {
 
     write_file_atomically(&path, "new").expect("the atomic write succeeds");
 
-    assert_eq!(fs::read_to_string(&path).expect("the note is readable"), "new");
+    assert_eq!(
+        fs::read_to_string(&path).expect("the note is readable"),
+        "new"
+    );
     let leftovers: Vec<_> = fs::read_dir(&temp_dir)
         .expect("the folder is readable")
         .map(|entry| entry.expect("the entry is readable").file_name())
@@ -587,7 +590,7 @@ fn desktop_state_update_merges_concurrent_mrus_and_preserves_app_settings() {
         },
     )
     .expect("first desktop-state update succeeds");
-    
+
     let second = update_desktop_state_contents(
         Some(&first),
         DesktopStateUpdate {
@@ -679,7 +682,7 @@ fn desktop_state_without_extension_directories_defaults_to_empty() {
 
     let updated =
         update_desktop_state_contents(Some(&existing.to_string()), DesktopStateUpdate::default())
-    .expect("desktop-state update succeeds");
+            .expect("desktop-state update succeeds");
 
     let settings: Value = serde_json::from_str(&updated).expect("serialized settings are valid");
     assert_eq!(
@@ -795,7 +798,7 @@ fn desktop_state_active_tab_id_explicit_null_clears_instead_of_restoring_current
 
     // An update that omits the field entirely keeps the current value.
     let restored = update_desktop_state_contents(Some(&stored), DesktopStateUpdate::default())
-    .expect("desktop-state update succeeds");
+        .expect("desktop-state update succeeds");
 
     let settings: Value = serde_json::from_str(&restored).expect("serialized settings are valid");
     assert_eq!(
@@ -1324,7 +1327,7 @@ fn note_write_without_a_precondition_still_overwrites() {
         "replaced".to_string(),
         None,
     )
-        .expect("an unchecked save goes through");
+    .expect("an unchecked save goes through");
     assert_eq!(
         fs::read_to_string(&note).expect("note is readable"),
         "replaced"
@@ -1346,29 +1349,17 @@ fn only_markdown_inside_the_vault_is_worth_waking_the_index_for() {
     let root = Path::new("/vault");
 
     assert!(Audience::Notes.accepts(root, &root.join("notes/today.md")));
-    assert!(Audience::Notes.accepts(
-        root,
-        &root.join("deep/nested/note.markdown")
-    ));
+    assert!(Audience::Notes.accepts(root, &root.join("deep/nested/note.markdown")));
 
     // Not a note.
     assert!(!Audience::Notes.accepts(root, &root.join("image.png")));
     assert!(!Audience::Notes.accepts(root, &root.join("notes")));
     // The editor's own scratch files and version control.
-    assert!(!Audience::Notes.accepts(
-        root,
-        &root.join(".obsidian/workspace.md")
-    ));
-    assert!(!Audience::Notes.accepts(
-        root,
-        &root.join(".git/COMMIT_EDITMSG.md")
-    ));
+    assert!(!Audience::Notes.accepts(root, &root.join(".obsidian/workspace.md")));
+    assert!(!Audience::Notes.accepts(root, &root.join(".git/COMMIT_EDITMSG.md")));
     assert!(!Audience::Notes.accepts(root, &root.join("notes/.hidden.md")));
     // Build output the workspace listing already refuses to walk.
-    assert!(!Audience::Notes.accepts(
-        root,
-        &root.join("node_modules/pkg/readme.md")
-    ));
+    assert!(!Audience::Notes.accepts(root, &root.join("node_modules/pkg/readme.md")));
     // Outside the vault entirely.
     assert!(!Audience::Notes.accepts(root, Path::new("/elsewhere/note.md")));
 }
@@ -1390,7 +1381,7 @@ fn history_takes_every_kind_of_file_the_index_ignores() {
             everything.accepts(&root, &path),
             "history refused to record {name}"
         );
-        }
+    }
 
     // An extension-less *file* is a file — `Makefile`, `LICENSE`, `Dockerfile`.
     // Only the note caches have to guess from the name alone.
@@ -1403,7 +1394,11 @@ fn history_takes_every_kind_of_file_the_index_ignores() {
     assert!(!everything.accepts(&root, &root.join("notes")));
 
     // The places neither consumer goes.
-    for name in [".obsidian/workspace.json", ".git/COMMIT_EDITMSG", "node_modules/pkg/index.js"] {
+    for name in [
+        ".obsidian/workspace.json",
+        ".git/COMMIT_EDITMSG",
+        "node_modules/pkg/index.js",
+    ] {
         assert!(
             !everything.accepts(&root, &root.join(name)),
             "history walked into {name}"
@@ -1456,7 +1451,8 @@ fn one_batch_tells_the_index_about_notes_and_history_about_everything() {
             at,
         ),
         DebouncedEvent::new(
-            notify::Event::new(EventKind::Create(CreateKind::File)).add_path(root.join("chart.png")),
+            notify::Event::new(EventKind::Create(CreateKind::File))
+                .add_path(root.join("chart.png")),
             at,
         ),
     ];
@@ -1483,11 +1479,13 @@ fn history_refuses_the_same_junk_the_first_snapshot_skips() {
     let at = Instant::now();
     let batch = vec![
         DebouncedEvent::new(
-            notify::Event::new(EventKind::Create(CreateKind::File)).add_path(root.join("chart.png")),
+            notify::Event::new(EventKind::Create(CreateKind::File))
+                .add_path(root.join("chart.png")),
             at,
         ),
         DebouncedEvent::new(
-            notify::Event::new(EventKind::Create(CreateKind::File)).add_path(root.join("Thumbs.db")),
+            notify::Event::new(EventKind::Create(CreateKind::File))
+                .add_path(root.join("Thumbs.db")),
             at,
         ),
         DebouncedEvent::new(
@@ -1503,7 +1501,11 @@ fn history_refuses_the_same_junk_the_first_snapshot_skips() {
     let _ = fs::remove_dir_all(&root);
 
     let all: Vec<&str> = reported.all.iter().map(|c| c.path.as_str()).collect();
-    assert_eq!(all, ["chart.png"], "history recorded a NEVER_RECORD name: {all:?}");
+    assert_eq!(
+        all,
+        ["chart.png"],
+        "history recorded a NEVER_RECORD name: {all:?}"
+    );
     assert!(reported.notes.is_empty(), "the index was told about junk");
 }
 
