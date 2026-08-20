@@ -74,7 +74,7 @@ export interface SyncStatus {
 }
 
 /** What a window shows before it has heard anything, and if it never does. */
-export const NOT_RECORDING: SyncStatus = {
+export const NOT_RECORDING: SyncStatus = Object.freeze({
   state: "off",
   lastRecordedAt: null,
   waiting: 0,
@@ -82,7 +82,7 @@ export const NOT_RECORDING: SyncStatus = {
   stuck: [],
   problem: null,
   alongsideOwnGit: false
-};
+});
 
 /** What became of the notes we tried to send on. */
 export type SyncLanded =

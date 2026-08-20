@@ -20,12 +20,6 @@ import { useSyncStatus } from "./useSyncStatus";
  * in the same native call, which checkpoints both versions before it writes.
  */
 
-/** One read of the list: either what it holds, or why it could not be read. */
-interface Read {
-  readonly conflicts: readonly ConflictSummary[] | null;
-  readonly error: string | null;
-}
-
 interface ConflictsPanelProps {
   readonly rootPath: string | null;
   /** Opens the side-by-side comparison, named by the copy and the note it is of. */
@@ -39,29 +33,21 @@ export function ConflictsPanel({ rootPath, onReview }: ConflictsPanelProps) {
   const { stuck } = useSyncStatus(rootPath);
 
   /**
-   * Reads the list, changing nothing.
+   * Reads the list and writes both halves of the result into state.
    *
-   * Kept free of state so it can be called from anywhere — an effect, a click
-   * handler — without the caller having to reason about when React will see the
-   * result. {@link apply} is the only thing that writes.
+   * The single source of truth for refreshing the panel: an effect, a change
+   * subscription, and a decision all funnel through here, so they all see the
+   * same error handling and the same ordering of `setState` calls.
    */
-  const read = useCallback(async (): Promise<Read | null> => {
-    if (!rootPath) return null;
+  const reload = useCallback(async (): Promise<void> => {
+    if (!rootPath) return;
     try {
-      return { conflicts: await listConflicts(rootPath), error: null };
+      setConflicts(await listConflicts(rootPath));
+      setError(null);
     } catch (cause) {
-      return {
-        conflicts: null,
-        error: messageOf(cause, "The list of items to review could not be read.")
-      };
+      setError(messageOf(cause, "The list of items to review could not be read."));
     }
   }, [rootPath]);
-
-  const apply = useCallback((result: Read | null) => {
-    if (!result) return;
-    if (result.conflicts) setConflicts(result.conflicts);
-    setError(result.error);
-  }, []);
 
   // One effect for the first read and for every one after it. The native side
   // announces both halves of a change — a daemon dropping a new copy, and
@@ -69,14 +55,12 @@ export function ConflictsPanel({ rootPath, onReview }: ConflictsPanelProps) {
   useEffect(() => {
     let cancelled = false;
     let stop: (() => void) | null = null;
-    const reload = () => {
-      void read().then((result) => {
-        if (!cancelled) apply(result);
-      });
+    const refresh = (): void => {
+      if (!cancelled) void reload();
     };
 
-    reload();
-    void subscribeToConflictChanges(reload).then((unlisten) => {
+    refresh();
+    void subscribeToConflictChanges(refresh).then((unlisten) => {
       if (cancelled) unlisten();
       else stop = unlisten;
     });
@@ -85,7 +69,7 @@ export function ConflictsPanel({ rootPath, onReview }: ConflictsPanelProps) {
       cancelled = true;
       stop?.();
     };
-  }, [apply, read]);
+  }, [reload]);
 
   const decide = useCallback(
     async (summary: ConflictSummary, resolution: ConflictResolution) => {
@@ -101,11 +85,11 @@ export function ConflictsPanel({ rootPath, onReview }: ConflictsPanelProps) {
       // the card exactly where it was, which the user should see for themselves.
       // The report comes last because the re-read clears the previous one, and a
       // failure the list overwrote would be a failure nobody was told about.
-      apply(await read());
+      await reload();
       if (failure) setError(failure);
       setBusy(null);
     },
-    [apply, read, rootPath]
+    [reload, rootPath]
   );
 
   if (!rootPath) {
@@ -245,5 +229,9 @@ function ConflictCard({ conflict, busy, onReview, onDecide }: ConflictCardProps)
 }
 
 function messageOf(cause: unknown, fallback: string): string {
-  return cause instanceof NativeCommandError ? cause.message : fallback;
+  if (cause instanceof NativeCommandError) return cause.message;
+  // A non-native failure is still worth a trail: the user sees the stable
+  // fallback, but a persistent cause nobody logged is one nobody can trace.
+  console.error("[sync] conflict operation failed:", cause);
+  return fallback;
 }

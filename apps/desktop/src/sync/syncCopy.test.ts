@@ -98,9 +98,12 @@ describe("the status footer", () => {
     const pill = describePill(status({ state: "off", alongsideOwnGit: true }), NOW);
 
     expect(pill.detail).toContain("keeps its own version history");
+    // The alongside-git sentence is owned by `describePill`; the "off" branch
+    // must not also say it, or the user sees it twice.
+    expect(pill.detail).not.toMatch(/keeps its own version history.*keeps its own version history/);
   });
 
-  /// A failure nobody can act on is a failure nobody will act on.
+  // A failure nobody can act on is a failure nobody will act on.
   it("always names something to do about a failure", () => {
     for (const code of [
       "sync.note_read_failed",
@@ -126,6 +129,28 @@ describe("the status footer", () => {
     expect(recoveryFor("sync.note_store_failed")).not.toBe(recoveryFor("sync.note_read_failed"));
     expect(recoveryFor("sync.note_write_failed")).not.toBe(recoveryFor("sync.note_read_failed"));
   });
+
+  // The sentences themselves, not just that they differ. A recovery that
+  // drifts from what the design wrote is a regression even if it is still
+  // unique, so each branch is pinned to its exact wording.
+  it("says the exact sentence each branch was written to say", () => {
+    expect(recoveryFor("sync.auth_required")).toBe(
+      "Use a remote that does not require a sign-in, or sign in when remote authentication is available."
+    );
+    expect(recoveryFor("sync.note_read_failed")).toBe(
+      "Check the notes folder is still connected, then edit any note to try again."
+    );
+    expect(recoveryFor("sync.note_write_failed")).toBe(
+      "Check this note can be saved on this computer — a name Windows refuses, or a folder sitting where the note belongs — then bring these notes in step again."
+    );
+    expect(recoveryFor("sync.vault_too_deep")).toBe(
+      "Some folders here are nested too deeply to keep track of. Move them nearer the top of the folder and open it again."
+    );
+    // The default branch: a code nobody planned for still has to name a move.
+    expect(recoveryFor("something.nobody.planned.for")).toBe(
+      "Close this folder and open it again to start saving versions."
+    );
+  });
 });
 
 describe("how often this folder has needed something of you", () => {
@@ -136,8 +161,8 @@ describe("how often this folder has needed something of you", () => {
     expect(text).toContain("never");
   });
 
-  /// The number that makes the feature visible: someone should be able to see
-  /// that the noise is being absorbed rather than simply not happening.
+  // The number that makes the feature visible: someone should be able to see
+  // that the noise is being absorbed rather than simply not happening.
   it("reports what was tidied away separately from what was asked", () => {
     const text = describeConflictRate({ decisions: 2, settled: 47, recorded: 340 });
 
@@ -183,8 +208,8 @@ describe("describeSync", () => {
     expect(text).toContain("1 note needs you to choose");
   });
 
-  /// A refusal is someone else's timing, not this person's problem, and the
-  /// only useful instruction is to wait.
+  // A refusal is someone else's timing, not this person's problem, and the
+  // only useful instruction is to wait.
   it("turns a refusal into something to do rather than a fault", () => {
     const text = describeSync({
       broughtDown: 0,

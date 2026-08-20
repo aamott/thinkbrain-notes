@@ -67,6 +67,7 @@ const { ConflictsPanel } = await import("./ConflictsPanel");
 const { MergeTab } = await import("./MergeTab");
 const { HistoryPanel } = await import("./HistoryPanel");
 const { SyncPill } = await import("./SyncPill");
+const { describeSync } = await import("./syncCopy");
 
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
@@ -193,30 +194,58 @@ describe("nothing in this feature speaks git to the user", () => {
     );
   });
 
-  /// Every state of the footer, including the ones that only appear when
-  /// something has gone wrong — which is exactly when jargon would land worst.
+  // Every state of the footer, including the ones that only appear when
+  // something has gone wrong — which is exactly when jargon would land worst.
+  // The `alongsideOwnGit` variant runs the "this folder also keeps its own
+  // version history" sentence through the same audit, in every state —
+  // including `problem`, where the appended sentence sits next to a failure.
   it("keeps the footer plain in every state it has", async () => {
     for (const state of ["off", "idle", "saving", "syncing", "attention", "problem"] as const) {
-      const status = {
-        ...NOT_RECORDING,
-        state: state as SyncState,
-        lastRecordedAt: Date.now(),
-        waiting: 1,
-        attention: 2,
-        stuck: [],
-        problem:
-          state === "problem"
-            ? { code: "sync.note_read_failed", message: "A note could not be read." }
-            : null
-      };
-      const host = document.createElement("div");
-      document.body.append(host);
-      const surface = createRoot(host);
-      await act(async () => surface.render(<SyncPill status={status} onOpen={() => undefined} />));
-      const spoken = host.querySelector("button")?.getAttribute("aria-label") ?? "";
-      audit(`the footer while ${state}`, `${host.textContent ?? ""} ${spoken}`);
-      await act(async () => surface.unmount());
-      host.remove();
+      for (const alongsideOwnGit of [false, true] as const) {
+        const status = {
+          ...NOT_RECORDING,
+          state: state as SyncState,
+          lastRecordedAt: Date.now(),
+          waiting: 1,
+          attention: 2,
+          stuck: [],
+          alongsideOwnGit,
+          problem:
+            state === "problem"
+              ? { code: "sync.note_read_failed", message: "A note could not be read." }
+              : null
+        };
+        const host = document.createElement("div");
+        document.body.append(host);
+        const surface = createRoot(host);
+        await act(async () => surface.render(<SyncPill status={status} onOpen={() => undefined} />));
+        const spoken = host.querySelector("button")?.getAttribute("aria-label") ?? "";
+        audit(
+          `the footer while ${state}${alongsideOwnGit ? " alongside own git" : ""}`,
+          `${host.textContent ?? ""} ${spoken}`
+        );
+        await act(async () => surface.unmount());
+        host.remove();
+      }
     }
+  });
+
+  // `describeSync` is not rendered by any panel above, so its sentences are
+  // audited directly — both the refusal path and the ordinary "moved" path,
+  // since each says something different.
+  it("keeps describeSync plain for a refusal and a moved landing", () => {
+    audit(
+      "describeSync on refusal",
+      describeSync({
+        broughtDown: 0,
+        askedAbout: 0,
+        sent: 0,
+        landed: { state: "refused", reason: "the other end holds changes this device has not seen" }
+      })
+    );
+    audit(
+      "describeSync on moved",
+      describeSync({ broughtDown: 2, askedAbout: 1, sent: 3, landed: { state: "moved" } })
+    );
   });
 });

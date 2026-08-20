@@ -3,27 +3,35 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { ConflictKind, ConflictSummary } from "./conflictTypes";
+import type { ConflictKind, ConflictResolution, ConflictSummary } from "./conflictTypes";
+import type { SyncStatus } from "./historyTypes";
 
-const listConflicts = vi.fn<() => Promise<readonly ConflictSummary[]>>();
-const resolveConflict = vi.fn<() => Promise<unknown>>();
+const listConflicts = vi.fn<(rootPath: string) => Promise<readonly ConflictSummary[]>>();
+const resolveConflict = vi.fn<
+  (rootPath: string, summary: ConflictSummary, resolution: ConflictResolution) => Promise<unknown>
+>();
 
 vi.mock("./conflictService", () => ({
-  listConflicts: () => listConflicts(),
-  resolveConflict: (...args: unknown[]) => resolveConflict(...(args as [])),
+  listConflicts: (rootPath: string) => listConflicts(rootPath),
+  resolveConflict: (rootPath: string, summary: ConflictSummary, resolution: ConflictResolution) =>
+    resolveConflict(rootPath, summary, resolution),
   subscribeToConflictChanges: () => Promise.resolve(() => undefined)
 }));
 
+// The panel reads `stuck` from this hook. A module-level variable backs the
+// mock so a test can swap in a non-empty list without re-registering the mock.
+let syncStatus: SyncStatus = {
+  state: "off",
+  lastRecordedAt: null,
+  waiting: 0,
+  attention: 0,
+  stuck: [],
+  problem: null,
+  alongsideOwnGit: false
+};
+
 vi.mock("./useSyncStatus", () => ({
-  useSyncStatus: () => ({
-    state: "off",
-    lastRecordedAt: null,
-    waiting: 0,
-    attention: 0,
-    stuck: [],
-    problem: null,
-    alongsideOwnGit: false
-  })
+  useSyncStatus: () => syncStatus
 }));
 
 const { ConflictsPanel } = await import("./ConflictsPanel");
@@ -34,6 +42,15 @@ let container: HTMLDivElement | null = null;
 beforeEach(() => {
   listConflicts.mockReset().mockResolvedValue([]);
   resolveConflict.mockReset().mockResolvedValue({ note: "note.md", keptAs: null, checkpoint: "a" });
+  syncStatus = {
+    state: "off",
+    lastRecordedAt: null,
+    waiting: 0,
+    attention: 0,
+    stuck: [],
+    problem: null,
+    alongsideOwnGit: false
+  };
 });
 
 afterEach(async () => {
@@ -145,8 +162,8 @@ describe("what each card offers", () => {
     expect(resolveConflict).toHaveBeenCalledWith("/notes", expect.anything(), { kind: "keepBoth" });
   });
 
-  /// A failed decision has to say so and leave the list alone — the native side
-  /// wrote nothing, and a card that quietly vanished would say otherwise.
+  // A failed decision has to say so and leave the list alone — the native side
+  // wrote nothing, and a card that quietly vanished would say otherwise.
   it("reports a refused decision without dropping the card", async () => {
     listConflicts.mockResolvedValue([conflict("diagram.png", "binary")]);
     resolveConflict.mockRejectedValue(new Error("refused"));
@@ -156,5 +173,65 @@ describe("what each card offers", () => {
 
     expect(host.querySelector('[role="alert"]')?.textContent).toContain("Nothing was changed");
     expect(host.textContent).toContain("diagram.png");
+  });
+});
+
+describe("notes that could not be kept in step", () => {
+  // The stuck list is separate from the conflicts list: a note that the
+  // recorder could not write still needs a card, and the card still needs the
+  // sentence that says what to do about it.
+  it("names the note and the recovery that suits its failure", async () => {
+    syncStatus = {
+      ...syncStatus,
+      stuck: [
+        {
+          path: "journal/Stuck Note.md",
+          code: "sync.note_read_failed",
+          message: "A note could not be read."
+        }
+      ]
+    };
+
+    const host = await render();
+
+    expect(host.textContent).toContain("Stuck Note.md");
+    expect(host.textContent).toContain("Could not be kept in step");
+    // The recovery sentence for a read failure, exactly as `recoveryFor` gives it.
+    expect(host.textContent).toContain(
+      "Check the notes folder is still connected, then edit any note to try again."
+    );
+  });
+});
+
+describe("a decision in flight", () => {
+  // While the native side is writing, the same buttons must not be clickable a
+  // second time — a double decision would race two writes against one note.
+  // Once it lands they come back, so a follow-up (or undoing the choice) is
+  // still possible.
+  it("disables the card's buttons mid-flight and re-enables them after", async () => {
+    listConflicts.mockResolvedValue([conflict("diagram.png", "binary")]);
+    let resolveDecision: ((value: unknown) => void) | null = null;
+    resolveConflict.mockImplementation(
+      () => new Promise<unknown>((resolve) => { resolveDecision = resolve; })
+    );
+
+    const host = await render();
+    const keepBoth = () => button(host, "Keep both");
+    const keepOurs = () => button(host, "Keep this computer's");
+
+    // Both buttons are present and enabled before anything is clicked.
+    expect(keepBoth().disabled).toBe(false);
+    expect(keepOurs().disabled).toBe(false);
+
+    await act(async () => { keepBoth().click(); });
+
+    // Mid-flight: every decision button on the card is disabled.
+    expect(keepBoth().disabled).toBe(true);
+    expect(keepOurs().disabled).toBe(true);
+
+    // After the native side answers, the buttons come back.
+    await act(async () => { resolveDecision?.(undefined); });
+    expect(keepBoth().disabled).toBe(false);
+    expect(keepOurs().disabled).toBe(false);
   });
 });

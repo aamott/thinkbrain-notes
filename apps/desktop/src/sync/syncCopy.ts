@@ -136,13 +136,12 @@ export function describePill(status: SyncStatus, now: Date = new Date()): PillCo
 function pillFor(status: SyncStatus, now: Date): PillCopy {
   switch (status.state) {
     case "off":
+      // The alongside-git sentence is appended by `describePill`, which owns
+      // that concern across every state — saying it here too doubles it up.
       return {
         symbol: "—",
         text: "Versions not saved here",
-        detail:
-          status.alongsideOwnGit
-            ? "This folder keeps its own version history, so ThinkBrain is leaving it alone."
-            : "Versions of your notes are not being saved here.",
+        detail: "Versions of your notes are not being saved here.",
         tone: "quiet"
       };
     case "problem": {
@@ -158,8 +157,7 @@ function pillFor(status: SyncStatus, now: Date): PillCopy {
       };
     }
     case "attention": {
-      const many = status.attention !== 1;
-      const text = `${status.attention} item${many ? "s" : ""} need${many ? "" : "s"} your attention`;
+      const text = `${plural(status.attention, "item needs", "items need")} your attention`;
       return {
         symbol: "⚠",
         text,
@@ -205,6 +203,9 @@ function pillFor(status: SyncStatus, now: Date): PillCopy {
  */
 export function describeSync(done: Synced): string {
   if (done.landed.state === "refused") {
+    // The reason is carried across IPC for diagnostics; the UI gives a stable
+    // message, but leave a trail so a refusal can be traced if it persists.
+    console.debug("[sync] refused:", done.landed.reason);
     return "Another device was sending its own changes at the same time. Try again in a moment.";
   }
 
