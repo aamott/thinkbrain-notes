@@ -72,9 +72,10 @@ which would throw away the decisions already made.
 
 ## Known gaps
 
-- **No toast.** The badge is live, and it is the durable half of "awareness";
-  a toast needs a notification surface this app does not have yet, and
-  inventing one for a single message is the wrong place to start.
+- **No new-conflict toast.** Sync failures now use the status-bar notification
+  surface, but a conflict toast still needs a deliberate notification policy:
+  a cloud daemon can make several copies at once, and one toast per file would
+  be noise. The badge remains the durable awareness path for now.
 - **Image cards show sizes and dates, not thumbnails.** Reading an image out of
   the vault into the panel needs the asset resolver that the editor uses, on a
   path that is not a note.

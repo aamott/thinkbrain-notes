@@ -69,12 +69,12 @@ restore from History. This is what earns the UI its casual tone.
   `plans/auto-sync/merge-ui-mockup.html`). Chunk choices labeled **by source**
   ("Keep this computer's" / "Keep OneDrive's" / "Keep both"), never by
   position — panes sit side-by-side on desktop, stacked on mobile.
-- **One Sync surface.** Cloud rescue + git sync are one feature: one
-  activity-bar item, one settings page (sections: "Cloud folder" auto-detected
-  · "Sync to another device"), one conflict panel, one history. Not two
-  extensions and not two action-bar items — they share the hidden repo, merge
-  engine, and all UI; splitting duplicates most of the code and splits one
-  user concept in two.
+- **One Sync feature, two jobs.** Cloud rescue + git sync share one hidden repo,
+  merge engine, and conflict UI — but two activity-bar items name the jobs:
+  **Two versions** (choose between copies from git or a cloud folder) and
+  **Saved versions** (local change history and restore). Settings split the
+  transports: **Cloud copies** (app-wide, passive detection) and **Git link**
+  (per workspace). Not two extensions and not Git-vs-OneDrive as two products.
 - **Settings/credentials placement:** remote URL + sync prefs in workspace
   settings (OS app-data); token in OS keychain only. No git CLI, no
   `.gitconfig`, nothing written to the vault.
@@ -110,10 +110,12 @@ conflicts · block-level Markdown merge · reconcile-text · cloud provider APIs
 7. `pending-history_pruning-low-med.md` — retention/size policy, gc
 8. `pending-mobile_cross_compile-med-easy.md` — CI validation on
    Android/iOS targets
+9. `pending-provider_sign_in-low-hard.md` — "Sign in with GitHub" alongside
+   the token form; same keychain path as story 6c
 
 ## Status
 
 - ✅ Approved; `app-vision.md` reconciled; old git-integration code removed.
 - ✅ Story 0 (the `gix` build spike, split off the front of story 1). gix
   cross-compiles for Android and iOS, and CI keeps it that way.
-- ⬜ Stories 1–8 pending.
+- ⬜ Stories 1–9 pending.

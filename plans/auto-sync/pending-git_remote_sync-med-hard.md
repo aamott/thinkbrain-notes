@@ -9,9 +9,9 @@ fetches and cannot push, so sending was written rather than called:
 - **6b — the round trip.** Fetch, three-way merge against an exact base,
   "Sync now", triggers, status. 🟩 Done.
 - **6c — setup and credentials.** Direct native OS keychain adapter via gix
-  credential callbacks. A token pasted in the link is stripped into the
-  keychain and forgotten from settings. Remaining: prove against GitHub +
-  GitLab; a Sign-in control so the token is never pasted into the link field.
+  credential callbacks. Git link and sign-in are separate inputs; the token
+  goes directly to the keychain and is rejected in the link field. Remaining:
+  prove against GitHub + GitLab.
 
 ## Scope
 
@@ -27,15 +27,18 @@ fetches and cannot push, so sending was written rather than called:
   keychain only. First connect bootstraps automatically: fetch → merge (empty
   and nonempty remote both handled) → push. Checkpoint ref never pushed
   (story 1).
-- **Setup, plain language:** workspace setting is "Folder or git link" — a
-  folder on this computer, or an https:// GitHub / GitLab / git link. HTTPS +
-  token first; SSH later if demanded.
+- **Setup, plain language:** workspace setting is **Git link** — an https://
+  GitHub / GitLab link, or a folder path to a bare repo. HTTPS sign-in takes
+  username and access token in dedicated keychain-only inputs; SSH later if
+  demanded.
 - **Triggers:** on-idle (debounced ~30s default) + manual "Sync now" +
   frequency cap (1/min default). Defaults are hardcoded; advanced settings
   later. "Sync now" = save open editors → commit → fetch → merge → push;
   waits for workspace mutex.
-- **Errors:** offline/auth/rejected-push surface as recovery actions
-  ("Reconnect", "Sign in again"); retry with backoff for transient.
+- **Errors:** offline/auth/rejected-push surface as a notification, bell
+  entry, footer state, and recovery action. Every attempted automatic round
+  counts against the one-minute cap, including failures, so a bad link cannot
+  flash the footer in a loop.
 
 ## Acceptance
 
@@ -50,5 +53,5 @@ fetches and cannot push, so sending was written rather than called:
 
 ## Status
 
-🟨 6a send-pack, 6b round trip, and 6c adapter done. Remaining: GitHub +
-GitLab as hosts; a Sign-in control so a token is not pasted into the link.
+🟨 6a send-pack, 6b round trip, and 6c adapter + sign-in control done.
+Remaining: GitHub + GitLab as hosts.

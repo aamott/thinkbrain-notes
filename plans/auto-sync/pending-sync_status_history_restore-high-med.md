@@ -76,6 +76,11 @@ three-way-merge go/no-go is answered with this vault's evidence.
   appears or clears, and by the watcher when a batch reaches the engine. Only
   when the footer would read differently: the sweeper runs twice a second and
   almost every tick is last tick's answer.
+- **Sync failure notification:** a failed round trip opens a short notification
+  with the error and recovery action, then remains behind the status-bar bell
+  until a successful round trip clears it. Failed automatic attempts still
+  count toward the frequency cap, so an unreachable link cannot flash the
+  footer every sweep tick.
 
 ## Known gaps
 

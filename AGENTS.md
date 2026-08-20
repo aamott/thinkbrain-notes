@@ -12,7 +12,7 @@ Future extensions include:
 
 ## File Map
 
-Keep map up to date. Relative filepaths. Concise.
+Keep map up to date with frequently accessed files. Relative filepaths. Concise.
 
 ```
 apps/desktop/  # React UI + Tauri Rust host (See apps/desktop/AGENTS.md)
@@ -26,7 +26,7 @@ apps/desktop/  # React UI + Tauri Rust host (See apps/desktop/AGENTS.md)
 │  ├─ panels/  # Left/right popouts, bottom panel, outline
 │  ├─ search/  # Search panel & model
 │  ├─ settings/  # Settings UI, theme provider, desktop state
-│  ├─ shell/  # DesktopShell, activity bar, title bar, status bar
+│  ├─ shell/  # DesktopShell, activity bar, title bar, status bar; StatusBar.tsx owns sync-error toast, setup-success toast + notification bell
 │  ├─ tabs/  # Tab model, registry, editor, live preview
 │  └─ workspace/  # Explorer, document adapter, workspace model
 ├─ src-tauri/  # Rust backend & ACP host (See apps/desktop/src-tauri/AGENTS.md)
