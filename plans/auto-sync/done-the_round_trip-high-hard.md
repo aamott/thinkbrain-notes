@@ -94,7 +94,7 @@ Three things fall out of that for free, which is the argument for it:
 
 ## Not in scope
 
-- **Credentials** — story 6c, gated on the secret-storage plan.
+- **Credentials** — story 6c, OS keychain adapter landed.
 - Other gaps tracked as their own stories (see Known gaps below).
 
 ## What this story decided
@@ -149,10 +149,7 @@ Tracked as their own stories, not kept here:
 
 - `pending-lane_test_strength-low-low.md`
 - `pending-delete_vs_change_silent_resolution-med-med.md`
-- `pending-unwritable_note_blocks_vault-high-hard.md`
 - `pending-symlink_submodule_skipped-med-med.md`
-- `pending-crash_conflict_copy_multiplication-high-hard.md`
-- `pending-sync_trigger_debounce-low-med.md`
 - `pending-large_sync_progress-low-low.md`
 
 ## Status

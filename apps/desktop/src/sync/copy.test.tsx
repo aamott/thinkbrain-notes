@@ -196,13 +196,14 @@ describe("nothing in this feature speaks git to the user", () => {
   /// Every state of the footer, including the ones that only appear when
   /// something has gone wrong — which is exactly when jargon would land worst.
   it("keeps the footer plain in every state it has", async () => {
-    for (const state of ["off", "idle", "saving", "attention", "problem"] as const) {
+    for (const state of ["off", "idle", "saving", "syncing", "attention", "problem"] as const) {
       const status = {
         ...NOT_RECORDING,
         state: state as SyncState,
         lastRecordedAt: Date.now(),
         waiting: 1,
         attention: 2,
+        stuck: [],
         problem:
           state === "problem"
             ? { code: "sync.note_read_failed", message: "A note could not be read." }

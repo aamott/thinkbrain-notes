@@ -386,6 +386,7 @@ test("the hello-notes example extension loads from its shipped files and capture
               lastRecordedAt: null,
               waiting: 0,
               attention: 0,
+              stuck: [],
               problem: null,
               alongsideOwnGit: false
             };
@@ -473,6 +474,7 @@ test("an extension creates a note and opens it through the workspace API", async
               lastRecordedAt: null,
               waiting: 0,
               attention: 0,
+              stuck: [],
               problem: null,
               alongsideOwnGit: false
             };
@@ -592,6 +594,7 @@ test("an extension lists notes in a folder and opens its own contributed tab", a
               lastRecordedAt: null,
               waiting: 0,
               attention: 0,
+              stuck: [],
               problem: null,
               alongsideOwnGit: false
             };

@@ -20,12 +20,20 @@ use crate::NativeError;
 use super::bootstrap::bootstrap;
 use super::conflict;
 use super::engine::Engine;
+use super::round;
+use super::settle;
 
 /// How often the sweeper looks for settled changes.
 ///
 /// Well under the settle window, so a note is recorded promptly once it goes
 /// quiet rather than up to a full window late.
 const TICK: Duration = Duration::from_millis(500);
+
+/// How long a vault must be still before a round trip fires without a click.
+const IDLE: Duration = Duration::from_secs(30);
+
+/// Soonest a second automatic round trip will fire after the last one finished.
+const CAP: Duration = Duration::from_secs(60);
 
 #[derive(Default)]
 struct Registry {
@@ -353,6 +361,7 @@ fn spawn_sweeper() {
             let now = Instant::now();
             for (key, engine) in engines {
                 let was_broken = engine.problem().is_some();
+                let was_stuck = engine.stuck().len();
                 let recorded = engine.record_settled(now);
                 if let Err(error) = &recorded {
                     eprintln!("[sync] could not record changes for {key}: {error:?}");
@@ -360,12 +369,49 @@ fn spawn_sweeper() {
                 // Only when the footer would read differently. This runs twice
                 // a second against every open workspace, and almost all of
                 // those ticks are the same answer as the one before.
-                if matches!(recorded, Ok(Some(_))) || engine.problem().is_some() != was_broken {
+                if matches!(recorded, Ok(Some(_)))
+                    || engine.problem().is_some() != was_broken
+                    || engine.stuck().len() != was_stuck
+                {
                     crate::commands::watcher::announce_sync_status(&key);
                 }
+                maybe_sync(&key, &engine, now);
             }
         })
         .expect("the sync sweeper thread starts");
+}
+
+/// Fires a round trip when the vault has been still and it has been long
+/// enough since the last one. "Sync now" does not go through here, and the
+/// per-workspace lane still keeps two trips from interleaving.
+fn maybe_sync(key: &str, engine: &Arc<Engine>, now: Instant) {
+    if !engine.ready_to_sync(IDLE, CAP, now) {
+        return;
+    }
+    let Some(home) = settle::settings_home() else {
+        return;
+    };
+    let root = PathBuf::from(key);
+    let Some(destination) = round::destination(&home, &root) else {
+        return;
+    };
+    if !engine.set_syncing(true) {
+        return;
+    }
+    crate::commands::watcher::announce_sync_status(key);
+    let worker = Arc::clone(engine);
+    let worker_key = key.to_string();
+    if std::thread::Builder::new()
+        .name("thinkbrain-auto-sync".into())
+        .spawn(move || {
+            let _ = round::sync(&worker, &worker_key, &root, &destination);
+            crate::commands::watcher::announce_sync_status(&worker_key);
+        })
+        .is_err()
+    {
+        engine.set_syncing(false);
+        crate::commands::watcher::announce_sync_status(key);
+    }
 }
 
 #[cfg(test)]

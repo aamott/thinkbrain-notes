@@ -79,15 +79,6 @@ three-way-merge go/no-go is answered with this vault's evidence.
 
 ## Known gaps
 
-- **A permanently unrecordable path blocks the whole vault's history.** Found
-  by this story's own status test. A failed commit puts its paths back into
-  `pending` on purpose — "the promise is unkept" — which is right for a drive
-  that came unplugged and wrong for a note that can never be read, because the
-  retry fails every 500ms forever and takes every other note's changes with it.
-  Story 5 makes it *visible* rather than silent: the footer now says "Saving
-  stopped" with something to do about it. Changing the retry policy is a story
-  1 decision (per-path failure isolation in `build_tree`) and is deliberately
-  not made here.
 - **Restore has no confirmation step.** It does not need one — the restore
   point is taken first, so the way out is another restore — but a note with
   unsaved edits in an open editor will have them replaced on disk, and the

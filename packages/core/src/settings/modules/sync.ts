@@ -27,17 +27,17 @@ export const DEFAULT_SETTLE_AUTOMATICALLY = true;
  */
 export function validateSyncDestination(value: unknown): string | null {
   if (typeof value !== "string") {
-    return "Paste a link, or leave this empty.";
+    return "Paste a folder path or an https:// git link, or leave this empty.";
   }
   if (value === "") return null;
   const trimmed = value.trim();
   if (trimmed === "") {
-    return "Leave this empty, or paste a link.";
+    return "Leave this empty, or paste a folder path or an https:// git link.";
   }
   if (looksLikeRemoteUrl(trimmed) || looksLikeScpRemote(trimmed) || looksLikeLocalRemote(trimmed)) {
     return null;
   }
-  return "Paste a link (https://… or user@host:path), or leave this empty.";
+  return "Paste a folder path or an https:// git link, or leave this empty.";
 }
 
 function looksLikeRemoteUrl(value: string): boolean {
@@ -95,7 +95,7 @@ export const syncModule: SettingsModule = {
     },
     {
       id: "sync.destination",
-      label: "Another device",
+      label: "Folder or git link",
       settings: [
         {
           key: "destination",
@@ -103,9 +103,9 @@ export const syncModule: SettingsModule = {
           default: "",
           scope: "workspace",
           section: "sync.destination",
-          label: "Keep these notes in step with",
+          label: "Folder or git link",
           description:
-            "A place these notes are kept in step with — paste the link it gives you. Leave it empty and nothing leaves this device. Earlier versions and conflicts work the same either way.",
+            "A folder on this computer, or an https:// git link (GitHub, GitLab, or similar). Leave empty for this device only. A token in the link is saved in the keychain and taken out of this field.",
           portable: false,
           validation: validateSyncDestination
         }

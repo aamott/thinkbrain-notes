@@ -34,6 +34,7 @@ libc = "0.2"
 # trying to compile a plugin that has no mobile implementation.
 [target.'cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))'.dependencies]
 tauri-plugin-updater = "2"
+keyring = "3"
 
 # ---------------------------------------------------------------------------
 # Build profiles

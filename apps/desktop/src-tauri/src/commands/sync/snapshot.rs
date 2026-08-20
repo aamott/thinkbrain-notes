@@ -70,11 +70,19 @@ fn history_read_failed(error: impl std::fmt::Display) -> NativeError {
     )
 }
 
+/// What recording one batch actually put in history.
+pub struct Landed {
+    pub commit: Option<gix::ObjectId>,
+    /// Notes this batch could not record. The rest of the vault still landed.
+    pub skipped: Vec<(PathBuf, NativeError)>,
+}
+
 /// Records the current on-disk state of `paths` as a new commit.
 ///
 /// `paths` are vault-relative. A path that exists on disk is stored; one that
 /// does not is removed from the tree, which is how a deleted note is recorded.
-/// Paths outside the vault are refused rather than silently skipped.
+/// A path that cannot be read is skipped rather than aborting the batch: one
+/// bad note must not stall the vault.
 ///
 /// Returns `None` when the resulting tree is identical to the last commit's —
 /// a save that changed nothing, or a change already recorded, should not leave
@@ -84,15 +92,30 @@ pub fn record(
     paths: &[PathBuf],
     message: &str,
 ) -> Result<Option<gix::ObjectId>, NativeError> {
+    Ok(landed(repo, paths, message)?.commit)
+}
+
+/// [`record`], and the notes that could not be included.
+pub fn landed(
+    repo: &gix::Repository,
+    paths: &[PathBuf],
+    message: &str,
+) -> Result<Landed, NativeError> {
     let parent = head_of(repo, HISTORY_REF)?;
     let base_tree = tree_of(repo, parent)?;
-    let tree = build_tree(repo, base_tree, paths)?;
+    let (tree, skipped) = build_tree(repo, base_tree, paths)?;
 
     if tree == base_tree {
-        return Ok(None);
+        return Ok(Landed {
+            commit: None,
+            skipped,
+        });
     }
 
-    commit_on(repo, HISTORY_REF, message, tree, parent).map(Some)
+    Ok(Landed {
+        commit: Some(commit_on(repo, HISTORY_REF, message, tree, parent)?),
+        skipped,
+    })
 }
 
 /// Records the current state of `paths` as a restore point, and returns
@@ -111,7 +134,7 @@ pub fn checkpoint(
 ) -> Result<gix::ObjectId, NativeError> {
     let parent = head_of(repo, CHECKPOINT_REF)?;
     let base_tree = tree_of(repo, parent)?;
-    let tree = build_tree(repo, base_tree, paths)?;
+    let (tree, _) = build_tree(repo, base_tree, paths)?;
 
     if tree == base_tree {
         if let Some(existing) = parent {
@@ -125,13 +148,21 @@ pub fn checkpoint(
     commit_on(repo, CHECKPOINT_REF, reason.message(), tree, parent)
 }
 
+fn unreadable(error: impl std::fmt::Display) -> NativeError {
+    failed(
+        "sync.note_read_failed",
+        "Could not read a note to record it.",
+        error,
+    )
+}
+
 /// Writes blobs for the paths that exist and drops the ones that do not,
-/// returning the resulting tree.
+/// returning the resulting tree and any notes that could not be included.
 fn build_tree(
     repo: &gix::Repository,
     base_tree: gix::ObjectId,
     paths: &[PathBuf],
-) -> Result<gix::ObjectId, NativeError> {
+) -> Result<(gix::ObjectId, Vec<(PathBuf, NativeError)>), NativeError> {
     let vault = repo
         .workdir()
         .ok_or_else(|| {
@@ -147,9 +178,16 @@ fn build_tree(
         )
     })?;
 
+    let mut skipped = Vec::new();
     let mut remaining: Vec<PathBuf> = paths.to_vec();
     while let Some(path) = remaining.pop() {
-        let relative = vault_relative(&vault, &path)?;
+        let relative = match vault_relative(&vault, &path) {
+            Ok(relative) => relative,
+            Err(error) => {
+                skipped.push((path, error));
+                continue;
+            }
+        };
         let absolute = vault.join(&relative);
 
         match std::fs::symlink_metadata(&absolute) {
@@ -158,7 +196,10 @@ fn build_tree(
                 // it here is how a rename or a rescan that only named the folder
                 // still records the notes that moved, rather than leaving the
                 // old folder in history.
-                remaining.extend(super::bootstrap::recordable_under(&vault, &absolute)?);
+                match super::bootstrap::recordable_under(&vault, &absolute) {
+                    Ok(notes) => remaining.extend(notes),
+                    Err(error) => skipped.push((path, error)),
+                }
             }
             Ok(metadata) if metadata.is_file() => {
                 let file = match open_without_following(&absolute) {
@@ -168,19 +209,13 @@ fn build_tree(
                             Ok(metadata) => metadata.is_file(),
                             Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
                             Err(error) => {
-                                return Err(failed(
-                                    "sync.note_read_failed",
-                                    "Could not read a note to record it.",
-                                    error,
-                                ));
+                                skipped.push((path, unreadable(error)));
+                                continue;
                             }
                         };
                         if still_file {
-                            return Err(failed(
-                                "sync.note_read_failed",
-                                "Could not read a note to record it.",
-                                open_error,
-                            ));
+                            skipped.push((path, unreadable(open_error)));
+                            continue;
                         }
                         editor.remove(tree_path(&relative)).map_err(|error| {
                             failed(
@@ -196,23 +231,30 @@ fn build_tree(
                 // a swap between the two would otherwise record one file's
                 // bytes under another's executable bit, or follow a symlink
                 // that appeared after the check.
-                let metadata = file.metadata().map_err(|error| {
-                    failed(
-                        "sync.note_read_failed",
-                        "Could not read a note to record it.",
-                        error,
-                    )
-                })?;
+                let metadata = match file.metadata() {
+                    Ok(metadata) => metadata,
+                    Err(error) => {
+                        skipped.push((path, unreadable(error)));
+                        continue;
+                    }
+                };
                 if metadata.file_type().is_symlink() || !metadata.is_file() {
                     continue;
                 }
-                let blob = repo.write_blob_stream(file).map_err(|error| {
-                    failed(
-                        "sync.note_store_failed",
-                        "Could not store a note's contents.",
-                        error,
-                    )
-                })?;
+                let blob = match repo.write_blob_stream(file) {
+                    Ok(blob) => blob,
+                    Err(error) => {
+                        skipped.push((
+                            path,
+                            failed(
+                                "sync.note_store_failed",
+                                "Could not store a note's contents.",
+                                error,
+                            ),
+                        ));
+                        continue;
+                    }
+                };
                 let kind = if is_executable(&metadata) {
                     gix::object::tree::EntryKind::BlobExecutable
                 } else {
@@ -247,26 +289,23 @@ fn build_tree(
             // Something else is wrong — a drive that went away, a folder we may
             // not read. Recording that as a deletion would throw notes out of
             // history over a problem that is very likely temporary.
-            Err(error) => {
-                return Err(failed(
-                    "sync.note_read_failed",
-                    "Could not read a note to record it.",
-                    error,
-                ));
-            }
+            Err(error) => skipped.push((path, unreadable(error))),
         }
     }
 
-    Ok(editor
-        .write()
-        .map_err(|error| {
-            failed(
-                "sync.tree_write_failed",
-                "Could not record the new state.",
-                error,
-            )
-        })?
-        .detach())
+    Ok((
+        editor
+            .write()
+            .map_err(|error| {
+                failed(
+                    "sync.tree_write_failed",
+                    "Could not record the new state.",
+                    error,
+                )
+            })?
+            .detach(),
+        skipped,
+    ))
 }
 
 /// Commits `tree` onto `reference`, authored by the app.

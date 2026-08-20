@@ -140,35 +140,65 @@ const FROM_ANOTHER_DEVICE: &str = " (from another device";
 /// `note (from another device N).md` files, rather than stating every one.
 const BESIDE_CAP: usize = 1_000;
 
-/// A free name to put another device's version of `original` beside it at.
+/// The unresolved-conflict slot for `original`: `note (from another device).md`.
 ///
-/// The search is bounded: after `BESIDE_CAP` numbered names are all taken, a
-/// high-resolution timestamp suffix is used instead of scanning further. That
-/// keeps the work capped on a hostile or very messy vault.
-pub fn beside(original: &str, taken: impl Fn(&str) -> bool) -> String {
-    let (directory, name) = match original.rfind('/') {
+/// Numbered names are only for when this slot is occupied by something that is
+/// not this conflict. An interrupted sync that already wrote the slot must
+/// reuse it, or the next attempt stacks ` 2`, then ` 3`.
+pub fn slot(original: &str) -> String {
+    let (directory, name) = dir_and_name(original);
+    let (stem, extension) = split_extension(name);
+    format!("{directory}{stem}{FROM_ANOTHER_DEVICE}){extension}")
+}
+
+fn dir_and_name(original: &str) -> (&str, &str) {
+    match original.rfind('/') {
         Some(index) => (&original[..=index], &original[index + 1..]),
         None => ("", original),
-    };
-    let (stem, extension) = split_extension(name);
+    }
+}
 
-    let unnumbered = format!("{directory}{stem}{FROM_ANOTHER_DEVICE}){extension}");
+/// A free name to put another device's version of `original` beside it at.
+///
+/// `taken` means the name cannot be reused — a folder sitting on it, or a
+/// numbered copy that is already someone else's file. The unnumbered slot is
+/// reusable even when a leftover from an interrupted write is already there.
+///
+/// The search is bounded: after `BESIDE_CAP` numbered names are all taken, a
+/// high-resolution timestamp suffix is used instead of scanning further.
+pub fn beside(original: &str, taken: impl Fn(&str) -> bool) -> String {
+    let unnumbered = slot(original);
     if !taken(&unnumbered) {
         return unnumbered;
     }
+    let (directory, name) = dir_and_name(original);
+    let (stem, extension) = split_extension(name);
     for nth in 2..=BESIDE_CAP {
         let candidate = format!("{directory}{stem}{FROM_ANOTHER_DEVICE} {nth}){extension}");
         if !taken(&candidate) {
             return candidate;
         }
     }
-    // Every numbered name is taken. A nanosecond stamp is unique enough in
-    // practice and keeps the search bounded rather than walking the whole vault.
     let stamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|elapsed| elapsed.as_nanos())
         .unwrap_or(0);
     format!("{directory}{stem}{FROM_ANOTHER_DEVICE} {stamp}){extension}")
+}
+
+/// [`beside`] against a real vault: reuse the unnumbered slot when it is
+/// already a file, and only number past a name that cannot be overwritten.
+pub fn beside_in(vault: &Path, original: &str) -> String {
+    beside(original, |path| occupant_blocks(vault, original, path))
+}
+
+fn occupant_blocks(vault: &Path, original: &str, path: &str) -> bool {
+    let present = vault.join(path);
+    if !present.exists() {
+        return false;
+    }
+    // A leftover copy of this conflict is the slot, not a collision.
+    !(path == slot(original) && present.is_file())
 }
 
 /// Nextcloud: `note (conflicted copy 2026-08-16 093100).md`.
@@ -342,6 +372,33 @@ mod tests {
         assert_eq!(beside("note.md", |_| false), "note (from another device).md");
         assert_eq!(
             beside("note.md", |name| name == "note (from another device).md"),
+            "note (from another device 2).md"
+        );
+    }
+
+    /// An interrupted sync leaves the unnumbered slot behind. Reusing it is
+    /// what stops the next attempt from stacking ` 2`, then ` 3`.
+    #[test]
+    fn an_existing_copy_of_this_conflict_is_reused_not_numbered() {
+        let vault = make_temp_test_dir("conflict-reuse-slot", "sync", true);
+        fs::write(vault.join("note.md"), "mine").expect("the note exists");
+        fs::write(vault.join("note (from another device).md"), "theirs").expect("the leftover exists");
+
+        assert_eq!(
+            beside_in(&vault, "note.md"),
+            "note (from another device).md"
+        );
+    }
+
+    /// Numbering is for a name that cannot be this conflict's slot — a folder
+    /// sitting on it, not a leftover file.
+    #[test]
+    fn a_folder_on_the_slot_is_numbered_past() {
+        let vault = make_temp_test_dir("conflict-slot-folder", "sync", true);
+        fs::create_dir(vault.join("note (from another device).md")).expect("the slot is a folder");
+
+        assert_eq!(
+            beside_in(&vault, "note.md"),
             "note (from another device 2).md"
         );
     }

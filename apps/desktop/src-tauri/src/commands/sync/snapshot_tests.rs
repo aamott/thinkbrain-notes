@@ -2,6 +2,7 @@ use super::super::hidden_repo;
 use super::*;
 use crate::tests::make_temp_test_dir;
 use std::fs;
+use std::path::{Path, PathBuf};
 
 struct Fixture {
     vault: PathBuf,
@@ -308,16 +309,24 @@ fn recording_an_unchanged_note_makes_no_commit() {
     assert_eq!(head_commit(&f.repo).expect("readable"), Some(first));
 }
 
-/// The vault is the boundary. A path that escapes it would pull the user's
-/// unrelated files into a history they think holds only their notes.
+/// A path that escapes the vault is skipped rather than aborting the batch.
+/// One bad name must not stall the rest of the notes.
 #[test]
-fn a_path_outside_the_vault_is_refused() {
+fn a_path_outside_the_vault_is_skipped_and_the_rest_still_lands() {
     let f = fixture("record-escape");
+    write(&f.vault, "one.md", "# One\n");
 
-    let error = record(&f.repo, &[PathBuf::from("../secrets.md")], "escape")
-        .expect_err("a path outside the vault is refused");
+    let landed = landed(
+        &f.repo,
+        &[PathBuf::from("one.md"), PathBuf::from("../secrets.md")],
+        "mixed",
+    )
+    .expect("the batch is not aborted");
 
-    assert_eq!(error.code, "sync.path_outside_vault");
+    assert!(landed.commit.is_some(), "the good note was not recorded");
+    assert_eq!(landed.skipped.len(), 1);
+    assert_eq!(landed.skipped[0].1.code, "sync.path_outside_vault");
+    assert_eq!(recorded_paths(&f.repo), ["one.md"]);
 }
 
 #[test]

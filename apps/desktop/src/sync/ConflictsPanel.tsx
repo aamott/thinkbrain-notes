@@ -5,6 +5,8 @@ import { Unavailable } from "../shell/Unavailable";
 import { describeSize, describeWhen, noteName, treatmentOf } from "./conflictCard";
 import { listConflicts, resolveConflict, subscribeToConflictChanges } from "./conflictService";
 import type { ConflictResolution, ConflictSummary } from "./conflictTypes";
+import { recoveryFor } from "./syncCopy";
+import { useSyncStatus } from "./useSyncStatus";
 
 /**
  * The notes that changed in two places, and what to do about each one.
@@ -34,6 +36,7 @@ export function ConflictsPanel({ rootPath, onReview }: ConflictsPanelProps) {
   const [conflicts, setConflicts] = useState<readonly ConflictSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const { stuck } = useSyncStatus(rootPath);
 
   /**
    * Reads the list, changing nothing.
@@ -109,7 +112,7 @@ export function ConflictsPanel({ rootPath, onReview }: ConflictsPanelProps) {
     return <Unavailable title="No workspace open" description="Open a workspace to see anything waiting for you." />;
   }
 
-  if (conflicts.length === 0 && !error) {
+  if (conflicts.length === 0 && stuck.length === 0 && !error) {
     return (
       <Unavailable
         title="Nothing needs your attention"
@@ -135,6 +138,15 @@ export function ConflictsPanel({ rootPath, onReview }: ConflictsPanelProps) {
       )}
 
       <ul className="m-0 flex list-none flex-col gap-2 p-3">
+        {stuck.map((note) => (
+          <li key={note.path} className="rounded-small border border-border bg-card p-3">
+            <h4 className="m-0 break-words text-xs font-semibold text-card-foreground">{noteName(note.path)}</h4>
+            <p className="mb-2 mt-0.5 text-[0.7rem] text-muted-foreground">Could not be kept in step</p>
+            <p className="mb-0 mt-0 text-[0.7rem] leading-relaxed text-muted-foreground">
+              {note.message} {recoveryFor(note.code)}
+            </p>
+          </li>
+        ))}
         {conflicts.map((conflict) => (
           <ConflictCard
             key={conflict.theirs.path}

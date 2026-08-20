@@ -134,7 +134,7 @@ describe("SettingsTab", () => {
     const el = await renderSettingsTab();
 
     expect(el.textContent).toContain("Workspace");
-    expect(el.textContent).toContain("Another device");
+    expect(el.textContent).toContain("Folder or git link");
     expect(el.textContent).toContain("Conflicts");
   });
 

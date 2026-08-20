@@ -73,6 +73,8 @@ export function recoveryFor(code: string): string {
     case "sync.note_read_failed":
     case "sync.vault_read_failed":
       return "Check the notes folder is still connected, then edit any note to try again.";
+    case "sync.note_write_failed":
+      return "Check this note can be saved on this computer — a name Windows refuses, or a folder sitting where the note belongs — then bring these notes in step again.";
     case "sync.vault_too_deep":
       return "Some folders here are nested too deeply to keep track of. Move them nearer the top of the folder and open it again.";
     case "sync.vault_too_many_entries":
@@ -170,6 +172,13 @@ function pillFor(status: SyncStatus, now: Date): PillCopy {
         symbol: "↻",
         text: "Saving…",
         detail: "Recent changes are being saved to this folder's version history.",
+        tone: "busy"
+      };
+    case "syncing":
+      return {
+        symbol: "↻",
+        text: "Bringing notes in step…",
+        detail: "These notes are being brought in step with your other devices.",
         tone: "busy"
       };
     case "idle": {

@@ -252,7 +252,7 @@ pub fn send(
     let greeting = gix::protocol::handshake(
         &mut transport,
         Service::ReceivePack,
-        no_credentials,
+        super::credentials::provide,
         Vec::new(),
         &mut gix::progress::Discard,
     )
@@ -315,17 +315,6 @@ pub fn send(
         landed: read_report(&mut report, reference)?,
         objects: objects.len(),
     })
-}
-
-/// What to offer when a server asks who we are: nothing, yet.
-///
-/// A server that wants a password says so, and answering it is the whole of the
-/// story that adds one. The oversized error half is gitoxide's own type.
-#[allow(clippy::result_large_err)]
-fn no_credentials(
-    _: gix::protocol::credentials::helper::Action,
-) -> gix::protocol::credentials::protocol::Result {
-    Ok(None)
 }
 
 /// Whether what the remote holds is something this history already contains.

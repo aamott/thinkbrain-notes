@@ -53,6 +53,11 @@ pub fn remember_settings_home(app_data_dir: &Path) {
     home.get_or_insert_with(|| app_data_dir.to_path_buf());
 }
 
+/// Where the app keeps its settings, if anyone has said.
+pub fn settings_home() -> Option<PathBuf> {
+    lock_or_recover(&SETTINGS_HOME).clone()
+}
+
 /// Whether the user has asked for the obvious ones to be settled.
 ///
 /// Read from disk each time rather than cached, and cheap enough because the

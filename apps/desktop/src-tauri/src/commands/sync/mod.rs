@@ -25,6 +25,7 @@ pub(super) fn unreachable(error: impl std::fmt::Display) -> NativeError {
 
 pub mod bootstrap;
 pub mod conflict;
+pub mod credentials;
 pub mod engine;
 pub mod hidden_repo;
 pub mod history;

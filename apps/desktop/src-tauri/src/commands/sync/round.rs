@@ -32,6 +32,7 @@ use serde::Serialize;
 use crate::error::NativeError;
 
 use super::conflict;
+use super::engine::StuckNote;
 use super::failed;
 use super::push;
 use super::snapshot::{self, HISTORY_REF as BRANCH};
@@ -71,6 +72,10 @@ pub struct Synced {
     /// the vault to rediscover what this sync just wrote.
     #[serde(skip)]
     pub conflict_copies: Vec<conflict::ConflictCopy>,
+    /// Notes this round trip could not write. Held back from the frontend
+    /// (`serde(skip)`): the engine surfaces them as needs-attention.
+    #[serde(skip)]
+    pub skipped: Vec<StuckNote>,
 }
 
 /// Where this vault syncs to, if anyone has said.
@@ -86,7 +91,26 @@ pub fn destination(app_data_dir: &Path, root: &Path) -> Option<String> {
         .as_str()?
         .trim()
         .to_string();
-    (!named.is_empty()).then_some(named)
+    if named.is_empty() {
+        return None;
+    }
+    let redacted = super::credentials::take_from_url(&named);
+    if redacted != named {
+        forget_secret_in_settings(&path, contents.as_deref(), &redacted);
+    }
+    Some(redacted)
+}
+
+/// The token has gone to the keychain; it must not stay in the settings file.
+fn forget_secret_in_settings(path: &Path, contents: Option<&str>, redacted: &str) {
+    let mut record = crate::commands::settings::parse_app_settings_record(contents);
+    record.insert(
+        SETTING.to_string(),
+        serde_json::Value::String(redacted.to_string()),
+    );
+    if let Ok(written) = crate::commands::settings::serialize_app_settings_record(record) {
+        let _ = crate::commands::workspace::write_file_atomically(path, written);
+    }
 }
 
 /// One round trip: fetch, merge, send.
@@ -111,15 +135,15 @@ fn trip(
     }?;
     let ours = snapshot::head_commit(repo)?;
 
-    let (brought_down, asked_about, copies) = match (ours, theirs) {
+    let (brought_down, asked_about, copies, skipped) = match (ours, theirs) {
         // Nothing to join: either they have nothing to give, or we have
         // nothing of our own and can simply take theirs.
-        (_, None) => (0, 0, Vec::new()),
+        (_, None) => (0, 0, Vec::new(), Vec::new()),
         (None, Some(theirs)) => {
-            let (brought_down, copies) = adopt(repo, vault, theirs)?;
-            (brought_down, copies.len(), copies)
+            let (brought_down, copies, skipped) = adopt(repo, vault, theirs)?;
+            (brought_down, copies.len(), copies, skipped)
         }
-        (Some(ours), Some(theirs)) if ours == theirs => (0, 0, Vec::new()),
+        (Some(ours), Some(theirs)) if ours == theirs => (0, 0, Vec::new(), Vec::new()),
         (Some(ours), Some(theirs)) => merge(repo, vault, ours, theirs)?,
     };
 
@@ -132,6 +156,7 @@ fn trip(
             sent: 0,
             landed: push::Landed::Moved,
             conflict_copies: copies,
+            skipped,
         });
     };
     let sent = {
@@ -149,6 +174,7 @@ fn trip(
         sent: sent.objects,
         landed: sent.landed,
         conflict_copies: copies,
+        skipped,
     })
 }
 
@@ -169,6 +195,7 @@ fn fetch(
         .with_fetch_tags(gix::remote::fetch::Tags::None)
         .connect(Direction::Fetch)
         .map_err(unreachable)?
+        .with_credentials(super::credentials::provide)
         .prepare_fetch(gix::progress::Discard, Default::default())
         .map_err(unreachable)?
         .receive(gix::progress::Discard, cancel);
@@ -237,8 +264,8 @@ fn adopt(
     repo: &gix::Repository,
     vault: &Path,
     theirs: gix::ObjectId,
-) -> Result<(usize, Vec<conflict::ConflictCopy>), NativeError> {
-    let (brought_down, _, copies) = apply(
+) -> Result<(usize, Vec<conflict::ConflictCopy>, Vec<StuckNote>), NativeError> {
+    let (brought_down, _, copies, skipped) = apply(
         repo,
         vault,
         snapshot::tree_of(repo, None)?,
@@ -251,7 +278,7 @@ fn adopt(
         "brought down from another device",
     )
     .map_err(|error| failed("sync.commit_failed", "Could not record what arrived.", error))?;
-    Ok((brought_down, copies))
+    Ok((brought_down, copies, skipped))
 }
 
 fn cannot(error: impl std::fmt::Display) -> NativeError {
@@ -268,7 +295,7 @@ fn merge(
     vault: &Path,
     ours: gix::ObjectId,
     theirs: gix::ObjectId,
-) -> Result<(usize, usize, Vec<conflict::ConflictCopy>), NativeError> {
+) -> Result<(usize, usize, Vec<conflict::ConflictCopy>, Vec<StuckNote>), NativeError> {
     let options = repo
         .tree_merge_options()
         .map_err(cannot)?
@@ -296,7 +323,7 @@ fn merge(
         .filter(|conflict| conflict.is_unresolved(TreatAsUnresolved::forced_resolution()))
         .collect();
 
-    let mut copies = leave_copies(repo, vault, &undecided)?;
+    let (mut copies, mut skipped) = leave_copies(repo, vault, &undecided)?;
     let asked_about = copies.len();
     let merged = outcome
         .tree_merge
@@ -305,13 +332,14 @@ fn merge(
         .map_err(cannot)?
         .detach();
 
-    let (brought_down, kept_back, kept_copies) =
+    let (brought_down, kept_back, kept_copies, more) =
         apply(repo, vault, snapshot::tree_of(repo, Some(ours))?, merged)?;
     copies.extend(kept_copies);
+    skipped.extend(more);
     let asked_about = asked_about + kept_back;
     snapshot::record_merge(repo, merged, ours, theirs, &describe(brought_down, asked_about))?;
 
-    Ok((brought_down, asked_about, copies))
+    Ok((brought_down, asked_about, copies, skipped))
 }
 
 fn describe(brought_down: usize, asked_about: usize) -> String {
@@ -325,20 +353,16 @@ fn describe(brought_down: usize, asked_about: usize) -> String {
 
 /// Writes the other side's version of each undecided note beside our own.
 ///
-/// A copy that cannot be written is not a copy that can be skipped: their
-/// wording would be nowhere, and our own would look like the only thing anyone
-/// wrote. So a failure here fails the sync.
-///
-/// Names are validated as UTF-8 here for the same reason `apply`'s [`within`]
-/// refuses them: writing a lossy-spelled copy would leave the two devices
-/// tracking different files forever. Both paths handle the same class of name
-/// the same way — refuse rather than mangle.
+/// A copy that cannot be written is skipped rather than aborting the vault:
+/// the rest still lands, and the note is reported as needs-attention so the
+/// next sync retries only that path.
 fn leave_copies(
     repo: &gix::Repository,
     vault: &Path,
     undecided: &[&gix::merge::tree::Conflict],
-) -> Result<Vec<conflict::ConflictCopy>, NativeError> {
+) -> Result<(Vec<conflict::ConflictCopy>, Vec<StuckNote>), NativeError> {
     let mut left = Vec::new();
+    let mut skipped = Vec::new();
     for conflict in undecided {
         let (_, theirs) = conflict.changes_in_resolution();
         let (mode, id) = theirs.entry_mode_and_id();
@@ -353,7 +377,7 @@ fn leave_copies(
                 "A note arrived under a name this device cannot read.",
             )
         })?;
-        let beside = conflict::beside(original, |path| vault.join(path).exists());
+        let beside = conflict::beside_in(vault, original);
         let contents = repo
             .find_object(id)
             .map_err(|error| {
@@ -365,14 +389,17 @@ fn leave_copies(
             })?
             .data
             .clone();
-        put(&vault.join(&beside), &contents)?;
+        if let Err(error) = put(&vault.join(&beside), &contents) {
+            skipped.push(stuck(beside, Some(id.to_owned()), error));
+            continue;
+        }
         left.push(conflict::ConflictCopy {
             copy: beside,
             original: original.to_string(),
             provider: "another device",
         });
     }
-    Ok(left)
+    Ok((left, skipped))
 }
 
 /// Brings the vault to `after`: how many notes moved, how many were left
@@ -386,7 +413,7 @@ fn apply(
     vault: &Path,
     before: gix::ObjectId,
     after: gix::ObjectId,
-) -> Result<(usize, usize, Vec<conflict::ConflictCopy>), NativeError> {
+) -> Result<(usize, usize, Vec<conflict::ConflictCopy>, Vec<StuckNote>), NativeError> {
     use gix::diff::tree::recorder::Change;
 
     // Every name is checked before anything is written, because the names come
@@ -408,7 +435,7 @@ fn apply(
         arriving.push((within(vault, path.as_ref())?, path, blob, expected));
     }
 
-    let (mut moved, mut kept_back, mut copies) = (0, 0, Vec::new());
+    let (mut moved, mut kept_back, mut copies, mut skipped) = (0, 0, Vec::new(), Vec::new());
     for (path, relative, blob, expected) in arriving {
         // Never write over something we did not expect to find. A note someone
         // edited while this was running — or after a sync that was interrupted
@@ -416,8 +443,12 @@ fn apply(
         // side's version goes beside it rather than over it.
         if let Some(theirs) = unexpected(repo, &path, blob, expected)? {
             let original = relative.to_string();
-            let beside = conflict::beside(&original, |name| vault.join(name).exists());
-            put(&vault.join(&beside), &theirs)?;
+            let beside = conflict::beside_in(vault, &original);
+            let blob_id = blob;
+            if let Err(error) = put(&vault.join(&beside), &theirs) {
+                skipped.push(stuck(beside, blob_id, error));
+                continue;
+            }
             kept_back += 1;
             copies.push(conflict::ConflictCopy {
                 copy: beside,
@@ -428,25 +459,35 @@ fn apply(
         }
 
         match blob {
-            Some(blob) => put(&path, &contents(repo, blob)?)?,
-            // Already gone is the state we wanted; anything else is a failure
-            // worth hearing about.
+            Some(blob) => {
+                if let Err(error) = put(&path, &contents(repo, blob)?) {
+                    skipped.push(stuck(relative.to_string(), Some(blob), error));
+                    continue;
+                }
+            }
+            // Already gone is the state we wanted; anything else is skipped
+            // rather than aborting the rest of the vault.
             None => match std::fs::remove_file(&path) {
                 Ok(()) => {}
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
                 Err(error) => {
-                    return Err(failed(
-                        "sync.note_write_failed",
-                        "Could not remove a note the other device deleted.",
-                        error,
+                    skipped.push(stuck(
+                        relative.to_string(),
+                        expected,
+                        failed(
+                            "sync.note_write_failed",
+                            "Could not remove a note the other device deleted.",
+                            error,
+                        ),
                     ));
+                    continue;
                 }
             },
         }
         moved += 1;
     }
 
-    Ok((moved, kept_back, copies))
+    Ok((moved, kept_back, copies, skipped))
 }
 
 /// The other side's bytes, when what is on disk is not what we were about to
@@ -502,6 +543,13 @@ fn contents(repo: &gix::Repository, blob: gix::ObjectId) -> Result<Vec<u8>, Nati
 }
 
 fn put(path: &Path, bytes: &[u8]) -> Result<(), NativeError> {
+    if path.is_file() {
+        if let Ok(existing) = std::fs::read(path) {
+            if existing == bytes {
+                return Ok(());
+            }
+        }
+    }
     crate::commands::workspace::write_file_atomically(path, bytes).map_err(|error| {
         failed(
             "sync.note_write_failed",
@@ -509,6 +557,37 @@ fn put(path: &Path, bytes: &[u8]) -> Result<(), NativeError> {
             error,
         )
     })
+}
+
+fn stuck(path: String, blob: Option<gix::ObjectId>, error: NativeError) -> StuckNote {
+    StuckNote {
+        path,
+        code: error.code,
+        message: error.message,
+        blob,
+    }
+}
+
+/// Retries notes a previous attempt could not write, before this round trip
+/// does any new work. Recording failures (no blob) are flushed through the
+/// engine; incoming writes are put from the blob we already have.
+fn retry_stuck(engine: &super::engine::Engine, vault: &Path) -> Result<(), NativeError> {
+    let repo = engine.repository();
+    let mut recording = Vec::new();
+    for note in engine.stuck() {
+        match note.blob {
+            None => recording.push(PathBuf::from(&note.path)),
+            Some(blob) => match put(&vault.join(&note.path), &contents(&repo, blob)?) {
+                Ok(()) => engine.forget_stuck(&note.path),
+                Err(error) => engine.note_stuck([stuck(note.path, Some(blob), error)]),
+            },
+        }
+    }
+    if !recording.is_empty() {
+        engine.note_changes(recording, std::time::Instant::now());
+        engine.flush()?;
+    }
+    Ok(())
 }
 
 
@@ -537,24 +616,49 @@ pub fn sync(
 
     // Whatever is still sitting in the settle window belongs in this sync.
     engine.flush()?;
+    retry_stuck(engine, root)?;
+
+    engine.set_syncing(true);
+    crate::commands::watcher::announce_sync_status(key);
+    struct Clear<'a>(&'a super::engine::Engine, &'a str);
+    impl Drop for Clear<'_> {
+        fn drop(&mut self) {
+            self.0.set_syncing(false);
+            crate::commands::watcher::announce_sync_status(self.1);
+        }
+    }
+    let _clear = Clear(engine, key);
 
     let repo = engine.repository();
     let cancel = Arc::new(AtomicBool::new(false));
     let synced = trip(&repo, root, destination, Arc::clone(&cancel))?;
+    if !synced.skipped.is_empty() {
+        engine.note_stuck(synced.skipped.clone());
+    }
+    engine.mark_synced();
     if !matches!(synced.landed, push::Landed::Refused { .. }) {
         return Ok(synced);
     }
 
     let again = trip(&repo, root, destination, cancel)?;
+    if !again.skipped.is_empty() {
+        engine.note_stuck(again.skipped.clone());
+    }
     let conflict_copies = {
         let mut all = synced.conflict_copies;
         all.extend(again.conflict_copies);
+        all
+    };
+    let skipped = {
+        let mut all = synced.skipped;
+        all.extend(again.skipped);
         all
     };
     Ok(Synced {
         brought_down: synced.brought_down + again.brought_down,
         asked_about: synced.asked_about + again.asked_about,
         conflict_copies,
+        skipped,
         ..again
     })
 }

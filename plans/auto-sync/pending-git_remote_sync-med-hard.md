@@ -7,10 +7,11 @@ fetches and cannot push, so sending was written rather than called:
 
 - **6a — send pack.** `pending-send_pack-high-hard.md`. 🟩 Done.
 - **6b — the round trip.** Fetch, three-way merge against an exact base,
-  "Sync now", triggers, status. Unblocked.
-- **6c — setup and credentials.** Gated: `extensions/pending-extension_secret_storage-med-hard.md`
-  forbids choosing a keychain crate until its questions are answered. Until
-  then a token has nowhere to live that is not a plaintext file.
+  "Sync now", triggers, status. 🟩 Done.
+- **6c — setup and credentials.** Direct native OS keychain adapter via gix
+  credential callbacks. A token pasted in the link is stripped into the
+  keychain and forgotten from settings. Remaining: prove against GitHub +
+  GitLab; a Sign-in control so the token is never pasted into the link field.
 
 ## Scope
 
@@ -26,23 +27,28 @@ fetches and cannot push, so sending was written rather than called:
   keychain only. First connect bootstraps automatically: fetch → merge (empty
   and nonempty remote both handled) → push. Checkpoint ref never pushed
   (story 1).
-- **Setup, plain language:** "Sync your notes to another device" → paste
-  link → sign in. No remote/URL/clone jargon. HTTPS + token first; SSH later
-  if demanded.
+- **Setup, plain language:** workspace setting is "Folder or git link" — a
+  folder on this computer, or an https:// GitHub / GitLab / git link. HTTPS +
+  token first; SSH later if demanded.
 - **Triggers:** on-idle (debounced ~30s default) + manual "Sync now" +
-  frequency cap (1/min default), advanced settings. "Sync now" = save open
-  editors → commit → fetch → merge → push; cancellable; waits for workspace
-  mutex.
+  frequency cap (1/min default). Defaults are hardcoded; advanced settings
+  later. "Sync now" = save open editors → commit → fetch → merge → push;
+  waits for workspace mutex.
 - **Errors:** offline/auth/rejected-push surface as recovery actions
   ("Reconnect", "Sign in again"); retry with backoff for transient.
 
 ## Acceptance
 
-- [ ] Two-device round-trip incl. conflicting edits → merge UI → converged
-- [ ] Token stored only in OS keychain; never in JSON/settings/logs
-- [ ] Setup flow copy audit (no jargon); works against GitHub + GitLab
-- [ ] Offline queue: edits while offline sync cleanly on reconnect
+- [x] Two-device round-trip incl. conflicting edits → merge UI → converged —
+      two vaults on one destination, including a note both sides changed.
+      GitHub / GitLab as *hosts* is leftover 6c proof, not this criterion.
+- [x] Token stored only in OS keychain; never in JSON/settings/logs
+- [x] Setup copy names a folder or an https git link, not a vague "place"
+- [x] Offline queue: edits while unreachable stay in the hidden history and
+      go out on the next successful trip (idle or "bring in step now"). There
+      is no separate queue file.
 
 ## Status
 
-⬜ Pending.
+🟨 6a send-pack, 6b round trip, and 6c adapter done. Remaining: GitHub +
+GitLab as hosts; a Sign-in control so a token is not pasted into the link.

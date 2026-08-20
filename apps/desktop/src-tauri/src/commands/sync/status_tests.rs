@@ -60,6 +60,16 @@ fn a_workspace_that_has_never_been_recorded_is_still_idle() {
 }
 
 #[test]
+fn a_round_trip_in_flight_says_so() {
+    let v = vault("status-syncing");
+    v.engine.set_syncing(true);
+
+    let status = of(Recording::By(&v.engine)).expect("the status is readable");
+
+    assert_eq!(status.state, State::Syncing);
+}
+
+#[test]
 fn a_change_that_has_not_settled_yet_shows_as_saving() {
     let v = vault("status-saving");
     note(&v, "one.md", "still typing\n");
@@ -86,51 +96,46 @@ fn a_conflict_outranks_a_change_still_being_saved() {
     assert_eq!(status.attention, 1);
 }
 
-/// Recording having stopped is the one thing worth interrupting for. Until
-/// now it went to stderr, and the app went on looking healthy.
-///
-/// The failure is provoked by naming a note *inside* a file, which the
-/// filesystem refuses with "not a directory" rather than "not found" — the one
-/// way to make a real recording fail without touching permissions, which a test
-/// running as root could defeat. Unix only for the same reason it is honest:
-/// Windows answers that question differently, and this feature's Windows
-/// verification is still outstanding.
+/// A note that cannot be recorded is needs-attention, not a vault-wide stop.
+/// Recording through a file is Unix-only: Windows reports that as "not found".
 #[cfg(unix)]
 #[test]
-fn a_failure_to_record_outranks_everything_else() {
-    let v = vault("status-problem");
+fn a_note_that_cannot_be_recorded_needs_attention_not_a_full_stop() {
+    let v = vault("status-stuck");
     note(&v, "one.md", "a note, not a folder\n");
     v.engine.note_conflicts([conflict("one.sync-conflict-1.md", "one.md")]);
     v.engine
         .note_changes([PathBuf::from("one.md/inner.md")], Instant::now());
-    v.engine.flush().expect_err("recording through a file fails");
+    v.engine.flush().expect("the rest of the vault still records");
 
     let status = of(Recording::By(&v.engine)).expect("the status is readable");
 
-    assert_eq!(status.state, State::Problem);
-    assert_eq!(
-        status.problem.as_ref().map(|problem| problem.code.as_str()),
-        Some("sync.note_read_failed")
-    );
+    assert_eq!(status.state, State::Attention);
+    assert_eq!(status.stuck.len(), 1);
+    assert_eq!(status.stuck[0].code, "sync.note_read_failed");
+    assert!(status.problem.is_none());
 }
 
 #[cfg(unix)]
 #[test]
-fn recording_again_clears_a_problem() {
+fn recording_a_readable_note_clears_a_stuck_one_that_has_been_fixed() {
     let v = vault("status-recovered");
     note(&v, "one.md", "a note, not a folder\n");
     v.engine
         .note_changes([PathBuf::from("one.md/inner.md")], Instant::now());
-    v.engine.flush().expect_err("recording through a file fails");
+    v.engine.flush().expect("the unreadable path is skipped");
+    assert_eq!(v.engine.stuck().len(), 1);
 
     std::fs::remove_file(v.root.join("one.md")).expect("the note is removed");
-    note(&v, "two.md", "written\n");
-    v.engine.note_changes([PathBuf::from("two.md")], Instant::now());
+    std::fs::create_dir(v.root.join("one.md")).expect("the folder exists");
+    note(&v, "one.md/inner.md", "now writable\n");
+    v.engine.note_changes([PathBuf::from("one.md/inner.md")], Instant::now());
     v.engine.flush().expect("the next change records");
 
     let status = of(Recording::By(&v.engine)).expect("the status is readable");
 
     assert_eq!(status.state, State::Idle);
+    assert!(status.stuck.is_empty());
     assert!(status.problem.is_none());
 }
 

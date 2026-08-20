@@ -72,10 +72,11 @@ describe("the status footer", () => {
     expect(pill.text).not.toMatch(/Today|Unknown/);
   });
 
-  it("says it is still saving while changes are on their way", () => {
-    const pill = describePill(status({ state: "saving", waiting: 2 }), NOW);
+  it("says it is bringing notes in step while a round trip is running", () => {
+    const pill = describePill(status({ state: "syncing" }), NOW);
 
-    expect(pill.text).toContain("Saving");
+    expect(pill.text).toContain("in step");
+    expect(pill.tone).toBe("busy");
   });
 
   it("counts what is waiting on the user", () => {
@@ -103,6 +104,7 @@ describe("the status footer", () => {
   it("always names something to do about a failure", () => {
     for (const code of [
       "sync.note_read_failed",
+      "sync.note_write_failed",
       "sync.note_store_failed",
       "sync.commit_failed",
       "sync.auth_required",
@@ -122,6 +124,7 @@ describe("the status footer", () => {
 
   it("points a problem at the recovery that suits it", () => {
     expect(recoveryFor("sync.note_store_failed")).not.toBe(recoveryFor("sync.note_read_failed"));
+    expect(recoveryFor("sync.note_write_failed")).not.toBe(recoveryFor("sync.note_read_failed"));
   });
 });
 

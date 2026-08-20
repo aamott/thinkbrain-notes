@@ -48,4 +48,15 @@ describe("sync module", () => {
       validateSettings(registry, { "sync.destination": "git@host" })
     ).toMatchObject([{ code: "settings.validation.failed" }]);
   });
+
+  it("names a folder or an https git link, not a vague place", () => {
+    const destination = syncModule.sections
+      .flatMap((section) => section.settings ?? [])
+      .find((setting) => setting.key === "destination");
+    expect(destination?.label).toBe("Folder or git link");
+    expect(destination?.description).toMatch(/folder/i);
+    expect(destination?.description).toMatch(/https:\/\//i);
+    expect(destination?.description).toMatch(/GitHub/i);
+    expect(destination?.description).not.toMatch(/a place/i);
+  });
 });

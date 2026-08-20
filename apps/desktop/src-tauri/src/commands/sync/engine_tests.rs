@@ -2,7 +2,8 @@ use super::super::bootstrap::bootstrap;
 use super::*;
 use crate::tests::make_temp_test_dir;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 struct Fixture {
     vault: PathBuf,
@@ -290,22 +291,33 @@ fn flushing_records_edits_that_have_not_settled_yet() {
     );
 }
 
-/// Taking a path out of the pending set is a promise to record it. If the
-/// commit fails the promise is unkept, so the path has to come back — a
-/// note dropped here is a note history never hears about again.
+/// A path that can never be recorded must not be retried every settle
+/// window, or it takes every other note with it. It is skipped and reported.
 #[test]
-fn a_batch_that_could_not_be_recorded_is_tried_again() {
-    let f = fixture("engine-retry");
+fn a_note_that_cannot_be_recorded_does_not_block_the_rest() {
+    let f = fixture("engine-skip-bad");
     let start = Instant::now();
-    f.engine.note_changes([PathBuf::from("../outside.md")], start);
+    write(&f.vault, "ok.md", "# Ok\n");
+    f.engine.note_changes(
+        [PathBuf::from("ok.md"), PathBuf::from("../outside.md")],
+        start,
+    );
 
-    f.engine
+    let commit = f
+        .engine
         .record_settled(start + SETTLE)
-        .expect_err("recording a path outside the vault fails");
+        .expect("the batch is not aborted")
+        .expect("the good note is recorded");
 
-    f.engine
-        .record_settled(start + SETTLE + SETTLE)
-        .expect_err("the failed batch was dropped instead of tried again");
+    assert!(
+        message_of(&f.engine, commit).ends_with("— 2 notes changed")
+            || message_of(&f.engine, commit).ends_with("— 1 note changed"),
+        "the message: {}",
+        message_of(&f.engine, commit)
+    );
+    assert_eq!(f.engine.stuck().len(), 1);
+    assert_eq!(f.engine.waiting(), 0);
+    assert!(f.engine.problem().is_none(), "a skipped note was treated as a vault-wide failure");
 }
 
 /// Nothing pending means nothing to write, not an empty commit.
@@ -343,4 +355,25 @@ fn an_engine_can_be_used_from_several_threads() {
         .expect("a commit is made");
 
     assert!(message_of(&f.engine, commit).ends_with("— 8 notes changed"));
+}
+
+#[test]
+fn a_vault_is_ready_to_sync_only_once_it_has_been_still_and_the_cap_has_passed() {
+    let f = fixture("engine-ready");
+    let start = Instant::now();
+    f.engine.note_changes([PathBuf::from("one.md")], start);
+
+    assert!(
+        !f.engine.ready_to_sync(Duration::from_secs(30), Duration::from_secs(60), start + Duration::from_secs(5)),
+        "a vault still being edited was ready"
+    );
+    assert!(
+        f.engine.ready_to_sync(Duration::from_secs(30), Duration::from_secs(60), start + Duration::from_secs(30)),
+        "a still vault was not ready before its first trip"
+    );
+    f.engine.mark_synced();
+    assert!(
+        !f.engine.ready_to_sync(Duration::from_secs(30), Duration::from_secs(60), start + Duration::from_secs(30)),
+        "the frequency cap did not hold"
+    );
 }

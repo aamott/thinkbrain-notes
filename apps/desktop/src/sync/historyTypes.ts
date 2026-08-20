@@ -42,9 +42,16 @@ export interface ConflictRate {
 }
 
 /** What the status footer is saying, in order of who needs to act. */
-export type SyncState = "off" | "problem" | "attention" | "saving" | "idle";
+export type SyncState = "off" | "problem" | "syncing" | "attention" | "saving" | "idle";
 
 export interface SyncProblem {
+  readonly code: string;
+  readonly message: string;
+}
+
+/** A note that could not be written or recorded, with something to do about it. */
+export interface StuckNote {
+  readonly path: string;
   readonly code: string;
   readonly message: string;
 }
@@ -55,6 +62,7 @@ export interface SyncStatus {
   readonly lastRecordedAt: number | null;
   readonly waiting: number;
   readonly attention: number;
+  readonly stuck: readonly StuckNote[];
   readonly problem: SyncProblem | null;
   /**
    * Whether this folder is also a git repository of the user's own.
@@ -71,6 +79,7 @@ export const NOT_RECORDING: SyncStatus = {
   lastRecordedAt: null,
   waiting: 0,
   attention: 0,
+  stuck: [],
   problem: null,
   alongsideOwnGit: false
 };

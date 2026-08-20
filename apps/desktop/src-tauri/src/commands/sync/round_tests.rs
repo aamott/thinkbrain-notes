@@ -121,6 +121,26 @@ fn a_named_destination_is_read_back_without_its_spaces() {
     );
 }
 
+#[test]
+fn a_token_embedded_in_the_link_never_leaves_with_the_destination() {
+    let (app_data, root) = with_setting(
+        "round-token",
+        Some(r#"{"sync.destination": "https://x-access-token:s3cret@example.test/notes.git"}"#),
+    );
+
+    let named = destination(&app_data, &root).expect("a destination is set");
+    assert_eq!(named, "https://example.test/notes.git");
+    assert!(!named.contains("s3cret"));
+    let stored = fs::read_to_string(crate::commands::settings::workspace_settings_path(
+        &app_data, &root,
+    ))
+    .expect("the settings are still there");
+    assert!(
+        !stored.contains("s3cret"),
+        "the token was left in the settings file"
+    );
+}
+
 /// Someone clearing the box means "stop syncing", not "sync to the empty
 /// string" — and an empty destination would otherwise fail on every attempt.
 #[test]
@@ -384,6 +404,57 @@ fn a_note_both_devices_already_had_becomes_a_question() {
         read(&two, "note (from another device).md"),
         "written on one\n"
     );
+}
+
+/// An interrupted sync leaves the unnumbered slot behind. The next attempt
+/// must overwrite it, not stack ` 2`.
+#[test]
+fn an_interrupted_copy_is_overwritten_not_numbered() {
+    let one = device("round-reuse-one");
+    let two = device("round-reuse-two");
+    let there = shared("round-reuse");
+    write(&one, "note.md", "the line\n");
+    trip(&one, &there);
+    trip(&two, &there);
+
+    write(&one, "note.md", "their wording\n");
+    trip(&one, &there);
+    write(&two, "note.md", "our wording\n");
+    write_only(&two, "note (from another device).md", "stale leftover\n");
+
+    let synced = trip(&two, &there);
+
+    assert_eq!(synced.asked_about, 1);
+    assert_eq!(read(&two, "note (from another device).md"), "their wording\n");
+    assert!(
+        !two.vault.join("note (from another device 2).md").exists(),
+        "a leftover copy was numbered past: {:?}",
+        files(&two)
+    );
+}
+
+/// A note that cannot be written does not stop the rest of the vault landing.
+#[test]
+fn one_unwritable_note_does_not_stall_the_vault() {
+    let one = device("round-unwritable-one");
+    let two = device("round-unwritable-two");
+    let there = shared("round-unwritable");
+    write(&one, "good.md", "ok\n");
+    write(&one, "blocked.md", "cannot land\n");
+    trip(&one, &there);
+
+    fs::create_dir(two.vault.join("blocked.md")).expect("the name is occupied by a folder");
+
+    let synced = trip(&two, &there);
+
+    assert_eq!(read(&two, "good.md"), "ok\n", "the rest of the vault did not land");
+    assert!(
+        two.vault.join("blocked.md").is_dir(),
+        "the blocking folder was replaced"
+    );
+    assert_eq!(synced.skipped.len(), 1);
+    assert_eq!(synced.skipped[0].path, "blocked.md");
+    assert_eq!(synced.skipped[0].code, "sync.note_write_failed");
 }
 
 /// Two windows, or one impatient double-click. Every one of them has real work

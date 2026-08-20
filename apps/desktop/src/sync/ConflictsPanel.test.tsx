@@ -14,6 +14,18 @@ vi.mock("./conflictService", () => ({
   subscribeToConflictChanges: () => Promise.resolve(() => undefined)
 }));
 
+vi.mock("./useSyncStatus", () => ({
+  useSyncStatus: () => ({
+    state: "off",
+    lastRecordedAt: null,
+    waiting: 0,
+    attention: 0,
+    stuck: [],
+    problem: null,
+    alongsideOwnGit: false
+  })
+}));
+
 const { ConflictsPanel } = await import("./ConflictsPanel");
 
 let root: Root | null = null;

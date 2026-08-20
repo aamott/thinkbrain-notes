@@ -15,7 +15,7 @@ use serde::Serialize;
 use crate::commands::workspace::resolve_workspace_root;
 use crate::NativeError;
 
-use super::engine::Engine;
+use super::engine::{Engine, StuckNote};
 use super::history;
 
 /// What the pill is saying, in order of who needs to act.
@@ -26,8 +26,11 @@ pub enum State {
     Off,
     /// Recording has stopped, and it will not start again on its own.
     Problem,
-    /// Two versions of something are waiting on a decision.
+    /// Two versions of something are waiting on a decision, or a note could
+    /// not be written and needs a retry.
     Attention,
+    /// A round trip to another device is in flight.
+    Syncing,
     /// Changes are on their way into history.
     Saving,
     /// Everything is recorded.
@@ -44,6 +47,8 @@ pub struct SyncStatus {
     pub waiting: usize,
     /// Conflicts waiting on a decision.
     pub attention: usize,
+    /// Notes that could not be written or recorded, each with a recovery.
+    pub stuck: Vec<StuckNote>,
     /// Why recording stopped, if it has. The window turns the code into a
     /// sentence about what to do next.
     pub problem: Option<NativeError>,
@@ -78,6 +83,7 @@ pub fn of(recording: Recording<'_>) -> Result<SyncStatus, NativeError> {
                 last_recorded_at: None,
                 waiting: 0,
                 attention: 0,
+                stuck: Vec::new(),
                 problem: None,
                 alongside_own_git: false,
             });
@@ -88,6 +94,7 @@ pub fn of(recording: Recording<'_>) -> Result<SyncStatus, NativeError> {
                 last_recorded_at: None,
                 waiting: 0,
                 attention: 0,
+                stuck: Vec::new(),
                 problem: Some(problem),
                 alongside_own_git: false,
             });
@@ -95,12 +102,15 @@ pub fn of(recording: Recording<'_>) -> Result<SyncStatus, NativeError> {
     };
 
     let problem = engine.problem();
-    let attention = engine.conflicts().len();
+    let stuck = engine.stuck();
+    let attention = engine.conflicts().len() + stuck.len();
     let waiting = engine.waiting();
 
     Ok(SyncStatus {
         state: if problem.is_some() {
             State::Problem
+        } else if engine.syncing() {
+            State::Syncing
         } else if attention > 0 {
             State::Attention
         } else if waiting > 0 {
@@ -111,6 +121,7 @@ pub fn of(recording: Recording<'_>) -> Result<SyncStatus, NativeError> {
         last_recorded_at: history::last_recorded(&engine.repository())?,
         waiting,
         attention,
+        stuck,
         problem,
         alongside_own_git: engine.alongside_own_git(),
     })
