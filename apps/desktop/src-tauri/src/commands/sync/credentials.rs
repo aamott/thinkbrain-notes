@@ -6,10 +6,8 @@
 
 #[cfg(test)]
 use std::collections::HashMap;
-#[cfg(test)]
 use std::sync::Mutex;
 
-#[cfg(test)]
 use crate::error::lock_or_recover;
 use crate::NativeError;
 
@@ -24,19 +22,22 @@ const SERVICE: &str = "ThinkBrain Notes";
 
 #[cfg(test)]
 static MEMORY: Mutex<Option<HashMap<String, (String, String)>>> = Mutex::new(None);
+#[cfg(not(test))]
+static KEYCHAIN: Mutex<()> = Mutex::new(());
 
 /// Username and password for `destination`, if we have one.
 pub fn get(destination: &str) -> Result<Option<(String, String)>, NativeError> {
     let key = account(destination);
     #[cfg(test)]
     {
-        return Ok(lock_or_recover(&MEMORY)
+        Ok(lock_or_recover(&MEMORY)
             .get_or_insert_with(HashMap::new)
             .get(&key)
-            .cloned());
+            .cloned())
     }
     #[cfg(not(test))]
     {
+        let _guard = lock_or_recover(&KEYCHAIN);
         os_get(&key)
     }
 }
@@ -50,10 +51,11 @@ pub fn store(destination: &str, username: &str, secret: &str) -> Result<(), Nati
         lock_or_recover(&MEMORY)
             .get_or_insert_with(HashMap::new)
             .insert(key, (username.to_string(), secret.to_string()));
-        return Ok(());
+        Ok(())
     }
     #[cfg(not(test))]
     {
+        let _guard = lock_or_recover(&KEYCHAIN);
         os_store(&key, username, secret)
     }
 }
@@ -65,12 +67,82 @@ fn delete(destination: &str) -> Result<(), NativeError> {
         lock_or_recover(&MEMORY)
             .get_or_insert_with(HashMap::new)
             .remove(&key);
-        return Ok(());
+        Ok(())
     }
     #[cfg(not(test))]
     {
+        let _guard = lock_or_recover(&KEYCHAIN);
         os_delete(&key)
     }
+}
+
+/// Stores credentials entered in the settings form.
+///
+/// Keeping this separate from [`take_from_url`] means the link setting is
+/// always safe to display and export: credentials never need to pass through
+/// the settings document at all.
+pub fn save_for_destination(
+    destination: &str,
+    username: &str,
+    token: &str,
+) -> Result<(), NativeError> {
+    let destination = destination.trim();
+    let username = username.trim();
+    if !is_clean_https_url(destination) {
+        return Err(NativeError::new(
+            "sync.credentials_need_https",
+            "Paste a secret-free HTTPS git link before saving a sign-in.",
+        ));
+    }
+    if username.is_empty() {
+        return Err(NativeError::new(
+            "sync.credentials_username_missing",
+            "Enter the username this token belongs to.",
+        ));
+    }
+    if token.is_empty() {
+        return Err(NativeError::new(
+            "sync.credentials_token_missing",
+            "Enter an access token.",
+        ));
+    }
+    store(destination, username, token)
+}
+
+/// Saves a username and access token directly to the OS keychain, then checks
+/// the configured destination immediately so a bad sign-in is never deferred
+/// behind the idle timer.
+#[tauri::command]
+pub fn save_sync_credentials(
+    app: tauri::AppHandle,
+    root_path: String,
+    destination: String,
+    username: String,
+    token: String,
+) -> Result<super::round::Synced, NativeError> {
+    save_for_destination(&destination, &username, &token)?;
+    let root = crate::commands::workspace::resolve_workspace_root(&root_path)?;
+    let key = root.to_string_lossy().to_string();
+    let engine = super::registry::engine(&key).ok_or_else(|| {
+        NativeError::new(
+            "sync.not_recording",
+            "This folder's history is not being kept, so there is nothing to sync.",
+        )
+    })?;
+    let synced = super::round::sync(&engine, &key, &root, destination.trim())?;
+    let synced = super::round::finish(&app, &engine, &key, &root, synced);
+    crate::commands::watcher::announce_setup_ok(&app, &key);
+    Ok(synced)
+}
+
+/// A token form only works for HTTPS, and accepting userinfo here would put a
+/// secret back into the URL we deliberately keep secret-free.
+fn is_clean_https_url(destination: &str) -> bool {
+    let Some(host_and_path) = destination.strip_prefix("https://") else {
+        return false;
+    };
+    let host = host_and_path.split('/').next().unwrap_or_default();
+    !host.is_empty() && !host.contains('@') && !host.chars().any(char::is_whitespace)
 }
 
 /// Strips `user:password@` from an https destination, stores the password, and
@@ -107,7 +179,12 @@ pub fn provide(
             else {
                 return Ok(None);
             };
-            let Ok(Some((username, password))) = get(url) else {
+            let Some((username, password)) = get(url).map_err(|source| {
+                gix::protocol::credentials::protocol::Error::ConfigureCredentialHelpers {
+                    source: Box::new(source),
+                }
+            })?
+            else {
                 return Ok(None);
             };
             let mut stored = ctx.clone();
@@ -143,9 +220,13 @@ pub fn provide(
 }
 
 fn account(destination: &str) -> String {
-    split_userinfo(destination)
+    let clean = split_userinfo(destination)
         .map(|(redacted, _, _)| redacted)
-        .unwrap_or_else(|| destination.trim().to_string())
+        .unwrap_or_else(|| destination.trim().to_string());
+    gix::url::parse(gix::bstr::BStr::new(&clean))
+        .ok()
+        .and_then(|url| String::from_utf8(url.to_bstring().to_vec()).ok())
+        .unwrap_or(clean)
 }
 
 /// `https://user:pass@host/path` → redacted URL, user, pass.
@@ -243,8 +324,8 @@ macro_rules! unsupported {
 supported! {
 fn unavailable(error: impl std::fmt::Display) -> NativeError {
     failed(
-        "sync.auth_required",
-        "This remote needs a sign-in before it can receive notes.",
+        "sync.credentials_unavailable",
+        "Could not use this computer's keychain.",
         error,
     )
 }
@@ -360,6 +441,28 @@ mod tests {
     #[test]
     fn a_local_path_is_not_treated_as_a_secret() {
         assert_eq!(take_from_url("/tmp/notes.git"), "/tmp/notes.git");
+    }
+
+    #[test]
+    fn settings_credentials_require_a_clean_https_link_and_go_to_the_keychain() {
+        let error = save_for_destination("git@example.test:notes.git", "me", "token")
+            .expect_err("SSH does not take an HTTPS token");
+        assert_eq!(error.code, "sync.credentials_need_https");
+
+        let error = save_for_destination(
+            "https://me:token@settings.example.test/notes.git",
+            "me",
+            "token",
+        )
+        .expect_err("a token belongs in the form, not the link");
+        assert_eq!(error.code, "sync.credentials_need_https");
+
+        save_for_destination(" https://settings.example.test/notes.git ", " me ", "token")
+            .expect("stored");
+        assert_eq!(
+            get("https://settings.example.test/notes.git").expect("readable"),
+            Some(("me".to_string(), "token".to_string()))
+        );
     }
 
     #[test]

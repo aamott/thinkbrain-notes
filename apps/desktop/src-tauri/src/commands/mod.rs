@@ -77,7 +77,8 @@ macro_rules! app_command_handlers {
             $crate::commands::sync::history::restore_version,
             $crate::commands::sync::history::sync_conflict_rate,
             $crate::commands::sync::status::sync_status,
-            $crate::commands::sync::round::sync_now
+            $crate::commands::sync::round::sync_now,
+            $crate::commands::sync::credentials::save_sync_credentials
         ]
     };
 }
@@ -129,6 +130,7 @@ pub const APP_COMMAND_PATHS: &[&str] = &[
     "sync::history::sync_conflict_rate",
     "sync::status::sync_status",
     "sync::round::sync_now",
+    "sync::credentials::save_sync_credentials",
 ];
 
 #[cfg(test)]
@@ -190,6 +192,7 @@ mod tests {
         assert!(APP_COMMAND_PATHS.contains(&"sync::history::sync_conflict_rate"));
         assert!(APP_COMMAND_PATHS.contains(&"sync::status::sync_status"));
         assert!(APP_COMMAND_PATHS.contains(&"sync::round::sync_now"));
+        assert!(APP_COMMAND_PATHS.contains(&"sync::credentials::save_sync_credentials"));
 
         // Sanity: no duplicates and the count matches the macro entries.
         let mut sorted = APP_COMMAND_PATHS.to_vec();
@@ -202,8 +205,8 @@ mod tests {
         );
         assert_eq!(
             APP_COMMAND_PATHS.len(),
-            39,
-            "expected 39 registered commands"
+            40,
+            "expected 40 registered commands"
         );
     }
 }

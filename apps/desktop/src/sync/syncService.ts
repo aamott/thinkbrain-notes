@@ -18,6 +18,8 @@ import type {
 
 /** Fired when what the status footer would say about a workspace has changed. */
 const SYNC_STATUS_EVENT = "sync://status";
+/** Fired after a successful save of git-link credentials, for a one-shot toast. */
+const SYNC_SETUP_EVENT = "sync://setup";
 
 /**
  * How much history one read asks for.
@@ -40,6 +42,16 @@ export function readSyncStatus(rootPath: string): Promise<SyncStatus> {
  */
 export function syncNow(rootPath: string): Promise<Synced> {
   return invokeNativeCommand("sync_now", { rootPath });
+}
+
+/** Saves credentials, then immediately checks the git link. */
+export function saveSyncCredentials(
+  rootPath: string,
+  destination: string,
+  username: string,
+  token: string
+): Promise<Synced> {
+  return invokeNativeCommand("save_sync_credentials", { rootPath, destination, username, token });
 }
 
 /**
@@ -72,4 +84,9 @@ export function readConflictRate(rootPath: string): Promise<ConflictRate> {
 
 export function subscribeToSyncStatus(onChange: () => void): Promise<() => void> {
   return subscribeToSyncEvent(SYNC_STATUS_EVENT, onChange);
+}
+
+/** Fired after a successful save of git-link credentials — not after ordinary sync. */
+export function subscribeToSetupSuccess(onChange: () => void): Promise<() => void> {
+  return subscribeToSyncEvent(SYNC_SETUP_EVENT, onChange);
 }

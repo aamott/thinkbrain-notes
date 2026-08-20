@@ -13,7 +13,6 @@ describe("validateSyncDestination", () => {
     for (const value of [
       "",
       "https://example.test/notes.git",
-      "https://token@example.test/notes.git",
       "ssh://git@example.test/notes.git",
       "file:///tmp/notes.git",
       "git@example.test:notes.git",
@@ -28,6 +27,11 @@ describe("validateSyncDestination", () => {
     expect(validateSyncDestination("   ")).not.toBeNull();
     expect(validateSyncDestination("git@host")).not.toBeNull();
     expect(validateSyncDestination("not a remote")).not.toBeNull();
+  });
+
+  it("keeps credentials out of the link field", () => {
+    expect(validateSyncDestination("https://token@example.test/notes.git")).toMatch(/sign-in fields/i);
+    expect(validateSyncDestination("https://me:token@example.test/notes.git")).toMatch(/sign-in fields/i);
   });
 });
 
@@ -49,14 +53,23 @@ describe("sync module", () => {
     ).toMatchObject([{ code: "settings.validation.failed" }]);
   });
 
-  it("names a folder or an https git link, not a vague place", () => {
+  it("names a git link, not a vague place", () => {
     const destination = syncModule.sections
       .flatMap((section) => section.settings ?? [])
       .find((setting) => setting.key === "destination");
-    expect(destination?.label).toBe("Folder or git link");
-    expect(destination?.description).toMatch(/folder/i);
+    expect(destination?.label).toBe("Git link");
     expect(destination?.description).toMatch(/https:\/\//i);
     expect(destination?.description).toMatch(/GitHub/i);
     expect(destination?.description).not.toMatch(/a place/i);
+    expect(destination?.control).toBe("sync-git-link");
+  });
+
+  it("explains cloud copies separately from git", () => {
+    const cloud = syncModule.sections.find((section) => section.id === "sync.conflicts");
+    const git = syncModule.sections.find((section) => section.id === "sync.destination");
+    expect(cloud?.label).toBe("Cloud copies");
+    expect(git?.label).toBe("Git link");
+    expect(cloud?.settings?.[0]?.description).toMatch(/Two versions/i);
+    expect(cloud?.settings?.[0]?.description).toMatch(/OneDrive/i);
   });
 });

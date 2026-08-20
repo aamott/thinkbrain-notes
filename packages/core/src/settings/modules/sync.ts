@@ -18,31 +18,43 @@ import type { SettingsModule } from "../types";
 export const DEFAULT_SETTLE_AUTOMATICALLY = true;
 
 /**
- * A destination someone pasted, or the empty "sync nowhere" sentinel.
+ * A git link someone pasted, or the empty "sync nowhere" sentinel.
  *
  * Accepts an http(s)/ssh/git/file URL, an SCP-style `user@host:path` remote,
- * or a local folder. Whitespace-only is not empty: empty is a choice, spaces
- * are a typo. Tokens embedded in a URL are valid here and stay off portable
- * export because the setting is workspace-scoped and `portable: false`.
+ * or a local path to a bare git repo. Whitespace-only is not empty: empty is a
+ * choice, spaces are a typo. Credentials are deliberately not valid here:
+ * username and token go straight to the OS keychain from the settings form.
  */
 export function validateSyncDestination(value: unknown): string | null {
   if (typeof value !== "string") {
-    return "Paste a folder path or an https:// git link, or leave this empty.";
+    return "Paste a git link or a folder path to a bare repo, or leave this empty.";
   }
   if (value === "") return null;
   const trimmed = value.trim();
   if (trimmed === "") {
-    return "Leave this empty, or paste a folder path or an https:// git link.";
+    return "Leave this empty, or paste a git link or a folder path to a bare repo.";
+  }
+  if (hasHttpCredentials(trimmed)) {
+    return "Remove the username or token from this link. Enter them in the sign-in fields below.";
   }
   if (looksLikeRemoteUrl(trimmed) || looksLikeScpRemote(trimmed) || looksLikeLocalRemote(trimmed)) {
     return null;
   }
-  return "Paste a folder path or an https:// git link, or leave this empty.";
+  return "Paste a git link (https://…) or a folder path to a bare repo, or leave this empty.";
 }
 
 function looksLikeRemoteUrl(value: string): boolean {
   try {
-    return Boolean(new URL(value).protocol);
+    return ["http:", "https:", "ssh:", "git:", "file:"].includes(new URL(value).protocol);
+  } catch {
+    return false;
+  }
+}
+
+function hasHttpCredentials(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return ["http:", "https:"].includes(url.protocol) && (url.username !== "" || url.password !== "");
   } catch {
     return false;
   }
@@ -79,7 +91,7 @@ export const syncModule: SettingsModule = {
   sections: [
     {
       id: "sync.conflicts",
-      label: "Conflicts",
+      label: "Cloud copies",
       settings: [
         {
           key: "settleAutomatically",
@@ -89,13 +101,13 @@ export const syncModule: SettingsModule = {
           section: "sync.conflicts",
           label: "Settle obvious conflicts without asking",
           description:
-            "When another device's copy of a note is identical to yours, or holds a version yours has already been through, keep yours and tidy the copy away. Earlier versions stay in History either way. Turn this off to be asked about every copy."
+            "If this folder is in OneDrive, Google Drive, or Syncthing, those apps sometimes leave an extra copy beside a note. When that copy is identical to yours, or holds a version yours has already been through, keep yours and tidy the copy away. It still shows up under Two versions until then. Earlier versions stay in Saved versions either way. Turn this off to be asked about every copy."
         }
       ]
     },
     {
       id: "sync.destination",
-      label: "Folder or git link",
+      label: "Git link",
       settings: [
         {
           key: "destination",
@@ -103,9 +115,10 @@ export const syncModule: SettingsModule = {
           default: "",
           scope: "workspace",
           section: "sync.destination",
-          label: "Folder or git link",
+          label: "Git link",
           description:
-            "A folder on this computer, or an https:// git link (GitHub, GitLab, or similar). Leave empty for this device only. A token in the link is saved in the keychain and taken out of this field.",
+            "An https:// link to GitHub, GitLab, or similar — or a folder path to a bare git repo on this computer or a NAS. Leave empty for this device only. Enter the username and access token below; they are saved in this computer's keychain, never in this link.",
+          control: "sync-git-link",
           portable: false,
           validation: validateSyncDestination
         }

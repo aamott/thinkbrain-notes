@@ -232,6 +232,16 @@ export interface NativeCommandMap {
     readonly args: { readonly rootPath: string };
     readonly result: NativeSynced;
   };
+  /** Saves a username and access token in the OS keychain, never settings. */
+  readonly save_sync_credentials: {
+    readonly args: {
+      readonly rootPath: string;
+      readonly destination: string;
+      readonly username: string;
+      readonly token: string;
+    };
+    readonly result: NativeSynced;
+  };
   readonly read_app_settings: {
     readonly args: undefined;
     readonly result: string | null;

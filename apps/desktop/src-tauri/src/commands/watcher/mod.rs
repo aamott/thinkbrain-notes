@@ -109,6 +109,14 @@ pub fn announce_sync_status(root_path: &str) {
     }
 }
 
+/// Sent when a git link sign-in just completed a successful round trip.
+pub const SYNC_SETUP_EVENT: &str = "sync://setup";
+
+/// Tells the window the git link just worked, so it can say so once.
+pub fn announce_setup_ok(app: &tauri::AppHandle, root_path: &str) {
+    announce(app, SYNC_SETUP_EVENT, root_path);
+}
+
 /// One shape for every "something about this workspace changed" event.
 fn announce(app: &tauri::AppHandle, event: &str, root_path: &str) {
     let payload = WorkspaceNamedPayload {
