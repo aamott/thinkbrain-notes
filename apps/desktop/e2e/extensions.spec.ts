@@ -1,12 +1,92 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 /**
  * Covers the extension platform end to end: manifest-declared contributions
  * appear before any extension code runs, and touching one activates it.
  */
+
+/** Command-palette shortcut: Cmd on macOS, Ctrl everywhere else. */
+const OPEN_PALETTE = process.platform === "darwin" ? "Meta+p" : "Control+p";
+
+/** Sync status returned by every fake bridge: sync is off, nothing pending. */
+const SYNC_STATUS_OFF = {
+  state: "off",
+  lastRecordedAt: null,
+  waiting: 0,
+  attention: 0,
+  stuck: [],
+  problem: null,
+  alongsideOwnGit: false
+} as const;
+
+type InvokeArgs = Record<string, unknown>;
+/** A per-command stub. Runs in Node: it may close over local state directly. */
+type InvokeStub = (args: InvokeArgs) => unknown;
+
+interface FakeBridgeOptions {
+  files: Record<string, string>;
+  /** Per-command stubs. Every command the app invokes must be stubbed or it throws. */
+  stubs?: Record<string, InvokeStub>;
+  /**
+   * Override `read_extension_file`. Defaults to reading `files` by `relativePath`
+   * and throwing if the file is missing.
+   */
+  readExtensionFile?: (args: InvokeArgs) => unknown;
+}
+
+/**
+ * Installs a fake `__TAURI_INTERNALS__` bridge on the page.
+ *
+ * The dispatcher runs in Node via `exposeFunction`, so stubs close over local
+ * arrays/maps directly — no `window.recordX` plumbing needed for invoke side
+ * effects. Unknown commands throw `unstubbed invoke: <command>` so a missing
+ * stub surfaces immediately instead of silently returning null.
+ */
+async function installFakeTauriBridge(page: Page, options: FakeBridgeOptions) {
+  const files = options.files;
+  const stubs = options.stubs ?? {};
+  const readExtensionFile = options.readExtensionFile;
+
+  await page.exposeFunction("__e2eInvoke", async (command: string, args: InvokeArgs): Promise<unknown> => {
+    if (command === "read_extension_file") {
+      if (readExtensionFile) return readExtensionFile(args);
+      const contents = files[String(args.relativePath)];
+      if (contents === undefined) throw new Error(`missing ${String(args.relativePath)}`);
+      return contents;
+    }
+    const stub = stubs[command];
+    if (stub === undefined) throw new Error(`unstubbed invoke: ${command}`);
+    return stub(args);
+  });
+
+  await page.addInitScript(() => {
+    const appWindow = window as Window & {
+      isTauri?: boolean;
+      __TAURI_INTERNALS__?: { invoke: (command: string, args: InvokeArgs) => Promise<unknown> };
+    };
+    appWindow.isTauri = true;
+    appWindow.__TAURI_INTERNALS__ = {
+      async invoke(command, args) {
+        return (window as unknown as { __e2eInvoke: (c: string, a: InvokeArgs) => Promise<unknown> }).__e2eInvoke(
+          command,
+          args
+        );
+      }
+    };
+    // The loader asks for confirmation before running trusted local code.
+    window.confirm = () => true;
+  });
+}
+
+/** Stubs shared by every test that loads a single extension from a folder picker. */
+const SINGLE_EXTENSION_STUBS: Record<string, InvokeStub> = {
+  "plugin:dialog|open": () => "/ext/hello-disk",
+  read_app_settings: () => null,
+  window_workspace_root: () => null
+};
 
 test("lists a built-in extension that has not started yet", async ({ page }) => {
   await page.goto("/");
@@ -61,38 +141,10 @@ const MANIFEST = {
   contributes: { commands: [{ id: "greet", title: "Greet from disk" }], panels: [] }
 };
 
-async function fakeExtensionDirectory(page: import("@playwright/test").Page, files: Record<string, string>) {
-  await page.addInitScript(
-    ({ files }) => {
-      const appWindow = window as Window & {
-        isTauri?: boolean;
-        __TAURI_INTERNALS__?: { invoke: (command: string, args: Record<string, unknown>) => Promise<unknown> };
-      };
-      appWindow.isTauri = true;
-      appWindow.__TAURI_INTERNALS__ = {
-        async invoke(command, args) {
-          if (command === "plugin:dialog|open") return "/ext/hello-disk";
-          if (command === "read_extension_file") {
-            const contents = files[String(args.relativePath)];
-            if (contents === undefined) throw new Error(`missing ${String(args.relativePath)}`);
-            return contents;
-          }
-          if (command === "read_app_settings") return null;
-          if (command === "window_workspace_root") return null;
-          return null;
-        }
-      };
-      // The loader asks for confirmation before running trusted local code.
-      window.confirm = () => true;
-    },
-    { files }
-  );
-}
-
 test("loads, runs, reloads, and removes an extension from a local directory", async ({ page }) => {
-  await fakeExtensionDirectory(page, {
-    "extension.json": JSON.stringify(MANIFEST),
-    "extension.js": EXTENSION_SOURCE
+  await installFakeTauriBridge(page, {
+    files: { "extension.json": JSON.stringify(MANIFEST), "extension.js": EXTENSION_SOURCE },
+    stubs: SINGLE_EXTENSION_STUBS
   });
   await page.goto("/");
   await page.getByRole("button", { name: "Extensions", exact: true }).click();
@@ -106,7 +158,7 @@ test("loads, runs, reloads, and removes an extension from a local directory", as
 
   // The command was stubbed from the manifest, so it is in the palette before
   // any extension code has run — and the palette had already rendered once.
-  await page.keyboard.press("Control+p");
+  await page.keyboard.press(OPEN_PALETTE);
   await expect(page.getByRole("dialog", { name: "Command palette" })).toBeVisible();
   await page.getByRole("combobox", { name: "Search commands" }).fill("Greet from disk");
   await page.keyboard.press("Enter");
@@ -125,43 +177,32 @@ test("loads, runs, reloads, and removes an extension from a local directory", as
 });
 
 test("restores stored extension directories at startup and reports one that fails", async ({ page }) => {
-  await page.addInitScript(
-    ({ files }: { files: Record<string, string> }) => {
-      const appWindow = window as Window & {
-        isTauri?: boolean;
-        __TAURI_INTERNALS__?: { invoke: (command: string, args: Record<string, unknown>) => Promise<unknown> };
-      };
-      appWindow.isTauri = true;
-      appWindow.__TAURI_INTERNALS__ = {
-        async invoke(command, args) {
-          if (command === "read_extension_file") {
-            if (String(args.directory) !== "/ext/hello-disk") {
-              throw new Error(`missing directory ${String(args.directory)}`);
-            }
-            const contents = files[String(args.relativePath)];
-            if (contents === undefined) throw new Error(`missing ${String(args.relativePath)}`);
-            return contents;
+  const files: Record<string, string> = {
+    "extension.json": JSON.stringify(MANIFEST),
+    "extension.js": EXTENSION_SOURCE
+  };
+  await installFakeTauriBridge(page, {
+    files,
+    stubs: {
+      read_app_settings: () =>
+        JSON.stringify({
+          desktopState: {
+            version: 3,
+            developmentExtensionDirectories: ["/ext/hello-disk", "/ext/vanished"]
           }
-          if (command === "read_app_settings") {
-            return JSON.stringify({
-              desktopState: {
-                version: 3,
-                developmentExtensionDirectories: ["/ext/hello-disk", "/ext/vanished"]
-              }
-            });
-          }
-          if (command === "window_workspace_root") return null;
-          return null;
-        }
-      };
+        }),
+      window_workspace_root: () => null
     },
-    {
-      files: {
-        "extension.json": JSON.stringify(MANIFEST),
-        "extension.js": EXTENSION_SOURCE
+    // The restored-directory loader passes `directory`; only the known one has files.
+    readExtensionFile: (args) => {
+      if (String(args.directory) !== "/ext/hello-disk") {
+        throw new Error(`missing directory ${String(args.directory)}`);
       }
+      const contents = files[String(args.relativePath)];
+      if (contents === undefined) throw new Error(`missing ${String(args.relativePath)}`);
+      return contents;
     }
-  );
+  });
 
   await page.goto("/");
   await page.getByRole("button", { name: "Extensions", exact: true }).click();
@@ -172,24 +213,21 @@ test("restores stored extension directories at startup and reports one that fail
   await expect(list).toContainText("/ext/hello-disk");
 
   // The vanished directory stays reported instead of silently disappearing.
-  await expect(page.getByRole("list", { name: "Extension load errors" })).toContainText(
-    "/ext/vanished"
-  );
+  await expect(page.getByRole("list", { name: "Extension load errors" })).toContainText("/ext/vanished");
 });
 
 test("reports a broken extension directory without registering anything", async ({ page }) => {
-  await fakeExtensionDirectory(page, { "extension.json": "{ not json" });
+  await installFakeTauriBridge(page, {
+    files: { "extension.json": "{ not json" },
+    stubs: SINGLE_EXTENSION_STUBS
+  });
   await page.goto("/");
   await page.getByRole("button", { name: "Extensions", exact: true }).click();
 
   await page.getByRole("button", { name: "Add from folder…" }).click();
 
-  await expect(page.getByRole("list", { name: "Extension load errors" })).toContainText(
-    "not valid JSON"
-  );
-  await expect(page.getByRole("list", { name: "Installed extensions" })).not.toContainText(
-    "Hello Disk"
-  );
+  await expect(page.getByRole("list", { name: "Extension load errors" })).toContainText("not valid JSON");
+  await expect(page.getByRole("list", { name: "Installed extensions" })).not.toContainText("Hello Disk");
 });
 
 /**
@@ -287,9 +325,9 @@ const PANEL_MANIFEST = {
 test("an extension loaded from disk gets its own activity-bar space and mounts its own DOM", async ({
   page
 }) => {
-  await fakeExtensionDirectory(page, {
-    "extension.json": JSON.stringify(PANEL_MANIFEST),
-    "extension.js": PANEL_EXTENSION_SOURCE
+  await installFakeTauriBridge(page, {
+    files: { "extension.json": JSON.stringify(PANEL_MANIFEST), "extension.js": PANEL_EXTENSION_SOURCE },
+    stubs: SINGLE_EXTENSION_STUBS
   });
   await page.goto("/");
   await page.getByRole("button", { name: "Extensions", exact: true }).click();
@@ -301,9 +339,7 @@ test("an extension loaded from disk gets its own activity-bar space and mounts i
   const activityBar = page.getByRole("complementary", { name: "Workspace sections" });
   const boardButton = activityBar.getByRole("button", { name: "Board", exact: true });
   await expect(boardButton).toBeVisible();
-  await expect(page.getByRole("list", { name: "Installed extensions" })).toContainText(
-    "Not started"
-  );
+  await expect(page.getByRole("list", { name: "Installed extensions" })).toContainText("Not started");
 
   // Opening it activates the extension, which mounts its own DOM in place of
   // the placeholder.
@@ -343,61 +379,28 @@ test("the hello-notes example extension loads from its shipped files and capture
   };
 
   const created: string[] = [];
-  await page.exposeFunction("recordCreate", (relativePath: string) => created.push(relativePath));
-
-  await page.addInitScript(
-    ({ files }: { files: Record<string, string> }) => {
-      const appWindow = window as Window & {
-        isTauri?: boolean;
-        recordCreate?: (path: string) => void;
-        __TAURI_INTERNALS__?: { invoke: (command: string, args: Record<string, unknown>) => Promise<unknown> };
-      };
-      appWindow.isTauri = true;
-      const notes = new Map<string, string>();
-      appWindow.__TAURI_INTERNALS__ = {
-        async invoke(command, args) {
-          if (command === "plugin:dialog|open") return "/ext/hello-notes";
-          if (command === "read_extension_file") {
-            const contents = files[String(args.relativePath)];
-            if (contents === undefined) throw new Error(`missing ${String(args.relativePath)}`);
-            return contents;
-          }
-          if (command === "open_workspace") {
-            return { workspace: { root_path: String(args.rootPath), name: "vault" }, files: [] };
-          }
-          if (command === "list_workspace_entries") return [];
-          if (command === "create_markdown_file") {
-            const relativePath = String(args.relativePath);
-            notes.set(relativePath, String(args.contents ?? ""));
-            appWindow.recordCreate?.(relativePath);
-            return { relative_path: relativePath, name: relativePath, byte_size: 0, updated_at: null };
-          }
-          if (command === "read_markdown_file") {
-            return {
-              relative_path: String(args.relativePath),
-              contents: notes.get(String(args.relativePath)) ?? ""
-            };
-          }
-          if (command === "read_app_settings") return null;
-          if (command === "window_workspace_root") return "/vault";
-          if (command === "sync_status") {
-            return {
-              state: "off",
-              lastRecordedAt: null,
-              waiting: 0,
-              attention: 0,
-              stuck: [],
-              problem: null,
-              alongsideOwnGit: false
-            };
-          }
-          return null;
-        }
-      };
-      window.confirm = () => true;
-    },
-    { files }
-  );
+  const notes = new Map<string, string>();
+  await installFakeTauriBridge(page, {
+    files,
+    stubs: {
+      "plugin:dialog|open": () => "/ext/hello-notes",
+      open_workspace: (args) => ({ workspace: { root_path: String(args.rootPath), name: "vault" }, files: [] }),
+      list_workspace_entries: () => [],
+      create_markdown_file: (args) => {
+        const relativePath = String(args.relativePath);
+        notes.set(relativePath, String(args.contents ?? ""));
+        created.push(relativePath);
+        return { relative_path: relativePath, name: relativePath, byte_size: 0, updated_at: null };
+      },
+      read_markdown_file: (args) => ({
+        relative_path: String(args.relativePath),
+        contents: notes.get(String(args.relativePath)) ?? ""
+      }),
+      read_app_settings: () => null,
+      window_workspace_root: () => "/vault",
+      sync_status: () => SYNC_STATUS_OFF
+    }
+  });
 
   await page.goto("/");
   const activityBar = page.getByRole("complementary", { name: "Workspace sections" });
@@ -418,86 +421,54 @@ test("the hello-notes example extension loads from its shipped files and capture
   await expect(capturePanel.getByRole("listitem")).toHaveText(created[0]!);
 
   // The same capture is reachable from the command palette.
-  await page.keyboard.press("Control+p");
+  await page.keyboard.press(OPEN_PALETTE);
   await page.getByRole("combobox", { name: "Search commands" }).fill("Capture a note");
   await page.keyboard.press("Enter");
 
   await expect.poll(() => created).toHaveLength(2);
-  await expect(page.getByRole("navigation", { name: "Open tabs" })).toContainText(".md");
+  // The tab title is the capture's basename: captures/capture-<stamp>.md -> capture-<stamp>.md
+  await expect(page.getByRole("navigation", { name: "Open tabs" })).toContainText(/capture-.+\.md/);
 });
 
 test("an extension creates a note and opens it through the workspace API", async ({ page }) => {
   const created: string[] = [];
   const events: string[] = [];
-  await page.exposeFunction("recordCreate", (path: string) => created.push(path));
+  // The extension source calls `window.recordEvent` from inside the page, so it
+  // still needs an exposed function (invoke stubs run in Node and close over
+  // `created` directly, so `recordCreate` is not needed).
   await page.exposeFunction("recordEvent", (event: string) => events.push(event));
 
-  await page.addInitScript(
-    ({ files }: { files: Record<string, string> }) => {
-      const appWindow = window as Window & {
-        isTauri?: boolean;
-        recordCreate?: (path: string) => void;
-        __TAURI_INTERNALS__?: { invoke: (command: string, args: Record<string, unknown>) => Promise<unknown> };
-      };
-      appWindow.isTauri = true;
-      const notes = new Map<string, string>();
-      appWindow.__TAURI_INTERNALS__ = {
-        async invoke(command, args) {
-          if (command === "plugin:dialog|open") {
-            return args.title === "Open workspace" ? "/vault" : "/ext/capture-notes";
-          }
-          if (command === "read_extension_file") {
-            const contents = files[String(args.relativePath)];
-            if (contents === undefined) throw new Error(`missing ${String(args.relativePath)}`);
-            return contents;
-          }
-          if (command === "open_workspace") {
-            return { workspace: { root_path: String(args.rootPath), name: "vault" }, files: [] };
-          }
-          if (command === "list_workspace_entries") return [];
-          if (command === "create_markdown_file") {
-            const path = String(args.relativePath);
-            notes.set(path, String(args.contents ?? ""));
-            appWindow.recordCreate?.(path);
-            return { relative_path: path, name: path, byte_size: 0, updated_at: null };
-          }
-          if (command === "read_markdown_file") {
-            return { relative_path: String(args.relativePath), contents: notes.get(String(args.relativePath)) ?? "" };
-          }
-          if (command === "read_app_settings") return null;
-          // The window reports its workspace root on load, so the shell has one
-          // open before the extension runs.
-          if (command === "window_workspace_root") return "/vault";
-          if (command === "sync_status") {
-            return {
-              state: "off",
-              lastRecordedAt: null,
-              waiting: 0,
-              attention: 0,
-              stuck: [],
-              problem: null,
-              alongsideOwnGit: false
-            };
-          }
-          return null;
-        }
-      };
-      window.confirm = () => true;
-    },
-    {
-      files: {
-        "extension.json": JSON.stringify(NOTES_MANIFEST),
-        "extension.js": NOTES_EXTENSION_SOURCE
-      }
+  const notes = new Map<string, string>();
+  await installFakeTauriBridge(page, {
+    files: { "extension.json": JSON.stringify(NOTES_MANIFEST), "extension.js": NOTES_EXTENSION_SOURCE },
+    stubs: {
+      "plugin:dialog|open": (args) => (args.title === "Open workspace" ? "/vault" : "/ext/capture-notes"),
+      open_workspace: (args) => ({ workspace: { root_path: String(args.rootPath), name: "vault" }, files: [] }),
+      list_workspace_entries: () => [],
+      create_markdown_file: (args) => {
+        const relativePath = String(args.relativePath);
+        notes.set(relativePath, String(args.contents ?? ""));
+        created.push(relativePath);
+        return { relative_path: relativePath, name: relativePath, byte_size: 0, updated_at: null };
+      },
+      read_markdown_file: (args) => ({
+        relative_path: String(args.relativePath),
+        contents: notes.get(String(args.relativePath)) ?? ""
+      }),
+      read_app_settings: () => null,
+      // The window reports its workspace root on load, so the shell has one
+      // open before the extension runs.
+      window_workspace_root: () => "/vault",
+      sync_status: () => SYNC_STATUS_OFF
     }
-  );
+  });
 
   await page.goto("/");
   await page.getByRole("button", { name: "Extensions", exact: true }).click();
   await page.getByRole("button", { name: "Add from folder…" }).click();
   await expect(page.getByRole("list", { name: "Installed extensions" })).toContainText("Capture Notes");
 
-  await page.keyboard.press("Control+p");
+  await page.keyboard.press(OPEN_PALETTE);
   await page.getByRole("combobox", { name: "Search commands" }).fill("Capture note");
   await page.keyboard.press("Enter");
 
@@ -549,70 +520,32 @@ const LISTING_MANIFEST = {
 
 test("an extension lists notes in a folder and opens its own contributed tab", async ({ page }) => {
   const listed: string[][] = [];
+  // The extension source calls `window.recordNotes` from inside the page.
   await page.exposeFunction("recordNotes", (paths: string[]) => listed.push(paths));
 
-  await page.addInitScript(
-    ({ files }: { files: Record<string, string> }) => {
-      const appWindow = window as Window & {
-        isTauri?: boolean;
-        __TAURI_INTERNALS__?: { invoke: (command: string, args: Record<string, unknown>) => Promise<unknown> };
-      };
-      appWindow.isTauri = true;
-      appWindow.__TAURI_INTERNALS__ = {
-        async invoke(command, args) {
-          if (command === "plugin:dialog|open") return "/ext/lister";
-          if (command === "read_extension_file") {
-            const contents = files[String(args.relativePath)];
-            if (contents === undefined) throw new Error(`missing ${String(args.relativePath)}`);
-            return contents;
-          }
-          if (command === "open_workspace") {
-            return { workspace: { root_path: String(args.rootPath), name: "vault" }, files: [] };
-          }
-          if (command === "list_workspace_entries") {
-            const file = (relativePath: string, updatedAt: number | null) => ({
-              relative_path: relativePath,
-              name: relativePath.split("/").at(-1),
-              parent_path: relativePath.split("/").slice(0, -1).join("/"),
-              kind: "file",
-              is_markdown: relativePath.endsWith(".md"),
-              byte_size: 0,
-              updated_at: updatedAt
-            });
-            return [
-              file("journal/2026/08/2026-08-07-1307.md", 30),
-              file("journal/cover.png", 20),
-              file("journalish/other.md", 10),
-              file("inbox/scratch.md", 5)
-            ];
-          }
-          if (command === "read_app_settings") return null;
-          if (command === "window_workspace_root") return "/vault";
-          if (command === "sync_status") {
-            return {
-              state: "off",
-              lastRecordedAt: null,
-              waiting: 0,
-              attention: 0,
-              stuck: [],
-              problem: null,
-              alongsideOwnGit: false
-            };
-          }
-          return null;
-        }
-      };
-      window.confirm = () => true;
-    },
-    { files: { "extension.json": JSON.stringify(LISTING_MANIFEST), "extension.js": LISTING_EXTENSION_SOURCE } }
-  );
+  await installFakeTauriBridge(page, {
+    files: { "extension.json": JSON.stringify(LISTING_MANIFEST), "extension.js": LISTING_EXTENSION_SOURCE },
+    stubs: {
+      "plugin:dialog|open": () => "/ext/lister",
+      open_workspace: (args) => ({ workspace: { root_path: String(args.rootPath), name: "vault" }, files: [] }),
+      list_workspace_entries: () => [
+        entry("journal/2026/08/2026-08-07-1307.md", 30),
+        entry("journal/cover.png", 20),
+        entry("journalish/other.md", 10),
+        entry("inbox/scratch.md", 5)
+      ],
+      read_app_settings: () => null,
+      window_workspace_root: () => "/vault",
+      sync_status: () => SYNC_STATUS_OFF
+    }
+  });
 
   await page.goto("/");
   await page.getByRole("button", { name: "Extensions", exact: true }).click();
   await page.getByRole("button", { name: "Add from folder…" }).click();
   await expect(page.getByRole("list", { name: "Installed extensions" })).toContainText("Lister");
 
-  await page.keyboard.press("Control+p");
+  await page.keyboard.press(OPEN_PALETTE);
   await page.getByRole("combobox", { name: "Search commands" }).fill("List journal notes");
   await page.keyboard.press("Enter");
 
@@ -623,3 +556,16 @@ test("an extension lists notes in a folder and opens its own contributed tab", a
   // The extension opened a tab of the kind it registered.
   await expect(page.getByRole("navigation", { name: "Open tabs" })).toContainText("August 2026");
 });
+
+/** Builds a workspace entry the `list_workspace_entries` stub returns. */
+function entry(relativePath: string, updatedAt: number | null) {
+  return {
+    relative_path: relativePath,
+    name: relativePath.split("/").at(-1),
+    parent_path: relativePath.split("/").slice(0, -1).join("/"),
+    kind: "file",
+    is_markdown: relativePath.endsWith(".md"),
+    byte_size: 0,
+    updated_at: updatedAt
+  };
+}
