@@ -84,7 +84,9 @@ ruling out by construction.
   A test pins each; nothing pins them to each other.
 - **Settling is not announced.** A copy tidied away leaves a restore point and
   a number in the History panel's footer, but nothing says "3 were handled" at
-  the time. The same missing notification surface as story 4's toast.
+  the time. The same missing notification surface as story 4's toast. Blocked
+  on `notification_system` — a settle adapter pushes a silent/transient
+  notification into the same store.
 
 ## Status
 

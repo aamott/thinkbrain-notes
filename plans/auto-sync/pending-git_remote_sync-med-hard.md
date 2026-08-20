@@ -38,7 +38,8 @@ fetches and cannot push, so sending was written rather than called:
 - **Errors:** offline/auth/rejected-push surface as a notification, bell
   entry, footer state, and recovery action. Every attempted automatic round
   counts against the one-minute cap, including failures, so a bad link cannot
-  flash the footer in a loop.
+  flash the footer in a loop. Notification surface provided by
+  `notification_system` — sync adapter pushes into the shared store.
 
 ## Acceptance
 
