@@ -1,27 +1,14 @@
-use super::super::hidden_repo;
+use super::super::test_support;
 use super::*;
 use crate::tests::make_temp_test_dir;
 use std::fs;
 use std::path::{Path, PathBuf};
+use test_support::write;
 
-struct Fixture {
-    vault: PathBuf,
-    repo: gix::Repository,
-}
+type Fixture = test_support::RepoFixture;
 
 fn fixture(name: &str) -> Fixture {
-    let vault = make_temp_test_dir(&format!("{name}-vault"), "sync", true);
-    let git_dir = make_temp_test_dir(&format!("{name}-gitdir"), "sync", true);
-    let repo = hidden_repo::open_or_create(&git_dir, &vault).expect("the hidden repository opens");
-    Fixture { vault, repo }
-}
-
-fn write(vault: &Path, relative: &str, contents: &str) {
-    let path = vault.join(relative);
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).expect("the note's folder exists");
-    }
-    fs::write(path, contents).expect("the note is written");
+    test_support::repo_fixture(name, "sync")
 }
 
 /// Every path in the recorded tree, so a test can say exactly what history
@@ -110,7 +97,12 @@ fn a_checkpoint_leaves_the_history_branch_alone() {
         .expect("committed");
 
     write(&f.vault, "note-DESKTOP-AB12CD.md", "# Theirs\n");
-    checkpoint(&f.repo, &[PathBuf::from("note-DESKTOP-AB12CD.md")], Reason::ConflictResolved).expect("checkpointed");
+    checkpoint(
+        &f.repo,
+        &[PathBuf::from("note-DESKTOP-AB12CD.md")],
+        Reason::ConflictResolved,
+    )
+    .expect("checkpointed");
 
     assert_eq!(head_commit(&f.repo).expect("readable"), Some(history));
 }
@@ -128,10 +120,20 @@ fn the_checkpoint_ref_is_not_a_branch() {
 fn checkpoints_keep_the_ones_before_them() {
     let f = fixture("checkpoint-chain");
     write(&f.vault, "one.md", "# One\n");
-    let first = checkpoint(&f.repo, &[PathBuf::from("one.md")], Reason::ConflictResolved).expect("checkpointed");
+    let first = checkpoint(
+        &f.repo,
+        &[PathBuf::from("one.md")],
+        Reason::ConflictResolved,
+    )
+    .expect("checkpointed");
 
     write(&f.vault, "two.md", "# Two\n");
-    let second = checkpoint(&f.repo, &[PathBuf::from("two.md")], Reason::ConflictResolved).expect("checkpointed");
+    let second = checkpoint(
+        &f.repo,
+        &[PathBuf::from("two.md")],
+        Reason::ConflictResolved,
+    )
+    .expect("checkpointed");
 
     assert_ne!(first, second);
     let parents: Vec<_> = f
@@ -152,9 +154,19 @@ fn checkpoints_keep_the_ones_before_them() {
 fn a_checkpoint_with_nothing_new_reuses_the_last_one() {
     let f = fixture("checkpoint-unchanged");
     write(&f.vault, "one.md", "# One\n");
-    let first = checkpoint(&f.repo, &[PathBuf::from("one.md")], Reason::ConflictResolved).expect("checkpointed");
+    let first = checkpoint(
+        &f.repo,
+        &[PathBuf::from("one.md")],
+        Reason::ConflictResolved,
+    )
+    .expect("checkpointed");
 
-    let second = checkpoint(&f.repo, &[PathBuf::from("one.md")], Reason::ConflictResolved).expect("checkpointed");
+    let second = checkpoint(
+        &f.repo,
+        &[PathBuf::from("one.md")],
+        Reason::ConflictResolved,
+    )
+    .expect("checkpointed");
 
     assert_eq!(first, second);
 }
@@ -166,7 +178,12 @@ fn a_checkpoint_with_nothing_new_reuses_the_last_one() {
 fn a_first_checkpoint_of_absent_notes_still_yields_a_restore_point() {
     let f = fixture("checkpoint-absent");
 
-    let id = checkpoint(&f.repo, &[PathBuf::from("missing.md")], Reason::ConflictResolved).expect("checkpointed");
+    let id = checkpoint(
+        &f.repo,
+        &[PathBuf::from("missing.md")],
+        Reason::ConflictResolved,
+    )
+    .expect("checkpointed");
 
     assert!(tree_paths_of(&f.repo, id).is_empty());
     // The checkpoint must actually be reachable from the checkpoint ref, or
@@ -415,7 +432,8 @@ fn recording_a_symlink_does_not_store_its_target() {
     // unchanged from the previous commit — `record` answers `None` rather
     // than writing an empty commit (and never follows the link to store the
     // target's bytes).
-    let recorded = record(&f.repo, &[PathBuf::from("note.md")], "second").expect("recording succeeds");
+    let recorded =
+        record(&f.repo, &[PathBuf::from("note.md")], "second").expect("recording succeeds");
     assert_eq!(
         recorded, None,
         "a symlink was recorded as a change instead of being skipped"
@@ -434,8 +452,7 @@ fn a_symlink_is_not_opened_as_its_target() {
     std::os::unix::fs::symlink(outside.join("secret.md"), vault.join("note.md"))
         .expect("the vault holds a symlink");
 
-    open_without_following(&vault.join("note.md"))
-        .expect_err("a symlink must not be followed");
+    open_without_following(&vault.join("note.md")).expect_err("a symlink must not be followed");
 }
 
 /// `..` is not the only way to name something that is not a note in this

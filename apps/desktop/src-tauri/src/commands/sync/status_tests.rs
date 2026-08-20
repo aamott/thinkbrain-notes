@@ -1,7 +1,6 @@
+use super::super::test_support;
 use super::*;
-use crate::commands::sync::bootstrap::bootstrap;
 use crate::commands::sync::conflict::ConflictCopy;
-use crate::tests::make_temp_test_dir;
 use std::path::PathBuf;
 use std::time::Instant;
 
@@ -11,17 +10,15 @@ struct Vault {
 }
 
 fn vault(name: &str) -> Vault {
-    let app_data = make_temp_test_dir(&format!("{name}-appdata"), "sync", true);
-    let root = make_temp_test_dir(&format!("{name}-vault"), "sync", true);
-    let managed = bootstrap(&app_data, &root).expect("bootstrap succeeds");
+    let fixture = test_support::engine_fixture(name);
     Vault {
-        root,
-        engine: Engine::new(managed.repo, managed.has_own_git),
+        root: fixture.vault,
+        engine: fixture.engine,
     }
 }
 
 fn note(v: &Vault, name: &str, contents: &str) {
-    std::fs::write(v.root.join(name), contents).expect("the note is written");
+    test_support::write(&v.root, name, contents);
 }
 
 fn conflict(copy: &str, original: &str) -> ConflictCopy {
@@ -38,14 +35,18 @@ fn conflict(copy: &str, original: &str) -> ConflictCopy {
 fn a_quiet_workspace_says_when_it_last_saved() {
     let v = vault("status-quiet");
     note(&v, "one.md", "written\n");
-    v.engine.note_changes([PathBuf::from("one.md")], Instant::now());
+    v.engine
+        .note_changes([PathBuf::from("one.md")], Instant::now());
     v.engine.flush().expect("the change is recorded");
 
     let status = of(Recording::By(&v.engine)).expect("the status is readable");
 
     assert_eq!(status.state, State::Idle);
     assert_eq!(status.waiting, 0);
-    assert!(status.last_recorded_at.is_some(), "a saved workspace knows when");
+    assert!(
+        status.last_recorded_at.is_some(),
+        "a saved workspace knows when"
+    );
     assert!(status.problem.is_none());
 }
 
@@ -73,7 +74,8 @@ fn a_round_trip_in_flight_says_so() {
 fn a_change_that_has_not_settled_yet_shows_as_saving() {
     let v = vault("status-saving");
     note(&v, "one.md", "still typing\n");
-    v.engine.note_changes([PathBuf::from("one.md")], Instant::now());
+    v.engine
+        .note_changes([PathBuf::from("one.md")], Instant::now());
 
     let status = of(Recording::By(&v.engine)).expect("the status is readable");
 
@@ -87,8 +89,10 @@ fn a_change_that_has_not_settled_yet_shows_as_saving() {
 fn a_conflict_outranks_a_change_still_being_saved() {
     let v = vault("status-attention");
     note(&v, "one.md", "still typing\n");
-    v.engine.note_changes([PathBuf::from("one.md")], Instant::now());
-    v.engine.note_conflicts([conflict("one.sync-conflict-1.md", "one.md")]);
+    v.engine
+        .note_changes([PathBuf::from("one.md")], Instant::now());
+    v.engine
+        .note_conflicts([conflict("one.sync-conflict-1.md", "one.md")]);
 
     let status = of(Recording::By(&v.engine)).expect("the status is readable");
 
@@ -105,10 +109,13 @@ fn a_note_that_cannot_be_recorded_needs_attention_not_a_full_stop() {
     // Make `one.md` a file so `one.md/inner.md` is unreadable, then turn it
     // into a folder to recover.
     note(&v, "one.md", "a note, not a folder\n");
-    v.engine.note_conflicts([conflict("one.sync-conflict-1.md", "one.md")]);
+    v.engine
+        .note_conflicts([conflict("one.sync-conflict-1.md", "one.md")]);
     v.engine
         .note_changes([PathBuf::from("one.md/inner.md")], Instant::now());
-    v.engine.flush().expect("the rest of the vault still records");
+    v.engine
+        .flush()
+        .expect("the rest of the vault still records");
 
     let status = of(Recording::By(&v.engine)).expect("the status is readable");
 
@@ -133,7 +140,8 @@ fn recording_a_readable_note_clears_a_stuck_one_that_has_been_fixed() {
     std::fs::remove_file(v.root.join("one.md")).expect("the note is removed");
     std::fs::create_dir(v.root.join("one.md")).expect("the folder exists");
     note(&v, "one.md/inner.md", "now writable\n");
-    v.engine.note_changes([PathBuf::from("one.md/inner.md")], Instant::now());
+    v.engine
+        .note_changes([PathBuf::from("one.md/inner.md")], Instant::now());
     v.engine.flush().expect("the next change records");
 
     let status = of(Recording::By(&v.engine)).expect("the status is readable");

@@ -1,4 +1,4 @@
-use super::super::hidden_repo;
+use super::super::test_support;
 use super::*;
 use crate::commands::sync::snapshot;
 use crate::tests::make_temp_test_dir;
@@ -9,37 +9,34 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 /// One device: a notes folder and the hidden repository that records it.
-struct Device {
-    vault: PathBuf,
-    repo: gix::Repository,
+pub(super) struct Device {
+    pub(super) vault: PathBuf,
+    pub(super) repo: gix::Repository,
 }
 
-fn device(name: &str) -> Device {
-    let vault = make_temp_test_dir(&format!("{name}-vault"), "round", true);
-    let git_dir = make_temp_test_dir(&format!("{name}-gitdir"), "round", true);
-    let repo = hidden_repo::open_or_create(&git_dir, &vault).expect("the hidden repository opens");
-    Device { vault, repo }
+pub(super) fn device(name: &str) -> Device {
+    let fixture = test_support::repo_fixture(name, "round");
+    Device {
+        vault: fixture.vault,
+        repo: fixture.repo,
+    }
 }
 
 /// The place both devices sync to.
-fn shared(name: &str) -> String {
+pub(super) fn shared(name: &str) -> String {
     let path = make_temp_test_dir(&format!("{name}-remote"), "round", true);
     gix::init_bare(&path).expect("the destination is created");
     path.to_string_lossy().into_owned()
 }
 
-fn write(device: &Device, relative: &str, contents: &str) {
-    let path = device.vault.join(relative);
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).expect("the note's folder exists");
-    }
-    fs::write(path, contents).expect("the note is written");
+pub(super) fn write(device: &Device, relative: &str, contents: &str) {
+    test_support::write(&device.vault, relative, contents);
     record(device, relative);
 }
 
 /// Writes a note without recording it, the way an unsaved edit sits on disk
 /// between the moment someone types it and the moment the sweeper notices.
-fn write_only(device: &Device, relative: &str, contents: &str) {
+pub(super) fn write_only(device: &Device, relative: &str, contents: &str) {
     fs::write(device.vault.join(relative), contents).expect("the note is written");
 }
 
@@ -58,17 +55,17 @@ fn remove(device: &Device, relative: &str) {
     record(device, relative);
 }
 
-fn read(device: &Device, relative: &str) -> String {
+pub(super) fn read(device: &Device, relative: &str) -> String {
     fs::read_to_string(device.vault.join(relative)).expect("the note is on disk")
 }
 
 /// One whole round trip, the way the command runs it.
-fn trip(device: &Device, destination: &str) -> Synced {
+pub(super) fn trip(device: &Device, destination: &str) -> Synced {
     once(&device.repo, &device.vault, destination).expect("the sync succeeds")
 }
 
 /// Every file in the vault, so a test can say what a sync did and did not leave.
-fn files(device: &Device) -> Vec<String> {
+pub(super) fn files(device: &Device) -> Vec<String> {
     let mut found = Vec::new();
     let mut folders = vec![device.vault.clone()];
     while let Some(folder) = folders.pop() {
@@ -163,7 +160,10 @@ fn a_first_sync_into_an_empty_destination_sends_everything() {
     let synced = trip(&one, &there);
 
     assert_eq!(synced.landed, push::Landed::Moved);
-    assert_eq!(synced.brought_down, 0, "an empty destination had something to bring down");
+    assert_eq!(
+        synced.brought_down, 0,
+        "an empty destination had something to bring down"
+    );
     assert!(synced.sent > 0, "nothing was sent");
 }
 
@@ -211,7 +211,10 @@ fn a_note_deleted_on_one_device_goes_away_on_the_other() {
     trip(&one, &there);
     trip(&two, &there);
 
-    assert!(!two.vault.join("one.md").exists(), "the note is still there");
+    assert!(
+        !two.vault.join("one.md").exists(),
+        "the note is still there"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -236,7 +239,11 @@ fn different_notes_on_each_side_merge_without_asking() {
     let synced = trip(&two, &there);
 
     assert_eq!(synced.asked_about, 0, "a question was asked about nothing");
-    assert_eq!(synced.landed, push::Landed::Moved, "the merge was not accepted");
+    assert_eq!(
+        synced.landed,
+        push::Landed::Moved,
+        "the merge was not accepted"
+    );
     assert_eq!(read(&two, "mine.md"), "mine\n");
     assert_eq!(read(&two, "theirs.md"), "theirs\n");
 }
@@ -260,7 +267,11 @@ fn what_a_merge_joined_is_sent_on_to_everyone_else() {
     write(&two, "theirs.md", "theirs\n");
     let merged = trip(&two, &there);
 
-    assert_eq!(merged.landed, push::Landed::Moved, "the merge was not accepted");
+    assert_eq!(
+        merged.landed,
+        push::Landed::Moved,
+        "the merge was not accepted"
+    );
 
     trip(&three, &there);
 
@@ -286,8 +297,14 @@ fn edits_in_different_parts_of_one_note_merge_without_asking() {
 
     let synced = trip(&two, &there);
 
-    assert_eq!(synced.asked_about, 0, "a question was asked about separate edits");
-    assert_eq!(read(&two, "note.md"), "top changed\nmiddle\nbottom changed\n");
+    assert_eq!(
+        synced.asked_about, 0,
+        "a question was asked about separate edits"
+    );
+    assert_eq!(
+        read(&two, "note.md"),
+        "top changed\nmiddle\nbottom changed\n"
+    );
 }
 
 /// The same line, both sides. Nothing can decide this but a person, so ours
@@ -308,9 +325,17 @@ fn the_same_line_changed_on_both_sides_leaves_a_copy_to_choose_from() {
     let synced = trip(&two, &there);
 
     assert_eq!(synced.asked_about, 1);
-    assert_eq!(read(&two, "note.md"), "our wording\n", "our note was overwritten");
+    assert_eq!(
+        read(&two, "note.md"),
+        "our wording\n",
+        "our note was overwritten"
+    );
     let copy = "note (from another device).md";
-    assert_eq!(read(&two, copy), "their wording\n", "theirs did not arrive beside it");
+    assert_eq!(
+        read(&two, copy),
+        "their wording\n",
+        "theirs did not arrive beside it"
+    );
     assert!(
         conflict::pair(copy, |path| two.vault.join(path).exists()).is_some(),
         "the copy is not in a shape the conflict panel recognises"
@@ -380,7 +405,10 @@ fn two_devices_that_each_already_had_notes_are_joined() {
 
     let synced = trip(&two, &there);
 
-    assert_eq!(synced.asked_about, 0, "two unrelated notes were made into a question");
+    assert_eq!(
+        synced.asked_about, 0,
+        "two unrelated notes were made into a question"
+    );
     assert_eq!(read(&two, "from-one.md"), "one\n");
     assert_eq!(read(&two, "from-two.md"), "two\n");
 }
@@ -404,243 +432,6 @@ fn a_note_both_devices_already_had_becomes_a_question() {
         read(&two, "note (from another device).md"),
         "written on one\n"
     );
-}
-
-/// An interrupted sync leaves the unnumbered slot behind. The next attempt
-/// must overwrite it, not stack ` 2`.
-#[test]
-fn an_interrupted_copy_is_overwritten_not_numbered() {
-    let one = device("round-reuse-one");
-    let two = device("round-reuse-two");
-    let there = shared("round-reuse");
-    write(&one, "note.md", "the line\n");
-    trip(&one, &there);
-    trip(&two, &there);
-
-    write(&one, "note.md", "their wording\n");
-    trip(&one, &there);
-    write(&two, "note.md", "our wording\n");
-    write_only(&two, "note (from another device).md", "stale leftover\n");
-
-    let synced = trip(&two, &there);
-
-    assert_eq!(synced.asked_about, 1);
-    assert_eq!(read(&two, "note (from another device).md"), "their wording\n");
-    assert!(
-        !two.vault.join("note (from another device 2).md").exists(),
-        "a leftover copy was numbered past: {:?}",
-        files(&two)
-    );
-}
-
-/// A note that cannot be written does not stop the rest of the vault landing.
-#[test]
-fn one_unwritable_note_does_not_stall_the_vault() {
-    let one = device("round-unwritable-one");
-    let two = device("round-unwritable-two");
-    let there = shared("round-unwritable");
-    write(&one, "good.md", "ok\n");
-    write(&one, "blocked.md", "cannot land\n");
-    trip(&one, &there);
-
-    fs::create_dir(two.vault.join("blocked.md")).expect("the name is occupied by a folder");
-
-    let synced = trip(&two, &there);
-
-    assert_eq!(read(&two, "good.md"), "ok\n", "the rest of the vault did not land");
-    assert!(
-        two.vault.join("blocked.md").is_dir(),
-        "the blocking folder was replaced"
-    );
-    assert_eq!(synced.skipped.len(), 1);
-    assert_eq!(synced.skipped[0].path, "blocked.md");
-    assert_eq!(synced.skipped[0].code, "sync.note_write_failed");
-}
-
-/// Two windows, or one impatient double-click. Every one of them has real work
-/// to do here — the destination holds a note this device has never seen — so
-/// each thread reaches the merge, and all four have to come back agreeing with
-/// the destination about where history ended.
-///
-/// This does not prove the lane: removing it leaves the test passing, because
-/// whichever thread merges first leaves the rest with nothing to merge, and
-/// the collision needs two of them past the fetch before either commits. The
-/// lane is there for that interleaving, which this cannot reliably reach.
-#[test]
-fn two_syncs_at_once_on_one_vault_do_not_interleave() {
-    let one = device("round-at-once");
-    let elsewhere = device("round-at-once-other");
-    let there = shared("round-at-once");
-    write(&elsewhere, "theirs.md", "from the other device\n");
-    trip(&elsewhere, &there);
-    write(&one, "note.md", "first\n");
-    let engine = std::sync::Arc::new(super::super::engine::Engine::new(
-        gix::open(one.repo.path()).expect("the hidden repository reopens"),
-        false,
-    ));
-    let key = one.vault.to_string_lossy().to_string();
-
-    let outcomes: Vec<Result<Synced, crate::NativeError>> = std::thread::scope(|scope| {
-        let handles: Vec<_> = (0..4)
-            .map(|_| {
-                let engine = std::sync::Arc::clone(&engine);
-                let vault = one.vault.clone();
-                let there = there.clone();
-                let key = key.clone();
-                scope.spawn(move || sync(&engine, &key, &vault, &there))
-            })
-            .collect();
-        handles
-            .into_iter()
-            .map(|handle| handle.join().expect("the thread finishes"))
-            .collect()
-    });
-
-    for outcome in &outcomes {
-        assert!(outcome.is_ok(), "a sync collided with another: {outcome:?}");
-    }
-    assert_eq!(
-        remote_tip(&there),
-        snapshot::head_commit(&one.repo).expect("the branch is readable"),
-        "the destination and this device disagree about where history ended"
-    );
-    assert_eq!(read(&one, "theirs.md"), "from the other device\n");
-}
-
-fn remote_tip(destination: &str) -> Option<gix::ObjectId> {
-    let repo = gix::open(destination).expect("the destination opens");
-    repo.try_find_reference("refs/heads/main")
-        .expect("the destination's refs are readable")
-        .map(|mut found| found.peel_to_id().expect("the ref points at an object").detach())
-}
-
-/// A name this device cannot even read is not a name it should guess at.
-/// Writing it under a mangled spelling would leave the two devices tracking
-/// different files forever, each unable to touch the other's. Here the
-/// hostile history holds a tree entry whose name is `note\xff.md` — a byte
-/// sequence that is not valid UTF-8 on this device — and pulling it must be
-/// refused rather than recorded under a guessed spelling.
-#[test]
-fn a_note_whose_name_cannot_be_read_here_is_refused() {
-    let victim = device("round-unreadable-name");
-    let there = shared("round-unreadable-name");
-
-    let hostile = device("round-unreadable-name-other");
-    let blob = hostile.repo.write_blob(b"anything").expect("the blob is written").detach();
-    let root = tree_holding(
-        &hostile,
-        b"note\xff.md".to_vec(),
-        gix::object::tree::EntryKind::Blob,
-        blob,
-    );
-    let crafted = commit_of(&hostile, "a name in no encoding", root, &[]);
-    push::send(&hostile.repo, &there, BRANCH, crafted).expect("the crafted history is sent");
-
-    let error = once(&victim.repo, &victim.vault, &there).expect_err("an unreadable name is refused");
-
-    assert_eq!(error.code, "sync.note_name_unreadable");
-    assert!(files(&victim).is_empty(), "something was written anyway: {:?}", files(&victim));
-}
-
-/// Someone types into a note while a sync is running, or after one was
-/// interrupted before it could record what it had already written. Either way
-/// what is on disk is theirs, and the other device's version goes beside it.
-#[test]
-fn a_note_changed_underneath_a_sync_is_never_written_over() {
-    let one = device("round-underneath-one");
-    let two = device("round-underneath-two");
-    let there = shared("round-underneath");
-    write(&one, "note.md", "as it was\n");
-    trip(&one, &there);
-    trip(&two, &there);
-
-    write_only(&two, "note.md", "what they were typing\n");
-    write(&one, "note.md", "changed elsewhere\n");
-    trip(&one, &there);
-
-    let synced = trip(&two, &there);
-
-    assert_eq!(read(&two, "note.md"), "what they were typing\n", "someone's typing was lost");
-    assert_eq!(read(&two, "note (from another device).md"), "changed elsewhere\n");
-    assert_eq!(synced.asked_about, 1);
-}
-
-/// Nothing in git's tree format forbids an entry named `..`, and `Path::join`
-/// follows it straight out of the folder. A destination someone else controls
-/// must never be able to choose where this app writes. Here the hostile
-/// history nests a tree entry named `..` pointing at `escaped.md`, so a
-/// naive recorder would write outside the vault — the pull must refuse it.
-#[test]
-fn a_note_named_to_escape_the_folder_is_refused() {
-    let victim = device("round-escape");
-    let there = shared("round-escape");
-
-    let hostile = device("round-escape-hostile");
-    let blob = hostile.repo.write_blob(b"escaped").expect("the blob is written").detach();
-    let inside = tree_holding(&hostile, "escaped.md", gix::object::tree::EntryKind::Blob, blob);
-    let root = tree_holding(&hostile, "..", gix::object::tree::EntryKind::Tree, inside);
-    let crafted = commit_of(&hostile, "a folder named to escape", root, &[]);
-    push::send(&hostile.repo, &there, BRANCH, crafted).expect("the crafted history is sent");
-
-    let escaped = victim
-        .vault
-        .parent()
-        .expect("the vault has a parent")
-        .join("escaped.md");
-    let error = once(&victim.repo, &victim.vault, &there).expect_err("a crafted tree is refused");
-
-    assert!(!escaped.exists(), "a note was written outside the folder: {escaped:?}");
-    assert_eq!(error.code, "sync.path_outside_vault");
-}
-
-/// Builds a raw gix tree holding a single entry, so a test can craft a
-/// hostile history (a `..` folder, an unreadable name) that the recorder
-/// would never produce itself.
-fn tree_holding(
-    device: &Device,
-    name: impl Into<gix::bstr::BString>,
-    kind: gix::object::tree::EntryKind,
-    oid: gix::ObjectId,
-) -> gix::ObjectId {
-    device
-        .repo
-        .write_object(&gix::objs::Tree {
-            entries: vec![gix::objs::tree::Entry {
-                mode: kind.into(),
-                filename: name.into(),
-                oid,
-            }],
-        })
-        .expect("the tree is written")
-        .detach()
-}
-
-/// Writes a raw gix commit pointing at `tree`, so a test can build a
-/// hostile history the security tests push at a victim device.
-fn commit_of(
-    device: &Device,
-    message: &str,
-    tree: gix::ObjectId,
-    parents: &[gix::ObjectId],
-) -> gix::ObjectId {
-    let who = gix::actor::Signature {
-        name: "ThinkBrain Notes".into(),
-        email: "sync@thinkbrain.notes".into(),
-        time: gix::date::Time::now_utc(),
-    };
-    device
-        .repo
-        .write_object(&gix::objs::Commit {
-            tree,
-            parents: parents.iter().copied().collect(),
-            author: who.clone(),
-            committer: who,
-            encoding: None,
-            message: message.into(),
-            extra_headers: Vec::new(),
-        })
-        .expect("the commit is written")
-        .detach()
 }
 
 // ---------------------------------------------------------------------------

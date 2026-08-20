@@ -16,7 +16,10 @@ fn engine_for(name: &str) -> Arc<Engine> {
 fn an_engine_outlives_every_window_but_the_last() {
     let mut state = Registry::default();
     state.adopt("vault", "window-1", engine_for("registry-shared"));
-    assert!(state.hold("vault", "window-2"), "the second window shares it");
+    assert!(
+        state.hold("vault", "window-2"),
+        "the second window shares it"
+    );
 
     assert!(
         state.release("vault", "window-1").is_none(),
@@ -41,7 +44,10 @@ fn a_destroyed_window_yields_every_engine_it_held() {
     let released = state.release_window("window-1");
 
     assert_eq!(released.len(), 1, "only the vault nobody else has open");
-    assert!(state.engines.contains_key("two"), "window-2 still has it open");
+    assert!(
+        state.engines.contains_key("two"),
+        "window-2 still has it open"
+    );
 }
 
 /// Bootstrapping happens outside the lock, so two windows opening one vault
@@ -121,7 +127,10 @@ fn attach_then_detach_removes_the_engine() {
     assert!(engine(&key).is_none(), "detach left the engine behind");
 
     attach(&app_data, &vault, &key, "reattach-2").expect("reattaching succeeds");
-    assert!(engine(&key).is_some(), "a second attach did not bring the engine back");
+    assert!(
+        engine(&key).is_some(),
+        "a second attach did not bring the engine back"
+    );
     detach(&key, "reattach-2");
 }
 
@@ -142,9 +151,15 @@ fn two_attaches_share_one_engine() {
     );
 
     detach(&key, "share-1");
-    assert!(engine(&key).is_some(), "the first detach dropped a shared engine");
+    assert!(
+        engine(&key).is_some(),
+        "the first detach dropped a shared engine"
+    );
     detach(&key, "share-2");
-    assert!(engine(&key).is_none(), "the last detach left the engine behind");
+    assert!(
+        engine(&key).is_none(),
+        "the last detach left the engine behind"
+    );
 }
 
 /// A destroyed window never runs teardown, so everything it held has to
@@ -304,11 +319,20 @@ fn the_conflicts_our_own_test_script_plants_are_the_ones_we_detect() {
     // Stem, marker, date-time-device, extension — including a stem with a
     // space in it and an extension that is neither `.md` nor an image.
     plant("Meeting Notes.md", "# Q3 sync\n");
-    plant("Meeting Notes.sync-conflict-20260817-215005-K3SDFHG.md", "# Q3 sync\nelse\n");
+    plant(
+        "Meeting Notes.sync-conflict-20260817-215005-K3SDFHG.md",
+        "# Q3 sync\nelse\n",
+    );
     plant("diagram.png", "\u{0}binary");
-    plant("diagram.sync-conflict-20260817-215005-K3SDFHG.png", "\u{0}other");
+    plant(
+        "diagram.sync-conflict-20260817-215005-K3SDFHG.png",
+        "\u{0}other",
+    );
     plant("Roadmap.canvas", "{\"nodes\":[]}\n");
-    plant("Roadmap.sync-conflict-20260817-215005-K3SDFHG.canvas", "{\"nodes\":[1]}\n");
+    plant(
+        "Roadmap.sync-conflict-20260817-215005-K3SDFHG.canvas",
+        "{\"nodes\":[1]}\n",
+    );
 
     let key = vault.to_string_lossy().to_string();
     attach(&app_data, &vault, &key, "planted-window").expect("attaching succeeds");
@@ -323,8 +347,15 @@ fn the_conflicts_our_own_test_script_plants_are_the_ones_we_detect() {
         .collect();
 
     detach(&key, "planted-window");
-    assert_eq!(held.len(), 3, "the startup scan should pair all three copies");
-    assert!(unbuildable.is_empty(), "these copies could not be shown: {unbuildable:?}");
+    assert_eq!(
+        held.len(),
+        3,
+        "the startup scan should pair all three copies"
+    );
+    assert!(
+        unbuildable.is_empty(),
+        "these copies could not be shown: {unbuildable:?}"
+    );
 }
 
 /// Settling runs while a workspace is being attached, which is also when the
@@ -345,6 +376,12 @@ fn attaching_settles_the_obvious_copies_without_deadlocking() {
     let held = engine.conflicts();
     detach(&key, "settle-window");
 
-    assert!(held.is_empty(), "a copy identical to the note should never be raised");
-    assert!(!vault.join(copy).exists(), "and it should have been tidied away");
+    assert!(
+        held.is_empty(),
+        "a copy identical to the note should never be raised"
+    );
+    assert!(
+        !vault.join(copy).exists(),
+        "and it should have been tidied away"
+    );
 }

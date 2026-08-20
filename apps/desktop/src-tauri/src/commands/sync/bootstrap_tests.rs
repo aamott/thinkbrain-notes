@@ -65,7 +65,10 @@ fn a_vault_with_its_own_git_is_recorded_too_and_its_repository_left_alone() {
 
     let workspace = bootstrap(&app_data, &vault).expect("bootstrap succeeds");
 
-    assert!(workspace.has_own_git, "the second history should be declared, not hidden");
+    assert!(
+        workspace.has_own_git,
+        "the second history should be declared, not hidden"
+    );
     assert_eq!(
         recorded_paths(&workspace.repo),
         ["note.md"],
@@ -99,7 +102,10 @@ fn a_vault_of_existing_notes_is_snapshotted_whole() {
 
     let workspace = bootstrap(&app_data, &vault).expect("bootstrap succeeds");
 
-    assert_eq!(recorded_paths(&workspace.repo), ["journal/2026/08-16.md", "one.md"]);
+    assert_eq!(
+        recorded_paths(&workspace.repo),
+        ["journal/2026/08-16.md", "one.md"]
+    );
 }
 
 #[test]
@@ -109,7 +115,10 @@ fn bootstrapping_again_does_not_snapshot_again() {
     write(&vault, "one.md", "# One\n");
 
     let first = bootstrap(&app_data, &vault).expect("bootstrap succeeds");
-    assert!(first.took_first_snapshot, "the first open did not record the vault");
+    assert!(
+        first.took_first_snapshot,
+        "the first open did not record the vault"
+    );
     let first_head = snapshot::head_commit(&first.repo).expect("the history is readable");
     drop(first);
 
@@ -175,15 +184,24 @@ fn conflict_copies_stay_out_of_history_without_being_ignored() {
     let app_data = make_temp_test_dir("bootstrap-conflict-appdata", "sync", true);
     let vault = make_temp_test_dir("bootstrap-conflict-vault", "sync", true);
     write(&vault, "note.md", "# Mine\n");
-    write(&vault, "note.sync-conflict-20260816-093100-K3SDFHG.md", "# Theirs\n");
-    write(&vault, "note (Adam's conflicted copy 2026-08-16).md", "# Theirs\n");
+    write(
+        &vault,
+        "note.sync-conflict-20260816-093100-K3SDFHG.md",
+        "# Theirs\n",
+    );
+    write(
+        &vault,
+        "note (Adam's conflicted copy 2026-08-16).md",
+        "# Theirs\n",
+    );
 
     let workspace = bootstrap(&app_data, &vault).expect("bootstrap succeeds");
 
     assert_eq!(recorded_paths(&workspace.repo), ["note.md"]);
 
     let git_dir = hidden_repo_path(&app_data, &vault.to_string_lossy());
-    let exclude = fs::read_to_string(git_dir.join("info/exclude")).expect("the exclude file is written");
+    let exclude =
+        fs::read_to_string(git_dir.join("info/exclude")).expect("the exclude file is written");
     assert!(
         !exclude.contains("conflict"),
         "conflict copies were ignored, which would put them out of reach of a checkpoint"
@@ -200,9 +218,13 @@ fn the_ignore_rules_live_in_the_repository_not_the_vault() {
 
     bootstrap(&app_data, &vault).expect("bootstrap succeeds");
 
-    assert!(!vault.join(".gitignore").exists(), "the vault was given a .gitignore");
+    assert!(
+        !vault.join(".gitignore").exists(),
+        "the vault was given a .gitignore"
+    );
     let git_dir = hidden_repo_path(&app_data, &vault.to_string_lossy());
-    let exclude = fs::read_to_string(git_dir.join("info/exclude")).expect("the exclude file is written");
+    let exclude =
+        fs::read_to_string(git_dir.join("info/exclude")).expect("the exclude file is written");
     assert!(exclude.contains(".DS_Store"));
     assert!(exclude.contains("*.tmp"));
 }

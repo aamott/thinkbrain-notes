@@ -55,7 +55,10 @@ fn remote_tip(path: &Path, reference: &str) -> Option<gix::ObjectId> {
     repo.try_find_reference(reference)
         .expect("the remote's refs are readable")
         .map(|mut found| {
-            found.peel_to_id().expect("the ref points at an object").detach()
+            found
+                .peel_to_id()
+                .expect("the ref points at an object")
+                .detach()
         })
 }
 
@@ -138,11 +141,9 @@ fn a_remote_already_at_our_tip_needs_nothing() {
     write(&f.vault, "one.md", "first\n");
     let tip = record(&f, "one", &["one.md"]);
 
-    assert!(
-        carried(&f.repo, tip, Some(tip))
-            .expect("the objects are counted")
-            .is_empty()
-    );
+    assert!(carried(&f.repo, tip, Some(tip))
+        .expect("the objects are counted")
+        .is_empty());
 }
 
 /// A commit whose note went back to an earlier wording reuses that earlier
@@ -197,7 +198,11 @@ fn a_push_into_an_empty_remote_lands_the_whole_history() {
     let sent = send(&f.repo, &link(&remote), BRANCH, tip).expect("the push succeeds");
 
     assert_eq!(sent.landed, Landed::Moved);
-    assert_eq!(remote_tip(&remote, BRANCH), Some(tip), "the remote's branch did not move");
+    assert_eq!(
+        remote_tip(&remote, BRANCH),
+        Some(tip),
+        "the remote's branch did not move"
+    );
     assert_eq!(
         readable_objects(&remote, tip),
         7,
@@ -218,7 +223,10 @@ fn a_second_push_sends_only_what_changed() {
     let sent = send(&f.repo, &link(&remote), BRANCH, second).expect("the second push succeeds");
 
     assert_eq!(sent.landed, Landed::Moved);
-    assert_eq!(sent.objects, 3, "the second push resent objects the remote had");
+    assert_eq!(
+        sent.objects, 3,
+        "the second push resent objects the remote had"
+    );
     assert_eq!(remote_tip(&remote, BRANCH), Some(second));
 }
 
@@ -230,7 +238,8 @@ fn a_push_with_nothing_to_add_is_not_an_error() {
     let tip = record(&f, "one", &["one.md"]);
     send(&f.repo, &link(&remote), BRANCH, tip).expect("the first push succeeds");
 
-    let sent = send(&f.repo, &link(&remote), BRANCH, tip).expect("pushing the same tip again succeeds");
+    let sent =
+        send(&f.repo, &link(&remote), BRANCH, tip).expect("pushing the same tip again succeeds");
 
     assert_eq!(sent.landed, Landed::Moved);
     assert_eq!(sent.objects, 0);
@@ -255,7 +264,8 @@ fn a_push_whose_remote_moved_underneath_it_is_refused() {
     // Ours, built on the same shared commit and knowing nothing of theirs. What
     // it holds does not matter; that it does not descend from theirs does.
     let ours = commit(&f, "ours", tree_of(&f.repo, shared), &[shared]);
-    let sent = send(&f.repo, &link(&remote), BRANCH, ours).expect("a refusal is an answer, not a failure");
+    let sent =
+        send(&f.repo, &link(&remote), BRANCH, ours).expect("a refusal is an answer, not a failure");
 
     assert!(
         matches!(sent.landed, Landed::Refused { .. }),
@@ -305,7 +315,10 @@ fn a_deleted_note_pushes_without_sending_anything_for_it() {
 
     assert_eq!(sent.landed, Landed::Moved);
     // The commit and its new root tree, and nothing standing in for the note.
-    assert_eq!(sent.objects, 2, "something was sent for a note that went away");
+    assert_eq!(
+        sent.objects, 2,
+        "something was sent for a note that went away"
+    );
     assert_eq!(note_at(&remote, second, "one.md"), "first\n");
 }
 
@@ -397,7 +410,12 @@ fn a_history_with_a_merge_pushes_completely() {
     let side = record(&f, "side", &["side.md"]);
 
     write(&f.vault, "main.md", "on the branch\n");
-    let mainline = commit(&f, "mainline", tree_of(&f.repo, record(&f, "main", &["main.md"])), &[base]);
+    let mainline = commit(
+        &f,
+        "mainline",
+        tree_of(&f.repo, record(&f, "main", &["main.md"])),
+        &[base],
+    );
     let merged = commit(&f, "merged", tree_of(&f.repo, side), &[mainline, side]);
 
     let sent = send(&f.repo, &link(&remote), BRANCH, merged).expect("the push succeeds");
@@ -410,7 +428,12 @@ fn a_history_with_a_merge_pushes_completely() {
 
 /// Writes a commit with any number of parents, which `snapshot` cannot: it
 /// only ever records a single line of history.
-fn commit(f: &Fixture, message: &str, tree: gix::ObjectId, parents: &[gix::ObjectId]) -> gix::ObjectId {
+fn commit(
+    f: &Fixture,
+    message: &str,
+    tree: gix::ObjectId,
+    parents: &[gix::ObjectId],
+) -> gix::ObjectId {
     let who = gix::actor::Signature {
         name: "ThinkBrain Notes".into(),
         email: "sync@thinkbrain.notes".into(),
@@ -481,8 +504,12 @@ fn the_checkpoint_ref_is_never_sent() {
     let remote = remote("push-checkpoint");
     write(&f.vault, "one.md", "first\n");
     let tip = record(&f, "one", &["one.md"]);
-    snapshot::checkpoint(&f.repo, &[PathBuf::from("one.md")], snapshot::Reason::VersionRestored)
-        .expect("the checkpoint is written");
+    snapshot::checkpoint(
+        &f.repo,
+        &[PathBuf::from("one.md")],
+        snapshot::Reason::VersionRestored,
+    )
+    .expect("the checkpoint is written");
 
     send(&f.repo, &link(&remote), BRANCH, tip).expect("the push succeeds");
 

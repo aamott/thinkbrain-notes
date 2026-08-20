@@ -84,7 +84,10 @@ fn a_copy_of_a_version_we_have_already_moved_past_is_not_a_question() {
 
     let asked = settle_one(&v);
 
-    assert!(asked.is_empty(), "a version we already passed through is not news");
+    assert!(
+        asked.is_empty(),
+        "a version we already passed through is not news"
+    );
     assert!(!exists(&v, COPY));
     assert_eq!(
         std::fs::read_to_string(v.root.join("note.md")).expect("readable"),
@@ -103,7 +106,11 @@ fn a_copy_nobody_has_seen_before_is_still_a_question() {
 
     let asked = settle_one(&v);
 
-    assert_eq!(asked.len(), 1, "a real disagreement must still be asked about");
+    assert_eq!(
+        asked.len(),
+        1,
+        "a real disagreement must still be asked about"
+    );
     assert!(exists(&v, COPY), "nothing should have been discarded");
 }
 
@@ -190,7 +197,11 @@ fn with_the_setting_off_even_an_identical_copy_is_asked_about() {
 
     let asked = settle_when(false, &v.engine, &v.root, vec![pairing(COPY, "note.md")]);
 
-    assert_eq!(asked.len(), 1, "with settling off, nothing should be settled");
+    assert_eq!(
+        asked.len(),
+        1,
+        "with settling off, nothing should be settled"
+    );
     assert!(exists(&v, COPY), "and nothing should have been discarded");
 }
 
@@ -207,7 +218,10 @@ fn settings_dir(name: &str, contents: Option<&str>) -> PathBuf {
 #[test]
 fn settling_is_on_until_someone_turns_it_off() {
     assert!(enabled_in(None), "with nowhere to look, the default stands");
-    assert!(enabled_in(Some(&settings_dir("settle-setting-absent", None))));
+    assert!(enabled_in(Some(&settings_dir(
+        "settle-setting-absent",
+        None
+    ))));
     assert!(enabled_in(Some(&settings_dir(
         "settle-setting-other-keys",
         Some(r#"{"appearance.theme":"dark"}"#)
