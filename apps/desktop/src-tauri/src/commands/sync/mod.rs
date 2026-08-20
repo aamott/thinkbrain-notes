@@ -23,6 +23,7 @@ pub(super) fn remote_unreachable(error: impl std::fmt::Display) -> NativeError {
     )
 }
 
+mod apply;
 pub mod bootstrap;
 pub mod conflict;
 pub mod credentials;
@@ -30,11 +31,16 @@ pub mod engine;
 pub mod hidden_repo;
 pub mod history;
 pub mod merge;
+mod network;
 pub mod pending;
 pub mod push;
 pub mod registry;
-pub mod round;
 pub mod resolve;
+pub mod round;
 pub mod settle;
 pub mod snapshot;
 pub mod status;
+
+#[cfg(test)]
+#[path = "test_support.rs"]
+mod test_support;

@@ -99,7 +99,10 @@ mod tests {
         let mut pending = PendingChanges::default();
         pending.note(path("one.md"), start);
 
-        assert_eq!(pending.take_settled(start + SETTLE, SETTLE), [path("one.md")]);
+        assert_eq!(
+            pending.take_settled(start + SETTLE, SETTLE),
+            [path("one.md")]
+        );
     }
 
     /// The same window that keeps history readable also keeps it correct. A
@@ -147,7 +150,10 @@ mod tests {
         pending.note(path("one.md"), start);
         pending.note(path("big.png"), start + SETTLE);
 
-        assert_eq!(pending.take_settled(start + SETTLE, SETTLE), [path("one.md")]);
+        assert_eq!(
+            pending.take_settled(start + SETTLE, SETTLE),
+            [path("one.md")]
+        );
         assert_eq!(
             pending.take_settled(start + SETTLE + SETTLE, SETTLE),
             [path("big.png")]
@@ -187,7 +193,10 @@ mod tests {
         pending.note(path("one.md"), start);
         pending.note(path("one.md"), start);
 
-        assert_eq!(pending.take_settled(start + SETTLE, SETTLE), [path("one.md")]);
+        assert_eq!(
+            pending.take_settled(start + SETTLE, SETTLE),
+            [path("one.md")]
+        );
     }
 
     /// Settled paths come out in a stable order so a commit's file list, and
@@ -212,13 +221,19 @@ mod tests {
     fn the_message_says_when_and_how_much() {
         let at = gix::date::Time::new(1_786_872_660, 0);
 
-        assert_eq!(commit_message(3, at), "Sync 2026-08-16 09:31 — 3 notes changed");
+        assert_eq!(
+            commit_message(3, at),
+            "Sync 2026-08-16 09:31 — 3 notes changed"
+        );
     }
 
     #[test]
     fn the_message_counts_a_single_note_in_the_singular() {
         let at = gix::date::Time::new(1_786_872_660, 0);
 
-        assert_eq!(commit_message(1, at), "Sync 2026-08-16 09:31 — 1 note changed");
+        assert_eq!(
+            commit_message(1, at),
+            "Sync 2026-08-16 09:31 — 1 note changed"
+        );
     }
 }

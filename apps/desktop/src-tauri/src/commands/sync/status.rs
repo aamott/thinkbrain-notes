@@ -79,7 +79,10 @@ pub fn of(recording: Recording<'_>) -> Result<SyncStatus, NativeError> {
     let engine = match recording {
         Recording::By(engine) => engine,
         Recording::NotOurs => {
-            return Ok(SyncStatus { state: State::Off, ..Default::default() });
+            return Ok(SyncStatus {
+                state: State::Off,
+                ..Default::default()
+            });
         }
         Recording::Failed(problem) => {
             return Ok(SyncStatus {

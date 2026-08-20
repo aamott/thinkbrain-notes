@@ -12,7 +12,9 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::commands::workspace::{is_ignored_entry_name, stable_workspace_hash, MAX_WORKSPACE_ENTRIES};
+use crate::commands::workspace::{
+    is_ignored_entry_name, stable_workspace_hash, MAX_WORKSPACE_ENTRIES,
+};
 use crate::NativeError;
 
 use super::failed;
@@ -38,8 +40,6 @@ pub struct ManagedWorkspace {
     /// the walk already skips along with every other.
     pub has_own_git: bool,
 }
-
-
 
 /// Names Auto Sync never records, in `.gitignore` syntax.
 ///
@@ -88,7 +88,9 @@ fn exclude_write_failed(error: impl std::fmt::Display) -> NativeError {
 /// history rather than inheriting a stranger's.
 pub fn hidden_repo_path(app_data_dir: &Path, canonical_root: &str) -> PathBuf {
     let key = stable_workspace_hash(canonical_root);
-    app_data_dir.join("sync").join(format!("workspace-{key:016x}.git"))
+    app_data_dir
+        .join("sync")
+        .join(format!("workspace-{key:016x}.git"))
 }
 
 /// Opens or creates the hidden repository for `vault`, taking the first
@@ -154,7 +156,12 @@ pub fn recordable_under(vault: &Path, directory: &Path) -> Result<Vec<PathBuf>, 
     Ok(found)
 }
 
-fn collect(vault: &Path, directory: &Path, depth: usize, found: &mut Vec<PathBuf>) -> Result<(), NativeError> {
+fn collect(
+    vault: &Path,
+    directory: &Path,
+    depth: usize,
+    found: &mut Vec<PathBuf>,
+) -> Result<(), NativeError> {
     if depth > MAX_MARKDOWN_DEPTH {
         return Err(NativeError::new(
             "sync.vault_too_deep",
@@ -205,13 +212,15 @@ fn collect(vault: &Path, directory: &Path, depth: usize, found: &mut Vec<PathBuf
 /// Only the two wildcard shapes the list actually uses — a leading `*` and a
 /// trailing `*`. A full glob engine here would be code with no caller.
 pub(crate) fn is_never_recorded(name: &str) -> bool {
-    NEVER_RECORD.iter().any(|pattern| match pattern.strip_prefix('*') {
-        Some(suffix) => name.ends_with(suffix),
-        None => match pattern.strip_suffix('*') {
-            Some(prefix) => name.starts_with(prefix),
-            None => name == *pattern,
-        },
-    })
+    NEVER_RECORD
+        .iter()
+        .any(|pattern| match pattern.strip_prefix('*') {
+            Some(suffix) => name.ends_with(suffix),
+            None => match pattern.strip_suffix('*') {
+                Some(prefix) => name.starts_with(prefix),
+                None => name == *pattern,
+            },
+        })
 }
 
 #[cfg(test)]

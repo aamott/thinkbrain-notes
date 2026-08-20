@@ -157,24 +157,26 @@ pub fn read(
 /// Deliberately not echo-suppressed, for the same reason resolving a conflict
 /// is not: the note changed under an editor that is probably open on it, and
 /// the watcher's outside-edit path is what refreshes every window showing it.
-pub fn restore(
-    repo: &gix::Repository,
-    note: &str,
-    change: &str,
-) -> Result<Restored, NativeError> {
+pub fn restore(repo: &gix::Repository, note: &str, change: &str) -> Result<Restored, NativeError> {
     // The same lock ordinary note writes take, so a save landing in the middle
     // of a restore is not a race this has to reason about.
     let _mutation_lock = acquire_workspace_mutation_lock();
 
     let vault = repo
         .workdir()
-        .ok_or_else(|| NativeError::new("sync.no_worktree", "This sync history has no notes folder."))?
+        .ok_or_else(|| {
+            NativeError::new("sync.no_worktree", "This sync history has no notes folder.")
+        })?
         .to_path_buf();
     let relative = snapshot::vault_relative(&vault, Path::new(note))?;
 
     let wanted = version_at(repo, &relative, change)?;
 
-    let checkpoint = snapshot::checkpoint(repo, std::slice::from_ref(&relative), Reason::VersionRestored)?;
+    let checkpoint = snapshot::checkpoint(
+        repo,
+        std::slice::from_ref(&relative),
+        Reason::VersionRestored,
+    )?;
 
     let absolute = vault.join(&relative);
     crate::commands::workspace::write_file_atomically(&absolute, &wanted).map_err(|error| {
@@ -197,7 +199,11 @@ pub fn conflict_rate(repo: &gix::Repository) -> Result<Rate, NativeError> {
     let checkpoints = snapshot::checkpoint_head(repo)?;
     Ok(Rate {
         decisions: count(repo, checkpoints, Some(Reason::ConflictResolved.message()))?,
-        settled: count(repo, checkpoints, Some(Reason::DuplicateDiscarded.message()))?,
+        settled: count(
+            repo,
+            checkpoints,
+            Some(Reason::DuplicateDiscarded.message()),
+        )?,
         recorded: count(repo, snapshot::head_commit(repo)?, None)?,
     })
 }
@@ -307,11 +313,15 @@ fn touched(
         .filter_map(|record| {
             use gix::diff::tree::recorder::Change;
             let (mode, path, change) = match record {
-                Change::Addition { entry_mode, path, .. } => (entry_mode, path, NoteChange::Added),
-                Change::Deletion { entry_mode, path, .. } => (entry_mode, path, NoteChange::Removed),
-                Change::Modification { entry_mode, path, .. } => {
-                    (entry_mode, path, NoteChange::Updated)
-                }
+                Change::Addition {
+                    entry_mode, path, ..
+                } => (entry_mode, path, NoteChange::Added),
+                Change::Deletion {
+                    entry_mode, path, ..
+                } => (entry_mode, path, NoteChange::Removed),
+                Change::Modification {
+                    entry_mode, path, ..
+                } => (entry_mode, path, NoteChange::Updated),
             };
             mode.is_blob().then(|| ChangedNote {
                 path: path.to_string(),
@@ -345,7 +355,6 @@ fn count(
     Ok(counted)
 }
 
-
 fn unreadable(message: &'static str, error: impl std::fmt::Display) -> NativeError {
     failed("sync.history_read_failed", message, error)
 }
@@ -359,8 +368,9 @@ fn unreadable(message: &'static str, error: impl std::fmt::Display) -> NativeErr
 /// A vault with its own git repository has no engine and therefore no history
 /// of ours. That is an empty list rather than an error: the panel showing
 /// nothing is the honest rendering of "Auto Sync is not looking after this".
-fn engine_for(root_path: &str) -> Result<Option<std::sync::Arc<super::engine::Engine>>, NativeError>
-{
+fn engine_for(
+    root_path: &str,
+) -> Result<Option<std::sync::Arc<super::engine::Engine>>, NativeError> {
     let root = resolve_workspace_root(root_path)?;
     Ok(super::registry::engine(&root.to_string_lossy()))
 }

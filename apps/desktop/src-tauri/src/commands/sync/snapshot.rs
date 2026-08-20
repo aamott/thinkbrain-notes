@@ -16,6 +16,8 @@ use std::path::{Component, Path, PathBuf};
 use crate::NativeError;
 
 use super::failed;
+#[path = "snapshot_record.rs"]
+mod record;
 
 /// Who the hidden repository records commits as.
 ///
@@ -202,69 +204,13 @@ fn build_tree(
                 }
             }
             Ok(metadata) if metadata.is_file() => {
-                let file = match open_without_following(&absolute) {
-                    Ok(f) => f,
-                    Err(open_error) => {
-                        let still_file = match std::fs::symlink_metadata(&absolute) {
-                            Ok(metadata) => metadata.is_file(),
-                            Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
-                            Err(error) => {
-                                skipped.push((path, unreadable(error)));
-                                continue;
-                            }
-                        };
-                        if still_file {
-                            skipped.push((path, unreadable(open_error)));
-                            continue;
-                        }
-                        editor.remove(tree_path(&relative)).map_err(|error| {
-                            failed(
-                                "sync.tree_write_failed",
-                                "Could not record a deleted note.",
-                                error,
-                            )
-                        })?;
-                        continue;
+                match record::record_file(repo, &mut editor, &vault, &relative, &path) {
+                    Ok(()) => {}
+                    Err(record::RecordFileError::Skipped((path, error))) => {
+                        skipped.push((path, error));
                     }
-                };
-                // Mode and type come from this fd, not the path-stat above:
-                // a swap between the two would otherwise record one file's
-                // bytes under another's executable bit, or follow a symlink
-                // that appeared after the check.
-                let metadata = match file.metadata() {
-                    Ok(metadata) => metadata,
-                    Err(error) => {
-                        skipped.push((path, unreadable(error)));
-                        continue;
-                    }
-                };
-                if metadata.file_type().is_symlink() || !metadata.is_file() {
-                    continue;
+                    Err(record::RecordFileError::Fatal(error)) => return Err(error),
                 }
-                let blob = match repo.write_blob_stream(file) {
-                    Ok(blob) => blob,
-                    Err(error) => {
-                        skipped.push((
-                            path,
-                            failed(
-                                "sync.note_store_failed",
-                                "Could not store a note's contents.",
-                                error,
-                            ),
-                        ));
-                        continue;
-                    }
-                };
-                let kind = if is_executable(&metadata) {
-                    gix::object::tree::EntryKind::BlobExecutable
-                } else {
-                    gix::object::tree::EntryKind::Blob
-                };
-                editor
-                    .upsert(tree_path(&relative), kind, blob.detach())
-                    .map_err(|error| {
-                        failed("sync.tree_write_failed", "Could not record a note.", error)
-                    })?;
             }
             // A symlink standing where a note used to be is not a note.
             // Following it is how history ends up holding files from outside
@@ -308,7 +254,6 @@ fn build_tree(
     ))
 }
 
-/// Commits `tree` onto `reference`, authored by the app.
 /// Records a merge on the history branch: one tree, two parents.
 ///
 /// Everything else here writes a single line of history, because everything
@@ -323,6 +268,7 @@ pub fn record_merge(
     commit_on(repo, HISTORY_REF, message, tree, [ours, theirs])
 }
 
+/// Commits `tree` onto `reference`, authored by the app.
 fn commit_on(
     repo: &gix::Repository,
     reference: &str,

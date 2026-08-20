@@ -124,12 +124,7 @@ fn registry() -> std::sync::MutexGuard<'static, Option<Registry>> {
 }
 
 /// Starts recording `root` on behalf of a window.
-pub fn attach(
-    app_data_dir: &Path,
-    root: &Path,
-    key: &str,
-    label: &str,
-) -> Result<(), NativeError> {
+pub fn attach(app_data_dir: &Path, root: &Path, key: &str, label: &str) -> Result<(), NativeError> {
     // Before any lock: settling reads a preference from here, and the paths
     // that do it have no window to ask.
     super::settle::remember_settings_home(app_data_dir);
@@ -263,8 +258,12 @@ pub fn failure(key: &str) -> Option<NativeError> {
 pub fn note_changes(key: &str, root: &Path, changes: &[WorkspaceChange]) -> bool {
     let engine = {
         let guard = registry();
-        let Some(state) = guard.as_ref() else { return false };
-        let Some(engine) = state.engines.get(key) else { return false };
+        let Some(state) = guard.as_ref() else {
+            return false;
+        };
+        let Some(engine) = state.engines.get(key) else {
+            return false;
+        };
         Arc::clone(engine)
     };
 
@@ -299,18 +298,18 @@ pub fn note_changes(key: &str, root: &Path, changes: &[WorkspaceChange]) -> bool
     };
 
     let found = paths
-            .iter()
-            // A copy that is no longer there is not a conflict to answer. This
-            // matters because resolving one *deletes* it, and the watcher
-            // reports that deletion — without this the conflict the user just
-            // settled would be raised again a second later.
-            .filter(|path| root.join(path).is_file())
-            .filter_map(|path| {
-                conflict::pair(&conflict::relative_str(path), |original| {
-                    root.join(original).is_file()
-                })
+        .iter()
+        // A copy that is no longer there is not a conflict to answer. This
+        // matters because resolving one *deletes* it, and the watcher
+        // reports that deletion — without this the conflict the user just
+        // settled would be raised again a second later.
+        .filter(|path| root.join(path).is_file())
+        .filter_map(|path| {
+            conflict::pair(&conflict::relative_str(path), |original| {
+                root.join(original).is_file()
             })
-            .collect::<Vec<_>>();
+        })
+        .collect::<Vec<_>>();
     let found_new = engine.note_conflicts(super::settle::obvious(&engine, root, found));
     engine.note_changes(paths, Instant::now());
     found_new
@@ -352,7 +351,9 @@ fn spawn_sweeper() {
 
             let engines: Vec<(String, Arc<Engine>)> = {
                 let guard = registry();
-                let Some(state) = guard.as_ref() else { continue };
+                let Some(state) = guard.as_ref() else {
+                    continue;
+                };
                 state
                     .engines
                     .iter()

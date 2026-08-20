@@ -22,9 +22,9 @@ use crate::commands::workspace::{
 };
 use crate::NativeError;
 
-use super::failed;
 use super::conflict::{self, ConflictCopy};
 use super::engine::Engine;
+use super::failed;
 use super::merge::{self, Chunk, Kind};
 
 /// What we call the version already in the vault.
@@ -164,7 +164,14 @@ pub fn resolve_conflict(
         )
     })?;
 
-    let resolved = resolve(&engine, &root, &copy_path, &resolution, &expected_ours, &expected_theirs)?;
+    let resolved = resolve(
+        &engine,
+        &root,
+        &copy_path,
+        &resolution,
+        &expected_ours,
+        &expected_theirs,
+    )?;
     // One fewer thing waiting on the user, in every window showing this vault.
     // The watcher will not say so on its own: it reports files, and the copy
     // going away is precisely the event that must *not* re-raise a conflict.
@@ -179,7 +186,11 @@ pub fn resolve_conflict(
 /// the user is looking at — resolving against the last save would quietly throw
 /// away everything typed since. The fingerprint still comes from disk: it
 /// exists to notice someone *else* writing, and the buffer is not someone else.
-pub fn view(root: &Path, copy_path: &str, buffer: Option<&str>) -> Result<ConflictView, NativeError> {
+pub fn view(
+    root: &Path,
+    copy_path: &str,
+    buffer: Option<&str>,
+) -> Result<ConflictView, NativeError> {
     let sides = Sides::load(root, copy_path, buffer)?;
     let (kind, chunks) = merge::compare(sides.shown(), &sides.theirs.bytes);
 
@@ -220,7 +231,12 @@ pub fn resolve(
 
     // No buffer: the write checks and records what is on disk. An editor's
     // unsaved text belongs in the merged contents the panel sends, not here.
-    let Sides { pairing, ours, theirs, .. } = Sides::load(root, copy_path, None)?;
+    let Sides {
+        pairing,
+        ours,
+        theirs,
+        ..
+    } = Sides::load(root, copy_path, None)?;
     if fingerprint(&ours.bytes) != expected_ours || fingerprint(&theirs.bytes) != expected_theirs {
         return Err(NativeError::new(
             "sync.conflict_moved",
@@ -300,7 +316,11 @@ struct Loaded {
 fn load(root: &Path, relative: &str) -> Result<Loaded, NativeError> {
     let path = resolve_workspace_entry_path(root, relative)?;
     let bytes = std::fs::read(&path).map_err(|error| {
-        failed("sync.version_read_failed", "Could not read one of the two versions.", error)
+        failed(
+            "sync.version_read_failed",
+            "Could not read one of the two versions.",
+            error,
+        )
     })?;
     Ok(Loaded { path, bytes })
 }
@@ -338,12 +358,22 @@ impl Sides {
         Ok(ConflictSummary {
             kind,
             ours: version(root, &self.ours, OURS_LABEL.to_string(), self.shown())?,
-            theirs: version(root, &self.theirs, self.pairing.provider.to_string(), &self.theirs.bytes)?,
+            theirs: version(
+                root,
+                &self.theirs,
+                self.pairing.provider.to_string(),
+                &self.theirs.bytes,
+            )?,
         })
     }
 }
 
-fn version(root: &Path, loaded: &Loaded, label: String, shown: &[u8]) -> Result<Version, NativeError> {
+fn version(
+    root: &Path,
+    loaded: &Loaded,
+    label: String,
+    shown: &[u8],
+) -> Result<Version, NativeError> {
     let metadata = entry_metadata(root, &loaded.path)?;
     Ok(Version {
         path: metadata.relative_path,
@@ -370,13 +400,21 @@ fn fingerprint(bytes: &[u8]) -> String {
 
 fn put(path: &Path, bytes: &[u8]) -> Result<(), NativeError> {
     std::fs::write(path, bytes).map_err(|error| {
-        failed("sync.resolution_write_failed", "Could not write the resolved note.", error)
+        failed(
+            "sync.resolution_write_failed",
+            "Could not write the resolved note.",
+            error,
+        )
     })
 }
 
 fn discard(path: &Path) -> Result<(), NativeError> {
     std::fs::remove_file(path).map_err(|error| {
-        failed("sync.conflict_cleanup_failed", "The note was resolved, but the extra copy could not be removed.", error)
+        failed(
+            "sync.conflict_cleanup_failed",
+            "The note was resolved, but the extra copy could not be removed.",
+            error,
+        )
     })
 }
 
@@ -400,7 +438,11 @@ fn keep_both(root: &Path, pairing: &ConflictCopy) -> Result<String, NativeError>
             continue;
         }
         std::fs::rename(root.join(&pairing.copy), &target).map_err(|error| {
-            failed("sync.conflict_cleanup_failed", "Both versions were kept, but the copy could not be renamed.", error)
+            failed(
+                "sync.conflict_cleanup_failed",
+                "Both versions were kept, but the copy could not be renamed.",
+                error,
+            )
         })?;
         return Ok(candidate);
     }
@@ -489,9 +531,16 @@ mod tests {
         assert_eq!(
             seen.chunks,
             [
-                Chunk::Common { text: "# Note\n".into() },
-                Chunk::Choice { ours: "mine\n".into(), theirs: "theirs\n".into() },
-                Chunk::Common { text: "end\n".into() },
+                Chunk::Common {
+                    text: "# Note\n".into()
+                },
+                Chunk::Choice {
+                    ours: "mine\n".into(),
+                    theirs: "theirs\n".into()
+                },
+                Chunk::Common {
+                    text: "end\n".into()
+                },
             ]
         );
     }
@@ -508,19 +557,26 @@ mod tests {
         let f = text_fixture("resolve-not-a-conflict");
         // A real file in a conflict's shape whose original is not there.
         fs::write(
-            f.vault.join("orphan.sync-conflict-20260816-093100-K3SDFHG.md"),
+            f.vault
+                .join("orphan.sync-conflict-20260816-093100-K3SDFHG.md"),
             "left behind",
         )
         .expect("the orphan is written");
 
         for (path, code) in [
             ("note.md", "sync.not_a_conflict"),
-            ("orphan.sync-conflict-20260816-093100-K3SDFHG.md", "sync.not_a_conflict"),
+            (
+                "orphan.sync-conflict-20260816-093100-K3SDFHG.md",
+                "sync.not_a_conflict",
+            ),
             ("../outside.md", "workspace.invalid_path"),
         ] {
             let refused = view(&f.vault, path, None)
                 .expect_err(&format!("{path} was accepted as a conflict"));
-            assert_eq!(refused.code, code, "{path} was refused for the wrong reason");
+            assert_eq!(
+                refused.code, code,
+                "{path} was refused for the wrong reason"
+            );
         }
     }
 
@@ -539,7 +595,11 @@ mod tests {
         assert_eq!(card.ours.path, "note.md");
         assert_eq!(card.ours.byte_size, "# Note\nmine\nend\n".len() as u64);
         assert_eq!(card.theirs.label, "Syncthing");
-        assert_eq!(card, f.view().summary, "a card and an opened conflict disagree");
+        assert_eq!(
+            card,
+            f.view().summary,
+            "a card and an opened conflict disagree"
+        );
     }
 
     /// The version the user is looking at is the one in their editor, not the
@@ -555,9 +615,16 @@ mod tests {
         assert_eq!(
             seen.chunks,
             [
-                Chunk::Common { text: "# Note\n".into() },
-                Chunk::Choice { ours: "still typing\n".into(), theirs: "theirs\n".into() },
-                Chunk::Common { text: "end\n".into() },
+                Chunk::Common {
+                    text: "# Note\n".into()
+                },
+                Chunk::Choice {
+                    ours: "still typing\n".into(),
+                    theirs: "theirs\n".into()
+                },
+                Chunk::Common {
+                    text: "end\n".into()
+                },
             ]
         );
     }
@@ -572,14 +639,19 @@ mod tests {
         let with_buffer = view(&f.vault, COPY, Some("# Note\nstill typing\nend\n"))
             .expect("the conflict is readable");
 
-        assert_eq!(with_buffer.summary.ours.fingerprint, f.view().summary.ours.fingerprint);
+        assert_eq!(
+            with_buffer.summary.ours.fingerprint,
+            f.view().summary.ours.fingerprint
+        );
     }
 
     #[test]
     fn keeping_ours_leaves_the_note_alone_and_removes_the_copy() {
         let f = text_fixture("resolve-keep-ours");
 
-        let done = f.resolve(Resolution::KeepOurs).expect("the resolution succeeds");
+        let done = f
+            .resolve(Resolution::KeepOurs)
+            .expect("the resolution succeeds");
 
         assert_eq!(f.read("note.md"), "# Note\nmine\nend\n");
         assert!(!f.exists(COPY), "the copy was left behind");
@@ -590,7 +662,8 @@ mod tests {
     fn keeping_theirs_puts_their_version_in_the_note() {
         let f = text_fixture("resolve-keep-theirs");
 
-        f.resolve(Resolution::KeepTheirs).expect("the resolution succeeds");
+        f.resolve(Resolution::KeepTheirs)
+            .expect("the resolution succeeds");
 
         assert_eq!(f.read("note.md"), "# Note\ntheirs\nend\n");
         assert!(!f.exists(COPY), "the copy was left behind");
@@ -615,7 +688,9 @@ mod tests {
     fn keeping_both_renames_the_copy_after_its_provider() {
         let f = text_fixture("resolve-keep-both");
 
-        let done = f.resolve(Resolution::KeepBoth).expect("the resolution succeeds");
+        let done = f
+            .resolve(Resolution::KeepBoth)
+            .expect("the resolution succeeds");
 
         assert_eq!(done.kept_as.as_deref(), Some("note (Syncthing).md"));
         assert_eq!(f.read("note (Syncthing).md"), "# Note\ntheirs\nend\n");
@@ -633,7 +708,9 @@ mod tests {
         let f = text_fixture("resolve-keep-both-twice");
         fs::write(f.vault.join("note (Syncthing).md"), "an earlier one").expect("written");
 
-        let done = f.resolve(Resolution::KeepBoth).expect("the resolution succeeds");
+        let done = f
+            .resolve(Resolution::KeepBoth)
+            .expect("the resolution succeeds");
 
         assert_eq!(done.kept_as.as_deref(), Some("note (Syncthing 2).md"));
         assert_eq!(f.read("note (Syncthing).md"), "an earlier one");
@@ -646,7 +723,9 @@ mod tests {
     fn both_versions_are_checkpointed_before_the_note_is_overwritten() {
         let f = text_fixture("resolve-checkpoint");
 
-        let done = f.resolve(Resolution::KeepTheirs).expect("the resolution succeeds");
+        let done = f
+            .resolve(Resolution::KeepTheirs)
+            .expect("the resolution succeeds");
 
         let repo = f.engine.repository();
         let tree = repo
@@ -654,7 +733,10 @@ mod tests {
             .expect("the checkpoint exists")
             .tree()
             .expect("the tree exists");
-        for (path, expected) in [("note.md", "# Note\nmine\nend\n"), (COPY, "# Note\ntheirs\nend\n")] {
+        for (path, expected) in [
+            ("note.md", "# Note\nmine\nend\n"),
+            (COPY, "# Note\ntheirs\nend\n"),
+        ] {
             let entry = tree
                 .lookup_entry_by_path(path)
                 .expect("the lookup succeeds")
@@ -674,7 +756,10 @@ mod tests {
     /// the daemon is as free to rewrite the note as the copy.
     #[test]
     fn a_side_that_changed_since_it_was_read_aborts_the_write() {
-        for (name, moved) in [("resolve-moved-theirs", COPY), ("resolve-moved-ours", "note.md")] {
+        for (name, moved) in [
+            ("resolve-moved-theirs", COPY),
+            ("resolve-moved-ours", "note.md"),
+        ] {
             let f = text_fixture(name);
             let seen = f.view();
             fs::write(f.vault.join(moved), "# Note\nsomeone else\nend\n").expect("rewritten");
@@ -684,9 +769,15 @@ mod tests {
                 .resolve_as_seen(&seen, Resolution::KeepTheirs)
                 .expect_err("the write should have been refused");
 
-            assert_eq!(refused.code, "sync.conflict_moved", "{moved} moving was not noticed");
+            assert_eq!(
+                refused.code, "sync.conflict_moved",
+                "{moved} moving was not noticed"
+            );
             assert_eq!(f.read("note.md"), before, "the note was written anyway");
-            assert!(f.exists(COPY), "the copy was removed by a refused resolution");
+            assert!(
+                f.exists(COPY),
+                "the copy was removed by a refused resolution"
+            );
         }
     }
 
@@ -726,9 +817,13 @@ mod tests {
     fn a_binary_conflict_can_still_be_resolved_whole() {
         let f = fixture("resolve-binary-keep", b"PNG\x00mine", b"PNG\x00theirs");
 
-        f.resolve(Resolution::KeepTheirs).expect("the resolution succeeds");
+        f.resolve(Resolution::KeepTheirs)
+            .expect("the resolution succeeds");
 
-        assert_eq!(fs::read(f.vault.join("note.md")).expect("readable"), b"PNG\x00theirs");
+        assert_eq!(
+            fs::read(f.vault.join("note.md")).expect("readable"),
+            b"PNG\x00theirs"
+        );
     }
 
     /// Text assembled from chunks that were never produced would be written
@@ -738,11 +833,16 @@ mod tests {
         let f = fixture("resolve-binary-merged", b"PNG\x00mine", b"PNG\x00theirs");
 
         let refused = f
-            .resolve(Resolution::Merged { contents: "nonsense".into() })
+            .resolve(Resolution::Merged {
+                contents: "nonsense".into(),
+            })
             .expect_err("a merge of two binaries should have been refused");
 
         assert_eq!(refused.code, "sync.not_mergeable");
-        assert_eq!(fs::read(f.vault.join("note.md")).expect("readable"), b"PNG\x00mine");
+        assert_eq!(
+            fs::read(f.vault.join("note.md")).expect("readable"),
+            b"PNG\x00mine"
+        );
     }
 
     /// The resolution write is deliberately *not* echo-suppressed. The note's
@@ -754,7 +854,8 @@ mod tests {
     fn a_resolution_is_announced_like_any_other_outside_write() {
         let f = text_fixture("resolve-announced");
 
-        f.resolve(Resolution::KeepTheirs).expect("the resolution succeeds");
+        f.resolve(Resolution::KeepTheirs)
+            .expect("the resolution succeeds");
 
         assert!(
             !crate::commands::watcher::take_self_write(&f.vault.join("note.md")),
@@ -783,7 +884,10 @@ mod tests {
                     scope.spawn(move || f.resolve_as_seen(&seen, Resolution::KeepTheirs).is_ok())
                 })
                 .collect();
-            handles.into_iter().map(|h| h.join().expect("the thread finishes")).collect()
+            handles
+                .into_iter()
+                .map(|h| h.join().expect("the thread finishes"))
+                .collect()
         });
 
         assert_eq!(
@@ -802,10 +906,18 @@ mod tests {
         let f = text_fixture("resolve-forget");
         f.engine
             .note_conflicts(conflict::scan(&f.vault).expect("the vault can be scanned"));
-        assert_eq!(f.engine.conflicts().len(), 1, "the conflict was not noticed");
+        assert_eq!(
+            f.engine.conflicts().len(),
+            1,
+            "the conflict was not noticed"
+        );
 
-        f.resolve(Resolution::KeepOurs).expect("the resolution succeeds");
+        f.resolve(Resolution::KeepOurs)
+            .expect("the resolution succeeds");
 
-        assert!(f.engine.conflicts().is_empty(), "the answered conflict is still listed");
+        assert!(
+            f.engine.conflicts().is_empty(),
+            "the answered conflict is still listed"
+        );
     }
 }

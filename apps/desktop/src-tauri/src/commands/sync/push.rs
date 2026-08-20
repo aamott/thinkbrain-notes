@@ -14,15 +14,15 @@ use std::collections::BTreeSet;
 use std::io::{BufRead, Write};
 
 use gix::protocol::transport;
-use transport::Service;
 use transport::client::blocking_io::Transport as _;
 use transport::client::{MessageKind, WriteMode};
+use transport::Service;
 
 use crate::error::NativeError;
 
 use super::failed;
-use super::snapshot;
 use super::remote_unreachable;
+use super::snapshot;
 
 /// The only pack version anything has spoken for twenty years.
 const PACK_VERSION: u32 = 2;
@@ -88,7 +88,9 @@ pub fn carried(
     let mut state = gix::diff::tree::State::default();
 
     for commit in commits {
-        let commit = commit.map_err(|error| history("Could not read this vault's history.", error))?.id;
+        let commit = commit
+            .map_err(|error| history("Could not read this vault's history.", error))?
+            .id;
         let object = repo
             .find_commit(commit)
             .map_err(|error| history("Could not read this vault's history.", error))?;
@@ -131,10 +133,12 @@ fn newly_reachable(
         snapshot::changes_between(repo, state, snapshot::tree_of(repo, parent)?, tree)?
             .into_iter()
             .filter_map(|record| match record {
-                Change::Addition { entry_mode, oid, .. }
-                | Change::Modification { entry_mode, oid, .. } => {
-                    (!entry_mode.is_commit()).then_some(oid)
+                Change::Addition {
+                    entry_mode, oid, ..
                 }
+                | Change::Modification {
+                    entry_mode, oid, ..
+                } => (!entry_mode.is_commit()).then_some(oid),
                 Change::Deletion { .. } => None,
             })
             .collect(),
@@ -178,7 +182,11 @@ pub fn pack(repo: &gix::Repository, objects: &[gix::ObjectId]) -> Result<Vec<u8>
         entry_header(object.kind, object.data.len(), &mut out);
 
         let unsendable = |error: std::io::Error| {
-            failed("sync.pack_failed", "Could not prepare notes to send.", error)
+            failed(
+                "sync.pack_failed",
+                "Could not prepare notes to send.",
+                error,
+            )
         };
         let mut deflated =
             flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
@@ -188,9 +196,13 @@ pub fn pack(repo: &gix::Repository, objects: &[gix::ObjectId]) -> Result<Vec<u8>
 
     let mut hasher = gix::hash::hasher(repo.object_hash());
     hasher.update(&out);
-    let checksum = hasher
-        .try_finalize()
-        .map_err(|error| failed("sync.pack_failed", "Could not prepare notes to send.", error))?;
+    let checksum = hasher.try_finalize().map_err(|error| {
+        failed(
+            "sync.pack_failed",
+            "Could not prepare notes to send.",
+            error,
+        )
+    })?;
     out.extend_from_slice(checksum.as_slice());
 
     Ok(out)
@@ -290,7 +302,11 @@ pub fn send(
         .request(WriteMode::Binary, MessageKind::Flush, false)
         .map_err(remote_unreachable)?;
     let sending = |error: std::io::Error| {
-        failed("sync.push_failed", "Could not send this vault's notes.", error)
+        failed(
+            "sync.push_failed",
+            "Could not send this vault's notes.",
+            error,
+        )
     };
     request
         .write_all(format!("{old} {tip} {reference}\0report-status\n").as_bytes())
@@ -300,7 +316,9 @@ pub fn send(
     // The commands are packet lines and the pack that follows them is not, so
     // the pack goes out through the raw half of the request.
     let (mut raw, mut report) = request.into_parts();
-    raw.write_all(&pack).and_then(|()| raw.flush()).map_err(sending)?;
+    raw.write_all(&pack)
+        .and_then(|()| raw.flush())
+        .map_err(sending)?;
     drop(raw);
 
     Ok(Sent {
@@ -408,7 +426,10 @@ fn read_report(
                 },
             });
         }
-        if line.strip_prefix("ok ").is_some_and(|named| named == reference) {
+        if line
+            .strip_prefix("ok ")
+            .is_some_and(|named| named == reference)
+        {
             return Ok(Landed::Moved);
         }
     }

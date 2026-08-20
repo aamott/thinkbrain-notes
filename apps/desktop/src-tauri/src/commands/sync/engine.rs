@@ -46,12 +46,22 @@ pub struct StuckNote {
 impl StuckNote {
     /// A note that could not be recorded (no blob to retry from).
     pub fn recording(path: String, error: NativeError) -> Self {
-        Self { path, blob: None, code: error.code, message: error.message }
+        Self {
+            path,
+            blob: None,
+            code: error.code,
+            message: error.message,
+        }
     }
 
     /// A note that could not be written, with the blob to retry from.
     pub fn incoming(path: String, blob: gix::ObjectId, error: NativeError) -> Self {
-        Self { path, blob: Some(blob), code: error.code, message: error.message }
+        Self {
+            path,
+            blob: Some(blob),
+            code: error.code,
+            message: error.message,
+        }
     }
 }
 
@@ -243,7 +253,10 @@ impl Engine {
                 let mut stuck = lock_or_recover(&self.stuck);
                 for (path, error) in &landed.skipped {
                     let relative = super::conflict::relative_str(path);
-                    stuck.insert(relative.clone(), StuckNote::recording(relative, error.clone()));
+                    stuck.insert(
+                        relative.clone(),
+                        StuckNote::recording(relative, error.clone()),
+                    );
                 }
                 self.set_problem(None);
             }

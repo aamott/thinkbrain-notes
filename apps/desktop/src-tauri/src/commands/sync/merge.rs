@@ -93,7 +93,10 @@ fn segment(ours: &str, theirs: &str) -> Vec<Chunk> {
     // rest of the file is common too.
     let mut ours_at = 0u32;
     for hunk in diff.hunks() {
-        push_common(&mut chunks, join(&input, Side::Ours, ours_at..hunk.before.start));
+        push_common(
+            &mut chunks,
+            join(&input, Side::Ours, ours_at..hunk.before.start),
+        );
         push_choice(
             &mut chunks,
             join(&input, Side::Ours, hunk.before.clone()),
@@ -101,7 +104,10 @@ fn segment(ours: &str, theirs: &str) -> Vec<Chunk> {
         );
         ours_at = hunk.before.end;
     }
-    push_common(&mut chunks, join(&input, Side::Ours, ours_at..input.before.len() as u32));
+    push_common(
+        &mut chunks,
+        join(&input, Side::Ours, ours_at..input.before.len() as u32),
+    );
     chunks
 }
 
@@ -172,7 +178,9 @@ mod tests {
     }
 
     fn common(text: &str) -> Chunk {
-        Chunk::Common { text: text.to_string() }
+        Chunk::Common {
+            text: text.to_string(),
+        }
     }
 
     fn choice(ours: &str, theirs: &str) -> Chunk {
@@ -194,7 +202,11 @@ mod tests {
     fn a_changed_line_is_a_choice_between_the_lines_around_it() {
         assert_eq!(
             chunks("# Note\nmine\nend\n", "# Note\ntheirs\nend\n"),
-            [common("# Note\n"), choice("mine\n", "theirs\n"), common("end\n")]
+            [
+                common("# Note\n"),
+                choice("mine\n", "theirs\n"),
+                common("end\n")
+            ]
         );
     }
 
@@ -233,7 +245,11 @@ mod tests {
             let (kind, chunks) = compare(ours.as_bytes(), theirs.as_bytes());
             assert_eq!(kind, Kind::Text, "{ours:?} vs {theirs:?} was not text");
             assert_eq!(side_text(&chunks, true), ours, "our side did not rebuild");
-            assert_eq!(side_text(&chunks, false), theirs, "their side did not rebuild");
+            assert_eq!(
+                side_text(&chunks, false),
+                theirs,
+                "their side did not rebuild"
+            );
         }
     }
 

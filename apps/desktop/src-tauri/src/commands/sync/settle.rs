@@ -26,8 +26,8 @@ use crate::error::lock_or_recover;
 use crate::NativeError;
 
 use super::conflict::ConflictCopy;
-use super::failed;
 use super::engine::Engine;
+use super::failed;
 use super::history;
 use super::snapshot::Reason;
 
@@ -170,16 +170,29 @@ fn settle(
 /// SHA-1: a repository configured for SHA-256 would otherwise compute ids that
 /// never match anything in its history, silently refusing to settle anything.
 fn blob_of(hash: gix::hash::Kind, bytes: &[u8]) -> Result<gix::ObjectId, NativeError> {
-    gix::objs::compute_hash(hash, gix::object::Kind::Blob, bytes)
-        .map_err(|error| failed("sync.version_read_failed", "Could not compare the two versions.", error))
+    gix::objs::compute_hash(hash, gix::object::Kind::Blob, bytes).map_err(|error| {
+        failed(
+            "sync.version_read_failed",
+            "Could not compare the two versions.",
+            error,
+        )
+    })
 }
 
 fn read_failed(error: std::io::Error) -> NativeError {
-    failed("sync.version_read_failed", "Could not read one of the two versions.", error)
+    failed(
+        "sync.version_read_failed",
+        "Could not read one of the two versions.",
+        error,
+    )
 }
 
 fn discard_failed(error: std::io::Error) -> NativeError {
-    failed("sync.conflict_not_discarded", "Could not discard the duplicate copy.", error)
+    failed(
+        "sync.conflict_not_discarded",
+        "Could not discard the duplicate copy.",
+        error,
+    )
 }
 
 #[cfg(test)]

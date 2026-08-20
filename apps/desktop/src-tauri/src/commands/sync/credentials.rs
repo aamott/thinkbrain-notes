@@ -23,7 +23,10 @@ pub fn get(destination: &str) -> Result<Option<(String, String)>, NativeError> {
     let key = account(destination);
     #[cfg(test)]
     {
-        return Ok(lock_or_recover(&MEMORY).get_or_insert_with(HashMap::new).get(&key).cloned());
+        return Ok(lock_or_recover(&MEMORY)
+            .get_or_insert_with(HashMap::new)
+            .get(&key)
+            .cloned());
     }
     #[cfg(not(test))]
     {
@@ -90,7 +93,11 @@ pub fn provide(
     use gix::protocol::credentials::helper::Action;
     match action {
         Action::Get(ctx) => {
-            let Some(url) = ctx.url.as_ref().and_then(|url| std::str::from_utf8(url).ok()) else {
+            let Some(url) = ctx
+                .url
+                .as_ref()
+                .and_then(|url| std::str::from_utf8(url).ok())
+            else {
                 return Ok(None);
             };
             let Ok(Some((username, password))) = get(url) else {
@@ -215,7 +222,10 @@ fn unavailable(error: impl std::fmt::Display) -> NativeError {
 /// keychain entry point, so a new platform is one line here rather than nine.
 macro_rules! supported {
     ($item:item) => {
-        #[cfg(all(not(test), any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+        #[cfg(all(
+            not(test),
+            any(target_os = "linux", target_os = "macos", target_os = "windows")
+        ))]
         $item
     };
 }
@@ -223,7 +233,10 @@ macro_rules! supported {
 /// The same gate, negated: the no-keychain stubs for unsupported platforms.
 macro_rules! unsupported {
     ($item:item) => {
-        #[cfg(all(not(test), not(any(target_os = "linux", target_os = "macos", target_os = "windows"))))]
+        #[cfg(all(
+            not(test),
+            not(any(target_os = "linux", target_os = "macos", target_os = "windows"))
+        ))]
         $item
     };
 }
@@ -314,8 +327,7 @@ mod tests {
 
     #[test]
     fn a_url_with_a_token_is_split_and_the_token_is_not_in_the_result() {
-        let destination =
-            take_from_url("https://x-access-token:s3cret@example.test/notes.git");
+        let destination = take_from_url("https://x-access-token:s3cret@example.test/notes.git");
 
         assert_eq!(destination, "https://example.test/notes.git");
         assert!(!destination.contains("s3cret"));
@@ -344,12 +356,17 @@ mod tests {
     #[test]
     fn provide_returns_what_was_stored_and_does_not_echo_the_secret_on_miss() {
         store("https://example.test/vault.git", "me", "tok").expect("stored");
-        let action = gix::protocol::credentials::helper::Action::get_for_url("https://example.test/vault.git");
-        let outcome = provide(action).expect("the helper answers").expect("an identity");
+        let action = gix::protocol::credentials::helper::Action::get_for_url(
+            "https://example.test/vault.git",
+        );
+        let outcome = provide(action)
+            .expect("the helper answers")
+            .expect("an identity");
         assert_eq!(outcome.identity.username, "me");
         assert_eq!(outcome.identity.password, "tok");
 
-        let miss = gix::protocol::credentials::helper::Action::get_for_url("https://other.test/vault.git");
+        let miss =
+            gix::protocol::credentials::helper::Action::get_for_url("https://other.test/vault.git");
         assert!(provide(miss).expect("a miss is not an error").is_none());
     }
 }

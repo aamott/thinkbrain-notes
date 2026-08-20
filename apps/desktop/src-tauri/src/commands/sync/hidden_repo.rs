@@ -31,8 +31,13 @@ pub fn open_or_create(git_dir: &Path, vault: &Path) -> Result<gix::Repository, N
 }
 
 fn open(git_dir: &Path) -> Result<gix::Repository, NativeError> {
-    gix::open(git_dir)
-        .map_err(|error| failed("sync.repo_open_failed", "Could not open this workspace's sync history.", error))
+    gix::open(git_dir).map_err(|error| {
+        failed(
+            "sync.repo_open_failed",
+            "Could not open this workspace's sync history.",
+            error,
+        )
+    })
 }
 
 fn create(git_dir: &Path, vault: &Path) -> Result<(), NativeError> {
@@ -40,12 +45,20 @@ fn create(git_dir: &Path, vault: &Path) -> Result<(), NativeError> {
     // install none of that exists yet.
     if let Some(parent) = git_dir.parent() {
         fs::create_dir_all(parent).map_err(|error| {
-            failed("sync.repo_create_failed", "Could not create this workspace's sync history.", error)
+            failed(
+                "sync.repo_create_failed",
+                "Could not create this workspace's sync history.",
+                error,
+            )
         })?;
     }
 
     gix::init_bare(git_dir).map_err(|error| {
-        failed("sync.repo_create_failed", "Could not create this workspace's sync history.", error)
+        failed(
+            "sync.repo_create_failed",
+            "Could not create this workspace's sync history.",
+            error,
+        )
     })?;
 
     point_at_worktree(git_dir, vault)
@@ -61,7 +74,11 @@ fn create(git_dir: &Path, vault: &Path) -> Result<(), NativeError> {
 fn point_at_worktree(git_dir: &Path, vault: &Path) -> Result<(), NativeError> {
     let config_path = git_dir.join("config");
     let config_failed = |error: String| {
-        failed("sync.repo_create_failed", "Could not point this workspace's sync history at its notes.", error)
+        failed(
+            "sync.repo_create_failed",
+            "Could not point this workspace's sync history at its notes.",
+            error,
+        )
     };
 
     let mut config =
@@ -80,10 +97,12 @@ fn point_at_worktree(git_dir: &Path, vault: &Path) -> Result<(), NativeError> {
         .write_to(&mut written)
         .map_err(|error| config_failed(error.to_string()))?;
 
-    let mut file = fs::File::create(&config_path).map_err(|error| config_failed(error.to_string()))?;
+    let mut file =
+        fs::File::create(&config_path).map_err(|error| config_failed(error.to_string()))?;
     file.write_all(&written)
         .map_err(|error| config_failed(error.to_string()))?;
-    file.sync_all().map_err(|error| config_failed(error.to_string()))?;
+    file.sync_all()
+        .map_err(|error| config_failed(error.to_string()))?;
 
     Ok(())
 }
