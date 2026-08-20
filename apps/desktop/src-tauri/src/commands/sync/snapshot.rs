@@ -513,14 +513,7 @@ pub(super) fn vault_relative(vault: &Path, path: &Path) -> Result<PathBuf, Nativ
 /// synced to a Mac has to produce the same tree on both, and git itself has
 /// only ever used `/` inside a tree.
 fn tree_path(relative: &Path) -> String {
-    relative
-        .components()
-        .filter_map(|component| match component {
-            std::path::Component::Normal(part) => Some(part.to_string_lossy().into_owned()),
-            _ => None,
-        })
-        .collect::<Vec<_>>()
-        .join("/")
+    super::conflict::relative_str(relative)
 }
 
 /// Opens `path` without following a final-component symlink.

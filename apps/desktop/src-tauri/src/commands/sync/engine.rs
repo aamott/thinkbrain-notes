@@ -43,6 +43,18 @@ pub struct StuckNote {
     pub blob: Option<gix::ObjectId>,
 }
 
+impl StuckNote {
+    /// A note that could not be recorded (no blob to retry from).
+    pub fn recording(path: String, error: NativeError) -> Self {
+        Self { path, blob: None, code: error.code, message: error.message }
+    }
+
+    /// A note that could not be written, with the blob to retry from.
+    pub fn incoming(path: String, blob: gix::ObjectId, error: NativeError) -> Self {
+        Self { path, blob: Some(blob), code: error.code, message: error.message }
+    }
+}
+
 /// A workspace Auto Sync is recording.
 pub struct Engine {
     /// Held across threads, so the repository is the thread-safe kind and each
@@ -110,7 +122,7 @@ impl Engine {
         let mut pending = lock_or_recover(&self.pending);
         let mut stuck = lock_or_recover(&self.stuck);
         for path in paths {
-            stuck.remove(&path.to_string_lossy().replace('\\', "/"));
+            stuck.remove(&super::conflict::relative_str(&path));
             pending.note(path, at);
         }
         *lock_or_recover(&self.last_touched) = at;
@@ -123,11 +135,13 @@ impl Engine {
     /// watcher — and only the first time is worth telling anyone about.
     pub fn note_conflicts(&self, found: impl IntoIterator<Item = ConflictCopy>) -> bool {
         let mut conflicts = lock_or_recover(&self.conflicts);
-        found
-            .into_iter()
-            .filter(|copy| conflicts.insert(copy.copy.clone(), copy.clone()).is_none())
-            .count()
-            > 0
+        let mut any_new = false;
+        for copy in found {
+            if conflicts.insert(copy.copy.clone(), copy.clone()).is_none() {
+                any_new = true;
+            }
+        }
+        any_new
     }
 
     /// The conflicts this workspace is waiting on someone to resolve.
@@ -228,16 +242,8 @@ impl Engine {
             Ok(landed) => {
                 let mut stuck = lock_or_recover(&self.stuck);
                 for (path, error) in &landed.skipped {
-                    let relative = path.to_string_lossy().replace('\\', "/");
-                    stuck.insert(
-                        relative.clone(),
-                        StuckNote {
-                            path: relative,
-                            code: error.code.clone(),
-                            message: error.message.clone(),
-                            blob: None,
-                        },
-                    );
+                    let relative = super::conflict::relative_str(path);
+                    stuck.insert(relative.clone(), StuckNote::recording(relative, error.clone()));
                 }
                 self.set_problem(None);
             }

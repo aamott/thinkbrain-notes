@@ -36,7 +36,7 @@ use super::engine::StuckNote;
 use super::failed;
 use super::push;
 use super::snapshot::{self, HISTORY_REF as BRANCH};
-use super::unreachable;
+use super::remote_unreachable;
 
 /// Where a fetched branch is put.
 ///
@@ -85,7 +85,18 @@ pub struct Synced {
 /// changed it.
 pub fn destination(app_data_dir: &Path, root: &Path) -> Option<String> {
     let path = crate::commands::settings::workspace_settings_path(app_data_dir, root);
-    let contents = crate::commands::settings::read_settings_file(&path).ok()?;
+    // Distinguish "key absent" (a legitimate `None`) from "file present but
+    // unreadable" (a loud, traceable failure). The old `.ok()?` collapsed I/O
+    // and parse errors into `None`, misreporting a corrupt settings file as
+    // "not set up to sync." We still return `None` so a bad file does not break
+    // sync entirely, but the failure is now logged so it can be found.
+    let contents = match crate::commands::settings::read_settings_file(&path) {
+        Ok(contents) => contents,
+        Err(error) => {
+            eprintln!("[sync] settings unreadable: {error:?}");
+            return None;
+        }
+    };
     let named = crate::commands::settings::parse_app_settings_record(contents.as_deref())
         .get(SETTING)?
         .as_str()?
@@ -102,14 +113,22 @@ pub fn destination(app_data_dir: &Path, root: &Path) -> Option<String> {
 }
 
 /// The token has gone to the keychain; it must not stay in the settings file.
+///
+/// A failed redaction leaves the credential in plaintext on disk, so it must
+/// never be silent: every failure is logged loudly. Only the error is logged —
+/// never the secret or the file contents.
 fn forget_secret_in_settings(path: &Path, contents: Option<&str>, redacted: &str) {
     let mut record = crate::commands::settings::parse_app_settings_record(contents);
     record.insert(
         SETTING.to_string(),
         serde_json::Value::String(redacted.to_string()),
     );
-    if let Ok(written) = crate::commands::settings::serialize_app_settings_record(record) {
-        let _ = crate::commands::workspace::write_file_atomically(path, written);
+    let Ok(written) = crate::commands::settings::serialize_app_settings_record(record) else {
+        eprintln!("[sync] failed to serialize redacted settings, secret may remain on disk");
+        return;
+    };
+    if let Err(error) = crate::commands::workspace::write_file_atomically(path, written) {
+        eprintln!("[sync] failed to redact secret from settings: {error:?}");
     }
 }
 
@@ -189,15 +208,15 @@ fn fetch(
 ) -> Result<Option<gix::ObjectId>, NativeError> {
     let brought = repo
         .remote_at(gix::bstr::BStr::new(destination))
-        .map_err(unreachable)?
+        .map_err(remote_unreachable)?
         .with_refspecs([format!("{BRANCH}:{REMOTE_REF}").as_str()], Direction::Fetch)
-        .map_err(unreachable)?
+        .map_err(remote_unreachable)?
         .with_fetch_tags(gix::remote::fetch::Tags::None)
         .connect(Direction::Fetch)
-        .map_err(unreachable)?
+        .map_err(remote_unreachable)?
         .with_credentials(super::credentials::provide)
         .prepare_fetch(gix::progress::Discard, Default::default())
-        .map_err(unreachable)?
+        .map_err(remote_unreachable)?
         .receive(gix::progress::Discard, cancel);
 
     match brought {
@@ -206,7 +225,7 @@ fn fetch(
         // yet. Nothing to bring down is not a failure to reach it.
         Err(gix::remote::fetch::Error::NoMapping { .. }) => Ok(None),
         Err(_) if cancel.load(Ordering::Relaxed) => Err(timed_out()),
-        Err(error) => Err(unreachable(error)),
+        Err(error) => Err(remote_unreachable(error)),
     }
 }
 
@@ -219,6 +238,12 @@ fn timed_out() -> NativeError {
 
 /// Runs `work` on its own thread so a hung remote cannot pin the caller —
 /// and therefore the per-workspace lane — past `limit`.
+///
+/// A panic inside `work` is caught so it surfaces as a distinct
+/// `sync.internal_error` rather than a misleading `sync.remote_unreachable`
+/// (a panic used to drop the sender, which the receiver reported as "could not
+/// reach the remote"). The panic payload is logged — never any secret — and
+/// the original error message is preserved in the log for debugging.
 fn bounded<T: Send + 'static>(
     limit: Duration,
     cancel: Arc<AtomicBool>,
@@ -228,7 +253,18 @@ fn bounded<T: Send + 'static>(
     std::thread::Builder::new()
         .name("thinkbrain-sync-io".into())
         .spawn(move || {
-            let _ = tx.send(work());
+            // `AssertUnwindSafe`: the closure captures remote handles whose
+            // `UnwindSafe` impls we do not control, but a sync is single-threaded
+            // per workspace lane, so there is no concurrent mutation to corrupt.
+            let outcome =
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(work)).map_err(|panic| {
+                    eprintln!("[sync] worker thread panicked: {panic:?}");
+                    NativeError::new(
+                        "sync.internal_error",
+                        "An internal error occurred during sync.",
+                    )
+                });
+            let _ = tx.send(outcome.and_then(|inner| inner));
         })
         .map_err(|error| {
             failed(
@@ -560,11 +596,9 @@ fn put(path: &Path, bytes: &[u8]) -> Result<(), NativeError> {
 }
 
 fn stuck(path: String, blob: Option<gix::ObjectId>, error: NativeError) -> StuckNote {
-    StuckNote {
-        path,
-        code: error.code,
-        message: error.message,
-        blob,
+    match blob {
+        Some(blob) => StuckNote::incoming(path, blob, error),
+        None => StuckNote::recording(path, error),
     }
 }
 
@@ -632,28 +666,23 @@ pub fn sync(
     let repo = engine.repository();
     let cancel = Arc::new(AtomicBool::new(false));
     let synced = trip(&repo, root, destination, Arc::clone(&cancel))?;
-    if !synced.skipped.is_empty() {
-        engine.note_stuck(synced.skipped.clone());
-    }
+    engine.note_stuck(synced.skipped.clone());
     engine.mark_synced();
     if !matches!(synced.landed, push::Landed::Refused { .. }) {
         return Ok(synced);
     }
 
     let again = trip(&repo, root, destination, cancel)?;
-    if !again.skipped.is_empty() {
-        engine.note_stuck(again.skipped.clone());
-    }
-    let conflict_copies = {
-        let mut all = synced.conflict_copies;
-        all.extend(again.conflict_copies);
-        all
-    };
-    let skipped = {
-        let mut all = synced.skipped;
-        all.extend(again.skipped);
-        all
-    };
+    engine.note_stuck(again.skipped.clone());
+
+    // Fold both trips into one report. `..again` keeps `sent` and `landed` from
+    // the second trip — the first trip's push was refused, so its counts are
+    // not part of what landed this round, and `synced.sent`/`synced.landed` are
+    // dropped here on purpose.
+    let mut conflict_copies = synced.conflict_copies;
+    conflict_copies.extend(again.conflict_copies);
+    let mut skipped = synced.skipped;
+    skipped.extend(again.skipped);
     Ok(Synced {
         brought_down: synced.brought_down + again.brought_down,
         asked_about: synced.asked_about + again.asked_about,

@@ -113,7 +113,17 @@ fn settle_when(
     let repo = engine.repository();
     found
         .into_iter()
-        .filter(|copy| !settle(engine, &repo, root, copy).unwrap_or(false))
+        .filter(|copy| match settle(engine, &repo, root, copy) {
+            Ok(settled) => !settled,
+            // A settle failure leaves the conflict exactly where it was — it is
+            // still a real question — so it is kept (`true`), not dropped. But
+            // the failure must not be silent: log the error so a corrupt copy
+            // or unreadable checkpoint is traceable.
+            Err(error) => {
+                eprintln!("[sync] settle failed: {error:?}");
+                true
+            }
+        })
         .collect()
 }
 
@@ -133,7 +143,7 @@ fn settle(
     // Cheapest first, and the one that holds even for a note nothing has
     // recorded yet — a vault opened seconds ago, or a note still settling.
     if ours != theirs {
-        let theirs = blob_of(&theirs)?;
+        let theirs = blob_of(repo.object_hash(), &theirs)?;
         if !history::has_recorded(repo, Path::new(&pairing.original), theirs)? {
             return Ok(false);
         }
@@ -149,19 +159,27 @@ fn settle(
         ],
         Reason::DuplicateDiscarded,
     )?;
-    std::fs::remove_file(&copy).map_err(read_failed)?;
+    std::fs::remove_file(&copy).map_err(discard_failed)?;
     Ok(true)
 }
 
 /// The id git would store these bytes under, which is also the only question
 /// worth asking about whether two files are the same file.
-fn blob_of(bytes: &[u8]) -> Result<gix::ObjectId, NativeError> {
-    gix::objs::compute_hash(gix::hash::Kind::Sha1, gix::object::Kind::Blob, bytes)
+///
+/// Takes the repository's object hash kind explicitly rather than hardcoding
+/// SHA-1: a repository configured for SHA-256 would otherwise compute ids that
+/// never match anything in its history, silently refusing to settle anything.
+fn blob_of(hash: gix::hash::Kind, bytes: &[u8]) -> Result<gix::ObjectId, NativeError> {
+    gix::objs::compute_hash(hash, gix::object::Kind::Blob, bytes)
         .map_err(|error| failed("sync.version_read_failed", "Could not compare the two versions.", error))
 }
 
 fn read_failed(error: std::io::Error) -> NativeError {
     failed("sync.version_read_failed", "Could not read one of the two versions.", error)
+}
+
+fn discard_failed(error: std::io::Error) -> NativeError {
+    failed("sync.conflict_not_discarded", "Could not discard the duplicate copy.", error)
 }
 
 #[cfg(test)]

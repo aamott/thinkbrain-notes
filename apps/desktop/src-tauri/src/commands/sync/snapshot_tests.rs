@@ -25,28 +25,14 @@ fn write(vault: &Path, relative: &str, contents: &str) {
 }
 
 /// Every path in the recorded tree, so a test can say exactly what history
-/// holds without caring how the trees nest.
+/// holds without caring how the trees nest. Resolves HEAD first (returning
+/// an empty list when there is no commit yet) and delegates the tree walk
+/// to [`tree_paths_of`].
 fn recorded_paths(repo: &gix::Repository) -> Vec<String> {
     let Some(commit) = head_commit(repo).expect("the history is readable") else {
         return Vec::new();
     };
-    let tree = repo
-        .find_commit(commit)
-        .expect("the commit exists")
-        .tree()
-        .expect("the tree exists");
-    let mut paths = Vec::new();
-    let mut recorder = gix::traverse::tree::Recorder::default();
-    tree.traverse()
-        .breadthfirst(&mut recorder)
-        .expect("the tree is walkable");
-    for entry in recorder.records {
-        if entry.mode.is_blob() {
-            paths.push(entry.filepath.to_string());
-        }
-    }
-    paths.sort();
-    paths
+    tree_paths_of(repo, commit)
 }
 
 /// Every blob path in a given commit's tree.
@@ -183,6 +169,13 @@ fn a_first_checkpoint_of_absent_notes_still_yields_a_restore_point() {
     let id = checkpoint(&f.repo, &[PathBuf::from("missing.md")], Reason::ConflictResolved).expect("checkpointed");
 
     assert!(tree_paths_of(&f.repo, id).is_empty());
+    // The checkpoint must actually be reachable from the checkpoint ref, or
+    // the restore point the caller was handed is not restorable.
+    assert_eq!(
+        checkpoint_head(&f.repo).expect("the checkpoint ref is readable"),
+        Some(id),
+        "the checkpoint ref does not point at the commit it returned"
+    );
 }
 
 #[test]
@@ -418,7 +411,15 @@ fn recording_a_symlink_does_not_store_its_target() {
     std::os::unix::fs::symlink(outside.join("secret.md"), f.vault.join("note.md"))
         .expect("the vault holds a symlink");
 
-    record(&f.repo, &[PathBuf::from("note.md")], "second").expect("recording succeeds");
+    // A symlink is not a note, so the recorder skips it and the tree is
+    // unchanged from the previous commit — `record` answers `None` rather
+    // than writing an empty commit (and never follows the link to store the
+    // target's bytes).
+    let recorded = record(&f.repo, &[PathBuf::from("note.md")], "second").expect("recording succeeds");
+    assert_eq!(
+        recorded, None,
+        "a symlink was recorded as a change instead of being skipped"
+    );
 
     assert_eq!(recorded_paths(&f.repo), ["note.md"]);
     assert_eq!(contents_of(&f.repo, "note.md"), "# A note\n");

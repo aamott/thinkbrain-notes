@@ -15,7 +15,7 @@ pub(super) fn failed(
     NativeError::with_details(code, message, error.to_string())
 }
 
-pub(super) fn unreachable(error: impl std::fmt::Display) -> NativeError {
+pub(super) fn remote_unreachable(error: impl std::fmt::Display) -> NativeError {
     failed(
         "sync.remote_unreachable",
         "Could not reach the place these notes sync to.",

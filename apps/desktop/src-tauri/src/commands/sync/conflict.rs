@@ -255,10 +255,7 @@ pub const PATTERNS: &[ConflictPattern] = &[
 /// named that way, or one left behind after the original was deleted, and
 /// offering to "resolve" it against nothing would be worse than ignoring it.
 pub fn pair(relative: &str, original_exists: impl Fn(&str) -> bool) -> Option<ConflictCopy> {
-    let (directory, name) = match relative.rfind('/') {
-        Some(index) => (&relative[..=index], &relative[index + 1..]),
-        None => ("", relative),
-    };
+    let (directory, name) = dir_and_name(relative);
 
     for pattern in PATTERNS {
         let Some(original_name) = (pattern.match_name)(name) else {

@@ -514,12 +514,12 @@ fn remote_tip(destination: &str) -> Option<gix::ObjectId> {
         .map(|mut found| found.peel_to_id().expect("the ref points at an object").detach())
 }
 
-/// Nothing in git's tree format forbids an entry named `..`, and `Path::join`
-/// follows it straight out of the folder. A destination someone else controls
-/// must never be able to choose where this app writes.
 /// A name this device cannot even read is not a name it should guess at.
 /// Writing it under a mangled spelling would leave the two devices tracking
-/// different files forever, each unable to touch the other's.
+/// different files forever, each unable to touch the other's. Here the
+/// hostile history holds a tree entry whose name is `note\xff.md` — a byte
+/// sequence that is not valid UTF-8 on this device — and pulling it must be
+/// refused rather than recorded under a guessed spelling.
 #[test]
 fn a_note_whose_name_cannot_be_read_here_is_refused() {
     let victim = device("round-unreadable-name");
@@ -565,8 +565,11 @@ fn a_note_changed_underneath_a_sync_is_never_written_over() {
     assert_eq!(synced.asked_about, 1);
 }
 
-/// The route that has no merge to hide behind: a folder with nothing recorded
-/// in it yet takes the other side's history wholesale.
+/// Nothing in git's tree format forbids an entry named `..`, and `Path::join`
+/// follows it straight out of the folder. A destination someone else controls
+/// must never be able to choose where this app writes. Here the hostile
+/// history nests a tree entry named `..` pointing at `escaped.md`, so a
+/// naive recorder would write outside the vault — the pull must refuse it.
 #[test]
 fn a_note_named_to_escape_the_folder_is_refused() {
     let victim = device("round-escape");
@@ -590,6 +593,9 @@ fn a_note_named_to_escape_the_folder_is_refused() {
     assert_eq!(error.code, "sync.path_outside_vault");
 }
 
+/// Builds a raw gix tree holding a single entry, so a test can craft a
+/// hostile history (a `..` folder, an unreadable name) that the recorder
+/// would never produce itself.
 fn tree_holding(
     device: &Device,
     name: impl Into<gix::bstr::BString>,
@@ -609,6 +615,8 @@ fn tree_holding(
         .detach()
 }
 
+/// Writes a raw gix commit pointing at `tree`, so a test can build a
+/// hostile history the security tests push at a victim device.
 fn commit_of(
     device: &Device,
     message: &str,

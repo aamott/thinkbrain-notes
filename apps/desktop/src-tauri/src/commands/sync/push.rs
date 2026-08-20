@@ -22,7 +22,7 @@ use crate::error::NativeError;
 
 use super::failed;
 use super::snapshot;
-use super::unreachable;
+use super::remote_unreachable;
 
 /// The only pack version anything has spoken for twenty years.
 const PACK_VERSION: u32 = 2;
@@ -70,12 +70,8 @@ pub fn carried(
     tip: gix::ObjectId,
     already: Option<gix::ObjectId>,
 ) -> Result<Vec<gix::ObjectId>, NativeError> {
-    fn history(error: impl std::fmt::Display) -> NativeError {
-        failed(
-            "sync.history_unreadable",
-            "Could not read this vault's history.",
-            error,
-        )
+    fn history(message: &'static str, error: impl std::fmt::Display) -> NativeError {
+        failed("sync.history_unreadable", message, error)
     }
 
     let known = already.filter(|id| repo.find_commit(*id).is_ok());
@@ -85,24 +81,20 @@ pub fn carried(
     }
     let commits = walk
         .all()
-        .map_err(history)?;
+        .map_err(|error| history("Could not read this vault's history.", error))?;
 
     let mut seen = BTreeSet::new();
     let mut carried = Vec::new();
     let mut state = gix::diff::tree::State::default();
 
     for commit in commits {
-        let commit = commit.map_err(history)?.id;
-        let object = repo.find_commit(commit).map_err(history)?;
+        let commit = commit.map_err(|error| history("Could not read this vault's history.", error))?.id;
+        let object = repo
+            .find_commit(commit)
+            .map_err(|error| history("Could not read this vault's history.", error))?;
         let tree = object
             .tree_id()
-            .map_err(|error| {
-                failed(
-                    "sync.history_unreadable",
-                    "Could not read a recorded state.",
-                    error,
-                )
-            })?
+            .map_err(|error| history("Could not read a recorded state.", error))?
             .detach();
         let parent = object.parent_ids().next().map(|id| id.detach());
 
@@ -247,7 +239,7 @@ pub fn send(
             ..Default::default()
         },
     )
-    .map_err(unreachable)?;
+    .map_err(remote_unreachable)?;
 
     let greeting = gix::protocol::handshake(
         &mut transport,
@@ -296,7 +288,7 @@ pub fn send(
 
     let mut request = transport
         .request(WriteMode::Binary, MessageKind::Flush, false)
-        .map_err(unreachable)?;
+        .map_err(remote_unreachable)?;
     let sending = |error: std::io::Error| {
         failed("sync.push_failed", "Could not send this vault's notes.", error)
     };
@@ -337,7 +329,7 @@ fn handshake_failure(error: gix::protocol::handshake::Error) -> NativeError {
             error,
         )
     } else {
-        unreachable(error)
+        remote_unreachable(error)
     }
 }
 
@@ -347,6 +339,17 @@ fn requires_authentication(error: &gix::protocol::handshake::Error) -> bool {
         | gix::protocol::handshake::Error::InvalidCredentials { .. } => true,
         gix::protocol::handshake::Error::Transport(transport::client::Error::Io(error)) => {
             error.kind() == std::io::ErrorKind::PermissionDenied
+                // NOTE: the two substring matches below are coupled to gix's
+                // HTTP transport error *message wording* (`"Received HTTP
+                // status 401"` / `"Received HTTP status 403"`), not to a
+                // structured status code. This is fragile: if gix rewords the
+                // message (or localizes it), these checks silently stop
+                // recognizing auth failures and a 401/403 becomes a generic
+                // `sync.remote_unreachable` instead of `sync.auth_required`.
+                // If a future gix version exposes the HTTP status as a
+                // structured field on `transport::client::Error` (or an enum
+                // variant), match that instead of the string. See
+                // `plans/auto-sync/` for the hardening story.
                 || ["Received HTTP status 401", "Received HTTP status 403"]
                     .iter()
                     .any(|status| error.to_string().contains(status))

@@ -19,7 +19,7 @@ use super::engine::{Engine, StuckNote};
 use super::history;
 
 /// What the pill is saying, in order of who needs to act.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub enum State {
     /// Auto Sync is deliberately not keeping history for this workspace.
@@ -34,10 +34,11 @@ pub enum State {
     /// Changes are on their way into history.
     Saving,
     /// Everything is recorded.
+    #[default]
     Idle,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncStatus {
     pub state: State,
@@ -78,25 +79,13 @@ pub fn of(recording: Recording<'_>) -> Result<SyncStatus, NativeError> {
     let engine = match recording {
         Recording::By(engine) => engine,
         Recording::NotOurs => {
-            return Ok(SyncStatus {
-                state: State::Off,
-                last_recorded_at: None,
-                waiting: 0,
-                attention: 0,
-                stuck: Vec::new(),
-                problem: None,
-                alongside_own_git: false,
-            });
+            return Ok(SyncStatus { state: State::Off, ..Default::default() });
         }
         Recording::Failed(problem) => {
             return Ok(SyncStatus {
                 state: State::Problem,
-                last_recorded_at: None,
-                waiting: 0,
-                attention: 0,
-                stuck: Vec::new(),
                 problem: Some(problem),
-                alongside_own_git: false,
+                ..Default::default()
             });
         }
     };

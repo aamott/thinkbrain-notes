@@ -102,6 +102,8 @@ fn a_conflict_outranks_a_change_still_being_saved() {
 #[test]
 fn a_note_that_cannot_be_recorded_needs_attention_not_a_full_stop() {
     let v = vault("status-stuck");
+    // Make `one.md` a file so `one.md/inner.md` is unreadable, then turn it
+    // into a folder to recover.
     note(&v, "one.md", "a note, not a folder\n");
     v.engine.note_conflicts([conflict("one.sync-conflict-1.md", "one.md")]);
     v.engine
@@ -120,6 +122,8 @@ fn a_note_that_cannot_be_recorded_needs_attention_not_a_full_stop() {
 #[test]
 fn recording_a_readable_note_clears_a_stuck_one_that_has_been_fixed() {
     let v = vault("status-recovered");
+    // Make `one.md` a file so `one.md/inner.md` is unreadable, then turn it
+    // into a folder to recover.
     note(&v, "one.md", "a note, not a folder\n");
     v.engine
         .note_changes([PathBuf::from("one.md/inner.md")], Instant::now());

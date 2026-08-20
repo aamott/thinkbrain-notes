@@ -15,6 +15,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use crate::commands::watcher::{WatchInterest, WorkspaceChange, WorkspaceChangeKind};
+use crate::error::lock_or_recover;
 use crate::NativeError;
 
 use super::bootstrap::bootstrap;
@@ -100,17 +101,26 @@ impl Registry {
             .filter_map(|key| self.engines.remove(&key).map(|engine| (key, engine)))
             .collect()
     }
+
+    /// Tries to register `label`'s interest in an already-live `key`.
+    ///
+    /// Returns `true` when an engine was there and the interest was acquired —
+    /// the caller's cue to start the sweeper (if not already running) and
+    /// return `Ok(())` rather than bootstrapping the vault again.
+    fn hold_and_sweep(&mut self, key: &str, label: &str) -> bool {
+        if self.hold(key, label) {
+            start_sweeping(self);
+            true
+        } else {
+            false
+        }
+    }
 }
 
 static ENGINES: Mutex<Option<Registry>> = Mutex::new(None);
 
 fn registry() -> std::sync::MutexGuard<'static, Option<Registry>> {
-    ENGINES
-        .lock()
-        .unwrap_or_else(|error| {
-            eprintln!("[sync] registry mutex was poisoned, recovering: {error}");
-            error.into_inner()
-        })
+    lock_or_recover(&ENGINES)
 }
 
 /// Starts recording `root` on behalf of a window.
@@ -127,8 +137,7 @@ pub fn attach(
     let lane = {
         let mut guard = registry();
         let state = guard.get_or_insert_with(Registry::default);
-        if state.hold(key, label) {
-            start_sweeping(state);
+        if state.hold_and_sweep(key, label) {
             return Ok(());
         }
         state.lane(key)
@@ -139,15 +148,11 @@ pub fn attach(
     // other window's open and close, and the sweeper with them. The lane keeps
     // two windows on the *same* vault from both walking it; the one that waited
     // re-checks so it does not walk it again once the first has finished.
-    let _lane = lane.lock().unwrap_or_else(|error| {
-        eprintln!("[sync] bootstrap lane mutex was poisoned, recovering: {error}");
-        error.into_inner()
-    });
+    let _lane = lock_or_recover(&lane);
     {
         let mut guard = registry();
         let state = guard.get_or_insert_with(Registry::default);
-        if state.hold(key, label) {
-            start_sweeping(state);
+        if state.hold_and_sweep(key, label) {
             return Ok(());
         }
     }

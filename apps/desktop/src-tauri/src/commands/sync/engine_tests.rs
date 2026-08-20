@@ -309,9 +309,11 @@ fn a_note_that_cannot_be_recorded_does_not_block_the_rest() {
         .expect("the batch is not aborted")
         .expect("the good note is recorded");
 
+    // The message counts the batch taken out of pending, not the notes that
+    // landed: both `ok.md` and `../outside.md` were settled, so the count is
+    // 2 even though `../outside.md` is then skipped and stuck.
     assert!(
-        message_of(&f.engine, commit).ends_with("— 2 notes changed")
-            || message_of(&f.engine, commit).ends_with("— 1 note changed"),
+        message_of(&f.engine, commit).ends_with("— 2 notes changed"),
         "the message: {}",
         message_of(&f.engine, commit)
     );
@@ -354,7 +356,11 @@ fn an_engine_can_be_used_from_several_threads() {
         .expect("recording succeeds")
         .expect("a commit is made");
 
-    assert!(message_of(&f.engine, commit).ends_with("— 8 notes changed"));
+    assert!(
+        message_of(&f.engine, commit).ends_with("— 8 notes changed"),
+        "the message did not count the notes: {}",
+        message_of(&f.engine, commit)
+    );
 }
 
 #[test]

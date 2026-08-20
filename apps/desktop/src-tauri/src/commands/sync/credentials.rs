@@ -73,7 +73,12 @@ pub fn take_from_url(destination: &str) -> String {
     let Some((redacted, username, secret)) = split_userinfo(destination) else {
         return destination.to_string();
     };
-    let _ = store(&redacted, &username, &secret);
+    // A store failure still returns the redacted URL: the secret must not
+    // travel with the request even if the keychain would not take it. But the
+    // failure must not be silent — only the error is logged, never the secret.
+    if let Err(error) = store(&redacted, &username, &secret) {
+        eprintln!("[sync] credential store/erase failed: {error:?}");
+    }
     redacted
 }
 
@@ -105,13 +110,18 @@ pub fn provide(
         }
         Action::Store(payload) => {
             if let Some((url, user, secret)) = identity_from_payload(&payload) {
-                let _ = store(&url, &user, &secret);
+                // Only the error is logged — never the secret value.
+                if let Err(error) = store(&url, &user, &secret) {
+                    eprintln!("[sync] credential store/erase failed: {error:?}");
+                }
             }
             Ok(None)
         }
         Action::Erase(payload) => {
             if let Some((url, _, _)) = identity_from_payload(&payload) {
-                let _ = delete(&url);
+                if let Err(error) = delete(&url) {
+                    eprintln!("[sync] credential store/erase failed: {error:?}");
+                }
             }
             Ok(None)
         }
@@ -125,7 +135,14 @@ fn account(destination: &str) -> String {
 }
 
 /// `https://user:pass@host/path` → redacted URL, user, pass.
+///
+/// Both userinfo halves are percent-decoded, because git URLs allow encoded
+/// characters in credentials (e.g. `https://user:p%40ss@host/path` where the
+/// password is `p@ss`). Without decoding, a `@` in the password would be stored
+/// verbatim as `%40` and the keychain would hand gix the wrong secret.
 fn split_userinfo(destination: &str) -> Option<(String, String, String)> {
+    use percent_encoding::percent_decode_str;
+
     let trimmed = destination.trim();
     let scheme = trimmed.find("://")?;
     if !matches!(&trimmed[..scheme], "http" | "https") {
@@ -138,10 +155,29 @@ fn split_userinfo(destination: &str) -> Option<(String, String, String)> {
         return None;
     }
     let host = &rest[at + 1..];
-    let (username, secret) = userinfo
-        .split_once(':')
-        .map(|(user, secret)| (user.to_string(), secret.to_string()))
-        .unwrap_or_else(|| (userinfo.to_string(), String::new()));
+    let (username, secret) = match userinfo.split_once(':') {
+        Some((user, secret)) => {
+            // A decode failure (invalid UTF-8 after percent-decoding) falls
+            // back to the raw slice rather than dropping the credential
+            // silently: the raw value is what was on the wire.
+            let username = percent_decode_str(user)
+                .decode_utf8()
+                .map(|decoded| decoded.to_string())
+                .unwrap_or_else(|_| user.to_string());
+            let secret = percent_decode_str(secret)
+                .decode_utf8()
+                .map(|decoded| decoded.to_string())
+                .unwrap_or_else(|_| secret.to_string());
+            (username, secret)
+        }
+        None => {
+            let username = percent_decode_str(userinfo)
+                .decode_utf8()
+                .map(|decoded| decoded.to_string())
+                .unwrap_or_else(|_| userinfo.to_string());
+            (username, String::new())
+        }
+    };
     if secret.is_empty() {
         return None;
     }
@@ -173,10 +209,26 @@ fn unavailable(error: impl std::fmt::Display) -> NativeError {
     )
 }
 
-#[cfg(all(
-    not(test),
-    any(target_os = "linux", target_os = "macos", target_os = "windows")
-))]
+/// Wraps an item with the cfg gate for "real OS, not under test".
+///
+/// Centralises the `not(test)` + supported-OS predicate repeated across every
+/// keychain entry point, so a new platform is one line here rather than nine.
+macro_rules! supported {
+    ($item:item) => {
+        #[cfg(all(not(test), any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+        $item
+    };
+}
+
+/// The same gate, negated: the no-keychain stubs for unsupported platforms.
+macro_rules! unsupported {
+    ($item:item) => {
+        #[cfg(all(not(test), not(any(target_os = "linux", target_os = "macos", target_os = "windows"))))]
+        $item
+    };
+}
+
+supported! {
 fn os_get(account: &str) -> Result<Option<(String, String)>, NativeError> {
     match os_entry(account)?.get_password() {
         Ok(payload) => Ok(decode(&payload)),
@@ -184,84 +236,76 @@ fn os_get(account: &str) -> Result<Option<(String, String)>, NativeError> {
         Err(error) => Err(unavailable(error)),
     }
 }
+}
 
-#[cfg(all(
-    not(test),
-    any(target_os = "linux", target_os = "macos", target_os = "windows")
-))]
+supported! {
 fn os_store(account: &str, username: &str, secret: &str) -> Result<(), NativeError> {
     os_entry(account)?
         .set_password(&encode(username, secret))
         .map_err(unavailable)
 }
+}
 
-#[cfg(all(
-    not(test),
-    any(target_os = "linux", target_os = "macos", target_os = "windows")
-))]
+supported! {
 fn os_delete(account: &str) -> Result<(), NativeError> {
     match os_entry(account)?.delete_credential() {
         Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
         Err(error) => Err(unavailable(error)),
     }
 }
+}
 
-#[cfg(all(
-    not(test),
-    any(target_os = "linux", target_os = "macos", target_os = "windows")
-))]
+supported! {
 fn os_entry(account: &str) -> Result<keyring::Entry, NativeError> {
     keyring::Entry::new(SERVICE, account).map_err(unavailable)
 }
+}
 
-#[cfg(all(
-    not(test),
-    not(any(target_os = "linux", target_os = "macos", target_os = "windows"))
-))]
+unsupported! {
 fn os_get(_account: &str) -> Result<Option<(String, String)>, NativeError> {
     Err(NativeError::new(
         "sync.auth_required",
         "Sign-in is not available on this device yet.",
     ))
 }
+}
 
-#[cfg(all(
-    not(test),
-    not(any(target_os = "linux", target_os = "macos", target_os = "windows"))
-))]
+unsupported! {
 fn os_store(_account: &str, _username: &str, _secret: &str) -> Result<(), NativeError> {
     Err(NativeError::new(
         "sync.auth_required",
         "Sign-in is not available on this device yet.",
     ))
 }
+}
 
-#[cfg(all(
-    not(test),
-    not(any(target_os = "linux", target_os = "macos", target_os = "windows"))
-))]
+unsupported! {
 fn os_delete(_account: &str) -> Result<(), NativeError> {
     Ok(())
 }
+}
 
-#[cfg(all(
-    not(test),
-    any(target_os = "linux", target_os = "macos", target_os = "windows")
-))]
+supported! {
 fn encode(username: &str, secret: &str) -> String {
     format!("{username}\n{secret}")
 }
+}
 
-#[cfg(all(
-    not(test),
-    any(target_os = "linux", target_os = "macos", target_os = "windows")
-))]
+supported! {
 fn decode(payload: &str) -> Option<(String, String)> {
-    let (username, secret) = payload.split_once('\n')?;
+    // A malformed entry (no newline, or an empty secret) is indistinguishable
+    // from "no credential" by the return value alone, so log it loudly. The
+    // payload itself is never logged — it may contain the secret.
+    let (username, secret) = payload.split_once('\n').or_else(|| {
+        eprintln!("[sync] malformed keychain entry detected");
+        None
+    })?;
     if secret.is_empty() {
+        eprintln!("[sync] malformed keychain entry detected");
         return None;
     }
     Some((username.to_string(), secret.to_string()))
+}
 }
 
 #[cfg(test)]
