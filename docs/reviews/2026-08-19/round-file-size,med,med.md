@@ -1,5 +1,0 @@
-- name: round.rs over 500-line preferred limit
-- file: /media/adam/extex/projects/thinkbrain-notes/apps/desktop/src-tauri/src/commands/sync/round.rs
-- lines: 1-712
-- description: At 712 lines round.rs is well over the project's 500-line preferred limit (and approaching the 800 hard cap). The file mixes three concerns: (1) the round-trip orchestration (`trip`, `sync`, `sync_now`), (2) network I/O with timeout bounding (`fetch`, `bounded`, `timed_out`), and (3) applying a fetched tree to the vault (`apply`, `unexpected`, `within`, `contents`, `put`, `stuck`, `leave_copies`, `retry_stuck`). The "apply changes to vault" cluster (lines 354-591) is self-contained and a natural extraction into an `apply.rs` module, which would bring round.rs comfortably under 500.
-- verification: Read of round.rs in full; line count 712.

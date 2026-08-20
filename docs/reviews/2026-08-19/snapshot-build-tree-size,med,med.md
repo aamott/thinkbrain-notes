@@ -1,5 +1,0 @@
-- name: build_tree is a 148-line deeply nested function
-- file: /media/adam/extex/projects/thinkbrain-notes/apps/desktop/src-tauri/src/commands/sync/snapshot.rs
-- lines: 161-309
-- description: `build_tree` is the file's complexity hotspot: ~148 lines with a `while` loop whose body is a `match` on `symlink_metadata`, and the `Ok(metadata) if metadata.is_file()` arm alone (lines 204-268) is 64 lines of nested error recovery (open-without-follow, re-stat, metadata, symlink check, blob write, upsert), each with its own `skipped.push(...); continue;`. The repeated `skipped.push((path, <wrapped error>)); continue;` pattern appears ~7 times. Extracting the file arm into a helper like `fn record_file(repo, editor, vault, relative, path) -> Result<(), (PathBuf, NativeError)>` (returning the skip pair on failure) would flatten the nesting and make each error path a single `return Err((path, ...))`. This also helps the file-size finding below.
-- verification: Read of snapshot.rs lines 161-309; counted 7 `skipped.push(...); continue;` sites and 4 levels of nesting in the file arm.
