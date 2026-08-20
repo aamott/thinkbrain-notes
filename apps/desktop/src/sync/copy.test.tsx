@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ConflictComparison, ConflictSummary } from "./conflictTypes";
-import { NOT_RECORDING, type RecordedChange, type SyncState } from "./historyTypes";
+import { NOT_RECORDING, type RecordedChange, type SyncState, type SyncStatus } from "./historyTypes";
 import { cleanup, render } from "./syncTestHarness";
 
 /**
@@ -16,13 +16,15 @@ import { cleanup, render } from "./syncTestHarness";
  * screen was built from uses "save merged note", and merging two documents is
  * ordinary English — mail merge, merging lanes. It is the *nouns* of git that
  * mean nothing to someone who has never used it.
+ *
+ * "git" is allowed on Two versions and in settings — the link field is a git
+ * link, and a card should say when a copy came from git rather than a cloud app.
  */
 const JARGON = [
   "commit",
   "HEAD",
   "repository",
   "repo",
-  "git",
   "ours",
   "theirs",
   "diff",
@@ -187,6 +189,23 @@ describe("nothing in this feature speaks git to the user", () => {
   // version history" sentence through the same audit, in every state —
   // including `problem`, where the appended sentence sits next to a failure.
   it("keeps the footer plain in every state it has", async () => {
+    const extras: readonly { label: string; status: SyncStatus }[] = [
+      {
+        label: "idle healthy",
+        status: {
+          ...NOT_RECORDING,
+          state: "idle",
+          health: "healthy",
+          lastCheckedAt: Date.now(),
+          lastRecordedAt: Date.now()
+        }
+      },
+      { label: "syncing saving", status: { ...NOT_RECORDING, state: "syncing", phase: "saving" } },
+      { label: "syncing checking", status: { ...NOT_RECORDING, state: "syncing", phase: "checking" } },
+      { label: "syncing combining", status: { ...NOT_RECORDING, state: "syncing", phase: "combining" } },
+      { label: "syncing sending", status: { ...NOT_RECORDING, state: "syncing", phase: "sending" } }
+    ];
+
     for (const state of ["off", "idle", "saving", "syncing", "attention", "problem"] as const) {
       for (const alongsideOwnGit of [false, true] as const) {
         const status = {
@@ -210,6 +229,13 @@ describe("nothing in this feature speaks git to the user", () => {
         );
         await unmount();
       }
+    }
+
+    for (const extra of extras) {
+      const { host, unmount } = await render(<SyncPill status={extra.status} onOpen={() => undefined} />);
+      const spoken = host.querySelector("button")?.getAttribute("aria-label") ?? "";
+      audit(`the footer while ${extra.label}`, `${host.textContent ?? ""} ${spoken}`);
+      await unmount();
     }
   });
 

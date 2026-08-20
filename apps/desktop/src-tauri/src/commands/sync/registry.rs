@@ -169,10 +169,18 @@ pub fn attach(app_data_dir: &Path, root: &Path, key: &str, label: &str) -> Resul
     let conflicts = conflict::scan(root).map_err(|error| remember_failure(key, error))?;
     engine.note_conflicts(super::settle::obvious(&engine, root, conflicts));
 
-    let mut guard = registry();
-    let state = guard.get_or_insert_with(Registry::default);
-    state.adopt(key, label, engine);
-    start_sweeping(state);
+    {
+        let mut guard = registry();
+        let state = guard.get_or_insert_with(Registry::default);
+        state.adopt(key, label, Arc::clone(&engine));
+        start_sweeping(state);
+    }
+    // A configured destination is checked when the workspace opens. This is
+    // the first useful moment to report a bad link or sign-in, rather than
+    // making someone wait for the idle timer or discover a manual button.
+    if let Some(destination) = round::destination(app_data_dir, root) {
+        start_round(key, &engine, root.to_path_buf(), destination);
+    }
     Ok(())
 }
 
@@ -401,6 +409,14 @@ fn maybe_sync(key: &str, engine: &Arc<Engine>, now: Instant) {
     let Some(destination) = round::destination(&home, &root) else {
         return;
     };
+    start_round(key, engine, root, destination);
+}
+
+/// Starts one round trip, if one is not already underway.
+///
+/// Shared by workspace open and idle scheduling so both paths show the same
+/// status, hold the same lane, and report the same failures.
+fn start_round(key: &str, engine: &Arc<Engine>, root: PathBuf, destination: String) {
     if !engine.set_syncing(true) {
         return;
     }

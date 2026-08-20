@@ -380,18 +380,21 @@ fn a_refusal_from_the_far_side_is_not_read_as_success() {
 fn a_remote_that_requests_credentials_is_not_called_unreachable() {
     let error = handshake_failure(gix::protocol::handshake::Error::EmptyCredentials);
 
-    assert_eq!(error.code, "sync.auth_required");
+    assert_eq!(error.code, "sync.credentials_invalid");
 }
 
 #[test]
-fn http_auth_statuses_are_not_called_unreachable() {
-    for status in [401, 403] {
+fn http_auth_statuses_name_the_action_someone_can_take() {
+    for (status, code) in [
+        (401, "sync.credentials_invalid"),
+        (403, "sync.credentials_forbidden"),
+    ] {
         let transport = transport::client::Error::Io(std::io::Error::other(format!(
             "Received HTTP status {status}"
         )));
         let error = handshake_failure(gix::protocol::handshake::Error::Transport(transport));
 
-        assert_eq!(error.code, "sync.auth_required", "status {status}");
+        assert_eq!(error.code, code, "status {status}");
     }
 }
 

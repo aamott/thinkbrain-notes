@@ -61,7 +61,9 @@ export function HistoryPanel({ rootPath, note, onShowEverything }: HistoryPanelP
   const restoring = useRef(false);
   const loading = loadedKey !== queryKey;
   const { alongsideOwnGit } = useSyncStatus(rootPath);
-  const destination = useSettingsStore((state) => state.getEffectiveValue("sync.destination"));
+  // Native manual sync reads the saved workspace document. Do not enable this
+  // from a staged link that the native side cannot see yet.
+  const destination = useSettingsStore((state) => state.workspaceValues?.["sync.destination"]);
   const syncConfigured = typeof destination === "string" && destination.trim() !== "";
 
   /** Reads the list, changing nothing. {@link apply} is the only writer. */
@@ -178,7 +180,7 @@ export function HistoryPanel({ rootPath, note, onShowEverything }: HistoryPanelP
     <section className="@container flex min-h-0 flex-1 flex-col overflow-y-auto" aria-label="Saved versions">
       <header className="border-b border-border px-3 py-3">
         <h3 className="m-0 text-sm font-semibold text-foreground">
-          {note ? `Earlier versions of ${noteName(note)}` : "History"}
+          {note ? `Earlier versions of ${noteName(note)}` : "Saved versions"}
         </h3>
         <p className="mb-0 mt-1 text-xs leading-relaxed text-muted-foreground">
           {note

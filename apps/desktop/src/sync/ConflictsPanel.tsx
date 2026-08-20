@@ -85,18 +85,18 @@ export function ConflictsPanel({ rootPath, onReview }: ConflictsPanelProps) {
   if (conflicts.length === 0 && stuck.length === 0 && !error) {
     return (
       <Unavailable
-        title="Nothing needs your attention"
-        description="When the same note is changed on two devices, both versions will show up here."
+        title="No notes with two versions"
+        description="When git sync or a cloud folder leaves two copies of a note, both show up here."
       />
     );
   }
 
   return (
-    <section className="@container flex min-h-0 flex-1 flex-col overflow-y-auto" aria-label="Items to review">
+    <section className="@container flex min-h-0 flex-1 flex-col overflow-y-auto" aria-label="Two versions">
       <header className="border-b border-border px-3 py-3">
-        <h3 className="m-0 text-sm font-semibold text-foreground">Needs your attention</h3>
+        <h3 className="m-0 text-sm font-semibold text-foreground">Two versions</h3>
         <p className="mb-0 mt-1 text-xs leading-relaxed text-muted-foreground">
-          These notes changed on more than one device. Take a look and choose which version to keep —
+          These notes have two saved copies — from git sync or a cloud folder. Choose which to keep;
           nothing is deleted until you decide.
         </p>
       </header>
@@ -110,7 +110,7 @@ export function ConflictsPanel({ rootPath, onReview }: ConflictsPanelProps) {
       <ul className="m-0 flex list-none flex-col gap-2 p-3">
         {stuck.map((note) => (
           <li key={note.path} className="rounded-small border border-border bg-card p-3">
-            <h4 className="m-0 break-words text-xs font-semibold text-card-foreground">{noteName(note.path)}</h4>
+            <h4 className="m-0 wrap-break-word text-xs font-semibold text-card-foreground">{noteName(note.path)}</h4>
             <p className="mb-2 mt-0.5 text-[0.7rem] text-muted-foreground">Could not be kept in step</p>
             <p className="mb-0 mt-0 text-[0.7rem] leading-relaxed text-muted-foreground">
               {note.message} {recoveryFor(note.code)}
@@ -149,7 +149,7 @@ function ConflictCard({ conflict, busy, onReview, onDecide }: ConflictCardProps)
 
   return (
     <li className="rounded-small border border-border bg-card p-3">
-      <h4 className="m-0 break-words text-xs font-semibold text-card-foreground">{name}</h4>
+      <h4 className="m-0 wrap-break-word text-xs font-semibold text-card-foreground">{name}</h4>
       <p className="mb-2 mt-0.5 text-[0.7rem] text-muted-foreground">Edited in two places</p>
 
       <p className="mb-2 mt-0 text-[0.7rem] text-muted-foreground">

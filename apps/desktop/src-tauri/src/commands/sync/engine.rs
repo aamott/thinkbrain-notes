@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde::Serialize;
 
@@ -41,6 +41,30 @@ pub struct StuckNote {
     /// failures have nothing to put — they retry by reading the disk again.
     #[serde(skip)]
     pub blob: Option<gix::ObjectId>,
+}
+
+/// Where a round trip currently is, for the footer to name without git jargon.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SyncPhase {
+    /// Recording outstanding local edits before talking to the other end.
+    Saving,
+    /// Fetching what changed there.
+    Checking,
+    /// Joining the two histories.
+    Combining,
+    /// Sending this device's notes onward.
+    Sending,
+}
+
+/// Whether a git link has ever completed a round trip from this device.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum SyncHealth {
+    #[default]
+    Unknown,
+    Healthy,
+    Problem,
 }
 
 impl StuckNote {
@@ -85,11 +109,20 @@ pub struct Engine {
     stuck: Mutex<BTreeMap<String, StuckNote>>,
     /// A round trip to another device is in flight.
     syncing: AtomicBool,
+    /// The named step of the in-flight round trip, if any.
+    phase: Mutex<Option<SyncPhase>>,
+    /// When a round trip last completed successfully, in milliseconds since the epoch.
+    last_checked_at: Mutex<Option<u64>>,
     /// The last attempt to record that failed, cleared by the next that works.
     ///
     /// Vault-wide only: a single note that could not be read is [`stuck`], not
     /// this, so the rest of the vault keeps being saved.
     problem: Mutex<Option<NativeError>>,
+    /// The most recent round trip that failed.
+    ///
+    /// Separate from `problem`: recording a later local edit must not erase a
+    /// sign-in or network problem before the next round trip succeeds.
+    sync_problem: Mutex<Option<NativeError>>,
     /// Held for the whole of a commit, so only one is ever in flight.
     ///
     /// Recording reads the branch, builds a tree on it and moves the ref, and
@@ -115,7 +148,10 @@ impl Engine {
             conflicts: Mutex::new(BTreeMap::new()),
             stuck: Mutex::new(BTreeMap::new()),
             syncing: AtomicBool::new(false),
+            phase: Mutex::new(None),
+            last_checked_at: Mutex::new(None),
             problem: Mutex::new(None),
+            sync_problem: Mutex::new(None),
             recording: Mutex::new(()),
             last_touched: Mutex::new(Instant::now()),
             last_synced: Mutex::new(None),
@@ -295,6 +331,44 @@ impl Engine {
         lock_or_recover(&self.problem).clone()
     }
 
+    /// The last round-trip failure, cleared only by a successful round trip.
+    pub fn sync_problem(&self) -> Option<NativeError> {
+        lock_or_recover(&self.sync_problem).clone()
+    }
+
+    /// Records whether the configured git link was reached successfully.
+    pub fn set_sync_problem(&self, problem: Option<NativeError>) {
+        let healthy = problem.is_none();
+        *lock_or_recover(&self.sync_problem) = problem;
+        if healthy {
+            self.mark_checked();
+        }
+    }
+
+    /// The named step of the in-flight round trip, if any.
+    pub fn phase(&self) -> Option<SyncPhase> {
+        *lock_or_recover(&self.phase)
+    }
+
+    /// Sets the named step of the in-flight round trip.
+    pub fn set_phase(&self, phase: Option<SyncPhase>) {
+        *lock_or_recover(&self.phase) = phase;
+    }
+
+    /// When a round trip last completed successfully.
+    pub fn last_checked_at(&self) -> Option<u64> {
+        *lock_or_recover(&self.last_checked_at)
+    }
+
+    /// Marks a successful round trip for the health indicator.
+    pub fn mark_checked(&self) {
+        let at = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|elapsed| elapsed.as_millis() as u64)
+            .unwrap_or(0);
+        *lock_or_recover(&self.last_checked_at) = Some(at);
+    }
+
     /// Notes that could not be written or recorded, waiting on a retry.
     pub fn stuck(&self) -> Vec<StuckNote> {
         lock_or_recover(&self.stuck).values().cloned().collect()
@@ -324,6 +398,9 @@ impl Engine {
     /// Returns whether this call changed the flag, so the caller can announce
     /// only when the footer would actually read differently.
     pub fn set_syncing(&self, on: bool) -> bool {
+        if !on {
+            self.set_phase(None);
+        }
         self.syncing.swap(on, Ordering::Relaxed) != on
     }
 

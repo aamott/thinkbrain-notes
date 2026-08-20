@@ -28,7 +28,7 @@ vi.mock("./syncService", () => ({
 
 vi.mock("../settings/settingsStore", () => ({
   useSettingsStore: (select: (state: unknown) => unknown) =>
-    select({ getEffectiveValue: () => destination })
+    select({ workspaceValues: { "sync.destination": destination } })
 }));
 
 const { HistoryPanel } = await import("./HistoryPanel");

@@ -245,7 +245,7 @@ pub const PATTERNS: &[ConflictPattern] = &[
         match_name: dropbox,
     },
     ConflictPattern {
-        provider: "another device",
+        provider: "git",
         // The one row that has earned it: we write these ourselves.
         evidence: Evidence::Fixture,
         match_name: another_device,

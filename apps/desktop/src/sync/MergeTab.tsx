@@ -125,8 +125,8 @@ function MergeSession({ rootPath, copyPath, buffer }: MergeSessionProps) {
         title="Saved"
         description={
           phase.keptAs
-            ? `Both versions were kept — the other one is now "${phase.keptAs}". You can always undo: earlier versions are kept in History.`
-            : "You can always undo — the earlier versions of this note are kept in History."
+            ? `Both versions were kept — the other one is now "${phase.keptAs}". You can always undo: earlier versions are kept in Saved versions.`
+            : "You can always undo — the earlier versions of this note are kept in Saved versions."
         }
       />
     );
@@ -234,7 +234,7 @@ function MergeSurface({ conflict, picks, saving, onChoose, onSave }: MergeSurfac
 
       <footer className="flex flex-col gap-2 @2xl:flex-row @2xl:items-center @2xl:justify-between">
         <p className="m-0 text-[0.7rem] text-muted-foreground">
-          You can always undo — previous versions are kept in History.
+          You can always undo — previous versions are kept in Saved versions.
         </p>
         <button
           type="button"

@@ -64,10 +64,70 @@ fn a_workspace_that_has_never_been_recorded_is_still_idle() {
 fn a_round_trip_in_flight_says_so() {
     let v = vault("status-syncing");
     v.engine.set_syncing(true);
+    v.engine
+        .set_phase(Some(crate::commands::sync::engine::SyncPhase::Checking));
 
     let status = of(Recording::By(&v.engine)).expect("the status is readable");
 
     assert_eq!(status.state, State::Syncing);
+    assert_eq!(
+        status.phase,
+        Some(crate::commands::sync::engine::SyncPhase::Checking)
+    );
+}
+
+#[test]
+fn a_successful_git_check_is_healthy_until_the_next_failure() {
+    let v = vault("status-healthy");
+    v.engine.set_sync_problem(None);
+
+    let status = of(Recording::By(&v.engine)).expect("the status is readable");
+
+    assert_eq!(status.state, State::Idle);
+    assert_eq!(
+        status.health,
+        crate::commands::sync::engine::SyncHealth::Healthy
+    );
+    assert!(status.last_checked_at.is_some());
+}
+
+#[test]
+fn finishing_a_round_trip_clears_the_named_step() {
+    let v = vault("status-phase-clear");
+    v.engine.set_syncing(true);
+    v.engine
+        .set_phase(Some(crate::commands::sync::engine::SyncPhase::Sending));
+    v.engine.set_syncing(false);
+
+    let status = of(Recording::By(&v.engine)).expect("the status is readable");
+
+    assert_eq!(status.state, State::Idle);
+    assert!(status.phase.is_none());
+}
+
+#[test]
+fn a_failed_git_sync_stays_visible_until_git_sync_works() {
+    let v = vault("status-git-failed");
+    v.engine.set_sync_problem(Some(crate::NativeError::new(
+        "sync.auth_required",
+        "This git link needs a sign-in.",
+    )));
+    note(&v, "one.md", "a later local change\n");
+    v.engine
+        .note_changes([PathBuf::from("one.md")], Instant::now());
+    v.engine.flush().expect("local recording still works");
+
+    let status = of(Recording::By(&v.engine)).expect("the status is readable");
+
+    assert_eq!(status.state, State::Problem);
+    assert_eq!(
+        status.health,
+        crate::commands::sync::engine::SyncHealth::Problem
+    );
+    assert_eq!(
+        status.problem.as_ref().map(|error| error.code.as_str()),
+        Some("sync.auth_required")
+    );
 }
 
 #[test]
@@ -176,6 +236,10 @@ fn a_workspace_that_could_not_be_set_up_is_a_problem_and_not_a_choice() {
     .expect("the status is readable");
 
     assert_eq!(status.state, State::Problem);
+    assert_eq!(
+        status.health,
+        crate::commands::sync::engine::SyncHealth::Problem
+    );
     assert_eq!(
         status.problem.as_ref().map(|problem| problem.code.as_str()),
         Some("sync.vault_too_deep")

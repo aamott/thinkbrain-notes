@@ -21,6 +21,7 @@ use transport::Service;
 use crate::error::NativeError;
 
 use super::failed;
+use super::remote_failure;
 use super::remote_unreachable;
 use super::snapshot;
 
@@ -340,39 +341,22 @@ fn builds_on(repo: &gix::Repository, old: gix::ObjectId, tip: gix::ObjectId) -> 
 }
 
 fn handshake_failure(error: gix::protocol::handshake::Error) -> NativeError {
-    if requires_authentication(&error) {
-        failed(
-            "sync.auth_required",
-            "This remote needs a sign-in before it can receive notes.",
-            error,
-        )
-    } else {
-        remote_unreachable(error)
-    }
-}
-
-fn requires_authentication(error: &gix::protocol::handshake::Error) -> bool {
     match error {
+        gix::protocol::handshake::Error::Credentials(_) => failed(
+            "sync.credentials_unavailable",
+            "Could not read the saved sign-in from this computer's keychain.",
+            error,
+        ),
         gix::protocol::handshake::Error::EmptyCredentials
-        | gix::protocol::handshake::Error::InvalidCredentials { .. } => true,
+        | gix::protocol::handshake::Error::InvalidCredentials { .. } => failed(
+            "sync.credentials_invalid",
+            "The username or access token was not accepted.",
+            error,
+        ),
         gix::protocol::handshake::Error::Transport(transport::client::Error::Io(error)) => {
-            error.kind() == std::io::ErrorKind::PermissionDenied
-                // NOTE: the two substring matches below are coupled to gix's
-                // HTTP transport error *message wording* (`"Received HTTP
-                // status 401"` / `"Received HTTP status 403"`), not to a
-                // structured status code. This is fragile: if gix rewords the
-                // message (or localizes it), these checks silently stop
-                // recognizing auth failures and a 401/403 becomes a generic
-                // `sync.remote_unreachable` instead of `sync.auth_required`.
-                // If a future gix version exposes the HTTP status as a
-                // structured field on `transport::client::Error` (or an enum
-                // variant), match that instead of the string. See
-                // `plans/auto-sync/` for the hardening story.
-                || ["Received HTTP status 401", "Received HTTP status 403"]
-                    .iter()
-                    .any(|status| error.to_string().contains(status))
+            remote_failure(error)
         }
-        _ => false,
+        error => remote_failure(error),
     }
 }
 

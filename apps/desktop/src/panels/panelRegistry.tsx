@@ -227,7 +227,7 @@ export const builtInDesktopPanels: readonly (LeftPanelContribution | RightPanelC
   },
   {
     id: "conflicts",
-    label: "Needs your attention",
+    label: "Two versions",
     icon: "conflicts",
     side: "left",
     availability: () => true,
@@ -237,7 +237,7 @@ export const builtInDesktopPanels: readonly (LeftPanelContribution | RightPanelC
   },
   {
     id: "history",
-    label: "History",
+    label: "Saved versions",
     icon: "history",
     side: "left",
     availability: () => true,

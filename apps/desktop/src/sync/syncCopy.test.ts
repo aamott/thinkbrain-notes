@@ -79,12 +79,38 @@ describe("the status footer", () => {
     expect(pill.tone).toBe("busy");
   });
 
-  it("counts what is waiting on the user", () => {
-    expect(describePill(status({ state: "attention", attention: 2 }), NOW).text).toContain(
-      "2 items need"
+  it("names the live phase of a round trip without git plumbing", () => {
+    expect(describePill(status({ state: "syncing", phase: "saving" }), NOW).text).toBe("Saving changes…");
+    expect(describePill(status({ state: "syncing", phase: "saving" }), NOW).detail).toMatch(
+      /recorded before checking the git link/
     );
-    expect(describePill(status({ state: "attention", attention: 1 }), NOW).text).toContain(
-      "1 item needs"
+    expect(describePill(status({ state: "syncing", phase: "checking" }), NOW).text).toBe(
+      "Checking for updates…"
+    );
+    expect(describePill(status({ state: "syncing", phase: "combining" }), NOW).text).toBe(
+      "Combining changes…"
+    );
+    expect(describePill(status({ state: "syncing", phase: "sending" }), NOW).text).toBe("Sending changes…");
+  });
+
+  it("says git sync is healthy after a successful check", () => {
+    const pill = describePill(
+      status({ state: "idle", health: "healthy", lastCheckedAt: AT, lastRecordedAt: AT }),
+      NOW
+    );
+
+    expect(pill.text).toContain("Git sync healthy");
+    expect(pill.text).toContain("Today");
+    expect(pill.detail.toLowerCase()).toContain("check");
+    expect(pill.detail.toLowerCase()).toContain("saved");
+  });
+
+  it("counts notes that have two versions", () => {
+    expect(describePill(status({ state: "attention", attention: 2 }), NOW).text).toBe(
+      "2 notes have two versions"
+    );
+    expect(describePill(status({ state: "attention", attention: 1 }), NOW).text).toBe(
+      "1 note has two versions"
     );
   });
 
@@ -111,6 +137,10 @@ describe("the status footer", () => {
       "sync.note_store_failed",
       "sync.commit_failed",
       "sync.auth_required",
+      "sync.credentials_invalid",
+      "sync.credentials_forbidden",
+      "sync.credentials_unavailable",
+      "sync.remote_not_found",
       "something.nobody.planned.for"
     ]) {
       const pill = describePill(
@@ -135,7 +165,16 @@ describe("the status footer", () => {
   // unique, so each branch is pinned to its exact wording.
   it("says the exact sentence each branch was written to say", () => {
     expect(recoveryFor("sync.auth_required")).toBe(
-      "Use a remote that does not require a sign-in, or sign in when remote authentication is available."
+      "Open Settings and save the correct username and access token for this git link."
+    );
+    expect(recoveryFor("sync.credentials_forbidden")).toBe(
+      "Give this token access to the repository, then save the sign-in again."
+    );
+    expect(recoveryFor("sync.credentials_unavailable")).toBe(
+      "Unlock this computer's keychain, then save the sign-in again."
+    );
+    expect(recoveryFor("sync.remote_not_found")).toBe(
+      "Check the git link. If this is a private repository, make sure the token can access it."
     );
     expect(recoveryFor("sync.note_read_failed")).toBe(
       "Check the notes folder is still connected, then edit any note to try again."
@@ -149,6 +188,9 @@ describe("the status footer", () => {
     // The default branch: a code nobody planned for still has to name a move.
     expect(recoveryFor("something.nobody.planned.for")).toBe(
       "Close this folder and open it again to start saving versions."
+    );
+    expect(recoveryFor("sync.remote_unreachable")).toBe(
+      "Check the git link and your connection, then bring these notes in step again."
     );
   });
 });

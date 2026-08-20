@@ -8,7 +8,7 @@ use gix::remote::Direction;
 use crate::error::NativeError;
 
 use super::failed;
-use super::remote_unreachable;
+use super::remote_failure;
 
 /// Where a fetched branch is put.
 ///
@@ -33,18 +33,18 @@ pub(super) fn fetch(
 ) -> Result<Option<gix::ObjectId>, NativeError> {
     let brought = repo
         .remote_at(gix::bstr::BStr::new(destination))
-        .map_err(remote_unreachable)?
+        .map_err(remote_failure)?
         .with_refspecs(
             [format!("{}:{}", super::snapshot::HISTORY_REF, REMOTE_REF).as_str()],
             Direction::Fetch,
         )
-        .map_err(remote_unreachable)?
+        .map_err(remote_failure)?
         .with_fetch_tags(gix::remote::fetch::Tags::None)
         .connect(Direction::Fetch)
-        .map_err(remote_unreachable)?
+        .map_err(remote_failure)?
         .with_credentials(super::credentials::provide)
         .prepare_fetch(gix::progress::Discard, Default::default())
-        .map_err(remote_unreachable)?
+        .map_err(remote_failure)?
         .receive(gix::progress::Discard, cancel);
 
     match brought {
@@ -53,7 +53,7 @@ pub(super) fn fetch(
         // yet. Nothing to bring down is not a failure to reach it.
         Err(gix::remote::fetch::Error::NoMapping { .. }) => Ok(None),
         Err(_) if cancel.load(Ordering::Relaxed) => Err(timed_out()),
-        Err(error) => Err(remote_unreachable(error)),
+        Err(error) => Err(remote_failure(error)),
     }
 }
 

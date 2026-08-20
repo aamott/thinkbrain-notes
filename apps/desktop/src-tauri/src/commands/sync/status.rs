@@ -15,7 +15,7 @@ use serde::Serialize;
 use crate::commands::workspace::resolve_workspace_root;
 use crate::NativeError;
 
-use super::engine::{Engine, StuckNote};
+use super::engine::{Engine, StuckNote, SyncHealth, SyncPhase};
 use super::history;
 
 /// What the pill is saying, in order of who needs to act.
@@ -53,6 +53,12 @@ pub struct SyncStatus {
     /// Why recording stopped, if it has. The window turns the code into a
     /// sentence about what to do next.
     pub problem: Option<NativeError>,
+    /// The named step of an in-flight round trip.
+    pub phase: Option<SyncPhase>,
+    /// Whether a git link has completed a round trip from this device.
+    pub health: SyncHealth,
+    /// When git sync last succeeded, in milliseconds since the epoch.
+    pub last_checked_at: Option<u64>,
     /// Whether this vault is also a git repository of the user's own.
     ///
     /// Two histories are being kept here, and someone should learn that from
@@ -87,16 +93,25 @@ pub fn of(recording: Recording<'_>) -> Result<SyncStatus, NativeError> {
         Recording::Failed(problem) => {
             return Ok(SyncStatus {
                 state: State::Problem,
+                health: SyncHealth::Problem,
                 problem: Some(problem),
                 ..Default::default()
             });
         }
     };
 
-    let problem = engine.problem();
+    let problem = engine.problem().or_else(|| engine.sync_problem());
     let stuck = engine.stuck();
     let attention = engine.conflicts().len() + stuck.len();
     let waiting = engine.waiting();
+    let last_checked_at = engine.last_checked_at();
+    let health = if problem.is_some() {
+        SyncHealth::Problem
+    } else if last_checked_at.is_some() {
+        SyncHealth::Healthy
+    } else {
+        SyncHealth::Unknown
+    };
 
     Ok(SyncStatus {
         state: if problem.is_some() {
@@ -115,6 +130,9 @@ pub fn of(recording: Recording<'_>) -> Result<SyncStatus, NativeError> {
         attention,
         stuck,
         problem,
+        phase: engine.phase(),
+        health,
+        last_checked_at,
         alongside_own_git: engine.alongside_own_git(),
     })
 }

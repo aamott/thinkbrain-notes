@@ -29,7 +29,7 @@ use crate::error::NativeError;
 
 use super::apply;
 use super::conflict;
-use super::engine::StuckNote;
+use super::engine::{StuckNote, SyncPhase};
 use super::failed;
 use super::network;
 use super::network::bounded;
@@ -125,7 +125,13 @@ pub fn once(
     vault: &Path,
     destination: &str,
 ) -> Result<Synced, NativeError> {
-    trip(repo, vault, destination, Arc::new(AtomicBool::new(false)))
+    trip(
+        repo,
+        vault,
+        destination,
+        Arc::new(AtomicBool::new(false)),
+        |_| {},
+    )
 }
 
 fn trip(
@@ -133,7 +139,9 @@ fn trip(
     vault: &Path,
     destination: &str,
     cancel: Arc<AtomicBool>,
+    mut on_phase: impl FnMut(SyncPhase),
 ) -> Result<Synced, NativeError> {
+    on_phase(SyncPhase::Checking);
     let theirs = {
         let repo = repo.clone();
         let destination = destination.to_owned();
@@ -149,11 +157,15 @@ fn trip(
         // nothing of our own and can simply take theirs.
         (_, None) => (0, 0, Vec::new(), Vec::new()),
         (None, Some(theirs)) => {
+            on_phase(SyncPhase::Combining);
             let (brought_down, copies, skipped) = adopt(repo, vault, theirs)?;
             (brought_down, copies.len(), copies, skipped)
         }
         (Some(ours), Some(theirs)) if ours == theirs => (0, 0, Vec::new(), Vec::new()),
-        (Some(ours), Some(theirs)) => merge(repo, vault, ours, theirs)?,
+        (Some(ours), Some(theirs)) => {
+            on_phase(SyncPhase::Combining);
+            merge(repo, vault, ours, theirs)?
+        }
     };
 
     let Some(tip) = snapshot::head_commit(repo)? else {
@@ -168,6 +180,7 @@ fn trip(
             skipped,
         });
     };
+    on_phase(SyncPhase::Sending);
     let sent = {
         let repo = repo.clone();
         let destination = destination.to_owned();
@@ -313,10 +326,6 @@ pub fn sync(
         error.into_inner()
     });
 
-    // Whatever is still sitting in the settle window belongs in this sync.
-    engine.flush()?;
-    apply::retry_stuck(engine, root)?;
-
     engine.set_syncing(true);
     crate::commands::watcher::announce_sync_status(key);
     struct Clear<'a>(&'a super::engine::Engine, &'a str);
@@ -327,34 +336,75 @@ pub fn sync(
         }
     }
     let _clear = Clear(engine, key);
-
-    let repo = engine.repository();
-    let cancel = Arc::new(AtomicBool::new(false));
-    let synced = trip(&repo, root, destination, Arc::clone(&cancel))?;
-    engine.note_stuck(synced.skipped.clone());
+    // Count an attempted round, not only a successful one. Otherwise a bad
+    // link or missing sign-in starts a new automatic attempt every sweep tick.
     engine.mark_synced();
-    if !matches!(synced.landed, push::Landed::Refused { .. }) {
-        return Ok(synced);
+    let outcome = (|| {
+        // Whatever is still sitting in the settle window belongs in this sync.
+        report_phase(engine, key, SyncPhase::Saving);
+        engine.flush()?;
+        apply::retry_stuck(engine, root)?;
+
+        let repo = engine.repository();
+        let cancel = Arc::new(AtomicBool::new(false));
+        let synced = trip(&repo, root, destination, Arc::clone(&cancel), |phase| {
+            report_phase(engine, key, phase)
+        })?;
+        engine.note_stuck(synced.skipped.clone());
+        if !matches!(synced.landed, push::Landed::Refused { .. }) {
+            return Ok(synced);
+        }
+
+        let again = trip(&repo, root, destination, cancel, |phase| {
+            report_phase(engine, key, phase)
+        })?;
+        engine.note_stuck(again.skipped.clone());
+
+        // Fold both trips into one report. `..again` keeps `sent` and `landed` from
+        // the second trip — the first trip's push was refused, so its counts are
+        // not part of what landed this round, and `synced.sent`/`synced.landed` are
+        // dropped here on purpose.
+        let mut conflict_copies = synced.conflict_copies;
+        conflict_copies.extend(again.conflict_copies);
+        let mut skipped = synced.skipped;
+        skipped.extend(again.skipped);
+        Ok(Synced {
+            brought_down: synced.brought_down + again.brought_down,
+            asked_about: synced.asked_about + again.asked_about,
+            conflict_copies,
+            skipped,
+            ..again
+        })
+    })();
+    engine.set_sync_problem(outcome.as_ref().err().cloned());
+    outcome
+}
+
+fn report_phase(engine: &super::engine::Engine, key: &str, phase: SyncPhase) {
+    engine.set_phase(Some(phase));
+    crate::commands::watcher::announce_sync_status(key);
+}
+
+/// Records and announces anything a completed round left for the UI.
+///
+/// Manual sync and credential-save sync both use this; otherwise the latter
+/// can write conflict copies without opening the same merge workflow.
+pub(super) fn finish(
+    app: &tauri::AppHandle,
+    engine: &super::engine::Engine,
+    key: &str,
+    root: &Path,
+    mut synced: Synced,
+) -> Synced {
+    let copies = std::mem::take(&mut synced.conflict_copies);
+    if !copies.is_empty() {
+        let new = engine.note_conflicts(super::settle::obvious(engine, root, copies));
+        if new {
+            crate::commands::watcher::announce_conflicts(app, key);
+        }
     }
-
-    let again = trip(&repo, root, destination, cancel)?;
-    engine.note_stuck(again.skipped.clone());
-
-    // Fold both trips into one report. `..again` keeps `sent` and `landed` from
-    // the second trip — the first trip's push was refused, so its counts are
-    // not part of what landed this round, and `synced.sent`/`synced.landed` are
-    // dropped here on purpose.
-    let mut conflict_copies = synced.conflict_copies;
-    conflict_copies.extend(again.conflict_copies);
-    let mut skipped = synced.skipped;
-    skipped.extend(again.skipped);
-    Ok(Synced {
-        brought_down: synced.brought_down + again.brought_down,
-        asked_about: synced.asked_about + again.asked_about,
-        conflict_copies,
-        skipped,
-        ..again
-    })
+    crate::commands::watcher::announce_sync_status(key);
+    synced
 }
 
 /// Syncs this workspace once, now, because someone asked.
@@ -386,23 +436,8 @@ pub fn sync_now(app: tauri::AppHandle, root_path: String) -> Result<Synced, Nati
         })
     })?;
 
-    let mut synced = sync(&engine, &key, &root, &destination)?;
-
-    // The copies this round trip wrote are known exactly — `leave_copies` and
-    // `apply`'s kept-back branch just wrote them — so they are noted directly
-    // rather than re-walking the vault to rediscover them by pattern. Conflicts
-    // that appeared while the app was closed are the watcher's and
-    // `registry::attach`'s responsibility, not this sync's.
-    let copies = std::mem::take(&mut synced.conflict_copies);
-    if !copies.is_empty() {
-        let new = engine.note_conflicts(super::settle::obvious(&engine, &root, copies));
-        if new {
-            crate::commands::watcher::announce_conflicts(&app, &key);
-        }
-    }
-    crate::commands::watcher::announce_sync_status(&key);
-
-    Ok(synced)
+    let synced = sync(&engine, &key, &root, &destination)?;
+    Ok(finish(&app, &engine, &key, &root, synced))
 }
 
 #[cfg(test)]

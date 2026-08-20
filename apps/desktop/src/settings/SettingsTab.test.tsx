@@ -134,8 +134,8 @@ describe("SettingsTab", () => {
     const el = await renderSettingsTab();
 
     expect(el.textContent).toContain("Workspace");
-    expect(el.textContent).toContain("Folder or git link");
-    expect(el.textContent).toContain("Conflicts");
+    expect(el.textContent).toContain("Git link");
+    expect(el.textContent).toContain("Cloud copies");
   });
 
   it("highlights the active section with aria-current after clicking it", async () => {

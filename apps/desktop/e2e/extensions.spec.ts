@@ -19,6 +19,9 @@ const SYNC_STATUS_OFF = {
   attention: 0,
   stuck: [],
   problem: null,
+  phase: null,
+  health: "unknown",
+  lastCheckedAt: null,
   alongsideOwnGit: false
 } as const;
 

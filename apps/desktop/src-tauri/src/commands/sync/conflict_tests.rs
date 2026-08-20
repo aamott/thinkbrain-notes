@@ -23,7 +23,7 @@ fn our_own_copies_are_paired_with_their_original() {
         .expect("a copy we wrote ourselves is recognised");
 
     assert_eq!(found.original, "note.md");
-    assert_eq!(found.provider, "another device");
+    assert_eq!(found.provider, "git");
 }
 
 #[test]

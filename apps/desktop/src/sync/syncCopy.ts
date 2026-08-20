@@ -7,7 +7,7 @@
  */
 
 import { describeWhen } from "./conflictCard";
-import type { ChangedNote, ConflictRate, Synced, SyncStatus } from "./historyTypes";
+import type { ChangedNote, ConflictRate, Synced, SyncPhase, SyncStatus } from "./historyTypes";
 
 /** How loudly the footer should say it. */
 export type PillTone = "quiet" | "busy" | "warn";
@@ -68,8 +68,24 @@ export function describeWhatChanged(notes: readonly ChangedNote[]): string {
  */
 export function recoveryFor(code: string): string {
   switch (code) {
+    case "sync.credentials_need_https":
+      return "Open Settings, check the HTTPS git link, then save a username and access token.";
     case "sync.auth_required":
-      return "Use a remote that does not require a sign-in, or sign in when remote authentication is available.";
+    case "sync.credentials_invalid":
+      return "Open Settings and save the correct username and access token for this git link.";
+    case "sync.credentials_forbidden":
+      return "Give this token access to the repository, then save the sign-in again.";
+    case "sync.credentials_unavailable":
+      return "Unlock this computer's keychain, then save the sign-in again.";
+    case "sync.remote_not_found":
+      return "Check the git link. If this is a private repository, make sure the token can access it.";
+    case "sync.credentials_username_missing":
+      return "Enter the username this token belongs to, then save the sign-in again.";
+    case "sync.credentials_token_missing":
+      return "Enter an access token, then save the sign-in again.";
+    case "sync.remote_unreachable":
+    case "sync.remote_timeout":
+      return "Check the git link and your connection, then bring these notes in step again.";
     case "sync.note_read_failed":
     case "sync.vault_read_failed":
       return "Check the notes folder is still connected, then edit any note to try again.";
@@ -125,6 +141,47 @@ export function describeConflictRate(rate: ConflictRate): string {
 const ALONGSIDE_OWN_GIT =
   "This folder also keeps its own version history, which is left exactly as it is.";
 
+/** Footer copy for an in-flight round trip, named by the step it is on. */
+function syncingPill(phase: SyncPhase | null): PillCopy {
+  switch (phase) {
+    case "saving":
+      return {
+        symbol: "↻",
+        text: "Saving changes…",
+        detail: "Recent edits are being recorded before checking the git link.",
+        tone: "busy"
+      };
+    case "checking":
+      return {
+        symbol: "↻",
+        text: "Checking for updates…",
+        detail: "Looking at the git link for notes from other devices.",
+        tone: "busy"
+      };
+    case "combining":
+      return {
+        symbol: "↻",
+        text: "Combining changes…",
+        detail: "Changes from this computer and the git link are being combined.",
+        tone: "busy"
+      };
+    case "sending":
+      return {
+        symbol: "↻",
+        text: "Sending changes…",
+        detail: "This computer's notes are being sent on to the git link.",
+        tone: "busy"
+      };
+    default:
+      return {
+        symbol: "↻",
+        text: "Bringing notes in step…",
+        detail: "These notes are being brought in step with your other devices.",
+        tone: "busy"
+      };
+  }
+}
+
 /** What the footer says about a workspace. */
 export function describePill(status: SyncStatus, now: Date = new Date()): PillCopy {
   const pill = pillFor(status, now);
@@ -157,11 +214,14 @@ function pillFor(status: SyncStatus, now: Date): PillCopy {
       };
     }
     case "attention": {
-      const text = `${plural(status.attention, "item needs", "items need")} your attention`;
+      const text =
+        status.attention === 1
+          ? "1 note has two versions"
+          : `${status.attention} notes have two versions`;
       return {
         symbol: "⚠",
         text,
-        detail: `${text}. The same note was changed in two places — open the list to choose what to keep.`,
+        detail: `${text}. Open Two versions to choose what to keep.`,
         tone: "warn"
       };
     }
@@ -173,13 +233,20 @@ function pillFor(status: SyncStatus, now: Date): PillCopy {
         tone: "busy"
       };
     case "syncing":
-      return {
-        symbol: "↻",
-        text: "Bringing notes in step…",
-        detail: "These notes are being brought in step with your other devices.",
-        tone: "busy"
-      };
+      return syncingPill(status.phase);
     case "idle": {
+      const checked = status.lastCheckedAt;
+      if (status.health === "healthy" && checked !== null) {
+        const when = describeMoment(checked, now);
+        return {
+          symbol: "✓",
+          text: `Git sync healthy · ${when}`,
+          detail:
+            `The last successful check was ${when.toLowerCase()}.` +
+            (status.lastRecordedAt !== null ? " Notes here are also saved." : ""),
+          tone: "quiet"
+        };
+      }
       const when = status.lastRecordedAt;
       return {
         symbol: "✓",

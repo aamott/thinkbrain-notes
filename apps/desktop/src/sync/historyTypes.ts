@@ -44,9 +44,17 @@ export interface ConflictRate {
 /** What the status footer is saying, in order of who needs to act. */
 export type SyncState = "off" | "problem" | "syncing" | "attention" | "saving" | "idle";
 
+/** Named step of an in-flight round trip, so the footer can name it without git jargon. */
+export type SyncPhase = "saving" | "checking" | "combining" | "sending";
+
+/** Whether a git link has completed a round trip from this device. */
+export type SyncHealth = "unknown" | "healthy" | "problem";
+
 export interface SyncProblem {
   readonly code: string;
   readonly message: string;
+  /** Sanitized transport diagnostic, available when it helps troubleshoot a link. */
+  readonly details?: string;
 }
 
 /** A note that could not be written or recorded, with something to do about it. */
@@ -64,6 +72,12 @@ export interface SyncStatus {
   readonly attention: number;
   readonly stuck: readonly StuckNote[];
   readonly problem: SyncProblem | null;
+  /** Named step of an in-flight round trip, when one is running. */
+  readonly phase: SyncPhase | null;
+  /** Whether a git link has completed a round trip from this device. */
+  readonly health: SyncHealth;
+  /** When git sync last succeeded, in milliseconds since the epoch. */
+  readonly lastCheckedAt: number | null;
   /**
    * Whether this folder is also a git repository of the user's own.
    *
@@ -81,6 +95,9 @@ export const NOT_RECORDING: SyncStatus = Object.freeze({
   attention: 0,
   stuck: [],
   problem: null,
+  phase: null,
+  health: "unknown",
+  lastCheckedAt: null,
   alongsideOwnGit: false
 });
 

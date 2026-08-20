@@ -52,7 +52,7 @@ pub(super) fn leave_copies(
         left.push(conflict::ConflictCopy {
             copy: beside,
             original: original.to_string(),
-            provider: "another device",
+            provider: "git",
         });
     }
     Ok((left, skipped))
@@ -123,7 +123,7 @@ pub(super) fn apply(
             copies.push(conflict::ConflictCopy {
                 copy: beside,
                 original,
-                provider: "another device",
+                provider: "git",
             });
             continue;
         }

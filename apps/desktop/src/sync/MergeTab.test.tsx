@@ -153,7 +153,7 @@ describe("saving", () => {
     await act(async () => button(host, "Done").click());
 
     expect(host.textContent).toContain("Saved");
-    expect(host.textContent).toContain("History");
+    expect(host.textContent).toContain("Saved versions");
   });
 
   /// The native side refuses a write whose versions have moved. That refusal is

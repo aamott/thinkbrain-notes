@@ -3,7 +3,7 @@ import { act } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ConflictKind, ConflictResolution, ConflictSummary } from "./conflictTypes";
-import type { SyncStatus } from "./historyTypes";
+import { NOT_RECORDING, type SyncStatus } from "./historyTypes";
 import { button, cleanup, render } from "./syncTestHarness";
 
 const listConflicts = vi.fn<(rootPath: string) => Promise<readonly ConflictSummary[]>>();
@@ -19,15 +19,7 @@ vi.mock("./conflictService", () => ({
 
 // The panel reads `stuck` from this hook. A module-level variable backs the
 // mock so a test can swap in a non-empty list without re-registering the mock.
-let syncStatus: SyncStatus = {
-  state: "off",
-  lastRecordedAt: null,
-  waiting: 0,
-  attention: 0,
-  stuck: [],
-  problem: null,
-  alongsideOwnGit: false
-};
+let syncStatus: SyncStatus = { ...NOT_RECORDING };
 
 vi.mock("./useSyncStatus", () => ({
   useSyncStatus: () => syncStatus
@@ -38,15 +30,7 @@ const { ConflictsPanel } = await import("./ConflictsPanel");
 beforeEach(() => {
   listConflicts.mockReset().mockResolvedValue([]);
   resolveConflict.mockReset().mockResolvedValue({ note: "note.md", keptAs: null, checkpoint: "a" });
-  syncStatus = {
-    state: "off",
-    lastRecordedAt: null,
-    waiting: 0,
-    attention: 0,
-    stuck: [],
-    problem: null,
-    alongsideOwnGit: false
-  };
+  syncStatus = { ...NOT_RECORDING };
 });
 
 afterEach(async () => {
@@ -75,7 +59,7 @@ describe("the list of things waiting on you", () => {
   it("says so plainly when there is nothing", async () => {
     const { host } = await render(<ConflictsPanel rootPath="/notes" onReview={() => undefined} />);
 
-    expect(host.textContent).toContain("Nothing needs your attention");
+    expect(host.textContent).toContain("No notes with two versions");
   });
 
   it("names each note and who else has a version of it", async () => {
