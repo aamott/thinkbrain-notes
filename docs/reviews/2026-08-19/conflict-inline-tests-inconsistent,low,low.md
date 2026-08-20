@@ -1,0 +1,5 @@
+- name: conflict.rs uses inline mod tests while sibling files use external _tests.rs
+- file: /media/adam/extex/projects/thinkbrain-notes/apps/desktop/src-tauri/src/commands/sync/conflict.rs
+- lines: 325-618
+- description: conflict.rs keeps its ~290 lines of tests inline via `#[cfg(test)] mod tests { ... }` (lines 325-618), while engine.rs, round.rs, and snapshot.rs all use the `#[cfg(test)] #[path = "..._tests.rs"] mod tests;` pattern to keep tests in a separate file. This inconsistency makes conflict.rs 618 lines (over the 500 preferred limit) even though its non-test code is only ~324 lines. Moving the tests to `conflict_tests.rs` would bring the source file under 500 and match the module's own convention.
+- verification: Read of conflict.rs lines 325-618 (inline tests); engine.rs line 333-335, round.rs 710-712, snapshot.rs 558-560 all use external `#[path]`.

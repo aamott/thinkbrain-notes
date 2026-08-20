@@ -1,0 +1,5 @@
+- name: record_merge docstring's first sentence describes commit_on, not record_merge
+- file: /media/adam/extex/projects/thinkbrain-notes/apps/desktop/src-tauri/src/commands/sync/snapshot.rs
+- lines: 313-326
+- description: The doc comment above `record_merge` (lines 313-317) reads "Commits `tree` onto `reference`, authored by the app. / Records a merge on the history branch: one tree, two parents." The first sentence describes `commit_on` (which takes a `reference` parameter) — `record_merge` takes `ours`/`theirs`, not `reference`. Meanwhile `commit_on` (line 328) has no docstring at all. The first sentence should move down to `commit_on`, leaving the "Records a merge on the history branch..." paragraph as `record_merge`'s doc. This is a Google-style docstring correctness issue on complex code.
+- verification: Read of snapshot.rs lines 311-328; `record_merge` signature has no `reference` param, `commit_on` does.
