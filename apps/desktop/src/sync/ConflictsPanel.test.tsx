@@ -1,10 +1,10 @@
 // @vitest-environment happy-dom
 import { act } from "react";
-import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ConflictKind, ConflictResolution, ConflictSummary } from "./conflictTypes";
 import type { SyncStatus } from "./historyTypes";
+import { button, cleanup, render } from "./syncTestHarness";
 
 const listConflicts = vi.fn<(rootPath: string) => Promise<readonly ConflictSummary[]>>();
 const resolveConflict = vi.fn<
@@ -14,8 +14,7 @@ const resolveConflict = vi.fn<
 vi.mock("./conflictService", () => ({
   listConflicts: (rootPath: string) => listConflicts(rootPath),
   resolveConflict: (rootPath: string, summary: ConflictSummary, resolution: ConflictResolution) =>
-    resolveConflict(rootPath, summary, resolution),
-  subscribeToConflictChanges: () => Promise.resolve(() => undefined)
+    resolveConflict(rootPath, summary, resolution)
 }));
 
 // The panel reads `stuck` from this hook. A module-level variable backs the
@@ -36,9 +35,6 @@ vi.mock("./useSyncStatus", () => ({
 
 const { ConflictsPanel } = await import("./ConflictsPanel");
 
-let root: Root | null = null;
-let container: HTMLDivElement | null = null;
-
 beforeEach(() => {
   listConflicts.mockReset().mockResolvedValue([]);
   resolveConflict.mockReset().mockResolvedValue({ note: "note.md", keptAs: null, checkpoint: "a" });
@@ -54,10 +50,7 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
-  await act(async () => root?.unmount());
-  container?.remove();
-  root = null;
-  container = null;
+  await cleanup();
 });
 
 const conflict = (path: string, kind: ConflictKind): ConflictSummary => ({
@@ -78,25 +71,9 @@ const conflict = (path: string, kind: ConflictKind): ConflictSummary => ({
   }
 });
 
-const render = async (onReview = vi.fn()): Promise<HTMLDivElement> => {
-  container = document.createElement("div");
-  document.body.append(container);
-  root = createRoot(container);
-  await act(async () => root?.render(<ConflictsPanel rootPath="/notes" onReview={onReview} />));
-  return container;
-};
-
-const button = (host: HTMLElement, text: string): HTMLButtonElement => {
-  const found = [...host.querySelectorAll("button")].find((candidate) =>
-    candidate.textContent?.includes(text)
-  );
-  if (!found) throw new Error(`No button reading "${text}" among: ${host.textContent}`);
-  return found;
-};
-
 describe("the list of things waiting on you", () => {
   it("says so plainly when there is nothing", async () => {
-    const host = await render();
+    const { host } = await render(<ConflictsPanel rootPath="/notes" onReview={() => undefined} />);
 
     expect(host.textContent).toContain("Nothing needs your attention");
   });
@@ -104,7 +81,7 @@ describe("the list of things waiting on you", () => {
   it("names each note and who else has a version of it", async () => {
     listConflicts.mockResolvedValue([conflict("journal/Meeting Notes.md", "text")]);
 
-    const host = await render();
+    const { host } = await render(<ConflictsPanel rootPath="/notes" onReview={() => undefined} />);
 
     expect(host.textContent).toContain("Meeting Notes.md");
     expect(host.textContent).toContain("Syncthing");
@@ -113,7 +90,7 @@ describe("the list of things waiting on you", () => {
   it("keeps reading the rest of the list when one card cannot be built", async () => {
     listConflicts.mockRejectedValue(new Error("nope"));
 
-    const host = await render();
+    const { host } = await render(<ConflictsPanel rootPath="/notes" onReview={() => undefined} />);
 
     expect(host.querySelector('[role="alert"]')?.textContent).toBeTruthy();
   });
@@ -124,7 +101,7 @@ describe("what each card offers", () => {
     listConflicts.mockResolvedValue([conflict("Meeting Notes.md", "text")]);
     const onReview = vi.fn();
 
-    const host = await render(onReview);
+    const { host } = await render(<ConflictsPanel rootPath="/notes" onReview={onReview} />);
     await act(async () => button(host, "Review").click());
 
     expect(onReview).toHaveBeenCalledWith(
@@ -138,7 +115,7 @@ describe("what each card offers", () => {
   it("offers a whole-version choice for a picture, with both sizes", async () => {
     listConflicts.mockResolvedValue([conflict("diagram.png", "binary")]);
 
-    const host = await render();
+    const { host } = await render(<ConflictsPanel rootPath="/notes" onReview={() => undefined} />);
 
     expect(host.textContent).toContain("214 KB");
     expect(host.textContent).toContain("238 KB");
@@ -148,7 +125,7 @@ describe("what each card offers", () => {
   it("explains itself instead of comparing a whiteboard", async () => {
     listConflicts.mockResolvedValue([conflict("Roadmap.canvas", "text")]);
 
-    const host = await render();
+    const { host } = await render(<ConflictsPanel rootPath="/notes" onReview={() => undefined} />);
 
     expect(host.textContent).toContain("Visual compare isn't available yet for whiteboards");
   });
@@ -156,7 +133,7 @@ describe("what each card offers", () => {
   it("carries a decision made from the card straight through", async () => {
     listConflicts.mockResolvedValue([conflict("diagram.png", "binary")]);
 
-    const host = await render();
+    const { host } = await render(<ConflictsPanel rootPath="/notes" onReview={() => undefined} />);
     await act(async () => button(host, "Keep both").click());
 
     expect(resolveConflict).toHaveBeenCalledWith("/notes", expect.anything(), { kind: "keepBoth" });
@@ -168,7 +145,7 @@ describe("what each card offers", () => {
     listConflicts.mockResolvedValue([conflict("diagram.png", "binary")]);
     resolveConflict.mockRejectedValue(new Error("refused"));
 
-    const host = await render();
+    const { host } = await render(<ConflictsPanel rootPath="/notes" onReview={() => undefined} />);
     await act(async () => button(host, "Keep both").click());
 
     expect(host.querySelector('[role="alert"]')?.textContent).toContain("Nothing was changed");
@@ -192,7 +169,7 @@ describe("notes that could not be kept in step", () => {
       ]
     };
 
-    const host = await render();
+    const { host } = await render(<ConflictsPanel rootPath="/notes" onReview={() => undefined} />);
 
     expect(host.textContent).toContain("Stuck Note.md");
     expect(host.textContent).toContain("Could not be kept in step");
@@ -215,7 +192,7 @@ describe("a decision in flight", () => {
       () => new Promise<unknown>((resolve) => { resolveDecision = resolve; })
     );
 
-    const host = await render();
+    const { host } = await render(<ConflictsPanel rootPath="/notes" onReview={() => undefined} />);
     const keepBoth = () => button(host, "Keep both");
     const keepOurs = () => button(host, "Keep this computer's");
 

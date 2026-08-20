@@ -4,12 +4,19 @@
 //! pasted with a username and password is split on first use: the secret goes
 //! here, the destination keeps only the place.
 
+#[cfg(test)]
 use std::collections::HashMap;
+#[cfg(test)]
 use std::sync::Mutex;
 
+#[cfg(test)]
 use crate::error::lock_or_recover;
 use crate::NativeError;
 
+#[cfg(all(
+    not(test),
+    any(target_os = "linux", target_os = "macos", target_os = "windows")
+))]
 use super::failed;
 
 #[cfg(not(test))]
@@ -208,14 +215,6 @@ fn identity_from_payload(payload: &[u8]) -> Option<(String, String, String)> {
     Some((url?, username?, password?))
 }
 
-fn unavailable(error: impl std::fmt::Display) -> NativeError {
-    failed(
-        "sync.auth_required",
-        "This remote needs a sign-in before it can receive notes.",
-        error,
-    )
-}
-
 /// Wraps an item with the cfg gate for "real OS, not under test".
 ///
 /// Centralises the `not(test)` + supported-OS predicate repeated across every
@@ -239,6 +238,16 @@ macro_rules! unsupported {
         ))]
         $item
     };
+}
+
+supported! {
+fn unavailable(error: impl std::fmt::Display) -> NativeError {
+    failed(
+        "sync.auth_required",
+        "This remote needs a sign-in before it can receive notes.",
+        error,
+    )
+}
 }
 
 supported! {

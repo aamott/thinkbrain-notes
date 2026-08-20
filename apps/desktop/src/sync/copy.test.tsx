@@ -1,10 +1,9 @@
 // @vitest-environment happy-dom
-import { act } from "react";
-import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ConflictComparison, ConflictSummary } from "./conflictTypes";
 import { NOT_RECORDING, type RecordedChange, type SyncState } from "./historyTypes";
+import { cleanup, render } from "./syncTestHarness";
 
 /**
  * Nothing in this feature may speak git to the user.
@@ -69,14 +68,8 @@ const { HistoryPanel } = await import("./HistoryPanel");
 const { SyncPill } = await import("./SyncPill");
 const { describeSync } = await import("./syncCopy");
 
-let root: Root | null = null;
-let container: HTMLDivElement | null = null;
-
 afterEach(async () => {
-  await act(async () => root?.unmount());
-  container?.remove();
-  root = null;
-  container = null;
+  await cleanup();
 });
 
 const version = (path: string, label: string) => ({
@@ -93,16 +86,10 @@ const summary = (path: string, kind: "text" | "binary"): ConflictSummary => ({
   theirs: version(`${path}.copy`, "OneDrive")
 });
 
-const render = async (element: React.ReactElement): Promise<string> => {
-  container = document.createElement("div");
-  document.body.append(container);
-  root = createRoot(container);
-  await act(async () => root?.render(element));
-  const text = container.textContent ?? "";
-  await act(async () => root?.unmount());
-  container.remove();
-  root = null;
-  container = null;
+const renderText = async (element: React.ReactElement): Promise<string> => {
+  const { host, unmount } = await render(element);
+  const text = host.textContent ?? "";
+  await unmount();
   return text;
 };
 
@@ -127,7 +114,7 @@ describe("nothing in this feature speaks git to the user", () => {
       listConflicts.mockResolvedValue([summary(name, kind)]);
       audit(
         `the ${name} card`,
-        await render(<ConflictsPanel rootPath="/notes" onReview={() => undefined} />)
+        await renderText(<ConflictsPanel rootPath="/notes" onReview={() => undefined} />)
       );
     }
   });
@@ -135,7 +122,7 @@ describe("nothing in this feature speaks git to the user", () => {
   it("keeps the empty list plain", async () => {
     listConflicts.mockResolvedValue([]);
 
-    audit("the empty list", await render(<ConflictsPanel rootPath="/notes" onReview={() => undefined} />));
+    audit("the empty list", await renderText(<ConflictsPanel rootPath="/notes" onReview={() => undefined} />));
   });
 
   it("keeps the comparison plain", async () => {
@@ -149,7 +136,7 @@ describe("nothing in this feature speaks git to the user", () => {
 
     audit(
       "the comparison",
-      await render(<MergeTab rootPath="/notes" copyPath="Meeting Notes.md.copy" buffer={null} />)
+      await renderText(<MergeTab rootPath="/notes" copyPath="Meeting Notes.md.copy" buffer={null} />)
     );
   });
 
@@ -158,7 +145,7 @@ describe("nothing in this feature speaks git to the user", () => {
 
     audit(
       "the failure",
-      await render(<MergeTab rootPath="/notes" copyPath="Meeting Notes.md.copy" buffer={null} />)
+      await renderText(<MergeTab rootPath="/notes" copyPath="Meeting Notes.md.copy" buffer={null} />)
     );
   });
 
@@ -178,7 +165,7 @@ describe("nothing in this feature speaks git to the user", () => {
     for (const note of [null, "Meeting Notes.md"]) {
       audit(
         `the history for ${note ?? "everything"}`,
-        await render(
+        await renderText(
           <HistoryPanel rootPath="/notes" note={note} onShowEverything={() => undefined} />
         )
       );
@@ -190,7 +177,7 @@ describe("nothing in this feature speaks git to the user", () => {
 
     audit(
       "the empty history",
-      await render(<HistoryPanel rootPath="/notes" note={null} onShowEverything={() => undefined} />)
+      await renderText(<HistoryPanel rootPath="/notes" note={null} onShowEverything={() => undefined} />)
     );
   });
 
@@ -215,17 +202,13 @@ describe("nothing in this feature speaks git to the user", () => {
               ? { code: "sync.note_read_failed", message: "A note could not be read." }
               : null
         };
-        const host = document.createElement("div");
-        document.body.append(host);
-        const surface = createRoot(host);
-        await act(async () => surface.render(<SyncPill status={status} onOpen={() => undefined} />));
+        const { host, unmount } = await render(<SyncPill status={status} onOpen={() => undefined} />);
         const spoken = host.querySelector("button")?.getAttribute("aria-label") ?? "";
         audit(
           `the footer while ${state}${alongsideOwnGit ? " alongside own git" : ""}`,
           `${host.textContent ?? ""} ${spoken}`
         );
-        await act(async () => surface.unmount());
-        host.remove();
+        await unmount();
       }
     }
   });

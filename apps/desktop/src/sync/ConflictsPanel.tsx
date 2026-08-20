@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { NativeCommandError } from "../native/commands";
 import { Unavailable } from "../shell/Unavailable";
 import { describeSize, describeWhen, noteName, treatmentOf } from "./conflictCard";
-import { listConflicts, resolveConflict, subscribeToConflictChanges } from "./conflictService";
+import { listConflicts, resolveConflict } from "./conflictService";
 import type { ConflictResolution, ConflictSummary } from "./conflictTypes";
 import { recoveryFor } from "./syncCopy";
 import { useSyncStatus } from "./useSyncStatus";
@@ -30,14 +30,13 @@ export function ConflictsPanel({ rootPath, onReview }: ConflictsPanelProps) {
   const [conflicts, setConflicts] = useState<readonly ConflictSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const { stuck } = useSyncStatus(rootPath);
 
   /**
    * Reads the list and writes both halves of the result into state.
    *
-   * The single source of truth for refreshing the panel: an effect, a change
-   * subscription, and a decision all funnel through here, so they all see the
-   * same error handling and the same ordering of `setState` calls.
+   * The single source of truth for refreshing the panel: the initial read,
+   * change subscription, and decisions all funnel through here, so they all see
+   * the same error handling and the same ordering of `setState` calls.
    */
   const reload = useCallback(async (): Promise<void> => {
     if (!rootPath) return;
@@ -49,27 +48,14 @@ export function ConflictsPanel({ rootPath, onReview }: ConflictsPanelProps) {
     }
   }, [rootPath]);
 
-  // One effect for the first read and for every one after it. The native side
-  // announces both halves of a change — a daemon dropping a new copy, and
-  // another window settling one — and both belong on this list.
   useEffect(() => {
-    let cancelled = false;
-    let stop: (() => void) | null = null;
     const refresh = (): void => {
-      if (!cancelled) void reload();
+      void reload();
     };
-
     refresh();
-    void subscribeToConflictChanges(refresh).then((unlisten) => {
-      if (cancelled) unlisten();
-      else stop = unlisten;
-    });
-
-    return () => {
-      cancelled = true;
-      stop?.();
-    };
   }, [reload]);
+
+  const { stuck } = useSyncStatus(rootPath, reload);
 
   const decide = useCallback(
     async (summary: ConflictSummary, resolution: ConflictResolution) => {
