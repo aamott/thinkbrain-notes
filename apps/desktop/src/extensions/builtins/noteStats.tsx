@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components -- activation function is intentionally exported alongside a local component */
-import type { DesktopPanelContext } from "../../panels/panelRegistry";
+import type { DesktopPanelContext } from "../../panels/panelRegistryModel";
 import type { DesktopExtensionContext } from "../desktopExtensionHost";
 import { computeNoteStats, FALLBACK_WPM } from "./noteStats";
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { desktopPanelRegistry } from "../panels/panelRegistry";
+import { desktopPanelRegistry } from "../panels/panelRegistryModel";
 import { isSelectableRightPanel } from "./shellTypes";
 
 describe("isSelectableRightPanel", () => {

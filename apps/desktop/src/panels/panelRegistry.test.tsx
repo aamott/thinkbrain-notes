@@ -19,7 +19,7 @@ import {
   type RightPanel,
   type RightPanelContribution,
   type RightPanelContext
-} from "./panelRegistry";
+} from "./panelRegistryModel";
 
 const explorerProps: DesktopPanelContext["explorerProps"] = {
   initialWorkspacePath: null,

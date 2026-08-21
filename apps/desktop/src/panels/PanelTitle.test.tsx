@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { PanelTitle } from "./PanelTitle";
-import type { PanelAction } from "./panelRegistry";
+import type { PanelAction } from "./panelRegistryModel";
 
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;

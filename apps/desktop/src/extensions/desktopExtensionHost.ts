@@ -17,7 +17,7 @@ import {
 import {
   desktopPanelRegistry,
   type DesktopPanelContribution
-} from "../panels/panelRegistry";
+} from "../panels/panelRegistryModel";
 import {
   createExtensionPanelMountFactory,
   type ExtensionPanelMount

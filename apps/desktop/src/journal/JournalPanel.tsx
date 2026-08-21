@@ -102,7 +102,7 @@ export interface JournalPanelProps {
 }
 
 /** A header's accessible name carries its count; the visible badge is not enough. */
-// `rowName` and `Row` live in `JournalRow.tsx` — presentational, no panel state.
+// `rowName` lives in `journalRowUtils.ts`; `Row` lives in `JournalRow.tsx` — presentational, no panel state.
 
 export function JournalPanel({
   view,

@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { desktopPanelRegistry } from "../panels/panelRegistry";
+import { desktopPanelRegistry } from "../panels/panelRegistryModel";
 import { ActivityBar } from "./ActivityBar";
 
 let root: Root | null = null;

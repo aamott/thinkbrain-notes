@@ -20,7 +20,7 @@ import {
 import { createDesktopExtensionHost } from "../desktopExtensionHost";
 import { createDesktopTabRegistry } from "../../tabs/tabRegistry";
 import { desktopCommandRegistry } from "../../commands/commandRegistry";
-import { desktopPanelRegistry } from "../../panels/panelRegistry";
+import { desktopPanelRegistry } from "../../panels/panelRegistryModel";
 import { desktopEditorHeaderRegistry } from "../../tabs/editorHeaderRegistry.ts";
 import { appSettingsRegistry, useSettingsStore } from "../../settings/settingsStore";
 
