@@ -1,4 +1,11 @@
 use serde::Serialize;
+use std::sync::{Mutex, MutexGuard};
+
+/// Recovers a mutex guard after poison, preserving the previous behavior of
+/// every inline `.lock().unwrap_or_else(|e| e.into_inner())` in the codebase.
+pub fn lock_or_recover<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+    mutex.lock().unwrap_or_else(|error| error.into_inner())
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct NativeError {

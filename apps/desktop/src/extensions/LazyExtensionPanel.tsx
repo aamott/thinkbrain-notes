@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 
-import type { DesktopPanelContext } from "../panels/panelRegistry";
+import type { DesktopPanelContext } from "../panels/panelRegistryModel";
 
 /**
  * Stands in for an extension's panel until that extension is activated.

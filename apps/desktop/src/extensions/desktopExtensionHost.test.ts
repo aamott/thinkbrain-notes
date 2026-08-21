@@ -13,7 +13,7 @@ import { appEvents } from "../events/appEvents";
 import { desktopCommandRegistry } from "../commands/commandRegistry";
 import { createDesktopTabRegistry } from "../tabs/tabRegistry";
 import { setWorkspaceBridge } from "./workspaceBridge";
-import { desktopPanelRegistry } from "../panels/panelRegistry";
+import { desktopPanelRegistry } from "../panels/panelRegistryModel";
 import { markdownEditorHookRegistry } from "../tabs/markdownEditorHooks";
 import { createDesktopEditorHeaderRegistry } from "../tabs/editorHeaderRegistry.ts";
 import {

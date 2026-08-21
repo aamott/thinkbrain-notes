@@ -18,6 +18,10 @@ gix = { version = "0.86", default-features = false, features = ["blocking-networ
 flate2 = "1"
 notify = "8.2.0"
 notify-debouncer-full = "0.7.0"
+# Used to percent-decode userinfo in sync destination URLs (e.g.
+# `https://user:p%40ss@host/path`). Already pulled in transitively by gix-url,
+# declared here so the sync module can depend on it directly.
+percent-encoding = "2"
 rusqlite = { version = "0.39", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -26,11 +30,15 @@ tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
 tauri-plugin-process = "2"
 
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 # The updater is desktop-only upstream, and this crate also builds for Android.
 # Gating it here rather than in `[dependencies]` keeps the mobile build from
 # trying to compile a plugin that has no mobile implementation.
 [target.'cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))'.dependencies]
 tauri-plugin-updater = "2"
+keyring = { version = "3", features = ["apple-native", "windows-native", "linux-native-sync-persistent", "crypto-rust"] }
 
 # ---------------------------------------------------------------------------
 # Build profiles

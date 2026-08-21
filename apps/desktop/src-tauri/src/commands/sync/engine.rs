@@ -7,9 +7,13 @@
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+use serde::Serialize;
+
+use crate::error::lock_or_recover;
 use crate::NativeError;
 
 use super::conflict::ConflictCopy;
@@ -25,6 +29,87 @@ use super::snapshot;
 /// half-downloaded file out of history.
 pub const SETTLE: Duration = Duration::from_secs(3);
 
+/// A note that could not be written or recorded, with something to do about it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StuckNote {
+    /// Vault-relative, forward slashes.
+    pub path: String,
+    pub code: String,
+    pub message: String,
+    /// Blob to retry writing, when this was an incoming note. Recording
+    /// failures have nothing to put — they retry by reading the disk again.
+    #[serde(skip)]
+    pub blob: Option<gix::ObjectId>,
+}
+
+/// A shortcut in the recorded tree that this device will not create.
+pub const SYMLINK_SKIPPED: &str = "sync.symlink_skipped";
+/// A nested repository in the recorded tree that this device will not clone.
+pub const SUBMODULE_SKIPPED: &str = "sync.submodule_skipped";
+
+/// Whether `code` is a skipped tree entry rather than a write/record failure.
+pub fn is_unsupported(code: &str) -> bool {
+    code == SYMLINK_SKIPPED || code == SUBMODULE_SKIPPED
+}
+
+/// Where a round trip currently is, for the footer to name without git jargon.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SyncPhase {
+    /// Recording outstanding local edits before talking to the other end.
+    Saving,
+    /// Fetching what changed there.
+    Checking,
+    /// Joining the two histories.
+    Combining,
+    /// Sending this device's notes onward.
+    Sending,
+}
+
+/// Whether a git link has ever completed a round trip from this device.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum SyncHealth {
+    #[default]
+    Unknown,
+    Healthy,
+    Problem,
+}
+
+impl StuckNote {
+    /// A note that could not be recorded (no blob to retry from).
+    pub fn recording(path: String, error: NativeError) -> Self {
+        Self {
+            path,
+            blob: None,
+            code: error.code,
+            message: error.message,
+        }
+    }
+
+    /// A note that could not be written, with the blob to retry from.
+    pub fn incoming(path: String, blob: gix::ObjectId, error: NativeError) -> Self {
+        Self {
+            path,
+            blob: Some(blob),
+            code: error.code,
+            message: error.message,
+        }
+    }
+
+    /// A tree entry this device will not create: a shortcut or a nested
+    /// repository. There is nothing to retry locally.
+    pub fn unsupported(path: String, code: &'static str, message: &'static str) -> Self {
+        Self {
+            path,
+            blob: None,
+            code: code.to_string(),
+            message: message.to_string(),
+        }
+    }
+}
+
 /// A workspace Auto Sync is recording.
 pub struct Engine {
     /// Held across threads, so the repository is the thread-safe kind and each
@@ -38,8 +123,27 @@ pub struct Engine {
     /// daemon writes it while the app is running. The user should be told about
     /// one conflict, not two.
     conflicts: Mutex<BTreeMap<String, ConflictCopy>>,
+    /// Notes that could not be written or recorded, keyed by path.
+    ///
+    /// One bad note must not stall the vault: the rest still lands, and this
+    /// set is what the footer counts as needing attention until a retry works.
+    stuck: Mutex<BTreeMap<String, StuckNote>>,
+    /// A round trip to another device is in flight.
+    syncing: AtomicBool,
+    /// The named step of the in-flight round trip, if any.
+    phase: Mutex<Option<SyncPhase>>,
+    /// When a round trip last completed successfully, in milliseconds since the epoch.
+    last_checked_at: Mutex<Option<u64>>,
     /// The last attempt to record that failed, cleared by the next that works.
+    ///
+    /// Vault-wide only: a single note that could not be read is [`stuck`], not
+    /// this, so the rest of the vault keeps being saved.
     problem: Mutex<Option<NativeError>>,
+    /// The most recent round trip that failed.
+    ///
+    /// Separate from `problem`: recording a later local edit must not erase a
+    /// sign-in or network problem before the next round trip succeeds.
+    sync_problem: Mutex<Option<NativeError>>,
     /// Held for the whole of a commit, so only one is ever in flight.
     ///
     /// Recording reads the branch, builds a tree on it and moves the ref, and
@@ -48,8 +152,14 @@ pub struct Engine {
     /// could act on. Separate from `pending` so notes can keep arriving while a
     /// commit is being written.
     recording: Mutex<()>,
+    /// The last failure to tidy private undo history. Recording ignores it.
+    maintenance_problem: Mutex<Option<NativeError>>,
     /// Whether the vault is also a git repository of the user's own.
     has_own_git: bool,
+    /// Last time a note changed, for the idle debounce that fires a round trip.
+    last_touched: Mutex<Instant>,
+    /// Last time a round trip finished, for the frequency cap.
+    last_synced: Mutex<Option<Instant>>,
 }
 
 impl Engine {
@@ -59,17 +169,33 @@ impl Engine {
             has_own_git,
             pending: Mutex::new(PendingChanges::default()),
             conflicts: Mutex::new(BTreeMap::new()),
+            stuck: Mutex::new(BTreeMap::new()),
+            syncing: AtomicBool::new(false),
+            phase: Mutex::new(None),
+            last_checked_at: Mutex::new(None),
             problem: Mutex::new(None),
+            sync_problem: Mutex::new(None),
             recording: Mutex::new(()),
+            maintenance_problem: Mutex::new(None),
+            last_touched: Mutex::new(Instant::now()),
+            last_synced: Mutex::new(None),
         }
     }
 
     /// Notes that `paths` changed, restarting each one's wait.
+    ///
+    /// A path that was stuck gets another chance: the user editing it, or the
+    /// folder becoming readable again, is exactly the signal that a retry is
+    /// worth it — and the sweeper must not keep hammering a note that cannot
+    /// be read.
     pub fn note_changes(&self, paths: impl IntoIterator<Item = PathBuf>, at: Instant) {
-        let mut pending = self.pending.lock().unwrap_or_else(|error| error.into_inner());
+        let mut pending = lock_or_recover(&self.pending);
+        let mut stuck = lock_or_recover(&self.stuck);
         for path in paths {
+            stuck.remove(&super::conflict::relative_str(&path));
             pending.note(path, at);
         }
+        *lock_or_recover(&self.last_touched) = at;
     }
 
     /// Adds conflict copies to the set awaiting resolution, reporting whether
@@ -78,18 +204,19 @@ impl Engine {
     /// The same copy arrives more than once — from the scan and again from the
     /// watcher — and only the first time is worth telling anyone about.
     pub fn note_conflicts(&self, found: impl IntoIterator<Item = ConflictCopy>) -> bool {
-        let mut conflicts = self.conflicts.lock().unwrap_or_else(|error| error.into_inner());
-        found
-            .into_iter()
-            .filter(|copy| conflicts.insert(copy.copy.clone(), copy.clone()).is_none())
-            .count()
-            > 0
+        let mut conflicts = lock_or_recover(&self.conflicts);
+        let mut any_new = false;
+        for copy in found {
+            if conflicts.insert(copy.copy.clone(), copy.clone()).is_none() {
+                any_new = true;
+            }
+        }
+        any_new
     }
 
     /// The conflicts this workspace is waiting on someone to resolve.
-    #[allow(dead_code, reason = "story 4's conflict panel is the reader")]
     pub fn conflicts(&self) -> Vec<ConflictCopy> {
-        let conflicts = self.conflicts.lock().unwrap_or_else(|error| error.into_inner());
+        let conflicts = lock_or_recover(&self.conflicts);
         conflicts.values().cloned().collect()
     }
 
@@ -104,7 +231,7 @@ impl Engine {
 
     /// Drops a conflict from the set, because it has been answered.
     pub fn forget_conflict(&self, copy: &str) {
-        let mut conflicts = self.conflicts.lock().unwrap_or_else(|error| error.into_inner());
+        let mut conflicts = lock_or_recover(&self.conflicts);
         conflicts.remove(copy);
     }
 
@@ -138,7 +265,7 @@ impl Engine {
 
     fn record(&self, now: Instant, settle: Duration) -> Result<Option<gix::ObjectId>, NativeError> {
         let settled = {
-            let mut pending = self.pending.lock().unwrap_or_else(|error| error.into_inner());
+            let mut pending = lock_or_recover(&self.pending);
             pending.take_settled(now, settle)
         };
         // Cost, not correctness: `record` would reach the same answer, but the
@@ -158,7 +285,7 @@ impl Engine {
         let settled: Vec<PathBuf> = match repo.workdir() {
             Some(vault) => settled
                 .into_iter()
-                .filter(|path| !super::conflict::is_conflict_copy(vault, path))
+                .filter(|path| !super::conflict::excluded_from_history(vault, path))
                 .collect(),
             None => settled,
         };
@@ -167,31 +294,38 @@ impl Engine {
         }
 
         let message = commit_message(settled.len(), gix::date::Time::now_local_or_utc());
-        let _recording = self.recording.lock().unwrap_or_else(|error| error.into_inner());
-        let recorded = snapshot::record(&repo, &settled, &message);
+        let _recording = lock_or_recover(&self.recording);
+        let recorded = snapshot::landed(&repo, &settled, &message);
 
-        // Taking a path out of `pending` is a promise to record it. If the
-        // commit failed — a note that vanished mid-read, a folder that went
-        // away with its drive — the promise is unkept, so the paths go back and
-        // are tried again rather than quietly leaving history behind the vault.
-        if recorded.is_err() {
-            let mut pending = self.pending.lock().unwrap_or_else(|error| error.into_inner());
-            for path in settled {
-                pending.note(path, now);
+        // Taking a path out of `pending` is a promise to record it. A
+        // vault-wide failure — the object store, the branch — puts every
+        // path back. A single note that cannot be read is skipped instead,
+        // so the rest of the vault stays in step.
+        match &recorded {
+            Err(error) => {
+                let mut pending = lock_or_recover(&self.pending);
+                for path in settled {
+                    pending.note(path, now);
+                }
+                self.set_problem(Some(error.clone()));
+            }
+            Ok(landed) => {
+                let mut stuck = lock_or_recover(&self.stuck);
+                for (path, error) in &landed.skipped {
+                    let relative = super::conflict::relative_str(path);
+                    stuck.insert(
+                        relative.clone(),
+                        StuckNote::recording(relative, error.clone()),
+                    );
+                }
+                self.set_problem(None);
             }
         }
-        self.remember(&recorded);
-        recorded
+        recorded.map(|landed| landed.commit)
     }
 
-    /// Keeps a failure to record, and lets the next success clear it.
-    ///
-    /// The sweeper has nobody to show an error to, so until now one went to
-    /// stderr and the app went on looking healthy. Holding the last one here is
-    /// what lets a window say "recording stopped, and here is what to do".
-    fn remember(&self, outcome: &Result<Option<gix::ObjectId>, NativeError>) {
-        let mut problem = self.problem.lock().unwrap_or_else(|error| error.into_inner());
-        *problem = outcome.as_ref().err().cloned();
+    fn set_problem(&self, problem: Option<NativeError>) {
+        *lock_or_recover(&self.problem) = problem;
     }
 
     /// Takes a restore point for `paths` before anything overwrites them.
@@ -200,7 +334,128 @@ impl Engine {
         paths: &[PathBuf],
         reason: snapshot::Reason,
     ) -> Result<gix::ObjectId, NativeError> {
+        let recording = lock_or_recover(&self.recording);
+        self.checkpoint_while_recording(&recording, paths, reason)
+    }
+
+    #[cfg(test)]
+    pub(super) fn try_checkpoint(
+        &self,
+        paths: &[PathBuf],
+        reason: snapshot::Reason,
+    ) -> Result<Option<gix::ObjectId>, NativeError> {
+        let recording = match self.recording.try_lock() {
+            Ok(recording) => recording,
+            Err(std::sync::TryLockError::WouldBlock) => return Ok(None),
+            Err(std::sync::TryLockError::Poisoned(poisoned)) => poisoned.into_inner(),
+        };
+        self.checkpoint_while_recording(&recording, paths, reason)
+            .map(Some)
+    }
+
+    fn checkpoint_while_recording(
+        &self,
+        _recording: &std::sync::MutexGuard<'_, ()>,
+        paths: &[PathBuf],
+        reason: snapshot::Reason,
+    ) -> Result<gix::ObjectId, NativeError> {
         snapshot::checkpoint(&self.repo.to_thread_local(), paths, reason)
+    }
+
+    /// The last failure to tidy private undo history, if any.
+    pub fn maintenance_problem(&self) -> Option<NativeError> {
+        lock_or_recover(&self.maintenance_problem).clone()
+    }
+
+    /// Records a tidy failure without stopping recording.
+    pub fn set_maintenance_problem(&self, problem: Option<NativeError>) {
+        *lock_or_recover(&self.maintenance_problem) = problem;
+    }
+
+    /// Whether automatic tidy is due for this vault.
+    pub fn due_for_maintenance(&self) -> bool {
+        super::maintain::due(&self.repository(), SystemTime::now())
+    }
+
+    /// Tidies private undo history under the recording lock.
+    ///
+    /// `force` is the Settings button: it runs even if a pass already happened
+    /// today. Automatic paths pass `false`. A failure is remembered and
+    /// returned; recording is left alone.
+    pub fn maintain(&self, force: bool) -> Result<super::maintain::Cleanup, NativeError> {
+        let _recording = lock_or_recover(&self.recording);
+        self.maintain_locked(force)
+    }
+
+    #[cfg(test)]
+    pub(super) fn maintain_after_lock(
+        &self,
+        force: bool,
+        after_lock: impl FnOnce(),
+    ) -> Result<super::maintain::Cleanup, NativeError> {
+        let _recording = lock_or_recover(&self.recording);
+        after_lock();
+        self.maintain_locked(force)
+    }
+
+    fn maintain_locked(&self, force: bool) -> Result<super::maintain::Cleanup, NativeError> {
+        let repo = self.repository();
+        if !force && !super::maintain::due(&repo, SystemTime::now()) {
+            return Ok(super::maintain::Cleanup {
+                bytes_before: 0,
+                bytes_after: 0,
+                reclaimed: 0,
+            });
+        }
+        let now = SystemTime::now();
+        let seconds = now
+            .duration_since(UNIX_EPOCH)
+            .map(|elapsed| elapsed.as_secs() as i64)
+            .unwrap_or(0);
+        match super::maintain::cleanup(&repo, seconds, &super::maintain::Policy::default()) {
+            Ok(done) => {
+                if let Err(error) = super::maintain::mark_done(&repo, now) {
+                    eprintln!("[sync] could not remember history maintenance: {error:?}");
+                }
+                self.set_maintenance_problem(None);
+                if done.reclaimed > 0 {
+                    eprintln!(
+                        "[sync] history maintenance reclaimed {} bytes",
+                        done.reclaimed
+                    );
+                }
+                Ok(done)
+            }
+            Err(error) => {
+                eprintln!("[sync] history maintenance failed: {error:?}");
+                self.set_maintenance_problem(Some(error.clone()));
+                Err(error)
+            }
+        }
+    }
+
+    /// Drops private restore points, then collects what that made unreachable.
+    pub fn clear_undo(&self) -> Result<super::maintain::Cleanup, NativeError> {
+        let _recording = lock_or_recover(&self.recording);
+        let repo = self.repository();
+        match super::maintain::clear_undo(&repo) {
+            Ok(done) => {
+                self.set_maintenance_problem(None);
+                if let Err(error) = super::maintain::mark_done(&repo, SystemTime::now()) {
+                    eprintln!("[sync] could not remember history maintenance: {error:?}");
+                }
+                eprintln!(
+                    "[sync] cleared private undo history, reclaimed {} bytes",
+                    done.reclaimed
+                );
+                Ok(done)
+            }
+            Err(error) => {
+                eprintln!("[sync] could not clear undo history: {error:?}");
+                self.set_maintenance_problem(Some(error.clone()));
+                Err(error)
+            }
+        }
     }
 
     /// How many changes are waiting to be recorded.
@@ -208,7 +463,7 @@ impl Engine {
     /// What the status pill turns into "Saving…". Zero is the resting state and
     /// the only one anybody should see for long.
     pub fn waiting(&self) -> usize {
-        let pending = self.pending.lock().unwrap_or_else(|error| error.into_inner());
+        let pending = lock_or_recover(&self.pending);
         pending.len()
     }
 
@@ -218,8 +473,107 @@ impl Engine {
     /// is the field that turns "your notes silently stopped being recorded"
     /// into something a window can say out loud.
     pub fn problem(&self) -> Option<NativeError> {
-        let problem = self.problem.lock().unwrap_or_else(|error| error.into_inner());
-        problem.clone()
+        lock_or_recover(&self.problem).clone()
+    }
+
+    /// The last round-trip failure, cleared only by a successful round trip.
+    pub fn sync_problem(&self) -> Option<NativeError> {
+        lock_or_recover(&self.sync_problem).clone()
+    }
+
+    /// Records whether the configured git link was reached successfully.
+    pub fn set_sync_problem(&self, problem: Option<NativeError>) {
+        let healthy = problem.is_none();
+        *lock_or_recover(&self.sync_problem) = problem;
+        if healthy {
+            self.mark_checked();
+        }
+    }
+
+    /// The named step of the in-flight round trip, if any.
+    pub fn phase(&self) -> Option<SyncPhase> {
+        *lock_or_recover(&self.phase)
+    }
+
+    /// Sets the named step of the in-flight round trip.
+    pub fn set_phase(&self, phase: Option<SyncPhase>) {
+        *lock_or_recover(&self.phase) = phase;
+    }
+
+    /// When a round trip last completed successfully.
+    pub fn last_checked_at(&self) -> Option<u64> {
+        *lock_or_recover(&self.last_checked_at)
+    }
+
+    /// Marks a successful round trip for the health indicator.
+    pub fn mark_checked(&self) {
+        let at = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|elapsed| elapsed.as_millis() as u64)
+            .unwrap_or(0);
+        *lock_or_recover(&self.last_checked_at) = Some(at);
+    }
+
+    /// Notes that could not be written or recorded, waiting on a retry.
+    pub fn stuck(&self) -> Vec<StuckNote> {
+        lock_or_recover(&self.stuck).values().cloned().collect()
+    }
+
+    /// Records notes that a round trip could not write, so the next attempt
+    /// retries only those paths.
+    pub fn note_stuck(&self, notes: impl IntoIterator<Item = StuckNote>) {
+        let mut stuck = lock_or_recover(&self.stuck);
+        for note in notes {
+            stuck.insert(note.path.clone(), note);
+        }
+    }
+
+    /// Drops a stuck note, because a retry wrote it or the user moved it.
+    pub fn forget_stuck(&self, path: &str) {
+        lock_or_recover(&self.stuck).remove(path);
+    }
+
+    /// Drops skipped-entry warnings so the next trip can reconstruct them
+    /// from the recorded tree. Write and record failures are left alone.
+    pub fn forget_unsupported(&self) {
+        lock_or_recover(&self.stuck).retain(|_, note| !is_unsupported(&note.code));
+    }
+
+    /// Whether a round trip to another device is in flight.
+    pub fn syncing(&self) -> bool {
+        self.syncing.load(Ordering::Relaxed)
+    }
+
+    /// Marks a round trip as started or finished.
+    ///
+    /// Returns whether this call changed the flag, so the caller can announce
+    /// only when the footer would actually read differently.
+    pub fn set_syncing(&self, on: bool) -> bool {
+        if !on {
+            self.set_phase(None);
+        }
+        self.syncing.swap(on, Ordering::Relaxed) != on
+    }
+
+    /// Marks a round trip as finished, for the frequency cap.
+    pub fn mark_synced(&self) {
+        *lock_or_recover(&self.last_synced) = Some(Instant::now());
+    }
+
+    /// Whether this vault has been still long enough, and it has been long
+    /// enough since the last round trip, to sync without a click.
+    pub fn ready_to_sync(&self, idle: Duration, cap: Duration, now: Instant) -> bool {
+        if self.syncing() {
+            return false;
+        }
+        let touched = *lock_or_recover(&self.last_touched);
+        if now.saturating_duration_since(touched) < idle {
+            return false;
+        }
+        match *lock_or_recover(&self.last_synced) {
+            None => true,
+            Some(synced) => now.saturating_duration_since(synced) >= cap,
+        }
     }
 }
 

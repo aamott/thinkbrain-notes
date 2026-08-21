@@ -5,4 +5,4 @@ model: glm-5.2
 max-nesting: 2
 ---
 
-Read AGENTS.md for instructions and development rules.
+Read AGENTS.md for instructions and development rules. Run full verification on files you change.

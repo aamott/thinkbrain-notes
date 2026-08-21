@@ -42,7 +42,8 @@ const SEEDED_APP_VALUES: Record<string, unknown> = {
   "editor.lineWrapping": true,
   "editor.livePreview": true,
   "settings.autosave": false,
-  "sync.settleAutomatically": true
+  "sync.settleAutomatically": true,
+  "sync.historyPolicy": ""
 };
 
 beforeEach(() => {
@@ -119,8 +120,6 @@ describe("buildExportPayload", () => {
   });
 
   it("excludes workspace-scoped settings from the export", () => {
-    // The built-in modules only have app-scoped settings, so the export should
-    // contain exactly those keys.
     const { json } = buildExportPayload();
     const parsed = JSON.parse(json);
     const keys = Object.keys(parsed.settings);
@@ -131,8 +130,9 @@ describe("buildExportPayload", () => {
     expect(keys).toContain("editor.lineWrapping");
     expect(keys).toContain("editor.livePreview");
     expect(keys).toContain("sync.settleAutomatically");
-    // No workspace-scoped keys exist in the built-in modules.
-    expect(keys).toHaveLength(7);
+    expect(keys).toContain("sync.historyPolicy");
+    expect(keys).not.toContain("sync.destination");
+    expect(keys).toHaveLength(8);
   });
 });
 

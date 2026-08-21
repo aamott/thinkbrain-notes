@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 
-import { NativeCommandError } from "../native/commands";
 import { Unavailable } from "../shell/Unavailable";
 import { describeSize, describeWhen, noteName, treatmentOf } from "./conflictCard";
-import { listConflicts, resolveConflict, subscribeToConflictChanges } from "./conflictService";
+import { listConflicts, resolveConflict } from "./conflictService";
 import type { ConflictResolution, ConflictSummary } from "./conflictTypes";
+import { failureMessage, recoveryFor } from "./syncCopy";
+import { useSyncStatus } from "./useSyncStatus";
 
 /**
  * The notes that changed in two places, and what to do about each one.
@@ -18,71 +19,41 @@ import type { ConflictResolution, ConflictSummary } from "./conflictTypes";
  * in the same native call, which checkpoints both versions before it writes.
  */
 
-/** One read of the list: either what it holds, or why it could not be read. */
-interface Read {
-  readonly conflicts: readonly ConflictSummary[] | null;
-  readonly error: string | null;
-}
-
 interface ConflictsPanelProps {
   readonly rootPath: string | null;
   /** Opens the side-by-side comparison, named by the copy and the note it is of. */
   readonly onReview: (copyPath: string, notePath: string) => void;
 }
-
 export function ConflictsPanel({ rootPath, onReview }: ConflictsPanelProps) {
   const [conflicts, setConflicts] = useState<readonly ConflictSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
   /**
-   * Reads the list, changing nothing.
+   * Reads the list and writes both halves of the result into state.
    *
-   * Kept free of state so it can be called from anywhere — an effect, a click
-   * handler — without the caller having to reason about when React will see the
-   * result. {@link apply} is the only thing that writes.
+   * The single source of truth for refreshing the panel: the initial read,
+   * change subscription, and decisions all funnel through here, so they all see
+   * the same error handling and the same ordering of `setState` calls.
    */
-  const read = useCallback(async (): Promise<Read | null> => {
-    if (!rootPath) return null;
+  const reload = useCallback(async (): Promise<void> => {
+    if (!rootPath) return;
     try {
-      return { conflicts: await listConflicts(rootPath), error: null };
+      setConflicts(await listConflicts(rootPath));
+      setError(null);
     } catch (cause) {
-      return {
-        conflicts: null,
-        error: messageOf(cause, "The list of items to review could not be read.")
-      };
+      setError(failureMessage(cause, "The list of items to review could not be read."));
     }
   }, [rootPath]);
 
-  const apply = useCallback((result: Read | null) => {
-    if (!result) return;
-    if (result.conflicts) setConflicts(result.conflicts);
-    setError(result.error);
-  }, []);
-
-  // One effect for the first read and for every one after it. The native side
-  // announces both halves of a change — a daemon dropping a new copy, and
-  // another window settling one — and both belong on this list.
   useEffect(() => {
-    let cancelled = false;
-    let stop: (() => void) | null = null;
-    const reload = () => {
-      void read().then((result) => {
-        if (!cancelled) apply(result);
-      });
+    const refresh = (): void => {
+      void reload();
     };
+    refresh();
+  }, [reload]);
 
-    reload();
-    void subscribeToConflictChanges(reload).then((unlisten) => {
-      if (cancelled) unlisten();
-      else stop = unlisten;
-    });
-
-    return () => {
-      cancelled = true;
-      stop?.();
-    };
-  }, [apply, read]);
+  const { stuck } = useSyncStatus(rootPath, reload);
 
   const decide = useCallback(
     async (summary: ConflictSummary, resolution: ConflictResolution) => {
@@ -92,39 +63,38 @@ export function ConflictsPanel({ rootPath, onReview }: ConflictsPanelProps) {
       try {
         await resolveConflict(rootPath, summary, resolution);
       } catch (cause) {
-        failure = messageOf(cause, "That version could not be saved. Nothing was changed.");
+        failure = failureMessage(cause, "That version could not be saved. Nothing was changed.");
       }
       // Always re-read, and always after the attempt: a refused decision leaves
       // the card exactly where it was, which the user should see for themselves.
       // The report comes last because the re-read clears the previous one, and a
       // failure the list overwrote would be a failure nobody was told about.
-      apply(await read());
+      await reload();
       if (failure) setError(failure);
       setBusy(null);
     },
-    [apply, read, rootPath]
+    [reload, rootPath]
   );
 
   if (!rootPath) {
     return <Unavailable title="No workspace open" description="Open a workspace to see anything waiting for you." />;
   }
 
-  if (conflicts.length === 0 && !error) {
+  if (conflicts.length === 0 && stuck.length === 0 && !error) {
     return (
       <Unavailable
-        title="Nothing needs your attention"
-        description="When the same note is changed on two devices, both versions will show up here."
+        title="Nothing waiting on a decision"
+        description="When git sync or a cloud folder leaves a note that needs a choice, it shows up here."
       />
     );
   }
 
   return (
-    <section className="@container flex min-h-0 flex-1 flex-col overflow-y-auto" aria-label="Items to review">
+    <section className="@container flex min-h-0 flex-1 flex-col overflow-y-auto" aria-label="Decisions needed">
       <header className="border-b border-border px-3 py-3">
-        <h3 className="m-0 text-sm font-semibold text-foreground">Needs your attention</h3>
+        <h3 className="m-0 text-sm font-semibold text-foreground">Decisions needed</h3>
         <p className="mb-0 mt-1 text-xs leading-relaxed text-muted-foreground">
-          These notes changed on more than one device. Take a look and choose which version to keep —
-          nothing is deleted until you decide.
+          Choose what to keep. Nothing is deleted until you decide.
         </p>
       </header>
 
@@ -135,6 +105,15 @@ export function ConflictsPanel({ rootPath, onReview }: ConflictsPanelProps) {
       )}
 
       <ul className="m-0 flex list-none flex-col gap-2 p-3">
+        {stuck.map((note) => (
+          <li key={note.path} className="rounded-small border border-border bg-card p-3">
+            <h4 className="m-0 wrap-break-word text-xs font-semibold text-card-foreground">{noteName(note.path)}</h4>
+            <p className="mb-2 mt-0.5 text-[0.7rem] text-muted-foreground">Could not be kept in step</p>
+            <p className="mb-0 mt-0 text-[0.7rem] leading-relaxed text-muted-foreground">
+              {note.message} {recoveryFor(note.code)}
+            </p>
+          </li>
+        ))}
         {conflicts.map((conflict) => (
           <ConflictCard
             key={conflict.theirs.path}
@@ -165,9 +144,42 @@ function ConflictCard({ conflict, busy, onReview, onDecide }: ConflictCardProps)
   const treatment = treatmentOf(conflict);
   const name = noteName(conflict.ours.path);
 
+  if (treatment === "keepOrDelete") {
+    return (
+      <li className="rounded-small border border-border bg-card p-3">
+        <h4 className="m-0 wrap-break-word text-xs font-semibold text-card-foreground">{name}</h4>
+        <p className="mb-2 mt-0.5 text-[0.7rem] text-muted-foreground">
+          Changed on one device and deleted on the other
+        </p>
+        <p className="mb-2 mt-0 text-[0.7rem] leading-relaxed text-muted-foreground">
+          Keeping the note saves the changed text. You can still put a deleted note back from Saved
+          versions.
+        </p>
+        <div className="flex flex-col gap-1.5 @xs:flex-row">
+          <button
+            type="button"
+            className={CARD_BUTTON_PRIMARY}
+            onClick={() => onDecide({ kind: "keepNote" })}
+            disabled={busy}
+          >
+            Keep note
+          </button>
+          <button
+            type="button"
+            className={CARD_BUTTON}
+            onClick={() => onDecide({ kind: "deleteNote" })}
+            disabled={busy}
+          >
+            Delete note
+          </button>
+        </div>
+      </li>
+    );
+  }
+
   return (
     <li className="rounded-small border border-border bg-card p-3">
-      <h4 className="m-0 break-words text-xs font-semibold text-card-foreground">{name}</h4>
+      <h4 className="m-0 wrap-break-word text-xs font-semibold text-card-foreground">{name}</h4>
       <p className="mb-2 mt-0.5 text-[0.7rem] text-muted-foreground">Edited in two places</p>
 
       <p className="mb-2 mt-0 text-[0.7rem] text-muted-foreground">
@@ -230,8 +242,4 @@ function ConflictCard({ conflict, busy, onReview, onDecide }: ConflictCardProps)
       </div>
     </li>
   );
-}
-
-function messageOf(cause: unknown, fallback: string): string {
-  return cause instanceof NativeCommandError ? cause.message : fallback;
 }

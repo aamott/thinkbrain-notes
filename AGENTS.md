@@ -12,7 +12,7 @@ Future extensions include:
 
 ## File Map
 
-Keep map up to date. Relative filepaths. Concise.
+Keep map up to date with frequently accessed files. Relative filepaths. Concise.
 
 ```
 apps/desktop/  # React UI + Tauri Rust host (See apps/desktop/AGENTS.md)
@@ -26,11 +26,11 @@ apps/desktop/  # React UI + Tauri Rust host (See apps/desktop/AGENTS.md)
 │  ├─ panels/  # Left/right popouts, bottom panel, outline
 │  ├─ search/  # Search panel & model
 │  ├─ settings/  # Settings UI, theme provider, desktop state
-│  ├─ shell/  # DesktopShell, activity bar, title bar, status bar
+│  ├─ shell/  # DesktopShell, activity bar, title bar, status bar; StatusBar.tsx owns sync-error toast, setup-success toast + notification bell
 │  ├─ tabs/  # Tab model, registry, editor, live preview
 │  └─ workspace/  # Explorer, document adapter, workspace model
 ├─ src-tauri/  # Rust backend & ACP host (See apps/desktop/src-tauri/AGENTS.md)
-│  └─ src/commands/  # Tauri commands: extensions, markdown, search, settings, themes, watcher, workspace
+│  └─ src/commands/  # Tauri commands: extensions, markdown, search, settings, sync (history, maintain, sign-in, import), themes, watcher, workspace
 │     └─ search/  # Structured metadata facet storage, queries, and focused tests
 ├─ e2e/  # Playwright E2E specs
 └─ demo/  # Demo fixtures
@@ -49,7 +49,7 @@ examples/extensions/  # Sample extension (hello-notes)
 - **ACP Integration**: Tauri Rust host owns agent process lifecycle via `agent-client-protocol` crate. Renderer receives Tauri events directly.
 
 ## Quality & Conventions
-- Run `./scripts/qa.sh` before completing tasks.
+- Run `./scripts/qa.sh` before completing tasks. Runs all linting, formatting, and tests.
 - Avoid `any` types; prefer strict types or `unknown`.
 - Fail loudly: log errors clearly and return typed results.
 
@@ -86,7 +86,7 @@ For major or cross-cutting refactors, `npx repomix --compress` can help map depe
 
 
 ## Rules/suggestions
-- Never commit/push without explicit user approval. Recommend commit message and what to try out.
+- Never commit/push without explicit user approval. Recommend commit message and what to try out. No signatures in commit messages.
 - Never change AGENTS.md (this file) without explicit user direction and approval. (Exception: `## File Map`)
 - Write compact, maintainable, optimized code. Shorter code is easier to read.
 - Avoid large files. Never over 800 lines. Break up earlier rather than later when it's already big. 

@@ -57,6 +57,7 @@ Each is a surface Opus 5 must decompose. Concise callouts only — not specs.
 - **Tool call tracking & approvals**: render tool calls in-thread; approvals
   flow through ACP permission-consent UI (arc step 10). Planner defines the
   in-thread affordances.
+- **Slash commands**: support for `available_commands_update` in ACP.
 
 ### Harness module pattern (locked method)
 
@@ -67,20 +68,97 @@ None are approved during planning — only the overall method per harness is
 approved. The planner describes the method; the dev approves workarounds
 individually during implementation.
 
+### Composer bar layout (locked)
+
+Left to right, one line:
+
+1. **Attach file** (uses `attachment` shadcn primitive)
+2. **MCP settings** — gear icon with popout
+3. **Profile selector**
+4. **Model selector**
+5. **Context ring** — gray background ring + white top ring that fills up to
+   show context usage. Hover/press shows a popout with:
+   - `50% (100k / 200k) context used`
+   - Total cost
+   - Estimated time to prompt cache expires (if ACP implements it), or `eta to
+     cache expiry` if a fallback is set in settings
+6. **Harness selector**
+7. **Voice record** — low priority, followup story
+8. **Send / cancel**
+
+#### Responsive collapse (planner must be specific, not verbose)
+
+As the panel narrows, collapse in this order:
+1. Harness name → icon only (keep selector)
+2. Profile → collapses
+3. Model → truncates with `...` (browser-native ellipsis)
+
+Planner specifies exact breakpoints or container-query thresholds.
+
+#### MCP settings popout (locked)
+
+May expand later to other session settings; MCP only for now. MCPs listed top
+to bottom, each row: status bubble, MCP name, switch. Header:
+
+```
+x mcp       [mcp settings] [open mcp config file]
+```
+
+- `mcp settings` icon → settings page
+- `open mcp config file` icon → opens the MCP config file in the editor. Note:
+  this file likely lives outside the workspace in global config; the editor must
+  handle non-workspace paths.
+
+### Chat message types & layout
+
+Three kinds of messages in the thread:
+
+1. **User messages** — rendered in a chat bubble.
+2. **Agent responses** — not in a bubble. Markdown-formatted. Contain a mix of
+   content types (see below).
+3. **Other notes** — host-injected contextual notices like "Your recent
+   terminal commands:", "Your recently changed files:", etc. These come from
+   the host, not the agent. Planner defines the full set.
+Line after agent chat shows options to copy, fork chat, show stats from that message.Symbols on bottom right of overall response.
+
+#### Expandable tabs menu (above the input composer)
+
+Conditionally shown on top of input composer (where the user types). Tabs along the bottom of the menu area:
+
+- **Files changed** — aggregate list of `filename +x -y` (icon + lines
+  added/removed) across all file writes in the session/turn. If 10 edits are
+  made across 5 files, the tab lists those 5 files with cumulative totals.
+  Buttons: **reject all** and **accept all**. Zeros on accept/reject.
+  - **Reject all**
+  - **Accept all**
+- **Subagents** — list of active subagents; clicking one scrolls to that subagent's
+  position in the chat.
+- Other tabs may be added later.
+
+Rules:
+- All tabs minimized by default.
+- A tab doesn't show unless it has content.
+- If no tabs have content, the tabs area doesn't render at all (saves chat
+  space).
+
+#### Agent response content types (designed by dev, planner asks)
+
+Agent responses are markdown formatted text and don't look like they're in a bubble. They contain tool calls, subagents, thinking, and anything else ACP can allow. 
+- **Tool call** — shows all info available via ACP, with a permission prompt.
+  Primary button is blue with a dropdown attached on the right to select the
+  action: `allow`, `always allow <command>`, etc. Ex: `Accept <`
+  - **File write** — Shows lines added/removed count + top 4 changed lines.
+
 ## Concrete invariants (locked)
 
-- **ACP protocol**: use the official `agent-client-protocol` Rust crate. The
+- **ACP protocol**: use the official `agent-client-protocol` Rust crate (v2.0.0 or greater). The
   host is deterministic — it transports, validates, enforces, returns
   conflicts; it never reasons, plans, edits, or merges for an agent.
 - **Chat UI primitives**: install shadcn conversational primitives via
   `pnpm dlx shadcn@latest add message-scroller message bubble attachment marker`
-  (see https://www.infoq.com/news/2026/08/shadcn-conversational-primitives/).
+  (see https://ui.shadcn.com/docs/components/message).
   These are the building blocks for the chat surface.
-- **Extension model**: true extension, not a built-in. Installable/removable,
-  registered through the extension host's canonical APIs. The extension owns
-  the assistant panel contribution, chat behavior, and a scoped credential
-  consumer capability — not OS secret storage, ACP process lifecycle, or
-  provider transport.
+- **Extension model**: Eventually a true extension, not a built-in. Installable/removable, registered through the extension host's canonical APIs. 
 - **Placement**: right action items menu, icon present, pops out from the right
   by default. Not in the left action bar.
 - **Styling**: Tailwind utilities + `--tn-*` tokens across all AI surfaces.
@@ -128,14 +206,12 @@ No UI mockup or implementation of these surfaces until answers are recorded.
   runtime behavior.
 - ⬜ `panelRegistry.tsx` has an `assistant` panel contribution (left-side
   framing — will need to move to right action items menu per invariants).
-- ⬜ Rust has `agent-client-protocol = "1.2"` in `Cargo.toml`/lock but no ACP
+- ⬜ Rust has `agent-client-protocol` in `Cargo.toml`/lock but no ACP
   module, commands, events, or lifecycle.
 - ⬜ No `packages/core/src/ai/`, provider gateway, secret consumer, history
   adapter, or consent records exist.
 
 ## What Opus 5 owns
 
-Everything not listed above: file paths, Tauri command/event names, DTO shapes,
-test matrices, acceptance checkboxes, story decomposition, dependency edges,
-and the actual planning of each arc step. This fable is the head-start, not the
-plan.
+Everything not locked above — paths, DTOs, test matrices, story decomposition —
+is the planning pass's to decide.

@@ -76,7 +76,17 @@ macro_rules! app_command_handlers {
             $crate::commands::sync::history::sync_history,
             $crate::commands::sync::history::restore_version,
             $crate::commands::sync::history::sync_conflict_rate,
-            $crate::commands::sync::status::sync_status
+            $crate::commands::sync::maintain::sync_history_usage,
+            $crate::commands::sync::maintain::sync_free_space,
+            $crate::commands::sync::maintain::sync_clear_undo_history,
+            $crate::commands::sync::status::sync_status,
+            $crate::commands::sync::round::sync_now,
+            $crate::commands::sync::sign_in::save_sync_credentials,
+            $crate::commands::sync::sign_in::save_sync_link,
+            $crate::commands::sync::sign_in::sync_sign_in_status,
+            $crate::commands::sync::sign_in::forget_sync_sign_in,
+            $crate::commands::sync::import::preview_workspace_from_git_link,
+            $crate::commands::sync::import::import_workspace_from_git_link
         ]
     };
 }
@@ -126,7 +136,17 @@ pub const APP_COMMAND_PATHS: &[&str] = &[
     "sync::history::sync_history",
     "sync::history::restore_version",
     "sync::history::sync_conflict_rate",
+    "sync::maintain::sync_history_usage",
+    "sync::maintain::sync_free_space",
+    "sync::maintain::sync_clear_undo_history",
     "sync::status::sync_status",
+    "sync::round::sync_now",
+    "sync::sign_in::save_sync_credentials",
+    "sync::sign_in::save_sync_link",
+    "sync::sign_in::sync_sign_in_status",
+    "sync::sign_in::forget_sync_sign_in",
+    "sync::import::preview_workspace_from_git_link",
+    "sync::import::import_workspace_from_git_link",
 ];
 
 #[cfg(test)]
@@ -186,7 +206,17 @@ mod tests {
         assert!(APP_COMMAND_PATHS.contains(&"sync::history::sync_history"));
         assert!(APP_COMMAND_PATHS.contains(&"sync::history::restore_version"));
         assert!(APP_COMMAND_PATHS.contains(&"sync::history::sync_conflict_rate"));
+        assert!(APP_COMMAND_PATHS.contains(&"sync::maintain::sync_history_usage"));
+        assert!(APP_COMMAND_PATHS.contains(&"sync::maintain::sync_free_space"));
+        assert!(APP_COMMAND_PATHS.contains(&"sync::maintain::sync_clear_undo_history"));
         assert!(APP_COMMAND_PATHS.contains(&"sync::status::sync_status"));
+        assert!(APP_COMMAND_PATHS.contains(&"sync::round::sync_now"));
+        assert!(APP_COMMAND_PATHS.contains(&"sync::sign_in::save_sync_credentials"));
+        assert!(APP_COMMAND_PATHS.contains(&"sync::sign_in::save_sync_link"));
+        assert!(APP_COMMAND_PATHS.contains(&"sync::sign_in::sync_sign_in_status"));
+        assert!(APP_COMMAND_PATHS.contains(&"sync::sign_in::forget_sync_sign_in"));
+        assert!(APP_COMMAND_PATHS.contains(&"sync::import::preview_workspace_from_git_link"));
+        assert!(APP_COMMAND_PATHS.contains(&"sync::import::import_workspace_from_git_link"));
 
         // Sanity: no duplicates and the count matches the macro entries.
         let mut sorted = APP_COMMAND_PATHS.to_vec();
@@ -199,8 +229,8 @@ mod tests {
         );
         assert_eq!(
             APP_COMMAND_PATHS.len(),
-            38,
-            "expected 34 registered commands"
+            48,
+            "expected 48 registered commands"
         );
     }
 }

@@ -2,13 +2,13 @@ import { type ReactNode } from "react";
 
 import { Unavailable } from "../shell/Unavailable";
 import { PanelTitle } from "./PanelTitle";
+import { MountedPanel } from "./panelRegistry";
 import {
   getDesktopPanelOrUndefined,
-  MountedPanel,
   type DesktopPanelContribution,
   type LeftPanelContext,
   type RightPanelContext
-} from "./panelRegistry";
+} from "./panelRegistryModel";
 
 type Side = "left" | "right";
 

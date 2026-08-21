@@ -1,15 +1,22 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-import { NativeCommandError } from "../native/commands";
+import { noteName } from "../lib/utils";
+import { useSettingsStore } from "../settings/settingsStore";
 import { Unavailable } from "../shell/Unavailable";
-import { noteName } from "./conflictCard";
-import type { ChangedNote, ConflictRate, RecordedChange } from "./historyTypes";
-import { describeConflictRate, describeMoment, describeWhatChanged } from "./syncCopy";
+import type { ChangedNote, ConflictRate, RecordedChange, Synced } from "./historyTypes";
+import {
+  describeConflictRate,
+  failureMessage,
+  describeMoment,
+  describePill,
+  describeSync,
+  describeWhatChanged
+} from "./syncCopy";
 import {
   readConflictRate,
   readHistory,
   restoreVersion,
-  subscribeToSyncStatus
+  syncNow
 } from "./syncService";
 import { useSyncStatus } from "./useSyncStatus";
 
@@ -32,7 +39,6 @@ interface HistoryPanelProps {
   /** Leaves a single note's versions for the whole workspace's history. */
   readonly onShowEverything: () => void;
 }
-
 /** One read of the panel: what it holds, or why it could not be read. */
 interface Read {
   readonly changes: readonly RecordedChange[] | null;
@@ -41,13 +47,22 @@ interface Read {
 }
 
 export function HistoryPanel({ rootPath, note, onShowEverything }: HistoryPanelProps) {
+  const queryKey = `${rootPath ?? ""}\0${note ?? ""}`;
   const [changes, setChanges] = useState<readonly RecordedChange[]>([]);
   const [rate, setRate] = useState<ConflictRate | null>(null);
   const [opened, setOpened] = useState<ReadonlySet<string>>(() => new Set());
-  const [busy, setBusy] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const { alongsideOwnGit } = useSyncStatus(rootPath);
+  const [syncing, setSyncing] = useState(false);
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
+  const restoring = useRef(false);
+  const reloadId = useRef(0);
+  const loading = loadedKey !== queryKey;
+  // Native manual sync reads the saved workspace document. Do not enable this
+  // from a staged link that the native side cannot see yet.
+  const destination = useSettingsStore((state) => state.workspaceValues?.["sync.destination"]);
+  const syncConfigured = typeof destination === "string" && destination.trim() !== "";
 
   /** Reads the list, changing nothing. {@link apply} is the only writer. */
   const read = useCallback(async (): Promise<Read | null> => {
@@ -59,7 +74,7 @@ export function HistoryPanel({ rootPath, note, onShowEverything }: HistoryPanelP
       ]);
       return { changes, rate, error: null };
     } catch (cause) {
-      return { changes: null, rate: null, error: messageOf(cause, "This folder's saved versions could not be read.") };
+      return { changes: null, rate: null, error: failureMessage(cause, "This folder's saved versions could not be read.", true) };
     }
   }, [note, rootPath]);
 
@@ -68,53 +83,78 @@ export function HistoryPanel({ rootPath, note, onShowEverything }: HistoryPanelP
     if (result.changes) setChanges(result.changes);
     if (result.rate) setRate(result.rate);
     setError(result.error);
-  }, []);
+    setLoadedKey(queryKey);
+  }, [queryKey]);
 
-  // One effect for the first read and every one after it. The sweeper announces
-  // when it has written something, which is exactly when this list is out of
-  // date — including after a restore made in this very window.
-  useEffect(() => {
-    let cancelled = false;
-    let stop: (() => void) | null = null;
-    const reload = () => {
-      void read().then((result) => {
-        if (!cancelled) apply(result);
-      });
-    };
-
-    reload();
-    void subscribeToSyncStatus(reload).then((unlisten) => {
-      if (cancelled) unlisten();
-      else stop = unlisten;
+  const reload = useCallback(() => {
+    const id = ++reloadId.current;
+    void read().then((result) => {
+      if (id === reloadId.current) apply(result);
     });
-
-    return () => {
-      cancelled = true;
-      stop?.();
-    };
   }, [apply, read]);
+  useEffect(() => () => {
+    reloadId.current++;
+  }, [queryKey]);
+  const status = useSyncStatus(rootPath, undefined, reload);
+  const { alongsideOwnGit } = status;
+  // Live status covers background trips; local `syncing` covers the click until
+  // the first status event arrives, so the button never looks idle mid-request.
+  const bringingInStep = syncing || status.state === "syncing";
+  const syncButtonLabel = bringingInStep
+    ? describePill({
+        ...status,
+        state: "syncing",
+        phase: status.state === "syncing" ? status.phase : null
+      }).text
+    : "Bring these notes in step now";
 
   const putBack = useCallback(
     async (change: RecordedChange, path: string) => {
-      if (!rootPath) return;
-      setBusy(`${change.id}:${path}`);
+      if (!rootPath || restoring.current) return;
+      restoring.current = true;
+      setBusy(true);
       setNotice(null);
       let failure: string | null = null;
       try {
         await restoreVersion(rootPath, path, change.id);
       } catch (cause) {
-        failure = messageOf(cause, "That version could not be put back. Nothing was changed.");
+        failure = failureMessage(cause, "That version could not be put back. Nothing was changed.", true);
       }
-      // Always after the attempt, and the report last: the re-read clears the
-      // previous message, and a failure the list overwrote would be a failure
-      // nobody was told about.
-      apply(await read());
-      if (failure) setError(failure);
-      else setNotice(`"${noteName(path)}" is back to how it was ${describeMoment(change.at).toLowerCase()}.`);
-      setBusy(null);
+      try {
+        // Always after the attempt, and the report last: the re-read clears the
+        // previous message, and a failure the list overwrote would be a failure
+        // nobody was told about.
+        apply(await read());
+        if (failure) setError(failure);
+        else setNotice(`"${noteName(path)}" is back to how it was ${describeMoment(change.at).toLowerCase()}.`);
+      } finally {
+        restoring.current = false;
+        setBusy(false);
+      }
     },
     [apply, read, rootPath]
   );
+
+  /** Brings this folder in step with wherever it syncs to, and says what moved. */
+  const bringInStep = useCallback(async () => {
+    if (!rootPath) return;
+    setSyncing(true);
+    setNotice(null);
+    setError(null);
+    let failure: string | null = null;
+    let done: Synced | null = null;
+    try {
+      done = await syncNow(rootPath);
+    } catch (cause) {
+      failure = failureMessage(cause, "These notes could not be brought in step. Nothing was changed.", true);
+    }
+    // The re-read first, the report last, for the same reason a restore does
+    // it that way: the list overwrites the message it was told to show.
+    apply(await read());
+    if (failure) setError(failure);
+    else if (done) setNotice(describeSync(done));
+    setSyncing(false);
+  }, [apply, read, rootPath]);
 
   const toggle = useCallback((id: string) => {
     setOpened((current) => {
@@ -132,7 +172,7 @@ export function HistoryPanel({ rootPath, note, onShowEverything }: HistoryPanelP
     <section className="@container flex min-h-0 flex-1 flex-col overflow-y-auto" aria-label="Saved versions">
       <header className="border-b border-border px-3 py-3">
         <h3 className="m-0 text-sm font-semibold text-foreground">
-          {note ? `Earlier versions of ${noteName(note)}` : "History"}
+          {note ? `Earlier versions of ${noteName(note)}` : "Saved versions"}
         </h3>
         <p className="mb-0 mt-1 text-xs leading-relaxed text-muted-foreground">
           {note
@@ -145,10 +185,21 @@ export function HistoryPanel({ rootPath, note, onShowEverything }: HistoryPanelP
             what you see here is a second, separate record kept outside your notes.
           </p>
         )}
-        {note && (
+        {note ? (
           <button type="button" className={QUIET_BUTTON + " mt-2"} onClick={onShowEverything}>
             Show everything instead
           </button>
+        ) : (
+          syncConfigured && (
+            <button
+              type="button"
+              className={QUIET_BUTTON + " mt-2"}
+              disabled={bringingInStep}
+              onClick={() => void bringInStep()}
+            >
+              {syncButtonLabel}
+            </button>
+          )
         )}
       </header>
 
@@ -163,7 +214,7 @@ export function HistoryPanel({ rootPath, note, onShowEverything }: HistoryPanelP
         </p>
       )}
 
-      {changes.length === 0 && error === null ? (
+      {!loading && changes.length === 0 && error === null ? (
         <Unavailable
           title={note ? "No earlier versions yet" : "Nothing saved yet"}
           description={
@@ -205,7 +256,7 @@ interface EntryProps {
   readonly open: boolean;
   /** A single note's versions are always open — there is nothing to fold away. */
   readonly collapsible: boolean;
-  readonly busy: string | null;
+  readonly busy: boolean;
   readonly onToggle: () => void;
   readonly onRestore: (path: string) => void;
 }
@@ -235,7 +286,7 @@ function Entry({ change, open, collapsible, busy, onToggle, onRestore }: EntryPr
               <NoteRow
                 key={note.path}
                 note={note}
-                busy={busy === `${change.id}:${note.path}`}
+                busy={busy}
                 onRestore={() => onRestore(note.path)}
               />
             ))}
@@ -251,7 +302,6 @@ function Entry({ change, open, collapsible, busy, onToggle, onRestore }: EntryPr
     </li>
   );
 }
-
 function NoteRow({
   note,
   busy,
@@ -276,8 +326,4 @@ function NoteRow({
       )}
     </li>
   );
-}
-
-function messageOf(cause: unknown, fallback: string): string {
-  return cause instanceof NativeCommandError ? cause.message : fallback;
 }

@@ -12,9 +12,12 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::commands::workspace::{is_ignored_entry_name, stable_workspace_hash, MAX_WORKSPACE_ENTRIES};
+use crate::commands::workspace::{
+    is_ignored_entry_name, stable_workspace_hash, MAX_WORKSPACE_ENTRIES,
+};
 use crate::NativeError;
 
+use super::failed;
 use super::{hidden_repo, snapshot};
 
 /// A vault Auto Sync keeps history for.
@@ -37,8 +40,6 @@ pub struct ManagedWorkspace {
     /// the walk already skips along with every other.
     pub has_own_git: bool,
 }
-
-
 
 /// Names Auto Sync never records, in `.gitignore` syntax.
 ///
@@ -64,6 +65,22 @@ const NEVER_RECORD: [&str; 6] = [
 /// it is being listed or snapshotted.
 const MAX_MARKDOWN_DEPTH: usize = 20;
 
+fn vault_read(error: impl std::fmt::Display) -> NativeError {
+    failed(
+        "sync.vault_read_failed",
+        "Could not read this workspace's notes.",
+        error,
+    )
+}
+
+fn exclude_write_failed(error: impl std::fmt::Display) -> NativeError {
+    failed(
+        "sync.exclude_write_failed",
+        "Could not set up this workspace's sync history.",
+        error,
+    )
+}
+
 /// Where a vault's hidden repository lives.
 ///
 /// Keyed by the same stable hash the workspace settings file uses, so one
@@ -71,7 +88,9 @@ const MAX_MARKDOWN_DEPTH: usize = 20;
 /// history rather than inheriting a stranger's.
 pub fn hidden_repo_path(app_data_dir: &Path, canonical_root: &str) -> PathBuf {
     let key = stable_workspace_hash(canonical_root);
-    app_data_dir.join("sync").join(format!("workspace-{key:016x}.git"))
+    app_data_dir
+        .join("sync")
+        .join(format!("workspace-{key:016x}.git"))
 }
 
 /// Opens or creates the hidden repository for `vault`, taking the first
@@ -87,7 +106,7 @@ pub fn bootstrap(app_data_dir: &Path, vault: &Path) -> Result<ManagedWorkspace, 
     if took_first_snapshot {
         let notes: Vec<PathBuf> = recordable_notes(vault)?
             .into_iter()
-            .filter(|note| !super::conflict::is_conflict_copy(vault, note))
+            .filter(|note| !super::conflict::excluded_from_history(vault, note))
             .collect();
         if !notes.is_empty() {
             snapshot::record(&repo, &notes, "Sync — first snapshot of this workspace")?;
@@ -108,13 +127,7 @@ pub fn bootstrap(app_data_dir: &Path, vault: &Path) -> Result<ManagedWorkspace, 
 /// `info/exclude` is the same rules, kept where the rest of the repository is.
 fn write_exclude_file(git_dir: &Path) -> Result<(), NativeError> {
     let info = git_dir.join("info");
-    std::fs::create_dir_all(&info).map_err(|error| {
-        NativeError::with_details(
-            "sync.exclude_write_failed",
-            "Could not set up this workspace's sync history.",
-            error.to_string(),
-        )
-    })?;
+    std::fs::create_dir_all(&info).map_err(exclude_write_failed)?;
 
     let mut contents =
         String::from("# Written by ThinkBrain Notes. Files Auto Sync never records.\n");
@@ -123,24 +136,32 @@ fn write_exclude_file(git_dir: &Path) -> Result<(), NativeError> {
         contents.push('\n');
     }
 
-    std::fs::write(info.join("exclude"), contents).map_err(|error| {
-        NativeError::with_details(
-            "sync.exclude_write_failed",
-            "Could not set up this workspace's sync history.",
-            error.to_string(),
-        )
-    })
+    std::fs::write(info.join("exclude"), contents).map_err(exclude_write_failed)
 }
 
 /// Every file in the vault worth recording, as vault-relative paths.
 pub fn recordable_notes(vault: &Path) -> Result<Vec<PathBuf>, NativeError> {
+    recordable_under(vault, vault)
+}
+
+/// Every recordable file under `directory`, still vault-relative.
+pub fn recordable_under(vault: &Path, directory: &Path) -> Result<Vec<PathBuf>, NativeError> {
+    let depth = directory
+        .strip_prefix(vault)
+        .map(|relative| relative.components().count())
+        .unwrap_or(0);
     let mut found = Vec::new();
-    collect(vault, vault, 0, &mut found)?;
+    collect(vault, directory, depth, &mut found)?;
     found.sort();
     Ok(found)
 }
 
-fn collect(vault: &Path, directory: &Path, depth: usize, found: &mut Vec<PathBuf>) -> Result<(), NativeError> {
+fn collect(
+    vault: &Path,
+    directory: &Path,
+    depth: usize,
+    found: &mut Vec<PathBuf>,
+) -> Result<(), NativeError> {
     if depth > MAX_MARKDOWN_DEPTH {
         return Err(NativeError::new(
             "sync.vault_too_deep",
@@ -148,22 +169,10 @@ fn collect(vault: &Path, directory: &Path, depth: usize, found: &mut Vec<PathBuf
         ));
     }
 
-    let entries = std::fs::read_dir(directory).map_err(|error| {
-        NativeError::with_details(
-            "sync.vault_read_failed",
-            "Could not read this workspace's notes.",
-            error.to_string(),
-        )
-    })?;
+    let entries = std::fs::read_dir(directory).map_err(vault_read)?;
 
     for entry in entries {
-        let entry = entry.map_err(|error| {
-            NativeError::with_details(
-                "sync.vault_read_failed",
-                "Could not read this workspace's notes.",
-                error.to_string(),
-            )
-        })?;
+        let entry = entry.map_err(vault_read)?;
         let path = entry.path();
         let name = entry.file_name();
         let name = name.to_string_lossy();
@@ -175,13 +184,7 @@ fn collect(vault: &Path, directory: &Path, depth: usize, found: &mut Vec<PathBuf
         // Symlinks are not followed: a link pointing outside the vault would
         // pull unrelated files into history, and one pointing back inside it
         // would record the same note twice.
-        let metadata = entry.metadata().map_err(|error| {
-            NativeError::with_details(
-                "sync.vault_read_failed",
-                "Could not read this workspace's notes.",
-                error.to_string(),
-            )
-        })?;
+        let metadata = entry.metadata().map_err(vault_read)?;
 
         if metadata.is_dir() {
             collect(vault, &path, depth + 1, found)?;
@@ -209,13 +212,15 @@ fn collect(vault: &Path, directory: &Path, depth: usize, found: &mut Vec<PathBuf
 /// Only the two wildcard shapes the list actually uses — a leading `*` and a
 /// trailing `*`. A full glob engine here would be code with no caller.
 pub(crate) fn is_never_recorded(name: &str) -> bool {
-    NEVER_RECORD.iter().any(|pattern| match pattern.strip_prefix('*') {
-        Some(suffix) => name.ends_with(suffix),
-        None => match pattern.strip_suffix('*') {
-            Some(prefix) => name.starts_with(prefix),
-            None => name == *pattern,
-        },
-    })
+    NEVER_RECORD
+        .iter()
+        .any(|pattern| match pattern.strip_prefix('*') {
+            Some(suffix) => name.ends_with(suffix),
+            None => match pattern.strip_suffix('*') {
+                Some(prefix) => name.starts_with(prefix),
+                None => name == *pattern,
+            },
+        })
 }
 
 #[cfg(test)]

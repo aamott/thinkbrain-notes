@@ -38,6 +38,12 @@ const error = (code: string, message: string): ManifestDiagnostic => ({
   severity: "error"
 });
 
+/** Builds a rejected-entry-path result carrying a single error diagnostic. */
+const rejectPath = (code: string, message: string): EntryPathResult => ({
+  path: null,
+  diagnostic: error(code, message)
+});
+
 const isCallable = (value: unknown): boolean => typeof value === "function";
 
 /**
@@ -50,43 +56,31 @@ export function resolveEntryPath(main: string | undefined): EntryPathResult {
   if (main === undefined) return { path: "extension.js", diagnostic: null };
 
   if (typeof main !== "string" || main.length === 0) {
-    return {
-      path: null,
-      diagnostic: error("entry_invalid_main", `"main" must be a non-empty string.`)
-    };
+    return rejectPath("entry_invalid_main", `"main" must be a non-empty string.`);
   }
 
   if (main.startsWith("/") || main.startsWith("\\") || WINDOWS_ABSOLUTE.test(main)) {
-    return {
-      path: null,
-      diagnostic: error(
-        "entry_absolute_path",
-        `"main" must be relative to the extension directory (not "${main}").`
-      )
-    };
+    return rejectPath(
+      "entry_absolute_path",
+      `"main" must be relative to the extension directory (not "${main}").`
+    );
   }
 
   // Checked on both separators: the manifest is authored by hand and may use
   // either, while the native side only ever sees the form written here.
   const segments = main.split(/[\\/]/);
   if (segments.includes("..")) {
-    return {
-      path: null,
-      diagnostic: error(
-        "entry_escapes_directory",
-        `"main" must not leave the extension directory (not "${main}").`
-      )
-    };
+    return rejectPath(
+      "entry_escapes_directory",
+      `"main" must not leave the extension directory (not "${main}").`
+    );
   }
 
   if (!JAVASCRIPT_ENTRY.test(main)) {
-    return {
-      path: null,
-      diagnostic: error(
-        "entry_not_javascript",
-        `"main" must name a pre-bundled .js or .mjs module (not "${main}").`
-      )
-    };
+    return rejectPath(
+      "entry_not_javascript",
+      `"main" must name a pre-bundled .js or .mjs module (not "${main}").`
+    );
   }
 
   return { path: main, diagnostic: null };

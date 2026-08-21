@@ -15,26 +15,30 @@ use serde::Serialize;
 use crate::commands::workspace::resolve_workspace_root;
 use crate::NativeError;
 
-use super::engine::Engine;
+use super::engine::{Engine, StuckNote, SyncHealth, SyncPhase};
 use super::history;
 
 /// What the pill is saying, in order of who needs to act.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub enum State {
     /// Auto Sync is deliberately not keeping history for this workspace.
     Off,
     /// Recording has stopped, and it will not start again on its own.
     Problem,
-    /// Two versions of something are waiting on a decision.
+    /// Two versions of something are waiting on a decision, or a note could
+    /// not be written and needs a retry.
     Attention,
+    /// A round trip to another device is in flight.
+    Syncing,
     /// Changes are on their way into history.
     Saving,
     /// Everything is recorded.
+    #[default]
     Idle,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncStatus {
     pub state: State,
@@ -44,14 +48,24 @@ pub struct SyncStatus {
     pub waiting: usize,
     /// Conflicts waiting on a decision.
     pub attention: usize,
+    /// Notes that could not be written or recorded, each with a recovery.
+    pub stuck: Vec<StuckNote>,
     /// Why recording stopped, if it has. The window turns the code into a
     /// sentence about what to do next.
     pub problem: Option<NativeError>,
-    /// Whether this vault is also a git repository of the user's own.
+    /// The named step of an in-flight round trip.
+    pub phase: Option<SyncPhase>,
+    /// Whether a git link has completed a round trip from this device.
+    pub health: SyncHealth,
+    /// When git sync last succeeded, in milliseconds since the epoch.
+    pub last_checked_at: Option<u64>,
+    /// Whether this folder is also a git repository of the user's own.
     ///
     /// Two histories are being kept here, and someone should learn that from
     /// the app rather than from noticing it.
     pub alongside_own_git: bool,
+    /// A failure to tidy private undo history. Recording ignores it.
+    pub maintenance_problem: Option<NativeError>,
 }
 
 /// What is keeping history for a workspace, or why nothing is.
@@ -75,32 +89,37 @@ pub fn of(recording: Recording<'_>) -> Result<SyncStatus, NativeError> {
         Recording::NotOurs => {
             return Ok(SyncStatus {
                 state: State::Off,
-                last_recorded_at: None,
-                waiting: 0,
-                attention: 0,
-                problem: None,
-                alongside_own_git: false,
+                ..Default::default()
             });
         }
         Recording::Failed(problem) => {
             return Ok(SyncStatus {
                 state: State::Problem,
-                last_recorded_at: None,
-                waiting: 0,
-                attention: 0,
+                health: SyncHealth::Problem,
                 problem: Some(problem),
-                alongside_own_git: false,
+                ..Default::default()
             });
         }
     };
 
-    let problem = engine.problem();
-    let attention = engine.conflicts().len();
+    let problem = engine.problem().or_else(|| engine.sync_problem());
+    let stuck = engine.stuck();
+    let attention = engine.conflicts().len() + stuck.len();
     let waiting = engine.waiting();
+    let last_checked_at = engine.last_checked_at();
+    let health = if problem.is_some() {
+        SyncHealth::Problem
+    } else if last_checked_at.is_some() {
+        SyncHealth::Healthy
+    } else {
+        SyncHealth::Unknown
+    };
 
     Ok(SyncStatus {
         state: if problem.is_some() {
             State::Problem
+        } else if engine.syncing() {
+            State::Syncing
         } else if attention > 0 {
             State::Attention
         } else if waiting > 0 {
@@ -111,8 +130,13 @@ pub fn of(recording: Recording<'_>) -> Result<SyncStatus, NativeError> {
         last_recorded_at: history::last_recorded(&engine.repository())?,
         waiting,
         attention,
+        stuck,
         problem,
+        phase: engine.phase(),
+        health,
+        last_checked_at,
         alongside_own_git: engine.alongside_own_git(),
+        maintenance_problem: engine.maintenance_problem(),
     })
 }
 

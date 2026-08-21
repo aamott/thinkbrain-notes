@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { createDebounced } from "../lib/debounce";
 import { JournalPanel } from "./JournalPanel";
 import {
   intersectPaths,
@@ -117,21 +118,12 @@ export function JournalPanelContainer({
   // the user knows why the reload undid their action, then cleared after a
   // pause. Errors used to vanish into `console.error` only.
   const [actionError, setActionError] = useState<string | null>(null);
-  const actionErrorTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearActionError = useMemo(() => createDebounced(() => setActionError(null), 6000), []);
   const showActionError = useCallback((message: string): void => {
-    if (actionErrorTimer.current !== null) clearTimeout(actionErrorTimer.current);
     setActionError(message);
-    // Long enough to read, short enough not to linger after the user moves on.
-    actionErrorTimer.current = setTimeout(() => {
-      actionErrorTimer.current = null;
-      setActionError(null);
-    }, 6000);
-  }, []);
-  useEffect(() => {
-    return () => {
-      if (actionErrorTimer.current !== null) clearTimeout(actionErrorTimer.current);
-    };
-  }, []);
+    clearActionError();
+  }, [clearActionError]);
+  useEffect(() => () => clearActionError.cancel(), [clearActionError]);
   // The answer is kept with the question it answered, so a result for a query
   // the user has already moved on from is ignored rather than shown as a filter
   // of the new one. Deriving it also keeps the effect from setting state

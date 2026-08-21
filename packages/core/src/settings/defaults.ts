@@ -26,8 +26,8 @@ export function extractDefaults(
 ): Record<string, unknown> {
   const defaults: Record<string, unknown> = {};
 
-  // Scope is a property of the setting, not of the module it arrived in: one
-  // extension module can hold a per-workspace folder and a global default view.
+  // Per-setting scope: a module may hold both a global default and a
+  // per-workspace folder, and only the matching keys belong in this map.
   for (const def of registry.getAllDefinitions()) {
     if (def.scope === scope) {
       defaults[def.key] = def.default;

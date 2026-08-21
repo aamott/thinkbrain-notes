@@ -86,7 +86,7 @@ test("opens a workspace in a new window and restores the last workspace on reloa
 
   await page.goto("/");
   await page.getByRole("button", { name: "Choose workspace" }).click();
-  await page.getByRole("menuitem", { name: "Add workspace" }).click();
+  await page.getByRole("menuitem", { name: "Open folder…" }).click();
   await expect(page.getByRole("heading", { name: "No workspace open" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Choose workspace" })).toHaveText("Choose workspace");
   await expect.poll(() => page.evaluate(() => sessionStorage.getItem("thinkbrain-e2e-app-settings"))).toContain("demo-vault");
@@ -200,7 +200,7 @@ test("opens, saves, protects, and creates Markdown notes through the fresh shell
           const oldKey = String(args.relativePath);
           const newKey = String(args.newRelativePath);
           if (oldKey in documents) {
-            documents[newKey] = documents[oldKey];
+            documents[newKey] = documents[oldKey]!;
             delete documents[oldKey];
             writeDocuments(documents);
           }
@@ -400,7 +400,7 @@ test("the explorer context menu creates, renames, and deletes entries", async ({
           const newKey = String(args.newRelativePath);
           const documents = readDocuments();
           if (oldKey in documents) {
-            documents[newKey] = documents[oldKey];
+            documents[newKey] = documents[oldKey]!;
             delete documents[oldKey];
             writeDocuments(documents);
           }

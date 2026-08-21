@@ -29,6 +29,17 @@ export interface ParseDynamicAppSettingsResult {
   readonly diagnostics: SettingsDiagnostic[];
 }
 
+/** Builds a defaults-fallback result with a single diagnostic. */
+const defaultsFailure = (
+  defaults: Record<string, unknown>,
+  code: string,
+  message: string,
+  severity: SettingsDiagnostic["severity"]
+): ParseDynamicAppSettingsResult => ({
+  values: defaults,
+  diagnostics: [{ code, message, severity }]
+});
+
 /**
  * Parses raw app settings JSON into a flat, registry-backed key-value map.
  *
@@ -60,45 +71,33 @@ export function parseDynamicAppSettings(
   const defaults = extractDefaults(registry, "app");
 
   if (rawJson === null) {
-    return {
-      values: defaults,
-      diagnostics: [
-        {
-          code: "settings.missing",
-          message: "Application settings file was not found; defaults were used.",
-          severity: "warning"
-        }
-      ]
-    };
+    return defaultsFailure(
+      defaults,
+      "settings.missing",
+      "Application settings file was not found; defaults were used.",
+      "warning"
+    );
   }
 
   let parsed: unknown;
   try {
     parsed = JSON.parse(rawJson) as unknown;
   } catch (error) {
-    return {
-      values: defaults,
-      diagnostics: [
-        {
-          code: "settings.invalid_json",
-          message: `Application settings JSON could not be parsed: ${getErrorMessage(error)}`,
-          severity: "error"
-        }
-      ]
-    };
+    return defaultsFailure(
+      defaults,
+      "settings.invalid_json",
+      `Application settings JSON could not be parsed: ${getErrorMessage(error)}`,
+      "error"
+    );
   }
 
   if (!isRecord(parsed)) {
-    return {
-      values: defaults,
-      diagnostics: [
-        {
-          code: "settings.invalid_shape",
-          message: "Application settings must be a JSON object; defaults were used.",
-          severity: "error"
-        }
-      ]
-    };
+    return defaultsFailure(
+      defaults,
+      "settings.invalid_shape",
+      "Application settings must be a JSON object; defaults were used.",
+      "error"
+    );
   }
 
   // Run migrations on the raw record (version-tracked), then extract settings.
@@ -119,16 +118,7 @@ export function parseDynamicAppSettings(
     record = migrated.record;
     migrationDiagnostics = migrated.diagnostics;
   } catch (error) {
-    return {
-      values: defaults,
-      diagnostics: [
-        {
-          code: "settings.migration_failed",
-          message: getErrorMessage(error),
-          severity: "error"
-        }
-      ]
-    };
+    return defaultsFailure(defaults, "settings.migration_failed", getErrorMessage(error), "error");
   }
 
   // Extract only known app-scoped keys from the migrated record; unknown keys

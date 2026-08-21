@@ -42,7 +42,7 @@ interface YamlIssue {
  *   input as body so callers never accidentally rewrite a damaged note.
  */
 export function parseFrontmatter(markdown: string): FrontmatterParseResult {
-  const emptyResult = createFrontmatterResult(createEmptyMetadata(), markdown, null, []);
+  const emptyResult = createFrontmatterResult(EMPTY_METADATA, markdown, null, []);
   const openingMatch = FRONTMATTER_OPEN_PATTERN.exec(markdown);
 
   if (!openingMatch) {
@@ -55,7 +55,7 @@ export function parseFrontmatter(markdown: string): FrontmatterParseResult {
   const closingMatch = FRONTMATTER_CLOSE_PATTERN.exec(markdown);
 
   if (!closingMatch) {
-    return createFrontmatterResult(createEmptyMetadata(), markdown, null, [
+    return createFrontmatterResult(EMPTY_METADATA, markdown, null, [
       {
         code: "frontmatter_missing_closing_fence",
         message: "YAML frontmatter starts with --- but has no closing --- fence.",
@@ -77,7 +77,7 @@ export function parseFrontmatter(markdown: string): FrontmatterParseResult {
   ];
 
   if (document.errors.length > 0) {
-    return createFrontmatterResult(createEmptyMetadata(), markdown, frontmatterBlock, diagnostics);
+    return createFrontmatterResult(EMPTY_METADATA, markdown, frontmatterBlock, diagnostics);
   }
 
   const parsedYaml = document.toJSON() as unknown;
@@ -168,18 +168,21 @@ function createFrontmatterResult(
   };
 }
 
-function createEmptyMetadata(): NoteMetadata {
-  return {
-    tags: [],
-    aliases: []
-  };
-}
+/**
+ * Shared empty metadata singleton. Callers never mutate the returned metadata
+ * (consumers spread before writing — see `serializeNote`), so a single frozen
+ * instance replaces the per-call factory without risk of cross-contamination.
+ */
+const EMPTY_METADATA: NoteMetadata = Object.freeze({
+  tags: Object.freeze<string[]>([]),
+  aliases: Object.freeze<string[]>([])
+}) as NoteMetadata;
 
 function coerceFrontmatterFields(
   parsedYaml: unknown,
   diagnostics: NoteDiagnostic[]
 ): Readonly<Record<string, unknown>> {
-  if (parsedYaml === null || parsedYaml === undefined) {
+  if (parsedYaml == null) {
     return {};
   }
 
@@ -219,7 +222,7 @@ function normalizeOptionalString(
   fieldName: string,
   diagnostics: NoteDiagnostic[]
 ): string | undefined {
-  if (value === undefined || value === null) {
+  if (value == null) {
     return undefined;
   }
 
@@ -243,7 +246,7 @@ function normalizeStringList(
   diagnostics: NoteDiagnostic[],
   normalizeItem: (value: string) => string | null
 ): string[] {
-  if (value === undefined || value === null) {
+  if (value == null) {
     return [];
   }
 

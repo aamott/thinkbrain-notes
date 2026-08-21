@@ -95,8 +95,11 @@ export interface SettingSection {
 /**
  * A self-contained settings schema contributed by the app or an extension.
  *
- * All settings in a module share the module's `scope`. The registry enforces
- * module ID uniqueness so namespaces never collide.
+ * Scope is a property of each setting: one module may hold a global default
+ * and a per-workspace remote. `scope` on the module is the grouping used when
+ * it has no settings yet; `getModulesByScope` otherwise projects the module to
+ * the settings that match the requested scope. The registry enforces module
+ * ID uniqueness so namespaces never collide.
  */
 export interface SettingsModule {
   readonly id: string;

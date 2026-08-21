@@ -130,38 +130,12 @@ describe("SettingsTab", () => {
   });
 
   it("shows the Workspace group when a workspace is open", async () => {
-    // Register a temporary workspace-scoped module so the Workspace group has
-    // content to render. The built-in modules are all app-scoped.
-    const tempWorkspaceModule = {
-      id: "test-workspace",
-      label: "Test Workspace",
-      scope: "workspace" as const,
-      sections: [
-        {
-          id: "test-workspace.section",
-          label: "WS Section",
-          settings: [
-            {
-              key: "wsSetting",
-              type: "string" as const,
-              default: "x",
-              scope: "workspace" as const,
-              section: "test-workspace.section",
-              label: "WS Setting",
-              description: "A workspace setting."
-            }
-          ]
-        }
-      ]
-    };
-    appSettingsRegistry.register(tempWorkspaceModule);
-
-    // Seed workspaceValues so the Workspace group renders.
-    useSettingsStore.setState({ workspaceValues: { "test-workspace.wsSetting": "x" } });
+    useSettingsStore.setState({ workspaceValues: { "sync.destination": "" } });
     const el = await renderSettingsTab();
 
     expect(el.textContent).toContain("Workspace");
-    expect(el.textContent).toContain("Test Workspace");
+    expect(el.textContent).toContain("Git link");
+    expect(el.textContent).toContain("Cloud copies");
   });
 
   it("highlights the active section with aria-current after clicking it", async () => {

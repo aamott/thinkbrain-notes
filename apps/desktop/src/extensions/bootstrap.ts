@@ -9,7 +9,7 @@ import {
 } from "@thinkbrain/core";
 
 import { desktopCommandRegistry, type DesktopCommandContext } from "../commands/commandRegistry";
-import { desktopPanelRegistry, type DesktopPanelContext } from "../panels/panelRegistry";
+import { desktopPanelRegistry, type DesktopPanelContext } from "../panels/panelRegistryModel";
 import { builtInExtensions, type BuiltInExtension } from "./builtins";
 import {
   desktopExtensionHost,

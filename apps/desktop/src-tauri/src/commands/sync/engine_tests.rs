@@ -1,30 +1,14 @@
-use super::super::bootstrap::bootstrap;
+use super::super::test_support;
 use super::*;
-use crate::tests::make_temp_test_dir;
 use std::fs;
-use std::path::Path;
+use std::path::PathBuf;
+use std::time::{Duration, Instant};
+use test_support::write;
 
-struct Fixture {
-    vault: PathBuf,
-    engine: Engine,
-}
+type Fixture = test_support::EngineFixture;
 
 fn fixture(name: &str) -> Fixture {
-    let app_data = make_temp_test_dir(&format!("{name}-appdata"), "sync", true);
-    let vault = make_temp_test_dir(&format!("{name}-vault"), "sync", true);
-    let workspace = bootstrap(&app_data, &vault).expect("bootstrap succeeds");
-    Fixture {
-        vault,
-        engine: Engine::new(workspace.repo, workspace.has_own_git),
-    }
-}
-
-fn write(root: &Path, relative: &str, contents: &str) {
-    let path = root.join(relative);
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).expect("the folder exists");
-    }
-    fs::write(path, contents).expect("the file is written");
+    test_support::engine_fixture(name)
 }
 
 fn message_of(engine: &Engine, commit: gix::ObjectId) -> String {
@@ -47,7 +31,9 @@ fn an_edit_is_recorded_only_once_it_settles() {
     f.engine.note_changes([PathBuf::from("one.md")], start);
 
     assert_eq!(
-        f.engine.record_settled(start + SETTLE / 2).expect("recording succeeds"),
+        f.engine
+            .record_settled(start + SETTLE / 2)
+            .expect("recording succeeds"),
         None
     );
     assert!(f
@@ -84,7 +70,9 @@ fn an_idle_workspace_records_nothing() {
     let f = fixture("engine-idle");
 
     assert_eq!(
-        f.engine.record_settled(Instant::now()).expect("recording succeeds"),
+        f.engine
+            .record_settled(Instant::now())
+            .expect("recording succeeds"),
         None
     );
 }
@@ -97,10 +85,13 @@ fn a_change_that_changed_nothing_records_nothing() {
     let start = Instant::now();
     write(&f.vault, "one.md", "# One\n");
     f.engine.note_changes([PathBuf::from("one.md")], start);
-    f.engine.record_settled(start + SETTLE).expect("recording succeeds");
+    f.engine
+        .record_settled(start + SETTLE)
+        .expect("recording succeeds");
 
     write(&f.vault, "one.md", "# One\n");
-    f.engine.note_changes([PathBuf::from("one.md")], start + SETTLE);
+    f.engine
+        .note_changes([PathBuf::from("one.md")], start + SETTLE);
 
     assert_eq!(
         f.engine
@@ -117,7 +108,11 @@ fn a_conflict_copy_is_not_recorded_in_history() {
     let f = fixture("engine-conflict");
     let start = Instant::now();
     write(&f.vault, "note.md", "# Mine\n");
-    write(&f.vault, "note.sync-conflict-20260816-093100-K3SDFHG.md", "# Theirs\n");
+    write(
+        &f.vault,
+        "note.sync-conflict-20260816-093100-K3SDFHG.md",
+        "# Theirs\n",
+    );
     f.engine.note_changes(
         [
             PathBuf::from("note.md"),
@@ -146,15 +141,23 @@ fn a_batch_of_only_conflict_copies_records_nothing() {
     let f = fixture("engine-conflict-only");
     let start = Instant::now();
     write(&f.vault, "note.md", "# Mine\n");
-    write(&f.vault, "note.sync-conflict-20260816-093100-K3SDFHG.md", "# Theirs\n");
+    write(
+        &f.vault,
+        "note.sync-conflict-20260816-093100-K3SDFHG.md",
+        "# Theirs\n",
+    );
 
     f.engine.note_changes(
-        [PathBuf::from("note.sync-conflict-20260816-093100-K3SDFHG.md")],
+        [PathBuf::from(
+            "note.sync-conflict-20260816-093100-K3SDFHG.md",
+        )],
         start,
     );
 
     assert_eq!(
-        f.engine.record_settled(start + SETTLE).expect("recording succeeds"),
+        f.engine
+            .record_settled(start + SETTLE)
+            .expect("recording succeeds"),
         None
     );
 }
@@ -188,8 +191,14 @@ fn only_the_first_sighting_of_a_conflict_is_worth_announcing() {
         provider: "Syncthing",
     };
 
-    assert!(f.engine.note_conflicts([copy.clone()]), "the first sighting was silent");
-    assert!(!f.engine.note_conflicts([copy]), "the same copy was announced twice");
+    assert!(
+        f.engine.note_conflicts([copy.clone()]),
+        "the first sighting was silent"
+    );
+    assert!(
+        !f.engine.note_conflicts([copy]),
+        "the same copy was announced twice"
+    );
 }
 
 #[test]
@@ -198,10 +207,13 @@ fn a_deleted_note_is_recorded_when_it_settles() {
     let start = Instant::now();
     write(&f.vault, "one.md", "# One\n");
     f.engine.note_changes([PathBuf::from("one.md")], start);
-    f.engine.record_settled(start + SETTLE).expect("recording succeeds");
+    f.engine
+        .record_settled(start + SETTLE)
+        .expect("recording succeeds");
 
     fs::remove_file(f.vault.join("one.md")).expect("the note is deleted");
-    f.engine.note_changes([PathBuf::from("one.md")], start + SETTLE);
+    f.engine
+        .note_changes([PathBuf::from("one.md")], start + SETTLE);
 
     assert!(f
         .engine
@@ -277,10 +289,13 @@ fn concurrent_recording_leaves_one_unbroken_history() {
 fn flushing_records_edits_that_have_not_settled_yet() {
     let f = fixture("engine-flush");
     write(&f.vault, "one.md", "# One\n");
-    f.engine.note_changes([PathBuf::from("one.md")], Instant::now());
+    f.engine
+        .note_changes([PathBuf::from("one.md")], Instant::now());
 
     assert_eq!(
-        f.engine.record_settled(Instant::now()).expect("recording succeeds"),
+        f.engine
+            .record_settled(Instant::now())
+            .expect("recording succeeds"),
         None,
         "the edit should not have settled yet"
     );
@@ -290,22 +305,38 @@ fn flushing_records_edits_that_have_not_settled_yet() {
     );
 }
 
-/// Taking a path out of the pending set is a promise to record it. If the
-/// commit fails the promise is unkept, so the path has to come back — a
-/// note dropped here is a note history never hears about again.
+/// A path that can never be recorded must not be retried every settle
+/// window, or it takes every other note with it. It is skipped and reported.
 #[test]
-fn a_batch_that_could_not_be_recorded_is_tried_again() {
-    let f = fixture("engine-retry");
+fn a_note_that_cannot_be_recorded_does_not_block_the_rest() {
+    let f = fixture("engine-skip-bad");
     let start = Instant::now();
-    f.engine.note_changes([PathBuf::from("../outside.md")], start);
+    write(&f.vault, "ok.md", "# Ok\n");
+    f.engine.note_changes(
+        [PathBuf::from("ok.md"), PathBuf::from("../outside.md")],
+        start,
+    );
 
-    f.engine
+    let commit = f
+        .engine
         .record_settled(start + SETTLE)
-        .expect_err("recording a path outside the vault fails");
+        .expect("the batch is not aborted")
+        .expect("the good note is recorded");
 
-    f.engine
-        .record_settled(start + SETTLE + SETTLE)
-        .expect_err("the failed batch was dropped instead of tried again");
+    // The message counts the batch taken out of pending, not the notes that
+    // landed: both `ok.md` and `../outside.md` were settled, so the count is
+    // 2 even though `../outside.md` is then skipped and stuck.
+    assert!(
+        message_of(&f.engine, commit).ends_with("— 2 notes changed"),
+        "the message: {}",
+        message_of(&f.engine, commit)
+    );
+    assert_eq!(f.engine.stuck().len(), 1);
+    assert_eq!(f.engine.waiting(), 0);
+    assert!(
+        f.engine.problem().is_none(),
+        "a skipped note was treated as a vault-wide failure"
+    );
 }
 
 /// Nothing pending means nothing to write, not an empty commit.
@@ -342,5 +373,42 @@ fn an_engine_can_be_used_from_several_threads() {
         .expect("recording succeeds")
         .expect("a commit is made");
 
-    assert!(message_of(&f.engine, commit).ends_with("— 8 notes changed"));
+    assert!(
+        message_of(&f.engine, commit).ends_with("— 8 notes changed"),
+        "the message did not count the notes: {}",
+        message_of(&f.engine, commit)
+    );
+}
+
+#[test]
+fn a_vault_is_ready_to_sync_only_once_it_has_been_still_and_the_cap_has_passed() {
+    let f = fixture("engine-ready");
+    let start = Instant::now();
+    f.engine.note_changes([PathBuf::from("one.md")], start);
+
+    assert!(
+        !f.engine.ready_to_sync(
+            Duration::from_secs(30),
+            Duration::from_secs(60),
+            start + Duration::from_secs(5)
+        ),
+        "a vault still being edited was ready"
+    );
+    assert!(
+        f.engine.ready_to_sync(
+            Duration::from_secs(30),
+            Duration::from_secs(60),
+            start + Duration::from_secs(30)
+        ),
+        "a still vault was not ready before its first trip"
+    );
+    f.engine.mark_synced();
+    assert!(
+        !f.engine.ready_to_sync(
+            Duration::from_secs(30),
+            Duration::from_secs(60),
+            start + Duration::from_secs(30)
+        ),
+        "the frequency cap did not hold"
+    );
 }

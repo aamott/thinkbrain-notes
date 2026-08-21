@@ -16,11 +16,13 @@
  * to have taught them by the time it says saving has stopped.
  */
 
-import { useState } from "react";
-import { Bell } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Bell, Copy, Check } from "lucide-react";
 import { cn } from "../lib/utils";
 import { SyncPill } from "../sync/SyncPill";
-import { NOT_RECORDING, type SyncStatus } from "../sync/historyTypes";
+import { recoveryFor } from "../sync/syncCopy";
+import { NOT_RECORDING, type SyncProblem, type SyncStatus } from "../sync/historyTypes";
+import { subscribeToSetupSuccess } from "../sync/syncService";
 
 /** Props for the {@link StatusBar} component. */
 type StatusBarProps = {
@@ -30,7 +32,14 @@ type StatusBarProps = {
   readonly syncStatus?: SyncStatus;
   /** Somewhere to go about what the sync pill reports. */
   readonly onOpenSyncPanel?: (panel: "conflicts" | "history") => void;
+  readonly onOpenSettings?: () => void;
 };
+
+const HISTORY_CLEANUP_FAILED = "sync.history_cleanup_failed";
+
+function toastTitle(code: string): string {
+  return code === HISTORY_CLEANUP_FAILED ? "Could not free space" : "Sync needs attention";
+}
 
 /**
  * Desktop shell status bar footer.
@@ -43,17 +52,162 @@ type StatusBarProps = {
 export function StatusBar({
   workspaceName,
   syncStatus = NOT_RECORDING,
-  onOpenSyncPanel
+  onOpenSyncPanel,
+  onOpenSettings
 }: StatusBarProps) {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  // Tracks which problem the user has already seen (auto-dismissed or closed).
+  // The visible toast is derived from the current problem + this key, so a new
+  // problem always shows without depending on a setState firing in an effect.
+  const [dismissedKey, setDismissedKey] = useState<string | null>(null);
+  // Setup success is event-driven (credentials saved), not derived from status.
+  const [setupReady, setSetupReady] = useState(false);
+  const [setupDismissed, setSetupDismissed] = useState(false);
+  // Pauses auto-dismiss while the pointer is over the toast, so a long message
+  // or technical details can be read without the toast vanishing mid-sentence.
+  // Kind-keyed so unmounting one toast under the pointer cannot pause the next.
+  const [hoveredKind, setHoveredKind] = useState<"error" | "success" | null>(null);
+  // Briefly shows a checkmark after the copy button is pressed.
+  const [copied, setCopied] = useState(false);
+  const problem = syncStatus.problem ?? syncStatus.maintenanceProblem;
+  const problemKey = problem ? `${problem.code}\0${problem.message}` : null;
+  // When the problem clears, reset the dismissed key so the same problem
+  // recurring later re-toasts (matches the original effect-based behavior).
+  if (problem === null && dismissedKey !== null) {
+    setDismissedKey(null);
+  }
+  // Errors win: a problem hides and consumes a pending setup-success toast.
+  if (problem !== null && setupReady && !setupDismissed) {
+    setSetupDismissed(true);
+  }
+  const toast = problem && problemKey !== dismissedKey ? problem : null;
+  const successToast = setupReady && !setupDismissed && problem === null;
+  const toastKind = toast ? "error" : successToast ? "success" : null;
+  const isHovering = hoveredKind !== null && hoveredKind === toastKind;
+
+  useEffect(() => {
+    let cancelled = false;
+    let stop: (() => void) | undefined;
+    void subscribeToSetupSuccess(() => {
+      if (cancelled) return;
+      setSetupReady(true);
+      setSetupDismissed(false);
+    })
+      .then((unlisten) => {
+        if (cancelled) unlisten();
+        else stop = unlisten;
+      })
+      .catch((cause: unknown) => {
+        if (!cancelled) console.error("[sync] could not subscribe to setup success", cause);
+      });
+    return () => {
+      cancelled = true;
+      stop?.();
+    };
+  }, []);
+
+  // Auto-dismiss the toast after 8 seconds, but only while the pointer is not
+  // hovering over it. Re-entering clears the running timer; leaving starts a
+  // fresh one. Only the async timer callback calls setState, so this effect
+  // does not trigger cascading renders.
+  useEffect(() => {
+    if (toast === null || isHovering) return;
+    const timeout = window.setTimeout(() => setDismissedKey(problemKey), 8_000);
+    return () => window.clearTimeout(timeout);
+  }, [toast, problemKey, isHovering]);
+
+  useEffect(() => {
+    if (!successToast || isHovering) return;
+    const timeout = window.setTimeout(() => setSetupDismissed(true), 8_000);
+    return () => window.clearTimeout(timeout);
+  }, [successToast, isHovering]);
+
+  // Clear the "Copied" confirmation shortly after it appears.
+  useEffect(() => {
+    if (!copied) return;
+    const timeout = window.setTimeout(() => setCopied(false), 2_000);
+    return () => window.clearTimeout(timeout);
+  }, [copied]);
+
+  const notification = problem;
+  const maintenanceToast = toast?.code === HISTORY_CLEANUP_FAILED;
+  const maintenanceNotification = notification?.code === HISTORY_CLEANUP_FAILED;
 
   return (
-    <footer className="flex items-center gap-[0.8rem] px-2 bg-statusbar text-statusbar-foreground text-[0.68rem] overflow-hidden whitespace-nowrap">
-      <span className="max-[760px]:hidden">{workspaceName ?? "No workspace open"}</span>
-      <SyncPill status={syncStatus} onOpen={(panel) => onOpenSyncPanel?.(panel)} />
-      <span className="flex-1 max-[760px]:block" />
+    <>
+      {toast && (
+        <aside
+          role="alert"
+          className="fixed bottom-8 right-3 z-100 w-80 rounded-lg border border-destructive bg-popover p-3 text-popover-foreground shadow-soft"
+          onMouseEnter={() => setHoveredKind("error")}
+          onMouseLeave={() => setHoveredKind(null)}
+        >
+          <p className="m-0 text-sm font-semibold">
+            {toastTitle(toast.code)}
+          </p>
+          <p className="mb-0 mt-1 text-xs leading-relaxed">{toast.message}</p>
+          <p className="mb-0 mt-1 text-xs leading-relaxed text-muted-foreground">{recoveryFor(toast.code)}</p>
+          <Diagnostic details={toast.details} />
+          <div className="mt-2 flex gap-2">
+            <button
+              type="button"
+              className="rounded-small border border-border bg-surface px-2 py-1 text-xs"
+              onClick={() =>
+                maintenanceToast ? onOpenSettings?.() : onOpenSyncPanel?.("history")
+              }
+            >
+              {maintenanceToast ? "Open Settings" : "Open saved versions"}
+            </button>
+            <button
+              type="button"
+              className="rounded-small px-2 py-1 text-xs text-muted-foreground"
+              onClick={() => setDismissedKey(problemKey)}
+            >
+              Dismiss
+            </button>
+            <button
+              type="button"
+              className="ml-auto flex items-center gap-1 rounded-small px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
+              aria-label={copied ? "Copied" : "Copy message"}
+              onClick={() => {
+                void navigator.clipboard.writeText(fullToastText(toast));
+                setCopied(true);
+              }}
+            >
+              {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+              {copied ? "Copied" : "Copy"}
+            </button>
+          </div>
+        </aside>
+      )}
+      {successToast && (
+        <aside
+          role="status"
+          className="fixed bottom-8 right-3 z-100 w-80 rounded-lg border border-success bg-popover p-3 text-popover-foreground shadow-soft"
+          onMouseEnter={() => setHoveredKind("success")}
+          onMouseLeave={() => setHoveredKind(null)}
+        >
+          <p className="m-0 text-sm font-semibold">Git link is ready</p>
+          <p className="mb-0 mt-1 text-xs leading-relaxed">
+            Notes can now stay in step with this git link.
+          </p>
+          <div className="mt-2 flex gap-2">
+            <button
+              type="button"
+              className="rounded-small px-2 py-1 text-xs text-muted-foreground"
+              onClick={() => setSetupDismissed(true)}
+            >
+              Dismiss
+            </button>
+          </div>
+        </aside>
+      )}
+      <footer className="flex items-center gap-[0.8rem] px-2 bg-statusbar text-statusbar-foreground text-[0.68rem] overflow-hidden whitespace-nowrap">
+        <span className="max-[760px]:hidden">{workspaceName ?? "No workspace open"}</span>
+        <SyncPill status={syncStatus} onOpen={(panel) => onOpenSyncPanel?.(panel)} />
+        <span className="flex-1 max-[760px]:block" />
 
-      <div className="relative">
+        <div className="relative">
         <button
           type="button"
           onClick={() => setNotificationsOpen((open) => !open)}
@@ -93,11 +247,54 @@ export function StatusBar({
                   ×
                 </button>
               </div>
-              <p className="m-0 text-xs text-muted-foreground">No notifications</p>
+              {notification ? (
+                <div className="flex flex-col gap-1 text-xs">
+                  <span className="font-semibold">{toastTitle(notification.code)}</span>
+                  <span>{notification.message}</span>
+                  <span className="text-muted-foreground">{recoveryFor(notification.code)}</span>
+                  <Diagnostic details={notification.details} />
+                  <button
+                    type="button"
+                    className="mt-1 w-fit rounded-small border border-border bg-surface px-2 py-1 text-xs"
+                    onClick={() => {
+                      if (maintenanceNotification) onOpenSettings?.();
+                      else onOpenSyncPanel?.("history");
+                      setNotificationsOpen(false);
+                    }}
+                  >
+                    {maintenanceNotification ? "Open Settings" : "Open saved versions"}
+                  </button>
+                </div>
+              ) : (
+                <p className="m-0 text-xs text-muted-foreground">No notifications</p>
+              )}
             </div>
           </>
         )}
-      </div>
-    </footer>
+        </div>
+      </footer>
+    </>
   );
+}
+
+function Diagnostic({ details }: { readonly details?: string }) {
+  if (!details) return null;
+  return (
+    <details className="mt-2 text-xs text-muted-foreground">
+      <summary className="cursor-pointer">Technical details</summary>
+      <p className="mb-0 mt-1 break-words font-mono">{details}</p>
+    </details>
+  );
+}
+
+/** Composes the full toast text for copying — title, message, recovery, and
+ *  any technical details — so a user can paste a complete report in one click. */
+function fullToastText(problem: SyncProblem): string {
+  const lines = [
+    toastTitle(problem.code),
+    problem.message,
+    recoveryFor(problem.code),
+  ];
+  if (problem.details) lines.push(`Technical details: ${problem.details}`);
+  return lines.filter(Boolean).join("\n");
 }

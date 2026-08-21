@@ -1,5 +1,7 @@
 import { AlertTriangle } from "lucide-react";
 
+import { bannerButtonClass, bannerButtonPrimaryClass } from "./bannerButton";
+
 /**
  * Tells the user a note changed on disk while they were editing it.
  *
@@ -51,14 +53,14 @@ export function StaleDocumentBanner({
       <span className="flex shrink-0 gap-[0.4rem]">
         <button
           type="button"
-          className="border border-border rounded-small py-[0.28rem] px-[0.6rem] text-foreground bg-surface cursor-pointer font-inherit text-[0.72rem]"
+          className={bannerButtonClass}
           onClick={onKeepMine}
         >
           Keep mine
         </button>
         <button
           type="button"
-          className="border border-primary rounded-small py-[0.28rem] px-[0.6rem] text-primary-foreground bg-primary cursor-pointer font-inherit text-[0.72rem]"
+          className={bannerButtonPrimaryClass}
           onClick={onLoadFromDisk}
         >
           Load the disk version

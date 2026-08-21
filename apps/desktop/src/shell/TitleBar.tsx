@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
 import { cn } from "../lib/utils";
 import type { DesktopTab } from "../tabs/tabModel";
-import { useRightPanelContributions } from "../panels/panelRegistry";
+import { useRightPanelContributions } from "../panels/panelRegistryModel";
 import { IconButton } from "./IconButton";
 import { type RightPanel } from "./shellTypes";
 

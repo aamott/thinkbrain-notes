@@ -15,6 +15,10 @@ use std::path::{Component, Path, PathBuf};
 
 use crate::NativeError;
 
+use super::failed;
+#[path = "snapshot_record.rs"]
+mod record;
+
 /// Who the hidden repository records commits as.
 ///
 /// Not the user, and deliberately not read from their git configuration: this
@@ -33,7 +37,7 @@ pub const HISTORY_REF: &str = "refs/heads/main";
 /// daemon left lying in the vault, and those must never reach the user's
 /// remote — a ref outside `refs/heads/` cannot be swept up by the ordinary
 /// "push my branches" refspec.
-const CHECKPOINT_REF: &str = "refs/thinkbrain/checkpoints";
+pub const CHECKPOINT_REF: &str = "refs/thinkbrain/checkpoints";
 
 /// Why a restore point was taken.
 ///
@@ -60,15 +64,27 @@ impl Reason {
     }
 }
 
-fn failed(code: &'static str, message: &'static str, error: impl std::fmt::Display) -> NativeError {
-    NativeError::with_details(code, message, error.to_string())
+fn history_read_failed(error: impl std::fmt::Display) -> NativeError {
+    failed(
+        "sync.history_read_failed",
+        "Could not read the sync history.",
+        error,
+    )
+}
+
+/// What recording one batch actually put in history.
+pub struct Landed {
+    pub commit: Option<gix::ObjectId>,
+    /// Notes this batch could not record. The rest of the vault still landed.
+    pub skipped: Vec<(PathBuf, NativeError)>,
 }
 
 /// Records the current on-disk state of `paths` as a new commit.
 ///
 /// `paths` are vault-relative. A path that exists on disk is stored; one that
 /// does not is removed from the tree, which is how a deleted note is recorded.
-/// Paths outside the vault are refused rather than silently skipped.
+/// A path that cannot be read is skipped rather than aborting the batch: one
+/// bad note must not stall the vault.
 ///
 /// Returns `None` when the resulting tree is identical to the last commit's —
 /// a save that changed nothing, or a change already recorded, should not leave
@@ -78,15 +94,30 @@ pub fn record(
     paths: &[PathBuf],
     message: &str,
 ) -> Result<Option<gix::ObjectId>, NativeError> {
+    Ok(landed(repo, paths, message)?.commit)
+}
+
+/// [`record`], and the notes that could not be included.
+pub fn landed(
+    repo: &gix::Repository,
+    paths: &[PathBuf],
+    message: &str,
+) -> Result<Landed, NativeError> {
     let parent = head_of(repo, HISTORY_REF)?;
     let base_tree = tree_of(repo, parent)?;
-    let tree = build_tree(repo, base_tree, paths)?;
+    let (tree, skipped) = build_tree(repo, base_tree, paths)?;
 
     if tree == base_tree {
-        return Ok(None);
+        return Ok(Landed {
+            commit: None,
+            skipped,
+        });
     }
 
-    commit_on(repo, HISTORY_REF, message, tree, parent).map(Some)
+    Ok(Landed {
+        commit: Some(commit_on(repo, HISTORY_REF, message, tree, parent)?),
+        skipped,
+    })
 }
 
 /// Records the current state of `paths` as a restore point, and returns
@@ -105,7 +136,7 @@ pub fn checkpoint(
 ) -> Result<gix::ObjectId, NativeError> {
     let parent = head_of(repo, CHECKPOINT_REF)?;
     let base_tree = tree_of(repo, parent)?;
-    let tree = build_tree(repo, base_tree, paths)?;
+    let (tree, _) = build_tree(repo, base_tree, paths)?;
 
     if tree == base_tree {
         if let Some(existing) = parent {
@@ -119,13 +150,21 @@ pub fn checkpoint(
     commit_on(repo, CHECKPOINT_REF, reason.message(), tree, parent)
 }
 
+fn unreadable(error: impl std::fmt::Display) -> NativeError {
+    failed(
+        "sync.note_read_failed",
+        "Could not read a note to record it.",
+        error,
+    )
+}
+
 /// Writes blobs for the paths that exist and drops the ones that do not,
-/// returning the resulting tree.
+/// returning the resulting tree and any notes that could not be included.
 fn build_tree(
     repo: &gix::Repository,
     base_tree: gix::ObjectId,
     paths: &[PathBuf],
-) -> Result<gix::ObjectId, NativeError> {
+) -> Result<(gix::ObjectId, Vec<(PathBuf, NativeError)>), NativeError> {
     let vault = repo
         .workdir()
         .ok_or_else(|| {
@@ -141,72 +180,50 @@ fn build_tree(
         )
     })?;
 
-    for path in paths {
-        let relative = vault_relative(&vault, path)?;
+    let mut skipped = Vec::new();
+    let mut remaining: Vec<PathBuf> = paths.to_vec();
+    while let Some(path) = remaining.pop() {
+        let relative = match vault_relative(&vault, &path) {
+            Ok(relative) => relative,
+            Err(error) => {
+                skipped.push((path, error));
+                continue;
+            }
+        };
         let absolute = vault.join(&relative);
 
         match std::fs::symlink_metadata(&absolute) {
-            Ok(metadata) if metadata.is_file() => {
-                let file = match std::fs::File::open(&absolute) {
-                    Ok(f) => f,
-                    Err(open_error) => {
-                        let still_file = match std::fs::symlink_metadata(&absolute) {
-                            Ok(metadata) => metadata.is_file(),
-                            Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
-                            Err(error) => {
-                                return Err(failed(
-                                    "sync.note_read_failed",
-                                    "Could not read a note to record it.",
-                                    error,
-                                ));
-                            }
-                        };
-                        if still_file {
-                            return Err(failed(
-                                "sync.note_read_failed",
-                                "Could not read a note to record it.",
-                                open_error,
-                            ));
-                        }
-                        editor.remove(tree_path(&relative)).map_err(|error| {
-                            failed(
-                                "sync.tree_write_failed",
-                                "Could not record a deleted note.",
-                                error,
-                            )
-                        })?;
-                        continue;
-                    }
-                };
-                let blob = repo.write_blob_stream(file).map_err(|error| {
-                    failed(
-                        "sync.note_store_failed",
-                        "Could not store a note's contents.",
-                        error,
-                    )
-                })?;
-                let kind = if is_executable(&metadata) {
-                    gix::object::tree::EntryKind::BlobExecutable
-                } else {
-                    gix::object::tree::EntryKind::Blob
-                };
-                editor
-                    .upsert(tree_path(&relative), kind, blob.detach())
-                    .map_err(|error| {
-                        failed("sync.tree_write_failed", "Could not record a note.", error)
-                    })?;
+            Ok(metadata) if metadata.is_dir() => {
+                // A folder's name stands for everything underneath it. Expanding
+                // it here is how a rename or a rescan that only named the folder
+                // still records the notes that moved, rather than leaving the
+                // old folder in history.
+                match super::bootstrap::recordable_under(&vault, &absolute) {
+                    Ok(notes) => remaining.extend(notes),
+                    Err(error) => skipped.push((path, error)),
+                }
             }
-            // A folder, or a symlink standing where a note used to be. Its name
-            // in the tree stands for everything underneath it, so removing it
-            // would take the whole folder's history with it — and the watcher
-            // reports folders. Whatever is inside arrives as its own change.
+            Ok(metadata) if metadata.is_file() => {
+                match record::record_file(repo, &mut editor, &vault, &relative, &path) {
+                    Ok(()) => {}
+                    Err(record::RecordFileError::Skipped((path, error))) => {
+                        skipped.push((path, error));
+                    }
+                    Err(record::RecordFileError::Fatal(error)) => return Err(error),
+                }
+            }
+            // A symlink standing where a note used to be is not a note.
+            // Following it is how history ends up holding files from outside
+            // the vault.
             Ok(_) => continue,
             // Genuinely gone, which is a deletion to record. The alternative is
             // a history that quietly keeps files the vault no longer has.
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
                 // `remove` on a path that was never recorded is not an error: a
                 // note created and deleted between two commits is simply absent
-                // from both.
+                // from both. A vanished folder takes every recorded note under
+                // it — `remove("notes")` would drop the whole subtree, which is
+                // the point.
                 editor.remove(tree_path(&relative)).map_err(|error| {
                     failed(
                         "sync.tree_write_failed",
@@ -218,26 +235,37 @@ fn build_tree(
             // Something else is wrong — a drive that went away, a folder we may
             // not read. Recording that as a deletion would throw notes out of
             // history over a problem that is very likely temporary.
-            Err(error) => {
-                return Err(failed(
-                    "sync.note_read_failed",
-                    "Could not read a note to record it.",
-                    error,
-                ));
-            }
+            Err(error) => skipped.push((path, unreadable(error))),
         }
     }
 
-    Ok(editor
-        .write()
-        .map_err(|error| {
-            failed(
-                "sync.tree_write_failed",
-                "Could not record the new state.",
-                error,
-            )
-        })?
-        .detach())
+    Ok((
+        editor
+            .write()
+            .map_err(|error| {
+                failed(
+                    "sync.tree_write_failed",
+                    "Could not record the new state.",
+                    error,
+                )
+            })?
+            .detach(),
+        skipped,
+    ))
+}
+
+/// Records a merge on the history branch: one tree, two parents.
+///
+/// Everything else here writes a single line of history, because everything
+/// else is one device typing. A sync is the only thing that joins two.
+pub fn record_merge(
+    repo: &gix::Repository,
+    tree: gix::ObjectId,
+    ours: gix::ObjectId,
+    theirs: gix::ObjectId,
+    message: &str,
+) -> Result<gix::ObjectId, NativeError> {
+    commit_on(repo, HISTORY_REF, message, tree, [ours, theirs])
 }
 
 /// Commits `tree` onto `reference`, authored by the app.
@@ -246,7 +274,7 @@ fn commit_on(
     reference: &str,
     message: &str,
     tree: gix::ObjectId,
-    parent: Option<gix::ObjectId>,
+    parents: impl IntoIterator<Item = gix::ObjectId>,
 ) -> Result<gix::ObjectId, NativeError> {
     let signature = gix::actor::Signature {
         name: AUTHOR_NAME.into(),
@@ -261,14 +289,15 @@ fn commit_on(
             reference,
             message,
             tree,
-            parent,
+            parents,
         )
         .map_err(|error| failed("sync.commit_failed", "Could not record this change.", error))?;
 
     Ok(commit.detach())
 }
 
-fn tree_of(
+/// The tree a commit recorded, or the empty tree when there is no commit.
+pub fn tree_of(
     repo: &gix::Repository,
     commit: Option<gix::ObjectId>,
 ) -> Result<gix::ObjectId, NativeError> {
@@ -278,9 +307,85 @@ fn tree_of(
     }
 }
 
+/// What changed between two recorded states, exactly as git sees it.
+///
+/// One walk with three readers: history names the notes a change touched, a
+/// push names the objects the far side is missing, and a sync writes the result
+/// into someone's folder. Each wants a different slice of the same answer, and
+/// working the answer out three times was three chances to work it out
+/// differently.
+///
+/// Folders are included, and so is everything inside a folder that appeared —
+/// the walk descends into an addition rather than naming it and stopping.
+pub fn changes_between(
+    repo: &gix::Repository,
+    state: &mut gix::diff::tree::State,
+    before: gix::ObjectId,
+    after: gix::ObjectId,
+) -> Result<Vec<gix::diff::tree::recorder::Change>, NativeError> {
+    let before = tree_at(repo, before)?;
+    let after = tree_at(repo, after)?;
+
+    let mut recorder = gix::diff::tree::Recorder::default();
+    gix::diff::tree(
+        gix::objs::TreeRefIter::from_bytes(&before.data, before.id.kind()),
+        gix::objs::TreeRefIter::from_bytes(&after.data, after.id.kind()),
+        state,
+        &repo.objects,
+        &mut recorder,
+    )
+    .map_err(|error| {
+        failed(
+            "sync.history_read_failed",
+            "Could not read what a change touched.",
+            error,
+        )
+    })?;
+
+    Ok(recorder.records)
+}
+
+/// The empty tree is answered without a lookup: nothing ever writes it, so a
+/// repository that has never recorded anything does not contain it.
+fn tree_at(repo: &gix::Repository, tree: gix::ObjectId) -> Result<gix::Tree<'_>, NativeError> {
+    if tree == gix::ObjectId::empty_tree(repo.object_hash()) {
+        return Ok(repo.empty_tree());
+    }
+    repo.find_tree(tree).map_err(|error| {
+        failed(
+            "sync.history_read_failed",
+            "Could not read a recorded state.",
+            error,
+        )
+    })
+}
+
 /// The latest commit on the vault's history branch, if there is one.
 pub fn head_commit(repo: &gix::Repository) -> Result<Option<gix::ObjectId>, NativeError> {
     head_of(repo, HISTORY_REF)
+}
+
+/// Every blob the current history commit holds, so a rescan can name the
+/// notes that vanished as well as the ones still on disk.
+pub(super) fn recorded_blob_paths(repo: &gix::Repository) -> Result<Vec<PathBuf>, NativeError> {
+    let Some(commit) = head_commit(repo)? else {
+        return Ok(Vec::new());
+    };
+    let tree = repo
+        .find_commit(commit)
+        .map_err(history_read_failed)?
+        .tree()
+        .map_err(history_read_failed)?;
+    let mut recorder = gix::traverse::tree::Recorder::default();
+    tree.traverse()
+        .breadthfirst(&mut recorder)
+        .map_err(history_read_failed)?;
+    Ok(recorder
+        .records
+        .into_iter()
+        .filter(|entry| entry.mode.is_blob())
+        .map(|entry| PathBuf::from(entry.filepath.to_string()))
+        .collect())
 }
 
 /// The newest restore point, or `None` if nothing has ever been checkpointed.
@@ -289,24 +394,22 @@ pub fn checkpoint_head(repo: &gix::Repository) -> Result<Option<gix::ObjectId>, 
 }
 
 fn head_of(repo: &gix::Repository, reference: &str) -> Result<Option<gix::ObjectId>, NativeError> {
-    match repo.find_reference(reference) {
-        Ok(mut reference) => {
-            let id = reference.peel_to_id().map_err(|error| {
-                failed(
-                    "sync.history_read_failed",
-                    "Could not read the sync history.",
-                    error,
-                )
-            })?;
-            Ok(Some(id.detach()))
-        }
-        Err(gix::reference::find::existing::Error::NotFound { .. }) => Ok(None),
-        Err(error) => Err(failed(
-            "sync.history_read_failed",
-            "Could not read the sync history.",
-            error,
-        )),
-    }
+    try_head_of(repo, reference).map_err(history_read_failed)
+}
+
+pub(super) fn try_head_of(
+    repo: &gix::Repository,
+    reference: &str,
+) -> Result<Option<gix::ObjectId>, String> {
+    repo.try_find_reference(reference)
+        .map_err(|error| error.to_string())?
+        .map(|mut found| {
+            found
+                .peel_to_id()
+                .map(gix::Id::detach)
+                .map_err(|error| error.to_string())
+        })
+        .transpose()
 }
 
 fn commit_tree(
@@ -315,21 +418,9 @@ fn commit_tree(
 ) -> Result<gix::ObjectId, NativeError> {
     let tree = repo
         .find_commit(commit)
-        .map_err(|error| {
-            failed(
-                "sync.history_read_failed",
-                "Could not read the sync history.",
-                error,
-            )
-        })?
+        .map_err(history_read_failed)?
         .tree_id()
-        .map_err(|error| {
-            failed(
-                "sync.history_read_failed",
-                "Could not read the sync history.",
-                error,
-            )
-        })?;
+        .map_err(history_read_failed)?;
     Ok(tree.detach())
 }
 
@@ -376,14 +467,28 @@ pub(super) fn vault_relative(vault: &Path, path: &Path) -> Result<PathBuf, Nativ
 /// synced to a Mac has to produce the same tree on both, and git itself has
 /// only ever used `/` inside a tree.
 fn tree_path(relative: &Path) -> String {
-    relative
-        .components()
-        .filter_map(|component| match component {
-            std::path::Component::Normal(part) => Some(part.to_string_lossy().into_owned()),
-            _ => None,
-        })
-        .collect::<Vec<_>>()
-        .join("/")
+    super::conflict::relative_str(relative)
+}
+
+/// Opens `path` without following a final-component symlink.
+///
+/// `File::open` follows, so a file swapped for a symlink after
+/// `symlink_metadata` would leak the target into history.
+fn open_without_following(path: &Path) -> std::io::Result<std::fs::File> {
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NOFOLLOW);
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        // FILE_FLAG_OPEN_REPARSE_POINT: open the link itself.
+        options.custom_flags(0x0020_0000);
+    }
+    options.open(path)
 }
 
 #[cfg(unix)]

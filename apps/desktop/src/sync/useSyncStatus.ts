@@ -13,8 +13,15 @@ import { readSyncStatus, subscribeToSyncStatus } from "./syncService";
  *
  * A failure reads as "not recording" rather than throwing: the footer is an
  * ambient thing, and the panels are where a problem gets explained.
+ *
+ * Optional callbacks share this hook's listeners with panels that also need
+ * to refresh their own content.
  */
-export function useSyncStatus(rootPath: string | null): SyncStatus {
+export function useSyncStatus(
+  rootPath: string | null,
+  onConflictChange?: () => void,
+  onStatusChange?: () => void
+): SyncStatus {
   const [status, setStatus] = useState<SyncStatus>(NOT_RECORDING);
 
   useEffect(() => {
@@ -26,6 +33,7 @@ export function useSyncStatus(rootPath: string | null): SyncStatus {
     const stops: (() => void)[] = [];
 
     const refresh = () => {
+      onStatusChange?.();
       void readSyncStatus(rootPath)
         .then((next) => {
           if (!cancelled) setStatus(next);
@@ -34,23 +42,35 @@ export function useSyncStatus(rootPath: string | null): SyncStatus {
           if (!cancelled) setStatus(NOT_RECORDING);
         });
     };
+    const refreshConflictStatus = () => {
+      if (cancelled) return;
+      refresh();
+      onConflictChange?.();
+    };
 
     refresh();
-    // Both halves of "something changed": the sweeper announces what it wrote,
-    // and a window settling a conflict announces that too. The count in this
-    // status comes from the second and the time from the first.
-    for (const subscribe of [subscribeToSyncStatus, subscribeToConflictChanges]) {
-      void subscribe(refresh).then((unlisten) => {
+    void subscribeToSyncStatus(refresh)
+      .then((unlisten) => {
         if (cancelled) unlisten();
         else stops.push(unlisten);
+      })
+      .catch((cause: unknown) => {
+        if (!cancelled) console.error("[sync] could not subscribe to status updates", cause);
       });
-    }
+    void subscribeToConflictChanges(refreshConflictStatus)
+      .then((unlisten) => {
+        if (cancelled) unlisten();
+        else stops.push(unlisten);
+      })
+      .catch((cause: unknown) => {
+        if (!cancelled) console.error("[sync] could not subscribe to status updates", cause);
+      });
 
     return () => {
       cancelled = true;
       for (const stop of stops) stop();
     };
-  }, [rootPath]);
+  }, [onConflictChange, onStatusChange, rootPath]);
 
   return status;
 }

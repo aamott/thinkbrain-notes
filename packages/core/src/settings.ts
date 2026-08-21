@@ -62,6 +62,16 @@ const DEFAULT_EDITOR_FONT_SIZE = 16;
 const MIN_EDITOR_FONT_SIZE = 10;
 const MAX_EDITOR_FONT_SIZE = 32;
 
+/** Builds a defaults-fallback result with a single diagnostic. */
+const defaultsFailure = (
+  code: string,
+  message: string,
+  severity: SettingsDiagnosticSeverity
+): ParseSettingsResult => ({
+  settings: DEFAULT_APP_SETTINGS,
+  diagnostics: [{ code, message, severity }]
+});
+
 export const DEFAULT_APP_SETTINGS: AppSettings = Object.freeze({
   version: CURRENT_SETTINGS_VERSION,
   theme: "system",
@@ -101,45 +111,30 @@ const APP_SETTING_MIGRATIONS: readonly MigrationStep[] = [
  */
 export function parseAppSettings(rawJson: string | null): ParseSettingsResult {
   if (rawJson === null) {
-    return {
-      settings: DEFAULT_APP_SETTINGS,
-      diagnostics: [
-        {
-          code: "settings.missing",
-          message: "Application settings file was not found; defaults were used.",
-          severity: "warning"
-        }
-      ]
-    };
+    return defaultsFailure(
+      "settings.missing",
+      "Application settings file was not found; defaults were used.",
+      "warning"
+    );
   }
 
   let parsed: unknown;
   try {
     parsed = JSON.parse(rawJson) as unknown;
   } catch (error) {
-    return {
-      settings: DEFAULT_APP_SETTINGS,
-      diagnostics: [
-        {
-          code: "settings.invalid_json",
-          message: `Application settings JSON could not be parsed: ${getErrorMessage(error)}`,
-          severity: "error"
-        }
-      ]
-    };
+    return defaultsFailure(
+      "settings.invalid_json",
+      `Application settings JSON could not be parsed: ${getErrorMessage(error)}`,
+      "error"
+    );
   }
 
   if (!isRecord(parsed)) {
-    return {
-      settings: DEFAULT_APP_SETTINGS,
-      diagnostics: [
-        {
-          code: "settings.invalid_shape",
-          message: "Application settings must be a JSON object; defaults were used.",
-          severity: "error"
-        }
-      ]
-    };
+    return defaultsFailure(
+      "settings.invalid_shape",
+      "Application settings must be a JSON object; defaults were used.",
+      "error"
+    );
   }
 
   // Only an error gives up on the document; a version merely newer than this
@@ -157,16 +152,7 @@ export function parseAppSettings(rawJson: string | null): ParseSettingsResult {
   try {
     candidate = migrateSettingsObject(parsed, versionResult.version);
   } catch (error) {
-    return {
-      settings: DEFAULT_APP_SETTINGS,
-      diagnostics: [
-        {
-          code: "settings.migration_failed",
-          message: getErrorMessage(error),
-          severity: "error"
-        }
-      ]
-    };
+    return defaultsFailure("settings.migration_failed", getErrorMessage(error), "error");
   }
 
   const normalized = normalizeAppSettings(candidate);

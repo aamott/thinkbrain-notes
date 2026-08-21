@@ -1,23 +1,44 @@
 // @vitest-environment happy-dom
-import { act } from "react";
+import { act, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { NOT_RECORDING, type ConflictRate, type RecordedChange } from "./historyTypes";
+import { NativeCommandError } from "../native/commands";
+import {
+  NOT_RECORDING,
+  type ConflictRate,
+  type RecordedChange,
+  type SyncPhase,
+  type SyncStatus,
+  type Synced
+} from "./historyTypes";
 
-const readHistory = vi.fn<() => Promise<readonly RecordedChange[]>>();
-const readConflictRate = vi.fn<() => Promise<ConflictRate>>();
-const restoreVersion = vi.fn<() => Promise<unknown>>();
+const readHistory = vi.fn<(rootPath: string, notePath: string | null) => Promise<readonly RecordedChange[]>>();
+const syncNow = vi.fn<(rootPath: string) => Promise<Synced>>();
+/** What the settings say this folder is kept in step with, if anything. */
+let destination = "";
+const readConflictRate = vi.fn<(rootPath: string) => Promise<ConflictRate>>();
+const restoreVersion = vi.fn<(rootPath: string, notePath: string, change: string) => Promise<void>>();
+// Module-level so a test can put the panel on a live phase without re-mocking.
+let syncStatus: SyncStatus = { ...NOT_RECORDING, state: "idle" };
 
 vi.mock("./useSyncStatus", () => ({
-  useSyncStatus: () => ({ ...NOT_RECORDING, state: "idle" })
+  useSyncStatus: (_rootPath: string | null, _onConflictChange?: () => void, onStatusChange?: () => void) => {
+    useEffect(() => onStatusChange?.(), [onStatusChange]);
+    return syncStatus;
+  }
 }));
 
 vi.mock("./syncService", () => ({
-  readHistory: (...args: unknown[]) => readHistory(...(args as [])),
-  readConflictRate: () => readConflictRate(),
-  restoreVersion: (...args: unknown[]) => restoreVersion(...(args as [])),
-  subscribeToSyncStatus: () => Promise.resolve(() => undefined)
+  readHistory,
+  readConflictRate,
+  restoreVersion,
+  syncNow
+}));
+
+vi.mock("../settings/settingsStore", () => ({
+  useSettingsStore: (select: (state: unknown) => unknown) =>
+    select({ workspaceValues: { "sync.destination": destination } })
 }));
 
 const { HistoryPanel } = await import("./HistoryPanel");
@@ -39,7 +60,15 @@ const change = (over: Partial<RecordedChange> = {}): RecordedChange => ({
 beforeEach(() => {
   readHistory.mockReset().mockResolvedValue([]);
   readConflictRate.mockReset().mockResolvedValue({ decisions: 0, settled: 0, recorded: 0 });
-  restoreVersion.mockReset().mockResolvedValue({ note: "n", checkpoint: "c" });
+  restoreVersion.mockReset().mockResolvedValue(undefined);
+  syncNow.mockReset().mockResolvedValue({
+    broughtDown: 0,
+    askedAbout: 0,
+    sent: 0,
+    landed: { state: "moved" }
+  });
+  destination = "";
+  syncStatus = { ...NOT_RECORDING, state: "idle" };
 });
 
 afterEach(async () => {
@@ -74,13 +103,35 @@ describe("the whole workspace's history", () => {
     expect(host.textContent).toContain("Nothing saved yet");
   });
 
+  it("waits for the first read before showing an empty state", async () => {
+    let finish!: (changes: readonly RecordedChange[]) => void;
+    const pending = new Promise<readonly RecordedChange[]>((resolve) => {
+      finish = resolve;
+    });
+    readHistory.mockReturnValue(pending);
+    container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
+
+    await act(() => {
+      root?.render(<HistoryPanel rootPath="/notes" note={null} onShowEverything={() => undefined} />);
+    });
+    expect(container.textContent).not.toContain("Nothing saved yet");
+
+    finish([]);
+    await act(async () => {
+      await pending;
+    });
+    expect(container.textContent).toContain("Nothing saved yet");
+  });
+
   it("dates each saved change and counts what it touched", async () => {
     readHistory.mockResolvedValue([change()]);
 
     const host = await render();
 
     expect(host.textContent).toContain("Today");
-    expect(host.textContent).toContain("2 notes updated");
+    expect(host.textContent).toContain("2 notes changed");
   });
 
   /// The list is a summary until asked. Naming every note in every change would
@@ -91,7 +142,7 @@ describe("the whole workspace's history", () => {
     const host = await render();
     expect(host.textContent).not.toContain("Meeting Notes.md");
 
-    await act(async () => button(host, "2 notes updated").click());
+    await act(async () => button(host, "2 notes changed").click());
     expect(host.textContent).toContain("Meeting Notes.md");
   });
 
@@ -100,7 +151,7 @@ describe("the whole workspace's history", () => {
     readHistory.mockResolvedValue([change()]);
 
     const host = await render();
-    await act(async () => button(host, "2 notes updated").click());
+    await act(async () => button(host, "2 notes changed").click());
 
     expect(host.textContent).toContain("Sync 2026-08-17 09:31 — 2 notes changed");
   });
@@ -155,34 +206,40 @@ describe("one note's earlier versions", () => {
 });
 
 describe("putting a version back", () => {
-  it("names the note and the change it came from", async () => {
+  const renderRoadmapForRestore = async () => {
     readHistory.mockResolvedValue([change({ notes: [{ path: "Roadmap.md", change: "updated" }] })]);
-
     const host = await render("Roadmap.md");
     await act(async () => button(host, "Put this version back").click());
+    return host;
+  };
 
+  it("names the note and the change it came from", async () => {
+    await renderRoadmapForRestore();
     expect(restoreVersion).toHaveBeenCalledWith("/notes", "Roadmap.md", "abc123");
   });
 
   it("says it worked, and says the earlier text is still there", async () => {
-    readHistory.mockResolvedValue([change({ notes: [{ path: "Roadmap.md", change: "updated" }] })]);
-
-    const host = await render("Roadmap.md");
-    await act(async () => button(host, "Put this version back").click());
-
+    const host = await renderRoadmapForRestore();
     expect(host.querySelector('[role="status"]')?.textContent).toContain("Roadmap.md");
   });
 
   /// A refused restore wrote nothing, and the list has to go on saying so.
   it("reports a refusal without dropping the list", async () => {
-    readHistory.mockResolvedValue([change({ notes: [{ path: "Roadmap.md", change: "updated" }] })]);
     restoreVersion.mockRejectedValue(new Error("refused"));
-
-    const host = await render("Roadmap.md");
-    await act(async () => button(host, "Put this version back").click());
-
+    const host = await renderRoadmapForRestore();
     expect(host.querySelector('[role="alert"]')?.textContent).toContain("Nothing was changed");
     expect(host.textContent).toContain("Roadmap.md");
+  });
+
+  it("adds the recovery hint from a native failure", async () => {
+    restoreVersion.mockRejectedValue(
+      new NativeCommandError({
+        code: "sync.note_store_failed",
+        message: "The saved version could not be put back."
+      })
+    );
+    const host = await renderRoadmapForRestore();
+    expect(host.textContent).toContain("Check this computer has space left");
   });
 
   /// A change that only deleted a note left no text to put back — offering one
@@ -191,9 +248,82 @@ describe("putting a version back", () => {
     readHistory.mockResolvedValue([change({ notes: [{ path: "Gone.md", change: "removed" }] })]);
 
     const host = await render();
-    await act(async () => button(host, "1 note updated").click());
+    await act(async () => button(host, "1 note deleted").click());
 
     expect(host.textContent).toContain("deleted");
     expect(() => button(host, "Put this version back")).toThrow();
+  });
+});
+
+describe("bringing a folder in step with another device", () => {
+  /// Offering to sync a folder that syncs nowhere is a button that can only
+  /// fail, and someone would reasonably read it as a thing they had set up.
+  it("is not offered at all when this folder syncs nowhere", async () => {
+    const host = await render();
+
+    expect(host.textContent).not.toContain("in step");
+  });
+
+  it("is offered once somewhere has been named", async () => {
+    destination = "https://example.test/notes.git";
+
+    const host = await render();
+
+    expect(button(host, "Bring these notes in step now")).toBeTruthy();
+  });
+
+  it("says what arrived, and reads the list again so it shows", async () => {
+    destination = "https://example.test/notes.git";
+    syncNow.mockResolvedValue({
+      broughtDown: 2,
+      askedAbout: 0,
+      sent: 3,
+      landed: { state: "moved" }
+    });
+    const host = await render();
+    readHistory.mockResolvedValue([change()]);
+
+    await act(async () => button(host, "Bring these notes in step now").click());
+
+    expect(syncNow).toHaveBeenCalledWith("/notes");
+    expect(host.textContent).toContain("2 notes arrived");
+    expect(host.textContent).toContain("Today");
+  });
+
+  /// A sync writes to someone's notes. A failure that scrolled past silently
+  /// would leave them believing it worked.
+  it("says so when it could not happen, and says nothing changed", async () => {
+    destination = "https://example.test/notes.git";
+    syncNow.mockRejectedValue(new Error("no"));
+
+    const host = await render();
+    await act(async () => button(host, "Bring these notes in step now").click());
+
+    expect(host.textContent).toContain("could not be brought in step");
+    expect(host.textContent).toContain("Nothing was changed");
+  });
+
+  /// The footer already names saving/checking/combining/sending. The history
+  /// button has to reuse those words, or a long trip looks stuck on "clicked".
+  it("names the live phase instead of a static busy label", async () => {
+    destination = "https://example.test/notes.git";
+    const phases: { phase: SyncPhase; label: string }[] = [
+      { phase: "saving", label: "Saving changes…" },
+      { phase: "checking", label: "Checking for updates…" },
+      { phase: "combining", label: "Combining changes…" },
+      { phase: "sending", label: "Sending changes…" }
+    ];
+
+    for (const { phase, label } of phases) {
+      syncStatus = { ...NOT_RECORDING, state: "syncing", phase };
+      const host = await render();
+      const syncButton = button(host, label);
+      expect(syncButton.disabled).toBe(true);
+      expect(host.textContent).not.toContain("Bring these notes in step now");
+      await act(async () => root?.unmount());
+      container?.remove();
+      root = null;
+      container = null;
+    }
   });
 });

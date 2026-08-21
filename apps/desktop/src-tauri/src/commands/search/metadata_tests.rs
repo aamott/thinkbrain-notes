@@ -311,7 +311,7 @@ fn schema_migrates_an_existing_fts_only_cache() {
         )
         .expect("metadata query succeeds")
         .facets[0]
-        .values,
+            .values,
         vec![text("restored")]
     );
 }

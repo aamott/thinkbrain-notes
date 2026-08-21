@@ -1,4 +1,4 @@
-import { useLeftPanelContributions } from "../panels/panelRegistry";
+import { useLeftPanelContributions } from "../panels/panelRegistryModel";
 import { IconButton } from "./IconButton";
 import { type LeftPanel } from "./shellTypes";
 

@@ -170,6 +170,7 @@ const ITEM =
  */
 export function MenuButton({
   label,
+  ariaLabel,
   icon,
   danger = false,
   current = false,
@@ -177,6 +178,7 @@ export function MenuButton({
   onClick,
 }: {
   readonly label: string;
+  readonly ariaLabel?: string;
   /** Drawn before the label, and never spoken — the label already says it. */
   readonly icon?: ReactNode;
   readonly danger?: boolean;
@@ -191,6 +193,7 @@ export function MenuButton({
       className={cn(ITEM, danger ? "text-danger" : "text-foreground")}
       role="menuitem"
       aria-current={current ? "true" : undefined}
+      aria-label={ariaLabel}
       title={title}
       onClick={onClick}
     >

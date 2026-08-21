@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createDesktopPanelRegistry,
   type DesktopPanelContext
-} from "../panels/panelRegistry";
+} from "../panels/panelRegistryModel";
 import { createDesktopExtensionHost } from "./desktopExtensionHost";
 
 /**

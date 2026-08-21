@@ -27,12 +27,6 @@ export interface RecordedChange {
   readonly notes: readonly ChangedNote[];
 }
 
-/** Where a restored version came from. */
-export interface RestoredVersion {
-  readonly note: string;
-  readonly checkpoint: string;
-}
-
 /** How often this vault has asked its user to choose between two versions. */
 export interface ConflictRate {
   /** Conflicts the user was asked about. */
@@ -48,9 +42,24 @@ export interface ConflictRate {
 }
 
 /** What the status footer is saying, in order of who needs to act. */
-export type SyncState = "off" | "problem" | "attention" | "saving" | "idle";
+export type SyncState = "off" | "problem" | "syncing" | "attention" | "saving" | "idle";
+
+/** Named step of an in-flight round trip, so the footer can name it without git jargon. */
+export type SyncPhase = "saving" | "checking" | "combining" | "sending";
+
+/** Whether a git link has completed a round trip from this device. */
+export type SyncHealth = "unknown" | "healthy" | "problem";
 
 export interface SyncProblem {
+  readonly code: string;
+  readonly message: string;
+  /** Sanitized transport diagnostic, available when it helps troubleshoot a link. */
+  readonly details?: string;
+}
+
+/** A note that could not be written or recorded, with something to do about it. */
+export interface StuckNote {
+  readonly path: string;
   readonly code: string;
   readonly message: string;
 }
@@ -61,22 +70,104 @@ export interface SyncStatus {
   readonly lastRecordedAt: number | null;
   readonly waiting: number;
   readonly attention: number;
+  readonly stuck: readonly StuckNote[];
   readonly problem: SyncProblem | null;
+  /** Named step of an in-flight round trip, when one is running. */
+  readonly phase: SyncPhase | null;
+  /** Whether a git link has completed a round trip from this device. */
+  readonly health: SyncHealth;
+  /** When git sync last succeeded, in milliseconds since the epoch. */
+  readonly lastCheckedAt: number | null;
   /**
    * Whether this folder is also a git repository of the user's own.
    *
-   * Nothing acts on it. Two histories are being kept here, and someone should
-   * hear that from the app rather than discover it.
+   * The history panel and footer pill explain that both histories are being
+   * kept here, so someone hears it from the app rather than discovering it.
    */
   readonly alongsideOwnGit: boolean;
+  /**
+   * A failure to tidy private undo history. Saving versions continues.
+   */
+  readonly maintenanceProblem: SyncProblem | null;
 }
 
 /** What a window shows before it has heard anything, and if it never does. */
-export const NOT_RECORDING: SyncStatus = {
+export const NOT_RECORDING: SyncStatus = Object.freeze({
   state: "off",
   lastRecordedAt: null,
   waiting: 0,
   attention: 0,
+  stuck: [],
   problem: null,
-  alongsideOwnGit: false
-};
+  phase: null,
+  health: "unknown",
+  lastCheckedAt: null,
+  alongsideOwnGit: false,
+  maintenanceProblem: null
+});
+
+/** What became of the notes we tried to send on. */
+export type SyncLanded =
+  | { readonly state: "moved" }
+  /** Retained as a native diagnostic; the UI gives a stable, actionable message instead. */
+  | { readonly state: "refused"; readonly reason: string };
+
+/** What one round trip to another device did. */
+export interface Synced {
+  /** Notes the other side's work changed here. */
+  readonly broughtDown: number;
+  /** Notes that needed a person, left as copies beside their originals. */
+  readonly askedAbout: number;
+  /**
+   * Objects sent onward. This is intentionally not shown as a note count:
+   * native push reports packed git objects, not notes.
+   */
+  readonly sent: number;
+  readonly landed: SyncLanded;
+}
+
+/** How much the hidden undo history occupies on this computer. */
+export interface HistoryUsage {
+  readonly bytes: number;
+}
+
+/** What one tidy or clear pass did to on-disk usage. */
+export interface HistoryCleanup {
+  readonly bytesBefore: number;
+  readonly bytesAfter: number;
+  readonly reclaimed: number;
+}
+
+/** One reusable git sign-in, without its token. */
+export interface SignInProfile {
+  readonly id: string;
+  readonly label: string;
+  readonly host: string;
+  readonly username: string;
+}
+
+export interface SelectedSignIn extends SignInProfile {
+  readonly saved: boolean;
+}
+
+export interface LegacySignIn {
+  readonly host: string;
+  readonly username: string;
+}
+
+export type SignInStorage = "available" | "unavailable" | "unsupported";
+
+export interface SignInStatus {
+  readonly storage: SignInStorage;
+  readonly storageMessage: string;
+  readonly host: string | null;
+  readonly selectedId: string | null;
+  readonly selected: SelectedSignIn | null;
+  readonly profiles: readonly SignInProfile[];
+  readonly legacy: LegacySignIn | null;
+}
+
+export interface SavedSignIn {
+  readonly profile: SignInProfile;
+  readonly migrated: boolean;
+}

@@ -22,9 +22,15 @@ An extension is a folder with two files:
    the Extensions panel flips from "Not started" to "Active".
 4. Click the **✎ Capture** icon in the activity bar — the extension's own
    entry, next to Explorer and Search. Its panel is plain DOM the extension
-   built itself, and the **＋** button in the panel header is an action the
-   extension contributed. Each capture appears in the panel's list, because
-   it is subscribed to `note.created`.
+   built itself, styled with a scoped `<style>` tag that references the
+   app's `--tn-color-*` theme tokens. The **＋** button in the panel header
+   is an action the extension contributed. Inside the panel you can:
+   - Type text and hit **Capture** (or `Ctrl+Enter`) to create a note with
+     that content.
+   - See a list of recent captures — loaded from `listNotes("captures")` on
+     mount and updated live via `note.created` events.
+   - Click a capture to open it (`openNote`).
+   - Click the **×** next to a capture to delete it (`deleteNote`).
 5. Save any note (`Ctrl+S`) and check the devtools console
    (`Ctrl+Shift+I`): `[hello-notes] saved: <path>`.
 6. Restart the app — the extension is still installed. Edit `extension.js`
@@ -38,7 +44,8 @@ An extension is a folder with two files:
   (`side: "right"`), plus optional `{ id, label, icon, run }` buttons in its
   header.
 - `context.workspace` — `createNote`, `openNote`, `readNote`, `writeNote`,
-  `listNotes(prefix)`, scoped to the open workspace root.
+  `listNotes(prefix)`, `renameNote`, `deleteNote`, scoped to the open
+  workspace root.
 - `context.tabs.register(...)` / `context.tabs.open(kind, title)` — full-canvas
   tab views of kinds your extension registered.
 - `context.events.on(...)` — typed app events: `note.opened`, `note.saved`,
@@ -57,6 +64,20 @@ return an optional cleanup. Use any library you like inside it, or none.
 `panel.state` holds `rootPath` and `documentContents` at mount time;
 `panel.onDidChange(listener)` delivers later values, since a mounted panel is
 not re-invoked the way a React panel is re-rendered.
+
+### Styling a DOM panel
+
+A disk-loaded extension cannot use Tailwind classes (those are processed at
+build time). Three options, in order of complexity:
+
+1. **Inline `style="..."`** — works but verbose; no `:hover` or media queries.
+2. **Scoped `<style>` tag** (what this example uses) — one `<style>` element
+   injected into the panel root, with prefixed class names (`hn-`) to avoid
+   collisions. Colors reference `--tn-color-*` tokens so the panel follows the
+   active theme. Supports `:hover`, `:focus`, and any CSS you need.
+3. **`document.adoptedStyleSheets`** — cleanest but overkill for a sample.
+
+Option 2 is the sweet spot for most extensions.
 
 This folder is loaded verbatim by an end-to-end test
 (`apps/desktop/e2e/extensions.spec.ts`), so the example cannot drift from

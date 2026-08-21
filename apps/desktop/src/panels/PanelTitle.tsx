@@ -1,4 +1,4 @@
-import type { PanelAction } from "./panelRegistry";
+import type { PanelAction } from "./panelRegistryModel";
 import { PanelIcon } from "../shell/panelIcons";
 
 /**

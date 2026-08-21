@@ -109,6 +109,29 @@ jobs:
           source scripts/rust-env.sh
           cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml
 
+  # Windows gate for the sync/keychain layer. Unix-only tests stay behind
+  # `#[cfg(unix)]` and are skipped here; this job still compiles and runs the
+  # Windows-native paths (keyring, path handling, sync) that Linux CI cannot.
+  rust-tests-windows:
+    name: Rust tests (Windows)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+          key: windows
+
+      - name: Cargo test
+        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml
+
   # Cross-compile gate for the sync layer.
   #
   # Auto Sync bets on gix specifically because it compiles for Android and iOS,

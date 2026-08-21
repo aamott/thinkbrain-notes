@@ -11,6 +11,8 @@
 
 use std::path::Path;
 
+use crate::NativeError;
+
 /// How much we actually know about a pattern.
 ///
 /// Recorded per row because it changes what the row is allowed to do. Every
@@ -19,8 +21,8 @@ use std::path::Path;
 /// marked as such rather than quietly trusted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Evidence {
-    /// A real file produced by the real daemon has been seen in this shape.
-    #[allow(dead_code, reason = "no row has earned this yet; see the story's known gaps")]
+    /// A real file in this shape has been seen — because a daemon produced one,
+    /// or because this app writes them itself.
     Fixture,
     /// Taken from documentation or reports. Believed, not witnessed.
     Documented,
@@ -30,7 +32,10 @@ pub enum Evidence {
 pub struct ConflictPattern {
     /// Shown to the user: "Keep OneDrive's".
     pub provider: &'static str,
-    #[allow(dead_code, reason = "read by the test that holds each row honest, and by story 4's UI")]
+    #[allow(
+        dead_code,
+        reason = "read by the test that holds each row honest, and by story 4's UI"
+    )]
     pub evidence: Evidence,
     /// Recovers the original file name from a conflict copy's name.
     match_name: fn(&str) -> Option<String>,
@@ -74,7 +79,8 @@ fn syncthing(name: &str) -> Option<String> {
     if parts.len() != 3 || parts.iter().any(|part| part.is_empty()) {
         return None;
     }
-    if !parts[0].chars().all(|c| c.is_ascii_digit()) || !parts[1].chars().all(|c| c.is_ascii_digit())
+    if !parts[0].chars().all(|c| c.is_ascii_digit())
+        || !parts[1].chars().all(|c| c.is_ascii_digit())
     {
         return None;
     }
@@ -83,25 +89,192 @@ fn syncthing(name: &str) -> Option<String> {
 }
 
 /// Dropbox: `note (Adam's conflicted copy 2026-08-16).md`.
+///
+/// The date is anchored so a note someone legitimately named `meeting (Adam's
+/// conflicted copy notes).md` is not paired against `meeting.md` and offered up
+/// for "resolution". The marker alone is not enough.
 fn dropbox(name: &str) -> Option<String> {
     let (stem, extension) = split_extension(name);
     let open = stem.rfind(" (")?;
     let inside = stem[open + 2..].strip_suffix(')')?;
-    if !inside.contains("conflicted copy") {
+    let after = inside.find("conflicted copy")?;
+    if !date_like(&inside[after + "conflicted copy".len()..]) {
         return None;
     }
     Some(format!("{}{}", &stem[..open], extension))
+}
+
+/// Whether `rest` begins with a Dropbox/Nextcloud conflict date
+/// (`2026-08-16`, optionally followed by a time). The marker alone is too loose
+/// — a person can name a note anything — so the date is what makes a copy a
+/// copy rather than a coincidence.
+fn date_like(rest: &str) -> bool {
+    let rest = rest.trim_start();
+    let bytes = rest.as_bytes();
+    bytes.len() >= 10
+        && bytes[..4].iter().all(|b| b.is_ascii_digit())
+        && bytes[4] == b'-'
+        && bytes[5..7].iter().all(|b| b.is_ascii_digit())
+        && bytes[7] == b'-'
+        && bytes[8..10].iter().all(|b| b.is_ascii_digit())
+}
+
+/// Ours: `note (from another device).md`, and ` 2`, ` 3` if one is already
+/// there.
+///
+/// A pull cannot decide every note, and what it could not decide is written
+/// into the vault in the shape a sync daemon would have used — so the panel,
+/// the merge view and the settle rules all apply to it without any of them
+/// learning where it came from.
+fn another_device(name: &str) -> Option<String> {
+    marked_original(name, FROM_ANOTHER_DEVICE)
+}
+
+/// Ours: `note (keep or delete).md`. One side changed the note, the other
+/// deleted it. There is no second version to compare, so this is a different
+/// marker from a two-version copy.
+fn keep_or_delete(name: &str) -> Option<String> {
+    marked_original(name, KEEP_OR_DELETE)
+}
+
+fn marked_original(name: &str, marker: &str) -> Option<String> {
+    let (stem, extension) = split_extension(name);
+    let open = stem.rfind(marker)?;
+    let counter = stem[open + marker.len()..].strip_suffix(')')?;
+    let numbered = counter.is_empty()
+        || counter
+            .strip_prefix(' ')
+            .is_some_and(|n| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()));
+    numbered.then(|| format!("{}{}", &stem[..open], extension))
+}
+
+const FROM_ANOTHER_DEVICE: &str = " (from another device";
+const KEEP_OR_DELETE: &str = " (keep or delete";
+
+/// The most numbered copies we scan for before falling back to a unique name.
+/// Bounds the work on a vault that someone has filled with thousands of
+/// `note (from another device N).md` files, rather than stating every one.
+const BESIDE_CAP: usize = 1_000;
+
+/// The unresolved-conflict slot for `original`: `note (from another device).md`.
+///
+/// Numbered names are only for when this slot is occupied by something that is
+/// not this conflict. An interrupted sync that already wrote the slot must
+/// reuse it, or the next attempt stacks ` 2`, then ` 3`.
+pub fn slot(original: &str) -> String {
+    named_slot(original, FROM_ANOTHER_DEVICE)
+}
+
+/// The keep-or-delete slot for `original`: `note (keep or delete).md`.
+pub fn deletion_slot(original: &str) -> String {
+    named_slot(original, KEEP_OR_DELETE)
+}
+
+fn named_slot(original: &str, marker: &str) -> String {
+    let (directory, name) = dir_and_name(original);
+    let (stem, extension) = split_extension(name);
+    format!("{directory}{stem}{marker}){extension}")
+}
+
+fn dir_and_name(original: &str) -> (&str, &str) {
+    match original.rfind('/') {
+        Some(index) => (&original[..=index], &original[index + 1..]),
+        None => ("", original),
+    }
+}
+
+/// A free name to put another device's version of `original` beside it at.
+///
+/// `taken` means the name cannot be reused — a folder sitting on it, or a
+/// numbered copy that is already someone else's file. The unnumbered slot is
+/// reusable even when a leftover from an interrupted write is already there.
+///
+/// The search is bounded: after `BESIDE_CAP` numbered names are all taken, a
+/// high-resolution timestamp suffix is used instead of scanning further.
+pub fn beside(original: &str, taken: impl Fn(&str) -> bool) -> String {
+    beside_marked(original, FROM_ANOTHER_DEVICE, taken)
+}
+
+/// A free keep-or-delete marker name for `original`.
+pub fn deletion_beside(original: &str, taken: impl Fn(&str) -> bool) -> String {
+    beside_marked(original, KEEP_OR_DELETE, taken)
+}
+
+fn beside_marked(original: &str, marker: &str, taken: impl Fn(&str) -> bool) -> String {
+    let unnumbered = named_slot(original, marker);
+    if !taken(&unnumbered) {
+        return unnumbered;
+    }
+    let (directory, name) = dir_and_name(original);
+    let (stem, extension) = split_extension(name);
+    for nth in 2..=BESIDE_CAP {
+        let candidate = format!("{directory}{stem}{marker} {nth}){extension}");
+        if !taken(&candidate) {
+            return candidate;
+        }
+    }
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_nanos())
+        .unwrap_or(0);
+    format!("{directory}{stem}{marker} {stamp}){extension}")
+}
+
+/// [`beside`] against a real vault: reuse the unnumbered slot when it is
+/// already a file, and only number past a name that cannot be overwritten.
+pub fn beside_in(vault: &Path, original: &str) -> String {
+    beside(original, |path| {
+        occupant_blocks(vault, &slot(original), path)
+    })
+}
+
+/// [`deletion_beside`] against a real vault.
+pub fn deletion_beside_in(vault: &Path, original: &str) -> String {
+    deletion_beside(original, |path| {
+        occupant_blocks(vault, &deletion_slot(original), path)
+    })
+}
+
+fn occupant_blocks(vault: &Path, reusable: &str, path: &str) -> bool {
+    let present = vault.join(path);
+    if !present.exists() {
+        return false;
+    }
+    // A leftover copy of this conflict is the slot, not a collision.
+    !(path == reusable && present.is_file())
+}
+
+/// Whether `relative` is the keep-or-delete marker for a note.
+pub fn is_deletion_decision(relative: &str) -> bool {
+    let name = match relative.rfind('/') {
+        Some(index) => &relative[index + 1..],
+        None => relative,
+    };
+    keep_or_delete(name).is_some()
+}
+
+/// Whether `original` has a keep-or-delete marker sitting beside it in `vault`.
+///
+/// While that marker exists, the note itself is still a decision, not a
+/// version to record or send.
+pub fn awaits_deletion_decision(vault: &Path, original: &str) -> bool {
+    vault.join(deletion_slot(original)).is_file()
 }
 
 /// Nextcloud: `note (conflicted copy 2026-08-16 093100).md`.
 ///
 /// Same shape as Dropbox without the owner's name, so `dropbox` already
 /// recognises it; kept as its own row so the user is told the right provider.
+/// `starts_with` is what keeps Dropbox's owner-prefixed names out of this row,
+/// and the date anchor keeps ordinary notes out of both.
 fn nextcloud(name: &str) -> Option<String> {
     let (stem, extension) = split_extension(name);
     let open = stem.rfind(" (")?;
     let inside = stem[open + 2..].strip_suffix(')')?;
     if !inside.starts_with("conflicted copy") {
+        return None;
+    }
+    if !date_like(&inside["conflicted copy".len()..]) {
         return None;
     }
     Some(format!("{}{}", &stem[..open], extension))
@@ -127,6 +300,17 @@ pub const PATTERNS: &[ConflictPattern] = &[
         evidence: Evidence::Documented,
         match_name: dropbox,
     },
+    ConflictPattern {
+        provider: "git",
+        // The one row that has earned it: we write these ourselves.
+        evidence: Evidence::Fixture,
+        match_name: another_device,
+    },
+    ConflictPattern {
+        provider: "git",
+        evidence: Evidence::Fixture,
+        match_name: keep_or_delete,
+    },
 ];
 
 /// Pairs a vault-relative path with the note it is a conflict copy of.
@@ -136,10 +320,7 @@ pub const PATTERNS: &[ConflictPattern] = &[
 /// named that way, or one left behind after the original was deleted, and
 /// offering to "resolve" it against nothing would be worse than ignoring it.
 pub fn pair(relative: &str, original_exists: impl Fn(&str) -> bool) -> Option<ConflictCopy> {
-    let (directory, name) = match relative.rfind('/') {
-        Some(index) => (&relative[..=index], &relative[index + 1..]),
-        None => ("", relative),
-    };
+    let (directory, name) = dir_and_name(relative);
 
     for pattern in PATTERNS {
         let Some(original_name) = (pattern.match_name)(name) else {
@@ -184,175 +365,30 @@ pub fn is_conflict_copy(vault: &Path, relative: &Path) -> bool {
     pair(&relative, |original| vault.join(original).exists()).is_some()
 }
 
+/// Whether history should ignore `relative`: a conflict copy, or a note that
+/// still has a keep-or-delete decision outstanding.
+pub fn excluded_from_history(vault: &Path, relative: &Path) -> bool {
+    is_conflict_copy(vault, relative) || awaits_deletion_decision(vault, &relative_str(relative))
+}
+
 /// Every conflict copy in a vault, as vault-relative paths.
 ///
 /// Run when a workspace opens: conflicts appear while the app is closed, and a
 /// user who has been away for a week should not have to touch each file to
 /// discover the app noticed nothing.
-pub fn scan(vault: &Path) -> Vec<ConflictCopy> {
-    let Ok(names) = super::bootstrap::recordable_notes(vault) else {
-        return Vec::new();
-    };
+pub fn scan(vault: &Path) -> Result<Vec<ConflictCopy>, NativeError> {
+    let names = super::bootstrap::recordable_notes(vault)?;
     let relative: Vec<String> = names.iter().map(|path| relative_str(path)).collect();
-    let present: std::collections::HashSet<&str> =
-        relative.iter().map(String::as_str).collect();
+    let present: std::collections::HashSet<&str> = relative.iter().map(String::as_str).collect();
 
     let mut found: Vec<ConflictCopy> = relative
         .iter()
         .filter_map(|path| pair(path, |original| present.contains(original)))
         .collect();
     found.sort_by(|a, b| a.copy.cmp(&b.copy));
-    found
+    Ok(found)
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::tests::make_temp_test_dir;
-    use std::fs;
-
-    fn always(_: &str) -> bool {
-        true
-    }
-
-    #[test]
-    fn syncthing_copies_are_paired_with_their_original() {
-        let found = pair("note.sync-conflict-20260816-093100-K3SDFHG.md", always)
-            .expect("a Syncthing copy is recognised");
-
-        assert_eq!(found.original, "note.md");
-        assert_eq!(found.provider, "Syncthing");
-    }
-
-    #[test]
-    fn dropbox_copies_are_paired_with_their_original() {
-        let found = pair("note (Adam's conflicted copy 2026-08-16).md", always)
-            .expect("a Dropbox copy is recognised");
-
-        assert_eq!(found.original, "note.md");
-        assert_eq!(found.provider, "Dropbox", "the copy was blamed on the wrong provider");
-    }
-
-    #[test]
-    fn nextcloud_copies_are_paired_with_their_original() {
-        let found = pair("note (conflicted copy 2026-08-16 093100).md", always)
-            .expect("a Nextcloud copy is recognised");
-
-        assert_eq!(found.original, "note.md");
-        assert_eq!(found.provider, "Nextcloud");
-    }
-
-    #[test]
-    fn a_copy_keeps_the_folder_its_original_is_in() {
-        let found = pair(
-            "journal/2026/08-16.sync-conflict-20260816-093100-K3SDFHG.md",
-            always,
-        )
-        .expect("a nested copy is recognised");
-
-        assert_eq!(found.original, "journal/2026/08-16.md");
-    }
-
-    /// The disambiguator that makes the risky patterns safe to have at all. A
-    /// name in a conflict shape whose original is gone is just a file, and
-    /// offering to resolve it against nothing would be worse than ignoring it.
-    #[test]
-    fn a_copy_with_no_original_is_not_a_conflict() {
-        assert_eq!(
-            pair("note.sync-conflict-20260816-093100-K3SDFHG.md", |_| false),
-            None
-        );
-    }
-
-    /// Carrying the marker is not enough: the tail has to be the shape
-    /// Syncthing actually writes, date and time and device. Matching on the
-    /// marker alone would claim any note whose name happened to contain it.
-    #[test]
-    fn the_syncthing_marker_alone_is_not_a_conflict() {
-        for name in [
-            "note.sync-conflict-draft.md",
-            "note.sync-conflict-20260816-093100.md",
-            "note.sync-conflict-20260816-093100-K3SDFHG-extra.md",
-            "note.sync-conflict-notadate-093100-K3SDFHG.md",
-            "note.sync-conflict-20260816-nottime-K3SDFHG.md",
-            "note.sync-conflict-20260816--K3SDFHG.md",
-        ] {
-            assert_eq!(pair(name, always), None, "{name} was mistaken for a conflict");
-        }
-    }
-
-    /// Ordinary notes must survive contact with this table. A false positive
-    /// here tells the user their own file is a conflict and offers to delete
-    /// one side of it.
-    #[test]
-    fn ordinary_notes_are_not_mistaken_for_conflicts() {
-        for name in [
-            "note.md",
-            "meeting (draft).md",
-            "sync-conflict.md",
-            "a note about the sync-conflict-format.md",
-            "notes (1).md",
-            "report v2.md",
-            "2026-08-16.md",
-            ".hidden.md",
-            "conflicted copy.md",
-        ] {
-            assert_eq!(pair(name, always), None, "{name} was mistaken for a conflict");
-        }
-    }
-
-    /// One original can collect copies from several machines at once.
-    #[test]
-    fn several_copies_of_one_note_each_pair_with_it() {
-        let vault = make_temp_test_dir("conflict-many", "sync", true);
-        fs::write(vault.join("note.md"), "mine").expect("the note exists");
-        for device in ["K3SDFHG", "P9WERTY"] {
-            fs::write(
-                vault.join(format!("note.sync-conflict-20260816-093100-{device}.md")),
-                "theirs",
-            )
-            .expect("the copy exists");
-        }
-
-        let found = scan(&vault);
-
-        assert_eq!(found.len(), 2);
-        assert!(found.iter().all(|copy| copy.original == "note.md"));
-    }
-
-    #[test]
-    fn a_scan_finds_conflicts_left_while_the_app_was_closed() {
-        let vault = make_temp_test_dir("conflict-scan", "sync", true);
-        fs::create_dir_all(vault.join("journal")).expect("the folder exists");
-        fs::write(vault.join("journal/08-16.md"), "mine").expect("the note exists");
-        fs::write(
-            vault.join("journal/08-16.sync-conflict-20260816-093100-K3SDFHG.md"),
-            "theirs",
-        )
-        .expect("the copy exists");
-        fs::write(vault.join("untouched.md"), "fine").expect("the note exists");
-
-        let found = scan(&vault);
-
-        assert_eq!(found.len(), 1);
-        assert_eq!(found[0].original, "journal/08-16.md");
-        assert_eq!(
-            found[0].copy,
-            "journal/08-16.sync-conflict-20260816-093100-K3SDFHG.md"
-        );
-    }
-
-    /// Until someone has watched each daemon produce a real file, the table
-    /// says so. This fails the moment a row claims evidence it does not have.
-    #[test]
-    fn every_pattern_records_what_is_actually_known_about_it() {
-        for pattern in PATTERNS {
-            assert_eq!(
-                pattern.evidence,
-                Evidence::Documented,
-                "{} claims fixture evidence; the fixture must exist in this file",
-                pattern.provider
-            );
-        }
-    }
-}
+#[path = "conflict_tests.rs"]
+mod tests;

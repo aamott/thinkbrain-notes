@@ -29,11 +29,6 @@ export interface Tab {
   readonly isDirty?: boolean;
 }
 
-export interface LayoutPreferences {
-  readonly tabs: readonly Tab[];
-  readonly activeTabId: string | null;
-}
-
 /** Metadata an extension contributes before a client binds it to a renderer. */
 export interface TabRegistration {
   readonly kind: TabKind;

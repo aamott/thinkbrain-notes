@@ -1,4 +1,4 @@
-use crate::error::NativeError;
+use crate::error::{lock_or_recover, NativeError};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 
@@ -12,11 +12,17 @@ use std::sync::{
     atomic::{AtomicU64, Ordering},
     Mutex,
 };
-use std::time::UNIX_EPOCH;
+use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::Manager;
 
 pub const IGNORED_FOLDERS: &[&str] = &["node_modules", "target", "dist", "vendor"];
 pub(crate) const MAX_WORKSPACE_ENTRIES: usize = 10_000;
+
+/// Builds a `NativeError::with_details` from a static code/message and a
+/// displayable error, matching the shared pattern used across command modules.
+fn failed(code: &'static str, message: &'static str, error: impl std::fmt::Display) -> NativeError {
+    NativeError::with_details(code, message, error.to_string())
+}
 
 /// True for vault entries the explorer, markdown walker, and watcher all skip:
 /// dotfiles plus the configured ignored-folder list. Centralized so the three
@@ -27,6 +33,40 @@ pub fn is_ignored_entry_name(name: &str) -> bool {
 
 pub static WORKSPACE_ENTRY_MUTATION_LOCK: Mutex<()> = Mutex::new(());
 static WORKSPACE_WINDOW_SEQUENCE: AtomicU64 = AtomicU64::new(1);
+
+/// Acquires the workspace entry mutation lock, recovering from poison so a
+/// panicked writer does not deadlock the app.
+pub fn acquire_workspace_mutation_lock() -> std::sync::MutexGuard<'static, ()> {
+    WORKSPACE_ENTRY_MUTATION_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+/// Creates missing parent directories for a path, mapping failures to the
+/// shared `workspace.create_parent_failed` error code.
+pub fn ensure_parent_dir(path: &Path, message: &str) -> Result<(), NativeError> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|error| {
+            NativeError::with_details("workspace.create_parent_failed", message, error)
+        })?;
+    }
+    Ok(())
+}
+
+/// Removes a document from the search index, logging failures best-effort
+/// so a stale index entry never blocks a successful rename or delete.
+pub fn remove_search_index_entry(
+    app: tauri::AppHandle,
+    root_path: String,
+    relative_path: &str,
+    module: &str,
+) {
+    if let Err(error) =
+        crate::commands::search::remove_index_document(app, root_path, relative_path.to_string())
+    {
+        eprintln!("[{module}] failed to remove search index for {relative_path}: {error}");
+    }
+}
 
 #[derive(Default)]
 pub struct WorkspaceWindowRoots(Mutex<HashMap<String, String>>);
@@ -43,28 +83,15 @@ pub fn register_workspace_window_root(
     label: String,
     root_path: String,
 ) {
-    roots
-        .0
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .insert(label, root_path);
+    lock_or_recover(&roots.0).insert(label, root_path);
 }
 
 pub fn workspace_window_root(roots: &WorkspaceWindowRoots, label: &str) -> Option<String> {
-    roots
-        .0
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .get(label)
-        .cloned()
+    lock_or_recover(&roots.0).get(label).cloned()
 }
 
 pub fn unregister_workspace_window_root(roots: &WorkspaceWindowRoots, label: &str) {
-    roots
-        .0
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .remove(label);
+    lock_or_recover(&roots.0).remove(label);
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -161,20 +188,10 @@ pub fn create_workspace_file(
     contents: Option<String>,
 ) -> Result<WorkspaceEntry, NativeError> {
     let root = resolve_workspace_root(&root_path)?;
-    let _mutation_lock = WORKSPACE_ENTRY_MUTATION_LOCK
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _mutation_lock = acquire_workspace_mutation_lock();
     let file_path = resolve_workspace_entry_path(&root, &relative_path)?;
 
-    if let Some(parent) = file_path.parent() {
-        fs::create_dir_all(parent).map_err(|error| {
-            NativeError::with_details(
-                "workspace.create_parent_failed",
-                "Failed to create the destination folder.",
-                error,
-            )
-        })?;
-    }
+    ensure_parent_dir(&file_path, "Failed to create the destination folder.")?;
 
     record_self_write(&file_path);
     let mut file = fs::OpenOptions::new()
@@ -188,7 +205,7 @@ pub fn create_workspace_file(
                     "A file already exists at that path.",
                 )
             } else {
-                NativeError::with_details(
+                failed(
                     "workspace.create_failed",
                     "Failed to create the file.",
                     error,
@@ -197,7 +214,7 @@ pub fn create_workspace_file(
         })?;
     file.write_all(contents.unwrap_or_default().as_bytes())
         .map_err(|error| {
-            NativeError::with_details(
+            failed(
                 "workspace.create_failed",
                 "Failed to create the file.",
                 error,
@@ -215,9 +232,7 @@ pub fn create_workspace_folder(
     relative_path: String,
 ) -> Result<WorkspaceEntry, NativeError> {
     let root = resolve_workspace_root(&root_path)?;
-    let _mutation_lock = WORKSPACE_ENTRY_MUTATION_LOCK
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _mutation_lock = acquire_workspace_mutation_lock();
     let folder_path = resolve_workspace_entry_path(&root, &relative_path)?;
 
     if folder_path.exists() {
@@ -228,7 +243,7 @@ pub fn create_workspace_folder(
     }
 
     fs::create_dir_all(&folder_path).map_err(|error| {
-        NativeError::with_details(
+        failed(
             "workspace.create_failed",
             "Failed to create the folder.",
             error,
@@ -253,11 +268,7 @@ pub fn rename_workspace_entry(
     let entry = rename_workspace_entry_impl(&root_path, &relative_path, &new_relative_path)?;
 
     if is_markdown {
-        if let Err(error) =
-            crate::commands::search::remove_index_document(app, root_path, relative_path.clone())
-        {
-            eprintln!("[workspace] failed to remove search index for {relative_path}: {error}");
-        }
+        remove_search_index_entry(app, root_path, &relative_path, "workspace");
     }
 
     Ok(entry)
@@ -269,9 +280,7 @@ fn rename_workspace_entry_impl(
     new_relative_path: &str,
 ) -> Result<WorkspaceEntry, NativeError> {
     let root = resolve_workspace_root(root_path)?;
-    let _mutation_lock = WORKSPACE_ENTRY_MUTATION_LOCK
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _mutation_lock = acquire_workspace_mutation_lock();
     let source_path = resolve_workspace_entry_path(&root, relative_path)?;
     let destination_path = resolve_workspace_entry_path(&root, new_relative_path)?;
 
@@ -295,21 +304,16 @@ fn rename_workspace_entry_impl(
         ));
     }
 
-    if let Some(parent) = destination_path.parent() {
-        fs::create_dir_all(parent).map_err(|error| {
-            NativeError::with_details(
-                "workspace.create_parent_failed",
-                "Failed to create the destination folder.",
-                error,
-            )
-        })?;
-    }
+    ensure_parent_dir(
+        &destination_path,
+        "Failed to create the destination folder.",
+    )?;
 
     record_self_write(&source_path);
     record_self_write(&destination_path);
     let is_dir = source_path.is_dir();
     fs::rename(&source_path, &destination_path).map_err(|error| {
-        NativeError::with_details(
+        failed(
             "workspace.rename_failed",
             "Failed to rename the workspace entry.",
             error,
@@ -344,11 +348,7 @@ pub fn delete_workspace_entry(
     delete_workspace_entry_impl(&root_path, &relative_path)?;
 
     if is_markdown {
-        if let Err(error) =
-            crate::commands::search::remove_index_document(app, root_path, relative_path.clone())
-        {
-            eprintln!("[workspace] failed to remove search index for {relative_path}: {error}");
-        }
+        remove_search_index_entry(app, root_path, &relative_path, "workspace");
     }
 
     Ok(())
@@ -356,9 +356,7 @@ pub fn delete_workspace_entry(
 
 fn delete_workspace_entry_impl(root_path: &str, relative_path: &str) -> Result<(), NativeError> {
     let root = resolve_workspace_root(root_path)?;
-    let _mutation_lock = WORKSPACE_ENTRY_MUTATION_LOCK
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _mutation_lock = acquire_workspace_mutation_lock();
     let entry_path = resolve_workspace_entry_path(&root, relative_path)?;
 
     if !entry_path.exists() {
@@ -376,7 +374,7 @@ fn delete_workspace_entry_impl(root_path: &str, relative_path: &str) -> Result<(
     };
 
     remove_result.map_err(|error| {
-        NativeError::with_details(
+        failed(
             "workspace.delete_failed",
             "Failed to delete the workspace entry.",
             error,
@@ -409,7 +407,7 @@ pub fn open_workspace_window(app: tauri::AppHandle, root_path: String) -> Result
             .title(describe_workspace(&root).name)
             .build()
             .map_err(|error| {
-                NativeError::with_details(
+                failed(
                     "workspace.window_failed",
                     "Failed to create a workspace window.",
                     error,
@@ -422,7 +420,7 @@ pub fn open_workspace_window(app: tauri::AppHandle, root_path: String) -> Result
     // policy; the extra closure handles the workspace-specific half.
     crate::commands::watcher::attach_window_destroy_cleanup(
         &window,
-        label_for_cleanup.clone(),
+        label,
         Some(move || {
             unregister_workspace_window_root(
                 &app_for_cleanup.state::<WorkspaceWindowRoots>(),
@@ -452,7 +450,7 @@ pub fn resolve_workspace_root(root_path: &str) -> Result<PathBuf, NativeError> {
     }
 
     let canonical_root = root.canonicalize().map_err(|error| {
-        NativeError::with_details(
+        failed(
             "workspace.open_failed",
             "Failed to open the workspace folder.",
             error,
@@ -491,7 +489,7 @@ pub fn resolve_workspace_entry_path(
     // inside the (already canonical) workspace root.
     if path.exists() {
         let canonical = path.canonicalize().map_err(|error| {
-            NativeError::with_details(
+            failed(
                 "workspace.invalid_path",
                 "Failed to resolve the workspace entry.",
                 error,
@@ -520,7 +518,7 @@ pub fn resolve_workspace_entry_path(
         }
     }
     let canonical_ancestor = ancestor.canonicalize().map_err(|error| {
-        NativeError::with_details(
+        failed(
             "workspace.invalid_path",
             "Failed to resolve the workspace entry.",
             error,
@@ -616,7 +614,7 @@ pub fn collect_workspace_entries(
     }
 
     let dir = fs::read_dir(current).map_err(|error| {
-        NativeError::with_details(
+        failed(
             "workspace.list_failed",
             "Failed to list the workspace contents.",
             error,
@@ -629,7 +627,7 @@ pub fn collect_workspace_entries(
         }
 
         let entry = entry.map_err(|error| {
-            NativeError::with_details(
+            failed(
                 "workspace.list_failed",
                 "Failed to inspect a workspace entry.",
                 error,
@@ -643,7 +641,7 @@ pub fn collect_workspace_entries(
 
         let path = entry.path();
         let file_type = entry.file_type().map_err(|error| {
-            NativeError::with_details(
+            failed(
                 "workspace.list_failed",
                 "Failed to inspect a workspace entry type.",
                 error,
@@ -699,7 +697,7 @@ pub fn entry_metadata(root: &Path, path: &Path) -> Result<EntryMetadata, NativeE
     let relative_path = path
         .strip_prefix(root)
         .map_err(|error| {
-            NativeError::with_details(
+            failed(
                 "workspace.invalid_path",
                 "Entry path is outside the workspace.",
                 error,
@@ -708,7 +706,7 @@ pub fn entry_metadata(root: &Path, path: &Path) -> Result<EntryMetadata, NativeE
         .to_string_lossy()
         .replace('\\', "/");
     let metadata = fs::metadata(path).map_err(|error| {
-        NativeError::with_details(
+        failed(
             "workspace.metadata_failed",
             "Failed to read workspace entry metadata.",
             error,
@@ -756,4 +754,44 @@ pub fn stable_workspace_hash(input: &str) -> u64 {
     }
 
     hash
+}
+
+/// Replaces `path` with `contents` via a sibling `.tmp` and a rename.
+///
+/// `rename` is atomic on the same filesystem, so a crash cannot leave a
+/// truncated destination. A failed persist deletes the temp file. Temp names
+/// start with `.` and end in `.tmp`, matching the names Auto Sync already
+/// refuses to record.
+pub fn write_file_atomically(path: &Path, contents: impl AsRef<[u8]>) -> std::io::Result<()> {
+    let parent = path.parent().ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "file path must include a parent directory",
+        )
+    })?;
+    fs::create_dir_all(parent)?;
+
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    // Include the target stem so two writers in one directory — app and
+    // workspace settings share `settings/` — cannot collide on the temp name
+    // even if their timestamps match.
+    let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("file");
+    let temp = parent.join(format!(".{stem}.{unique}.tmp"));
+    let persisted = fs::write(&temp, contents).and_then(|_| {
+        // Windows `rename` will not replace an existing file. Dropping the
+        // destination first is not atomic, but it still cannot leave a
+        // half-written note, which is the failure this helper exists to close.
+        #[cfg(windows)]
+        if path.exists() {
+            fs::remove_file(path)?;
+        }
+        fs::rename(&temp, path)
+    });
+    if persisted.is_err() {
+        let _ = fs::remove_file(&temp);
+    }
+    persisted
 }

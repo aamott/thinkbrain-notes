@@ -6,7 +6,7 @@
  * contribution registry rather than in shell-specific action arrays.
  */
 
-import { getDesktopPanelOrUndefined, type RightPanel } from "../panels/panelRegistry";
+import { getDesktopPanelOrUndefined, type RightPanel } from "../panels/panelRegistryModel";
 
 /**
  * Narrow shell selection types re-exported from the panel registry.
@@ -21,7 +21,7 @@ export type {
   BuiltInRightPanel,
   LeftPanel,
   RightPanel
-} from "../panels/panelRegistry";
+} from "../panels/panelRegistryModel";
 
 /**
  * Narrows `revealPanel`'s wide command-context string to real right-dock

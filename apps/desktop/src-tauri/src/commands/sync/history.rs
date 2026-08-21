@@ -14,17 +14,20 @@ use std::path::Path;
 
 use serde::Serialize;
 
-use crate::commands::workspace::{resolve_workspace_root, WORKSPACE_ENTRY_MUTATION_LOCK};
+use crate::commands::workspace::{acquire_workspace_mutation_lock, resolve_workspace_root};
 use crate::NativeError;
 
+use super::engine::Engine;
+use super::failed;
 use super::snapshot::{self, Reason};
 
 /// How far back one note's own history is searched before giving up.
 ///
 /// A note edited once a year in a vault edited hourly would otherwise walk the
 /// whole history to find nothing, on a panel someone opened by accident. The
-/// cap is generous enough that a real note's versions are all found, and the
-/// surface says when it stopped rather than implying there is nothing more.
+/// cap is generous enough that a real note's versions are all found; when a
+/// longer history is truncated by it, the reader logs that it stopped rather
+/// than returning a list that quietly looks complete.
 const SCAN: usize = 5_000;
 
 /// What happened to one note in one recorded change.
@@ -59,8 +62,7 @@ pub struct Recorded {
 }
 
 /// Where a restored version came from and what was held before it landed.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Restored {
     pub note: String,
     /// The restore point taken before the note was overwritten, so putting an
@@ -133,6 +135,17 @@ pub fn read(
         });
     }
 
+    // The cap was reached without running out of history: older versions may
+    // exist beyond it. Say so loudly rather than handing back a list that looks
+    // complete. The common case (a real note's versions all live within SCAN)
+    // never reaches here.
+    if next.is_some() && found.len() < limit {
+        eprintln!(
+            "[sync] history for {} stopped at the {SCAN}-commit scan cap; older versions may exist",
+            note.unwrap_or("the vault")
+        );
+    }
+
     Ok(found)
 }
 
@@ -145,38 +158,26 @@ pub fn read(
 /// Deliberately not echo-suppressed, for the same reason resolving a conflict
 /// is not: the note changed under an editor that is probably open on it, and
 /// the watcher's outside-edit path is what refreshes every window showing it.
-pub fn restore(
-    repo: &gix::Repository,
-    note: &str,
-    change: &str,
-) -> Result<Restored, NativeError> {
+pub fn restore(engine: &Engine, note: &str, change: &str) -> Result<Restored, NativeError> {
     // The same lock ordinary note writes take, so a save landing in the middle
     // of a restore is not a race this has to reason about.
-    let _mutation_lock = WORKSPACE_ENTRY_MUTATION_LOCK
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _mutation_lock = acquire_workspace_mutation_lock();
 
+    let repo = engine.repository();
     let vault = repo
         .workdir()
-        .ok_or_else(|| NativeError::new("sync.no_worktree", "This sync history has no notes folder."))?
+        .ok_or_else(|| {
+            NativeError::new("sync.no_worktree", "This sync history has no notes folder.")
+        })?
         .to_path_buf();
     let relative = snapshot::vault_relative(&vault, Path::new(note))?;
 
-    let wanted = version_at(repo, &relative, change)?;
+    let wanted = version_at(&repo, &relative, change)?;
 
-    let checkpoint = snapshot::checkpoint(repo, std::slice::from_ref(&relative), Reason::VersionRestored)?;
+    let checkpoint = engine.checkpoint(std::slice::from_ref(&relative), Reason::VersionRestored)?;
 
     let absolute = vault.join(&relative);
-    if let Some(parent) = absolute.parent() {
-        std::fs::create_dir_all(parent).map_err(|error| {
-            failed(
-                "sync.restore_failed",
-                "Could not make room for the restored note.",
-                error,
-            )
-        })?;
-    }
-    std::fs::write(&absolute, &wanted).map_err(|error| {
+    crate::commands::workspace::write_file_atomically(&absolute, &wanted).map_err(|error| {
         failed(
             "sync.restore_failed",
             "Could not write the restored note.",
@@ -196,7 +197,11 @@ pub fn conflict_rate(repo: &gix::Repository) -> Result<Rate, NativeError> {
     let checkpoints = snapshot::checkpoint_head(repo)?;
     Ok(Rate {
         decisions: count(repo, checkpoints, Some(Reason::ConflictResolved.message()))?,
-        settled: count(repo, checkpoints, Some(Reason::DuplicateDiscarded.message()))?,
+        settled: count(
+            repo,
+            checkpoints,
+            Some(Reason::DuplicateDiscarded.message()),
+        )?,
         recorded: count(repo, snapshot::head_commit(repo)?, None)?,
     })
 }
@@ -219,6 +224,11 @@ pub fn last_recorded(repo: &gix::Repository) -> Result<Option<u64>, NativeError>
 /// This is what makes "that device was simply behind" answerable without a
 /// merge base. If the other machine's file is a state ours has already passed
 /// through, ours holds everything theirs did.
+///
+/// The walk is bounded by [`SCAN`]. A `false` answer means "not within the
+/// last `SCAN` commits" rather than "never": a note whose matching version is
+/// older than that is reported as not recorded. The false negative is safe —
+/// it turns a skip into a merge — but it is not a definitive "never".
 pub fn has_recorded(
     repo: &gix::Repository,
     note: &Path,
@@ -287,34 +297,29 @@ fn touched(
     parent: Option<gix::ObjectId>,
     commit: gix::ObjectId,
 ) -> Result<Vec<ChangedNote>, NativeError> {
-    let after = tree_of(repo, commit)?;
-    let before = parent.map(|id| tree_of(repo, id)).transpose()?;
-    let empty = repo.empty_tree();
-    let before = before.as_ref().unwrap_or(&empty);
-
-    let mut recorder = gix::diff::tree::Recorder::default();
-    gix::diff::tree(
-        gix::objs::TreeRefIter::from_bytes(&before.data, before.id.kind()),
-        gix::objs::TreeRefIter::from_bytes(&after.data, after.id.kind()),
+    let changes = snapshot::changes_between(
+        repo,
         state,
-        &repo.objects,
-        &mut recorder,
-    )
-    .map_err(|error| unreadable("Could not read what a change touched.", error))?;
+        snapshot::tree_of(repo, parent)?,
+        snapshot::tree_of(repo, Some(commit))?,
+    )?;
 
     // Only files. A folder appearing or disappearing is the notes inside it
     // arriving or leaving, and they are each listed in their own right.
-    let mut notes: Vec<ChangedNote> = recorder
-        .records
+    let mut notes: Vec<ChangedNote> = changes
         .into_iter()
         .filter_map(|record| {
             use gix::diff::tree::recorder::Change;
             let (mode, path, change) = match record {
-                Change::Addition { entry_mode, path, .. } => (entry_mode, path, NoteChange::Added),
-                Change::Deletion { entry_mode, path, .. } => (entry_mode, path, NoteChange::Removed),
-                Change::Modification { entry_mode, path, .. } => {
-                    (entry_mode, path, NoteChange::Updated)
-                }
+                Change::Addition {
+                    entry_mode, path, ..
+                } => (entry_mode, path, NoteChange::Added),
+                Change::Deletion {
+                    entry_mode, path, ..
+                } => (entry_mode, path, NoteChange::Removed),
+                Change::Modification {
+                    entry_mode, path, ..
+                } => (entry_mode, path, NoteChange::Updated),
             };
             mode.is_blob().then(|| ChangedNote {
                 path: path.to_string(),
@@ -348,19 +353,8 @@ fn count(
     Ok(counted)
 }
 
-fn tree_of(repo: &gix::Repository, commit: gix::ObjectId) -> Result<gix::Tree<'_>, NativeError> {
-    repo.find_commit(commit)
-        .map_err(|error| unreadable("Could not read the sync history.", error))?
-        .tree()
-        .map_err(|error| unreadable("Could not read the sync history.", error))
-}
-
 fn unreadable(message: &'static str, error: impl std::fmt::Display) -> NativeError {
     failed("sync.history_read_failed", message, error)
-}
-
-fn failed(code: &'static str, message: &'static str, error: impl std::fmt::Display) -> NativeError {
-    NativeError::with_details(code, message, error.to_string())
 }
 
 // ---------------------------------------------------------------------------
@@ -372,8 +366,9 @@ fn failed(code: &'static str, message: &'static str, error: impl std::fmt::Displ
 /// A vault with its own git repository has no engine and therefore no history
 /// of ours. That is an empty list rather than an error: the panel showing
 /// nothing is the honest rendering of "Auto Sync is not looking after this".
-fn engine_for(root_path: &str) -> Result<Option<std::sync::Arc<super::engine::Engine>>, NativeError>
-{
+fn engine_for(
+    root_path: &str,
+) -> Result<Option<std::sync::Arc<super::engine::Engine>>, NativeError> {
     let root = resolve_workspace_root(root_path)?;
     Ok(super::registry::engine(&root.to_string_lossy()))
 }
@@ -395,7 +390,7 @@ pub fn restore_version(
     root_path: String,
     note_path: String,
     change: String,
-) -> Result<Restored, NativeError> {
+) -> Result<(), NativeError> {
     // Without an engine there is no restore point, and without one this write
     // would be the single thing Auto Sync promises never to be: a change to the
     // user's notes that cannot be undone.
@@ -405,7 +400,7 @@ pub fn restore_version(
             "Auto Sync is not keeping history for this workspace, so there is nothing to put back.",
         )
     })?;
-    restore(&engine.repository(), &note_path, &change)
+    restore(&engine, &note_path, &change).map(|_| ())
 }
 
 #[tauri::command]

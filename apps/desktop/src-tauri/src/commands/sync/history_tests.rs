@@ -1,3 +1,4 @@
+use super::super::engine::Engine;
 use super::super::hidden_repo;
 use super::*;
 use crate::tests::make_temp_test_dir;
@@ -7,13 +8,20 @@ use std::path::PathBuf;
 struct Fixture {
     vault: PathBuf,
     repo: gix::Repository,
+    engine: Engine,
 }
 
 fn fixture(name: &str) -> Fixture {
     let vault = make_temp_test_dir(&format!("{name}-vault"), "sync", true);
     let git_dir = make_temp_test_dir(&format!("{name}-gitdir"), "sync", true);
     let repo = hidden_repo::open_or_create(&git_dir, &vault).expect("the hidden repository opens");
-    Fixture { vault, repo }
+    let engine = Engine::new(repo, false);
+    let repo = engine.repository();
+    Fixture {
+        vault,
+        repo,
+        engine,
+    }
 }
 
 fn write(vault: &Path, relative: &str, contents: &str) {
@@ -47,7 +55,9 @@ fn paths_in(entry: &Recorded) -> Vec<&str> {
 fn a_vault_that_has_never_been_recorded_has_no_history() {
     let f = fixture("history-empty");
 
-    assert!(read(&f.repo, None, 20).expect("the history is readable").is_empty());
+    assert!(read(&f.repo, None, 20)
+        .expect("the history is readable")
+        .is_empty());
 }
 
 /// The list is the whole of what a nontechnical person sees of git, so an entry
@@ -57,13 +67,20 @@ fn each_recorded_change_names_the_notes_it_touched() {
     let f = fixture("history-names");
     write(&f.vault, "one.md", "first\n");
     write(&f.vault, "journal/two.md", "second\n");
-    record(&f, "Sync 2026-08-17 09:31 — 2 notes changed", &["one.md", "journal/two.md"]);
+    record(
+        &f,
+        "Sync 2026-08-17 09:31 — 2 notes changed",
+        &["one.md", "journal/two.md"],
+    );
 
     let history = read(&f.repo, None, 20).expect("the history is readable");
 
     assert_eq!(history.len(), 1);
     assert_eq!(paths_in(&history[0]), ["journal/two.md", "one.md"]);
-    assert!(history[0].notes.iter().all(|note| note.change == NoteChange::Added));
+    assert!(history[0]
+        .notes
+        .iter()
+        .all(|note| note.change == NoteChange::Added));
 }
 
 /// The message is kept word for word: it is the escape hatch for anyone who
@@ -77,7 +94,10 @@ fn the_message_is_kept_word_for_word() {
     let history = read(&f.repo, None, 20).expect("the history is readable");
 
     assert_eq!(history[0].message, "Sync 2026-08-17 09:31 — 1 note changed");
-    assert!(history[0].at.is_some(), "a recorded change knows when it happened");
+    assert!(
+        history[0].at.is_some(),
+        "a recorded change knows when it happened"
+    );
 }
 
 #[test]
@@ -100,7 +120,10 @@ fn an_edit_reads_as_an_update_and_a_removal_as_a_removal() {
         .collect();
     assert_eq!(
         changes,
-        [("one.md", NoteChange::Updated), ("two.md", NoteChange::Removed)]
+        [
+            ("one.md", NoteChange::Updated),
+            ("two.md", NoteChange::Removed)
+        ]
     );
 }
 
@@ -115,7 +138,10 @@ fn the_newest_change_comes_first() {
     let history = read(&f.repo, None, 20).expect("the history is readable");
 
     assert_eq!(
-        history.iter().map(|entry| entry.message.as_str()).collect::<Vec<_>>(),
+        history
+            .iter()
+            .map(|entry| entry.message.as_str())
+            .collect::<Vec<_>>(),
         ["newest", "oldest"]
     );
 }
@@ -169,7 +195,10 @@ fn one_notes_history_leaves_out_the_change_that_deleted_it() {
     let history = read(&f.repo, Some("gone.md"), 20).expect("the history is readable");
 
     assert_eq!(
-        history.iter().map(|entry| entry.message.as_str()).collect::<Vec<_>>(),
+        history
+            .iter()
+            .map(|entry| entry.message.as_str())
+            .collect::<Vec<_>>(),
         ["written"]
     );
 }
@@ -186,10 +215,21 @@ fn restoring_puts_the_earlier_text_back_on_disk() {
     write(&f.vault, "note.md", "what I typed by mistake\n");
     record(&f, "second", &["note.md"]);
 
-    let wanted = read(&f.repo, Some("note.md"), 20).expect("readable")[1].id.clone();
-    restore(&f.repo, "note.md", &wanted).expect("the version is restored");
+    let wanted = read(&f.repo, Some("note.md"), 20).expect("readable")[1]
+        .id
+        .clone();
+    restore(&f.engine, "note.md", &wanted).expect("the version is restored");
 
     assert_eq!(on_disk(&f, "note.md"), "the version I want back\n");
+    let leftovers: Vec<_> = fs::read_dir(&f.vault)
+        .expect("the vault is readable")
+        .map(|entry| entry.expect("the entry is readable").file_name())
+        .collect();
+    assert_eq!(
+        leftovers.as_slice(),
+        [std::ffi::OsString::from("note.md")],
+        "a restore must not leave a sibling temp behind"
+    );
 }
 
 /// The promise the merge tab makes out loud — "you can always undo" — has to
@@ -205,10 +245,10 @@ fn a_restore_can_itself_be_undone() {
     let history = read(&f.repo, Some("note.md"), 20).expect("readable");
     let (newer, older) = (history[0].id.clone(), history[1].id.clone());
 
-    restore(&f.repo, "note.md", &older).expect("the older version is restored");
+    restore(&f.engine, "note.md", &older).expect("the older version is restored");
     assert_eq!(on_disk(&f, "note.md"), "version one\n");
 
-    restore(&f.repo, "note.md", &newer).expect("the restore is undone");
+    restore(&f.engine, "note.md", &newer).expect("the restore is undone");
     assert_eq!(on_disk(&f, "note.md"), "version two\n");
 }
 
@@ -220,8 +260,10 @@ fn a_restore_takes_a_restore_point_of_what_it_is_about_to_overwrite() {
     write(&f.vault, "note.md", "version two\n");
     record(&f, "second", &["note.md"]);
 
-    let older = read(&f.repo, Some("note.md"), 20).expect("readable")[1].id.clone();
-    let restored = restore(&f.repo, "note.md", &older).expect("the version is restored");
+    let older = read(&f.repo, Some("note.md"), 20).expect("readable")[1]
+        .id
+        .clone();
+    let restored = restore(&f.engine, "note.md", &older).expect("the version is restored");
 
     let checkpoint = gix::ObjectId::from_hex(restored.checkpoint.as_bytes()).expect("an id");
     let mut tree = f
@@ -250,8 +292,10 @@ fn restoring_a_note_that_had_been_deleted_brings_it_back() {
     fs::remove_file(f.vault.join("gone.md")).expect("the note is deleted");
     record(&f, "deleted", &["gone.md"]);
 
-    let wanted = read(&f.repo, Some("gone.md"), 20).expect("readable")[0].id.clone();
-    restore(&f.repo, "gone.md", &wanted).expect("the note comes back");
+    let wanted = read(&f.repo, Some("gone.md"), 20).expect("readable")[0]
+        .id
+        .clone();
+    restore(&f.engine, "gone.md", &wanted).expect("the note comes back");
 
     assert_eq!(on_disk(&f, "gone.md"), "still wanted\n");
 }
@@ -263,7 +307,7 @@ fn restoring_a_version_a_note_never_had_is_refused() {
     record(&f, "first", &["one.md"]);
 
     let change = read(&f.repo, None, 20).expect("readable")[0].id.clone();
-    let error = restore(&f.repo, "never-existed.md", &change).expect_err("nothing to restore");
+    let error = restore(&f.engine, "never-existed.md", &change).expect_err("nothing to restore");
 
     assert_eq!(error.code, "sync.version_missing");
 }
@@ -274,7 +318,7 @@ fn restoring_from_something_that_is_not_a_recorded_change_is_refused() {
     write(&f.vault, "one.md", "only note\n");
     record(&f, "first", &["one.md"]);
 
-    let error = restore(&f.repo, "one.md", "not-an-id").expect_err("nothing to restore from");
+    let error = restore(&f.engine, "one.md", "not-an-id").expect_err("nothing to restore from");
 
     assert_eq!(error.code, "sync.version_missing");
 }
@@ -288,7 +332,7 @@ fn restoring_to_a_path_outside_the_vault_is_refused() {
     record(&f, "first", &["one.md"]);
 
     let change = read(&f.repo, None, 20).expect("readable")[0].id.clone();
-    let error = restore(&f.repo, "../elsewhere.md", &change).expect_err("refused");
+    let error = restore(&f.engine, "../elsewhere.md", &change).expect_err("refused");
 
     assert_eq!(error.code, "sync.path_outside_vault");
 }
@@ -308,15 +352,26 @@ fn the_counter_tells_decisions_from_restores() {
     write(&f.vault, "one.md", "second\n");
     record(&f, "second", &["one.md"]);
 
-    snapshot::checkpoint(&f.repo, &[PathBuf::from("one.md")], snapshot::Reason::ConflictResolved)
-        .expect("a decision is checkpointed");
+    snapshot::checkpoint(
+        &f.repo,
+        &[PathBuf::from("one.md")],
+        snapshot::Reason::ConflictResolved,
+    )
+    .expect("a decision is checkpointed");
     write(&f.vault, "one.md", "third\n");
-    snapshot::checkpoint(&f.repo, &[PathBuf::from("one.md")], snapshot::Reason::VersionRestored)
-        .expect("a restore is checkpointed");
+    snapshot::checkpoint(
+        &f.repo,
+        &[PathBuf::from("one.md")],
+        snapshot::Reason::VersionRestored,
+    )
+    .expect("a restore is checkpointed");
 
     let rate = conflict_rate(&f.repo).expect("the counter is readable");
 
-    assert_eq!(rate.decisions, 1, "a restore is not a conflict anyone had to decide");
+    assert_eq!(
+        rate.decisions, 1,
+        "a restore is not a conflict anyone had to decide"
+    );
     assert_eq!(rate.recorded, 2);
 }
 

@@ -48,8 +48,8 @@ import {
 // ---------------------------------------------------------------------------
 
 /**
- * Module-scoped registry with the built-in Appearance, Editor, and Settings
- * modules.
+ * Module-scoped registry with the built-in Appearance, Editor, Settings, and
+ * Sync modules.
  *
  * Exported so UI components (Story 3+) can look up definitions, sections, and
  * modules for rendering. Extensions will register additional modules here in a

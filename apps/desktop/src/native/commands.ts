@@ -8,8 +8,12 @@ import type {
 } from "../sync/conflictTypes";
 import type {
   ConflictRate as NativeConflictRate,
+  HistoryCleanup as NativeHistoryCleanup,
+  HistoryUsage as NativeHistoryUsage,
   RecordedChange as NativeRecordedChange,
-  RestoredVersion as NativeRestoredVersion,
+  SavedSignIn as NativeSavedSignIn,
+  SignInStatus as NativeSignInStatus,
+  Synced as NativeSynced,
   SyncStatus as NativeSyncStatus
 } from "../sync/historyTypes";
 
@@ -221,11 +225,72 @@ export interface NativeCommandMap {
       readonly notePath: string;
       readonly change: string;
     };
-    readonly result: NativeRestoredVersion;
+    readonly result: null;
   };
   readonly sync_conflict_rate: {
     readonly args: { readonly rootPath: string };
     readonly result: NativeConflictRate;
+  };
+  /** One round trip to wherever this workspace syncs to. */
+  readonly sync_now: {
+    readonly args: { readonly rootPath: string };
+    readonly result: NativeSynced;
+  };
+  /** Saves a username and access token in the OS keychain, never settings. */
+  readonly save_sync_credentials: {
+    readonly args: {
+      readonly rootPath: string;
+      readonly destination: string;
+      readonly username: string;
+      readonly token: string;
+      readonly profileId?: string | null;
+      readonly label?: string | null;
+    };
+    readonly result: NativeSavedSignIn;
+  };
+  readonly save_sync_link: {
+    readonly args: {
+      readonly rootPath: string;
+      readonly destination: string;
+      readonly profileId?: string | null;
+    };
+    readonly result: NativeSavedSignIn;
+  };
+  readonly sync_sign_in_status: {
+    readonly args: {
+      readonly rootPath: string;
+      readonly destination: string;
+      readonly profileId?: string | null;
+    };
+    readonly result: NativeSignInStatus;
+  };
+  readonly forget_sync_sign_in: {
+    readonly args: { readonly profileId: string };
+    readonly result: null;
+  };
+  readonly preview_workspace_from_git_link: {
+    readonly args: { readonly destination: string; readonly parentPath: string };
+    readonly result: NativeGitLinkPreview;
+  };
+  readonly import_workspace_from_git_link: {
+    readonly args: {
+      readonly destination: string;
+      readonly parentPath: string;
+      readonly profileId?: string | null;
+    };
+    readonly result: NativeImportStarted;
+  };
+  readonly sync_history_usage: {
+    readonly args: { readonly rootPath: string };
+    readonly result: NativeHistoryUsage;
+  };
+  readonly sync_free_space: {
+    readonly args: { readonly rootPath: string };
+    readonly result: NativeHistoryCleanup;
+  };
+  readonly sync_clear_undo_history: {
+    readonly args: { readonly rootPath: string };
+    readonly result: NativeHistoryCleanup;
   };
   readonly read_app_settings: {
     readonly args: undefined;
@@ -368,6 +433,24 @@ export interface NativeThemeEntry {
   readonly path: string;
 }
 
+export interface NativeGitLinkPreview {
+  readonly childName: string;
+  readonly targetPath: string;
+}
+
+export interface NativeImportStarted {
+  readonly requestId: string;
+  readonly targetPath: string;
+}
+
+export interface NativeImportProgress {
+  readonly requestId: string;
+  readonly state: string;
+  readonly phase?: NativeSyncStatus["phase"];
+  readonly targetPath: string;
+  readonly error?: NativeCommandErrorShape;
+}
+
 // Sent to `index_documents`. Field names are camelCase here and mapped to the
 // Rust struct's snake_case fields by serde's `rename_all = "camelCase"`.
 export interface NativeDocumentInput {
@@ -434,19 +517,14 @@ export function normalizeNativeError(error: unknown): NativeCommandError {
     return new NativeCommandError(error);
   }
 
-  if (error instanceof Error) {
-    return new NativeCommandError({
-      code: "desktop.native_bridge_error",
-      message: error.message
-    });
-  }
-
   return new NativeCommandError({
     code: "desktop.native_bridge_error",
     message:
-      typeof error === "string"
-        ? error
-        : "The desktop native bridge returned an unknown error."
+      error instanceof Error
+        ? error.message
+        : typeof error === "string"
+          ? error
+          : "The desktop native bridge returned an unknown error."
   });
 }
 

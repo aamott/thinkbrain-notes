@@ -69,12 +69,12 @@ restore from History. This is what earns the UI its casual tone.
   `plans/auto-sync/merge-ui-mockup.html`). Chunk choices labeled **by source**
   ("Keep this computer's" / "Keep OneDrive's" / "Keep both"), never by
   position — panes sit side-by-side on desktop, stacked on mobile.
-- **One Sync surface.** Cloud rescue + git sync are one feature: one
-  activity-bar item, one settings page (sections: "Cloud folder" auto-detected
-  · "Sync to another device"), one conflict panel, one history. Not two
-  extensions and not two action-bar items — they share the hidden repo, merge
-  engine, and all UI; splitting duplicates most of the code and splits one
-  user concept in two.
+- **One Sync feature, two jobs.** Cloud rescue + git sync share one hidden repo,
+  merge engine, and conflict UI — but two activity-bar items name the jobs:
+  **Two versions** (choose between copies from git or a cloud folder) and
+  **Saved versions** (local change history and restore). Settings split the
+  transports: **Cloud copies** (app-wide, passive detection) and **Git link**
+  (per workspace). Not two extensions and not Git-vs-OneDrive as two products.
 - **Settings/credentials placement:** remote URL + sync prefs in workspace
   settings (OS app-data); token in OS keychain only. No git CLI, no
   `.gitconfig`, nothing written to the vault.
@@ -95,7 +95,7 @@ conflicts · block-level Markdown merge · reconcile-text · cloud provider APIs
 
 ## Stories (`plans/auto-sync/`, dependency order)
 
-0. `pending-gix_engine_hidden_repo-high-hard.md` — engine, hidden repo,
+0. `done-gix_engine_hidden_repo-high-hard.md` — engine, hidden repo,
    bootstrap matrix, auto-commit, checkpoint API
 2. `pending-cloud_conflict_detection-high-med.md` — pattern table, watcher
    integration, startup scan, cleanup protocol
@@ -105,15 +105,21 @@ conflicts · block-level Markdown merge · reconcile-text · cloud provider APIs
    source-based labels
 5. `pending-sync_status_history_restore-high-med.md` — status pill, friendly
    history, restore previous version
-6. `pending-git_remote_sync-med-hard.md` — push/pull, keychain, plain-language
-   setup, triggers
+6. `done-git_remote_sync-med-hard.md` — push/pull, keychain, plain-language
+   setup, triggers; 6e onboarding import is
+   `auto-sync/done-workspace_from_git_link-med-hard.md`; 6f import
+   sign-in parity is `auto-sync/done-import_sign_in_parity-med-med.md`
 7. `pending-history_pruning-low-med.md` — retention/size policy, gc
 8. `pending-mobile_cross_compile-med-easy.md` — CI validation on
    Android/iOS targets
+9. `pending-provider_sign_in-low-hard.md` — "Sign in with GitHub" alongside
+   the token form; same keychain path as story 6c
+- UX follow-up (after 6): `done-workspace_selector_git_badge-low-med.md`
+  — plain vs Git-linked cue in the workspace selector (icon Choice B)
 
 ## Status
 
 - ✅ Approved; `app-vision.md` reconciled; old git-integration code removed.
-- ✅ Story 0 (the `gix` build spike, split off the front of story 1). gix
-  cross-compiles for Android and iOS, and CI keeps it that way.
-- ⬜ Stories 1–8 pending.
+- ✅ Story 0 (`gix` build spike, split off the front of story 1).
+- ✅ Story 6 (Git Remote Sync: 6a send-pack, 6b round trip, 6c credentials, 6d link UX, 6e workspace import, 6f import sign-in parity, selector git badge).
+- ⬜ Stories 2–5, 7–9 pending.

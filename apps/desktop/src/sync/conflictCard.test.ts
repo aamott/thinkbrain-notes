@@ -30,6 +30,15 @@ describe("treatmentOf", () => {
     expect(treatmentOf(summary("budget.xlsx", "binary"))).toBe("file");
   });
 
+  it("offers keep or delete when one side deleted the note", () => {
+    expect(
+      treatmentOf({
+        ...summary("Meeting Notes.md", "text"),
+        decision: "keepOrDelete"
+      })
+    ).toBe("keepOrDelete");
+  });
+
   // An SVG is text, and comparing its markup line by line is not what anyone
   // opening a picture wants to see.
   it("treats a picture as a picture even when its bytes are text", () => {

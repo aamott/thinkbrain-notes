@@ -36,24 +36,25 @@ mod classify;
 mod lifecycle;
 mod self_write;
 
-#[allow(unused_imports)]
-pub use classify::{classify_event, is_in_watched_area, workspace_relative_path};
 #[cfg(test)]
 pub(crate) use classify::{classify_all, Audience};
+#[allow(unused_imports)]
+pub use classify::{classify_event, is_in_watched_area, workspace_relative_path};
 pub(crate) use classify::{collect_changes, Changes};
 #[allow(unused_imports)]
 pub use lifecycle::{
-    __cmd__unwatch_workspace, __cmd__watch_workspace,
-    __tauri_command_name_unwatch_workspace, __tauri_command_name_watch_workspace,
-    attach_window_destroy_cleanup, release_window_watchers, unwatch_workspace, watch_workspace,
-    WatchInterest,
+    __cmd__unwatch_workspace, __cmd__watch_workspace, __tauri_command_name_unwatch_workspace,
+    __tauri_command_name_watch_workspace, attach_window_destroy_cleanup, release_window_watchers,
+    unwatch_workspace, watch_workspace, WatchInterest,
 };
+pub(crate) use self_write::take_self_write;
 #[allow(unused_imports)]
 pub use self_write::{record_self_write, SelfWriteLog, SELF_WRITE_TTL};
-pub(crate) use self_write::take_self_write;
 
 use serde::Serialize;
 use tauri::Emitter;
+
+use crate::error::lock_or_recover;
 
 /// The frontend event carrying a settled batch of changes.
 pub const WORKSPACE_CHANGED_EVENT: &str = "workspace://changed";
@@ -92,7 +93,7 @@ static REACH: std::sync::Mutex<Option<tauri::AppHandle>> = std::sync::Mutex::new
 
 /// Remembers a handle for the background threads to announce through.
 pub fn remember_reach(app: &tauri::AppHandle) {
-    let mut reach = REACH.lock().unwrap_or_else(|error| error.into_inner());
+    let mut reach = lock_or_recover(&REACH);
     reach.get_or_insert_with(|| app.clone());
 }
 
@@ -102,10 +103,18 @@ pub fn remember_reach(app: &tauri::AppHandle) {
 /// process with no windows yet has nothing to tell, which is silence rather
 /// than an error.
 pub fn announce_sync_status(root_path: &str) {
-    let reach = REACH.lock().unwrap_or_else(|error| error.into_inner());
+    let reach = lock_or_recover(&REACH);
     if let Some(app) = reach.as_ref() {
         announce(app, SYNC_STATUS_EVENT, root_path);
     }
+}
+
+/// Sent when a git link sign-in just completed a successful round trip.
+pub const SYNC_SETUP_EVENT: &str = "sync://setup";
+
+/// Tells the window the git link just worked, so it can say so once.
+pub fn announce_setup_ok(app: &tauri::AppHandle, root_path: &str) {
+    announce(app, SYNC_SETUP_EVENT, root_path);
 }
 
 /// One shape for every "something about this workspace changed" event.

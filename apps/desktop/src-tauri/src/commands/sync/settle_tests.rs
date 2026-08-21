@@ -84,7 +84,10 @@ fn a_copy_of_a_version_we_have_already_moved_past_is_not_a_question() {
 
     let asked = settle_one(&v);
 
-    assert!(asked.is_empty(), "a version we already passed through is not news");
+    assert!(
+        asked.is_empty(),
+        "a version we already passed through is not news"
+    );
     assert!(!exists(&v, COPY));
     assert_eq!(
         std::fs::read_to_string(v.root.join("note.md")).expect("readable"),
@@ -103,7 +106,11 @@ fn a_copy_nobody_has_seen_before_is_still_a_question() {
 
     let asked = settle_one(&v);
 
-    assert_eq!(asked.len(), 1, "a real disagreement must still be asked about");
+    assert_eq!(
+        asked.len(),
+        1,
+        "a real disagreement must still be asked about"
+    );
     assert!(exists(&v, COPY), "nothing should have been discarded");
 }
 
@@ -190,7 +197,11 @@ fn with_the_setting_off_even_an_identical_copy_is_asked_about() {
 
     let asked = settle_when(false, &v.engine, &v.root, vec![pairing(COPY, "note.md")]);
 
-    assert_eq!(asked.len(), 1, "with settling off, nothing should be settled");
+    assert_eq!(
+        asked.len(),
+        1,
+        "with settling off, nothing should be settled"
+    );
     assert!(exists(&v, COPY), "and nothing should have been discarded");
 }
 
@@ -207,7 +218,10 @@ fn settings_dir(name: &str, contents: Option<&str>) -> PathBuf {
 #[test]
 fn settling_is_on_until_someone_turns_it_off() {
     assert!(enabled_in(None), "with nowhere to look, the default stands");
-    assert!(enabled_in(Some(&settings_dir("settle-setting-absent", None))));
+    assert!(enabled_in(Some(&settings_dir(
+        "settle-setting-absent",
+        None
+    ))));
     assert!(enabled_in(Some(&settings_dir(
         "settle-setting-other-keys",
         Some(r#"{"appearance.theme":"dark"}"#)
@@ -233,4 +247,27 @@ fn an_unreadable_preference_leaves_the_default_standing() {
         "settle-setting-broken",
         Some("{not json at all")
     ))));
+}
+
+/// A keep-or-delete marker is a real question even when the marker file is
+/// empty. Settling it as a duplicate would throw the decision away.
+#[test]
+fn a_keep_or_delete_marker_is_never_settled() {
+    let v = vault("settle-keep-or-delete");
+    write(&v, "note.md", "changed on this device\n");
+    write(&v, "note (keep or delete).md", "");
+
+    let asked = settle_when(
+        true,
+        &v.engine,
+        &v.root,
+        vec![pairing("note (keep or delete).md", "note.md")],
+    );
+
+    assert_eq!(asked.len(), 1, "a keep-or-delete decision was settled");
+    assert!(exists(&v, "note (keep or delete).md"));
+    assert_eq!(
+        std::fs::read_to_string(v.root.join("note.md")).expect("readable"),
+        "changed on this device\n"
+    );
 }

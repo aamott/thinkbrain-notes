@@ -1,10 +1,9 @@
 // @vitest-environment happy-dom
-import { act } from "react";
-import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ConflictComparison, ConflictSummary } from "./conflictTypes";
-import { NOT_RECORDING, type RecordedChange, type SyncState } from "./historyTypes";
+import { NOT_RECORDING, type RecordedChange, type SyncState, type SyncStatus } from "./historyTypes";
+import { cleanup, render } from "./syncTestHarness";
 
 /**
  * Nothing in this feature may speak git to the user.
@@ -17,13 +16,15 @@ import { NOT_RECORDING, type RecordedChange, type SyncState } from "./historyTyp
  * screen was built from uses "save merged note", and merging two documents is
  * ordinary English — mail merge, merging lanes. It is the *nouns* of git that
  * mean nothing to someone who has never used it.
+ *
+ * "git" is allowed in Decisions needed and in settings — the link field is a git
+ * link, and a card should say when a copy came from git rather than a cloud app.
  */
 const JARGON = [
   "commit",
   "HEAD",
   "repository",
   "repo",
-  "git",
   "ours",
   "theirs",
   "diff",
@@ -59,23 +60,22 @@ vi.mock("./syncService", () => ({
     Promise.resolve({ ...NOT_RECORDING, state: "idle", alongsideOwnGit: true }),
   readHistory: () => readHistory(),
   readConflictRate: () => Promise.resolve({ decisions: 2, settled: 47, recorded: 340 }),
-  restoreVersion: () => Promise.resolve({ note: "n", checkpoint: "c" }),
-  subscribeToSyncStatus: () => Promise.resolve(() => undefined)
+  restoreVersion: () => Promise.resolve(),
+  subscribeToSyncStatus: () => Promise.resolve(() => undefined),
+  readHistoryUsage: () => Promise.resolve({ bytes: 2048 }),
+  freeSyncSpace: () => Promise.resolve({ bytesBefore: 2048, bytesAfter: 2048, reclaimed: 0 }),
+  clearUndoHistory: () => Promise.resolve({ bytesBefore: 2048, bytesAfter: 1024, reclaimed: 1024 })
 }));
 
 const { ConflictsPanel } = await import("./ConflictsPanel");
 const { MergeTab } = await import("./MergeTab");
 const { HistoryPanel } = await import("./HistoryPanel");
 const { SyncPill } = await import("./SyncPill");
-
-let root: Root | null = null;
-let container: HTMLDivElement | null = null;
+const { describeSync } = await import("./syncCopy");
+const { HistoryPolicyControl } = await import("../settings/controls/HistoryPolicyControl");
 
 afterEach(async () => {
-  await act(async () => root?.unmount());
-  container?.remove();
-  root = null;
-  container = null;
+  await cleanup();
 });
 
 const version = (path: string, label: string) => ({
@@ -92,16 +92,10 @@ const summary = (path: string, kind: "text" | "binary"): ConflictSummary => ({
   theirs: version(`${path}.copy`, "OneDrive")
 });
 
-const render = async (element: React.ReactElement): Promise<string> => {
-  container = document.createElement("div");
-  document.body.append(container);
-  root = createRoot(container);
-  await act(async () => root?.render(element));
-  const text = container.textContent ?? "";
-  await act(async () => root?.unmount());
-  container.remove();
-  root = null;
-  container = null;
+const renderText = async (element: React.ReactElement): Promise<string> => {
+  const { host, unmount } = await render(element);
+  const text = host.textContent ?? "";
+  await unmount();
   return text;
 };
 
@@ -126,15 +120,21 @@ describe("nothing in this feature speaks git to the user", () => {
       listConflicts.mockResolvedValue([summary(name, kind)]);
       audit(
         `the ${name} card`,
-        await render(<ConflictsPanel rootPath="/notes" onReview={() => undefined} />)
+        await renderText(<ConflictsPanel rootPath="/notes" onReview={() => undefined} />)
       );
     }
+
+    listConflicts.mockResolvedValue([{ ...summary("Meeting Notes.md", "text"), decision: "keepOrDelete" }]);
+    audit(
+      "the keep-or-delete card",
+      await renderText(<ConflictsPanel rootPath="/notes" onReview={() => undefined} />)
+    );
   });
 
   it("keeps the empty list plain", async () => {
     listConflicts.mockResolvedValue([]);
 
-    audit("the empty list", await render(<ConflictsPanel rootPath="/notes" onReview={() => undefined} />));
+    audit("the empty list", await renderText(<ConflictsPanel rootPath="/notes" onReview={() => undefined} />));
   });
 
   it("keeps the comparison plain", async () => {
@@ -148,7 +148,7 @@ describe("nothing in this feature speaks git to the user", () => {
 
     audit(
       "the comparison",
-      await render(<MergeTab rootPath="/notes" copyPath="Meeting Notes.md.copy" buffer={null} />)
+      await renderText(<MergeTab rootPath="/notes" copyPath="Meeting Notes.md.copy" buffer={null} />)
     );
   });
 
@@ -157,7 +157,7 @@ describe("nothing in this feature speaks git to the user", () => {
 
     audit(
       "the failure",
-      await render(<MergeTab rootPath="/notes" copyPath="Meeting Notes.md.copy" buffer={null} />)
+      await renderText(<MergeTab rootPath="/notes" copyPath="Meeting Notes.md.copy" buffer={null} />)
     );
   });
 
@@ -177,7 +177,7 @@ describe("nothing in this feature speaks git to the user", () => {
     for (const note of [null, "Meeting Notes.md"]) {
       audit(
         `the history for ${note ?? "everything"}`,
-        await render(
+        await renderText(
           <HistoryPanel rootPath="/notes" note={note} onShowEverything={() => undefined} />
         )
       );
@@ -189,33 +189,112 @@ describe("nothing in this feature speaks git to the user", () => {
 
     audit(
       "the empty history",
-      await render(<HistoryPanel rootPath="/notes" note={null} onShowEverything={() => undefined} />)
+      await renderText(<HistoryPanel rootPath="/notes" note={null} onShowEverything={() => undefined} />)
     );
   });
 
-  /// Every state of the footer, including the ones that only appear when
-  /// something has gone wrong — which is exactly when jargon would land worst.
+  // Every state of the footer, including the ones that only appear when
+  // something has gone wrong — which is exactly when jargon would land worst.
+  // The `alongsideOwnGit` variant runs the "this folder also keeps its own
+  // version history" sentence through the same audit, in every state —
+  // including `problem`, where the appended sentence sits next to a failure.
   it("keeps the footer plain in every state it has", async () => {
-    for (const state of ["off", "idle", "saving", "attention", "problem"] as const) {
-      const status = {
-        ...NOT_RECORDING,
-        state: state as SyncState,
-        lastRecordedAt: Date.now(),
-        waiting: 1,
-        attention: 2,
-        problem:
-          state === "problem"
-            ? { code: "sync.note_read_failed", message: "A note could not be read." }
-            : null
-      };
-      const host = document.createElement("div");
-      document.body.append(host);
-      const surface = createRoot(host);
-      await act(async () => surface.render(<SyncPill status={status} onOpen={() => undefined} />));
-      const spoken = host.querySelector("button")?.getAttribute("aria-label") ?? "";
-      audit(`the footer while ${state}`, `${host.textContent ?? ""} ${spoken}`);
-      await act(async () => surface.unmount());
-      host.remove();
+    const extras: readonly { label: string; status: SyncStatus }[] = [
+      {
+        label: "idle healthy",
+        status: {
+          ...NOT_RECORDING,
+          state: "idle",
+          health: "healthy",
+          lastCheckedAt: Date.now(),
+          lastRecordedAt: Date.now()
+        }
+      },
+      { label: "syncing saving", status: { ...NOT_RECORDING, state: "syncing", phase: "saving" } },
+      { label: "syncing checking", status: { ...NOT_RECORDING, state: "syncing", phase: "checking" } },
+      { label: "syncing combining", status: { ...NOT_RECORDING, state: "syncing", phase: "combining" } },
+      { label: "syncing sending", status: { ...NOT_RECORDING, state: "syncing", phase: "sending" } },
+      {
+        label: "idle maintenance",
+        status: {
+          ...NOT_RECORDING,
+          state: "idle",
+          maintenanceProblem: {
+            code: "sync.history_cleanup_failed",
+            message: "Could not tidy the saved undo history on this computer."
+          }
+        }
+      }
+    ];
+
+    for (const state of ["off", "idle", "saving", "syncing", "attention", "problem"] as const) {
+      for (const alongsideOwnGit of [false, true] as const) {
+        const status = {
+          ...NOT_RECORDING,
+          state: state as SyncState,
+          lastRecordedAt: Date.now(),
+          waiting: 1,
+          attention: 2,
+          stuck: [],
+          alongsideOwnGit,
+          problem:
+            state === "problem"
+              ? { code: "sync.note_read_failed", message: "A note could not be read." }
+              : null
+        };
+        const { host, unmount } = await render(<SyncPill status={status} onOpen={() => undefined} />);
+        const spoken = host.querySelector("button")?.getAttribute("aria-label") ?? "";
+        audit(
+          `the footer while ${state}${alongsideOwnGit ? " alongside own git" : ""}`,
+          `${host.textContent ?? ""} ${spoken}`
+        );
+        await unmount();
+      }
     }
+
+    for (const extra of extras) {
+      const { host, unmount } = await render(<SyncPill status={extra.status} onOpen={() => undefined} />);
+      const spoken = host.querySelector("button")?.getAttribute("aria-label") ?? "";
+      audit(`the footer while ${extra.label}`, `${host.textContent ?? ""} ${spoken}`);
+      await unmount();
+    }
+  });
+
+  it("keeps the undo-history settings control plain", async () => {
+    const definition = {
+      key: "sync.historyPolicy",
+      label: "Saved undo history",
+      description:
+        "Undo copies from resolving two versions or putting an earlier version back are kept for 90 days on this computer.",
+      type: "string" as const,
+      default: "",
+      scope: "app" as const,
+      section: "sync.history"
+    };
+    audit(
+      "the undo history settings",
+      await renderText(
+        <HistoryPolicyControl definition={definition} value="" onChange={() => undefined} />
+      )
+    );
+  });
+
+  // `describeSync` is not rendered by any panel above, so its sentences are
+  // audited directly — both the refusal path and the ordinary "moved" path,
+  // since each says something different.
+  it("keeps describeSync plain for a refusal and a moved landing", () => {
+    audit(
+      "describeSync on refusal",
+      describeSync({
+        broughtDown: 0,
+        askedAbout: 0,
+        sent: 0,
+        landed: { state: "refused", reason: "the other end holds changes this device has not seen" }
+      })
+    );
+    audit(
+      "describeSync on moved",
+      describeSync({ broughtDown: 2, askedAbout: 1, sent: 3, landed: { state: "moved" } })
+    );
   });
 });

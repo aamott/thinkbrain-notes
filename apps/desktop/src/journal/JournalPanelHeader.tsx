@@ -2,6 +2,7 @@ import { ACTION, TOUCH } from "./journalChrome";
 import { JournalFilterControl } from "./JournalFilterControl";
 import type { JournalChip, JournalFacet, JournalPredicate } from "./journalFacets";
 import type { JournalView } from "./journalViewModel";
+import { PanelIcon } from "../shell/panelIcons";
 
 export type { JournalChip };
 
@@ -53,17 +54,17 @@ export function JournalPanelHeader({
         >
           ＋ New entry
         </button>
-        <button type="button" aria-label="Today" title="Today" onClick={onToday} className={`${ACTION} w-7 px-0`}>
-          ◷
+        <button type="button" aria-label="Today" title="Today" onClick={onToday} className={`${ACTION} flex w-7 items-center justify-center px-0`}>
+          <PanelIcon name="go-to-today" className="w-[0.9rem] h-[0.9rem]" />
         </button>
         <button
           type="button"
           aria-label="Open journal calendar"
           title="Open calendar"
           onClick={onOpenCalendar}
-          className={`${ACTION} w-7 px-0`}
+          className={`${ACTION} flex w-7 items-center justify-center px-0`}
         >
-          ▦
+          <PanelIcon name="calendar-days" className="w-[0.9rem] h-[0.9rem]" />
         </button>
       </div>
 

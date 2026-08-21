@@ -10,7 +10,7 @@ import type {
   SettingMigration
 } from "./types";
 import { validateSettings } from "./validation";
-import { appearanceModule, editorModule, settingsModule } from "./modules";
+import { appearanceModule, editorModule, settingsModule, syncModule } from "./modules";
 
 /** Registers all built-in modules into a fresh registry. */
 function registryWithBuiltIns(): SettingsRegistry {
@@ -18,6 +18,7 @@ function registryWithBuiltIns(): SettingsRegistry {
   registry.register(appearanceModule);
   registry.register(editorModule);
   registry.register(settingsModule);
+  registry.register(syncModule);
   return registry;
 }
 
@@ -42,7 +43,8 @@ describe("settings registry", () => {
     expect(registry.getAllModules().map((module) => module.id)).toEqual([
       "appearance",
       "editor",
-      "settings"
+      "settings",
+      "sync"
     ]);
     expect(registry.getModule("appearance")?.label).toBe("Appearance");
     expect(registry.getModule("editor")?.label).toBe("Editor");
@@ -97,30 +99,24 @@ describe("settings registry", () => {
     }
   });
 
+  const baseDynamicDef = {
+    key: "value",
+    scope: "app",
+    section: "schema-safety.section",
+    label: "Value",
+    description: "A dynamically supplied value."
+  } as const;
+
   it("rejects a dynamic definition with a default of the wrong type", () => {
     const registry = createSettingsRegistry();
 
     expect(() => registry.register(moduleWithDynamicDefinition({
-      key: "value",
-      type: "number",
-      default: "16",
-      scope: "app",
-      section: "schema-safety.section",
-      label: "Value",
-      description: "A dynamically supplied value."
+      ...baseDynamicDef, type: "number", default: "16"
     }))).toThrow(/Invalid default.*finite number.*received string/);
   });
 
   it("rejects enum definitions with missing or empty options", () => {
-    const missingOptions = {
-      key: "value",
-      type: "enum",
-      default: "one",
-      scope: "app",
-      section: "schema-safety.section",
-      label: "Value",
-      description: "A dynamically supplied value."
-    };
+    const missingOptions = { ...baseDynamicDef, type: "enum", default: "one" };
     const emptyOptions = { ...missingOptions, options: [] };
 
     expect(() => createSettingsRegistry().register(
@@ -135,27 +131,14 @@ describe("settings registry", () => {
     const registry = createSettingsRegistry();
 
     expect(() => registry.register(moduleWithDynamicDefinition({
-      key: "value",
-      type: "enum",
-      options: ["one", "two"],
-      default: "three",
-      scope: "app",
-      section: "schema-safety.section",
-      label: "Value",
-      description: "A dynamically supplied value."
+      ...baseDynamicDef, type: "enum", options: ["one", "two"], default: "three"
     }))).toThrow(/default "three" is not one of \[one, two\]/);
   });
 
   it("accepts null as a path default", () => {
     const registry = createSettingsRegistry();
     registry.register(moduleWithDynamicDefinition({
-      key: "value",
-      type: "path",
-      default: null,
-      scope: "app",
-      section: "schema-safety.section",
-      label: "Value",
-      description: "A dynamically supplied value."
+      ...baseDynamicDef, type: "path", default: null
     }));
 
     expect(registry.getDefinition("schema-safety.value")?.default).toBeNull();
@@ -320,9 +303,36 @@ describe("settings registry", () => {
     expect(registry.getModulesByScope("app").map((module) => module.id)).toEqual([
       "appearance",
       "editor",
-      "settings"
+      "settings",
+      "sync"
     ]);
-    expect(registry.getModulesByScope("workspace")).toEqual([]);
+    expect(registry.getModulesByScope("workspace").map((module) => module.id)).toEqual([
+      "sync"
+    ]);
+  });
+
+  it("projects a mixed-scope module into each scope with only matching settings", () => {
+    const registry = registryWithBuiltIns();
+
+    const appSync = registry.getModulesByScope("app").find((module) => module.id === "sync");
+    expect(appSync?.sections.map((section) => section.id)).toEqual([
+      "sync.conflicts",
+      "sync.history"
+    ]);
+    expect(appSync?.sections[0]?.settings?.map((def) => def.key)).toEqual([
+      "settleAutomatically"
+    ]);
+
+    const workspaceSync = registry
+      .getModulesByScope("workspace")
+      .find((module) => module.id === "sync");
+    expect(workspaceSync?.sections.map((section) => section.id)).toEqual([
+      "sync.destination"
+    ]);
+    expect(workspaceSync?.sections[0]?.settings?.map((def) => def.key)).toEqual([
+      "destination",
+      "signInProfile"
+    ]);
   });
 
   it("collects migrations via registerMigration/getMigrations", () => {
@@ -477,13 +487,18 @@ describe("extractDefaults", () => {
       "editor.fontSize": 16,
       "editor.lineWrapping": true,
       "editor.livePreview": true,
-      "settings.autosave": false
+      "settings.autosave": false,
+      "sync.settleAutomatically": true,
+      "sync.historyPolicy": ""
     });
   });
 
-  it("returns an empty map for workspace scope (no built-in workspace modules)", () => {
+  it("returns workspace defaults from per-setting scope, not module scope", () => {
     const registry = registryWithBuiltIns();
-    expect(extractDefaults(registry, "workspace")).toEqual({});
+    expect(extractDefaults(registry, "workspace")).toEqual({
+      "sync.destination": "",
+      "sync.signInProfile": ""
+    });
   });
 
   it("includes workspace defaults when a workspace module is registered", () => {
@@ -514,6 +529,8 @@ describe("extractDefaults", () => {
     registry.register(workspaceModule);
 
     expect(extractDefaults(registry, "workspace")).toEqual({
+      "sync.destination": "",
+      "sync.signInProfile": "",
       "ws.defaultFolder": null
     });
   });
@@ -725,5 +742,33 @@ describe("built-in module structure", () => {
     const name = all.find((def) => def.key === "paths.name");
     expect(folder?.portable).toBe(false);
     expect(name?.portable).toBe(true);
+  });
+
+  it("exposes sync.destination as a non-portable workspace setting", () => {
+    const registry = registryWithBuiltIns();
+    const def = registry.getDefinition("sync.destination");
+
+    expect(def).toMatchObject({
+      key: "sync.destination",
+      type: "string",
+      default: "",
+      scope: "workspace",
+      section: "sync.destination",
+      portable: false
+    });
+  });
+
+  it("exposes sync.signInProfile as a non-portable workspace setting", () => {
+    const registry = registryWithBuiltIns();
+    const def = registry.getDefinition("sync.signInProfile");
+
+    expect(def).toMatchObject({
+      key: "sync.signInProfile",
+      type: "string",
+      default: "",
+      scope: "workspace",
+      section: "sync.destination",
+      portable: false
+    });
   });
 });

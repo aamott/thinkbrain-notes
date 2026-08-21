@@ -9,3 +9,8 @@ import { twMerge } from "tailwind-merge";
 export function cn(...inputs: ClassValue[]): string {
   return twMerge(clsx(inputs));
 }
+
+/** The file name out of a workspace-relative path. */
+export function noteName(path: string): string {
+  return path.split("/").filter(Boolean).at(-1) ?? path;
+}

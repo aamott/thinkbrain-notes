@@ -110,7 +110,7 @@ export function ExtensionsPanel({ entries }: ExtensionsPanelProps) {
         </p>
         <button
           type="button"
-          className="cursor-pointer rounded-small border border-border bg-transparent px-2 py-1 text-foreground text-[0.6875rem] disabled:cursor-default disabled:opacity-50"
+          className="cursor-pointer rounded-small border border-border bg-transparent px-2 py-1 text-foreground text-[0.6875rem] disabled:opacity-50"
           onClick={() => void onAdd()}
           disabled={busy}
         >
@@ -155,7 +155,7 @@ export function ExtensionsPanel({ entries }: ExtensionsPanelProps) {
                   <div className="mt-1 flex gap-2">
                     <button
                       type="button"
-                      className="cursor-pointer border-0 bg-transparent p-0 text-[0.6875rem] text-accent underline disabled:cursor-default disabled:opacity-50"
+                      className="cursor-pointer border-0 bg-transparent p-0 text-[0.6875rem] text-accent underline disabled:opacity-50"
                       onClick={() => void run(() => getLocalExtensions()!.reload(entry.id))}
                       disabled={busy}
                     >
@@ -163,7 +163,7 @@ export function ExtensionsPanel({ entries }: ExtensionsPanelProps) {
                     </button>
                     <button
                       type="button"
-                      className="cursor-pointer border-0 bg-transparent p-0 text-[0.6875rem] text-accent underline disabled:cursor-default disabled:opacity-50"
+                      className="cursor-pointer border-0 bg-transparent p-0 text-[0.6875rem] text-accent underline disabled:opacity-50"
                       onClick={() => void run(() => getLocalExtensions()!.remove(entry.id))}
                       disabled={busy}
                     >

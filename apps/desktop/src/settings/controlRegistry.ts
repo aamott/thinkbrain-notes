@@ -20,6 +20,8 @@ import { TextControl } from "./controls/TextControl";
 import { NumberControl } from "./controls/NumberControl";
 import { SelectControl } from "./controls/SelectControl";
 import { PathControl } from "./controls/PathControl";
+import { GitLinkControl } from "./controls/GitLinkControl";
+import { HistoryPolicyControl } from "./controls/HistoryPolicyControl";
 
 /** Shared input className for text/number/select/path controls. */
 export const inputClassName =
@@ -136,3 +138,5 @@ registerControl("text", TextControl);
 registerControl("number", NumberControl);
 registerControl("select", SelectControl);
 registerControl("path", PathControl);
+registerControl("sync-git-link", GitLinkControl);
+registerControl("sync-history-policy", HistoryPolicyControl);

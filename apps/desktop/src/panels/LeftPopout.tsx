@@ -3,7 +3,7 @@ import { useMemo } from "react";
 import { type LeftPanel } from "../shell/shellTypes";
 import type { WorkspaceExplorerProps } from "../workspace/WorkspaceExplorer";
 import { Popout } from "./Popout";
-import { useLeftPanelContributions, type LeftPanelContext } from "./panelRegistry";
+import { useLeftPanelContributions, type LeftPanelContext } from "./panelRegistryModel";
 
 type LeftPopoutProps = {
   readonly panel: LeftPanel;

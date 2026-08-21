@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { ThemeProvider } from "../settings/ThemeProvider";
 import { DesktopShell } from "./DesktopShell";
 import { StatusBar } from "./StatusBar";
-import { desktopPanelRegistry } from "../panels/panelRegistry";
+import { desktopPanelRegistry } from "../panels/panelRegistryModel";
 
 /**
  * Renders the shell to static markup.

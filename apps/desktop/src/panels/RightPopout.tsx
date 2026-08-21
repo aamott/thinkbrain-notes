@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { type RightPanel } from "../shell/shellTypes";
 import { Popout } from "./Popout";
-import { useRightPanelContributions, type RightPanelContext } from "./panelRegistry";
+import { useRightPanelContributions, type RightPanelContext } from "./panelRegistryModel";
 
 type RightPopoutProps = {
   /** Currently active right activity bar panel. */

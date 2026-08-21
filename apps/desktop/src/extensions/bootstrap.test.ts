@@ -3,7 +3,7 @@ import type { ExtensionManifest } from "@thinkbrain/core";
 import { describe, expect, it, vi } from "vitest";
 
 import { createDesktopCommandRegistry, type DesktopCommandContext } from "../commands/commandRegistry";
-import { createDesktopPanelRegistry } from "../panels/panelRegistry";
+import { createDesktopPanelRegistry } from "../panels/panelRegistryModel";
 import { bootstrapExtensions } from "./bootstrap";
 import type { BuiltInExtension } from "./builtins";
 import { createDesktopExtensionHost, type DesktopExtensionContext } from "./desktopExtensionHost";

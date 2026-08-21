@@ -35,6 +35,9 @@ export interface ConflictVersion {
   readonly fingerprint: string;
 }
 
+/** Whether this is two versions of a note, or keep-versus-delete. */
+export type ConflictDecision = "versions" | "keepOrDelete";
+
 /**
  * A conflict as the triage list shows it.
  *
@@ -43,6 +46,8 @@ export interface ConflictVersion {
  */
 export interface ConflictSummary {
   readonly kind: ConflictKind;
+  /** Absent on older payloads; treated as two versions. */
+  readonly decision?: ConflictDecision;
   readonly ours: ConflictVersion;
   readonly theirs: ConflictVersion;
 }
@@ -59,7 +64,11 @@ export type ConflictResolution =
   /** Keep both, renaming the copy after whoever made it. */
   | { readonly kind: "keepBoth" }
   /** Assembled chunk by chunk in the merge view. */
-  | { readonly kind: "merged"; readonly contents: string };
+  | { readonly kind: "merged"; readonly contents: string }
+  /** Keep the note; the other device had deleted it. */
+  | { readonly kind: "keepNote" }
+  /** Delete the note after a restore point is taken. */
+  | { readonly kind: "deleteNote" };
 
 /** Where things ended up. */
 export interface ConflictResolved {

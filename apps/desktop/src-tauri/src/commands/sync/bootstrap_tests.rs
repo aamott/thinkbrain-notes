@@ -1,6 +1,7 @@
 use super::*;
 use crate::tests::make_temp_test_dir;
 use std::fs;
+use std::path::PathBuf;
 
 fn write(root: &Path, relative: &str, contents: &str) {
     let path = root.join(relative);
@@ -49,12 +50,12 @@ fn each_workspace_gets_its_own_hidden_repo() {
     assert!(one.starts_with(app_data.join("sync")));
 }
 
-/// The one case where the right answer is to do nothing. A vault that is
-/// A notes folder under someone's own version control is exactly the folder
-/// most likely to also be in a sync folder, so refusing it cost the whole
-/// feature to the people most likely to need it. Never touching their
-/// repository is a separate promise, and it keeps itself: ours lives in app
-/// data, and the walk skips every dot-directory, `.git` among them.
+/// The one case where the right answer is to do nothing. A notes folder under
+/// someone's own version control is exactly the folder most likely to also be
+/// in a sync folder, so refusing it cost the whole feature to the people most
+/// likely to need it. Never touching their repository is a separate promise,
+/// and it keeps itself: ours lives in app data, and the walk skips every
+/// dot-directory, `.git` among them.
 #[test]
 fn a_vault_with_its_own_git_is_recorded_too_and_its_repository_left_alone() {
     let app_data = make_temp_test_dir("bootstrap-own-git-appdata", "sync", true);
@@ -65,7 +66,10 @@ fn a_vault_with_its_own_git_is_recorded_too_and_its_repository_left_alone() {
 
     let workspace = bootstrap(&app_data, &vault).expect("bootstrap succeeds");
 
-    assert!(workspace.has_own_git, "the second history should be declared, not hidden");
+    assert!(
+        workspace.has_own_git,
+        "the second history should be declared, not hidden"
+    );
     assert_eq!(
         recorded_paths(&workspace.repo),
         ["note.md"],
@@ -97,9 +101,12 @@ fn a_vault_of_existing_notes_is_snapshotted_whole() {
     write(&vault, "one.md", "# One\n");
     write(&vault, "journal/2026/08-16.md", "# Today\n");
 
-    let workspace = (bootstrap(&app_data, &vault).expect("bootstrap succeeds"));
+    let workspace = bootstrap(&app_data, &vault).expect("bootstrap succeeds");
 
-    assert_eq!(recorded_paths(&workspace.repo), ["journal/2026/08-16.md", "one.md"]);
+    assert_eq!(
+        recorded_paths(&workspace.repo),
+        ["journal/2026/08-16.md", "one.md"]
+    );
 }
 
 #[test]
@@ -108,12 +115,15 @@ fn bootstrapping_again_does_not_snapshot_again() {
     let vault = make_temp_test_dir("bootstrap-twice-vault", "sync", true);
     write(&vault, "one.md", "# One\n");
 
-    let first = (bootstrap(&app_data, &vault).expect("bootstrap succeeds"));
-    assert!(first.took_first_snapshot, "the first open did not record the vault");
+    let first = bootstrap(&app_data, &vault).expect("bootstrap succeeds");
+    assert!(
+        first.took_first_snapshot,
+        "the first open did not record the vault"
+    );
     let first_head = snapshot::head_commit(&first.repo).expect("the history is readable");
     drop(first);
 
-    let second = (bootstrap(&app_data, &vault).expect("bootstrap succeeds again"));
+    let second = bootstrap(&app_data, &vault).expect("bootstrap succeeds again");
 
     assert!(
         !second.took_first_snapshot,
@@ -140,7 +150,7 @@ fn os_junk_and_half_written_files_are_not_recorded() {
     write(&vault, "~$note.md", "lock");
     write(&vault, ".~lock.note.md#", "lock");
 
-    let workspace = (bootstrap(&app_data, &vault).expect("bootstrap succeeds"));
+    let workspace = bootstrap(&app_data, &vault).expect("bootstrap succeeds");
 
     assert_eq!(recorded_paths(&workspace.repo), ["note.md"]);
 }
@@ -160,7 +170,7 @@ fn symlinks_are_not_followed_into_the_snapshot() {
     std::os::unix::fs::symlink(&outside, vault.join("linked-folder"))
         .expect("the vault holds a symlinked folder");
 
-    let workspace = (bootstrap(&app_data, &vault).expect("bootstrap succeeds"));
+    let workspace = bootstrap(&app_data, &vault).expect("bootstrap succeeds");
 
     assert_eq!(recorded_paths(&workspace.repo), ["note.md"]);
 }
@@ -175,15 +185,24 @@ fn conflict_copies_stay_out_of_history_without_being_ignored() {
     let app_data = make_temp_test_dir("bootstrap-conflict-appdata", "sync", true);
     let vault = make_temp_test_dir("bootstrap-conflict-vault", "sync", true);
     write(&vault, "note.md", "# Mine\n");
-    write(&vault, "note.sync-conflict-20260816-093100-K3SDFHG.md", "# Theirs\n");
-    write(&vault, "note (Adam's conflicted copy 2026-08-16).md", "# Theirs\n");
+    write(
+        &vault,
+        "note.sync-conflict-20260816-093100-K3SDFHG.md",
+        "# Theirs\n",
+    );
+    write(
+        &vault,
+        "note (Adam's conflicted copy 2026-08-16).md",
+        "# Theirs\n",
+    );
 
-    let workspace = (bootstrap(&app_data, &vault).expect("bootstrap succeeds"));
+    let workspace = bootstrap(&app_data, &vault).expect("bootstrap succeeds");
 
     assert_eq!(recorded_paths(&workspace.repo), ["note.md"]);
 
     let git_dir = hidden_repo_path(&app_data, &vault.to_string_lossy());
-    let exclude = fs::read_to_string(git_dir.join("info/exclude")).expect("the exclude file is written");
+    let exclude =
+        fs::read_to_string(git_dir.join("info/exclude")).expect("the exclude file is written");
     assert!(
         !exclude.contains("conflict"),
         "conflict copies were ignored, which would put them out of reach of a checkpoint"
@@ -200,9 +219,13 @@ fn the_ignore_rules_live_in_the_repository_not_the_vault() {
 
     bootstrap(&app_data, &vault).expect("bootstrap succeeds");
 
-    assert!(!vault.join(".gitignore").exists(), "the vault was given a .gitignore");
+    assert!(
+        !vault.join(".gitignore").exists(),
+        "the vault was given a .gitignore"
+    );
     let git_dir = hidden_repo_path(&app_data, &vault.to_string_lossy());
-    let exclude = fs::read_to_string(git_dir.join("info/exclude")).expect("the exclude file is written");
+    let exclude =
+        fs::read_to_string(git_dir.join("info/exclude")).expect("the exclude file is written");
     assert!(exclude.contains(".DS_Store"));
     assert!(exclude.contains("*.tmp"));
 }
@@ -221,7 +244,7 @@ fn ignored_folders_are_pruned_but_non_markdown_files_are_kept() {
     write(&vault, "target/debug/app", "binary");
     write(&vault, "notes/.hidden.md", "secret");
 
-    let workspace = (bootstrap(&app_data, &vault).expect("bootstrap succeeds"));
+    let workspace = bootstrap(&app_data, &vault).expect("bootstrap succeeds");
 
     let paths = recorded_paths(&workspace.repo);
     assert!(
@@ -306,4 +329,89 @@ fn a_vault_with_too_many_entries_fails_with_entry_cap_error() {
         }
         Ok(_) => panic!("bootstrap should fail for vault with too many entries"),
     }
+}
+
+/// Cold bootstrap, reopen, and one-file incremental recording for exactly
+/// 10,000 small notes.
+///
+/// Ignored so ordinary `cargo test` / CI do not spend minutes writing and
+/// hashing a ceiling-sized vault. Absolute wall times vary by machine; this
+/// prints them and asserts only ratios — reopen and incremental must be
+/// materially cheaper than cold bootstrap, with no hardware-dependent cutoff.
+///
+/// Run with:
+/// `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml \
+///   measures_a_ten_thousand_note_vault -- --ignored --nocapture`
+#[test]
+#[ignore = "reproducible 10k-vault measurement; run with --ignored --nocapture"]
+fn measures_a_ten_thousand_note_vault() {
+    use std::time::Instant;
+
+    const COUNT: usize = 10_000;
+    assert_eq!(
+        COUNT, MAX_WORKSPACE_ENTRIES,
+        "measurement must sit on the documented vault ceiling"
+    );
+
+    let app_data = make_temp_test_dir("bootstrap-10k-appdata", "sync", true);
+    let vault = make_temp_test_dir("bootstrap-10k-vault", "sync", true);
+    for i in 0..COUNT {
+        write(&vault, &format!("note{i:05}.md"), "# n\n");
+    }
+
+    let cold_started = Instant::now();
+    let cold = bootstrap(&app_data, &vault).expect("cold bootstrap succeeds");
+    let cold_elapsed = cold_started.elapsed();
+    assert!(
+        cold.took_first_snapshot,
+        "cold open must take the first snapshot"
+    );
+    assert_eq!(
+        recorded_paths(&cold.repo).len(),
+        COUNT,
+        "every note must land in the first snapshot"
+    );
+    drop(cold);
+
+    let reopen_started = Instant::now();
+    let reopened = bootstrap(&app_data, &vault).expect("reopen succeeds");
+    let reopen_elapsed = reopen_started.elapsed();
+    assert!(
+        !reopened.took_first_snapshot,
+        "reopen must not walk the vault again"
+    );
+
+    write(&vault, "note00000.md", "# edited\n");
+    let incremental_started = Instant::now();
+    snapshot::record(
+        &reopened.repo,
+        &[PathBuf::from("note00000.md")],
+        "Sync — one note changed",
+    )
+    .expect("incremental record succeeds");
+    let incremental_elapsed = incremental_started.elapsed();
+
+    let cold_ms = cold_elapsed.as_secs_f64() * 1000.0;
+    let reopen_ms = reopen_elapsed.as_secs_f64() * 1000.0;
+    let incremental_ms = incremental_elapsed.as_secs_f64() * 1000.0;
+    let reopen_ratio = cold_ms / reopen_ms.max(0.001);
+    let incremental_ratio = cold_ms / incremental_ms.max(0.001);
+
+    eprintln!("10k-vault measurement (absolute + ratios vs cold bootstrap):");
+    eprintln!("  cold bootstrap: {cold_elapsed:?} ({cold_ms:.1} ms)");
+    eprintln!(
+        "  reopen:         {reopen_elapsed:?} ({reopen_ms:.1} ms) — {reopen_ratio:.1}x cheaper"
+    );
+    eprintln!(
+        "  incremental:    {incremental_elapsed:?} ({incremental_ms:.1} ms) — {incremental_ratio:.1}x cheaper"
+    );
+
+    assert!(
+        reopen_ms * 2.0 < cold_ms,
+        "reopen should be materially cheaper than cold bootstrap (reopen {reopen_ms:.1} ms, cold {cold_ms:.1} ms)"
+    );
+    assert!(
+        incremental_ms * 2.0 < cold_ms,
+        "one-file incremental should be materially cheaper than cold bootstrap (incremental {incremental_ms:.1} ms, cold {cold_ms:.1} ms)"
+    );
 }

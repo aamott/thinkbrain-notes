@@ -22,18 +22,21 @@
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
+use crate::error::lock_or_recover;
 use crate::NativeError;
 
 use super::conflict::ConflictCopy;
 use super::engine::Engine;
+use super::failed;
 use super::history;
 use super::snapshot::Reason;
 
 /// The setting's key, and the default it has to agree with.
 ///
-/// Repeated from `packages/core/src/settings/modules/sync.ts` rather than
-/// derived, because this side answers the question before any window is
-/// listening. Changing one means changing the other.
+/// Repeated from `DEFAULT_SETTLE_AUTOMATICALLY` in
+/// `packages/core/src/settings/modules/sync.ts` rather than derived, because
+/// this side answers the question before any window is listening. Changing one
+/// means changing the other.
 const SETTING: &str = "sync.settleAutomatically";
 const SETTLE_BY_DEFAULT: bool = true;
 
@@ -46,8 +49,13 @@ static SETTINGS_HOME: Mutex<Option<PathBuf>> = Mutex::new(None);
 
 /// Remembers where to look for the setting, for the paths that have no window.
 pub fn remember_settings_home(app_data_dir: &Path) {
-    let mut home = SETTINGS_HOME.lock().unwrap_or_else(|error| error.into_inner());
+    let mut home = lock_or_recover(&SETTINGS_HOME);
     home.get_or_insert_with(|| app_data_dir.to_path_buf());
+}
+
+/// Where the app keeps its settings, if anyone has said.
+pub fn settings_home() -> Option<PathBuf> {
+    lock_or_recover(&SETTINGS_HOME).clone()
 }
 
 /// Whether the user has asked for the obvious ones to be settled.
@@ -57,7 +65,7 @@ pub fn remember_settings_home(app_data_dir: &Path) {
 /// moment at which a stale answer would be most annoying.
 fn enabled() -> bool {
     let home = {
-        let home = SETTINGS_HOME.lock().unwrap_or_else(|error| error.into_inner());
+        let home = lock_or_recover(&SETTINGS_HOME);
         home.clone()
     };
     enabled_in(home.as_deref())
@@ -105,7 +113,17 @@ fn settle_when(
     let repo = engine.repository();
     found
         .into_iter()
-        .filter(|copy| !settle(engine, &repo, root, copy).unwrap_or(false))
+        .filter(|copy| match settle(engine, &repo, root, copy) {
+            Ok(settled) => !settled,
+            // A settle failure leaves the conflict exactly where it was — it is
+            // still a real question — so it is kept (`true`), not dropped. But
+            // the failure must not be silent: log the error so a corrupt copy
+            // or unreadable checkpoint is traceable.
+            Err(error) => {
+                eprintln!("[sync] settle failed: {error:?}");
+                true
+            }
+        })
         .collect()
 }
 
@@ -119,13 +137,17 @@ fn settle(
     let note = root.join(&pairing.original);
     let copy = root.join(&pairing.copy);
 
+    if super::conflict::is_deletion_decision(&pairing.copy) {
+        return Ok(false);
+    }
+
     let ours = std::fs::read(&note).map_err(read_failed)?;
     let theirs = std::fs::read(&copy).map_err(read_failed)?;
 
     // Cheapest first, and the one that holds even for a note nothing has
     // recorded yet — a vault opened seconds ago, or a note still settling.
     if ours != theirs {
-        let theirs = blob_of(&theirs)?;
+        let theirs = blob_of(repo.object_hash(), &theirs)?;
         if !history::has_recorded(repo, Path::new(&pairing.original), theirs)? {
             return Ok(false);
         }
@@ -141,27 +163,39 @@ fn settle(
         ],
         Reason::DuplicateDiscarded,
     )?;
-    std::fs::remove_file(&copy).map_err(read_failed)?;
+    std::fs::remove_file(&copy).map_err(discard_failed)?;
     Ok(true)
 }
 
 /// The id git would store these bytes under, which is also the only question
 /// worth asking about whether two files are the same file.
-fn blob_of(bytes: &[u8]) -> Result<gix::ObjectId, NativeError> {
-    gix::objs::compute_hash(gix::hash::Kind::Sha1, gix::object::Kind::Blob, bytes).map_err(|error| {
-        NativeError::with_details(
+///
+/// Takes the repository's object hash kind explicitly rather than hardcoding
+/// SHA-1: a repository configured for SHA-256 would otherwise compute ids that
+/// never match anything in its history, silently refusing to settle anything.
+fn blob_of(hash: gix::hash::Kind, bytes: &[u8]) -> Result<gix::ObjectId, NativeError> {
+    gix::objs::compute_hash(hash, gix::object::Kind::Blob, bytes).map_err(|error| {
+        failed(
             "sync.version_read_failed",
             "Could not compare the two versions.",
-            error.to_string(),
+            error,
         )
     })
 }
 
 fn read_failed(error: std::io::Error) -> NativeError {
-    NativeError::with_details(
+    failed(
         "sync.version_read_failed",
         "Could not read one of the two versions.",
-        error.to_string(),
+        error,
+    )
+}
+
+fn discard_failed(error: std::io::Error) -> NativeError {
+    failed(
+        "sync.conflict_not_discarded",
+        "Could not discard the duplicate copy.",
+        error,
     )
 }
 

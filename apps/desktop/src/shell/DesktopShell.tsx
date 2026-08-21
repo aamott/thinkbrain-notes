@@ -47,7 +47,7 @@ import { StaleDocumentBanner } from "./StaleDocumentBanner";
 import { UpdateBanner } from "./UpdateBanner";
 import { useAppUpdate } from "./useAppUpdate";
 import { checkForUpdate, relaunchApp } from "./appUpdater";
-import { isBuiltInLeftPanel } from "../panels/panelRegistry";
+import { isBuiltInLeftPanel } from "../panels/panelRegistryModel";
 import { isSelectableRightPanel, type DocumentViewState, type RightPanel } from "./shellTypes";
 import { StatusBar } from "./StatusBar";
 import { TabContent } from "./TabContent";
@@ -383,7 +383,8 @@ export function DesktopShell() {
       .catch((error: unknown) => {
         console.error(`[commandRegistry] Command "${command.id}" failed.`, error);
       });
-  }, [closePalette, openSettingsTab, persistDesktopState, selectLeftPanel, setTheme, showExplorer, theme, toggleBottomPanel, toggleLivePreview, updateBottomPanel]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setLeftPanel is a stable useState setter
+  }, [closePalette, openSettingsTab, persistDesktopState, requestNewNoteFocus, selectLeftPanel, setTheme, showExplorer, theme, toggleBottomPanel, toggleLivePreview, updateBottomPanel]);
 
   const updateDocument = useCallback((tabId: string, contents: string) => {
     setDocuments((current) => {
@@ -567,6 +568,7 @@ export function DesktopShell() {
     rightWidthRef.current = rightWidth;
     rootRef.current?.style.setProperty("--tn-shell-left-width", leftPanel ? `${leftWidth}px` : "0px");
     rootRef.current?.style.setProperty("--tn-shell-right-width", `${rightWidth}px`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- leftWidthRef/rightWidthRef are stable refs
   }, [leftWidth, leftPanel, rightWidth]);
 
   /**
@@ -606,6 +608,7 @@ export function DesktopShell() {
       window.addEventListener("pointerup", finish);
       window.addEventListener("pointercancel", finish);
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- leftWidthRef/rightWidthRef are stable refs
     [updatePanelWidth],
   );
 
@@ -624,6 +627,7 @@ export function DesktopShell() {
       const currentWidth = side === "left" ? leftWidthRef.current : rightWidthRef.current;
       updatePanelWidth(side, currentWidth + applyDelta);
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- leftWidthRef/rightWidthRef are stable refs
     [updatePanelWidth],
   );
 
@@ -738,7 +742,12 @@ export function DesktopShell() {
         )}
       </div>
 
-      <StatusBar workspaceName={workspaceName} syncStatus={syncStatus} onOpenSyncPanel={openSyncPanel} />
+      <StatusBar
+        workspaceName={workspaceName}
+        syncStatus={syncStatus}
+        onOpenSyncPanel={openSyncPanel}
+        onOpenSettings={openSettingsTab}
+      />
 
       {paletteOpen && (
         <CommandPalette

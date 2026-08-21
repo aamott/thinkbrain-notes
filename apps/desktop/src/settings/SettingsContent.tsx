@@ -150,17 +150,16 @@ export function SettingsContent() {
 
   // The `appearance.theme` section is rendered via the unified `ThemePicker`
   // (which stages both `appearance.theme` and `appearance.themeFile`) plus the
-  // `ThemeToolbar` (Export/Import). The standalone generic rows for those two
-  // keys are redundant — filter them out so they don't render twice. The
-  // registry definitions stay so the settings system still knows about them.
-  const HIDDEN_KEYS_IN_THEME_SECTION = new Set([
+  // `ThemeToolbar` (Export/Import). `sync.signInProfile` is edited inside
+  // GitLinkControl. Those standalone generic rows are redundant — filter them
+  // out so they don't render twice. The registry definitions stay so the
+  // settings system still knows about them.
+  const HIDDEN_SETTING_ROWS = new Set([
     "appearance.theme",
-    "appearance.themeFile"
+    "appearance.themeFile",
+    "sync.signInProfile"
   ]);
-  const definitions =
-    activeSection === "appearance.theme"
-      ? allDefinitions.filter((d) => !HIDDEN_KEYS_IN_THEME_SECTION.has(d.key))
-      : allDefinitions;
+  const definitions = allDefinitions.filter((d) => !HIDDEN_SETTING_ROWS.has(d.key));
 
   // Determine whether any staged change belongs to the active section so the
   // per-section reset button can be enabled/disabled. `resetSection` only

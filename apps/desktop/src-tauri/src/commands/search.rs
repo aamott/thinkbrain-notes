@@ -1,5 +1,5 @@
 use crate::commands::workspace::{resolve_workspace_root, stable_workspace_hash};
-use crate::error::NativeError;
+use crate::error::{lock_or_recover, NativeError};
 use rusqlite::{params, Connection, Transaction};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -9,6 +9,12 @@ use std::{
     sync::{Arc, Mutex},
 };
 use tauri::Manager;
+
+/// Builds a `NativeError::with_details` from a static code/message and a
+/// displayable error, matching the shared pattern used across command modules.
+fn failed(code: &'static str, message: &'static str, error: impl std::fmt::Display) -> NativeError {
+    NativeError::with_details(code, message, error.to_string())
+}
 
 mod metadata;
 #[cfg(test)]
@@ -27,9 +33,7 @@ pub fn get_search_connection(
     app: &tauri::AppHandle,
     root_path: &str,
 ) -> Result<Arc<Mutex<Connection>>, NativeError> {
-    let mut lock = SEARCH_CONNECTIONS
-        .lock()
-        .unwrap_or_else(|error| error.into_inner());
+    let mut lock = lock_or_recover(&SEARCH_CONNECTIONS);
     let pool = lock.get_or_insert_with(HashMap::new);
     if let Some(conn) = pool.get(root_path) {
         return Ok(conn.clone());
@@ -93,12 +97,10 @@ pub fn index_documents(
     documents: Vec<DocumentRecord>,
 ) -> Result<usize, NativeError> {
     let connection_pool = get_search_connection(&app, &root_path)?;
-    let mut connection = connection_pool
-        .lock()
-        .unwrap_or_else(|error| error.into_inner());
+    let mut connection = lock_or_recover(&connection_pool);
 
     index_document_records(&mut connection, &documents).map_err(|error| {
-        NativeError::with_details(
+        failed(
             "index.write_failed",
             "Failed to update the search index.",
             error,
@@ -115,9 +117,7 @@ pub fn search_index(
     limit: Option<u32>,
 ) -> Result<Vec<SearchHit>, NativeError> {
     let connection_pool = get_search_connection(&app, &root_path)?;
-    let connection = connection_pool
-        .lock()
-        .unwrap_or_else(|error| error.into_inner());
+    let connection = lock_or_recover(&connection_pool);
 
     search_documents(
         &connection,
@@ -130,7 +130,7 @@ pub fn search_index(
         },
     )
     .map_err(|error| {
-        NativeError::with_details(
+        failed(
             "index.search_failed",
             "Failed to search the workspace index.",
             error,
@@ -147,9 +147,7 @@ pub fn query_index_metadata(
     predicates: Vec<MetadataPredicate>,
 ) -> Result<MetadataQueryResult, NativeError> {
     let connection_pool = get_search_connection(&app, &root_path)?;
-    let connection = connection_pool
-        .lock()
-        .unwrap_or_else(|error| error.into_inner());
+    let connection = lock_or_recover(&connection_pool);
 
     metadata::query_metadata(
         &connection,
@@ -160,7 +158,7 @@ pub fn query_index_metadata(
         },
     )
     .map_err(|error| {
-        NativeError::with_details(
+        failed(
             "index.metadata_query_failed",
             "Failed to query workspace metadata.",
             error,
@@ -171,12 +169,10 @@ pub fn query_index_metadata(
 #[tauri::command]
 pub fn clear_index(app: tauri::AppHandle, root_path: String) -> Result<(), NativeError> {
     let connection_pool = get_search_connection(&app, &root_path)?;
-    let mut connection = connection_pool
-        .lock()
-        .unwrap_or_else(|error| error.into_inner());
+    let mut connection = lock_or_recover(&connection_pool);
 
     clear_documents(&mut connection).map_err(|error| {
-        NativeError::with_details(
+        failed(
             "index.clear_failed",
             "Failed to clear the workspace index.",
             error,
@@ -191,12 +187,10 @@ pub fn remove_index_document(
     path: String,
 ) -> Result<(), NativeError> {
     let connection_pool = get_search_connection(&app, &root_path)?;
-    let mut connection = connection_pool
-        .lock()
-        .unwrap_or_else(|error| error.into_inner());
+    let mut connection = lock_or_recover(&connection_pool);
 
     delete_document(&mut connection, &path).map_err(|error| {
-        NativeError::with_details(
+        failed(
             "index.remove_failed",
             "Failed to remove a document from the workspace index.",
             error,
@@ -214,7 +208,7 @@ pub fn open_index_connection(
 ) -> Result<Connection, NativeError> {
     let db_path = resolve_index_db_path(app, root_path)?;
     let connection = Connection::open(&db_path).map_err(|error| {
-        NativeError::with_details(
+        failed(
             "index.open_failed",
             "Failed to open the search index database.",
             error,
@@ -222,7 +216,7 @@ pub fn open_index_connection(
     })?;
 
     init_index_schema(&connection).map_err(|error| {
-        NativeError::with_details(
+        failed(
             "index.schema_failed",
             "Failed to initialize the search index schema.",
             error,
@@ -242,7 +236,7 @@ pub fn resolve_index_db_path(
 ) -> Result<PathBuf, NativeError> {
     let canonical_root = resolve_workspace_root(root_path)?;
     let app_data_dir = app.path().app_data_dir().map_err(|error| {
-        NativeError::with_details(
+        failed(
             "index.app_data_unavailable",
             "Failed to resolve the application data directory.",
             error,
@@ -251,7 +245,7 @@ pub fn resolve_index_db_path(
     let index_dir = app_data_dir.join("index");
 
     fs::create_dir_all(&index_dir).map_err(|error| {
-        NativeError::with_details(
+        failed(
             "index.create_dir_failed",
             "Failed to create the search index directory.",
             error,

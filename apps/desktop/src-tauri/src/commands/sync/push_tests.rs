@@ -55,7 +55,10 @@ fn remote_tip(path: &Path, reference: &str) -> Option<gix::ObjectId> {
     repo.try_find_reference(reference)
         .expect("the remote's refs are readable")
         .map(|mut found| {
-            found.peel_to_id().expect("the ref points at an object").detach()
+            found
+                .peel_to_id()
+                .expect("the ref points at an object")
+                .detach()
         })
 }
 
@@ -138,11 +141,9 @@ fn a_remote_already_at_our_tip_needs_nothing() {
     write(&f.vault, "one.md", "first\n");
     let tip = record(&f, "one", &["one.md"]);
 
-    assert!(
-        carried(&f.repo, tip, Some(tip))
-            .expect("the objects are counted")
-            .is_empty()
-    );
+    assert!(carried(&f.repo, tip, Some(tip))
+        .expect("the objects are counted")
+        .is_empty());
 }
 
 /// A commit whose note went back to an earlier wording reuses that earlier
@@ -197,7 +198,11 @@ fn a_push_into_an_empty_remote_lands_the_whole_history() {
     let sent = send(&f.repo, &link(&remote), BRANCH, tip).expect("the push succeeds");
 
     assert_eq!(sent.landed, Landed::Moved);
-    assert_eq!(remote_tip(&remote, BRANCH), Some(tip), "the remote's branch did not move");
+    assert_eq!(
+        remote_tip(&remote, BRANCH),
+        Some(tip),
+        "the remote's branch did not move"
+    );
     assert_eq!(
         readable_objects(&remote, tip),
         7,
@@ -218,7 +223,10 @@ fn a_second_push_sends_only_what_changed() {
     let sent = send(&f.repo, &link(&remote), BRANCH, second).expect("the second push succeeds");
 
     assert_eq!(sent.landed, Landed::Moved);
-    assert_eq!(sent.objects, 3, "the second push resent objects the remote had");
+    assert_eq!(
+        sent.objects, 3,
+        "the second push resent objects the remote had"
+    );
     assert_eq!(remote_tip(&remote, BRANCH), Some(second));
 }
 
@@ -230,7 +238,8 @@ fn a_push_with_nothing_to_add_is_not_an_error() {
     let tip = record(&f, "one", &["one.md"]);
     send(&f.repo, &link(&remote), BRANCH, tip).expect("the first push succeeds");
 
-    let sent = send(&f.repo, &link(&remote), BRANCH, tip).expect("pushing the same tip again succeeds");
+    let sent =
+        send(&f.repo, &link(&remote), BRANCH, tip).expect("pushing the same tip again succeeds");
 
     assert_eq!(sent.landed, Landed::Moved);
     assert_eq!(sent.objects, 0);
@@ -255,7 +264,8 @@ fn a_push_whose_remote_moved_underneath_it_is_refused() {
     // Ours, built on the same shared commit and knowing nothing of theirs. What
     // it holds does not matter; that it does not descend from theirs does.
     let ours = commit(&f, "ours", tree_of(&f.repo, shared), &[shared]);
-    let sent = send(&f.repo, &link(&remote), BRANCH, ours).expect("a refusal is an answer, not a failure");
+    let sent =
+        send(&f.repo, &link(&remote), BRANCH, ours).expect("a refusal is an answer, not a failure");
 
     assert!(
         matches!(sent.landed, Landed::Refused { .. }),
@@ -305,7 +315,10 @@ fn a_deleted_note_pushes_without_sending_anything_for_it() {
 
     assert_eq!(sent.landed, Landed::Moved);
     // The commit and its new root tree, and nothing standing in for the note.
-    assert_eq!(sent.objects, 2, "something was sent for a note that went away");
+    assert_eq!(
+        sent.objects, 2,
+        "something was sent for a note that went away"
+    );
     assert_eq!(note_at(&remote, second, "one.md"), "first\n");
 }
 
@@ -363,6 +376,28 @@ fn a_refusal_from_the_far_side_is_not_read_as_success() {
     );
 }
 
+#[test]
+fn a_remote_that_requests_credentials_is_not_called_unreachable() {
+    let error = handshake_failure(gix::protocol::handshake::Error::EmptyCredentials);
+
+    assert_eq!(error.code, "sync.credentials_invalid");
+}
+
+#[test]
+fn http_auth_statuses_name_the_action_someone_can_take() {
+    for (status, code) in [
+        (401, "sync.credentials_invalid"),
+        (403, "sync.credentials_forbidden"),
+    ] {
+        let transport = transport::client::Error::Io(std::io::Error::other(format!(
+            "Received HTTP status {status}"
+        )));
+        let error = handshake_failure(gix::protocol::handshake::Error::Transport(transport));
+
+        assert_eq!(error.code, code, "status {status}");
+    }
+}
+
 /// Merges are where an incomplete object set hides: the second parent's
 /// objects are not in any first-parent diff, so a history with a merge in it
 /// is the case that proves the walk, not the diff, decides what goes.
@@ -378,7 +413,12 @@ fn a_history_with_a_merge_pushes_completely() {
     let side = record(&f, "side", &["side.md"]);
 
     write(&f.vault, "main.md", "on the branch\n");
-    let mainline = commit(&f, "mainline", tree_of(&f.repo, record(&f, "main", &["main.md"])), &[base]);
+    let mainline = commit(
+        &f,
+        "mainline",
+        tree_of(&f.repo, record(&f, "main", &["main.md"])),
+        &[base],
+    );
     let merged = commit(&f, "merged", tree_of(&f.repo, side), &[mainline, side]);
 
     let sent = send(&f.repo, &link(&remote), BRANCH, merged).expect("the push succeeds");
@@ -391,7 +431,12 @@ fn a_history_with_a_merge_pushes_completely() {
 
 /// Writes a commit with any number of parents, which `snapshot` cannot: it
 /// only ever records a single line of history.
-fn commit(f: &Fixture, message: &str, tree: gix::ObjectId, parents: &[gix::ObjectId]) -> gix::ObjectId {
+fn commit(
+    f: &Fixture,
+    message: &str,
+    tree: gix::ObjectId,
+    parents: &[gix::ObjectId],
+) -> gix::ObjectId {
     let who = gix::actor::Signature {
         name: "ThinkBrain Notes".into(),
         email: "sync@thinkbrain.notes".into(),
@@ -421,6 +466,39 @@ fn tree_of(repo: &gix::Repository, commit: gix::ObjectId) -> gix::ObjectId {
         .detach()
 }
 
+/// A folder inside the vault with its own `.git` is recorded by git as a
+/// gitlink: an entry whose id names a commit in *someone else's* repository,
+/// which this one has never had and cannot send. Real git skips these when it
+/// works out what a pack must carry, and so must we — otherwise one such entry
+/// anywhere in the history makes every push from then on fail outright.
+#[test]
+fn a_folder_with_its_own_repository_does_not_break_the_push() {
+    let f = fixture("push-gitlink");
+    let remote = remote("push-gitlink");
+    write(&f.vault, "one.md", "first\n");
+    let tip = record(&f, "one", &["one.md"]);
+
+    // A commit id from somewhere else entirely; nothing here can resolve it.
+    let elsewhere = fixture("push-gitlink-other");
+    write(&elsewhere.vault, "theirs.md", "not ours\n");
+    let foreign = record(&elsewhere, "theirs", &["theirs.md"]);
+
+    let mut editor = f
+        .repo
+        .edit_tree(tree_of(&f.repo, tip))
+        .expect("the tree opens for editing");
+    editor
+        .upsert("reference", gix::object::tree::EntryKind::Commit, foreign)
+        .expect("the gitlink entry is added");
+    let tree = editor.write().expect("the tree is written").detach();
+    let with_gitlink = commit(&f, "a folder of its own", tree, &[tip]);
+
+    let sent = send(&f.repo, &link(&remote), BRANCH, with_gitlink).expect("the push succeeds");
+
+    assert_eq!(sent.landed, Landed::Moved);
+    assert_eq!(remote_tip(&remote, BRANCH), Some(with_gitlink));
+}
+
 /// The restore points are ours. They are not a branch, and a push that swept
 /// them up would put someone's undo history on a server they never chose.
 #[test]
@@ -429,8 +507,12 @@ fn the_checkpoint_ref_is_never_sent() {
     let remote = remote("push-checkpoint");
     write(&f.vault, "one.md", "first\n");
     let tip = record(&f, "one", &["one.md"]);
-    snapshot::checkpoint(&f.repo, &[PathBuf::from("one.md")], snapshot::Reason::VersionRestored)
-        .expect("the checkpoint is written");
+    snapshot::checkpoint(
+        &f.repo,
+        &[PathBuf::from("one.md")],
+        snapshot::Reason::VersionRestored,
+    )
+    .expect("the checkpoint is written");
 
     send(&f.repo, &link(&remote), BRANCH, tip).expect("the push succeeds");
 

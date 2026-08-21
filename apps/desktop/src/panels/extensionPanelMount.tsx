@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, type ReactNode } from "react";
 
 import type { Disposable } from "@thinkbrain/core";
 
-import type { DesktopPanelContext } from "./panelRegistry";
+import type { DesktopPanelContext } from "./panelRegistryModel";
 
 /**
  * The framework-neutral panel contract for extensions.

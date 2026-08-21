@@ -135,6 +135,7 @@ describe("settingsStore", () => {
 
       const state = store.getState();
       expect(state.workspaceValues).not.toBeNull();
+      expect(state.workspaceValues).toMatchObject({ "sync.destination": "" });
       expect(state.workspaceRootPath).toBe("/notes/test");
       expect(gateway.readWorkspaceSettings).toHaveBeenCalledWith("/notes/test");
     });

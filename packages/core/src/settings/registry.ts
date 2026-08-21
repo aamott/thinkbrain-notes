@@ -52,7 +52,12 @@ export interface SettingsRegistry {
   getDefinition(fullKey: string): SettingDefinition | undefined;
   /** Returns resolved definitions in declaration order for a section. */
   getDefinitionsForSection(sectionId: string): readonly SettingDefinition[];
-  /** Returns modules matching an app or workspace scope. */
+  /**
+   * Returns modules that contribute settings of the given scope.
+   *
+   * Each returned module is projected to that scope: mixed-scope modules
+   * appear in both lists, each carrying only the matching settings.
+   */
   getModulesByScope(scope: SettingScope): readonly SettingsModule[];
   /** Returns all resolved definitions in module and declaration order. */
   getAllDefinitions(): readonly SettingDefinition[];
@@ -194,9 +199,12 @@ class SettingsRegistryImpl implements SettingsRegistry {
   }
 
   getModulesByScope(scope: SettingScope): readonly SettingsModule[] {
-    return this.moduleOrder
-      .map((id) => this.requireModule(id).module)
-      .filter((module) => module.scope === scope);
+    const modules: SettingsModule[] = [];
+    for (const id of this.moduleOrder) {
+      const projected = projectModuleToScope(this.requireModule(id).module, scope);
+      if (projected) modules.push(projected);
+    }
+    return modules;
   }
 
   getAllDefinitions(): readonly SettingDefinition[] {
@@ -281,6 +289,59 @@ function assertValidModuleId(moduleId: string): void {
       `Invalid settings module id "${moduleId}". IDs must be lowercase kebab-case.`
     );
   }
+}
+
+/**
+ * Projects a module onto one scope so a mixed-scope module can appear in both
+ * the app and workspace navs, each carrying only the matching settings.
+ *
+ * A module with no matching settings is omitted unless it has no settings at
+ * all and declared this scope — empty declared groupings still need a home.
+ */
+function projectModuleToScope(
+  module: SettingsModule,
+  scope: SettingScope
+): SettingsModule | undefined {
+  const sections = projectSectionsToScope(module.sections, scope);
+  if (sections.length > 0) {
+    return { ...module, scope, sections };
+  }
+  return module.scope === scope && !moduleHasSettings(module)
+    ? { ...module, sections }
+    : undefined;
+}
+
+function moduleHasSettings(module: SettingsModule): boolean {
+  const walk = (sections: readonly SettingSection[]): boolean => {
+    for (const section of sections) {
+      if (section.settings && section.settings.length > 0) return true;
+      if (section.subsections && walk(section.subsections)) return true;
+    }
+    return false;
+  };
+  return walk(module.sections);
+}
+
+function projectSectionsToScope(
+  sections: readonly SettingSection[],
+  scope: SettingScope
+): SettingSection[] {
+  const projected: SettingSection[] = [];
+  for (const section of sections) {
+    const settings = section.settings?.filter((def) => def.scope === scope);
+    const subsections = section.subsections
+      ? projectSectionsToScope(section.subsections, scope)
+      : undefined;
+    const hasSettings = settings !== undefined && settings.length > 0;
+    const hasSubsections = subsections !== undefined && subsections.length > 0;
+    if (!hasSettings && !hasSubsections) continue;
+    projected.push({
+      ...section,
+      settings: hasSettings ? settings : undefined,
+      subsections: hasSubsections ? subsections : undefined
+    });
+  }
+  return projected;
 }
 
 /**
