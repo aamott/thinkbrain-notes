@@ -65,11 +65,12 @@ fetches and cannot push, so sending was written rather than called:
 - [x] Live GitHub host proof — disposable private repo: empty remote push,
       second-device bring-down, catch-up without blocking the next push, and
       same-line conflict copy. Script: `scripts/sync-live-github.sh`.
-- [ ] Live GitLab host proof — same script shape: `scripts/sync-live-gitlab.sh`
-      (needs `glab` + `GITLAB_TOKEN`)
+- [x] Live GitLab host proof — same script shape: `scripts/sync-live-gitlab.sh`
+      (needs `glab` + `GITLAB_TOKEN`). Passed on protocol v2 by default with
+      in-memory protocol v1 fallback during fetch.
 
 ## Status
 
-🟨 6a send-pack, 6b round trip, and 6c adapter + sign-in control done.
-6d git-link setup UX and 6e import-from-link implemented in app code.
-GitHub live proof done. Remaining host proof: GitLab.
+🟩 6a send-pack, 6b round trip, 6c adapter + sign-in control, 6d git-link
+setup UX, and 6e import-from-link all done. GitHub and GitLab live proof
+both passed on protocol v2 default (v1 fallback). Story 6 acceptance complete.

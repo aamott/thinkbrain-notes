@@ -35,6 +35,9 @@ glab repo create "$NAME" --private --description "ThinkBrain Notes disposable sy
 
 export TB_SYNC_LIVE_URL="$URL"
 export TB_SYNC_LIVE_USER="$LOGIN"
+if [[ -z "${GITLAB_TOKEN:-}" ]]; then
+  GITLAB_TOKEN="$(glab auth status -t 2>&1 | sed -n 's/.*Token found in configuration file.*:[[:space:]]*\([^[:space:]]*\).*/\1/p' | head -1)"
+fi
 if [[ -n "${GITLAB_TOKEN:-}" ]]; then
   export TB_SYNC_LIVE_TOKEN="$GITLAB_TOKEN"
 else

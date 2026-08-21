@@ -384,9 +384,20 @@ fn a_second_check_after_import_does_not_interleave_or_rewrite_notes() {
 
 #[test]
 fn import_progress_never_carries_url_credentials() {
-    let error = crate::commands::sync::remote_failure(
-        "could not reach https://me:token@example.test/notes.git",
-    );
+    /// Minimal error type for `remote_failure`, which now requires
+    /// `std::error::Error` to walk the source chain.
+    #[derive(Debug)]
+    struct TestError(String);
+    impl std::fmt::Display for TestError {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_str(&self.0)
+        }
+    }
+    impl std::error::Error for TestError {}
+
+    let error = crate::commands::sync::remote_failure(TestError(
+        "could not reach https://me:token@example.test/notes.git".to_string(),
+    ));
     let payload = ImportProgress {
         request_id: "req-1".to_string(),
         state: "failed".to_string(),

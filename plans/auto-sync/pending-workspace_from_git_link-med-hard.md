@@ -75,7 +75,8 @@ and the existing catalog; a missing selection is never replaced.
 - [x] Failure keeps the dialog and names a recovery action
 - [x] Live GitHub proof (shared with 6c; round-trip path via
       `scripts/sync-live-github.sh`)
-- [ ] Live GitLab proof (still 6c leftover; not claimed here)
+- [x] Live GitLab proof (shared with 6c; round-trip path via
+      `scripts/sync-live-gitlab.sh`)
 
 ## Known limitations
 
@@ -86,7 +87,6 @@ and the existing catalog; a missing selection is never replaced.
   added (zero-files-in-vault stands).
 - Opening the imported workspace may fire one extra no-op check via the
   existing attach path; it cannot interleave with the import trip.
-- Live GitLab host proof is still required, shared with 6c/6d.
 - Import lists host-filtered saved sign-ins but cannot create/update one in
   the dialog; Settings is required today. Parity is story 6f
   (`pending-import_sign_in_parity-med-med.md`). A blank-looking select can
@@ -97,6 +97,6 @@ and the existing catalog; a missing selection is never replaced.
 
 ## Status
 
-🟨 Implemented in app code. GitHub live proof done. Remaining: GitLab live
-proof (same leftover as stories 6c and 6d). Sign-in-from-import and
-selector badge are separate follow-ups (6f + badge story).
+🟩 Implemented in app code. GitHub and GitLab live proof both done.
+Sign-in-from-import and selector badge are separate follow-ups (6f + badge
+story).

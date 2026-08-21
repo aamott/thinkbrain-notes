@@ -27,10 +27,26 @@ pub(super) fn remote_unreachable(error: impl std::fmt::Display) -> NativeError {
 /// Turns the few HTTP answers a person can act on into distinct messages.
 ///
 /// gix currently exposes these HTTP statuses inside an I/O error's text rather
-/// than as an enum. Keep the matching here, rather than teaching every fetch
-/// and push call site its own slightly different set of strings.
-pub(super) fn remote_failure(error: impl std::fmt::Display) -> NativeError {
-    let details = error.to_string();
+/// than as an enum, and wraps them in layers of `Io(Custom { ... })` whose
+/// `Display` only shows "An IO error occurred when talking to the server".
+/// We walk the full `std::error::Error::source()` chain so the HTTP status
+/// buried inside is actually seen. Keep the matching here, rather than
+/// teaching every fetch and push call site its own slightly different set of
+/// strings.
+pub(super) fn remote_failure<E: std::error::Error>(error: E) -> NativeError {
+    // Collect the top-level message plus every source in the chain, so the
+    // HTTP status string buried inside `Io(Custom { error: "HTTP status 403" })`
+    // is visible to the matchers below.
+    let mut details = error.to_string();
+    let mut source = error.source();
+    while let Some(err) = source {
+        let msg = err.to_string();
+        if !msg.is_empty() && !details.contains(&msg) {
+            details.push_str(": ");
+            details.push_str(&msg);
+        }
+        source = err.source();
+    }
     let lowercase = details.to_lowercase();
     let (code, message) = if lowercase.contains("failed to obtain credentials")
         || lowercase.contains("configure credential helpers")
@@ -126,6 +142,18 @@ mod live_host;
 mod tests {
     use super::{redact_remote_credentials, remote_failure};
 
+    /// A minimal error type for testing `remote_failure` with string messages,
+    /// since the function now requires `std::error::Error` to walk the source
+    /// chain (gix wraps HTTP statuses deep inside `Io(Custom { ... })`).
+    #[derive(Debug)]
+    struct TestError(String);
+    impl std::fmt::Display for TestError {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_str(&self.0)
+        }
+    }
+    impl std::error::Error for TestError {}
+
     #[test]
     fn http_failures_do_not_all_sound_like_a_broken_link() {
         for (status, code) in [
@@ -133,14 +161,16 @@ mod tests {
             (403, "sync.credentials_forbidden"),
             (404, "sync.remote_not_found"),
         ] {
-            let error = remote_failure(format!("Received HTTP status {status}"));
+            let error = remote_failure(TestError(format!(
+                "Received HTTP status {status}"
+            )));
             assert_eq!(error.code, code);
         }
     }
 
     #[test]
     fn a_keychain_failure_is_not_reported_as_a_bad_link() {
-        let error = remote_failure("Failed to obtain credentials");
+        let error = remote_failure(TestError("Failed to obtain credentials".to_string()));
 
         assert_eq!(error.code, "sync.credentials_unavailable");
         assert_eq!(
@@ -151,11 +181,45 @@ mod tests {
 
     #[test]
     fn a_fetch_with_no_saved_credentials_is_not_reported_as_a_bad_link() {
-        let error = remote_failure(
-            "No credentials were returned at all as if the credential helper isn't functioning",
-        );
+        let error = remote_failure(TestError(
+            "No credentials were returned at all as if the credential helper isn't functioning"
+                .to_string(),
+        ));
 
         assert_eq!(error.code, "sync.credentials_invalid");
+    }
+
+    #[test]
+    fn an_http_status_buried_in_an_io_error_source_chain_is_still_matched() {
+        // gix wraps HTTP statuses inside layers of `Io(Custom { ... })` whose
+        // `Display` only shows "An IO error occurred when talking to the
+        // server". The source chain must be walked to find the status.
+        use std::sync::OnceLock;
+
+        #[derive(Debug)]
+        struct OuterError;
+        impl std::fmt::Display for OuterError {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str("An IO error occurred when talking to the server")
+            }
+        }
+        impl std::error::Error for OuterError {
+            fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+                static INNER: OnceLock<InnerError> = OnceLock::new();
+                Some(INNER.get_or_init(|| InnerError))
+            }
+        }
+        #[derive(Debug)]
+        struct InnerError;
+        impl std::fmt::Display for InnerError {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str("Received HTTP status 403")
+            }
+        }
+        impl std::error::Error for InnerError {}
+
+        let error = remote_failure(OuterError);
+        assert_eq!(error.code, "sync.credentials_forbidden");
     }
 
     #[test]

@@ -24,10 +24,44 @@ pub(super) const NETWORK: Duration = Duration::from_secs(90);
 
 /// Brings the destination's default branch down into a ref of ours.
 ///
+/// Uses git protocol v2 by default (gix default). If ref discovery fails on an
+/// HTTPS remote that rejects v2 requests (e.g. Cloudflare / middleboxes
+/// blocking v2 POSTs or servers without v2 support), retries once with protocol
+/// v1 scoped strictly to an in-memory repository config clone.
+///
 /// `None` means the far side has nothing on that branch yet, which is what a
 /// destination looks like before anyone has synced to it. Local remotes are
 /// asked for HEAD's target so a nonstandard default (not `main`) still arrives.
 pub(super) fn fetch(
+    repo: &gix::Repository,
+    destination: &str,
+    cancel: &Arc<AtomicBool>,
+) -> Result<Option<gix::ObjectId>, NativeError> {
+    match fetch_attempt(repo, destination, cancel) {
+        Ok(result) => Ok(result),
+        Err(error) => {
+            if cancel.load(Ordering::Relaxed) {
+                return Err(error);
+            }
+            if let Some(v1_repo) = repo_with_protocol_v1(repo) {
+                if let Ok(result) = fetch_attempt(&v1_repo, destination, cancel) {
+                    return Ok(result);
+                }
+            }
+            Err(error)
+        }
+    }
+}
+
+fn repo_with_protocol_v1(repo: &gix::Repository) -> Option<gix::Repository> {
+    let mut cloned = repo.clone();
+    let mut config = cloned.config_snapshot_mut();
+    config.set_raw_value("protocol.version", "1").ok()?;
+    config.commit().ok()?;
+    Some(cloned)
+}
+
+fn fetch_attempt(
     repo: &gix::Repository,
     destination: &str,
     cancel: &Arc<AtomicBool>,
@@ -39,6 +73,7 @@ pub(super) fn fetch(
         None => Ok(None),
     }
 }
+
 fn receive(
     repo: &gix::Repository,
     destination: &str,
@@ -142,5 +177,32 @@ pub(super) fn bounded<T: Send + 'static>(
             "sync.remote_unreachable",
             "Could not reach the place these notes sync to.",
         )),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::commands::sync::test_support;
+
+    #[test]
+    fn protocol_v1_fallback_does_not_mutate_on_disk_config() {
+        let fixture = test_support::repo_fixture("v1-fallback", "network");
+        let on_disk_config_path = fixture.repo.git_dir().join("config");
+        let initial_config =
+            std::fs::read_to_string(&on_disk_config_path).expect("config file exists");
+        assert!(!initial_config.contains("protocol.version"));
+
+        let v1_repo = repo_with_protocol_v1(&fixture.repo).expect("in-memory clone succeeds");
+        let config_snapshot = v1_repo.config_snapshot();
+        let version = config_snapshot
+            .string("protocol.version")
+            .map(|s| s.to_string());
+        assert_eq!(version.as_deref(), Some("1"));
+
+        // Confirm the config file on disk was not touched
+        let disk_after = std::fs::read_to_string(&on_disk_config_path).expect("config exists");
+        assert!(!disk_after.contains("protocol.version"));
+        assert_eq!(initial_config, disk_after);
     }
 }

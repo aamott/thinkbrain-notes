@@ -49,7 +49,7 @@ include Add Workspace / import-from-link (next phase).
 - [x] Forget sign-in removes that secret; other workspaces are left missing
 - [x] First verification is background; Settings stays usable
 - [x] Live GitHub proof (shared with 6c; `scripts/sync-live-github.sh`)
-- [ ] Live GitLab proof (still 6c leftover; not claimed here)
+- [x] Live GitLab proof (shared with 6c; `scripts/sync-live-gitlab.sh`)
 
 ## Known limitations
 
@@ -65,5 +65,4 @@ include Add Workspace / import-from-link (next phase).
 
 ## Status
 
-🟨 Implemented in app code. GitHub live proof done. Remaining: GitLab live
-proof (same leftover as story 6c).
+🟩 Implemented in app code. GitHub and GitLab live proof both done.
