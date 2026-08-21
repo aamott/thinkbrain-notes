@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # scripts/qa.sh — Unified quality-assurance runner.
 # Runs lint, typecheck, and tests across the entire monorepo.
-# Defaults to quiet output; pass --verbose for full output.
 
 set -euo pipefail
 
@@ -13,21 +12,11 @@ if [ -f "$(dirname "$0")/rust-env.sh" ]; then
   source "$(dirname "$0")/rust-env.sh" >/dev/null
 fi
 
-VERBOSE=false
-for arg in "$@"; do
-  case "$arg" in
-    --verbose|-v) VERBOSE=true ;;
-  esac
-done
-
-if [ "$VERBOSE" = true ]; then
-  QUIET_FLAG=""
-else
-  QUIET_FLAG="--quiet"
-fi
-
+# Note: do not pass --quiet to eslint. It suppresses warnings, which
+# hides Tailwind CSS conflict detection (eslint-plugin-tailwindcss rules
+# are set to "warn"). Warnings need to be visible to get cleaned up.
 echo "▸ Lint"
-pnpm lint $QUIET_FLAG
+pnpm lint
 
 echo "▸ Typecheck"
 pnpm typecheck
