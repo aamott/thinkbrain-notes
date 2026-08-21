@@ -110,8 +110,8 @@ conflicts · block-level Markdown merge · reconcile-text · cloud provider APIs
    `auto-sync/done-workspace_from_git_link-med-hard.md`; 6f import
    sign-in parity is `auto-sync/done-import_sign_in_parity-med-med.md`
 7. `pending-history_pruning-low-med.md` — retention/size policy, gc
-8. `pending-mobile_cross_compile-med-easy.md` — CI validation on
-   Android/iOS targets
+8. `done-mobile_cross_compile-med-easy.md` — CI validation on
+   Android/iOS targets; local Android NDK validation
 9. `pending-provider_sign_in-low-hard.md` — "Sign in with GitHub" alongside
    the token form; same keychain path as story 6c
 - UX follow-up (after 6): `done-workspace_selector_git_badge-low-med.md`
@@ -122,4 +122,5 @@ conflicts · block-level Markdown merge · reconcile-text · cloud provider APIs
 - ✅ Approved; `app-vision.md` reconciled; old git-integration code removed.
 - ✅ Story 0 (`gix` build spike, split off the front of story 1).
 - ✅ Story 6 (Git Remote Sync: 6a send-pack, 6b round trip, 6c credentials, 6d link UX, 6e workspace import, 6f import sign-in parity, selector git badge).
-- ⬜ Stories 2–5, 7–9 pending.
+- ✅ Story 8 (Mobile cross-compile validation in CI & local Android NDK).
+- ⬜ Stories 2–5, 7, 9 pending.

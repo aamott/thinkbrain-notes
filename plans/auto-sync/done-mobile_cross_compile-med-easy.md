@@ -13,9 +13,11 @@ Story 8. Proves the gix bet early and cheaply. No mobile UX (mobile epic).
 
 ## Acceptance
 
-- [ ] Both targets compile in CI on every sync-layer change
-- [ ] Failure here blocks sync-layer merges (the bet stays proven)
+- [x] Both targets compile in CI on every sync-layer change (`.github/workflows/ci.yml` `sync-cross-compile` job matrix)
+- [x] Failure here blocks sync-layer merges (the bet stays proven)
+- [x] Local cross-compile validation script (`scripts/sync-cross-android.sh`) verifies `aarch64-linux-android` with local Android NDK
 
 ## Status
 
-⬜ Pending.
+🟩 Done. Verified in CI pipeline and validated locally with Android NDK.
+
