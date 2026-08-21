@@ -107,12 +107,15 @@ conflicts · block-level Markdown merge · reconcile-text · cloud provider APIs
    history, restore previous version
 6. `pending-git_remote_sync-med-hard.md` — push/pull, keychain, plain-language
    setup, triggers; 6e onboarding import is
-   `auto-sync/pending-workspace_from_git_link-med-hard.md`
+   `auto-sync/pending-workspace_from_git_link-med-hard.md`; 6f import
+   sign-in parity is `auto-sync/pending-import_sign_in_parity-med-med.md`
 7. `pending-history_pruning-low-med.md` — retention/size policy, gc
 8. `pending-mobile_cross_compile-med-easy.md` — CI validation on
    Android/iOS targets
 9. `pending-provider_sign_in-low-hard.md` — "Sign in with GitHub" alongside
    the token form; same keychain path as story 6c
+- UX follow-up (after 6): `pending-workspace_selector_git_badge-low-med.md`
+  — plain vs Git-linked cue in the workspace selector (icon TBD)
 
 ## Status
 

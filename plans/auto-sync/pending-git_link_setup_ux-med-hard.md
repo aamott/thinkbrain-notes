@@ -54,7 +54,9 @@ include Add Workspace / import-from-link (next phase).
 ## Known limitations
 
 - Importing a workspace from a git link is story 6e
-  (`pending-workspace_from_git_link-med-hard.md`).
+  (`pending-workspace_from_git_link-med-hard.md`). Adding or updating a
+  sign-in from that dialog (Settings parity) is story 6f
+  (`pending-import_sign_in_parity-med-med.md`).
 - Legacy URL entries are copied into a profile on Save link, not deleted.
 - Two workspaces can still point at the same profile ID on purpose; Forget
   then makes both missing, which is the explicit-selection rule.

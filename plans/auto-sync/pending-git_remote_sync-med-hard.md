@@ -19,6 +19,10 @@ fetches and cannot push, so sending was written rather than called:
   `pending-workspace_from_git_link-med-hard.md`. New child folder from a
   secret-free HTTPS (or local bare) link; reuses 6d profiles. Remaining:
   live GitLab proof, shared with 6c.
+- **6f — import dialog sign-in parity.**
+  `pending-import_sign_in_parity-med-med.md`. Show saved host-filtered
+  profiles honestly; add/update a sign-in from Bring in (no Settings
+  detour). Not started.
 
 ## Scope
 

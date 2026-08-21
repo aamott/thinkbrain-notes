@@ -87,8 +87,16 @@ and the existing catalog; a missing selection is never replaced.
 - Opening the imported workspace may fire one extra no-op check via the
   existing attach path; it cannot interleave with the import trip.
 - Live GitLab host proof is still required, shared with 6c/6d.
+- Import lists host-filtered saved sign-ins but cannot create/update one in
+  the dialog; Settings is required today. Parity is story 6f
+  (`pending-import_sign_in_parity-med-med.md`). A blank-looking select can
+  also mean "no profiles for this host yet" or a failed status read — 6f
+  tightens that copy and any real list bugs.
+- Workspace selector does not mark Git-linked folders; see
+  `pending-workspace_selector_git_badge-low-med.md`.
 
 ## Status
 
 🟨 Implemented in app code. GitHub live proof done. Remaining: GitLab live
-proof (same leftover as stories 6c and 6d).
+proof (same leftover as stories 6c and 6d). Sign-in-from-import and
+selector badge are separate follow-ups (6f + badge story).
