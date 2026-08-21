@@ -31,15 +31,21 @@ export function useSyncStatus(
     }
     let cancelled = false;
     const stops: (() => void)[] = [];
+    // Request counter so only the latest in-flight read wins. A stale read
+    // that resolves after a newer one (e.g. the start-of-setup status read
+    // landing after sync://setup has already fired) is ignored, preventing
+    // it from overwriting the current status with an older snapshot.
+    let requestId = 0;
 
     const refresh = () => {
+      const id = ++requestId;
       onStatusChange?.();
       void readSyncStatus(rootPath)
         .then((next) => {
-          if (!cancelled) setStatus(next);
+          if (!cancelled && id === requestId) setStatus(next);
         })
         .catch(() => {
-          if (!cancelled) setStatus(NOT_RECORDING);
+          if (!cancelled && id === requestId) setStatus(NOT_RECORDING);
         });
     };
     const refreshConflictStatus = () => {

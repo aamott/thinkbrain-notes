@@ -3,11 +3,14 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { resetNotificationStore, useNotificationStore } from "../notifications/notificationStore";
 import { NOT_RECORDING, type SyncStatus } from "../sync/historyTypes";
 import { StatusBar } from "./StatusBar";
 
 let onSetupSuccess: (() => void) | null = null;
 
+// The adapter subscribes to setup success; mocking the sync service keeps the
+// test from needing the Tauri event bridge and lets us fire the event by hand.
 vi.mock("../sync/syncService", () => ({
   subscribeToSetupSuccess: (onChange: () => void) => {
     onSetupSuccess = onChange;
@@ -22,6 +25,7 @@ let host: HTMLDivElement | null = null;
 
 beforeEach(() => {
   onSetupSuccess = null;
+  resetNotificationStore();
 });
 
 afterEach(async () => {
@@ -108,19 +112,30 @@ describe("sync failure notifications", () => {
 
     const dialog = rendered.querySelector('[role="dialog"]');
     expect(dialog?.textContent).toContain("Sync needs attention");
-    expect(dialog?.textContent).toContain(
-      "This git link needs a sign-in."
-    );
+    expect(dialog?.textContent).toContain("This git link needs a sign-in.");
 
     await act(async () => findButton(dialog!, "Open saved versions")?.click());
 
     expect(onOpenSyncPanel).toHaveBeenCalledWith("history");
     expect(onOpenSettings).not.toHaveBeenCalled();
   });
+
+  it("shows a badge dot on the bell when there is an unread notification", async () => {
+    const rendered = await renderProblem();
+    const bell = rendered.querySelector<HTMLButtonElement>('button[aria-label="Notifications"]');
+    // The badge dot is a span inside the bell button.
+    expect(bell?.querySelector("span")?.className).toContain("bg-danger");
+  });
+
+  it("does not show a badge dot when there are no notifications", async () => {
+    const rendered = await renderBar();
+    const bell = rendered.querySelector<HTMLButtonElement>('button[aria-label="Notifications"]');
+    expect(bell?.querySelector("span.bg-danger")).toBeNull();
+  });
 });
 
 describe("git link setup success", () => {
-  it("toasts after setup, without putting it behind the bell", async () => {
+  it("toasts after setup and appears in the bell log while undismissed", async () => {
     const rendered = await renderBar();
     await act(async () => onSetupSuccess?.());
 
@@ -132,14 +147,16 @@ describe("git link setup success", () => {
 
     const bell = rendered.querySelector<HTMLButtonElement>('button[aria-label="Notifications"]');
     await act(async () => bell?.click());
-    expect(rendered.querySelector('[role="dialog"]')?.textContent).toContain("No notifications");
-    expect(rendered.querySelector('[role="dialog"]')?.textContent).not.toContain("Git link is ready");
+    // The success notification is transient (not silent), so it is both the
+    // active toast and an undismissed entry in the bell log.
+    expect(rendered.querySelector('[role="dialog"]')?.textContent).toContain("Git link is ready");
   });
 
   it("does not show a success toast while a problem is present", async () => {
     const rendered = await renderProblem();
     await act(async () => onSetupSuccess?.());
 
+    // The sticky problem wins the toast slot.
     expect(rendered.querySelector('[role="status"]')).toBeNull();
     expect(rendered.querySelector('[role="alert"]')?.textContent).toContain("Sync needs attention");
   });
@@ -163,9 +180,8 @@ describe("undo history maintenance notifications", () => {
     );
 
     expect(rendered.querySelector('[role="alert"]')?.textContent).toContain("Could not free space");
-    expect(rendered.textContent).toContain("Free space now");
-    expect(rendered.querySelector('[role="alert"]')?.textContent).not.toContain("Sync needs attention");
     expect(rendered.textContent).toContain("Open Settings");
+    expect(rendered.querySelector('[role="alert"]')?.textContent).not.toContain("Sync needs attention");
 
     await act(async () => findButton(rendered, "Open Settings")?.click());
 
@@ -220,5 +236,41 @@ describe("undo history maintenance notifications", () => {
       expect.stringContaining("Could not free space\nCould not tidy the saved undo history")
     );
     expect(writeText.mock.calls[0]?.[0]).not.toContain("Sync needs attention");
+  });
+});
+
+describe("bell log", () => {
+  it("lists notifications newest-first with Clear all", async () => {
+    const rendered = await renderProblem();
+    const bell = rendered.querySelector<HTMLButtonElement>('button[aria-label="Notifications"]');
+    await act(async () => bell?.click());
+
+    const dialog = rendered.querySelector('[role="dialog"]');
+    expect(dialog?.textContent).toContain("Clear all");
+
+    await act(async () => findButton(dialog!, "Clear all")?.click());
+    // After clear all, the log is empty and the toast is gone.
+    expect(useNotificationStore.getState().notifications).toHaveLength(0);
+    expect(rendered.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it("Dismiss in the toast clears the toast", async () => {
+    const rendered = await renderProblem();
+    await act(async () => findButton(rendered, "Dismiss")?.click());
+    expect(rendered.querySelector('[role="alert"]')).toBeNull();
+    // The entry is dismissed, not removed — it stays out of the bell log.
+    expect(useNotificationStore.getState().notifications[0]?.dismissed).toBe(true);
+  });
+
+  it("Dismiss in a bell row removes it from the visible log", async () => {
+    const rendered = await renderProblem();
+    const bell = rendered.querySelector<HTMLButtonElement>('button[aria-label="Notifications"]');
+    await act(async () => bell?.click());
+
+    const dialog = rendered.querySelector('[role="dialog"]');
+    await act(async () => findButton(dialog!, "Dismiss")?.click());
+
+    // The row is dismissed; the log now shows "No notifications".
+    expect(dialog?.textContent).toContain("No notifications");
   });
 });

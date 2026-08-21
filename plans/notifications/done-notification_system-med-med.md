@@ -98,4 +98,4 @@ apps/desktop/src/sync/
 
 ## Status
 
-⬜ Pending.
+✅ Done.
