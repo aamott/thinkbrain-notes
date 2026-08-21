@@ -313,7 +313,16 @@ fn an_empty_remote_creates_an_empty_linked_workspace_without_git_in_the_vault() 
         .collect();
     assert!(entries.is_empty(), "empty remote left files: {entries:?}");
     let written = settings_of(&app_data, &target);
-    assert!(written.contains(&*remote.to_string_lossy()));
+    // Parse the JSON rather than substring-matching: Windows verbatim paths
+    // (`\\?\C:\...`) get backslash-escaped in JSON, so a raw `contains` check
+    // against the unescaped path fails even though the value is correct.
+    let record: serde_json::Value =
+        serde_json::from_str(&written).expect("settings are valid JSON");
+    assert_eq!(
+        record["sync.destination"].as_str(),
+        Some(remote.to_string_lossy().as_ref()),
+        "the git link was persisted"
+    );
 }
 
 #[test]

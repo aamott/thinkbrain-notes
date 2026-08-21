@@ -15,6 +15,36 @@ pub(super) fn failed(
     NativeError::with_details(code, message, error.to_string())
 }
 
+/// Strips the Windows verbatim-path prefix (`\\?\`) so a local path can be
+/// parsed as a git remote URL by `gix::url::parse`.
+///
+/// `std::fs::canonicalize` (and some Windows APIs) prepend `\\?\` to paths
+/// longer than `MAX_PATH` or when the path already uses verbatim syntax. gix's
+/// URL parser sees the leading `\\` and tries to interpret the path as an
+/// SCP-like target (`user@host:path`), failing with "invalid domain character"
+/// on the `?`. This is a real production path — a user who picks a local bare
+/// repo via a file dialog gets a canonicalized path — not just a test issue.
+///
+/// `\\?\UNC\server\share` is mapped back to `\\server\share` so UNC paths
+/// still work as local file remotes. On non-Windows this is a no-op.
+pub(super) fn normalize_destination(destination: &str) -> String {
+    #[cfg(windows)]
+    {
+        let trimmed = destination.trim();
+        if let Some(rest) = trimmed.strip_prefix(r"\\?\UNC\") {
+            format!(r"\\{rest}")
+        } else if let Some(rest) = trimmed.strip_prefix(r"\\?\") {
+            rest.to_string()
+        } else {
+            trimmed.to_string()
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        destination.trim().to_string()
+    }
+}
+
 pub(super) fn remote_unreachable(error: impl std::fmt::Display) -> NativeError {
     let details = redact_remote_credentials(&error.to_string());
     NativeError::with_details(

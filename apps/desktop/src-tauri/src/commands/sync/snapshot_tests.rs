@@ -1,5 +1,6 @@
 use super::super::test_support;
 use super::*;
+#[cfg(unix)]
 use crate::tests::make_temp_test_dir;
 use std::fs;
 use std::path::{Path, PathBuf};

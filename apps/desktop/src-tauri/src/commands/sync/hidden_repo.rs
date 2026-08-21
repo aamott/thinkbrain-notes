@@ -61,6 +61,20 @@ fn create(git_dir: &Path, vault: &Path) -> Result<(), NativeError> {
         )
     })?;
 
+    // `gix::init_bare` respects `init.defaultBranch` from the system/user git
+    // config, which is `master` on older Windows git installs and `main` on
+    // newer ones. The sync layer always records history on `refs/heads/main`
+    // (see `snapshot::HISTORY_REF`), so HEAD must point there regardless of the
+    // platform default — otherwise `repo.head_commit()` reports an unborn
+    // `refs/heads/master` while the real history lives on a different ref.
+    std::fs::write(git_dir.join("HEAD"), "ref: refs/heads/main\n").map_err(|error| {
+        failed(
+            "sync.repo_create_failed",
+            "Could not create this workspace's sync history.",
+            error,
+        )
+    })?;
+
     point_at_worktree(git_dir, vault)
 }
 

@@ -80,8 +80,9 @@ fn receive(
     cancel: &Arc<AtomicBool>,
     spec: &str,
 ) -> Result<Option<gix::ObjectId>, NativeError> {
+    let normalized = super::normalize_destination(destination);
     let brought = repo
-        .remote_at(gix::bstr::BStr::new(destination))
+        .remote_at(gix::bstr::BStr::new(&normalized))
         .map_err(remote_failure)?
         .with_refspecs([spec], Direction::Fetch)
         .map_err(remote_failure)?
