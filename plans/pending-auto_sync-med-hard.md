@@ -105,21 +105,21 @@ conflicts · block-level Markdown merge · reconcile-text · cloud provider APIs
    source-based labels
 5. `pending-sync_status_history_restore-high-med.md` — status pill, friendly
    history, restore previous version
-6. `pending-git_remote_sync-med-hard.md` — push/pull, keychain, plain-language
+6. `done-git_remote_sync-med-hard.md` — push/pull, keychain, plain-language
    setup, triggers; 6e onboarding import is
-   `auto-sync/pending-workspace_from_git_link-med-hard.md`; 6f import
-   sign-in parity is `auto-sync/pending-import_sign_in_parity-med-med.md`
+   `auto-sync/done-workspace_from_git_link-med-hard.md`; 6f import
+   sign-in parity is `auto-sync/done-import_sign_in_parity-med-med.md`
 7. `pending-history_pruning-low-med.md` — retention/size policy, gc
 8. `pending-mobile_cross_compile-med-easy.md` — CI validation on
    Android/iOS targets
 9. `pending-provider_sign_in-low-hard.md` — "Sign in with GitHub" alongside
    the token form; same keychain path as story 6c
-- UX follow-up (after 6): `pending-workspace_selector_git_badge-low-med.md`
-  — plain vs Git-linked cue in the workspace selector (icon TBD)
+- UX follow-up (after 6): `done-workspace_selector_git_badge-low-med.md`
+  — plain vs Git-linked cue in the workspace selector (icon Choice B)
 
 ## Status
 
 - ✅ Approved; `app-vision.md` reconciled; old git-integration code removed.
-- ✅ Story 0 (the `gix` build spike, split off the front of story 1). gix
-  cross-compiles for Android and iOS, and CI keeps it that way.
-- ⬜ Stories 1–9 pending.
+- ✅ Story 0 (`gix` build spike, split off the front of story 1).
+- ✅ Story 6 (Git Remote Sync: 6a send-pack, 6b round trip, 6c credentials, 6d link UX, 6e workspace import, 6f import sign-in parity, selector git badge).
+- ⬜ Stories 2–5, 7–9 pending.
