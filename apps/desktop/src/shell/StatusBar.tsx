@@ -104,20 +104,16 @@ export function StatusBar({
   const [copied, setCopied] = useState(false);
 
   const isTransient = toast?.severity === "transient";
-  // Depend on the toast id, not the whole object: dedup re-raises create a
-  // new NotificationItem with the same id, which would otherwise reset the
-  // 8s timer on every re-raise.
-  const toastId = toast?.id ?? null;
 
   // Auto-dismiss transient toasts after 8s, paused while hovered. Sticky
   // toasts have no timer — only Dismiss or clearBySource clears them.
   useEffect(() => {
-    if (!toastId || !isTransient || hovering) return;
+    if (!toast || !isTransient || hovering) return;
     const timeout = window.setTimeout(() => {
-      dismissNotification(toastId);
+      if (toast.id) dismissNotification(toast.id);
     }, TRANSIENT_TIMEOUT_MS);
     return () => window.clearTimeout(timeout);
-  }, [toastId, isTransient, hovering, dismissNotification]);
+  }, [toast, isTransient, hovering, dismissNotification]);
 
   // Clear the "Copied" confirmation shortly after it appears.
   useEffect(() => {
