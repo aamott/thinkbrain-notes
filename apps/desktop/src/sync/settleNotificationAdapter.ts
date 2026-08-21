@@ -75,11 +75,11 @@ export function useSettleNotificationAdapter({
           addNotification({
             source: SETTLE_SOURCE,
             dedupKey: `${SETTLE_SOURCE}:announced`,
-            title: "Duplicates tidied away",
+            title: "Duplicate files merged",
             message:
               newlySettled === 1
-                ? "1 duplicate copy was handled without asking."
-                : `${newlySettled} duplicate copies were handled without asking.`,
+                ? "1 duplicate file was merged."
+                : `${newlySettled} duplicate files were merged.`,
             recovery: "Nothing is lost — each one is restorable from the saved versions.",
             severity: "transient",
             variant: "info"

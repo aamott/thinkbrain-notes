@@ -497,8 +497,6 @@ export function DesktopShell() {
   // someone who has never opened it, which is exactly when the panel is not
   // mounted to count anything.
   const syncStatus = useSyncStatus(restoredWorkspacePath ?? null);
-  // Announce when the sync engine settles obvious conflicts without asking.
-  // Mounted here (not in StatusBar) because it needs rootPath for the rate read.
   useSettleNotificationAdapter({ rootPath: restoredWorkspacePath ?? null, syncStatus });
   const conflictBadges = useMemo<Readonly<Record<string, number>>>(() => {
     const badges: Record<string, number> = {};

@@ -78,9 +78,9 @@ describe("useSettleNotificationAdapter", () => {
     expect(state.notifications[0]?.source).toBe(SETTLE_SOURCE);
     expect(state.notifications[0]?.severity).toBe("transient");
     expect(state.notifications[0]?.variant).toBe("info");
-    expect(state.notifications[0]?.title).toBe("Duplicates tidied away");
-    expect(state.notifications[0]?.message).toContain("5 duplicate copies were handled");
-    expect(state.activeToast?.title).toBe("Duplicates tidied away");
+    expect(state.notifications[0]?.title).toBe("Duplicate files merged");
+    expect(state.notifications[0]?.message).toContain("5 duplicate files were merged");
+    expect(state.activeToast?.title).toBe("Duplicate files merged");
   });
 
   it("uses singular copy for exactly one newly settled conflict", async () => {
@@ -91,7 +91,7 @@ describe("useSettleNotificationAdapter", () => {
     await rerender({ ...NOT_RECORDING, state: "syncing" });
 
     expect(useNotificationStore.getState().notifications[0]?.message).toContain(
-      "1 duplicate copy was handled"
+      "1 duplicate file was merged"
     );
   });
 
@@ -134,7 +134,7 @@ describe("useSettleNotificationAdapter", () => {
 
     const state = useNotificationStore.getState();
     expect(state.notifications).toHaveLength(1);
-    expect(state.notifications[0]?.message).toContain("3 duplicate copies were handled");
+    expect(state.notifications[0]?.message).toContain("3 duplicate files were merged");
   });
 
   it("survives a failed rate read without notifying", async () => {
