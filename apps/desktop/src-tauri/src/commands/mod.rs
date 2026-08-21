@@ -76,6 +76,9 @@ macro_rules! app_command_handlers {
             $crate::commands::sync::history::sync_history,
             $crate::commands::sync::history::restore_version,
             $crate::commands::sync::history::sync_conflict_rate,
+            $crate::commands::sync::maintain::sync_history_usage,
+            $crate::commands::sync::maintain::sync_free_space,
+            $crate::commands::sync::maintain::sync_clear_undo_history,
             $crate::commands::sync::status::sync_status,
             $crate::commands::sync::round::sync_now,
             $crate::commands::sync::credentials::save_sync_credentials
@@ -128,6 +131,9 @@ pub const APP_COMMAND_PATHS: &[&str] = &[
     "sync::history::sync_history",
     "sync::history::restore_version",
     "sync::history::sync_conflict_rate",
+    "sync::maintain::sync_history_usage",
+    "sync::maintain::sync_free_space",
+    "sync::maintain::sync_clear_undo_history",
     "sync::status::sync_status",
     "sync::round::sync_now",
     "sync::credentials::save_sync_credentials",
@@ -190,6 +196,9 @@ mod tests {
         assert!(APP_COMMAND_PATHS.contains(&"sync::history::sync_history"));
         assert!(APP_COMMAND_PATHS.contains(&"sync::history::restore_version"));
         assert!(APP_COMMAND_PATHS.contains(&"sync::history::sync_conflict_rate"));
+        assert!(APP_COMMAND_PATHS.contains(&"sync::maintain::sync_history_usage"));
+        assert!(APP_COMMAND_PATHS.contains(&"sync::maintain::sync_free_space"));
+        assert!(APP_COMMAND_PATHS.contains(&"sync::maintain::sync_clear_undo_history"));
         assert!(APP_COMMAND_PATHS.contains(&"sync::status::sync_status"));
         assert!(APP_COMMAND_PATHS.contains(&"sync::round::sync_now"));
         assert!(APP_COMMAND_PATHS.contains(&"sync::credentials::save_sync_credentials"));
@@ -205,8 +214,8 @@ mod tests {
         );
         assert_eq!(
             APP_COMMAND_PATHS.len(),
-            40,
-            "expected 40 registered commands"
+            43,
+            "expected 43 registered commands"
         );
     }
 }

@@ -85,6 +85,10 @@ export interface SyncStatus {
    * kept here, so someone hears it from the app rather than discovering it.
    */
   readonly alongsideOwnGit: boolean;
+  /**
+   * A failure to tidy private undo history. Saving versions continues.
+   */
+  readonly maintenanceProblem: SyncProblem | null;
 }
 
 /** What a window shows before it has heard anything, and if it never does. */
@@ -98,7 +102,8 @@ export const NOT_RECORDING: SyncStatus = Object.freeze({
   phase: null,
   health: "unknown",
   lastCheckedAt: null,
-  alongsideOwnGit: false
+  alongsideOwnGit: false,
+  maintenanceProblem: null
 });
 
 /** What became of the notes we tried to send on. */
@@ -119,4 +124,16 @@ export interface Synced {
    */
   readonly sent: number;
   readonly landed: SyncLanded;
+}
+
+/** How much the hidden undo history occupies on this computer. */
+export interface HistoryUsage {
+  readonly bytes: number;
+}
+
+/** What one tidy or clear pass did to on-disk usage. */
+export interface HistoryCleanup {
+  readonly bytesBefore: number;
+  readonly bytesAfter: number;
+  readonly reclaimed: number;
 }

@@ -4,6 +4,8 @@ export { appearanceModule } from "./appearance";
 export { editorModule } from "./editor";
 export { settingsModule } from "./settings";
 export {
+  DEFAULT_CHECKPOINT_RETENTION_DAYS,
+  DEFAULT_HISTORICAL_FILE_LIMIT_MB,
   DEFAULT_SETTLE_AUTOMATICALLY,
   syncModule,
   validateSyncDestination

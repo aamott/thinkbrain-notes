@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import { createSettingsRegistry } from "../registry";
 import { validateSettings } from "../validation";
 import {
+  DEFAULT_CHECKPOINT_RETENTION_DAYS,
+  DEFAULT_HISTORICAL_FILE_LIMIT_MB,
   DEFAULT_SETTLE_AUTOMATICALLY,
   syncModule,
   validateSyncDestination
@@ -69,7 +71,25 @@ describe("sync module", () => {
     const git = syncModule.sections.find((section) => section.id === "sync.destination");
     expect(cloud?.label).toBe("Cloud copies");
     expect(git?.label).toBe("Git link");
-    expect(cloud?.settings?.[0]?.description).toMatch(/Two versions/i);
+    expect(cloud?.settings?.[0]?.description).toMatch(/Decisions needed/i);
     expect(cloud?.settings?.[0]?.description).toMatch(/OneDrive/i);
+  });
+
+  it("documents app-wide undo retention without promising a size cap", () => {
+    expect(DEFAULT_CHECKPOINT_RETENTION_DAYS).toBe(90);
+    expect(DEFAULT_HISTORICAL_FILE_LIMIT_MB).toBe(25);
+    const history = syncModule.sections.find((section) => section.id === "sync.history");
+    expect(history?.label).toBe("Saved undo history");
+    expect(history?.settings?.[0]?.control).toBe("sync-history-policy");
+    expect(history?.settings?.[0]?.portable).toBe(false);
+    expect(history?.settings?.[0]?.description).toMatch(
+      new RegExp(`${DEFAULT_CHECKPOINT_RETENTION_DAYS} days`)
+    );
+    expect(history?.settings?.[0]?.description).toMatch(
+      new RegExp(`${DEFAULT_HISTORICAL_FILE_LIMIT_MB} MB`)
+    );
+    expect(history?.settings?.[0]?.description).toMatch(/retention threshold/);
+    expect(history?.settings?.[0]?.description).not.toMatch(/size cap/i);
+    expect(history?.settings?.[0]?.description).not.toMatch(/\bcheckpoint\b/i);
   });
 });

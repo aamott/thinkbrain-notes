@@ -17,7 +17,7 @@ import { cleanup, render } from "./syncTestHarness";
  * ordinary English — mail merge, merging lanes. It is the *nouns* of git that
  * mean nothing to someone who has never used it.
  *
- * "git" is allowed on Two versions and in settings — the link field is a git
+ * "git" is allowed in Decisions needed and in settings — the link field is a git
  * link, and a card should say when a copy came from git rather than a cloud app.
  */
 const JARGON = [
@@ -61,7 +61,10 @@ vi.mock("./syncService", () => ({
   readHistory: () => readHistory(),
   readConflictRate: () => Promise.resolve({ decisions: 2, settled: 47, recorded: 340 }),
   restoreVersion: () => Promise.resolve(),
-  subscribeToSyncStatus: () => Promise.resolve(() => undefined)
+  subscribeToSyncStatus: () => Promise.resolve(() => undefined),
+  readHistoryUsage: () => Promise.resolve({ bytes: 2048 }),
+  freeSyncSpace: () => Promise.resolve({ bytesBefore: 2048, bytesAfter: 2048, reclaimed: 0 }),
+  clearUndoHistory: () => Promise.resolve({ bytesBefore: 2048, bytesAfter: 1024, reclaimed: 1024 })
 }));
 
 const { ConflictsPanel } = await import("./ConflictsPanel");
@@ -69,6 +72,7 @@ const { MergeTab } = await import("./MergeTab");
 const { HistoryPanel } = await import("./HistoryPanel");
 const { SyncPill } = await import("./SyncPill");
 const { describeSync } = await import("./syncCopy");
+const { HistoryPolicyControl } = await import("../settings/controls/HistoryPolicyControl");
 
 afterEach(async () => {
   await cleanup();
@@ -119,6 +123,12 @@ describe("nothing in this feature speaks git to the user", () => {
         await renderText(<ConflictsPanel rootPath="/notes" onReview={() => undefined} />)
       );
     }
+
+    listConflicts.mockResolvedValue([{ ...summary("Meeting Notes.md", "text"), decision: "keepOrDelete" }]);
+    audit(
+      "the keep-or-delete card",
+      await renderText(<ConflictsPanel rootPath="/notes" onReview={() => undefined} />)
+    );
   });
 
   it("keeps the empty list plain", async () => {
@@ -203,7 +213,18 @@ describe("nothing in this feature speaks git to the user", () => {
       { label: "syncing saving", status: { ...NOT_RECORDING, state: "syncing", phase: "saving" } },
       { label: "syncing checking", status: { ...NOT_RECORDING, state: "syncing", phase: "checking" } },
       { label: "syncing combining", status: { ...NOT_RECORDING, state: "syncing", phase: "combining" } },
-      { label: "syncing sending", status: { ...NOT_RECORDING, state: "syncing", phase: "sending" } }
+      { label: "syncing sending", status: { ...NOT_RECORDING, state: "syncing", phase: "sending" } },
+      {
+        label: "idle maintenance",
+        status: {
+          ...NOT_RECORDING,
+          state: "idle",
+          maintenanceProblem: {
+            code: "sync.history_cleanup_failed",
+            message: "Could not tidy the saved undo history on this computer."
+          }
+        }
+      }
     ];
 
     for (const state of ["off", "idle", "saving", "syncing", "attention", "problem"] as const) {
@@ -237,6 +258,25 @@ describe("nothing in this feature speaks git to the user", () => {
       audit(`the footer while ${extra.label}`, `${host.textContent ?? ""} ${spoken}`);
       await unmount();
     }
+  });
+
+  it("keeps the undo-history settings control plain", async () => {
+    const definition = {
+      key: "sync.historyPolicy",
+      label: "Saved undo history",
+      description:
+        "Undo copies from resolving two versions or putting an earlier version back are kept for 90 days on this computer.",
+      type: "string" as const,
+      default: "",
+      scope: "app" as const,
+      section: "sync.history"
+    };
+    audit(
+      "the undo history settings",
+      await renderText(
+        <HistoryPolicyControl definition={definition} value="" onChange={() => undefined} />
+      )
+    );
   });
 
   // `describeSync` is not rendered by any panel above, so its sentences are

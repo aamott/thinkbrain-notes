@@ -248,3 +248,26 @@ fn an_unreadable_preference_leaves_the_default_standing() {
         Some("{not json at all")
     ))));
 }
+
+/// A keep-or-delete marker is a real question even when the marker file is
+/// empty. Settling it as a duplicate would throw the decision away.
+#[test]
+fn a_keep_or_delete_marker_is_never_settled() {
+    let v = vault("settle-keep-or-delete");
+    write(&v, "note.md", "changed on this device\n");
+    write(&v, "note (keep or delete).md", "");
+
+    let asked = settle_when(
+        true,
+        &v.engine,
+        &v.root,
+        vec![pairing("note (keep or delete).md", "note.md")],
+    );
+
+    assert_eq!(asked.len(), 1, "a keep-or-delete decision was settled");
+    assert!(exists(&v, "note (keep or delete).md"));
+    assert_eq!(
+        std::fs::read_to_string(v.root.join("note.md")).expect("readable"),
+        "changed on this device\n"
+    );
+}

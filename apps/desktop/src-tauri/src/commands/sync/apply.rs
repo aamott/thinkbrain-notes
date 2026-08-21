@@ -1,9 +1,11 @@
 use std::path::{Path, PathBuf};
 
+use gix::merge::tree::{Resolution, ResolutionFailure};
+
 use crate::NativeError;
 
 use super::conflict;
-use super::engine::{Engine, StuckNote};
+use super::engine::{self, Engine, StuckNote};
 use super::failed;
 use super::snapshot;
 
@@ -20,11 +22,31 @@ pub(super) fn leave_copies(
     let mut left = Vec::new();
     let mut skipped = Vec::new();
     for conflict in undecided {
+        match deletion_decision(repo, vault, conflict) {
+            Ok(Some(copy)) => {
+                left.push(copy);
+                continue;
+            }
+            Ok(None) => {}
+            Err(error) => {
+                skipped.push(stuck(
+                    path_of(conflict).unwrap_or_else(|_| "unknown".into()),
+                    None,
+                    error,
+                ));
+                continue;
+            }
+        }
         let (_, theirs) = conflict.changes_in_resolution();
         let (mode, id) = theirs.entry_mode_and_id();
-        if !mode.is_blob() {
-            // A folder, or a note they deleted. Neither is a version of
-            // anything, so there is nothing to put beside ours.
+        if !mode.is_blob()
+            || matches!(
+                theirs,
+                gix::diff::tree_with_rewrites::Change::Deletion { .. }
+            )
+        {
+            // A folder, or a deletion that was not a modify/delete decision.
+            // Neither is a second version of the note.
             continue;
         }
         let original = std::str::from_utf8(theirs.location()).map_err(|_| {
@@ -135,24 +157,37 @@ pub(super) fn apply(
                     continue;
                 }
             }
-            // Already gone is the state we wanted; anything else is skipped
-            // rather than aborting the rest of the vault.
-            None => match std::fs::remove_file(&path) {
-                Ok(()) => {}
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-                Err(error) => {
-                    skipped.push(stuck(
-                        relative.to_string(),
-                        expected,
-                        failed(
-                            "sync.note_write_failed",
-                            "Could not remove a note the other device deleted.",
-                            error,
-                        ),
-                    ));
+            // Already gone is the state we wanted. Unrecorded text on disk is
+            // a keep-or-delete decision: deleting it here would throw away
+            // writing this device has not recorded yet.
+            None => {
+                if disk_has_unrecorded_text(repo, &path, expected)? {
+                    match write_deletion_marker(vault, &relative.to_string()) {
+                        Ok(copy) => {
+                            kept_back += 1;
+                            copies.push(copy);
+                        }
+                        Err(error) => skipped.push(stuck(relative.to_string(), expected, error)),
+                    }
                     continue;
                 }
-            },
+                match std::fs::remove_file(&path) {
+                    Ok(()) => {}
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(error) => {
+                        skipped.push(stuck(
+                            relative.to_string(),
+                            expected,
+                            failed(
+                                "sync.note_write_failed",
+                                "Could not remove a note the other device deleted.",
+                                error,
+                            ),
+                        ));
+                        continue;
+                    }
+                }
+            }
         }
         moved += 1;
     }
@@ -187,8 +222,8 @@ fn unexpected(
     }
     match blob {
         Some(blob) => contents(repo, blob).map(Some),
-        // They deleted a note this device has since changed. Keeping it is the
-        // safe direction, and there is nothing of theirs to put beside it.
+        // Incoming deletions with unrecorded disk text are handled by
+        // `disk_has_unrecorded_text` rather than by writing a second version.
         None => Ok(None),
     }
 }
@@ -242,13 +277,170 @@ fn stuck(path: String, blob: Option<gix::ObjectId>, error: NativeError) -> Stuck
     }
 }
 
+fn is_modify_delete(conflict: &gix::merge::tree::Conflict) -> bool {
+    matches!(
+        &conflict.resolution,
+        Err(ResolutionFailure::OursModifiedTheirsDeleted)
+            | Ok(Resolution::Forced(
+                ResolutionFailure::OursModifiedTheirsDeleted
+            ))
+    )
+}
+
+fn path_of(conflict: &gix::merge::tree::Conflict) -> Result<String, NativeError> {
+    std::str::from_utf8(conflict.ours.location())
+        .map(str::to_string)
+        .map_err(|_| {
+            NativeError::new(
+                "sync.note_name_unreadable",
+                "A note arrived under a name this device cannot read.",
+            )
+        })
+}
+
+/// Turns a gix modify/delete into a keep-or-delete marker. When this device
+/// deleted and the other changed, the changed note is written first so the
+/// text is not lost.
+fn deletion_decision(
+    repo: &gix::Repository,
+    vault: &Path,
+    conflict: &gix::merge::tree::Conflict,
+) -> Result<Option<conflict::ConflictCopy>, NativeError> {
+    if !is_modify_delete(conflict) {
+        return Ok(None);
+    }
+    let original = path_of(conflict)?;
+    let entries = conflict.entries();
+    if entries[1].is_none() {
+        let Some(theirs) = entries[2] else {
+            return Ok(None);
+        };
+        if !theirs.mode.is_blob() {
+            return Ok(None);
+        }
+        put(&vault.join(&original), &contents(repo, theirs.id)?)?;
+    } else if entries[2].is_none() {
+        if !vault.join(&original).is_file() {
+            return Ok(None);
+        }
+    } else {
+        return Ok(None);
+    }
+    write_deletion_marker(vault, &original).map(Some)
+}
+
+fn write_deletion_marker(
+    vault: &Path,
+    original: &str,
+) -> Result<conflict::ConflictCopy, NativeError> {
+    let beside = conflict::deletion_beside_in(vault, original);
+    put(&vault.join(&beside), b"")?;
+    Ok(conflict::ConflictCopy {
+        copy: beside,
+        original: original.to_string(),
+        provider: "git",
+    })
+}
+
+fn disk_has_unrecorded_text(
+    repo: &gix::Repository,
+    path: &Path,
+    expected: Option<gix::ObjectId>,
+) -> Result<bool, NativeError> {
+    let Ok(on_disk) = std::fs::read(path) else {
+        return Ok(false);
+    };
+    let current = gix::objs::compute_hash(repo.object_hash(), gix::object::Kind::Blob, &on_disk)
+        .map_err(|error| {
+            failed(
+                "sync.note_write_failed",
+                "Could not read a note before replacing it.",
+                error,
+            )
+        })?;
+    Ok(Some(current) != expected)
+}
+
+/// Reports recorded shortcuts and nested repositories that are not present in
+/// the vault. They stay in the tree so this device does not broadcast a
+/// deletion; the warning is rebuilt from the tree on every trip.
+pub(super) fn skipped_unsupported(
+    repo: &gix::Repository,
+    vault: &Path,
+) -> Result<Vec<StuckNote>, NativeError> {
+    let Some(commit) = snapshot::head_commit(repo)? else {
+        return Ok(Vec::new());
+    };
+    let tree = repo
+        .find_commit(commit)
+        .map_err(|error| {
+            failed(
+                "sync.history_unreadable",
+                "Could not read a recorded state.",
+                error,
+            )
+        })?
+        .tree()
+        .map_err(|error| {
+            failed(
+                "sync.history_unreadable",
+                "Could not read a recorded state.",
+                error,
+            )
+        })?;
+    let mut recorder = gix::traverse::tree::Recorder::default();
+    tree.traverse()
+        .breadthfirst(&mut recorder)
+        .map_err(|error| {
+            failed(
+                "sync.history_unreadable",
+                "Could not read a recorded state.",
+                error,
+            )
+        })?;
+
+    let mut skipped = Vec::new();
+    for entry in recorder.records {
+        let path = entry.filepath.to_string();
+        if entry.mode.is_link() && !vault_is_symlink(vault, &path) {
+            skipped.push(StuckNote::unsupported(
+                path,
+                engine::SYMLINK_SKIPPED,
+                "A shortcut from another device was not created here.",
+            ));
+        } else if entry.mode.is_commit() && !vault_is_gitlink(vault, &path) {
+            skipped.push(StuckNote::unsupported(
+                path,
+                engine::SUBMODULE_SKIPPED,
+                "A folder with its own version history from another device was not brought in.",
+            ));
+        }
+    }
+    Ok(skipped)
+}
+
+fn vault_is_symlink(vault: &Path, relative: &str) -> bool {
+    std::fs::symlink_metadata(vault.join(relative))
+        .map(|metadata| metadata.file_type().is_symlink())
+        .unwrap_or(false)
+}
+
+fn vault_is_gitlink(vault: &Path, relative: &str) -> bool {
+    vault.join(relative).join(".git").exists()
+}
+
 /// Retries notes a previous attempt could not write, before this round trip
 /// does any new work. Recording failures (no blob) are flushed through the
-/// engine; incoming writes are put from the blob we already have.
+/// engine; incoming writes are put from the blob we already have. Skipped
+/// shortcuts and nested repositories are left alone so they are not recorded
+/// as deletions.
 pub(super) fn retry_stuck(engine: &Engine, vault: &Path) -> Result<(), NativeError> {
     let repo = engine.repository();
     let mut recording = Vec::new();
     for note in engine.stuck() {
+        if engine::is_unsupported(&note.code) {
+            continue;
+        }
         match note.blob {
             None => recording.push(PathBuf::from(&note.path)),
             Some(blob) => match put(&vault.join(&note.path), &contents(&repo, blob)?) {

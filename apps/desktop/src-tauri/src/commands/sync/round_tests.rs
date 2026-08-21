@@ -491,3 +491,257 @@ fn syncing_an_empty_vault_to_an_empty_destination_does_nothing() {
     assert_eq!(synced.asked_about, 0);
     assert_eq!(synced.sent, 0);
 }
+
+const KEEP_OR_DELETE: &str = "note (keep or delete).md";
+
+/// They deleted it, we changed it. The changed text stays, and the question
+/// is keep-or-delete rather than two versions to compare.
+#[test]
+fn they_deleted_and_we_changed_is_a_keep_or_delete_decision() {
+    let one = device("round-they-del-one");
+    let two = device("round-they-del-two");
+    let there = shared("round-they-del");
+    write(&one, "note.md", "shared\n");
+    trip(&one, &there);
+    trip(&two, &there);
+
+    remove(&one, "note.md");
+    trip(&one, &there);
+    write(&two, "note.md", "our later wording\n");
+
+    let synced = trip(&two, &there);
+
+    assert_eq!(synced.asked_about, 1);
+    assert_eq!(read(&two, "note.md"), "our later wording\n");
+    assert!(
+        two.vault.join(KEEP_OR_DELETE).is_file(),
+        "no keep-or-delete marker was written"
+    );
+    assert!(
+        !two.vault.join("note (from another device).md").exists(),
+        "a two-version copy was left for a deletion"
+    );
+}
+
+/// We deleted it, they changed it. Their text is written so it is not lost,
+/// and the same keep-or-delete question is asked.
+#[test]
+fn we_deleted_and_they_changed_materializes_the_changed_note() {
+    let one = device("round-we-del-one");
+    let two = device("round-we-del-two");
+    let there = shared("round-we-del");
+    write(&one, "note.md", "shared\n");
+    trip(&one, &there);
+    trip(&two, &there);
+
+    write(&one, "note.md", "their later wording\n");
+    trip(&one, &there);
+    remove(&two, "note.md");
+
+    let synced = trip(&two, &there);
+
+    assert_eq!(synced.asked_about, 1);
+    assert_eq!(read(&two, "note.md"), "their later wording\n");
+    assert!(two.vault.join(KEEP_OR_DELETE).is_file());
+}
+
+/// An incoming deletion must not throw away unrecorded text sitting on disk.
+#[test]
+fn an_incoming_deletion_does_not_remove_unrecorded_local_text() {
+    let one = device("round-dirty-del-one");
+    let two = device("round-dirty-del-two");
+    let there = shared("round-dirty-del");
+    write(&one, "note.md", "shared\n");
+    trip(&one, &there);
+    trip(&two, &there);
+
+    remove(&one, "note.md");
+    trip(&one, &there);
+    write_only(&two, "note.md", "still typing\n");
+
+    let synced = trip(&two, &there);
+
+    assert_eq!(synced.asked_about, 1);
+    assert_eq!(read(&two, "note.md"), "still typing\n");
+    assert!(two.vault.join(KEEP_OR_DELETE).is_file());
+}
+
+/// The marker is a local decision. Pushing it would hand everyone else a
+/// question they were never part of.
+#[test]
+fn a_keep_or_delete_marker_is_never_sent_on() {
+    let one = device("round-del-push-one");
+    let two = device("round-del-push-two");
+    let three = device("round-del-push-three");
+    let there = shared("round-del-push");
+    write(&one, "note.md", "shared\n");
+    trip(&one, &there);
+    trip(&two, &there);
+
+    remove(&one, "note.md");
+    trip(&one, &there);
+    write(&two, "note.md", "our later wording\n");
+    trip(&two, &there);
+    trip(&two, &there);
+    trip(&three, &there);
+
+    assert!(
+        !three.vault.join(KEEP_OR_DELETE).exists(),
+        "a third device was handed someone else's keep-or-delete marker"
+    );
+}
+
+fn plant_entry(
+    device: &Device,
+    relative: &str,
+    kind: gix::object::tree::EntryKind,
+    id: gix::ObjectId,
+) {
+    let parent = snapshot::head_commit(&device.repo).expect("head is readable");
+    let base = snapshot::tree_of(&device.repo, parent).expect("the tree is readable");
+    let mut editor = device
+        .repo
+        .edit_tree(base)
+        .expect("the tree opens for editing");
+    editor
+        .upsert(relative, kind, id)
+        .expect("the entry is added");
+    let tree = editor.write().expect("the tree is written").detach();
+    let who = gix::actor::Signature {
+        name: "ThinkBrain Notes".into(),
+        email: "sync@thinkbrain.notes".into(),
+        time: gix::date::Time::now_utc(),
+    };
+    let commit = device
+        .repo
+        .write_object(&gix::objs::Commit {
+            tree,
+            parents: parent.into_iter().collect(),
+            author: who.clone(),
+            committer: who,
+            encoding: None,
+            message: "planted an unsupported entry".into(),
+            extra_headers: Vec::new(),
+        })
+        .expect("the commit is written")
+        .detach();
+    device
+        .repo
+        .reference(
+            snapshot::HISTORY_REF,
+            commit,
+            gix::refs::transaction::PreviousValue::Any,
+            "planted an unsupported entry",
+        )
+        .expect("the branch moves");
+}
+
+fn plant_link(device: &Device, relative: &str, target: &str) {
+    let blob = device
+        .repo
+        .write_blob(target.as_bytes())
+        .expect("the target is stored");
+    plant_entry(
+        device,
+        relative,
+        gix::object::tree::EntryKind::Link,
+        blob.detach(),
+    );
+}
+
+fn plant_gitlink(device: &Device, relative: &str, commit: gix::ObjectId) {
+    plant_entry(
+        device,
+        relative,
+        gix::object::tree::EntryKind::Commit,
+        commit,
+    );
+}
+
+/// A shortcut in the tree is not created here, and a later equal-tip trip
+/// still knows it has not landed.
+#[test]
+fn an_incoming_symlink_is_reported_and_still_reported_on_an_equal_tip() {
+    let one = device("round-link-one");
+    let two = device("round-link-two");
+    let there = shared("round-link");
+    write(&one, "kept.md", "stays\n");
+    trip(&one, &there);
+    plant_link(&one, "shortcut.md", "kept.md");
+    trip(&one, &there);
+
+    let first = trip(&two, &there);
+    assert_eq!(read(&two, "kept.md"), "stays\n");
+    assert!(
+        !two.vault.join("shortcut.md").exists(),
+        "a shortcut was created on this device"
+    );
+    assert_eq!(first.skipped.len(), 1);
+    assert_eq!(first.skipped[0].code, "sync.symlink_skipped");
+    assert_eq!(first.skipped[0].path, "shortcut.md");
+
+    let again = trip(&two, &there);
+    assert_eq!(again.skipped.len(), 1);
+    assert_eq!(again.skipped[0].code, "sync.symlink_skipped");
+}
+
+/// A nested repository is skipped the same way, without breaking other notes.
+#[test]
+fn an_incoming_gitlink_is_reported_and_other_notes_still_arrive() {
+    let one = device("round-gitlink-one");
+    let two = device("round-gitlink-two");
+    let elsewhere = device("round-gitlink-other");
+    let there = shared("round-gitlink");
+    write(&one, "kept.md", "stays\n");
+    trip(&one, &there);
+    write(&elsewhere, "foreign.md", "not ours\n");
+    let foreign = snapshot::head_commit(&elsewhere.repo)
+        .expect("readable")
+        .expect("a commit");
+    plant_gitlink(&one, "nested", foreign);
+    write(&one, "later.md", "also arrives\n");
+    trip(&one, &there);
+
+    let synced = trip(&two, &there);
+    assert_eq!(read(&two, "kept.md"), "stays\n");
+    assert_eq!(read(&two, "later.md"), "also arrives\n");
+    assert!(!two.vault.join("nested").exists());
+    assert!(synced
+        .skipped
+        .iter()
+        .any(|note| note.code == "sync.submodule_skipped" && note.path == "nested"));
+}
+
+/// Leaving the unsupported entry in the tree means this device does not
+/// broadcast a deletion of it.
+#[test]
+fn a_skipped_symlink_is_not_pushed_as_a_deletion() {
+    let one = device("round-link-push-one");
+    let two = device("round-link-push-two");
+    let three = device("round-link-push-three");
+    let there = shared("round-link-push");
+    write(&one, "kept.md", "stays\n");
+    trip(&one, &there);
+    plant_link(&one, "shortcut.md", "kept.md");
+    trip(&one, &there);
+    trip(&two, &there);
+    write(&two, "from-two.md", "two\n");
+    trip(&two, &there);
+    trip(&three, &there);
+
+    assert_eq!(read(&three, "kept.md"), "stays\n");
+    assert_eq!(read(&three, "from-two.md"), "two\n");
+    assert!(
+        three
+            .repo
+            .head_commit()
+            .expect("head")
+            .tree()
+            .expect("tree")
+            .lookup_entry_by_path("shortcut.md")
+            .expect("lookup")
+            .is_some(),
+        "the shortcut was dropped from history as if this device deleted it"
+    );
+    assert!(!three.vault.join("shortcut.md").exists());
+}

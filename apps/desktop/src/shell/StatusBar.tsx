@@ -32,7 +32,14 @@ type StatusBarProps = {
   readonly syncStatus?: SyncStatus;
   /** Somewhere to go about what the sync pill reports. */
   readonly onOpenSyncPanel?: (panel: "conflicts" | "history") => void;
+  readonly onOpenSettings?: () => void;
 };
+
+const HISTORY_CLEANUP_FAILED = "sync.history_cleanup_failed";
+
+function toastTitle(code: string): string {
+  return code === HISTORY_CLEANUP_FAILED ? "Could not free space" : "Sync needs attention";
+}
 
 /**
  * Desktop shell status bar footer.
@@ -45,7 +52,8 @@ type StatusBarProps = {
 export function StatusBar({
   workspaceName,
   syncStatus = NOT_RECORDING,
-  onOpenSyncPanel
+  onOpenSyncPanel,
+  onOpenSettings
 }: StatusBarProps) {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   // Tracks which problem the user has already seen (auto-dismissed or closed).
@@ -61,7 +69,7 @@ export function StatusBar({
   const [hoveredKind, setHoveredKind] = useState<"error" | "success" | null>(null);
   // Briefly shows a checkmark after the copy button is pressed.
   const [copied, setCopied] = useState(false);
-  const problem = syncStatus.problem;
+  const problem = syncStatus.problem ?? syncStatus.maintenanceProblem;
   const problemKey = problem ? `${problem.code}\0${problem.message}` : null;
   // When the problem clears, reset the dismissed key so the same problem
   // recurring later re-toasts (matches the original effect-based behavior).
@@ -122,6 +130,8 @@ export function StatusBar({
   }, [copied]);
 
   const notification = problem;
+  const maintenanceToast = toast?.code === HISTORY_CLEANUP_FAILED;
+  const maintenanceNotification = notification?.code === HISTORY_CLEANUP_FAILED;
 
   return (
     <>
@@ -132,7 +142,9 @@ export function StatusBar({
           onMouseEnter={() => setHoveredKind("error")}
           onMouseLeave={() => setHoveredKind(null)}
         >
-          <p className="m-0 text-sm font-semibold">Sync needs attention</p>
+          <p className="m-0 text-sm font-semibold">
+            {toastTitle(toast.code)}
+          </p>
           <p className="mb-0 mt-1 text-xs leading-relaxed">{toast.message}</p>
           <p className="mb-0 mt-1 text-xs leading-relaxed text-muted-foreground">{recoveryFor(toast.code)}</p>
           <Diagnostic details={toast.details} />
@@ -140,9 +152,11 @@ export function StatusBar({
             <button
               type="button"
               className="rounded-small border border-border bg-surface px-2 py-1 text-xs"
-              onClick={() => onOpenSyncPanel?.("history")}
+              onClick={() =>
+                maintenanceToast ? onOpenSettings?.() : onOpenSyncPanel?.("history")
+              }
             >
-              Open saved versions
+              {maintenanceToast ? "Open Settings" : "Open saved versions"}
             </button>
             <button
               type="button"
@@ -235,7 +249,7 @@ export function StatusBar({
               </div>
               {notification ? (
                 <div className="flex flex-col gap-1 text-xs">
-                  <span className="font-semibold">Sync needs attention</span>
+                  <span className="font-semibold">{toastTitle(notification.code)}</span>
                   <span>{notification.message}</span>
                   <span className="text-muted-foreground">{recoveryFor(notification.code)}</span>
                   <Diagnostic details={notification.details} />
@@ -243,11 +257,12 @@ export function StatusBar({
                     type="button"
                     className="mt-1 w-fit rounded-small border border-border bg-surface px-2 py-1 text-xs"
                     onClick={() => {
-                      onOpenSyncPanel?.("history");
+                      if (maintenanceNotification) onOpenSettings?.();
+                      else onOpenSyncPanel?.("history");
                       setNotificationsOpen(false);
                     }}
                   >
-                    Open saved versions
+                    {maintenanceNotification ? "Open Settings" : "Open saved versions"}
                   </button>
                 </div>
               ) : (
@@ -276,7 +291,7 @@ function Diagnostic({ details }: { readonly details?: string }) {
  *  any technical details — so a user can paste a complete report in one click. */
 function fullToastText(problem: SyncProblem): string {
   const lines = [
-    "Sync needs attention",
+    toastTitle(problem.code),
     problem.message,
     recoveryFor(problem.code),
   ];

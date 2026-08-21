@@ -1,6 +1,7 @@
 use super::*;
 use crate::tests::make_temp_test_dir;
 use std::fs;
+use std::path::PathBuf;
 
 fn write(root: &Path, relative: &str, contents: &str) {
     let path = root.join(relative);
@@ -328,4 +329,89 @@ fn a_vault_with_too_many_entries_fails_with_entry_cap_error() {
         }
         Ok(_) => panic!("bootstrap should fail for vault with too many entries"),
     }
+}
+
+/// Cold bootstrap, reopen, and one-file incremental recording for exactly
+/// 10,000 small notes.
+///
+/// Ignored so ordinary `cargo test` / CI do not spend minutes writing and
+/// hashing a ceiling-sized vault. Absolute wall times vary by machine; this
+/// prints them and asserts only ratios — reopen and incremental must be
+/// materially cheaper than cold bootstrap, with no hardware-dependent cutoff.
+///
+/// Run with:
+/// `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml \
+///   measures_a_ten_thousand_note_vault -- --ignored --nocapture`
+#[test]
+#[ignore = "reproducible 10k-vault measurement; run with --ignored --nocapture"]
+fn measures_a_ten_thousand_note_vault() {
+    use std::time::Instant;
+
+    const COUNT: usize = 10_000;
+    assert_eq!(
+        COUNT, MAX_WORKSPACE_ENTRIES,
+        "measurement must sit on the documented vault ceiling"
+    );
+
+    let app_data = make_temp_test_dir("bootstrap-10k-appdata", "sync", true);
+    let vault = make_temp_test_dir("bootstrap-10k-vault", "sync", true);
+    for i in 0..COUNT {
+        write(&vault, &format!("note{i:05}.md"), "# n\n");
+    }
+
+    let cold_started = Instant::now();
+    let cold = bootstrap(&app_data, &vault).expect("cold bootstrap succeeds");
+    let cold_elapsed = cold_started.elapsed();
+    assert!(
+        cold.took_first_snapshot,
+        "cold open must take the first snapshot"
+    );
+    assert_eq!(
+        recorded_paths(&cold.repo).len(),
+        COUNT,
+        "every note must land in the first snapshot"
+    );
+    drop(cold);
+
+    let reopen_started = Instant::now();
+    let reopened = bootstrap(&app_data, &vault).expect("reopen succeeds");
+    let reopen_elapsed = reopen_started.elapsed();
+    assert!(
+        !reopened.took_first_snapshot,
+        "reopen must not walk the vault again"
+    );
+
+    write(&vault, "note00000.md", "# edited\n");
+    let incremental_started = Instant::now();
+    snapshot::record(
+        &reopened.repo,
+        &[PathBuf::from("note00000.md")],
+        "Sync — one note changed",
+    )
+    .expect("incremental record succeeds");
+    let incremental_elapsed = incremental_started.elapsed();
+
+    let cold_ms = cold_elapsed.as_secs_f64() * 1000.0;
+    let reopen_ms = reopen_elapsed.as_secs_f64() * 1000.0;
+    let incremental_ms = incremental_elapsed.as_secs_f64() * 1000.0;
+    let reopen_ratio = cold_ms / reopen_ms.max(0.001);
+    let incremental_ratio = cold_ms / incremental_ms.max(0.001);
+
+    eprintln!("10k-vault measurement (absolute + ratios vs cold bootstrap):");
+    eprintln!("  cold bootstrap: {cold_elapsed:?} ({cold_ms:.1} ms)");
+    eprintln!(
+        "  reopen:         {reopen_elapsed:?} ({reopen_ms:.1} ms) — {reopen_ratio:.1}x cheaper"
+    );
+    eprintln!(
+        "  incremental:    {incremental_elapsed:?} ({incremental_ms:.1} ms) — {incremental_ratio:.1}x cheaper"
+    );
+
+    assert!(
+        reopen_ms * 2.0 < cold_ms,
+        "reopen should be materially cheaper than cold bootstrap (reopen {reopen_ms:.1} ms, cold {cold_ms:.1} ms)"
+    );
+    assert!(
+        incremental_ms * 2.0 < cold_ms,
+        "one-file incremental should be materially cheaper than cold bootstrap (incremental {incremental_ms:.1} ms, cold {cold_ms:.1} ms)"
+    );
 }

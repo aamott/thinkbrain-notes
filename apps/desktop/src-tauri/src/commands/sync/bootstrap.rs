@@ -106,7 +106,7 @@ pub fn bootstrap(app_data_dir: &Path, vault: &Path) -> Result<ManagedWorkspace, 
     if took_first_snapshot {
         let notes: Vec<PathBuf> = recordable_notes(vault)?
             .into_iter()
-            .filter(|note| !super::conflict::is_conflict_copy(vault, note))
+            .filter(|note| !super::conflict::excluded_from_history(vault, note))
             .collect();
         if !notes.is_empty() {
             snapshot::record(&repo, &notes, "Sync — first snapshot of this workspace")?;

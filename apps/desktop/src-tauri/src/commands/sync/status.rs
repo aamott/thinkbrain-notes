@@ -59,11 +59,13 @@ pub struct SyncStatus {
     pub health: SyncHealth,
     /// When git sync last succeeded, in milliseconds since the epoch.
     pub last_checked_at: Option<u64>,
-    /// Whether this vault is also a git repository of the user's own.
+    /// Whether this folder is also a git repository of the user's own.
     ///
     /// Two histories are being kept here, and someone should learn that from
     /// the app rather than from noticing it.
     pub alongside_own_git: bool,
+    /// A failure to tidy private undo history. Recording ignores it.
+    pub maintenance_problem: Option<NativeError>,
 }
 
 /// What is keeping history for a workspace, or why nothing is.
@@ -134,6 +136,7 @@ pub fn of(recording: Recording<'_>) -> Result<SyncStatus, NativeError> {
         health,
         last_checked_at,
         alongside_own_git: engine.alongside_own_git(),
+        maintenance_problem: engine.maintenance_problem(),
     })
 }
 

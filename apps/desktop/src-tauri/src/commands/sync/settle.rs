@@ -137,6 +137,10 @@ fn settle(
     let note = root.join(&pairing.original);
     let copy = root.join(&pairing.copy);
 
+    if super::conflict::is_deletion_decision(&pairing.copy) {
+        return Ok(false);
+    }
+
     let ours = std::fs::read(&note).map_err(read_failed)?;
     let theirs = std::fs::read(&copy).map_err(read_failed)?;
 

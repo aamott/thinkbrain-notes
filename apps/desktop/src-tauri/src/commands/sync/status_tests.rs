@@ -160,6 +160,26 @@ fn a_conflict_outranks_a_change_still_being_saved() {
     assert_eq!(status.attention, 1);
 }
 
+/// A shortcut or nested repository that did not land is needs-attention, with
+/// the code the window turns into recovery copy.
+#[test]
+fn a_skipped_shortcut_needs_attention() {
+    let v = vault("status-symlink-skipped");
+    v.engine
+        .note_stuck([crate::commands::sync::engine::StuckNote::unsupported(
+            "shortcut.md".into(),
+            crate::commands::sync::engine::SYMLINK_SKIPPED,
+            "A shortcut from another device was not created here.",
+        )]);
+
+    let status = of(Recording::By(&v.engine)).expect("the status is readable");
+
+    assert_eq!(status.state, State::Attention);
+    assert_eq!(status.stuck.len(), 1);
+    assert_eq!(status.stuck[0].code, "sync.symlink_skipped");
+    assert!(status.problem.is_none());
+}
+
 /// A note that cannot be recorded is needs-attention, not a vault-wide stop.
 /// Recording through a file is Unix-only: Windows reports that as "not found".
 #[cfg(unix)]
@@ -243,5 +263,27 @@ fn a_workspace_that_could_not_be_set_up_is_a_problem_and_not_a_choice() {
     assert_eq!(
         status.problem.as_ref().map(|problem| problem.code.as_str()),
         Some("sync.vault_too_deep")
+    );
+}
+
+/// A tidy failure is visible without claiming that saving versions has stopped.
+#[test]
+fn a_maintenance_failure_is_not_a_recording_stop() {
+    let v = vault("status-maintain");
+    v.engine.set_maintenance_problem(Some(NativeError::new(
+        crate::commands::sync::maintain::CLEANUP_FAILED,
+        "Could not tidy the saved undo history on this computer.",
+    )));
+
+    let status = of(Recording::By(&v.engine)).expect("the status is readable");
+
+    assert_eq!(status.state, State::Idle);
+    assert!(status.problem.is_none());
+    assert_eq!(
+        status
+            .maintenance_problem
+            .as_ref()
+            .map(|problem| problem.code.as_str()),
+        Some(crate::commands::sync::maintain::CLEANUP_FAILED)
     );
 }

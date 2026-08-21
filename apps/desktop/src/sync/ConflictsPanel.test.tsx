@@ -59,7 +59,7 @@ describe("the list of things waiting on you", () => {
   it("says so plainly when there is nothing", async () => {
     const { host } = await render(<ConflictsPanel rootPath="/notes" onReview={() => undefined} />);
 
-    expect(host.textContent).toContain("No notes with two versions");
+    expect(host.textContent).toContain("Nothing waiting on a decision");
   });
 
   it("names each note and who else has a version of it", async () => {
@@ -67,6 +67,8 @@ describe("the list of things waiting on you", () => {
 
     const { host } = await render(<ConflictsPanel rootPath="/notes" onReview={() => undefined} />);
 
+    expect(host.querySelector('section[aria-label="Decisions needed"]')).not.toBeNull();
+    expect(host.querySelector("h3")?.textContent).toBe("Decisions needed");
     expect(host.textContent).toContain("Meeting Notes.md");
     expect(host.textContent).toContain("Syncthing");
   });
@@ -123,6 +125,32 @@ describe("what each card offers", () => {
     expect(resolveConflict).toHaveBeenCalledWith("/notes", expect.anything(), { kind: "keepBoth" });
   });
 
+  it("offers keep or delete when one side deleted the note", async () => {
+    listConflicts.mockResolvedValue([
+      { ...conflict("Meeting Notes.md", "text"), decision: "keepOrDelete" }
+    ]);
+
+    const { host } = await render(<ConflictsPanel rootPath="/notes" onReview={() => undefined} />);
+
+    expect(host.textContent).toContain("Changed on one device and deleted on the other");
+    expect(() => button(host, "Keep both")).toThrow();
+    expect(() => button(host, "Review")).toThrow();
+    await act(async () => button(host, "Keep note").click());
+
+    expect(resolveConflict).toHaveBeenCalledWith("/notes", expect.anything(), { kind: "keepNote" });
+  });
+
+  it("passes delete note decisions through from the destructive action", async () => {
+    listConflicts.mockResolvedValue([
+      { ...conflict("Meeting Notes.md", "text"), decision: "keepOrDelete" }
+    ]);
+
+    const { host } = await render(<ConflictsPanel rootPath="/notes" onReview={() => undefined} />);
+    await act(async () => button(host, "Delete note").click());
+
+    expect(resolveConflict).toHaveBeenCalledWith("/notes", expect.anything(), { kind: "deleteNote" });
+  });
+
   // A failed decision has to say so and leave the list alone — the native side
   // wrote nothing, and a card that quietly vanished would say otherwise.
   it("reports a refused decision without dropping the card", async () => {
@@ -160,6 +188,26 @@ describe("notes that could not be kept in step", () => {
     // The recovery sentence for a read failure, exactly as `recoveryFor` gives it.
     expect(host.textContent).toContain(
       "Check the notes folder is still connected, then edit any note to try again."
+    );
+  });
+
+  it("says how to clear a skipped shortcut", async () => {
+    syncStatus = {
+      ...syncStatus,
+      stuck: [
+        {
+          path: "shortcut.md",
+          code: "sync.symlink_skipped",
+          message: "A shortcut from another device was not created here."
+        }
+      ]
+    };
+
+    const { host } = await render(<ConflictsPanel rootPath="/notes" onReview={() => undefined} />);
+
+    expect(host.textContent).toContain("shortcut.md");
+    expect(host.textContent).toContain(
+      "Replace or remove this item on the device that sent it, then bring these notes in step again."
     );
   });
 });

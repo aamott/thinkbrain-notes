@@ -13,6 +13,7 @@
 //! showing this vault, using the path that already exists for outside edits.
 
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 
 use serde::{Deserialize, Serialize};
 
@@ -62,8 +63,18 @@ pub struct Version {
 #[serde(rename_all = "camelCase")]
 pub struct ConflictSummary {
     pub kind: Kind,
+    pub decision: Decision,
     pub ours: Version,
     pub theirs: Version,
+}
+
+/// Whether this is two versions of a note, or keep-versus-delete.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum Decision {
+    #[default]
+    Versions,
+    KeepOrDelete,
 }
 
 /// A conflict, in the only form the merge view ever sees.
@@ -97,6 +108,10 @@ pub enum Resolution {
     KeepBoth,
     /// Chunk by chunk, as assembled by the panel.
     Merged { contents: String },
+    /// Keep the note; one side had deleted it.
+    KeepNote,
+    /// Delete the note; one side had changed it. Checkpointed first.
+    DeleteNote,
 }
 
 /// Where things ended up, so the window that asked can say so.
@@ -251,6 +266,19 @@ pub fn resolve(
             "This file cannot be merged line by line; keep one version or both.",
         ));
     }
+    let deletion = conflict::is_deletion_decision(&pairing.copy);
+    if deletion && !matches!(resolution, Resolution::KeepNote | Resolution::DeleteNote) {
+        return Err(NativeError::new(
+            "sync.not_a_conflict",
+            "This note was changed on one device and deleted on the other. Keep it or delete it.",
+        ));
+    }
+    if !deletion && matches!(resolution, Resolution::KeepNote | Resolution::DeleteNote) {
+        return Err(NativeError::new(
+            "sync.not_a_conflict",
+            "This is a choice between two versions, not whether to keep or delete the note.",
+        ));
+    }
 
     let checkpoint = engine.checkpoint(
         &[
@@ -276,11 +304,28 @@ pub fn resolve(
             None
         }
         Resolution::KeepBoth => Some(keep_both(root, &pairing)?),
+        Resolution::KeepNote => {
+            discard(&theirs.path)?;
+            None
+        }
+        Resolution::DeleteNote => {
+            if ours.path.exists() {
+                discard(&ours.path)?;
+            }
+            discard(&theirs.path)?;
+            None
+        }
     };
 
     // The conflict is answered whichever way it went, and after a rename the
     // copy no longer looks like one — so nothing would clear it later.
     engine.forget_conflict(&pairing.copy);
+    if matches!(resolution, Resolution::KeepNote | Resolution::DeleteNote) {
+        // A keep-or-delete marker kept the note out of history. Now that the
+        // decision is made, record whatever is actually on disk.
+        engine.note_changes([PathBuf::from(&pairing.original)], Instant::now());
+        engine.flush()?;
+    }
 
     Ok(Resolved {
         note: pairing.original,
@@ -357,6 +402,11 @@ impl Sides {
     fn summarise(&self, root: &Path, kind: Kind) -> Result<ConflictSummary, NativeError> {
         Ok(ConflictSummary {
             kind,
+            decision: if conflict::is_deletion_decision(&self.pairing.copy) {
+                Decision::KeepOrDelete
+            } else {
+                Decision::Versions
+            },
             ours: version(root, &self.ours, OURS_LABEL.to_string(), self.shown())?,
             theirs: version(
                 root,
@@ -921,3 +971,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "resolve_deletion_tests.rs"]
+mod deletion_tests;

@@ -390,6 +390,7 @@ fn spawn_sweeper() {
                     crate::commands::watcher::announce_sync_status(&key);
                 }
                 maybe_sync(&key, &engine, now);
+                maybe_maintain(&key, &engine);
             }
         })
         .expect("the sync sweeper thread starts");
@@ -410,6 +411,30 @@ fn maybe_sync(key: &str, engine: &Arc<Engine>, now: Instant) {
         return;
     };
     start_round(key, engine, root, destination);
+}
+
+/// Tidies private undo history at most daily while the vault is still.
+///
+/// Takes the workspace lane so a round trip cannot interleave, then the
+/// recording lock inside `maintain`. A failure is announced but does not
+/// stop the next edit from being recorded.
+fn maybe_maintain(key: &str, engine: &Arc<Engine>) {
+    if engine.syncing() || engine.waiting() > 0 || !engine.due_for_maintenance() {
+        return;
+    }
+    let lane = lane(key);
+    let _lane = lock_or_recover(&lane);
+    if engine.syncing() || engine.waiting() > 0 {
+        return;
+    }
+    let had_problem = engine.maintenance_problem().is_some();
+    let result = engine.maintain(false);
+    if let Err(error) = &result {
+        eprintln!("[sync] could not tidy undo history for {key}: {error:?}");
+    }
+    if result.is_err() || had_problem != engine.maintenance_problem().is_some() {
+        crate::commands::watcher::announce_sync_status(key);
+    }
 }
 
 /// Starts one round trip, if one is not already underway.

@@ -21,7 +21,9 @@ export type CardTreatment =
   /** An honest explanation instead of a comparison that would not help. */
   | "whiteboard"
   /** Names, sizes and dates, and a whole-file choice. */
-  | "file";
+  | "file"
+  /** One side changed the note, the other deleted it. */
+  | "keepOrDelete";
 
 const PICTURE_EXTENSIONS = new Set([
   "png",
@@ -48,6 +50,7 @@ function extensionOf(path: string): string {
  * where the user expected to see their work.
  */
 export function treatmentOf(summary: ConflictSummary): CardTreatment {
+  if (summary.decision === "keepOrDelete") return "keepOrDelete";
   const extension = extensionOf(summary.ours.path);
   if (extension === "canvas") return "whiteboard";
   if (PICTURE_EXTENSIONS.has(extension)) return "image";

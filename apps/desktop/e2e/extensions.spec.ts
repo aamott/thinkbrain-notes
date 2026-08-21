@@ -22,7 +22,8 @@ const SYNC_STATUS_OFF = {
   phase: null,
   health: "unknown",
   lastCheckedAt: null,
-  alongsideOwnGit: false
+  alongsideOwnGit: false,
+  maintenanceProblem: null
 } as const;
 
 type InvokeArgs = Record<string, unknown>;

@@ -27,6 +27,20 @@ fn our_own_copies_are_paired_with_their_original() {
 }
 
 #[test]
+fn a_keep_or_delete_marker_is_paired_with_its_note() {
+    let found =
+        pair("note (keep or delete).md", always).expect("a keep-or-delete marker is recognised");
+
+    assert_eq!(found.original, "note.md");
+    assert!(is_deletion_decision(&found.copy));
+}
+
+#[test]
+fn a_note_merely_named_keep_or_delete_is_not_a_marker() {
+    assert!(pair("note (keep or delete of mine).md", always).is_none());
+}
+
+#[test]
 fn a_second_copy_of_one_note_is_still_paired() {
     let found =
         pair("note (from another device 2).md", always).expect("a numbered copy is recognised");
@@ -292,7 +306,11 @@ fn a_scan_reports_when_the_vault_cannot_be_read() {
 fn every_pattern_records_what_is_actually_known_about_it() {
     for pattern in PATTERNS {
         if pattern.evidence == Evidence::Fixture {
-            let ours = beside("note.md", |_| false);
+            let ours = if (pattern.match_name)("note (keep or delete).md").is_some() {
+                deletion_beside("note.md", |_| false)
+            } else {
+                beside("note.md", |_| false)
+            };
             assert_eq!(
                 (pattern.match_name)(&ours).as_deref(),
                 Some("note.md"),

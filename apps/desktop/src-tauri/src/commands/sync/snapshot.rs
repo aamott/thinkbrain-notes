@@ -37,7 +37,7 @@ pub const HISTORY_REF: &str = "refs/heads/main";
 /// daemon left lying in the vault, and those must never reach the user's
 /// remote — a ref outside `refs/heads/` cannot be swept up by the ordinary
 /// "push my branches" refspec.
-const CHECKPOINT_REF: &str = "refs/thinkbrain/checkpoints";
+pub const CHECKPOINT_REF: &str = "refs/thinkbrain/checkpoints";
 
 /// Why a restore point was taken.
 ///

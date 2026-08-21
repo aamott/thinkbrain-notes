@@ -1,3 +1,4 @@
+use super::super::engine::Engine;
 use super::super::hidden_repo;
 use super::*;
 use crate::tests::make_temp_test_dir;
@@ -7,13 +8,20 @@ use std::path::PathBuf;
 struct Fixture {
     vault: PathBuf,
     repo: gix::Repository,
+    engine: Engine,
 }
 
 fn fixture(name: &str) -> Fixture {
     let vault = make_temp_test_dir(&format!("{name}-vault"), "sync", true);
     let git_dir = make_temp_test_dir(&format!("{name}-gitdir"), "sync", true);
     let repo = hidden_repo::open_or_create(&git_dir, &vault).expect("the hidden repository opens");
-    Fixture { vault, repo }
+    let engine = Engine::new(repo, false);
+    let repo = engine.repository();
+    Fixture {
+        vault,
+        repo,
+        engine,
+    }
 }
 
 fn write(vault: &Path, relative: &str, contents: &str) {
@@ -210,7 +218,7 @@ fn restoring_puts_the_earlier_text_back_on_disk() {
     let wanted = read(&f.repo, Some("note.md"), 20).expect("readable")[1]
         .id
         .clone();
-    restore(&f.repo, "note.md", &wanted).expect("the version is restored");
+    restore(&f.engine, "note.md", &wanted).expect("the version is restored");
 
     assert_eq!(on_disk(&f, "note.md"), "the version I want back\n");
     let leftovers: Vec<_> = fs::read_dir(&f.vault)
@@ -237,10 +245,10 @@ fn a_restore_can_itself_be_undone() {
     let history = read(&f.repo, Some("note.md"), 20).expect("readable");
     let (newer, older) = (history[0].id.clone(), history[1].id.clone());
 
-    restore(&f.repo, "note.md", &older).expect("the older version is restored");
+    restore(&f.engine, "note.md", &older).expect("the older version is restored");
     assert_eq!(on_disk(&f, "note.md"), "version one\n");
 
-    restore(&f.repo, "note.md", &newer).expect("the restore is undone");
+    restore(&f.engine, "note.md", &newer).expect("the restore is undone");
     assert_eq!(on_disk(&f, "note.md"), "version two\n");
 }
 
@@ -255,7 +263,7 @@ fn a_restore_takes_a_restore_point_of_what_it_is_about_to_overwrite() {
     let older = read(&f.repo, Some("note.md"), 20).expect("readable")[1]
         .id
         .clone();
-    let restored = restore(&f.repo, "note.md", &older).expect("the version is restored");
+    let restored = restore(&f.engine, "note.md", &older).expect("the version is restored");
 
     let checkpoint = gix::ObjectId::from_hex(restored.checkpoint.as_bytes()).expect("an id");
     let mut tree = f
@@ -287,7 +295,7 @@ fn restoring_a_note_that_had_been_deleted_brings_it_back() {
     let wanted = read(&f.repo, Some("gone.md"), 20).expect("readable")[0]
         .id
         .clone();
-    restore(&f.repo, "gone.md", &wanted).expect("the note comes back");
+    restore(&f.engine, "gone.md", &wanted).expect("the note comes back");
 
     assert_eq!(on_disk(&f, "gone.md"), "still wanted\n");
 }
@@ -299,7 +307,7 @@ fn restoring_a_version_a_note_never_had_is_refused() {
     record(&f, "first", &["one.md"]);
 
     let change = read(&f.repo, None, 20).expect("readable")[0].id.clone();
-    let error = restore(&f.repo, "never-existed.md", &change).expect_err("nothing to restore");
+    let error = restore(&f.engine, "never-existed.md", &change).expect_err("nothing to restore");
 
     assert_eq!(error.code, "sync.version_missing");
 }
@@ -310,7 +318,7 @@ fn restoring_from_something_that_is_not_a_recorded_change_is_refused() {
     write(&f.vault, "one.md", "only note\n");
     record(&f, "first", &["one.md"]);
 
-    let error = restore(&f.repo, "one.md", "not-an-id").expect_err("nothing to restore from");
+    let error = restore(&f.engine, "one.md", "not-an-id").expect_err("nothing to restore from");
 
     assert_eq!(error.code, "sync.version_missing");
 }
@@ -324,7 +332,7 @@ fn restoring_to_a_path_outside_the_vault_is_refused() {
     record(&f, "first", &["one.md"]);
 
     let change = read(&f.repo, None, 20).expect("readable")[0].id.clone();
-    let error = restore(&f.repo, "../elsewhere.md", &change).expect_err("refused");
+    let error = restore(&f.engine, "../elsewhere.md", &change).expect_err("refused");
 
     assert_eq!(error.code, "sync.path_outside_vault");
 }

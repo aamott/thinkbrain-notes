@@ -17,6 +17,7 @@ use serde::Serialize;
 use crate::commands::workspace::{acquire_workspace_mutation_lock, resolve_workspace_root};
 use crate::NativeError;
 
+use super::engine::Engine;
 use super::failed;
 use super::snapshot::{self, Reason};
 
@@ -157,11 +158,12 @@ pub fn read(
 /// Deliberately not echo-suppressed, for the same reason resolving a conflict
 /// is not: the note changed under an editor that is probably open on it, and
 /// the watcher's outside-edit path is what refreshes every window showing it.
-pub fn restore(repo: &gix::Repository, note: &str, change: &str) -> Result<Restored, NativeError> {
+pub fn restore(engine: &Engine, note: &str, change: &str) -> Result<Restored, NativeError> {
     // The same lock ordinary note writes take, so a save landing in the middle
     // of a restore is not a race this has to reason about.
     let _mutation_lock = acquire_workspace_mutation_lock();
 
+    let repo = engine.repository();
     let vault = repo
         .workdir()
         .ok_or_else(|| {
@@ -170,13 +172,9 @@ pub fn restore(repo: &gix::Repository, note: &str, change: &str) -> Result<Resto
         .to_path_buf();
     let relative = snapshot::vault_relative(&vault, Path::new(note))?;
 
-    let wanted = version_at(repo, &relative, change)?;
+    let wanted = version_at(&repo, &relative, change)?;
 
-    let checkpoint = snapshot::checkpoint(
-        repo,
-        std::slice::from_ref(&relative),
-        Reason::VersionRestored,
-    )?;
+    let checkpoint = engine.checkpoint(std::slice::from_ref(&relative), Reason::VersionRestored)?;
 
     let absolute = vault.join(&relative);
     crate::commands::workspace::write_file_atomically(&absolute, &wanted).map_err(|error| {
@@ -402,7 +400,7 @@ pub fn restore_version(
             "Auto Sync is not keeping history for this workspace, so there is nothing to put back.",
         )
     })?;
-    restore(&engine.repository(), &note_path, &change).map(|_| ())
+    restore(&engine, &note_path, &change).map(|_| ())
 }
 
 #[tauri::command]

@@ -91,6 +91,9 @@ export function recoveryFor(code: string): string {
       return "Check the notes folder is still connected, then edit any note to try again.";
     case "sync.note_write_failed":
       return "Check this note can be saved on this computer — a name Windows refuses, or a folder sitting where the note belongs — then bring these notes in step again.";
+    case "sync.symlink_skipped":
+    case "sync.submodule_skipped":
+      return "Replace or remove this item on the device that sent it, then bring these notes in step again.";
     case "sync.vault_too_deep":
       return "Some folders here are nested too deeply to keep track of. Move them nearer the top of the folder and open it again.";
     case "sync.vault_too_many_entries":
@@ -103,6 +106,8 @@ export function recoveryFor(code: string): string {
     case "sync.tree_write_failed":
     case "sync.commit_failed":
       return "Check this computer has space left, then edit any note to try again.";
+    case "sync.history_cleanup_failed":
+      return "Check this computer has space left, then try Free space now in Settings.";
     default:
       return "Close this folder and open it again to start saving versions.";
   }
@@ -124,9 +129,9 @@ export function describeConflictRate(rate: ConflictRate): string {
       : ` ${rate.settled} duplicate cop${rate.settled === 1 ? "y was" : "ies were"} tidied away without asking.`;
 
   if (rate.decisions === 0) {
-    return `${versions}, and you have never had to choose between two of them.${tidied}`;
+    return `${versions}, and you have never had to choose what to keep.${tidied}`;
   }
-  const asked = `${rate.decisions} of them needed you to choose between two copies of a note.`;
+  const asked = `${rate.decisions} of them needed you to decide what to keep.`;
   return `${versions}. ${asked}${tidied}`;
 }
 
@@ -215,13 +220,11 @@ function pillFor(status: SyncStatus, now: Date): PillCopy {
     }
     case "attention": {
       const text =
-        status.attention === 1
-          ? "1 note has two versions"
-          : `${status.attention} notes have two versions`;
+        status.attention === 1 ? "1 note needs a decision" : `${status.attention} notes need a decision`;
       return {
         symbol: "⚠",
         text,
-        detail: `${text}. Open Two versions to choose what to keep.`,
+        detail: `${text}. Open Decisions needed to choose what to keep.`,
         tone: "warn"
       };
     }
@@ -235,6 +238,16 @@ function pillFor(status: SyncStatus, now: Date): PillCopy {
     case "syncing":
       return syncingPill(status.phase);
     case "idle": {
+      if (status.maintenanceProblem) {
+        const message =
+          status.maintenanceProblem.message || "Could not tidy the saved undo history on this computer.";
+        return {
+          symbol: "⚠",
+          text: "Could not free space",
+          detail: `${message} ${recoveryFor(status.maintenanceProblem.code)}`,
+          tone: "warn"
+        };
+      }
       const checked = status.lastCheckedAt;
       if (status.health === "healthy" && checked !== null) {
         const when = describeMoment(checked, now);
@@ -282,7 +295,7 @@ export function describeSync(done: Synced): string {
       : null;
   const toChoose =
     done.askedAbout > 0
-      ? `${plural(done.askedAbout, "note needs", "notes need")} you to choose between two versions.`
+      ? `${plural(done.askedAbout, "note needs", "notes need")} you to decide what to keep.`
       : null;
 
   if (!arrived && !toChoose) return "Everything here is already in step with your other devices.";

@@ -51,8 +51,12 @@ as it stands rather than from nothing.
       vault is recorded while its window is busy or minimised
 - [x] Recording runs on a sweeper thread, never a command handler, and holds no
       lock while it hashes
-- [ ] 10k-file vault measured rather than argued — the design is incremental
-      (see `snapshot.rs`), but no one has timed a real vault of that size
+- [x] 10k-file vault measured rather than argued — ignored harness
+      `measures_a_ten_thousand_note_vault` in `bootstrap_tests.rs`. Observed
+      baseline (Linux x86_64, 2026-08-19, unoptimized test profile): cold
+      bootstrap ~592 ms; reopen ~0.9 ms (~640× cheaper); one-file incremental
+      ~87 ms (~7× cheaper). Absolute times are machine-local; CI asserts only
+      that reopen and incremental stay materially cheaper than cold.
 - [x] Old system-git code and plans removed
 - [x] History holds the user's own edits, not only what other programs did to
       the vault — see "What the review changed"
@@ -94,5 +98,5 @@ ignored folders.
 
 ## Status
 
-🟨 Mechanism, bootstrap, checkpoint, auto-commit and the review's findings
-done. Remaining: a measured 10k-vault run.
+🟩 Mechanism, bootstrap, checkpoint, auto-commit, review findings, and the
+measured 10k-vault run are done.

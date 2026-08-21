@@ -152,7 +152,7 @@ fn trip(
     }?;
     let ours = snapshot::head_commit(repo)?;
 
-    let (brought_down, asked_about, copies, skipped) = match (ours, theirs) {
+    let (brought_down, asked_about, copies, mut skipped) = match (ours, theirs) {
         // Nothing to join: either they have nothing to give, or we have
         // nothing of our own and can simply take theirs.
         (_, None) => (0, 0, Vec::new(), Vec::new()),
@@ -167,6 +167,7 @@ fn trip(
             merge(repo, vault, ours, theirs)?
         }
     };
+    skipped.extend(apply::skipped_unsupported(repo, vault)?);
 
     let Some(tip) = snapshot::head_commit(repo)? else {
         // A vault nobody has typed in yet, syncing to a place nobody has
@@ -350,6 +351,7 @@ pub fn sync(
         let synced = trip(&repo, root, destination, Arc::clone(&cancel), |phase| {
             report_phase(engine, key, phase)
         })?;
+        engine.forget_unsupported();
         engine.note_stuck(synced.skipped.clone());
         if !matches!(synced.landed, push::Landed::Refused { .. }) {
             return Ok(synced);
@@ -358,6 +360,7 @@ pub fn sync(
         let again = trip(&repo, root, destination, cancel, |phase| {
             report_phase(engine, key, phase)
         })?;
+        engine.forget_unsupported();
         engine.note_stuck(again.skipped.clone());
 
         // Fold both trips into one report. `..again` keeps `sent` and `landed` from
@@ -377,6 +380,11 @@ pub fn sync(
         })
     })();
     engine.set_sync_problem(outcome.as_ref().err().cloned());
+    if outcome.is_ok() {
+        if let Err(error) = engine.maintain(false) {
+            eprintln!("[sync] history maintenance after a round trip failed: {error:?}");
+        }
+    }
     outcome
 }
 

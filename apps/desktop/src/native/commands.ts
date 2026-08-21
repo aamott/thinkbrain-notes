@@ -8,6 +8,8 @@ import type {
 } from "../sync/conflictTypes";
 import type {
   ConflictRate as NativeConflictRate,
+  HistoryCleanup as NativeHistoryCleanup,
+  HistoryUsage as NativeHistoryUsage,
   RecordedChange as NativeRecordedChange,
   Synced as NativeSynced,
   SyncStatus as NativeSyncStatus
@@ -241,6 +243,18 @@ export interface NativeCommandMap {
       readonly token: string;
     };
     readonly result: NativeSynced;
+  };
+  readonly sync_history_usage: {
+    readonly args: { readonly rootPath: string };
+    readonly result: NativeHistoryUsage;
+  };
+  readonly sync_free_space: {
+    readonly args: { readonly rootPath: string };
+    readonly result: NativeHistoryCleanup;
+  };
+  readonly sync_clear_undo_history: {
+    readonly args: { readonly rootPath: string };
+    readonly result: NativeHistoryCleanup;
   };
   readonly read_app_settings: {
     readonly args: undefined;

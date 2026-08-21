@@ -105,12 +105,33 @@ describe("the status footer", () => {
     expect(pill.detail.toLowerCase()).toContain("saved");
   });
 
-  it("counts notes that have two versions", () => {
+  it("warns about a tidy failure without claiming saving has stopped", () => {
+    const pill = describePill(
+      status({
+        state: "idle",
+        maintenanceProblem: {
+          code: "sync.history_cleanup_failed",
+          message: "Could not tidy the saved undo history on this computer."
+        }
+      }),
+      NOW
+    );
+
+    expect(pill.text).toBe("Could not free space");
+    expect(pill.tone).toBe("warn");
+    expect(pill.detail).toContain("Free space now");
+    expect(pill.detail).not.toMatch(/not saving/i);
+  });
+
+  it("counts notes that need a decision", () => {
     expect(describePill(status({ state: "attention", attention: 2 }), NOW).text).toBe(
-      "2 notes have two versions"
+      "2 notes need a decision"
     );
     expect(describePill(status({ state: "attention", attention: 1 }), NOW).text).toBe(
-      "1 note has two versions"
+      "1 note needs a decision"
+    );
+    expect(describePill(status({ state: "attention", attention: 1 }), NOW).detail).toBe(
+      "1 note needs a decision. Open Decisions needed to choose what to keep."
     );
   });
 
@@ -192,6 +213,13 @@ describe("the status footer", () => {
     expect(recoveryFor("sync.remote_unreachable")).toBe(
       "Check the git link and your connection, then bring these notes in step again."
     );
+    expect(recoveryFor("sync.symlink_skipped")).toBe(
+      "Replace or remove this item on the device that sent it, then bring these notes in step again."
+    );
+    expect(recoveryFor("sync.submodule_skipped")).toBe(recoveryFor("sync.symlink_skipped"));
+    expect(recoveryFor("sync.history_cleanup_failed")).toBe(
+      "Check this computer has space left, then try Free space now in Settings."
+    );
   });
 });
 
@@ -247,7 +275,7 @@ describe("describeSync", () => {
     const text = describeSync({ broughtDown: 1, askedAbout: 1, sent: 2, landed: moved });
 
     expect(text).toContain("1 note arrived");
-    expect(text).toContain("1 note needs you to choose");
+    expect(text).toContain("1 note needs you to decide");
   });
 
   // A refusal is someone else's timing, not this person's problem, and the

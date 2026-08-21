@@ -738,7 +738,12 @@ export function DesktopShell() {
         )}
       </div>
 
-      <StatusBar workspaceName={workspaceName} syncStatus={syncStatus} onOpenSyncPanel={openSyncPanel} />
+      <StatusBar
+        workspaceName={workspaceName}
+        syncStatus={syncStatus}
+        onOpenSyncPanel={openSyncPanel}
+        onOpenSettings={openSettingsTab}
+      />
 
       {paletteOpen && (
         <CommandPalette

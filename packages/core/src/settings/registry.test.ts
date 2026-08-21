@@ -315,7 +315,10 @@ describe("settings registry", () => {
     const registry = registryWithBuiltIns();
 
     const appSync = registry.getModulesByScope("app").find((module) => module.id === "sync");
-    expect(appSync?.sections.map((section) => section.id)).toEqual(["sync.conflicts"]);
+    expect(appSync?.sections.map((section) => section.id)).toEqual([
+      "sync.conflicts",
+      "sync.history"
+    ]);
     expect(appSync?.sections[0]?.settings?.map((def) => def.key)).toEqual([
       "settleAutomatically"
     ]);
@@ -484,7 +487,8 @@ describe("extractDefaults", () => {
       "editor.lineWrapping": true,
       "editor.livePreview": true,
       "settings.autosave": false,
-      "sync.settleAutomatically": true
+      "sync.settleAutomatically": true,
+      "sync.historyPolicy": ""
     });
   });
 

@@ -14,7 +14,7 @@ use super::remote_failure;
 ///
 /// Deliberately outside `refs/heads/`, so nothing can mistake the other
 /// device's work for our own history.
-const REMOTE_REF: &str = "refs/thinkbrain/remote";
+pub(super) const REMOTE_REF: &str = "refs/thinkbrain/remote";
 
 /// How long one fetch or push may take.
 ///

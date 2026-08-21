@@ -18,6 +18,20 @@ import type { SettingsModule } from "../types";
 export const DEFAULT_SETTLE_AUTOMATICALLY = true;
 
 /**
+ * How long private undo copies are kept. Repeated on the native side as
+ * `RETENTION_DAYS` in `apps/desktop/src-tauri/src/commands/sync/maintain.rs`.
+ */
+export const DEFAULT_CHECKPOINT_RETENTION_DAYS = 90;
+
+/**
+ * Threshold for dropping a file from older private undo copies. Repeated on
+ * the native side as `HISTORICAL_FILE_LIMIT_MB` in
+ * `apps/desktop/src-tauri/src/commands/sync/maintain.rs`. Not a repository
+ * size cap: current notes and the latest undo copy are always kept.
+ */
+export const DEFAULT_HISTORICAL_FILE_LIMIT_MB = 25;
+
+/**
  * A git link someone pasted, or the empty "sync nowhere" sentinel.
  *
  * Accepts an http(s)/ssh/git/file URL, an SCP-style `user@host:path` remote,
@@ -101,7 +115,24 @@ export const syncModule: SettingsModule = {
           section: "sync.conflicts",
           label: "Settle obvious conflicts without asking",
           description:
-            "If this folder is in OneDrive, Google Drive, or Syncthing, those apps sometimes leave an extra copy beside a note. When that copy is identical to yours, or holds a version yours has already been through, keep yours and tidy the copy away. It still shows up under Two versions until then. Earlier versions stay in Saved versions either way. Turn this off to be asked about every copy."
+            "If this folder is in OneDrive, Google Drive, or Syncthing, those apps sometimes leave an extra copy beside a note. When that copy is identical to yours, or holds a version yours has already been through, keep yours and tidy the copy away. It still shows up under Decisions needed until then. Earlier versions stay in Saved versions either way. Turn this off to be asked about every copy."
+        }
+      ]
+    },
+    {
+      id: "sync.history",
+      label: "Saved undo history",
+      settings: [
+        {
+          key: "historyPolicy",
+          type: "string",
+          default: "",
+          scope: "app",
+          section: "sync.history",
+          label: "Saved undo history",
+          description: `Undo copies from resolving two versions or putting an earlier version back are kept for ${DEFAULT_CHECKPOINT_RETENTION_DAYS} days on this computer. Files larger than ${DEFAULT_HISTORICAL_FILE_LIMIT_MB} MB are not kept in older undo copies. This is a retention threshold, not a size limit: your current notes and the latest undo copy are always kept. History that has been sent to a git link is never rewritten.`,
+          control: "sync-history-policy",
+          portable: false
         }
       ]
     },

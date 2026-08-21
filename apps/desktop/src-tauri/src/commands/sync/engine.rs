@@ -43,6 +43,16 @@ pub struct StuckNote {
     pub blob: Option<gix::ObjectId>,
 }
 
+/// A shortcut in the recorded tree that this device will not create.
+pub const SYMLINK_SKIPPED: &str = "sync.symlink_skipped";
+/// A nested repository in the recorded tree that this device will not clone.
+pub const SUBMODULE_SKIPPED: &str = "sync.submodule_skipped";
+
+/// Whether `code` is a skipped tree entry rather than a write/record failure.
+pub fn is_unsupported(code: &str) -> bool {
+    code == SYMLINK_SKIPPED || code == SUBMODULE_SKIPPED
+}
+
 /// Where a round trip currently is, for the footer to name without git jargon.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -85,6 +95,17 @@ impl StuckNote {
             blob: Some(blob),
             code: error.code,
             message: error.message,
+        }
+    }
+
+    /// A tree entry this device will not create: a shortcut or a nested
+    /// repository. There is nothing to retry locally.
+    pub fn unsupported(path: String, code: &'static str, message: &'static str) -> Self {
+        Self {
+            path,
+            blob: None,
+            code: code.to_string(),
+            message: message.to_string(),
         }
     }
 }
@@ -131,6 +152,8 @@ pub struct Engine {
     /// could act on. Separate from `pending` so notes can keep arriving while a
     /// commit is being written.
     recording: Mutex<()>,
+    /// The last failure to tidy private undo history. Recording ignores it.
+    maintenance_problem: Mutex<Option<NativeError>>,
     /// Whether the vault is also a git repository of the user's own.
     has_own_git: bool,
     /// Last time a note changed, for the idle debounce that fires a round trip.
@@ -153,6 +176,7 @@ impl Engine {
             problem: Mutex::new(None),
             sync_problem: Mutex::new(None),
             recording: Mutex::new(()),
+            maintenance_problem: Mutex::new(None),
             last_touched: Mutex::new(Instant::now()),
             last_synced: Mutex::new(None),
         }
@@ -261,7 +285,7 @@ impl Engine {
         let settled: Vec<PathBuf> = match repo.workdir() {
             Some(vault) => settled
                 .into_iter()
-                .filter(|path| !super::conflict::is_conflict_copy(vault, path))
+                .filter(|path| !super::conflict::excluded_from_history(vault, path))
                 .collect(),
             None => settled,
         };
@@ -310,7 +334,128 @@ impl Engine {
         paths: &[PathBuf],
         reason: snapshot::Reason,
     ) -> Result<gix::ObjectId, NativeError> {
+        let recording = lock_or_recover(&self.recording);
+        self.checkpoint_while_recording(&recording, paths, reason)
+    }
+
+    #[cfg(test)]
+    pub(super) fn try_checkpoint(
+        &self,
+        paths: &[PathBuf],
+        reason: snapshot::Reason,
+    ) -> Result<Option<gix::ObjectId>, NativeError> {
+        let recording = match self.recording.try_lock() {
+            Ok(recording) => recording,
+            Err(std::sync::TryLockError::WouldBlock) => return Ok(None),
+            Err(std::sync::TryLockError::Poisoned(poisoned)) => poisoned.into_inner(),
+        };
+        self.checkpoint_while_recording(&recording, paths, reason)
+            .map(Some)
+    }
+
+    fn checkpoint_while_recording(
+        &self,
+        _recording: &std::sync::MutexGuard<'_, ()>,
+        paths: &[PathBuf],
+        reason: snapshot::Reason,
+    ) -> Result<gix::ObjectId, NativeError> {
         snapshot::checkpoint(&self.repo.to_thread_local(), paths, reason)
+    }
+
+    /// The last failure to tidy private undo history, if any.
+    pub fn maintenance_problem(&self) -> Option<NativeError> {
+        lock_or_recover(&self.maintenance_problem).clone()
+    }
+
+    /// Records a tidy failure without stopping recording.
+    pub fn set_maintenance_problem(&self, problem: Option<NativeError>) {
+        *lock_or_recover(&self.maintenance_problem) = problem;
+    }
+
+    /// Whether automatic tidy is due for this vault.
+    pub fn due_for_maintenance(&self) -> bool {
+        super::maintain::due(&self.repository(), SystemTime::now())
+    }
+
+    /// Tidies private undo history under the recording lock.
+    ///
+    /// `force` is the Settings button: it runs even if a pass already happened
+    /// today. Automatic paths pass `false`. A failure is remembered and
+    /// returned; recording is left alone.
+    pub fn maintain(&self, force: bool) -> Result<super::maintain::Cleanup, NativeError> {
+        let _recording = lock_or_recover(&self.recording);
+        self.maintain_locked(force)
+    }
+
+    #[cfg(test)]
+    pub(super) fn maintain_after_lock(
+        &self,
+        force: bool,
+        after_lock: impl FnOnce(),
+    ) -> Result<super::maintain::Cleanup, NativeError> {
+        let _recording = lock_or_recover(&self.recording);
+        after_lock();
+        self.maintain_locked(force)
+    }
+
+    fn maintain_locked(&self, force: bool) -> Result<super::maintain::Cleanup, NativeError> {
+        let repo = self.repository();
+        if !force && !super::maintain::due(&repo, SystemTime::now()) {
+            return Ok(super::maintain::Cleanup {
+                bytes_before: 0,
+                bytes_after: 0,
+                reclaimed: 0,
+            });
+        }
+        let now = SystemTime::now();
+        let seconds = now
+            .duration_since(UNIX_EPOCH)
+            .map(|elapsed| elapsed.as_secs() as i64)
+            .unwrap_or(0);
+        match super::maintain::cleanup(&repo, seconds, &super::maintain::Policy::default()) {
+            Ok(done) => {
+                if let Err(error) = super::maintain::mark_done(&repo, now) {
+                    eprintln!("[sync] could not remember history maintenance: {error:?}");
+                }
+                self.set_maintenance_problem(None);
+                if done.reclaimed > 0 {
+                    eprintln!(
+                        "[sync] history maintenance reclaimed {} bytes",
+                        done.reclaimed
+                    );
+                }
+                Ok(done)
+            }
+            Err(error) => {
+                eprintln!("[sync] history maintenance failed: {error:?}");
+                self.set_maintenance_problem(Some(error.clone()));
+                Err(error)
+            }
+        }
+    }
+
+    /// Drops private restore points, then collects what that made unreachable.
+    pub fn clear_undo(&self) -> Result<super::maintain::Cleanup, NativeError> {
+        let _recording = lock_or_recover(&self.recording);
+        let repo = self.repository();
+        match super::maintain::clear_undo(&repo) {
+            Ok(done) => {
+                self.set_maintenance_problem(None);
+                if let Err(error) = super::maintain::mark_done(&repo, SystemTime::now()) {
+                    eprintln!("[sync] could not remember history maintenance: {error:?}");
+                }
+                eprintln!(
+                    "[sync] cleared private undo history, reclaimed {} bytes",
+                    done.reclaimed
+                );
+                Ok(done)
+            }
+            Err(error) => {
+                eprintln!("[sync] could not clear undo history: {error:?}");
+                self.set_maintenance_problem(Some(error.clone()));
+                Err(error)
+            }
+        }
     }
 
     /// How many changes are waiting to be recorded.
@@ -386,6 +531,12 @@ impl Engine {
     /// Drops a stuck note, because a retry wrote it or the user moved it.
     pub fn forget_stuck(&self, path: &str) {
         lock_or_recover(&self.stuck).remove(path);
+    }
+
+    /// Drops skipped-entry warnings so the next trip can reconstruct them
+    /// from the recorded tree. Write and record failures are left alone.
+    pub fn forget_unsupported(&self) {
+        lock_or_recover(&self.stuck).retain(|_, note| !is_unsupported(&note.code));
     }
 
     /// Whether a round trip to another device is in flight.

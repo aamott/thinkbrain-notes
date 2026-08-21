@@ -95,7 +95,7 @@ conflicts · block-level Markdown merge · reconcile-text · cloud provider APIs
 
 ## Stories (`plans/auto-sync/`, dependency order)
 
-0. `pending-gix_engine_hidden_repo-high-hard.md` — engine, hidden repo,
+0. `done-gix_engine_hidden_repo-high-hard.md` — engine, hidden repo,
    bootstrap matrix, auto-commit, checkpoint API
 2. `pending-cloud_conflict_detection-high-med.md` — pattern table, watcher
    integration, startup scan, cleanup protocol

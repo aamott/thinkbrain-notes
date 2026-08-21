@@ -85,19 +85,18 @@ export function ConflictsPanel({ rootPath, onReview }: ConflictsPanelProps) {
   if (conflicts.length === 0 && stuck.length === 0 && !error) {
     return (
       <Unavailable
-        title="No notes with two versions"
-        description="When git sync or a cloud folder leaves two copies of a note, both show up here."
+        title="Nothing waiting on a decision"
+        description="When git sync or a cloud folder leaves a note that needs a choice, it shows up here."
       />
     );
   }
 
   return (
-    <section className="@container flex min-h-0 flex-1 flex-col overflow-y-auto" aria-label="Two versions">
+    <section className="@container flex min-h-0 flex-1 flex-col overflow-y-auto" aria-label="Decisions needed">
       <header className="border-b border-border px-3 py-3">
-        <h3 className="m-0 text-sm font-semibold text-foreground">Two versions</h3>
+        <h3 className="m-0 text-sm font-semibold text-foreground">Decisions needed</h3>
         <p className="mb-0 mt-1 text-xs leading-relaxed text-muted-foreground">
-          These notes have two saved copies — from git sync or a cloud folder. Choose which to keep;
-          nothing is deleted until you decide.
+          Choose what to keep. Nothing is deleted until you decide.
         </p>
       </header>
 
@@ -146,6 +145,39 @@ const CARD_BUTTON_PRIMARY =
 function ConflictCard({ conflict, busy, onReview, onDecide }: ConflictCardProps) {
   const treatment = treatmentOf(conflict);
   const name = noteName(conflict.ours.path);
+
+  if (treatment === "keepOrDelete") {
+    return (
+      <li className="rounded-small border border-border bg-card p-3">
+        <h4 className="m-0 wrap-break-word text-xs font-semibold text-card-foreground">{name}</h4>
+        <p className="mb-2 mt-0.5 text-[0.7rem] text-muted-foreground">
+          Changed on one device and deleted on the other
+        </p>
+        <p className="mb-2 mt-0 text-[0.7rem] leading-relaxed text-muted-foreground">
+          Keeping the note saves the changed text. You can still put a deleted note back from Saved
+          versions.
+        </p>
+        <div className="flex flex-col gap-1.5 @xs:flex-row">
+          <button
+            type="button"
+            className={CARD_BUTTON_PRIMARY}
+            onClick={() => onDecide({ kind: "keepNote" })}
+            disabled={busy}
+          >
+            Keep note
+          </button>
+          <button
+            type="button"
+            className={CARD_BUTTON}
+            onClick={() => onDecide({ kind: "deleteNote" })}
+            disabled={busy}
+          >
+            Delete note
+          </button>
+        </div>
+      </li>
+    );
+  }
 
   return (
     <li className="rounded-small border border-border bg-card p-3">

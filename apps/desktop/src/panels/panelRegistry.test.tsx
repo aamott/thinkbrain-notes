@@ -119,6 +119,7 @@ describe("desktop panel registry", () => {
 
   it("looks up registered panels and reports missing ids", () => {
     expect(desktopPanelRegistry.get("outline")?.label).toBe("Outline");
+    expect(desktopPanelRegistry.get("conflicts")?.label).toBe("Decisions needed");
     expect(desktopPanelRegistry.get("missing")).toBeUndefined();
     expect(desktopPanelRegistry.isAvailable("outline", context)).toBe(true);
     expect(desktopPanelRegistry.isAvailable("tags", context)).toBe(false);

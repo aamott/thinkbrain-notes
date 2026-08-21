@@ -150,7 +150,7 @@ Tracked as their own stories, not kept here:
 - `pending-lane_test_strength-low-low.md`
 - `pending-delete_vs_change_silent_resolution-med-med.md`
 - `pending-symlink_submodule_skipped-med-med.md`
-- `pending-large_sync_progress-low-low.md`
+- `done-large_sync_progress-low-low.md`
 
 ## Status
 

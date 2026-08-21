@@ -11,6 +11,8 @@ import { invokeNativeCommand } from "../native/commands";
 import { subscribeToSyncEvent } from "./syncEvents";
 import type {
   ConflictRate,
+  HistoryCleanup,
+  HistoryUsage,
   RecordedChange,
   Synced,
   SyncStatus
@@ -80,6 +82,18 @@ export function restoreVersion(
 
 export function readConflictRate(rootPath: string): Promise<ConflictRate> {
   return invokeNativeCommand("sync_conflict_rate", { rootPath });
+}
+
+export function readHistoryUsage(rootPath: string): Promise<HistoryUsage> {
+  return invokeNativeCommand("sync_history_usage", { rootPath });
+}
+
+export function freeSyncSpace(rootPath: string): Promise<HistoryCleanup> {
+  return invokeNativeCommand("sync_free_space", { rootPath });
+}
+
+export function clearUndoHistory(rootPath: string): Promise<HistoryCleanup> {
+  return invokeNativeCommand("sync_clear_undo_history", { rootPath });
 }
 
 export function subscribeToSyncStatus(onChange: () => void): Promise<() => void> {

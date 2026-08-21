@@ -127,9 +127,20 @@ fn date_like(rest: &str) -> bool {
 /// the merge view and the settle rules all apply to it without any of them
 /// learning where it came from.
 fn another_device(name: &str) -> Option<String> {
+    marked_original(name, FROM_ANOTHER_DEVICE)
+}
+
+/// Ours: `note (keep or delete).md`. One side changed the note, the other
+/// deleted it. There is no second version to compare, so this is a different
+/// marker from a two-version copy.
+fn keep_or_delete(name: &str) -> Option<String> {
+    marked_original(name, KEEP_OR_DELETE)
+}
+
+fn marked_original(name: &str, marker: &str) -> Option<String> {
     let (stem, extension) = split_extension(name);
-    let open = stem.rfind(FROM_ANOTHER_DEVICE)?;
-    let counter = stem[open + FROM_ANOTHER_DEVICE.len()..].strip_suffix(')')?;
+    let open = stem.rfind(marker)?;
+    let counter = stem[open + marker.len()..].strip_suffix(')')?;
     let numbered = counter.is_empty()
         || counter
             .strip_prefix(' ')
@@ -138,6 +149,7 @@ fn another_device(name: &str) -> Option<String> {
 }
 
 const FROM_ANOTHER_DEVICE: &str = " (from another device";
+const KEEP_OR_DELETE: &str = " (keep or delete";
 
 /// The most numbered copies we scan for before falling back to a unique name.
 /// Bounds the work on a vault that someone has filled with thousands of
@@ -150,9 +162,18 @@ const BESIDE_CAP: usize = 1_000;
 /// not this conflict. An interrupted sync that already wrote the slot must
 /// reuse it, or the next attempt stacks ` 2`, then ` 3`.
 pub fn slot(original: &str) -> String {
+    named_slot(original, FROM_ANOTHER_DEVICE)
+}
+
+/// The keep-or-delete slot for `original`: `note (keep or delete).md`.
+pub fn deletion_slot(original: &str) -> String {
+    named_slot(original, KEEP_OR_DELETE)
+}
+
+fn named_slot(original: &str, marker: &str) -> String {
     let (directory, name) = dir_and_name(original);
     let (stem, extension) = split_extension(name);
-    format!("{directory}{stem}{FROM_ANOTHER_DEVICE}){extension}")
+    format!("{directory}{stem}{marker}){extension}")
 }
 
 fn dir_and_name(original: &str) -> (&str, &str) {
@@ -171,14 +192,23 @@ fn dir_and_name(original: &str) -> (&str, &str) {
 /// The search is bounded: after `BESIDE_CAP` numbered names are all taken, a
 /// high-resolution timestamp suffix is used instead of scanning further.
 pub fn beside(original: &str, taken: impl Fn(&str) -> bool) -> String {
-    let unnumbered = slot(original);
+    beside_marked(original, FROM_ANOTHER_DEVICE, taken)
+}
+
+/// A free keep-or-delete marker name for `original`.
+pub fn deletion_beside(original: &str, taken: impl Fn(&str) -> bool) -> String {
+    beside_marked(original, KEEP_OR_DELETE, taken)
+}
+
+fn beside_marked(original: &str, marker: &str, taken: impl Fn(&str) -> bool) -> String {
+    let unnumbered = named_slot(original, marker);
     if !taken(&unnumbered) {
         return unnumbered;
     }
     let (directory, name) = dir_and_name(original);
     let (stem, extension) = split_extension(name);
     for nth in 2..=BESIDE_CAP {
-        let candidate = format!("{directory}{stem}{FROM_ANOTHER_DEVICE} {nth}){extension}");
+        let candidate = format!("{directory}{stem}{marker} {nth}){extension}");
         if !taken(&candidate) {
             return candidate;
         }
@@ -187,22 +217,48 @@ pub fn beside(original: &str, taken: impl Fn(&str) -> bool) -> String {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|elapsed| elapsed.as_nanos())
         .unwrap_or(0);
-    format!("{directory}{stem}{FROM_ANOTHER_DEVICE} {stamp}){extension}")
+    format!("{directory}{stem}{marker} {stamp}){extension}")
 }
 
 /// [`beside`] against a real vault: reuse the unnumbered slot when it is
 /// already a file, and only number past a name that cannot be overwritten.
 pub fn beside_in(vault: &Path, original: &str) -> String {
-    beside(original, |path| occupant_blocks(vault, original, path))
+    beside(original, |path| {
+        occupant_blocks(vault, &slot(original), path)
+    })
 }
 
-fn occupant_blocks(vault: &Path, original: &str, path: &str) -> bool {
+/// [`deletion_beside`] against a real vault.
+pub fn deletion_beside_in(vault: &Path, original: &str) -> String {
+    deletion_beside(original, |path| {
+        occupant_blocks(vault, &deletion_slot(original), path)
+    })
+}
+
+fn occupant_blocks(vault: &Path, reusable: &str, path: &str) -> bool {
     let present = vault.join(path);
     if !present.exists() {
         return false;
     }
     // A leftover copy of this conflict is the slot, not a collision.
-    !(path == slot(original) && present.is_file())
+    !(path == reusable && present.is_file())
+}
+
+/// Whether `relative` is the keep-or-delete marker for a note.
+pub fn is_deletion_decision(relative: &str) -> bool {
+    let name = match relative.rfind('/') {
+        Some(index) => &relative[index + 1..],
+        None => relative,
+    };
+    keep_or_delete(name).is_some()
+}
+
+/// Whether `original` has a keep-or-delete marker sitting beside it in `vault`.
+///
+/// While that marker exists, the note itself is still a decision, not a
+/// version to record or send.
+pub fn awaits_deletion_decision(vault: &Path, original: &str) -> bool {
+    vault.join(deletion_slot(original)).is_file()
 }
 
 /// Nextcloud: `note (conflicted copy 2026-08-16 093100).md`.
@@ -249,6 +305,11 @@ pub const PATTERNS: &[ConflictPattern] = &[
         // The one row that has earned it: we write these ourselves.
         evidence: Evidence::Fixture,
         match_name: another_device,
+    },
+    ConflictPattern {
+        provider: "git",
+        evidence: Evidence::Fixture,
+        match_name: keep_or_delete,
     },
 ];
 
@@ -302,6 +363,12 @@ pub fn relative_str(path: &Path) -> String {
 pub fn is_conflict_copy(vault: &Path, relative: &Path) -> bool {
     let relative = relative_str(relative);
     pair(&relative, |original| vault.join(original).exists()).is_some()
+}
+
+/// Whether history should ignore `relative`: a conflict copy, or a note that
+/// still has a keep-or-delete decision outstanding.
+pub fn excluded_from_history(vault: &Path, relative: &Path) -> bool {
+    is_conflict_copy(vault, relative) || awaits_deletion_decision(vault, &relative_str(relative))
 }
 
 /// Every conflict copy in a vault, as vault-relative paths.

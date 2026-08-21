@@ -30,7 +30,7 @@ apps/desktop/  # React UI + Tauri Rust host (See apps/desktop/AGENTS.md)
 │  ├─ tabs/  # Tab model, registry, editor, live preview
 │  └─ workspace/  # Explorer, document adapter, workspace model
 ├─ src-tauri/  # Rust backend & ACP host (See apps/desktop/src-tauri/AGENTS.md)
-│  └─ src/commands/  # Tauri commands: extensions, markdown, search, settings, themes, watcher, workspace
+│  └─ src/commands/  # Tauri commands: extensions, markdown, search, settings, sync (history, maintain), themes, watcher, workspace
 │     └─ search/  # Structured metadata facet storage, queries, and focused tests
 ├─ e2e/  # Playwright E2E specs
 └─ demo/  # Demo fixtures

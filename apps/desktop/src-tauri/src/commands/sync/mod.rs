@@ -100,6 +100,7 @@ pub mod credentials;
 pub mod engine;
 pub mod hidden_repo;
 pub mod history;
+pub mod maintain;
 pub mod merge;
 mod network;
 pub mod pending;

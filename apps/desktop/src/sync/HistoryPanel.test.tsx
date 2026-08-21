@@ -4,7 +4,14 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { NativeCommandError } from "../native/commands";
-import { NOT_RECORDING, type ConflictRate, type RecordedChange, type Synced } from "./historyTypes";
+import {
+  NOT_RECORDING,
+  type ConflictRate,
+  type RecordedChange,
+  type SyncPhase,
+  type SyncStatus,
+  type Synced
+} from "./historyTypes";
 
 const readHistory = vi.fn<(rootPath: string, notePath: string | null) => Promise<readonly RecordedChange[]>>();
 const syncNow = vi.fn<(rootPath: string) => Promise<Synced>>();
@@ -14,8 +21,11 @@ const readConflictRate = vi.fn<(rootPath: string) => Promise<ConflictRate>>();
 const restoreVersion = vi.fn<(rootPath: string, notePath: string, change: string) => Promise<void>>();
 const subscribeToSyncStatus = vi.fn<() => Promise<() => void>>();
 
+// Module-level so a test can put the panel on a live phase without re-mocking.
+let syncStatus: SyncStatus = { ...NOT_RECORDING, state: "idle" };
+
 vi.mock("./useSyncStatus", () => ({
-  useSyncStatus: () => ({ ...NOT_RECORDING, state: "idle" })
+  useSyncStatus: () => syncStatus
 }));
 
 vi.mock("./syncService", () => ({
@@ -59,6 +69,7 @@ beforeEach(() => {
     landed: { state: "moved" }
   });
   destination = "";
+  syncStatus = { ...NOT_RECORDING, state: "idle" };
 });
 
 afterEach(async () => {
@@ -302,5 +313,29 @@ describe("bringing a folder in step with another device", () => {
 
     expect(host.textContent).toContain("could not be brought in step");
     expect(host.textContent).toContain("Nothing was changed");
+  });
+
+  /// The footer already names saving/checking/combining/sending. The history
+  /// button has to reuse those words, or a long trip looks stuck on "clicked".
+  it("names the live phase instead of a static busy label", async () => {
+    destination = "https://example.test/notes.git";
+    const phases: { phase: SyncPhase; label: string }[] = [
+      { phase: "saving", label: "Saving changes…" },
+      { phase: "checking", label: "Checking for updates…" },
+      { phase: "combining", label: "Combining changes…" },
+      { phase: "sending", label: "Sending changes…" }
+    ];
+
+    for (const { phase, label } of phases) {
+      syncStatus = { ...NOT_RECORDING, state: "syncing", phase };
+      const host = await render();
+      const syncButton = button(host, label);
+      expect(syncButton.disabled).toBe(true);
+      expect(host.textContent).not.toContain("Bring these notes in step now");
+      await act(async () => root?.unmount());
+      container?.remove();
+      root = null;
+      container = null;
+    }
   });
 });

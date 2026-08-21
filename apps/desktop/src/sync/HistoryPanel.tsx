@@ -8,6 +8,7 @@ import type { ChangedNote, ConflictRate, RecordedChange, Synced } from "./histor
 import {
   describeConflictRate,
   describeMoment,
+  describePill,
   recoveryFor,
   describeSync,
   describeWhatChanged
@@ -60,7 +61,18 @@ export function HistoryPanel({ rootPath, note, onShowEverything }: HistoryPanelP
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
   const restoring = useRef(false);
   const loading = loadedKey !== queryKey;
-  const { alongsideOwnGit } = useSyncStatus(rootPath);
+  const status = useSyncStatus(rootPath);
+  const { alongsideOwnGit } = status;
+  // Live status covers background trips; local `syncing` covers the click until
+  // the first status event arrives, so the button never looks idle mid-request.
+  const bringingInStep = syncing || status.state === "syncing";
+  const syncButtonLabel = bringingInStep
+    ? describePill({
+        ...status,
+        state: "syncing",
+        phase: status.state === "syncing" ? status.phase : null
+      }).text
+    : "Bring these notes in step now";
   // Native manual sync reads the saved workspace document. Do not enable this
   // from a staged link that the native side cannot see yet.
   const destination = useSettingsStore((state) => state.workspaceValues?.["sync.destination"]);
@@ -202,10 +214,10 @@ export function HistoryPanel({ rootPath, note, onShowEverything }: HistoryPanelP
             <button
               type="button"
               className={QUIET_BUTTON + " mt-2"}
-              disabled={syncing}
+              disabled={bringingInStep}
               onClick={() => void bringInStep()}
             >
-              {syncing ? "Bringing these notes in step…" : "Bring these notes in step now"}
+              {syncButtonLabel}
             </button>
           )
         )}
