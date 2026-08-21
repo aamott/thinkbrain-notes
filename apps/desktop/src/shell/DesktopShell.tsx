@@ -9,6 +9,7 @@ import { appEvents } from "../events/appEvents";
 import { BottomPanel as BottomPanelContent } from "../panels/BottomPanel";
 import { LeftPopout } from "../panels/LeftPopout";
 import { useSyncStatus } from "../sync/useSyncStatus";
+import { useSettleNotificationAdapter } from "../sync/settleNotificationAdapter";
 import { RightPopout } from "../panels/RightPopout";
 import { useTheme } from "../settings/theme-context";
 import { useSettingsStore } from "../settings/settingsStore";
@@ -496,6 +497,9 @@ export function DesktopShell() {
   // someone who has never opened it, which is exactly when the panel is not
   // mounted to count anything.
   const syncStatus = useSyncStatus(restoredWorkspacePath ?? null);
+  // Announce when the sync engine settles obvious conflicts without asking.
+  // Mounted here (not in StatusBar) because it needs rootPath for the rate read.
+  useSettleNotificationAdapter({ rootPath: restoredWorkspacePath ?? null, syncStatus });
   const conflictBadges = useMemo<Readonly<Record<string, number>>>(() => {
     const badges: Record<string, number> = {};
     if (syncStatus.attention > 0) badges.conflicts = syncStatus.attention;

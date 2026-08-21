@@ -32,9 +32,10 @@ its own severity rules and pushes into the store.
 
 ## Stories (`plans/notifications/`)
 
-1. `pending-notification_system-med-med.md` — store, types, sync adapter,
+1. ✅ `done-notification_system-med-med.md` — store, types, sync adapter,
    bell log UI, badge count, sticky toasts, StatusBar migration.
 
 ## Status
 
-⬜ Pending.
+✅ Story 1 done. Epic unblocks `merge_ui`, `settle_obvious_conflicts`, and
+`git_remote_sync` notification surfaces — those are auto-sync epic stories.
