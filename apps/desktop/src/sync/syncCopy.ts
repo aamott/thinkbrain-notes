@@ -6,6 +6,7 @@
  * back — and a failure is never reported without something to do about it.
  */
 
+import { NativeCommandError } from "../native/commands";
 import { describeWhen } from "./conflictCard";
 import type { ChangedNote, ConflictRate, Synced, SyncPhase, SyncStatus } from "./historyTypes";
 
@@ -77,6 +78,11 @@ export function recoveryFor(code: string): string {
       return "Give this token access to the repository, then save the sign-in again.";
     case "sync.credentials_unavailable":
       return "Unlock this computer's keychain, then save the sign-in again.";
+    case "sync.sign_in_missing":
+    case "sync.sign_in_wrong_host":
+      return "Choose another saved sign-in, or add a username and access token.";
+    case "sync.sign_in_needed":
+      return "Choose a saved sign-in, or add a username and access token.";
     case "sync.remote_not_found":
       return "Check the git link. If this is a private repository, make sure the token can access it.";
     case "sync.credentials_username_missing":
@@ -111,6 +117,18 @@ export function recoveryFor(code: string): string {
     default:
       return "Close this folder and open it again to start saving versions.";
   }
+}
+
+export function failureMessage(
+  cause: unknown,
+  fallback: string,
+  includeRecovery: boolean = false
+): string {
+  if (!(cause instanceof NativeCommandError)) {
+    console.error("[sync] operation failed:", cause);
+    return fallback;
+  }
+  return includeRecovery ? `${cause.message} ${recoveryFor(cause.code)}` : cause.message;
 }
 
 /**

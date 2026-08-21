@@ -74,6 +74,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
   const [showHidden, setShowHidden] = useState<boolean>(DEFAULT_WORKSPACE_SETTINGS.showHidden);
   // Open state for the header "..." (more actions) dropdown popover.
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const [importFromGitOpen, setImportFromGitOpen] = useState(false);
   const tree = useMemo(() => buildWorkspaceTree(state.entries), [state.entries]);
   const workspaceRootPath = state.snapshot?.workspace.root_path;
 
@@ -197,6 +198,10 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
     }
     await refreshEntries();
   }, [refreshEntries]);
+
+  const openGitLinkImport = useCallback(() => {
+    setImportFromGitOpen(true);
+  }, []);
 
   const openWorkspace = useCallback(async () => {
     try {
@@ -478,12 +483,14 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
       showVersions,
       refreshEntries,
       openWorkspace,
+      openGitLinkImport,
       launchWorkspace,
       confirmDelete,
       setMoreMenuOpen,
       setRenaming,
       setCreating,
       setPendingDelete,
+      setImportFromGitOpen,
       dismissError
     }),
     [
@@ -495,6 +502,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
       handleTreeKeyDown,
       launchWorkspace,
       openWorkspace,
+      openGitLinkImport,
       refreshEntries,
       requestDelete,
       showContextMenu,
@@ -526,6 +534,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
       activePath={activePath}
       recentWorkspacePaths={recentWorkspacePaths}
       actions={actions}
+      importFromGitOpen={importFromGitOpen}
     />
   );
 });

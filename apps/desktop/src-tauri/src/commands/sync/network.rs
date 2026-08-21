@@ -22,22 +22,33 @@ pub(super) const REMOTE_REF: &str = "refs/thinkbrain/remote";
 /// lane forever — every later Sync Now on this vault queues behind it.
 pub(super) const NETWORK: Duration = Duration::from_secs(90);
 
-/// Brings the destination's branch down into a ref of ours.
+/// Brings the destination's default branch down into a ref of ours.
 ///
 /// `None` means the far side has nothing on that branch yet, which is what a
-/// destination looks like before anyone has synced to it.
+/// destination looks like before anyone has synced to it. Local remotes are
+/// asked for HEAD's target so a nonstandard default (not `main`) still arrives.
 pub(super) fn fetch(
     repo: &gix::Repository,
     destination: &str,
     cancel: &Arc<AtomicBool>,
 ) -> Result<Option<gix::ObjectId>, NativeError> {
+    let spec = fetch_refspec(destination);
+    match receive(repo, destination, cancel, &spec)? {
+        Some(id) => Ok(Some(id)),
+        None if spec != main_refspec() => receive(repo, destination, cancel, &main_refspec()),
+        None => Ok(None),
+    }
+}
+fn receive(
+    repo: &gix::Repository,
+    destination: &str,
+    cancel: &Arc<AtomicBool>,
+    spec: &str,
+) -> Result<Option<gix::ObjectId>, NativeError> {
     let brought = repo
         .remote_at(gix::bstr::BStr::new(destination))
         .map_err(remote_failure)?
-        .with_refspecs(
-            [format!("{}:{}", super::snapshot::HISTORY_REF, REMOTE_REF).as_str()],
-            Direction::Fetch,
-        )
+        .with_refspecs([spec], Direction::Fetch)
         .map_err(remote_failure)?
         .with_fetch_tags(gix::remote::fetch::Tags::None)
         .connect(Direction::Fetch)
@@ -48,13 +59,33 @@ pub(super) fn fetch(
         .receive(gix::progress::Discard, cancel);
 
     match brought {
-        Ok(_) => head_of(repo, REMOTE_REF),
-        // The branch is simply not there: a destination nobody has synced to
-        // yet. Nothing to bring down is not a failure to reach it.
+        Ok(_) => super::snapshot::try_head_of(repo, REMOTE_REF).map_err(|error| {
+            failed(
+                "sync.history_unreadable",
+                "Could not read a sync marker.",
+                error,
+            )
+        }),
         Err(gix::remote::fetch::Error::NoMapping { .. }) => Ok(None),
         Err(_) if cancel.load(Ordering::Relaxed) => Err(timed_out()),
         Err(error) => Err(remote_failure(error)),
     }
+}
+fn fetch_refspec(destination: &str) -> String {
+    local_head_target(destination)
+        .map(|name| format!("{name}:{REMOTE_REF}"))
+        .unwrap_or_else(|| format!("HEAD:{REMOTE_REF}"))
+}
+
+fn main_refspec() -> String {
+    format!("{}:{REMOTE_REF}", super::snapshot::HISTORY_REF)
+}
+
+fn local_head_target(destination: &str) -> Option<String> {
+    let path = destination.strip_prefix("file://").unwrap_or(destination);
+    let repo = gix::open(path).ok()?;
+    let head = repo.head().ok()?;
+    Some(head.referent_name()?.as_bstr().to_string())
 }
 
 fn timed_out() -> NativeError {
@@ -112,23 +143,4 @@ pub(super) fn bounded<T: Send + 'static>(
             "Could not reach the place these notes sync to.",
         )),
     }
-}
-
-fn head_of(repo: &gix::Repository, reference: &str) -> Result<Option<gix::ObjectId>, NativeError> {
-    let unreadable = |error: &dyn std::fmt::Display| {
-        failed(
-            "sync.history_unreadable",
-            "Could not read a sync marker.",
-            error,
-        )
-    };
-    repo.try_find_reference(reference)
-        .map_err(|error| unreadable(&error))?
-        .map(|mut found| {
-            found
-                .peel_to_id()
-                .map(gix::Id::detach)
-                .map_err(|error| unreadable(&error))
-        })
-        .transpose()
 }

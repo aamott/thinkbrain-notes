@@ -14,6 +14,8 @@ import type {
   HistoryCleanup,
   HistoryUsage,
   RecordedChange,
+  SavedSignIn,
+  SignInStatus,
   Synced,
   SyncStatus
 } from "./historyTypes";
@@ -46,14 +48,52 @@ export function syncNow(rootPath: string): Promise<Synced> {
   return invokeNativeCommand("sync_now", { rootPath });
 }
 
-/** Saves credentials, then immediately checks the git link. */
+/** Saves credentials, then starts a background check of the git link. */
 export function saveSyncCredentials(
   rootPath: string,
   destination: string,
   username: string,
-  token: string
-): Promise<Synced> {
-  return invokeNativeCommand("save_sync_credentials", { rootPath, destination, username, token });
+  token: string,
+  profileId?: string | null,
+  label?: string | null
+): Promise<SavedSignIn> {
+  return invokeNativeCommand("save_sync_credentials", {
+    rootPath,
+    destination,
+    username,
+    token,
+    profileId: profileId ?? null,
+    label: label ?? null
+  });
+}
+
+/** Persists an explicit profile selection and starts a background check. */
+export function saveSyncLink(
+  rootPath: string,
+  destination: string,
+  profileId?: string | null
+): Promise<SavedSignIn> {
+  return invokeNativeCommand("save_sync_link", {
+    rootPath,
+    destination,
+    profileId: profileId ?? null
+  });
+}
+
+export function readSignInStatus(
+  rootPath: string,
+  destination: string,
+  profileId?: string | null
+): Promise<SignInStatus> {
+  return invokeNativeCommand("sync_sign_in_status", {
+    rootPath,
+    destination,
+    profileId: profileId ?? null
+  });
+}
+
+export function forgetSignIn(profileId: string): Promise<void> {
+  return invokeNativeCommand("forget_sync_sign_in", { profileId }).then(() => undefined);
 }
 
 /**

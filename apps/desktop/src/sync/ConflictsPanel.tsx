@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 
-import { NativeCommandError } from "../native/commands";
 import { Unavailable } from "../shell/Unavailable";
 import { describeSize, describeWhen, noteName, treatmentOf } from "./conflictCard";
 import { listConflicts, resolveConflict } from "./conflictService";
 import type { ConflictResolution, ConflictSummary } from "./conflictTypes";
-import { recoveryFor } from "./syncCopy";
+import { failureMessage, recoveryFor } from "./syncCopy";
 import { useSyncStatus } from "./useSyncStatus";
 
 /**
@@ -25,7 +24,6 @@ interface ConflictsPanelProps {
   /** Opens the side-by-side comparison, named by the copy and the note it is of. */
   readonly onReview: (copyPath: string, notePath: string) => void;
 }
-
 export function ConflictsPanel({ rootPath, onReview }: ConflictsPanelProps) {
   const [conflicts, setConflicts] = useState<readonly ConflictSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -44,7 +42,7 @@ export function ConflictsPanel({ rootPath, onReview }: ConflictsPanelProps) {
       setConflicts(await listConflicts(rootPath));
       setError(null);
     } catch (cause) {
-      setError(messageOf(cause, "The list of items to review could not be read."));
+      setError(failureMessage(cause, "The list of items to review could not be read."));
     }
   }, [rootPath]);
 
@@ -65,7 +63,7 @@ export function ConflictsPanel({ rootPath, onReview }: ConflictsPanelProps) {
       try {
         await resolveConflict(rootPath, summary, resolution);
       } catch (cause) {
-        failure = messageOf(cause, "That version could not be saved. Nothing was changed.");
+        failure = failureMessage(cause, "That version could not be saved. Nothing was changed.");
       }
       // Always re-read, and always after the attempt: a refused decision leaves
       // the card exactly where it was, which the user should see for themselves.
@@ -244,12 +242,4 @@ function ConflictCard({ conflict, busy, onReview, onDecide }: ConflictCardProps)
       </div>
     </li>
   );
-}
-
-function messageOf(cause: unknown, fallback: string): string {
-  if (cause instanceof NativeCommandError) return cause.message;
-  // A non-native failure is still worth a trail: the user sees the stable
-  // fallback, but a persistent cause nobody logged is one nobody can trace.
-  console.error("[sync] conflict operation failed:", cause);
-  return fallback;
 }

@@ -394,14 +394,22 @@ pub fn checkpoint_head(repo: &gix::Repository) -> Result<Option<gix::ObjectId>, 
 }
 
 fn head_of(repo: &gix::Repository, reference: &str) -> Result<Option<gix::ObjectId>, NativeError> {
-    match repo.find_reference(reference) {
-        Ok(mut reference) => {
-            let id = reference.peel_to_id().map_err(history_read_failed)?;
-            Ok(Some(id.detach()))
-        }
-        Err(gix::reference::find::existing::Error::NotFound { .. }) => Ok(None),
-        Err(error) => Err(history_read_failed(error)),
-    }
+    try_head_of(repo, reference).map_err(history_read_failed)
+}
+
+pub(super) fn try_head_of(
+    repo: &gix::Repository,
+    reference: &str,
+) -> Result<Option<gix::ObjectId>, String> {
+    repo.try_find_reference(reference)
+        .map_err(|error| error.to_string())?
+        .map(|mut found| {
+            found
+                .peel_to_id()
+                .map(gix::Id::detach)
+                .map_err(|error| error.to_string())
+        })
+        .transpose()
 }
 
 fn commit_tree(

@@ -12,6 +12,13 @@ fetches and cannot push, so sending was written rather than called:
   credential callbacks. Git link and sign-in are separate inputs; the token
   goes directly to the keychain and is rejected in the link field. Remaining:
   prove against GitHub + GitLab.
+- **6d — git-link setup UX.** `pending-git_link_setup_ux-med-hard.md`.
+  Labeled profiles by opaque ID, Save link vs Update sign-in, nonblocking
+  first check. Remaining: live host proof, shared with 6c.
+- **6e — bring in workspace from Git link.**
+  `pending-workspace_from_git_link-med-hard.md`. New child folder from a
+  secret-free HTTPS (or local bare) link; reuses 6d profiles. Remaining:
+  live host proof, shared with 6c.
 
 ## Scope
 
@@ -55,4 +62,5 @@ fetches and cannot push, so sending was written rather than called:
 ## Status
 
 🟨 6a send-pack, 6b round trip, and 6c adapter + sign-in control done.
-Remaining: GitHub + GitLab as hosts.
+6d git-link setup UX and 6e import-from-link implemented in app code.
+Remaining: GitHub + GitLab as hosts (live proof, not marked complete).

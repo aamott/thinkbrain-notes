@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { NativeCommandError } from "../native/commands";
 import { Unavailable } from "../shell/Unavailable";
 import { describeSize, describeWhen, noteName } from "./conflictCard";
 import { readConflict, resolveConflict } from "./conflictService";
@@ -14,6 +13,7 @@ import {
   type ChunkPick,
   type ChunkPicks
 } from "./mergeModel";
+import { failureMessage } from "./syncCopy";
 
 /**
  * Two versions of one note, and a decision for each place they differ.
@@ -39,12 +39,13 @@ interface MergeTabProps {
    */
   readonly buffer?: string | null;
 }
-
 type Phase =
   | { readonly at: "loading" }
   | { readonly at: "ready"; readonly conflict: ConflictComparison }
   | { readonly at: "done"; readonly note: string; readonly keptAs: string | null }
   | { readonly at: "failed"; readonly message: string };
+
+const COMPARE_FAILURE = "Something went wrong reading the two versions.";
 
 /**
  * Starts a fresh session per conflict.
@@ -86,7 +87,9 @@ function MergeSession({ rootPath, copyPath, buffer }: MergeSessionProps) {
         if (!cancelled) setPhase({ at: "ready", conflict });
       })
       .catch((cause: unknown) => {
-        if (!cancelled) setPhase({ at: "failed", message: messageOf(cause) });
+        if (!cancelled) {
+          setPhase({ at: "failed", message: failureMessage(cause, COMPARE_FAILURE) });
+        }
       });
     return () => {
       cancelled = true;
@@ -105,7 +108,7 @@ function MergeSession({ rootPath, copyPath, buffer }: MergeSessionProps) {
         const done = await resolveConflict(rootPath, phase.conflict, { kind: "merged", contents });
         setPhase({ at: "done", note: done.note, keptAs: done.keptAs });
       } catch (cause) {
-        setPhase({ at: "failed", message: messageOf(cause) });
+        setPhase({ at: "failed", message: failureMessage(cause, COMPARE_FAILURE) });
       } finally {
         setSaving(false);
       }
@@ -329,10 +332,4 @@ function Side({
       </pre>
     </div>
   );
-}
-
-function messageOf(cause: unknown): string {
-  return cause instanceof NativeCommandError
-    ? cause.message
-    : "Something went wrong reading the two versions.";
 }

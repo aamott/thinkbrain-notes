@@ -42,12 +42,14 @@ export interface WorkspaceExplorerActions {
   readonly showVersions: (entry: NativeWorkspaceEntry) => void;
   readonly refreshEntries: () => Promise<void>;
   readonly openWorkspace: () => Promise<void>;
+  readonly openGitLinkImport: () => void;
   readonly launchWorkspace: (rootPath: string) => Promise<void>;
   readonly confirmDelete: () => Promise<void>;
   readonly setMoreMenuOpen: Dispatch<SetStateAction<boolean>>;
   readonly setRenaming: (value: RenameState | null) => void;
   readonly setCreating: (value: CreateState | null) => void;
   readonly setPendingDelete: (value: NativeWorkspaceEntry | null) => void;
+  readonly setImportFromGitOpen: Dispatch<SetStateAction<boolean>>;
   readonly dismissError: () => void;
 }
 

@@ -106,7 +106,8 @@ conflicts · block-level Markdown merge · reconcile-text · cloud provider APIs
 5. `pending-sync_status_history_restore-high-med.md` — status pill, friendly
    history, restore previous version
 6. `pending-git_remote_sync-med-hard.md` — push/pull, keychain, plain-language
-   setup, triggers
+   setup, triggers; 6e onboarding import is
+   `auto-sync/pending-workspace_from_git_link-med-hard.md`
 7. `pending-history_pruning-low-med.md` — retention/size policy, gc
 8. `pending-mobile_cross_compile-med-easy.md` — CI validation on
    Android/iOS targets

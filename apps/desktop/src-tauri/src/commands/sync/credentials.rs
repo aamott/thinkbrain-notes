@@ -20,124 +20,176 @@ use super::failed;
 #[cfg(not(test))]
 const SERVICE: &str = "ThinkBrain Notes";
 
+/// Keychain account used only to prove the backend answers. Never written.
+#[cfg(not(test))]
+const STORAGE_PROBE: &str = "profile:__storage_probe";
+
 #[cfg(test)]
 static MEMORY: Mutex<Option<HashMap<String, (String, String)>>> = Mutex::new(None);
 #[cfg(not(test))]
 static KEYCHAIN: Mutex<()> = Mutex::new(());
 
+thread_local! {
+    static BOUND_PROFILE: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Whether the OS keychain (or the in-memory test stand-in) can be asked.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)] // Unavailable/Unsupported are constructed only in non-test builds.
+pub enum StorageKind {
+    Available,
+    Unavailable,
+    Unsupported,
+}
+
 /// Username and password for `destination`, if we have one.
+///
+/// When a profile ID is bound for this thread, that profile is the only
+/// identity returned — a missing profile does not fall back to another
+/// saved sign-in. With no bound profile, the older per-repository URL key
+/// is still consulted.
 pub fn get(destination: &str) -> Result<Option<(String, String)>, NativeError> {
-    let key = account(destination);
-    #[cfg(test)]
-    {
-        Ok(lock_or_recover(&MEMORY)
-            .get_or_insert_with(HashMap::new)
-            .get(&key)
-            .cloned())
+    if let Some(id) = bound_profile() {
+        return get_profile(&id);
     }
-    #[cfg(not(test))]
-    {
-        let _guard = lock_or_recover(&KEYCHAIN);
-        os_get(&key)
+    get_legacy(destination)
+}
+
+/// The currently bound profile ID, if a round trip named one.
+pub fn bound_profile() -> Option<String> {
+    BOUND_PROFILE.with(|slot| slot.borrow().clone())
+}
+
+/// Runs `work` with `id` as the only sign-in this thread will offer gix.
+pub fn with_profile<T>(id: Option<&str>, work: impl FnOnce() -> T) -> T {
+    struct Reset(Option<String>);
+    impl Drop for Reset {
+        fn drop(&mut self) {
+            BOUND_PROFILE.with(|slot| *slot.borrow_mut() = self.0.take());
+        }
     }
+    let previous = BOUND_PROFILE.with(|slot| slot.replace(id.map(str::to_owned)));
+    let _reset = Reset(previous);
+    work()
+}
+
+/// The older per-repository URL entry, ignoring any bound profile.
+pub fn get_legacy(destination: &str) -> Result<Option<(String, String)>, NativeError> {
+    read_account(&account(destination))
+}
+
+/// Token stored under an opaque profile ID.
+pub fn get_profile(id: &str) -> Result<Option<(String, String)>, NativeError> {
+    read_account(&profile_account(id))
 }
 
 /// Stores the identity for `destination`. `secret` is the token; it is not
 /// logged, not returned, and not written anywhere but the OS store.
 pub fn store(destination: &str, username: &str, secret: &str) -> Result<(), NativeError> {
-    let key = account(destination);
-    #[cfg(test)]
-    {
-        lock_or_recover(&MEMORY)
-            .get_or_insert_with(HashMap::new)
-            .insert(key, (username.to_string(), secret.to_string()));
-        Ok(())
-    }
-    #[cfg(not(test))]
-    {
-        let _guard = lock_or_recover(&KEYCHAIN);
-        os_store(&key, username, secret)
-    }
+    write_account(&account(destination), username, secret)
+}
+
+/// Stores the token for one labeled profile. Does not touch any other profile.
+pub fn store_profile(id: &str, username: &str, secret: &str) -> Result<(), NativeError> {
+    write_account(&profile_account(id), username, secret)
 }
 
 fn delete(destination: &str) -> Result<(), NativeError> {
-    let key = account(destination);
+    remove_account(&account(destination))
+}
+
+/// Removes one profile's secret. Metadata is the caller's problem.
+pub fn delete_profile(id: &str) -> Result<(), NativeError> {
+    remove_account(&profile_account(id))
+}
+
+fn profile_account(id: &str) -> String {
+    format!("profile:{id}")
+}
+
+fn read_account(key: &str) -> Result<Option<(String, String)>, NativeError> {
+    #[cfg(test)]
+    {
+        Ok(lock_or_recover(&MEMORY)
+            .get_or_insert_with(HashMap::new)
+            .get(key)
+            .cloned())
+    }
+    #[cfg(not(test))]
+    {
+        let _guard = lock_or_recover(&KEYCHAIN);
+        os_get(key)
+    }
+}
+
+fn write_account(key: &str, username: &str, secret: &str) -> Result<(), NativeError> {
     #[cfg(test)]
     {
         lock_or_recover(&MEMORY)
             .get_or_insert_with(HashMap::new)
-            .remove(&key);
+            .insert(key.to_string(), (username.to_string(), secret.to_string()));
         Ok(())
     }
     #[cfg(not(test))]
     {
         let _guard = lock_or_recover(&KEYCHAIN);
-        os_delete(&key)
+        os_store(key, username, secret)
     }
 }
 
-/// Stores credentials entered in the settings form.
-///
-/// Keeping this separate from [`take_from_url`] means the link setting is
-/// always safe to display and export: credentials never need to pass through
-/// the settings document at all.
-pub fn save_for_destination(
-    destination: &str,
-    username: &str,
-    token: &str,
-) -> Result<(), NativeError> {
-    let destination = destination.trim();
-    let username = username.trim();
-    if !is_clean_https_url(destination) {
-        return Err(NativeError::new(
-            "sync.credentials_need_https",
-            "Paste a secret-free HTTPS git link before saving a sign-in.",
-        ));
+fn remove_account(key: &str) -> Result<(), NativeError> {
+    #[cfg(test)]
+    {
+        lock_or_recover(&MEMORY)
+            .get_or_insert_with(HashMap::new)
+            .remove(key);
+        Ok(())
     }
-    if username.is_empty() {
-        return Err(NativeError::new(
-            "sync.credentials_username_missing",
-            "Enter the username this token belongs to.",
-        ));
+    #[cfg(not(test))]
+    {
+        let _guard = lock_or_recover(&KEYCHAIN);
+        os_delete(key)
     }
-    if token.is_empty() {
-        return Err(NativeError::new(
-            "sync.credentials_token_missing",
-            "Enter an access token.",
-        ));
-    }
-    store(destination, username, token)
 }
 
-/// Saves a username and access token directly to the OS keychain, then checks
-/// the configured destination immediately so a bad sign-in is never deferred
-/// behind the idle timer.
-#[tauri::command]
-pub fn save_sync_credentials(
-    app: tauri::AppHandle,
-    root_path: String,
-    destination: String,
-    username: String,
-    token: String,
-) -> Result<super::round::Synced, NativeError> {
-    save_for_destination(&destination, &username, &token)?;
-    let root = crate::commands::workspace::resolve_workspace_root(&root_path)?;
-    let key = root.to_string_lossy().to_string();
-    let engine = super::registry::engine(&key).ok_or_else(|| {
-        NativeError::new(
-            "sync.not_recording",
-            "This folder's history is not being kept, so there is nothing to sync.",
-        )
-    })?;
-    let synced = super::round::sync(&engine, &key, &root, destination.trim())?;
-    let synced = super::round::finish(&app, &engine, &key, &root, synced);
-    crate::commands::watcher::announce_setup_ok(&app, &key);
-    Ok(synced)
+/// Asks whether the keychain answers, without writing a secret.
+pub fn storage_status() -> (StorageKind, String) {
+    #[cfg(test)]
+    {
+        return (
+            StorageKind::Available,
+            "This computer can keep a sign-in.".to_string(),
+        );
+    }
+    #[cfg(all(
+        not(test),
+        not(any(target_os = "linux", target_os = "macos", target_os = "windows"))
+    ))]
+    {
+        return (
+            StorageKind::Unsupported,
+            "Sign-in is not available on this device yet.".to_string(),
+        );
+    }
+    #[cfg(all(
+        not(test),
+        any(target_os = "linux", target_os = "macos", target_os = "windows")
+    ))]
+    {
+        let _guard = lock_or_recover(&KEYCHAIN);
+        match os_get(STORAGE_PROBE) {
+            Ok(_) => (
+                StorageKind::Available,
+                "This computer can keep a sign-in.".to_string(),
+            ),
+            Err(error) => (StorageKind::Unavailable, error.message),
+        }
+    }
 }
 
 /// A token form only works for HTTPS, and accepting userinfo here would put a
 /// secret back into the URL we deliberately keep secret-free.
-fn is_clean_https_url(destination: &str) -> bool {
+pub(super) fn is_clean_https_url(destination: &str) -> bool {
     let Some(host_and_path) = destination.strip_prefix("https://") else {
         return false;
     };
@@ -444,28 +496,6 @@ mod tests {
     }
 
     #[test]
-    fn settings_credentials_require_a_clean_https_link_and_go_to_the_keychain() {
-        let error = save_for_destination("git@example.test:notes.git", "me", "token")
-            .expect_err("SSH does not take an HTTPS token");
-        assert_eq!(error.code, "sync.credentials_need_https");
-
-        let error = save_for_destination(
-            "https://me:token@settings.example.test/notes.git",
-            "me",
-            "token",
-        )
-        .expect_err("a token belongs in the form, not the link");
-        assert_eq!(error.code, "sync.credentials_need_https");
-
-        save_for_destination(" https://settings.example.test/notes.git ", " me ", "token")
-            .expect("stored");
-        assert_eq!(
-            get("https://settings.example.test/notes.git").expect("readable"),
-            Some(("me".to_string(), "token".to_string()))
-        );
-    }
-
-    #[test]
     fn provide_returns_what_was_stored_and_does_not_echo_the_secret_on_miss() {
         store("https://example.test/vault.git", "me", "tok").expect("stored");
         let action = gix::protocol::credentials::helper::Action::get_for_url(
@@ -480,5 +510,55 @@ mod tests {
         let miss =
             gix::protocol::credentials::helper::Action::get_for_url("https://other.test/vault.git");
         assert!(provide(miss).expect("a miss is not an error").is_none());
+    }
+
+    #[test]
+    fn a_bound_profile_does_not_fall_back_to_a_url_entry() {
+        store(
+            "https://fallback.example.test/notes.git",
+            "url-user",
+            "url-tok",
+        )
+        .expect("stored");
+        store_profile("p-bound", "profile-user", "profile-tok").expect("stored");
+
+        let from_profile = with_profile(Some("p-bound"), || {
+            get("https://fallback.example.test/notes.git").expect("readable")
+        });
+        assert_eq!(
+            from_profile,
+            Some(("profile-user".to_string(), "profile-tok".to_string()))
+        );
+
+        let missing = with_profile(Some("p-missing"), || {
+            get("https://fallback.example.test/notes.git").expect("readable")
+        });
+        assert_eq!(missing, None);
+        assert_eq!(
+            get_legacy("https://fallback.example.test/notes.git").expect("readable"),
+            Some(("url-user".to_string(), "url-tok".to_string()))
+        );
+    }
+
+    #[test]
+    fn two_profiles_for_the_same_host_and_user_stay_distinct() {
+        store_profile("p-one", "me", "token-one").expect("stored");
+        store_profile("p-two", "me", "token-two").expect("stored");
+
+        assert_eq!(
+            get_profile("p-one").expect("readable"),
+            Some(("me".to_string(), "token-one".to_string()))
+        );
+        assert_eq!(
+            get_profile("p-two").expect("readable"),
+            Some(("me".to_string(), "token-two".to_string()))
+        );
+    }
+
+    #[test]
+    fn storage_status_treats_a_missing_probe_entry_as_available() {
+        let (kind, message) = storage_status();
+        assert_eq!(kind, StorageKind::Available);
+        assert!(message.contains("keep a sign-in"));
     }
 }

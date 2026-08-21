@@ -330,7 +330,8 @@ describe("settings registry", () => {
       "sync.destination"
     ]);
     expect(workspaceSync?.sections[0]?.settings?.map((def) => def.key)).toEqual([
-      "destination"
+      "destination",
+      "signInProfile"
     ]);
   });
 
@@ -495,7 +496,8 @@ describe("extractDefaults", () => {
   it("returns workspace defaults from per-setting scope, not module scope", () => {
     const registry = registryWithBuiltIns();
     expect(extractDefaults(registry, "workspace")).toEqual({
-      "sync.destination": ""
+      "sync.destination": "",
+      "sync.signInProfile": ""
     });
   });
 
@@ -528,6 +530,7 @@ describe("extractDefaults", () => {
 
     expect(extractDefaults(registry, "workspace")).toEqual({
       "sync.destination": "",
+      "sync.signInProfile": "",
       "ws.defaultFolder": null
     });
   });
@@ -747,6 +750,20 @@ describe("built-in module structure", () => {
 
     expect(def).toMatchObject({
       key: "sync.destination",
+      type: "string",
+      default: "",
+      scope: "workspace",
+      section: "sync.destination",
+      portable: false
+    });
+  });
+
+  it("exposes sync.signInProfile as a non-portable workspace setting", () => {
+    const registry = registryWithBuiltIns();
+    const def = registry.getDefinition("sync.signInProfile");
+
+    expect(def).toMatchObject({
+      key: "sync.signInProfile",
       type: "string",
       default: "",
       scope: "workspace",

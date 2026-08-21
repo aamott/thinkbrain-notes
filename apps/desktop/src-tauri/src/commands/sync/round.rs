@@ -83,39 +83,31 @@ pub fn destination(app_data_dir: &Path, root: &Path) -> Option<String> {
             return None;
         }
     };
-    let named = crate::commands::settings::parse_app_settings_record(contents.as_deref())
-        .get(SETTING)?
-        .as_str()?
-        .trim()
-        .to_string();
+    let mut record = crate::commands::settings::parse_app_settings_record(contents.as_deref());
+    let named = record.get(SETTING)?.as_str()?.trim().to_string();
     if named.is_empty() {
         return None;
     }
     let redacted = super::credentials::take_from_url(&named);
     if redacted != named {
-        forget_secret_in_settings(&path, contents.as_deref(), &redacted);
+        record.insert(
+            SETTING.to_string(),
+            serde_json::Value::String(redacted.clone()),
+        );
+        match crate::commands::settings::serialize_app_settings_record(record) {
+            Ok(written) => {
+                if let Err(error) =
+                    crate::commands::workspace::write_file_atomically(&path, written)
+                {
+                    eprintln!("[sync] failed to redact secret from settings: {error:?}");
+                }
+            }
+            Err(_) => {
+                eprintln!("[sync] failed to serialize redacted settings, secret may remain on disk")
+            }
+        }
     }
     Some(redacted)
-}
-
-/// The token has gone to the keychain; it must not stay in the settings file.
-///
-/// A failed redaction leaves the credential in plaintext on disk, so it must
-/// never be silent: every failure is logged loudly. Only the error is logged —
-/// never the secret or the file contents.
-fn forget_secret_in_settings(path: &Path, contents: Option<&str>, redacted: &str) {
-    let mut record = crate::commands::settings::parse_app_settings_record(contents);
-    record.insert(
-        SETTING.to_string(),
-        serde_json::Value::String(redacted.to_string()),
-    );
-    let Ok(written) = crate::commands::settings::serialize_app_settings_record(record) else {
-        eprintln!("[sync] failed to serialize redacted settings, secret may remain on disk");
-        return;
-    };
-    if let Err(error) = crate::commands::workspace::write_file_atomically(path, written) {
-        eprintln!("[sync] failed to redact secret from settings: {error:?}");
-    }
 }
 
 /// One round trip: fetch, merge, send.
@@ -125,12 +117,28 @@ pub fn once(
     vault: &Path,
     destination: &str,
 ) -> Result<Synced, NativeError> {
+    run_trip(repo, vault, destination, None, |_| {})
+}
+
+/// Fetch, merge, and send with an explicit profile and phase callback.
+///
+/// Import uses this rather than [`sync`] so it can hold the workspace lane
+/// itself and not deadlock, and so Settings' "saving" step is skipped for an
+/// empty new folder.
+pub(super) fn run_trip(
+    repo: &gix::Repository,
+    vault: &Path,
+    destination: &str,
+    profile_id: Option<&str>,
+    on_phase: impl FnMut(SyncPhase),
+) -> Result<Synced, NativeError> {
     trip(
         repo,
         vault,
         destination,
         Arc::new(AtomicBool::new(false)),
-        |_| {},
+        profile_id.map(str::to_owned),
+        on_phase,
     )
 }
 
@@ -139,6 +147,7 @@ fn trip(
     vault: &Path,
     destination: &str,
     cancel: Arc<AtomicBool>,
+    profile_id: Option<String>,
     mut on_phase: impl FnMut(SyncPhase),
 ) -> Result<Synced, NativeError> {
     on_phase(SyncPhase::Checking);
@@ -146,8 +155,11 @@ fn trip(
         let repo = repo.clone();
         let destination = destination.to_owned();
         let cancel = Arc::clone(&cancel);
+        let profile = profile_id.clone();
         bounded(network::NETWORK, Arc::clone(&cancel), move || {
-            network::fetch(&repo, &destination, &cancel)
+            super::credentials::with_profile(profile.as_deref(), || {
+                network::fetch(&repo, &destination, &cancel)
+            })
         })
     }?;
     let ours = snapshot::head_commit(repo)?;
@@ -186,8 +198,11 @@ fn trip(
         let repo = repo.clone();
         let destination = destination.to_owned();
         let cancel = Arc::clone(&cancel);
+        let profile = profile_id.clone();
         bounded(network::NETWORK, cancel, move || {
-            push::send(&repo, &destination, BRANCH, tip)
+            super::credentials::with_profile(profile.as_deref(), || {
+                push::send(&repo, &destination, BRANCH, tip)
+            })
         })
     }?;
 
@@ -320,6 +335,7 @@ pub fn sync(
     key: &str,
     root: &Path,
     destination: &str,
+    profile_id: Option<&str>,
 ) -> Result<Synced, NativeError> {
     let lane = super::registry::lane(key);
     let _lane = lane.lock().unwrap_or_else(|error| {
@@ -340,6 +356,7 @@ pub fn sync(
     // Count an attempted round, not only a successful one. Otherwise a bad
     // link or missing sign-in starts a new automatic attempt every sweep tick.
     engine.mark_synced();
+    let profile = profile_id.map(str::to_owned);
     let outcome = (|| {
         // Whatever is still sitting in the settle window belongs in this sync.
         report_phase(engine, key, SyncPhase::Saving);
@@ -348,16 +365,21 @@ pub fn sync(
 
         let repo = engine.repository();
         let cancel = Arc::new(AtomicBool::new(false));
-        let synced = trip(&repo, root, destination, Arc::clone(&cancel), |phase| {
-            report_phase(engine, key, phase)
-        })?;
+        let synced = trip(
+            &repo,
+            root,
+            destination,
+            Arc::clone(&cancel),
+            profile.clone(),
+            |phase| report_phase(engine, key, phase),
+        )?;
         engine.forget_unsupported();
         engine.note_stuck(synced.skipped.clone());
         if !matches!(synced.landed, push::Landed::Refused { .. }) {
             return Ok(synced);
         }
 
-        let again = trip(&repo, root, destination, cancel, |phase| {
+        let again = trip(&repo, root, destination, cancel, profile.clone(), |phase| {
             report_phase(engine, key, phase)
         })?;
         engine.forget_unsupported();
@@ -444,7 +466,8 @@ pub fn sync_now(app: tauri::AppHandle, root_path: String) -> Result<Synced, Nati
         })
     })?;
 
-    let synced = sync(&engine, &key, &root, &destination)?;
+    let profile = super::sign_in::selected_profile_id_for(&root);
+    let synced = sync(&engine, &key, &root, &destination, profile.as_deref())?;
     Ok(finish(&app, &engine, &key, &root, synced))
 }
 

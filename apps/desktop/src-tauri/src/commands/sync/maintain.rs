@@ -346,13 +346,16 @@ fn protected_objects(repo: &gix::Repository) -> Result<BTreeSet<gix::ObjectId>, 
     if let Some(main) = snapshot::head_commit(repo)? {
         stack.push(main);
     }
-    if let Some(remote) = head_of(repo, REMOTE_REF)? {
+    if let Some(remote) = snapshot::try_head_of(repo, REMOTE_REF).map_err(cleanup_failed)? {
         stack.push(remote);
     }
     if let Some(checkpoints) = snapshot::checkpoint_head(repo)? {
         stack.push(checkpoints);
     }
-    if let (Some(ours), Some(theirs)) = (snapshot::head_commit(repo)?, head_of(repo, REMOTE_REF)?) {
+    if let (Some(ours), Some(theirs)) = (
+        snapshot::head_commit(repo)?,
+        snapshot::try_head_of(repo, REMOTE_REF).map_err(cleanup_failed)?,
+    ) {
         if let Ok(base) = repo.merge_base(ours, theirs) {
             stack.push(base.detach());
         }
@@ -389,14 +392,6 @@ fn protected_objects(repo: &gix::Repository) -> Result<BTreeSet<gix::ObjectId>, 
         }
     }
     Ok(seen)
-}
-
-fn head_of(repo: &gix::Repository, reference: &str) -> Result<Option<gix::ObjectId>, NativeError> {
-    match repo.find_reference(reference) {
-        Ok(mut found) => Ok(Some(found.peel_to_id().map_err(cleanup_failed)?.detach())),
-        Err(gix::reference::find::existing::Error::NotFound { .. }) => Ok(None),
-        Err(error) => Err(cleanup_failed(error)),
-    }
 }
 
 fn dir_size(path: &Path) -> io::Result<u64> {

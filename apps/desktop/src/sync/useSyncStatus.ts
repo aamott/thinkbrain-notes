@@ -14,10 +14,14 @@ import { readSyncStatus, subscribeToSyncStatus } from "./syncService";
  * A failure reads as "not recording" rather than throwing: the footer is an
  * ambient thing, and the panels are where a problem gets explained.
  *
- * When supplied, `onConflictChange` shares this hook's one conflict listener
- * with a panel that needs to refresh its own list.
+ * Optional callbacks share this hook's listeners with panels that also need
+ * to refresh their own content.
  */
-export function useSyncStatus(rootPath: string | null, onConflictChange?: () => void): SyncStatus {
+export function useSyncStatus(
+  rootPath: string | null,
+  onConflictChange?: () => void,
+  onStatusChange?: () => void
+): SyncStatus {
   const [status, setStatus] = useState<SyncStatus>(NOT_RECORDING);
 
   useEffect(() => {
@@ -29,6 +33,7 @@ export function useSyncStatus(rootPath: string | null, onConflictChange?: () => 
     const stops: (() => void)[] = [];
 
     const refresh = () => {
+      onStatusChange?.();
       void readSyncStatus(rootPath)
         .then((next) => {
           if (!cancelled) setStatus(next);
@@ -65,7 +70,7 @@ export function useSyncStatus(rootPath: string | null, onConflictChange?: () => 
       cancelled = true;
       for (const stop of stops) stop();
     };
-  }, [onConflictChange, rootPath]);
+  }, [onConflictChange, onStatusChange, rootPath]);
 
   return status;
 }

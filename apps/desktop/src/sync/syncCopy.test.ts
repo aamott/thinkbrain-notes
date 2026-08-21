@@ -194,6 +194,12 @@ describe("the status footer", () => {
     expect(recoveryFor("sync.credentials_unavailable")).toBe(
       "Unlock this computer's keychain, then save the sign-in again."
     );
+    expect(recoveryFor("sync.sign_in_missing")).toBe(
+      "Choose another saved sign-in, or add a username and access token."
+    );
+    expect(recoveryFor("sync.sign_in_needed")).toBe(
+      "Choose a saved sign-in, or add a username and access token."
+    );
     expect(recoveryFor("sync.remote_not_found")).toBe(
       "Check the git link. If this is a private repository, make sure the token can access it."
     );

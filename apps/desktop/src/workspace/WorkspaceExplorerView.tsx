@@ -1,5 +1,5 @@
 import { useCallback, useId, useRef, useState } from "react";
-import { ChevronDown, Folder, FolderPlus, MoreHorizontal } from "lucide-react";
+import { ChevronDown, Folder, FolderPlus, Link, MoreHorizontal } from "lucide-react";
 import type { NativeWorkspaceEntry } from "../native/commands";
 import type { WorkspaceExplorerState, WorkspaceTreeNode } from "./workspaceExplorerModel";
 import { WorkspaceFileIcon } from "./WorkspaceFileIcon";
@@ -7,6 +7,8 @@ import { cn } from "../lib/utils";
 import { Menu, MenuButton, MenuCheckbox } from "../shell/Menu";
 import { WorkspaceTreeItem, InlineNameInput } from "./WorkspaceTree";
 import { DeleteConfirmDialog, WorkspaceContextMenu } from "./WorkspaceExplorerMenus";
+import { GitLinkImportDialog } from "./GitLinkImportDialog";
+import { IMPORT_FROM_GIT_LABEL, OPEN_FOLDER_LABEL } from "./gitLinkImportCopy";
 import type { ContextMenuState, CreateState, RenameState, WorkspaceExplorerActions } from "./workspaceExplorerTypes";
 
 interface WorkspaceExplorerViewProps {
@@ -26,6 +28,7 @@ interface WorkspaceExplorerViewProps {
   readonly activePath: string | null;
   readonly recentWorkspacePaths: readonly string[];
   readonly actions: WorkspaceExplorerActions;
+  readonly importFromGitOpen: boolean;
 }
 
 export function WorkspaceExplorerView({
@@ -44,7 +47,8 @@ export function WorkspaceExplorerView({
   expandedFolders,
   activePath,
   recentWorkspacePaths,
-  actions
+  actions,
+  importFromGitOpen
 }: WorkspaceExplorerViewProps) {
   const isBusy = state.phase === "opening" || busy;
   // The menu has to know its own trigger, or the press that closes it counts
@@ -174,8 +178,10 @@ export function WorkspaceExplorerView({
         currentPath={workspaceRootPath}
         paths={recentWorkspacePaths}
         onAdd={actions.openWorkspace}
+        onImportFromGit={actions.openGitLinkImport}
         onSelect={actions.launchWorkspace}
       />
+      {importFromGitOpen && <GitLinkImportDialog onClose={() => actions.setImportFromGitOpen(false)} />}
     </section>
   );
 }
@@ -205,7 +211,7 @@ function ErrorState({ message, onDismiss }: { readonly message: string; readonly
   );
 }
 
-export function WorkspaceSelector({ currentPath, paths, onSelect, onAdd }: { readonly currentPath?: string; readonly paths: readonly string[]; readonly onSelect: (path: string) => void; readonly onAdd: () => void }) {
+export function WorkspaceSelector({ currentPath, paths, onSelect, onAdd, onImportFromGit }: { readonly currentPath?: string; readonly paths: readonly string[]; readonly onSelect: (path: string) => void; readonly onAdd: () => void; readonly onImportFromGit: () => void }) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuId = useId();
@@ -252,8 +258,13 @@ export function WorkspaceSelector({ currentPath, paths, onSelect, onAdd }: { rea
           ))}
           <MenuButton
             icon={<FolderPlus />}
-            label="Add workspace"
+            label={OPEN_FOLDER_LABEL}
             onClick={() => { closeMenu(true); onAdd(); }}
+          />
+          <MenuButton
+            icon={<Link />}
+            label={IMPORT_FROM_GIT_LABEL}
+            onClick={() => { closeMenu(true); onImportFromGit(); }}
           />
         </Menu>
       )}

@@ -11,6 +11,8 @@ import type {
   HistoryCleanup as NativeHistoryCleanup,
   HistoryUsage as NativeHistoryUsage,
   RecordedChange as NativeRecordedChange,
+  SavedSignIn as NativeSavedSignIn,
+  SignInStatus as NativeSignInStatus,
   Synced as NativeSynced,
   SyncStatus as NativeSyncStatus
 } from "../sync/historyTypes";
@@ -241,8 +243,42 @@ export interface NativeCommandMap {
       readonly destination: string;
       readonly username: string;
       readonly token: string;
+      readonly profileId?: string | null;
+      readonly label?: string | null;
     };
-    readonly result: NativeSynced;
+    readonly result: NativeSavedSignIn;
+  };
+  readonly save_sync_link: {
+    readonly args: {
+      readonly rootPath: string;
+      readonly destination: string;
+      readonly profileId?: string | null;
+    };
+    readonly result: NativeSavedSignIn;
+  };
+  readonly sync_sign_in_status: {
+    readonly args: {
+      readonly rootPath: string;
+      readonly destination: string;
+      readonly profileId?: string | null;
+    };
+    readonly result: NativeSignInStatus;
+  };
+  readonly forget_sync_sign_in: {
+    readonly args: { readonly profileId: string };
+    readonly result: null;
+  };
+  readonly preview_workspace_from_git_link: {
+    readonly args: { readonly destination: string; readonly parentPath: string };
+    readonly result: NativeGitLinkPreview;
+  };
+  readonly import_workspace_from_git_link: {
+    readonly args: {
+      readonly destination: string;
+      readonly parentPath: string;
+      readonly profileId?: string | null;
+    };
+    readonly result: NativeImportStarted;
   };
   readonly sync_history_usage: {
     readonly args: { readonly rootPath: string };
@@ -395,6 +431,24 @@ export interface NativeWorkspaceSnapshot {
 export interface NativeThemeEntry {
   readonly name: string;
   readonly path: string;
+}
+
+export interface NativeGitLinkPreview {
+  readonly childName: string;
+  readonly targetPath: string;
+}
+
+export interface NativeImportStarted {
+  readonly requestId: string;
+  readonly targetPath: string;
+}
+
+export interface NativeImportProgress {
+  readonly requestId: string;
+  readonly state: string;
+  readonly phase?: NativeSyncStatus["phase"];
+  readonly targetPath: string;
+  readonly error?: NativeCommandErrorShape;
 }
 
 // Sent to `index_documents`. Field names are camelCase here and mapped to the

@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act } from "react";
+import { act, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -19,20 +19,20 @@ const syncNow = vi.fn<(rootPath: string) => Promise<Synced>>();
 let destination = "";
 const readConflictRate = vi.fn<(rootPath: string) => Promise<ConflictRate>>();
 const restoreVersion = vi.fn<(rootPath: string, notePath: string, change: string) => Promise<void>>();
-const subscribeToSyncStatus = vi.fn<() => Promise<() => void>>();
-
 // Module-level so a test can put the panel on a live phase without re-mocking.
 let syncStatus: SyncStatus = { ...NOT_RECORDING, state: "idle" };
 
 vi.mock("./useSyncStatus", () => ({
-  useSyncStatus: () => syncStatus
+  useSyncStatus: (_rootPath: string | null, _onConflictChange?: () => void, onStatusChange?: () => void) => {
+    useEffect(() => onStatusChange?.(), [onStatusChange]);
+    return syncStatus;
+  }
 }));
 
 vi.mock("./syncService", () => ({
   readHistory,
   readConflictRate,
   restoreVersion,
-  subscribeToSyncStatus,
   syncNow
 }));
 
@@ -61,7 +61,6 @@ beforeEach(() => {
   readHistory.mockReset().mockResolvedValue([]);
   readConflictRate.mockReset().mockResolvedValue({ decisions: 0, settled: 0, recorded: 0 });
   restoreVersion.mockReset().mockResolvedValue(undefined);
-  subscribeToSyncStatus.mockReset().mockResolvedValue(() => undefined);
   syncNow.mockReset().mockResolvedValue({
     broughtDown: 0,
     askedAbout: 0,
@@ -241,17 +240,6 @@ describe("putting a version back", () => {
     );
     const host = await renderRoadmapForRestore();
     expect(host.textContent).toContain("Check this computer has space left");
-  });
-
-  it("logs a failed history subscription instead of leaving it unhandled", async () => {
-    const cause = new Error("listen failed");
-    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    subscribeToSyncStatus.mockRejectedValue(cause);
-
-    await render();
-
-    expect(log).toHaveBeenCalledWith("[sync] could not subscribe to history updates", cause);
-    log.mockRestore();
   });
 
   /// A change that only deleted a note left no text to put back — offering one

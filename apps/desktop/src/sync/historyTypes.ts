@@ -137,3 +137,37 @@ export interface HistoryCleanup {
   readonly bytesAfter: number;
   readonly reclaimed: number;
 }
+
+/** One reusable git sign-in, without its token. */
+export interface SignInProfile {
+  readonly id: string;
+  readonly label: string;
+  readonly host: string;
+  readonly username: string;
+}
+
+export interface SelectedSignIn extends SignInProfile {
+  readonly saved: boolean;
+}
+
+export interface LegacySignIn {
+  readonly host: string;
+  readonly username: string;
+}
+
+export type SignInStorage = "available" | "unavailable" | "unsupported";
+
+export interface SignInStatus {
+  readonly storage: SignInStorage;
+  readonly storageMessage: string;
+  readonly host: string | null;
+  readonly selectedId: string | null;
+  readonly selected: SelectedSignIn | null;
+  readonly profiles: readonly SignInProfile[];
+  readonly legacy: LegacySignIn | null;
+}
+
+export interface SavedSignIn {
+  readonly profile: SignInProfile;
+  readonly migrated: boolean;
+}

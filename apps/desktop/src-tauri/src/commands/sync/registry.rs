@@ -442,16 +442,53 @@ fn maybe_maintain(key: &str, engine: &Arc<Engine>) {
 /// Shared by workspace open and idle scheduling so both paths show the same
 /// status, hold the same lane, and report the same failures.
 fn start_round(key: &str, engine: &Arc<Engine>, root: PathBuf, destination: String) {
+    start_round_inner(None, key, engine, root, destination, None);
+}
+
+/// Starts a setup check in the background so Settings can return immediately.
+///
+/// On success it fires the existing setup toast; on failure the engine's
+/// problem is already the error toast. The saved link and profile stay.
+pub(super) fn start_setup_round(
+    app: tauri::AppHandle,
+    key: &str,
+    engine: &Arc<Engine>,
+    root: PathBuf,
+    destination: String,
+    profile_id: Option<String>,
+) {
+    start_round_inner(Some(app), key, engine, root, destination, profile_id);
+}
+
+fn start_round_inner(
+    app: Option<tauri::AppHandle>,
+    key: &str,
+    engine: &Arc<Engine>,
+    root: PathBuf,
+    destination: String,
+    profile_id: Option<String>,
+) {
     if !engine.set_syncing(true) {
         return;
     }
     crate::commands::watcher::announce_sync_status(key);
     let worker = Arc::clone(engine);
     let worker_key = key.to_string();
+    let profile_id = profile_id.or_else(|| super::sign_in::selected_profile_id_for(&root));
     if std::thread::Builder::new()
         .name("thinkbrain-auto-sync".into())
         .spawn(move || {
-            let _ = round::sync(&worker, &worker_key, &root, &destination);
+            let result = round::sync(
+                &worker,
+                &worker_key,
+                &root,
+                &destination,
+                profile_id.as_deref(),
+            );
+            if let (Some(app), Ok(synced)) = (app.as_ref(), result) {
+                round::finish(app, &worker, &worker_key, &root, synced);
+                crate::commands::watcher::announce_setup_ok(app, &worker_key);
+            }
             crate::commands::watcher::announce_sync_status(&worker_key);
         })
         .is_err()

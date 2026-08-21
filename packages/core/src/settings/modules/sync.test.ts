@@ -66,6 +66,15 @@ describe("sync module", () => {
     expect(destination?.control).toBe("sync-git-link");
   });
 
+  it("keeps the selected sign-in id as a hidden workspace setting", () => {
+    const profile = syncModule.sections
+      .flatMap((section) => section.settings ?? [])
+      .find((setting) => setting.key === "signInProfile");
+    expect(profile?.scope).toBe("workspace");
+    expect(profile?.portable).toBe(false);
+    expect(profile?.default).toBe("");
+  });
+
   it("explains cloud copies separately from git", () => {
     const cloud = syncModule.sections.find((section) => section.id === "sync.conflicts");
     const git = syncModule.sections.find((section) => section.id === "sync.destination");

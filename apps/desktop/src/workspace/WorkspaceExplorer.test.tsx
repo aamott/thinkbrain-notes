@@ -16,6 +16,12 @@ vi.mock("./workspaceSettings", () => ({
   writeWorkspaceSettings: vi.fn(() => Promise.resolve())
 }));
 
+vi.mock("./gitLinkImport", () => ({
+  previewWorkspaceFromGitLink: vi.fn(),
+  importWorkspaceFromGitLink: vi.fn(),
+  subscribeToWorkspaceImport: vi.fn(() => Promise.resolve(() => undefined))
+}));
+
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
 
@@ -32,6 +38,7 @@ async function renderSelector() {
   root = createRoot(container);
   const onSelect = vi.fn();
   const onAdd = vi.fn();
+  const onImportFromGit = vi.fn();
 
   await act(async () => {
     root?.render(
@@ -40,11 +47,12 @@ async function renderSelector() {
         paths={["/notes/previous", "/notes/current"]}
         onSelect={onSelect}
         onAdd={onAdd}
+        onImportFromGit={onImportFromGit}
       />
     );
   });
 
-  return { onAdd, onSelect };
+  return { onAdd, onImportFromGit, onSelect };
 }
 
 async function renderExplorer(api: WorkspaceDesktopApi, initialWorkspacePath?: string) {
@@ -88,7 +96,7 @@ describe("WorkspaceExplorer presentation", () => {
 
     const menu = container?.querySelector("[role='menu']");
     expect(menu?.getAttribute("aria-label")).toBe("Workspaces");
-    expect(menu?.querySelectorAll("[role='menuitem']")).toHaveLength(3);
+    expect(menu?.querySelectorAll("[role='menuitem']")).toHaveLength(4);
     const previous = Array.from(menu?.querySelectorAll<HTMLButtonElement>("button") ?? [])
       .find((button) => button.textContent?.includes("previous"));
     if (!previous) throw new Error("Known workspace was not rendered.");
@@ -99,8 +107,8 @@ describe("WorkspaceExplorer presentation", () => {
     expect(onAdd).not.toHaveBeenCalled();
   });
 
-  it("closes the selector menu with Escape and exposes Add workspace as its final action", async () => {
-    const { onAdd } = await renderSelector();
+  it("closes the selector menu with Escape and exposes Open folder and Bring in from Git link", async () => {
+    const { onAdd, onImportFromGit } = await renderSelector();
     const trigger = container?.querySelector<HTMLButtonElement>("button");
     if (!trigger) throw new Error("Workspace selector trigger was not rendered.");
     await click(trigger);
@@ -113,10 +121,16 @@ describe("WorkspaceExplorer presentation", () => {
 
     await click(trigger);
     const actions = Array.from(container?.querySelectorAll<HTMLButtonElement>("[role='menuitem']") ?? []);
-    expect(actions.at(-1)?.textContent).toContain("Add workspace");
-    await click(actions.at(-1)!);
-
+    expect(actions.at(-2)?.textContent).toContain("Open folder");
+    expect(actions.at(-1)?.textContent).toContain("Bring in from Git link");
+    await click(actions.at(-2)!);
     expect(onAdd).toHaveBeenCalledOnce();
+    expect(onImportFromGit).not.toHaveBeenCalled();
+
+    await click(trigger);
+    const again = Array.from(container?.querySelectorAll<HTMLButtonElement>("[role='menuitem']") ?? []);
+    await click(again.at(-1)!);
+    expect(onImportFromGit).toHaveBeenCalledOnce();
     expect(container?.querySelector("[role='menu']")).toBeNull();
     expect(document.activeElement).toBe(trigger);
   });
@@ -186,7 +200,9 @@ describe("WorkspaceExplorer presentation", () => {
 
     await click(trigger);
     const actions = Array.from(container?.querySelectorAll<HTMLButtonElement>("[role='menuitem']") ?? []);
-    await click(actions.at(-1)!);
+    const openFolder = actions.find((button) => button.textContent?.includes("Open folder"));
+    if (!openFolder) throw new Error("Open folder action was not rendered.");
+    await click(openFolder);
     expect(pickWorkspaceDirectory).toHaveBeenCalledOnce();
     expect(openWorkspaceWindow).toHaveBeenCalledWith("/notes/new");
   });

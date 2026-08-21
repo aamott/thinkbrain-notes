@@ -148,10 +148,20 @@ export const syncModule: SettingsModule = {
           section: "sync.destination",
           label: "Git link",
           description:
-            "An https:// link to GitHub, GitLab, or similar — or a folder path to a bare git repo on this computer or a NAS. Leave empty for this device only. Enter the username and access token below; they are saved in this computer's keychain, never in this link.",
+            "An https:// link to GitHub, GitLab, or similar — or a folder path to a bare git repo on this computer or a NAS. Leave empty for this device only. Choose a saved sign-in below, or add a username and access token; the token is saved in this computer's keychain, never in this link.",
           control: "sync-git-link",
           portable: false,
           validation: validateSyncDestination
+        },
+        {
+          key: "signInProfile",
+          type: "string",
+          default: "",
+          scope: "workspace",
+          section: "sync.destination",
+          label: "Saved sign-in",
+          description: "Which saved sign-in this folder uses. Shown with the git link.",
+          portable: false
         }
       ]
     }

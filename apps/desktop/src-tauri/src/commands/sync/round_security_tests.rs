@@ -92,7 +92,7 @@ fn concurrent_syncs_on_one_vault_agree_on_history() {
                 let vault = one.vault.clone();
                 let there = there.clone();
                 let key = key.clone();
-                scope.spawn(move || sync(&engine, &key, &vault, &there))
+                scope.spawn(move || sync(&engine, &key, &vault, &there, None))
             })
             .collect();
         handles
@@ -139,7 +139,7 @@ fn a_sync_waits_for_the_workspace_lane_before_entering_the_trip() {
                 let vault = one.vault.clone();
                 let there = there.clone();
                 let key = key.clone();
-                scope.spawn(move || sync(&engine, &key, &vault, &there))
+                scope.spawn(move || sync(&engine, &key, &vault, &there, None))
             })
             .collect();
 

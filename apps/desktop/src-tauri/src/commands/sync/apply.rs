@@ -71,11 +71,7 @@ pub(super) fn leave_copies(
             skipped.push(stuck(beside, Some(id.to_owned()), error));
             continue;
         }
-        left.push(conflict::ConflictCopy {
-            copy: beside,
-            original: original.to_string(),
-            provider: "git",
-        });
+        left.push(git_copy(beside, original));
     }
     Ok((left, skipped))
 }
@@ -142,11 +138,7 @@ pub(super) fn apply(
                 continue;
             }
             kept_back += 1;
-            copies.push(conflict::ConflictCopy {
-                copy: beside,
-                original,
-                provider: "git",
-            });
+            copies.push(git_copy(beside, original));
             continue;
         }
 
@@ -203,19 +195,11 @@ fn unexpected(
     blob: Option<gix::ObjectId>,
     expected: Option<gix::ObjectId>,
 ) -> Result<Option<Vec<u8>>, NativeError> {
-    let Ok(on_disk) = std::fs::read(path) else {
+    let Some(current) = disk_blob_id(repo, path)? else {
         // Nothing there to lose. A note already gone is also the state a
         // deletion wanted.
         return Ok(None);
     };
-    let current = gix::objs::compute_hash(repo.object_hash(), gix::object::Kind::Blob, &on_disk)
-        .map_err(|error| {
-            failed(
-                "sync.note_write_failed",
-                "Could not read a note before replacing it.",
-                error,
-            )
-        })?;
 
     if Some(current) == expected || Some(current) == blob {
         return Ok(None);
@@ -335,11 +319,15 @@ fn write_deletion_marker(
 ) -> Result<conflict::ConflictCopy, NativeError> {
     let beside = conflict::deletion_beside_in(vault, original);
     put(&vault.join(&beside), b"")?;
-    Ok(conflict::ConflictCopy {
-        copy: beside,
-        original: original.to_string(),
+    Ok(git_copy(beside, original))
+}
+
+fn git_copy(copy: String, original: impl Into<String>) -> conflict::ConflictCopy {
+    conflict::ConflictCopy {
+        copy,
+        original: original.into(),
         provider: "git",
-    })
+    }
 }
 
 fn disk_has_unrecorded_text(
@@ -347,18 +335,22 @@ fn disk_has_unrecorded_text(
     path: &Path,
     expected: Option<gix::ObjectId>,
 ) -> Result<bool, NativeError> {
-    let Ok(on_disk) = std::fs::read(path) else {
-        return Ok(false);
+    Ok(disk_blob_id(repo, path)?.is_some_and(|current| Some(current) != expected))
+}
+
+fn disk_blob_id(repo: &gix::Repository, path: &Path) -> Result<Option<gix::ObjectId>, NativeError> {
+    let Ok(bytes) = std::fs::read(path) else {
+        return Ok(None);
     };
-    let current = gix::objs::compute_hash(repo.object_hash(), gix::object::Kind::Blob, &on_disk)
+    gix::objs::compute_hash(repo.object_hash(), gix::object::Kind::Blob, &bytes)
+        .map(Some)
         .map_err(|error| {
             failed(
                 "sync.note_write_failed",
                 "Could not read a note before replacing it.",
                 error,
             )
-        })?;
-    Ok(Some(current) != expected)
+        })
 }
 
 /// Reports recorded shortcuts and nested repositories that are not present in

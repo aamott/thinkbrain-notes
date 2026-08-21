@@ -1,15 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { NativeCommandError } from "../native/commands";
 import { noteName } from "../lib/utils";
 import { useSettingsStore } from "../settings/settingsStore";
 import { Unavailable } from "../shell/Unavailable";
 import type { ChangedNote, ConflictRate, RecordedChange, Synced } from "./historyTypes";
 import {
   describeConflictRate,
+  failureMessage,
   describeMoment,
   describePill,
-  recoveryFor,
   describeSync,
   describeWhatChanged
 } from "./syncCopy";
@@ -17,7 +16,6 @@ import {
   readConflictRate,
   readHistory,
   restoreVersion,
-  subscribeToSyncStatus,
   syncNow
 } from "./syncService";
 import { useSyncStatus } from "./useSyncStatus";
@@ -41,7 +39,6 @@ interface HistoryPanelProps {
   /** Leaves a single note's versions for the whole workspace's history. */
   readonly onShowEverything: () => void;
 }
-
 /** One read of the panel: what it holds, or why it could not be read. */
 interface Read {
   readonly changes: readonly RecordedChange[] | null;
@@ -60,19 +57,8 @@ export function HistoryPanel({ rootPath, note, onShowEverything }: HistoryPanelP
   const [syncing, setSyncing] = useState(false);
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
   const restoring = useRef(false);
+  const reloadId = useRef(0);
   const loading = loadedKey !== queryKey;
-  const status = useSyncStatus(rootPath);
-  const { alongsideOwnGit } = status;
-  // Live status covers background trips; local `syncing` covers the click until
-  // the first status event arrives, so the button never looks idle mid-request.
-  const bringingInStep = syncing || status.state === "syncing";
-  const syncButtonLabel = bringingInStep
-    ? describePill({
-        ...status,
-        state: "syncing",
-        phase: status.state === "syncing" ? status.phase : null
-      }).text
-    : "Bring these notes in step now";
   // Native manual sync reads the saved workspace document. Do not enable this
   // from a staged link that the native side cannot see yet.
   const destination = useSettingsStore((state) => state.workspaceValues?.["sync.destination"]);
@@ -88,7 +74,7 @@ export function HistoryPanel({ rootPath, note, onShowEverything }: HistoryPanelP
       ]);
       return { changes, rate, error: null };
     } catch (cause) {
-      return { changes: null, rate: null, error: messageOf(cause, "This folder's saved versions could not be read.") };
+      return { changes: null, rate: null, error: failureMessage(cause, "This folder's saved versions could not be read.", true) };
     }
   }, [note, rootPath]);
 
@@ -100,33 +86,27 @@ export function HistoryPanel({ rootPath, note, onShowEverything }: HistoryPanelP
     setLoadedKey(queryKey);
   }, [queryKey]);
 
-  // One effect for the first read and every one after it. The sweeper announces
-  // when it has written something, which is exactly when this list is out of
-  // date — including after a restore made in this very window.
-  useEffect(() => {
-    let cancelled = false;
-    let stop: (() => void) | null = null;
-    const reload = () => {
-      void read().then((result) => {
-        if (!cancelled) apply(result);
-      });
-    };
-
-    reload();
-    void subscribeToSyncStatus(reload)
-      .then((unlisten) => {
-        if (cancelled) unlisten();
-        else stop = unlisten;
-      })
-      .catch((cause: unknown) => {
-        if (!cancelled) console.error("[sync] could not subscribe to history updates", cause);
-      });
-
-    return () => {
-      cancelled = true;
-      stop?.();
-    };
+  const reload = useCallback(() => {
+    const id = ++reloadId.current;
+    void read().then((result) => {
+      if (id === reloadId.current) apply(result);
+    });
   }, [apply, read]);
+  useEffect(() => () => {
+    reloadId.current++;
+  }, [queryKey]);
+  const status = useSyncStatus(rootPath, undefined, reload);
+  const { alongsideOwnGit } = status;
+  // Live status covers background trips; local `syncing` covers the click until
+  // the first status event arrives, so the button never looks idle mid-request.
+  const bringingInStep = syncing || status.state === "syncing";
+  const syncButtonLabel = bringingInStep
+    ? describePill({
+        ...status,
+        state: "syncing",
+        phase: status.state === "syncing" ? status.phase : null
+      }).text
+    : "Bring these notes in step now";
 
   const putBack = useCallback(
     async (change: RecordedChange, path: string) => {
@@ -138,7 +118,7 @@ export function HistoryPanel({ rootPath, note, onShowEverything }: HistoryPanelP
       try {
         await restoreVersion(rootPath, path, change.id);
       } catch (cause) {
-        failure = messageOf(cause, "That version could not be put back. Nothing was changed.");
+        failure = failureMessage(cause, "That version could not be put back. Nothing was changed.", true);
       }
       try {
         // Always after the attempt, and the report last: the re-read clears the
@@ -166,7 +146,7 @@ export function HistoryPanel({ rootPath, note, onShowEverything }: HistoryPanelP
     try {
       done = await syncNow(rootPath);
     } catch (cause) {
-      failure = messageOf(cause, "These notes could not be brought in step. Nothing was changed.");
+      failure = failureMessage(cause, "These notes could not be brought in step. Nothing was changed.", true);
     }
     // The re-read first, the report last, for the same reason a restore does
     // it that way: the list overwrites the message it was told to show.
@@ -322,7 +302,6 @@ function Entry({ change, open, collapsible, busy, onToggle, onRestore }: EntryPr
     </li>
   );
 }
-
 function NoteRow({
   note,
   busy,
@@ -347,10 +326,4 @@ function NoteRow({
       )}
     </li>
   );
-}
-
-function messageOf(cause: unknown, fallback: string): string {
-  return cause instanceof NativeCommandError
-    ? `${cause.message} ${recoveryFor(cause.code)}`
-    : fallback;
 }

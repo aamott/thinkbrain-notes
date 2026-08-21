@@ -263,6 +263,8 @@ pub fn send(
     )
     .map_err(handshake_failure)?;
 
+    let dest_ref =
+        advertised_head(greeting.refs.as_deref()).unwrap_or_else(|| reference.to_string());
     let null = gix::ObjectId::null(repo.object_hash());
     let old = greeting
         .refs
@@ -272,10 +274,10 @@ pub fn send(
             gix::protocol::handshake::Ref::Direct {
                 full_ref_name,
                 object,
-            } if full_ref_name == reference => Some(*object),
+            } if full_ref_name == dest_ref.as_str() => Some(*object),
             gix::protocol::handshake::Ref::Peeled {
                 full_ref_name, tag, ..
-            } if full_ref_name == reference => Some(*tag),
+            } if full_ref_name == dest_ref.as_str() => Some(*tag),
             _ => None,
         })
         .unwrap_or(null);
@@ -310,7 +312,7 @@ pub fn send(
         )
     };
     request
-        .write_all(format!("{old} {tip} {reference}\0report-status\n").as_bytes())
+        .write_all(format!("{old} {tip} {dest_ref}\0report-status\n").as_bytes())
         .and_then(|()| request.write_message(MessageKind::Flush))
         .map_err(sending)?;
 
@@ -323,8 +325,24 @@ pub fn send(
     drop(raw);
 
     Ok(Sent {
-        landed: read_report(&mut report, reference)?,
+        landed: read_report(&mut report, &dest_ref)?,
         objects: objects.len(),
+    })
+}
+
+/// The branch HEAD names on the remote, so a nonstandard default is updated.
+fn advertised_head(refs: Option<&[gix::protocol::handshake::Ref]>) -> Option<String> {
+    refs?.iter().find_map(|known| match known {
+        gix::protocol::handshake::Ref::Symbolic {
+            full_ref_name,
+            target,
+            ..
+        }
+        | gix::protocol::handshake::Ref::Unborn {
+            full_ref_name,
+            target,
+        } if full_ref_name == "HEAD" => Some(target.to_string()),
+        _ => None,
     })
 }
 

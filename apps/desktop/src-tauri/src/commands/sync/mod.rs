@@ -100,6 +100,7 @@ pub mod credentials;
 pub mod engine;
 pub mod hidden_repo;
 pub mod history;
+pub mod import;
 pub mod maintain;
 pub mod merge;
 mod network;
@@ -109,6 +110,7 @@ pub mod registry;
 pub mod resolve;
 pub mod round;
 pub mod settle;
+pub mod sign_in;
 pub mod snapshot;
 pub mod status;
 
