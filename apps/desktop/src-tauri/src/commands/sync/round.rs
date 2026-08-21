@@ -174,6 +174,17 @@ fn trip(
             (brought_down, copies.len(), copies, skipped)
         }
         (Some(ours), Some(theirs)) if ours == theirs => (0, 0, Vec::new(), Vec::new()),
+        // They moved; we did not. Advance to their tip instead of writing a
+        // merge commit that would block their next push as "unseen history".
+        (Some(ours), Some(theirs)) if tip_contains(repo, ours, theirs) => {
+            on_phase(SyncPhase::Combining);
+            let (brought_down, copies, skipped) = fast_forward(repo, vault, ours, theirs)?;
+            (brought_down, copies.len(), copies, skipped)
+        }
+        // We moved; they did not. Send ours as-is.
+        (Some(ours), Some(theirs)) if tip_contains(repo, theirs, ours) => {
+            (0, 0, Vec::new(), Vec::new())
+        }
         (Some(ours), Some(theirs)) => {
             on_phase(SyncPhase::Combining);
             merge(repo, vault, ours, theirs)?
@@ -228,11 +239,37 @@ fn adopt(
         snapshot::tree_of(repo, None)?,
         snapshot::tree_of(repo, Some(theirs))?,
     )?;
+    point_history(repo, theirs, "brought down from another device")?;
+    Ok((brought_down, copies, skipped))
+}
+
+/// Moves this vault to `theirs` when that tip already contains `ours`.
+fn fast_forward(
+    repo: &gix::Repository,
+    vault: &Path,
+    ours: gix::ObjectId,
+    theirs: gix::ObjectId,
+) -> Result<(usize, Vec<conflict::ConflictCopy>, Vec<StuckNote>), NativeError> {
+    let (brought_down, _, copies, skipped) = apply::apply(
+        repo,
+        vault,
+        snapshot::tree_of(repo, Some(ours))?,
+        snapshot::tree_of(repo, Some(theirs))?,
+    )?;
+    point_history(repo, theirs, "brought down from another device")?;
+    Ok((brought_down, copies, skipped))
+}
+
+fn point_history(
+    repo: &gix::Repository,
+    tip: gix::ObjectId,
+    message: &str,
+) -> Result<(), NativeError> {
     repo.reference(
         BRANCH,
-        theirs,
+        tip,
         gix::refs::transaction::PreviousValue::Any,
-        "brought down from another device",
+        message,
     )
     .map_err(|error| {
         failed(
@@ -241,7 +278,13 @@ fn adopt(
             error,
         )
     })?;
-    Ok((brought_down, copies, skipped))
+    Ok(())
+}
+
+/// Whether `tip` already contains every commit reachable from `ancestor`.
+fn tip_contains(repo: &gix::Repository, ancestor: gix::ObjectId, tip: gix::ObjectId) -> bool {
+    repo.merge_base(ancestor, tip)
+        .is_ok_and(|base| base.detach() == ancestor)
 }
 
 fn cannot(error: impl std::fmt::Display) -> NativeError {

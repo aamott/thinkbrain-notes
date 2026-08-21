@@ -73,7 +73,9 @@ and the existing catalog; a missing selection is never replaced.
 - [x] Success opens the workspace window exactly once (native `open_workspace_window`
       on ok; the dialog only closes and does not open a second window)
 - [x] Failure keeps the dialog and names a recovery action
-- [ ] Live GitHub / GitLab proof (still 6c leftover; not claimed here)
+- [x] Live GitHub proof (shared with 6c; round-trip path via
+      `scripts/sync-live-github.sh`)
+- [ ] Live GitLab proof (still 6c leftover; not claimed here)
 
 ## Known limitations
 
@@ -84,9 +86,9 @@ and the existing catalog; a missing selection is never replaced.
   added (zero-files-in-vault stands).
 - Opening the imported workspace may fire one extra no-op check via the
   existing attach path; it cannot interleave with the import trip.
-- Live host proof (GitHub / GitLab) is still required, shared with 6c/6d.
+- Live GitLab host proof is still required, shared with 6c/6d.
 
 ## Status
 
-🟨 Implemented in app code. Remaining: live host proof (GitHub / GitLab),
-same leftover as stories 6c and 6d.
+🟨 Implemented in app code. GitHub live proof done. Remaining: GitLab live
+proof (same leftover as stories 6c and 6d).

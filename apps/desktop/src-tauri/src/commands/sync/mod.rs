@@ -119,6 +119,10 @@ pub mod status;
 mod test_support;
 
 #[cfg(test)]
+#[path = "live_host_tests.rs"]
+mod live_host;
+
+#[cfg(test)]
 mod tests {
     use super::{redact_remote_credentials, remote_failure};
 

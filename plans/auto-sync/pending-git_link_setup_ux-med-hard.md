@@ -48,7 +48,8 @@ include Add Workspace / import-from-link (next phase).
 - [x] Update sign-in writes only the selected (or newly created) profile
 - [x] Forget sign-in removes that secret; other workspaces are left missing
 - [x] First verification is background; Settings stays usable
-- [ ] Live GitHub / GitLab proof (still 6c leftover; not claimed here)
+- [x] Live GitHub proof (shared with 6c; `scripts/sync-live-github.sh`)
+- [ ] Live GitLab proof (still 6c leftover; not claimed here)
 
 ## Known limitations
 
@@ -62,5 +63,5 @@ include Add Workspace / import-from-link (next phase).
 
 ## Status
 
-🟨 Implemented in app code. Remaining: live host proof (GitHub / GitLab),
-same leftover as story 6c.
+🟨 Implemented in app code. GitHub live proof done. Remaining: GitLab live
+proof (same leftover as story 6c).

@@ -10,15 +10,15 @@ fetches and cannot push, so sending was written rather than called:
   "Sync now", triggers, status. 🟩 Done.
 - **6c — setup and credentials.** Direct native OS keychain adapter via gix
   credential callbacks. Git link and sign-in are separate inputs; the token
-  goes directly to the keychain and is rejected in the link field. Remaining:
-  prove against GitHub + GitLab.
+  goes directly to the keychain and is rejected in the link field. GitHub
+  live proof done (`scripts/sync-live-github.sh`). Remaining: GitLab.
 - **6d — git-link setup UX.** `pending-git_link_setup_ux-med-hard.md`.
   Labeled profiles by opaque ID, Save link vs Update sign-in, nonblocking
-  first check. Remaining: live host proof, shared with 6c.
+  first check. Remaining: live GitLab proof, shared with 6c.
 - **6e — bring in workspace from Git link.**
   `pending-workspace_from_git_link-med-hard.md`. New child folder from a
   secret-free HTTPS (or local bare) link; reuses 6d profiles. Remaining:
-  live host proof, shared with 6c.
+  live GitLab proof, shared with 6c.
 
 ## Scope
 
@@ -58,9 +58,14 @@ fetches and cannot push, so sending was written rather than called:
 - [x] Offline queue: edits while unreachable stay in the hidden history and
       go out on the next successful trip (idle or "bring in step now"). There
       is no separate queue file.
+- [x] Live GitHub host proof — disposable private repo: empty remote push,
+      second-device bring-down, catch-up without blocking the next push, and
+      same-line conflict copy. Script: `scripts/sync-live-github.sh`.
+- [ ] Live GitLab host proof — same script shape: `scripts/sync-live-gitlab.sh`
+      (needs `glab` + `GITLAB_TOKEN`)
 
 ## Status
 
 🟨 6a send-pack, 6b round trip, and 6c adapter + sign-in control done.
 6d git-link setup UX and 6e import-from-link implemented in app code.
-Remaining: GitHub + GitLab as hosts (live proof, not marked complete).
+GitHub live proof done. Remaining host proof: GitLab.

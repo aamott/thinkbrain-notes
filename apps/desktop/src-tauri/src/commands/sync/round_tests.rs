@@ -224,6 +224,27 @@ fn a_note_deleted_on_one_device_goes_away_on_the_other() {
 /// The case the whole feature is for, and the one a two-way comparison could
 /// never answer: two devices, different notes, no question to ask.
 #[test]
+fn a_second_note_still_lands_after_the_other_device_caught_up() {
+    let one = device("round-ff-one");
+    let two = device("round-ff-two");
+    let there = shared("round-ff");
+    write(&one, "one.md", "first\n");
+    trip(&one, &there);
+    trip(&two, &there);
+
+    write(&one, "two.md", "second\n");
+    let synced = trip(&one, &there);
+
+    assert_eq!(
+        synced.landed,
+        push::Landed::Moved,
+        "catch-up invented history that blocked the next push"
+    );
+    trip(&two, &there);
+    assert_eq!(read(&two, "two.md"), "second\n");
+}
+
+#[test]
 fn different_notes_on_each_side_merge_without_asking() {
     let one = device("round-apart-one");
     let two = device("round-apart-two");
