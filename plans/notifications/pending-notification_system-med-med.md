@@ -92,8 +92,9 @@ apps/desktop/src/sync/
 
 ## Out of scope
 
-Persisting across sessions · non-sync producers (extensions, updates, ACP) ·
-notification settings (per-source mute, etc.).
+- Persisting across sessions (ephemeral in-memory for now)
+- Wiring non-sync producers in this story (extensions, updates, ACP will use `addNotification` in their respective stories)
+- Notification settings (per-source mute, etc.)
 
 ## Status
 
