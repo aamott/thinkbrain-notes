@@ -12,6 +12,16 @@ const importWorkspaceFromGitLink = vi.fn<
 >();
 const subscribeToWorkspaceImport = vi.fn<(onEvent: (payload: WorkspaceImportProgress) => void) => Promise<() => void>>();
 const readSignInStatus = vi.fn<(rootPath: string, destination: string, profileId?: string | null) => Promise<SignInStatus>>();
+const saveSyncCredentials = vi.fn<
+  (
+    rootPath: string,
+    destination: string,
+    username: string,
+    token: string,
+    profileId?: string | null,
+    label?: string | null
+  ) => Promise<{ readonly profile: { readonly id: string; readonly label: string; readonly host: string; readonly username: string }; readonly migrated: boolean }>
+>();
 const pickDirectoryPath = vi.fn<(title: string) => Promise<string | null>>();
 
 vi.mock("./gitLinkImport", () => ({
@@ -25,7 +35,15 @@ vi.mock("./gitLinkImport", () => ({
 
 vi.mock("../sync/syncService", () => ({
   readSignInStatus: (rootPath: string, destination: string, profileId?: string | null) =>
-    readSignInStatus(rootPath, destination, profileId)
+    readSignInStatus(rootPath, destination, profileId),
+  saveSyncCredentials: (
+    rootPath: string,
+    destination: string,
+    username: string,
+    token: string,
+    profileId?: string | null,
+    label?: string | null
+  ) => saveSyncCredentials(rootPath, destination, username, token, profileId, label)
 }));
 
 vi.mock("../native/dialogs", () => ({
@@ -318,4 +336,90 @@ describe("GitLinkImportDialog", () => {
     });
     expect(onClose).not.toHaveBeenCalled();
   });
+
+  it("allows creating a new sign-in profile in the dialog and brings in with it", async () => {
+    saveSyncCredentials.mockResolvedValueOnce({
+      profile: {
+        id: "p-new-123",
+        label: "adam@github.com",
+        host: "github.com",
+        username: "adam"
+      },
+      migrated: false
+    });
+    await renderDialog();
+    await typeInto(
+      host!.querySelector("#git-link-import-url") as HTMLInputElement,
+      "https://github.com/you/notes.git"
+    );
+    await click([...host!.querySelectorAll("button")].find((button) => button.textContent === "Browse…")!);
+    await act(async () => undefined);
+
+    const select = host!.querySelector("#git-link-import-profile") as HTMLSelectElement;
+    await act(async () => {
+      select.value = "new";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await act(async () => undefined);
+
+    const usernameInput = host!.querySelector("#git-link-import-username") as HTMLInputElement;
+    const tokenInput = host!.querySelector("#git-link-import-token") as HTMLInputElement;
+    expect(usernameInput).toBeTruthy();
+    expect(tokenInput).toBeTruthy();
+
+    const bringInButton = [...host!.querySelectorAll("button")].find((button) => button.textContent === "Bring in")!;
+    expect(bringInButton.disabled).toBe(true);
+
+    await typeInto(usernameInput, "adam");
+    await typeInto(tokenInput, "ghp_secret123");
+    expect(bringInButton.disabled).toBe(false);
+
+    await click(bringInButton);
+    await act(async () => undefined);
+
+    expect(saveSyncCredentials).toHaveBeenCalledWith(
+      "",
+      "https://github.com/you/notes.git",
+      "adam",
+      "ghp_secret123",
+      null,
+      null
+    );
+    expect(importWorkspaceFromGitLink).toHaveBeenCalledWith(
+      "https://github.com/you/notes.git",
+      "/home/you",
+      "p-new-123"
+    );
+  });
+
+  it("shows an honest message when a host has no saved profiles yet", async () => {
+    readSignInStatus.mockResolvedValueOnce({
+      ...emptyStatus,
+      host: "gitlab.com",
+      profiles: []
+    });
+    await renderDialog();
+    await typeInto(
+      host!.querySelector("#git-link-import-url") as HTMLInputElement,
+      "https://gitlab.com/group/notes.git"
+    );
+    await act(async () => undefined);
+    expect(host?.textContent).toContain("No saved sign-ins for gitlab.com yet.");
+  });
+
+  it("surfaces storage errors from readSignInStatus", async () => {
+    readSignInStatus.mockResolvedValueOnce({
+      ...emptyStatus,
+      storage: "unavailable",
+      storageMessage: "The keychain is locked."
+    });
+    await renderDialog();
+    await typeInto(
+      host!.querySelector("#git-link-import-url") as HTMLInputElement,
+      "https://github.com/you/notes.git"
+    );
+    await act(async () => undefined);
+    expect(host?.textContent).toContain("The keychain is locked.");
+  });
 });
+

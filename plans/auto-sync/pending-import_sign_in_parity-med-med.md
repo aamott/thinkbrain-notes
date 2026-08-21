@@ -40,19 +40,19 @@ What users hit:
 
 ## Acceptance
 
-- [ ] With a parseable HTTPS link whose host has saved profiles, the import
+- [x] With a parseable HTTPS link whose host has saved profiles, the import
       select lists those profiles (same catalog Settings uses)
-- [ ] With no matching profiles, the UI says so clearly (not a blank-looking
+- [x] With no matching profiles, the UI says so clearly (not a blank-looking
       control with no explanation)
-- [ ] A `readSignInStatus` failure surfaces a recovery message instead of an
+- [x] A `readSignInStatus` failure surfaces a recovery message instead of an
       empty list that looks like "none saved"
-- [ ] User can create a new labeled profile from the import dialog and then
+- [x] User can create a new labeled profile from the import dialog and then
       Bring in with it, without opening Settings
-- [ ] Creating/updating a profile from import does not kick off sync on the
+- [x] Creating/updating a profile from import does not kick off sync on the
       currently open workspace
-- [ ] Public / local bare import still works with no profile
-- [ ] Wrong-host / missing profile is refused; nothing silently substitutes
-- [ ] Focused tests cover list/filter, create-then-import, and no current-
+- [x] Public / local bare import still works with no profile
+- [x] Wrong-host / missing profile is refused; nothing silently substitutes
+- [x] Focused tests cover list/filter, create-then-import, and no current-
       workspace trip on credential save from import
 
 ## Out of scope
@@ -64,5 +64,5 @@ What users hit:
 
 ## Status
 
-⬜ Not started. File after GitLab live proof / Story 6 close-out unless that
-proof is blocked.
+🟩 Implemented in app code. All acceptance criteria and focused tests passing.
+

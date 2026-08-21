@@ -24,6 +24,7 @@ with a quick glance at the selector density before shipping.
 
 ## Decisions to lock with the choice
 
+- **Choice:** **B** (folder icon plus small GitBranch badge overlay).
 - **Signal = app Git link, not vault `.git`.** A folder counts as linked when
   this app has a persisted `sync.destination` for it (workspace settings in
   app-data). A user-owned `.git` inside the vault is a different status
@@ -39,12 +40,12 @@ with a quick glance at the selector density before shipping.
 
 ## Acceptance
 
-- [ ] Icon/badge choice recorded (A/B/C) in this file before merge
-- [ ] Recent list distinguishes plain folders from Git-linked ones
-- [ ] Distinction is based on this app's `sync.destination`, not vault `.git`
-- [ ] Unreadable settings fall back to plain-folder treatment
-- [ ] Accessible name/description differs for the two kinds
-- [ ] Focused UI test covers at least one plain and one linked recent path
+- [x] Icon/badge choice recorded (A/B/C) in this file before merge
+- [x] Recent list distinguishes plain folders from Git-linked ones
+- [x] Distinction is based on this app's `sync.destination`, not vault `.git`
+- [x] Unreadable settings fall back to plain-folder treatment
+- [x] Accessible name/description differs for the two kinds
+- [x] Focused UI test covers at least one plain and one linked recent path
 
 ## Out of scope
 
@@ -55,5 +56,5 @@ with a quick glance at the selector density before shipping.
 
 ## Status
 
-⬜ Not started. Pick up after Story 6 host proof and import sign-in parity
-unless product wants the badge sooner for demos.
+🟩 Implemented in app code. Choice B implemented with accessible names and focused test.
+

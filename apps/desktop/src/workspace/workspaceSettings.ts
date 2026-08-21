@@ -44,6 +44,36 @@ export async function readWorkspaceSettings(rootPath: string): Promise<Workspace
 }
 
 /**
+ * Checks whether the given workspace settings document contains a non-empty `sync.destination`.
+ */
+export function hasGitSyncDestination(raw: string | null | undefined): boolean {
+  if (!raw) return false;
+  try {
+    const value: unknown = JSON.parse(raw);
+    if (isRecord(value)) {
+      const destination = value["sync.destination"];
+      return typeof destination === "string" && destination.trim() !== "";
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Checks whether the workspace at `rootPath` has a Git link configured.
+ * Unreadable or absent settings return false without throwing.
+ */
+export async function isWorkspaceGitLinked(rootPath: string): Promise<boolean> {
+  try {
+    const document = await readWorkspaceSettingsDocument(rootPath);
+    return hasGitSyncDestination(document);
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Persists `settings` for `rootPath`, keeping every other key in the file.
  *
  * The read-modify-write goes through {@link updateWorkspaceSettingsDocument}

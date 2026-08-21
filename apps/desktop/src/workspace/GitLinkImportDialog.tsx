@@ -9,7 +9,7 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboard
 
 import { NativeCommandError } from "../native/commands";
 import { pickDirectoryPath } from "../native/dialogs";
-import { readSignInStatus } from "../sync/syncService";
+import { readSignInStatus, saveSyncCredentials } from "../sync/syncService";
 import type { SignInStatus } from "../sync/historyTypes";
 import {
   importWorkspaceFromGitLink,
@@ -21,8 +21,11 @@ import {
 import {
   IMPORT_DIALOG_TITLE,
   importPhaseText,
+  NEW_PROFILE_LABEL,
   NO_PROFILE_LABEL,
+  noProfilesForHost,
   recoveryForImport,
+  SIGN_IN_HELP_TEXT,
   validateImportLink
 } from "./gitLinkImportCopy";
 
@@ -44,11 +47,14 @@ export function GitLinkImportDialog({ onClose }: GitLinkImportDialogProps) {
   const [destination, setDestination] = useState("");
   const [parentPath, setParentPath] = useState("");
   const [profileId, setProfileId] = useState("");
+  const [username, setUsername] = useState("");
+  const [token, setToken] = useState("");
   const [previewResult, setPreviewResult] = useState<{
     readonly key: string;
     readonly preview: GitLinkPreview;
   } | null>(null);
   const [status, setStatus] = useState<SignInStatus | null>(null);
+  const [statusError, setStatusError] = useState<string | null>(null);
   const [listening, setListening] = useState(false);
   const [busy, setBusy] = useState(false);
   const [phase, setPhase] = useState<string | null>(null);
@@ -56,12 +62,22 @@ export function GitLinkImportDialog({ onClose }: GitLinkImportDialogProps) {
   const linkError = validateImportLink(destination);
   const previewKey = `${destination.trim()}\0${parentPath}`;
   const preview = previewResult?.key === previewKey ? previewResult.preview : null;
-  const profiles = status?.profiles ?? [];
+  const isHttps = destination.trim().startsWith("https://") || destination.trim().startsWith("http://");
+  const effectiveStatus = isHttps ? status : null;
+  const effectiveStatusError = isHttps ? statusError : null;
+  const profiles = effectiveStatus?.profiles ?? [];
   const selectedInList = profiles.some((profile) => profile.id === profileId);
   const selectedMissing =
-    profileId !== "" && (!selectedInList || status?.selected?.saved !== true);
+    profileId !== "" && profileId !== "new" && (!selectedInList || effectiveStatus?.selected?.saved !== true);
+  const isNewProfile = isHttps && profileId === "new";
   const canSubmit =
-    listening && !busy && linkError === null && parentPath !== "" && preview !== null && !selectedMissing;
+    listening &&
+    !busy &&
+    linkError === null &&
+    parentPath !== "" &&
+    preview !== null &&
+    (!isHttps || profileId === "" || profileId === "new" || (!selectedMissing && selectedInList)) &&
+    (!isNewProfile || (username.trim() !== "" && token !== ""));
 
   useEffect(() => {
     linkInputRef.current?.focus();
@@ -72,18 +88,30 @@ export function GitLinkImportDialog({ onClose }: GitLinkImportDialogProps) {
   }, [onClose]);
 
   useEffect(() => {
+    if (!isHttps) return;
     let cancelled = false;
-    void readSignInStatus("", destination.trim(), profileId || null)
+    const queryId = profileId !== "" && profileId !== "new" ? profileId : null;
+    void readSignInStatus("", destination.trim(), queryId)
       .then((next) => {
-        if (!cancelled) setStatus(next);
+        if (!cancelled) {
+          setStatus(next);
+          setStatusError(null);
+        }
       })
-      .catch(() => {
-        if (!cancelled) setStatus(null);
+      .catch((caught: unknown) => {
+        if (!cancelled) {
+          setStatus(null);
+          setStatusError(
+            caught instanceof NativeCommandError
+              ? caught.message
+              : "Could not check whether a sign-in is saved."
+          );
+        }
       });
     return () => {
       cancelled = true;
     };
-  }, [destination, profileId]);
+  }, [destination, isHttps, profileId]);
 
   useEffect(() => {
     if (linkError !== null || parentPath === "") return;
@@ -161,10 +189,29 @@ export function GitLinkImportDialog({ onClose }: GitLinkImportDialogProps) {
     setError(null);
     setPhase("checking");
     try {
+      let effectiveProfileId: string | null = null;
+      if (isHttps) {
+        if (profileId === "new") {
+          setPhase("saving");
+          const saved = await saveSyncCredentials(
+            "",
+            destination.trim(),
+            username.trim(),
+            token,
+            null,
+            null
+          );
+          effectiveProfileId = saved.profile.id;
+          setProfileId(saved.profile.id);
+        } else if (profileId !== "") {
+          effectiveProfileId = profileId;
+        }
+      }
+      setPhase("checking");
       const started = await importWorkspaceFromGitLink(
         destination.trim(),
         parentPath,
-        profileId || null
+        effectiveProfileId
       );
       requestRef.current = started.requestId;
       const early = earlyProgress.current.get(started.requestId);
@@ -238,12 +285,18 @@ export function GitLinkImportDialog({ onClose }: GitLinkImportDialogProps) {
             id="git-link-import-profile"
             value={profileId}
             disabled={busy}
-            onChange={(event) => setProfileId(event.target.value)}
+            onChange={(event) => {
+              const next = event.target.value;
+              setProfileId(next);
+              const found = profiles.find((p) => p.id === next);
+              if (found) setUsername(found.username);
+            }}
             className={inputClassName}
           >
             <option value="">{NO_PROFILE_LABEL}</option>
-            {profileId !== "" && !selectedInList && (
-              <option value={profileId}>{status?.selected?.label ?? "Unknown sign-in"}</option>
+            <option value="new">{NEW_PROFILE_LABEL}</option>
+            {profileId !== "" && profileId !== "new" && !selectedInList && (
+              <option value={profileId}>{effectiveStatus?.selected?.label ?? "Unknown sign-in"}</option>
             )}
             {profiles.map((profile) => (
               <option key={profile.id} value={profile.id}>
@@ -252,6 +305,54 @@ export function GitLinkImportDialog({ onClose }: GitLinkImportDialogProps) {
             ))}
           </select>
         </label>
+        {isNewProfile && (
+          <div className="flex flex-col gap-2 rounded-small border border-border p-2.5">
+            <label className="flex flex-col gap-1 text-xs text-foreground" htmlFor="git-link-import-username">
+              Username
+              <input
+                id="git-link-import-username"
+                type="text"
+                autoComplete="username"
+                value={username}
+                disabled={busy}
+                onChange={(event) => setUsername(event.target.value)}
+                placeholder="GitHub username or oauth2"
+                className={inputClassName}
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs text-foreground" htmlFor="git-link-import-token">
+              Access token
+              <input
+                id="git-link-import-token"
+                type="password"
+                autoComplete="current-password"
+                value={token}
+                disabled={busy}
+                onChange={(event) => setToken(event.target.value)}
+                placeholder="Paste an access token"
+                className={inputClassName}
+              />
+            </label>
+            <p className="m-0 text-xs leading-relaxed text-muted-foreground">
+              {SIGN_IN_HELP_TEXT}
+            </p>
+          </div>
+        )}
+        {!isNewProfile && isHttps && profiles.length === 0 && effectiveStatus?.storage === "available" && effectiveStatus.host && (
+          <p className="m-0 text-xs text-muted-foreground">
+            {noProfilesForHost(effectiveStatus.host)}
+          </p>
+        )}
+        {effectiveStatus?.storage && effectiveStatus.storage !== "available" && (
+          <p role="alert" className="m-0 text-xs text-destructive">
+            {effectiveStatus.storageMessage}
+          </p>
+        )}
+        {effectiveStatusError && (
+          <p role="alert" className="m-0 text-xs text-destructive">
+            {effectiveStatusError}
+          </p>
+        )}
         {selectedMissing && (
           <p role="alert" className="m-0 text-xs text-destructive">
             This sign-in is not available for the selected git host.

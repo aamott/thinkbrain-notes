@@ -10,6 +10,14 @@ export const OPEN_FOLDER_LABEL = "Open folder…";
 export const IMPORT_FROM_GIT_LABEL = "Bring in from Git link…";
 export const IMPORT_DIALOG_TITLE = "Bring in workspace from Git link";
 export const NO_PROFILE_LABEL = "No sign-in (public or local)";
+export const NEW_PROFILE_LABEL = "New sign-in";
+
+export const SIGN_IN_HELP_TEXT =
+  "GitHub: use your username. GitLab: use the username shown for a project token, or oauth2 for a personal token. The token is saved only in this computer's keychain.";
+
+export function noProfilesForHost(host: string): string {
+  return `No saved sign-ins for ${host} yet.`;
+}
 
 const PHASE_TEXT: Record<string, string> = {
   checking: "Checking for updates…",
@@ -49,3 +57,4 @@ export function recoveryForImport(code: string): string {
       return recoveryFor(code);
   }
 }
+

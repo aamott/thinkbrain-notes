@@ -13,7 +13,8 @@ import { readWorkspaceSettings, type WorkspaceSettings } from "./workspaceSettin
 vi.mock("./workspaceSettings", () => ({
   DEFAULT_WORKSPACE_SETTINGS: { showHidden: false },
   readWorkspaceSettings: vi.fn(() => Promise.resolve({ showHidden: false })),
-  writeWorkspaceSettings: vi.fn(() => Promise.resolve())
+  writeWorkspaceSettings: vi.fn(() => Promise.resolve()),
+  isWorkspaceGitLinked: vi.fn((path: string) => Promise.resolve(path.includes("git-linked")))
 }));
 
 vi.mock("./gitLinkImport", () => ({
@@ -205,6 +206,38 @@ describe("WorkspaceExplorer presentation", () => {
     await click(openFolder);
     expect(pickWorkspaceDirectory).toHaveBeenCalledOnce();
     expect(openWorkspaceWindow).toHaveBeenCalledWith("/notes/new");
+  });
+
+  it("distinguishes plain and Git-linked workspaces in the selector with accessible labels", async () => {
+    container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
+    await act(async () => {
+      root?.render(
+        <WorkspaceSelector
+          currentPath="/notes/git-linked-vault"
+          paths={["/notes/plain-notes", "/notes/git-linked-vault"]}
+          onSelect={vi.fn()}
+          onAdd={vi.fn()}
+          onImportFromGit={vi.fn()}
+        />
+      );
+    });
+    await act(async () => undefined);
+
+    const trigger = container?.querySelector<HTMLButtonElement>("button[aria-haspopup='menu']");
+    expect(trigger?.getAttribute("aria-label")).toBe("git-linked-vault (Git-linked workspace)");
+
+    await click(trigger!);
+    const items = Array.from(container?.querySelectorAll<HTMLButtonElement>("[role='menuitem']") ?? []);
+    const plainItem = items.find((item) => item.textContent?.includes("plain-notes"));
+    const linkedItem = items.find((item) => item.textContent?.includes("git-linked-vault"));
+
+    expect(plainItem?.getAttribute("aria-label")).toBe("plain-notes");
+    expect(plainItem?.getAttribute("title")).toBe("/notes/plain-notes");
+
+    expect(linkedItem?.getAttribute("aria-label")).toBe("git-linked-vault (Git-linked workspace)");
+    expect(linkedItem?.getAttribute("title")).toBe("/notes/git-linked-vault (Git-linked workspace)");
   });
 });
 
