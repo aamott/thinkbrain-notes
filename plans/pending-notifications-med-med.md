@@ -37,5 +37,10 @@ its own severity rules and pushes into the store.
 
 ## Status
 
-✅ Story 1 done. Epic unblocks `merge_ui`, `settle_obvious_conflicts`, and
-`git_remote_sync` notification surfaces — those are auto-sync epic stories.
+✅ Story 1 done, and the source-agnostic claim is now carried by three
+producers, none of which needed a store or UI change: `syncNotificationAdapter`
+(problems + setup success), `settleNotificationAdapter` (duplicates merged) and
+`conflictNotificationAdapter` (two versions found). The last two closed known
+gaps in `settle_obvious_conflicts` and `merge_ui` respectively.
+
+Remaining consumers are extensions, updates and ACP.

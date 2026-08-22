@@ -73,6 +73,10 @@ const { HistoryPanel } = await import("./HistoryPanel");
 const { SyncPill } = await import("./SyncPill");
 const { describeSync } = await import("./syncCopy");
 const { HistoryPolicyControl } = await import("../settings/controls/HistoryPolicyControl");
+const { resetNotificationStore, useNotificationStore } = await import(
+  "../notifications/notificationStore"
+);
+const { useConflictNotificationAdapter } = await import("./conflictNotificationAdapter");
 
 afterEach(async () => {
   await cleanup();
@@ -295,6 +299,35 @@ describe("nothing in this feature speaks git to the user", () => {
     audit(
       "describeSync on moved",
       describeSync({ broughtDown: 2, askedAbout: 1, sent: 3, landed: { state: "moved" } })
+    );
+  });
+
+  // The conflict toast reaches the screen through the notification store rather
+  // than through any panel here, so — like `describeSync` above — its sentences
+  // are audited from what the producer put in the store, which is what the
+  // status bar renders verbatim.
+  it("keeps the new-conflict announcement plain", async () => {
+    resetNotificationStore();
+    listConflicts.mockResolvedValue([summary("note.md", "text")]);
+
+    function Host() {
+      useConflictNotificationAdapter({
+        rootPath: "/notes",
+        syncStatus: NOT_RECORDING,
+        onReview: () => undefined
+      });
+      return null;
+    }
+    const { unmount } = await render(<Host />);
+    const announced = useNotificationStore.getState().notifications[0];
+    await unmount();
+
+    expect(announced).toBeDefined();
+    audit(
+      "the new-conflict announcement",
+      [announced?.title, announced?.message, announced?.recovery, announced?.action?.label]
+        .filter(Boolean)
+        .join(" ")
     );
   });
 });
