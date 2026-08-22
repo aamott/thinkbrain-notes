@@ -6,7 +6,8 @@ Story 3. `(versions) → structured chunks`; UI never sees raw markers.
 
 - **Two modes:** three-way via gix merge where base is exact (git sync,
   story 6); two-way for cloud conflict pairs (no base — segment into
-  common/differing chunks, e.g. similar-lines diff).
+  common/differing chunks, e.g. similar-lines diff). Both shipped, but not as
+  two chunk producers — see "What this story decided".
 - **Output contract:** ordered chunks `{ common | choice{ sides } }`, each
   side tagged with source label + timestamp; `kind: text | binary`
   (binary = metadata only, never diffed). One contract for both modes — UI
@@ -48,11 +49,25 @@ Story 3. `(versions) → structured chunks`; UI never sees raw markers.
 
 ## What this story decided
 
-**Only the two-way mode is built.** Three-way needs an exact base, which only
-arrives with git sync in story 6, and the contract has no slot for "which mode
-made this" — so story 6 can fill the same `ConflictView` from a real merge
-without the panel noticing. Writing it now would mean testing a merge against
-a base nothing can yet produce.
+**One mode reaches the UI, because three-way reduces to two-way.** The plan
+expected three-way to be a second producer of chunks, filling the same
+`ConflictView` from a real base. It arrived with story 6 as something better:
+`round.rs::merge` runs `repo.merge_commits` with `FileFavor::Ours`, so gix
+resolves every hunk that does not genuinely overlap, and only the ones that do
+are written out as copies beside the note — the same shape a cloud daemon
+leaves. `resolve::view` then segments those with `merge::compare`, the two-way
+path, without knowing where they came from.
+
+So the goal of "the UI doesn't know which mode produced it" is met by there
+being one mode at the UI, rather than two converging on a contract. Less code
+and one path to test. It also means the base is used where it is exact — to
+*avoid* asking the question — instead of to decorate a comparison the user
+would still have to answer by hand.
+
+`round_tests.rs` covers it end to end: two devices change the same line, the
+merge asks about exactly one thing, our wording is not overwritten, theirs
+lands beside it, and the copy is in a shape `conflict::pair` recognises. A
+sibling test pins that no conflict marker is ever written into a note.
 
 **Refresh by announcement, not by payload.** The plan called for pushing the
 merged content back to open editors. Every other write in the app claims its
@@ -88,5 +103,7 @@ than twice per hunk.
 
 ## Status
 
-🟨 Two-way segmentation, the resolution write, the checkpoint order, the CAS
-guard and cleanup are done. Three-way waits on story 6.
+🟨 Two-way segmentation, three-way merge (shipped with story 6, as reduction
+to copies), the resolution write, the checkpoint order, the CAS guard and
+cleanup are done. Remaining: the mutation lock is not proven by a test — see
+Known gaps.

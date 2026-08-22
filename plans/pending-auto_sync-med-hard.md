@@ -123,4 +123,10 @@ conflicts · block-level Markdown merge · reconcile-text · cloud provider APIs
 - ✅ Story 0 (`gix` build spike, split off the front of story 1).
 - ✅ Story 6 (Git Remote Sync: 6a send-pack, 6b round trip, 6c credentials, 6d link UX, 6e workspace import, 6f import sign-in parity, selector git badge).
 - ✅ Story 8 (Mobile cross-compile validation in CI & local Android NDK).
-- ⬜ Stories 2–5, 7, 9 pending.
+- 🟨 Stories 2–5 are substantially built; each names what is left in its own
+  Status. Story 3's three-way merge landed inside story 6 rather than on its
+  own — the merge resolves what it can and leaves only genuine overlaps as
+  copies, which the two-way path already handles.
+- ⬜ Stories 7 and 9 pending. Story 2's remaining work (real fixtures per
+  provider) and story 5's (Windows) need daemons and a Windows machine, not
+  more code.
