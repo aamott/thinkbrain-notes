@@ -77,8 +77,9 @@ Deliver the approved contribution matrix, likely-file diff, typed contracts/test
 
 ## References
 
-- `plans/extensions/done-extension_manifest_format-low-med.md`
-- `plans/extensions/done-extension_lifecycle_bootstrap-low-med.md`
+- Manifest parser/schema and lifecycle/bootstrap integration — both shipped;
+  their story files were reviewed and deleted per the plan-review policy in
+  `AGENTS.md`.
 
 ## Resolved: the loader story's blocked-on note
 

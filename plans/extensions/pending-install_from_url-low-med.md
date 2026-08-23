@@ -54,4 +54,4 @@ Deferred decision and canonical-story link.
 
 - `plans/extensions/pending-extension_deferred_distribution-low-med.md`
 - `plans/marketplace/`
-- `plans/technical-decisions.md`
+- `plans/pending-extensions-low-hard.md`

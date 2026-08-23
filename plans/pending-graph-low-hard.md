@@ -54,12 +54,11 @@ Non-goals (out of scope for this epic):
   (`packages/core/src/note-model.ts`), `extractWikiLinks`
   (`packages/core/src/markdown.ts`), aliases in `NoteMetadata`.
 - `indexing-search` (MVP core done) — the wiki-link index that backlinks and
-  graph edges are derived from. `plans/indexing-search/` retains three pending
-  follow-ups — structured frontmatter records and facet queries
-  (`pending-frontmatter_metadata_facets-high-hard.md`), an external-edit file
-  watcher (`pending-file_watcher-low-med.md`), and managed SQLite connection
-  pooling (`pending-connection_pooling-low-med.md`). These are enhancements and
-  do not block this epic.
+  graph edges are derived from. Structured frontmatter records/facet queries
+  and the external-edit file watcher have both shipped (`plans/indexing-search/done-summary.md`,
+  `plans/wip-indexing-search-med-med.md`); the one remaining follow-up is managed SQLite
+  connection pooling (`plans/indexing-search/pending-connection_pooling-low-med.md`). None of
+  these block this epic.
 
 No other epic blocks this one. `semantic-search` and `ai` are independent
 future epics; this epic uses only explicit wiki-link edges.
@@ -75,14 +74,12 @@ future epics; this epic uses only explicit wiki-link edges.
 
 ## Status
 
-- ✅ Link target resolution (aliases + path normalization) — see
-  `pending-link_target_resolution-low-med.md`
-- ⬜ Clickable wiki-link navigation — click `[[Target]]` to open the note — see
-  `pending-clickable_wiki_link_navigation-low-med.md`
-- ⬜ Wiki-link autocomplete — `[[` triggers a note picker — see
-  `pending-wiki_link_autocomplete-med-med.md`
-- ⬜ Wiki-link index for backlinks — reverse index (target → linking notes) — see
-  `pending-wiki_link_index-med-med.md`
+Four stories shipped; see `plans/graph/done-summary.md` for what shipped and where.
+
+- ✅ Link target resolution (aliases + path normalization)
+- ✅ Wiki-link index for backlinks — reverse index (target → linking notes)
+- ✅ Wiki-link autocomplete — `[[` triggers a note picker
+- ✅ Clickable wiki-link navigation — click `[[Target]]` to open the note
 - ⬜ Backlinks panel — list notes linking to the active note — see
   `pending-backlinks_panel-med-med.md` (elevated to medium urgency)
 - ⬜ Automatic link update on rename — rewrite `[[old]]` → `[[new]]` across the vault — see

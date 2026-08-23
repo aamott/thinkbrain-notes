@@ -63,6 +63,7 @@ No archive extraction, install/uninstall UI, signing, URL/marketplace, auto-upda
 
 ## References
 
-- `plans/extensions/done-extension_manifest_format-low-med.md`
+- Manifest parser/schema — shipped; its story file was reviewed and deleted
+  per the plan-review policy in `AGENTS.md`.
 - `plans/extensions/pending-extension_file_installation-low-med.md`
-- `plans/technical-decisions.md`
+- `plans/pending-extensions-low-hard.md` — Manifest-driven, packaging contract

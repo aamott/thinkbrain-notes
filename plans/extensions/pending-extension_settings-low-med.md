@@ -78,7 +78,7 @@ No credentials/encryption fallback, installer, marketplace, URL install, feature
 
 ## References
 
-- `plans/technical-decisions.md`
+- `plans/pending-extensions-low-hard.md` — Settings and credentials integration
 - `plans/extensions/pending-extension_secret_storage-med-hard.md`
 - `apps/desktop/src/settings/`
 

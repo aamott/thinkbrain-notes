@@ -19,5 +19,5 @@ behavior, not security enforcement. Create `tauri.android.conf.json` and
 
 ## References
 
-- `plans/pending-mobile-low-hard.md` — capability gating decision
+- `plans/pending-mobile-med-hard.md` — capability gating decision
 - `plans/pending-extensions-low-hard.md` — platform-aware capabilities

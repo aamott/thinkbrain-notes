@@ -19,5 +19,5 @@ minimum).
 
 ## References
 
-- `plans/pending-mobile-low-hard.md` — epic context
+- `plans/pending-mobile-med-hard.md` — epic context
 - `packages/ui/src/styles/tokens.css` — shared `--tn-*` tokens

@@ -72,10 +72,12 @@ Deferred (do not implement here): URL install, signing, marketplace, strong isol
 
 - D47 ids in `plans/extensions/pending-beta_builtin_extensions-med-med.md` are approved; remaining beta matrix decisions still gate affected registrations.
 - `pending-journal_panel_ui-high-hard.md` and `pending-calendar_tab_ui-high-hard.md` provide stable feature contracts.
-- `plans/extensions/pending-editor_header_contribution-high-med.md` (D44) and `pending-extension_settings-low-med.md` (D45).
+- D44 editor-header contribution (shipped 2026-08-08) and `pending-extension_settings-low-med.md` (D45).
 - Existing command/panel/tab/settings/workspace APIs and registries plus D44 editor headers; preserve disposable lifecycle tests.
 - Indexing/search epic's FTS5 cache (D16) — do not build a parallel index.
-- Beta boundary: `pending-beta_builtin_extensions-med-med.md`, `pending-internal_contribution_points-low-med.md`, and shipped `done-extension_lifecycle_bootstrap-low-med.md` (all in `plans/extensions/`).
+- Beta boundary: `pending-beta_builtin_extensions-med-med.md` (in `plans/extensions/`); internal
+  contribution points and lifecycle/bootstrap integration have both shipped, their story files
+  reviewed and deleted per the plan-review policy in `AGENTS.md`.
 
 ## Acceptance criteria
 

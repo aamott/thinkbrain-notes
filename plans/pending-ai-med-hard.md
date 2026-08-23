@@ -215,3 +215,10 @@ No UI mockup or implementation of these surfaces until answers are recorded.
 
 Everything not locked above — paths, DTOs, test matrices, story decomposition —
 is the planning pass's to decide.
+
+## Status
+
+⬜ Unplanned. This is a fable, not an epic with stories yet — no `plans/ai/` directory
+exists and zero stories have been written. Nothing here has been implemented beyond the
+visual-only placeholder noted under "Current state" above. Awaiting the Opus 5 planning
+pass described in this document.

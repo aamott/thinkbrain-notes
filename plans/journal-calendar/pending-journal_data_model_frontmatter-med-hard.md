@@ -85,7 +85,7 @@ Define platform-agnostic journal metadata and a stable, portable Markdown contra
 
 - Discovery/wireframes story approved (gate closed for D2–D38 above).
 - Existing generic boundaries: `packages/core/src/frontmatter.ts`, `markdown.ts`, `note-model.ts`.
-- `plans/technical-decisions.md` frontmatter mutation policy and comment-preserving follow-up remain binding.
+- `plans/wip-note-model-low-hard.md` frontmatter mutation policy and comment-preserving follow-up remain binding.
 
 ## Acceptance criteria
 

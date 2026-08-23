@@ -6,8 +6,8 @@ When a note is renamed or moved, every `[[Target]]` in other notes that pointed 
 
 ## Dependencies
 
-- Link target resolution (`pending-link_target_resolution-low-med.md`) — ✅ done
-- Wiki-link index (`pending-wiki_link_index-med-med.md`) — needed to find which notes reference the renamed note
+- Link target resolution — ✅ done, see `plans/graph/done-summary.md`
+- Wiki-link index — ✅ done, see `plans/graph/done-summary.md`; used to find which notes reference the renamed note
 - `note.renamed` event — ✅ emitted from `workspaceAdapter.ts`
 
 ## Acceptance Criteria

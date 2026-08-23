@@ -108,9 +108,8 @@ the persisted app setting and `data-thinkbrain-theme`.
 - ⬜ generic file viewer tabs (code editor, image/audio/video viewers) — see
   `plans/ui-shell/pending-generic_file_viewers-med-med.md`
 - ✅ semi-preview markdown editor (live preview with inline source on focus);
-  implementation lives in `apps/desktop/src/tabs/livePreview/` (design docs:
-  `docs/superpowers/specs/2026-08-06-markdown-live-preview-design.md` and
-  `docs/superpowers/plans/2026-08-06-markdown-live-preview.md`).
+  implementation lives in `apps/desktop/src/tabs/livePreview/`; its design docs
+  were reviewed and deleted per the plan-review policy in `AGENTS.md`.
 - ⬜ modular settings system (declarative, auto-populating settings tab) — see
   `plans/ui-shell/pending-modular_settings_system-med-hard.md`
 - ❌ prior movable-action/slot and layout-editing stories were superseded and

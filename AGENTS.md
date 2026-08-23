@@ -58,7 +58,7 @@ examples/extensions/  # Sample extension (hello-notes)
 
 
 ## Plans
-List relevant folder to see task status. Update status in filename. Review after milestones. Delete tasks after review, or fix status if work is not complete. Add action items from review as stories unless they are immediately fixable. Plans should be concise. Avoid duplicating info in files and long worklogs. Compare file layouts and architectures before starting work.
+List relevant folder to see task status. Status lives in the filename — `pending`, `wip`, or `done` — and the filename, the file's own `## Status` section, and reality must all agree. When you finish work, change all three in the same commit. An epic's `## Status` must not contradict its own stories: if a story shipped, say so in the epic too, and never leave an epic naming a prerequisite as blocked when the story that provides it is `done`. When a story file is consolidated into a `done-summary.md` or deleted, grep `plans/` for its filename and fix every reference — a plan pointing at a file that no longer exists reads as unfinished work and will send the next session at it. Review after milestones. Delete tasks after review, or fix status if work is not complete. Add action items from review as stories unless they are immediately fixable. Plans should be concise. Avoid duplicating info in files and long worklogs. Compare file layouts and architectures before starting work.
 
 **Plan Folder**
 

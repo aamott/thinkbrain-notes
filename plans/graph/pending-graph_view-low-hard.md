@@ -7,7 +7,7 @@ connections are edges. A force-directed layout positions nodes; users can
 pan, zoom, and click a node to open that note. The graph is derived live from
 the wiki-link index — never stored.
 
-Depends on link target resolution (`pending-link_target_resolution`).
+Depends on link target resolution (shipped; see `plans/graph/done-summary.md`).
 
 ## Acceptance Criteria
 
@@ -35,4 +35,4 @@ Depends on link target resolution (`pending-link_target_resolution`).
 - A future typed frontend bridge remains planned for native index access; no bridge
   file is assigned yet.
 - `plans/pending-graph-low-hard.md` — this epic
-- `plans/graph/pending-link_target_resolution-low-med.md` — prerequisite
+- `plans/graph/done-summary.md` — link target resolution, prerequisite (shipped)

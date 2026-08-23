@@ -26,7 +26,9 @@ IAs without presenting either as final.
 - `plans/journal-calendar/assets/journal-calendar-moodboard.md` (approved D35).
 - `plans/journal-calendar/assets/journal-calendar-wireframes.md` (IA/mobile
   alternatives, state coverage, focus order; approved D37/D39/D40).
-- `plans/technical-decisions.md` (not edited here; needs separate approval).
+- `plans/technical-decisions.md` (not edited here; needs separate approval) — this file
+  was later deleted; cross-cutting decisions now live in the epic that owns them (see
+  `plans/app-vision.md`).
 
 ## Dependencies
 
@@ -164,7 +166,7 @@ menu). Journal registers an ordinary popout and inherits this — must NOT imple
 bespoke mobile navigation, a private bottom bar, or its own return path.
 `pending-journal_mobile_refinement-med-med.md` narrows to touch targets, collapsed
 widget, list density, calendar-tab-on-phone; navigation composition deferred to
-`plans/mobile/pending-responsive_layout-low-med.md`.
+`plans/mobile/pending-responsive_layout-med-med.md`.
 
 **D27.** No calendar activity-bar button; journal button is the only activity-bar
 entry. (Fully supersedes D6; closes D14's residual question.) Activity bar is for

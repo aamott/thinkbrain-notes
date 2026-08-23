@@ -2,9 +2,9 @@
 
 > Tauri Mobile epic. **Android is the priority target; iOS follows later.**
 > Mobile is a responsive variant of the desktop app, not a separate app. Read
-> `plans/app-vision.md` and `plans/technical-decisions.md` (Platform section)
-> before starting any story here. Urgency is medium — elevated from low, but
-> balanced against in-progress core epics.
+> `plans/app-vision.md` (Technical Stack, Repository Structure) before starting
+> any story here. Urgency is medium — elevated from low, but balanced against
+> in-progress core epics.
 
 ## Goal
 
@@ -53,9 +53,9 @@ Tauri v2 Mobile uses the same webview as desktop, so the entire React frontend,
 `packages/ui`, CodeMirror 6, and the adapter pattern are reused without
 duplication. Mobile is a build target of `apps/desktop/`, not a separate app.
 No `apps/mobile/` directory is created. The hub-and-spoke contract from
-`app-vision.md` and `technical-decisions.md` is unchanged — `packages/core`
-stays platform-agnostic, and `apps/desktop` provides the Tauri adapters that
-both desktop and mobile builds use.
+`app-vision.md` is unchanged — `packages/core` stays platform-agnostic, and
+`apps/desktop` provides the Tauri adapters that both desktop and mobile builds
+use.
 
 ### Responsive layout
 

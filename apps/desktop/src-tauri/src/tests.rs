@@ -1228,6 +1228,61 @@ fn app_settings_write_treats_an_absent_file_as_a_precondition_of_its_own() {
     assert!(check_settings_precondition(None, Some("{}"), app_code, app_msg).is_err());
 }
 
+/// A note save must not truncate the file it is replacing.
+///
+/// `fs::write` opens with `O_TRUNC`: the note is emptied first and refilled
+/// second, so a crash, a full disk or a lost power cable between the two leaves
+/// the user with nothing. Writing a temp file and renaming it over the target
+/// never puts the destination in a state worth losing — the reader either sees
+/// the old note or the new one.
+///
+/// The helper for this has existed and been tested since settings needed it;
+/// the note path was the one caller still writing in place, which is the path
+/// this epic exists to protect.
+///
+/// Unix-only because the inode is the evidence: a rename gives the name a new
+/// one, an in-place write keeps it. Windows has no equivalent that a test can
+/// read, and the helper is explicit that its Windows path is not atomic.
+#[cfg(unix)]
+#[test]
+fn a_note_save_replaces_the_file_rather_than_truncating_it() {
+    use std::os::unix::fs::MetadataExt;
+
+    let root = temp_test_dir("note-write-atomic");
+    let note = root.join("draft.md");
+    fs::write(&note, "the note as it was").expect("note is written");
+    let before = fs::metadata(&note).expect("the note has metadata").ino();
+
+    write_markdown_document(
+        &root.to_string_lossy(),
+        "draft.md",
+        "the note as it is now".to_string(),
+        None,
+    )
+    .expect("the save succeeds");
+
+    let after = fs::metadata(&note).expect("the note still has metadata").ino();
+    assert_ne!(
+        before, after,
+        "the note was written in place, so a crash mid-write would empty it"
+    );
+    assert_eq!(
+        fs::read_to_string(&note).expect("the note is readable"),
+        "the note as it is now"
+    );
+
+    // The temp file is an implementation detail and must not outlive the save.
+    let strays: Vec<_> = fs::read_dir(&root)
+        .expect("the folder is readable")
+        .filter_map(Result::ok)
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .filter(|name| name != "draft.md")
+        .collect();
+    assert!(strays.is_empty(), "the save left {strays:?} behind");
+
+    fs::remove_dir_all(&root).ok();
+}
+
 #[test]
 fn note_write_is_refused_when_the_file_changed_underneath_it() {
     let root = temp_test_dir("note-write-conflict");
@@ -1918,6 +1973,74 @@ fn the_app_hears_an_outside_write_but_not_the_echo_of_its_own() {
             .iter()
             .any(|change| change.path == "theirs.md"),
         "an outside write went unreported; saw {reported_theirs:?}"
+    );
+}
+
+/// The same suppression, through the save path a note actually takes.
+///
+/// The test above writes with `fs::write`, so it says nothing about the way
+/// notes are really saved: a temp file, then a rename over the target. That
+/// shape reaches the watcher differently — a created file at a name nobody
+/// asked about, and the destination arriving by rename rather than by write —
+/// and either could surface as an outside edit, which is how a tab reloads
+/// itself out from under someone mid-sentence.
+///
+/// The temp name starts with a dot, so the vault walk skips it for the same
+/// reason it skips every other dot-entry. This pins that, because the atomic
+/// write choosing a non-hidden temp name later would be a quiet regression.
+#[test]
+fn saving_a_note_the_way_the_app_does_reports_no_change_of_its_own() {
+    use notify::RecursiveMode;
+    use notify_debouncer_full::new_debouncer;
+    use std::sync::mpsc;
+
+    let root = temp_test_dir("watcher-echo-save");
+    let note = root.join("draft.md");
+    fs::write(&note, "before\n").expect("the note exists to be saved over");
+
+    let (sender, receiver) = mpsc::channel();
+    let mut debouncer = new_debouncer(Duration::from_millis(100), None, move |result| {
+        let _ = sender.send(result);
+    })
+    .expect("debouncer starts");
+    debouncer
+        .watch(&root, RecursiveMode::Recursive)
+        .expect("watching a temp dir succeeds");
+
+    // The save the app really performs, echo announced the way it announces it.
+    write_markdown_document(
+        &root.to_string_lossy(),
+        "draft.md",
+        "after\n".to_string(),
+        None,
+    )
+    .expect("the save succeeds");
+
+    let deadline = std::time::Instant::now() + Duration::from_secs(2);
+    let mut raw = 0usize;
+    let mut reported = Vec::new();
+    while let Ok(result) =
+        receiver.recv_timeout(deadline.saturating_duration_since(std::time::Instant::now()))
+    {
+        if let Ok(events) = result {
+            raw += events.len();
+            reported.extend(collect_changes(&root, &events).notes);
+        }
+    }
+
+    drop(debouncer);
+    let contents = fs::read_to_string(&note).unwrap_or_default();
+    let _ = fs::remove_dir_all(&root);
+
+    assert_eq!(contents, "after\n", "the save did not land");
+    assert!(
+        raw > 0,
+        "the platform reported nothing at all, so suppression was never exercised"
+    );
+    assert_eq!(
+        reported,
+        Vec::new(),
+        "the app reported its own save as an outside change; saw {reported:?}"
     );
 }
 

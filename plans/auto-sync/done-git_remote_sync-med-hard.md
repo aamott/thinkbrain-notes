@@ -5,22 +5,22 @@ Story 6. The one active sync. Depends on stories 1, 3; UI in 4, 5.
 **Split, because "push/pull via gix" turned out to be half true.** gitoxide
 fetches and cannot push, so sending was written rather than called:
 
-- **6a — send pack.** `pending-send_pack-high-hard.md`. 🟩 Done.
+- **6a — send pack.** `done-send_pack-high-hard.md`. 🟩 Done.
 - **6b — the round trip.** Fetch, three-way merge against an exact base,
   "Sync now", triggers, status. 🟩 Done.
 - **6c — setup and credentials.** Direct native OS keychain adapter via gix
   credential callbacks. Git link and sign-in are separate inputs; the token
   goes directly to the keychain and is rejected in the link field. GitHub
   live proof done (`scripts/sync-live-github.sh`). Remaining: GitLab.
-- **6d — git-link setup UX.** `pending-git_link_setup_ux-med-hard.md`.
+- **6d — git-link setup UX.** `done-git_link_setup_ux-med-hard.md`.
   Labeled profiles by opaque ID, Save link vs Update sign-in, nonblocking
   first check. Remaining: live GitLab proof, shared with 6c.
 - **6e — bring in workspace from Git link.**
-  `pending-workspace_from_git_link-med-hard.md`. New child folder from a
+  `done-workspace_from_git_link-med-hard.md`. New child folder from a
   secret-free HTTPS (or local bare) link; reuses 6d profiles. Remaining:
   live GitLab proof, shared with 6c.
 - **6f — import dialog sign-in parity.**
-  `pending-import_sign_in_parity-med-med.md`. Show saved host-filtered
+  `done-import_sign_in_parity-med-med.md`. Show saved host-filtered
   profiles honestly; add/update a sign-in from Bring in (no Settings
   detour). Not started.
 
