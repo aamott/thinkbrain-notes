@@ -135,6 +135,10 @@
    base and scoped under .cm-editor for enough specificity to beat
    CodeMirror's runtime-injected scoped class styles. Also set caret-color
    on the contenteditable for the native cursor fallback. */
+.cm-editor,
+.cm-editor .cm-scroller {
+  cursor: text;
+}
 .cm-editor .cm-content {
   caret-color: var(--tn-color-foreground);
 }

@@ -5,7 +5,7 @@ These are random issues or shortcomings users have noted. They may or may not be
 ## Editor
 - [ ] Only markdown files can be edited. Any filetype that can reasonably be edited or viewed should be able to be. If a file can't be edited, clicking it should open something in the canvas with an option to open in the system's default app. 
   - Types of files: text-based (code, markdown, txt, etc.), images, videos, audio, pdf (if easy), etc.
-- [ ] When mouse is over editor, cursor should show over the whole thing. Currently only shows down to the last line. 
+- [x] When mouse is over editor, cursor should show over the whole thing. Currently only shows down to the last line. 
 
 ## Workspace Viewer
 - [ ] File icons should represent the current file and be themed. They exist to a degree but should include everything from mp3 to markdown to docx. Should be adaptable to different themes.
