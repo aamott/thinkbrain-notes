@@ -160,14 +160,14 @@ export function TitleBar({
       </nav>
 
       {/* Right action group — panel toggles. */}
-      <div className="flex items-center border-l border-border gap-2 h-full px-1">
+      <div className="flex items-center border-l border-border gap-1 h-full px-2">
         {rightPanels.map((action) => (
           <IconButton
             key={action.id}
             label={action.label}
             symbol={action.icon}
             active={rightPanel === action.id}
-            className="max-[760px]:hidden"
+            className="w-[1.6rem] h-[1.6rem] border-l-0 rounded-small text-titlebar-foreground max-[760px]:hidden"
             onClick={() => onToggleRightPanel(action.id)}
           />
         ))}
