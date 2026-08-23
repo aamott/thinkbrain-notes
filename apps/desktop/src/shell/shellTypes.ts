@@ -41,6 +41,15 @@ export function isSelectableRightPanel(id: string): id is RightPanel {
 }
 
 /**
+ * Which side dock a width applies to.
+ *
+ * Here rather than in either of its two users, which each had their own copy:
+ * the resize handles and the width persistence have to mean the same thing by
+ * "left".
+ */
+export type PanelSide = "left" | "right";
+
+/**
  * Bottom dock panel ids.
  *
  * Only the terminal surface is wired today; the union is kept open for future
