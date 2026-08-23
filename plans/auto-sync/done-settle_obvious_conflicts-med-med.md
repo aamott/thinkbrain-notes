@@ -82,11 +82,10 @@ ruling out by construction.
 - **The default is written twice**, once in the settings module and once in
   the native side, which answers the question before any window is listening.
   A test pins each; nothing pins them to each other.
-- **Settling is not announced.** A copy tidied away leaves a restore point and
-  a number in the History panel's footer, but nothing says "3 were handled" at
-  the time. The same missing notification surface as story 4's toast. Blocked
-  on `notification_system` — a settle adapter pushes a silent/transient
-  notification into the same store.
+- **~~Settling is not announced.~~** ✅ Fixed: `settleNotificationAdapter.ts`
+  watches the conflict-rate `settled` counter and pushes a transient
+  notification ("N duplicates were tidied away") into the notification store
+  when it increases. Unblocked by `done-notification_system-med-med.md`.
 
 ## Status
 

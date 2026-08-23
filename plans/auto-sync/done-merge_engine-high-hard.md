@@ -6,7 +6,8 @@ Story 3. `(versions) → structured chunks`; UI never sees raw markers.
 
 - **Two modes:** three-way via gix merge where base is exact (git sync,
   story 6); two-way for cloud conflict pairs (no base — segment into
-  common/differing chunks, e.g. similar-lines diff).
+  common/differing chunks, e.g. similar-lines diff). Both shipped, but not as
+  two chunk producers — see "What this story decided".
 - **Output contract:** ordered chunks `{ common | choice{ sides } }`, each
   side tagged with source label + timestamp; `kind: text | binary`
   (binary = metadata only, never diffed). One contract for both modes — UI
@@ -37,9 +38,11 @@ Story 3. `(versions) → structured chunks`; UI never sees raw markers.
 - [x] Buffer rule covered by test — the buffer stands in for our side of the
       comparison, and deliberately does *not* stand in for the fingerprint,
       which exists to notice someone else writing
-- [ ] Concurrent trigger test holds mutex — see Known gaps. Simultaneous
-      resolutions of one conflict do land exactly once, and that is tested,
-      but the mutex is not what the test proves
+- [x] Concurrent trigger test holds mutex — `resolve_after_read` parks a
+      resolution between the fingerprint check and the write, and a real
+      `write_markdown_document` is shown not to land in that window. Removing
+      the lock fails the test, which is what makes it a proof rather than a
+      description
 - [x] CAS race test: side mutated mid-resolve → abort + re-present, no data
       loss — either side moving refuses the write, takes no checkpoint and
       leaves both files untouched
@@ -48,11 +51,25 @@ Story 3. `(versions) → structured chunks`; UI never sees raw markers.
 
 ## What this story decided
 
-**Only the two-way mode is built.** Three-way needs an exact base, which only
-arrives with git sync in story 6, and the contract has no slot for "which mode
-made this" — so story 6 can fill the same `ConflictView` from a real merge
-without the panel noticing. Writing it now would mean testing a merge against
-a base nothing can yet produce.
+**One mode reaches the UI, because three-way reduces to two-way.** The plan
+expected three-way to be a second producer of chunks, filling the same
+`ConflictView` from a real base. It arrived with story 6 as something better:
+`round.rs::merge` runs `repo.merge_commits` with `FileFavor::Ours`, so gix
+resolves every hunk that does not genuinely overlap, and only the ones that do
+are written out as copies beside the note — the same shape a cloud daemon
+leaves. `resolve::view` then segments those with `merge::compare`, the two-way
+path, without knowing where they came from.
+
+So the goal of "the UI doesn't know which mode produced it" is met by there
+being one mode at the UI, rather than two converging on a contract. Less code
+and one path to test. It also means the base is used where it is exact — to
+*avoid* asking the question — instead of to decorate a comparison the user
+would still have to answer by hand.
+
+`round_tests.rs` covers it end to end: two devices change the same line, the
+merge asks about exactly one thing, our wording is not overwritten, theirs
+lands beside it, and the copy is in a shape `conflict::pair` recognises. A
+sibling test pins that no conflict marker is ever written into a note.
 
 **Refresh by announcement, not by payload.** The plan called for pushing the
 merged content back to open editors. Every other write in the app claims its
@@ -69,18 +86,31 @@ conflict copy by checking the *original* existed, never the copy. Resolving
 deletes the copy, the watcher reports the deletion, and the conflict the user
 had just answered was raised again a second later.
 
+**The lock is proven by parking a resolution inside it.** This story held the
+mutex test open on the grounds that reaching the window needed a seam, and that
+without one the test would be timing-dependent. `resolve_after_read` — the
+`maintain_after_lock` pattern, `#[cfg(test)]` and compiled out of release —
+opens that seam after the fingerprint check and before the first write. The
+test parks a resolution there, asserts the note is still untouched (so the
+window is the real one), then runs an actual note save against it.
+
+One bounded wait remains, and it only fails in the sound direction: a save that
+*completes* while the resolution is parked means the lock is not held, which is
+the defect. A slow save cannot fail the test, only pass it for a weaker reason.
+Verified by deleting the lock and watching the test fail with its own message,
+then restoring it.
+
+The test releases the parked thread before asserting. Failing first would
+deadlock `thread::scope` waiting on a resolution nothing would ever let go —
+which is what it did on the first attempt, and is worth knowing before the next
+seam is written.
+
 **Labels sit on the version, not the chunk.** They are the same for every
 chunk in a comparison, so the contract names them twice per conflict rather
 than twice per hunk.
 
 ## Known gaps
 
-- **The mutation lock is not proven by a test.** It serializes a resolution
-  against an ordinary note save — the interleaving where a save lands between
-  the fingerprint read and the write, and the resolution overwrites it while
-  reporting success. Reaching that deterministically needs a seam to widen the
-  window; without one the test would be timing-dependent. The lock is the one
-  `markdown.rs` already takes, so the two paths do serialize.
 - **A resolution is not itself a commit on the history branch.** It is
   checkpointed before the write, and the watcher then reports the write like
   any other, so the sweeper records it a few seconds later. Nothing forces it
@@ -88,5 +118,8 @@ than twice per hunk.
 
 ## Status
 
-🟨 Two-way segmentation, the resolution write, the checkpoint order, the CAS
-guard and cleanup are done. Three-way waits on story 6.
+✅ Two-way segmentation, three-way merge (shipped with story 6, as reduction
+to copies), the resolution write, the checkpoint order, the CAS guard, cleanup
+and the mutation lock are done and covered. The one remaining note under Known
+gaps is a timing observation about *when* a resolution reaches the history
+branch, not missing work.

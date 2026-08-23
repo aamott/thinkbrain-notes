@@ -51,6 +51,21 @@ section still pending. It is disabled until each one is answered: the default
 would be this computer's side, and accepting it unread is exactly how someone
 loses the paragraph they wrote on the other machine.
 
+**The toast counts arrivals, not outstanding conflicts.**
+`conflictNotificationAdapter.ts` keeps the set of copy paths it has announced
+and speaks only for the ones that were not in it. A count would stay silent on
+the interleaving that matters — one conflict answered as another lands leaves
+the total unchanged while something new waits. It keys on `theirs.path`, the
+same handle `Engine::note_conflicts` uses.
+
+It is **transient, not sticky**, and one aggregate toast rather than one per
+file, which answers the noise objection this gap was originally held open for.
+Sticky was rejected on a concrete cost: `pickToast` ranks sticky above
+transient, so an unreviewed conflict would have suppressed every other
+producer's toast for as long as it sat there. The badge stays the durable
+awareness path; the toast is the announcement. Its copy is audited by
+`copy.test.tsx` like every other sentence in the feature.
+
 **The audit runs against pixels, not source.** `conflict.theirs.path` in code
 is fine; "theirs" on screen is not. Rendering each state and scanning the text
 is the only way to tell those apart. "Merge" and "merged" are deliberately not
@@ -72,11 +87,6 @@ which would throw away the decisions already made.
 
 ## Known gaps
 
-- **No new-conflict toast.** Sync failures now use the status-bar notification
-  surface, but a conflict toast still needs a deliberate notification policy:
-  a cloud daemon can make several copies at once, and one toast per file would
-  be noise. The badge remains the durable awareness path for now. Blocked on
-  `notification_system` — a conflict adapter pushes into the same store.
 - **Image cards show sizes and dates, not thumbnails.** Reading an image out of
   the vault into the panel needs the asset resolver that the editor uses, on a
   path that is not a note.
@@ -86,5 +96,6 @@ which would throw away the decisions already made.
 
 ## Status
 
-🟨 Triage cards, the comparison, the result preview, the resolution write and
-the badge are done. Remaining: thumbnails, the toast, and self-closing tabs.
+🟨 Triage cards, the comparison, the result preview, the resolution write, the
+badge and the new-conflict toast are done. Remaining: thumbnails and
+self-closing tabs.

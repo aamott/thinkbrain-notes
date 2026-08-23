@@ -8,7 +8,7 @@ import {
 import { appEvents } from "../events/appEvents";
 import { BottomPanel as BottomPanelContent } from "../panels/BottomPanel";
 import { LeftPopout } from "../panels/LeftPopout";
-import { useSyncStatus } from "../sync/useSyncStatus";
+import { useSyncSurfaces } from "../sync/useSyncSurfaces";
 import { RightPopout } from "../panels/RightPopout";
 import { useTheme } from "../settings/theme-context";
 import { useSettingsStore } from "../settings/settingsStore";
@@ -492,16 +492,6 @@ export function DesktopShell() {
 
   const activeTab = tabState.tabs.find((tab) => tab.id === tabState.activeTabId) ?? null;
 
-  // Read here rather than inside the panel: the number has to be visible to
-  // someone who has never opened it, which is exactly when the panel is not
-  // mounted to count anything.
-  const syncStatus = useSyncStatus(restoredWorkspacePath ?? null);
-  const conflictBadges = useMemo<Readonly<Record<string, number>>>(() => {
-    const badges: Record<string, number> = {};
-    if (syncStatus.attention > 0) badges.conflicts = syncStatus.attention;
-    return badges;
-  }, [syncStatus.attention]);
-
   // Which note the history panel is about. Set by "Previous versions…" in the
   // file tree and cleared by the panel itself, so opening History from the
   // footer is always the whole workspace rather than whatever was last asked.
@@ -520,6 +510,11 @@ export function DesktopShell() {
     },
     [selectLeftPanel]
   );
+
+  const { syncStatus, conflictBadges } = useSyncSurfaces({
+    rootPath: restoredWorkspacePath ?? null,
+    onReview: openSyncPanel
+  });
 
   // The unsaved text of an editor open on the note a merge tab is comparing.
   // "This computer's version" has to be what the user is looking at; offering

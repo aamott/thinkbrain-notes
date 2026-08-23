@@ -239,6 +239,53 @@ pub fn resolve(
     expected_ours: &str,
     expected_theirs: &str,
 ) -> Result<Resolved, NativeError> {
+    resolve_holding_lock(
+        engine,
+        root,
+        copy_path,
+        resolution,
+        expected_ours,
+        expected_theirs,
+        || {},
+    )
+}
+
+/// `resolve`, with a seam open between the read and the write.
+///
+/// The window the mutation lock exists to close is invisible from outside: a
+/// save that lands after the fingerprints are checked and before the contents
+/// are replaced would be overwritten while the resolution reported success.
+/// Parking a caller exactly there is the only way to put a real save into it.
+#[cfg(test)]
+pub(super) fn resolve_after_read(
+    engine: &Engine,
+    root: &Path,
+    copy_path: &str,
+    resolution: &Resolution,
+    expected_ours: &str,
+    expected_theirs: &str,
+    after_read: impl FnOnce(),
+) -> Result<Resolved, NativeError> {
+    resolve_holding_lock(
+        engine,
+        root,
+        copy_path,
+        resolution,
+        expected_ours,
+        expected_theirs,
+        after_read,
+    )
+}
+
+fn resolve_holding_lock(
+    engine: &Engine,
+    root: &Path,
+    copy_path: &str,
+    resolution: &Resolution,
+    expected_ours: &str,
+    expected_theirs: &str,
+    after_read: impl FnOnce(),
+) -> Result<Resolved, NativeError> {
     // Held across the read, the check and every write below, and it is the same
     // lock the ordinary note writes take — so a save landing in the middle of a
     // resolution is not a race this has to reason about.
@@ -279,6 +326,10 @@ pub fn resolve(
             "This is a choice between two versions, not whether to keep or delete the note.",
         ));
     }
+
+    // Everything below writes. A test parks here to hold the lock open across
+    // the boundary; in every other build this is a closure that does nothing.
+    after_read();
 
     let checkpoint = engine.checkpoint(
         &[
@@ -920,7 +971,8 @@ mod tests {
     /// This does not prove the mutation lock: removing it leaves the test
     /// passing, because a resolution ends by deleting the copy and only one
     /// caller can do that. The lock is there for the interleaving this cannot
-    /// reach — an ordinary note save landing between the read and the write.
+    /// reach — an ordinary note save landing between the read and the write,
+    /// which `a_note_save_cannot_land_between_the_read_and_the_write` covers.
     #[test]
     fn simultaneous_resolutions_of_one_conflict_land_exactly_once() {
         let f = std::sync::Arc::new(text_fixture("resolve-concurrent"));
@@ -946,6 +998,104 @@ mod tests {
             "a conflict was resolved more than once"
         );
         assert_eq!(f.read("note.md"), "# Note\ntheirs\nend\n");
+        assert!(!f.exists(COPY));
+    }
+
+    /// The interleaving the mutation lock exists for, and the one the test
+    /// above cannot reach: an ordinary note save landing after the resolution
+    /// has checked the fingerprints and before it replaces the contents.
+    /// Without the lock the save is written and then overwritten, and the
+    /// resolution reports success over the top of it.
+    ///
+    /// The seam parks the resolution exactly in that window. The bounded wait
+    /// is the one timing element left, and it only fails in the sound
+    /// direction: a save that *completes* while the resolution is parked means
+    /// the lock is not being held, which is the defect. A slow save cannot fail
+    /// this test, only pass it for a weaker reason.
+    #[test]
+    fn a_note_save_cannot_land_between_the_read_and_the_write() {
+        use std::sync::mpsc;
+        use std::time::Duration;
+
+        let f = text_fixture("resolve-lock-window");
+        let seen = f.view();
+        let before = f.read("note.md");
+        let root = f.vault.to_str().expect("the vault path is utf-8").to_owned();
+
+        let (entered_tx, entered_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let (saved_tx, saved_rx) = mpsc::channel();
+
+        let engine = &f.engine;
+        let vault = &f.vault;
+        let seen = &seen;
+        let root = &root;
+
+        let saved_while_parked = std::thread::scope(|scope| {
+            let resolving = scope.spawn(move || {
+                resolve_after_read(
+                    engine,
+                    vault,
+                    COPY,
+                    &Resolution::KeepTheirs,
+                    &seen.summary.ours.fingerprint,
+                    &seen.summary.theirs.fingerprint,
+                    || {
+                        entered_tx.send(()).expect("the seam is announced");
+                        release_rx.recv().expect("the resolution is released");
+                    },
+                )
+            });
+
+            entered_rx
+                .recv_timeout(Duration::from_secs(5))
+                .expect("the resolution reaches the write");
+
+            // The seam is genuinely before the write, so what follows is about
+            // the window the lock covers rather than one that already closed.
+            assert_eq!(
+                f.read("note.md"),
+                before,
+                "the resolution had already written when the seam was reached"
+            );
+
+            let saving = scope.spawn(move || {
+                let written = crate::commands::markdown::write_markdown_document(
+                    root,
+                    "note.md",
+                    "# Note\nsaved by the editor\nend\n".to_owned(),
+                    None,
+                );
+                saved_tx.send(()).expect("the save announces that it finished");
+                written
+            });
+
+            // Recorded rather than asserted here: the resolution is still
+            // parked, and failing before releasing it would hang the scope
+            // instead of reporting what went wrong.
+            let saved_while_parked = saved_rx.recv_timeout(Duration::from_millis(250)).is_ok();
+
+            release_tx.send(()).expect("the resolution is let go");
+            resolving
+                .join()
+                .expect("the resolving thread finishes")
+                .expect("the resolution succeeds");
+            saving
+                .join()
+                .expect("the saving thread finishes")
+                .expect("the save succeeds");
+            saved_while_parked
+        });
+
+        assert!(
+            !saved_while_parked,
+            "a note save landed between the resolution's read and its write"
+        );
+
+        // Both writes happened, one after the other rather than inside each
+        // other: the save is what is on disk, and the copy the resolution
+        // answered is gone.
+        assert_eq!(f.read("note.md"), "# Note\nsaved by the editor\nend\n");
         assert!(!f.exists(COPY));
     }
 

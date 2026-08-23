@@ -32,9 +32,15 @@ its own severity rules and pushes into the store.
 
 ## Stories (`plans/notifications/`)
 
-1. `pending-notification_system-med-med.md` — store, types, sync adapter,
+1. ✅ `done-notification_system-med-med.md` — store, types, sync adapter,
    bell log UI, badge count, sticky toasts, StatusBar migration.
 
 ## Status
 
-⬜ Pending.
+✅ Story 1 done, and the source-agnostic claim is now carried by three
+producers, none of which needed a store or UI change: `syncNotificationAdapter`
+(problems + setup success), `settleNotificationAdapter` (duplicates merged) and
+`conflictNotificationAdapter` (two versions found). The last two closed known
+gaps in `settle_obvious_conflicts` and `merge_ui` respectively.
+
+Remaining consumers are extensions, updates and ACP.
