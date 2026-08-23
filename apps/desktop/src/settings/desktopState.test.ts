@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   collapsedGroups,
+  workspaceTabs,
   DEFAULT_DESKTOP_STATE,
   DESKTOP_STATE_KEY,
   loadDesktopState,
@@ -223,7 +224,8 @@ describe("desktop state persistence", () => {
         developmentExtensionDirectories: [],
         openTabs: [],
         activeTabId: null,
-        workspaceViews: {}
+        workspaceViews: {},
+        workspaceTabs: {}
       }
     });
   });
@@ -495,5 +497,158 @@ describe("collapsed groups (D53)", () => {
     expect(state.leftPanelWidth).toBe(300);
     expect(state.openTabs).toHaveLength(1);
     expect(state.workspaceViews).toEqual({});
+  });
+});
+
+describe("per-workspace tabs", () => {
+  /**
+   * The bug this fixes: tabs were one flat list in a document every window
+   * shares, so two windows on two vaults overwrote each other's list and then
+   * both restored the same tabs — pointing at whichever vault wrote last.
+   */
+  it("keeps each workspace's tabs apart", () => {
+    const state = parseDesktopState(
+      JSON.stringify({
+        desktopState: {
+          version: 5,
+          workspaceTabs: {
+            "/vault": {
+              openTabs: [
+                { id: "a", title: "One", kind: "editor", rootPath: "/vault", relativePath: "one.md" }
+              ],
+              activeTabId: "a"
+            },
+            "/other": {
+              openTabs: [
+                { id: "b", title: "Two", kind: "editor", rootPath: "/other", relativePath: "two.md" }
+              ],
+              activeTabId: "b"
+            }
+          }
+        }
+      })
+    );
+
+    expect(workspaceTabs(state, "/vault").openTabs).toHaveLength(1);
+    expect(workspaceTabs(state, "/vault").openTabs[0]?.relativePath).toBe("one.md");
+    expect(workspaceTabs(state, "/vault").activeTabId).toBe("a");
+    expect(workspaceTabs(state, "/other").openTabs[0]?.relativePath).toBe("two.md");
+    // A workspace nothing was stored for opens with nothing, not with somebody
+    // else's tabs — which is the whole point.
+    expect(workspaceTabs(state, "/unknown").openTabs).toEqual([]);
+    expect(workspaceTabs(state, null).openTabs).toEqual([]);
+  });
+
+  /**
+   * An existing user upgrading has tabs only in the old flat field. Those belong
+   * to whatever workspace was last open, so that workspace — and only that one —
+   * inherits them.
+   */
+  it("gives the legacy flat tab list to the workspace that was last open", () => {
+    const state = parseDesktopState(
+      JSON.stringify({
+        desktopState: {
+          version: 5,
+          lastWorkspacePath: "/vault",
+          openTabs: [
+            { id: "a", title: "One", kind: "editor", rootPath: "/vault", relativePath: "one.md" }
+          ],
+          activeTabId: "a"
+        }
+      })
+    );
+
+    expect(workspaceTabs(state, "/vault").openTabs[0]?.relativePath).toBe("one.md");
+    expect(workspaceTabs(state, "/vault").activeTabId).toBe("a");
+    expect(workspaceTabs(state, "/other").openTabs).toEqual([]);
+  });
+
+  it("prefers the keyed tabs over the legacy list for the same workspace", () => {
+    const state = parseDesktopState(
+      JSON.stringify({
+        desktopState: {
+          version: 5,
+          lastWorkspacePath: "/vault",
+          openTabs: [
+            { id: "old", title: "Old", kind: "editor", rootPath: "/vault", relativePath: "old.md" }
+          ],
+          activeTabId: "old",
+          workspaceTabs: {
+            "/vault": {
+              openTabs: [
+                { id: "new", title: "New", kind: "editor", rootPath: "/vault", relativePath: "new.md" }
+              ],
+              activeTabId: "new"
+            }
+          }
+        }
+      })
+    );
+
+    expect(workspaceTabs(state, "/vault").openTabs).toHaveLength(1);
+    expect(workspaceTabs(state, "/vault").openTabs[0]?.relativePath).toBe("new.md");
+  });
+
+  it("reads a hand-edited document without refusing to draw", () => {
+    const state = parseDesktopState(
+      JSON.stringify({
+        desktopState: {
+          version: 5,
+          workspaceTabs: {
+            "/vault": { openTabs: [{ id: "a", title: "One", kind: "editor" }, 7, null], activeTabId: 5 },
+            "/other": "not an object"
+          }
+        }
+      })
+    );
+
+    expect(workspaceTabs(state, "/vault").openTabs).toHaveLength(1);
+    expect(workspaceTabs(state, "/vault").activeTabId).toBeNull();
+    expect(workspaceTabs(state, "/other").openTabs).toEqual([]);
+  });
+
+  it("sends a targeted update so one window does not overwrite another's tabs", async () => {
+    const written: string[] = [];
+    const gateway: DesktopStateGateway = {
+      readAppSettings: () =>
+        Promise.resolve(
+          JSON.stringify({
+            desktopState: {
+              version: 5,
+              recentWorkspacePaths: ["/vault", "/other"],
+              workspaceTabs: {
+                "/other": {
+                  openTabs: [
+                    { id: "b", title: "Two", kind: "editor", rootPath: "/other", relativePath: "two.md" }
+                  ],
+                  activeTabId: "b"
+                }
+              }
+            }
+          })
+        ),
+      writeAppSettings: (contents) => {
+        written.push(contents);
+        return Promise.resolve();
+      }
+    };
+
+    const next = await saveDesktopState(
+      {
+        lastWorkspacePath: "/vault",
+        workspaceTabs: {
+          workspacePath: "/vault",
+          openTabs: [
+            { id: "a", title: "One", kind: "editor", rootPath: "/vault", relativePath: "one.md" }
+          ],
+          activeTabId: "a"
+        }
+      },
+      gateway
+    );
+
+    expect(workspaceTabs(next, "/vault").openTabs[0]?.relativePath).toBe("one.md");
+    // The other window's entry survived the write.
+    expect(workspaceTabs(next, "/other").openTabs[0]?.relativePath).toBe("two.md");
   });
 });

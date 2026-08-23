@@ -30,6 +30,29 @@ export type WorkspaceViews = Readonly<
   Record<string, Readonly<Record<string, readonly string[]>>>
 >;
 
+/**
+ * Per-workspace open tabs.
+ *
+ * Tabs used to be one flat list here, which meant two windows on two vaults
+ * overwrote each other's list and then both restored the same tabs — pointing
+ * at whichever vault had written last. Keyed by workspace for the same reason
+ * `workspaceViews` is, and written the same targeted way.
+ */
+export type WorkspaceTabs = Readonly<Record<string, WorkspaceTabState>>;
+
+/** What one workspace had open. */
+export interface WorkspaceTabState {
+  readonly openTabs: readonly PersistedTab[];
+  readonly activeTabId: string | null;
+}
+
+/** One workspace's tabs, as a window sends them. */
+export interface WorkspaceTabsUpdate {
+  readonly workspacePath: string;
+  readonly openTabs: readonly PersistedTab[];
+  readonly activeTabId: string | null;
+}
+
 /** One view's collapsed groups, in one workspace. */
 export interface CollapsedGroupsUpdate {
   readonly workspacePath: string;
@@ -49,6 +72,7 @@ export interface DesktopState {
   readonly openTabs: readonly PersistedTab[];
   readonly activeTabId: string | null;
   readonly workspaceViews: WorkspaceViews;
+  readonly workspaceTabs: WorkspaceTabs;
 }
 
 export interface DesktopStateUpdate {
@@ -67,6 +91,8 @@ export interface DesktopStateUpdate {
    * each of them overwrite what the other had just recorded.
    */
   readonly collapsedGroups?: CollapsedGroupsUpdate;
+  /** Targeted for the same reason `collapsedGroups` is. */
+  readonly workspaceTabs?: WorkspaceTabsUpdate;
 }
 
 export interface DesktopStateGateway {
@@ -92,7 +118,8 @@ export const DEFAULT_DESKTOP_STATE: DesktopState = Object.freeze({
   developmentExtensionDirectories: [],
   openTabs: [],
   activeTabId: null,
-  workspaceViews: {}
+  workspaceViews: {},
+  workspaceTabs: {}
 });
 
 const nativeDesktopStateGateway: DesktopStateGateway = {
@@ -241,7 +268,8 @@ function applyDesktopStateUpdate(
         : update.developmentExtensionDirectories,
     openTabs: update.openTabs === undefined ? state.openTabs : update.openTabs,
     activeTabId: update.activeTabId === undefined ? state.activeTabId : update.activeTabId,
-    workspaceViews: applyCollapsedGroups(state.workspaceViews, update.collapsedGroups)
+    workspaceViews: applyCollapsedGroups(state.workspaceViews, update.collapsedGroups),
+    workspaceTabs: applyWorkspaceTabs(state.workspaceTabs, update.workspaceTabs)
   });
 }
 
@@ -287,7 +315,62 @@ function createDesktopState(value: Readonly<Record<string, unknown>>): DesktopSt
     ),
     openTabs: readPersistedTabs(value.openTabs),
     activeTabId: readNonEmptyString(value.activeTabId),
-    workspaceViews: readWorkspaceViews(value.workspaceViews)
+    workspaceViews: readWorkspaceViews(value.workspaceViews),
+    workspaceTabs: readWorkspaceTabs(value.workspaceTabs)
+  };
+}
+
+/**
+ * Reads the stored per-workspace tabs, skipping anything malformed.
+ *
+ * Same forgiving rule as the collapsed groups: a hand-edited document costs a
+ * tab that did not reopen, never a window that will not draw.
+ */
+function readWorkspaceTabs(value: unknown): WorkspaceTabs {
+  if (!isRecord(value)) return {};
+  const tabs: Record<string, WorkspaceTabState> = {};
+  for (const [workspacePath, stored] of Object.entries(value)) {
+    if (!isRecord(stored)) continue;
+    tabs[workspacePath] = {
+      openTabs: readPersistedTabs(stored.openTabs),
+      activeTabId: readNonEmptyString(stored.activeTabId)
+    };
+  }
+  return tabs;
+}
+
+/**
+ * One workspace's tabs, with the legacy flat list as its fallback.
+ *
+ * An existing user upgrading has tabs only in `openTabs`. Those belong to
+ * whatever workspace was last open, so that workspace inherits them and no
+ * other one does — handing them to every workspace is the bug being fixed.
+ */
+export function workspaceTabs(
+  state: DesktopState,
+  workspacePath: string | null
+): WorkspaceTabState {
+  if (workspacePath === null) return { openTabs: [], activeTabId: null };
+  const stored = state.workspaceTabs[workspacePath];
+  if (stored) return stored;
+  if (state.lastWorkspacePath === workspacePath) {
+    return { openTabs: state.openTabs, activeTabId: state.activeTabId };
+  }
+  return { openTabs: [], activeTabId: null };
+}
+
+/** Records one workspace's tabs, leaving every other workspace's alone. */
+function applyWorkspaceTabs(
+  tabs: WorkspaceTabs,
+  update: WorkspaceTabsUpdate | undefined
+): WorkspaceTabs {
+  if (update === undefined) return tabs;
+  return {
+    ...tabs,
+    [update.workspacePath]: {
+      openTabs: update.openTabs,
+      activeTabId: update.activeTabId
+    }
   };
 }
 

@@ -12,6 +12,7 @@ import {
   loadDesktopState,
   promoteRecentWorkspace,
   saveDesktopState,
+  workspaceTabs,
   type DesktopStateUpdate,
   type PersistedTab
 } from "../settings/desktopState";
@@ -91,12 +92,17 @@ export function useWorkspaceLifecycle({
       setRightWidth(desktopState.rightPanelWidth);
       setBottomPanel(desktopState.bottomPanelOpen ? "terminal" : null);
 
-      // Restore persisted tabs once. Guarded by a ref because StrictMode
+      // Restore this workspace's tabs once. Guarded by a ref because StrictMode
       // double-mounts effects in dev — without this, tabs would open twice.
-      if (!tabsRestoredRef.current && desktopState.openTabs.length > 0) {
+      //
+      // Keyed by the workspace this window actually has open. Reading a single
+      // shared list here is what used to give two windows on two vaults the
+      // same tabs, each pointing at the other's notes.
+      const rootPath = windowRoot ?? desktopState.lastWorkspacePath;
+      const restoring = workspaceTabs(desktopState, rootPath);
+      if (!tabsRestoredRef.current && restoring.openTabs.length > 0) {
         tabsRestoredRef.current = true;
-        const rootPath = windowRoot ?? desktopState.lastWorkspacePath;
-        for (const persisted of desktopState.openTabs) {
+        for (const persisted of restoring.openTabs) {
           const tab = restoreTab(persisted, rootPath);
           if (tab) {
             dispatchTabs({ type: "open", tab });
@@ -105,8 +111,8 @@ export function useWorkspaceLifecycle({
             }
           }
         }
-        if (desktopState.activeTabId) {
-          dispatchTabs({ type: "activate", tabId: desktopState.activeTabId });
+        if (restoring.activeTabId) {
+          dispatchTabs({ type: "activate", tabId: restoring.activeTabId });
         }
       }
     }).finally(() => {
@@ -152,9 +158,17 @@ export function useWorkspaceLifecycle({
    */
   const saveTabs = useMemo(
     () =>
-      createDebounced<DesktopTabState>((tabs) => {
+      createDebounced<TabSave>(({ tabs, workspacePath }) => {
+        const openTabs = tabs.tabs.map(tabToPersisted);
         persistDesktopState({
-          openTabs: tabs.tabs.map(tabToPersisted),
+          // Targeted: this window says what *its* workspace has open and
+          // touches no other, which is what keeps two windows from overwriting
+          // each other. The flat pair below is the same list under the old
+          // field, kept written so an older build still finds something.
+          ...(workspacePath
+            ? { workspaceTabs: { workspacePath, openTabs, activeTabId: tabs.activeTabId } }
+            : {}),
+          openTabs,
           activeTabId: tabs.activeTabId
         });
       }, TAB_PERSIST_DELAY_MS),
@@ -162,8 +176,8 @@ export function useWorkspaceLifecycle({
   );
   useEffect(() => {
     if (!stateRestored || !isTauri()) return;
-    saveTabs(tabState);
-  }, [saveTabs, stateRestored, tabState]);
+    saveTabs({ tabs: tabState, workspacePath: restoredWorkspacePath });
+  }, [saveTabs, stateRestored, tabState, restoredWorkspacePath]);
 
   /**
    * Coalesces rapid resize updates so a drag writes its final width once rather
@@ -462,6 +476,12 @@ export function useWorkspaceLifecycle({
 }
 
 /** Converts a runtime tab to the serializable shape persisted in desktop state. */
+/** What the debounced tab save needs: the tabs, and whose they are. */
+interface TabSave {
+  readonly tabs: DesktopTabState;
+  readonly workspacePath: string | null;
+}
+
 function tabToPersisted(tab: DesktopTab): PersistedTab {
   return {
     id: tab.id,
