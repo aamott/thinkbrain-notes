@@ -1,6 +1,6 @@
 # ThinkBrain Notes Project Guidance
 
-Open, local-first knowledge workspace inspired by Obsidian & VS Code. Standard Markdown files with zero database lock-in. Fast, extensible, including extensions. Supports Mac, Windows, Linux, ios, and Android. Stores metadata separate from the repo to avoid syncing issues with OneDrive and SyncThing. 
+Open, local-first knowledge workspace inspired by Obsidian & VS Code. Standard Markdown files with zero database lock-in. Fast, extensible, including extensions, and can view and edit all sorts of files. Supports Mac, Windows, Linux, ios, and Android. Stores metadata separate from the repo to avoid syncing issues with OneDrive and SyncThing. 
 
 Future extensions include: 
 - ACP Agent Chat

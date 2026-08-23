@@ -18,15 +18,31 @@ repair flow yet.
       Unix-only, because the helper is explicit that its Windows fallback
       (remove-then-rename) is not atomic and there is nothing equivalent for a
       test to read.
-- [ ] Previous version kept briefly as a backup (location/retention TBD by
-      discovery).
-- [ ] Opening detects truncation, encoding errors, and unexpected empty
-      results from non-empty files.
+- [x] Previous version kept as a backup — `commands/backup.rs`. App-data, per
+      workspace, mirroring the note's folder so the tree is browsable by hand;
+      three versions per note, pruned oldest-first. Best-effort by contract: a
+      backup that cannot be written must never fail the save, or the safety net
+      becomes a way to lose work.
+- [x] Opening detects encoding errors — `read_note` reads bytes and reports
+      `workspace.note_unreadable` where `fs::read_to_string` used to fold the
+      failure into the same error an absent file gets. The shell can now tell
+      "not there" from "there and wrong".
+- [ ] **Not** truncation or emptiness, and deliberately so. The obvious test —
+      empty note, non-empty version kept — was built, then removed before
+      commit: it fires when someone deletes a note's contents and saves, since
+      the version it kept is the text they just deleted. It would have refused
+      to open a note they emptied on purpose, and with no recovery UI yet that
+      leaves them stuck. What actually separates damage from intent is that the
+      note went empty *without the app writing it*, which is the watcher's
+      knowledge. That check belongs on the outside-change path.
 - [ ] Corruption routes to a recovery UI (not a silent empty editor) showing
       what was detected and offering the last backup if available.
 - [ ] Honest messaging only — never claim data is safe when it isn't.
 - [ ] No app caches or backups in the vault's app-data directory.
-- [ ] Vitest covers atomic writes, detection cases, and recovery states.
+- [x] Covered by tests, in Rust rather than Vitest: all of this is native — the
+      write, the backup and the decode all happen where the bytes are. Reverting
+      the atomic write, or the backup, fails them.
+- [ ] Recovery-state coverage waits on the UI below.
 - [ ] `pnpm lint`, `pnpm typecheck`, `pnpm test` pass.
 
 ## What shipped, and what it exposed

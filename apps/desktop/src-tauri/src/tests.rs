@@ -1,4 +1,4 @@
-use crate::commands::{markdown::*, search::*, settings::*, workspace::*};
+use crate::commands::{backup::*, markdown::*, search::*, settings::*, workspace::*};
 use crate::NativeError;
 use rusqlite::Connection;
 use serde_json::Value;
@@ -1125,10 +1125,7 @@ fn markdown_commands_reject_symlink_escapes_from_the_workspace() {
     // workspace would read and overwrite files the workspace never covered.
     symlink(&secret, root.join("innocent.md")).expect("symlink is created");
 
-    let read_escape = read_markdown_file(
-        root.to_string_lossy().to_string(),
-        "innocent.md".to_string(),
-    );
+    let read_escape = read_note(&root.to_string_lossy(), "innocent.md", None);
     assert!(
         read_escape.is_err(),
         "reading through a symlink must be refused"
@@ -1228,6 +1225,143 @@ fn app_settings_write_treats_an_absent_file_as_a_precondition_of_its_own() {
     assert!(check_settings_precondition(None, Some("{}"), app_code, app_msg).is_err());
 }
 
+/// A note the app cannot decode is damage, and must be reported as damage.
+///
+/// `fs::read_to_string` folds an encoding failure into the same
+/// `workspace.read_failed` an absent file gets, so the shell had no way to tell
+/// "this is not there" from "this is there and wrong" — and no reason to offer
+/// a recovery path for the second.
+#[test]
+fn a_note_that_cannot_be_decoded_is_reported_as_damaged() {
+    let root = temp_test_dir("read-undecodable");
+    // A lone 0xFF is not valid UTF-8 in any position.
+    fs::write(root.join("note.md"), [b'#', b' ', 0xFF, b'\n']).expect("the note is written");
+
+    let failure = read_note(&root.to_string_lossy(), "note.md", None)
+        .expect_err("an undecodable note is refused");
+
+    assert_eq!(failure.code, "workspace.note_unreadable");
+    fs::remove_dir_all(&root).ok();
+}
+
+/// An empty note opens as an empty note.
+///
+/// Guards the check that was considered and rejected: "empty, but we kept
+/// something non-empty" fires on a user deleting a note's contents and saving,
+/// because the thing it kept is the text they just deleted. Every deliberate
+/// empty would have opened with a damage notice, and the notice would have
+/// stopped meaning anything.
+#[test]
+fn an_empty_note_with_nothing_kept_opens_normally() {
+    let root = temp_test_dir("read-empty-new");
+    let app_data = temp_test_dir("read-empty-new-appdata");
+    fs::write(root.join("fresh.md"), "").expect("the note is written");
+
+    let read = read_note(&root.to_string_lossy(), "fresh.md", Some(&app_data))
+        .expect("a genuinely new empty note opens");
+
+    assert_eq!(read.contents, "");
+    fs::remove_dir_all(&root).ok();
+    fs::remove_dir_all(&app_data).ok();
+}
+
+/// A save keeps the version it replaced, so a bad save is recoverable.
+///
+/// Backups live in app-data, not the vault. A user with the app on two or three
+/// machines then has that many independent sets, none of them inside the folder
+/// a sync daemon is rewriting — putting them in the vault would hand them to the
+/// process a backup exists to protect against. The cost is that a backup does
+/// not travel with the notes, which the recovery UI has to say plainly.
+#[test]
+fn a_save_keeps_the_version_it_replaced() {
+    let root = temp_test_dir("backup-keeps");
+    let app_data = temp_test_dir("backup-keeps-appdata");
+    let note = root.join("daily").join("today.md");
+    fs::create_dir_all(note.parent().expect("the note has a folder")).expect("folder is made");
+    fs::write(&note, "what was there\n").expect("the note exists to be replaced");
+
+    write_markdown_document(
+        &root.to_string_lossy(),
+        "daily/today.md",
+        "what is there now\n".to_string(),
+        None,
+        Some(&app_data),
+    )
+    .expect("the save succeeds");
+
+    let kept = list_note_backups(&app_data, &root, "daily/today.md");
+    assert_eq!(kept.len(), 1, "the replaced version was not kept");
+    assert_eq!(
+        fs::read_to_string(&kept[0]).expect("the backup is readable"),
+        "what was there\n"
+    );
+    // The backup folder mirrors the vault, so someone opening it by hand can
+    // tell which note they are looking at.
+    assert!(
+        kept[0].to_string_lossy().contains("daily"),
+        "the backup did not mirror the note's folder: {:?}",
+        kept[0]
+    );
+
+    fs::remove_dir_all(&root).ok();
+    fs::remove_dir_all(&app_data).ok();
+}
+
+/// Retention is count-based, which is what bounds app-data predictably.
+#[test]
+fn only_the_most_recent_backups_are_kept() {
+    let root = temp_test_dir("backup-prune");
+    let app_data = temp_test_dir("backup-prune-appdata");
+    let note = root.join("note.md");
+    fs::write(&note, "version 0\n").expect("the note exists");
+
+    for version in 1..=(KEPT_BACKUPS + 2) {
+        write_markdown_document(
+            &root.to_string_lossy(),
+            "note.md",
+            format!("version {version}\n"),
+            None,
+            Some(&app_data),
+        )
+        .expect("the save succeeds");
+    }
+
+    let kept = list_note_backups(&app_data, &root, "note.md");
+    assert_eq!(kept.len(), KEPT_BACKUPS, "retention did not bound the folder");
+
+    // Newest first, and the newest is the version replaced by the last save.
+    let newest = fs::read_to_string(&kept[0]).expect("the backup is readable");
+    assert_eq!(newest, format!("version {}\n", KEPT_BACKUPS + 1));
+    // The oldest versions are the ones dropped.
+    let all: Vec<String> = kept
+        .iter()
+        .map(|path| fs::read_to_string(path).expect("the backup is readable"))
+        .collect();
+    assert!(
+        !all.contains(&"version 0\n".to_string()),
+        "the oldest version outlived retention: {all:?}"
+    );
+
+    fs::remove_dir_all(&root).ok();
+    fs::remove_dir_all(&app_data).ok();
+}
+
+/// Creating a note has nothing to keep, and must not leave an empty backup.
+#[test]
+fn creating_a_note_keeps_no_backup() {
+    let root = temp_test_dir("backup-create");
+    let app_data = temp_test_dir("backup-create-appdata");
+    let note = root.join("fresh.md");
+    fs::write(&note, "first\n").expect("the note exists");
+
+    // A save with no previous content is the shape a creation leaves behind.
+    let kept = list_note_backups(&app_data, &root, "fresh.md");
+    assert!(kept.is_empty(), "a note nobody has saved over has a backup");
+
+    fs::remove_dir_all(&root).ok();
+    fs::remove_dir_all(&app_data).ok();
+}
+
 /// A note save must not truncate the file it is replacing.
 ///
 /// `fs::write` opens with `O_TRUNC`: the note is emptied first and refilled
@@ -1257,6 +1391,7 @@ fn a_note_save_replaces_the_file_rather_than_truncating_it() {
         &root.to_string_lossy(),
         "draft.md",
         "the note as it is now".to_string(),
+        None,
         None,
     )
     .expect("the save succeeds");
@@ -1298,6 +1433,7 @@ fn note_write_is_refused_when_the_file_changed_underneath_it() {
         "draft.md",
         "what the tab holds".to_string(),
         Some("what the tab was opened with"),
+        None,
     )
     .expect_err("a save computed from a stale read is refused");
     assert_eq!(refused.code, "workspace.note_conflict");
@@ -1323,6 +1459,7 @@ fn note_write_goes_through_when_the_file_is_what_the_caller_last_read() {
         "draft.md",
         "edited".to_string(),
         Some("on disk"),
+        None,
     )
     .expect("a save against an untouched file goes through");
     assert_eq!(
@@ -1352,6 +1489,7 @@ fn note_write_is_refused_when_the_file_cannot_be_read_to_check() {
         "draft.md",
         "mine".to_string(),
         Some("on disk"),
+        None,
     )
     .expect_err("a write it cannot verify is refused");
     assert_eq!(refused.code, "workspace.note_conflict");
@@ -1381,6 +1519,7 @@ fn note_write_without_a_precondition_still_overwrites() {
         &root.to_string_lossy(),
         "draft.md",
         "replaced".to_string(),
+        None,
         None,
     )
     .expect("an unchecked save goes through");
@@ -2012,6 +2151,7 @@ fn saving_a_note_the_way_the_app_does_reports_no_change_of_its_own() {
         &root.to_string_lossy(),
         "draft.md",
         "after\n".to_string(),
+        None,
         None,
     )
     .expect("the save succeeds");

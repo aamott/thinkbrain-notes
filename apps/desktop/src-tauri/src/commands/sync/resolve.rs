@@ -1065,6 +1065,7 @@ mod tests {
                     "note.md",
                     "# Note\nsaved by the editor\nend\n".to_owned(),
                     None,
+                    None,
                 );
                 saved_tx.send(()).expect("the save announces that it finished");
                 written

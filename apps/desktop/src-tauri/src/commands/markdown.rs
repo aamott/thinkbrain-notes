@@ -1,4 +1,5 @@
 use crate::commands::watcher::record_self_write;
+use tauri::Manager;
 use crate::error::NativeError;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
@@ -43,12 +44,42 @@ pub fn list_markdown_files(root_path: String) -> Result<Vec<MarkdownFileEntry>, 
 
 #[tauri::command]
 pub fn read_markdown_file(
+    app: tauri::AppHandle,
     root_path: String,
     relative_path: String,
 ) -> Result<MarkdownFileContents, NativeError> {
-    let root = resolve_workspace_root(&root_path)?;
-    let file_path = resolve_markdown_file_path(&root, &relative_path)?;
-    let contents = fs::read_to_string(&file_path).map_err(|error| {
+    let app_data = app.path().app_data_dir().ok();
+    read_note(&root_path, &relative_path, app_data.as_deref())
+}
+
+/// Reads a note, telling damage apart from absence.
+///
+/// `fs::read_to_string` folds an encoding failure into the same error an
+/// unreadable file gets, so the shell could not tell "this note is not there"
+/// from "this note is there and wrong" — and had no reason to offer a recovery
+/// path for the second. Both checks below cost nothing extra: the bytes are
+/// being read either way.
+///
+/// Deliberately absent is any check on emptiness or length. A short note is not
+/// a damaged one, and an empty note is usually a note somebody emptied — the
+/// obvious test, "empty but we kept something non-empty", fires on exactly that
+/// ordinary action, since the thing it kept is the text they just deleted.
+/// Telling people their own edit was corruption is worse than saying nothing.
+///
+/// What actually distinguishes damage is that the note became empty *without
+/// the app writing it*, which is the watcher's knowledge and not this function's.
+/// That check belongs on the outside-change path and is not built yet.
+///
+/// Split from the command so it can be tested: the `AppHandle` a
+/// `#[tauri::command]` takes is unavailable to a unit test.
+pub fn read_note(
+    root_path: &str,
+    relative_path: &str,
+    _backups_in: Option<&Path>,
+) -> Result<MarkdownFileContents, NativeError> {
+    let root = resolve_workspace_root(root_path)?;
+    let file_path = resolve_markdown_file_path(&root, relative_path)?;
+    let bytes = fs::read(&file_path).map_err(|error| {
         failed(
             "workspace.read_failed",
             "Failed to read the Markdown file.",
@@ -56,21 +87,38 @@ pub fn read_markdown_file(
         )
     })?;
 
+    let contents = String::from_utf8(bytes).map_err(|error| {
+        NativeError::with_details(
+            "workspace.note_unreadable",
+            "This note is not readable as text. It may have been damaged.",
+            error,
+        )
+    })?;
+
     Ok(MarkdownFileContents {
-        relative_path: normalize_relative_path(&relative_path)?,
+        relative_path: normalize_relative_path(relative_path)?,
         contents,
     })
 }
 
 #[tauri::command]
 pub fn write_markdown_file(
-    _app: tauri::AppHandle,
+    app: tauri::AppHandle,
     root_path: String,
     relative_path: String,
     contents: String,
     expected: Option<String>,
 ) -> Result<MarkdownFileEntry, NativeError> {
-    write_markdown_document(&root_path, &relative_path, contents, expected.as_deref())
+    // A vault whose app-data cannot be resolved still saves; it just keeps no
+    // backup. Refusing the write would be the safety net causing the loss.
+    let app_data = app.path().app_data_dir().ok();
+    write_markdown_document(
+        &root_path,
+        &relative_path,
+        contents,
+        expected.as_deref(),
+        app_data.as_deref(),
+    )
 }
 
 /// Writes a note, optionally refusing if it is not what the caller last read.
@@ -91,11 +139,15 @@ pub fn write_markdown_file(
 /// Split from the command so it can be tested: the `AppHandle` a `#[tauri::command]`
 /// takes is unavailable to a unit test, and a comparison tested on its own would
 /// not show that a refused write leaves the file alone.
+/// `backups_to` is the app-data directory to keep the replaced version under,
+/// or `None` to keep none — which is what callers with nothing to protect
+/// (tests, and any path where app-data cannot be resolved) pass.
 pub fn write_markdown_document(
     root_path: &str,
     relative_path: &str,
     contents: String,
     expected: Option<&str>,
+    backups_to: Option<&Path>,
 ) -> Result<MarkdownFileEntry, NativeError> {
     let root = resolve_workspace_root(root_path)?;
     let file_path = resolve_markdown_file_path(&root, relative_path)?;
@@ -115,6 +167,19 @@ pub fn write_markdown_document(
 
     if let Some(expected) = expected {
         check_note_write_precondition(&file_path, expected)?;
+    }
+
+    // Keep what is about to be replaced. Best-effort on purpose: the user
+    // pressed save, and failing the write because a *copy* of the old version
+    // could not be made would turn the safety net into a way to lose work.
+    if let Some(app_data) = backups_to {
+        if let Ok(previous) = fs::read(&file_path) {
+            if let Err(error) =
+                super::backup::keep_previous_version(app_data, &root, relative_path, &previous)
+            {
+                eprintln!("[backup] could not keep the previous version of {relative_path}: {error}");
+            }
+        }
     }
 
     record_self_write(&file_path);

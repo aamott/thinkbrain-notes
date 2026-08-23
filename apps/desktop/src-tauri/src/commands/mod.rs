@@ -18,6 +18,7 @@
 //! - Input Validation: User inputs (such as paths or filenames) must be sanitized and checked before execution.
 //! - State Safety: Desktop state and workspace window mappings use synchronized thread-safe primitives.
 
+pub mod backup;
 pub mod extensions;
 pub mod markdown;
 pub mod search;
