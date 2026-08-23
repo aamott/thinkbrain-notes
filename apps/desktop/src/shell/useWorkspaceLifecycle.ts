@@ -30,8 +30,7 @@ import { useWikiLinkIndexStore } from "../wikiLinks/wikiLinkIndexStore";
 import { workspaceDesktopApi } from "../workspace/workspaceAdapter";
 import { watchWorkspace } from "../workspace/workspaceWatcher";
 import { addWorkspaceFile, removeWorkspaceFile } from "./workspaceFileList";
-import type { BottomPanel, LeftPanel } from "./shellTypes";
-type PanelSide = "left" | "right";
+import type { BottomPanel, LeftPanel, PanelSide } from "./shellTypes";
 /** How long a burst of tab opens and closes settles before it is written down. */
 const TAB_PERSIST_DELAY_MS = 400;
 /** How long a drag settles before its final width is written down. */
