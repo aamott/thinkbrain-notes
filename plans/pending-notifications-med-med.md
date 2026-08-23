@@ -37,10 +37,13 @@ its own severity rules and pushes into the store.
 
 ## Status
 
-✅ Story 1 done, and the source-agnostic claim is now carried by three
+✅ Story 1 done, and the source-agnostic claim is now carried by four
 producers, none of which needed a store or UI change: `syncNotificationAdapter`
-(problems + setup success), `settleNotificationAdapter` (duplicates merged) and
-`conflictNotificationAdapter` (two versions found). The last two closed known
-gaps in `settle_obvious_conflicts` and `merge_ui` respectively.
+(problems + setup success), `settleNotificationAdapter` (duplicates merged),
+`conflictNotificationAdapter` (two versions found) and
+`settingsQuarantineAdapter` (a settings document set aside). The first three
+closed known gaps in `settle_obvious_conflicts` and `merge_ui`; the fourth
+closed the last acceptance item in `data-safety`, and is the first producer
+from outside sync — which is what the store was built for.
 
 Remaining consumers are extensions, updates and ACP.

@@ -1,6 +1,6 @@
 # Story: Settings Survive a Downgrade, and Corruption Is Recoverable
 
-**Status:** 🟨 in progress · **Urgency:** medium · **Difficulty:** medium
+**Status:** ✅ complete · **Urgency:** medium · **Difficulty:** medium
 
 ## Problem
 
@@ -69,8 +69,20 @@ evidence.
 - [x] An unparseable settings document is moved to `<stem>.corrupt.json` and the
       app starts with defaults rather than refusing to open.
 - [x] An empty settings file is read as absent and quarantines nothing.
-- [ ] The user is told, in the app, that their settings were set aside — today it
-      is only on stderr.
+- [x] The user is told, in the app, that their settings were set aside.
+      `quarantine_settings_file` records where it put the document — only once
+      the move succeeded, since naming a path nothing was written to would be
+      worse than saying nothing — and `useSettingsQuarantineAdapter` reads that
+      once per window and pushes a notification.
+
+      **Sticky**, unlike the sync producers. The file is recoverable only while
+      the user knows it exists, and a toast that clears itself after eight
+      seconds is how that goes unnoticed. Rare enough that ranking above the
+      transient producers costs them nothing.
+
+      The list is per-run rather than found on disk: the quarantine file
+      survives until someone deals with it, and re-announcing it at every
+      launch would nag about a loss already reported.
 
 ## Deliberately not in this story
 
@@ -80,16 +92,24 @@ evidence.
   TypeScript write path runs only for a caller-supplied gateway the app never
   uses. Mirroring it would widen `DesktopState.version` from a literal type and
   churn the expectations in a suite that has no bug to fix.
-- **A recovery UI.** Surfacing a quarantined document, offering to restore it, and
-  reporting what was detected belong to
-  `pending-safe_writes_corruption_detection-med-hard.md`, which owns that surface
-  for notes already.
+- **A recovery UI for settings.** The notification names the file and the app
+  starts on defaults; offering to parse and merge a broken settings document is
+  a different problem from restoring a note, and nobody has asked for it.
+  `done-safe_writes_corruption_detection-med-hard.md` owns the note surface.
 - **What corrupts the file in the first place.** Writes are already atomic
   (temp + rename in the same directory), so the writer is not the suspect. One
   candidate remains unexamined: `useWorkspaceLifecycle.ts` guards its debounced
   tab save on `stateRestored`, and a save that lands before restoration commits
   would persist an empty tab list. That would explain lost tabs, not a lost
   theme, so it is a separate thread.
+
+## Validation of the closing change
+
+- Two native tests: a quarantine is recorded with the path it was moved to, and
+  an absent document is not reported as damage.
+- Five frontend tests: silent on an ordinary launch, sticky when something was
+  set aside, the path carried for copying, the count when several were, and
+  quiet when it cannot ask.
 
 ## Validation
 

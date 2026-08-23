@@ -61,6 +61,10 @@ export interface NativeCommandMap {
     readonly args: { readonly rootPath: string; readonly includeHidden: boolean };
     readonly result: readonly NativeWorkspaceEntry[];
   };
+  readonly quarantined_settings: {
+    readonly args: undefined;
+    readonly result: readonly string[];
+  };
   readonly list_note_versions: {
     readonly args: { readonly rootPath: string; readonly relativePath: string };
     readonly result: readonly NativeKeptVersion[];

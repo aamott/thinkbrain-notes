@@ -1225,6 +1225,51 @@ fn app_settings_write_treats_an_absent_file_as_a_precondition_of_its_own() {
     assert!(check_settings_precondition(None, Some("{}"), app_code, app_msg).is_err());
 }
 
+/// Setting a document aside is something the user has to be told about.
+///
+/// The quarantine already worked, but it only said so on stderr — so from
+/// inside the app the user's theme, workspace and tabs simply reverted to
+/// defaults with no explanation, which is the same experience as the data loss
+/// this whole story was written to stop.
+#[test]
+fn a_quarantined_settings_document_is_remembered_for_the_user() {
+    let dir = temp_test_dir("quarantine-reported");
+    let path = dir.join("app.json");
+    fs::write(&path, "{ this is not json").expect("the broken document is written");
+
+    let before = quarantined_settings_paths().len();
+    let read = read_settings_file(&path).expect("reading does not fail");
+
+    assert!(read.is_none(), "an unparseable document was handed back as settings");
+    let reported = quarantined_settings_paths();
+    assert_eq!(
+        reported.len(),
+        before + 1,
+        "the quarantine was not recorded for the user"
+    );
+    assert!(
+        reported.last().is_some_and(|p| p.ends_with("app.corrupt.json")),
+        "the recorded path is not where the document was put: {reported:?}"
+    );
+    assert!(dir.join("app.corrupt.json").is_file(), "the document was not kept");
+
+    fs::remove_dir_all(&dir).ok();
+}
+
+/// A document that simply is not there is not news.
+#[test]
+fn an_absent_settings_document_is_not_reported_as_quarantined() {
+    let dir = temp_test_dir("quarantine-absent");
+    let before = quarantined_settings_paths().len();
+
+    let read = read_settings_file(&dir.join("app.json")).expect("reading does not fail");
+
+    assert!(read.is_none());
+    assert_eq!(quarantined_settings_paths().len(), before, "absence was reported as damage");
+
+    fs::remove_dir_all(&dir).ok();
+}
+
 /// Restoring puts a kept version back, and keeps what it replaced.
 ///
 /// Restoring is itself a save, so it goes through the same path and earns the

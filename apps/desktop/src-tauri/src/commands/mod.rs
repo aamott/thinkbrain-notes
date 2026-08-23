@@ -58,6 +58,7 @@ macro_rules! app_command_handlers {
             $crate::commands::search::query_index_metadata,
             $crate::commands::search::clear_index,
             $crate::commands::search::remove_index_document,
+            $crate::commands::settings::quarantined_settings,
             $crate::commands::settings::read_app_settings,
             $crate::commands::settings::write_app_settings,
             $crate::commands::settings::update_desktop_state,
@@ -120,6 +121,7 @@ pub const APP_COMMAND_PATHS: &[&str] = &[
     "search::query_index_metadata",
     "search::clear_index",
     "search::remove_index_document",
+    "settings::quarantined_settings",
     "settings::read_app_settings",
     "settings::write_app_settings",
     "settings::update_desktop_state",
@@ -234,8 +236,8 @@ mod tests {
         );
         assert_eq!(
             APP_COMMAND_PATHS.len(),
-            50,
-            "expected 50 registered commands"
+            51,
+            "expected 51 registered commands"
         );
     }
 }

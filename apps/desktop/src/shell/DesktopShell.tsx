@@ -14,6 +14,7 @@ import { useExternalDocumentSync } from "./useExternalDocumentSync";
 import { RightPopout } from "../panels/RightPopout";
 import { useTheme } from "../settings/theme-context";
 import { useSettingsStore } from "../settings/settingsStore";
+import { useSettingsQuarantineAdapter } from "../settings/settingsQuarantineAdapter";
 import { useWikiLinkIndexStore } from "../wikiLinks/wikiLinkIndexStore";
 import {
   createConflictTab,
@@ -252,6 +253,10 @@ export function DesktopShell() {
     markDocumentConflict,
     reloadDocumentInPlace
   });
+
+  // Says so if a settings document had to be set aside at startup. Silent on
+  // every ordinary launch.
+  useSettingsQuarantineAdapter();
 
   const { beginResize, resizeWithKeyboard, cancelResize } = usePanelResize({
     leftWidthRef,
