@@ -27,7 +27,12 @@ repair flow yet.
       `workspace.note_unreadable` where `fs::read_to_string` used to fold the
       failure into the same error an absent file gets. The shell can now tell
       "not there" from "there and wrong".
-- [ ] **Not** truncation or emptiness, and deliberately so. The obvious test —
+- [x] Emptiness, on the outside-change path rather than the read path —
+      `applyReloadedDocument` is the only place that knows both what the tab
+      held a moment ago and that the change came from outside, since the app's
+      own writes are echo-suppressed and never reach it. That is what separates
+      damage from someone deleting their own text.
+- **Not** truncation — a decision, not an outstanding item. The obvious test —
       empty note, non-empty version kept — was built, then removed before
       commit: it fires when someone deletes a note's contents and saves, since
       the version it kept is the text they just deleted. It would have refused
@@ -35,15 +40,26 @@ repair flow yet.
       leaves them stuck. What actually separates damage from intent is that the
       note went empty *without the app writing it*, which is the watcher's
       knowledge. That check belongs on the outside-change path.
-- [ ] Corruption routes to a recovery UI (not a silent empty editor) showing
-      what was detected and offering the last backup if available.
-- [ ] Honest messaging only — never claim data is safe when it isn't.
-- [ ] No app caches or backups in the vault's app-data directory.
+- [x] Corruption routes to a recovery UI. Two surfaces, because they are two
+      situations: a note that cannot be decoded has no editor to put a banner
+      above, so the tab shows `DamagedNote` in place of the dead-end
+      `Unavailable`; a note that went empty still opens and still wants typing
+      into, so it gets `EmptiedNoteBanner` in `StaleDocumentBanner`'s shape —
+      non-modal, `role="status"`, one per tab. Both offer the same
+      `NoteVersionList`.
+- [x] Honest messaging only. The version list says outright when this device
+      kept nothing and points at the History panel, which is the cost of
+      keeping backups out of the synced folder. A failed restore reports the
+      failure rather than reporting success.
+- [x] Nothing of the app's goes in the vault — backups live in per-device
+      app-data, keyed by the same workspace hash the hidden repo uses.
 - [x] Covered by tests, in Rust rather than Vitest: all of this is native — the
       write, the backup and the decode all happen where the bytes are. Reverting
       the atomic write, or the backup, fails them.
-- [ ] Recovery-state coverage waits on the UI below.
-- [ ] `pnpm lint`, `pnpm typecheck`, `pnpm test` pass.
+- [x] Recovery states covered — `NoteVersionList.test.tsx`. Removing the
+      confirmation fails four of the six.
+- [x] `pnpm lint`, `pnpm typecheck`, `pnpm test` pass — 1,339 desktop and 391
+      native tests.
 
 ## What shipped, and what it exposed
 
@@ -58,10 +74,23 @@ temp name is hidden, so the vault walk skips it for the same reason it skips
 every other dot-entry; that is pinned, because a later change to a non-hidden
 temp name would be a quiet regression.
 
-Still open on this story: the backup, the detection, and the recovery UI. The
-questions below are unanswered and are product decisions, not implementation
-ones — the backup location in particular cannot be chosen without deciding
-whether backups are allowed to reach the user's cloud drive.
+The same shape of question came up for the restore, and got the same answer:
+it writes through the ordinary save path rather than around it, so the version
+it replaces is kept like any other.
+
+## Restoring
+
+Restoring overwrites, and asks first. The write goes through the ordinary save
+path, so the version being replaced is kept in turn — the restore is itself
+undoable, which is what lets the confirmation be an honest question rather than
+a last chance. The confirmation is inline rather than modal: the user did not
+start this task, and `DirtyCloseDialog` stays the modal for the one decision
+that genuinely blocks.
+
+The version path arrives from the frontend and is not trusted. `restore_note_version`
+checks it resolves inside *this note's own* backup folder before reading it;
+without that a crafted request could write any readable file on the machine
+into a note. A test covers the refusal.
 
 ## Discovery — resolved 2026-08-23
 
@@ -82,25 +111,31 @@ does travel.
 **Retention: count-based**, with a setting later for both count and age. Count
 is the one that bounds disk use predictably, which is what app-data needs.
 
-**Detection: on every open, limited to what the read already knows.** The file
-is being read anyway, so the checks below cost no extra I/O:
+**Detection: on every open, limited to what the read already knows** — invalid
+UTF-8, which the read has to decide anyway and which previously surfaced as a
+plain read error with no route to a backup.
 
-- *Invalid UTF-8* — the read already has to decide this, and today an
-  undecodable note surfaces as a read error with no route to a backup.
-- *Empty content from a non-empty file* — the size on disk and the decoded
-  length disagree, which is a real signal and cheap to spot.
+The emptiness half of this answer did **not** survive implementation, and the
+acceptance list above records why: checking it at read time cannot tell damage
+from someone deleting their own text. It moved to the outside-change path,
+where the app's own writes never reach and the previous contents are known.
 
-Deliberately **not** attempted: general "truncation" detection. A short note is
+Deliberately **not** attempted: general truncation detection. A short note is
 not a damaged one, and without a prior known-good length the check cannot tell
-them apart — it would tell people their own writing was corrupt. Once backups
-exist, a *suspicious shrink* against the last backup is a defensible heuristic,
-but it is a heuristic and the UI must say so rather than assert damage.
+them apart. A *suspicious shrink* against the last kept version is a defensible
+heuristic once someone asks for it, but it is a heuristic and the UI would have
+to say so rather than assert damage.
 
-## Likely files
+## Where it landed
 
-- `apps/desktop/src/workspace/workspaceDocumentAdapter.ts` — atomic save path
-- `packages/core/src/note-model.ts` / `markdown.ts` — detection helpers (pure)
-- `apps/desktop/src/tabs/` — recovery UI
+Guessed wrong at planning time, so recorded as built:
+
+- `src-tauri/src/commands/workspace.rs` — `write_file_atomically`, already there
+- `src-tauri/src/commands/markdown.rs` — the save routed through it, and `read_note`
+- `src-tauri/src/commands/backup.rs` — keeping, listing, pruning, restoring
+- `src/shell/externalDocumentSync.ts` — the emptied-outside mark
+- `src/shell/{DamagedNote,EmptiedNoteBanner,NoteVersionList}.tsx` — the surfaces
+- `src/workspace/noteBackupService.ts` — the bridge
 - `apps/desktop/src-tauri/src/commands/` — native temp/rename if needed
 
 ## References

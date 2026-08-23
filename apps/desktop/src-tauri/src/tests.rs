@@ -1225,6 +1225,91 @@ fn app_settings_write_treats_an_absent_file_as_a_precondition_of_its_own() {
     assert!(check_settings_precondition(None, Some("{}"), app_code, app_msg).is_err());
 }
 
+/// Restoring puts a kept version back, and keeps what it replaced.
+///
+/// Restoring is itself a save, so it goes through the same path and earns the
+/// same backup. A restore chosen in a panic — the wrong version, the wrong
+/// note — is therefore undoable, which is what makes the confirmation an
+/// honest one rather than a last chance.
+#[test]
+fn restoring_a_version_keeps_the_one_it_replaced() {
+    let root = temp_test_dir("restore-keeps");
+    let app_data = temp_test_dir("restore-keeps-appdata");
+    let note = root.join("note.md");
+
+    fs::write(&note, "the good version\n").expect("the note is written");
+    // A save damages it, keeping the good version.
+    write_markdown_document(
+        &root.to_string_lossy(),
+        "note.md",
+        "the damaged version\n".to_string(),
+        None,
+        Some(&app_data),
+    )
+    .expect("the damaging save goes through");
+
+    let kept = list_note_backups(&app_data, &root, "note.md");
+    assert_eq!(kept.len(), 1, "the good version was not kept");
+
+    restore_note_version(
+        &root.to_string_lossy(),
+        "note.md",
+        &kept[0].to_string_lossy(),
+        &app_data,
+    )
+    .expect("the restore succeeds");
+
+    assert_eq!(
+        fs::read_to_string(&note).expect("the note is readable"),
+        "the good version\n"
+    );
+    // The damaged version is now itself recoverable, so the restore can be undone.
+    let after = list_note_backups(&app_data, &root, "note.md");
+    let texts: Vec<String> = after
+        .iter()
+        .map(|path| fs::read_to_string(path).unwrap_or_default())
+        .collect();
+    assert!(
+        texts.contains(&"the damaged version\n".to_string()),
+        "restoring threw away what it replaced: {texts:?}"
+    );
+
+    fs::remove_dir_all(&root).ok();
+    fs::remove_dir_all(&app_data).ok();
+}
+
+/// A restore may only read from this workspace's own backup folder.
+///
+/// The path comes from the frontend, so it is not trusted: without this, a
+/// crafted request could write any readable file on the machine into a note.
+#[test]
+fn a_restore_refuses_a_version_outside_this_workspaces_backups() {
+    let root = temp_test_dir("restore-escape");
+    let app_data = temp_test_dir("restore-escape-appdata");
+    let outsider = temp_test_dir("restore-escape-elsewhere").join("secret.md");
+    fs::create_dir_all(outsider.parent().expect("it has a folder")).expect("folder is made");
+    fs::write(&outsider, "not yours\n").expect("the outsider is written");
+    fs::write(root.join("note.md"), "mine\n").expect("the note is written");
+
+    let refused = restore_note_version(
+        &root.to_string_lossy(),
+        "note.md",
+        &outsider.to_string_lossy(),
+        &app_data,
+    )
+    .expect_err("a version from outside the backup folder is refused");
+
+    assert_eq!(refused.code, "workspace.backup_not_found");
+    assert_eq!(
+        fs::read_to_string(root.join("note.md")).expect("the note is readable"),
+        "mine\n",
+        "the refused restore wrote anyway"
+    );
+
+    fs::remove_dir_all(&root).ok();
+    fs::remove_dir_all(&app_data).ok();
+}
+
 /// A note the app cannot decode is damage, and must be reported as damage.
 ///
 /// `fs::read_to_string` folds an encoding failure into the same

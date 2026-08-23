@@ -148,7 +148,16 @@ export function applyReloadedDocument(
 
   return {
     ...documents,
-    [tabId]: { contents, diskContents: contents, phase: "ready", error: null }
+    [tabId]: {
+      contents,
+      diskContents: contents,
+      phase: "ready",
+      error: null,
+      // Text replaced by nothing, by a writer that was not this app. Set here
+      // rather than guessed at read time: only the reload knows what the tab
+      // held a moment ago, and only an outside change reaches this path.
+      emptiedOutside: contents === "" && expectedContents !== ""
+    }
   };
 }
 

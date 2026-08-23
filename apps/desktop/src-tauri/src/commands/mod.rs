@@ -67,6 +67,8 @@ macro_rules! app_command_handlers {
             $crate::commands::themes::list_themes,
             $crate::commands::themes::read_theme_file,
             $crate::commands::extensions::read_extension_file,
+            $crate::commands::backup::list_note_versions,
+            $crate::commands::backup::restore_note_backup,
             $crate::commands::workspace::open_workspace_window,
             $crate::commands::workspace::window_workspace_root,
             $crate::commands::watcher::watch_workspace,
@@ -127,6 +129,8 @@ pub const APP_COMMAND_PATHS: &[&str] = &[
     "themes::list_themes",
     "themes::read_theme_file",
     "extensions::read_extension_file",
+    "backup::list_note_versions",
+    "backup::restore_note_backup",
     "workspace::open_workspace_window",
     "workspace::window_workspace_root",
     "watcher::watch_workspace",
@@ -230,8 +234,8 @@ mod tests {
         );
         assert_eq!(
             APP_COMMAND_PATHS.len(),
-            48,
-            "expected 48 registered commands"
+            50,
+            "expected 50 registered commands"
         );
     }
 }

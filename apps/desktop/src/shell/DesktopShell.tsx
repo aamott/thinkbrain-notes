@@ -25,6 +25,7 @@ import {
 import { ActivityBar } from "./ActivityBar";
 import { DirtyCloseDialog } from "./DirtyCloseDialog";
 import { ResizeHandle } from "./ResizeHandle";
+import { EmptiedNoteBanner } from "./EmptiedNoteBanner";
 import { StaleDocumentBanner } from "./StaleDocumentBanner";
 import { UpdateBanner } from "./UpdateBanner";
 import { useAppUpdate } from "./useAppUpdate";
@@ -91,7 +92,8 @@ export function DesktopShell() {
     keepMyVersion,
     loadDiskVersion,
     moveDocument,
-    markDocumentConflict
+    markDocumentConflict,
+    dismissEmptied
   } = useDocumentViews({ tabState, dispatchTabs });
 
   const {
@@ -392,7 +394,16 @@ export function DesktopShell() {
                 onLoadFromDisk={() => loadDiskVersion(activeTab)}
               />
             )}
-            <TabContent tab={activeTab} document={activeDocument} onChange={updateDocument} onSave={saveDocument} noteIndex={noteIndex} onOpenNote={onOpenNote} unsavedNoteContents={unsavedNoteContents} />
+            {activeTab && activeDocument?.emptiedOutside && activeTab.resource?.rootPath && activeTab.resource?.relativePath && (
+              <EmptiedNoteBanner
+                rootPath={activeTab.resource.rootPath}
+                relativePath={activeTab.resource.relativePath}
+                fileName={activeTab.title}
+                onDismiss={() => dismissEmptied(activeTab.id)}
+                onRestored={() => reloadDocumentInPlace(activeTab.id, activeTab.resource!.rootPath!, activeTab.resource!.relativePath!)}
+              />
+            )}
+            <TabContent tab={activeTab} document={activeDocument} onChange={updateDocument} onSave={saveDocument} noteIndex={noteIndex} onOpenNote={onOpenNote} onReloadNote={reloadDocumentInPlace} unsavedNoteContents={unsavedNoteContents} />
           </article>
           {bottomPanel && (
             <BottomPanelContent

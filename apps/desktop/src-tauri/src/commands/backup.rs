@@ -24,6 +24,7 @@
 //! Retention is count-based. Age-based retention cannot bound disk use, and
 //! app-data is the one place that has to stay bounded.
 
+use crate::error::NativeError;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -72,7 +73,6 @@ pub fn note_backups_dir(app_data_dir: &Path, canonical_root: &Path, relative_pat
 ///
 /// Names are nanosecond stamps, so lexicographic order is chronological order
 /// for any timestamp this program will ever write.
-#[allow(dead_code)]
 pub fn list_note_backups(
     app_data_dir: &Path,
     canonical_root: &Path,
@@ -141,4 +141,112 @@ fn prune(dir: &Path, keep: usize) {
     for stale in kept.iter().take(kept.len() - keep) {
         let _ = fs::remove_file(stale);
     }
+}
+
+/// One kept version, as the recovery pane lists it.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KeptVersion {
+    /// Absolute path, sent back verbatim to restore this one.
+    pub path: String,
+    /// Milliseconds since the epoch, from the name rather than the filesystem —
+    /// a copy preserves neither mtime nor birth time reliably.
+    pub kept_at: u64,
+    pub byte_size: u64,
+}
+
+/// This note's kept versions, newest first, for the frontend.
+#[tauri::command]
+pub fn list_note_versions(
+    app: tauri::AppHandle,
+    root_path: String,
+    relative_path: String,
+) -> Result<Vec<KeptVersion>, NativeError> {
+    use tauri::Manager;
+    let root = super::workspace::resolve_workspace_root(&root_path)?;
+    let Some(app_data) = app.path().app_data_dir().ok() else {
+        return Ok(Vec::new());
+    };
+
+    Ok(list_note_backups(&app_data, &root, &relative_path)
+        .into_iter()
+        .filter_map(|path| {
+            let size = fs::metadata(&path).ok()?.len();
+            let stamp: u128 = path.file_stem()?.to_str()?.parse().ok()?;
+            Some(KeptVersion {
+                path: path.to_string_lossy().into_owned(),
+                kept_at: (stamp / 1_000_000) as u64,
+                byte_size: size,
+            })
+        })
+        .collect())
+}
+
+/// Puts a kept version back, keeping what it replaced.
+#[tauri::command]
+pub fn restore_note_backup(
+    app: tauri::AppHandle,
+    root_path: String,
+    relative_path: String,
+    version_path: String,
+) -> Result<(), NativeError> {
+    use tauri::Manager;
+    let app_data = app.path().app_data_dir().map_err(|error| {
+        NativeError::with_details(
+            "workspace.app_data_unavailable",
+            "Could not find where kept versions are stored.",
+            error,
+        )
+    })?;
+    restore_note_version(&root_path, &relative_path, &version_path, &app_data)
+}
+
+/// The restore itself, split from the command so it can be tested.
+///
+/// `version_path` arrives from the frontend and is therefore not trusted: it is
+/// checked to be inside *this note's own* backup folder before anything is
+/// read. Without that, a crafted request could write any readable file on the
+/// machine into a note.
+///
+/// The write goes through the ordinary save path, which means the version being
+/// replaced is kept in turn — a restore chosen in a panic is undoable, which is
+/// what lets the confirmation be an honest question rather than a last chance.
+pub fn restore_note_version(
+    root_path: &str,
+    relative_path: &str,
+    version_path: &str,
+    app_data_dir: &Path,
+) -> Result<(), NativeError> {
+    let root = super::workspace::resolve_workspace_root(root_path)?;
+    let wanted = Path::new(version_path);
+    let allowed = note_backups_dir(app_data_dir, &root, relative_path);
+
+    let is_ours = wanted
+        .canonicalize()
+        .ok()
+        .zip(allowed.canonicalize().ok())
+        .is_some_and(|(file, dir)| file.starts_with(&dir) && file.is_file());
+    if !is_ours {
+        return Err(NativeError::new(
+            "workspace.backup_not_found",
+            "That kept version is not one of this note's.",
+        ));
+    }
+
+    let contents = fs::read_to_string(wanted).map_err(|error| {
+        NativeError::with_details(
+            "workspace.backup_unreadable",
+            "That kept version could not be read.",
+            error,
+        )
+    })?;
+
+    super::markdown::write_markdown_document(
+        root_path,
+        relative_path,
+        contents,
+        None,
+        Some(app_data_dir),
+    )?;
+    Ok(())
 }
