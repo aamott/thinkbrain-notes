@@ -21,8 +21,15 @@ type TabContentProps = {
   readonly onSave: (tab: DesktopTab) => Promise<boolean>;
   readonly noteIndex?: readonly NoteIndexEntry[];
   readonly onOpenNote?: (relativePath: string) => void;
-  /** Re-reads a note, after a kept version was put back over it. */
-  readonly onReloadNote?: (tabId: string, rootPath: string, relativePath: string) => void;
+  /**
+   * Re-opens a note after a kept version was put back over it.
+   *
+   * The ordinary load, not the in-place re-read: this tab is showing an error,
+   * and the in-place path drops any document that is not `ready` — it would
+   * leave the damage on screen over a file that had already been fixed. The
+   * brief loading state is honest here, because the user asked for this.
+   */
+  readonly onReopenNote?: (tabId: string, rootPath: string, relativePath: string) => void;
   /**
    * Unsaved text of an editor open on the note a merge tab is about.
    *
@@ -52,7 +59,7 @@ export function TabContent({
   onSave,
   noteIndex,
   onOpenNote,
-  onReloadNote,
+  onReopenNote,
   unsavedNoteContents
 }: TabContentProps) {
   // Hooks must run before any early return, so both are read up front even
@@ -160,7 +167,7 @@ export function TabContent({
           rootPath={rootPath}
           relativePath={relativePath}
           detail={document.error}
-          onRestored={() => onReloadNote?.(tab.id, rootPath, relativePath)}
+          onRestored={() => onReopenNote?.(tab.id, rootPath, relativePath)}
         />
       );
     }

@@ -400,10 +400,10 @@ export function DesktopShell() {
                 relativePath={activeTab.resource.relativePath}
                 fileName={activeTab.title}
                 onDismiss={() => dismissEmptied(activeTab.id)}
-                onRestored={() => reloadDocumentInPlace(activeTab.id, activeTab.resource!.rootPath!, activeTab.resource!.relativePath!)}
+                onRestored={() => loadDocumentIntoView(activeTab.id, activeTab.resource!.rootPath!, activeTab.resource!.relativePath!)}
               />
             )}
-            <TabContent tab={activeTab} document={activeDocument} onChange={updateDocument} onSave={saveDocument} noteIndex={noteIndex} onOpenNote={onOpenNote} onReloadNote={reloadDocumentInPlace} unsavedNoteContents={unsavedNoteContents} />
+            <TabContent tab={activeTab} document={activeDocument} onChange={updateDocument} onSave={saveDocument} noteIndex={noteIndex} onOpenNote={onOpenNote} onReopenNote={loadDocumentIntoView} unsavedNoteContents={unsavedNoteContents} />
           </article>
           {bottomPanel && (
             <BottomPanelContent
