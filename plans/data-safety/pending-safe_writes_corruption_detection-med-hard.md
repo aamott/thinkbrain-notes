@@ -8,8 +8,16 @@ repair flow yet.
 
 ## Acceptance Criteria
 
-- [ ] Every save writes a temp file then renames over the target; a crash
-      mid-write leaves the previous file intact.
+- [x] Every save writes a temp file then renames over the target; a crash
+      mid-write leaves the previous file intact. `write_file_atomically` had
+      existed and been tested since settings needed it — notes were the one
+      caller still writing in place, which is the path this epic exists to
+      protect. Both note sites in `markdown.rs` now use it.
+      Proven by inode: `fs::write` opens with `O_TRUNC` and keeps the inode, a
+      rename gives the name a new one, so the test asserts the number changed.
+      Unix-only, because the helper is explicit that its Windows fallback
+      (remove-then-rename) is not atomic and there is nothing equivalent for a
+      test to read.
 - [ ] Previous version kept briefly as a backup (location/retention TBD by
       discovery).
 - [ ] Opening detects truncation, encoding errors, and unexpected empty
@@ -20,6 +28,24 @@ repair flow yet.
 - [ ] No app caches or backups in the vault's app-data directory.
 - [ ] Vitest covers atomic writes, detection cases, and recovery states.
 - [ ] `pnpm lint`, `pnpm typecheck`, `pnpm test` pass.
+
+## What shipped, and what it exposed
+
+Routing notes through the atomic helper changes the shape of what reaches the
+file watcher: a created file at a name nobody asked about, and the destination
+arriving by rename rather than by write. Either could have surfaced as an
+outside edit, which is how a tab reloads itself out from under someone
+mid-sentence. The existing echo-suppression test could not have caught it — it
+writes with `fs::write` rather than through the save path — so a second test
+now drives the real one and asserts the app reports no change of its own. The
+temp name is hidden, so the vault walk skips it for the same reason it skips
+every other dot-entry; that is pinned, because a later change to a non-hidden
+temp name would be a quiet regression.
+
+Still open on this story: the backup, the detection, and the recovery UI. The
+questions below are unanswered and are product decisions, not implementation
+ones — the backup location in particular cannot be chosen without deciding
+whether backups are allowed to reach the user's cloud drive.
 
 ## Discovery (resolve before implementation)
 

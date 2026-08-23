@@ -16,7 +16,7 @@ fn failed(code: &'static str, message: &'static str, error: impl std::fmt::Displ
 use crate::commands::workspace::{
     acquire_workspace_mutation_lock, ensure_parent_dir, entry_metadata, is_ignored_entry_name,
     normalize_relative_path, remove_search_index_entry, resolve_workspace_entry_path,
-    resolve_workspace_root, MAX_WORKSPACE_ENTRIES,
+    resolve_workspace_root, write_file_atomically, MAX_WORKSPACE_ENTRIES,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -118,7 +118,9 @@ pub fn write_markdown_document(
     }
 
     record_self_write(&file_path);
-    fs::write(&file_path, contents).map_err(|error| {
+    // Temp-then-rename rather than `fs::write`, which truncates first: a crash
+    // between emptying the note and refilling it would leave nothing at all.
+    write_file_atomically(&file_path, contents).map_err(|error| {
         failed(
             "workspace.write_failed",
             "Failed to write the Markdown file.",
@@ -165,7 +167,8 @@ pub fn create_markdown_file(
     ensure_parent_dir(&file_path, "Failed to create the note folder.")?;
 
     record_self_write(&file_path);
-    fs::write(&file_path, contents.unwrap_or_default()).map_err(|error| {
+    // Nothing exists to lose here, but a note is written one way in this file.
+    write_file_atomically(&file_path, contents.unwrap_or_default()).map_err(|error| {
         failed(
             "workspace.create_failed",
             "Failed to create the Markdown file.",
