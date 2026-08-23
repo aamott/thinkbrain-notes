@@ -36,6 +36,7 @@ import { isSelectableRightPanel, type RightPanel } from "./shellTypes";
 import { StatusBar } from "./StatusBar";
 import { TabContent } from "./TabContent";
 import { TitleBar } from "./TitleBar";
+import { WorkspaceHeaderBar } from "./WorkspaceHeaderBar";
 import { useWorkspaceLifecycle } from "./useWorkspaceLifecycle";
 
 export function DesktopShell() {
@@ -300,13 +301,19 @@ export function DesktopShell() {
         event.preventDefault();
         toggleBottomPanel();
       }
+      if (modifier && event.key.toLowerCase() === "s") {
+        if (activeTab?.kind === "editor" && activeTab.isDirty) {
+          event.preventDefault();
+          void saveDocument(activeTab);
+        }
+      }
       if (event.key === "Escape") {
         if (!event.defaultPrevented && paletteOpen) closePalette();
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [closePalette, openPalette, paletteOpen, selectLeftPanel, toggleBottomPanel]);
+  }, [closePalette, openPalette, paletteOpen, selectLeftPanel, toggleBottomPanel, activeTab, saveDocument]);
 
   // Dock widths are published as CSS custom properties so the popouts can size
   // themselves from tokens instead of inline styles. The left dock publishes 0
@@ -384,14 +391,16 @@ export function DesktopShell() {
 
         <section className="flex flex-col flex-auto min-w-60" aria-label="Note workspace">
           <article className="flex flex-1 flex-col min-h-0 overflow-auto bg-editor">
-            <div className="flex-[0_0_2rem] border-b border-border text-muted-foreground text-[0.72rem] py-[0.55rem] px-[0.9rem]">
-              {workspaceName ?? "Workspace"}{" "}
-              {activeTab && (
-                <>
-                  <span className="px-[0.28rem]">›</span> {activeTab.title}
-                </>
-              )}
-            </div>
+            <WorkspaceHeaderBar
+              workspaceName={workspaceName}
+              rootPath={restoredWorkspacePath}
+              activeTab={activeTab}
+              isDirty={Boolean(activeTab?.isDirty)}
+              isSaving={activeDocument?.phase === "saving"}
+              onSave={() => {
+                if (activeTab) void saveDocument(activeTab);
+              }}
+            />
             {activeTab && conflicts.has(activeTab.id) && (
               <StaleDocumentBanner
                 fileName={activeTab.title}

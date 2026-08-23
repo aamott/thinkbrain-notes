@@ -223,17 +223,6 @@ export function MarkdownEditor({
 
   return (
     <section className="flex min-h-0 flex-1 flex-col" aria-busy={isSaving} aria-label="Markdown document">
-      <div className="flex min-h-8 items-center justify-between gap-3 px-[0.9rem] border-b border-border text-muted-foreground text-[0.6875rem]">
-        <span>{isSaving ? "Saving…" : "Markdown"}</span>
-        <button
-          type="button"
-          className="rounded-small border border-border bg-primary px-2 py-1 text-primary-foreground cursor-pointer disabled:cursor-wait disabled:opacity-70"
-          onClick={onSave}
-          disabled={isSaving}
-        >
-          Save
-        </button>
-      </div>
       {error && (
         <p
           className="m-0 px-[0.9rem] py-2 border-b border-b-[color-mix(in_srgb,var(--color-destructive)_50%,var(--color-border))] text-danger bg-[color-mix(in_srgb,var(--color-destructive)_8%,transparent)] text-xs"
