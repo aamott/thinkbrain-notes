@@ -236,7 +236,8 @@ pub fn send(
     reference: &str,
     tip: gix::ObjectId,
 ) -> Result<Sent, NativeError> {
-    let url = gix::url::parse(gix::bstr::BStr::new(destination)).map_err(|error| {
+    let normalized = super::normalize_destination(destination);
+    let url = gix::url::parse(gix::bstr::BStr::new(&normalized)).map_err(|error| {
         failed(
             "sync.remote_unreadable",
             "That does not look like a place notes can be synced to.",
