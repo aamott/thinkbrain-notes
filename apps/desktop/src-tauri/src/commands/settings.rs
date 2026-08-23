@@ -56,6 +56,34 @@ pub struct CollapsedGroupsUpdate {
     pub collapsed: Vec<String>,
 }
 
+/// One workspace's open tabs.
+///
+/// Targeted for the same reason the collapsed groups are, and for a defect that
+/// actually shipped: tabs were one flat list in a document every window shares,
+/// so two windows on two vaults overwrote each other and then restored each
+/// other's notes on the next launch. Sending the whole map would put that back.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceTabsUpdate {
+    pub workspace_path: String,
+    pub open_tabs: Vec<PersistedTab>,
+    #[serde(default)]
+    pub active_tab_id: Option<String>,
+}
+
+/// What one workspace had open, as the document stores it.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceTabState {
+    pub open_tabs: Vec<PersistedTab>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_tab_id: Option<String>,
+}
+
+/// Per-workspace open tabs. A `BTreeMap` for the same stable-serialization
+/// reason as `WorkspaceViews`.
+pub type WorkspaceTabs = BTreeMap<String, WorkspaceTabState>;
+
 #[derive(Debug, Clone, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct DesktopStateUpdate {
@@ -79,6 +107,8 @@ pub struct DesktopStateUpdate {
     pub active_tab_id: Option<Option<String>>,
     #[serde(default)]
     pub collapsed_groups: Option<CollapsedGroupsUpdate>,
+    #[serde(default)]
+    pub workspace_tabs: Option<WorkspaceTabsUpdate>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -97,6 +127,12 @@ pub struct DesktopState {
     active_tab_id: Option<String>,
     /// Workspace path -> view id -> the group keys collapsed in it (D53).
     workspace_views: WorkspaceViews,
+    /// Workspace path -> what that workspace had open.
+    ///
+    /// `open_tabs` above is the flat list this replaced. It is still read and
+    /// written so a downgrade keeps working, and so an existing user's tabs
+    /// survive the upgrade — see `apply_workspace_tabs`.
+    workspace_tabs: WorkspaceTabs,
     /// Whatever a newer build wrote here that this one has no name for.
     ///
     /// Carried through verbatim so a downgrade costs nothing: this build reads
@@ -108,7 +144,7 @@ pub struct DesktopState {
 
 /// The keys this build writes itself; everything else in a stored document is
 /// somebody else's and travels in `unknown_fields`.
-const DESKTOP_STATE_KEYS: [&str; 11] = [
+const DESKTOP_STATE_KEYS: [&str; 12] = [
     "version",
     "lastWorkspacePath",
     "recentWorkspacePaths",
@@ -120,6 +156,7 @@ const DESKTOP_STATE_KEYS: [&str; 11] = [
     "openTabs",
     "activeTabId",
     "workspaceViews",
+    "workspaceTabs",
 ];
 
 /// Per-workspace, per-view collapsed group keys.
@@ -415,6 +452,11 @@ pub fn apply_desktop_state_update(
         update.collapsed_groups,
         &recent_workspace_paths,
     );
+    let workspace_tabs = apply_workspace_tabs(
+        current.workspace_tabs,
+        update.workspace_tabs,
+        &recent_workspace_paths,
+    );
 
     DesktopState {
         // Both carried from the document being updated, not reset to this
@@ -446,6 +488,7 @@ pub fn apply_desktop_state_update(
             None => current.active_tab_id,
         },
         workspace_views,
+        workspace_tabs,
     }
 }
 
@@ -475,6 +518,33 @@ fn apply_collapsed_groups(
 
     views.retain(|workspace_path, _| remembered.iter().any(|known| known == workspace_path));
     views
+}
+
+/// Records one workspace's open tabs and forgets the workspaces we no longer
+/// remember.
+///
+/// Bounded by the recent-workspace list for the same reason the collapsed
+/// groups are: a vault the app has forgotten how to reopen has no tabs left to
+/// restore, and one policy is easier to reason about than two.
+fn apply_workspace_tabs(
+    mut tabs: WorkspaceTabs,
+    update: Option<WorkspaceTabsUpdate>,
+    remembered: &[String],
+) -> WorkspaceTabs {
+    if let Some(update) = update {
+        if let Some(workspace_path) = nonempty_workspace_path(&update.workspace_path) {
+            tabs.insert(
+                workspace_path,
+                WorkspaceTabState {
+                    open_tabs: update.open_tabs,
+                    active_tab_id: update.active_tab_id,
+                },
+            );
+        }
+    }
+
+    tabs.retain(|workspace_path, _| remembered.iter().any(|known| known == workspace_path));
+    tabs
 }
 
 pub fn create_desktop_state(state: &Map<String, Value>) -> DesktopState {
@@ -542,12 +612,41 @@ pub fn create_desktop_state(state: &Map<String, Value>) -> DesktopState {
             .filter(|id| !id.is_empty())
             .map(str::to_owned),
         workspace_views: read_workspace_views(state.get("workspaceViews")),
+        workspace_tabs: read_workspace_tabs(state.get("workspaceTabs")),
         unknown_fields: state
             .iter()
             .filter(|(key, _)| !DESKTOP_STATE_KEYS.contains(&key.as_str()))
             .map(|(key, value)| (key.clone(), value.clone()))
             .collect(),
     }
+}
+
+/// Reads the stored per-workspace tabs, skipping anything malformed.
+///
+/// Same forgiving rule as the collapsed groups: a hand-edited or truncated
+/// document costs a tab that did not reopen, never a window that will not draw.
+fn read_workspace_tabs(value: Option<&Value>) -> WorkspaceTabs {
+    let Some(Value::Object(workspaces)) = value else {
+        return WorkspaceTabs::new();
+    };
+
+    workspaces
+        .iter()
+        .filter_map(|(workspace_path, stored)| {
+            let stored = stored.as_object()?;
+            Some((
+                workspace_path.clone(),
+                WorkspaceTabState {
+                    open_tabs: read_persisted_tabs(stored.get("openTabs")),
+                    active_tab_id: stored
+                        .get("activeTabId")
+                        .and_then(Value::as_str)
+                        .filter(|id| !id.is_empty())
+                        .map(str::to_owned),
+                },
+            ))
+        })
+        .collect()
 }
 
 /// Reads the stored collapsed groups, skipping anything malformed.
@@ -597,6 +696,7 @@ pub fn default_desktop_state() -> DesktopState {
         open_tabs: Vec::new(),
         active_tab_id: None,
         workspace_views: WorkspaceViews::new(),
+        workspace_tabs: WorkspaceTabs::new(),
         unknown_fields: Map::new(),
     }
 }

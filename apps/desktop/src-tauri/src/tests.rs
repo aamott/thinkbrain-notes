@@ -622,6 +622,7 @@ fn desktop_state_update_merges_concurrent_mrus_and_preserves_app_settings() {
             "lastWorkspacePath": one_path,
             "recentWorkspacePaths": [two_path, legacy_path, one_path],
             "workspaceViews": {},
+            "workspaceTabs": {},
             "explorerOpen": true,
             "leftPanelWidth": 352.0,
             "rightPanelWidth": 480.0,
@@ -2141,6 +2142,91 @@ fn collapsed_groups_are_kept_per_workspace_and_per_view() {
     assert_eq!(
         settings["desktopState"]["workspaceViews"][&first_path]["journal"],
         serde_json::json!([])
+    );
+
+    fs::remove_dir_all(&first_root).ok();
+    fs::remove_dir_all(&second_root).ok();
+}
+
+/// Two windows on two vaults must not show each other's tabs.
+///
+/// Tabs used to be one flat list in a document every window shares, so the last
+/// window to touch a tab overwrote the other's list, and on the next launch both
+/// restored the same tabs — pointing at whichever vault had written them. They
+/// are keyed by workspace for the same reason the collapsed groups are, and
+/// written the same targeted way: sending the whole map would put back exactly
+/// the overwriting this removes.
+#[test]
+fn tabs_are_kept_per_workspace() {
+    let first_root = temp_test_dir("tabs_first");
+    let second_root = temp_test_dir("tabs_second");
+    let first_path = first_root.to_string_lossy().to_string();
+    let second_path = second_root.to_string_lossy().to_string();
+
+    let open = |contents: Option<&str>, workspace: &str, note: &str| {
+        update_desktop_state_contents(
+            contents,
+            DesktopStateUpdate {
+                last_workspace_path: Some(Some(workspace.to_string())),
+                workspace_tabs: Some(WorkspaceTabsUpdate {
+                    workspace_path: workspace.to_string(),
+                    open_tabs: vec![PersistedTab {
+                        id: format!("editor:{workspace}:{note}"),
+                        title: note.to_string(),
+                        kind: "editor".to_string(),
+                        root_path: Some(workspace.to_string()),
+                        relative_path: Some(note.to_string()),
+                    }],
+                    active_tab_id: Some(format!("editor:{workspace}:{note}")),
+                }),
+                ..Default::default()
+            },
+        )
+        .expect("desktop-state update succeeds")
+    };
+
+    let stored = open(None, &first_path, "one.md");
+    // The second window must leave the first window's tabs alone.
+    let stored = open(Some(&stored), &second_path, "two.md");
+
+    let settings: Value = serde_json::from_str(&stored).expect("serialized settings are valid");
+    let tabs = &settings["desktopState"]["workspaceTabs"];
+
+    assert_eq!(tabs[&first_path]["openTabs"][0]["relativePath"], "one.md");
+    assert_eq!(tabs[&second_path]["openTabs"][0]["relativePath"], "two.md");
+    assert_eq!(
+        tabs[&first_path]["openTabs"].as_array().map(Vec::len),
+        Some(1),
+        "the second window added its tab to the first window's list"
+    );
+    assert_eq!(
+        tabs[&first_path]["activeTabId"],
+        format!("editor:{first_path}:one.md")
+    );
+
+    // Closing every tab is a real answer, not an absent one.
+    let emptied = update_desktop_state_contents(
+        Some(&stored),
+        DesktopStateUpdate {
+            last_workspace_path: Some(Some(first_path.clone())),
+            workspace_tabs: Some(WorkspaceTabsUpdate {
+                workspace_path: first_path.clone(),
+                open_tabs: Vec::new(),
+                active_tab_id: None,
+            }),
+            ..Default::default()
+        },
+    )
+    .expect("desktop-state update succeeds");
+    let settings: Value = serde_json::from_str(&emptied).expect("serialized settings are valid");
+    assert_eq!(
+        settings["desktopState"]["workspaceTabs"][&first_path]["openTabs"],
+        serde_json::json!([])
+    );
+    // ...and it does not disturb the other vault.
+    assert_eq!(
+        settings["desktopState"]["workspaceTabs"][&second_path]["openTabs"][0]["relativePath"],
+        "two.md"
     );
 
     fs::remove_dir_all(&first_root).ok();
