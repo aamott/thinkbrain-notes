@@ -24,7 +24,7 @@ with a quick glance at the selector density before shipping.
 
 ## Decisions to lock with the choice
 
-- **Choice:** **B** (folder icon plus small GitBranch badge overlay).
+- **Choice:** **A** (Folder vs FolderGit2 icons from Lucide).
 - **Signal = app Git link, not vault `.git`.** A folder counts as linked when
   this app has a persisted `sync.destination` for it (workspace settings in
   app-data). A user-owned `.git` inside the vault is a different status
@@ -56,5 +56,5 @@ with a quick glance at the selector density before shipping.
 
 ## Status
 
-🟩 Implemented in app code. Choice B implemented with accessible names and focused test.
+🟩 Implemented in app code. Choice A (FolderGit2) implemented with accessible names and focused test.
 
