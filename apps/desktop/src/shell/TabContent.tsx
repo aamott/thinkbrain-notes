@@ -8,6 +8,7 @@ import type { DesktopTab } from "../tabs/tabModel";
 import type { DocumentViewState } from "./shellTypes";
 import { SettingsTab } from "../settings/SettingsTab";
 import { MergeTab } from "../sync/MergeTab";
+import { DamagedNote } from "./DamagedNote";
 import { Unavailable } from "./Unavailable";
 
 /**
@@ -20,6 +21,15 @@ type TabContentProps = {
   readonly onSave: (tab: DesktopTab) => Promise<boolean>;
   readonly noteIndex?: readonly NoteIndexEntry[];
   readonly onOpenNote?: (relativePath: string) => void;
+  /**
+   * Re-opens a note after a kept version was put back over it.
+   *
+   * The ordinary load, not the in-place re-read: this tab is showing an error,
+   * and the in-place path drops any document that is not `ready` — it would
+   * leave the damage on screen over a file that had already been fixed. The
+   * brief loading state is honest here, because the user asked for this.
+   */
+  readonly onReopenNote?: (tabId: string, rootPath: string, relativePath: string) => void;
   /**
    * Unsaved text of an editor open on the note a merge tab is about.
    *
@@ -49,6 +59,7 @@ export function TabContent({
   onSave,
   noteIndex,
   onOpenNote,
+  onReopenNote,
   unsavedNoteContents
 }: TabContentProps) {
   // Hooks must run before any early return, so both are read up front even
@@ -147,6 +158,19 @@ export function TabContent({
   }
 
   if (document.phase === "error" && !document.contents) {
+    // A note that is there and unreadable has somewhere to go; one that is
+    // simply absent does not, and offering it recovery would claim more than
+    // is known.
+    if (document.errorCode === "workspace.note_unreadable" && rootPath && relativePath) {
+      return (
+        <DamagedNote
+          rootPath={rootPath}
+          relativePath={relativePath}
+          detail={document.error}
+          onRestored={() => onReopenNote?.(tab.id, rootPath, relativePath)}
+        />
+      );
+    }
     return (
       <Unavailable
         title="Could not open note"

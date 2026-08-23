@@ -61,6 +61,22 @@ export interface NativeCommandMap {
     readonly args: { readonly rootPath: string; readonly includeHidden: boolean };
     readonly result: readonly NativeWorkspaceEntry[];
   };
+  readonly quarantined_settings: {
+    readonly args: undefined;
+    readonly result: readonly string[];
+  };
+  readonly list_note_versions: {
+    readonly args: { readonly rootPath: string; readonly relativePath: string };
+    readonly result: readonly NativeKeptVersion[];
+  };
+  readonly restore_note_backup: {
+    readonly args: {
+      readonly rootPath: string;
+      readonly relativePath: string;
+      readonly versionPath: string;
+    };
+    readonly result: null;
+  };
   readonly read_markdown_file: {
     readonly args: {
       readonly rootPath: string;
@@ -400,6 +416,15 @@ export interface NativeMarkdownFileEntry {
   readonly parent_path: string;
   readonly byte_size: number;
   readonly updated_at: string | null;
+}
+
+/** One version of a note the app kept before replacing it. */
+export interface NativeKeptVersion {
+  /** Absolute path, sent back verbatim to restore this one. */
+  readonly path: string;
+  /** Milliseconds since the epoch. */
+  readonly keptAt: number;
+  readonly byteSize: number;
 }
 
 export interface NativeMarkdownFileContents {

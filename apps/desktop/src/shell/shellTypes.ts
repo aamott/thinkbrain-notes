@@ -85,5 +85,22 @@ export type DocumentViewState = {
    */
   readonly diskContents: string | null;
   readonly phase: "loading" | "ready" | "saving" | "error";
+  /**
+   * This note arrived empty from a change the app did not make.
+   *
+   * Not "the note is empty" — that is usually somebody emptying it. The app's
+   * own writes are echo-suppressed and never reach the reload path, so this can
+   * only be set by an outside change replacing text with nothing, which is the
+   * shape of the damage people report after a sync client or a crash.
+   */
+  readonly emptiedOutside?: boolean;
   readonly error: string | null;
+  /**
+   * The native code behind `error`, when there was one.
+   *
+   * Carried because not every failure means the same thing to the user: a note
+   * that cannot be decoded has a recovery path, and one that is simply absent
+   * does not. Without the code the shell could only show both the same way.
+   */
+  readonly errorCode?: string | null;
 };

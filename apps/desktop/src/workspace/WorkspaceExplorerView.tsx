@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { ChevronDown, Folder, FolderPlus, GitBranch, Link, MoreHorizontal } from "lucide-react";
+import { ChevronDown, Folder, FolderGit2, FolderPlus, Link, MoreHorizontal } from "lucide-react";
 import type { NativeWorkspaceEntry } from "../native/commands";
 import type { WorkspaceExplorerState, WorkspaceTreeNode } from "./workspaceExplorerModel";
 import { WorkspaceFileIcon } from "./WorkspaceFileIcon";
@@ -273,14 +273,7 @@ export function WorkspaceSelector({
         aria-label={currentIsGitLinked ? `${currentFolderName} (Git-linked workspace)` : currentFolderName}
         onClick={() => setOpen((value) => !value)}
       >
-        {currentIsGitLinked ? (
-          <span aria-hidden="true" className="relative flex flex-none items-center">
-            <Folder />
-            <GitBranch className="absolute -bottom-0.5 -right-0.5 size-2 text-primary" />
-          </span>
-        ) : (
-          <Folder aria-hidden="true" />
-        )}
+        {currentIsGitLinked ? <FolderGit2 aria-hidden="true" /> : <Folder aria-hidden="true" />}
         <span className="truncate">{currentFolderName}</span>
         <ChevronDown aria-hidden="true" />
       </button>
@@ -300,16 +293,7 @@ export function WorkspaceSelector({
             return (
               <MenuButton
                 key={path}
-                icon={
-                  isLinked ? (
-                    <span aria-hidden="true" className="relative flex flex-none items-center">
-                      <Folder />
-                      <GitBranch className="absolute -bottom-0.5 -right-0.5 size-2 text-primary" />
-                    </span>
-                  ) : (
-                    <Folder />
-                  )
-                }
+                icon={isLinked ? <FolderGit2 /> : <Folder />}
                 label={folderName}
                 ariaLabel={isLinked ? `${folderName} (Git-linked workspace)` : folderName}
                 title={isLinked ? `${path} (Git-linked workspace)` : path}

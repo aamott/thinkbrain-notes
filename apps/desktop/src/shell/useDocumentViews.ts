@@ -63,6 +63,8 @@ export interface DocumentViews {
   readonly moveDocument: (fromTabId: string, toTabId: string) => void;
   /** Flags a tab as holding edits the file no longer agrees with. */
   readonly markDocumentConflict: (tabId: string) => void;
+  /** Stops asking about a note that went empty outside the app. */
+  readonly dismissEmptied: (tabId: string) => void;
 }
 
 export function useDocumentViews({ tabState, dispatchTabs }: DocumentViewsProps): DocumentViews {
@@ -131,7 +133,13 @@ export function useDocumentViews({ tabState, dispatchTabs }: DocumentViewsProps)
                 diskContents: result.document.contents,
                 error: null
               }
-            : { phase: "error", contents: "", diskContents: null, error: result.message }
+            : {
+                phase: "error",
+                contents: "",
+                diskContents: null,
+                error: result.message,
+                errorCode: result.code
+              }
         }));
       });
     },
@@ -284,6 +292,15 @@ export function useDocumentViews({ tabState, dispatchTabs }: DocumentViewsProps)
     [loadDocumentIntoView]
   );
 
+  /** Stops asking about a note that went empty outside the app. Writes nothing. */
+  const dismissEmptied = useCallback((tabId: string) => {
+    setDocuments((current) => {
+      const document = current[tabId];
+      if (!document?.emptiedOutside) return current;
+      return { ...current, [tabId]: { ...document, emptiedOutside: false } };
+    });
+  }, []);
+
   // The two narrow doors the outside-change watcher needs. Exposed as actions
   // rather than the setters themselves so nothing else can reshape this state.
   const moveDocument = useCallback((fromTabId: string, toTabId: string) => {
@@ -305,6 +322,7 @@ export function useDocumentViews({ tabState, dispatchTabs }: DocumentViewsProps)
     keepMyVersion,
     loadDiskVersion,
     moveDocument,
-    markDocumentConflict
+    markDocumentConflict,
+    dismissEmptied
   };
 }

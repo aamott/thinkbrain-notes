@@ -208,7 +208,7 @@ describe("WorkspaceExplorer presentation", () => {
     expect(openWorkspaceWindow).toHaveBeenCalledWith("/notes/new");
   });
 
-  it("distinguishes plain and Git-linked workspaces in the selector with accessible labels", async () => {
+  it("distinguishes plain and Git-linked workspaces in the selector with accessible labels and icons", async () => {
     container = document.createElement("div");
     document.body.append(container);
     root = createRoot(container);
@@ -227,6 +227,7 @@ describe("WorkspaceExplorer presentation", () => {
 
     const trigger = container?.querySelector<HTMLButtonElement>("button[aria-haspopup='menu']");
     expect(trigger?.getAttribute("aria-label")).toBe("git-linked-vault (Git-linked workspace)");
+    expect(trigger?.querySelector(".lucide-folder-git2")).not.toBeNull();
 
     await click(trigger!);
     const items = Array.from(container?.querySelectorAll<HTMLButtonElement>("[role='menuitem']") ?? []);
@@ -235,9 +236,12 @@ describe("WorkspaceExplorer presentation", () => {
 
     expect(plainItem?.getAttribute("aria-label")).toBe("plain-notes");
     expect(plainItem?.getAttribute("title")).toBe("/notes/plain-notes");
+    expect(plainItem?.querySelector(".lucide-folder")).not.toBeNull();
+    expect(plainItem?.querySelector(".lucide-folder-git2")).toBeNull();
 
     expect(linkedItem?.getAttribute("aria-label")).toBe("git-linked-vault (Git-linked workspace)");
     expect(linkedItem?.getAttribute("title")).toBe("/notes/git-linked-vault (Git-linked workspace)");
+    expect(linkedItem?.querySelector(".lucide-folder-git2")).not.toBeNull();
   });
 });
 

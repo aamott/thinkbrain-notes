@@ -134,7 +134,9 @@ describe("putting a re-read note back into its tab", () => {
       contents: "new",
       diskContents: "new",
       phase: "ready",
-      error: null
+      error: null,
+      // An ordinary outside edit, not a note replaced with nothing.
+      emptiedOutside: false
     });
   });
 
@@ -451,5 +453,41 @@ describe("tracking which tabs are waiting on an answer", () => {
     const before: ReadonlySet<string> = new Set();
 
     expect(pruneConflicts(before, new Set(["a"]))).toBe(before);
+  });
+});
+
+describe("a note that went empty outside the app", () => {
+  /**
+   * The failure people actually report: a note that "went blank" after a sync
+   * client or a crash. The signal is not emptiness — it is emptiness arriving
+   * from *outside*, which is the only thing that separates damage from someone
+   * deleting their own text and saving. The app's own writes are echo-
+   * suppressed and never reach this path, so they cannot trip it.
+   */
+  it("marks the view so the tab can offer the kept version", () => {
+    const before = { a: ready("the writing that was there") };
+
+    const after = applyReloadedDocument(before, "a", "the writing that was there", "");
+
+    expect(after.a?.contents).toBe("");
+    expect(after.a?.emptiedOutside).toBe(true);
+  });
+
+  it("does not mark a note that was already empty", () => {
+    // Nothing was lost, so there is nothing to say.
+    const before = { a: ready("") };
+
+    const after = applyReloadedDocument(before, "a", "", "");
+
+    expect(after.a?.emptiedOutside).toBeFalsy();
+  });
+
+  it("clears the mark when real content arrives again", () => {
+    const emptied = applyReloadedDocument({ a: ready("first") }, "a", "first", "");
+    expect(emptied.a?.emptiedOutside).toBe(true);
+
+    const restored = applyReloadedDocument(emptied, "a", "", "first again");
+
+    expect(restored.a?.emptiedOutside).toBeFalsy();
   });
 });

@@ -824,6 +824,28 @@ pub fn read_settings_file(path: &Path) -> Result<Option<String>, NativeError> {
     Ok(None)
 }
 
+/// Documents set aside during this run, in the order it happened.
+///
+/// Kept in memory rather than found on disk: the quarantine file survives until
+/// someone deals with it, and re-announcing it at every launch would nag about
+/// a loss the user has already been told about. This is the announcement of an
+/// event, so it lasts as long as the run the event happened in.
+static QUARANTINED_SETTINGS: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
+/// Where documents were set aside during this run.
+pub fn quarantined_settings_paths() -> Vec<String> {
+    QUARANTINED_SETTINGS
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .clone()
+}
+
+/// The same list, for the shell to tell the user about.
+#[tauri::command]
+pub fn quarantined_settings() -> Vec<String> {
+    quarantined_settings_paths()
+}
+
 /// Moves an unparseable document aside, best effort.
 ///
 /// A failure here must not stop the app from starting: the user is already
@@ -840,6 +862,13 @@ fn quarantine_settings_file(path: &Path) {
         eprintln!("Failed to set aside unreadable settings at {path:?}: {error}");
         return;
     }
+
+    // Recorded only once the move succeeded: telling the user their document is
+    // safe at a path nothing was written to would be worse than saying nothing.
+    QUARANTINED_SETTINGS
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .push(quarantine.to_string_lossy().into_owned());
     eprintln!("Unreadable settings at {path:?} were set aside as {quarantine:?}.");
 }
 

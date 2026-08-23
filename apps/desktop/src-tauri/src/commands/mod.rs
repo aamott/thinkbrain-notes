@@ -18,6 +18,7 @@
 //! - Input Validation: User inputs (such as paths or filenames) must be sanitized and checked before execution.
 //! - State Safety: Desktop state and workspace window mappings use synchronized thread-safe primitives.
 
+pub mod backup;
 pub mod extensions;
 pub mod markdown;
 pub mod search;
@@ -57,6 +58,7 @@ macro_rules! app_command_handlers {
             $crate::commands::search::query_index_metadata,
             $crate::commands::search::clear_index,
             $crate::commands::search::remove_index_document,
+            $crate::commands::settings::quarantined_settings,
             $crate::commands::settings::read_app_settings,
             $crate::commands::settings::write_app_settings,
             $crate::commands::settings::update_desktop_state,
@@ -66,6 +68,8 @@ macro_rules! app_command_handlers {
             $crate::commands::themes::list_themes,
             $crate::commands::themes::read_theme_file,
             $crate::commands::extensions::read_extension_file,
+            $crate::commands::backup::list_note_versions,
+            $crate::commands::backup::restore_note_backup,
             $crate::commands::workspace::open_workspace_window,
             $crate::commands::workspace::window_workspace_root,
             $crate::commands::watcher::watch_workspace,
@@ -117,6 +121,7 @@ pub const APP_COMMAND_PATHS: &[&str] = &[
     "search::query_index_metadata",
     "search::clear_index",
     "search::remove_index_document",
+    "settings::quarantined_settings",
     "settings::read_app_settings",
     "settings::write_app_settings",
     "settings::update_desktop_state",
@@ -126,6 +131,8 @@ pub const APP_COMMAND_PATHS: &[&str] = &[
     "themes::list_themes",
     "themes::read_theme_file",
     "extensions::read_extension_file",
+    "backup::list_note_versions",
+    "backup::restore_note_backup",
     "workspace::open_workspace_window",
     "workspace::window_workspace_root",
     "watcher::watch_workspace",
@@ -229,8 +236,8 @@ mod tests {
         );
         assert_eq!(
             APP_COMMAND_PATHS.len(),
-            48,
-            "expected 48 registered commands"
+            51,
+            "expected 51 registered commands"
         );
     }
 }

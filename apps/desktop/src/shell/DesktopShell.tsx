@@ -14,6 +14,7 @@ import { useExternalDocumentSync } from "./useExternalDocumentSync";
 import { RightPopout } from "../panels/RightPopout";
 import { useTheme } from "../settings/theme-context";
 import { useSettingsStore } from "../settings/settingsStore";
+import { useSettingsQuarantineAdapter } from "../settings/settingsQuarantineAdapter";
 import { useWikiLinkIndexStore } from "../wikiLinks/wikiLinkIndexStore";
 import {
   createConflictTab,
@@ -25,6 +26,7 @@ import {
 import { ActivityBar } from "./ActivityBar";
 import { DirtyCloseDialog } from "./DirtyCloseDialog";
 import { ResizeHandle } from "./ResizeHandle";
+import { EmptiedNoteBanner } from "./EmptiedNoteBanner";
 import { StaleDocumentBanner } from "./StaleDocumentBanner";
 import { UpdateBanner } from "./UpdateBanner";
 import { useAppUpdate } from "./useAppUpdate";
@@ -91,7 +93,8 @@ export function DesktopShell() {
     keepMyVersion,
     loadDiskVersion,
     moveDocument,
-    markDocumentConflict
+    markDocumentConflict,
+    dismissEmptied
   } = useDocumentViews({ tabState, dispatchTabs });
 
   const {
@@ -251,6 +254,10 @@ export function DesktopShell() {
     reloadDocumentInPlace
   });
 
+  // Says so if a settings document had to be set aside at startup. Silent on
+  // every ordinary launch.
+  useSettingsQuarantineAdapter();
+
   const { beginResize, resizeWithKeyboard, cancelResize } = usePanelResize({
     leftWidthRef,
     rightWidthRef,
@@ -392,7 +399,16 @@ export function DesktopShell() {
                 onLoadFromDisk={() => loadDiskVersion(activeTab)}
               />
             )}
-            <TabContent tab={activeTab} document={activeDocument} onChange={updateDocument} onSave={saveDocument} noteIndex={noteIndex} onOpenNote={onOpenNote} unsavedNoteContents={unsavedNoteContents} />
+            {activeTab && activeDocument?.emptiedOutside && activeTab.resource?.rootPath && activeTab.resource?.relativePath && (
+              <EmptiedNoteBanner
+                rootPath={activeTab.resource.rootPath}
+                relativePath={activeTab.resource.relativePath}
+                fileName={activeTab.title}
+                onDismiss={() => dismissEmptied(activeTab.id)}
+                onRestored={() => loadDocumentIntoView(activeTab.id, activeTab.resource!.rootPath!, activeTab.resource!.relativePath!)}
+              />
+            )}
+            <TabContent tab={activeTab} document={activeDocument} onChange={updateDocument} onSave={saveDocument} noteIndex={noteIndex} onOpenNote={onOpenNote} onReopenNote={loadDocumentIntoView} unsavedNoteContents={unsavedNoteContents} />
           </article>
           {bottomPanel && (
             <BottomPanelContent

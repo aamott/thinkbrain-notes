@@ -57,9 +57,25 @@ Non-goals:
 
 ## Status
 
-- ⬜ Focused first story: safe writes + corruption detection + recovery UI —
-  `data-safety/pending-safe_writes_corruption_detection-med-hard.md`
-- 🟨 Settings survive a downgrade, and corruption is recoverable —
-  `data-safety/pending-settings_survive_a_downgrade-med-med.md`. Not notes, but
-  the same failure: a document the app could not fully read was replaced instead
-  of kept. The recovery UI it needs is the one the story above owns.
+- ✅ Focused first story: safe writes + corruption detection + recovery UI —
+  `data-safety/done-safe_writes_corruption_detection-med-hard.md`. Notes now
+  save through a temp file and a rename, the replaced version is kept per
+  device in app-data, a note that cannot be decoded is named as damaged rather
+  than merely unopenable, and both that case and a note emptied from outside
+  offer their kept versions back.
+
+  Deliberately not attempted: general truncation detection. A short note is not
+  a damaged one, and the story records why the obvious emptiness test was built
+  and then removed before it shipped.
+- ✅ Settings survive a downgrade, and corruption is recoverable —
+  `data-safety/done-settings_survive_a_downgrade-med-med.md`. Not notes, but the
+  same failure: a document the app could not fully read was replaced instead of
+  kept. A newer document is now read rather than discarded, an unparseable one
+  is set aside rather than overwritten, and — closing the last item — the user
+  is told in the app rather than only on stderr.
+
+Both stories in this epic are done. What the epic listed as deferred is
+untouched and unclaimed: the vault integrity scan, a retention policy beyond
+the three versions a note keeps, and a repair flow for damaged frontmatter.
+None has been asked for, and none should be started on the strength of this
+list alone.
