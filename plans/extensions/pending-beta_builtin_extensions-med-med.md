@@ -35,7 +35,8 @@ their extension namespaces, not unapproved commands/views.
 
 - Lifecycle/bootstrap, compatibility, and API contribution contracts.
 - Existing internal registries and scoped settings bridge.
-- `plans/wip-git-integration-low-hard.md`, `plans/wip-ai-low-hard.md`, and journal/calendar plan if present.
+- `plans/pending-auto_sync-med-hard.md`, `plans/pending-ai-med-hard.md` (awaiting its planning
+  pass), and journal/calendar plan if present.
 - Native secret story for ACP credential consumers.
 
 ## Exact likely file areas
@@ -84,7 +85,8 @@ No journal/calendar, Git sync/conflict, ACP host/chat/provider, secret-store, in
 ## References
 
 - `plans/pending-extensions-low-hard.md`
-- `plans/extensions/done-extension_lifecycle_bootstrap-low-med.md`
+- Lifecycle/bootstrap integration — shipped; its story file was reviewed and
+  deleted per the plan-review policy in `AGENTS.md`.
 - `plans/extensions/pending-extension_secret_storage-med-hard.md`
-- `plans/wip-git-integration-low-hard.md`
-- `plans/wip-ai-low-hard.md`
+- `plans/pending-auto_sync-med-hard.md`
+- `plans/pending-ai-med-hard.md`

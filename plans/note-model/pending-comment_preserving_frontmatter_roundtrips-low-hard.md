@@ -27,4 +27,4 @@ Tracks open item OI-001.
 
 - `packages/core/src/frontmatter.ts` — `parseFrontmatter`, `serializeFrontmatter`, `serializeNote`
 - `packages/core/src/note-model.ts` — `NoteMetadata`, `SerializableNote`
-- `plans/technical-decisions.md` — mutation policy, unknown-field preservation
+- `plans/wip-note-model-low-hard.md` — mutation policy, unknown-field preservation

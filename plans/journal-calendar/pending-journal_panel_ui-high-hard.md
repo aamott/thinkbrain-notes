@@ -55,9 +55,10 @@ under D34.
 widget instead uses the platform prerequisite's first-class React slot and observable, disposable
 registry above the Markdown body. Already-open editors must react to registration/disposal; do not
 portal into CodeMirror DOM, alter `editorHooks`, or depend on startup order. This story consumes
-`plans/extensions/pending-editor_header_contribution-high-med.md`; it does not implement the
-registry. The prerequisite must prove post-mount registration/disposal; CodeMirror hooks remain
-for CodeMirror extensions/keybindings only.
+D44's React editor-header contribution (shipped 2026-08-08; its story file was reviewed and
+deleted per the plan-review policy); it does not implement the registry. The prerequisite
+proved post-mount registration/disposal; CodeMirror hooks remain for CodeMirror
+extensions/keybindings only.
 
 ## Panel side and context gap
 
@@ -117,11 +118,12 @@ chrome would be the inconsistent choice. **Product owner: say the word and I wil
 ## Dependencies
 
 - Approved discovery desktop wireframe and state/copy matrix, plus the approved desktop mockup `assets/journal-panel-mockup.html` (D71-D75). D34 still gates the mobile artifact.
-- `plans/extensions/pending-editor_header_contribution-high-med.md` implements D44 before widget integration.
+- D44's React editor-header slot (shipped 2026-08-08; its story file was reviewed and deleted
+  per the plan-review policy) implements before widget integration.
 - `DesktopPanelContext` gap resolution: workspace listing and index access must be provided before the panel factory body can be implemented.
 - Journal data model, journal service, and settings/accessibility contract.
 - Existing `DesktopPanelContribution`, `DesktopPanelContext`, `LeftPopout`, `ActivityBar`, and editor-tab reducer.
-- `plans/indexing-search/pending-frontmatter_metadata_facets-high-hard.md` for D41 facet queries; the cache stays disposable, rebuildable and never source of truth.
+- `plans/indexing-search/done-summary.md` — frontmatter metadata facets (D41), shipped; the cache stays disposable, rebuildable and never source of truth.
 
 ## Acceptance criteria
 

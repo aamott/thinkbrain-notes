@@ -20,7 +20,7 @@ interface/refactor to a platform or architecture owner before implementation.
 
 ## References
 
-- `plans/technical-decisions.md` — Platform, Repository Structure sections
+- `plans/app-vision.md` — Technical Stack, Repository Structure sections
 - `apps/desktop/src/native/commands.ts` — current direct-Tauri bridge
 - `packages/core/src/index.ts` — where interfaces should live
-- `plans/pending-mobile-low-hard.md` — mobile reuses current adapters and is not blocked by this holding item
+- `plans/pending-mobile-med-hard.md` — mobile reuses current adapters and is not blocked by this holding item

@@ -67,7 +67,7 @@ limits of search" in the indexing epic rather than fixed here.
 
 D41 assigns structured-frontmatter facets to the platform-owned disposable index. This story may expose them through its UI-independent boundary but does not own the index schema or native command. If unavailable, return a typed unavailable result—never scan every file or create a journal cache.
 
-**No longer blocked (2026-08-13):** `plans/indexing-search/done-frontmatter_metadata_facets-high-hard.md` shipped `query_index_metadata`, and `searchIndexStore.queryMetadata` returns the typed available/unavailable/failure results this asks for.
+**No longer blocked (2026-08-13):** the frontmatter metadata facets story shipped `query_index_metadata` (see `plans/indexing-search/done-summary.md`), and `searchIndexStore.queryMetadata` returns the typed available/unavailable/failure results this asks for.
 
 ## Goal
 
@@ -106,7 +106,8 @@ Implement a typed, UI-independent service that resolves dates/paths, detects sam
 - Data-model story (approved `JournalEntryRef`, `parseJournalFilename`, `buildNewEntryFrontmatter`).
 - Existing `WorkspaceDocumentApi`, `WorkspaceDesktopApi`, `loadWorkspaceDocument`, `saveWorkspaceDocument`, and native error shape.
 - Existing frontmatter mutation policy (`created_at` at creation, `updated_at` on explicit save).
-- D41 metadata facets depended on `plans/indexing-search/done-frontmatter_metadata_facets-high-hard.md`, which has shipped; other service work never did.
+- D41 metadata facets depended on the frontmatter metadata facets story (see
+  `plans/indexing-search/done-summary.md`), which has shipped; other service work never did.
 
 ## Acceptance criteria
 

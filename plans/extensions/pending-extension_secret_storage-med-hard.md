@@ -20,7 +20,8 @@ Provide a typed Rust/native boundary for one extension and credential key at a t
 
 ## Prerequisites
 
-- Canonical extension id/parser and native gateway conventions in `plans/wip-ai-low-hard.md`.
+- Canonical extension id/parser and native gateway conventions, once the AI epic
+  gets its planning pass (`plans/pending-ai-med-hard.md`).
 - Scoped settings/API boundary and ACP/provider consumer requirements.
 - Tauri capability conventions in `apps/desktop/src-tauri/capabilities/`.
 
@@ -67,6 +68,5 @@ No encrypted fallback, credentials UI, provider/ACP behavior, marketplace, insta
 
 ## References
 
-- `plans/technical-decisions.md`
-- `plans/wip-ai-low-hard.md`
+- `plans/pending-ai-med-hard.md`
 - `plans/extensions/pending-extension_settings-low-med.md`

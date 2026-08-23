@@ -89,11 +89,11 @@ and the existing catalog; a missing selection is never replaced.
   existing attach path; it cannot interleave with the import trip.
 - Import lists host-filtered saved sign-ins but cannot create/update one in
   the dialog; Settings is required today. Parity is story 6f
-  (`pending-import_sign_in_parity-med-med.md`). A blank-looking select can
-  also mean "no profiles for this host yet" or a failed status read — 6f
-  tightens that copy and any real list bugs.
+  (`auto-sync/done-import_sign_in_parity-med-med.md`, shipped). A blank-looking select
+  could also mean "no profiles for this host yet" or a failed status read — 6f
+  tightened that copy and any real list bugs.
 - Workspace selector does not mark Git-linked folders; see
-  `pending-workspace_selector_git_badge-low-med.md`.
+  `done-workspace_selector_git_badge-low-med.md`.
 
 ## Status
 

@@ -2,10 +2,9 @@
 
 > Extension system: internal contribution points and trusted local modules. This is
 > a **future epic** (low urgency; implementation is in progress, with internal
-> contribution points partially complete). Read `plans/app-vision.md` and
-> `plans/technical-decisions.md` (Extensions section) before starting any story
-> here. The foreseeable beta favors maintainability and easy development over
-> hostile-extension isolation.
+> contribution points partially complete). Read `plans/app-vision.md` before
+> starting any story here. The foreseeable beta favors maintainability and easy
+> development over hostile-extension isolation.
 
 ## Goal
 
@@ -40,10 +39,11 @@ epics:
 - **Journal/calendar** — one journal panel/activity entry, calendar tab, D44 editor-header widget, and D45 app/workspace settings. Templates are out by D21; feature behavior and Markdown storage remain in its epic.
 - **Git sync** — built-in sync/background-task registration only. Git operations,
   file watching, conflict handling, and sync UX remain owned by
-  `plans/wip-git-integration-low-hard.md` and its child stories.
+  `plans/pending-auto_sync-med-hard.md` and its child stories.
 - **ACP Agent Chat** — built-in assistant contribution and scoped credential/API
   boundary. ACP host lifecycle, chat UI, permissions, and provider behavior
-  remain owned by `plans/wip-ai-low-hard.md` and `plans/ai/`.
+  remain owned by `plans/pending-ai-med-hard.md`, once it has a planning pass and a
+  `plans/ai/` directory of its own.
 
 No beta built-in receives a third-party-install path or a separate privilege
 model; each runs as trusted app code in the same context.
@@ -198,20 +198,21 @@ their existing epics; this epic owns only their extension registrations.
 
 Focused follow-up stories:
 
-- `plans/extensions/done-extension_manifest_format-low-med.md` — shipped manifest
-  parser/schema and typed diagnostics.
-- `plans/extensions/done-extension_capability_compatibility-low-med.md` — shipped
-  soft capability/API/platform compatibility results; not a security sandbox.
-- `plans/extensions/done-extension_local_directory_loader-low-med.md` — shipped
-  trusted local-directory module loading and reload semantics; entry blob urls
-  are revoked as soon as the import settles.
-- `plans/extensions/done-extension_lifecycle_bootstrap-low-med.md` — shipped
-  manifest runtime, startup/command/view activation, desktop bootstrap, and shutdown;
-  `onLanguage` remains unsupported.
+- Manifest parser/schema and typed diagnostics — shipped and reviewed; its story
+  file was deleted per the plan-review policy in `AGENTS.md`.
+- Soft capability/API/platform compatibility results (not a security sandbox) —
+  shipped and reviewed; its story file was deleted per the plan-review policy.
+- Trusted local-directory module loading and reload semantics, with entry blob
+  urls revoked as soon as the import settles — shipped and reviewed; its story
+  file was deleted per the plan-review policy.
+- Manifest runtime, startup/command/view activation, desktop bootstrap, and
+  shutdown (`onLanguage` remains unsupported) — shipped and reviewed; its story
+  file was deleted per the plan-review policy.
 - `plans/extensions/pending-extension_contribution_surfaces-low-med.md` — typed
   views, menus, context menus, editor actions, and themes.
-- `plans/extensions/pending-editor_header_contribution-high-med.md` — D44 observable
-  React slot above the editor body; distinct from CodeMirror hooks.
+- D44 observable React slot above the editor body, distinct from CodeMirror
+  hooks — shipped 2026-08-08; its story file was deleted per the plan-review
+  policy.
 - `plans/extensions/pending-extension_events_tasks-low-med.md` — app/extension
   events and abortable background tasks.
 - `plans/extensions/pending-extension_data_storage-low-med.md` — extension-owned
@@ -234,8 +235,9 @@ Focused follow-up stories:
 
 The internal contribution implementation and lifecycle/scoped-settings work are
 usable prerequisites for these stories. Secret storage also depends on the
-native gateway boundaries in `plans/wip-ai-low-hard.md`; built-in registrations
-consume the existing feature epics rather than blocking their behavior work.
+native gateway boundaries the AI epic will define once `plans/pending-ai-med-hard.md`
+gets its planning pass; built-in registrations consume the existing feature
+epics rather than blocking their behavior work.
 
 This epic itself has no hard blocking prerequisites, but it assumes the
 internal contribution points (command registry, panel registration, editor
@@ -257,8 +259,8 @@ are not yet formalized, the first story here should establish them.
 ## Status
 
 - ✅ Internal contribution points — core command, panel, editor-hook, and
-  settings-schema contracts/bridges are implemented and tested; follow-up review
-  notes remain in `plans/extensions/done-internal_contribution_points-low-med.md`.
+  settings-schema contracts/bridges are implemented and tested; its story file
+  was reviewed and deleted per the plan-review policy in `AGENTS.md`.
 - ✅ Contributed tab kinds — `desktopTabRegistry` singleton with renderer `factory`,
   `subscribe`, and disposable registration; `DesktopExtensionContext.tabs.register()` and
   `openTab(kind, title)`. Built-in kinds remain shell-drawn by design.
@@ -266,16 +268,16 @@ are not yet formalized, the first story here should establish them.
   and tested. Manifest parsing, compatibility evaluation, local-directory loading,
   and bootstrap are shipped for the trusted beta path; remaining gaps are
   unsupported `onLanguage` and duplicate-id diagnostics.
-- ✅ Manifest parser/schema — `plans/extensions/done-extension_manifest_format-low-med.md`.
-- ✅ Soft capability/API/platform compatibility —
-  `plans/extensions/done-extension_capability_compatibility-low-med.md`.
-- ✅ Local-directory loader —
-  `plans/extensions/done-extension_local_directory_loader-low-med.md`. A
-  directory holding `extension.json` plus a single pre-bundled ESM entry loads,
-  activates lazily, reloads, and unloads from the Extensions panel. Disk
-  extensions contribute commands, settings, and panels. Directory persistence
-  across restarts is shipped —
-  `plans/extensions/done-local_extension_directory_persistence-low-easy.md`.
+- ✅ Manifest parser/schema — shipped; its story file was reviewed and deleted
+  per the plan-review policy.
+- ✅ Soft capability/API/platform compatibility — shipped; its story file was
+  reviewed and deleted per the plan-review policy.
+- ✅ Local-directory loader — shipped; its story file was reviewed and deleted
+  per the plan-review policy. A directory holding `extension.json` plus a
+  single pre-bundled ESM entry loads, activates lazily, reloads, and unloads
+  from the Extensions panel. Disk extensions contribute commands, settings,
+  and panels. Directory persistence across restarts is also shipped, its story
+  file likewise reviewed and deleted.
 - ✅ Extension workspace/tab APIs — `context.workspace.listNotes(prefix)` (Markdown only,
   folder-prefix matched, with modified times) and `context.tabs.open(kind, title)` scoped to
   kinds the calling extension registered. Closes D68/D69 for the journal.
@@ -290,17 +292,16 @@ are not yet formalized, the first story here should establish them.
   `note.saved`, `note.created`, and `workspace.opened`, scoped to the activation
   and isolated per listener. Custom extension-emitted events and background
   tasks remain in `plans/extensions/pending-extension_events_tasks-low-med.md`.
-- ✅ Lifecycle/bootstrap integration —
-  `plans/extensions/done-extension_lifecycle_bootstrap-low-med.md`. Built-ins are
-  registered from manifests at startup and activated lazily via contribution
-  stubs; `note-stats` is the first built-in and exercises commands, panels, and
-  namespaced settings.
+- ✅ Lifecycle/bootstrap integration — shipped; its story file was reviewed and
+  deleted per the plan-review policy. Built-ins are registered from manifests
+  at startup and activated lazily via contribution stubs; `note-stats` is the
+  first built-in and exercises commands, panels, and namespaced settings.
 - ⬜ API/event/background-task/data surfaces — split across
   `pending-extension_events_tasks-low-med.md`,
   `pending-extension_data_storage-low-med.md`, and
   `pending-extension_feature_hooks-low-med.md`.
-- ⬜ D44 React editor-header contribution —
-  `plans/extensions/pending-editor_header_contribution-high-med.md`.
+- ✅ D44 React editor-header contribution — shipped 2026-08-08; its story file
+  was reviewed and deleted per the plan-review policy.
 - ⬜ D45 app/workspace settings UI/persistence/uninstall —
   `plans/extensions/pending-extension_settings-low-med.md`.
 - ⬜ Native secret storage — `plans/extensions/pending-extension_secret_storage-med-hard.md`;

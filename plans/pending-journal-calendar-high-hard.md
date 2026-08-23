@@ -1,6 +1,6 @@
 # Journal & Calendar
 
-> Dedicated feature epic for an optional, local-first journal and journaling calendar built on ordinary Markdown notes. Read `plans/app-vision.md`, `plans/technical-decisions.md`, `user-noted-todo.md`, the mobile epic, the UI-shell plans, and `plans/extensions/pending-beta_builtin_extensions-med-med.md` before starting any story.
+> Dedicated feature epic for an optional, local-first journal and journaling calendar built on ordinary Markdown notes. Read `plans/app-vision.md`, `user-noted-todo.md`, the mobile epic, the UI-shell plans, and `plans/extensions/pending-beta_builtin_extensions-med-med.md` before starting any story.
 
 ## Collaboration gate — SATISFIED 2026-08-07, extended 2026-08-08
 
@@ -21,8 +21,9 @@ D71-D75 came out of the approved desktop panel mockup (action emphasis, preview 
 kept, filter alignment, dateline format, header order); D76-D78 from the approved mobile
 mockup (touch row height, wrapping chips, the sheet's contract).
 
-All three D34 mockups are approved (panel, mobile, calendar tab). What remains is platform work: the D41 facets prerequisite
-below, which the panel degrades around rather than waits for.
+All three D34 mockups are approved (panel, mobile, calendar tab). The platform prerequisites
+below, including the D41 facets prerequisite the panel was built to degrade around, have all
+shipped; what remains is the journal/calendar story work itself.
 
 ## Goal
 
@@ -66,14 +67,14 @@ Non-goals:
 - Existing `apps/desktop/src/panels/panelRegistry.tsx`, `LeftPopout.tsx`, `ActivityBar.tsx`, and `DesktopShell.tsx` own rendering and shell composition. Journal/calendar contributions must enter through the registry rather than a parallel action array.
 - Existing `apps/desktop/src/extensions/desktopExtensionHost.ts` owns scoped command, panel, editor-hook, and settings registration. Built-in registration must use its disposable lifecycle.
 - Existing modular settings work (`apps/desktop/src/settings/settingsStore.ts`, `packages/core/src/settings/`) owns namespaced settings persistence outside the workspace.
-- Mobile is the same `apps/desktop` React/Tauri webview; coordinate with `plans/mobile/pending-responsive_layout-low-med.md`, `pending-mobile_tauri_config-low-easy.md`, and `pending-codemirror_mobile_testing-low-med.md`.
+- Mobile is the same `apps/desktop` React/Tauri webview; coordinate with `plans/mobile/pending-responsive_layout-med-med.md`, `pending-mobile_tauri_config-med-easy.md`, and `pending-codemirror_mobile_testing-med-med.md`.
 - Coordinate registration only with `plans/extensions/pending-beta_builtin_extensions-med-med.md`; journal/calendar behavior and storage stay here.
 - **Indexing/search dependency (D16/D41).** Full-text search and metadata facets reuse the
-  platform-owned disposable index; metadata facets wait on
-  `indexing-search/pending-frontmatter_metadata_facets-high-hard.md`. Browsing, dates,
-  grouping and lazy previews do not depend on that work. If the index is unavailable,
-  browsing and date filters remain usable and metadata facets report unavailable — never
-  fall back to a full-file scan or a journal-owned cache.
+  platform-owned disposable index; metadata facets shipped — see
+  `plans/indexing-search/done-summary.md`. Browsing, dates, grouping and lazy previews never
+  depended on that work. If the index is unavailable, browsing and date filters remain usable
+  and metadata facets report unavailable — never fall back to a full-file scan or a
+  journal-owned cache.
 
 
 ## Platform reality check — 2026-08-08
@@ -90,7 +91,7 @@ Prerequisites still to build, all decided:
 | ~~2~~ | ✅ React editor-header slot shipped 2026-08-08 (D44) | — |
 | ~~3~~ | ✅ Workspace-scoped settings shipped 2026-08-08 (D45); the settings **UI/uninstall** work stays behind that story's product gate and blocks nothing here | — |
 | ~~4~~ | ✅ `listNotes(prefix)` shipped 2026-08-08 | — |
-| 5 | Frontmatter metadata facets in the index (D41) — **blocked**: rests on the frontend indexing service, workspace-open hook, incremental upsert and native bridge, all unbuilt. The panel ships with facets in their unavailable state until this lands | `indexing-search/pending-frontmatter_metadata_facets-high-hard.md` |
+| ~~5~~ | ✅ Frontmatter metadata facets in the index (D41) shipped — see `plans/indexing-search/done-summary.md` | — |
 
 Already usable: `desktopExtensionHost` register/activate, `DesktopExtensionContext`
 (`commands`, `panels`, `editorHooks`, `settings`, `tabs`, `workspace`), contributed tab kinds
@@ -147,5 +148,5 @@ recorded in the story. Stories may be split further if a subagent would exceed o
   persistence and the D57 phone layout shipped; metadata predicates remain, waiting on D41
 - 🟨 Story 8 mobile refinement — M-2 sheet (D78), M-1 touch density (D76) and
   `journal/mobile-a11y-checklist.md` shipped; the manual VoiceOver/TalkBack pass remains
-- 🟨 Platform prerequisites: D68/D69 API additions shipped; D44 editor-header slot, D45
-  workspace-scoped settings, and D41 metadata facets remain
+- ✅ Platform prerequisites: D68/D69 API additions, D44 editor-header slot, D45
+  workspace-scoped settings, and D41 metadata facets have all shipped

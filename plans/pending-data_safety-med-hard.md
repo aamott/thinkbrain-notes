@@ -2,8 +2,7 @@
 
 > New epic (medium urgency). User notes are irreplaceable; data loss is the
 > worst-case failure for a notes app. Read `plans/app-vision.md` (User data
-> separation, Bring your own sync) and `plans/technical-decisions.md` before
-> starting any story here.
+> separation, Bring your own sync) before starting any story here.
 
 ## Goal
 

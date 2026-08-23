@@ -20,5 +20,5 @@ Set `EditorView.EDIT_CONTEXT = false` if needed for Android.
 
 ## References
 
-- `plans/pending-mobile-low-hard.md` — known limitations
+- `plans/pending-mobile-med-hard.md` — known limitations
 - tauri-apps/tauri#10631 — Android keyboard / visualViewport issue

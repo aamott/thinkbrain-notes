@@ -8,7 +8,7 @@ itself, its direct wiki-link targets (outgoing), and notes that link to it
 context without rendering the entire vault.
 
 Depends on the graph view story (`pending-graph_view`) and link target
-resolution (`pending-link_target_resolution`).
+resolution (shipped; see `plans/graph/done-summary.md`).
 
 ## Acceptance Criteria
 
@@ -30,4 +30,4 @@ resolution (`pending-link_target_resolution`).
 - `packages/core/src/markdown.ts` — `extractWikiLinks`
 - `plans/pending-graph-low-hard.md` — this epic
 - `plans/graph/pending-graph_view-low-hard.md` — prerequisite
-- `plans/graph/pending-link_target_resolution-low-med.md` — prerequisite
+- `plans/graph/done-summary.md` — link target resolution, prerequisite (shipped)

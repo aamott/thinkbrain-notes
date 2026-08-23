@@ -67,4 +67,5 @@ Deliver event/task decision matrix, typed contracts, fixture tests, lifecycle re
 
 ## References
 
-- `plans/extensions/done-extension_lifecycle_bootstrap-low-med.md`
+- Lifecycle/bootstrap integration — shipped; its story file was reviewed and
+  deleted per the plan-review policy in `AGENTS.md`.

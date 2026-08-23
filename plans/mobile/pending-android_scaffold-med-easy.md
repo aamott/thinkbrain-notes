@@ -20,4 +20,4 @@ needed.
 
 ## References
 
-- `plans/pending-mobile-low-hard.md` — epic context, known limitations
+- `plans/pending-mobile-med-hard.md` — epic context, known limitations

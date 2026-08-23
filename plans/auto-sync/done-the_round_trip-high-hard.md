@@ -147,7 +147,7 @@ here failed the whole push. Real git skips them; now so do we.
 
 Tracked as their own stories, not kept here:
 
-- `pending-lane_test_strength-low-low.md`
+- `done-lane_test_strength-low-low.md`
 - `pending-delete_vs_change_silent_resolution-med-med.md`
 - `pending-symlink_submodule_skipped-med-med.md`
 - `done-large_sync_progress-low-low.md`
