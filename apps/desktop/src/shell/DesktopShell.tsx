@@ -284,10 +284,21 @@ export function DesktopShell() {
   const activeDocument = activeTab ? documents[activeTab.id] : undefined;
 
   // Global shortcuts: command palette (Ctrl/Cmd+P), explorer (Ctrl/Cmd+B),
-  // bottom dock (Ctrl/Cmd+J), and Escape to dismiss the palette.
+  // bottom dock (Ctrl/Cmd+J), save (Ctrl/Cmd+S), tab switching (Ctrl+Tab / Ctrl+Shift+Tab),
+  // and Escape to dismiss the palette.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const modifier = event.ctrlKey || event.metaKey;
+      if (event.ctrlKey && event.key === "Tab") {
+        if (tabState.tabs.length > 1) {
+          event.preventDefault();
+          const currentIndex = tabState.tabs.findIndex((t) => t.id === tabState.activeTabId);
+          const delta = event.shiftKey ? -1 : 1;
+          const nextIndex = (currentIndex + delta + tabState.tabs.length) % tabState.tabs.length;
+          const nextTab = tabState.tabs[nextIndex];
+          if (nextTab) dispatchTabs({ type: "activate", tabId: nextTab.id });
+        }
+      }
       if (modifier && event.key.toLowerCase() === "p") {
         event.preventDefault();
         if (paletteOpen) closePalette();
@@ -313,7 +324,7 @@ export function DesktopShell() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [closePalette, openPalette, paletteOpen, selectLeftPanel, toggleBottomPanel, activeTab, saveDocument]);
+  }, [closePalette, openPalette, paletteOpen, selectLeftPanel, toggleBottomPanel, activeTab, saveDocument, tabState.tabs, tabState.activeTabId]);
 
   // Dock widths are published as CSS custom properties so the popouts can size
   // themselves from tokens instead of inline styles. The left dock publishes 0

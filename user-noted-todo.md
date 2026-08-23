@@ -15,7 +15,7 @@ These are random issues or shortcomings users have noted. They may or may not be
 - [ ] Save unsaved tabs on reload. Currently unsaved tab content is lost on reload.
 - [ ] Command palette fuzzy search and separate file search from command search. If you put `>` at the start of the search it searches commands. Take it away and it searches files. Optimize for tens of thousands of files. Use an ignore list of common issues, like `node_modules`.
 - [ ] Action menu items are spaced right, but their button hitboxes aren't square, they're skinny and tall. 
-- [ ] Ctrl+tab to switch tabs, Ctrl+Shift+tab to switch tabs in reverse.
+- [x] Ctrl+tab to switch tabs, Ctrl+Shift+tab to switch tabs in reverse.
 - [ ] Mobile has no layout for tabs
 - [ ] Activity bar icons are super generic and need updating. Same for activity menu items. 
 
