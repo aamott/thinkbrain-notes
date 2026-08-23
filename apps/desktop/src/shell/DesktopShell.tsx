@@ -289,15 +289,18 @@ export function DesktopShell() {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const modifier = event.ctrlKey || event.metaKey;
-      if (event.ctrlKey && event.key === "Tab") {
+      const isTab = event.key === "Tab" || event.key === "Backtab" || event.code === "Tab";
+      if (modifier && isTab) {
         if (tabState.tabs.length > 1) {
           event.preventDefault();
+          event.stopPropagation();
           const currentIndex = tabState.tabs.findIndex((t) => t.id === tabState.activeTabId);
           const delta = event.shiftKey ? -1 : 1;
           const nextIndex = (currentIndex + delta + tabState.tabs.length) % tabState.tabs.length;
           const nextTab = tabState.tabs[nextIndex];
           if (nextTab) dispatchTabs({ type: "activate", tabId: nextTab.id });
         }
+        return;
       }
       if (modifier && event.key.toLowerCase() === "p") {
         event.preventDefault();
@@ -322,8 +325,8 @@ export function DesktopShell() {
         if (!event.defaultPrevented && paletteOpen) closePalette();
       }
     };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [closePalette, openPalette, paletteOpen, selectLeftPanel, toggleBottomPanel, activeTab, saveDocument, tabState.tabs, tabState.activeTabId]);
 
   // Dock widths are published as CSS custom properties so the popouts can size
