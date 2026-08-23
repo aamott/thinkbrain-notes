@@ -291,9 +291,9 @@ export function DesktopShell() {
       const modifier = event.ctrlKey || event.metaKey;
       const isTab = event.key === "Tab" || event.key === "Backtab" || event.code === "Tab";
       if (modifier && isTab) {
+        event.preventDefault();
+        event.stopPropagation();
         if (tabState.tabs.length > 1) {
-          event.preventDefault();
-          event.stopPropagation();
           const currentIndex = tabState.tabs.findIndex((t) => t.id === tabState.activeTabId);
           const delta = event.shiftKey ? -1 : 1;
           const nextIndex = (currentIndex + delta + tabState.tabs.length) % tabState.tabs.length;
