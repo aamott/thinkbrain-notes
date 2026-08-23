@@ -45,6 +45,107 @@ Non-goals (deferred or out of scope for this epic):
 - tablet-specific layouts (phone-first; tablet falls out of responsive design)
 - publishing to app stores (build/ship pipeline is a later concern)
 
+## Where it actually stands (observed on an Android device, 2026-08-23)
+
+The app **compiles, installs and launches on Android**. That is further than
+this epic's status list suggests, and further than a reading of the repo
+suggests — several items below were already built and never ticked. What
+follows is what a person found by running it, plus what the code says about
+why.
+
+### Already done, and this epic said otherwise
+
+- **The Android scaffold is committed.** `apps/desktop/src-tauri/gen/android/`
+  holds 49 tracked files from `tauri android init` (commit `58dfd14`).
+  `mobile/pending-android_scaffold-med-easy.md` is stale as to the scaffolding
+  step; its *acceptance* — emulator launch, UI renders without crash — is what
+  is really outstanding, and the device run has now answered both.
+- **Mobile capabilities are declared.** `src-tauri/capabilities/mobile.json`
+  covers `android`/`iOS` for `main` and `workspace-*` windows.
+- **Desktop-only dependencies are already gated.** `tauri-plugin-updater` and
+  `keyring` sit behind
+  `cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))`
+  in `Cargo.toml`, and `credentials.rs` splits on the same condition with
+  `supported!`/`unsupported!` macros. Nothing has to be untangled for the build
+  to work — it already does.
+- **Some responsive work exists**: `max-[760px]:` breakpoints in
+  `DesktopShell`, `TitleBar`, `Popout` and `ResizeHandle`; `useCoarsePointer.ts`
+  (`matchMedia("(pointer: coarse)")`, because width alone cannot tell a phone
+  from a narrow panel); and `MetadataBottomSheet.tsx`, which tracks
+  `window.visualViewport` around the soft keyboard.
+
+### The blocker: a workspace cannot be opened at all
+
+Nothing else in this epic matters until this is answered. On device, no
+workspace can be opened — with or without git.
+
+The cause is structural rather than a bug. `workspaceAdapter.pickWorkspaceDirectory`
+asks `tauri-plugin-dialog` for `open({ directory: true })`. Android has no such
+picker: the Storage Access Framework hands back a `content://` URI, not a
+filesystem path. And even given one, `resolve_workspace_root`
+(`commands/workspace.rs:442`) requires a path that is absolute and
+`canonicalize()`s to a directory — which a `content://` URI cannot be.
+
+So the whole workspace model assumes a real filesystem path, and on Android the
+app can only address paths it owns: its own app-specific external storage. The
+open decisions are which of these to take, and they are product decisions, not
+implementation ones:
+
+- **App-owned vault directory.** The app creates and owns the vault under its
+  own storage. No picker, nothing to grant, works today. The cost is that the
+  vault is not somewhere the user can browse to with another app, and on many
+  devices it is removed when the app is uninstalled.
+- **SAF, properly.** Real user-chosen folders, at the price of teaching the
+  entire native layer to speak `content://` instead of `Path` — every command
+  in `workspace.rs`, `markdown.rs`, `backup.rs` and the sync layer. Large.
+- **Clone-first onboarding.** Notably, *this problem does not exist for git.*
+  Cloning creates the vault at a path the app chooses, so no picker is needed
+  and no permission is asked for. On a phone, "sign in and clone your notes" is
+  a better first run than "find a folder" regardless — which makes git the
+  natural mobile entry point rather than an advanced feature.
+
+### Git specifically
+
+- **gix cross-compiles** for `aarch64-linux-android` and `aarch64-apple-ios`,
+  gated in CI. But the gate is `cargo check -p gix` on that one package, by
+  design — CI's own comment says Tauri's mobile build "needs an SDK, a linker
+  and a generated project, none of which this gate is asking about." gix has
+  never been *run* on a device.
+- **Credentials do not persist.** On Android `credentials.rs` compiles to stubs
+  that return `sync.auth_required` — "Sign-in is not available on this device
+  yet." Public clones would work; private ones have nowhere to keep a token.
+  The alternative (an encrypted app-data fallback) is the same unmade decision
+  `plans/pending-extensions-low-hard.md` records for extension secrets, and
+  mobile is what forces it.
+- **Foreground-only.** `auto-sync/done-mobile_cross_compile-med-easy.md` says
+  this constraint was "documented for the mobile epic"; it was not, so it is
+  recorded here. Android does not let an app sync on idle the way the desktop
+  triggers assume, so mobile needs its own answer about when a round trip runs.
+
+### The UI is not usable on a phone yet
+
+- **Very unoptimised generally.** The `max-[760px]:` work covers the shell
+  chrome, not the surfaces inside it.
+- **The activity bar is wrong for touch.** `ActivityBar.tsx` is a 53-line rail
+  of icon-only buttons — the labels exist as `aria-label` only. On mobile it
+  should be a popout menu **with visible labels**: an icon rail on a phone is
+  both too small to hit and too cryptic without text. The `Popout` components
+  (`panels/Popout.tsx`) already do full-screen overlay under 760px, so the
+  surface to reuse exists.
+- **The soft keyboard breaks the editor.** Tracked upstream at
+  tauri-apps/tauri#10631: the webview viewport does not resize when the
+  keyboard opens, which breaks CodeMirror cursor positioning and scrolling.
+  This is not ours to fix and it gates mobile editing — a notes app that puts
+  the cursor in the wrong place while typing is not shippable. It needs
+  verifying on a current Tauri, then a workaround.
+
+### Not yet known
+
+Nobody has tried the search index (`rusqlite`, bundled SQLite) or the file
+watcher (`notify`) on a device. Both are in the unconditional dependency block
+with no Android handling, and Android restricts inotify watches; neither has
+been observed working or failing.
+
 ## Architecture Decisions
 
 ### Same codebase as desktop
@@ -113,15 +214,34 @@ No other epic blocks this one. Resolve only adapter gaps actually proven by mobi
 
 **Phase 1 — Android (medium urgency):**
 
-- ⬜ Responsive layout breakpoints (CSS Modules + shared `--tn-*` tokens,
-  phone-first on small screens) — `mobile/pending-responsive_layout-med-med.md`
-- ⬜ Touch-friendly navigation (bottom tabs, swipe gestures, 44px touch targets)
-- ⬜ `tauri android init` — scaffold Android target — `mobile/pending-android_scaffold-med-easy.md`
-- ⬜ Mobile Tauri config (soft capability declarations and unavailable
-  desktop-only commands) — `mobile/pending-mobile_tauri_config-med-easy.md`
-- ⬜ CodeMirror mobile testing and fixes (scrolling, IME, touch selection) —
+Ordered by what blocks what. The first item gates every other one: there is no
+point tuning a layout for a workspace that cannot be opened.
+
+- 🟥 **A workspace cannot be opened on Android at all** — the directory picker
+  does not exist on the platform, and the native layer requires a filesystem
+  path. See "Where it actually stands" above.
+  `mobile/pending-android_workspace_access-high-hard.md`
+- ⬜ Git clone as the mobile way in, and what a token can be kept in —
+  `mobile/pending-mobile_git_access-high-hard.md`
+- ⬜ Navigation menu replacing the icon rail, with visible labels —
+  `mobile/pending-mobile_navigation_menu-med-med.md`
+- 🟨 Responsive layout — the shell chrome adapts under 760px, the surfaces
+  inside it do not — `mobile/pending-responsive_layout-med-med.md`
+- ⬜ Touch-friendly navigation (swipe gestures, 44px touch targets)
+- ✅ `tauri android init` — the scaffold is committed under
+  `src-tauri/gen/android/`, and the app builds, installs and launches on a
+  device. `mobile/pending-android_scaffold-med-easy.md` still holds the
+  remaining acceptance for it.
+- 🟨 Mobile Tauri config — `capabilities/mobile.json` exists and the
+  desktop-only dependencies are gated; the soft "unavailable on mobile"
+  reporting for desktop-only commands is not built —
+  `mobile/pending-mobile_tauri_config-med-easy.md`
+- ⬜ CodeMirror mobile testing and fixes — gated on the upstream soft-keyboard
+  viewport bug (tauri-apps/tauri#10631) —
   `mobile/pending-codemirror_mobile_testing-med-med.md`
 - ⬜ Reuse current Tauri adapters; raise only proven cross-cutting adapter gaps through maintenance
+- ❓ Search index (`rusqlite`) and file watcher (`notify`) on a device —
+  neither observed working nor failing
 
 **Phase 2 — iOS (low urgency, deferred until Android is stable):**
 
