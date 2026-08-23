@@ -99,7 +99,7 @@ conflicts · block-level Markdown merge · reconcile-text · cloud provider APIs
    bootstrap matrix, auto-commit, checkpoint API
 2. `pending-cloud_conflict_detection-high-med.md` — pattern table, watcher
    integration, startup scan, cleanup protocol
-3. `pending-merge_engine-high-hard.md` — three-way (git) / two-way (cloud) →
+3. `done-merge_engine-high-hard.md` — three-way (git) / two-way (cloud) →
    structured chunks; buffer rule; workspace mutex
 4. `pending-merge_ui-high-hard.md` — cards + merge tab, per-type behavior,
    source-based labels
@@ -123,10 +123,11 @@ conflicts · block-level Markdown merge · reconcile-text · cloud provider APIs
 - ✅ Story 0 (`gix` build spike, split off the front of story 1).
 - ✅ Story 6 (Git Remote Sync: 6a send-pack, 6b round trip, 6c credentials, 6d link UX, 6e workspace import, 6f import sign-in parity, selector git badge).
 - ✅ Story 8 (Mobile cross-compile validation in CI & local Android NDK).
-- 🟨 Stories 2–5 are substantially built; each names what is left in its own
-  Status. Story 3's three-way merge landed inside story 6 rather than on its
-  own — the merge resolves what it can and leaves only genuine overlaps as
-  copies, which the two-way path already handles.
+- ✅ Story 3 (Merge Engine). Its three-way half landed inside story 6 rather
+  than on its own — the merge resolves what it can and leaves only genuine
+  overlaps as copies, which the two-way path already handles.
+- 🟨 Stories 2, 4 and 5 are substantially built; each names what is left in
+  its own Status.
 - ⬜ Stories 7 and 9 pending. Story 2's remaining work (real fixtures per
   provider) and story 5's (Windows) need daemons and a Windows machine, not
   more code.
