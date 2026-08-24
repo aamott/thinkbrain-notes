@@ -62,3 +62,10 @@ The rest of the "unoptimised for mobile" surface — panel widths, the tab strip
 the editor chrome — belongs to `pending-responsive_layout-med-med.md`. This
 story is only the navigation control, because it is the one a phone user meets
 first and the one that cannot be fixed by a breakpoint alone.
+
+## References
+
+- `plans/pending-mobile-med-hard.md` — epic context
+- `plans/mobile/assets/mobile-ui-mockup.html` — visual reference; the mockup's "Universal Top Header" (Left: Menu/Back slot) and "Bottom Nav Hub" are concrete answers to this story's "What opens it" open question, to be confirmed during planning
+- `apps/desktop/src/panels/Popout.tsx` — the full-screen overlay surface under 760px to reuse
+- `apps/desktop/src/lib/useCoarsePointer.ts` — distinguishes a phone from a narrow desktop panel where width alone cannot

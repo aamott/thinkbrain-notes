@@ -20,4 +20,5 @@ minimum).
 ## References
 
 - `plans/pending-mobile-med-hard.md` — epic context
+- `plans/mobile/assets/mobile-ui-mockup.html` — visual reference for the phone-first shell, bottom nav, and action-sheet/drawer patterns this story's breakpoints expose
 - `packages/ui/src/styles/tokens.css` — shared `--tn-*` tokens

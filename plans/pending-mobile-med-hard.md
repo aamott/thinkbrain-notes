@@ -125,7 +125,12 @@ implementation ones:
 ### The UI is not usable on a phone yet
 
 - **Very unoptimised generally.** The `max-[760px]:` work covers the shell
-  chrome, not the surfaces inside it.
+  chrome, not the surfaces inside it. A full visual reference for the intended
+  phone-first shell — universal top header, bottom nav hub, action sheets and
+  drawers — lives at `plans/mobile/assets/mobile-ui-mockup.html`; it informs
+  `pending-mobile_navigation_menu-med-med.md` and
+  `pending-responsive_layout-med-med.md` and has not yet been formally
+  approved through a discovery gate.
 - **The activity bar is wrong for touch.** `ActivityBar.tsx` is a 53-line rail
   of icon-only buttons — the labels exist as `aria-label` only. On mobile it
   should be a popout menu **with visible labels**: an icon rail on a phone is
