@@ -182,7 +182,7 @@ export function SettingsContent() {
   };
 
   return (
-    <div ref={containerRef} className="flex min-h-0 flex-grow flex-col overflow-y-auto">
+    <div ref={containerRef} className="flex min-h-0 grow flex-col overflow-y-auto">
       <div className="mx-auto w-full max-w-160 px-6 py-4 max-[760px]:max-w-none max-[760px]:pt-4 max-[760px]:pr-4 max-[760px]:pb-8 max-[760px]:pl-15">
         <div className="mb-2 flex items-center gap-2">
           <h2 className="text-base font-semibold text-foreground">{sectionLabel}</h2>

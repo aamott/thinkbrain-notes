@@ -10,7 +10,8 @@
  * the active nav target and closes the narrow-screen navigation overlay.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { ChevronDown, ChevronRight, Search, X } from "lucide-react";
 import type {
   SettingDefinition,
@@ -18,9 +19,19 @@ import type {
   SettingsModule
 } from "@thinkbrain/core";
 import { cn } from "../lib/utils";
+import { createDebounced } from "../lib/debounce";
 import { appSettingsRegistry, useSettingsStore } from "./settingsStore";
+import { fuzzySearch, type FuzzySearchField } from "./fuzzyMatch";
 import { requestSettingHighlight } from "./settingHighlight";
 import { findSectionLabelInSection } from "./sectionUtils";
+
+const SEARCH_DEBOUNCE_MS = 150;
+const SEARCH_RESULT_ROW_HEIGHT = 52;
+const SEARCH_FIELDS: readonly FuzzySearchField<SettingDefinition>[] = [
+  { value: (definition) => definition.label, weight: 3 },
+  { value: (definition) => definition.description, weight: 2 },
+  { value: (definition) => definition.key, weight: 1 }
+];
 
 export interface SettingsNavProps {
   readonly open: boolean;
@@ -185,18 +196,14 @@ function buildSectionPath(definition: SettingDefinition): string {
   return `${moduleLabel} > ${sectionLabel}`;
 }
 
-/** Filters all registry definitions by a case-insensitive substring match. */
+/** Searches all registry definitions and returns them best-match first. */
 function filterDefinitions(query: string): readonly SettingDefinition[] {
-  const trimmed = query.trim().toLowerCase();
-  if (trimmed === "") return [];
-  return appSettingsRegistry.getAllDefinitions().filter((definition) =>
-    [definition.label, definition.description, definition.key].some((field) =>
-      field.toLowerCase().includes(trimmed)
-    )
+  return fuzzySearch(query, appSettingsRegistry.getAllDefinitions(), SEARCH_FIELDS).map(
+    ({ item }) => item
   );
 }
 
-/** Renders the flat search results list. */
+/** Renders only the visible portion of the flat search results list. */
 function SearchResults({
   results,
   onSelect
@@ -204,27 +211,71 @@ function SearchResults({
   readonly results: readonly SettingDefinition[];
   readonly onSelect: (definition: SettingDefinition) => void;
 }) {
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  // TanStack Virtual manages mutable measurements intentionally; this component
+  // remains outside React Compiler memoization so those measurements stay live.
+  // eslint-disable-next-line react-hooks/incompatible-library
+  const rowVirtualizer = useVirtualizer({
+    count: results.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => SEARCH_RESULT_ROW_HEIGHT,
+    getItemKey: (index) => results[index]?.key ?? index,
+    overscan: 5,
+    // This initial measurement keeps server-like DOM environments useful until
+    // ResizeObserver supplies the real panel size in a browser.
+    initialRect: { width: 224, height: 400 }
+  });
+
+  useEffect(() => {
+    rowVirtualizer.scrollToOffset(0);
+  }, [results, rowVirtualizer]);
+
   if (results.length === 0) {
     return <p className="px-2 py-4 text-center text-xs text-muted-foreground">No results</p>;
   }
 
+  const virtualRows = rowVirtualizer.getVirtualItems();
+
   return (
-    <ul role="list" className="m-0 flex flex-col gap-0.5 p-0">
-      {results.map((definition) => (
-        <li key={definition.key} role="none" className="list-none">
-          <button
-            type="button"
-            onClick={() => onSelect(definition)}
-            className="flex w-full cursor-pointer flex-col gap-0.5 rounded-small px-2 py-1.5 text-left hover:bg-accent focus-visible:-outline-offset-2 focus-visible:outline-2 focus-visible:outline-ring max-[760px]:min-h-11"
-          >
-            <span className="text-xs font-medium text-foreground">{definition.label}</span>
-            <span className="text-[0.625rem] text-muted-foreground">
-              {buildSectionPath(definition)}
-            </span>
-          </button>
-        </li>
-      ))}
-    </ul>
+    <div
+      ref={scrollRef}
+      className="min-h-0 flex-1 overflow-y-auto"
+      data-testid="settings-search-results-viewport"
+    >
+      <ul
+        role="list"
+        className="relative m-0 p-0"
+        style={{ height: rowVirtualizer.getTotalSize() }}
+      >
+        {virtualRows.map((virtualRow) => {
+          const definition = results[virtualRow.index]!;
+          return (
+            <li
+              key={definition.key}
+              role="none"
+              className="absolute inset-s-0 top-0 w-full list-none p-0.5"
+              style={{
+                height: virtualRow.size,
+                transform: `translateY(${virtualRow.start}px)`
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => onSelect(definition)}
+                className="flex h-full w-full cursor-pointer flex-col justify-center gap-0.5 rounded-small px-2 text-left hover:bg-accent focus-visible:-outline-offset-2 focus-visible:outline-2 focus-visible:outline-ring max-[760px]:min-h-11"
+              >
+                <span className="truncate text-xs font-medium text-foreground">
+                  {definition.label}
+                </span>
+                <span className="truncate text-[0.625rem] text-muted-foreground">
+                  {buildSectionPath(definition)}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }
 
@@ -241,16 +292,31 @@ export function SettingsNav({ open, onClose }: SettingsNavProps) {
   const setActiveSection = useSettingsStore((state) => state.setActiveSection);
   const searchQuery = useSettingsStore((state) => state.searchQuery);
   const setSearchQuery = useSettingsStore((state) => state.setSearchQuery);
+  const [inputValue, setInputValue] = useState(searchQuery);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const debouncedSetSearchQuery = useMemo(
+    () => createDebounced(setSearchQuery, SEARCH_DEBOUNCE_MS),
+    [setSearchQuery]
+  );
 
   useEffect(() => {
     if (open) searchInputRef.current?.focus();
   }, [open]);
 
+  useEffect(
+    () => () => {
+      debouncedSetSearchQuery.cancel();
+    },
+    [debouncedSetSearchQuery]
+  );
+
   const appModules = appSettingsRegistry.getModulesByScope("app");
   const workspaceModules = appSettingsRegistry.getModulesByScope("workspace");
   const isSearching = searchQuery.trim() !== "";
-  const results = isSearching ? filterDefinitions(searchQuery) : [];
+  const results = useMemo(
+    () => (isSearching ? filterDefinitions(searchQuery) : []),
+    [isSearching, searchQuery]
+  );
 
   /** Selects a section and dismisses the responsive overlay when necessary. */
   function handleSectionSelect(id: string): void {
@@ -259,6 +325,8 @@ export function SettingsNav({ open, onClose }: SettingsNavProps) {
 
   /** Selects and highlights a search result, then dismisses the overlay. */
   function handleResultSelect(definition: SettingDefinition): void {
+    debouncedSetSearchQuery.cancel();
+    setInputValue("");
     setSearchQuery("");
     setActiveSection(definition.section);
     requestSettingHighlight(definition.key);
@@ -268,13 +336,13 @@ export function SettingsNav({ open, onClose }: SettingsNavProps) {
     <nav
       id="settings-navigation"
       className={cn(
-        "flex min-h-0 w-56 shrink-0 flex-col overflow-y-auto border-r border-border bg-sidebar p-2 text-sidebar-foreground max-[760px]:invisible max-[760px]:pointer-events-none max-[760px]:absolute max-[760px]:inset-y-0 max-[760px]:start-0 max-[760px]:z-30 max-[760px]:w-[min(15rem,calc(100%-2rem))] max-[760px]:-translate-x-full max-[760px]:shadow-panel max-[760px]:transition-[transform_180ms_ease,visibility_0s_linear_180ms]",
+        "flex min-h-0 w-56 shrink-0 flex-col overflow-hidden border-r border-border bg-sidebar p-2 text-sidebar-foreground max-[760px]:invisible max-[760px]:pointer-events-none max-[760px]:absolute max-[760px]:inset-y-0 max-[760px]:start-0 max-[760px]:z-30 max-[760px]:w-[min(15rem,calc(100%-2rem))] max-[760px]:-translate-x-full max-[760px]:shadow-panel max-[760px]:transition-[transform_180ms_ease,visibility_0s_linear_180ms]",
         open && "max-[760px]:visible max-[760px]:pointer-events-auto max-[760px]:translate-x-0 max-[760px]:delay-0"
       )}
       aria-label="Settings sections"
       data-open={open ? "true" : "false"}
     >
-      <div className="sticky -top-2 z-10 -mx-2 -mt-2 mb-1 flex items-center gap-1 bg-surface p-2">
+      <div className="-mx-2 -mt-2 mb-1 flex shrink-0 items-center gap-1 bg-surface p-2">
         <div className="relative flex-1">
           <Search
             className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
@@ -283,10 +351,17 @@ export function SettingsNav({ open, onClose }: SettingsNavProps) {
           <input
             ref={searchInputRef}
             type="search"
-            value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
+            value={inputValue}
+            onChange={(event) => {
+              const nextQuery = event.target.value;
+              setInputValue(nextQuery);
+              debouncedSetSearchQuery(nextQuery);
+            }}
             onKeyDown={(event) => {
-              if (event.key === "Escape") setSearchQuery("");
+              if (event.key !== "Escape") return;
+              debouncedSetSearchQuery.cancel();
+              setInputValue("");
+              setSearchQuery("");
             }}
             placeholder="Search settings…"
             aria-label="Search settings"
@@ -306,22 +381,24 @@ export function SettingsNav({ open, onClose }: SettingsNavProps) {
       {isSearching ? (
         <SearchResults results={results} onSelect={handleResultSelect} />
       ) : (
-        <ul role="tree" className="m-0 flex flex-col gap-1 p-0">
-          <ScopeGroup
-            label="Application"
-            modules={appModules}
-            activeSection={activeSection}
-            onSelect={handleSectionSelect}
-          />
-          {workspaceValues !== null && workspaceModules.length > 0 && (
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <ul role="tree" className="m-0 flex flex-col gap-1 p-0">
             <ScopeGroup
-              label="Workspace"
-              modules={workspaceModules}
+              label="Application"
+              modules={appModules}
               activeSection={activeSection}
               onSelect={handleSectionSelect}
             />
-          )}
-        </ul>
+            {workspaceValues !== null && workspaceModules.length > 0 && (
+              <ScopeGroup
+                label="Workspace"
+                modules={workspaceModules}
+                activeSection={activeSection}
+                onSelect={handleSectionSelect}
+              />
+            )}
+          </ul>
+        </div>
       )}
     </nav>
   );

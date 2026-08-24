@@ -91,7 +91,7 @@ Workspace settings: `read_workspace_settings` / `write_workspace_settings`.
 | 2 | `settings-store-persistence` | done | 1 |
 | 3 | `settings-responsive-header` | done | 1, 2 |
 | 4 | `settings-header-save-dirty` | done | 3 |
-| 5 | `settings-fuzzy-search` | pending | 3 |
+| 5 | `settings-fuzzy-search` | done | 3 |
 | 6 | `settings-import-export-reset` | done | 2, 3 |
 
 ## Dependencies

@@ -115,7 +115,7 @@ export function SettingsTab() {
             ref={hamburgerRef}
             type="button"
             className={cn(
-              "hidden max-[760px]:absolute max-[760px]:start-2 max-[760px]:top-2 max-[760px]:z-20 max-[760px]:size-9 max-[760px]:cursor-pointer max-[760px]:place-items-center max-[760px]:text-muted-foreground max-[760px]:opacity-100 max-[760px]:transition-opacity max-[760px]:duration-150 max-[760px]:grid",
+              "hidden max-[760px]:absolute max-[760px]:inset-s-2 max-[760px]:top-2 max-[760px]:z-20 max-[760px]:size-9 max-[760px]:cursor-pointer max-[760px]:place-items-center max-[760px]:text-muted-foreground max-[760px]:opacity-100 max-[760px]:transition-opacity max-[760px]:duration-150 max-[760px]:grid",
               navOpen && "max-[760px]:pointer-events-none max-[760px]:opacity-0"
             )}
             aria-label="Open settings navigation"

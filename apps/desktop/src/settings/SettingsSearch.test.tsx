@@ -5,7 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SettingsTab } from "./SettingsTab";
-import { useSettingsStore } from "./settingsStore";
+import { appSettingsRegistry, useSettingsStore } from "./settingsStore";
 
 /**
  * Settings search/filter component tests (Story 5).
@@ -17,6 +17,7 @@ import { useSettingsStore } from "./settingsStore";
 
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
+let temporaryRegistrations: Array<{ dispose(): void }> = [];
 
 /** Default app values seeded into the store for most tests. */
 const SEEDED_APP_VALUES: Record<string, unknown> = {
@@ -28,6 +29,21 @@ const SEEDED_APP_VALUES: Record<string, unknown> = {
 };
 
 beforeEach(() => {
+  // happy-dom has no layout engine; give the virtualizer a deterministic
+  // viewport while retaining the real @tanstack/react-virtual implementation.
+  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+    x: 0,
+    y: 0,
+    width: 224,
+    height: 400,
+    top: 0,
+    right: 224,
+    bottom: 400,
+    left: 0,
+    toJSON: () => ({})
+  });
+  vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(224);
+  vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(400);
   useSettingsStore.setState({
     appValues: { ...SEEDED_APP_VALUES },
     workspaceValues: null,
@@ -46,9 +62,12 @@ beforeEach(() => {
 
 afterEach(async () => {
   await act(async () => root?.unmount());
+  for (const registration of temporaryRegistrations) registration.dispose();
+  temporaryRegistrations = [];
   container?.remove();
   root = null;
   container = null;
+  vi.restoreAllMocks();
 });
 
 /**
@@ -79,6 +98,18 @@ async function click(element: Element): Promise<void> {
   });
 }
 
+/** Types into React's controlled search input and flushes the input event. */
+async function typeSearch(input: HTMLInputElement, value: string): Promise<void> {
+  await act(async () => {
+    const valueSetter = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value"
+    )?.set;
+    valueSetter?.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true, cancelable: true }));
+  });
+}
+
 describe("SettingsSearch", () => {
   it("renders a search input at the top of the nav", async () => {
     const el = await renderSettingsTab();
@@ -90,11 +121,10 @@ describe("SettingsSearch", () => {
     expect(searchInput?.placeholder).toBe("Search settings…");
   });
 
-  it("filters definitions by label (case-insensitive)", async () => {
-    await setSearchQuery("font");
+  it("fuzzy matches non-consecutive label characters", async () => {
+    await setSearchQuery("fnt");
     const el = await renderSettingsTab();
 
-    // "Font size" result is present.
     const results = el.querySelectorAll('[role="list"] button');
     const labels = Array.from(results).map((b) => b.textContent);
     expect(labels.some((t) => t?.includes("Font size"))).toBe(true);
@@ -116,6 +146,79 @@ describe("SettingsSearch", () => {
     const results = el.querySelectorAll('[role="list"] button');
     const labels = Array.from(results).map((b) => b.textContent);
     expect(labels.some((t) => t?.includes("Line wrapping"))).toBe(true);
+  });
+
+  it("ranks a direct label match before weaker field matches", async () => {
+    await setSearchQuery("theme");
+    const el = await renderSettingsTab();
+
+    const labels = Array.from(el.querySelectorAll('[role="list"] button')).map(
+      (button) => button.querySelector("span")?.textContent
+    );
+    expect(labels[0]).toBe("Theme");
+    expect(labels).toContain("Custom theme file");
+  });
+
+  it("debounces committed search updates by 150ms", async () => {
+    vi.useFakeTimers();
+    try {
+      const el = await renderSettingsTab();
+      const input = el.querySelector<HTMLInputElement>(
+        'input[aria-label="Search settings"]'
+      )!;
+
+      await typeSearch(input, "fnt");
+      expect(input.value).toBe("fnt");
+      expect(useSettingsStore.getState().searchQuery).toBe("");
+
+      await act(async () => {
+        vi.advanceTimersByTime(149);
+      });
+      expect(useSettingsStore.getState().searchQuery).toBe("");
+
+      await act(async () => {
+        vi.advanceTimersByTime(1);
+      });
+      expect(useSettingsStore.getState().searchQuery).toBe("fnt");
+      expect(el.querySelector('[role="list"]')).not.toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("renders only the visible rows for 500+ matching settings", async () => {
+    const sectionId = "virtual-search.results";
+    temporaryRegistrations.push(
+      appSettingsRegistry.register({
+        id: "virtual-search",
+        label: "Virtual Search",
+        scope: "app",
+        sections: [
+          {
+            id: sectionId,
+            label: "Results",
+            settings: Array.from({ length: 520 }, (_, index) => ({
+              key: `option${index}`,
+              type: "boolean" as const,
+              default: false,
+              scope: "app" as const,
+              section: sectionId,
+              label: `Virtual option ${index}`,
+              description: "Bulk virtualization test setting"
+            }))
+          }
+        ]
+      })
+    );
+    await setSearchQuery("virtual option");
+    const el = await renderSettingsTab();
+
+    const list = el.querySelector<HTMLElement>('[role="list"]')!;
+    const renderedRows = list.querySelectorAll("button");
+    const totalRows = Number.parseFloat(list.style.height) / 52;
+    expect(renderedRows.length).toBeGreaterThan(0);
+    expect(totalRows).toBeGreaterThanOrEqual(520);
+    expect(renderedRows.length).toBeLessThan(totalRows);
   });
 
   it("shows the module/section path in results", async () => {

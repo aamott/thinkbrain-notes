@@ -1,5 +1,10 @@
 # Story 5: Settings Fuzzy Search + Virtualization
 
+## Status
+
+Done — settings search now uses ranked fuzzy matching, commits input after a
+150ms debounce, and virtualizes the flat result list.
+
 ## Epic
 
 Part of [Modular Settings System](./pending-modular_settings_system-med-hard.md).
@@ -25,14 +30,14 @@ search feels instant with hundreds of settings.
 
 ## Acceptance Criteria
 
-- [ ] Fuzzy match against label, description, and full key. Results ranked
+- [x] Fuzzy match against label, description, and full key. Results ranked
       best-first.
-- [ ] With 500+ settings, typing stays smooth. Input debounced (≤150ms).
+- [x] With 500+ settings, typing stays smooth. Input debounced (≤150ms).
       Results list virtualized — only visible rows in DOM.
-- [ ] Existing behavior preserved: flat results list, click navigates to
+- [x] Existing behavior preserved: flat results list, click navigates to
       section + highlights setting, Escape clears, "No results" message.
-- [ ] `SettingsSearch.test.tsx` updated for fuzzy matching + virtualization.
-- [ ] `pnpm lint`, `pnpm typecheck`, `pnpm test` all pass.
+- [x] `SettingsSearch.test.tsx` updated for fuzzy matching + virtualization.
+- [x] `pnpm lint`, `pnpm typecheck`, `pnpm test` all pass.
 
 ## File References
 
