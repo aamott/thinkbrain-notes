@@ -161,9 +161,7 @@ Agent responses are markdown formatted text and don't look like they're in a bub
 - **Extension model**: Eventually a true extension, not a built-in. Installable/removable, registered through the extension host's canonical APIs. 
 - **Placement**: right action items menu, icon present, pops out from the right
   by default. Not in the left action bar.
-- **Styling**: Tailwind utilities + `--tn-*` tokens across all AI surfaces.
-  shadcn primitives are Tailwind-based; this is non-negotiable for the chat UI.
-  (Supersedes any prior CSS Modules guidance for AI.)
+- **Styling**: AI surfaces use shared `--tn-*` design tokens.
 - **ACP reference implementation**: during dev and planning, clone
   https://github.com/agentclientprotocol/rust-sdk as a reference — it has
   examples of host/client patterns. Delete the clone when done; do not vendor

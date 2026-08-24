@@ -60,7 +60,6 @@ Implement the approved calendar canvas tab with week/month views, D46 three-dot-
 ## Likely files
 
 - `apps/desktop/src/journal/CalendarTab.tsx` (new; replaces the previously scoped `CalendarPanel.tsx`).
-- `apps/desktop/src/journal/CalendarTab.module.css` (new; CSS Modules, `--tn-*` tokens only).
 - `apps/desktop/src/journal/CalendarTab.test.tsx` (new).
 - `apps/desktop/src/journal/calendarViewModel.ts` and test (new, if state/query mapping merits separation).
 - `apps/desktop/src/extensions/builtins/journalCalendarExtension.tsx` — register D47 local tab kind `calendar` with a factory.
@@ -89,7 +88,6 @@ Do NOT touch `apps/desktop/src/shell/ActivityBar.tsx` for the calendar — no ac
 - [ ] Loading, empty-range, no-workspace, and error states are explicit, distinct, and actionable.
 - [ ] Keyboard model for the grid (roving focus, month paging, activation) is implemented per the product-owner decision recorded in the discovery story; NOT guessed.
 - [ ] Screen-reader announcements for day cells, entry counts, and filter activation are correct.
-- [ ] CSS uses co-located CSS Modules and `--tn-*` tokens; no inline styles.
 - [ ] Desktop tests cover rendering, data states, dot rendering, day-selection filter sharing, and options-strip interaction.
 
 ## Validation

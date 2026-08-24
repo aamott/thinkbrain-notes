@@ -20,7 +20,6 @@ Depends on link target resolution (shipped; see `plans/graph/done-summary.md`).
 - [ ] Empty state is shown when no notes link to the active note.
 - [ ] Unresolved links pointing at the active note's title/alias are still
       counted (so renaming a note to match a dangling link surfaces it).
-- [ ] Panel uses CSS Modules; no inline styles.
 - [ ] Vitest covers the backlink lookup logic in `packages/core`; the desktop
       service wrapper is tested too.
 

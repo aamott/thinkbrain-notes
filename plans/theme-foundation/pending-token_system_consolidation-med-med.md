@@ -26,4 +26,4 @@ include spacing, typography, radius, shadow, and z-index scales.
 - `packages/ui/package.json:13` — `./styles.css` export for the token sheet
 - `apps/desktop/src/main.tsx` — imports `@thinkbrain/ui/styles.css` token sheet.
 - `apps/desktop/src/index.css` — current global app stylesheet to reduce to
-  reset/base rules during the CSS Module migration.
+  reset/base rules during the token consolidation.

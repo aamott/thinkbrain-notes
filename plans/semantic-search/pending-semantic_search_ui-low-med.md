@@ -14,7 +14,6 @@ with keyword hits.
       (current default behaviour unchanged).
 - [ ] Indexing/embedding progress is reported reusing the existing indexing
       status UI pattern.
-- [ ] No inline styles; CSS Modules co-located with the panel.
 - [ ] Disabled gracefully when no workspace is open or embeddings are
       unavailable.
 

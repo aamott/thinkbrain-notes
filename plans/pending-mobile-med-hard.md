@@ -25,8 +25,8 @@ In scope:
 
 - `tauri android init` / `tauri ios init` scaffolding for the Android and iOS
   targets
-- Responsive layout breakpoints using co-located CSS Modules and shared `--tn-*`
-  tokens so the desktop shell adapts to phone screens
+- Responsive layout breakpoints using shared `--tn-*` tokens so the desktop
+  shell adapts to phone screens
 - Touch-friendly navigation (bottom tabs, swipe gestures, 44px touch targets)
 - Mobile capability compatibility — desktop-only Tauri commands (terminal,
   process-spawn) are reported as unavailable on mobile via platform-aware
@@ -160,8 +160,8 @@ use.
 
 ### Responsive layout
 
-Mobile uses CSS media queries and co-located CSS Modules with shared `--tn-*`
-tokens to switch between desktop and mobile layouts within the same shell.
+Mobile switches between desktop and mobile layouts with shared `--tn-*` tokens
+within the same shell.
 Phone-first on small screens (single panel, bottom tab navigation), multi-panel
 on large screens (current desktop layout). There is no separate screen tree or
 navigation stack — the same React components reflow based on viewport width.

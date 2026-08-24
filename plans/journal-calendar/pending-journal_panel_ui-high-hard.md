@@ -96,24 +96,22 @@ Implement the approved journal list/create/open experience as a focused React su
 ## Likely files
 
 - `apps/desktop/src/journal/JournalPanel.tsx` (new).
-- `apps/desktop/src/journal/JournalPanel.module.css` (new; CSS Modules, `--tn-*` tokens only).
 - `apps/desktop/src/journal/JournalPanel.test.tsx` (new).
 - `apps/desktop/src/journal/journalViewModel.ts` and test (new, if state mapping merits separation).
-- `apps/desktop/src/journal/JournalEntryList.tsx` and `JournalEntryList.module.css` (new; virtualized list component).
-- `apps/desktop/src/journal/MetadataWidget.tsx` and `MetadataWidget.module.css` (new; collapsed dateline + expanded form through D44).
+- `apps/desktop/src/journal/JournalEntryList.tsx` (new; virtualized list component).
+- `apps/desktop/src/journal/MetadataWidget.tsx` (new; collapsed dateline + expanded form through D44).
 - `apps/desktop/src/journal/MetadataWidget.test.tsx` (new).
 - `apps/desktop/src/panels/panelRegistry.tsx` (register journal contribution via the extension host; do not bypass registry).
 - `apps/desktop/src/panels/LeftPopout.tsx`, `apps/desktop/src/shell/ActivityBar.tsx`, `apps/desktop/src/shell/DesktopShell.tsx` (minimal context/callback wiring only).
 - Opening tabs uses the existing `openTab(kind, title)` entry point in `apps/desktop/src/shell/DesktopShell.tsx`; `TabContent.tsx` should NOT need editing. Do not fork editor state.
 - `apps/desktop/src/tabs/MarkdownEditor.tsx` and the React slot registry belong to the D44 platform prerequisite; consume them here, do not duplicate them.
 
-**Styling convention — deviation, flagged.** `plans/technical-decisions.md` calls for CSS
-Modules, but the app contains **zero** `.module.css` files: every shell component styles with
-Tailwind utilities, and `apps/desktop/src/index.css` maps those utilities onto the `--tn-*`
-tokens (`--color-sidebar: var(--tn-color-sidebar)`). The journal follows its neighbours, so
-`bg-sidebar` and `text-muted-foreground` resolve to the same tokens a CSS Module would use;
-no colour is hard-coded. Introducing the repo's only CSS Module inside Tailwind-styled panel
-chrome would be the inconsistent choice. **Product owner: say the word and I will convert.**
+**Styling convention — standard.** The app contains **zero** `.module.css` files:
+every shell component styles with Tailwind v4 utility classes, and
+`apps/desktop/src/index.css` maps those utilities onto the `--tn-*` tokens
+(`--color-sidebar: var(--tn-color-sidebar)`). The journal follows its
+neighbours, so `bg-sidebar` and `text-muted-foreground` resolve to the shared
+tokens; no colour is hard-coded.
 
 ## Dependencies
 
@@ -142,7 +140,6 @@ chrome would be the inconsistent choice. **Product owner: say the word and I wil
 - [x] Malformed frontmatter shows a non-blocking notice, as does a date that disagrees with the filename; neither rewrites anything. Edits are a single-key textual change, so key order, comments and quoting survive (`frontmatterEdit.ts`).
 - [ ] All fourteen UI states are handled with the approved mockup's copy and recovery actions; no fake/placeholder data ships.
 - [ ] Keyboard focus order matches the focus spec in the discovery story; screen-reader roles/names/live regions are correct; no hard-coded colors — `--tn-*` tokens only (D31).
-- [ ] CSS uses co-located CSS Modules and `--tn-*` tokens; no inline styles except runtime panel-dimension CSSOM custom properties on the panel root.
 - [ ] Desktop tests cover rendering, service failures, creating/opening notes, dirty-state behavior, panel toggling, filter emphasis, facet values, index-unavailable degradation, and malformed-frontmatter notice.
 - [ ] `DesktopPanelContext` gap (workspace listing / index access) is resolved and documented before the panel factory body is merged.
 
@@ -161,10 +158,9 @@ laid out, because a row's height is not ours to decide: the coarse-pointer
 minimum (D76), the width tiers (D55/D72), the user's font size and the
 platform's scrollbars all move it. Estimates cover the first frame only.
 
-**The spacer divs carry an inline height**, which the CSS acceptance criterion
-below otherwise forbids. It is the same exception that criterion already makes
-for runtime panel dimensions: the height of the rows that are not drawn is a
-number computed per scroll, and there is no class that can express it.
+**The spacer divs carry an inline height.** The height of the rows that are not
+drawn is a number computed per scroll, and there is no class that can express
+it.
 
 **The filter's values are asked for unfiltered, its matches are not.** The
 index computes facet values over the entries a query matched, so asking with the

@@ -68,10 +68,8 @@ Refine journal-owned surfaces for phone-sized viewports using the existing respo
 
 ## Likely files
 
-- `apps/desktop/src/journal/JournalPanel.module.css` (responsive refinements for compact list density and narrow dateline).
-- `apps/desktop/src/journal/JournalPanel.tsx` (only semantic/interaction changes required by D40; no mobile-only screen tree).
+- `apps/desktop/src/journal/JournalPanel.tsx` (responsive refinements for compact list density and narrow dateline; only semantic/interaction changes required by D40; no mobile-only screen tree).
 - `apps/desktop/src/journal/MetadataBottomSheet.tsx` (new; M-2 bottom sheet confined to metadata editing).
-- `apps/desktop/src/journal/MetadataBottomSheet.module.css` (new; CSS Modules, `--tn-*` tokens only).
 - `apps/desktop/src/journal/MetadataBottomSheet.test.tsx` (new).
 - `apps/desktop/src/journal/JournalPanel.mobile.test.tsx` (new or colocated viewport tests).
 - `apps/desktop/src/shell/DesktopShell.tsx`, `panels/LeftPopout.tsx` (reuse existing responsive full-screen behavior; avoid separate screen tree — coordinate with `pending-responsive_layout-med-med.md` owner).
@@ -114,6 +112,6 @@ Do NOT create `apps/mobile/` or add a separate mobile screen tree.
 
 The following stories need from this one:
 
-- `MetadataBottomSheet` component API and CSS Module for reuse if the metadata widget is extended in future slices.
+- `MetadataBottomSheet` component API for reuse if the metadata widget is extended in future slices.
 - `mobile-a11y-checklist.md` for sign-off by the product owner and for reference by the calendar tab story.
 - Confirmation (in test output) that the wide-desktop layout is unchanged, for the calendar tab story to rely on.
