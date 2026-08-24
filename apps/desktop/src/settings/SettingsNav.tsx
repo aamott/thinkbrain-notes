@@ -7,17 +7,11 @@
  * (settings whose scope is `"app"`) and "Workspace" (settings whose scope is
  * `"workspace"`, only when a workspace is open). A mixed-scope module appears
  * in both, projected to the matching settings. Clicking a section sets it as
- * the active nav target.
- * Subsections are collapsible via a chevron toggle (local component state).
- *
- * Search filters all registry definitions by case-insensitive substring match
- * against label, description, and full key. Clicking a result clears the
- * query, navigates to the setting's section, and requests a brief highlight
- * on the matching row in the content area.
+ * the active nav target and closes the narrow-screen navigation overlay.
  */
 
-import { useState } from "react";
-import { ChevronDown, ChevronRight, Search } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ChevronDown, ChevronRight, Search, X } from "lucide-react";
 import type {
   SettingDefinition,
   SettingSection,
@@ -28,18 +22,19 @@ import { appSettingsRegistry, useSettingsStore } from "./settingsStore";
 import { requestSettingHighlight } from "./settingHighlight";
 import { findSectionLabelInSection } from "./sectionUtils";
 
+export interface SettingsNavProps {
+  readonly open: boolean;
+  readonly onClose: () => void;
+}
+
 /**
  * Recursively renders a section and its subsections as tree items.
  *
- * Sections that directly hold settings are clickable nav targets (they set
- * `activeSection`). Sections with subsections render a collapsible group with
- * a chevron; a section can be both a nav target and have subsections.
- *
  * Args:
  *   section: The section to render.
- *   level: Indentation depth (0 = top-level within a module).
+ *   level: Accessibility depth within the module.
  *   activeSection: The currently active section id, or null.
- *   onSelect: Callback to set the active section.
+ *   onSelect: Callback to select a section.
  */
 function SectionTreeItem({
   section,
@@ -56,49 +51,36 @@ function SectionTreeItem({
   const hasSubsections = Boolean(section.subsections && section.subsections.length > 0);
   const hasSettings = Boolean(section.settings && section.settings.length > 0);
   const isActive = activeSection === section.id;
-  const indent = level * 0.75; // rem per nesting level
-
   const Chevron = expanded ? ChevronDown : ChevronRight;
 
   return (
     <li role="none" className="list-none">
       <div
         role="treeitem"
-        // aria-level: module group is level 1, so sections within it start at
-        // level 2 and increase with each nesting depth. `level` is 0-based
-        // within a module, hence `level + 2`.
         aria-level={level + 2}
-        // aria-expanded is only meaningful for items with subsections; omit it
-        // for leaf sections so screen readers don't announce a toggleable
-        // state that doesn't exist.
         aria-expanded={hasSubsections ? expanded : undefined}
         className="flex items-center"
-        style={{ paddingLeft: `${indent}rem` }}
       >
         {hasSubsections && (
           <button
             type="button"
             aria-label={expanded ? "Collapse subsection" : "Expand subsection"}
-            onClick={() => setExpanded((v) => !v)}
-            className="flex size-4 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground"
+            onClick={() => setExpanded((value) => !value)}
+            className="flex size-4 shrink-0 cursor-pointer items-center justify-center rounded-small text-muted-foreground hover:text-foreground max-[760px]:min-h-11 max-[760px]:min-w-11"
           >
-            <Chevron className="size-3" />
+            <Chevron className="size-3" aria-hidden="true" />
           </button>
         )}
         {!hasSubsections && <span className="w-4 shrink-0" />}
 
         <button
           type="button"
-          // Only sections with settings are selectable nav targets.
           disabled={!hasSettings}
           aria-current={isActive ? "true" : undefined}
           onClick={() => hasSettings && onSelect(section.id)}
           className={cn(
-            "flex-1 truncate rounded px-1.5 py-1 text-left text-xs leading-relaxed",
-            "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
-            isActive
-              ? "bg-surface font-medium text-foreground"
-              : "text-muted-foreground hover:bg-accent hover:text-foreground",
+            "min-w-0 flex-1 cursor-pointer truncate rounded-small px-1.5 py-1 text-left text-xs leading-relaxed text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:-outline-offset-2 focus-visible:outline-2 focus-visible:outline-ring max-[760px]:min-h-11",
+            isActive && "bg-surface font-medium text-foreground",
             !hasSettings && "cursor-default opacity-70 hover:bg-transparent"
           )}
         >
@@ -107,11 +89,11 @@ function SectionTreeItem({
       </div>
 
       {hasSubsections && expanded && (
-        <ul role="group" className="m-0 p-0">
-          {section.subsections!.map((sub) => (
+        <ul role="group" className="m-0 ps-3">
+          {section.subsections!.map((subsection) => (
             <SectionTreeItem
-              key={sub.id}
-              section={sub}
+              key={subsection.id}
+              section={subsection}
               level={level + 1}
               activeSection={activeSection}
               onSelect={onSelect}
@@ -123,9 +105,7 @@ function SectionTreeItem({
   );
 }
 
-/**
- * Renders a single module's sections as a subtree.
- */
+/** Renders a single module's sections as a subtree. */
 function ModuleGroup({
   module,
   activeSection,
@@ -137,7 +117,7 @@ function ModuleGroup({
 }) {
   return (
     <li role="treeitem" aria-expanded="true" className="list-none">
-      <div className="px-1 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <div className="p-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
         {module.label}
       </div>
       <ul role="group" className="m-0 p-0">
@@ -155,11 +135,7 @@ function ModuleGroup({
   );
 }
 
-/**
- * Renders a scope group ("Application" / "Workspace"): a treeitem header with
- * the scope label, wrapping a `<ul role="group">` of `ModuleGroup`s. Both
- * scope blocks share this structure; only the label and module list differ.
- */
+/** Renders an Application or Workspace scope group. */
 function ScopeGroup({
   label,
   modules,
@@ -173,7 +149,7 @@ function ScopeGroup({
 }) {
   return (
     <li role="treeitem" aria-expanded="true" className="list-none">
-      <div className="px-1 py-1 text-xs font-semibold uppercase tracking-wide text-foreground">
+      <div className="p-1 text-xs font-semibold uppercase tracking-wider text-foreground">
         {label}
       </div>
       <ul role="group" className="m-0 p-0">
@@ -193,11 +169,6 @@ function ScopeGroup({
 /**
  * Builds the "Module > Section" path label for a setting definition.
  *
- * The module id is the segment before the first dot of the full key. The
- * section label is found by scanning the module's sections for one whose id
- * matches `definition.section`. Falls back to the raw section id if the
- * module or section label can't be resolved.
- *
  * Args:
  *   definition: The setting definition to build a path for.
  *
@@ -214,29 +185,18 @@ function buildSectionPath(definition: SettingDefinition): string {
   return `${moduleLabel} > ${sectionLabel}`;
 }
 
-/**
- * Filters all registry definitions by a case-insensitive substring match
- * against label, description, and full key.
- *
- * Args:
- *   query: The raw search query (will be trimmed and lowercased).
- *
- * Returns:
- *   Matching definitions in registry registration order.
- */
+/** Filters all registry definitions by a case-insensitive substring match. */
 function filterDefinitions(query: string): readonly SettingDefinition[] {
   const trimmed = query.trim().toLowerCase();
   if (trimmed === "") return [];
-  return appSettingsRegistry.getAllDefinitions().filter((def) =>
-    [def.label, def.description, def.key].some((field) => field.toLowerCase().includes(trimmed))
+  return appSettingsRegistry.getAllDefinitions().filter((definition) =>
+    [definition.label, definition.description, definition.key].some((field) =>
+      field.toLowerCase().includes(trimmed)
+    )
   );
 }
 
-/**
- * Renders the flat search results list. Each row shows the setting label and
- * its module/section path. Clicking a row clears the query, navigates to the
- * setting's section, and requests a highlight on the row in the content area.
- */
+/** Renders the flat search results list. */
 function SearchResults({
   results,
   onSelect
@@ -245,27 +205,21 @@ function SearchResults({
   readonly onSelect: (definition: SettingDefinition) => void;
 }) {
   if (results.length === 0) {
-    return (
-      <p className="px-2 py-4 text-center text-xs text-muted-foreground">
-        No results
-      </p>
-    );
+    return <p className="px-2 py-4 text-center text-xs text-muted-foreground">No results</p>;
   }
 
   return (
     <ul role="list" className="m-0 flex flex-col gap-0.5 p-0">
-      {results.map((def) => (
-        <li key={def.key} role="none" className="list-none">
+      {results.map((definition) => (
+        <li key={definition.key} role="none" className="list-none">
           <button
             type="button"
-            onClick={() => onSelect(def)}
-            className="flex w-full flex-col gap-0.5 rounded px-2 py-1.5 text-left hover:bg-accent focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
+            onClick={() => onSelect(definition)}
+            className="flex w-full cursor-pointer flex-col gap-0.5 rounded-small px-2 py-1.5 text-left hover:bg-accent focus-visible:-outline-offset-2 focus-visible:outline-2 focus-visible:outline-ring max-[760px]:min-h-11"
           >
-            <span className="text-xs font-medium text-foreground">
-              {def.label}
-            </span>
-            <span className="text-[10px] text-muted-foreground">
-              {buildSectionPath(def)}
+            <span className="text-xs font-medium text-foreground">{definition.label}</span>
+            <span className="text-[0.625rem] text-muted-foreground">
+              {buildSectionPath(definition)}
             </span>
           </button>
         </li>
@@ -275,33 +229,35 @@ function SearchResults({
 }
 
 /**
- * The settings navigation tree with search.
+ * Settings navigation tree and narrow-screen overlay.
  *
- * Reads `activeSection`, `searchQuery`, `workspaceValues`, `setActiveSection`,
- * and `setSearchQuery` from the settings store. When `searchQuery` is non-empty
- * (after trim), the tree is replaced by a flat results list. The "Workspace"
- * group only renders when `workspaceValues` is non-null (i.e. a workspace is
- * open). Modules come from `getModulesByScope`, which projects mixed-scope
- * modules onto the matching settings.
+ * Args:
+ *   open: Whether the responsive overlay is open.
+ *   onClose: Closes the overlay and restores focus to its trigger.
  */
-export function SettingsNav() {
-  const activeSection = useSettingsStore((s) => s.activeSection);
-  const workspaceValues = useSettingsStore((s) => s.workspaceValues);
-  const setActiveSection = useSettingsStore((s) => s.setActiveSection);
-  const searchQuery = useSettingsStore((s) => s.searchQuery);
-  const setSearchQuery = useSettingsStore((s) => s.setSearchQuery);
+export function SettingsNav({ open, onClose }: SettingsNavProps) {
+  const activeSection = useSettingsStore((state) => state.activeSection);
+  const workspaceValues = useSettingsStore((state) => state.workspaceValues);
+  const setActiveSection = useSettingsStore((state) => state.setActiveSection);
+  const searchQuery = useSettingsStore((state) => state.searchQuery);
+  const setSearchQuery = useSettingsStore((state) => state.setSearchQuery);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (open) searchInputRef.current?.focus();
+  }, [open]);
 
   const appModules = appSettingsRegistry.getModulesByScope("app");
   const workspaceModules = appSettingsRegistry.getModulesByScope("workspace");
-
-  const trimmedQuery = searchQuery.trim();
-  const isSearching = trimmedQuery !== "";
+  const isSearching = searchQuery.trim() !== "";
   const results = isSearching ? filterDefinitions(searchQuery) : [];
 
-  /**
-   * Handles a search result click: clears the query, navigates to the
-   * setting's section, and requests a highlight on the row.
-   */
+  /** Selects a section and dismisses the responsive overlay when necessary. */
+  function handleSectionSelect(id: string): void {
+    setActiveSection(id);
+  }
+
+  /** Selects and highlights a search result, then dismisses the overlay. */
   function handleResultSelect(definition: SettingDefinition): void {
     setSearchQuery("");
     setActiveSection(definition.section);
@@ -310,54 +266,62 @@ export function SettingsNav() {
 
   return (
     <nav
-      className="flex min-h-0 flex-1 flex-col overflow-y-auto p-2"
+      id="settings-navigation"
+      className={cn(
+        "flex min-h-0 w-56 shrink-0 flex-col overflow-y-auto border-r border-border bg-sidebar p-2 text-sidebar-foreground max-[760px]:invisible max-[760px]:pointer-events-none max-[760px]:absolute max-[760px]:inset-y-0 max-[760px]:start-0 max-[760px]:z-30 max-[760px]:w-[min(15rem,calc(100%-2rem))] max-[760px]:-translate-x-full max-[760px]:shadow-panel max-[760px]:transition-[transform_180ms_ease,visibility_0s_linear_180ms]",
+        open && "max-[760px]:visible max-[760px]:pointer-events-auto max-[760px]:translate-x-0 max-[760px]:delay-0"
+      )}
       aria-label="Settings sections"
+      data-open={open ? "true" : "false"}
     >
-      {/* Search input: sticky at the top so it stays visible while results
-          scroll. bg-surface prevents results from bleeding through. */}
-      <div className="sticky top-0 z-10 -m-2 mb-1 bg-surface p-2">
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+      <div className="sticky -top-2 z-10 -mx-2 -mt-2 mb-1 flex items-center gap-1 bg-surface p-2">
+        <div className="relative flex-1">
+          <Search
+            className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
+            aria-hidden="true"
+          />
           <input
+            ref={searchInputRef}
             type="search"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Escape") {
-                setSearchQuery("");
-              }
+            onChange={(event) => setSearchQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") setSearchQuery("");
             }}
             placeholder="Search settings…"
             aria-label="Search settings"
-            className={cn(
-              "w-full rounded-small border border-border bg-surface py-1.5 pl-7 pr-2 text-xs text-foreground",
-              "placeholder:text-muted-foreground",
-              "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
-            )}
+            className="w-full rounded-small border border-border bg-surface py-1.5 pr-2 pl-7 text-xs text-foreground placeholder:text-muted-foreground focus-visible:-outline-offset-2 focus-visible:outline-2 focus-visible:outline-ring max-[760px]:min-h-11"
           />
         </div>
+        <button
+          type="button"
+          className="hidden cursor-pointer items-center justify-center rounded-small text-muted-foreground hover:text-foreground max-[760px]:flex max-[760px]:size-11"
+          aria-label="Close settings navigation"
+          onClick={onClose}
+        >
+          <X aria-hidden="true" />
+        </button>
       </div>
 
       {isSearching ? (
         <SearchResults results={results} onSelect={handleResultSelect} />
       ) : (
-      <ul role="tree" className="m-0 flex flex-col gap-1 p-0">
-        <ScopeGroup
-          label="Application"
-          modules={appModules}
-          activeSection={activeSection}
-          onSelect={setActiveSection}
-        />
-
-        {workspaceValues !== null && workspaceModules.length > 0 && (
+        <ul role="tree" className="m-0 flex flex-col gap-1 p-0">
           <ScopeGroup
-            label="Workspace"
-            modules={workspaceModules}
+            label="Application"
+            modules={appModules}
             activeSection={activeSection}
-            onSelect={setActiveSection}
+            onSelect={handleSectionSelect}
           />
-        )}
-      </ul>
+          {workspaceValues !== null && workspaceModules.length > 0 && (
+            <ScopeGroup
+              label="Workspace"
+              modules={workspaceModules}
+              activeSection={activeSection}
+              onSelect={handleSectionSelect}
+            />
+          )}
+        </ul>
       )}
     </nav>
   );

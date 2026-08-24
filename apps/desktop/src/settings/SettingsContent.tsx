@@ -22,8 +22,8 @@ import {
 } from "react";
 import { RotateCcw } from "lucide-react";
 import type { SettingDefinition, SettingsDiagnostic } from "@thinkbrain/core";
-import { Unavailable } from "../shell/Unavailable";
 import { cn } from "../lib/utils";
+import { Unavailable } from "../shell/Unavailable";
 import { appSettingsRegistry, useSettingsStore } from "./settingsStore";
 import { resolveEffectiveValue } from "./settingsHelpers";
 import { getControlForDefinition } from "./controlRegistry";
@@ -60,25 +60,30 @@ function SettingRow({
   return (
     <div
       data-setting-key={definition.key}
+      data-highlighted={highlighted ? "true" : undefined}
       className={cn(
-        "flex flex-col gap-1 py-2.5 rounded-small transition-colors",
-        highlighted && "ring-2 ring-ring bg-accent"
+        "grid grid-cols-[minmax(0,1fr)_auto] gap-4 rounded-small border-b border-border py-2.5 transition-[background-color,box-shadow] duration-150 max-[760px]:grid-cols-[minmax(0,1fr)]",
+        highlighted && "bg-accent ring-2 ring-ring"
       )}
     >
-      <label className="text-sm font-semibold text-foreground" htmlFor={definition.key}>
-        {definition.label}
-      </label>
-      {definition.description && (
-        <p className="text-xs leading-relaxed text-muted-foreground">{definition.description}</p>
-      )}
-      <div className="mt-1">
+      <div className="flex flex-col gap-1">
+        <label className="text-sm font-semibold text-foreground" htmlFor={definition.key}>
+          {definition.label}
+        </label>
+        {definition.description && (
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            {definition.description}
+          </p>
+        )}
+      </div>
+      <div className="mt-1 self-center justify-self-end max-[760px]:w-full max-[760px]:justify-self-stretch max-[760px]:[&_button]:min-h-11 max-[760px]:[&_input]:min-h-11 max-[760px]:[&_select]:min-h-11 max-[760px]:[&_input:not([type=number])]:w-full max-[760px]:[&_input:not([type=number])]:max-w-none max-[760px]:[&_select]:w-full max-[760px]:[&_select]:max-w-none">
         {/* Use createElement to render the dynamically-resolved control.
             JSX <ControlComponent /> would trip the react-hooks/static-components
             lint rule which flags component "creation" during render. */}
         {createElement(ControlComponent, { definition, value, onChange })}
       </div>
       {diagnostics.length > 0 && (
-        <div className="mt-1 flex flex-col gap-0.5">
+        <div className="col-span-full mt-1 flex flex-col gap-0.5 max-[760px]:col-span-1">
           {diagnostics.map((diagnostic, index) => (
             <p
               key={`${diagnostic.code}-${index}`}
@@ -177,8 +182,8 @@ export function SettingsContent() {
   };
 
   return (
-    <div ref={containerRef} className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-      <div className="mx-auto w-full max-w-160 px-6 py-4">
+    <div ref={containerRef} className="flex min-h-0 flex-grow flex-col overflow-y-auto">
+      <div className="mx-auto w-full max-w-160 px-6 py-4 max-[760px]:max-w-none max-[760px]:pt-4 max-[760px]:pr-4 max-[760px]:pb-8 max-[760px]:pl-15">
         <div className="mb-2 flex items-center gap-2">
           <h2 className="text-base font-semibold text-foreground">{sectionLabel}</h2>
           <button
@@ -188,20 +193,16 @@ export function SettingsContent() {
             title="Reset this section to defaults"
             aria-label="Reset this section to defaults"
             className={cn(
-              "flex items-center gap-1 rounded-small px-1.5 py-0.5 text-xs",
-              "text-muted-foreground bg-surface cursor-pointer",
-              "hover:text-foreground hover:bg-accent transition-colors",
+              "flex cursor-pointer items-center gap-1 rounded-small border-0 bg-surface px-1.5 py-0.5 text-xs text-muted-foreground transition-colors duration-150 enabled:hover:bg-accent enabled:hover:text-foreground focus-visible:-outline-offset-2 focus-visible:outline-2 focus-visible:outline-ring max-[760px]:min-h-11",
               !hasStagedForSection && "cursor-not-allowed opacity-40"
             )}
           >
-            <RotateCcw className="size-3" aria-hidden="true" />
+            <RotateCcw className="size-3 flex-none" aria-hidden="true" />
             <span>Reset</span>
           </button>
         </div>
         {allDefinitions.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            This section has no settings yet.
-          </p>
+          <p className="text-sm text-muted-foreground">This section has no settings yet.</p>
         ) : (
           <>
             {/* Unified theme picker + export/import toolbar — only for the
@@ -217,26 +218,26 @@ export function SettingsContent() {
                 <ThemeToolbar />
               </>
             )}
-            <div className="divide-y divide-border">
-            {definitions.map((definition) => (
-              <SettingRow
-                key={definition.key}
-                definition={definition}
-                value={resolveEffectiveValue(
-                  definition.key,
-                  stagedChanges,
-                  appValues,
-                  workspaceValues,
-                  definition
-                )}
-                onChange={(value) => stageChange(definition.key, value)}
-                diagnostics={validationDiagnostics.filter(
-                  (d) => d.path === definition.key
-                )}
-                highlighted={highlightKey === definition.key}
-              />
-            ))}
-          </div>
+            <div className="flex flex-col">
+              {definitions.map((definition) => (
+                <SettingRow
+                  key={definition.key}
+                  definition={definition}
+                  value={resolveEffectiveValue(
+                    definition.key,
+                    stagedChanges,
+                    appValues,
+                    workspaceValues,
+                    definition
+                  )}
+                  onChange={(value) => stageChange(definition.key, value)}
+                  diagnostics={validationDiagnostics.filter(
+                    (d) => d.path === definition.key
+                  )}
+                  highlighted={highlightKey === definition.key}
+                />
+              ))}
+            </div>
           </>
         )}
       </div>

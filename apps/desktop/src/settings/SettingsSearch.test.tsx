@@ -206,10 +206,10 @@ describe("SettingsSearch", () => {
         );
       });
 
-      // The matching row should have the highlight class.
+      // The matching row should expose its highlighted state.
       const highlightedRow = el.querySelector('[data-setting-key="editor.fontSize"]');
       expect(highlightedRow).not.toBeNull();
-      expect(highlightedRow?.className).toContain("ring-ring");
+      expect(highlightedRow?.getAttribute("data-highlighted")).toBe("true");
 
       // Advance fake timers past the highlight duration; it should clear.
       await act(async () => {
@@ -217,7 +217,7 @@ describe("SettingsSearch", () => {
       });
 
       const rowAfter = el.querySelector('[data-setting-key="editor.fontSize"]');
-      expect(rowAfter?.className).not.toContain("ring-ring");
+      expect(rowAfter?.hasAttribute("data-highlighted")).toBe(false);
     } finally {
       vi.useRealTimers();
     }

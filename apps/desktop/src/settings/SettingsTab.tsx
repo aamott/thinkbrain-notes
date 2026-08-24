@@ -1,37 +1,56 @@
 /**
  * Main settings tab component.
  *
- * Two-pane layout: left nav (`SettingsNav`) + right content area
- * (`SettingsContent`). Both panes scroll independently. On mount (inside
- * Tauri), loads settings via the store using the current workspace root path
- * so the "Workspace" nav group appears when a workspace is open.
+ * Responsive settings layout with a header, navigation drawer, and content
+ * area. On mount (inside Tauri), loads settings via the store using the current
+ * workspace root path so the "Workspace" nav group appears when one is open.
  *
  * A ref guards against double-loading in React StrictMode (which mounts
  * effects twice in development). The load error, if any, renders as a banner.
  */
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Menu } from "lucide-react";
 import { isTauri } from "@tauri-apps/api/core";
+import { cn } from "../lib/utils";
 import { workspaceDesktopApi } from "../workspace/workspaceAdapter";
 import { getExtensionBootstrap } from "../extensions/bootstrapRef";
 import { getWorkspaceBridge } from "../extensions/workspaceBridge";
 import { useSettingsStore } from "./settingsStore";
 import { SettingsNav } from "./SettingsNav";
 import { SettingsContent } from "./SettingsContent";
-import { SettingsSaveBar } from "./SettingsSaveBar";
+import { SettingsHeaderBar } from "./SettingsHeaderBar";
 
 /**
  * The settings tab surface.
  *
- * Fills its container (TabContent wraps it). The left nav is a fixed-width
- * column; the content area is `flex-1`. Both use `min-h-0` so flex children
- * can shrink and scroll independently.
+ * Fills its container and switches the navigation from a fixed desktop column
+ * to a modal drawer with focus restoration on narrow screens.
  */
 export function SettingsTab() {
   const loadSettings = useSettingsStore((s) => s.loadSettings);
   const loadError = useSettingsStore((s) => s.loadError);
+  const [navOpen, setNavOpen] = useState(false);
+  const hamburgerRef = useRef<HTMLButtonElement | null>(null);
   // Guard against double-load in React StrictMode (dev double-mounts effects).
   const loadedRef = useRef(false);
+
+  const openNav = useCallback((): void => setNavOpen(true), []);
+  const closeNavAndRestoreFocus = useCallback((): void => {
+    setNavOpen(false);
+    requestAnimationFrame(() => hamburgerRef.current?.focus());
+  }, []);
+
+  useEffect(() => {
+    if (!navOpen) return;
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      closeNavAndRestoreFocus();
+    };
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => window.removeEventListener("keydown", handleKeyDown, true);
+  }, [navOpen, closeNavAndRestoreFocus]);
 
   // An extension registers its settings schema when it activates, and most
   // activate lazily — so before this, a journal you had not opened yet simply
@@ -73,24 +92,41 @@ export function SettingsTab() {
     <div className="flex h-full min-h-0 flex-col bg-background text-foreground">
       {loadError && (
         <div
+          className="border-b border-destructive bg-[color-mix(in_srgb,var(--tn-color-destructive)_10%,transparent)] px-4 py-2 text-sm text-destructive"
           role="alert"
-          className="border-b border-destructive bg-destructive/10 px-4 py-2 text-sm text-destructive"
         >
           {loadError}
         </div>
       )}
-      <div className="flex min-h-0 flex-1">
-        {/* Left nav: fixed-width, independently scrollable. */}
-        <div className="w-56 shrink-0 border-r border-border bg-sidebar">
-          <SettingsNav />
-        </div>
-        {/* Right content: fills remaining space, independently scrollable.
-            The content area is flex-1 (scrolls); the save bar is sticky at the
-            bottom and always visible within the right pane. */}
-        <div className="flex min-h-0 flex-1 flex-col">
+      <SettingsHeaderBar />
+      <div className="relative flex min-h-0 min-w-0 flex-1">
+        {navOpen && (
+          <button
+            type="button"
+            className="absolute inset-0 z-20 cursor-pointer border-0 bg-overlay p-0"
+            aria-label="Close settings navigation"
+            data-testid="settings-navigation-scrim"
+            onClick={closeNavAndRestoreFocus}
+          />
+        )}
+        <SettingsNav open={navOpen} onClose={closeNavAndRestoreFocus} />
+        <main className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-editor">
+          <button
+            ref={hamburgerRef}
+            type="button"
+            className={cn(
+              "hidden max-[760px]:absolute max-[760px]:start-2 max-[760px]:top-2 max-[760px]:z-20 max-[760px]:size-9 max-[760px]:cursor-pointer max-[760px]:place-items-center max-[760px]:text-muted-foreground max-[760px]:opacity-100 max-[760px]:transition-opacity max-[760px]:duration-150 max-[760px]:grid",
+              navOpen && "max-[760px]:pointer-events-none max-[760px]:opacity-0"
+            )}
+            aria-label="Open settings navigation"
+            aria-controls="settings-navigation"
+            aria-expanded={navOpen}
+            onClick={openNav}
+          >
+            <Menu aria-hidden="true" />
+          </button>
           <SettingsContent />
-          <SettingsSaveBar />
-        </div>
+        </main>
       </div>
     </div>
   );

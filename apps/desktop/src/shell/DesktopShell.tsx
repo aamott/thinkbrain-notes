@@ -405,16 +405,20 @@ export function DesktopShell() {
 
         <section className="flex flex-col flex-auto min-w-60" aria-label="Note workspace">
           <article className="flex flex-1 flex-col min-h-0 overflow-auto bg-editor">
-            <WorkspaceHeaderBar
-              workspaceName={workspaceName}
-              rootPath={restoredWorkspacePath}
-              activeTab={activeTab}
-              isDirty={Boolean(activeTab?.isDirty)}
-              isSaving={activeDocument?.phase === "saving"}
-              onSave={() => {
-                if (activeTab) void saveDocument(activeTab);
-              }}
-            />
+            {/* Settings tabs render their own SettingsHeaderBar inside SettingsTab,
+                so hide the shared WorkspaceHeaderBar to avoid stacking two header bars. */}
+            {activeTab?.kind !== "settings" && (
+              <WorkspaceHeaderBar
+                workspaceName={workspaceName}
+                rootPath={restoredWorkspacePath}
+                activeTab={activeTab}
+                isDirty={Boolean(activeTab?.isDirty)}
+                isSaving={activeDocument?.phase === "saving"}
+                onSave={() => {
+                  if (activeTab) void saveDocument(activeTab);
+                }}
+              />
+            )}
             {activeTab && conflicts.has(activeTab.id) && (
               <StaleDocumentBanner
                 fileName={activeTab.title}

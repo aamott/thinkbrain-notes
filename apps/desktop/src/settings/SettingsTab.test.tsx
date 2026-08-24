@@ -111,22 +111,98 @@ async function click(element: Element): Promise<void> {
 }
 
 describe("SettingsTab", () => {
-  it("renders a two-pane layout with Application group and built-in module sections", async () => {
+  it("renders the header, navigation, and content layout without the old save bar", async () => {
     const el = await renderSettingsTab();
 
-    // The nav tree exists.
-    const tree = el.querySelector('[role="tree"]');
-    expect(tree).not.toBeNull();
+    expect(el.querySelector('[data-testid="settings-header-bar"]')).not.toBeNull();
 
-    // "Application" top-level group is present.
+    const nav = el.querySelector<HTMLElement>("#settings-navigation");
+    expect(nav).not.toBeNull();
+    expect(nav?.querySelector('[role="tree"]')).not.toBeNull();
     expect(el.textContent).toContain("Application");
-
-    // Built-in modules' section labels appear in the nav.
     expect(el.textContent).toContain("Theme");
     expect(el.textContent).toContain("Display");
-
-    // "Workspace" group is NOT present when no workspace is open.
     expect(el.textContent).not.toContain("Workspace");
+    expect(el.querySelector("main")).not.toBeNull();
+    expect(el.querySelectorAll('[role="toolbar"][aria-label="Settings actions"]')).toHaveLength(1);
+    expect(el.querySelector('[data-testid="settings-save-bar"]')).toBeNull();
+  });
+
+  it("gives the hamburger button the navigation ARIA relationship", async () => {
+    const el = await renderSettingsTab();
+    const hamburger = el.querySelector<HTMLButtonElement>(
+      'button[aria-label="Open settings navigation"]'
+    );
+
+    expect(hamburger).not.toBeNull();
+    expect(hamburger?.getAttribute("aria-controls")).toBe("settings-navigation");
+    expect(hamburger?.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("opens the navigation and scrim from the hamburger button", async () => {
+    const el = await renderSettingsTab();
+    const hamburger = el.querySelector<HTMLButtonElement>(
+      'button[aria-label="Open settings navigation"]'
+    )!;
+
+    await click(hamburger);
+
+    expect(hamburger.getAttribute("aria-expanded")).toBe("true");
+    expect(el.querySelector("#settings-navigation")?.getAttribute("data-open")).toBe("true");
+    expect(el.querySelector('[data-testid="settings-navigation-scrim"]')).not.toBeNull();
+  });
+
+  it("closes the navigation from its close button", async () => {
+    const el = await renderSettingsTab();
+    await click(el.querySelector('button[aria-label="Open settings navigation"]')!);
+    const nav = el.querySelector<HTMLElement>("#settings-navigation")!;
+    const closeButton = nav.querySelector<HTMLButtonElement>(
+      'button[aria-label="Close settings navigation"]'
+    )!;
+
+    await click(closeButton);
+
+    expect(nav.getAttribute("data-open")).toBe("false");
+    expect(el.querySelector('[data-testid="settings-navigation-scrim"]')).toBeNull();
+  });
+
+  it("closes the navigation from the scrim", async () => {
+    const el = await renderSettingsTab();
+    await click(el.querySelector('button[aria-label="Open settings navigation"]')!);
+    const scrim = el.querySelector<HTMLButtonElement>(
+      '[data-testid="settings-navigation-scrim"]'
+    )!;
+
+    await click(scrim);
+
+    expect(el.querySelector("#settings-navigation")?.getAttribute("data-open")).toBe("false");
+    expect(el.querySelector('[data-testid="settings-navigation-scrim"]')).toBeNull();
+  });
+
+  it("closes the navigation when Escape is pressed", async () => {
+    const el = await renderSettingsTab();
+    await click(el.querySelector('button[aria-label="Open settings navigation"]')!);
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+
+    expect(el.querySelector("#settings-navigation")?.getAttribute("data-open")).toBe("false");
+    expect(el.querySelector('[data-testid="settings-navigation-scrim"]')).toBeNull();
+  });
+
+  it("navigates to the selected section without closing the overlay", async () => {
+    const el = await renderSettingsTab();
+    await click(el.querySelector('button[aria-label="Open settings navigation"]')!);
+    const displayButton = Array.from(el.querySelectorAll<HTMLButtonElement>("button")).find(
+      (button) => button.textContent === "Display"
+    )!;
+
+    await click(displayButton);
+
+    expect(useSettingsStore.getState().activeSection).toBe("editor.display");
+    // Nav stays open so the user can browse multiple sections.
+    expect(el.querySelector("#settings-navigation")?.getAttribute("data-open")).toBe("true");
   });
 
   it("shows the Workspace group when a workspace is open", async () => {

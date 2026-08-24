@@ -210,7 +210,7 @@ export function ThemePicker() {
  * Theme" opens a `.tbtheme.json` file, parses it, and stages the path in
  * `appearance.themeFile` so the ThemeProvider picks it up. Both actions show a
  * transient status message (cleared after a few seconds), mirroring the
- * SettingsSaveBar pattern.
+ * SettingsHeaderBar pattern.
  *
  * The buttons only render when the active section is `appearance.theme`; they
  * are always enabled (export never needs staged state, and import stages its
