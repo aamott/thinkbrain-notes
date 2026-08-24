@@ -1,7 +1,7 @@
 ---
 name: trivial
 description: Lowest difficulty tier. Quick tasks and targeted lookups. E.g. "Is this feature implemented?". Uses a fast, inexpensive model.
-model: swe-1-7
+model: glm-5.2
 max-nesting: 2
 ---
 

@@ -1,5 +1,16 @@
 <!DOCTYPE html>
 <html lang="en">
+<!--
+  GUIDE TO THIS FILE (Source of Truth):
+  This is the complete mockup for ThinkBrain Notes Mobile UI Architecture.
+  
+  Key Features to review:
+  1. Universal Top Header: Look for the slot architecture (Left: Menu/Back, Center: Title, Right: Tab Badge & 3-dots).
+  2. Bottom Nav Hub: Provides global access to Home, Search, New Note, Tabs, and Menu.
+  3. Action Sheets & Drawers: Demonstrates transform of desktop sidebars into mobile overlays (Hamburger drawer & Bottom drag-sheet).
+  
+  Note: Converted entirely to Tailwind CSS v4 with extracted components for brevity.
+-->
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -7,1506 +18,502 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <style>
-    :root {
-      --tn-bg: #0c0e14;
-      --tn-surface: #141721;
-      --tn-surface-elevated: #1b1f2e;
-      --tn-card: #181b26;
-      --tn-border: #262b3d;
-      --tn-border-subtle: rgba(255, 255, 255, 0.08);
-      --tn-primary: #8b5cf6;
-      --tn-primary-glow: rgba(139, 92, 246, 0.35);
-      --tn-primary-hover: #7c3aed;
-      --tn-primary-fg: #ffffff;
-      --tn-fg: #f1f5f9;
-      --tn-fg-muted: #94a3b8;
-      --tn-fg-subtle: #64748b;
-      --tn-accent: #a78bfa;
-      --tn-danger: #ef4444;
-      --tn-success: #10b981;
-      --tn-warning: #f59e0b;
-      --tn-radius: 12px;
-      --tn-radius-sm: 8px;
-      --tn-radius-lg: 20px;
-    }
-
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      -webkit-tap-highlight-color: transparent;
+  
+  <!-- Tailwind v4 CDN -->
+  <script src="https://unpkg.com/@tailwindcss/browser@4"></script>
+  
+  <style type="text/tailwindcss">
+    @theme {
+      --color-tn-bg: #0c0e14;
+      --color-tn-surface: #141721;
+      --color-tn-surface-elevated: #1b1f2e;
+      --color-tn-card: #181b26;
+      --color-tn-border: #262b3d;
+      --color-tn-border-subtle: rgba(255, 255, 255, 0.08);
+      --color-tn-primary: #8b5cf6;
+      --color-tn-primary-glow: rgba(139, 92, 246, 0.35);
+      --color-tn-primary-hover: #7c3aed;
+      --color-tn-primary-fg: #ffffff;
+      --color-tn-fg: #f1f5f9;
+      --color-tn-fg-muted: #94a3b8;
+      --color-tn-fg-subtle: #64748b;
+      --color-tn-accent: #a78bfa;
+      --color-tn-danger: #ef4444;
+      --color-tn-success: #10b981;
+      --color-tn-warning: #f59e0b;
+      
+      --font-sans: "Inter", sans-serif;
+      --font-mono: "JetBrains Mono", monospace;
     }
 
     body {
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-      background: var(--tn-bg);
-      color: var(--tn-fg);
-      min-height: 100vh;
-      padding: 2rem 1.5rem 4rem;
-      overflow-x: hidden;
-      background-image: 
-        radial-gradient(circle at 15% 10%, rgba(139, 92, 246, 0.08) 0%, transparent 45%),
-        radial-gradient(circle at 85% 80%, rgba(59, 130, 246, 0.06) 0%, transparent 50%);
-    }
-
-    /* Page Header */
-    .header-banner {
-      max-width: 1300px;
-      margin: 0 auto 2.5rem;
-      display: flex;
-      flex-direction: column;
-      gap: 0.75rem;
-    }
-
-    .brand-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-      background: rgba(139, 92, 246, 0.12);
-      border: 1px solid rgba(139, 92, 246, 0.3);
-      padding: 0.35rem 0.85rem;
-      border-radius: 9999px;
-      width: fit-content;
-      font-size: 0.8rem;
-      font-weight: 600;
-      color: var(--tn-accent);
-    }
-
-    .brand-badge .logo-icon {
-      width: 14px;
-      height: 14px;
-      background: var(--tn-primary);
-      border-radius: 3px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 9px;
-      font-weight: 800;
-      color: white;
-    }
-
-    h1 {
-      font-size: 2.2rem;
-      font-weight: 800;
-      letter-spacing: -0.03em;
-      background: linear-gradient(135deg, #ffffff 40%, #a78bfa 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-
-    .subtitle {
-      color: var(--tn-fg-muted);
-      font-size: 1.05rem;
-      max-width: 800px;
-      line-height: 1.6;
-    }
-
-    /* View Controls */
-    .view-toolbar {
-      max-width: 1300px;
-      margin: 0 auto 2rem;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 1rem;
-      flex-wrap: wrap;
-      background: var(--tn-surface);
-      border: 1px solid var(--tn-border);
-      padding: 0.75rem 1.25rem;
-      border-radius: var(--tn-radius);
-    }
-
-    .tab-pills {
-      display: flex;
-      gap: 0.5rem;
-      flex-wrap: wrap;
-    }
-
-    .tab-pill {
-      background: transparent;
-      border: 1px solid transparent;
-      color: var(--tn-fg-muted);
-      padding: 0.5rem 1rem;
-      border-radius: var(--tn-radius-sm);
-      font-size: 0.85rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      display: flex;
-      align-items: center;
-      gap: 0.45rem;
-    }
-
-    .tab-pill:hover {
-      color: var(--tn-fg);
-      background: rgba(255, 255, 255, 0.05);
-    }
-
-    .tab-pill.active {
-      background: var(--tn-primary);
-      color: white;
-      box-shadow: 0 4px 14px var(--tn-primary-glow);
-    }
-
-    .legend-chips {
-      display: flex;
-      gap: 1rem;
-      font-size: 0.8rem;
-      color: var(--tn-fg-subtle);
-    }
-
-    .legend-chip {
-      display: flex;
-      align-items: center;
-      gap: 0.35rem;
-    }
-
-    .legend-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-    }
-
-    /* Phone Showcase Grid */
-    .showcase-grid {
-      max-width: 1400px;
-      margin: 0 auto;
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-      gap: 2.5rem 2rem;
-      align-items: start;
-    }
-
-    /* Individual Phone Mockup Frame */
-    .phone-card {
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
-      align-items: center;
-    }
-
-    .phone-meta {
-      text-align: center;
-      width: 100%;
-    }
-
-    .phone-meta h3 {
-      font-size: 1.15rem;
-      font-weight: 700;
-      color: var(--tn-fg);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 0.5rem;
-    }
-
-    .phone-meta p {
-      font-size: 0.85rem;
-      color: var(--tn-fg-muted);
-      margin-top: 0.25rem;
-      line-height: 1.4;
-    }
-
-    .phone-meta .tag {
-      font-size: 0.7rem;
-      padding: 0.15rem 0.5rem;
-      border-radius: 4px;
-      background: rgba(139, 92, 246, 0.2);
-      color: var(--tn-accent);
-      font-weight: 600;
-    }
-
-    .phone-frame {
-      width: 360px;
-      height: 720px;
-      background: #090a0f;
-      border-radius: 44px;
-      border: 6px solid #282c3c;
-      box-shadow: 
-        0 25px 50px -12px rgba(0, 0, 0, 0.8),
-        0 0 0 1px rgba(255, 255, 255, 0.08),
-        inset 0 0 0 2px #10121a;
-      position: relative;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-      user-select: none;
-    }
-
-    /* Dynamic Island / Status Notch */
-    .phone-notch {
-      position: absolute;
-      top: 10px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 100px;
-      height: 24px;
-      background: #000000;
-      border-radius: 20px;
-      z-index: 100;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 8px;
-    }
-
-    .notch-camera {
-      width: 10px;
-      height: 10px;
-      background: #111524;
-      border-radius: 50%;
-    }
-
-    .notch-sensor {
-      width: 6px;
-      height: 6px;
-      background: #0d0f17;
-      border-radius: 50%;
-    }
-
-    /* System Status Bar */
-    .system-status-bar {
-      height: 44px;
-      padding: 12px 20px 0;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 0.75rem;
-      font-weight: 600;
-      color: var(--tn-fg);
-      z-index: 90;
-      flex-shrink: 0;
-    }
-
-    .status-icons {
-      display: flex;
-      gap: 0.35rem;
-      align-items: center;
-    }
-
-    /* App View Container */
-    .app-screen {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      position: relative;
-      overflow: hidden;
-      background: #0d0f16;
-    }
-
-    /* --- Shell Chrome Components --- */
-
-    /* 1. Mobile Top App Bar */
-    .mobile-header {
-      height: 48px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 12px;
-      background: var(--tn-surface);
-      border-bottom: 1px solid var(--tn-border);
-      flex-shrink: 0;
-      z-index: 40;
-    }
-
-    .header-btn {
-      width: 36px;
-      height: 36px;
-      border-radius: var(--tn-radius-sm);
-      background: transparent;
-      border: none;
-      color: var(--tn-fg);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      position: relative;
-      transition: background 0.15s ease;
-    }
-
-    .header-btn:hover {
-      background: rgba(255, 255, 255, 0.08);
-    }
-
-    .header-btn .badge-dot {
-      position: absolute;
-      top: 6px;
-      right: 6px;
-      width: 7px;
-      height: 7px;
-      background: var(--tn-danger);
-      border-radius: 50%;
-      border: 1.5px solid var(--tn-surface);
-    }
-
-    .header-title-container {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      max-width: 190px;
-      cursor: pointer;
-      flex: 1;
-    }
-
-    .header-title {
-      font-size: 0.85rem;
-      font-weight: 600;
-      color: var(--tn-fg);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
-
-    .header-title svg {
-      color: var(--tn-fg-subtle);
-    }
-
-    .header-subpath {
-      font-size: 0.65rem;
-      color: var(--tn-fg-subtle);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .chrome-badge {
-      width: 26px;
-      height: 26px;
-      border: 2px solid var(--tn-border);
-      border-radius: 6px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 0.75rem;
-      font-weight: 800;
-      color: var(--tn-fg);
-    }
-
-    /* 2. Workspace Breadcrumb Sub-Header */
-    .workspace-sub-bar {
-      height: 28px;
-      background: #11131c;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 14px;
-      font-size: 0.7rem;
-      color: var(--tn-fg-muted);
-      flex-shrink: 0;
-    }
-
-    .breadcrumb-path {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .git-badge {
-      display: flex;
-      align-items: center;
-      gap: 3px;
-      font-size: 0.65rem;
-      color: var(--tn-accent);
-      background: rgba(139, 92, 246, 0.1);
-      padding: 1px 5px;
-      border-radius: 4px;
-    }
-
-    /* 3. Note Content Body */
-    .note-body {
-      flex: 1;
-      overflow-y: auto;
-      padding: 16px 16px 80px;
-      font-size: 0.9rem;
-      line-height: 1.6;
-      color: var(--tn-fg);
-    }
-
-    .note-h1 {
-      font-size: 1.4rem;
-      font-weight: 800;
-      color: #ffffff;
-      margin-bottom: 10px;
-      line-height: 1.25;
-    }
-
-    .note-h2 {
-      font-size: 1.1rem;
-      font-weight: 700;
-      color: var(--tn-accent);
-      margin: 18px 0 8px;
-    }
-
-    .note-p {
-      color: #cbd5e1;
-      margin-bottom: 12px;
-      font-size: 0.88rem;
-    }
-
-    .note-wikilink {
-      color: var(--tn-accent);
-      background: rgba(139, 92, 246, 0.15);
-      padding: 1px 4px;
-      border-radius: 4px;
-      font-weight: 500;
-      cursor: pointer;
-    }
-
-    .note-task-list {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      margin: 12px 0;
-    }
-
-    .task-item {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 0.86rem;
-    }
-
-    .task-box {
-      width: 16px;
-      height: 16px;
-      border: 1.5px solid var(--tn-fg-muted);
-      border-radius: 4px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .task-box.checked {
-      background: var(--tn-primary);
-      border-color: var(--tn-primary);
-      color: white;
-    }
-
-    /* 4. Bottom Navigation Bar */
-    .flat-bottom-nav {
-      height: 60px;
-      background: rgba(19, 22, 32, 0.95);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border-top: 1px solid var(--tn-border);
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      display: flex;
-      align-items: center;
-      justify-content: space-around;
-      padding: 0 8px 10px;
-      z-index: 50;
-    }
-
-    .nav-btn {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 3px;
-      background: transparent;
-      border: none;
-      color: var(--tn-fg-subtle);
-      font-size: 0.65rem;
-      font-weight: 600;
-      flex: 1;
-      padding: 6px 0;
-      border-radius: 8px;
-    }
-
-    .nav-btn.active {
-      color: var(--tn-accent);
-    }
-
-    .nav-btn svg {
-      width: 20px;
-      height: 20px;
-    }
-
-    /* The Refined Accent "+" Button (No Bulge) */
-    .inline-accent-btn {
-      width: 44px;
-      height: 34px;
-      background: rgba(139, 92, 246, 0.15);
-      border: 1px solid rgba(139, 92, 246, 0.4);
-      border-radius: 12px;
-      color: var(--tn-accent);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin: 0 auto 3px;
-    }
-
-    .inline-accent-btn svg {
-      width: 20px;
-      height: 20px;
-    }
-
-    .nav-btn-with-accent {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      background: transparent;
-      border: none;
-      color: var(--tn-accent);
-      font-size: 0.65rem;
-      font-weight: 600;
-    }
-
-    /* 5. Slide-Over Navigation Drawer (Activity Bar Replacement) */
-    .drawer-overlay {
-      position: absolute;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.7);
-      backdrop-filter: blur(4px);
-      z-index: 60;
-      display: flex;
-    }
-
-    .drawer-panel {
-      width: 86%;
-      height: 100%;
-      background: #141722;
-      border-right: 1px solid var(--tn-border);
-      display: flex;
-      flex-direction: column;
-      box-shadow: 10px 0 30px rgba(0, 0, 0, 0.5);
-    }
-
-    .drawer-header {
-      padding: 16px;
-      border-bottom: 1px solid var(--tn-border);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-
-    .workspace-switcher {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .workspace-avatar {
-      width: 32px;
-      height: 32px;
-      border-radius: 8px;
-      background: var(--tn-primary);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 800;
-      font-size: 0.85rem;
-      color: white;
-    }
-
-    .workspace-info h4 {
-      font-size: 0.9rem;
-      font-weight: 700;
-      color: white;
-    }
-
-    .workspace-info span {
-      font-size: 0.7rem;
-      color: var(--tn-fg-subtle);
-    }
-
-    .drawer-search-bar {
-      margin: 12px 16px 6px;
-      background: #0f1118;
-      border: 1px solid var(--tn-border);
-      border-radius: var(--tn-radius-sm);
-      padding: 8px 12px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 0.8rem;
-      color: var(--tn-fg-subtle);
-    }
-
-    .drawer-menu-list {
-      flex: 1;
-      overflow-y: auto;
-      padding: 8px 10px;
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-    }
-
-    .drawer-section-label {
-      font-size: 0.68rem;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: var(--tn-fg-subtle);
-      padding: 8px 10px 4px;
-      font-weight: 700;
-    }
-
-    .drawer-menu-item {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 10px 12px;
-      border-radius: var(--tn-radius-sm);
-      color: #cbd5e1;
-      font-size: 0.88rem;
-      font-weight: 500;
-      cursor: pointer;
-      transition: background 0.15s;
-    }
-
-    .drawer-menu-item:hover,
-    .drawer-menu-item.active {
-      background: rgba(139, 92, 246, 0.15);
-      color: white;
-    }
-
-    .drawer-menu-item.active {
-      font-weight: 600;
-      color: var(--tn-accent);
-    }
-
-    .item-left-group {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .item-left-group svg {
-      color: var(--tn-fg-muted);
-    }
-
-    .drawer-menu-item.active .item-left-group svg {
-      color: var(--tn-accent);
-    }
-
-    .badge-pill {
-      background: var(--tn-danger);
-      color: white;
-      font-size: 0.65rem;
-      font-weight: 700;
-      padding: 2px 6px;
-      border-radius: 10px;
-    }
-
-    .drawer-footer {
-      padding: 12px 14px;
-      border-top: 1px solid var(--tn-border);
-      background: #10121a;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-
-    /* 6. Mobile Left Popout (File Explorer Tree) */
-    .mobile-popout-screen {
-      display: flex;
-      flex-direction: column;
-      height: 100%;
-      background: #141722;
-    }
-
-    .popout-top-actions {
-      padding: 10px 14px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      border-bottom: 1px solid var(--tn-border);
-    }
-
-    .popout-title {
-      font-size: 0.9rem;
-      font-weight: 700;
-      color: white;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-
-    .tree-action-icons {
-      display: flex;
-      gap: 4px;
-    }
-
-    .icon-btn-xs {
-      width: 28px;
-      height: 28px;
-      border-radius: 6px;
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid var(--tn-border);
-      color: var(--tn-fg-muted);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-    }
-
-    .file-tree-list {
-      flex: 1;
-      overflow-y: auto;
-      padding: 8px 10px;
-    }
-
-    .tree-folder-row {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 9px 8px;
-      font-size: 0.85rem;
-      font-weight: 600;
-      color: #e2e8f0;
-      border-radius: 6px;
-      cursor: pointer;
-    }
-
-    .tree-folder-row svg {
-      color: var(--tn-fg-subtle);
-    }
-
-    .tree-sub-items {
-      padding-left: 20px;
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-      border-left: 1px solid rgba(255, 255, 255, 0.06);
-      margin-left: 14px;
-    }
-
-    .tree-file-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 10px;
-      font-size: 0.82rem;
-      color: #94a3b8;
-      border-radius: 6px;
-      cursor: pointer;
-    }
-
-    .tree-file-row.active {
-      background: rgba(139, 92, 246, 0.2);
-      color: white;
-      font-weight: 600;
-    }
-
-    .tree-file-row.active svg {
-      color: var(--tn-accent);
-    }
-
-    /* 7. Active Editor Mode with Virtual Keyboard & Accessory Toolbar */
-    .keyboard-editor-screen {
-      display: flex;
-      flex-direction: column;
-      height: 100%;
-      position: relative;
-    }
-
-    .active-editor-content {
-      flex: 1;
-      padding: 14px 16px;
-      font-size: 0.9rem;
-      line-height: 1.6;
-      color: var(--tn-fg);
-      background: #0e1017;
-      overflow-y: auto;
-    }
-
-    .cursor-caret {
-      display: inline-block;
-      width: 2px;
-      height: 1.1em;
-      background: var(--tn-primary);
-      vertical-align: text-bottom;
-      animation: blink 1s infinite;
-    }
-
+      background-color: var(--color-tn-bg);
+      color: var(--color-tn-fg);
+      font-family: var(--font-sans);
+    }
+
+    /* Extracted Components to shorten code */
+    @layer components {
+      .phone-frame-wrapper {
+        @apply relative bg-tn-bg text-tn-fg rounded-[36px] overflow-hidden shadow-2xl shadow-black/50 border-[8px] border-tn-surface-elevated w-full h-[650px] flex flex-col shrink-0;
+      }
+      .app-screen {
+        @apply flex flex-col h-full bg-[#141722] relative;
+      }
+      .mobile-header {
+        @apply h-14 flex items-center justify-between px-3 bg-tn-surface border-b border-tn-border-subtle shrink-0;
+      }
+      .header-btn {
+        @apply w-8 h-8 rounded-full text-tn-fg flex items-center justify-center cursor-pointer hover:bg-white/10 transition-colors shrink-0;
+      }
+      .tabs-btn {
+        @apply w-[22px] h-[22px] rounded-[6px] border-[2px] border-tn-fg-subtle text-tn-fg-subtle flex items-center justify-center text-[11px] font-bold cursor-pointer hover:bg-white/10 transition-colors mx-1;
+      }
+      .nav-btn {
+        @apply flex flex-col items-center justify-center gap-1 w-12 h-12 rounded-xl transition-colors text-tn-fg-subtle hover:text-tn-fg hover:bg-white/5;
+      }
+      .nav-btn-active {
+        @apply text-tn-primary hover:text-tn-primary;
+      }
+      .nav-icon {
+        @apply w-[22px] h-[22px];
+      }
+    }
+
+    /* Custom utilities */
+    .scrollbar-none::-webkit-scrollbar { display: none; }
+    .scrollbar-none { scrollbar-width: none; }
     @keyframes blink {
       0%, 100% { opacity: 1; }
       50% { opacity: 0; }
     }
-
-    /* Virtual Keyboard Accessory Bar */
-    .keyboard-accessory-bar {
-      height: 42px;
-      background: #1a1d2b;
-      border-top: 1px solid var(--tn-border);
-      border-bottom: 1px solid var(--tn-border);
-      display: flex;
-      align-items: center;
-      padding: 0 6px;
-      gap: 4px;
-      overflow-x: auto;
-      scrollbar-width: none;
-      flex-shrink: 0;
-    }
-
-    .keyboard-accessory-bar::-webkit-scrollbar {
-      display: none;
-    }
-
-    .fmt-btn {
-      width: 32px;
-      height: 32px;
-      border-radius: 6px;
-      background: rgba(255, 255, 255, 0.06);
-      border: none;
-      color: #e2e8f0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 0.8rem;
-      font-weight: 600;
-      flex-shrink: 0;
-      cursor: pointer;
-    }
-
-    .fmt-btn.ai-btn {
-      background: linear-gradient(135deg, rgba(139, 92, 246, 0.4), rgba(168, 85, 247, 0.3));
-      border: 1px solid var(--tn-primary);
-      color: #ffffff;
-    }
-
-    /* Simulated Mobile Virtual Keyboard */
-    .simulated-keyboard {
-      height: 220px;
-      background: #1e2230;
-      padding: 8px 4px 20px;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      flex-shrink: 0;
-    }
-
-    .kbd-row {
-      display: flex;
-      justify-content: center;
-      gap: 5px;
-    }
-
-    .kbd-key {
-      height: 38px;
-      background: #2b3145;
-      border-radius: 5px;
-      color: #ffffff;
-      font-size: 0.95rem;
-      font-weight: 500;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex: 1;
-      max-width: 30px;
-      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
-    }
-
-    .kbd-key.wide {
-      max-width: 44px;
-      background: #232838;
-      font-size: 0.75rem;
-    }
-
-    .kbd-key.space {
-      max-width: 150px;
-    }
-
-    .kbd-key.return {
-      max-width: 65px;
-      background: var(--tn-primary);
-    }
-
-    /* 8. Document Tools Bottom Sheet */
-    .bottom-sheet-overlay {
-      position: absolute;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.65);
-      z-index: 70;
-      display: flex;
-      flex-direction: column;
-      justify-content: flex-end;
-    }
-
-    .bottom-sheet-card {
-      background: #161925;
-      border-top: 1px solid var(--tn-border);
-      border-radius: 20px 20px 0 0;
-      max-height: 70%;
-      padding: 12px 16px 24px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.6);
-    }
-
-    .sheet-handle {
-      width: 36px;
-      height: 4px;
-      background: #374151;
-      border-radius: 2px;
-      align-self: center;
-      margin-bottom: 4px;
-    }
-
-    .sheet-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-
-    .sheet-header h4 {
-      font-size: 0.95rem;
-      font-weight: 700;
-      color: white;
-    }
-
-    .sheet-segmented-tabs {
-      display: flex;
-      background: #0f1118;
-      border-radius: 8px;
-      padding: 3px;
-      gap: 2px;
-    }
-
-    .sheet-tab {
-      flex: 1;
-      padding: 6px 0;
-      font-size: 0.75rem;
-      font-weight: 600;
-      text-align: center;
-      border-radius: 6px;
-      color: var(--tn-fg-subtle);
-      background: transparent;
-      border: none;
-      cursor: pointer;
-    }
-
-    .sheet-tab.active {
-      background: #222638;
-      color: white;
-    }
-
-    .outline-list {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      margin-top: 6px;
-    }
-
-    .outline-item {
-      padding: 8px 10px;
-      background: #1a1d2b;
-      border-radius: 6px;
-      font-size: 0.82rem;
-      color: #cbd5e1;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-
-    .outline-item.h1 { font-weight: 700; color: white; }
-    .outline-item.h2 { padding-left: 20px; color: var(--tn-accent); }
-    .outline-item.h3 { padding-left: 32px; color: var(--tn-fg-muted); }
-
-    /* Home Indicator Bar */
-    .home-bar {
-      position: absolute;
-      bottom: 6px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 120px;
-      height: 4px;
-      background: rgba(255, 255, 255, 0.25);
-      border-radius: 2px;
-      z-index: 120;
-    }
+    .animate-blink { animation: blink 1s infinite; }
   </style>
 </head>
-<body>
-
-  <!-- Header Banner -->
-  <header class="header-banner">
-    <div class="brand-badge">
-      <span class="logo-icon">T</span>
-      ThinkBrain Notes Mobile Architecture
-    </div>
-    <h1>100% Mobile UI Mockup Showcase</h1>
-    <p class="subtitle">
-      Explore the responsive transformation of ThinkBrain Notes. Comparing the mobile adaptation of the 
-      <strong>Activity Bar (Navigation Drawer)</strong>, <strong>Left Popout (File Explorer Tree)</strong>, 
-      and <strong>CodeMirror Markdown Editor (Accessory Bar & Bottom Sheet Inspector)</strong>.
-    </p>
-  </header>
-
-  <!-- View Controls / Filter -->
-  <div class="view-toolbar">
-    <div class="tab-pills">
-      <button class="tab-pill active" onclick="filterView('all')">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg>
-        All 4 Core States
-      </button>
-      <button class="tab-pill" onclick="filterView('drawer')">1. Activity Bar ➔ Nav Drawer</button>
-      <button class="tab-pill" onclick="filterView('popout')">2. Left Popout ➔ File Tree</button>
-      <button class="tab-pill" onclick="filterView('editor')">3. Active Editor & Accessory</button>
-      <button class="tab-pill" onclick="filterView('tools')">4. Action Menu ➔ Bottom Sheet</button>
-    </div>
-    <div class="legend-chips">
-      <span class="legend-chip"><span class="legend-dot" style="background: var(--tn-primary);"></span> Primary Touch Targets ≥44px</span>
-      <span class="legend-chip"><span class="legend-dot" style="background: var(--tn-danger);"></span> Dynamic Status Badges</span>
-    </div>
-  </div>
+<body class="m-0 p-0 selection:bg-tn-primary/30 antialiased">
 
   <!-- Showcase Grid of Mobile Devices -->
-  <div class="showcase-grid">
+  <div class="flex flex-wrap gap-12 justify-center p-8 min-h-screen">
 
     <!-- Screen 1: Activity Bar -> Navigation Drawer -->
-    <div class="phone-card" data-category="drawer">
-      <div class="phone-meta">
-        <h3>
+    <div class="flex flex-col items-center gap-4 w-[320px] shrink-0" data-category="drawer">
+      <div class="text-center px-4">
+        <h3 class="text-[0.95rem] font-bold text-white flex items-center justify-center gap-2 mb-1.5">
           <span>1. Activity Bar ➔ Nav Drawer</span>
-          <span class="tag">Left Rail Transform</span>
+          <span class="text-[0.6rem] uppercase tracking-wider bg-tn-primary/20 text-tn-accent px-1.5 py-0.5 rounded-sm">Left Rail</span>
         </h3>
-        <p>The 48px icon-only rail transforms into an 86% width drawer with visible labels, conflict badges, and settings.</p>
+        <p class="text-[0.75rem] text-tn-fg-muted leading-relaxed">The 48px icon-only rail transforms into an 86% width drawer with visible labels, conflict badges, and settings.</p>
       </div>
 
-      <div class="phone-frame">
-        <div class="phone-notch">
-          <div class="notch-sensor"></div>
-          <div class="notch-camera"></div>
-        </div>
-        <div class="system-status-bar">
-          <span>9:41</span>
-          <div class="status-icons">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="12" x="2" y="6" rx="2"/><line x1="22" y1="11" x2="22" y2="13"/></svg>
-          </div>
-        </div>
-
+      <!-- Phone Frame -->
+      <div class="phone-frame-wrapper phone-frame">
         <div class="app-screen">
-          <!-- Background Note (Darkened) -->
+          
+          <!-- Universal Top Header -->
           <div class="mobile-header">
-            <button class="header-btn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="18" x2="20" y2="18"/></svg></button>
-            <div class="header-title">Getting Started</div>
-            <button class="header-btn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></button>
+            <button class="header-btn"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="18" x2="20" y2="18"/></svg></button>
+            <div class="text-[0.85rem] font-semibold text-tn-fg whitespace-nowrap overflow-hidden text-ellipsis flex items-center gap-1">Getting Started</div>
+            <div class="flex items-center gap-1">
+              <button class="tabs-btn">3</button>
+              <button class="header-btn"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></button>
+            </div>
           </div>
 
           <!-- Drawer Overlay -->
-          <div class="drawer-overlay">
-            <div class="drawer-panel">
+          <div class="absolute inset-0 bg-black/60 z-[60]">
+            <!-- Drawer Panel -->
+            <div class="absolute top-0 left-0 bottom-0 w-[86%] max-w-[300px] bg-tn-surface shadow-[20px_0_40px_rgba(0,0,0,0.5)] flex flex-col overflow-y-auto pb-4">
+              
               <!-- Workspace Switcher Header -->
-              <div class="drawer-header">
-                <div class="workspace-switcher">
-                  <div class="workspace-avatar">T</div>
-                  <div class="workspace-info">
-                    <h4>Personal Notes</h4>
-                    <span>324 notes · Git linked</span>
+              <div class="p-4 flex items-center justify-between border-b border-tn-border-subtle hover:bg-white/5 cursor-pointer">
+                <div class="flex items-center gap-3">
+                  <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-tn-primary to-tn-accent text-white flex items-center justify-center font-bold text-sm shadow-md">T</div>
+                  <div class="flex flex-col">
+                    <h4 class="text-sm font-bold text-white leading-tight">Personal Notes</h4>
+                    <span class="text-[0.65rem] text-tn-fg-subtle">324 notes · Git linked</span>
                   </div>
                 </div>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-tn-fg-muted"><path d="m6 9 6 6 6-6"/></svg>
               </div>
 
               <!-- Quick Search Bar -->
-              <div class="drawer-search-bar">
+              <div class="mx-3 mt-3 p-2 bg-tn-bg border border-tn-border rounded-lg flex items-center gap-2 text-tn-fg-subtle text-xs cursor-text">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
                 <span>Quick search or command (⌘P)</span>
               </div>
 
               <!-- Full Activity Bar Navigation Items -->
-              <div class="drawer-menu-list">
-                <span class="drawer-section-label">Navigation</span>
+              <div class="flex-1 py-3 px-2 flex flex-col gap-1">
+                <span class="text-[0.65rem] font-bold text-tn-fg-subtle uppercase tracking-wider px-2 py-1 mt-1">Navigation</span>
                 
-                <div class="drawer-menu-item active">
-                  <div class="item-left-group">
+                <div class="flex items-center justify-between px-3 py-2.5 rounded-lg text-[0.88rem] font-semibold text-tn-accent bg-tn-primary/15 cursor-pointer">
+                  <div class="flex items-center gap-3">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
                     <span>Explorer (Files)</span>
                   </div>
                 </div>
 
-                <div class="drawer-menu-item">
-                  <div class="item-left-group">
+                <div class="flex items-center justify-between px-3 py-2.5 rounded-lg text-[0.88rem] font-medium text-tn-fg hover:bg-tn-primary/15 hover:text-white cursor-pointer transition-colors group">
+                  <div class="flex items-center gap-3 text-tn-fg-muted group-hover:text-tn-accent transition-colors">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-                    <span>Search Vault</span>
+                    <span class="text-tn-fg group-hover:text-white">Search Vault</span>
                   </div>
                 </div>
 
-                <div class="drawer-menu-item">
-                  <div class="item-left-group">
+                <div class="flex items-center justify-between px-3 py-2.5 rounded-lg text-[0.88rem] font-medium text-tn-fg hover:bg-tn-primary/15 hover:text-white cursor-pointer transition-colors group">
+                  <div class="flex items-center gap-3 text-tn-fg-muted group-hover:text-tn-accent transition-colors">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z"/><path d="M7 7h.01"/></svg>
-                    <span>Tags & Labels</span>
+                    <span class="text-tn-fg group-hover:text-white">Tags & Labels</span>
                   </div>
                 </div>
 
-                <div class="drawer-menu-item">
-                  <div class="item-left-group">
+                <div class="flex items-center justify-between px-3 py-2.5 rounded-lg text-[0.88rem] font-medium text-tn-fg hover:bg-tn-primary/15 hover:text-white cursor-pointer transition-colors group">
+                  <div class="flex items-center gap-3 text-tn-fg-muted group-hover:text-tn-accent transition-colors">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
-                    <span>Sync & Conflicts</span>
+                    <span class="text-tn-fg group-hover:text-white">Sync & Conflicts</span>
                   </div>
-                  <span class="badge-pill">3</span>
+                  <span class="bg-tn-danger text-white text-[0.65rem] font-bold px-1.5 py-0.5 rounded-full">3</span>
                 </div>
 
-                <div class="drawer-menu-item">
-                  <div class="item-left-group">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>
-                    <span>History & Versions</span>
-                  </div>
-                </div>
+                <span class="text-[0.65rem] font-bold text-tn-fg-subtle uppercase tracking-wider px-2 py-1 mt-2">Extensions</span>
 
-                <span class="drawer-section-label">Extensions</span>
-
-                <div class="drawer-menu-item">
-                  <div class="item-left-group">
+                <div class="flex items-center justify-between px-3 py-2.5 rounded-lg text-[0.88rem] font-medium text-tn-fg hover:bg-tn-primary/15 hover:text-white cursor-pointer transition-colors group">
+                  <div class="flex items-center gap-3 text-tn-fg-muted group-hover:text-tn-accent transition-colors">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-                    <span>Journal & Calendar</span>
-                  </div>
-                </div>
-
-                <div class="drawer-menu-item">
-                  <div class="item-left-group">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m7.5 4.27 9 5.15a2 2 0 0 1 1 1.73v1.7a2 2 0 0 1-1 1.73l-9 5.15A2 2 0 0 1 5 18V6a2 2 0 0 1 2.5-1.73Z"/></svg>
-                    <span>Extensions Manager</span>
+                    <span class="text-tn-fg group-hover:text-white">Journal & Calendar</span>
                   </div>
                 </div>
               </div>
 
-              <!-- Drawer Footer (Settings) -->
-              <div class="drawer-footer">
-                <div class="drawer-menu-item" style="padding: 4px 8px; width: 100%;">
-                  <div class="item-left-group">
+              <!-- Drawer Footer -->
+              <div class="p-3 border-t border-tn-border bg-[#10121a]">
+                <div class="flex items-center justify-between px-2 py-2 rounded-lg text-[0.85rem] font-medium text-tn-fg hover:bg-white/10 cursor-pointer transition-colors group">
+                  <div class="flex items-center gap-3 text-tn-fg-muted group-hover:text-white transition-colors">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-                    <span>App Settings</span>
+                    <span class="text-tn-fg group-hover:text-white">App Settings</span>
                   </div>
                 </div>
               </div>
+
             </div>
           </div>
         </div>
-
-        <div class="home-bar"></div>
       </div>
     </div>
 
     <!-- Screen 2: Left Popout -> File Explorer Tree -->
-    <div class="phone-card" data-category="popout">
-      <div class="phone-meta">
-        <h3>
+    <div class="flex flex-col items-center gap-4 w-[320px] shrink-0" data-category="popout">
+      <div class="text-center px-4">
+        <h3 class="text-[0.95rem] font-bold text-white flex items-center justify-center gap-2 mb-1.5">
           <span>2. Left Popout ➔ File Tree</span>
-          <span class="tag">Sidebar Transform</span>
+          <span class="text-[0.6rem] uppercase tracking-wider bg-tn-primary/20 text-tn-accent px-1.5 py-0.5 rounded-sm">Sidebar</span>
         </h3>
-        <p>Full-screen mobile explorer tree with 48px touch targets, quick action toolbar, and deep nesting.</p>
+        <p class="text-[0.75rem] text-tn-fg-muted leading-relaxed">Full-screen mobile explorer tree with 48px touch targets, quick action toolbar, and deep nesting.</p>
       </div>
 
-      <div class="phone-frame">
-        <div class="phone-notch">
-          <div class="notch-sensor"></div>
-          <div class="notch-camera"></div>
-        </div>
-        <div class="system-status-bar">
-          <span>9:41</span>
-          <div class="status-icons">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="12" x="2" y="6" rx="2"/><line x1="22" y1="11" x2="22" y2="13"/></svg>
-          </div>
-        </div>
-
+      <div class="phone-frame-wrapper phone-frame">
         <div class="app-screen">
-          <div class="mobile-popout-screen">
-            <!-- Header -->
-            <div class="mobile-header">
-              <button class="header-btn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
-              <div class="header-title">File Explorer</div>
-              <button class="header-btn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></button>
-            </div>
-
-            <!-- Popout Sub Toolbar -->
-            <div class="popout-top-actions">
-              <span class="popout-title">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
-                Personal Vault
-              </span>
-              <div class="tree-action-icons">
-                <button class="icon-btn-xs" title="New Note"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></button>
-                <button class="icon-btn-xs" title="New Folder"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg></button>
-                <button class="icon-btn-xs" title="Collapse All"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m7 15 5 5 5-5M7 9l5-5 5 5"/></svg></button>
-              </div>
-            </div>
-
-            <!-- Touch Tree Items -->
-            <div class="file-tree-list">
-              <div class="tree-folder-row">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--tn-accent);"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
-                <span>Projects</span>
-              </div>
-
-              <div class="tree-sub-items">
-                <div class="tree-file-row active">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
-                  <span>Q3 Marketing Plan.md</span>
-                </div>
-                <div class="tree-file-row">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
-                  <span>Architecture Spec.md</span>
-                </div>
-              </div>
-
-              <div class="tree-folder-row" style="margin-top: 4px;">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
-                <span>Daily Notes</span>
-              </div>
-
-              <div class="tree-folder-row">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
-                <span>Research & Ideas</span>
-              </div>
-
-              <div class="tree-file-row" style="margin-top: 6px;">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
-                <span>Index.md</span>
-              </div>
-            </div>
-
-            <!-- Bottom Navigation Bar -->
-            <div class="flat-bottom-nav">
-              <button class="nav-btn active">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
-                <span>Home</span>
-              </button>
-              <button class="nav-btn">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-                <span>Search</span>
-              </button>
-              <button class="nav-btn-with-accent">
-                <div class="inline-accent-btn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg></div>
-                <span>New</span>
-              </button>
-              <button class="nav-btn">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg>
-                <span>AI Agent</span>
-              </button>
-              <button class="nav-btn">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
-                <span>Menu</span>
-              </button>
+          
+          <!-- Header -->
+          <div class="mobile-header">
+            <button class="header-btn"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+            <div class="text-[0.85rem] font-semibold text-tn-fg whitespace-nowrap overflow-hidden text-ellipsis flex items-center gap-1">File Explorer</div>
+            <div class="flex items-center gap-1">
+              <button class="tabs-btn">3</button>
             </div>
           </div>
-        </div>
 
-        <div class="home-bar"></div>
+          <!-- Popout Sub Toolbar -->
+          <div class="px-3.5 py-2.5 flex items-center justify-between border-b border-tn-border">
+            <span class="text-[0.9rem] font-bold text-white flex items-center gap-1.5">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
+              Personal Vault
+            </span>
+            <div class="flex gap-1">
+              <button class="w-7 h-7 rounded-md bg-white/5 border border-tn-border text-tn-fg-muted flex items-center justify-center cursor-pointer hover:text-white" title="New Note"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></button>
+              <button class="w-7 h-7 rounded-md bg-white/5 border border-tn-border text-tn-fg-muted flex items-center justify-center cursor-pointer hover:text-white" title="New Folder"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg></button>
+              <button class="w-7 h-7 rounded-md bg-white/5 border border-tn-border text-tn-fg-muted flex items-center justify-center cursor-pointer hover:text-white" title="Collapse All"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m7 15 5 5 5-5M7 9l5-5 5 5"/></svg></button>
+            </div>
+          </div>
+
+          <!-- Touch Tree Items -->
+          <div class="flex-1 overflow-y-auto px-2.5 py-2">
+            <div class="flex items-center gap-1.5 py-2 px-2 text-[0.85rem] font-semibold text-[#e2e8f0] rounded-md cursor-pointer hover:bg-white/5">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-tn-fg-subtle"><path d="m6 9 6 6 6-6"/></svg>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-tn-accent"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
+              <span>Projects</span>
+            </div>
+
+            <div class="pl-5 flex flex-col gap-0.5 border-l border-white/5 ml-3.5 mt-0.5 mb-1">
+              <div class="flex items-center gap-2 py-2 px-2.5 text-[0.82rem] font-semibold text-white bg-tn-primary/20 rounded-md cursor-pointer">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-tn-accent"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+                <span>Q3 Marketing Plan.md</span>
+              </div>
+              <div class="flex items-center gap-2 py-2 px-2.5 text-[0.82rem] text-[#94a3b8] rounded-md cursor-pointer hover:bg-white/5">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+                <span>Architecture Spec.md</span>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-1.5 py-2 px-2 text-[0.85rem] font-semibold text-[#e2e8f0] rounded-md cursor-pointer hover:bg-white/5">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-tn-fg-subtle"><path d="m9 18 6-6-6-6"/></svg>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
+              <span>Daily Notes</span>
+            </div>
+
+            <div class="flex items-center gap-1.5 py-2 px-2 text-[0.85rem] font-semibold text-[#e2e8f0] rounded-md cursor-pointer hover:bg-white/5">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-tn-fg-subtle"><path d="m9 18 6-6-6-6"/></svg>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
+              <span>Research & Ideas</span>
+            </div>
+
+            <div class="flex items-center gap-2 py-2 px-2.5 text-[0.82rem] text-[#94a3b8] rounded-md cursor-pointer mt-1 hover:bg-white/5">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+              <span>Index.md</span>
+            </div>
+          </div>
+
+          <!-- Bottom Navigation Bar (Injected globally in mockups via JS) -->
+          <div class="needs-bottom-nav"></div>
+
+        </div>
       </div>
     </div>
 
     <!-- Screen 3: CodeMirror Editor with Keyboard Accessory Bar -->
-    <div class="phone-card" data-category="editor">
-      <div class="phone-meta">
-        <h3>
+    <div class="flex flex-col items-center gap-4 w-[320px] shrink-0" data-category="editor">
+      <div class="text-center px-4">
+        <h3 class="text-[0.95rem] font-bold text-white flex items-center justify-center gap-2 mb-1.5">
           <span>3. Active Markdown Editor</span>
-          <span class="tag">Typing & Accessory</span>
+          <span class="text-[0.6rem] uppercase tracking-wider bg-tn-primary/20 text-tn-accent px-1.5 py-0.5 rounded-sm">Accessory</span>
         </h3>
-        <p>Virtual keyboard raised with fixed formatting accessory bar (B, I, H, Lists, Links, AI) docked above it.</p>
+        <p class="text-[0.75rem] text-tn-fg-muted leading-relaxed">Virtual keyboard raised with fixed formatting accessory bar docked above it.</p>
       </div>
 
-      <div class="phone-frame">
-        <div class="phone-notch">
-          <div class="notch-sensor"></div>
-          <div class="notch-camera"></div>
-        </div>
-        <div class="system-status-bar">
-          <span>9:41</span>
-          <div class="status-icons">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="12" x="2" y="6" rx="2"/><line x1="22" y1="11" x2="22" y2="13"/></svg>
+      <div class="phone-frame-wrapper phone-frame">
+        <div class="app-screen !bg-[#0e1017]">
+          
+          <!-- App Header -->
+          <div class="mobile-header">
+            <button class="header-btn"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg></button>
+            <div class="flex flex-col items-center max-w-[190px] cursor-pointer flex-1">
+              <div class="text-[0.85rem] font-semibold text-tn-fg-muted whitespace-nowrap overflow-hidden text-ellipsis flex items-center gap-1">Q3 Marketing Plan.md</div>
+              <div class="text-[0.65rem] text-tn-fg-subtle">Projects / Marketing</div>
+            </div>
+            <div class="flex items-center gap-1">
+              <button class="tabs-btn">3</button>
+              <button class="header-btn"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></button>
+            </div>
           </div>
-        </div>
 
-        <div class="app-screen">
-          <div class="keyboard-editor-screen">
-            <!-- App Header -->
-            <div class="mobile-header">
-              <span style="font-size: 0.8rem; font-weight: 800; color: white;">ThinkBrain</span>
-              <div class="header-title-container">
-                <div class="header-title" style="color: var(--tn-fg-muted);">Q3 Marketing Plan.md</div>
-                <div class="header-subpath">Projects / Marketing</div>
-              </div>
-              <div class="chrome-badge">3</div>
+          <!-- Active Document Editor View -->
+          <div class="flex-1 py-3.5 px-4 text-[0.9rem] leading-relaxed text-tn-fg overflow-y-auto">
+            <div class="text-xl font-bold mb-3 mt-1 tracking-tight text-white"># Q3 Marketing Plan</div>
+            <div class="mb-3 text-tn-fg-muted">
+              We are launching the new mobile experience in late August.
+              Connecting ideas with <span class="text-tn-accent cursor-pointer hover:underline">[[Product Strategy]]</span>.
             </div>
-
-            <!-- Active Document Editor View -->
-            <div class="active-editor-content">
-              <div class="note-h1"># Q3 Marketing Plan</div>
-              <div class="note-p">
-                We are launching the new mobile experience in late August.
-                Connecting ideas with <span class="note-wikilink">[[Product Strategy]]</span>.
+            <div class="text-lg font-semibold mt-5 mb-2 text-white">## Core Deliverables</div>
+            <div class="flex flex-col gap-1.5 ml-1">
+              <div class="flex items-start gap-2.5">
+                <div class="w-[18px] h-[18px] rounded-[4px] border-[1.5px] border-tn-primary bg-tn-primary/20 text-tn-primary flex items-center justify-center text-[0.7rem] font-bold mt-0.5 shrink-0">✓</div>
+                <span class="text-tn-fg-subtle line-through">Scaffold Android & iOS build pipelines</span>
               </div>
-              <div class="note-h2">## Core Deliverables</div>
-              <div class="note-task-list">
-                <div class="task-item">
-                  <div class="task-box checked">✓</div>
-                  <span>Scaffold Android & iOS build pipelines</span>
-                </div>
-                <div class="task-item">
-                  <div class="task-box checked">✓</div>
-                  <span>Responsive shell tokens & layout</span>
-                </div>
-                <div class="task-item">
-                  <div class="task-box"></div>
-                  <span>CodeMirror mobile cursor fix<span class="cursor-caret"></span></span>
-                </div>
+              <div class="flex items-start gap-2.5">
+                <div class="w-[18px] h-[18px] rounded-[4px] border-[1.5px] border-tn-primary bg-tn-primary/20 text-tn-primary flex items-center justify-center text-[0.7rem] font-bold mt-0.5 shrink-0">✓</div>
+                <span class="text-tn-fg-subtle line-through">Responsive shell tokens & layout</span>
               </div>
-            </div>
-
-            <!-- Formatting Accessory Toolbar (Above Keyboard) -->
-            <div class="keyboard-accessory-bar">
-              <button class="fmt-btn" title="Bold"><strong>B</strong></button>
-              <button class="fmt-btn" title="Italic"><em>I</em></button>
-              <button class="fmt-btn" title="Heading">H</button>
-              <button class="fmt-btn" title="Task List">☑</button>
-              <button class="fmt-btn" title="Bullet List">•</button>
-              <button class="fmt-btn" title="Wiki Link">[[ ]]</button>
-              <button class="fmt-btn" title="Image">🖼</button>
-              <button class="fmt-btn" title="Undo">↶</button>
-              <button class="fmt-btn" title="Redo">↷</button>
-            </div>
-
-            <!-- Simulated Soft Keyboard -->
-            <div class="simulated-keyboard">
-              <div class="kbd-row">
-                <div class="kbd-key">Q</div><div class="kbd-key">W</div><div class="kbd-key">E</div>
-                <div class="kbd-key">R</div><div class="kbd-key">T</div><div class="kbd-key">Y</div>
-                <div class="kbd-key">U</div><div class="kbd-key">I</div><div class="kbd-key">O</div><div class="kbd-key">P</div>
-              </div>
-              <div class="kbd-row">
-                <div class="kbd-key">A</div><div class="kbd-key">S</div><div class="kbd-key">D</div>
-                <div class="kbd-key">F</div><div class="kbd-key">G</div><div class="kbd-key">H</div>
-                <div class="kbd-key">J</div><div class="kbd-key">K</div><div class="kbd-key">L</div>
-              </div>
-              <div class="kbd-row">
-                <div class="kbd-key wide">⇧</div><div class="kbd-key">Z</div><div class="kbd-key">X</div>
-                <div class="kbd-key">C</div><div class="kbd-key">V</div><div class="kbd-key">B</div>
-                <div class="kbd-key">N</div><div class="kbd-key">M</div><div class="kbd-key wide">⌫</div>
-              </div>
-              <div class="kbd-row">
-                <div class="kbd-key wide">123</div><div class="kbd-key">🌐</div>
-                <div class="kbd-key space">space</div><div class="kbd-key return">return</div>
+              <div class="flex items-start gap-2.5">
+                <div class="w-[18px] h-[18px] rounded-[4px] border-[1.5px] border-tn-border-subtle bg-white/5 mt-0.5 shrink-0"></div>
+                <span>CodeMirror mobile cursor fix<span class="inline-block w-[2px] h-[1.1em] bg-tn-primary align-text-bottom animate-blink"></span></span>
               </div>
             </div>
           </div>
-        </div>
 
-        <div class="home-bar"></div>
+          <!-- Formatting Accessory Toolbar (Above Keyboard) -->
+          <div class="h-[42px] bg-[#1a1d2b] border-y border-tn-border flex items-center px-1.5 gap-1 overflow-x-auto shrink-0 scrollbar-none">
+            <button class="w-8 h-8 rounded-md bg-white/5 text-[#e2e8f0] flex items-center justify-center text-[0.8rem] font-semibold shrink-0 cursor-pointer"><strong>B</strong></button>
+            <button class="w-8 h-8 rounded-md bg-white/5 text-[#e2e8f0] flex items-center justify-center text-[0.8rem] font-semibold shrink-0 cursor-pointer"><em>I</em></button>
+            <button class="w-8 h-8 rounded-md bg-white/5 text-[#e2e8f0] flex items-center justify-center text-[0.8rem] font-semibold shrink-0 cursor-pointer">H</button>
+            <button class="w-8 h-8 rounded-md bg-white/5 text-[#e2e8f0] flex items-center justify-center text-[0.8rem] font-semibold shrink-0 cursor-pointer">☑</button>
+            <button class="w-8 h-8 rounded-md bg-white/5 text-[#e2e8f0] flex items-center justify-center text-[0.8rem] font-semibold shrink-0 cursor-pointer">•</button>
+            <button class="w-8 h-8 rounded-md bg-white/5 text-[#e2e8f0] flex items-center justify-center text-[0.8rem] font-semibold shrink-0 cursor-pointer">[[ ]]</button>
+            <button class="w-8 h-8 rounded-md bg-white/5 text-[#e2e8f0] flex items-center justify-center text-[0.8rem] font-semibold shrink-0 cursor-pointer">🖼</button>
+            <button class="w-8 h-8 rounded-md bg-white/5 text-[#e2e8f0] flex items-center justify-center text-[0.8rem] font-semibold shrink-0 cursor-pointer">↶</button>
+            <button class="w-8 h-8 rounded-md bg-white/5 text-[#e2e8f0] flex items-center justify-center text-[0.8rem] font-semibold shrink-0 cursor-pointer">↷</button>
+          </div>
+
+          <!-- Simulated Soft Keyboard -->
+          <div class="h-[220px] bg-[#1e2230] pt-2 px-1 pb-5 flex flex-col gap-1.5 shrink-0">
+            <div class="flex justify-center gap-[5px]">
+              <div class="h-[38px] bg-[#2b3145] rounded-[5px] text-white text-[0.95rem] font-medium flex items-center justify-center flex-1 max-w-[30px] shadow-[0_1px_2px_rgba(0,0,0,0.4)]">Q</div>
+              <div class="h-[38px] bg-[#2b3145] rounded-[5px] text-white text-[0.95rem] font-medium flex items-center justify-center flex-1 max-w-[30px] shadow-[0_1px_2px_rgba(0,0,0,0.4)]">W</div>
+              <div class="h-[38px] bg-[#2b3145] rounded-[5px] text-white text-[0.95rem] font-medium flex items-center justify-center flex-1 max-w-[30px] shadow-[0_1px_2px_rgba(0,0,0,0.4)]">E</div>
+              <div class="h-[38px] bg-[#2b3145] rounded-[5px] text-white text-[0.95rem] font-medium flex items-center justify-center flex-1 max-w-[30px] shadow-[0_1px_2px_rgba(0,0,0,0.4)]">R</div>
+              <div class="h-[38px] bg-[#2b3145] rounded-[5px] text-white text-[0.95rem] font-medium flex items-center justify-center flex-1 max-w-[30px] shadow-[0_1px_2px_rgba(0,0,0,0.4)]">T</div>
+              <div class="h-[38px] bg-[#2b3145] rounded-[5px] text-white text-[0.95rem] font-medium flex items-center justify-center flex-1 max-w-[30px] shadow-[0_1px_2px_rgba(0,0,0,0.4)]">Y</div>
+              <div class="h-[38px] bg-[#2b3145] rounded-[5px] text-white text-[0.95rem] font-medium flex items-center justify-center flex-1 max-w-[30px] shadow-[0_1px_2px_rgba(0,0,0,0.4)]">U</div>
+              <div class="h-[38px] bg-[#2b3145] rounded-[5px] text-white text-[0.95rem] font-medium flex items-center justify-center flex-1 max-w-[30px] shadow-[0_1px_2px_rgba(0,0,0,0.4)]">I</div>
+              <div class="h-[38px] bg-[#2b3145] rounded-[5px] text-white text-[0.95rem] font-medium flex items-center justify-center flex-1 max-w-[30px] shadow-[0_1px_2px_rgba(0,0,0,0.4)]">O</div>
+              <div class="h-[38px] bg-[#2b3145] rounded-[5px] text-white text-[0.95rem] font-medium flex items-center justify-center flex-1 max-w-[30px] shadow-[0_1px_2px_rgba(0,0,0,0.4)]">P</div>
+            </div>
+            <div class="flex justify-center gap-[5px]">
+              <div class="h-[38px] bg-[#2b3145] rounded-[5px] text-white text-[0.95rem] font-medium flex items-center justify-center flex-1 max-w-[30px] shadow-[0_1px_2px_rgba(0,0,0,0.4)]">A</div>
+              <div class="h-[38px] bg-[#2b3145] rounded-[5px] text-white text-[0.95rem] font-medium flex items-center justify-center flex-1 max-w-[30px] shadow-[0_1px_2px_rgba(0,0,0,0.4)]">S</div>
+              <div class="h-[38px] bg-[#2b3145] rounded-[5px] text-white text-[0.95rem] font-medium flex items-center justify-center flex-1 max-w-[30px] shadow-[0_1px_2px_rgba(0,0,0,0.4)]">D</div>
+              <div class="h-[38px] bg-[#2b3145] rounded-[5px] text-white text-[0.95rem] font-medium flex items-center justify-center flex-1 max-w-[30px] shadow-[0_1px_2px_rgba(0,0,0,0.4)]">F</div>
+              <div class="h-[38px] bg-[#2b3145] rounded-[5px] text-white text-[0.95rem] font-medium flex items-center justify-center flex-1 max-w-[30px] shadow-[0_1px_2px_rgba(0,0,0,0.4)]">G</div>
+              <div class="h-[38px] bg-[#2b3145] rounded-[5px] text-white text-[0.95rem] font-medium flex items-center justify-center flex-1 max-w-[30px] shadow-[0_1px_2px_rgba(0,0,0,0.4)]">H</div>
+              <div class="h-[38px] bg-[#2b3145] rounded-[5px] text-white text-[0.95rem] font-medium flex items-center justify-center flex-1 max-w-[30px] shadow-[0_1px_2px_rgba(0,0,0,0.4)]">J</div>
+              <div class="h-[38px] bg-[#2b3145] rounded-[5px] text-white text-[0.95rem] font-medium flex items-center justify-center flex-1 max-w-[30px] shadow-[0_1px_2px_rgba(0,0,0,0.4)]">K</div>
+              <div class="h-[38px] bg-[#2b3145] rounded-[5px] text-white text-[0.95rem] font-medium flex items-center justify-center flex-1 max-w-[30px] shadow-[0_1px_2px_rgba(0,0,0,0.4)]">L</div>
+            </div>
+            <div class="flex justify-center gap-[5px]">
+              <div class="h-[38px] rounded-[5px] text-white font-medium flex items-center justify-center flex-1 shadow-[0_1px_2px_rgba(0,0,0,0.4)] max-w-[44px] bg-[#232838] text-[0.75rem]">⇧</div>
+              <div class="h-[38px] bg-[#2b3145] rounded-[5px] text-white text-[0.95rem] font-medium flex items-center justify-center flex-1 max-w-[30px] shadow-[0_1px_2px_rgba(0,0,0,0.4)]">Z</div>
+              <div class="h-[38px] bg-[#2b3145] rounded-[5px] text-white text-[0.95rem] font-medium flex items-center justify-center flex-1 max-w-[30px] shadow-[0_1px_2px_rgba(0,0,0,0.4)]">X</div>
+              <div class="h-[38px] bg-[#2b3145] rounded-[5px] text-white text-[0.95rem] font-medium flex items-center justify-center flex-1 max-w-[30px] shadow-[0_1px_2px_rgba(0,0,0,0.4)]">C</div>
+              <div class="h-[38px] bg-[#2b3145] rounded-[5px] text-white text-[0.95rem] font-medium flex items-center justify-center flex-1 max-w-[30px] shadow-[0_1px_2px_rgba(0,0,0,0.4)]">V</div>
+              <div class="h-[38px] bg-[#2b3145] rounded-[5px] text-white text-[0.95rem] font-medium flex items-center justify-center flex-1 max-w-[30px] shadow-[0_1px_2px_rgba(0,0,0,0.4)]">B</div>
+              <div class="h-[38px] bg-[#2b3145] rounded-[5px] text-white text-[0.95rem] font-medium flex items-center justify-center flex-1 max-w-[30px] shadow-[0_1px_2px_rgba(0,0,0,0.4)]">N</div>
+              <div class="h-[38px] bg-[#2b3145] rounded-[5px] text-white text-[0.95rem] font-medium flex items-center justify-center flex-1 max-w-[30px] shadow-[0_1px_2px_rgba(0,0,0,0.4)]">M</div>
+              <div class="h-[38px] rounded-[5px] text-white font-medium flex items-center justify-center flex-1 shadow-[0_1px_2px_rgba(0,0,0,0.4)] max-w-[44px] bg-[#232838] text-[0.75rem]">⌫</div>
+            </div>
+            <div class="flex justify-center gap-[5px]">
+              <div class="h-[38px] rounded-[5px] text-white font-medium flex items-center justify-center flex-1 shadow-[0_1px_2px_rgba(0,0,0,0.4)] max-w-[44px] bg-[#232838] text-[0.75rem]">123</div>
+              <div class="h-[38px] bg-[#2b3145] rounded-[5px] text-white text-[0.95rem] font-medium flex items-center justify-center flex-1 max-w-[30px] shadow-[0_1px_2px_rgba(0,0,0,0.4)]">🌐</div>
+              <div class="h-[38px] bg-[#2b3145] rounded-[5px] text-white text-[0.95rem] font-medium flex items-center justify-center flex-1 shadow-[0_1px_2px_rgba(0,0,0,0.4)] max-w-[150px]">space</div>
+              <div class="h-[38px] rounded-[5px] text-white font-medium flex items-center justify-center flex-1 shadow-[0_1px_2px_rgba(0,0,0,0.4)] max-w-[65px] bg-tn-primary text-[0.8rem]">return</div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
     <!-- Screen 4: Document Tools Bottom Sheet (Action Items) -->
-    <div class="phone-card" data-category="tools">
-      <div class="phone-meta">
-        <h3>
+    <div class="flex flex-col items-center gap-4 w-[320px] shrink-0" data-category="tools">
+      <div class="text-center px-4">
+        <h3 class="text-[0.95rem] font-bold text-white flex items-center justify-center gap-2 mb-1.5">
           <span>4. Action Menu ➔ Bottom Sheet</span>
-          <span class="tag">Right Dock Transform</span>
+          <span class="text-[0.6rem] uppercase tracking-wider bg-tn-primary/20 text-tn-accent px-1.5 py-0.5 rounded-sm">Right Dock</span>
         </h3>
-        <p>Outline, Properties, Backlinks, and Assistant packaged into a thumb-accessible drag sheet.</p>
+        <p class="text-[0.75rem] text-tn-fg-muted leading-relaxed">Outline, Properties, and Backlinks packaged into a thumb-accessible drag sheet.</p>
       </div>
 
-      <div class="phone-frame">
-        <div class="phone-notch">
-          <div class="notch-sensor"></div>
-          <div class="notch-camera"></div>
+      <div class="phone-frame-wrapper phone-frame">
+        <div class="app-screen !bg-[#0e1017]">
+          
+          <!-- Background Note Content -->
+          <div class="mobile-header">
+            <button class="header-btn"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg></button>
+            <div class="flex flex-col items-center max-w-[190px] cursor-pointer flex-1">
+              <div class="text-[0.85rem] font-semibold text-tn-fg-muted whitespace-nowrap overflow-hidden text-ellipsis flex items-center gap-1">Q3 Marketing Plan.md</div>
+            </div>
+            <div class="flex items-center gap-1">
+              <button class="tabs-btn">3</button>
+              <button class="header-btn"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></button>
+            </div>
+          </div>
+
+          <div class="flex-1 py-3.5 px-4 text-[0.9rem] leading-relaxed text-tn-fg">
+            <div class="text-xl font-bold mb-3 mt-1 tracking-tight text-white"># Q3 Marketing Plan</div>
+            <div class="mb-3 text-tn-fg-muted">We are launching the new mobile experience in late August...</div>
+          </div>
+
+          <!-- Bottom Sheet Overlay -->
+          <div class="absolute inset-0 bg-black/65 z-[70] flex flex-col justify-end">
+            <div class="bg-[#161925] border-t border-tn-border rounded-t-[20px] max-h-[70%] pt-3 px-4 pb-6 flex flex-col gap-3 shadow-[0_-10px_30px_rgba(0,0,0,0.6)]">
+              <div class="w-9 h-1 bg-[#374151] rounded-full self-center mb-1"></div>
+              
+              <div class="flex items-center justify-between">
+                <h4 class="text-[0.95rem] font-bold text-white">Document Inspector</h4>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-tn-fg-subtle"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </div>
+
+              <!-- Segmented Controls (Right Action Items) -->
+              <div class="flex bg-[#0f1118] rounded-lg p-[3px] gap-[2px]">
+                <button class="flex-1 py-1.5 text-[0.75rem] font-semibold text-center rounded-md bg-[#222638] text-white cursor-pointer border-none">Outline</button>
+                <button class="flex-1 py-1.5 text-[0.75rem] font-semibold text-center rounded-md text-tn-fg-subtle bg-transparent cursor-pointer border-none hover:text-white">Properties</button>
+                <button class="flex-1 py-1.5 text-[0.75rem] font-semibold text-center rounded-md text-tn-fg-subtle bg-transparent cursor-pointer border-none hover:text-white">Backlinks (4)</button>
+              </div>
+
+              <!-- Outline Items List -->
+              <div class="flex flex-col gap-1.5 mt-1.5">
+                <div class="py-2 px-2.5 bg-[#1a1d2b] rounded-md text-[0.82rem] flex items-center justify-between font-bold text-white">
+                  <span># Q3 Marketing Plan</span>
+                  <span class="text-[0.7rem] text-tn-fg-subtle font-normal">L1</span>
+                </div>
+                <div class="py-2 px-2.5 bg-[#1a1d2b] rounded-md text-[0.82rem] flex items-center justify-between pl-5 text-tn-accent">
+                  <span>## Core Deliverables</span>
+                  <span class="text-[0.7rem] text-tn-fg-subtle">L8</span>
+                </div>
+                <div class="py-2 px-2.5 bg-[#1a1d2b] rounded-md text-[0.82rem] flex items-center justify-between pl-8 text-tn-fg-muted">
+                  <span>### Android Scaffolding</span>
+                  <span class="text-[0.7rem] text-tn-fg-subtle">L14</span>
+                </div>
+                <div class="py-2 px-2.5 bg-[#1a1d2b] rounded-md text-[0.82rem] flex items-center justify-between pl-5 text-tn-accent">
+                  <span>## Launch Timelines</span>
+                  <span class="text-[0.7rem] text-tn-fg-subtle">L22</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-        <div class="system-status-bar">
-          <span>9:41</span>
-          <div class="status-icons">
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Bottom Navigation Bar template to inject
+    const bottomNavTemplate = `
+      <div class="absolute bottom-0 w-full h-[60px] bg-tn-surface/80 backdrop-blur-md border-t border-tn-border-subtle flex items-center justify-around px-2 pb-safe z-50">
+        <button class="nav-btn nav-btn-active">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
+          <span class="text-[0.65rem] font-medium">Home</span>
+        </button>
+        <button class="nav-btn">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <span class="text-[0.65rem] font-medium">Search</span>
+        </button>
+        <button class="flex flex-col items-center justify-center gap-1 text-tn-fg-subtle w-12 h-12 rounded-xl transition-colors group">
+          <div class="bg-tn-primary text-white rounded-[10px] flex items-center justify-center shadow-lg w-10 h-10 -mt-2 group-hover:bg-tn-primary-hover transition-colors"><svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg></div>
+          <span class="text-[0.65rem] font-medium group-hover:text-tn-fg transition-colors">New</span>
+        </button>
+        <button class="nav-btn">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1-1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg>
+          <span class="text-[0.65rem] font-medium">AI Agent</span>
+        </button>
+        <button class="nav-btn">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+          <span class="text-[0.65rem] font-medium">Menu</span>
+        </button>
+      </div>
+    `;
+
+    // Compact repetitive shell elements injected for display
+    document.querySelectorAll('.phone-frame').forEach(frame => {
+      frame.insertAdjacentHTML('afterbegin', `
+        <div class="absolute top-0 inset-x-0 h-6 flex justify-center z-[100] pointer-events-none">
+          <div class="bg-black w-[150px] h-[25px] rounded-b-[20px] flex justify-between px-[10px] pb-1 relative">
+            <div class="w-3 h-3 rounded-full bg-[#111] shadow-[inset_0_0_2px_rgba(255,255,255,0.1)] self-end"></div>
+            <div class="w-3.5 h-3.5 rounded-full bg-[#111] shadow-[inset_0_0_2px_rgba(255,255,255,0.1)] border-[1.5px] border-[#0a0a0a] self-end relative before:content-[''] before:absolute before:inset-[3px] before:rounded-full before:bg-[#050505]"></div>
+          </div>
+        </div>
+        <div class="h-11 flex items-center justify-between px-6 shrink-0 z-[90] relative pointer-events-none">
+          <span class="text-[0.8rem] font-semibold text-white tracking-wide">9:41</span>
+          <div class="flex items-center gap-1.5 text-white">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="12" x="2" y="6" rx="2"/><line x1="22" y1="11" x2="22" y2="13"/></svg>
           </div>
         </div>
+      `);
+      frame.insertAdjacentHTML('beforeend', '<div class="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-[120px] h-1 bg-white/25 rounded-full z-[120]"></div>');
+    });
 
-        <div class="app-screen">
-          <!-- Background Note Content -->
-          <div class="mobile-header">
-            <span style="font-size: 0.8rem; font-weight: 800; color: white;">ThinkBrain</span>
-            <div class="header-title-container">
-              <div class="header-title" style="color: var(--tn-fg-muted);">Q3 Marketing Plan.md</div>
-            </div>
-            <div class="chrome-badge">3</div>
-          </div>
-
-          <div class="note-body">
-            <div class="note-h1"># Q3 Marketing Plan</div>
-            <div class="note-p">We are launching the new mobile experience in late August...</div>
-          </div>
-
-          <!-- Bottom Sheet Overlay -->
-          <div class="bottom-sheet-overlay">
-            <div class="bottom-sheet-card">
-              <div class="sheet-handle"></div>
-              
-              <div class="sheet-header">
-                <h4>Document Inspector</h4>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--tn-fg-subtle);"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-              </div>
-
-              <!-- Segmented Controls (Right Action Items) -->
-              <div class="sheet-segmented-tabs">
-                <button class="sheet-tab active">Outline</button>
-                <button class="sheet-tab">Properties</button>
-                <button class="sheet-tab">Backlinks (4)</button>
-              </div>
-
-              <!-- Outline Items List -->
-              <div class="outline-list">
-                <div class="outline-item h1">
-                  <span># Q3 Marketing Plan</span>
-                  <span style="font-size: 0.7rem; color: var(--tn-fg-subtle);">L1</span>
-                </div>
-                <div class="outline-item h2">
-                  <span>## Core Deliverables</span>
-                  <span style="font-size: 0.7rem; color: var(--tn-fg-subtle);">L8</span>
-                </div>
-                <div class="outline-item h3">
-                  <span>### Android Scaffolding</span>
-                  <span style="font-size: 0.7rem; color: var(--tn-fg-subtle);">L14</span>
-                </div>
-                <div class="outline-item h2">
-                  <span>## Launch Timelines</span>
-                  <span style="font-size: 0.7rem; color: var(--tn-fg-subtle);">L22</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="home-bar"></div>
-      </div>
-    </div>
-
-  </div>
-
-  <script>
-    function filterView(category) {
-      const cards = document.querySelectorAll('.phone-card');
-      const tabs = document.querySelectorAll('.tab-pill');
-
-      tabs.forEach(t => t.classList.remove('active'));
-      event.currentTarget.classList.add('active');
-
-      cards.forEach(card => {
-        if (category === 'all' || card.dataset.category === category) {
-          card.style.display = 'flex';
-        } else {
-          card.style.display = 'none';
-        }
-      });
-    }
+    // Inject bottom nav only into the first two screens
+    document.querySelectorAll('.needs-bottom-nav').forEach(el => {
+      el.outerHTML = bottomNavTemplate;
+    });
   </script>
 </body>
 </html>
