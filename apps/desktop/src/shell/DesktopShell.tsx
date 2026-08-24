@@ -12,7 +12,7 @@ import { usePanelResize } from "./usePanelResize";
 import { useDocumentViews } from "./useDocumentViews";
 import { useExternalDocumentSync } from "./useExternalDocumentSync";
 import { RightPopout } from "../panels/RightPopout";
-import { useTheme } from "../settings/theme-context";
+import { useTheme } from "../settings/ThemeProvider";
 import { useSettingsStore } from "../settings/settingsStore";
 import { useSettingsQuarantineAdapter } from "../settings/settingsQuarantineAdapter";
 import { useWikiLinkIndexStore } from "../wikiLinks/wikiLinkIndexStore";
