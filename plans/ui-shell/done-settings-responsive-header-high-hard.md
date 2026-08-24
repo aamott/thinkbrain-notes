@@ -1,4 +1,16 @@
-# Story 3: Settings Responsive Nav + Header Bar
+# Story 3: Settings Responsive Nav + Header Bar — DONE
+
+## Status
+
+Done. The sticky `SettingsSaveBar` was removed; Save, Reset, Export, Import,
+autosave label, and save error moved into a new `SettingsHeaderBar` rendered
+at the top of `SettingsTab`. `SettingsNav` accepts `open`/`onClose` props and
+slides in as an overlay below 760px with a scrim, ✕ close button, Escape
+handling, and focus restoration. `SettingsContent` uses Tailwind v4 utility
+classes with a responsive grid layout and ≥44px touch targets on phone. The shell's
+`WorkspaceHeaderBar` is hidden for settings tabs to avoid stacking two bars.
+`SettingsSaveBar.tsx` and its test were deleted; coverage split between
+`SettingsHeaderBar.test.tsx` and `SettingsContent.test.tsx`.
 
 ## Epic
 
@@ -81,5 +93,3 @@ changes (story 4 — the logic moves but the store interaction stays the same).
   `plans/pending-mobile-med-hard.md`).
 - Keep the existing autosave logic from `SettingsSaveBar.tsx` — when autosave
   is enabled, Save/Reset hide and an "Autosave enabled" label shows.
-- Co-located CSS Modules backed by `--tn-*` tokens. No Tailwind utilities or
-  inline styles.

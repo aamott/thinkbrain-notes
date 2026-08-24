@@ -4,7 +4,7 @@
 
 Part of [Modular Settings System](./pending-modular_settings_system-med-hard.md).
 Read that first for the 14 binding design decisions and architecture overview.
-Also read [Story 3](./pending-settings-responsive-header-high-hard.md).
+Also read [Story 3](./done-settings-responsive-header-high-hard.md).
 
 ## Context
 
