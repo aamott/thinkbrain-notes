@@ -1,5 +1,9 @@
 # Story 4: Header Bar Save + Dirty State + Validation
 
+## Status
+
+Verified the Story 3 header-bar migration: header Save/Reset states and store actions, per-section reset, inline validation alerts, autosave mode, settings-tab dirty-dot synchronization, and DirtyCloseDialog Save/Discard/Cancel flows all pass. Added integrated DesktopShell tests for the settings dirty dot and dirty-close decisions; no production changes were needed, and `settingsStore.ts` and `DesktopShell.tsx` remain unchanged.
+
 ## Epic
 
 Part of [Modular Settings System](./pending-modular_settings_system-med-hard.md).
@@ -19,8 +23,8 @@ updates tests.
 **In scope:**
 - Verify Save button in header bar calls `saveSettings()`, shows "Save (N)",
   disables when clean, shows "Saving…" when in-flight.
-- Verify Reset button in section header calls `resetStaged()`, disables when
-  clean.
+- Verify the header Reset button calls `resetStaged()` and the per-section
+  Reset button calls `resetSection()`; both are disabled when clean.
 - Verify dirty dot on the settings tab still works after the layout change.
 - Verify `DirtyCloseDialog` still triggers on close while dirty.
 - Verify inline validation errors still display next to controls.
@@ -30,15 +34,16 @@ updates tests.
 
 ## Acceptance Criteria
 
-- [ ] Save in header bar: "Save" or "Save (N)", disabled when clean, "Saving…"
+- [x] Save in header bar: "Save" or "Save (N)", disabled when clean, "Saving…"
       when in-flight.
-- [ ] Reset in section header: calls `resetStaged()`, disabled when clean.
-- [ ] Dirty dot on tab when `isDirty`. Clears on save or reset.
-- [ ] Close while dirty triggers `DirtyCloseDialog`: Save/Discard/Cancel.
-- [ ] Validation errors display inline with `role="alert"`. Clear on re-save.
-- [ ] Autosave mode: Save/Reset hidden, "Autosave enabled" label shown.
-- [ ] All tests updated and passing.
-- [ ] `pnpm lint`, `pnpm typecheck`, `pnpm test` all pass.
+- [x] Header Reset calls `resetStaged()`; the per-section Reset calls
+      `resetSection()` and both are disabled when clean.
+- [x] Dirty dot on tab when `isDirty`. Clears on save or reset.
+- [x] Close while dirty triggers `DirtyCloseDialog`: Save/Discard/Cancel.
+- [x] Validation errors display inline with `role="alert"`. Clear on re-save.
+- [x] Autosave mode: Save/Reset hidden, "Autosave enabled" label shown.
+- [x] All tests updated and passing.
+- [x] `pnpm lint`, `pnpm typecheck`, `pnpm test` all pass.
 
 ## File References
 
