@@ -1,12 +1,41 @@
-import { useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { isTauri } from "@tauri-apps/api/core";
-import { parseThemeFile, type ThemeBase } from "@thinkbrain/core";
-import { type AppTheme, ThemeProviderContext, type ThemeProviderState } from "./theme-context";
-import { appSettingsRegistry, useSettingsStore } from "./settingsStore";
-import { resolveEffectiveValue } from "./settingsHelpers";
+import { parseThemeFile, type AppThemeSetting, type ThemeBase } from "@thinkbrain/core";
+import { useSettingsStore } from "./settingsStore";
 import { readThemeFile } from "./themeAdapter";
 import { injectThemeOverrides, removeThemeOverrides } from "./themeInjection";
+import { useEffectiveValue } from "./useEffectiveValue";
+
+// Support system, light, dark, and potentially custom imported themes later.
+// `AppTheme` extends `AppThemeSetting` with the `(string & {})` escape hatch so
+// future custom themes can flow through the same context without a breaking
+// change, while persistence still uses the strict `AppThemeSetting` union.
+export type AppTheme = AppThemeSetting | (string & {});
+
+export interface ThemeProviderState {
+  readonly theme: AppTheme;
+  readonly setTheme: (theme: AppTheme) => void;
+}
+
+// eslint-disable-next-line react-refresh/only-export-components
+export const ThemeProviderContext = createContext<ThemeProviderState>({
+  theme: "system",
+  // Fail loudly if `useTheme` is consumed outside a `ThemeProvider`. A silent
+  // no-op here would mask the missing-provider bug (theme changes would
+  // appear to do nothing). Throwing surfaces it immediately at the call site.
+  setTheme: () => {
+    throw new Error("useTheme must be used within a ThemeProvider");
+  }
+});
+
+// eslint-disable-next-line react-refresh/only-export-components
+export function useTheme(): ThemeProviderState {
+  // The context always has a default value (with a throwing `setTheme`), so
+  // `useContext` never returns `undefined` here — the missing-provider case is
+  // surfaced by the throwing default setter when the consumer calls it.
+  return useContext(ThemeProviderContext);
+}
 
 export interface ThemeProviderProps {
   readonly children: ReactNode;
@@ -54,31 +83,13 @@ export function ThemeProvider({
   children,
   defaultTheme = "system",
 }: ThemeProviderProps) {
-  // Subscribe to the raw state fields that determine the effective theme, then
-  // compute it inline. Calling `getEffectiveValue` inside a selector does NOT
-  // reliably trigger re-renders: Zustand compares the selector's returned
-  // value (a primitive string) and the method only reads current state at
-  // selection time, so subsequent mutations to `stagedChanges`/`appValues`
-  // wouldn't necessarily re-run the selector with the new state. Subscribing
-  // to the underlying fields guarantees re-renders whenever any of them
-  // change. Resolution order mirrors `getEffectiveValue`: staged > appValues > default.
-  const staged = useSettingsStore((s) => s.stagedChanges);
-  const appValues = useSettingsStore((s) => s.appValues);
   const loaded = useSettingsStore((s) => s.loaded);
   const loadSettings = useSettingsStore((s) => s.loadSettings);
   const stageChange = useSettingsStore((s) => s.stageChange);
 
-  // Resolve effective values via the shared pure helper so the precedence rule
-  // (staged > appValues > registry default) stays in one place. See the comment
-  // above on why we subscribe to the raw maps rather than calling the store's
-  // `getEffectiveValue` action inside a selector.
-  const themeFromStore = resolveEffectiveValue(
-    "appearance.theme",
-    staged,
-    appValues,
-    null,
-    appSettingsRegistry.getDefinition("appearance.theme")
-  );
+  // The hook subscribes to the raw value maps before resolving the value so
+  // staged or loaded changes trigger a render.
+  const themeFromStore = useEffectiveValue("appearance.theme");
   // Resolve the display theme: use the store value once loaded, else the prop
   // default. The store value is `unknown` (typed as the registry default), so
   // coerce to the AppTheme string union.
@@ -86,16 +97,8 @@ export function ThemeProvider({
     ? (themeFromStore as AppTheme)
     : defaultTheme;
 
-  // Resolve the effective themeFile path with the same staged > appValues >
-  // default pattern. Default is null (no custom theme). A staged non-string
-  // value (e.g. null) clears the file.
-  const themeFileFromStore = resolveEffectiveValue(
-    "appearance.themeFile",
-    staged,
-    appValues,
-    null,
-    appSettingsRegistry.getDefinition("appearance.themeFile")
-  );
+  // A staged non-string value (e.g. null) clears the file.
+  const themeFileFromStore = useEffectiveValue("appearance.themeFile");
   const themeFile: string | null =
     loaded && typeof themeFileFromStore === "string" && themeFileFromStore.length > 0
       ? themeFileFromStore

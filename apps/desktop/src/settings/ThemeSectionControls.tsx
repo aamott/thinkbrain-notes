@@ -12,8 +12,7 @@
 import { useCallback, useEffect, useState, type ChangeEvent } from "react";
 import { Download, Upload } from "lucide-react";
 import { cn } from "../lib/utils";
-import { appSettingsRegistry, useSettingsStore } from "./settingsStore";
-import { resolveEffectiveValue } from "./settingsHelpers";
+import { useSettingsStore } from "./settingsStore";
 import { listThemes, type ThemeEntry } from "./themeAdapter";
 import {
   buildThemeExport,
@@ -22,6 +21,7 @@ import {
   type ImportThemeResult
 } from "./themeImportExport";
 import { useTransientStatus } from "./useTransientStatus";
+import { useEffectiveValue } from "./useEffectiveValue";
 
 /**
  * The base theme option values exposed by the unified picker.
@@ -74,12 +74,6 @@ export function ThemePicker() {
   // branch is a single null-check.
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  // Subscribe to the raw value maps so the select re-renders when the user
-  // stages a new theme (or theme file path). Only the three fields the
-  // effective-value computation reads are selected, matching SettingRow.
-  const stagedChanges = useSettingsStore((s) => s.stagedChanges);
-  const appValues = useSettingsStore((s) => s.appValues);
-  const workspaceValues = useSettingsStore((s) => s.workspaceValues);
   const stageChange = useSettingsStore((s) => s.stageChange);
 
   // Load the theme list on mount. The adapter returns an empty array outside
@@ -107,29 +101,13 @@ export function ThemePicker() {
   }, []);
 
   // Compute the effective themeFile value (staged > app > default). The
-  // default is `null` (no custom theme) per the settings registry. Both
-  // appearance.theme and appearance.themeFile are app-scoped, so a workspace
-  // file cannot override them — resolveEffectiveValue enforces that.
-  const themeFileDef = appSettingsRegistry.getDefinition("appearance.themeFile");
-  const themeFileValue = resolveEffectiveValue(
-    "appearance.themeFile",
-    stagedChanges,
-    appValues,
-    workspaceValues,
-    themeFileDef
-  );
+  // default is `null` (no custom theme) per the settings registry.
+  const themeFileValue = useEffectiveValue("appearance.themeFile");
 
   // The unified select's value: if a theme file is active (non-null string),
   // use its path; otherwise fall back to the effective base `appearance.theme`
   // value (defaulting to "system" if somehow not a string).
-  const themeDef = appSettingsRegistry.getDefinition("appearance.theme");
-  const themeValue = resolveEffectiveValue(
-    "appearance.theme",
-    stagedChanges,
-    appValues,
-    workspaceValues,
-    themeDef
-  );
+  const themeValue = useEffectiveValue("appearance.theme");
   const selectValue =
     typeof themeFileValue === "string" && themeFileValue !== ""
       ? themeFileValue

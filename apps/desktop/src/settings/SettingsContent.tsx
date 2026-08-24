@@ -3,14 +3,13 @@
  *
  * For each setting definition in the active section, renders a row with the
  * label, description, and the auto-generated (or custom) control. The
- * control's value is the *effective* value computed reactively from the
- * store's raw state fields (staged > appValues > workspaceValues > default).
+ * control's value is the *effective* value computed reactively by
+ * `useEffectiveValue` (staged > appValues > workspaceValues > default).
  *
  * Per the store's reactivity note: `getEffectiveValue` is a store action that
  * reads current state, so calling it during render won't trigger re-renders.
- * Instead we select the raw state fields (`stagedChanges`, `appValues`,
- * `workspaceValues`) with `useSettingsStore` so the component re-renders when
- * any of them change, and compute the effective value inline.
+ * Instead, `useEffectiveValue` subscribes to the raw state fields so each
+ * setting row re-renders when any of them change.
  */
 
 import {
@@ -25,11 +24,11 @@ import type { SettingDefinition, SettingsDiagnostic } from "@thinkbrain/core";
 import { cn } from "../lib/utils";
 import { Unavailable } from "../shell/Unavailable";
 import { appSettingsRegistry, useSettingsStore } from "./settingsStore";
-import { resolveEffectiveValue } from "./settingsHelpers";
 import { getControlForDefinition } from "./controlRegistry";
 import { subscribeSettingHighlight } from "./settingHighlight";
 import { findSectionLabelAcrossModules } from "./sectionUtils";
 import { ThemePicker, ThemeToolbar } from "./ThemeSectionControls";
+import { useEffectiveValue } from "./useEffectiveValue";
 
 /**
  * Renders a single setting row: label, description, control, and any inline
@@ -44,18 +43,17 @@ import { ThemePicker, ThemeToolbar } from "./ThemeSectionControls";
  */
 function SettingRow({
   definition,
-  value,
   onChange,
   diagnostics,
   highlighted
 }: {
   readonly definition: SettingDefinition;
-  readonly value: unknown;
   readonly onChange: (value: unknown) => void;
   readonly diagnostics: readonly SettingsDiagnostic[];
   readonly highlighted: boolean;
 }) {
   const ControlComponent = getControlForDefinition(definition);
+  const value = useEffectiveValue(definition.key);
 
   return (
     <div
@@ -109,10 +107,7 @@ function SettingRow({
  */
 export function SettingsContent() {
   const activeSection = useSettingsStore((s) => s.activeSection);
-  // Subscribe to the raw value maps so controls re-render on any change.
   const stagedChanges = useSettingsStore((s) => s.stagedChanges);
-  const appValues = useSettingsStore((s) => s.appValues);
-  const workspaceValues = useSettingsStore((s) => s.workspaceValues);
   const stageChange = useSettingsStore((s) => s.stageChange);
   // Subscribe to validation diagnostics so inline errors render/clear reactively.
   const validationDiagnostics = useSettingsStore((s) => s.validationDiagnostics);
@@ -223,13 +218,6 @@ export function SettingsContent() {
                 <SettingRow
                   key={definition.key}
                   definition={definition}
-                  value={resolveEffectiveValue(
-                    definition.key,
-                    stagedChanges,
-                    appValues,
-                    workspaceValues,
-                    definition
-                  )}
                   onChange={(value) => stageChange(definition.key, value)}
                   diagnostics={validationDiagnostics.filter(
                     (d) => d.path === definition.key
