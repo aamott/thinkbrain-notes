@@ -390,8 +390,10 @@ pub fn delete_workspace_entry_for_test(
     delete_workspace_entry_impl(&root_path, &relative_path)
 }
 
-#[tauri::command]
-pub fn open_workspace_window(app: tauri::AppHandle, root_path: String) -> Result<(), NativeError> {
+pub(crate) fn create_workspace_window_off_main_thread(
+    app: tauri::AppHandle,
+    root_path: String,
+) -> Result<(), NativeError> {
     let root = resolve_workspace_root(&root_path)?;
     let label = next_workspace_window_label();
     let root_path = root.to_string_lossy().into_owned();
@@ -407,6 +409,7 @@ pub fn open_workspace_window(app: tauri::AppHandle, root_path: String) -> Result
             .title(describe_workspace(&root).name)
             .build()
             .map_err(|error| {
+                unregister_workspace_window_root(&app.state::<WorkspaceWindowRoots>(), &label);
                 failed(
                     "workspace.window_failed",
                     "Failed to create a workspace window.",
@@ -429,6 +432,14 @@ pub fn open_workspace_window(app: tauri::AppHandle, root_path: String) -> Result
         }),
     );
     Ok(())
+}
+
+#[tauri::command]
+pub async fn open_workspace_window(
+    app: tauri::AppHandle,
+    root_path: String,
+) -> Result<(), NativeError> {
+    create_workspace_window_off_main_thread(app, root_path)
 }
 
 #[tauri::command]

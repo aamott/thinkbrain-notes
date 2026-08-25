@@ -3,31 +3,32 @@ import tailwindcss from "@tailwindcss/vite";
 import { fileURLToPath, URL } from "node:url";
 import { defineConfig } from "vitest/config";
 
+/** `fileURLToPath` on Windows produces backslash paths (e.g. `C:\...\src\`).
+ *  Vite's alias replacement appends the remaining import path with forward
+ *  slashes, creating mixed separators that fail to resolve. Normalizing to
+ *  forward slashes keeps aliases working cross-platform. */
+const aliasPath = (relative: string) =>
+  fileURLToPath(new URL(relative, import.meta.url)).replace(/\\/g, "/");
+
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: [
       {
         find: "@/",
-        replacement: fileURLToPath(new URL("./src/", import.meta.url))
+        replacement: aliasPath("./src/")
       },
       {
         find: "@thinkbrain/ui/styles.css",
-        replacement: fileURLToPath(
-          new URL("../../packages/ui/src/styles/tokens.css", import.meta.url)
-        )
+        replacement: aliasPath("../../packages/ui/src/styles/tokens.css")
       },
       {
         find: "@thinkbrain/core",
-        replacement: fileURLToPath(
-          new URL("../../packages/core/src/index.ts", import.meta.url)
-        )
+        replacement: aliasPath("../../packages/core/src/index.ts")
       },
       {
         find: "@thinkbrain/ui",
-        replacement: fileURLToPath(
-          new URL("../../packages/ui/src/index.ts", import.meta.url)
-        )
+        replacement: aliasPath("../../packages/ui/src/index.ts")
       }
     ]
   },

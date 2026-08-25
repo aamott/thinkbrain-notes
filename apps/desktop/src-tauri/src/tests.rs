@@ -9,6 +9,18 @@ use std::{
 };
 
 #[test]
+fn workspace_window_creation_command_is_async() {
+    fn assert_async_command<F, Fut>(_command: F)
+    where
+        F: Fn(tauri::AppHandle, String) -> Fut,
+        Fut: std::future::Future<Output = Result<(), NativeError>>,
+    {
+    }
+
+    assert_async_command(open_workspace_window);
+}
+
+#[test]
 fn workspace_window_roots_are_scoped_to_opaque_window_labels() {
     let roots = WorkspaceWindowRoots::default();
     let first = next_workspace_window_label();
