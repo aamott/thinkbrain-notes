@@ -39,7 +39,7 @@ apps/desktop/  # React UI + Tauri Rust host (See apps/desktop/AGENTS.md)
 packages/core/  # Platform-agnostic TS: note model, markdown, frontmatter, settings, layout, extensions (See packages/core/AGENTS.md)
 packages/ui/  # Design system: tokens, shadcn components (See packages/ui/AGENTS.md)
 plans/  # Epics, feature specs, task tracking (See ## Plans below)
-scripts/  # qa.sh, rust-env.sh, with-rust-env.sh
+scripts/  # qa.mjs (run via `pnpm qa`), with-rust-env.mjs — cross-platform Node wrappers; plus qa.sh, rust-env.sh, with-rust-env.sh
 docs/  # Reviews, known issues, superpowers specs
 examples/extensions/  # Sample extension (hello-notes)
 ```
@@ -51,7 +51,7 @@ examples/extensions/  # Sample extension (hello-notes)
 - **ACP Integration**: Tauri Rust host owns agent process lifecycle via `agent-client-protocol` crate. Renderer receives Tauri events directly.
 
 ## Quality & Conventions
-- Run `./scripts/qa.sh` before completing tasks. Runs all linting, formatting, and tests.
+- Run `pnpm qa` before completing tasks. Runs all linting, formatting, and tests (cross-platform; backed by `scripts/qa.mjs`).
 - Avoid `any` types; prefer strict types or `unknown`.
 - Fail loudly: log errors clearly and return typed results.
 

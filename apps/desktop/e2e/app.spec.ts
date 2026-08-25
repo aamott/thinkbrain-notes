@@ -28,7 +28,15 @@ test("activity bar toggles between the explorer and search panels", async ({ pag
   await expect(page.getByRole("complementary", { name: "Explorer panel" })).toBeVisible();
 });
 
-test("opens a workspace in a new window and restores the last workspace on reload", async ({ page }) => {
+// Renderer-only scope: this test mocks `open_workspace_window` as a no-op
+// success and `window_workspace_root` as null. It proves the renderer
+// persists `lastWorkspacePath` after the launch flow and restores the
+// workspace on reload — NOT that a native Tauri webview was created. A
+// blank, frozen, or failed native window would not be caught here. Native
+// window lifecycle pieces (label generation, root registration/cleanup,
+// path validation) have focused Rust unit tests; a real OS webview still
+// requires a live Tauri runtime rather than this browser harness.
+test("renderer persists and restores the last workspace across reload (no native webview is created)", async ({ page }) => {
   await page.addInitScript(() => {
     const settingsKey = "thinkbrain-e2e-app-settings";
     const appWindow = window as Window & {
@@ -94,6 +102,69 @@ test("opens a workspace in a new window and restores the last workspace on reloa
   await page.reload();
   await expect(page.getByRole("heading", { name: "demo-vault" })).toBeVisible();
   await expect(page.getByRole("treeitem", { name: /Notes/ })).toBeVisible();
+});
+
+// Renderer-only: verifies the multi-window restore precedence — when the
+// native window has a registered root (`window_workspace_root`), it wins
+// over the persisted `lastWorkspacePath` fallback. This is the contract a
+// second workspace window relies on to open its own vault rather than the
+// last one any window touched. Like the test above, it mocks the native
+// commands and does not create a real native window.
+test("renderer prefers the native window root over the persisted last workspace on reload", async ({ page }) => {
+  await page.addInitScript(() => {
+    const settingsKey = "thinkbrain-e2e-app-settings-window-root";
+    const appWindow = window as Window & {
+      isTauri?: boolean;
+      __TAURI_INTERNALS__?: { invoke: (command: string, args: Record<string, unknown>) => Promise<unknown> };
+    };
+    appWindow.isTauri = true;
+    appWindow.__TAURI_INTERNALS__ = {
+      async invoke(command, args) {
+        if (command === "plugin:dialog|open") return "/workspace/demo-vault";
+        // Simulate a workspace window whose native root was registered
+        // before the frontend loaded — this is what a real Tauri window
+        // created by `open_workspace_window` would return.
+        if (command === "window_workspace_root") return "/workspace/window-root-vault";
+        if (command === "open_workspace_window") return null;
+        if (command === "read_app_settings") return sessionStorage.getItem(settingsKey);
+        if (command === "write_app_settings") {
+          sessionStorage.setItem(settingsKey, String(args.contents));
+          return null;
+        }
+        if (command === "update_desktop_state") {
+          const current = JSON.parse(sessionStorage.getItem(settingsKey) ?? "{}") as Record<string, unknown>;
+          const previousDesktopState = (current.desktopState ?? {}) as Record<string, unknown>;
+          const update = (args.update ?? {}) as Record<string, unknown>;
+          const merged = {
+            version: 3,
+            lastWorkspacePath: update.lastWorkspacePath ?? previousDesktopState.lastWorkspacePath ?? null,
+            recentWorkspacePaths: update.recentWorkspacePaths ?? previousDesktopState.recentWorkspacePaths ?? [],
+            explorerOpen: update.explorerOpen ?? previousDesktopState.explorerOpen ?? true,
+            leftPanelWidth: update.leftPanelWidth ?? previousDesktopState.leftPanelWidth ?? 288,
+            rightPanelWidth: update.rightPanelWidth ?? previousDesktopState.rightPanelWidth ?? 320,
+            bottomPanelOpen: update.bottomPanelOpen ?? previousDesktopState.bottomPanelOpen ?? false
+          };
+          const next = { ...current, desktopState: merged };
+          const serialized = JSON.stringify(next);
+          sessionStorage.setItem(settingsKey, serialized);
+          return serialized;
+        }
+        if (command === "open_workspace") {
+          return {
+            workspace: { root_path: String(args.rootPath), name: String(args.rootPath).split("/").pop() ?? "vault" },
+            files: []
+          };
+        }
+        if (command === "list_workspace_entries") return [];
+        throw new Error(`Unexpected native command: ${command}`);
+      }
+    };
+  });
+
+  await page.goto("/");
+  // The native window root takes precedence, so the window-root vault
+  // opens even though no workspace was picked in this page session.
+  await expect(page.getByRole("heading", { name: "window-root-vault" })).toBeVisible();
 });
 
 test("command palette opens workspace files, runs commands, and restores focus", async ({ page }) => {
@@ -237,7 +308,7 @@ test("opens, saves, protects, and creates Markdown notes through the fresh shell
   await expect(page.getByRole("dialog", { name: "Unsaved changes" })).toBeVisible();
   await page.getByRole("button", { name: "Cancel" }).click();
   await expect(editor).toBeVisible();
-  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await page.getByRole("button", { name: "Save note" }).click();
   await expect(page.getByLabel("Unsaved changes")).not.toBeVisible();
   await expect.poll(() => page.evaluate(() => sessionStorage.getItem("thinkbrain-e2e-markdown-documents"))).toContain("# Updated welcome");
 

@@ -4,6 +4,7 @@
 //! and the Rust backend.
 //!
 //! Submodules:
+//! - `atomic_write`: Temp-then-rename file replacement that never deletes the destination first.
 //! - `workspace`: Vault/workspace window lifecycle, file and directory hierarchy operations.
 //! - `markdown`: Content reading, writing, creation, renaming, and listing of markdown files.
 //! - `search`: Full-text document indexing and search query execution.
@@ -18,6 +19,7 @@
 //! - Input Validation: User inputs (such as paths or filenames) must be sanitized and checked before execution.
 //! - State Safety: Desktop state and workspace window mappings use synchronized thread-safe primitives.
 
+pub mod atomic_write;
 pub mod backup;
 pub mod extensions;
 pub mod markdown;

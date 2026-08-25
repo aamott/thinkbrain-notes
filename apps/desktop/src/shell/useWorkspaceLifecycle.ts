@@ -11,11 +11,14 @@ import {
   DEFAULT_RIGHT_PANEL_WIDTH,
   loadDesktopState,
   promoteRecentWorkspace,
-  saveDesktopState,
   workspaceTabs,
-  type DesktopStateUpdate,
   type PersistedTab
 } from "../settings/desktopState";
+import {
+  persistDesktopState,
+  readDesktopState,
+  reportDesktopStateReadFailure
+} from "../settings/desktopStatePersistence";
 import { useSearchIndexStore } from "../search/searchIndexStore";
 import { useSettingsStore } from "../settings/settingsStore";
 import {
@@ -74,8 +77,11 @@ export function useWorkspaceLifecycle({
     if (!isTauri()) return;
 
     let active = true;
-    void Promise.allSettled([loadDesktopState(), workspaceDesktopApi.windowWorkspaceRoot()]).then(([desktopResult, rootResult]) => {
+    void Promise.allSettled([readDesktopState(), workspaceDesktopApi.windowWorkspaceRoot()]).then(([desktopResult, rootResult]) => {
       if (!active) return;
+      // `readDesktopState` reports and falls back to defaults on failure, so
+      // the desktop result is always fulfilled — the ternary is kept for the
+      // `allSettled` type narrowing `windowWorkspaceRoot` requires.
       const desktopState = desktopResult.status === "fulfilled" ? desktopResult.value : DEFAULT_DESKTOP_STATE;
       const windowRoot = rootResult.status === "fulfilled" ? rootResult.value : null;
       const recentPaths = windowRoot
@@ -134,7 +140,7 @@ export function useWorkspaceLifecycle({
         if (!active) return;
         recentWorkspacePathsRef.current = desktopState.recentWorkspacePaths;
         setRecentWorkspacePaths(desktopState.recentWorkspacePaths);
-      }).catch(() => undefined);
+      }).catch(reportDesktopStateReadFailure);
     };
 
     window.addEventListener("focus", refreshRecentWorkspacePaths);
@@ -142,11 +148,6 @@ export function useWorkspaceLifecycle({
       active = false;
       window.removeEventListener("focus", refreshRecentWorkspacePaths);
     };
-  }, []);
-
-  const persistDesktopState = useCallback((update: DesktopStateUpdate) => {
-    if (!isTauri()) return;
-    void saveDesktopState(update).catch(() => undefined);
   }, []);
 
   /**
@@ -171,7 +172,7 @@ export function useWorkspaceLifecycle({
           activeTabId: tabs.activeTabId
         });
       }, TAB_PERSIST_DELAY_MS),
-    [persistDesktopState]
+    []
   );
   useEffect(() => {
     if (!stateRestored || !isTauri()) return;
@@ -193,7 +194,7 @@ export function useWorkspaceLifecycle({
         PANEL_WIDTH_PERSIST_DELAY_MS
       )
     }),
-    [persistDesktopState]
+    []
   );
   const schedulePanelWidthPersistence = useCallback(
     (side: PanelSide, width: number) => savePanelWidth[side](width),
@@ -224,7 +225,7 @@ export function useWorkspaceLifecycle({
   const updateBottomPanel = useCallback((panel: BottomPanel | null) => {
     setBottomPanel(panel);
     persistDesktopState({ bottomPanelOpen: panel !== null });
-  }, [persistDesktopState]);
+  }, []);
 
   const toggleBottomPanel = useCallback(() => {
     updateBottomPanel(bottomPanel ? null : "terminal");
@@ -236,7 +237,7 @@ export function useWorkspaceLifecycle({
       persistDesktopState({ explorerOpen: next === "explorer" });
       return next;
     });
-  }, [persistDesktopState]);
+  }, []);
 
   const handleWorkspaceOpened = useCallback((rootPath: string, snapshot: NativeWorkspaceSnapshot) => {
     setRestoredWorkspacePath(rootPath);
@@ -246,7 +247,7 @@ export function useWorkspaceLifecycle({
     void useSearchIndexStore.getState().indexWorkspace(rootPath, snapshot.files);
     void useWikiLinkIndexStore.getState().indexWorkspace(rootPath, snapshot.files);
     persistDesktopState({ lastWorkspacePath: rootPath, recentWorkspacePaths: recentPaths });
-  }, [persistDesktopState, updateRecentWorkspacePaths]);
+  }, [updateRecentWorkspacePaths]);
 
   const handleWorkspaceUnavailable = useCallback(() => {
     setRestoredWorkspacePath(null);
@@ -255,7 +256,7 @@ export function useWorkspaceLifecycle({
     useSearchIndexStore.getState().clearWorkspace();
     useWikiLinkIndexStore.getState().clearWorkspace();
     persistDesktopState({ lastWorkspacePath: null });
-  }, [persistDesktopState]);
+  }, []);
 
   const handleWorkspaceLaunched = useCallback((rootPath: string) => {
     const recentPaths = updateRecentWorkspacePaths(rootPath);
@@ -264,12 +265,12 @@ export function useWorkspaceLifecycle({
     // workspace. In multi-window Tauri sessions, `window_workspace_root`
     // takes precedence over this fallback on reload.
     persistDesktopState({ lastWorkspacePath: rootPath, recentWorkspacePaths: recentPaths });
-  }, [persistDesktopState, updateRecentWorkspacePaths]);
+  }, [updateRecentWorkspacePaths]);
 
   const showExplorer = useCallback(() => {
     setLeftPanel("explorer");
     persistDesktopState({ explorerOpen: true });
-  }, [persistDesktopState]);
+  }, []);
 
   const acknowledgeNewNoteFocus = useCallback(() => {
     setNewNoteFocusRequest(0);

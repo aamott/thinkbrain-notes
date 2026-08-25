@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { createDebounced } from "../lib/debounce";
-import { collapsedGroups, loadDesktopState, saveDesktopState } from "../settings/desktopState";
+import { collapsedGroups, loadDesktopState } from "../settings/desktopState";
+import {
+  persistDesktopState,
+  reportDesktopStateReadFailure
+} from "../settings/desktopStatePersistence";
 import { useSettingsStore } from "../settings/settingsStore";
 
 /**
@@ -45,8 +49,9 @@ export function useCollapsedGroups(
         if (cancelled) return;
         setCollapsed(new Set(collapsedGroups(state, workspaceRootPath, viewId)));
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         // Everything open is the honest fallback for state we could not read.
+        reportDesktopStateReadFailure(error);
         if (!cancelled) setCollapsed(new Set());
       });
     return () => {
@@ -57,9 +62,9 @@ export function useCollapsedGroups(
   const [persist] = useState(() =>
     createDebounced<{ workspacePath: string; viewId: string; collapsed: readonly string[] }>(
       ({ workspacePath, viewId: view, collapsed: keys }) => {
-        void saveDesktopState({
+        persistDesktopState({
           collapsedGroups: { workspacePath, viewId: view, collapsed: keys }
-        }).catch(() => undefined);
+        });
       },
       PERSIST_DELAY_MS
     )
