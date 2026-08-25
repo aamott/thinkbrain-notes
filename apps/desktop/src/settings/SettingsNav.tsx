@@ -6,8 +6,8 @@
  * list when a search query is active. Top-level tree groups are "Application"
  * (settings whose scope is `"app"`) and "Workspace" (settings whose scope is
  * `"workspace"`, only when a workspace is open). A mixed-scope module appears
- * in both, projected to the matching settings. Clicking a section sets it as
- * the active nav target and closes the narrow-screen navigation overlay.
+ * in both, projected to the matching settings. Clicking a section scrolls its
+ * content anchor into view while the content scroll-spy owns active state.
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -15,6 +15,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { ChevronDown, ChevronRight, Search, X } from "lucide-react";
 import type {
   SettingDefinition,
+  SettingScope,
   SettingSection,
   SettingsModule
 } from "@thinkbrain/core";
@@ -38,6 +39,14 @@ export interface SettingsNavProps {
   readonly onClose: () => void;
 }
 
+/** Smoothly scrolls the single-page content to a registered section anchor. */
+function scrollToSection(sectionId: string): void {
+  document.getElementById(`settings-section-${sectionId}`)?.scrollIntoView({
+    behavior: "smooth",
+    block: "start"
+  });
+}
+
 /**
  * Recursively renders a section and its subsections as tree items.
  *
@@ -49,11 +58,13 @@ export interface SettingsNavProps {
  */
 function SectionTreeItem({
   section,
+  scope,
   level,
   activeSection,
   onSelect
 }: {
   readonly section: SettingSection;
+  readonly scope: SettingScope;
   readonly level: number;
   readonly activeSection: string | null;
   readonly onSelect: (id: string) => void;
@@ -61,7 +72,8 @@ function SectionTreeItem({
   const [expanded, setExpanded] = useState(true);
   const hasSubsections = Boolean(section.subsections && section.subsections.length > 0);
   const hasSettings = Boolean(section.settings && section.settings.length > 0);
-  const isActive = activeSection === section.id;
+  const qualifiedId = `${scope}:${section.id}`;
+  const isActive = activeSection === qualifiedId;
   const Chevron = expanded ? ChevronDown : ChevronRight;
 
   return (
@@ -88,7 +100,7 @@ function SectionTreeItem({
           type="button"
           disabled={!hasSettings}
           aria-current={isActive ? "true" : undefined}
-          onClick={() => hasSettings && onSelect(section.id)}
+          onClick={() => hasSettings && onSelect(qualifiedId)}
           className={cn(
             "min-w-0 flex-1 cursor-pointer truncate rounded-small px-1.5 py-1 text-left text-xs leading-relaxed text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:-outline-offset-2 focus-visible:outline-2 focus-visible:outline-ring max-[760px]:min-h-11",
             isActive && "bg-surface font-medium text-foreground",
@@ -105,6 +117,7 @@ function SectionTreeItem({
             <SectionTreeItem
               key={subsection.id}
               section={subsection}
+              scope={scope}
               level={level + 1}
               activeSection={activeSection}
               onSelect={onSelect}
@@ -119,10 +132,12 @@ function SectionTreeItem({
 /** Renders a single module's sections as a subtree. */
 function ModuleGroup({
   module,
+  scope,
   activeSection,
   onSelect
 }: {
   readonly module: SettingsModule;
+  readonly scope: SettingScope;
   readonly activeSection: string | null;
   readonly onSelect: (id: string) => void;
 }) {
@@ -136,6 +151,7 @@ function ModuleGroup({
           <SectionTreeItem
             key={section.id}
             section={section}
+            scope={scope}
             level={0}
             activeSection={activeSection}
             onSelect={onSelect}
@@ -149,11 +165,13 @@ function ModuleGroup({
 /** Renders an Application or Workspace scope group. */
 function ScopeGroup({
   label,
+  scope,
   modules,
   activeSection,
   onSelect
 }: {
   readonly label: string;
+  readonly scope: SettingScope;
   readonly modules: readonly SettingsModule[];
   readonly activeSection: string | null;
   readonly onSelect: (id: string) => void;
@@ -168,6 +186,7 @@ function ScopeGroup({
           <ModuleGroup
             key={module.id}
             module={module}
+            scope={scope}
             activeSection={activeSection}
             onSelect={onSelect}
           />
@@ -289,7 +308,6 @@ function SearchResults({
 export function SettingsNav({ open, onClose }: SettingsNavProps) {
   const activeSection = useSettingsStore((state) => state.activeSection);
   const workspaceValues = useSettingsStore((state) => state.workspaceValues);
-  const setActiveSection = useSettingsStore((state) => state.setActiveSection);
   const searchQuery = useSettingsStore((state) => state.searchQuery);
   const setSearchQuery = useSettingsStore((state) => state.setSearchQuery);
   const [inputValue, setInputValue] = useState(searchQuery);
@@ -318,17 +336,17 @@ export function SettingsNav({ open, onClose }: SettingsNavProps) {
     [isSearching, searchQuery]
   );
 
-  /** Selects a section and dismisses the responsive overlay when necessary. */
+  /** Scrolls to a section without closing the responsive navigation. */
   function handleSectionSelect(id: string): void {
-    setActiveSection(id);
+    scrollToSection(id);
   }
 
-  /** Selects and highlights a search result, then dismisses the overlay. */
+  /** Clears search, scrolls to the result's section, and highlights its row. */
   function handleResultSelect(definition: SettingDefinition): void {
     debouncedSetSearchQuery.cancel();
     setInputValue("");
     setSearchQuery("");
-    setActiveSection(definition.section);
+    scrollToSection(`${definition.scope}:${definition.section}`);
     requestSettingHighlight(definition.key);
   }
 
@@ -336,14 +354,14 @@ export function SettingsNav({ open, onClose }: SettingsNavProps) {
     <nav
       id="settings-navigation"
       className={cn(
-        "flex min-h-0 w-56 shrink-0 flex-col overflow-hidden border-r border-border bg-sidebar p-2 text-sidebar-foreground max-[760px]:invisible max-[760px]:pointer-events-none max-[760px]:absolute max-[760px]:inset-y-0 max-[760px]:start-0 max-[760px]:z-30 max-[760px]:w-[min(15rem,calc(100%-2rem))] max-[760px]:-translate-x-full max-[760px]:shadow-panel max-[760px]:transition-[transform_180ms_ease,visibility_0s_linear_180ms]",
+        "flex min-h-0 w-56 shrink-0 flex-col overflow-hidden border-r border-border bg-sidebar p-2 text-sidebar-foreground max-[760px]:invisible max-[760px]:pointer-events-none max-[760px]:absolute max-[760px]:inset-y-0 max-[760px]:inset-s-0 max-[760px]:z-30 max-[760px]:w-[min(15rem,calc(100%-2rem))] max-[760px]:-translate-x-full max-[760px]:shadow-panel max-[760px]:transition-[transform_180ms_ease,visibility_0s_linear_180ms]",
         open && "max-[760px]:visible max-[760px]:pointer-events-auto max-[760px]:translate-x-0 max-[760px]:delay-0"
       )}
       aria-label="Settings sections"
       data-open={open ? "true" : "false"}
     >
       <div className="-mx-2 -mt-2 mb-1 flex shrink-0 items-center gap-1 bg-surface p-2">
-        <div className="relative flex-1">
+        <div className="relative flex-1">s
           <Search
             className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
             aria-hidden="true"
@@ -365,7 +383,7 @@ export function SettingsNav({ open, onClose }: SettingsNavProps) {
             }}
             placeholder="Search settings…"
             aria-label="Search settings"
-            className="w-full rounded-small border border-border bg-surface py-1.5 pr-2 pl-7 text-xs text-foreground placeholder:text-muted-foreground focus-visible:-outline-offset-2 focus-visible:outline-2 focus-visible:outline-ring max-[760px]:min-h-11"
+            className="w-full rounded-small border border-border bg-surface py-1.5 pr-2 pl-7 text-xs placeholder:text-muted-foreground focus-visible:-outline-offset-2 focus-visible:outline-2 focus-visible:outline-ring max-[760px]:min-h-11"
           />
         </div>
         <button
@@ -385,6 +403,7 @@ export function SettingsNav({ open, onClose }: SettingsNavProps) {
           <ul role="tree" className="m-0 flex flex-col gap-1 p-0">
             <ScopeGroup
               label="Application"
+              scope="app"
               modules={appModules}
               activeSection={activeSection}
               onSelect={handleSectionSelect}
@@ -392,6 +411,7 @@ export function SettingsNav({ open, onClose }: SettingsNavProps) {
             {workspaceValues !== null && workspaceModules.length > 0 && (
               <ScopeGroup
                 label="Workspace"
+                scope="workspace"
                 modules={workspaceModules}
                 activeSection={activeSection}
                 onSelect={handleSectionSelect}

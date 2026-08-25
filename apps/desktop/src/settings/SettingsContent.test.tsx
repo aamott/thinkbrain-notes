@@ -5,6 +5,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SettingsContent } from "./SettingsContent";
+import { createScrollSpyHarness } from "./scrollSpyTestUtils";
+import { requestSettingHighlight } from "./settingHighlight";
 import { useSettingsStore } from "./settingsStore";
 
 /**
@@ -29,6 +31,7 @@ vi.mock("../native/fs", () => ({
 
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
+const scrollSpy = createScrollSpyHarness();
 
 /** Default app values seeded into the store for most tests. */
 const SEEDED_APP_VALUES: Record<string, unknown> = {
@@ -40,6 +43,8 @@ const SEEDED_APP_VALUES: Record<string, unknown> = {
 };
 
 beforeEach(() => {
+  scrollSpy.install();
+
   // Reset the singleton store to a clean, loaded state before every test.
   // Replace resetSection with a spy so the click test can assert its argument.
   useSettingsStore.setState({
@@ -66,6 +71,8 @@ afterEach(async () => {
   container?.remove();
   root = null;
   container = null;
+  vi.useRealTimers();
+  scrollSpy.restore();
 });
 
 /**
@@ -90,6 +97,65 @@ async function click(element: Element): Promise<void> {
     element.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
   });
 }
+
+/** Publishes one visible section to the content observer. */
+async function intersectSection(section: Element): Promise<void> {
+  await act(async () => {
+    scrollSpy.intersect(section);
+  });
+}
+
+describe("SettingsContent single-page layout", () => {
+  it("renders every app section in registry order", async () => {
+    const el = await render(<SettingsContent />);
+    const ids = Array.from(el.querySelectorAll("section"), (section) => section.id);
+
+    expect(ids).toContain("settings-section-app:appearance.theme");
+    expect(ids).toContain("settings-section-app:editor.display");
+    expect(ids).toContain("settings-section-app:settings.general");
+    expect(ids.indexOf("settings-section-app:appearance.theme")).toBeLessThan(
+      ids.indexOf("settings-section-app:editor.display")
+    );
+  });
+
+  it("appends workspace sections only when a workspace is open", async () => {
+    useSettingsStore.setState({ workspaceValues: { "sync.destination": "" } });
+    const el = await render(<SettingsContent />);
+    const ids = Array.from(el.querySelectorAll("section"), (section) => section.id);
+
+    expect(ids).toContain("settings-section-workspace:sync.destination");
+    expect(ids.indexOf("settings-section-workspace:sync.destination")).toBeGreaterThan(
+      ids.indexOf("settings-section-app:sync.history")
+    );
+  });
+
+  it("updates activeSection from scroll position", async () => {
+    const el = await render(<SettingsContent />);
+    const display = el.querySelector("#settings-section-app\\:editor\\.display")!;
+
+    await intersectSection(display);
+    expect(useSettingsStore.getState().activeSection).toBe("app:editor.display");
+  });
+
+  it("scrolls to and highlights a setting requested by search", async () => {
+    vi.useFakeTimers();
+    const el = await render(<SettingsContent />);
+    const display = el.querySelector<HTMLElement>("#settings-section-app\\:editor\\.display")!;
+
+    await act(async () => requestSettingHighlight("editor.fontSize"));
+
+    expect(
+      el.querySelector('[data-setting-key="editor.fontSize"]')?.getAttribute("data-highlighted")
+    ).toBe("true");
+    expect(scrollSpy.scrollIntoView.mock.instances).toContain(display);
+    expect(scrollSpy.scrollIntoView).toHaveBeenCalledWith({
+      behavior: "smooth",
+      block: "start"
+    });
+
+    await act(async () => vi.advanceTimersByTime(1200));
+  });
+});
 
 describe("SettingsContent inline validation errors", () => {
   it("renders role=alert with the diagnostic message for a matching key", async () => {
@@ -135,7 +201,7 @@ describe("SettingsContent inline validation errors", () => {
     expect(el.querySelectorAll('[role="alert"]').length).toBe(0);
   });
 
-  it("does not render errors for keys not in the active section", async () => {
+  it("renders errors even when their section is not currently active", async () => {
     useSettingsStore.setState({
       activeSection: "appearance.theme",
       validationDiagnostics: [
@@ -149,61 +215,27 @@ describe("SettingsContent inline validation errors", () => {
     });
     const el = await render(<SettingsContent />);
 
-    // editor.fontSize is not in the appearance.theme section, so no alert.
-    expect(el.querySelectorAll('[role="alert"]').length).toBe(0);
+    // All sections remain mounted, so diagnostics never disappear while scrolling.
+    expect(el.querySelectorAll('[role="alert"]').length).toBe(1);
   });
 });
 
 describe("SettingsContent per-section reset button", () => {
-  it("renders a reset button in the section header", async () => {
+  it("is disabled without staged changes, enabled with them, and calls resetSection on click", async () => {
     useSettingsStore.setState({ activeSection: "editor.display" });
     const el = await render(<SettingsContent />);
 
     const resetBtn = el.querySelector<HTMLButtonElement>(
-      'button[title="Reset this section to defaults"]'
-    );
-    expect(resetBtn).not.toBeNull();
-  });
-
-  it("disables the reset button when there are no staged changes for the section", async () => {
-    useSettingsStore.setState({
-      activeSection: "editor.display",
-      stagedChanges: {}
-    });
-    const el = await render(<SettingsContent />);
-
-    const resetBtn = el.querySelector<HTMLButtonElement>(
-      'button[title="Reset this section to defaults"]'
-    );
-    expect(resetBtn!.disabled).toBe(true);
-  });
-
-  it("enables the reset button when there are staged changes for the section", async () => {
-    useSettingsStore.setState({
-      activeSection: "editor.display",
-      stagedChanges: { "editor.fontSize": 20 }
-    });
-    const el = await render(<SettingsContent />);
-
-    const resetBtn = el.querySelector<HTMLButtonElement>(
-      'button[title="Reset this section to defaults"]'
-    );
-    expect(resetBtn!.disabled).toBe(false);
-  });
-
-  it("clicking the reset button calls resetSection with the active section", async () => {
-    useSettingsStore.setState({
-      activeSection: "editor.display",
-      stagedChanges: { "editor.fontSize": 20 }
-    });
-    const el = await render(<SettingsContent />);
-
-    const resetBtn = el.querySelector<HTMLButtonElement>(
-      'button[title="Reset this section to defaults"]'
+      'button[aria-label="Reset Display to defaults"]'
     )!;
-    await click(resetBtn);
+    expect(resetBtn.disabled).toBe(true);
 
-    const { resetSection } = useSettingsStore.getState();
-    expect(resetSection).toHaveBeenCalledWith("editor.display");
+    await act(async () => {
+      useSettingsStore.setState({ stagedChanges: { "editor.fontSize": 20 } });
+    });
+    expect(resetBtn.disabled).toBe(false);
+
+    await click(resetBtn);
+    expect(useSettingsStore.getState().resetSection).toHaveBeenCalledWith("editor.display");
   });
 });

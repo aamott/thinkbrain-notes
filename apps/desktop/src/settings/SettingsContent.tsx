@@ -1,7 +1,7 @@
 /**
- * Settings content area: renders the controls for the active section.
+ * Settings content area: renders every registered settings section.
  *
- * For each setting definition in the active section, renders a row with the
+ * For each setting definition in every visible section, renders a row with the
  * label, description, and the auto-generated (or custom) control. The
  * control's value is the *effective* value computed reactively by
  * `useEffectiveValue` (staged > appValues > workspaceValues > default).
@@ -20,15 +20,59 @@ import {
   useState
 } from "react";
 import { RotateCcw } from "lucide-react";
-import type { SettingDefinition, SettingsDiagnostic } from "@thinkbrain/core";
+import type {
+  SettingDefinition,
+  SettingScope,
+  SettingsDiagnostic,
+  SettingsModule,
+  SettingSection
+} from "@thinkbrain/core";
 import { cn } from "../lib/utils";
 import { Unavailable } from "../shell/Unavailable";
 import { appSettingsRegistry, useSettingsStore } from "./settingsStore";
 import { getControlForDefinition } from "./controlRegistry";
 import { subscribeSettingHighlight } from "./settingHighlight";
-import { findSectionLabelAcrossModules } from "./sectionUtils";
 import { ThemePicker, ThemeToolbar } from "./ThemeSectionControls";
 import { useEffectiveValue } from "./useEffectiveValue";
+
+const SECTION_ID_PREFIX = "settings-section-";
+const HIDDEN_SETTING_ROWS = new Set([
+  "appearance.theme",
+  "appearance.themeFile",
+  "sync.signInProfile"
+]);
+
+interface RenderedSection {
+  readonly section: SettingSection;
+  readonly scope: SettingScope;
+}
+
+/**
+ * Builds a scope-qualified id for a rendered section.
+ *
+ * Mixed-scope modules (e.g. Journal) project the same section id into both
+ * app and workspace scope groups. Qualifying with scope keeps DOM ids unique
+ * and lets the scroll-spy distinguish which projection is on screen.
+ */
+function scopeQualifiedId(scope: SettingScope, sectionId: string): string {
+  return `${scope}:${sectionId}`;
+}
+
+/** Flattens projected module trees while preserving module and section order. */
+function flattenModuleSections(
+  modules: readonly SettingsModule[],
+  scope: SettingScope
+): RenderedSection[] {
+  const flattened: RenderedSection[] = [];
+  const visit = (sections: readonly SettingSection[]): void => {
+    for (const section of sections) {
+      flattened.push({ section, scope });
+      if (section.subsections) visit(section.subsections);
+    }
+  };
+  for (const module of modules) visit(module.sections);
+  return flattened;
+}
 
 /**
  * Renders a single setting row: label, description, control, and any inline
@@ -54,13 +98,19 @@ function SettingRow({
 }) {
   const ControlComponent = getControlForDefinition(definition);
   const value = useEffectiveValue(definition.key);
+  // Custom controls (e.g. GitLinkControl, HistoryPolicyControl) render their
+  // own full-width UI and don't fit the two-column label/control grid.
+  const isCustomControl = Boolean(definition.control);
 
   return (
     <div
       data-setting-key={definition.key}
       data-highlighted={highlighted ? "true" : undefined}
       className={cn(
-        "grid grid-cols-[minmax(0,1fr)_auto] gap-4 rounded-small border-b border-border py-2.5 transition-[background-color,box-shadow] duration-150 max-[760px]:grid-cols-[minmax(0,1fr)]",
+        "grid gap-4 rounded-small border-b border-border py-2.5 transition-[background-color,box-shadow] duration-150",
+        isCustomControl
+          ? "grid-cols-[minmax(0,1fr)]"
+          : "grid-cols-[minmax(0,1fr)_auto] max-[760px]:grid-cols-[minmax(0,1fr)]",
         highlighted && "bg-accent ring-2 ring-ring"
       )}
     >
@@ -74,7 +124,14 @@ function SettingRow({
           </p>
         )}
       </div>
-      <div className="mt-1 self-center justify-self-end max-[760px]:w-full max-[760px]:justify-self-stretch max-[760px]:[&_button]:min-h-11 max-[760px]:[&_input]:min-h-11 max-[760px]:[&_select]:min-h-11 max-[760px]:[&_input:not([type=number])]:w-full max-[760px]:[&_input:not([type=number])]:max-w-none max-[760px]:[&_select]:w-full max-[760px]:[&_select]:max-w-none">
+      <div
+        className={cn(
+          "mt-1",
+          isCustomControl
+            ? "w-full"
+            : "self-center justify-self-end max-[760px]:w-full max-[760px]:justify-self-stretch max-[760px]:[&_button:not([role=switch])]:min-h-11 max-[760px]:[&_input]:min-h-11 max-[760px]:[&_select]:min-h-11 max-[760px]:[&_input:not([type=number])]:w-full max-[760px]:[&_input:not([type=number])]:max-w-none max-[760px]:[&_select]:w-full max-[760px]:[&_select]:max-w-none"
+        )}
+      >
         {/* Use createElement to render the dynamically-resolved control.
             JSX <ControlComponent /> would trip the react-hooks/static-components
             lint rule which flags component "creation" during render. */}
@@ -98,70 +155,36 @@ function SettingRow({
 }
 
 /**
- * The settings content area.
- *
- * Reads `activeSection` and the raw value maps from the store. When no
- * section is selected, shows an empty-state prompt. Otherwise renders the
- * section header (with a per-section "Reset to defaults" button) and one row
- * per setting definition.
+ * Renders one section within the single-page settings document.
  */
-export function SettingsContent() {
-  const activeSection = useSettingsStore((s) => s.activeSection);
-  const stagedChanges = useSettingsStore((s) => s.stagedChanges);
-  const stageChange = useSettingsStore((s) => s.stageChange);
-  // Subscribe to validation diagnostics so inline errors render/clear reactively.
-  const validationDiagnostics = useSettingsStore((s) => s.validationDiagnostics);
-
-  // Track the currently highlighted setting key (from search-result clicks).
-  // The highlight bus notifies with a key to highlight, then null to clear.
-  const [highlightKey, setHighlightKey] = useState<string | null>(null);
-  // Ref on the scrollable content container so the highlight effect can query
-  // for the highlighted row and scroll it into view.
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    return subscribeSettingHighlight((key) => setHighlightKey(key));
-  }, []);
-
-  // When a setting is highlighted (from a search-result click), scroll its row
-  // into view so the user can actually see it even if it's below the fold.
-  // Uses useLayoutEffect so the scroll happens before paint, avoiding a flash.
-  // The selector targets the `data-setting-key` attribute set by SettingRow.
-  useLayoutEffect(() => {
-    if (highlightKey === null) return;
-    const container = containerRef.current;
-    if (container === null) return;
-    const row = container.querySelector<HTMLElement>(
-      `[data-setting-key="${CSS.escape(highlightKey)}"]`
-    );
-    row?.scrollIntoView({ block: "center" });
-  }, [highlightKey]);
-
-  if (activeSection === null) {
-    return (
-      <Unavailable
-        title="No section selected"
-        description="Select a section from the left to view its settings."
-      />
-    );
-  }
-
-  const allDefinitions = appSettingsRegistry.getDefinitionsForSection(activeSection);
-  const sectionLabel = findSectionLabelAcrossModules(appSettingsRegistry, activeSection);
-
+function SettingsSection({
+  renderedSection,
+  stagedChanges,
+  validationDiagnostics,
+  highlightKey,
+  setSectionRef
+}: {
+  readonly renderedSection: RenderedSection;
+  readonly stagedChanges: Readonly<Record<string, unknown>>;
+  readonly validationDiagnostics: readonly SettingsDiagnostic[];
+  readonly highlightKey: string | null;
+  readonly setSectionRef: (sectionId: string, element: HTMLElement | null) => void;
+}) {
+  const { section, scope } = renderedSection;
+  const qualifiedId = scopeQualifiedId(scope, section.id);
+  const stageChange = useSettingsStore((state) => state.stageChange);
+  const allDefinitions = appSettingsRegistry
+    .getDefinitionsForSection(section.id)
+    .filter((definition) => definition.scope === scope);
   // The `appearance.theme` section is rendered via the unified `ThemePicker`
   // (which stages both `appearance.theme` and `appearance.themeFile`) plus the
   // `ThemeToolbar` (Export/Import). `sync.signInProfile` is edited inside
   // GitLinkControl. Those standalone generic rows are redundant — filter them
   // out so they don't render twice. The registry definitions stay so the
   // settings system still knows about them.
-  const HIDDEN_SETTING_ROWS = new Set([
-    "appearance.theme",
-    "appearance.themeFile",
-    "sync.signInProfile"
-  ]);
   const definitions = allDefinitions.filter((d) => !HIDDEN_SETTING_ROWS.has(d.key));
 
-  // Determine whether any staged change belongs to the active section so the
+  // Determine whether any staged change belongs to this section so the
   // per-section reset button can be enabled/disabled. `resetSection` only
   // clears staged entries for the section — it does NOT write to disk. Note:
   // use the full set of section keys (including hidden ones) so staging a
@@ -171,63 +194,178 @@ export function SettingsContent() {
     sectionKeys.has(k)
   );
 
-  /** Reverts staged changes for the active section to the last-saved values. */
+  /** Reverts staged changes for this section to the last-saved values. */
   const handleResetSection = (): void => {
-    useSettingsStore.getState().resetSection(activeSection);
+    useSettingsStore.getState().resetSection(section.id);
   };
 
   return (
-    <div ref={containerRef} className="flex min-h-0 grow flex-col overflow-y-auto">
-      <div className="mx-auto w-full max-w-160 px-6 py-4 max-[760px]:max-w-none max-[760px]:pt-4 max-[760px]:pr-4 max-[760px]:pb-8 max-[760px]:pl-15">
-        <div className="mb-2 flex items-center gap-2">
-          <h2 className="text-base font-semibold text-foreground">{sectionLabel}</h2>
-          <button
-            type="button"
-            disabled={!hasStagedForSection}
-            onClick={handleResetSection}
-            title="Reset this section to defaults"
-            aria-label="Reset this section to defaults"
-            className={cn(
-              "flex cursor-pointer items-center gap-1 rounded-small border-0 bg-surface px-1.5 py-0.5 text-xs text-muted-foreground transition-colors duration-150 enabled:hover:bg-accent enabled:hover:text-foreground focus-visible:-outline-offset-2 focus-visible:outline-2 focus-visible:outline-ring max-[760px]:min-h-11",
-              !hasStagedForSection && "cursor-not-allowed opacity-40"
-            )}
-          >
-            <RotateCcw className="size-3 flex-none" aria-hidden="true" />
-            <span>Reset</span>
-          </button>
-        </div>
-        {allDefinitions.length === 0 ? (
-          <p className="text-sm text-muted-foreground">This section has no settings yet.</p>
-        ) : (
-          <>
-            {/* Unified theme picker + export/import toolbar — only for the
-                appearance.theme section. The picker combines the base
-                System/Light/Dark options with discovered preset files into a
-                single dropdown; the toolbar keeps the Export/Import actions.
-                Both render above the setting rows (the standalone
-                appearance.theme and appearance.themeFile rows are filtered out
-                above to avoid duplication). */}
-            {activeSection === "appearance.theme" && (
-              <>
-                <ThemePicker />
-                <ThemeToolbar />
-              </>
-            )}
-            <div className="flex flex-col">
-              {definitions.map((definition) => (
-                <SettingRow
-                  key={definition.key}
-                  definition={definition}
-                  onChange={(value) => stageChange(definition.key, value)}
-                  diagnostics={validationDiagnostics.filter(
-                    (d) => d.path === definition.key
-                  )}
-                  highlighted={highlightKey === definition.key}
-                />
-              ))}
-            </div>
-          </>
-        )}
+    <section
+      id={`${SECTION_ID_PREFIX}${qualifiedId}`}
+      ref={(element) => setSectionRef(qualifiedId, element)}
+      className="scroll-mt-4 py-4 first:pt-4"
+      aria-labelledby={`${SECTION_ID_PREFIX}${qualifiedId}-heading`}
+    >
+      <div className="mb-2 flex items-center gap-2">
+        <h2
+          id={`${SECTION_ID_PREFIX}${qualifiedId}-heading`}
+          className="text-base font-semibold text-foreground"
+        >
+          {section.label}
+        </h2>
+        <button
+          type="button"
+          disabled={!hasStagedForSection}
+          onClick={handleResetSection}
+          title="Reset this section to defaults"
+          aria-label={`Reset ${section.label} to defaults`}
+          className={cn(
+            "flex cursor-pointer items-center gap-1 rounded-small border-0 bg-surface px-1.5 py-0.5 text-xs text-muted-foreground transition-colors duration-150 enabled:hover:bg-accent enabled:hover:text-foreground focus-visible:-outline-offset-2 focus-visible:outline-2 focus-visible:outline-ring max-[760px]:min-h-11",
+            !hasStagedForSection && "cursor-not-allowed opacity-40"
+          )}
+        >
+          <RotateCcw className="size-3 flex-none" aria-hidden="true" />
+          <span>Reset</span>
+        </button>
+      </div>
+      {allDefinitions.length === 0 ? (
+        <p className="text-sm text-muted-foreground">This section has no settings yet.</p>
+      ) : (
+        <>
+          {/* Theme controls replace the hidden generic theme rows. */}
+          {section.id === "appearance.theme" && scope === "app" && (
+            <>
+              <ThemePicker />
+              <ThemeToolbar />
+            </>
+          )}
+          <div className="flex flex-col">
+            {definitions.map((definition) => (
+              <SettingRow
+                key={definition.key}
+                definition={definition}
+                onChange={(value) => stageChange(definition.key, value)}
+                diagnostics={validationDiagnostics.filter(
+                  (diagnostic) => diagnostic.path === definition.key
+                )}
+                highlighted={highlightKey === definition.key}
+              />
+            ))}
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+/**
+ * The one-page settings document and its content-rooted scroll-spy.
+ */
+export function SettingsContent() {
+  const workspaceValues = useSettingsStore((state) => state.workspaceValues);
+  const stagedChanges = useSettingsStore((state) => state.stagedChanges);
+  // Subscribe so inline validation diagnostics render and clear reactively.
+  const validationDiagnostics = useSettingsStore((state) => state.validationDiagnostics);
+  const setActiveSection = useSettingsStore((state) => state.setActiveSection);
+  const [highlightKey, setHighlightKey] = useState<string | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const sectionRefs = useRef(new Map<string, HTMLElement>());
+
+  // Scope projection matches the navigation: app sections precede workspace
+  // sections, and workspace sections only exist while a workspace is open.
+  const appSections = flattenModuleSections(
+    appSettingsRegistry.getModulesByScope("app"),
+    "app"
+  );
+  const renderedSections =
+    workspaceValues === null
+      ? appSections
+      : [
+          ...appSections,
+          ...flattenModuleSections(
+            appSettingsRegistry.getModulesByScope("workspace"),
+            "workspace"
+          )
+        ];
+  const sectionIdsKey = renderedSections
+    .map(({ section, scope }) => `${scope}:${section.id}`)
+    .join("|");
+
+  /** Keeps the map used by both the observer and section-ref requirement current. */
+  const setSectionRef = (sectionId: string, element: HTMLElement | null): void => {
+    if (element) sectionRefs.current.set(sectionId, element);
+    else sectionRefs.current.delete(sectionId);
+  };
+
+  useEffect(() => subscribeSettingHighlight(setHighlightKey), []);
+
+  // Search highlights target the containing section rather than a lone row so
+  // its heading and context remain visible after navigation.
+  useLayoutEffect(() => {
+    if (highlightKey === null) return;
+    const row = containerRef.current?.querySelector<HTMLElement>(
+      `[data-setting-key="${CSS.escape(highlightKey)}"]`
+    );
+    row?.closest<HTMLElement>("section")?.scrollIntoView({
+      behavior: "smooth",
+      block: "start"
+    });
+  }, [highlightKey]);
+
+  useEffect(() => {
+    const root = containerRef.current;
+    if (root === null) return;
+
+    // The active section is the last one whose top has crossed a threshold
+    // line 20% down the scroll container — the standard scroll-spy technique.
+    // Every section is treated identically regardless of depth, scope, or
+    // height. A passive scroll listener fires on every frame so the highlight
+    // stays correct even at the very top or bottom of the scroll area, where
+    // an IntersectionObserver might not fire (no intersection *change*).
+    const THRESHOLD_FRACTION = 0.2;
+    const recompute = (): void => {
+      const threshold = root.getBoundingClientRect().top + root.clientHeight * THRESHOLD_FRACTION;
+      let active: string | null = null;
+      for (const [id, element] of sectionRefs.current) {
+        if (element.getBoundingClientRect().top <= threshold) active = id;
+        else break; // sections are in document order; nothing past here qualifies
+      }
+      if (active !== null && useSettingsStore.getState().activeSection !== active) {
+        setActiveSection(active);
+      }
+    };
+
+    root.addEventListener("scroll", recompute, { passive: true });
+    recompute();
+    return () => root.removeEventListener("scroll", recompute);
+  }, [sectionIdsKey, setActiveSection]);
+
+  if (renderedSections.length === 0) {
+    return (
+      <Unavailable
+        title="No settings available"
+        description="No settings sections are currently registered."
+      />
+    );
+  }
+
+  return (
+    <div
+      ref={containerRef}
+      className="flex min-h-0 grow flex-col overflow-y-auto"
+      data-testid="settings-content-scroll"
+    >
+      <div className="mx-auto w-full max-w-160 px-6 max-[760px]:max-w-none max-[760px]:pr-4 max-[760px]:pb-8 max-[760px]:pl-15">
+        {renderedSections.map((renderedSection) => (
+          <SettingsSection
+            key={`${renderedSection.scope}:${renderedSection.section.id}`}
+            renderedSection={renderedSection}
+            stagedChanges={stagedChanges}
+            validationDiagnostics={validationDiagnostics}
+            highlightKey={highlightKey}
+            setSectionRef={setSectionRef}
+          />
+        ))}
       </div>
     </div>
   );

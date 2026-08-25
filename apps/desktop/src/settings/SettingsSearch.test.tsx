@@ -239,11 +239,17 @@ describe("SettingsSearch", () => {
     expect(el.querySelector('[role="list"]')).toBeNull();
   });
 
-  it("clicking a result clears the query and sets the active section", async () => {
-    // Start on a different section so we can verify navigation.
-    useSettingsStore.setState({ activeSection: "appearance.theme" });
+  it("clicking a result clears the query and scrolls to its section", async () => {
     await setSearchQuery("font");
     const el = await renderSettingsTab();
+    const displaySection = el.querySelector<HTMLElement>(
+      "#settings-section-app\\:editor\\.display"
+    )!;
+    const scrollSpy = vi.spyOn(displaySection, "scrollIntoView");
+
+    // Capture whatever activeSection the scroll-spy set on mount; the click
+    // should not change it.
+    const activeBeforeClick = useSettingsStore.getState().activeSection;
 
     const resultButton = Array.from(
       el.querySelectorAll<HTMLButtonElement>('[role="list"] button')
@@ -253,8 +259,12 @@ describe("SettingsSearch", () => {
 
     // Query should be cleared.
     expect(useSettingsStore.getState().searchQuery).toBe("");
-    // Active section should be the setting's section.
-    expect(useSettingsStore.getState().activeSection).toBe("editor.display");
+    expect(scrollSpy).toHaveBeenCalledWith({
+      behavior: "smooth",
+      block: "start"
+    });
+    // The scroll-spy, not the result click, owns active state.
+    expect(useSettingsStore.getState().activeSection).toBe(activeBeforeClick);
   });
 
   it("Escape clears the query and restores the tree", async () => {

@@ -60,11 +60,18 @@ function findSectionPath(
 function buildBreadcrumbPath(activeSection: string | null): readonly string[] {
   if (!activeSection) return ["Settings"];
 
+  // activeSection is scope-qualified (e.g. "app:editor.display") so the
+  // scroll-spy can distinguish mixed-scope sections. Strip the scope prefix
+  // for the breadcrumb lookup, which only needs the section id.
+  const sectionId = activeSection.includes(":")
+    ? activeSection.slice(activeSection.indexOf(":") + 1)
+    : activeSection;
+
   for (const module of appSettingsRegistry.getAllModules()) {
     // Use the shared lookup to confirm this module owns the active section.
-    if (!findSectionLabelInSection(module.sections, activeSection)) continue;
+    if (!findSectionLabelInSection(module.sections, sectionId)) continue;
 
-    const sectionPath = findSectionPath(module.sections, activeSection);
+    const sectionPath = findSectionPath(module.sections, sectionId);
     if (sectionPath) return [module.label, ...sectionPath];
   }
 
