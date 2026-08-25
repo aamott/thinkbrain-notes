@@ -15,6 +15,11 @@ build
 local.properties
 key.properties
 keystore.properties
+# Release signing keystores — a leaked key lets an attacker sign malicious
+# updates as this app. keystore.properties (the path config) is ignored above;
+# the binary keystore itself must never be committed.
+*.keystore
+*.jks
 
 /.tauri
 /tauri.settings.gradle

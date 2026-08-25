@@ -20,6 +20,9 @@
     "qa": "node scripts/qa.mjs",
     "desktop:run": "pnpm build && node scripts/with-rust-env.mjs cargo run --manifest-path apps/desktop/src-tauri/Cargo.toml",
     "desktop:tauri": "node scripts/with-rust-env.mjs pnpm --filter @thinkbrain/desktop tauri",
+    "android:dev": "pnpm desktop:tauri android dev",
+    "android:build": "pnpm desktop:tauri android build --debug",
+    "android:build:release": "pnpm desktop:tauri android build",
     "prepare": "husky"
   },
   "devDependencies": {

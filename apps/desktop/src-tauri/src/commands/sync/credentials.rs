@@ -17,11 +17,20 @@ use crate::NativeError;
 ))]
 use super::failed;
 
-#[cfg(not(test))]
+/// Keychain service name. Only referenced from the `supported!` (desktop-OS)
+/// keychain helpers, so gate it the same way to avoid dead-code warnings on
+/// Android, where the keychain is stubbed out.
+#[cfg(all(
+    not(test),
+    any(target_os = "linux", target_os = "macos", target_os = "windows")
+))]
 const SERVICE: &str = "ThinkBrain Notes";
 
 /// Keychain account used only to prove the backend answers. Never written.
-#[cfg(not(test))]
+#[cfg(all(
+    not(test),
+    any(target_os = "linux", target_os = "macos", target_os = "windows")
+))]
 const STORAGE_PROBE: &str = "profile:__storage_probe";
 
 #[cfg(test)]

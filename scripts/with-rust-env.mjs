@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -31,6 +31,27 @@ if (!isWindows && existsSync(bashWrapper) && hasCommand("bash")) {
 const env = { ...process.env };
 if (hasCommand("sccache")) env.RUSTC_WRAPPER = "sccache";
 else delete env.RUSTC_WRAPPER;
+
+// Android NDK autodetection for the Windows path (the bash wrapper handles
+// Unix via rust-env.sh). Honors an existing NDK_HOME; otherwise picks the
+// highest-versioned NDK under ANDROID_HOME/ndk. Silently skipped when absent.
+if (!env.NDK_HOME) {
+  const sdkRoot = env.ANDROID_HOME || env.ANDROID_SDK_ROOT;
+  if (sdkRoot) {
+    try {
+      const ndkDir = join(sdkRoot, "ndk");
+      if (existsSync(ndkDir)) {
+        const entries = readdirSync(ndkDir, { withFileTypes: true })
+          .filter((e) => e.isDirectory())
+          .map((e) => e.name)
+          .sort();
+        if (entries.length > 0) env.NDK_HOME = join(ndkDir, entries[entries.length - 1]);
+      }
+    } catch {
+      // Missing/unreadable NDK dir is not fatal — desktop-only devs skip this.
+    }
+  }
+}
 
 let [command, ...commandArgs] = args;
 if (isWindows && command === "pnpm") {
