@@ -6,11 +6,33 @@ vi.mock("../native/commands", () => ({
     files: []
   }))
 }));
-vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn() }));
+vi.mock("../native/dialogs", () => ({
+  pickDirectoryPath: vi.fn(async () => null)
+}));
 
 import { invokeNativeCommand } from "../native/commands";
+import { pickDirectoryPath } from "../native/dialogs";
 import { appEvents } from "../events/appEvents";
 import { workspaceDesktopApi } from "./workspaceAdapter";
+
+describe("pickWorkspaceDirectory", () => {
+  it("delegates to the native directory picker with the workspace title", async () => {
+    vi.mocked(pickDirectoryPath).mockResolvedValueOnce("/vault");
+
+    const result = await workspaceDesktopApi.pickWorkspaceDirectory();
+
+    expect(pickDirectoryPath).toHaveBeenCalledWith("Open workspace");
+    expect(result).toBe("/vault");
+  });
+
+  it("returns null when the user cancels the picker", async () => {
+    vi.mocked(pickDirectoryPath).mockResolvedValueOnce(null);
+
+    const result = await workspaceDesktopApi.pickWorkspaceDirectory();
+
+    expect(result).toBeNull();
+  });
+});
 
 describe("workspace open events", () => {
   it("emits workspace.opened after the native open succeeds", async () => {

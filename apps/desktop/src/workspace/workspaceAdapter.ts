@@ -1,9 +1,9 @@
-import { open } from "@tauri-apps/plugin-dialog";
 import {
   invokeNativeCommand,
   type NativeWorkspaceEntry,
   type NativeWorkspaceSnapshot
 } from "../native/commands";
+import { pickDirectoryPath } from "../native/dialogs";
 import { appEvents } from "../events/appEvents";
 
 export interface WorkspaceDesktopApi {
@@ -31,14 +31,8 @@ export interface WorkspaceDesktopApi {
 }
 
 export const workspaceDesktopApi: WorkspaceDesktopApi = {
-  async pickWorkspaceDirectory() {
-    const selection = await open({
-      title: "Open workspace",
-      directory: true,
-      multiple: false
-    });
-
-    return typeof selection === "string" ? selection : null;
+  pickWorkspaceDirectory() {
+    return pickDirectoryPath("Open workspace");
   },
   // Every workspace load funnels through here — explicit opens and startup
   // restores alike — so this is the one place `workspace.opened` can be
