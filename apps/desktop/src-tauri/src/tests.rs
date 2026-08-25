@@ -9,6 +9,18 @@ use std::{
 };
 
 #[test]
+fn workspace_window_creation_command_is_async() {
+    fn assert_async_command<F, Fut>(_command: F)
+    where
+        F: Fn(tauri::AppHandle, String) -> Fut,
+        Fut: std::future::Future<Output = Result<(), NativeError>>,
+    {
+    }
+
+    assert_async_command(open_workspace_window);
+}
+
+#[test]
 fn workspace_window_roots_are_scoped_to_opaque_window_labels() {
     let roots = WorkspaceWindowRoots::default();
     let first = next_workspace_window_label();
@@ -1240,7 +1252,10 @@ fn a_quarantined_settings_document_is_remembered_for_the_user() {
     let before = quarantined_settings_paths().len();
     let read = read_settings_file(&path).expect("reading does not fail");
 
-    assert!(read.is_none(), "an unparseable document was handed back as settings");
+    assert!(
+        read.is_none(),
+        "an unparseable document was handed back as settings"
+    );
     let reported = quarantined_settings_paths();
     assert_eq!(
         reported.len(),
@@ -1248,10 +1263,15 @@ fn a_quarantined_settings_document_is_remembered_for_the_user() {
         "the quarantine was not recorded for the user"
     );
     assert!(
-        reported.last().is_some_and(|p| p.ends_with("app.corrupt.json")),
+        reported
+            .last()
+            .is_some_and(|p| p.ends_with("app.corrupt.json")),
         "the recorded path is not where the document was put: {reported:?}"
     );
-    assert!(dir.join("app.corrupt.json").is_file(), "the document was not kept");
+    assert!(
+        dir.join("app.corrupt.json").is_file(),
+        "the document was not kept"
+    );
 
     fs::remove_dir_all(&dir).ok();
 }
@@ -1265,7 +1285,11 @@ fn an_absent_settings_document_is_not_reported_as_quarantined() {
     let read = read_settings_file(&dir.join("app.json")).expect("reading does not fail");
 
     assert!(read.is_none());
-    assert_eq!(quarantined_settings_paths().len(), before, "absence was reported as damage");
+    assert_eq!(
+        quarantined_settings_paths().len(),
+        before,
+        "absence was reported as damage"
+    );
 
     fs::remove_dir_all(&dir).ok();
 }
@@ -1457,7 +1481,11 @@ fn only_the_most_recent_backups_are_kept() {
     }
 
     let kept = list_note_backups(&app_data, &root, "note.md");
-    assert_eq!(kept.len(), KEPT_BACKUPS, "retention did not bound the folder");
+    assert_eq!(
+        kept.len(),
+        KEPT_BACKUPS,
+        "retention did not bound the folder"
+    );
 
     // Newest first, and the newest is the version replaced by the last save.
     let newest = fs::read_to_string(&kept[0]).expect("the backup is readable");
@@ -1526,7 +1554,9 @@ fn a_note_save_replaces_the_file_rather_than_truncating_it() {
     )
     .expect("the save succeeds");
 
-    let after = fs::metadata(&note).expect("the note still has metadata").ino();
+    let after = fs::metadata(&note)
+        .expect("the note still has metadata")
+        .ino();
     assert_ne!(
         before, after,
         "the note was written in place, so a crash mid-write would empty it"

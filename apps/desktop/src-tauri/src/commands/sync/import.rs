@@ -277,7 +277,7 @@ fn run_imported(
         emit("running", Some(phase), None);
     }) {
         Ok(path) => {
-            match crate::commands::workspace::open_workspace_window(
+            match crate::commands::workspace::create_workspace_window_off_main_thread(
                 app.clone(),
                 path.to_string_lossy().into_owned(),
             ) {

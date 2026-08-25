@@ -57,8 +57,14 @@ fn live_env() -> Option<(String, String, String)> {
 }
 
 fn trip(device: &Device, destination: &str, profile: &str) -> Synced {
-    run_trip(&device.repo, &device.vault, destination, Some(profile), |_| {})
-        .unwrap_or_else(|error| panic!("live sync failed: {} ({})", error.message, error.code))
+    run_trip(
+        &device.repo,
+        &device.vault,
+        destination,
+        Some(profile),
+        |_| {},
+    )
+    .unwrap_or_else(|error| panic!("live sync failed: {} ({})", error.message, error.code))
 }
 
 fn bind_profile(user: &str, token: &str) -> String {

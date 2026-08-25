@@ -56,7 +56,11 @@ pub fn workspace_backups_dir(app_data_dir: &Path, canonical_root: &Path) -> Path
 /// the vault and someone opening it by hand can tell what they are looking at.
 /// The note's *name* becomes the folder: retention is then a listing and a
 /// sort, and one note's versions can never be confused with another's.
-pub fn note_backups_dir(app_data_dir: &Path, canonical_root: &Path, relative_path: &str) -> PathBuf {
+pub fn note_backups_dir(
+    app_data_dir: &Path,
+    canonical_root: &Path,
+    relative_path: &str,
+) -> PathBuf {
     let mut dir = workspace_backups_dir(app_data_dir, canonical_root);
     for segment in relative_path.split('/').filter(|s| !s.is_empty()) {
         dir.push(segment);

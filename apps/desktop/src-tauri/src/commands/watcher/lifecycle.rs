@@ -136,15 +136,40 @@ pub fn watch_workspace(
     // by window interest, released with the last window. Failing to record is
     // not a reason to refuse to open a workspace, so a failure here is reported
     // and the workspace opens regardless.
+    //
+    // Bootstrapping walks and hashes every note in the vault, and on a large
+    // vault that takes long enough to stall the Windows message pump and trigger
+    // an AppHang. Running it on a background thread keeps the main thread free
+    // to pump messages while the hidden repository is set up. Changes that
+    // arrive before the engine is attached are simply not recorded — the same
+    // gap as any other brief startup window.
     if let Ok(app_data_dir) = app.path().app_data_dir() {
         // Before attaching, so the sweeper this may start can already reach the
         // windows it will have news for.
         crate::commands::watcher::remember_reach(&app);
-        if let Err(error) =
-            crate::commands::sync::registry::attach(&app_data_dir, &root, &key, &label)
-        {
-            eprintln!("[sync] could not start recording {key}: {error:?}");
-        }
+        let app_data_dir = app_data_dir.to_path_buf();
+        let root_for_sync = root.clone();
+        let key_for_sync = key.clone();
+        let label_for_sync = label.clone();
+        std::thread::Builder::new()
+            .name("thinkbrain-sync-bootstrap".into())
+            .spawn(move || {
+                if let Err(error) = crate::commands::sync::registry::attach(
+                    &app_data_dir,
+                    &root_for_sync,
+                    &key_for_sync,
+                    &label_for_sync,
+                ) {
+                    eprintln!("[sync] could not start recording {key_for_sync}: {error:?}");
+                }
+            })
+            .map_err(|error| {
+                NativeError::with_details(
+                    "sync.bootstrap_thread_failed",
+                    "Could not start the sync history thread.",
+                    error,
+                )
+            })?;
     }
 
     Ok(key)

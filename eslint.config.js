@@ -36,6 +36,14 @@ export default tseslint.config(
     }
   },
   {
+    files: ["scripts/**/*.{js,mjs,cjs}"],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: "module",
+      globals: { ...globals.node }
+    }
+  },
+  {
     // Example extensions are pre-bundled ES modules that run in the webview.
     files: ["examples/**/*.js"],
     languageOptions: {

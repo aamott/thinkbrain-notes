@@ -1,8 +1,8 @@
 use crate::commands::watcher::record_self_write;
-use tauri::Manager;
 use crate::error::NativeError;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
+use tauri::Manager;
 
 use std::fs;
 
@@ -177,7 +177,9 @@ pub fn write_markdown_document(
             if let Err(error) =
                 super::backup::keep_previous_version(app_data, &root, relative_path, &previous)
             {
-                eprintln!("[backup] could not keep the previous version of {relative_path}: {error}");
+                eprintln!(
+                    "[backup] could not keep the previous version of {relative_path}: {error}"
+                );
             }
         }
     }

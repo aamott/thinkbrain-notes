@@ -1020,7 +1020,11 @@ mod tests {
         let f = text_fixture("resolve-lock-window");
         let seen = f.view();
         let before = f.read("note.md");
-        let root = f.vault.to_str().expect("the vault path is utf-8").to_owned();
+        let root = f
+            .vault
+            .to_str()
+            .expect("the vault path is utf-8")
+            .to_owned();
 
         let (entered_tx, entered_rx) = mpsc::channel();
         let (release_tx, release_rx) = mpsc::channel();
@@ -1067,7 +1071,9 @@ mod tests {
                     None,
                     None,
                 );
-                saved_tx.send(()).expect("the save announces that it finished");
+                saved_tx
+                    .send(())
+                    .expect("the save announces that it finished");
                 written
             });
 

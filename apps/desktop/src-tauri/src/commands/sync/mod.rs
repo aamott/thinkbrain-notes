@@ -191,9 +191,7 @@ mod tests {
             (403, "sync.credentials_forbidden"),
             (404, "sync.remote_not_found"),
         ] {
-            let error = remote_failure(TestError(format!(
-                "Received HTTP status {status}"
-            )));
+            let error = remote_failure(TestError(format!("Received HTTP status {status}")));
             assert_eq!(error.code, code);
         }
     }
