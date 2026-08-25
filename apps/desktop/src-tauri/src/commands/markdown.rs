@@ -1,5 +1,5 @@
 use crate::commands::watcher::record_self_write;
-use crate::error::NativeError;
+use crate::error::{failed, NativeError};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 use tauri::Manager;
@@ -7,12 +7,6 @@ use tauri::Manager;
 use std::fs;
 
 const MAX_MARKDOWN_DEPTH: usize = 20;
-
-/// Builds a `NativeError::with_details` from a static code/message and a
-/// displayable error, matching the shared pattern used across command modules.
-fn failed(code: &'static str, message: &'static str, error: impl std::fmt::Display) -> NativeError {
-    NativeError::with_details(code, message, error.to_string())
-}
 
 use crate::commands::workspace::{
     acquire_workspace_mutation_lock, ensure_parent_dir, entry_metadata, is_ignored_entry_name,

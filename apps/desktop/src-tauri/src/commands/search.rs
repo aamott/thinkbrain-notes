@@ -1,5 +1,5 @@
 use crate::commands::workspace::{resolve_workspace_root, stable_workspace_hash};
-use crate::error::{lock_or_recover, NativeError};
+use crate::error::{failed, lock_or_recover, NativeError};
 use rusqlite::{params, Connection, Transaction};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -9,12 +9,6 @@ use std::{
     sync::{Arc, Mutex},
 };
 use tauri::Manager;
-
-/// Builds a `NativeError::with_details` from a static code/message and a
-/// displayable error, matching the shared pattern used across command modules.
-fn failed(code: &'static str, message: &'static str, error: impl std::fmt::Display) -> NativeError {
-    NativeError::with_details(code, message, error.to_string())
-}
 
 mod metadata;
 #[cfg(test)]

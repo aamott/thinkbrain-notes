@@ -1,4 +1,65 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+
+type WorkspaceRestoreHarness = {
+  readonly settingsKey: string;
+  readonly windowRoot: string | null;
+  readonly entries?: boolean;
+};
+
+async function installWorkspaceRestoreHarness(page: Page, options: WorkspaceRestoreHarness) {
+  await page.addInitScript(({ settingsKey, windowRoot, entries }) => {
+    const appWindow = window as Window & {
+      isTauri?: boolean;
+      __TAURI_INTERNALS__?: { invoke: (command: string, args: Record<string, unknown>) => Promise<unknown> };
+    };
+    appWindow.isTauri = true;
+    appWindow.__TAURI_INTERNALS__ = {
+      async invoke(command, args) {
+        if (command === "plugin:dialog|open") return "/workspace/demo-vault";
+        if (command === "window_workspace_root") return windowRoot;
+        if (command === "open_workspace_window") return null;
+        if (command === "read_app_settings") return sessionStorage.getItem(settingsKey);
+        if (command === "write_app_settings") {
+          sessionStorage.setItem(settingsKey, String(args.contents));
+          return null;
+        }
+        if (command === "update_desktop_state") {
+          const current = JSON.parse(sessionStorage.getItem(settingsKey) ?? "{}") as Record<string, unknown>;
+          const previous = (current.desktopState ?? {}) as Record<string, unknown>;
+          const update = (args.update ?? {}) as Record<string, unknown>;
+          const desktopState = {
+            version: 3,
+            lastWorkspacePath: update.lastWorkspacePath ?? previous.lastWorkspacePath ?? null,
+            recentWorkspacePaths: update.recentWorkspacePaths ?? previous.recentWorkspacePaths ?? [],
+            explorerOpen: update.explorerOpen ?? previous.explorerOpen ?? true,
+            leftPanelWidth: update.leftPanelWidth ?? previous.leftPanelWidth ?? 288,
+            rightPanelWidth: update.rightPanelWidth ?? previous.rightPanelWidth ?? 320,
+            bottomPanelOpen: update.bottomPanelOpen ?? previous.bottomPanelOpen ?? false
+          };
+          const serialized = JSON.stringify({ ...current, desktopState });
+          sessionStorage.setItem(settingsKey, serialized);
+          return serialized;
+        }
+        if (command === "open_workspace") {
+          const rootPath = String(args.rootPath);
+          return {
+            workspace: { root_path: rootPath, name: rootPath.split("/").pop() ?? "vault" },
+            files: []
+          };
+        }
+        if (command === "list_workspace_entries") {
+          return entries
+            ? [
+                { relative_path: "Notes", name: "Notes", parent_path: "", kind: "directory", is_markdown: false, byte_size: 0, updated_at: null },
+                { relative_path: "Notes/welcome.md", name: "welcome.md", parent_path: "Notes", kind: "file", is_markdown: true, byte_size: 12, updated_at: null }
+              ]
+            : [];
+        }
+        throw new Error(`Unexpected native command: ${command}`);
+      }
+    };
+  }, options);
+}
 
 test("desktop workspace shell boots in the browser harness", async ({ page }) => {
   await page.goto("/");
@@ -28,68 +89,13 @@ test("activity bar toggles between the explorer and search panels", async ({ pag
   await expect(page.getByRole("complementary", { name: "Explorer panel" })).toBeVisible();
 });
 
-// Renderer-only scope: this test mocks `open_workspace_window` as a no-op
-// success and `window_workspace_root` as null. It proves the renderer
-// persists `lastWorkspacePath` after the launch flow and restores the
-// workspace on reload — NOT that a native Tauri webview was created. A
-// blank, frozen, or failed native window would not be caught here. Native
-// window lifecycle pieces (label generation, root registration/cleanup,
-// path validation) have focused Rust unit tests; a real OS webview still
-// requires a live Tauri runtime rather than this browser harness.
+// Browser-only: proves renderer persistence, not native webview creation.
+// Rust covers lifecycle primitives; a real webview requires Tauri runtime.
 test("renderer persists and restores the last workspace across reload (no native webview is created)", async ({ page }) => {
-  await page.addInitScript(() => {
-    const settingsKey = "thinkbrain-e2e-app-settings";
-    const appWindow = window as Window & {
-      isTauri?: boolean;
-      __TAURI_INTERNALS__?: { invoke: (command: string, args: Record<string, unknown>) => Promise<unknown> };
-    };
-    appWindow.isTauri = true;
-    appWindow.__TAURI_INTERNALS__ = {
-      async invoke(command, args) {
-        if (command === "plugin:dialog|open") return "/workspace/demo-vault";
-        if (command === "window_workspace_root") return null;
-        if (command === "open_workspace_window") return null;
-        if (command === "read_app_settings") return sessionStorage.getItem(settingsKey);
-        if (command === "write_app_settings") {
-          sessionStorage.setItem(settingsKey, String(args.contents));
-          return null;
-        }
-        // The host's `update_desktop_state` command returns the full serialized
-        // settings document after merging the partial update into `desktopState`.
-        // The mock mirrors that contract so `loadDesktopState` can read it back.
-        if (command === "update_desktop_state") {
-          const current = JSON.parse(sessionStorage.getItem(settingsKey) ?? "{}") as Record<string, unknown>;
-          const previousDesktopState = (current.desktopState ?? {}) as Record<string, unknown>;
-          const update = (args.update ?? {}) as Record<string, unknown>;
-          const merged = {
-            version: 3,
-            lastWorkspacePath: update.lastWorkspacePath ?? previousDesktopState.lastWorkspacePath ?? null,
-            recentWorkspacePaths: update.recentWorkspacePaths ?? previousDesktopState.recentWorkspacePaths ?? [],
-            explorerOpen: update.explorerOpen ?? previousDesktopState.explorerOpen ?? true,
-            leftPanelWidth: update.leftPanelWidth ?? previousDesktopState.leftPanelWidth ?? 288,
-            rightPanelWidth: update.rightPanelWidth ?? previousDesktopState.rightPanelWidth ?? 320,
-            bottomPanelOpen: update.bottomPanelOpen ?? previousDesktopState.bottomPanelOpen ?? false
-          };
-          const next = { ...current, desktopState: merged };
-          const serialized = JSON.stringify(next);
-          sessionStorage.setItem(settingsKey, serialized);
-          return serialized;
-        }
-        if (command === "open_workspace") {
-          return {
-            workspace: { root_path: String(args.rootPath), name: "demo-vault" },
-            files: []
-          };
-        }
-        if (command === "list_workspace_entries") {
-          return [
-            { relative_path: "Notes", name: "Notes", parent_path: "", kind: "directory", is_markdown: false, byte_size: 0, updated_at: null },
-            { relative_path: "Notes/welcome.md", name: "welcome.md", parent_path: "Notes", kind: "file", is_markdown: true, byte_size: 12, updated_at: null }
-          ];
-        }
-        throw new Error(`Unexpected native command: ${command}`);
-      }
-    };
+  await installWorkspaceRestoreHarness(page, {
+    settingsKey: "thinkbrain-e2e-app-settings",
+    windowRoot: null,
+    entries: true
   });
 
   await page.goto("/");
@@ -104,61 +110,11 @@ test("renderer persists and restores the last workspace across reload (no native
   await expect(page.getByRole("treeitem", { name: /Notes/ })).toBeVisible();
 });
 
-// Renderer-only: verifies the multi-window restore precedence — when the
-// native window has a registered root (`window_workspace_root`), it wins
-// over the persisted `lastWorkspacePath` fallback. This is the contract a
-// second workspace window relies on to open its own vault rather than the
-// last one any window touched. Like the test above, it mocks the native
-// commands and does not create a real native window.
+// Browser-only: a native window root must beat the persisted fallback.
 test("renderer prefers the native window root over the persisted last workspace on reload", async ({ page }) => {
-  await page.addInitScript(() => {
-    const settingsKey = "thinkbrain-e2e-app-settings-window-root";
-    const appWindow = window as Window & {
-      isTauri?: boolean;
-      __TAURI_INTERNALS__?: { invoke: (command: string, args: Record<string, unknown>) => Promise<unknown> };
-    };
-    appWindow.isTauri = true;
-    appWindow.__TAURI_INTERNALS__ = {
-      async invoke(command, args) {
-        if (command === "plugin:dialog|open") return "/workspace/demo-vault";
-        // Simulate a workspace window whose native root was registered
-        // before the frontend loaded — this is what a real Tauri window
-        // created by `open_workspace_window` would return.
-        if (command === "window_workspace_root") return "/workspace/window-root-vault";
-        if (command === "open_workspace_window") return null;
-        if (command === "read_app_settings") return sessionStorage.getItem(settingsKey);
-        if (command === "write_app_settings") {
-          sessionStorage.setItem(settingsKey, String(args.contents));
-          return null;
-        }
-        if (command === "update_desktop_state") {
-          const current = JSON.parse(sessionStorage.getItem(settingsKey) ?? "{}") as Record<string, unknown>;
-          const previousDesktopState = (current.desktopState ?? {}) as Record<string, unknown>;
-          const update = (args.update ?? {}) as Record<string, unknown>;
-          const merged = {
-            version: 3,
-            lastWorkspacePath: update.lastWorkspacePath ?? previousDesktopState.lastWorkspacePath ?? null,
-            recentWorkspacePaths: update.recentWorkspacePaths ?? previousDesktopState.recentWorkspacePaths ?? [],
-            explorerOpen: update.explorerOpen ?? previousDesktopState.explorerOpen ?? true,
-            leftPanelWidth: update.leftPanelWidth ?? previousDesktopState.leftPanelWidth ?? 288,
-            rightPanelWidth: update.rightPanelWidth ?? previousDesktopState.rightPanelWidth ?? 320,
-            bottomPanelOpen: update.bottomPanelOpen ?? previousDesktopState.bottomPanelOpen ?? false
-          };
-          const next = { ...current, desktopState: merged };
-          const serialized = JSON.stringify(next);
-          sessionStorage.setItem(settingsKey, serialized);
-          return serialized;
-        }
-        if (command === "open_workspace") {
-          return {
-            workspace: { root_path: String(args.rootPath), name: String(args.rootPath).split("/").pop() ?? "vault" },
-            files: []
-          };
-        }
-        if (command === "list_workspace_entries") return [];
-        throw new Error(`Unexpected native command: ${command}`);
-      }
-    };
+  await installWorkspaceRestoreHarness(page, {
+    settingsKey: "thinkbrain-e2e-app-settings-window-root",
+    windowRoot: "/workspace/window-root-vault"
   });
 
   await page.goto("/");

@@ -1,24 +1,9 @@
-//! Workspace path security, resolution, and shared entry metadata.
+//! Shared workspace path security and metadata.
 //!
-//! Owns the cross-cutting primitives every workspace operation builds on:
-//! - Workspace root resolution and the relative-path validator that keeps
-//!   file/folder operations inside the vault (`..`, absolute paths, and
-//!   symlinked escapes are rejected).
-//! - The shared entry-mutation lock and ignored-entry classification used by
-//!   the explorer walker, the markdown walker, and the watcher so the three
-//!   cannot drift.
-//! - Filesystem-derived entry metadata (relative path, file name, parent
-//!   path, byte size, mtime) shared by the workspace and markdown entry
-//!   builders.
-//! - The deterministic workspace hash used for cache filenames, and the
-//!   thin re-export of the atomic-write helper so the historical
-//!   `crate::commands::workspace::write_file_atomically` call path keeps
-//!   working.
-//!
-//! This module has no dependency on the other workspace sibling modules; it is
-//! the foundation they build on.
+//! Rejects traversal and symlink escapes; owns the mutation lock, ignored-name
+//! policy, entry metadata, stable hash, and atomic-write re-export.
 
-use crate::error::NativeError;
+use crate::error::{failed, NativeError};
 use serde::Serialize;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
@@ -27,12 +12,6 @@ use std::time::UNIX_EPOCH;
 
 pub const IGNORED_FOLDERS: &[&str] = &["node_modules", "target", "dist", "vendor"];
 pub(crate) const MAX_WORKSPACE_ENTRIES: usize = 10_000;
-
-/// Builds a `NativeError::with_details` from a static code/message and a
-/// displayable error, matching the shared pattern used across command modules.
-fn failed(code: &'static str, message: &'static str, error: impl std::fmt::Display) -> NativeError {
-    NativeError::with_details(code, message, error.to_string())
-}
 
 /// True for vault entries the explorer, markdown walker, and watcher all skip:
 /// dotfiles plus the configured ignored-folder list. Centralized so the three
@@ -315,13 +294,5 @@ pub fn stable_workspace_hash(input: &str) -> u64 {
     hash
 }
 
-/// Replaces `path` with `contents` via a sibling `.tmp` and an atomic rename.
-///
-/// This is a thin re-export of [`crate::commands::atomic_write::write_file_atomically`]
-/// so the historical `crate::commands::workspace::write_file_atomically` call
-/// path keeps working without churning every caller. The implementation lives
-/// in one focused module so the Windows replace-existing behavior, the
-/// pre-replace flush, and the failure cleanup are owned in a single place.
-pub fn write_file_atomically(path: &Path, contents: impl AsRef<[u8]>) -> std::io::Result<()> {
-    crate::commands::atomic_write::write_file_atomically(path, contents)
-}
+/// Preserves the historical `commands::workspace` API.
+pub use crate::commands::atomic_write::write_file_atomically;

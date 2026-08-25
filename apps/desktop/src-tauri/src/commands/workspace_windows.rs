@@ -1,20 +1,10 @@
-//! Workspace window lifecycle and shell-level commands.
+//! Workspace window lifecycle and shell commands.
 //!
-//! Owns the per-window root registry that maps an opaque window label back to
-//! the vault it was opened for, the label sequence that keeps window labels
-//! unique, and the off-main-thread window builder used by both the
-//! `open_workspace_window` command and the Auto Sync import flow. Also owns
-//! the shell-status and `open_workspace` commands: `open_workspace` grants the
-//! `asset://` scope for a vault and returns its initial snapshot, while
-//! `desktop_shell_status` reports the shell name/version the frontend uses to
-//! confirm the native host is ready.
-//!
-//! Depends on [`super::workspace_paths`] for root resolution and workspace
-//! description, and on the markdown and watcher modules for the initial file
-//! listing and window-destroy cleanup wiring.
+//! Maps window labels to roots, creates windows off the main thread, grants
+//! vault asset scope, and cleans up roots/watchers on destroy.
 
 use crate::commands::markdown::{list_markdown_file_entries, MarkdownFileEntry};
-use crate::error::{lock_or_recover, NativeError};
+use crate::error::{failed, lock_or_recover, NativeError};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::{
@@ -24,12 +14,6 @@ use std::sync::{
 use tauri::Manager;
 
 use super::workspace_paths::{describe_workspace, resolve_workspace_root, WorkspaceDescriptor};
-
-/// Builds a `NativeError::with_details` from a static code/message and a
-/// displayable error, matching the shared pattern used across command modules.
-fn failed(code: &'static str, message: &'static str, error: impl std::fmt::Display) -> NativeError {
-    NativeError::with_details(code, message, error.to_string())
-}
 
 #[derive(Default)]
 pub struct WorkspaceWindowRoots(Mutex<HashMap<String, String>>);

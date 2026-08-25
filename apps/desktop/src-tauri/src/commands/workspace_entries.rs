@@ -1,20 +1,11 @@
-//! Workspace file/folder entry tree and CRUD operations.
+//! Workspace tree and explorer CRUD.
 //!
-//! Owns the explorer's view of the vault: recursive entry collection that
-//! emits directories before their contents (so empty folders show), the
-//! `WorkspaceEntry` shape the renderer builds its tree from, and the
-//! create/rename/delete commands that power the explorer's context actions.
-//! Rename and delete drop stale search-index entries best-effort via the
-//! shared `remove_search_index_entry` helper.
-//!
-//! Depends on [`super::workspace_paths`] for root/entry resolution, the
-//! mutation lock, parent-dir creation, ignored-name classification, and entry
-//! metadata, and on the markdown and watcher modules for markdown detection
-//! and self-write recording.
+//! Collects all entry types, preserves empty folders, and records create,
+//! rename, and delete effects for the watcher and search index.
 
 use crate::commands::markdown::is_markdown_path;
 use crate::commands::watcher::record_self_write;
-use crate::error::NativeError;
+use crate::error::{failed, NativeError};
 use serde::Serialize;
 use std::fs;
 use std::io::Write;
@@ -25,12 +16,6 @@ use super::workspace_paths::{
     remove_search_index_entry, resolve_workspace_entry_path, resolve_workspace_root,
     IGNORED_FOLDERS, MAX_WORKSPACE_ENTRIES,
 };
-
-/// Builds a `NativeError::with_details` from a static code/message and a
-/// displayable error, matching the shared pattern used across command modules.
-fn failed(code: &'static str, message: &'static str, error: impl std::fmt::Display) -> NativeError {
-    NativeError::with_details(code, message, error.to_string())
-}
 
 /// A single file-manager entry: a folder or a file of any type.
 ///

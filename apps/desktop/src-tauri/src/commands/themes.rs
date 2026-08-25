@@ -14,7 +14,7 @@
 //! file is still selectable (and the frontend's parser will surface the error
 //! when the user picks it).
 
-use crate::error::NativeError;
+use crate::error::{failed, NativeError};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -23,12 +23,6 @@ use tauri::Manager;
 
 /// File extension for theme files (without the leading dot).
 const THEME_EXTENSION: &str = "tbtheme.json";
-
-/// Builds a `NativeError::with_details` from a static code/message and a
-/// displayable error, matching the shared pattern used across command modules.
-fn failed(code: &'static str, message: &'static str, error: impl std::fmt::Display) -> NativeError {
-    NativeError::with_details(code, message, error.to_string())
-}
 
 /// Filenames of the preset themes bundled via `tauri.conf.json > bundle.resources`.
 ///
