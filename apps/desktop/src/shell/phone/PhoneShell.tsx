@@ -8,6 +8,7 @@ import type { ShellState } from "../useShellState";
 import { PhoneDrawer } from "./PhoneDrawer";
 import { PhoneHeader } from "./PhoneHeader";
 import { PhoneHub } from "./PhoneHub";
+import { TabSwitcherSheet } from "./TabSwitcherSheet";
 import { useHubItems } from "./useHubItems";
 
 /**
@@ -24,6 +25,7 @@ import { useHubItems } from "./useHubItems";
 export function PhoneShell({ shell }: { readonly shell: ShellState }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [revealed, setRevealed] = useState<string | null>(null);
+  const [tabsOpen, setTabsOpen] = useState(false);
   const { items } = useHubItems();
 
   const closeDrawer = useCallback(() => setDrawerOpen(false), []);
@@ -60,7 +62,7 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
         tabCount={shell.tabState.tabs.length}
         onBack={() => setRevealed(null)}
         onOpenNavigation={() => setDrawerOpen(true)}
-        onOpenTabs={() => undefined}
+        onOpenTabs={() => setTabsOpen(true)}
         onOpenInspector={() => undefined}
       />
 
@@ -104,6 +106,21 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
         onSelectPanel={revealPanel}
         onRunCommand={runCommand}
         onOpenMenu={() => setDrawerOpen(true)}
+      />
+
+      <TabSwitcherSheet
+        open={tabsOpen}
+        tabs={shell.tabState.tabs}
+        activeTabId={shell.tabState.activeTabId}
+        documents={shell.documents}
+        onDismiss={() => setTabsOpen(false)}
+        onSelect={(tabId) => {
+          shell.dispatchTabs({ type: "activate", tabId });
+          // A tab is the note, not a panel: choosing one leaves whatever panel
+          // was revealed and puts the editor back on screen.
+          setRevealed(null);
+        }}
+        onClose={(tabId) => shell.dispatchTabs({ type: "requestClose", tabId })}
       />
 
       <PhoneDrawer

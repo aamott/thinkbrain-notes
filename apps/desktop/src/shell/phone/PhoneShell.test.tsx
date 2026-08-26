@@ -125,6 +125,20 @@ describe("PhoneShell", () => {
     expect(host.querySelector('[aria-label="Search panel"]')).not.toBeNull();
   });
 
+  // The header's count button is labelled "Open tabs (n)" and the switcher's
+  // dialog is labelled "Open tabs" — near-identical, so both are matched
+  // exactly rather than by prefix, or the assertion would pass on the button.
+  it("opens the tab switcher from the header count button", async () => {
+    const host = await render();
+    expect(host.querySelector('[aria-label="Open tabs"]')).toBeNull();
+
+    await click(host, "Open tabs (0)");
+
+    const switcher = host.querySelector('[aria-label="Open tabs"]');
+    expect(switcher).not.toBeNull();
+    expect(switcher?.getAttribute("role")).toBe("dialog");
+  });
+
   it("keeps the hub visible while a panel is revealed", async () => {
     const host = await render();
 
