@@ -80,6 +80,27 @@ describe("ShellRoot", () => {
 
     expect(host.querySelector('[aria-label="ThinkBrain desktop workspace"]')).not.toBeNull();
   });
+
+  it("renders phone chrome on a narrow touch screen", async () => {
+    narrow = true;
+    coarse = true;
+
+    const host = await render();
+
+    expect(host.querySelector('[aria-label="ThinkBrain mobile workspace"]')).not.toBeNull();
+  });
+
+  // The two chromes are alternatives, not layers: mounting both would run two
+  // editors over one document and give the phone an icon rail it has no room for.
+  it("renders one chrome at a time", async () => {
+    narrow = true;
+    coarse = true;
+
+    const host = await render();
+
+    expect(host.querySelector('[aria-label="ThinkBrain desktop workspace"]')).toBeNull();
+    expect(host.querySelector('[aria-label="Workspace sections"]')).toBeNull();
+  });
 });
 
 describe("usePhoneChrome", () => {

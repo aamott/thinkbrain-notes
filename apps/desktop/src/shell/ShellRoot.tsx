@@ -1,5 +1,6 @@
 import { useCoarsePointer } from "../journal/useCoarsePointer";
 import { DesktopShell } from "./DesktopShell";
+import { PhoneShell } from "./phone/PhoneShell";
 import { useNarrowViewport } from "./useNarrowViewport";
 import { useShellState } from "./useShellState";
 
@@ -24,7 +25,6 @@ export function usePhoneChrome(): boolean {
  */
 export function ShellRoot() {
   const shell = useShellState();
-  // Consumed by PhoneShell in a later task; computed now so the gate ships tested.
-  usePhoneChrome();
-  return <DesktopShell shell={shell} />;
+  const phone = usePhoneChrome();
+  return phone ? <PhoneShell shell={shell} /> : <DesktopShell shell={shell} />;
 }
