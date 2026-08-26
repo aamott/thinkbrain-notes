@@ -10,6 +10,14 @@
 
 @import "tailwindcss";
 
+/* Tailwind v4 auto-detects sources from the Vite root, which is apps/desktop —
+   so the shared components in packages/ui are never scanned and their classes
+   are never emitted. Nothing caught this before because the desktop imported
+   only the token stylesheet from that package, never a component. The phone
+   shell renders Drawer, BottomSheet and BottomNav from there, so the directory
+   has to be declared. */
+@source "../../../packages/ui/src";
+
 @theme inline {
   /* Core semantic colors → bg-*, text-*, border-*, etc. */
   --color-background: var(--tn-color-background);
