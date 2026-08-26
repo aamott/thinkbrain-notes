@@ -4,6 +4,12 @@ import { subscribeToConflictChanges } from "./conflictService";
 import { NOT_RECORDING, type SyncStatus } from "./historyTypes";
 import { readSyncStatus, subscribeToSyncStatus } from "./syncService";
 
+/** A status and the workspace it was read from. */
+interface StatusReading {
+  readonly rootPath: string | null;
+  readonly status: SyncStatus;
+}
+
 /**
  * What this workspace's sync is doing, kept current.
  *
@@ -22,13 +28,14 @@ export function useSyncStatus(
   onConflictChange?: () => void,
   onStatusChange?: () => void
 ): SyncStatus {
-  const [status, setStatus] = useState<SyncStatus>(NOT_RECORDING);
+  // Keyed by the workspace it describes, so leaving one workspace does not
+  // need an effect to write the reset back into state — a status that is not
+  // this root's simply is not shown. Resetting from inside the effect cost a
+  // second render pass on every workspace change.
+  const [reading, setReading] = useState<StatusReading>({ rootPath: null, status: NOT_RECORDING });
 
   useEffect(() => {
-    if (!rootPath) {
-      setStatus(NOT_RECORDING);
-      return;
-    }
+    if (!rootPath) return;
     let cancelled = false;
     const stops: (() => void)[] = [];
 
@@ -36,10 +43,10 @@ export function useSyncStatus(
       onStatusChange?.();
       void readSyncStatus(rootPath)
         .then((next) => {
-          if (!cancelled) setStatus(next);
+          if (!cancelled) setReading({ rootPath, status: next });
         })
         .catch(() => {
-          if (!cancelled) setStatus(NOT_RECORDING);
+          if (!cancelled) setReading({ rootPath, status: NOT_RECORDING });
         });
     };
     const refreshConflictStatus = () => {
@@ -72,5 +79,5 @@ export function useSyncStatus(
     };
   }, [onConflictChange, onStatusChange, rootPath]);
 
-  return status;
+  return reading.rootPath === rootPath ? reading.status : NOT_RECORDING;
 }

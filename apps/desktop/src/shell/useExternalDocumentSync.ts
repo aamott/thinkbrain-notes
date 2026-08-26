@@ -98,6 +98,5 @@ export function useExternalDocumentSync({
         }
       }
     );
-    // tabStateRef and dispatchTabs are stable and stay out of the deps.
-  }, [workspacePath, moveDocument, markDocumentConflict, reloadDocumentInPlace]);
+  }, [workspacePath, tabStateRef, dispatchTabs, moveDocument, markDocumentConflict, reloadDocumentInPlace]);
 }

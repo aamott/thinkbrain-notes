@@ -326,8 +326,7 @@ export function useShellState(): ShellState {
       .catch((error: unknown) => {
         console.error(`[commandRegistry] Command "${command.id}" failed.`, error);
       });
-    // `setLeftPanel` is a stable useState setter and is deliberately not a dep.
-  }, [closePalette, openSettingsTab, persistDesktopState, requestNewNoteFocus, selectLeftPanel, setTheme, showExplorer, theme, toggleBottomPanel, toggleLivePreview, toggleRightPanel, updateBottomPanel]);
+  }, [closePalette, openSettingsTab, persistDesktopState, requestNewNoteFocus, selectLeftPanel, setLeftPanel, setTheme, showExplorer, theme, toggleBottomPanel, toggleLivePreview, toggleRightPanel, updateBottomPanel]);
 
   const activeTab = tabState.tabs.find((tab) => tab.id === tabState.activeTabId) ?? null;
 
@@ -440,8 +439,7 @@ export function useShellState(): ShellState {
   useEffect(() => {
     leftWidthRef.current = leftWidth;
     rightWidthRef.current = rightWidth;
-    // `leftWidthRef`/`rightWidthRef` are stable refs and are deliberately not deps.
-  }, [leftWidth, rightWidth]);
+  }, [leftWidthRef, leftWidth, rightWidthRef, rightWidth]);
 
   return {
     tabState,

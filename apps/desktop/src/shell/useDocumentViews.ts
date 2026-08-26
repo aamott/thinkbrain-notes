@@ -157,8 +157,7 @@ export function useDocumentViews({ tabState, dispatchTabs }: DocumentViewsProps)
       if (documentsRef.current[tab.id]) return;
       loadDocumentIntoView(tab.id, rootPath, relativePath);
     },
-    // dispatchTabs is a stable reducer dispatch, so it stays out of the deps.
-    [loadDocumentIntoView]
+    [dispatchTabs, loadDocumentIntoView]
   );
 
   /**
@@ -190,8 +189,7 @@ export function useDocumentViews({ tabState, dispatchTabs }: DocumentViewsProps)
       });
       dispatchTabs({ type: "setDirty", tabId, isDirty: true });
     },
-    // dispatchTabs is a stable reducer dispatch, so it stays out of the deps.
-    []
+    [dispatchTabs]
   );
 
   /**
@@ -245,8 +243,7 @@ export function useDocumentViews({ tabState, dispatchTabs }: DocumentViewsProps)
     // writing their version, and the file is now theirs.
     setConflicts((current) => clearConflict(current, tab.id));
     return true;
-    // dispatchTabs is a stable reducer dispatch, so it stays out of the deps.
-  }, []);
+  }, [dispatchTabs]);
 
   /**
    * Keeps the tab's unsaved edits and stops asking about the change on disk.
@@ -288,8 +285,7 @@ export function useDocumentViews({ tabState, dispatchTabs }: DocumentViewsProps)
       dispatchTabs({ type: "setDirty", tabId: tab.id, isDirty: false });
       loadDocumentIntoView(tab.id, rootPath, relativePath);
     },
-    // dispatchTabs is a stable reducer dispatch, so it stays out of the deps.
-    [loadDocumentIntoView]
+    [dispatchTabs, loadDocumentIntoView]
   );
 
   /** Stops asking about a note that went empty outside the app. Writes nothing. */

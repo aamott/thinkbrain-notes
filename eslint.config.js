@@ -76,13 +76,27 @@ export default tseslint.config(
     }
   },
   {
+    // Rules of hooks apply wherever hooks are written, and many of this
+    // codebase's hooks live in plain `.ts` files — `useShellState`,
+    // `useDocumentViews`, `useWorkspaceLifecycle`, `usePanelResize`. Scoping
+    // this to `.tsx` meant a conditional hook call or a missing dependency in
+    // any of them linted clean.
+    files: ["**/*.{ts,tsx}"],
+    plugins: {
+      "react-hooks": reactHooks
+    },
+    rules: {
+      ...reactHooks.configs.recommended.rules
+    }
+  },
+  {
+    // Fast-refresh boundaries are a component-module concern, so this stays
+    // scoped to the files that can export components.
     files: ["**/*.tsx"],
     plugins: {
-      "react-hooks": reactHooks,
       "react-refresh": reactRefresh
     },
     rules: {
-      ...reactHooks.configs.recommended.rules,
       "react-refresh/only-export-components": [
         "warn",
         { "allowConstantExport": true }

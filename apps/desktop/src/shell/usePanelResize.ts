@@ -101,8 +101,7 @@ export function usePanelResize({
       window.addEventListener("pointerup", finish);
       window.addEventListener("pointercancel", finish);
     },
-    // The width refs are stable and deliberately absent from the deps.
-    [updatePanelWidth]
+    [leftWidthRef, rightWidthRef, updatePanelWidth]
   );
 
   /** Keyboard alternative to dragging a handle. */
@@ -118,8 +117,7 @@ export function usePanelResize({
       const current = side === "left" ? leftWidthRef.current : rightWidthRef.current;
       updatePanelWidth(side, current + delta);
     },
-    // The width refs are stable and deliberately absent from the deps.
-    [updatePanelWidth]
+    [leftWidthRef, rightWidthRef, updatePanelWidth]
   );
 
   return { beginResize, resizeWithKeyboard, cancelResize };

@@ -296,7 +296,7 @@ export function useWorkspaceLifecycle({
       }
     });
     return () => setWorkspaceBridge(null);
-  }, [restoredWorkspacePath, openMarkdownDocument]);
+  }, [restoredWorkspacePath, openMarkdownDocument, dispatchTabs]);
 
   // Reload settings whenever the workspace root changes so the settings store
   // knows the workspace root path. Without this, workspace-scoped settings
