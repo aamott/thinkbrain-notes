@@ -36,7 +36,7 @@ describe("ActivityBar", () => {
   it("renders the registered left panels", async () => {
     const host = await render(activityBar());
 
-    expect(host.querySelector('[aria-label="Explorer"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="Files"]')).not.toBeNull();
   });
 
   /**

@@ -66,7 +66,7 @@ test("desktop workspace shell boots in the browser harness", async ({ page }) =>
 
   await expect(page.getByRole("main", { name: "ThinkBrain desktop workspace" })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Open tabs" })).toBeVisible();
-  await expect(page.getByRole("complementary", { name: "Explorer panel" })).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "Files panel" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Choose workspace" })).toBeVisible();
   await expect(page.getByText(/Welcome to ThinkBrain/)).toBeVisible();
 });
@@ -79,14 +79,14 @@ test("activity bar toggles between the explorer and search panels", async ({ pag
   await expect(page.getByRole("complementary", { name: "Search panel" })).toBeVisible();
   await expect(page.getByText("Open a workspace to search its notes.")).toBeVisible();
 
-  await page.getByRole("button", { name: "Explorer", exact: true }).click();
-  await expect(page.getByRole("complementary", { name: "Explorer panel" })).toBeVisible();
+  await page.getByRole("button", { name: "Files", exact: true }).click();
+  await expect(page.getByRole("complementary", { name: "Files panel" })).toBeVisible();
   await expect(page.getByText("ThinkBrain will show the current folder hierarchy without changing any files.")).toBeVisible();
 
-  await page.getByRole("button", { name: "Explorer", exact: true }).click();
-  await expect(page.getByRole("complementary", { name: "Explorer panel" })).not.toBeVisible();
-  await page.getByRole("button", { name: "Explorer", exact: true }).click();
-  await expect(page.getByRole("complementary", { name: "Explorer panel" })).toBeVisible();
+  await page.getByRole("button", { name: "Files", exact: true }).click();
+  await expect(page.getByRole("complementary", { name: "Files panel" })).not.toBeVisible();
+  await page.getByRole("button", { name: "Files", exact: true }).click();
+  await expect(page.getByRole("complementary", { name: "Files panel" })).toBeVisible();
 });
 
 // Browser-only: proves renderer persistence, not native webview creation.
@@ -315,8 +315,8 @@ test("assistant and bottom panel toggles preserve the editor", async ({ page }) 
 
   await page.getByRole("button", { name: "Assistant", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Assistant" })).toBeVisible();
-  await page.getByRole("button", { name: "Explorer", exact: true }).click();
-  await expect(page.getByRole("complementary", { name: "Explorer panel" })).not.toBeVisible();
+  await page.getByRole("button", { name: "Files", exact: true }).click();
+  await expect(page.getByRole("complementary", { name: "Files panel" })).not.toBeVisible();
   await expect(page.getByRole("heading", { name: "Assistant" })).toBeVisible();
   await page.getByRole("button", { name: "Assistant", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Assistant" })).not.toBeVisible();
@@ -338,7 +338,7 @@ test("the editor remains usable without horizontal page overflow on a narrow scr
   await page.goto("/");
 
   await expect(page.getByRole("main")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Explorer", exact: true })).toHaveCSS("transition-duration", "0s");
+  await expect(page.getByRole("button", { name: "Files", exact: true })).toHaveCSS("transition-duration", "0s");
 
   const hasHorizontalOverflow = await page.evaluate(
     () => document.documentElement.scrollWidth > window.innerWidth

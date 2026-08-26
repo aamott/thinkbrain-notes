@@ -96,6 +96,7 @@ export const builtInDesktopCommands: readonly DesktopCommand[] = [
   available({
     id: "new-note",
     title: "New note",
+    icon: "plus",
     keywords: ["create", "markdown", "file"],
     handler: ({ showExplorer, focusNewNote, closePalette }) => {
       showExplorer();
@@ -131,7 +132,7 @@ export const builtInDesktopCommands: readonly DesktopCommand[] = [
   }),
   available({
     id: "toggle-explorer",
-    title: "Toggle Explorer",
+    title: "Toggle Files",
     keywords: ["sidebar", "files"],
     handler: withClosePalette(({ toggleExplorer }) => {
       toggleExplorer();

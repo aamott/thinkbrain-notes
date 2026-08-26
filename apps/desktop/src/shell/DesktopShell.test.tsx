@@ -63,7 +63,7 @@ describe("DesktopShell composition", () => {
     const markup = shellMarkup();
 
     expect(markup).toContain('aria-label="Note workspace"');
-    expect(markup).toContain('aria-label="Explorer panel"');
+    expect(markup).toContain('aria-label="Files panel"');
     // The right dock is collapsed by default, so neither its panel nor its
     // resize handle should be present on first render.
     expect(markup).not.toContain('aria-label="Outline panel"');
@@ -100,9 +100,9 @@ describe("DesktopShell composition", () => {
   it("renders the explorer panel by default with aria-current on its activity button", () => {
     const markup = shellMarkup();
 
-    expect(markup).toContain('aria-label="Explorer panel"');
+    expect(markup).toContain('aria-label="Files panel"');
     // IconButton emits aria-current between aria-label and title when active.
-    expect(markup).toContain('aria-label="Explorer" aria-current="true" title="Explorer"');
+    expect(markup).toContain('aria-label="Files" aria-current="true" title="Files"');
   });
 
   it("does not render the search panel when explorer is active", () => {
