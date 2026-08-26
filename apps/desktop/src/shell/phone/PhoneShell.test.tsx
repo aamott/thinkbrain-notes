@@ -198,6 +198,39 @@ describe("PhoneShell", () => {
     expect(host.querySelector('[aria-label="Primary navigation"]')).not.toBeNull();
   });
 
+  // Both the header's `⋯` button and the sheet it opens are labelled
+  // "Document tools", so every assertion here matches on the dialog role too —
+  // an unscoped query would match the button, which is always present, and pass
+  // whether or not the sheet ever opened.
+  const inspector = (host: HTMLDivElement): Element | null =>
+    host.querySelector('[role="dialog"][aria-label="Document tools"]');
+
+  it("opens the inspector sheet from the header's document tools button", async () => {
+    const host = await render();
+    expect(inspector(host)).toBeNull();
+
+    await click(host, "Document tools");
+
+    expect(inspector(host)).not.toBeNull();
+  });
+
+  // `revealPanel` used to set `revealed` for any panel id while the content
+  // branch only ever renders a *left* popout, so the default Assistant hub slot
+  // full-screened the Files panel instead of opening an inspector.
+  it("opens the inspector sheet from the assistant hub shortcut", async () => {
+    const host = await render();
+
+    const hub = host.querySelector('[aria-label="Primary navigation"]');
+    await act(async () => {
+      hub?.querySelector<HTMLButtonElement>('[aria-label="Assistant"]')?.click();
+    });
+
+    expect(inspector(host)).not.toBeNull();
+    expect(inspector(host)?.querySelector('[aria-label="Assistant panel"]')).not.toBeNull();
+    // The note stays on screen behind the sheet: no left panel takes over.
+    expect(host.querySelector('[aria-label="Files panel"]')).toBeNull();
+  });
+
   it("prompts before closing a tab that has unsaved work", async () => {
     // `requestClose` on a dirty tab does not close it — it parks a request and
     // waits. A shell with no prompt mounted swallows the close silently and

@@ -6,6 +6,7 @@ import { isSelectableRightPanel } from "../shellTypes";
 import { TabCloseRequest } from "../TabCloseRequest";
 import { TabContent } from "../TabContent";
 import type { ShellState } from "../useShellState";
+import { InspectorSheet } from "./InspectorSheet";
 import { PhoneDrawer } from "./PhoneDrawer";
 import { PhoneHeader } from "./PhoneHeader";
 import { PhoneHub } from "./PhoneHub";
@@ -27,6 +28,7 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [revealed, setRevealed] = useState<string | null>(null);
   const [tabsOpen, setTabsOpen] = useState(false);
+  const [inspectorOpen, setInspectorOpen] = useState(false);
   const { items } = useHubItems();
 
   const closeDrawer = useCallback(() => setDrawerOpen(false), []);
@@ -34,10 +36,19 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
   const revealPanel = useCallback(
     (panelId: string) => {
       setDrawerOpen(false);
-      // Toggle: tapping the hub slot you are already on returns you to the note.
-      setRevealed((current) => (current === panelId ? null : panelId));
-      if (isBuiltInLeftPanel(panelId)) shell.selectLeftPanel(panelId);
-      else if (isSelectableRightPanel(panelId)) shell.setRightPanel(panelId);
+      if (isBuiltInLeftPanel(panelId)) {
+        // Toggle: tapping the hub slot you are already on returns you to the
+        // note. A left panel takes over the screen, so any open sheet goes.
+        setInspectorOpen(false);
+        setRevealed((current) => (current === panelId ? null : panelId));
+        shell.selectLeftPanel(panelId);
+      } else if (isSelectableRightPanel(panelId)) {
+        // A right-side target is an inspector, not a screen: it opens over the
+        // note rather than replacing it. Revealing it would have shown the
+        // *left* popout instead, since that is all the content branch renders.
+        shell.setRightPanel(panelId);
+        setInspectorOpen(true);
+      }
     },
     [shell]
   );
@@ -63,8 +74,14 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
         tabCount={shell.tabState.tabs.length}
         onBack={() => setRevealed(null)}
         onOpenNavigation={() => setDrawerOpen(true)}
-        onOpenTabs={() => setTabsOpen(true)}
-        onOpenInspector={() => undefined}
+        onOpenTabs={() => {
+          setInspectorOpen(false);
+          setTabsOpen(true);
+        }}
+        onOpenInspector={() => {
+          setTabsOpen(false);
+          setInspectorOpen(true);
+        }}
       />
 
       <div className="relative flex min-h-0 flex-1 flex-col">
@@ -102,7 +119,9 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
       <PhoneHub
         items={items}
         activeLeftPanel={revealed}
-        activeRightPanel={shell.rightPanel}
+        // Only truthful while the sheet is up: `rightPanel` outlives it, and a
+        // hub slot left lit over a dismissed sheet claims a surface is open.
+        activeRightPanel={inspectorOpen ? shell.rightPanel : null}
         badges={shell.conflictBadges}
         onSelectPanel={revealPanel}
         onRunCommand={runCommand}
@@ -122,6 +141,19 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
           setRevealed(null);
         }}
         onClose={(tabId) => shell.dispatchTabs({ type: "requestClose", tabId })}
+      />
+
+      {/* Inspectors read live shell state, so a tab switched underneath an open
+          sheet re-renders it rather than stranding it on the previous note. */}
+      <InspectorSheet
+        open={inspectorOpen}
+        panel={shell.rightPanel ?? "outline"}
+        rootPath={shell.restoredWorkspacePath}
+        documentContents={
+          shell.activeDocument?.phase === "ready" ? shell.activeDocument.contents : null
+        }
+        onDismiss={() => setInspectorOpen(false)}
+        onSelectPanel={(panel) => shell.setRightPanel(panel)}
       />
 
       {/* Closing a dirty tab parks a request and waits for an answer. Without
