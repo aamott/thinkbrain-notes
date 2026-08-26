@@ -1,5 +1,7 @@
 import {
   invokeNativeCommand,
+  type NativeWorkspaceAccessCapabilities,
+  type NativeWorkspaceDescriptor,
   type NativeWorkspaceEntry,
   type NativeWorkspaceSnapshot
 } from "../native/commands";
@@ -7,6 +9,9 @@ import { pickDirectoryPath } from "../native/dialogs";
 import { appEvents } from "../events/appEvents";
 
 export interface WorkspaceDesktopApi {
+  workspaceAccessCapabilities(): Promise<NativeWorkspaceAccessCapabilities>;
+  listManagedWorkspaces(): Promise<readonly NativeWorkspaceDescriptor[]>;
+  createManagedWorkspace(name: string): Promise<NativeWorkspaceDescriptor>;
   pickWorkspaceDirectory(): Promise<string | null>;
   openWorkspace(rootPath: string): Promise<NativeWorkspaceSnapshot>;
   listWorkspaceEntries(rootPath: string, includeHidden: boolean): Promise<readonly NativeWorkspaceEntry[]>;
@@ -31,6 +36,15 @@ export interface WorkspaceDesktopApi {
 }
 
 export const workspaceDesktopApi: WorkspaceDesktopApi = {
+  workspaceAccessCapabilities() {
+    return invokeNativeCommand("workspace_access_capabilities");
+  },
+  listManagedWorkspaces() {
+    return invokeNativeCommand("list_managed_workspaces");
+  },
+  createManagedWorkspace(name) {
+    return invokeNativeCommand("create_managed_workspace", { name });
+  },
   pickWorkspaceDirectory() {
     return pickDirectoryPath("Open workspace");
   },

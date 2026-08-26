@@ -131,7 +131,7 @@ pub fn prepare_import(
     if target.exists() {
         return Err(NativeError::new(
             "sync.import_target_exists",
-            "A folder with that name is already there. Choose another parent folder, or rename the one that exists.",
+            "A folder with that name is already there.",
         ));
     }
     let requested = profile_id.map(str::trim).filter(|id| !id.is_empty());
@@ -213,6 +213,17 @@ pub fn preview_workspace_from_git_link(
     preview_from_git_link(&destination, &parent_path)
 }
 
+/// Previews an import beneath the native-managed vault root.
+#[tauri::command]
+pub fn preview_managed_workspace_from_git_link(
+    app: tauri::AppHandle,
+    destination: String,
+) -> Result<GitLinkPreview, NativeError> {
+    let app_data = resolve_app_data(&app)?;
+    let parent = crate::commands::workspace::managed_vaults_root(&app_data)?;
+    preview_from_git_link(&destination, &parent.to_string_lossy())
+}
+
 #[tauri::command]
 pub fn import_workspace_from_git_link(
     app: tauri::AppHandle,
@@ -220,15 +231,49 @@ pub fn import_workspace_from_git_link(
     parent_path: String,
     profile_id: Option<String>,
 ) -> Result<ImportStarted, NativeError> {
+    let app_data = resolve_app_data(&app)?;
+    start_import(app, app_data, destination, parent_path, profile_id, true)
+}
+
+/// Imports into the native-managed vault root and leaves opening to the current mobile window.
+#[tauri::command]
+pub fn import_managed_workspace_from_git_link(
+    app: tauri::AppHandle,
+    destination: String,
+    profile_id: Option<String>,
+) -> Result<ImportStarted, NativeError> {
+    let app_data = resolve_app_data(&app)?;
+    let parent = crate::commands::workspace::managed_vaults_root(&app_data)?;
+    start_import(
+        app,
+        app_data,
+        destination,
+        parent.to_string_lossy().into_owned(),
+        profile_id,
+        false,
+    )
+}
+
+fn resolve_app_data(app: &tauri::AppHandle) -> Result<PathBuf, NativeError> {
     use tauri::Manager as _;
 
-    let app_data = app.path().app_data_dir().map_err(|error| {
+    app.path().app_data_dir().map_err(|error| {
         failed(
             "sync.no_app_data",
             "Could not find where this app keeps its files.",
             error,
         )
-    })?;
+    })
+}
+
+fn start_import(
+    app: tauri::AppHandle,
+    app_data: PathBuf,
+    destination: String,
+    parent_path: String,
+    profile_id: Option<String>,
+    open_in_new_window: bool,
+) -> Result<ImportStarted, NativeError> {
     let prepared = prepare_import(&app_data, &destination, &parent_path, profile_id.as_deref())?;
     let request_id = new_request_id();
     let target_path = prepared.target.to_string_lossy().into_owned();
@@ -241,7 +286,14 @@ pub fn import_workspace_from_git_link(
     if std::thread::Builder::new()
         .name("thinkbrain-import".into())
         .spawn(move || {
-            run_imported(worker_app, worker_data, request_id, target_path, prepared);
+            run_imported(
+                worker_app,
+                worker_data,
+                request_id,
+                target_path,
+                prepared,
+                open_in_new_window,
+            );
         })
         .is_err()
     {
@@ -260,6 +312,7 @@ fn run_imported(
     request_id: String,
     target_path: String,
     prepared: PreparedImport,
+    open_in_new_window: bool,
 ) {
     let emit = |state: &str, phase: Option<SyncPhase>, error: Option<NativeError>| {
         let payload = ImportProgress {
@@ -276,7 +329,7 @@ fn run_imported(
     match complete_import(&app_data, prepared, |phase| {
         emit("running", Some(phase), None);
     }) {
-        Ok(path) => {
+        Ok(path) if open_in_new_window => {
             match crate::commands::workspace::create_workspace_window_off_main_thread(
                 app.clone(),
                 path.to_string_lossy().into_owned(),
@@ -293,6 +346,7 @@ fn run_imported(
                 ),
             }
         }
+        Ok(_) => emit("ok", None, None),
         Err(error) => emit("failed", None, Some(error)),
     }
 }

@@ -27,6 +27,12 @@ export function previewWorkspaceFromGitLink(
   return invokeNativeCommand("preview_workspace_from_git_link", { destination, parentPath });
 }
 
+export function previewManagedWorkspaceFromGitLink(
+  destination: string
+): Promise<GitLinkPreview> {
+  return invokeNativeCommand("preview_managed_workspace_from_git_link", { destination });
+}
+
 export function importWorkspaceFromGitLink(
   destination: string,
   parentPath: string,
@@ -35,6 +41,16 @@ export function importWorkspaceFromGitLink(
   return invokeNativeCommand("import_workspace_from_git_link", {
     destination,
     parentPath,
+    profileId: profileId ?? null
+  });
+}
+
+export function importManagedWorkspaceFromGitLink(
+  destination: string,
+  profileId?: string | null
+): Promise<ImportStarted> {
+  return invokeNativeCommand("import_managed_workspace_from_git_link", {
+    destination,
     profileId: profileId ?? null
   });
 }

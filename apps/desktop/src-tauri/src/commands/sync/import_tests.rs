@@ -426,5 +426,9 @@ fn import_commands_are_registered() {
     assert!(crate::commands::APP_COMMAND_PATHS
         .contains(&"sync::import::preview_workspace_from_git_link"));
     assert!(crate::commands::APP_COMMAND_PATHS
+        .contains(&"sync::import::preview_managed_workspace_from_git_link"));
+    assert!(crate::commands::APP_COMMAND_PATHS
         .contains(&"sync::import::import_workspace_from_git_link"));
+    assert!(crate::commands::APP_COMMAND_PATHS
+        .contains(&"sync::import::import_managed_workspace_from_git_link"));
 }

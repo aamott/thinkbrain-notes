@@ -12,7 +12,9 @@ import { pickDirectoryPath } from "../native/dialogs";
 import { readSignInStatus, saveSyncCredentials } from "../sync/syncService";
 import type { SignInStatus } from "../sync/historyTypes";
 import {
+  importManagedWorkspaceFromGitLink,
   importWorkspaceFromGitLink,
+  previewManagedWorkspaceFromGitLink,
   previewWorkspaceFromGitLink,
   subscribeToWorkspaceImport,
   type GitLinkPreview,
@@ -33,13 +35,16 @@ const inputClassName =
   "w-full rounded-small border border-border bg-surface px-2 py-1 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50";
 
 export interface GitLinkImportDialogProps {
+  readonly managedDestination?: boolean;
   readonly onClose: () => void;
+  readonly onImported?: (rootPath: string) => void;
 }
 
-export function GitLinkImportDialog({ onClose }: GitLinkImportDialogProps) {
+export function GitLinkImportDialog({ managedDestination = false, onClose, onImported }: GitLinkImportDialogProps) {
   const dialogRef = useRef<HTMLElement>(null);
   const linkInputRef = useRef<HTMLInputElement>(null);
   const onCloseRef = useRef(onClose);
+  const onImportedRef = useRef(onImported);
   const requestRef = useRef<string | null>(null);
   const earlyProgress = useRef(new Map<string, WorkspaceImportProgress>());
   const titleId = useId();
@@ -60,7 +65,8 @@ export function GitLinkImportDialog({ onClose }: GitLinkImportDialogProps) {
   const [phase, setPhase] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const linkError = validateImportLink(destination);
-  const previewKey = `${destination.trim()}\0${parentPath}`;
+  const destinationReady = managedDestination || parentPath !== "";
+  const previewKey = `${managedDestination ? "managed" : parentPath}\0${destination.trim()}`;
   const preview = previewResult?.key === previewKey ? previewResult.preview : null;
   const isHttps = destination.trim().startsWith("https://") || destination.trim().startsWith("http://");
   const effectiveStatus = isHttps ? status : null;
@@ -74,7 +80,7 @@ export function GitLinkImportDialog({ onClose }: GitLinkImportDialogProps) {
     listening &&
     !busy &&
     linkError === null &&
-    parentPath !== "" &&
+    destinationReady &&
     preview !== null &&
     (!isHttps || profileId === "" || profileId === "new" || (!selectedMissing && selectedInList)) &&
     (!isNewProfile || (username.trim() !== "" && token !== ""));
@@ -85,7 +91,8 @@ export function GitLinkImportDialog({ onClose }: GitLinkImportDialogProps) {
 
   useEffect(() => {
     onCloseRef.current = onClose;
-  }, [onClose]);
+    onImportedRef.current = onImported;
+  }, [onClose, onImported]);
 
   useEffect(() => {
     if (!isHttps) return;
@@ -114,9 +121,12 @@ export function GitLinkImportDialog({ onClose }: GitLinkImportDialogProps) {
   }, [destination, isHttps, profileId]);
 
   useEffect(() => {
-    if (linkError !== null || parentPath === "") return;
+    if (linkError !== null || !destinationReady) return;
     let cancelled = false;
-    void previewWorkspaceFromGitLink(destination.trim(), parentPath)
+    const request = managedDestination
+      ? previewManagedWorkspaceFromGitLink(destination.trim())
+      : previewWorkspaceFromGitLink(destination.trim(), parentPath);
+    void request
       .then((next) => {
         if (!cancelled) setPreviewResult({ key: previewKey, preview: next });
       })
@@ -128,7 +138,7 @@ export function GitLinkImportDialog({ onClose }: GitLinkImportDialogProps) {
     return () => {
       cancelled = true;
     };
-  }, [destination, parentPath, linkError, previewKey]);
+  }, [destination, destinationReady, linkError, managedDestination, parentPath, previewKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -139,7 +149,15 @@ export function GitLinkImportDialog({ onClose }: GitLinkImportDialogProps) {
       if (requestId === null) {
         queued.set(event.requestId, event);
       } else if (event.requestId === requestId) {
-        applyProgress(event, setPhase, setError, setBusy, () => onCloseRef.current());
+        applyProgress(
+          event,
+          setPhase,
+          setError,
+          setBusy,
+          () => onCloseRef.current(),
+          (rootPath) => onImportedRef.current?.(rootPath),
+          managedDestination
+        );
       }
     }).then((stop) => {
       if (cancelled) stop();
@@ -155,7 +173,7 @@ export function GitLinkImportDialog({ onClose }: GitLinkImportDialogProps) {
       unlisten?.();
       queued.clear();
     };
-  }, []);
+  }, [managedDestination]);
 
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLElement>) => {
     if (event.key === "Escape" && !busy) {
@@ -208,20 +226,26 @@ export function GitLinkImportDialog({ onClose }: GitLinkImportDialogProps) {
         }
       }
       setPhase("checking");
-      const started = await importWorkspaceFromGitLink(
-        destination.trim(),
-        parentPath,
-        effectiveProfileId
-      );
+      const started = managedDestination
+        ? await importManagedWorkspaceFromGitLink(destination.trim(), effectiveProfileId)
+        : await importWorkspaceFromGitLink(destination.trim(), parentPath, effectiveProfileId);
       requestRef.current = started.requestId;
       const early = earlyProgress.current.get(started.requestId);
       if (early) {
         earlyProgress.current.delete(started.requestId);
-        applyProgress(early, setPhase, setError, setBusy, onClose);
+        applyProgress(
+          early,
+          setPhase,
+          setError,
+          setBusy,
+          onClose,
+          (rootPath) => onImported?.(rootPath),
+          managedDestination
+        );
       }
     } catch (caught) {
       setBusy(false);
-      setError(importError(caught, "Could not start bringing these notes in."));
+      setError(importError(caught, "Could not start bringing these notes in.", managedDestination));
     }
   };
 
@@ -258,26 +282,37 @@ export function GitLinkImportDialog({ onClose }: GitLinkImportDialogProps) {
             {linkError}
           </p>
         )}
-        <div className="flex flex-col gap-1">
-          <span className="text-xs text-foreground">Parent folder</span>
-          <div className="flex gap-2">
-            <p className="m-0 min-w-0 flex-1 truncate rounded-small border border-border bg-surface px-2 py-1 text-xs text-muted-foreground">
-              {parentPath || "Choose where to put the new folder"}
+        {managedDestination ? (
+          <div className="flex flex-col gap-1">
+            <span className="text-xs text-foreground">Location</span>
+            <p className="m-0 rounded-small border border-border bg-surface px-2 py-1 text-xs text-muted-foreground">
+              Managed app storage
             </p>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void chooseParent()}
-              className="shrink-0 rounded-small border border-border bg-surface px-2 py-1 text-xs text-foreground disabled:opacity-50"
-            >
-              Browse…
-            </button>
           </div>
-        </div>
+        ) : (
+          <div className="flex flex-col gap-1">
+            <span className="text-xs text-foreground">Parent folder</span>
+            <div className="flex gap-2">
+              <p className="m-0 min-w-0 flex-1 truncate rounded-small border border-border bg-surface px-2 py-1 text-xs text-muted-foreground">
+                {parentPath || "Choose where to put the new folder"}
+              </p>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void chooseParent()}
+                className="shrink-0 rounded-small border border-border bg-surface px-2 py-1 text-xs text-foreground disabled:opacity-50"
+              >
+                Browse…
+              </button>
+            </div>
+          </div>
+        )}
         <p id={previewId} className="m-0 text-xs text-muted-foreground">
           {preview
             ? `New folder: ${preview.childName}`
-            : "The new folder name comes from the git link once a parent folder is chosen."}
+            : managedDestination
+              ? "The managed vault name comes from the git link."
+              : "The new folder name comes from the git link once a parent folder is chosen."}
         </p>
         <label className="flex flex-col gap-1 text-xs text-foreground" htmlFor="git-link-import-profile">
           Saved sign-in
@@ -396,27 +431,30 @@ function applyProgress(
   setPhase: (value: string | null) => void,
   setError: (value: string | null) => void,
   setBusy: (value: boolean) => void,
-  onClose: () => void
+  onClose: () => void,
+  onImported: (rootPath: string) => void,
+  managedDestination: boolean
 ): void {
   if (event.state === "ok") {
     setBusy(false);
+    onImported(event.targetPath);
     onClose();
     return;
   }
   if (event.state === "failed") {
     setBusy(false);
     setPhase(null);
-    setError(importError(event.error, "Could not bring these notes in."));
+    setError(importError(event.error, "Could not bring these notes in.", managedDestination));
     return;
   }
   setPhase(event.phase ?? event.state);
 }
 
-function importError(cause: unknown, fallback: string): string {
+function importError(cause: unknown, fallback: string, managedDestination: boolean): string {
   const shaped = typeof cause === "object" && cause !== null
     ? cause as { readonly code?: unknown; readonly message?: unknown }
     : null;
   const code = typeof shaped?.code === "string" ? shaped.code : "";
   const message = code && typeof shaped?.message === "string" ? shaped.message : fallback;
-  return `${message} ${recoveryForImport(code)}`;
+  return `${message} ${recoveryForImport(code, managedDestination)}`;
 }

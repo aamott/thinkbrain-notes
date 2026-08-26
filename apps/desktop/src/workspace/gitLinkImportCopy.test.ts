@@ -41,6 +41,7 @@ describe("git-link import copy", () => {
 
   it("names a recovery action for import failures", () => {
     expect(recoveryForImport("sync.import_target_exists")).toMatch(/parent folder/);
+    expect(recoveryForImport("sync.import_target_exists", true)).toMatch(/managed vault/);
     expect(recoveryForImport("sync.sign_in_missing")).toMatch(/saved sign-in/);
   });
 });

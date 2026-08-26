@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useReducer, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
-import type { NativeWorkspaceEntry, NativeWorkspaceSnapshot } from "../native/commands";
+import type { NativeWorkspaceAccessCapabilities, NativeWorkspaceEntry, NativeWorkspaceSnapshot } from "../native/commands";
 import {
   buildWorkspaceTree,
   initialWorkspaceExplorerState,
@@ -23,6 +23,12 @@ import {
   type RenameState,
   type WorkspaceExplorerActions
 } from "./workspaceExplorerTypes";
+
+const DESKTOP_WORKSPACE_ACCESS: NativeWorkspaceAccessCapabilities = {
+  canOpenFolder: true,
+  canCreateManagedWorkspace: false,
+  opensWorkspaceInNewWindow: true
+};
 
 export interface WorkspaceExplorerProps {
   readonly api?: WorkspaceDesktopApi;
@@ -74,9 +80,17 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
   const [showHidden, setShowHidden] = useState<boolean>(DEFAULT_WORKSPACE_SETTINGS.showHidden);
   // Open state for the header "..." (more actions) dropdown popover.
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const [accessCapabilities, setAccessCapabilities] = useState<NativeWorkspaceAccessCapabilities | null>(null);
+  const [managedWorkspacePaths, setManagedWorkspacePaths] = useState<readonly string[]>([]);
+  const [createManagedWorkspaceOpen, setCreateManagedWorkspaceOpen] = useState(false);
+  const [managedStorageNoticeOpen, setManagedStorageNoticeOpen] = useState(false);
   const [importFromGitOpen, setImportFromGitOpen] = useState(false);
   const tree = useMemo(() => buildWorkspaceTree(state.entries), [state.entries]);
   const workspaceRootPath = state.snapshot?.workspace.root_path;
+  const availableWorkspacePaths = useMemo(
+    () => [...new Set([...managedWorkspacePaths, ...recentWorkspacePaths])],
+    [managedWorkspacePaths, recentWorkspacePaths]
+  );
 
   // Refs holding the latest state/props so async helpers never read stale
   // closures after an `await`. The workspace root captured before an operation
@@ -107,6 +121,30 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
     inFlightRef.current = Math.max(0, inFlightRef.current - 1);
     if (inFlightRef.current === 0) setBusy(false);
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    if (typeof api.workspaceAccessCapabilities !== "function") {
+      setAccessCapabilities(DESKTOP_WORKSPACE_ACCESS);
+      return () => {
+        active = false;
+      };
+    }
+    void api.workspaceAccessCapabilities()
+      .then(async (capabilities) => {
+        if (!active) return;
+        setAccessCapabilities(capabilities);
+        if (!capabilities.canCreateManagedWorkspace) return;
+        const workspaces = await api.listManagedWorkspaces();
+        if (active) setManagedWorkspacePaths(workspaces.map((workspace) => workspace.root_path));
+      })
+      .catch((error: unknown) => {
+        if (active) setActionError(workspaceErrorMessage(error));
+      });
+    return () => {
+      active = false;
+    };
+  }, [api]);
 
   const clearWorkspaceState = useCallback(() => {
     setContextMenu(null);
@@ -170,12 +208,16 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
 
   const launchWorkspace = useCallback(async (rootPath: string) => {
     try {
-      await apiRef.current.openWorkspaceWindow(rootPath);
-      callbacksRef.current.onWorkspaceLaunched?.(rootPath);
+      if (accessCapabilities?.opensWorkspaceInNewWindow !== false) {
+        await apiRef.current.openWorkspaceWindow(rootPath);
+        callbacksRef.current.onWorkspaceLaunched?.(rootPath);
+      } else {
+        await loadWorkspace(rootPath);
+      }
     } catch (error) {
       setActionError(workspaceErrorMessage(error));
     }
-  }, []);
+  }, [accessCapabilities, loadWorkspace]);
 
   /**
    * Toggles the "show hidden entries" preference, persists it to the current
@@ -198,6 +240,24 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
     }
     await refreshEntries();
   }, [refreshEntries]);
+
+  const createManagedWorkspace = useCallback(async (name: string): Promise<boolean> => {
+    startOperation();
+    setActionError(null);
+    try {
+      const workspace = await apiRef.current.createManagedWorkspace(name);
+      setManagedWorkspacePaths((paths) => [...new Set([...paths, workspace.root_path])]);
+      setCreateManagedWorkspaceOpen(false);
+      setManagedStorageNoticeOpen(true);
+      await loadWorkspace(workspace.root_path);
+      return true;
+    } catch (error) {
+      setActionError(workspaceErrorMessage(error));
+      return false;
+    } finally {
+      endOperation();
+    }
+  }, [endOperation, loadWorkspace, startOperation]);
 
   const openGitLinkImport = useCallback(() => {
     setImportFromGitOpen(true);
@@ -482,6 +542,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
       requestDelete,
       showVersions,
       refreshEntries,
+      createManagedWorkspace,
       openWorkspace,
       openGitLinkImport,
       launchWorkspace,
@@ -490,13 +551,16 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
       setRenaming,
       setCreating,
       setPendingDelete,
+      setCreateManagedWorkspaceOpen,
       setImportFromGitOpen,
+      setManagedStorageNoticeOpen,
       dismissError
     }),
     [
       closeContextMenu,
       collapseFolder,
       confirmDelete,
+      createManagedWorkspace,
       dismissError,
       handleMarkdownFileSelected,
       handleTreeKeyDown,
@@ -532,8 +596,11 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
       moreMenuOpen={moreMenuOpen}
       expandedFolders={expandedFolders}
       activePath={activePath}
-      recentWorkspacePaths={recentWorkspacePaths}
+      accessCapabilities={accessCapabilities}
+      recentWorkspacePaths={availableWorkspacePaths}
       actions={actions}
+      createManagedWorkspaceOpen={createManagedWorkspaceOpen}
+      managedStorageNoticeOpen={managedStorageNoticeOpen}
       importFromGitOpen={importFromGitOpen}
     />
   );

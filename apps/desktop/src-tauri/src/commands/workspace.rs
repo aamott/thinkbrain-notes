@@ -6,11 +6,14 @@
 // Keep sibling files nested under this public module.
 #[path = "workspace_entries.rs"]
 mod workspace_entries;
+#[path = "workspace_managed.rs"]
+mod workspace_managed;
 #[path = "workspace_paths.rs"]
 mod workspace_paths;
 #[path = "workspace_windows.rs"]
 mod workspace_windows;
 
 pub use workspace_entries::*;
+pub use workspace_managed::*;
 pub use workspace_paths::*;
 pub use workspace_windows::*;

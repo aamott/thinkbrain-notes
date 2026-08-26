@@ -57,6 +57,7 @@ examples/extensions/  # Sample extension (hello-notes)
 
 ## Development & Launching
 - To run the Tauri desktop app in development mode, use `pnpm desktop:tauri dev` in the project root. Note: `pnpm dev` only launches the web UI, so always use `pnpm desktop:tauri dev` to test native functionality.
+- Android builds must be initiated from the terminal via `pnpm android:dev` or `pnpm android:build`. Android Studio's build button calls Gradle directly, which panics because the Tauri CLI's WebSocket coordination server isn't running. Use Android Studio only for the emulator, Logcat, and native debugging.
 
 
 ## Plans

@@ -17,44 +17,39 @@ None of that survives a phone. There is no hover, screen width the rail eats is
 width the note does not get, and a first-time user on a small screen has no way
 to learn what an unlabelled glyph opens.
 
-## What it should be
+## Approved direction (2026-08-25)
 
-A **popout menu with visible labels**, opened from a single control, replacing
-the rail below the phone breakpoint. Icons stay — beside the words, not instead
-of them.
+`assets/mobile-ui-mockup.html` is the visual source of truth:
 
-The surface already exists and should be reused rather than rebuilt:
-`panels/Popout.tsx` already becomes a full-screen overlay under `760px`, and
-`LeftPopout`/`RightPopout` are mounted in the shell. `useCoarsePointer.ts` is
-also there for the case width alone cannot decide — a narrow desktop window is
-not a phone, and the two want different answers.
+- The phone shell has a universal top header with a Menu/Back left slot, title
+  center slot, and tabs count plus action menu on the right.
+- A bottom navigation hub exposes Home, Search, New Note, Tabs and Menu.
+- Menu opens an 86%-width navigation drawer (maximum 300px) with visible icon
+  labels, workspace switcher, conflict badges and App Settings.
+- Header and bottom Menu affordances open the same drawer; there is one source
+  of truth for entries, active state and badges.
+- Desktop keeps its current icon rail unchanged.
 
-## Open questions for whoever plans this
+Reuse the existing panel/overlay state and shared navigation registration rather
+than creating a second menu model, but match the approved drawer presentation;
+`Popout.tsx` becoming full-screen below `760px` is useful infrastructure, not a
+reason to replace the approved 86%-width drawer with a different surface.
+`useCoarsePointer.ts` remains relevant because a narrow desktop window is not
+automatically a phone.
 
-- **What opens it.** A hamburger in the title bar, a bottom-edge control, or a
-  swipe from the edge. The epic's scope mentions bottom tabs and swipe
-  gestures; a menu and a bottom tab bar are different answers to the same
-  question and only one should be built first.
-- **Whether the same menu carries the settings entry**, which today is a
-  separate icon pinned to the bottom of the rail.
-- **What happens to the badge.** The conflicts count currently rides on the
-  rail icon (`conflictBadges` in `useSyncSurfaces`). Inside a closed menu
-  nobody would see it, so the opening control has to carry it instead.
-- **Whether the desktop rail stays.** Nothing here argues for changing desktop;
-  the cheapest correct outcome is one component with two presentations, not two
-  components.
+## Acceptance
 
-## Acceptance (to be settled)
-
-- [ ] Below the phone breakpoint the icon rail is replaced by a menu whose
-      entries show their names
+- [ ] On phones the icon rail is replaced by the approved universal header,
+      bottom navigation hub and labeled 86%-width navigation drawer
+- [ ] Header and bottom Menu controls open the same drawer; Home, Search, New
+      Note, Tabs and Menu remain globally reachable
 - [ ] Touch targets meet the 44px minimum the epic already asks for
-- [ ] Anything the rail communicated — the active panel, the conflicts badge —
-      is still visible with the menu closed
-- [ ] The desktop presentation is unchanged, and the two share one source of
-      truth for what the entries are
-- [ ] Screen-reader behaviour is no worse than the rail's, which is currently
-      the only place these names exist
+- [ ] Active navigation and conflict badges remain visible when the drawer is
+      closed, and App Settings remains available inside it
+- [ ] The desktop presentation is unchanged, and mobile/desktop share one source
+      of truth for navigation entries, active state and badges
+- [ ] Focus management, dismissal and screen-reader behavior are tested for the
+      drawer and bottom navigation
 
 ## Related, not this story
 
@@ -66,6 +61,6 @@ first and the one that cannot be fixed by a breakpoint alone.
 ## References
 
 - `plans/pending-mobile-med-hard.md` — epic context
-- `plans/mobile/assets/mobile-ui-mockup.html` — visual reference; the mockup's "Universal Top Header" (Left: Menu/Back slot) and "Bottom Nav Hub" are concrete answers to this story's "What opens it" open question, to be confirmed during planning
-- `apps/desktop/src/panels/Popout.tsx` — the full-screen overlay surface under 760px to reuse
+- `plans/mobile/assets/mobile-ui-mockup.html` — approved visual source of truth
+- `apps/desktop/src/panels/Popout.tsx` — existing responsive overlay/state infrastructure to evaluate for reuse
 - `apps/desktop/src/lib/useCoarsePointer.ts` — distinguishes a phone from a narrow desktop panel where width alone cannot

@@ -55,11 +55,10 @@ why.
 
 ### Already done, and this epic said otherwise
 
-- **The Android scaffold is committed.** `apps/desktop/src-tauri/gen/android/`
-  holds 49 tracked files from `tauri android init` (commit `58dfd14`).
-  `mobile/pending-android_scaffold-med-easy.md` is stale as to the scaffolding
-  step; its *acceptance* — emulator launch, UI renders without crash — is what
-  is really outstanding, and the device run has now answered both.
+- **The Android scaffold is done.** `apps/desktop/src-tauri/gen/android/`
+  holds 49 tracked files from `tauri android init` (commit `58dfd14`), and the
+  device run confirmed installation, launch and initial UI rendering. See
+  `mobile/done-android_scaffold-med-easy.md`.
 - **Mobile capabilities are declared.** `src-tauri/capabilities/mobile.json`
   covers `android`/`iOS` for `main` and `workspace-*` windows.
 - **Desktop-only dependencies are already gated.** `tauri-plugin-updater` and
@@ -74,35 +73,27 @@ why.
   from a narrow panel); and `MetadataBottomSheet.tsx`, which tracks
   `window.visualViewport` around the soft keyboard.
 
-### The blocker: a workspace cannot be opened at all
+### The blocker: managed Android workspace access must be built
 
-Nothing else in this epic matters until this is answered. On device, no
-workspace can be opened — with or without git.
+On device, no workspace can currently be opened — with or without git. The
+cause is structural rather than a picker bug:
+`workspaceAdapter.pickWorkspaceDirectory` asks `tauri-plugin-dialog` for
+`open({ directory: true })`, which Android does not support, while SAF returns a
+`content://` tree URI and the native workspace, watcher, search and sync layers
+require canonical filesystem `Path`s.
 
-The cause is structural rather than a bug. `workspaceAdapter.pickWorkspaceDirectory`
-asks `tauri-plugin-dialog` for `open({ directory: true })`. Android has no such
-picker: the Storage Access Framework hands back a `content://` URI, not a
-filesystem path. And even given one, `resolve_workspace_root`
-(`commands/workspace.rs:442`) requires a path that is absolute and
-`canonicalize()`s to a directory — which a `content://` URI cannot be.
+**Decision approved 2026-08-25:** Android v1 uses managed vaults plus clone-first
+onboarding. Native code creates or clones vaults beneath a dedicated app-data
+root; mobile offers Create vault and Clone from Git and does not invoke Open
+Folder. Desktop keeps its existing picker flows. Managed-vault creation shows a
+one-time uninstall-risk notice, but the app does not display a persistent
+"unprotected" warning or pretend it can detect external backups.
 
-So the whole workspace model assumes a real filesystem path, and on Android the
-app can only address paths it owns: its own app-specific external storage. The
-open decisions are which of these to take, and they are product decisions, not
-implementation ones:
-
-- **App-owned vault directory.** The app creates and owns the vault under its
-  own storage. No picker, nothing to grant, works today. The cost is that the
-  vault is not somewhere the user can browse to with another app, and on many
-  devices it is removed when the app is uninstalled.
-- **SAF, properly.** Real user-chosen folders, at the price of teaching the
-  entire native layer to speak `content://` instead of `Path` — every command
-  in `workspace.rs`, `markdown.rs`, `backup.rs` and the sync layer. Large.
-- **Clone-first onboarding.** Notably, *this problem does not exist for git.*
-  Cloning creates the vault at a path the app chooses, so no picker is needed
-  and no permission is asked for. On a phone, "sign in and clone your notes" is
-  a better first run than "find a folder" regardless — which makes git the
-  natural mobile entry point rather than an advanced feature.
+Direct SAF linked folders are deferred to
+`mobile/pending-android_saf_linked_folders-low-hard.md`. That research-first
+story will re-check current platform/plugin support and compare a persisted SAF
+tree plus local mirror/reconciliation against a full storage abstraction. It
+must not convert `content://` URIs into guessed `/storage/...` paths.
 
 ### Git specifically
 
@@ -125,18 +116,18 @@ implementation ones:
 ### The UI is not usable on a phone yet
 
 - **Very unoptimised generally.** The `max-[760px]:` work covers the shell
-  chrome, not the surfaces inside it. A full visual reference for the intended
-  phone-first shell — universal top header, bottom nav hub, action sheets and
-  drawers — lives at `plans/mobile/assets/mobile-ui-mockup.html`; it informs
+  chrome, not the surfaces inside it. The approved 2026-08-25 visual source of
+  truth for the phone-first shell — universal top header, bottom nav hub,
+  action sheets and drawers — is
+  `plans/mobile/assets/mobile-ui-mockup.html`. It governs
   `pending-mobile_navigation_menu-med-med.md` and
-  `pending-responsive_layout-med-med.md` and has not yet been formally
-  approved through a discovery gate.
+  `pending-responsive_layout-med-med.md`.
 - **The activity bar is wrong for touch.** `ActivityBar.tsx` is a 53-line rail
-  of icon-only buttons — the labels exist as `aria-label` only. On mobile it
-  should be a popout menu **with visible labels**: an icon rail on a phone is
-  both too small to hit and too cryptic without text. The `Popout` components
-  (`panels/Popout.tsx`) already do full-screen overlay under 760px, so the
-  surface to reuse exists.
+  of icon-only buttons — the labels exist as `aria-label` only. The approved
+  mobile presentation replaces it with the universal header, bottom navigation
+  hub and an 86%-width labeled drawer carrying active state, conflict badges and
+  settings. Existing popout/overlay state may be reused, but the approved drawer
+  rather than the current full-screen mobile Popout is the target surface.
 - **The soft keyboard breaks the editor.** Tracked upstream at
   tauri-apps/tauri#10631: the webview viewport does not resize when the
   keyboard opens, which breaks CodeMirror cursor positioning and scrolling.
@@ -202,8 +193,12 @@ rather than creating mobile-specific adapters.
 
 ### Bring Your Own Sync
 
-No cloud sync. Mobile users rely on the same external sync tools
-(OneDrive/Syncthing/Git) as desktop. App caches/settings never go in the vault.
+No hosted cloud service is added. Git is the direct Android v1 sync path because
+managed vaults are private app storage. OneDrive, Syncthing and similar tools
+remain passive from the app's perspective but generally cannot watch that
+private directory under Android scoped storage; durable shared-folder sync is
+part of the deferred SAF story. The app does not infer or warn continuously
+about external protection state. App caches/settings never go in the vault.
 
 ## Dependencies
 
@@ -222,21 +217,21 @@ No other epic blocks this one. Resolve only adapter gaps actually proven by mobi
 Ordered by what blocks what. The first item gates every other one: there is no
 point tuning a layout for a workspace that cannot be opened.
 
-- 🟥 **A workspace cannot be opened on Android at all** — the directory picker
-  does not exist on the platform, and the native layer requires a filesystem
-  path. See "Where it actually stands" above.
+- 🟥 **Managed workspace access** — the product decision is approved: Android
+  v1 creates or clones real-path vaults beneath app data and does not invoke a
+  folder picker. Implementation now gates the epic.
   `mobile/pending-android_workspace_access-high-hard.md`
-- ⬜ Git clone as the mobile way in, and what a token can be kept in —
+- ⬜ Git clone as the mobile way in, followed by Android Keystore-backed shared
+  secret storage for private repositories —
   `mobile/pending-mobile_git_access-high-hard.md`
-- ⬜ Navigation menu replacing the icon rail, with visible labels —
-  `mobile/pending-mobile_navigation_menu-med-med.md`
+- ⬜ Navigation menu replacing the icon rail according to the approved mobile
+  UI mockup — `mobile/pending-mobile_navigation_menu-med-med.md`
 - 🟨 Responsive layout — the shell chrome adapts under 760px, the surfaces
   inside it do not — `mobile/pending-responsive_layout-med-med.md`
 - ⬜ Touch-friendly navigation (swipe gestures, 44px touch targets)
 - ✅ `tauri android init` — the scaffold is committed under
-  `src-tauri/gen/android/`, and the app builds, installs and launches on a
-  device. `mobile/pending-android_scaffold-med-easy.md` still holds the
-  remaining acceptance for it.
+  `src-tauri/gen/android/`, and the app builds, installs, launches and renders
+  on a device — `mobile/done-android_scaffold-med-easy.md`
 - 🟨 Mobile Tauri config — `capabilities/mobile.json` exists and the
   desktop-only dependencies are gated; the soft "unavailable on mobile"
   reporting for desktop-only commands is not built —
@@ -247,6 +242,8 @@ point tuning a layout for a workspace that cannot be opened.
 - ⬜ Reuse current Tauri adapters; raise only proven cross-cutting adapter gaps through maintenance
 - ❓ Search index (`rusqlite`) and file watcher (`notify`) on a device —
   neither observed working nor failing
+- ⏸️ SAF linked folders — deferred research-first follow-up after managed
+  vaults are stable — `mobile/pending-android_saf_linked_folders-low-hard.md`
 
 **Phase 2 — iOS (low urgency, deferred until Android is stable):**
 
