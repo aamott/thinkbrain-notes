@@ -1,7 +1,6 @@
 ---
 name: android-dev
 description: Android development and build workflow for ThinkBrain Notes. Applies when building, running, debugging, or deploying the Tauri Android app to an emulator or device. Covers the terminal-first build flow, why Android Studio's build button fails, and how to install/deploy APKs.
-user-invocable: false
 ---
 
 # Android Development Workflow

@@ -1,38 +1,61 @@
 name: release
 
-# Builds desktop binaries for Linux, macOS (Intel + Arm), and Windows whenever a
-# version tag (`v*`) is pushed, then publishes a GitHub Release with the
-# artifacts attached. Uses tauri-apps/tauri-action, which reads the app version
-# from apps/desktop/src-tauri/tauri.conf.json and builds the bundle targets
-# configured there.
+# Builds desktop binaries (Linux, macOS Intel + Arm, Windows) and Android
+# bundles (AAB + universal APK) on every push to `main` and on version tags
+# (`v*`). On a tag push the artifacts are attached to a GitHub Release; on a
+# `main` push they are uploaded as workflow artifacts only, so breakage shows
+# up before a release rather than at release time.
+#
+# Desktop builds use tauri-apps/tauri-action, which reads the app version from
+# apps/desktop/src-tauri/tauri.conf.json and builds the bundle targets
+# configured there. Android is built with a dedicated job (see android below)
+# because tauri-action's `mobile: android` path registers both signed and
+# unsigned APK paths and fails if either is missing, which does not fit a
+# signing-config-that-may-be-absent setup.
 #
 # Two different signatures are in play, and only one of them exists. Updater
 # artifacts are signed with the project's minisign key so an installed app can
 # tell a real update from anything else. OS code-signing and notarization are
 # not wired up, so macOS and Windows still show the "unidentified developer"
-# prompt on first launch.
+# prompt on first launch. Android release bundles are signed with the keystore
+# whose base64 + passwords live in repository secrets (see ANDROID SECRETS
+# below); without those secrets the Android job is skipped.
 
 on:
   push:
+    branches:
+      - main
     tags:
       - "v*"
   workflow_dispatch:
 
+# `contents: write` is needed by tauri-action to create the GitHub Release and
+# by the Android job to `gh release upload` assets to it.
+permissions:
+  contents: write
+
 jobs:
-  publish-tauri:
-    permissions:
-      contents: write
+  # ───────────────────────────── Desktop (Linux / macOS / Windows) ────────
+  # Matrix over the three desktop platforms. On a tag push tauri-action creates
+  # (or reuses) the draft release and uploads the bundles; on a `main` push it
+  # only uploads workflow artifacts (`tagName` is empty so no release is made).
+  desktop:
+    name: ${{ matrix.label }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - platform: macos-latest
+          - label: macOS (Apple Silicon)
+            platform: macos-latest
             args: "--target aarch64-apple-darwin"
-          - platform: macos-latest
+          - label: macOS (Intel)
+            platform: macos-latest
             args: "--target x86_64-apple-darwin"
-          - platform: ubuntu-22.04
+          - label: Linux
+            platform: ubuntu-22.04
             args: ""
-          - platform: windows-latest
+          - label: Windows
+            platform: windows-latest
             args: ""
 
     runs-on: ${{ matrix.platform }}
@@ -101,7 +124,10 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: ${{ github.ref_name }}
+          # On a tag push, create/reuse the release for that tag. On a `main`
+          # push `github.ref_name` is `main` (not a version), so leave tagName
+          # empty — tauri-action then builds and uploads workflow artifacts only.
+          tagName: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
           releaseName: "ThinkBrain Notes ${{ github.ref_name }}"
           releaseBody: |
             A local-first Markdown workspace. Your notes stay ordinary `.md` files on disk, and everything built on top of them — the search index, the link graph, the calendar — is a cache the app can throw away and rebuild.
@@ -140,4 +166,155 @@ jobs:
           # `Thinkbrain Notes-0.1.0-windows-x86_64.exe`. Placeholders are
           # documented in tauri-action's README.
           assetNamePattern: '[name]-[version]-[platform]-[arch][ext]'
+          # Always upload workflow artifacts so `main`-push builds and the
+          # Android job can find the desktop bundles without a release. On a
+          # tag push these are uploaded in addition to the release assets.
+          uploadWorkflowArtifacts: true
           args: ${{ matrix.args }}
+
+  # ───────────────────────────── Android ─────────────────────────────────
+  # Builds a signed release AAB + universal APK. Runs in parallel with the
+  # desktop matrix; on a tag push it polls for the release the desktop job
+  # creates (via tauri-action) and attaches the Android bundles with
+  # `gh release upload`. On a `main` push it only uploads workflow artifacts.
+  #
+  # ANDROID SECRETS — set these in the repo's Actions secrets to enable signed
+  # release builds. If any are missing the job is skipped (via the `if` below)
+  # rather than producing an unsigned bundle quietly.
+  #   ANDROID_KEYSTORE_BASE64   base64-encoded .keystore or .jks file
+  #   ANDROID_KEYSTORE_PASSWORD keystore (store) password
+  #   ANDROID_KEY_ALIAS         key alias inside the keystore
+  #   ANDROID_KEY_PASSWORD      password for that key
+  android:
+    name: Android
+    # Skip entirely when the signing secrets are not configured — there is no
+    # point building an unsigned release bundle for distribution, and failing
+    # loudly here is better than shipping an unsigned artifact by accident.
+    if: ${{ vars.ANDROID_RELEASE_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.8.0
+          run_install: false
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          # All four Android ABIs Tauri builds by default.
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # ubuntu-latest ships the Android SDK and NDK; Tauri's CLI and cargo-ndk
+      # locate them via ANDROID_HOME / ANDROID_NDK_HOME. Point ANDROID_NDK_HOME
+      # at the latest installed NDK so the C/assembly build of aws-lc-sys (pulled
+      # in by gix's HTTPS transport) can find the cross-compiler.
+      - name: Point cargo at the Android NDK cross-compilers
+        run: |
+          echo "ANDROID_NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> "$GITHUB_ENV"
+          TOOLCHAIN="$ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          for triple in aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android; do
+            api=21
+            if [[ "$triple" == "armv7-linux-androideabi" ]]; then api=24; fi
+            upper=$(echo "$triple" | tr '[:lower:]-' '[:upper:]_')
+            echo "CC_${upper}=$TOOLCHAIN/${triple}${api}-clang" >> "$GITHUB_ENV"
+            echo "CXX_${upper}=$TOOLCHAIN/${triple}${api}-clang++" >> "$GITHUB_ENV"
+            echo "AR_${upper}=$TOOLCHAIN/llvm-ar" >> "$GITHUB_ENV"
+            echo "CARGO_TARGET_${upper}_LINKER=$TOOLCHAIN/${triple}${api}-clang" >> "$GITHUB_ENV"
+          done
+
+      - name: Cache cargo
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+          key: android
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Decode the signing keystore from the base64 secret and write the
+      # keystore.properties the build.gradle.kts signing config reads. Both
+      # files live under gen/android/ which is gitignored for exactly this.
+      - name: Set up Android release signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          keystore_dir="apps/desktop/src-tauri/gen/android"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$keystore_dir/release.keystore"
+          {
+            printf 'storeFile=release.keystore\n'
+            printf 'storePassword=%s\n' "$ANDROID_KEYSTORE_PASSWORD"
+            printf 'keyAlias=%s\n' "$ANDROID_KEY_ALIAS"
+            printf 'keyPassword=%s\n' "$ANDROID_KEY_PASSWORD"
+          } > "$keystore_dir/keystore.properties"
+
+      # Build the AAB (default) and APKs (--apk). The Rust compile dominates
+      # the time and is cached across the two invocations, so the second run
+      # only re-runs the Gradle assemble step.
+      - name: Build Android AAB
+        run: pnpm desktop:tauri android build
+
+      - name: Build Android APKs
+        run: pnpm desktop:tauri android build --apk
+
+      # Collect every APK and AAB the two builds produced into one staging
+      # directory so a single upload-artifact / gh release upload covers them.
+      - name: Stage Android bundles
+        run: |
+          set -euo pipefail
+          out="apps/desktop/src-tauri/gen/android/app/build/outputs"
+          mkdir -p staging
+          find "$out" -type f \( -name '*.apk' -o -name '*.aab' \) \
+            -exec cp {} staging/ \;
+          echo "Staged bundles:"
+          ls -la staging/
+
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-bundles
+          path: staging/*
+          if-no-files-found: error
+
+      # On a tag push, attach the staged bundles to the release that the desktop
+      # job creates via tauri-action. That release is a draft, so poll until it
+      # exists rather than racing the desktop matrix — tauri-action creates the
+      # release from whichever desktop job reaches that step first.
+      - name: Attach bundles to the GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          for i in $(seq 1 30); do
+            if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+              gh release upload "$tag" staging/* --repo "$GITHUB_REPOSITORY" --clobber
+              echo "Uploaded Android bundles to release $tag"
+              exit 0
+            fi
+            echo "Release $tag not ready yet (attempt $i/30); waiting 60s..."
+            sleep 60
+          done
+          echo "::error::Release $tag never appeared after 30 minutes; desktop job may have failed." >&2
+          exit 1

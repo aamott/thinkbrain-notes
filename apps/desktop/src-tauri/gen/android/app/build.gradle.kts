@@ -13,6 +13,19 @@ val tauriProperties = Properties().apply {
     }
 }
 
+// Release signing key. `keystore.properties` lives at the Android project root
+// (`gen/android/keystore.properties`, gitignored) and points at the binary
+// keystore (also gitignored). When absent — e.g. local debug builds, or a CI
+// run without the signing secrets — `keystoreProperties` stays empty and the
+// release build type falls back to Android's default unsigned output, so the
+// build never hard-fails just because a key is missing.
+val keystoreProperties = Properties().apply {
+    val propFile = rootProject.file("keystore.properties")
+    if (propFile.exists()) {
+        propFile.inputStream().use { load(it) }
+    }
+}
+
 android {
     compileSdk = 36
     namespace = "com.thinkbrain.notes"
@@ -23,6 +36,14 @@ android {
         targetSdk = 36
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()
         versionName = tauriProperties.getProperty("tauri.android.versionName", "1.0")
+    }
+    signingConfigs {
+        create("release") {
+            keystoreProperties["storeFile"]?.let { storeFile = rootProject.file(it as String) }
+            storePassword = keystoreProperties["storePassword"] as String?
+            keyAlias = keystoreProperties["keyAlias"] as String?
+            keyPassword = keystoreProperties["keyPassword"] as String?
+        }
     }
     buildTypes {
         getByName("debug") {
@@ -43,6 +64,11 @@ android {
                     .plus(getDefaultProguardFile("proguard-android-optimize.txt"))
                     .toList().toTypedArray()
             )
+            // Only sign when a keystore was loaded — otherwise leave the output
+            // unsigned (`*-unsigned.apk`) rather than failing the build.
+            if (keystoreProperties.containsKey("storeFile")) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
     kotlinOptions {
