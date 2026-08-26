@@ -1,8 +1,9 @@
 // @vitest-environment happy-dom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 
+import { desktopPanelRegistry } from "../../panels/panelRegistryModel";
 import { ThemeProvider } from "../../settings/ThemeProvider";
 import { useShellState, type ShellState } from "../useShellState";
 import { PhoneShell } from "./PhoneShell";
@@ -34,6 +35,20 @@ vi.mock("../../workspace/workspaceDocumentAdapter", () => ({
 vi.mock("../../native/commands", () => ({
   invokeNativeCommand: vi.fn(() => Promise.resolve(null))
 }));
+
+// The registry is a module singleton, so this extension panel is live for the
+// whole file. It exists to prove the drawer's rows are actually reachable —
+// `isBuiltInLeftPanel` is a literal list of first-party ids and rejected every
+// one of these, so tapping an extension's panel used to do nothing.
+const extensionPanel = desktopPanelRegistry.register({
+  id: "hello-notes.notebook",
+  label: "Hello notebook",
+  icon: "notebook",
+  side: "left",
+  factory: () => <p>hello notebook</p>
+});
+
+afterAll(() => extensionPanel.dispose());
 
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
@@ -250,5 +265,21 @@ describe("PhoneShell", () => {
 
     expect(document.querySelector('[role="dialog"][aria-label="Unsaved changes"]')).not.toBeNull();
     expect(shell().tabState.tabs).toHaveLength(1);
+  });
+
+  it("reveals an extension's left panel from the drawer", async () => {
+    const host = await render();
+    await click(host, "Open navigation");
+
+    // Scoped to the drawer: the hub renders its own slots with the same labels.
+    const drawer = host.querySelector('[aria-label="Navigation"]');
+    expect(drawer).not.toBeNull();
+    await act(async () => {
+      drawer?.querySelector<HTMLButtonElement>('[aria-label="Hello notebook"]')?.click();
+    });
+
+    // The panel that was asked for, not whichever one the shell last selected.
+    expect(host.querySelector('[aria-label="Hello notebook panel"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="Files panel"]')).toBeNull();
   });
 });

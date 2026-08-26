@@ -1,8 +1,7 @@
 import { useCallback, useState } from "react";
 
 import { LeftPopout } from "../../panels/LeftPopout";
-import { isBuiltInLeftPanel } from "../../panels/panelRegistryModel";
-import { isSelectableRightPanel } from "../shellTypes";
+import { isSelectableLeftPanel, isSelectableRightPanel, type LeftPanel } from "../shellTypes";
 import { TabCloseRequest } from "../TabCloseRequest";
 import { TabContent } from "../TabContent";
 import type { ShellState } from "../useShellState";
@@ -26,7 +25,10 @@ import { useHubItems } from "./useHubItems";
  */
 export function PhoneShell({ shell }: { readonly shell: ShellState }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [revealed, setRevealed] = useState<string | null>(null);
+  // The panel filling the screen, or null for the note. Typed rather than a
+  // bare string so the content branch can render *this* panel instead of
+  // guessing at the last one the shell selected.
+  const [revealed, setRevealed] = useState<LeftPanel | null>(null);
   const [tabsOpen, setTabsOpen] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const { items } = useHubItems();
@@ -36,7 +38,10 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
   const revealPanel = useCallback(
     (panelId: string) => {
       setDrawerOpen(false);
-      if (isBuiltInLeftPanel(panelId)) {
+      // Asks the registry, not a literal list of the six first-party ids: an
+      // extension's left panel is listed in the drawer, so tapping it has to
+      // do something.
+      if (isSelectableLeftPanel(panelId)) {
         // Toggle: tapping the hub slot you are already on returns you to the
         // note. A left panel takes over the screen, so any open sheet goes.
         setInspectorOpen(false);
@@ -100,7 +105,7 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
           // Content takes over: full width between header and hub, unlike the
           // drawer, which peeks at 86%.
           <LeftPopout
-            panel={shell.leftPanel ?? "explorer"}
+            panel={revealed}
             rootPath={shell.restoredWorkspacePath}
             explorerProps={shell.explorerProps}
             onReviewConflict={shell.reviewConflict}
