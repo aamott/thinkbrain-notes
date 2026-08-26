@@ -230,12 +230,14 @@ point tuning a layout for a workspace that cannot be opened.
 - ⬜ Git clone as the mobile way in, followed by Android Keystore-backed shared
   secret storage for private repositories —
   `mobile/pending-mobile_git_access-high-hard.md`
-- ⬜ Phone shell chrome — headless shell state, form-factor gate, header,
-  drawer, shortcut hub, tab-switcher and inspector sheets —
-  `mobile/pending-phone_shell_chrome-med-hard.md`
+- 🟨 Phone shell chrome — headless shell state, form-factor gate, header,
+  drawer, shortcut hub, tab-switcher and inspector sheets. Built and green
+  under test; awaiting a pass on an Android device —
+  `mobile/wip-phone_shell_chrome-med-hard.md`
 - 🟨 Phone surface fixes — popout width, bottom-edge contention, keyboard
-  inset, `pointer-coarse:` sizing —
-  `mobile/pending-phone_surface_fixes-med-med.md`
+  inset, `pointer-coarse:` sizing. Built and green under test; the keyboard
+  inset is the part no emulator check can settle —
+  `mobile/wip-phone_surface_fixes-med-med.md`
 - ✅ `tauri android init` — the scaffold is committed under
   `src-tauri/gen/android/`, and the app builds, installs, launches and renders
   on a device — `mobile/done-android_scaffold-med-easy.md`

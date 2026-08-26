@@ -1,12 +1,12 @@
 # Story: Phone Shell Chrome — Header, Drawer, Hub, Sheets
 
-**Status:** ⬜ pending · **Urgency:** medium · **Difficulty:** hard
+**Status:** 🔵 wip · **Urgency:** medium · **Difficulty:** hard
 
 > Re-cut 2026-08-25 from `pending-mobile_navigation_menu`. That story and
 > `pending-responsive_layout` overlapped on the bottom bar and left the tab
 > strip and right panels unowned. The seam is now **navigation chrome** (this
 > story) versus **surfaces inside panels**
-> (`pending-phone_surface_fixes-med-med.md`).
+> (`wip-phone_surface_fixes-med-med.md`).
 
 **Design:** `docs/superpowers/specs/2026-08-25-mobile-shell-design.md`
 **Plan:** `docs/superpowers/plans/2026-08-25-mobile-shell.md` — Tasks 1–12, 14
@@ -62,26 +62,26 @@ target's registration — so it reads "Files", or "Journal" if the user pins tha
 
 ## Acceptance
 
-- [ ] `useShellState` runs headlessly; `DesktopShell` and `PhoneShell` are
+- [x] `useShellState` runs headlessly; `DesktopShell` and `PhoneShell` are
       layout only and each independently testable
-- [ ] Phone chrome renders only when the pointer is coarse **and** the viewport
+- [x] Phone chrome renders only when the pointer is coarse **and** the viewport
       is narrow; a narrow mouse-driven window keeps desktop chrome
-- [ ] No icon rail on phone; the drawer lists every registered left panel with a
+- [x] No icon rail on phone; the drawer lists every registered left panel with a
       **visible** label, active state and conflict badges
-- [ ] Header menu button and hub Menu slot open the same drawer
-- [ ] Tab switcher is a two-column **grid of preview cards** (Chrome-on-Android
+- [x] Header menu button and hub Menu slot open the same drawer
+- [x] Tab switcher is a two-column **grid of preview cards** (Chrome-on-Android
       style), each with title, close affordance, dirty marker and a text excerpt
       of the note with frontmatter stripped; the active card is marked. Tabs
       with no prose (settings, merge) name their kind instead
-- [ ] Inspector sheet reaches every registered right panel — the gap that exists
+- [x] Inspector sheet reaches every registered right panel — the gap that exists
       today
-- [ ] Hub renders resolved shortcuts with visible labels and badges; an
+- [x] Hub renders resolved shortcuts with visible labels and badges; an
       unregistered pin is skipped, not repaired
-- [ ] Long-press pins from the drawer and removes from the hub; Menu survives
-- [ ] Desktop presentation unchanged — no desktop test assertion edited
-- [ ] Focus management, dismissal and screen-reader behaviour tested for drawer
+- [x] Long-press pins from the drawer and removes from the hub; Menu survives
+- [x] Desktop presentation unchanged — no desktop test assertion edited
+- [x] Focus management, dismissal and screen-reader behaviour tested for drawer
       and both sheets
-- [ ] `pnpm qa` and `pnpm test:e2e` pass
+- [x] `pnpm qa` and `pnpm test:e2e` pass
 
 ## References
 
@@ -93,4 +93,29 @@ target's registration — so it reads "Files", or "Journal" if the user pins tha
 ## Not this story
 
 Popout width, keyboard inset, status-bar folding and the bottom panel —
-`pending-phone_surface_fixes-med-med.md`.
+`wip-phone_surface_fixes-med-med.md`.
+
+## What shipped
+
+Implemented across `docs/superpowers/plans/2026-08-25-mobile-shell.md` Tasks
+1–12 and 14. Every criterion above is met in code and covered by tests:
+1512 unit tests and 32 Playwright tests (5 of them in a `phone` project at a
+Pixel 7 viewport with `hasTouch`) pass, as does `pnpm qa`.
+
+**Still open — this is why the story is `wip-` and not `done-`:** none of it
+has run on an Android device. Badges, the full-width reveal and the
+keyboard-inset behaviour are covered only by unit tests, because headless
+Chromium does not reproduce `visualViewport` the way a real soft keyboard
+does. Move to `done-` after a pass on hardware.
+
+**Decisions worth revisiting after that pass:**
+
+- `DEFAULT_HUB_ITEMS` has five entries and `MAX_HUB_ITEMS` is five, so the
+  hub ships full and a new user's first pin is refused until they remove
+  something. The drawer explains this in words, but the alternative — a
+  four-slot default, or a cap of six — is a product call, not a bug fix.
+- Long-press is announced only in the drawer's hint line. Someone who never
+  opens the drawer never learns the hub is editable.
+- The drawer's "Pinned" mark is visible but not in the row's accessible
+  name, because the row is named for its panel and the hub, the rail and
+  several tests key off that exact string.

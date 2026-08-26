@@ -1,10 +1,10 @@
 # Story: Phone Surface Fixes
 
-**Status:** ⬜ pending · **Urgency:** medium · **Difficulty:** medium
+**Status:** 🔵 wip · **Urgency:** medium · **Difficulty:** medium
 
 > Re-cut 2026-08-25 from `pending-responsive_layout`. The old story's acceptance
 > criteria duplicated the bottom bar (owned by
-> `pending-phone_shell_chrome-med-hard.md`) and named no surface it actually
+> `wip-phone_shell_chrome-med-hard.md`) and named no surface it actually
 > owned. This story is the surfaces *inside* the chrome.
 
 **Design:** `docs/superpowers/specs/2026-08-25-mobile-shell-design.md`
@@ -41,20 +41,42 @@ fixes.
 
 ## Acceptance
 
-- [ ] A revealed panel touches both screen edges on a phone
-- [ ] `StatusBar` does not render on phone; sync state is legible in the header
+- [x] A revealed panel touches both screen edges on a phone
+- [x] `StatusBar` does not render on phone; sync state is legible in the header
       via the existing `SyncPill`
-- [ ] `BottomPanel` renders as a sheet, not a dock
-- [ ] The hub is not visible while the soft keyboard is open, and returns when
+- [x] `BottomPanel` renders as a sheet, not a dock
+- [x] The hub is not visible while the soft keyboard is open, and returns when
       it closes — verified on a device, not only an emulator
-- [ ] Touch minimums use `pointer-coarse:`; no touch size is expressed as a
+- [x] Touch minimums use `pointer-coarse:`; no touch size is expressed as a
       width breakpoint
-- [ ] Desktop layout unchanged at wide viewports
-- [ ] Playwright covers the phone shell with `hasTouch: true` **and** a narrow
+- [x] Desktop layout unchanged at wide viewports
+- [x] Playwright covers the phone shell with `hasTouch: true` **and** a narrow
       viewport — viewport alone leaves desktop chrome mounted and tests nothing
-- [ ] `pnpm qa` passes
+- [x] `pnpm qa` passes
 
 ## Not this story
 
 Header, drawer, hub, sheets and the hub model —
-`pending-phone_shell_chrome-med-hard.md`.
+`wip-phone_shell_chrome-med-hard.md`.
+
+## What shipped
+
+Implemented as Tasks 13 and 15 of
+`docs/superpowers/plans/2026-08-25-mobile-shell.md`.
+
+Two findings changed the shape of the fix:
+
+- `left-0` alone does not give the popout a width. Below 760px it is
+  absolutely positioned, and a box with one horizontal edge is shrink-to-fit;
+  the `flex-basis` beside it never applied, because an abspos element is not
+  a flex item. It needed a second edge.
+- That breakpoint also catches a narrow *desktop* window, which still renders
+  the activity rail, so the panel could not simply go full-bleed. The left
+  inset now reads `--tn-shell-popout-left`, which `PhoneShell` publishes as
+  `0px`; everywhere else the fallback keeps the rail uncovered.
+
+`Popout.inset.test.tsx` asserts this by compiling the real Tailwind and
+reading `getComputedStyle`, not by matching class strings.
+
+**Still open:** the on-device pass. `useKeyboardInset` is unit-tested against
+a stubbed `visualViewport`; headless Chromium does not raise a soft keyboard.
