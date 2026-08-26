@@ -3137,14 +3137,39 @@ Four corrections the phone chrome exposes. Grouped because each is a few lines a
 
 `SIDE_CLASS.left` insets the full-screen popout by the rail's width. With no rail, that is a 3rem strip of nothing, and it contradicts the "content takes over" rule.
 
+**`left-0` alone does not fix this, and the plan originally said it did.** Under
+`max-[760px]:` the element is `absolute` with `top-0 bottom-0` and *no* width or
+right edge, so its width is shrink-to-fit. `flex-[0_0_var(--tn-shell-left-width)]`
+does not help: `flex-basis` has no effect on an absolutely positioned box, which
+is not a flex item — and `--tn-shell-left-width` is never published in phone
+chrome anyway, since only `DesktopShell`'s effect sets it. The panel must be
+given a right edge as well as a left one.
+
+**And it cannot simply become full-bleed at every width ≤760px.** That breakpoint
+also catches a *narrow desktop window driven by a mouse*, where `DesktopShell`
+still renders the activity rail; spanning edge to edge there would cover it.
+Phone chrome and narrow desktop need different insets from the same class.
+
+Drive the left inset from a custom property with the rail width as its default,
+and let `PhoneShell` publish `0px` on its own root — the same technique
+`DesktopShell` already uses for `--tn-shell-left-width`:
+
 ```ts
 const SIDE_CLASS: Record<Side, string> = {
-  // The phone offset that used to reserve the activity rail is gone: the rail
-  // does not render in phone chrome, so a revealed panel takes the full width.
-  left: "border-r border-border flex-[0_0_var(--tn-shell-left-width)] max-[760px]:left-0",
-  right: "border-l border-border flex-[0_0_var(--tn-shell-right-width)] max-[760px]:right-0"
+  // Below 760px the popout overlays rather than docks. The left inset reserves
+  // the activity rail, which narrow *desktop* windows still render; `PhoneShell`
+  // publishes `--tn-shell-popout-left: 0px` because phone chrome has no rail.
+  // `right-0` is what actually gives the box a width — without a second edge an
+  // absolutely positioned element is shrink-to-fit, and the flex basis beside it
+  // is inert on an abspos box.
+  left: "border-r border-border flex-[0_0_var(--tn-shell-left-width)] max-[760px]:left-[var(--tn-shell-popout-left,var(--tn-size-activitybar-width))] max-[760px]:right-0",
+  right: "border-l border-border flex-[0_0_var(--tn-shell-right-width)] max-[760px]:right-0 max-[760px]:left-0"
 };
 ```
+
+Verify the result by rendering, not by reading classes: assert the revealed
+panel's box actually spans the shell's width in phone chrome, and that a narrow
+desktop window still shows the rail beside it.
 
 - [ ] **Step 2: Verify no desktop regression**
 
