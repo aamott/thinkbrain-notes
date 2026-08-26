@@ -235,7 +235,7 @@ export function MarkdownEditor({
         context={headerContext}
       />
       <div
-        className="min-h-0 flex-1 overflow-auto cursor-text [&_.cm-editor]:min-h-full [&_.cm-editor]:cursor-text [&_.cm-editor]:bg-editor [&_.cm-editor]:text-foreground [&_.cm-editor]:font-mono [&_.cm-editor]:text-sm [&_.cm-editor]:leading-1.65 [&_.cm-scroller]:overflow-auto [&_.cm-scroller]:cursor-text [&_.cm-content]:pt-4 [&_.cm-content]:px-5 [&_.cm-content]:pb-16 [&_.cm-focused]:outline-none"
+        className="min-h-0 flex-1 overflow-auto cursor-text [&_.cm-editor]:min-h-full [&_.cm-editor]:cursor-text [&_.cm-editor]:bg-editor [&_.cm-editor]:text-foreground [&_.cm-editor]:font-mono [&_.cm-editor]:text-sm [&_.cm-editor]:leading-1.65 [&_.cm-scroller]:overflow-auto [&_.cm-scroller]:cursor-text [&_.cm-content]:min-h-full [&_.cm-content]:pt-4 [&_.cm-content]:px-5 [&_.cm-content]:pb-16 [&_.cm-focused]:outline-none"
         ref={hostRef}
       />
     </section>
