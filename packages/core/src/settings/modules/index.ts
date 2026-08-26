@@ -10,3 +10,4 @@ export {
   syncModule,
   validateSyncDestination
 } from "./sync";
+export { MOBILE_HUB_CONTROL, uiModule } from "./ui";
