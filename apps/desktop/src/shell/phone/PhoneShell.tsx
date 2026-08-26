@@ -1,5 +1,7 @@
+import { BottomSheet } from "@thinkbrain/ui";
 import { useCallback, useState } from "react";
 
+import { BottomPanel } from "../../panels/BottomPanel";
 import { LeftPopout } from "../../panels/LeftPopout";
 import { isSelectableLeftPanel, isSelectableRightPanel, type LeftPanel } from "../shellTypes";
 import { TabCloseRequest } from "../TabCloseRequest";
@@ -22,6 +24,10 @@ import { useHubItems } from "./useHubItems";
  * The root is `relative` and fills its box on purpose: `Drawer`, `BottomSheet`
  * and `Scrim` all position with `absolute`, so this element is the containing
  * block every phone overlay is measured against.
+ *
+ * It also publishes `--tn-shell-popout-left: 0px`. `Popout` insets itself by
+ * the activity rail below 760px because a *narrow desktop window* still renders
+ * one; phone chrome does not, so the reserved strip would be 3rem of nothing.
  */
 export function PhoneShell({ shell }: { readonly shell: ShellState }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -70,13 +76,14 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
 
   return (
     <main
-      className="relative flex h-full min-w-0 flex-col overflow-hidden bg-background text-foreground"
+      className="relative flex h-full min-w-0 flex-col overflow-hidden bg-background text-foreground [--tn-shell-popout-left:0px]"
       aria-label="ThinkBrain mobile workspace"
     >
       <PhoneHeader
         title={shell.activeTab?.title ?? shell.workspaceName ?? "ThinkBrain"}
         canGoBack={revealed !== null}
         tabCount={shell.tabState.tabs.length}
+        syncStatus={shell.syncStatus}
         onBack={() => setRevealed(null)}
         onOpenNavigation={() => setDrawerOpen(true)}
         onOpenTabs={() => {
@@ -86,6 +93,16 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
         onOpenInspector={() => {
           setTabsOpen(false);
           setInspectorOpen(true);
+        }}
+        // Not `revealPanel`: that one toggles, so tapping the pill while the
+        // panel it names is already open would close it, and it skips the
+        // version-filter reset `openSyncPanel` does for history. The pill
+        // always means "show me this".
+        onOpenSyncPanel={(panel) => {
+          shell.openSyncPanel(panel);
+          setInspectorOpen(false);
+          setTabsOpen(false);
+          setRevealed(panel);
         }}
       />
 
@@ -132,6 +149,25 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
         onRunCommand={runCommand}
         onOpenMenu={() => setDrawerOpen(true)}
       />
+
+      {/* Three bottom chromes do not fit on a phone and the hub owns that edge,
+          so the bottom dock arrives as a sheet instead of a third band. */}
+      <BottomSheet
+        open={shell.bottomPanel !== null}
+        onDismiss={() => shell.updateBottomPanel(null)}
+        // Named for what it is rather than what it holds: the sheet wraps
+        // BottomPanel's own region, which already carries "Bottom panel", and
+        // a dialog echoing its only child's name reads twice to a screen reader.
+        label="Tools"
+      >
+        {shell.bottomPanel && (
+          <BottomPanel
+            active={shell.bottomPanel}
+            onChange={shell.updateBottomPanel}
+            onClose={() => shell.updateBottomPanel(null)}
+          />
+        )}
+      </BottomSheet>
 
       <TabSwitcherSheet
         open={tabsOpen}

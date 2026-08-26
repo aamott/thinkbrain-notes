@@ -1,7 +1,8 @@
 import type { JournalFieldDefinition, JournalFieldValue } from "@thinkbrain/core";
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
+import { useKeyboardInset } from "../shell/phone/useKeyboardInset";
 import { MetadataField } from "./MetadataField";
 import { FieldAffordances } from "./MetadataWidget";
 
@@ -39,37 +40,6 @@ export interface MetadataBottomSheetProps {
 }
 
 const FOCUSABLE = 'button, input, select, textarea, [href], [tabindex]:not([tabindex="-1"])';
-
-/**
- * How much of the window the soft keyboard is covering.
- *
- * The visual viewport shrinks when the keyboard opens, so the sheet sits on top
- * of whatever is left rather than behind it (D78).
- */
-function useKeyboardInset(): number {
-  const read = useCallback((): number => {
-    const viewport = typeof window === "undefined" ? undefined : window.visualViewport;
-    if (!viewport) return 0;
-    return Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop);
-  }, []);
-
-  const [inset, setInset] = useState(read);
-
-  useEffect(() => {
-    const viewport = window.visualViewport;
-    if (!viewport) return;
-    const update = () => setInset(read());
-    update();
-    viewport.addEventListener("resize", update);
-    viewport.addEventListener("scroll", update);
-    return () => {
-      viewport.removeEventListener("resize", update);
-      viewport.removeEventListener("scroll", update);
-    };
-  }, [read]);
-
-  return inset;
-}
 
 export function MetadataBottomSheet({
   title,

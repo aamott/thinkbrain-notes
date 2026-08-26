@@ -9,11 +9,12 @@ import type { RightPanel } from "../shellTypes";
  * Inside the sheet the popout is a flow child, not a dock overlay.
  *
  * `Popout` positions itself `absolute` below 760px so the desktop's side docks
- * slide over the editor at narrow widths. Every phone is below that breakpoint,
- * so without this the popout would pin itself to the sheet's own edges and
- * cover the segmented control that chose it. `flex-1` also overrides the dock's
- * `flex-basis`, which resolves to nothing here — only `DesktopShell` publishes
- * `--tn-shell-right-width`.
+ * slide over the editor at narrow widths, insetting from both edges so the box
+ * has a width at all. Every phone is below that breakpoint, so without this the
+ * popout would fill the sheet corner to corner and cover the segmented control
+ * that chose it. `static` is what makes those insets inert; `flex-1` also
+ * overrides the dock's `flex-basis`, which resolves to nothing here — only
+ * `DesktopShell` publishes `--tn-shell-right-width`.
  */
 const AS_FLOW_CHILD =
   "[&>aside]:static [&>aside]:min-h-0 [&>aside]:flex-1 [&>aside]:border-l-0 [&>aside]:shadow-none";

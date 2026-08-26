@@ -56,6 +56,7 @@ let container: HTMLDivElement | null = null;
 afterEach(async () => {
   await act(async () => root?.unmount());
   container?.remove();
+  vi.unstubAllGlobals();
   root = null;
   container = null;
 });
@@ -265,6 +266,56 @@ describe("PhoneShell", () => {
 
     expect(document.querySelector('[role="dialog"][aria-label="Unsaved changes"]')).not.toBeNull();
     expect(shell().tabState.tabs).toHaveLength(1);
+  });
+
+  // `StatusBar` does not render in phone chrome, so the header is the only
+  // place sync trouble is visible at all. Scoped to the header's own button —
+  // the pill is the one control there carrying a `title`.
+  const pill = (host: HTMLDivElement): HTMLButtonElement | null =>
+    host.querySelector<HTMLButtonElement>("header button[title]");
+
+  it("reports sync state in the header", async () => {
+    const host = await render();
+
+    expect(pill(host)).not.toBeNull();
+    expect(host.querySelector("header")?.textContent).toContain("Versions not saved here");
+  });
+
+  it("reveals the panel behind the sync pill instead of opening a desktop dock", async () => {
+    const host = await render();
+
+    await act(async () => pill(host)?.click());
+
+    // "off" sends you to the history, which on a phone is a revealed panel.
+    expect(host.querySelector('[aria-label="Saved versions panel"]')).not.toBeNull();
+  });
+
+  // The section inside the sheet carries the same accessible name, so this
+  // matches the dialog explicitly — an unscoped query would pass on the
+  // section alone and prove nothing about the sheet.
+  it("renders the bottom panel as a sheet rather than a third bottom band", async () => {
+    const { host, shell } = await renderWithShell();
+    expect(host.querySelector('[role="dialog"][aria-label="Tools"]')).toBeNull();
+
+    await act(async () => shell().updateBottomPanel("terminal"));
+
+    const sheet = host.querySelector('[role="dialog"][aria-label="Tools"]');
+    expect(sheet).not.toBeNull();
+    expect(sheet?.querySelector('[aria-label="Bottom panel tabs"]')).not.toBeNull();
+  });
+
+  it("hides the hub while the soft keyboard covers the bottom of the viewport", async () => {
+    vi.stubGlobal("innerHeight", 800);
+    vi.stubGlobal("visualViewport", {
+      height: 500,
+      offsetTop: 0,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined
+    });
+
+    const host = await render();
+
+    expect(host.querySelector('[aria-label="Primary navigation"]')).toBeNull();
   });
 
   it("reveals an extension's left panel from the drawer", async () => {

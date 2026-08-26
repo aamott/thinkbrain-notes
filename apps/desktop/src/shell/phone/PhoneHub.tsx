@@ -8,6 +8,7 @@ import {
 } from "../../panels/panelRegistryModel";
 import { PanelIcon } from "../panelIcons";
 import { resolveHubItems, type HubItem } from "./hubModel";
+import { useKeyboardInset } from "./useKeyboardInset";
 
 /**
  * Turns the persisted hub shortcuts into rendered navigation items.
@@ -35,6 +36,7 @@ export function PhoneHub({
   readonly onOpenMenu: () => void;
   readonly onLongPress?: (item: HubItem) => void;
 }) {
+  const keyboardInset = useKeyboardInset();
   const leftPanels = useLeftPanelContributions();
   const rightPanels = useRightPanelContributions();
   const commands = useDesktopCommands();
@@ -76,6 +78,12 @@ export function PhoneHub({
     onOpenMenu,
     onLongPress
   ]);
+
+  // A five-slot bar wedged between the keyboard and the line being typed is
+  // worse than no bar: it eats the last rows of the note and none of its
+  // targets are what the thumb is reaching for. Hidden entirely rather than
+  // pushed up, so the editor keeps the space.
+  if (keyboardInset > 0) return null;
 
   return <BottomNav label="Primary navigation" items={navItems} />;
 }

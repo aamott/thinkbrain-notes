@@ -12,9 +12,22 @@ import {
 
 type Side = "left" | "right";
 
+// Below 760px a popout overlays the editor instead of docking beside it. Two
+// edges are what give it a width: an absolutely positioned box with only one
+// horizontal edge is shrink-to-fit, and the `flex-basis` beside it is inert
+// because an abspos element is not a flex item.
+//
+// The left inset reserves the activity rail, which a *narrow desktop window*
+// still renders — so it cannot simply be 0. It reads
+// `--tn-shell-popout-left`, which `PhoneShell` publishes as `0px` on its own
+// root because phone chrome has no rail; anywhere else the fallback keeps the
+// rail uncovered.
+const POPOUT_LEFT =
+  "max-[760px]:left-[var(--tn-shell-popout-left,var(--tn-size-activitybar-width))]";
+
 const SIDE_CLASS: Record<Side, string> = {
-  left: "border-r border-border flex-[0_0_var(--tn-shell-left-width)] max-[760px]:left-[var(--tn-size-activitybar-width)]",
-  right: "border-l border-border flex-[0_0_var(--tn-shell-right-width)] max-[760px]:right-0"
+  left: `border-r border-border flex-[0_0_var(--tn-shell-left-width)] ${POPOUT_LEFT} max-[760px]:right-0`,
+  right: `border-l border-border flex-[0_0_var(--tn-shell-right-width)] max-[760px]:right-0 ${POPOUT_LEFT}`
 };
 
 const SHARED_CLASS =

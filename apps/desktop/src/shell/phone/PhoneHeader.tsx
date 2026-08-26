@@ -1,28 +1,41 @@
 import { ArrowLeft, Menu as MenuIcon, MoreHorizontal } from "lucide-react";
 
+import type { SyncStatus } from "../../sync/historyTypes";
+import { SyncPill } from "../../sync/SyncPill";
+
 /**
  * Universal phone header.
  *
  * The two right-hand controls open different surfaces: the count opens the tab
  * switcher, `⋯` opens the inspector sheet. Only the left slot and the hub's Menu
  * slot open the navigation drawer.
+ *
+ * It also carries the sync pill, because `StatusBar` does not render in phone
+ * chrome and this is the only place someone learns their notes stopped being
+ * saved. It is the same `SyncPill` the footer renders — the status has no
+ * `label` of its own, and a second phrasing of it would be a second thing to
+ * keep true.
  */
 export function PhoneHeader({
   title,
   canGoBack,
   tabCount,
+  syncStatus,
   onBack,
   onOpenNavigation,
   onOpenTabs,
-  onOpenInspector
+  onOpenInspector,
+  onOpenSyncPanel
 }: {
   readonly title: string;
   readonly canGoBack: boolean;
   readonly tabCount: number;
+  readonly syncStatus: SyncStatus;
   readonly onBack: () => void;
   readonly onOpenNavigation: () => void;
   readonly onOpenTabs: () => void;
   readonly onOpenInspector: () => void;
+  readonly onOpenSyncPanel: (panel: "conflicts" | "history") => void;
 }) {
   const button =
     "flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-small border-0 bg-transparent text-titlebar-foreground focus-visible:-outline-offset-2 focus-visible:outline-2 focus-visible:outline-ring";
@@ -45,7 +58,15 @@ export function PhoneHeader({
 
       <h1 className="min-w-0 flex-1 truncate text-center text-sm font-semibold">{title}</h1>
 
-      <div className="flex shrink-0 items-center">
+      <div className="flex min-w-0 items-center">
+        {/* Allowed to shrink and clip: the pill's longest sentence is wider
+            than a phone, and the title beside it is already truncating. The
+            whole of it stays in the tooltip and the accessible name. The
+            touch bump is real here — the pill's own box is text-height, well
+            under the 44px the icon buttons already clear. */}
+        <span className="flex min-w-0 shrink items-center overflow-hidden text-xs [&>button]:min-w-0 [&>button]:whitespace-nowrap pointer-coarse:[&>button]:min-h-11">
+          <SyncPill status={syncStatus} onOpen={onOpenSyncPanel} />
+        </span>
         <button
           type="button"
           aria-label={`Open tabs (${tabCount})`}
