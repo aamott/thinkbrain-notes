@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { ThemeProvider } from "../settings/ThemeProvider";
 import { DesktopShell } from "./DesktopShell";
+import { useShellState } from "./useShellState";
 import { StatusBar } from "./StatusBar";
 import { desktopPanelRegistry } from "../panels/panelRegistryModel";
 
@@ -15,10 +16,14 @@ import { desktopPanelRegistry } from "../panels/panelRegistryModel";
  * The shell consumes `useTheme()` from {@link ThemeProvider}, so it must be
  * wrapped in the provider — otherwise the hook throws outside its context.
  */
+function Shell() {
+  return <DesktopShell shell={useShellState()} />;
+}
+
 function shellMarkup(): string {
   return renderToStaticMarkup(
     <ThemeProvider>
-      <DesktopShell />
+      <Shell />
     </ThemeProvider>
   );
 }

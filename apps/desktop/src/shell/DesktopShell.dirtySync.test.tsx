@@ -73,6 +73,7 @@ import { getWorkspaceBridge } from "../extensions/workspaceBridge";
 import { useSettingsStore } from "../settings/settingsStore";
 import { ThemeProvider } from "../settings/ThemeProvider";
 import { DesktopShell } from "./DesktopShell";
+import { useShellState } from "./useShellState";
 
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
@@ -108,6 +109,10 @@ afterEach(async () => {
  * Wrapping in {@link ThemeProvider} is required because `DesktopShell` consumes
  * `useTheme()` — without the provider the hook throws outside its context.
  */
+function Shell() {
+  return <DesktopShell shell={useShellState()} />;
+}
+
 async function renderShell(): Promise<HTMLDivElement> {
   container = document.createElement("div");
   document.body.append(container);
@@ -115,7 +120,7 @@ async function renderShell(): Promise<HTMLDivElement> {
   await act(async () => {
     root?.render(
       <ThemeProvider>
-        <DesktopShell />
+        <Shell />
       </ThemeProvider>
     );
   });
