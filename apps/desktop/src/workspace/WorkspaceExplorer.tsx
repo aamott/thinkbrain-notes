@@ -139,7 +139,17 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
         if (active) setManagedWorkspacePaths(workspaces.map((workspace) => workspace.root_path));
       })
       .catch((error: unknown) => {
-        if (active) setActionError(workspaceErrorMessage(error));
+        if (!active) return;
+        setActionError(workspaceErrorMessage(error));
+        // Fall back to the same answer the absent-method branch gives. A
+        // rejection used to leave `accessCapabilities` null forever, which is
+        // not "we don't know yet" to the view — it renders "Checking workspace
+        // access…" and keeps "Choose workspace" disabled, so a host whose
+        // command is missing or merely failed locks the user out of opening a
+        // vault at all. Saying "desktop rules" and showing the error is worse
+        // only if the host really had stricter rules to report, and it could
+        // not report them.
+        setAccessCapabilities(DESKTOP_WORKSPACE_ACCESS);
       });
     return () => {
       active = false;

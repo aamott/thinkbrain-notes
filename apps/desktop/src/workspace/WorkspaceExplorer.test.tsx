@@ -330,6 +330,27 @@ describe("WorkspaceExplorer presentation", () => {
     expect(linkedItem?.getAttribute("title")).toBe("/notes/git-linked-vault (Git-linked workspace)");
     expect(linkedItem?.querySelector(".lucide-folder-git2")).not.toBeNull();
   });
+
+  it("still lets a workspace be chosen when the capability probe fails", async () => {
+    // A host whose `workspace_access_capabilities` command is missing or simply
+    // fails used to leave capabilities null forever — which the view reads as
+    // "still checking", not "unknown": permanent placeholder copy and a
+    // permanently disabled button, with no way to open a vault at all.
+    container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
+    const failing = {
+      ...workspaceDesktopApi,
+      workspaceAccessCapabilities: () => Promise.reject(new Error("no such command"))
+    };
+    await act(async () => {
+      root?.render(<WorkspaceExplorer api={failing} recentWorkspacePaths={[]} />);
+    });
+
+    const choose = container.querySelector<HTMLButtonElement>('[aria-label="Choose workspace"]');
+    expect(choose).not.toBeNull();
+    expect(choose?.disabled).toBe(false);
+  });
 });
 
 function iconMarkup(name: string) {
