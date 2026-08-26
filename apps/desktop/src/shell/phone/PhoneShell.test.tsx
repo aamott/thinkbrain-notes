@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 
 import { desktopPanelRegistry } from "../../panels/panelRegistryModel";
+import { useSettingsStore } from "../../settings/settingsStore";
 import { ThemeProvider } from "../../settings/ThemeProvider";
 import { useShellState, type ShellState } from "../useShellState";
 import { PhoneShell } from "./PhoneShell";
@@ -57,9 +58,41 @@ afterEach(async () => {
   await act(async () => root?.unmount());
   container?.remove();
   vi.unstubAllGlobals();
+  vi.useRealTimers();
+  clearStoredHub();
   root = null;
   container = null;
 });
+
+/**
+ * The settings store is a module singleton and the hub edits below really do
+ * persist: `invokeNativeCommand` is mocked to resolve, so a save "succeeds" and
+ * lands in `appValues`. Left there, one test's pin would be the next test's
+ * starting hub. Only the hub key is cleared — blanking the store wholesale
+ * would take the theme and desktop state with it.
+ */
+function clearStoredHub(): void {
+  const appValues = { ...useSettingsStore.getState().appValues };
+  delete appValues["ui.mobileHub"];
+  useSettingsStore.setState({ appValues, stagedChanges: {}, isDirty: false, dirtyCount: 0 });
+}
+
+/** Seeds the persisted hub before a mount, the way a returning user would find it. */
+function storeHub(items: readonly unknown[]): void {
+  useSettingsStore.getState().stageChange("ui.mobileHub", JSON.stringify(items));
+}
+
+const hubOf = (host: HTMLDivElement): Element | null =>
+  host.querySelector('[aria-label="Primary navigation"]');
+
+const drawerOf = (host: HTMLDivElement): Element | null =>
+  host.querySelector('[aria-label="Navigation"]');
+
+/** Hub slot labels, in bar order — the assertion pin/remove actually needs. */
+const hubLabels = (host: HTMLDivElement): readonly (string | null)[] =>
+  [...(hubOf(host)?.querySelectorAll("button") ?? [])].map((button) =>
+    button.getAttribute("aria-label")
+  );
 
 /**
  * Mounts `PhoneShell` over real shell state, as `ShellRoot` does.
@@ -316,6 +349,69 @@ describe("PhoneShell", () => {
     const host = await render();
 
     expect(host.querySelector('[aria-label="Primary navigation"]')).toBeNull();
+  });
+
+  // The default hub already holds MAX_HUB_ITEMS slots, so a pin from a fresh
+  // install is refused. Start from a two-slot hub, which is what a user who had
+  // pruned the bar would come back to.
+  it("pins a panel to the hub from a drawer long press", async () => {
+    storeHub([{ kind: "panel", id: "explorer" }, { kind: "menu" }]);
+    const host = await render();
+    expect(hubOf(host)?.textContent).not.toContain("Saved versions");
+    await click(host, "Open navigation");
+
+    // On touch, press-and-hold fires `contextmenu`, which is what the drawer
+    // rows listen for — no second long-press timer of their own.
+    await act(async () => {
+      drawerOf(host)
+        ?.querySelector('[aria-label="Saved versions"]')
+        ?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+    });
+
+    // Pinned before the menu, which stays the last slot.
+    expect(hubLabels(host)).toEqual(["Files", "Saved versions", "Menu"]);
+    // And the row now says so, so a second hold that changes nothing reads as
+    // "already done" rather than as a broken gesture.
+    expect(drawerOf(host)?.querySelector('[aria-label="Saved versions"]')?.textContent).toContain(
+      "Pinned"
+    );
+  });
+
+  // Silently dropping the pin is the failure this guards: the hub is full out
+  // of the box, so the first hold a new user tries is a refused one.
+  it("refuses a sixth shortcut and says why in the drawer", async () => {
+    const host = await render();
+    await click(host, "Open navigation");
+    expect(drawerOf(host)?.textContent).toContain("The bottom bar is full");
+
+    await act(async () => {
+      drawerOf(host)
+        ?.querySelector('[aria-label="Saved versions"]')
+        ?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+    });
+
+    expect(hubLabels(host)).toEqual(["Files", "Search", "New note", "Assistant", "Menu"]);
+  });
+
+  it("removes a hub shortcut on a long press and leaves the menu alone", async () => {
+    const host = await render();
+    vi.useFakeTimers();
+
+    // `BottomNav` is what turns a 500ms hold into the callback, so the hold is
+    // exercised through it rather than reimplemented here.
+    const hold = async (label: string): Promise<void> => {
+      const slot = hubOf(host)?.querySelector(`[aria-label="${label}"]`);
+      await act(async () => {
+        slot?.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+        vi.advanceTimersByTime(600);
+      });
+    };
+
+    await hold("Files");
+    await hold("Menu");
+
+    vi.useRealTimers();
+    expect(hubLabels(host)).toEqual(["Search", "New note", "Assistant", "Menu"]);
   });
 
   it("reveals an extension's left panel from the drawer", async () => {

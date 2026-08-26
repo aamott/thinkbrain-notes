@@ -1,5 +1,5 @@
 import { BottomSheet } from "@thinkbrain/ui";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import { BottomPanel } from "../../panels/BottomPanel";
 import { LeftPopout } from "../../panels/LeftPopout";
@@ -7,6 +7,8 @@ import { isSelectableLeftPanel, isSelectableRightPanel, type LeftPanel } from ".
 import { TabCloseRequest } from "../TabCloseRequest";
 import { TabContent } from "../TabContent";
 import type { ShellState } from "../useShellState";
+import { MAX_HUB_ITEMS, pinPanel, removeItem } from "./hubEditing";
+import type { HubItem } from "./hubModel";
 import { InspectorSheet } from "./InspectorSheet";
 import { PhoneDrawer } from "./PhoneDrawer";
 import { PhoneHeader } from "./PhoneHeader";
@@ -37,9 +39,26 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
   const [revealed, setRevealed] = useState<LeftPanel | null>(null);
   const [tabsOpen, setTabsOpen] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(false);
-  const { items } = useHubItems();
+  const { items, setItems } = useHubItems();
 
   const closeDrawer = useCallback(() => setDrawerOpen(false), []);
+
+  // Long press is the whole v1 customization affordance: hold a drawer row to
+  // pin it, hold a hub slot to remove it. Both helpers hand back the identical
+  // array when they decline, so a refused edit never costs a settings write —
+  // and the drawer, not a toast, is what says why (its hint line and its
+  // "Pinned" marks). Phone chrome renders no status bar to toast into.
+  const editHub = useCallback(
+    (next: readonly HubItem[]) => {
+      if (next !== items) void setItems(next);
+    },
+    [items, setItems]
+  );
+
+  const hubPanelIds = useMemo(
+    () => items.flatMap((item) => (item.kind === "panel" ? [item.id] : [])),
+    [items]
+  );
 
   const revealPanel = useCallback(
     (panelId: string) => {
@@ -148,6 +167,7 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
         onSelectPanel={revealPanel}
         onRunCommand={runCommand}
         onOpenMenu={() => setDrawerOpen(true)}
+        onLongPress={(target) => editHub(removeItem(items, target))}
       />
 
       {/* Three bottom chromes do not fit on a phone and the hub owns that edge,
@@ -209,6 +229,9 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
         workspaceName={shell.workspaceName}
         onDismiss={closeDrawer}
         onSelectPanel={revealPanel}
+        onLongPressPanel={(panelId) => editHub(pinPanel(items, panelId))}
+        hubPanelIds={hubPanelIds}
+        hubFull={items.length >= MAX_HUB_ITEMS}
         onOpenSettings={() => {
           shell.openSettingsTab();
           setDrawerOpen(false);
