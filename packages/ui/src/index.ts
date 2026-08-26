@@ -4,3 +4,7 @@ export type { ButtonProps } from "./components/ui/button";
 export { cn } from "./lib/utils";
 export { useDismissable } from "./components/ui/use-dismissable";
 export { Scrim } from "./components/ui/scrim";
+export { Drawer } from "./components/ui/drawer";
+export { BottomSheet } from "./components/ui/bottom-sheet";
+export { BottomNav } from "./components/ui/bottom-nav";
+export type { BottomNavItem } from "./components/ui/bottom-nav";
