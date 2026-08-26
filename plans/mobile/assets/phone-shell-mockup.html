@@ -246,32 +246,62 @@
     <p class="note">Content <em>takes over</em>: full width, both edges, no activity-rail inset. The hub stays — that is what makes it a hub and not a home screen. Header-left becomes Back.</p>
   </figure>
 
-  <!-- 4. Tab switcher -->
+  <!-- 4. Tab switcher grid -->
   <figure class="m-0 flex flex-col gap-3">
     <div class="phone">
       <div class="hdr">
         <span class="hbtn">☰</span>
         <h2 class="min-w-0 flex-1 truncate text-center text-sm font-semibold">Weekly review</h2>
         <div class="flex shrink-0 items-center">
-          <span class="hbtn"><span class="flex size-6 items-center justify-center rounded-small border-2 border-current text-[0.7rem] font-bold">3</span></span>
+          <span class="hbtn text-activitybar-active"><span class="flex size-6 items-center justify-center rounded-small border-2 border-current text-[0.7rem] font-bold">3</span></span>
           <span class="hbtn">⋯</span>
         </div>
       </div>
       <div class="relative flex-1 overflow-hidden bg-editor">
         <div class="absolute inset-0 bg-overlay"></div>
-        <section class="absolute inset-x-0 bottom-0 max-h-[80%] rounded-t-large bg-panel p-2 text-panel-foreground shadow-panel">
-          <p class="px-3 py-2 text-[0.65rem] font-bold uppercase tracking-wider text-muted-foreground">Open tabs</p>
-          <div class="flex items-center gap-1">
-            <span class="row flex-1 bg-tab-active text-tab-active-foreground"><span class="flex-1">Weekly review</span></span>
-            <span class="flex size-11 items-center justify-center text-muted-foreground">✕</span>
-          </div>
-          <div class="flex items-center gap-1">
-            <span class="row flex-1"><span class="flex-1">Mobile shell</span><span class="size-[0.4rem] rounded-full bg-primary"></span></span>
-            <span class="flex size-11 items-center justify-center text-muted-foreground">✕</span>
-          </div>
-          <div class="flex items-center gap-1">
-            <span class="row flex-1"><span class="flex-1">Settings</span></span>
-            <span class="flex size-11 items-center justify-center text-muted-foreground">✕</span>
+        <section class="absolute inset-x-0 bottom-0 max-h-[85%] overflow-hidden rounded-t-large bg-panel text-panel-foreground shadow-panel">
+          <p class="px-3 pt-3 text-[0.65rem] font-bold uppercase tracking-wider text-muted-foreground">Open tabs</p>
+          <div class="grid grid-cols-2 gap-3 p-3">
+
+            <div class="flex h-44 flex-col overflow-hidden rounded-medium border-2 border-primary bg-tab-active text-tab-active-foreground">
+              <div class="flex h-9 shrink-0 items-center gap-1 border-b border-border bg-surface pl-2">
+                <span class="min-w-0 flex-1 truncate text-[0.7rem] font-medium">Weekly review</span>
+                <span class="flex size-9 items-center justify-center text-[0.7rem] text-muted-foreground">✕</span>
+              </div>
+              <p class="m-0 overflow-hidden p-2 text-[0.6rem] leading-relaxed text-muted-foreground">
+                Shipped the managed-vault path. Clone-first onboarding works end to end on device. Still open: right panels unreachable, hub needs the keyboard inset…
+              </p>
+            </div>
+
+            <div class="flex h-44 flex-col overflow-hidden rounded-medium border border-border bg-tab-active text-tab-active-foreground">
+              <div class="flex h-9 shrink-0 items-center gap-1 border-b border-border bg-surface pl-2">
+                <span class="min-w-0 flex-1 truncate text-[0.7rem] font-medium">Mobile shell</span>
+                <span class="size-[0.35rem] shrink-0 rounded-full bg-primary"></span>
+                <span class="flex size-9 items-center justify-center text-[0.7rem] text-muted-foreground">✕</span>
+              </div>
+              <p class="m-0 overflow-hidden p-2 text-[0.6rem] leading-relaxed text-muted-foreground">
+                Two chrome components over one headless state layer. The hub is a shortcut bar, not a third panel side — side says where a panel lives…
+              </p>
+            </div>
+
+            <div class="flex h-44 flex-col overflow-hidden rounded-medium border border-border bg-tab-active text-tab-active-foreground">
+              <div class="flex h-9 shrink-0 items-center gap-1 border-b border-border bg-surface pl-2">
+                <span class="min-w-0 flex-1 truncate text-[0.7rem] font-medium">Settings</span>
+                <span class="flex size-9 items-center justify-center text-[0.7rem] text-muted-foreground">✕</span>
+              </div>
+              <p class="m-0 p-2 text-[0.6rem] italic text-muted-foreground">settings</p>
+            </div>
+
+            <div class="flex h-44 flex-col overflow-hidden rounded-medium border border-border bg-tab-active text-tab-active-foreground opacity-60">
+              <div class="flex h-9 shrink-0 items-center gap-1 border-b border-border bg-surface pl-2">
+                <span class="min-w-0 flex-1 truncate text-[0.7rem] font-medium">2025 retro</span>
+                <span class="flex size-9 items-center justify-center text-[0.7rem] text-muted-foreground">✕</span>
+              </div>
+              <p class="m-0 overflow-hidden p-2 text-[0.6rem] leading-relaxed text-muted-foreground">
+                What worked, what did not, and what to stop doing. Longest section is about scope…
+              </p>
+            </div>
+
           </div>
         </section>
       </div>
@@ -283,8 +313,8 @@
         <span class="slot"><span class="text-lg">☰</span>Menu</span>
       </nav>
     </div>
-    <figcaption class="cap">4 · Tab switcher</figcaption>
-    <p class="note">Tabs live in the header, browser-style, not in the hub. The count opens this sheet; the dot marks unsaved changes. The desktop tab strip does not render here.</p>
+    <figcaption class="cap">4 · Tab switcher grid</figcaption>
+    <p class="note">Two-column cards, Chrome-on-Android style. The preview is a <em>text excerpt</em> with frontmatter stripped — there is no per-element webview capture, only the active tab has a mounted editor, and at thumbnail scale every note is the same grey rectangle. Ringed card is active; the dot is unsaved changes; ✕ closes without selecting. Tabs with no prose name their kind.</p>
   </figure>
 
   <!-- 5. Inspector sheet -->

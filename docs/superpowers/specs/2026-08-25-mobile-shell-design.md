@@ -186,14 +186,30 @@ Right: tab count button, then an overflow `⋯` button.
 
 The two right-hand controls open different things, and the epic currently
 flattens them into one sentence. The tab count opens the **tab switcher
-sheet**; `⋯` opens the **inspector sheet**.
+grid**; `⋯` opens the **inspector sheet**.
 
 ### Tab switcher
 
 Tabs live in the header, not the hub — the browser-like placement. The count
-button opens a sheet listing open tabs with title, dirty dot and close
-affordance, reusing `tabState` directly. The desktop tab strip does not render
-on phone.
+button opens a **grid of cards**, two columns, as Chrome on Android does: each
+card carries a title bar with a close affordance, a dirty marker, and a preview
+of the tab's content. The active tab's card is ringed. The desktop tab strip
+does not render on phone.
+
+**The preview is a text excerpt, not a screenshot.** Chrome rasterizes the page;
+we cannot and should not. The webview offers no per-element capture, only the
+active tab has a mounted CodeMirror, and rendering true thumbnails would mean
+mounting an editor per open tab to photograph it. Meanwhile `documents` already
+holds the full contents of every open tab — including restored ones, which
+`useWorkspaceLifecycle.ts:115` loads eagerly — so an excerpt costs nothing.
+
+It is also the better preview for this app. At thumbnail scale every Markdown
+note is the same grey rectangle; what identifies a note is its opening lines.
+The excerpt strips YAML frontmatter via `parseFrontmatter(contents).body`, or
+every card would show `---` and a title key instead of the note.
+
+Tabs with no text — settings, merge, and registered-but-unavailable kinds —
+show a placard naming the kind rather than an empty card.
 
 ### Inspector sheet
 
@@ -217,7 +233,7 @@ is the expensive half and pin/remove covers the actual use case.
 | --- | --- |
 | `ActivityBar` rail | Drawer rows (same registry) |
 | Right-panel buttons in `TitleBar` | Inspector sheet behind `⋯` |
-| Tab strip | Tab switcher sheet behind the count button |
+| Tab strip | Tab switcher grid behind the count button |
 | `StatusBar` | Header + drawer badges (see below) |
 | `BottomPanel` | Sheet |
 | Left/right popouts | Full-width panel between header and hub |
@@ -339,7 +355,7 @@ desktop app unchanged.
    generic, token-driven, theme-correct, with focus/dismissal behaviour.
 4. **Hub model.** `HubItem`, the resolver over both registries, the
    `ui.mobileHub` setting, defaults.
-5. **`PhoneShell`.** Header, drawer, hub, tab switcher sheet, inspector sheet.
+5. **`PhoneShell`.** Header, drawer, hub, tab switcher grid, inspector sheet.
 6. **Surface fixes.** `Popout` inset, StatusBar fold, BottomPanel as sheet,
    `visualViewport` handling for the hub, `pointer-coarse:` sizing sweep.
 7. **Pin/remove long-press.**

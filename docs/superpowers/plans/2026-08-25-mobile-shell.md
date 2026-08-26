@@ -2458,20 +2458,104 @@ git commit -m "feat(shell): add phone chrome with header, drawer and hub"
 
 ---
 
-### Task 11: Tab switcher sheet
+### Task 11: Tab switcher grid
 
-Tabs live in the header, browser-style, not in the hub. The desktop tab strip does not render on a phone, so this is the only way to reach a second tab.
+Tabs live in the header, browser-style, not in the hub. The switcher is a
+two-column grid of preview cards, as Chrome on Android does — not a list.
+
+**The preview is a text excerpt, not a screenshot.** The webview has no
+per-element capture, only the active tab has a mounted CodeMirror, and true
+thumbnails would mean mounting an editor per tab to photograph it. `documents`
+already holds full contents for every open tab — including restored ones, loaded
+eagerly at `useWorkspaceLifecycle.ts:115` — so an excerpt is free, and at
+thumbnail scale every Markdown note looks identical anyway. What identifies a
+note is its opening lines.
 
 **Files:**
+- Create: `apps/desktop/src/shell/phone/tabPreview.ts`
+- Create: `apps/desktop/src/shell/phone/tabPreview.test.ts`
 - Create: `apps/desktop/src/shell/phone/TabSwitcherSheet.tsx`
 - Create: `apps/desktop/src/shell/phone/TabSwitcherSheet.test.tsx`
 - Modify: `apps/desktop/src/shell/phone/PhoneShell.tsx`
 
 **Interfaces:**
-- Consumes: `BottomSheet` (Task 6), `shell.tabState`, `shell.dispatchTabs`.
-- Produces: `<TabSwitcherSheet open tabs activeTabId onDismiss onSelect onClose />`.
+- Consumes: `BottomSheet` (Task 6), `shell.tabState`, `shell.dispatchTabs`,
+  `shell.documents`, `parseFrontmatter` from `@thinkbrain/core`.
+- Produces: `previewText(contents, maxChars?)`,
+  `<TabSwitcherSheet open tabs activeTabId documents onDismiss onSelect onClose />`.
 
-- [ ] **Step 1: Write the failing test**
+- [ ] **Step 1: Write the failing test for the excerpt**
+
+```ts
+import { describe, expect, it } from "vitest";
+
+import { previewText } from "./tabPreview";
+
+describe("previewText", () => {
+  it("returns the opening prose", () => {
+    expect(previewText("# Weekly review\nShipped the vault path.")).toBe(
+      "# Weekly review Shipped the vault path."
+    );
+  });
+
+  it("strips YAML frontmatter, which would otherwise be every card's preview", () => {
+    const note = "---\ntitle: Weekly review\ntags: [work]\n---\nShipped the vault path.";
+
+    expect(previewText(note)).toBe("Shipped the vault path.");
+  });
+
+  it("collapses blank lines and runs of whitespace", () => {
+    expect(previewText("First\n\n\n   Second")).toBe("First Second");
+  });
+
+  it("truncates with an ellipsis at the limit", () => {
+    expect(previewText("abcdefghij", 5)).toBe("abcde…");
+  });
+
+  it("does not append an ellipsis when the text already fits", () => {
+    expect(previewText("abc", 5)).toBe("abc");
+  });
+
+  it("returns an empty string for a document that is only frontmatter", () => {
+    expect(previewText("---\ntitle: Empty\n---\n")).toBe("");
+  });
+
+  it("returns an empty string for content that has not loaded yet", () => {
+    expect(previewText("")).toBe("");
+  });
+});
+```
+
+- [ ] **Step 2: Run it to verify it fails**
+
+Run: `pnpm --filter @thinkbrain/desktop test -- tabPreview`
+Expected: FAIL — module not found.
+
+- [ ] **Step 3: Implement the excerpt**
+
+```ts
+import { parseFrontmatter } from "@thinkbrain/core";
+
+/** Characters a card can show before the text stops being scannable. */
+const DEFAULT_LIMIT = 180;
+
+/**
+ * The opening prose of a note, for a tab card.
+ *
+ * Frontmatter is stripped through the same parser the editor uses — without it
+ * every card would preview `---` and a title key rather than the note. Newlines
+ * collapse to spaces because the card wraps its own lines and a preserved blank
+ * line would waste a third of the visible area.
+ */
+export function previewText(contents: string, maxChars: number = DEFAULT_LIMIT): string {
+  const body = parseFrontmatter(contents).body;
+  const flattened = body.replace(/\s+/g, " ").trim();
+  if (flattened.length <= maxChars) return flattened;
+  return `${flattened.slice(0, maxChars)}…`;
+}
+```
+
+- [ ] **Step 4: Write the failing test for the grid**
 
 ```tsx
 // @vitest-environment happy-dom
@@ -2492,9 +2576,15 @@ afterEach(async () => {
 });
 
 const tabs = [
-  { id: "a", kind: "editor" as const, title: "Note A", isDirty: false },
-  { id: "b", kind: "editor" as const, title: "Note B", isDirty: true }
+  { id: "a", kind: "editor" as const, title: "Note A" },
+  { id: "b", kind: "editor" as const, title: "Note B", isDirty: true },
+  { id: "settings", kind: "settings" as const, title: "Settings" }
 ];
+
+const documents = {
+  a: { phase: "ready" as const, contents: "---\ntitle: A\n---\nAlpha body text.", diskContents: null, error: null },
+  b: { phase: "ready" as const, contents: "Bravo body text.", diskContents: null, error: null }
+};
 
 const render = async (element: React.ReactElement): Promise<HTMLDivElement> => {
   container = document.createElement("div");
@@ -2504,34 +2594,51 @@ const render = async (element: React.ReactElement): Promise<HTMLDivElement> => {
   return container;
 };
 
-describe("TabSwitcherSheet", () => {
-  it("lists every open tab", async () => {
-    const host = await render(
-      <TabSwitcherSheet
-        open
-        tabs={tabs}
-        activeTabId="a"
-        onDismiss={() => undefined}
-        onSelect={() => undefined}
-        onClose={() => undefined}
-      />
-    );
+const sheet = (overrides: Record<string, unknown> = {}): React.ReactElement => (
+  <TabSwitcherSheet
+    open
+    tabs={tabs}
+    activeTabId="a"
+    documents={documents}
+    onDismiss={() => undefined}
+    onSelect={() => undefined}
+    onClose={() => undefined}
+    {...overrides}
+  />
+);
 
-    expect(host.querySelector('[aria-label="Note A"]')).not.toBeNull();
-    expect(host.querySelector('[aria-label="Note B"]')).not.toBeNull();
+describe("TabSwitcherSheet", () => {
+  it("lays the tabs out as a grid, not a list", async () => {
+    const host = await render(sheet());
+
+    const grid = host.querySelector('[aria-label="Open tabs"] ul');
+    expect(grid?.className).toContain("grid-cols-2");
+    expect(grid?.querySelectorAll("li")).toHaveLength(3);
+  });
+
+  it("previews a note's opening prose with frontmatter stripped", async () => {
+    const host = await render(sheet());
+
+    const card = host.querySelector('[aria-label="Note A"]');
+    expect(card?.textContent).toContain("Alpha body text.");
+    expect(card?.textContent).not.toContain("title: A");
+  });
+
+  it("names the kind for a tab that has no text to preview", async () => {
+    const host = await render(sheet());
+
+    expect(host.querySelector('[aria-label="Settings"]')?.textContent).toContain("settings");
+  });
+
+  it("marks the active tab's card", async () => {
+    const host = await render(sheet());
+
+    expect(host.querySelector('[aria-label="Note A"]')?.getAttribute("aria-current")).toBe("page");
+    expect(host.querySelector('[aria-label="Note B"]')?.getAttribute("aria-current")).toBeNull();
   });
 
   it("marks a tab with unsaved changes", async () => {
-    const host = await render(
-      <TabSwitcherSheet
-        open
-        tabs={tabs}
-        activeTabId="a"
-        onDismiss={() => undefined}
-        onSelect={() => undefined}
-        onClose={() => undefined}
-      />
-    );
+    const host = await render(sheet());
 
     expect(host.querySelector('[aria-label="Note B"] [aria-label="Unsaved changes"]')).not.toBeNull();
   });
@@ -2539,16 +2646,7 @@ describe("TabSwitcherSheet", () => {
   it("selects a tab and dismisses itself", async () => {
     const onSelect = vi.fn();
     const onDismiss = vi.fn();
-    const host = await render(
-      <TabSwitcherSheet
-        open
-        tabs={tabs}
-        activeTabId="a"
-        onDismiss={onDismiss}
-        onSelect={onSelect}
-        onClose={() => undefined}
-      />
-    );
+    const host = await render(sheet({ onSelect, onDismiss }));
 
     await act(async () => {
       host.querySelector<HTMLButtonElement>('[aria-label="Note B"]')?.click();
@@ -2558,19 +2656,11 @@ describe("TabSwitcherSheet", () => {
     expect(onDismiss).toHaveBeenCalledOnce();
   });
 
-  it("closes a tab without selecting it", async () => {
+  it("closes a tab without selecting it or dismissing the grid", async () => {
     const onClose = vi.fn();
     const onSelect = vi.fn();
-    const host = await render(
-      <TabSwitcherSheet
-        open
-        tabs={tabs}
-        activeTabId="a"
-        onDismiss={() => undefined}
-        onSelect={onSelect}
-        onClose={onClose}
-      />
-    );
+    const onDismiss = vi.fn();
+    const host = await render(sheet({ onClose, onSelect, onDismiss }));
 
     await act(async () => {
       host.querySelector<HTMLButtonElement>('[aria-label="Close Note B"]')?.click();
@@ -2578,34 +2668,43 @@ describe("TabSwitcherSheet", () => {
 
     expect(onClose).toHaveBeenCalledWith("b");
     expect(onSelect).not.toHaveBeenCalled();
+    expect(onDismiss).not.toHaveBeenCalled();
   });
 });
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
+- [ ] **Step 5: Run it to verify it fails**
 
 Run: `pnpm --filter @thinkbrain/desktop test -- TabSwitcherSheet`
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Implement the sheet**
+- [ ] **Step 6: Implement the grid**
+
+The close button sits inside the card but must not activate it — it is a sibling
+of the select button, not a child, so a tap on ✕ never bubbles into a selection.
 
 ```tsx
 import { BottomSheet } from "@thinkbrain/ui";
 import { X } from "lucide-react";
 
 import { cn } from "../../lib/utils";
+import type { DocumentView } from "../useDocumentViews";
 import type { DesktopTab } from "../../tabs/tabModel";
+import { previewText } from "./tabPreview";
 
 /**
- * Open tabs, reached from the header's count button.
+ * Open tabs as a grid of preview cards, reached from the header's count button.
  *
- * The desktop tab strip does not render on a phone — a row of 116px tabs across
- * 390px is unusable — so this sheet is the only way to reach a second tab.
+ * A grid rather than a list because that is what a phone user already knows from
+ * a browser, and because two columns of cards fit more tabs on screen than rows
+ * of titles. The preview is a text excerpt: see `tabPreview.ts` for why a real
+ * screenshot is neither available nor desirable here.
  */
 export function TabSwitcherSheet({
   open,
   tabs,
   activeTabId,
+  documents,
   onDismiss,
   onSelect,
   onClose
@@ -2613,53 +2712,81 @@ export function TabSwitcherSheet({
   readonly open: boolean;
   readonly tabs: readonly DesktopTab[];
   readonly activeTabId: string | null;
+  readonly documents: Readonly<Record<string, DocumentView>>;
   readonly onDismiss: () => void;
   readonly onSelect: (tabId: string) => void;
   readonly onClose: (tabId: string) => void;
 }) {
   return (
     <BottomSheet open={open} onDismiss={onDismiss} label="Open tabs">
-      <ul className="flex list-none flex-col gap-0.5 p-2">
-        {tabs.map((tab) => (
-          <li key={tab.id} className="flex items-center gap-1">
-            <button
-              type="button"
-              aria-label={tab.title}
-              aria-current={tab.id === activeTabId ? "page" : undefined}
-              className={cn(
-                "flex min-h-12 flex-1 cursor-pointer items-center gap-2 rounded-small border-0 bg-transparent px-3 text-left text-sm hover:bg-accent focus-visible:-outline-offset-2 focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:min-h-12",
-                tab.id === activeTabId && "bg-tab-active text-tab-active-foreground"
-              )}
-              onClick={() => {
-                onSelect(tab.id);
-                onDismiss();
-              }}
-            >
-              <span className="flex-1 truncate">{tab.title}</span>
-              {tab.isDirty && (
-                <span
-                  aria-label="Unsaved changes"
-                  className="size-[0.4rem] rounded-full bg-primary"
-                />
-              )}
-            </button>
-            <button
-              type="button"
-              aria-label={`Close ${tab.title}`}
-              className="flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-small border-0 bg-transparent text-muted-foreground hover:text-foreground focus-visible:-outline-offset-2 focus-visible:outline-2 focus-visible:outline-ring"
-              onClick={() => onClose(tab.id)}
-            >
-              <X aria-hidden="true" className="size-4" />
-            </button>
-          </li>
-        ))}
+      <ul className="m-0 grid list-none grid-cols-2 gap-3 p-3">
+        {tabs.map((tab) => {
+          const isActive = tab.id === activeTabId;
+          const document = documents[tab.id];
+          const excerpt =
+            document?.phase === "ready" ? previewText(document.contents) : "";
+          return (
+            <li key={tab.id} className="m-0">
+              <div
+                className={cn(
+                  "flex h-44 flex-col overflow-hidden rounded-medium border border-border bg-tab-active text-tab-active-foreground",
+                  isActive && "border-primary ring-2 ring-primary"
+                )}
+              >
+                <div className="flex h-9 shrink-0 items-center gap-1 border-b border-border bg-surface pl-2">
+                  <span className="min-w-0 flex-1 truncate text-[0.7rem] font-medium">
+                    {tab.title}
+                  </span>
+                  {tab.isDirty && (
+                    <span
+                      aria-label="Unsaved changes"
+                      className="size-[0.35rem] shrink-0 rounded-full bg-primary"
+                    />
+                  )}
+                  <button
+                    type="button"
+                    aria-label={`Close ${tab.title}`}
+                    className="flex size-9 shrink-0 cursor-pointer items-center justify-center border-0 bg-transparent text-muted-foreground hover:text-foreground focus-visible:-outline-offset-2 focus-visible:outline-2 focus-visible:outline-ring"
+                    onClick={() => onClose(tab.id)}
+                  >
+                    <X aria-hidden="true" className="size-3.5" />
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  aria-label={tab.title}
+                  aria-current={isActive ? "page" : undefined}
+                  className="flex flex-1 cursor-pointer flex-col items-start overflow-hidden border-0 bg-transparent p-2 text-left focus-visible:-outline-offset-2 focus-visible:outline-2 focus-visible:outline-ring"
+                  onClick={() => {
+                    onSelect(tab.id);
+                    onDismiss();
+                  }}
+                >
+                  {excerpt.length > 0 ? (
+                    <p className="m-0 line-clamp-6 text-[0.6rem] leading-relaxed text-muted-foreground">
+                      {excerpt}
+                    </p>
+                  ) : (
+                    // Settings, merge and unavailable kinds have no prose to show.
+                    <span className="m-0 text-[0.6rem] text-muted-foreground italic">
+                      {tab.kind}
+                    </span>
+                  )}
+                </button>
+              </div>
+            </li>
+          );
+        })}
       </ul>
     </BottomSheet>
   );
 }
 ```
 
-- [ ] **Step 4: Wire it into `PhoneShell`**
+If `DocumentView` is not exported from `useDocumentViews.ts`, export the existing
+interface rather than redeclaring it here.
+
+- [ ] **Step 7: Wire it into `PhoneShell`**
 
 Add state and replace the `onOpenTabs` no-op:
 
@@ -2678,6 +2805,7 @@ Render it beside `PhoneDrawer`:
         open={tabsOpen}
         tabs={shell.tabState.tabs}
         activeTabId={shell.tabState.activeTabId}
+        documents={shell.documents}
         onDismiss={() => setTabsOpen(false)}
         onSelect={(tabId) => {
           shell.dispatchTabs({ type: "activate", tabId });
@@ -2687,16 +2815,16 @@ Render it beside `PhoneDrawer`:
       />
 ```
 
-- [ ] **Step 5: Run tests and QA**
+- [ ] **Step 8: Run tests and QA**
 
 Run: `pnpm --filter @thinkbrain/desktop test && pnpm qa`
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
 git add apps/desktop/src/shell/phone
-git commit -m "feat(shell): add phone tab switcher sheet"
+git commit -m "feat(shell): add phone tab switcher grid with note previews"
 ```
 
 ---

@@ -42,7 +42,10 @@ target's registration — so it reads "Files", or "Journal" if the user pins tha
 ## Decisions
 
 - Tabs live in the **header** (browser-like), not the hub. The count button
-  opens a tab-switcher sheet.
+  opens a tab-switcher **grid** of preview cards. The preview is a text excerpt,
+  not a screenshot: there is no per-element webview capture, only the active tab
+  has a mounted editor, and at thumbnail scale every Markdown note looks the
+  same — the opening lines are what identify a note.
 - The header's `⋯` opens the **inspector sheet** — a different surface from the
   drawer. Only the header's left slot and the hub's Menu slot open the drawer.
 - Drawer is 86% / max 300px over a scrim (**navigation peeks**); a revealed
@@ -66,7 +69,10 @@ target's registration — so it reads "Files", or "Journal" if the user pins tha
 - [ ] No icon rail on phone; the drawer lists every registered left panel with a
       **visible** label, active state and conflict badges
 - [ ] Header menu button and hub Menu slot open the same drawer
-- [ ] Tab switcher sheet reaches every open tab, with dirty markers and close
+- [ ] Tab switcher is a two-column **grid of preview cards** (Chrome-on-Android
+      style), each with title, close affordance, dirty marker and a text excerpt
+      of the note with frontmatter stripped; the active card is marked. Tabs
+      with no prose (settings, merge) name their kind instead
 - [ ] Inspector sheet reaches every registered right panel — the gap that exists
       today
 - [ ] Hub renders resolved shortcuts with visible labels and badges; an
