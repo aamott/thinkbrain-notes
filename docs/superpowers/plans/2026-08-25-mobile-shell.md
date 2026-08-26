@@ -34,11 +34,23 @@
 **Files:**
 - Create: `apps/desktop/src/shell/useShellState.ts`
 - Create: `apps/desktop/src/shell/useShellState.test.tsx`
+- Create: `apps/desktop/src/shell/useShellShortcuts.ts` — the global keydown
+  effect, so `useShellState.ts` stays inside the 500-line limit
 - Modify: `apps/desktop/src/shell/DesktopShell.tsx` — becomes chrome only
+- Modify: `apps/desktop/src/shell/useAppUpdate.ts` — name its anonymous
+  return type `AppUpdate`
+- Modify: `apps/desktop/src/App.tsx` and the two `DesktopShell` test files —
+  each grows a three-line wrapper that calls the hook and passes `shell`
 
 **Interfaces:**
 - Consumes: existing `useDocumentViews`, `useWorkspaceLifecycle`, `useSyncSurfaces`, `useDesktopCommands`, `usePanelResize`, `useExternalDocumentSync`, `useSettingsStore`, `useWikiLinkIndexStore`.
 - Produces: `useShellState(): ShellState`. Every later task consumes this exact shape.
+
+The type names below are the real ones. `DocumentViewState` and `PanelSide`
+come from `shell/shellTypes.ts`, `PanelResize` from `usePanelResize.ts`,
+`WorkspaceExplorerProps` from `workspace/WorkspaceExplorer.tsx`,
+`NoteIndexEntry` from `@thinkbrain/core`, and `AppUpdate` is added to
+`useAppUpdate.ts` in this task (its return type was anonymous).
 
 ```ts
 export interface ShellState {
@@ -46,8 +58,8 @@ export interface ShellState {
   readonly tabState: DesktopTabState;
   readonly dispatchTabs: Dispatch<DesktopTabAction>;
   readonly activeTab: DesktopTab | null;
-  readonly activeDocument: DocumentView | undefined;
-  readonly documents: Readonly<Record<string, DocumentView>>;
+  readonly activeDocument: DocumentViewState | undefined;
+  readonly documents: Readonly<Record<string, DocumentViewState>>;
   readonly conflicts: ReadonlySet<string>;
   readonly unsavedNoteContents: string | null;
   readonly saveDocument: (tab: DesktopTab) => Promise<boolean>;
@@ -75,7 +87,7 @@ export interface ShellState {
   readonly workspaceFiles: readonly NativeMarkdownFileEntry[];
   readonly recentWorkspacePaths: readonly string[];
   readonly stateRestored: boolean;
-  readonly explorerProps: ExplorerProps;
+  readonly explorerProps: WorkspaceExplorerProps;
   readonly versionsOf: string | null;
   readonly showVersionsOf: (rootPath: string, relativePath: string) => void;
   /** Clears the history panel's note filter. `DesktopShell` inlines this today
@@ -93,13 +105,13 @@ export interface ShellState {
   readonly openSettingsTab: () => void;
   readonly syncStatus: SyncStatus;
   readonly conflictBadges: Readonly<Record<string, number>>;
-  readonly noteIndex: WikiLinkNoteIndex;
-  readonly update: AppUpdateState;
+  readonly noteIndex: readonly NoteIndexEntry[];
+  readonly update: AppUpdate;
 
   // desktop-only, ignored by PhoneShell
   readonly leftWidth: number;
   readonly rightWidth: number;
-  readonly resize: PanelResizeControls;
+  readonly resize: PanelResize;
   readonly resetPanelWidth: (side: PanelSide) => void;
 }
 ```
@@ -107,6 +119,11 @@ export interface ShellState {
 - [ ] **Step 1: Write the failing test**
 
 Create `apps/desktop/src/shell/useShellState.test.tsx`. This proves the hook runs with no chrome — the whole point of the extraction.
+
+`useShellState` calls `useTheme()`, so the probe must be wrapped in
+`ThemeProvider` — and the value has to be captured through a box rather than a
+bare `let`, since assigning inside the render callback does not narrow and
+TypeScript would read the variable as `null`.
 
 ```tsx
 // @vitest-environment happy-dom
@@ -215,7 +232,7 @@ const explorerProps = useMemo(() => ({
      newNoteFocusRequest, recentWorkspacePaths, handleWorkspaceLaunched, showVersionsOf]);
 ```
 
-The CSS custom-property effect (`--tn-shell-left-width` / `--tn-shell-right-width`) is **chrome** and stays in `DesktopShell.tsx`, because it writes to that component's own root ref.
+The CSS custom-property effect (`--tn-shell-left-width` / `--tn-shell-right-width`) is **chrome** and stays in `DesktopShell.tsx`, because it writes to that component's own root ref. Its other half is not: the same effect currently also does `leftWidthRef.current = leftWidth`, and those refs move into the hook with `usePanelResize`. Split it — ref-sync in `useShellState`, the two `setProperty` calls in the chrome.
 
 - [ ] **Step 4: Rewrite `DesktopShell.tsx` to consume the hook**
 
@@ -2688,7 +2705,7 @@ import { BottomSheet } from "@thinkbrain/ui";
 import { X } from "lucide-react";
 
 import { cn } from "../../lib/utils";
-import type { DocumentView } from "../useDocumentViews";
+import type { DocumentViewState } from "../shellTypes";
 import type { DesktopTab } from "../../tabs/tabModel";
 import { previewText } from "./tabPreview";
 
@@ -2712,7 +2729,7 @@ export function TabSwitcherSheet({
   readonly open: boolean;
   readonly tabs: readonly DesktopTab[];
   readonly activeTabId: string | null;
-  readonly documents: Readonly<Record<string, DocumentView>>;
+  readonly documents: Readonly<Record<string, DocumentViewState>>;
   readonly onDismiss: () => void;
   readonly onSelect: (tabId: string) => void;
   readonly onClose: (tabId: string) => void;
@@ -2783,8 +2800,8 @@ export function TabSwitcherSheet({
 }
 ```
 
-If `DocumentView` is not exported from `useDocumentViews.ts`, export the existing
-interface rather than redeclaring it here.
+`DocumentViewState` lives in `shell/shellTypes.ts`, not in `useDocumentViews.ts`.
+It is already exported; nothing needs adding.
 
 - [ ] **Step 7: Wire it into `PhoneShell`**
 
