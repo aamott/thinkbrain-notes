@@ -21,6 +21,9 @@
 - **Touch sizing is a pointer question:** use the `pointer-coarse:` variant (`journal/journalChrome.tsx` exports `TOUCH = "pointer-coarse:min-h-11"`). Never express a touch minimum as a width breakpoint.
 - **Panel and setting ids never drift** — they appear in persisted workspace state and settings keys. Labels may change; ids may not.
 - **No new `SettingType`.** `SettingType` is `"boolean" | "string" | "number" | "enum" | "path"`. JSON-shaped settings are stored as `type: "string"` with a custom control, following `journal.fieldDefinitions`.
+- **Running one test file:** `pnpm --filter @thinkbrain/desktop exec vitest run <name>`.
+  `pnpm --filter … test -- <name>` does *not* filter — it runs the whole suite,
+  which makes a red-run step prove nothing.
 - **`pnpm qa` must pass** before any task is considered done (lint, typecheck, tests, formatting; cross-platform via `scripts/qa.mjs`).
 - **Commits require explicit user approval** (`AGENTS.md`). Each task's Commit step is a proposal — present the message, wait for the go-ahead. No signatures in commit messages.
 - **Desktop behaviour must be unchanged** by Tasks 1–9. Any desktop-visible diff before Task 10 is a bug in the extraction.
@@ -192,7 +195,7 @@ describe("useShellState", () => {
 
 - [ ] **Step 2: Run the test to verify it fails**
 
-Run: `pnpm --filter @thinkbrain/desktop test -- useShellState`
+Run: `pnpm --filter @thinkbrain/desktop exec vitest run useShellState`
 Expected: FAIL — `Failed to resolve import "./useShellState"`.
 
 - [ ] **Step 3: Create the hook by moving code out of `DesktopShell.tsx`**
@@ -296,7 +299,12 @@ let listeners: Array<() => void> = [];
 const stubMatchMedia = (matches: boolean): { set: (next: boolean) => void } => {
   let current = matches;
   vi.stubGlobal("matchMedia", (query: string) => ({
-    matches: current,
+    // A getter, not a snapshot: `matches: current` freezes at construction and
+    // `media.set(true)` would never reach `getSnapshot`, so the test could not
+    // fail against a correct implementation. A real MediaQueryList is live too.
+    get matches() {
+      return current;
+    },
     media: query,
     addEventListener: (_: string, listener: () => void) => listeners.push(listener),
     removeEventListener: (_: string, listener: () => void) => {
@@ -347,7 +355,7 @@ describe("useNarrowViewport", () => {
 
 - [ ] **Step 2: Run it to verify it fails**
 
-Run: `pnpm --filter @thinkbrain/desktop test -- useNarrowViewport`
+Run: `pnpm --filter @thinkbrain/desktop exec vitest run useNarrowViewport`
 Expected: FAIL — module not found.
 
 - [ ] **Step 3: Implement the hook**
@@ -389,13 +397,27 @@ export function useNarrowViewport(): boolean {
 
 - [ ] **Step 4: Write the failing test for `ShellRoot`**
 
+`ShellRoot` mounts the real shell state, so the render needs `ThemeProvider`
+(`useShellState` calls `useTheme()`) and the two Tauri mocks that keep the
+restore path a no-op. The `workspaceAdapter` / `workspaceDocumentAdapter` mocks
+from `DesktopShell.dirtySync.test.tsx` are *not* needed here.
+
+Add a fourth case the plan originally missed: a direct `usePhoneChrome` test
+over the whole truth table. With only the three `ShellRoot` cases below,
+`coarse && narrow` and `coarse || narrow` are indistinguishable — and the `||`
+version would hand phone chrome to every touchscreen laptop.
+
 ```tsx
 // @vitest-environment happy-dom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { ShellRoot } from "./ShellRoot";
+import { ThemeProvider } from "../settings/ThemeProvider";
+import { ShellRoot, usePhoneChrome } from "./ShellRoot";
+
+vi.mock("@tauri-apps/api/core", () => ({ isTauri: vi.fn(() => false) }));
+vi.mock("../native/commands", () => ({ invokeNativeCommand: vi.fn(() => Promise.resolve(null)) }));
 
 vi.mock("./useNarrowViewport", () => ({ useNarrowViewport: () => narrow }));
 vi.mock("../journal/useCoarsePointer", () => ({ useCoarsePointer: () => coarse }));
@@ -452,7 +474,7 @@ describe("ShellRoot", () => {
 
 - [ ] **Step 5: Run it to verify it fails**
 
-Run: `pnpm --filter @thinkbrain/desktop test -- ShellRoot`
+Run: `pnpm --filter @thinkbrain/desktop exec vitest run ShellRoot`
 Expected: FAIL — module not found.
 
 - [ ] **Step 6: Implement `ShellRoot`**
@@ -471,6 +493,7 @@ import { useShellState } from "./useShellState";
  * Both hooks are called unconditionally — `useCoarsePointer() && useNarrowViewport()`
  * would short-circuit and skip a hook call.
  */
+// eslint-disable-next-line react-refresh/only-export-components -- gate hook belongs beside the chrome that consumes it
 export function usePhoneChrome(): boolean {
   const coarse = useCoarsePointer();
   const narrow = useNarrowViewport();
@@ -550,7 +573,7 @@ it("labels the explorer panel Files", () => {
 
 - [ ] **Step 2: Run them to verify they fail**
 
-Run: `pnpm --filter @thinkbrain/desktop test -- commandRegistry panelRegistry`
+Run: `pnpm --filter @thinkbrain/desktop exec vitest run commandRegistry panelRegistry`
 Expected: FAIL — `undefined` is not `"plus"`, and `"Explorer"` is not `"Files"`.
 
 - [ ] **Step 3: Add `icon?` to the core contribution**
@@ -605,8 +628,19 @@ In `apps/desktop/src/panels/panelRegistryModel.tsx`, in `builtInDesktopPanels`, 
 
 - [ ] **Step 6: Update assertions that referenced the old label**
 
-Run: `grep -rn '"Explorer"' apps/desktop/src apps/desktop/e2e`
-Update each assertion to `"Files"`. Do **not** change any occurrence of the id `explorer`.
+Run: `grep -rni 'explorer' apps/desktop/src apps/desktop/e2e`
+
+`grep -rn '"Explorer"'` is **not** enough — it misses `aria-label="Explorer panel"`,
+which `Popout.tsx:55` builds as `` `${contribution.label} panel` ``. Seven
+assertions across `DesktopShell.test.tsx` and `e2e/app.spec.ts` depend on it.
+
+Update each user-visible **label** to `"Files"`, including the `toggle-explorer`
+command's `title` (a palette entry reading "Toggle Explorer" would open a panel
+labelled "Files") and its assertion. Do **not** change any occurrence of the
+**id** `explorer` or `toggle-explorer` — those are persisted in workspace state
+and settings keys. Leave `PanelTitle.test.tsx` (a literal prop on a standalone
+component) and `packages/core/src/contributions.test.ts` (a synthetic fixture)
+alone; neither is about the registered panel label.
 
 - [ ] **Step 7: Run tests and QA**
 
@@ -629,6 +663,9 @@ git commit -m "feat(core): add optional command icons; rename Explorer panel to 
 
 **Files:**
 - Modify: `packages/ui/package.json` — add `happy-dom` devDependency
+- Modify: `packages/ui/tsconfig.build.json` — its `exclude` is `["src/**/*.test.ts"]`,
+  so a new `.test.tsx` would be compiled into `dist/`. `pnpm qa` does not run
+  `build`, so this only shows up in `pnpm --filter @thinkbrain/ui build`.
 - Create: `packages/ui/vitest.config.ts`
 - Create: `packages/ui/src/components/ui/use-dismissable.ts`
 - Create: `packages/ui/src/components/ui/use-dismissable.test.tsx`
@@ -941,7 +978,7 @@ describe("Drawer", () => {
 
 - [ ] **Step 2: Run it to verify it fails**
 
-Run: `pnpm --filter @thinkbrain/ui test -- drawer`
+Run: `pnpm --filter @thinkbrain/ui exec vitest run drawer`
 Expected: FAIL — module not found.
 
 - [ ] **Step 3: Implement `Drawer`**
@@ -1098,7 +1135,7 @@ describe("BottomSheet", () => {
 
 - [ ] **Step 2: Run it to verify it fails**
 
-Run: `pnpm --filter @thinkbrain/ui test -- bottom-sheet`
+Run: `pnpm --filter @thinkbrain/ui exec vitest run bottom-sheet`
 Expected: FAIL — module not found.
 
 - [ ] **Step 3: Implement `BottomSheet`**
@@ -1280,7 +1317,7 @@ describe("BottomNav", () => {
 
 - [ ] **Step 2: Run it to verify it fails**
 
-Run: `pnpm --filter @thinkbrain/ui test -- bottom-nav`
+Run: `pnpm --filter @thinkbrain/ui exec vitest run bottom-nav`
 Expected: FAIL — module not found.
 
 - [ ] **Step 3: Implement `BottomNav`**
@@ -1525,7 +1562,7 @@ describe("DEFAULT_HUB_ITEMS", () => {
 
 - [ ] **Step 2: Run it to verify it fails**
 
-Run: `pnpm --filter @thinkbrain/desktop test -- hubModel`
+Run: `pnpm --filter @thinkbrain/desktop exec vitest run hubModel`
 Expected: FAIL — module not found.
 
 - [ ] **Step 3: Implement the model**
@@ -1697,7 +1734,7 @@ export function serializeHubItems(items: readonly HubItem[]): string {
 
 - [ ] **Step 5: Run tests and QA**
 
-Run: `pnpm --filter @thinkbrain/desktop test -- hubModel && pnpm qa`
+Run: `pnpm --filter @thinkbrain/desktop exec vitest run hubModel && pnpm qa`
 Expected: PASS.
 
 - [ ] **Step 6: Commit**
@@ -1751,7 +1788,7 @@ describe("uiModule", () => {
 
 - [ ] **Step 2: Run it to verify it fails**
 
-Run: `pnpm --filter @thinkbrain/core test -- ui`
+Run: `pnpm --filter @thinkbrain/core exec vitest run ui`
 Expected: FAIL — module not found.
 
 - [ ] **Step 3: Implement the settings module**
@@ -1894,7 +1931,7 @@ describe("useHubItems", () => {
 
 - [ ] **Step 6: Run it to verify it fails**
 
-Run: `pnpm --filter @thinkbrain/desktop test -- useHubItems`
+Run: `pnpm --filter @thinkbrain/desktop exec vitest run useHubItems`
 Expected: FAIL — module not found.
 
 - [ ] **Step 7: Implement the hook**
@@ -2068,7 +2105,7 @@ describe("PhoneShell", () => {
 
 - [ ] **Step 2: Run it to verify it fails**
 
-Run: `pnpm --filter @thinkbrain/desktop test -- PhoneShell`
+Run: `pnpm --filter @thinkbrain/desktop exec vitest run PhoneShell`
 Expected: FAIL — module not found.
 
 - [ ] **Step 3: Implement `PhoneHeader`**
@@ -2545,7 +2582,7 @@ describe("previewText", () => {
 
 - [ ] **Step 2: Run it to verify it fails**
 
-Run: `pnpm --filter @thinkbrain/desktop test -- tabPreview`
+Run: `pnpm --filter @thinkbrain/desktop exec vitest run tabPreview`
 Expected: FAIL — module not found.
 
 - [ ] **Step 3: Implement the excerpt**
@@ -2692,7 +2729,7 @@ describe("TabSwitcherSheet", () => {
 
 - [ ] **Step 5: Run it to verify it fails**
 
-Run: `pnpm --filter @thinkbrain/desktop test -- TabSwitcherSheet`
+Run: `pnpm --filter @thinkbrain/desktop exec vitest run TabSwitcherSheet`
 Expected: FAIL — module not found.
 
 - [ ] **Step 6: Implement the grid**
@@ -2931,7 +2968,7 @@ describe("InspectorSheet", () => {
 
 - [ ] **Step 2: Run it to verify it fails**
 
-Run: `pnpm --filter @thinkbrain/desktop test -- InspectorSheet`
+Run: `pnpm --filter @thinkbrain/desktop exec vitest run InspectorSheet`
 Expected: FAIL — module not found.
 
 - [ ] **Step 3: Implement the sheet**
@@ -3088,7 +3125,7 @@ const SIDE_CLASS: Record<Side, string> = {
 
 - [ ] **Step 2: Verify no desktop regression**
 
-Run: `pnpm --filter @thinkbrain/desktop test -- Popout panelRegistry DesktopShell`
+Run: `pnpm --filter @thinkbrain/desktop exec vitest run Popout panelRegistry DesktopShell`
 Expected: PASS. The changed class is inside a `max-[760px]:` variant, so wide layouts are untouched.
 
 - [ ] **Step 3: Write the failing test for the keyboard inset**
@@ -3156,7 +3193,7 @@ describe("useKeyboardInset", () => {
 
 - [ ] **Step 4: Run it to verify it fails**
 
-Run: `pnpm --filter @thinkbrain/desktop test -- useKeyboardInset`
+Run: `pnpm --filter @thinkbrain/desktop exec vitest run useKeyboardInset`
 Expected: FAIL — module not found.
 
 - [ ] **Step 5: Implement the hook**
@@ -3346,7 +3383,7 @@ describe("removeItem", () => {
 
 - [ ] **Step 2: Run it to verify it fails**
 
-Run: `pnpm --filter @thinkbrain/desktop test -- hubEditing`
+Run: `pnpm --filter @thinkbrain/desktop exec vitest run hubEditing`
 Expected: FAIL — module not found.
 
 - [ ] **Step 3: Implement the editing helpers**
