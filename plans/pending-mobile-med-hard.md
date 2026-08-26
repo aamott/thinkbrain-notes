@@ -27,7 +27,9 @@ In scope:
   targets
 - Responsive layout breakpoints using shared `--tn-*` tokens so the desktop
   shell adapts to phone screens
-- Touch-friendly navigation (bottom tabs, swipe gestures, 44px touch targets)
+- Touch-friendly navigation: a bottom shortcut hub whose slots point at
+  registered panels and commands, plus touch-sized hit targets keyed off
+  `pointer: coarse` rather than viewport width
 - Mobile capability compatibility — desktop-only Tauri commands (terminal,
   process-spawn) are reported as unavailable on mobile via platform-aware
   declarations; this is soft compatibility behavior, not security enforcement
@@ -116,24 +118,26 @@ must not convert `content://` URIs into guessed `/storage/...` paths.
 ### The UI is not usable on a phone yet
 
 - **Very unoptimised generally.** The `max-[760px]:` work covers the shell
-  chrome, not the surfaces inside it. The approved 2026-08-25 visual source of
-  truth for the phone-first shell — universal top header, bottom nav hub,
-  action sheets and drawers — is
-  `plans/mobile/assets/mobile-ui-mockup.html`. It governs
-  `pending-mobile_navigation_menu-med-med.md` and
-  `pending-responsive_layout-med-med.md`.
+  chrome, not the surfaces inside it. The binding design is
+  `docs/superpowers/specs/2026-08-25-mobile-shell-design.md`, implemented by
+  `docs/superpowers/plans/2026-08-25-mobile-shell.md`.
+  `plans/mobile/assets/phone-shell-mockup.html` is a **look-and-feel
+  reference**, not a source of truth: a mockup carries its own token namespace
+  and cannot be copied into the app's `--tn-*` utilities.
 - **The activity bar is wrong for touch.** `ActivityBar.tsx` is a 53-line rail
-  of icon-only buttons — the labels exist as `aria-label` only. The approved
-  mobile presentation replaces it with the universal header, bottom navigation
-  hub and an 86%-width labeled drawer carrying active state, conflict badges and
-  settings. Existing popout/overlay state may be reused, but the approved drawer
-  rather than the current full-screen mobile Popout is the target surface.
-- **The soft keyboard breaks the editor.** Tracked upstream at
-  tauri-apps/tauri#10631: the webview viewport does not resize when the
-  keyboard opens, which breaks CodeMirror cursor positioning and scrolling.
-  This is not ours to fix and it gates mobile editing — a notes app that puts
-  the cursor in the wrong place while typing is not shippable. It needs
-  verifying on a current Tauri, then a workaround.
+  of icon-only buttons — the labels exist as `aria-label` only. On phone it is
+  replaced by a universal header, a bottom shortcut hub and an 86%-width
+  labeled drawer rendering the same `useLeftPanelContributions()` the rail
+  reads, so entries, active state and badges keep one definition.
+- **Right panels are unreachable on a phone.** `TitleBar.tsx:170` hides every
+  right-panel button below 760px, so outline, properties, backlinks and the
+  assistant have no mobile entry point at all. An inspector sheet behind the
+  header's `⋯` owns this.
+- **The soft keyboard.** `windowSoftInputMode="adjustResize"` shipped and
+  editing was verified on an emulator, so tauri-apps/tauri#10631 no longer
+  gates mobile editing. Residual risk: emulator-only verification, and a
+  bottom-anchored hub that must track `window.visualViewport` rather than
+  float over the keyboard.
 
 ### Not yet known
 
@@ -158,9 +162,11 @@ use.
 
 Mobile switches between desktop and mobile layouts with shared `--tn-*` tokens
 within the same shell.
-Phone-first on small screens (single panel, bottom tab navigation), multi-panel
-on large screens (current desktop layout). There is no separate screen tree or
-navigation stack — the same React components reflow based on viewport width.
+Phone-first on small screens (single panel, bottom shortcut hub), multi-panel on
+large screens (current desktop layout). There is no separate screen tree or
+navigation stack: `useShellState` holds the state and two thin layout components
+arrange it, chosen on `coarse pointer && width < 760`. Panels, tabs, documents
+and the panel registry are shared untouched.
 
 ### Capability gating
 
@@ -173,11 +179,11 @@ boundary.
 
 ### Known limitations
 
-- **Android keyboard / `visualViewport` issue** (critical for text editing,
-  tracked at tauri-apps/tauri#10631): the webview viewport does not resize
-  correctly when the soft keyboard opens, which breaks CodeMirror cursor
-  positioning and scrolling. Must be verified and worked around before mobile
-  editing ships.
+- **Android keyboard / `visualViewport`** (tauri-apps/tauri#10631): mitigated,
+  not open. `windowSoftInputMode="adjustResize"` shipped with
+  `mobile/done-codemirror_mobile_testing-med-med.md` and editing was verified on
+  an emulator. What remains is device verification and keeping bottom-anchored
+  chrome out of the keyboard's way.
 - **CodeMirror 6 mobile quirks**: scrolling on Android, IME composition
   (Gboard), and touch-based text selection on iOS need explicit testing and
   likely fixes. `EditorView.EDIT_CONTEXT = false` may be required on Android.
@@ -224,11 +230,12 @@ point tuning a layout for a workspace that cannot be opened.
 - ⬜ Git clone as the mobile way in, followed by Android Keystore-backed shared
   secret storage for private repositories —
   `mobile/pending-mobile_git_access-high-hard.md`
-- ⬜ Navigation menu replacing the icon rail according to the approved mobile
-  UI mockup — `mobile/pending-mobile_navigation_menu-med-med.md`
-- 🟨 Responsive layout — the shell chrome adapts under 760px, the surfaces
-  inside it do not — `mobile/pending-responsive_layout-med-med.md`
-- ⬜ Touch-friendly navigation (swipe gestures, 44px touch targets)
+- ⬜ Phone shell chrome — headless shell state, form-factor gate, header,
+  drawer, shortcut hub, tab-switcher and inspector sheets —
+  `mobile/pending-phone_shell_chrome-med-hard.md`
+- 🟨 Phone surface fixes — popout width, bottom-edge contention, keyboard
+  inset, `pointer-coarse:` sizing —
+  `mobile/pending-phone_surface_fixes-med-med.md`
 - ✅ `tauri android init` — the scaffold is committed under
   `src-tauri/gen/android/`, and the app builds, installs, launches and renders
   on a device — `mobile/done-android_scaffold-med-easy.md`

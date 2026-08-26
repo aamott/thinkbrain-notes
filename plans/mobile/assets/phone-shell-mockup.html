@@ -1,0 +1,361 @@
+<!doctype html>
+<html lang="en" data-thinkbrain-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phone shell — look-and-feel reference</title>
+<script src="https://unpkg.com/@tailwindcss/browser@4"></script>
+<style type="text/tailwindcss">
+  /*
+    Look-and-feel reference for docs/superpowers/specs/2026-08-25-mobile-shell-design.md.
+    NOT a source of truth — the spec's prose is. What this file DOES guarantee is
+    that every utility class below exists in the real app: the tokens are copied
+    verbatim from packages/ui/src/styles/tokens.css and mapped through the same
+    `@theme inline` block as apps/desktop/src/index.css, so `bg-sidebar`,
+    `text-muted-foreground` and friends mean here exactly what they mean there.
+    Do not add a colour that is not a token.
+  */
+  :root {
+    --tn-color-background: hsl(0 0% 100%);
+    --tn-color-foreground: hsl(222 47% 11%);
+    --tn-color-surface: hsl(220 16% 97%);
+    --tn-color-primary: hsl(262 83% 58%);
+    --tn-color-primary-foreground: hsl(0 0% 100%);
+    --tn-color-secondary: hsl(220 14% 96%);
+    --tn-color-muted-foreground: hsl(220 9% 46%);
+    --tn-color-accent: hsl(262 83% 96%);
+    --tn-color-accent-foreground: hsl(262 83% 40%);
+    --tn-color-danger: hsl(0 84% 38%);
+    --tn-color-danger-foreground: hsl(0 0% 100%);
+    --tn-color-border: hsl(220 13% 91%);
+    --tn-color-ring: hsl(262 83% 58%);
+    --tn-color-overlay: rgb(0 0 0 / 42%);
+    --tn-color-titlebar: hsl(0 0% 97%);
+    --tn-color-titlebar-foreground: hsl(222 47% 11%);
+    --tn-color-activitybar-active: hsl(262 83% 58%);
+    --tn-color-sidebar: hsl(220 16% 97%);
+    --tn-color-sidebar-foreground: hsl(222 47% 11%);
+    --tn-color-editor: hsl(0 0% 100%);
+    --tn-color-editor-foreground: hsl(222 47% 11%);
+    --tn-color-panel: hsl(220 16% 96%);
+    --tn-color-panel-foreground: hsl(222 47% 11%);
+    --tn-color-statusbar: hsl(262 83% 58%);
+    --tn-color-statusbar-foreground: hsl(0 0% 100%);
+    --tn-color-tab-active: hsl(0 0% 100%);
+    --tn-color-tab-active-foreground: hsl(222 47% 11%);
+    --tn-radius-small: 0.25rem;
+    --tn-radius-medium: 0.5rem;
+    --tn-radius-large: 0.75rem;
+    --tn-shadow-panel: 0 0 24px 4px rgb(0 0 0 / 35%);
+  }
+  [data-thinkbrain-theme="dark"] {
+    color-scheme: dark;
+    --tn-color-background: hsl(0 0% 7%);
+    --tn-color-foreground: hsl(0 0% 98%);
+    --tn-color-surface: hsl(0 0% 10%);
+    --tn-color-primary: hsl(152 60% 38%);
+    --tn-color-primary-foreground: hsl(0 0% 100%);
+    --tn-color-secondary: hsl(0 0% 16%);
+    --tn-color-muted-foreground: hsl(0 0% 60%);
+    --tn-color-accent: hsl(152 40% 18%);
+    --tn-color-accent-foreground: hsl(152 60% 55%);
+    --tn-color-danger: hsl(0 72% 62%);
+    --tn-color-danger-foreground: hsl(0 0% 100%);
+    --tn-color-border: hsl(0 0% 18%);
+    --tn-color-ring: hsl(152 60% 45%);
+    --tn-color-titlebar: hsl(0 0% 9%);
+    --tn-color-titlebar-foreground: hsl(0 0% 98%);
+    --tn-color-activitybar-active: hsl(152 60% 45%);
+    --tn-color-sidebar: hsl(0 0% 9%);
+    --tn-color-sidebar-foreground: hsl(0 0% 98%);
+    --tn-color-editor: hsl(0 0% 7%);
+    --tn-color-editor-foreground: hsl(0 0% 98%);
+    --tn-color-panel: hsl(0 0% 9%);
+    --tn-color-panel-foreground: hsl(0 0% 98%);
+    --tn-color-statusbar: hsl(0 0% 12%);
+    --tn-color-statusbar-foreground: hsl(0 0% 98%);
+    --tn-color-tab-active: hsl(0 0% 7%);
+    --tn-color-tab-active-foreground: hsl(0 0% 98%);
+    --tn-shadow-panel: 0 0 24px 4px rgb(0 0 0 / 55%);
+  }
+
+  /* Same mapping the app uses, so class names transfer verbatim. */
+  @theme inline {
+    --color-background: var(--tn-color-background);
+    --color-foreground: var(--tn-color-foreground);
+    --color-surface: var(--tn-color-surface);
+    --color-primary: var(--tn-color-primary);
+    --color-primary-foreground: var(--tn-color-primary-foreground);
+    --color-secondary: var(--tn-color-secondary);
+    --color-muted-foreground: var(--tn-color-muted-foreground);
+    --color-accent: var(--tn-color-accent);
+    --color-accent-foreground: var(--tn-color-accent-foreground);
+    --color-danger: var(--tn-color-danger);
+    --color-danger-foreground: var(--tn-color-danger-foreground);
+    --color-border: var(--tn-color-border);
+    --color-ring: var(--tn-color-ring);
+    --color-overlay: var(--tn-color-overlay);
+    --color-titlebar: var(--tn-color-titlebar);
+    --color-titlebar-foreground: var(--tn-color-titlebar-foreground);
+    --color-activitybar-active: var(--tn-color-activitybar-active);
+    --color-sidebar: var(--tn-color-sidebar);
+    --color-sidebar-foreground: var(--tn-color-sidebar-foreground);
+    --color-editor: var(--tn-color-editor);
+    --color-editor-foreground: var(--tn-color-editor-foreground);
+    --color-panel: var(--tn-color-panel);
+    --color-panel-foreground: var(--tn-color-panel-foreground);
+    --color-statusbar: var(--tn-color-statusbar);
+    --color-statusbar-foreground: var(--tn-color-statusbar-foreground);
+    --color-tab-active: var(--tn-color-tab-active);
+    --color-tab-active-foreground: var(--tn-color-tab-active-foreground);
+    --radius-small: var(--tn-radius-small);
+    --radius-medium: var(--tn-radius-medium);
+    --radius-large: var(--tn-radius-large);
+    --shadow-panel: var(--tn-shadow-panel);
+  }
+
+  @layer components {
+    /* 412x915 — the Pixel 7 viewport the Playwright phone project uses. */
+    .phone { @apply relative flex h-[640px] w-[300px] shrink-0 flex-col overflow-hidden rounded-large border border-border bg-background text-foreground shadow-panel; }
+    .hdr   { @apply flex h-14 shrink-0 items-center justify-between gap-1 border-b border-border bg-titlebar px-1 text-titlebar-foreground; }
+    .hbtn  { @apply flex size-11 shrink-0 items-center justify-center rounded-small text-titlebar-foreground; }
+    .hub   { @apply flex shrink-0 items-stretch justify-around border-t border-border bg-statusbar text-statusbar-foreground; }
+    .slot  { @apply relative flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 px-1 text-[0.62rem] font-medium opacity-70; }
+    .slot-on { @apply opacity-100; }
+    .row   { @apply flex min-h-12 w-full items-center gap-3 rounded-small px-3 text-left text-sm; }
+    .badge { @apply rounded-full bg-danger px-1.5 text-[0.62rem] font-bold text-danger-foreground; }
+    .cap   { @apply text-sm font-semibold; }
+    .note  { @apply max-w-[300px] text-xs leading-relaxed text-muted-foreground; }
+  }
+</style>
+</head>
+<body class="bg-surface p-8 font-sans text-foreground antialiased">
+
+<header class="mx-auto mb-8 max-w-6xl">
+  <h1 class="text-xl font-bold">Phone shell — look-and-feel reference</h1>
+  <p class="note mt-2 max-w-3xl">
+    Binding decisions live in <code>docs/superpowers/specs/2026-08-25-mobile-shell-design.md</code>.
+    This page exists to show proportion and hierarchy. Every colour here is a
+    <code>--tn-*</code> token and every utility class exists in the real app, so
+    markup can be read across without translation.
+  </p>
+  <button id="theme" class="mt-3 rounded-small border border-border bg-surface px-3 py-1.5 text-xs">
+    Toggle light / dark
+  </button>
+</header>
+
+<main class="mx-auto grid max-w-6xl grid-cols-[repeat(auto-fit,minmax(300px,300px))] justify-center gap-10">
+
+  <!-- 1. Reading a note -->
+  <figure class="m-0 flex flex-col gap-3">
+    <div class="phone">
+      <div class="hdr">
+        <span class="hbtn">☰</span>
+        <h2 class="min-w-0 flex-1 truncate text-center text-sm font-semibold">Weekly review</h2>
+        <div class="flex shrink-0 items-center">
+          <span class="rounded-small bg-secondary px-1.5 py-0.5 text-[0.6rem] text-muted-foreground">Synced</span>
+          <span class="hbtn"><span class="flex size-6 items-center justify-center rounded-small border-2 border-current text-[0.7rem] font-bold">3</span></span>
+          <span class="hbtn">⋯</span>
+        </div>
+      </div>
+      <div class="flex-1 overflow-hidden bg-editor p-4 text-editor-foreground">
+        <h3 class="mb-2 text-base font-bold">Weekly review</h3>
+        <p class="mb-3 text-xs leading-relaxed">Shipped the managed-vault path. Clone-first onboarding works end to end on device.</p>
+        <p class="mb-1 text-xs leading-relaxed">- Right panels still unreachable</p>
+        <p class="mb-1 text-xs leading-relaxed">- Hub needs the keyboard inset</p>
+        <p class="text-xs leading-relaxed text-muted-foreground">[[Android workspace access]]</p>
+      </div>
+      <nav class="hub">
+        <span class="slot"><span class="text-lg">🗂</span>Files</span>
+        <span class="slot"><span class="text-lg">🔍</span>Search</span>
+        <span class="slot"><span class="text-lg">＋</span>New</span>
+        <span class="slot"><span class="text-lg">✨</span>Assistant</span>
+        <span class="slot"><span class="text-lg">☰</span>Menu</span>
+      </nav>
+    </div>
+    <figcaption class="cap">1 · Reading a note</figcaption>
+    <p class="note">Header carries sync state, tab count and <code>⋯</code>. Hub labels are visible text — the rail relied on hover, and a phone has none.</p>
+  </figure>
+
+  <!-- 2. Drawer -->
+  <figure class="m-0 flex flex-col gap-3">
+    <div class="phone">
+      <div class="hdr">
+        <span class="hbtn">✕</span>
+        <h2 class="min-w-0 flex-1 truncate text-center text-sm font-semibold">Weekly review</h2>
+        <div class="flex shrink-0 items-center"><span class="hbtn">⋯</span></div>
+      </div>
+      <div class="relative flex-1 overflow-hidden bg-editor">
+        <div class="absolute inset-0 bg-overlay"></div>
+        <aside class="absolute inset-y-0 left-0 flex w-[86%] max-w-[300px] flex-col bg-sidebar text-sidebar-foreground shadow-panel">
+          <div class="border-b border-border px-4 py-3">
+            <p class="truncate text-sm font-bold">Personal notes</p>
+            <p class="text-[0.65rem] text-muted-foreground">324 notes · Git linked</p>
+          </div>
+          <div class="flex flex-1 flex-col gap-0.5 p-2">
+            <span class="row bg-accent text-accent-foreground"><span>🗂</span><span class="flex-1">Files</span></span>
+            <span class="row"><span>🔍</span><span class="flex-1">Search</span></span>
+            <span class="row"><span>⇄</span><span class="flex-1">Decisions needed</span><span class="badge">3</span></span>
+            <span class="row"><span>🕘</span><span class="flex-1">Saved versions</span></span>
+            <span class="row"><span>🏷</span><span class="flex-1">Tags</span></span>
+            <span class="row"><span>🧩</span><span class="flex-1">Extensions</span></span>
+            <span class="row"><span>📓</span><span class="flex-1">Journal</span></span>
+          </div>
+          <div class="border-t border-border p-2">
+            <span class="row"><span>⚙</span><span class="flex-1">Settings</span></span>
+          </div>
+        </aside>
+      </div>
+      <nav class="hub">
+        <span class="slot"><span class="text-lg">🗂</span>Files</span>
+        <span class="slot"><span class="text-lg">🔍</span>Search</span>
+        <span class="slot"><span class="text-lg">＋</span>New</span>
+        <span class="slot"><span class="text-lg">✨</span>Assistant</span>
+        <span class="slot slot-on"><span class="text-lg">☰</span>Menu</span>
+      </nav>
+    </div>
+    <figcaption class="cap">2 · Navigation drawer</figcaption>
+    <p class="note">86% wide, max 300px, over a scrim — navigation chrome <em>peeks</em>. Rows come from <code>useLeftPanelContributions()</code>, the same source the desktop rail reads. Long-press a row to pin it to the hub.</p>
+  </figure>
+
+  <!-- 3. Revealed panel -->
+  <figure class="m-0 flex flex-col gap-3">
+    <div class="phone">
+      <div class="hdr">
+        <span class="hbtn">←</span>
+        <h2 class="min-w-0 flex-1 truncate text-center text-sm font-semibold">Files</h2>
+        <div class="flex shrink-0 items-center"><span class="hbtn">⋯</span></div>
+      </div>
+      <div class="flex-1 overflow-hidden bg-sidebar p-2 text-sidebar-foreground">
+        <span class="row"><span>📁</span><span class="flex-1">Projects</span></span>
+        <span class="row pl-7"><span>📄</span><span class="flex-1">Weekly review</span></span>
+        <span class="row pl-7"><span>📄</span><span class="flex-1">Mobile shell</span></span>
+        <span class="row"><span>📁</span><span class="flex-1">Journal</span></span>
+        <span class="row"><span>📁</span><span class="flex-1">Archive</span></span>
+        <span class="row pl-7"><span>📄</span><span class="flex-1">2025 retro</span></span>
+      </div>
+      <nav class="hub">
+        <span class="slot slot-on"><span class="text-lg">🗂</span>Files</span>
+        <span class="slot"><span class="text-lg">🔍</span>Search</span>
+        <span class="slot"><span class="text-lg">＋</span>New</span>
+        <span class="slot"><span class="text-lg">✨</span>Assistant</span>
+        <span class="slot"><span class="text-lg">☰</span>Menu</span>
+      </nav>
+    </div>
+    <figcaption class="cap">3 · Revealed panel</figcaption>
+    <p class="note">Content <em>takes over</em>: full width, both edges, no activity-rail inset. The hub stays — that is what makes it a hub and not a home screen. Header-left becomes Back.</p>
+  </figure>
+
+  <!-- 4. Tab switcher -->
+  <figure class="m-0 flex flex-col gap-3">
+    <div class="phone">
+      <div class="hdr">
+        <span class="hbtn">☰</span>
+        <h2 class="min-w-0 flex-1 truncate text-center text-sm font-semibold">Weekly review</h2>
+        <div class="flex shrink-0 items-center">
+          <span class="hbtn"><span class="flex size-6 items-center justify-center rounded-small border-2 border-current text-[0.7rem] font-bold">3</span></span>
+          <span class="hbtn">⋯</span>
+        </div>
+      </div>
+      <div class="relative flex-1 overflow-hidden bg-editor">
+        <div class="absolute inset-0 bg-overlay"></div>
+        <section class="absolute inset-x-0 bottom-0 max-h-[80%] rounded-t-large bg-panel p-2 text-panel-foreground shadow-panel">
+          <p class="px-3 py-2 text-[0.65rem] font-bold uppercase tracking-wider text-muted-foreground">Open tabs</p>
+          <div class="flex items-center gap-1">
+            <span class="row flex-1 bg-tab-active text-tab-active-foreground"><span class="flex-1">Weekly review</span></span>
+            <span class="flex size-11 items-center justify-center text-muted-foreground">✕</span>
+          </div>
+          <div class="flex items-center gap-1">
+            <span class="row flex-1"><span class="flex-1">Mobile shell</span><span class="size-[0.4rem] rounded-full bg-primary"></span></span>
+            <span class="flex size-11 items-center justify-center text-muted-foreground">✕</span>
+          </div>
+          <div class="flex items-center gap-1">
+            <span class="row flex-1"><span class="flex-1">Settings</span></span>
+            <span class="flex size-11 items-center justify-center text-muted-foreground">✕</span>
+          </div>
+        </section>
+      </div>
+      <nav class="hub">
+        <span class="slot"><span class="text-lg">🗂</span>Files</span>
+        <span class="slot"><span class="text-lg">🔍</span>Search</span>
+        <span class="slot"><span class="text-lg">＋</span>New</span>
+        <span class="slot"><span class="text-lg">✨</span>Assistant</span>
+        <span class="slot"><span class="text-lg">☰</span>Menu</span>
+      </nav>
+    </div>
+    <figcaption class="cap">4 · Tab switcher</figcaption>
+    <p class="note">Tabs live in the header, browser-style, not in the hub. The count opens this sheet; the dot marks unsaved changes. The desktop tab strip does not render here.</p>
+  </figure>
+
+  <!-- 5. Inspector sheet -->
+  <figure class="m-0 flex flex-col gap-3">
+    <div class="phone">
+      <div class="hdr">
+        <span class="hbtn">☰</span>
+        <h2 class="min-w-0 flex-1 truncate text-center text-sm font-semibold">Weekly review</h2>
+        <div class="flex shrink-0 items-center">
+          <span class="hbtn"><span class="flex size-6 items-center justify-center rounded-small border-2 border-current text-[0.7rem] font-bold">3</span></span>
+          <span class="hbtn text-activitybar-active">⋯</span>
+        </div>
+      </div>
+      <div class="relative flex-1 overflow-hidden bg-editor">
+        <div class="absolute inset-0 bg-overlay"></div>
+        <section class="absolute inset-x-0 bottom-0 max-h-[80%] rounded-t-large bg-panel text-panel-foreground shadow-panel">
+          <div class="flex gap-1 overflow-x-auto border-b border-border p-2">
+            <span class="min-h-11 shrink-0 rounded-small bg-primary px-3 py-3 text-xs text-primary-foreground">Outline</span>
+            <span class="min-h-11 shrink-0 rounded-small border border-border bg-surface px-3 py-3 text-xs text-muted-foreground">Properties</span>
+            <span class="min-h-11 shrink-0 rounded-small border border-border bg-surface px-3 py-3 text-xs text-muted-foreground">Backlinks</span>
+            <span class="min-h-11 shrink-0 rounded-small border border-border bg-surface px-3 py-3 text-xs text-muted-foreground">Assistant</span>
+          </div>
+          <div class="p-2">
+            <span class="row"><span class="flex-1">Weekly review</span></span>
+            <span class="row pl-6"><span class="flex-1 text-muted-foreground">Shipped</span></span>
+            <span class="row pl-6"><span class="flex-1 text-muted-foreground">Still open</span></span>
+            <span class="row pl-10"><span class="flex-1 text-muted-foreground">Keyboard inset</span></span>
+          </div>
+        </section>
+      </div>
+      <nav class="hub">
+        <span class="slot"><span class="text-lg">🗂</span>Files</span>
+        <span class="slot"><span class="text-lg">🔍</span>Search</span>
+        <span class="slot"><span class="text-lg">＋</span>New</span>
+        <span class="slot"><span class="text-lg">✨</span>Assistant</span>
+        <span class="slot"><span class="text-lg">☰</span>Menu</span>
+      </nav>
+    </div>
+    <figcaption class="cap">5 · Inspector sheet</figcaption>
+    <p class="note">The fix for right panels being unreachable today. Segments come from <code>useRightPanelContributions()</code>, so an extension's right panel appears with no mobile-specific work. The Assistant hub slot opens straight here.</p>
+  </figure>
+
+  <!-- 6. Keyboard -->
+  <figure class="m-0 flex flex-col gap-3">
+    <div class="phone">
+      <div class="hdr">
+        <span class="hbtn">☰</span>
+        <h2 class="min-w-0 flex-1 truncate text-center text-sm font-semibold">Weekly review</h2>
+        <div class="flex shrink-0 items-center"><span class="hbtn">⋯</span></div>
+      </div>
+      <div class="flex-1 overflow-hidden bg-editor p-4 text-editor-foreground">
+        <h3 class="mb-2 text-base font-bold">Weekly review</h3>
+        <p class="text-xs leading-relaxed">Still open: the hub has to stay out of the keyboard's way<span class="border-r-2 border-primary">&nbsp;</span></p>
+      </div>
+      <div class="shrink-0 border-t border-border bg-panel px-2 py-3 text-panel-foreground">
+        <div class="mb-2 flex justify-around text-xs text-muted-foreground"><span>q</span><span>w</span><span>e</span><span>r</span><span>t</span><span>y</span><span>u</span><span>i</span><span>o</span><span>p</span></div>
+        <div class="mb-2 flex justify-around text-xs text-muted-foreground"><span>a</span><span>s</span><span>d</span><span>f</span><span>g</span><span>h</span><span>j</span><span>k</span><span>l</span></div>
+        <div class="flex justify-around text-xs text-muted-foreground"><span>⇧</span><span>z</span><span>x</span><span>c</span><span>v</span><span>b</span><span>n</span><span>m</span><span>⌫</span></div>
+      </div>
+    </div>
+    <figcaption class="cap">6 · Keyboard open</figcaption>
+    <p class="note">The hub is gone, not pushed up. A five-slot bar wedged between the keyboard and the text being typed is worse than no bar. <code>useKeyboardInset</code> reads <code>visualViewport</code>, as <code>MetadataBottomSheet</code> already does.</p>
+  </figure>
+
+</main>
+
+<script>
+  document.getElementById("theme").addEventListener("click", () => {
+    const root = document.documentElement;
+    root.dataset.thinkbrainTheme = root.dataset.thinkbrainTheme === "dark" ? "light" : "dark";
+  });
+</script>
+</body>
+</html>

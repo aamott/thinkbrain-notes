@@ -166,7 +166,7 @@ menu). Journal registers an ordinary popout and inherits this — must NOT imple
 bespoke mobile navigation, a private bottom bar, or its own return path.
 `pending-journal_mobile_refinement-med-med.md` narrows to touch targets, collapsed
 widget, list density, calendar-tab-on-phone; navigation composition deferred to
-`plans/mobile/pending-responsive_layout-med-med.md`.
+the mobile `phone_shell_chrome` story.
 
 **D27.** No calendar activity-bar button; journal button is the only activity-bar
 entry. (Fully supersedes D6; closes D14's residual question.) Activity bar is for

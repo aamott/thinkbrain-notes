@@ -67,7 +67,7 @@ Non-goals:
 - Existing `apps/desktop/src/panels/panelRegistry.tsx`, `LeftPopout.tsx`, `ActivityBar.tsx`, and `DesktopShell.tsx` own rendering and shell composition. Journal/calendar contributions must enter through the registry rather than a parallel action array.
 - Existing `apps/desktop/src/extensions/desktopExtensionHost.ts` owns scoped command, panel, editor-hook, and settings registration. Built-in registration must use its disposable lifecycle.
 - Existing modular settings work (`apps/desktop/src/settings/settingsStore.ts`, `packages/core/src/settings/`) owns namespaced settings persistence outside the workspace.
-- Mobile is the same `apps/desktop` React/Tauri webview; coordinate with `plans/mobile/pending-responsive_layout-med-med.md`, `pending-mobile_tauri_config-med-easy.md`, and `done-codemirror_mobile_testing-med-med.md`.
+- Mobile is the same `apps/desktop` React/Tauri webview; coordinate with `plans/mobile/pending-phone_shell_chrome-med-hard.md`, `pending-phone_surface_fixes-med-med.md`, `pending-mobile_tauri_config-med-easy.md`, and `done-codemirror_mobile_testing-med-med.md`.
 - Coordinate registration only with `plans/extensions/pending-beta_builtin_extensions-med-med.md`; journal/calendar behavior and storage stay here.
 - **Indexing/search dependency (D16/D41).** Full-text search and metadata facets reuse the
   platform-owned disposable index; metadata facets shipped — see
