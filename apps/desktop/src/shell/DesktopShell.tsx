@@ -12,14 +12,13 @@ import { CommandPalette, type WorkspaceFileResult } from "../commands/CommandPal
 import { BottomPanel as BottomPanelContent } from "../panels/BottomPanel";
 import { LeftPopout } from "../panels/LeftPopout";
 import { RightPopout } from "../panels/RightPopout";
-import { useSettingsStore } from "../settings/settingsStore";
 import { ActivityBar } from "./ActivityBar";
-import { DirtyCloseDialog } from "./DirtyCloseDialog";
 import { ResizeHandle } from "./ResizeHandle";
 import { EmptiedNoteBanner } from "./EmptiedNoteBanner";
 import { StaleDocumentBanner } from "./StaleDocumentBanner";
 import { UpdateBanner } from "./UpdateBanner";
 import { StatusBar } from "./StatusBar";
+import { TabCloseRequest } from "./TabCloseRequest";
 import { TabContent } from "./TabContent";
 import { TitleBar } from "./TitleBar";
 import { WorkspaceHeaderBar } from "./WorkspaceHeaderBar";
@@ -171,39 +170,7 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
           onOpenFile={(file) => shell.openMarkdownDocument(file.rootPath, file.relativePath)}
         />
       )}
-      {tabState.closeRequest && (
-        <DirtyCloseDialog
-          tab={tabState.tabs.find((tab) => tab.id === tabState.closeRequest?.tabId) ?? null}
-          onCancel={() => dispatchTabs({ type: "cancelClose", tabId: tabState.closeRequest!.tabId })}
-          onDiscard={() => {
-            const tab = tabState.tabs.find((candidate) => candidate.id === tabState.closeRequest?.tabId);
-            // For settings tabs, clear staged changes so the store doesn't stay
-            // dirty after discarding. Editor tabs have no staged settings state.
-            if (tab?.kind === "settings") {
-              useSettingsStore.getState().resetStaged();
-            }
-            dispatchTabs({ type: "discardClose", tabId: tabState.closeRequest!.tabId });
-          }}
-          onSave={async () => {
-            const tab = tabState.tabs.find((candidate) => candidate.id === tabState.closeRequest?.tabId);
-            if (!tab) return;
-            // Settings tabs save through the settings store, not saveDocument.
-            if (tab.kind === "settings") {
-              const result = await useSettingsStore.getState().saveSettings();
-              // On success, close the tab. On validation failure, leave the
-              // dialog open so the user sees inline errors in the settings tab.
-              if (result.success) {
-                dispatchTabs({ type: "completeSaveAndClose", tabId: tab.id });
-              }
-              return;
-            }
-            // Editor tabs save through the document persistence layer.
-            if (await shell.saveDocument(tab)) {
-              dispatchTabs({ type: "completeSaveAndClose", tabId: tab.id });
-            }
-          }}
-        />
-      )}
+      <TabCloseRequest shell={shell} />
     </main>
   );
 }

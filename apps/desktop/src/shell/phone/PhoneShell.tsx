@@ -3,6 +3,7 @@ import { useCallback, useState } from "react";
 import { LeftPopout } from "../../panels/LeftPopout";
 import { isBuiltInLeftPanel } from "../../panels/panelRegistryModel";
 import { isSelectableRightPanel } from "../shellTypes";
+import { TabCloseRequest } from "../TabCloseRequest";
 import { TabContent } from "../TabContent";
 import type { ShellState } from "../useShellState";
 import { PhoneDrawer } from "./PhoneDrawer";
@@ -122,6 +123,11 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
         }}
         onClose={(tabId) => shell.dispatchTabs({ type: "requestClose", tabId })}
       />
+
+      {/* Closing a dirty tab parks a request and waits for an answer. Without
+          this the phone's ✕ would do nothing at all, and the parked request
+          would make every later attempt on that tab a no-op too. */}
+      <TabCloseRequest shell={shell} />
 
       <PhoneDrawer
         open={drawerOpen}

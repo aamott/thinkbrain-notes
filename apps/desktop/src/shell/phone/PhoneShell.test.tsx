@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ThemeProvider } from "../../settings/ThemeProvider";
-import { useShellState } from "../useShellState";
+import { useShellState, type ShellState } from "../useShellState";
 import { PhoneShell } from "./PhoneShell";
 
 // `useShellState` boots the workspace lifecycle and reaches for Tauri IPC when
@@ -12,6 +12,23 @@ import { PhoneShell } from "./PhoneShell";
 // no-op, matching `ShellRoot.test.tsx` and `useShellState.test.tsx`.
 vi.mock("@tauri-apps/api/core", () => ({
   isTauri: vi.fn(() => false)
+}));
+
+// The load path dereferences what the adapter returns, and the native-command
+// mock resolves to null. Hand it a real document so opening a note works.
+vi.mock("../../workspace/workspaceDocumentAdapter", () => ({
+  workspaceDocumentApi: {
+    readMarkdownDocument: vi.fn(() =>
+      Promise.resolve({
+        rootPath: "/vault",
+        relativePath: "note.md",
+        contents: "# Note\n\nSome text.",
+        modifiedAtMs: 0
+      })
+    ),
+    writeMarkdownDocument: vi.fn(),
+    createMarkdownDocument: vi.fn()
+  }
 }));
 
 vi.mock("../../native/commands", () => ({
@@ -47,6 +64,39 @@ const render = async (): Promise<HTMLDivElement> => {
     );
   });
   return container;
+};
+
+/**
+ * Same mount, but hands the test the live shell so it can open and edit a note.
+ * Reaching a dirty tab any other way would mean faking the reducer.
+ */
+const renderWithShell = async (): Promise<{
+  host: HTMLDivElement;
+  shell: () => ShellState;
+}> => {
+  const box: { current: ShellState | null } = { current: null };
+  const Host = () => {
+    const shell = useShellState();
+    box.current = shell;
+    return <PhoneShell shell={shell} />;
+  };
+  container = document.createElement("div");
+  document.body.append(container);
+  root = createRoot(container);
+  await act(async () => {
+    root?.render(
+      <ThemeProvider>
+        <Host />
+      </ThemeProvider>
+    );
+  });
+  return {
+    host: container,
+    shell: () => {
+      if (!box.current) throw new Error("PhoneShell did not render");
+      return box.current;
+    }
+  };
 };
 
 const click = async (host: HTMLDivElement, label: string): Promise<void> => {
@@ -146,5 +196,26 @@ describe("PhoneShell", () => {
 
     expect(host.querySelector('[aria-label="Search panel"]')).not.toBeNull();
     expect(host.querySelector('[aria-label="Primary navigation"]')).not.toBeNull();
+  });
+
+  it("prompts before closing a tab that has unsaved work", async () => {
+    // `requestClose` on a dirty tab does not close it — it parks a request and
+    // waits. A shell with no prompt mounted swallows the close silently and
+    // then no-ops every later attempt on that tab, which is what the phone did
+    // until `TabCloseRequest` was rendered here too.
+    const { host, shell } = await renderWithShell();
+    await act(async () => shell().openMarkdownDocument("/vault", "note.md"));
+    const tabId = shell().tabState.tabs[0]?.id;
+    expect(tabId).toBeDefined();
+    await act(async () => shell().updateDocument(tabId!, "edited text"));
+
+    await click(host, "Open tabs (1)");
+    const sheet = host.querySelector('[aria-label="Open tabs"]');
+    await act(async () => {
+      sheet?.querySelector<HTMLButtonElement>('[aria-label^="Close "]')?.click();
+    });
+
+    expect(document.querySelector('[role="dialog"][aria-label="Unsaved changes"]')).not.toBeNull();
+    expect(shell().tabState.tabs).toHaveLength(1);
   });
 });
