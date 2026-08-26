@@ -4,7 +4,7 @@
 
 > Cloning is the most likely way a vault ever arrives on a phone, because it is
 > the one way that needs no folder picker — see
-> `pending-android_workspace_access-high-hard.md`. That makes this story part of
+> `done-android_workspace_access-high-hard.md`. That makes this story part of
 > onboarding rather than an advanced feature.
 
 ## What is already true

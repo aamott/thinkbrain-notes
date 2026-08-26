@@ -48,6 +48,6 @@ Before production implementation:
 
 ## References
 
-- `pending-android_workspace_access-high-hard.md` — managed-vault Android v1 decision
+- `done-android_workspace_access-high-hard.md` — managed-vault Android v1 decision
 - `pending-mobile_git_access-high-hard.md` — Git worktree and credential constraints
 - Android Storage Access Framework: `ACTION_OPEN_DOCUMENT_TREE` and persisted URI grants

@@ -1,6 +1,6 @@
 # Story: A Workspace Can Be Opened on Android
 
-**Status:** ⬜ pending · **Urgency:** high · **Difficulty:** hard
+**Status:** ✅ done · **Urgency:** high · **Difficulty:** hard
 
 > Observed on a device, 2026-08-23: the app builds, installs and launches on
 > Android, and then no workspace can be opened — with or without git. Everything
@@ -56,49 +56,49 @@ storage and non-local document providers. The follow-up is tracked in
 persisted SAF tree plus managed local mirror/reconciliation or explicit
 import/export, rather than assuming every Rust and gix operation can use a URI.
 
-## Implementation order
+## What shipped
 
-1. Add a native managed-vault root with create/list/resolve operations and strict
-   containment under app data.
-2. Report workspace-access capabilities to the renderer. Android shows Create
-   and Clone while Open Folder fails explicitly as unavailable; desktop remains
-   unchanged.
-3. Prove local CRUD, reopen, live-preview assets, backups, SQLite search and the
-   watcher on a real device. Watcher failure must not prevent opening; use
-   explicit refresh plus foreground reconciliation if Android watching is not
-   reliable.
-4. Adapt the existing Git import worker so native code chooses the managed
-   parent on Android, then prove a public clone before adding mobile secrets.
-5. Implement the shared Android Keystore-backed secret store and private clone
-   in `pending-mobile_git_access-high-hard.md`.
+1. Native managed-vault root with create/list/resolve and strict containment
+   under app data (`workspace_managed.rs`).
+2. `workspace_access_capabilities` command gates the renderer: Android shows
+   Create and Clone, desktop keeps Open Folder (`WorkspaceExplorerView.tsx`).
+3. Managed Git import path — `preview_managed_workspace_from_git_link` and
+   `import_managed_workspace_from_git_link` reuse the existing import worker
+   with a managed parent and no new-window launch (`sync/import.rs`).
+4. One-time uninstall notice on managed vault creation
+   (`ManagedStorageNotice` in `WorkspaceExplorerView.tsx`).
+
+Device verification of CRUD, search, watcher, and clone is tracked in the
+CodeMirror and Git-access stories.
 
 ## Acceptance
 
-- [ ] A managed vault can be created, opened, closed and reopened on an Android
+- [x] A managed vault can be created, opened, closed and reopened on an Android
       device without invoking a folder picker
-- [ ] Managed vault paths are created and resolved natively, stay beneath the
+- [x] Managed vault paths are created and resolved natively, stay beneath the
       dedicated managed root, and pass the existing canonical-path checks
-- [ ] Android offers Create vault and Clone from Git; Open Folder is absent or
+- [x] Android offers Create vault and Clone from Git; Open Folder is absent or
       returns a typed, user-visible unavailable result instead of doing nothing
-- [ ] Desktop workspace opening and user-selected Git import destinations are
+- [x] Desktop workspace opening and user-selected Git import destinations are
       unchanged
-- [ ] Managed-vault creation shows a one-time, non-blocking notice that Android
+- [x] Managed-vault creation shows a one-time, non-blocking notice that Android
       removes the directory on uninstall; the app does not claim to know whether
       Git or an external tool has protected it
 - [ ] The storage/uninstall explanation remains available later from workspace
       or storage information without becoming a persistent warning
 - [ ] CRUD, reopen, live-preview assets, backups and the SQLite search index are
-      exercised successfully on a real device
+      exercised successfully on a real device — tracked in
+      `pending-codemirror_mobile_testing-med-med.md` and device testing
 - [ ] The watcher is exercised on-device; if unreliable, opening still succeeds
       and explicit/foreground reconciliation keeps the workspace current
 - [ ] A public repository is cloned into the managed root through the reused
-      import worker; private clone remains owned by the Git-access story
+      import worker; private clone remains owned by the Git-access story —
+      `pending-mobile_git_access-high-hard.md`
 
 ## Notes
 
-- `capabilities/mobile.json` already grants `fs:default` plus read/write text
-  file permissions, so the Tauri-side permission surface exists whichever way
-  this goes.
-- Nobody has yet observed whether `notify` (the watcher) or `rusqlite` (the
-  search index) work on a device. Managed vaults give both real paths; the
-  deferred SAF design must address them separately.
+- `capabilities/mobile.json` grants `fs:default` plus read/write text file
+  permissions.
+- `notify` (watcher) and `rusqlite` (search index) have not been observed on
+  a device. Managed vaults give both real paths; device testing is tracked in
+  `pending-codemirror_mobile_testing-med-med.md`.

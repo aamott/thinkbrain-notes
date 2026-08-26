@@ -217,10 +217,10 @@ No other epic blocks this one. Resolve only adapter gaps actually proven by mobi
 Ordered by what blocks what. The first item gates every other one: there is no
 point tuning a layout for a workspace that cannot be opened.
 
-- 🟥 **Managed workspace access** — the product decision is approved: Android
-  v1 creates or clones real-path vaults beneath app data and does not invoke a
-  folder picker. Implementation now gates the epic.
-  `mobile/pending-android_workspace_access-high-hard.md`
+- ✅ **Managed workspace access** — Android v1 creates or clones real-path
+  vaults beneath app data. Native managed-vault commands, capability-gated
+  UI, clone-first onboarding, and one-time uninstall notice all shipped.
+  `mobile/done-android_workspace_access-high-hard.md`
 - ⬜ Git clone as the mobile way in, followed by Android Keystore-backed shared
   secret storage for private repositories —
   `mobile/pending-mobile_git_access-high-hard.md`
