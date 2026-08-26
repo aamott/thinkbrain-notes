@@ -1451,6 +1451,11 @@ A pure function over the two registries. No `side: "bottom"` exists — the hub 
 - Consumes: `DesktopPanelContribution` and `DesktopPanelId` from `panels/panelRegistryModel`, `DesktopCommand` and `DesktopCommandId` from `commands/commandRegistry`.
 - Produces: `HubItem`, `ResolvedHubItem`, `DEFAULT_HUB_ITEMS`, `resolveHubItems`, `parseHubItems`, `serializeHubItems`.
 
+`ResolvedHubItem.key` must carry the slot **index**, not the target id alone
+(`panel-${index}-${id}`). Nothing dedupes the list, so the same panel can be
+pinned twice — and Task 10 feeds `key` straight to React, where a collision
+silently drops a slot from the bar.
+
 - [ ] **Step 1: Write the failing test**
 
 ```ts
@@ -1753,7 +1758,13 @@ git commit -m "feat(shell): add mobile hub model and resolver"
 **Files:**
 - Create: `packages/core/src/settings/modules/ui.ts`
 - Modify: `packages/core/src/settings/modules/index.ts`
-- Modify: `packages/core/src/index.ts` — export `uiModule` if the other modules are exported there
+- Modify: `apps/desktop/src/settings/settingsStore.ts` — the one real registration
+  site: `appSettingsRegistry.register(uiModule)`. `packages/core/src/index.ts` needs
+  no edit; it already does `export * from "./settings/index"`, which re-exports
+  `./modules`, so the barrel edit alone exposes `uiModule`.
+- Modify: `apps/desktop/src/settings/SettingsImportExport.test.ts` — a pre-existing
+  test enumerates every app-scoped key and asserts the count. Registering a new
+  setting necessarily changes that inventory.
 - Create: `apps/desktop/src/shell/phone/useHubItems.ts`
 - Create: `apps/desktop/src/shell/phone/useHubItems.test.tsx`
 
@@ -1774,7 +1785,7 @@ import { uiModule } from "./ui";
 describe("uiModule", () => {
   it("registers the hub under the full key ui.mobileHub", () => {
     const registry = createSettingsRegistry();
-    registry.registerModule(uiModule);
+    registry.register(uiModule);
 
     const definition = registry.getDefinition("ui.mobileHub");
 
@@ -1858,7 +1869,19 @@ Then find where the built-in modules are registered:
 
 Run: `grep -rn "appearanceModule" apps/desktop/src packages/core/src --include=*.ts --include=*.tsx | grep -v test`
 
-Add `uiModule` alongside `appearanceModule` at each registration site, and add it to `packages/core/src/index.ts` if the other modules are re-exported there.
+Add `uiModule` alongside `appearanceModule` at the registration site in
+`apps/desktop/src/settings/settingsStore.ts`. Do not touch `packages/core/src/index.ts`.
+
+Two API names to get right, both of which the plan originally had wrong:
+`SettingsRegistry` exposes `register(module)`, not `registerModule(module)`, and
+`validateSettings` takes the registry first — `validateSettings(registry, values)`.
+
+The mock factory in the hook test must use `vi.hoisted` for its spy. `vi.mock` is
+hoisted above the imports and its factory runs while `./useHubItems` is being
+imported, so a factory closing over a `const` declared below the imports is a TDZ
+error. Give the spy an explicit type too
+(`vi.fn<(key: string, value: unknown) => Promise<void>>()`); an
+`async (_key, _value) => undefined` literal trips `@typescript-eslint/no-unused-vars`.
 
 - [ ] **Step 5: Write the failing test for the hook**
 
@@ -1978,7 +2001,7 @@ Expected: PASS.
 - [ ] **Step 9: Commit**
 
 ```bash
-git add packages/core/src/settings/modules/ui.ts packages/core/src/settings/modules/ui.test.ts packages/core/src/settings/modules/index.ts packages/core/src/index.ts apps/desktop/src/shell/phone/useHubItems.ts apps/desktop/src/shell/phone/useHubItems.test.tsx
+git add packages/core/src/settings/modules/ui.ts packages/core/src/settings/modules/ui.test.ts packages/core/src/settings/modules/index.ts apps/desktop/src/settings/settingsStore.ts apps/desktop/src/settings/SettingsImportExport.test.ts apps/desktop/src/shell/phone/useHubItems.ts apps/desktop/src/shell/phone/useHubItems.test.tsx
 git add -u
 git commit -m "feat(settings): persist mobile hub shortcuts under ui.mobileHub"
 ```
