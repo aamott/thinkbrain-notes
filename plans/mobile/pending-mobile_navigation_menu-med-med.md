@@ -63,4 +63,4 @@ first and the one that cannot be fixed by a breakpoint alone.
 - `plans/pending-mobile-med-hard.md` — epic context
 - `plans/mobile/assets/mobile-ui-mockup.html` — approved visual source of truth
 - `apps/desktop/src/panels/Popout.tsx` — existing responsive overlay/state infrastructure to evaluate for reuse
-- `apps/desktop/src/lib/useCoarsePointer.ts` — distinguishes a phone from a narrow desktop panel where width alone cannot
+- `apps/desktop/src/journal/useCoarsePointer.ts` — distinguishes a phone from a narrow desktop panel where width alone cannot

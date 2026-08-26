@@ -105,7 +105,7 @@ Do NOT create `apps/mobile/` or add a separate mobile screen tree.
 - No bespoke mobile navigation, private bottom bar, custom return path, or `apps/mobile/` directory.
 - No calendar tab phone layout beyond D57; `pending-calendar_tab_ui-high-hard.md` implements it.
 - No separate mobile app, React Native layer, cloud sync, tablet-specific design, or app-store work.
-- No fix for unrelated CodeMirror/Tauri keyboard issues — link to `pending-codemirror_mobile_testing-med-med.md`.
+- No fix for unrelated CodeMirror/Tauri keyboard issues — link to `done-codemirror_mobile_testing-med-med.md`.
 - High contrast is out of scope (themes own it).
 
 ## Handoff artifacts

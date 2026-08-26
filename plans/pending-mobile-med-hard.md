@@ -236,9 +236,9 @@ point tuning a layout for a workspace that cannot be opened.
   desktop-only dependencies are gated; the soft "unavailable on mobile"
   reporting for desktop-only commands is not built —
   `mobile/pending-mobile_tauri_config-med-easy.md`
-- ⬜ CodeMirror mobile testing and fixes — gated on the upstream soft-keyboard
-  viewport bug (tauri-apps/tauri#10631) —
-  `mobile/pending-codemirror_mobile_testing-med-med.md`
+- ✅ CodeMirror mobile testing — editing verified on Android emulator,
+  `windowSoftInputMode="adjustResize"` added, tap-below-last-line fixed —
+  `mobile/done-codemirror_mobile_testing-med-med.md`
 - ⬜ Reuse current Tauri adapters; raise only proven cross-cutting adapter gaps through maintenance
 - ❓ Search index (`rusqlite`) and file watcher (`notify`) on a device —
   neither observed working nor failing

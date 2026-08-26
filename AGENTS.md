@@ -61,7 +61,7 @@ examples/extensions/  # Sample extension (hello-notes)
 
 
 ## Plans
-List relevant folder to see task status. Status lives in the filename — `pending`, `wip`, `done`, etc. — and the filename and reality must agree. When you finish work, change the filename in the same commit as the work. An epic does not track story status internally. Refer to epics by slug rather than full filename to avoid repeated updating of the same things across files. Add action items from findings as stories unless they are immediately fixable. Plans should be concise. Avoid duplicating info in files and long worklogs. Compare file layouts and architectures before starting work.
+List relevant folder to see task status. Status lives in the filename — `pending`, `wip`, `done`, etc. — and the filename and reality must agree. When you finish work, change the filename in the same commit as the work. An epic does not track story status internally. Use epic/story slug rather than full filename to avoid repeated updating of the same things across files. Add action items from findings as stories unless they are immediately fixable. Plans should be concise. Avoid duplicating info in files and long worklogs. Compare file layouts and architectures before starting work.
 
 **Plan Folder**
 

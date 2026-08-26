@@ -88,7 +88,7 @@ CodeMirror and Git-access stories.
       or storage information without becoming a persistent warning
 - [ ] CRUD, reopen, live-preview assets, backups and the SQLite search index are
       exercised successfully on a real device — tracked in
-      `pending-codemirror_mobile_testing-med-med.md` and device testing
+      `done-codemirror_mobile_testing-med-med.md` and device testing
 - [ ] The watcher is exercised on-device; if unreliable, opening still succeeds
       and explicit/foreground reconciliation keeps the workspace current
 - [ ] A public repository is cloned into the managed root through the reused
@@ -101,4 +101,4 @@ CodeMirror and Git-access stories.
   permissions.
 - `notify` (watcher) and `rusqlite` (search index) have not been observed on
   a device. Managed vaults give both real paths; device testing is tracked in
-  `pending-codemirror_mobile_testing-med-med.md`.
+  `done-codemirror_mobile_testing-med-med.md`.
