@@ -333,6 +333,86 @@ describe("parseThemeFile - CSS-injection-unsafe token values", () => {
   });
 });
 
+describe("parseThemeFile - CSS color validation", () => {
+  it.each([
+    ["3-digit hex", "#abc"],
+    ["4-digit hex (with alpha)", "#abcd"],
+    ["6-digit hex", "#1a2b3c"],
+    ["8-digit hex (with alpha)", "#1a2b3c4d"],
+    ["uppercase hex", "#ABCDEF"],
+    ["named color", "cornflowerblue"],
+    ["transparent keyword", "transparent"],
+    ["currentcolor keyword", "currentcolor"],
+    ["system color Canvas", "Canvas"],
+    ["system color ButtonFace", "ButtonFace"],
+    ["system color Highlight", "Highlight"],
+    ["system color Field", "Field"],
+    ["system color graytext", "graytext"],
+    ["legacy system color windowtext", "windowtext"],
+    ["hsl modern syntax", "hsl(152 60% 38%)"],
+    ["hsl with alpha", "hsl(152 60% 38% / 50%)"],
+    ["hsl legacy comma syntax", "hsl(152, 60%, 38%)"],
+    ["hsla legacy", "hsla(152, 60%, 38%, 0.5)"],
+    ["rgb modern syntax", "rgb(26 43 60)"],
+    ["rgb with alpha slash", "rgb(26 43 60 / 42%)"],
+    ["rgba legacy", "rgba(26, 43, 60, 0.42)"],
+    ["hwb", "hwb(152 10% 20%)"],
+    ["lab", "lab(50% 40 59.5)"],
+    ["lch", "lch(50% 70 180)"],
+    ["oklab", "oklab(0.5 0.1 0.05)"],
+    ["oklch", "oklch(0.7 0.15 150)"],
+    ["color() function", "color(display-p3 1 0 0)"],
+    ["color-mix", "color-mix(in srgb, red 50%, blue)"],
+    ["color-contrast", "color-contrast(red vs blue)"],
+    ["var reference", "var(--tn-color-primary)"],
+    ["var with fallback", "var(--tn-color-primary, #fff)"],
+    ["light-dark function", "light-dark(#fff, #000)"],
+    ["named color with whitespace", "  rebeccapurple  "]
+  ])("accepts a valid %s color value", (_label, value) => {
+    const result = parseThemeFile(
+      buildJson({ tokens: { "--tn-color-background": value } })
+    );
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.theme!.tokens).toEqual({ "--tn-color-background": value });
+  });
+
+  it.each([
+    ["plain text", "not-a-color"],
+    ["5-digit hex (invalid length)", "#abc12"],
+    ["too-short hex", "#ab"],
+    ["too-long hex", "#abcdefg"],
+    ["unknown function", "mycolor(1 2 3)"],
+    ["unbalanced parens", "rgb(0 0 0"],
+    ["extra closing paren", "rgb(0 0 0))"],
+    ["number", "42"],
+    ["arbitrary string", "hello world"],
+    ["css property", "color: red"],
+    ["empty parens", "rgb()"],
+    ["url function", "url(image.png)"],
+    ["calc expression", "calc(100% - 10px)"],
+    ["gradient", "linear-gradient(red, blue)"]
+  ])("rejects an invalid %s value with a color diagnostic", (_label, value) => {
+    const result = parseThemeFile(
+      buildJson({
+        tokens: {
+          "--tn-color-background": value,
+          "--tn-color-foreground": "hsl(0 0% 98%)"
+        }
+      })
+    );
+
+    expect(result.theme).not.toBeNull();
+    expect(result.theme!.tokens).toEqual({
+      "--tn-color-foreground": "hsl(0 0% 98%)"
+    });
+    expect(result.diagnostics).toHaveLength(1);
+    expect(result.diagnostics[0]!.code).toBe("theme.token.value_not_color");
+    expect(result.diagnostics[0]!.severity).toBe("error");
+    expect(result.diagnostics[0]!.path).toBe("tokens.--tn-color-background");
+  });
+});
+
 describe("KNOWN_THEME_TOKENS", () => {
   it("matches the --tn-color-* custom properties declared in packages/ui/src/styles/tokens.css", () => {
     // Regression guard for drift: tokens.css is the source of truth, this

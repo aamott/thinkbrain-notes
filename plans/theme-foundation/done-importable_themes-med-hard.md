@@ -1,9 +1,9 @@
 # Importable Themes
 
-**Status:** in progress · **Urgency:** medium · **Difficulty:** hard
+**Status:** ✅ done · **Urgency:** medium · **Difficulty:** hard
 
-Core parsing, application, and import/export flows are implemented; strict CSS
-color-value validation remains open.
+Core parsing, application, import/export flows, and strict CSS color-value
+validation are all implemented.
 
 ## Goal
 
@@ -105,19 +105,19 @@ to UI improvements — new tokens fall back to the base automatically.
 
 ## Acceptance Criteria
 
-- [ ] `parseThemeFile` validates name, base, version, and token entries.
-- [ ] Unknown token names produce warnings (not errors) and are dropped.
-- [ ] Malformed color values produce errors and cause the theme to be rejected.
-- [ ] `serializeThemeFile` produces stable, pretty-printed JSON.
-- [ ] `KNOWN_THEME_TOKENS` lists all 44 `--tn-color-*` tokens from
+- [x] `parseThemeFile` validates name, base, version, and token entries.
+- [x] Unknown token names produce warnings (not errors) and are dropped.
+- [x] Malformed color values produce errors and cause the theme to be rejected.
+- [x] `serializeThemeFile` produces stable, pretty-printed JSON.
+- [x] `KNOWN_THEME_TOKENS` lists all 44 `--tn-color-*` tokens from
       `packages/ui/src/styles/tokens.css`.
-- [ ] `appearanceModule` includes a `themeFile` path setting.
-- [ ] `ThemeProvider` injects overrides when `themeFile` is set and removes
+- [x] `appearanceModule` includes a `themeFile` path setting.
+- [x] `ThemeProvider` injects overrides when `themeFile` is set and removes
       them when cleared.
-- [ ] Theme export writes a `.tbtheme.json` via native save dialog.
-- [ ] Theme import reads a `.tbtheme.json`, validates, and stages the path.
-- [ ] Existing settings tests updated for the new `appearance.themeFile` key.
-- [ ] `pnpm lint`, `pnpm typecheck`, and `pnpm test` pass.
+- [x] Theme export writes a `.tbtheme.json` via native save dialog.
+- [x] Theme import reads a `.tbtheme.json`, validates, and stages the path.
+- [x] Existing settings tests updated for the new `appearance.themeFile` key.
+- [x] `pnpm lint`, `pnpm typecheck`, and `pnpm test` pass.
 
 ## File References
 

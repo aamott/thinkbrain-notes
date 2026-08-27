@@ -146,9 +146,88 @@ async function flushAsyncFileRead(): Promise<void> {
 describe("ThemeProvider", () => {
   it("uses the default theme when the store is not loaded", async () => {
     // Store stays `loaded: false`; the prop default should drive the attribute.
+    // "system" resolves to "light" because happy-dom's matchMedia defaults to
+    // light (no dark preference).
     await renderProvider("system");
 
-    expect(document.documentElement.dataset.thinkbrainTheme).toBe("system");
+    expect(document.documentElement.dataset.thinkbrainTheme).toBe("light");
+  });
+
+  it("resolves 'system' to the OS dark preference via matchMedia", async () => {
+    // Stub matchMedia to report a dark OS preference. The "system" setting
+    // must resolve to "dark" on the attribute — never "system".
+    vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({
+      matches: true,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn()
+    }));
+    useSettingsStore.setState({
+      loaded: true,
+      appValues: { "appearance.theme": "system", "appearance.themeFile": null }
+    });
+
+    await renderProvider("system");
+
+    expect(document.documentElement.dataset.thinkbrainTheme).toBe("dark");
+    vi.unstubAllGlobals();
+  });
+
+  it("resolves 'system' to 'light' when the OS prefers light", async () => {
+    vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({
+      matches: false,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn()
+    }));
+    useSettingsStore.setState({
+      loaded: true,
+      appValues: { "appearance.theme": "system", "appearance.themeFile": null }
+    });
+
+    await renderProvider("system");
+
+    expect(document.documentElement.dataset.thinkbrainTheme).toBe("light");
+    vi.unstubAllGlobals();
+  });
+
+  it("reacts to OS theme changes while running on the 'system' setting", async () => {
+    // Start with a light OS preference.
+    const listeners: ((e: MediaQueryListEvent) => void)[] = [];
+    vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({
+      matches: false,
+      addEventListener: (_: string, cb: (e: MediaQueryListEvent) => void) => listeners.push(cb),
+      removeEventListener: vi.fn()
+    }));
+    useSettingsStore.setState({
+      loaded: true,
+      appValues: { "appearance.theme": "system", "appearance.themeFile": null }
+    });
+
+    await renderProvider("system");
+    expect(document.documentElement.dataset.thinkbrainTheme).toBe("light");
+
+    // Simulate the OS switching to dark.
+    await act(async () => {
+      for (const cb of listeners) {
+        cb({ matches: true } as unknown as MediaQueryListEvent);
+      }
+    });
+
+    expect(document.documentElement.dataset.thinkbrainTheme).toBe("dark");
+    vi.unstubAllGlobals();
+  });
+
+  it("never writes 'system' to the data-thinkbrain-theme attribute", async () => {
+    // Regardless of the store value, the attribute must be light or dark.
+    useSettingsStore.setState({
+      loaded: true,
+      appValues: { "appearance.theme": "system", "appearance.themeFile": null }
+    });
+
+    await renderProvider("system");
+
+    const attr = document.documentElement.dataset.thinkbrainTheme;
+    expect(attr).not.toBe("system");
+    expect(attr === "light" || attr === "dark").toBe(true);
   });
 
   it("sets the attribute to the store's appearance.theme once loaded", async () => {

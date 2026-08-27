@@ -66,13 +66,16 @@ shell surfaces without a heavy opinionated UI framework.
   `packages/ui/src/styles/tokens.css` and imported by `apps/desktop/src/main.tsx`.
 - ✅ Default light theme token set — implemented in `:root, :root[data-thinkbrain-theme="light"]`.
 - ✅ Default dark theme token set — implemented in `:root[data-thinkbrain-theme="dark"]`.
-- 🟨 System theme has CSS fallback coverage, but `ThemeProvider.tsx` still writes literal `system`; full light/dark resolution and OS-change handling remain in `pending-system_theme_resolution-med-med.md`.
+- ✅ System theme resolution — `ThemeProvider.tsx` resolves `"system"` to
+  `light`/`dark` via `matchMedia("(prefers-color-scheme: dark)")` and tracks
+  OS theme changes live; the `data-thinkbrain-theme` attribute is always a
+  concrete base. See `done-system_theme_resolution-med-med.md`.
 - ✅ Reusable base components in `packages/ui` — `shadcn/ui` initialized and `Button` component added.
 - ✅ Accessibility-focused primitives (Radix UI-style) — implemented via `shadcn/ui` (Radix UI under the hood).
-- ⬜ Shell/editor/sidebar surfaces use shared `--tn-*` tokens — the current
-  production source already uses the shared-token approach.
-- Importable themes are substantially implemented — parser/serialization in
+- ✅ Shell/editor/sidebar surfaces use shared `--tn-*` tokens — verified
+  across `apps/desktop/src/shell/` and `apps/desktop/src/tabs/`.
+- ✅ Importable themes — parser/serialization/strict CSS color validation in
   `packages/core/src/theme.ts`, application in
-  `apps/desktop/src/settings/ThemeProvider.tsx`, and import/export in
-  `apps/desktop/src/settings/themeImportExport.ts`; strict CSS color-value
-  validation remains before closing `pending-importable_themes-med-hard.md`.
+  `apps/desktop/src/settings/ThemeProvider.tsx`, import/export in
+  `apps/desktop/src/settings/themeImportExport.ts`. See
+  `done-importable_themes-med-hard.md`.

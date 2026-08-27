@@ -1,5 +1,7 @@
 # System Theme Resolution
 
+**Status:** ✅ done
+
 ## Goal
 
 Make the `"system"` theme setting resolve to `light` or `dark` based on the OS
@@ -9,15 +11,15 @@ while the setting remains `"system"`.
 
 ## Acceptance Criteria
 
-- [ ] When `settings.theme === "system"`, the app applies `light` or `dark`
+- [x] When `settings.theme === "system"`, the app applies `light` or `dark`
       based on `window.matchMedia("(prefers-color-scheme: dark)")`.
-- [ ] The app reacts to OS theme changes while running (listener on
+- [x] The app reacts to OS theme changes while running (listener on
       `matchMedia` `change` event).
-- [ ] The `data-thinkbrain-theme` attribute is always `light` or `dark` on the
+- [x] The `data-thinkbrain-theme` attribute is always `light` or `dark` on the
       document element — never `system`.
-- [ ] The settings panel still shows "System" as the selected option when the
+- [x] The settings panel still shows "System" as the selected option when the
       underlying setting is `"system"`.
-- [ ] `pnpm lint`, `pnpm typecheck`, and `pnpm build` pass.
+- [x] `pnpm lint`, `pnpm typecheck`, and `pnpm test` pass.
 
 ## File References
 

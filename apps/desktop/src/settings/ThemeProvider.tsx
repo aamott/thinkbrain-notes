@@ -7,6 +7,28 @@ import { readThemeFile } from "./themeAdapter";
 import { injectThemeOverrides, removeThemeOverrides } from "./themeInjection";
 import { useEffectiveValue } from "./useEffectiveValue";
 
+/**
+ * Resolves a theme value to a concrete `light` or `dark` base.
+ *
+ * `"system"` is resolved against the OS `prefers-color-scheme` media query so
+ * the `data-thinkbrain-theme` attribute is always a concrete base — never
+ * `"system"`. This keeps custom-theme-file override selectors (scoped under
+ * `:root[data-thinkbrain-theme="<base>"]`) matching correctly, and gives JS
+ * consumers a readable base. Any value that is not `"light"` or `"dark"` is
+ * treated as `"system"` and resolved the same way.
+ *
+ * Returns `"light"` when `matchMedia` is unavailable (SSR / very old webview).
+ */
+function resolveThemeBase(theme: string): "light" | "dark" {
+  if (theme === "light") return "light";
+  if (theme === "dark") return "dark";
+  // "system" or any unexpected value: resolve via the OS preference.
+  if (typeof window !== "undefined" && window.matchMedia) {
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+  return "light";
+}
+
 // Support system, light, dark, and potentially custom imported themes later.
 // `AppTheme` extends `AppThemeSetting` with the `(string & {})` escape hatch so
 // future custom themes can flow through the same context without a breaking
@@ -58,8 +80,10 @@ export interface ThemeProviderProps {
  * skipped and the `defaultTheme` prop is used.
  *
  * The theme is applied via the `data-thinkbrain-theme` attribute on the root
- * element so CSS can branch on light/dark/system without JS resolution. The
- * "system" value is handled in CSS through `@media (prefers-color-scheme)`.
+ * element. The attribute is always a concrete `light` or `dark` — the
+ * `"system"` setting is resolved to the OS preference via
+ * `matchMedia("(prefers-color-scheme: dark)")` and tracked live so OS theme
+ * changes are reflected while the app is running.
  *
  * Custom theme files (`appearance.themeFile`): when set to a non-null path,
  * the provider reads the file via the native fs bridge, parses it with
@@ -113,15 +137,43 @@ export function ThemeProvider({
   // effective base — no other code path writes the attribute.
   const [themeFileBase, setThemeFileBase] = useState<ThemeBase | null>(null);
 
+  // The OS color-scheme preference, tracked so `"system"` resolves live when
+  // the user switches their OS theme while the app is running. The state is
+  // only consulted when the effective theme would be `"system"` (no theme file
+  // active and the user selected "system").
+  const [osThemeBase, setOsThemeBase] = useState<"light" | "dark">(() =>
+    resolveThemeBase("system")
+  );
+
+  // Subscribe to OS theme changes so `"system"` tracks the OS live. The
+  // listener is removed on unmount. `matchMedia` may be unavailable in very
+  // old webviews or SSR; the guard prevents a crash and falls back to the
+  // initial `osThemeBase` value.
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const mql = window.matchMedia("(prefers-color-scheme: dark)");
+    const handleChange = (e: MediaQueryListEvent): void => {
+      setOsThemeBase(e.matches ? "dark" : "light");
+    };
+    mql.addEventListener("change", handleChange);
+    return () => mql.removeEventListener("change", handleChange);
+  }, []);
+
   // The effective theme: when a themeFile is active, its cached base takes
   // precedence over the user's selection. When no file is active (or it hasn't
-  // loaded yet), the user's selection drives. Computed synchronously so the
-  // DOM attribute is always consistent with the React tree — no async gap.
-  // The `themeFile !== null` guard short-circuits stale `themeFileBase` values
-  // when the file is cleared, so the effect doesn't need to call
-  // `setThemeFileBase(null)` synchronously (which would trip the
+  // loaded yet), the user's selection drives. `"system"` is resolved to the
+  // live OS preference (`osThemeBase`) so the `data-thinkbrain-theme` attribute
+  // is always a concrete `light` or `dark` — never `system`. Computed
+  // synchronously so the DOM attribute is always consistent with the React
+  // tree — no async gap. The `themeFile !== null` guard short-circuits stale
+  // `themeFileBase` values when the file is cleared, so the effect doesn't
+  // need to call `setThemeFileBase(null)` synchronously (which would trip the
   // `react-hooks/set-state-in-effect` lint rule).
-  const effectiveTheme: AppTheme = themeFile !== null ? (themeFileBase ?? theme) : theme;
+  const resolvedTheme: AppTheme = themeFile !== null ? (themeFileBase ?? theme) : theme;
+  const effectiveTheme: "light" | "dark" =
+    resolvedTheme === "light" || resolvedTheme === "dark"
+      ? (resolvedTheme as "light" | "dark")
+      : osThemeBase;
 
   // Track the user's theme selection in a ref so the async file-read effect can
   // reference it in log messages without depending on it (which would trigger a
