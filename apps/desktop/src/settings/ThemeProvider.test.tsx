@@ -5,37 +5,18 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * ThemeProvider tests.
+ * ThemeProvider tests. Pins the contract: `data-thinkbrain-theme` always
+ * reflects the resolved base (never "system"), the file's base takes
+ * precedence over the user's dropdown, parse failures/cleared files revert
+ * to the user's selection, and a toggle while a file is active doesn't flap.
  *
- * The provider was refactored to use a single source of truth for the effective
- * theme base: `effectiveTheme = themeFileBase ?? theme`, computed synchronously.
- * One effect writes `data-thinkbrain-theme` to `document.documentElement`; a
- * separate async effect reads/parses the theme file and updates `themeFileBase`
- * state (it never touches the DOM attribute directly). These tests pin that
- * contract: the attribute always reflects the resolved base, the file's base
- * takes precedence over the user's dropdown selection, parse failures and
- * cleared files revert to the user's selection, and a user toggle while a file
- * is active does not flap the attribute.
- *
- * Mocks:
- *   - `./themeAdapter`: `readThemeFile` returns a configurable string (or
- *     null) so the async file-read effect can be driven deterministically.
- *   - `@tauri-apps/api/core`: `isTauri` returns `false` so the mount-time
- *     `loadSettings` call is skipped (the store is seeded directly via
- *     `setState` instead).
- *
- * Rendering follows the codebase convention: `createRoot` + `act` + DOM
- * queries (no @testing-library/react dependency is available).
+ * Uses `createRoot` + `act` (no @testing-library/react). Mocks `themeAdapter`
+ * for controllable file reads and `isTauri` to skip the mount-time load.
  */
 
-// Mock the theme adapter so the async theme-file read is controllable.
-// `readThemeFile` is overridden per-test via `vi.mocked(...).mockResolvedValue`.
 vi.mock("./themeAdapter", () => ({
   readThemeFile: vi.fn<(path: string) => Promise<string | null>>()
 }));
-
-// Mock the Tauri core `isTauri` check so the provider's mount-time
-// `loadSettings` effect is a no-op under Node (non-Tauri).
 vi.mock("@tauri-apps/api/core", () => ({
   isTauri: vi.fn<() => boolean>()
 }));
@@ -59,14 +40,11 @@ let root: Root | null = null;
 let container: HTMLDivElement | null = null;
 
 beforeEach(() => {
-  // `isTauri` is false for every test so the mount effect skips `loadSettings`.
   vi.mocked(isTauri).mockReturnValue(false);
-  // Default: the fs bridge resolves to null (no file content). Individual
-  // tests override this to return a theme JSON string.
   vi.mocked(readThemeFile).mockResolvedValue(null);
 
-  // Reset the singleton store to a clean, unloaded state. Each test seeds the
-  // exact fields it needs via `setState` to keep cases isolated.
+  // Reset to a clean, unloaded state. Tests seed fields via `setState`.
+  // (Not using `seedSettingsStore` because most tests need `loaded: false`.)
   useSettingsStore.setState({
     appValues: {},
     workspaceValues: null,
@@ -89,29 +67,17 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
-  // Unmount and tear down the container so effects clean up between tests.
   await act(async () => root?.unmount());
   container?.remove();
   root = null;
   container = null;
   document.documentElement.removeAttribute("data-thinkbrain-theme");
-  // Restore stubbed globals (e.g. matchMedia) regardless of test outcome so a
-  // stub from a test that threw early cannot leak into the next one.
   vi.unstubAllGlobals();
   vi.mocked(readThemeFile).mockReset();
   vi.mocked(isTauri).mockReset();
 });
 
-/**
- * Renders the ThemeProvider into a fresh container and flushes effects.
- *
- * Args:
- *   defaultTheme: The fallback theme passed via props (defaults to "system").
- *
- * Returns:
- *   The container element for DOM queries (rarely needed since assertions
- *   target `document.documentElement`).
- */
+/** Renders the ThemeProvider into a fresh container and flushes effects. */
 async function renderProvider(
   defaultTheme: "system" | "light" | "dark" = "system"
 ): Promise<HTMLDivElement> {
@@ -128,19 +94,9 @@ async function renderProvider(
   return container;
 }
 
-/**
- * Flushes pending microtasks (the async theme-file read resolves on a
- * microtask) and any resulting React state updates.
- *
- * The provider's file-read effect chains `.then` on a mocked promise that
- * resolves synchronously when awaited; wrapping an empty async `act` callback
- * flushes both the microtask and the subsequent `setThemeFileBase` re-render.
- * A small `waitFor` guards against scheduling jitter.
- */
+/** Flushes the async theme-file read microtask and resulting state updates. */
 async function flushAsyncFileRead(): Promise<void> {
   await act(async () => {
-    // Drain microtasks so the mocked `readThemeFile` promise settles and
-    // the `.then` callback runs within the act scope.
     await Promise.resolve();
     await Promise.resolve();
   });

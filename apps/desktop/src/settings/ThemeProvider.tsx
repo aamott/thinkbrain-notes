@@ -45,42 +45,25 @@ export interface ThemeProviderProps {
 }
 
 /**
- * A React context provider that applies the selected theme to the root element.
+ * React context provider that applies the selected theme to the root element.
  *
  * Theme is read from the Zustand settings store (`appearance.theme` effective
- * value). On mount (inside Tauri), the provider triggers `loadSettings` so
- * the store hydrates from the native app
- * settings file. Theme changes are **staged** into the store via `stageChange`
- * (per epic design decision #4: single Save button); the DOM attribute updates
- * immediately because the provider re-renders on store change, but persistence
- * is deferred to `saveSettings()` in the settings tab.
+ * value). On mount (inside Tauri), the provider triggers `loadSettings` to
+ * hydrate from the native settings file. Theme changes are **staged** via
+ * `stageChange` (single-Save design); the DOM updates immediately, persistence
+ * is deferred to `saveSettings()`.
  *
- * In non-Tauri contexts (tests, plain browser previews) the native load is
- * skipped and the `defaultTheme` prop is used.
+ * The `data-thinkbrain-theme` attribute is always a concrete `light` or
+ * `dark` — `"system"` is resolved via `matchMedia` and tracked live. Custom
+ * theme files (`appearance.themeFile`) override the base palette: the file's
+ * `base` takes precedence over the user's dropdown, and token overrides are
+ * injected via `injectThemeOverrides`.
  *
- * The theme is applied via the `data-thinkbrain-theme` attribute on the root
- * element. The attribute is always a concrete `light` or `dark` — the
- * `"system"` setting is resolved to the OS preference via
- * `matchMedia("(prefers-color-scheme: dark)")` and tracked live so OS theme
- * changes are reflected while the app is running.
- *
- * Custom theme files (`appearance.themeFile`): when set to a non-null path,
- * the provider reads the file via the native fs bridge, parses it with
- * `parseThemeFile`, and injects its token overrides via `injectThemeOverrides`.
- * The theme file's `base` field takes precedence over the user's `theme`
- * dropdown — the effective base is computed synchronously from the cached
- * file base, and a single effect writes the `data-thinkbrain-theme` attribute.
- * If parsing fails, diagnostics are logged loudly, overrides are removed, and
- * the user's selected theme drives the attribute again. When `themeFile` is
- * cleared, overrides are removed and the user's selected theme drives the
- * attribute.
- *
- * **Single source of truth:** The effective base is computed in one place
- * (`effectiveTheme` below) from `{ userTheme, themeFileBase }`. One effect
- * writes the DOM attribute. A separate effect handles the async file
- * read/parse and updates `themeFileBase` state — it never touches the DOM
- * attribute directly. This eliminates the effect-race and stale-base bugs
- * that arise when two effects both write the same attribute.
+ * **Single source of truth:** `effectiveTheme` is computed synchronously from
+ * `{ userTheme, themeFileBase, osThemeBase }`. One effect writes the DOM
+ * attribute; a separate async effect reads/parses the theme file and updates
+ * `themeFileBase` state (never touching the DOM directly). This eliminates
+ * effect races and stale-base bugs.
  */
 export function ThemeProvider({
   children,
@@ -107,41 +90,32 @@ export function ThemeProvider({
       ? themeFileFromStore
       : null;
 
-  // The parsed theme file's base, cached from the last successful async read.
-  // When non-null, it takes precedence over the user's `theme` selection — the
-  // custom theme commits to a base palette, and the scoped override selector
-  // only matches when `data-thinkbrain-theme` equals the file's base.
-  // When null (no file, parse failure, or still loading), the user's `theme`
-  // selection drives the attribute. This is the single source of truth for the
-  // effective base — no other code path writes the attribute.
+  // Cached base from the last successful theme-file read. When non-null, it
+  // takes precedence over the user's selection — the custom theme commits to
+  // a base palette, and the scoped override selector only matches when the
+  // attribute equals the file's base.
   const [themeFileBase, setThemeFileBase] = useState<ThemeBase | null>(null);
 
-  // The OS color-scheme preference, tracked so `"system"` resolves live when
-  // the user switches their OS theme while the app is running. The state is
-  // only consulted when the effective theme would be `"system"` (no theme file
-  // active and the user selected "system").
+  // OS color-scheme preference for live `"system"` resolution. Only consulted
+  // when no theme file is active and the user selected "system".
   const [osThemeBase, setOsThemeBase] = useState<"light" | "dark">(() =>
     resolveThemeBase("system")
   );
 
-  // Subscribe to OS theme changes so `"system"` tracks the OS live. The
-  // listener is removed on unmount. `matchMedia` may be unavailable in very
-  // old webviews or SSR; the guard prevents a crash and falls back to the
-  // initial `osThemeBase` value. The listener only updates `osThemeBase` when
-  // the current effective theme resolves through the "system" path (no theme
-  // file active and the user did not pick an explicit light/dark) — otherwise
-  // `effectiveTheme` short-circuits and a `setOsThemeBase` call would be a
-  // wasted re-render. The listener is set up once with empty deps, so a ref
-  // tracks the current `resolvedTheme` for the guard check.
+  // Subscribe to OS theme changes. The listener only fires `setOsThemeBase`
+  // when the current theme resolves through the "system" path — otherwise
+  // it's a no-op to avoid wasted re-renders. A ref tracks `resolvedTheme`
+  // since the listener is set up once with empty deps.
   const resolvedThemeRef = useRef<AppTheme | null>(null);
+  // `themeRef` lets the async file-read effect log the user's selection
+  // without depending on `theme` (which would trigger redundant disk reads).
+  const themeRef = useRef(theme);
 
   useEffect(() => {
     if (typeof window === "undefined" || !window.matchMedia) return;
     const mql = window.matchMedia("(prefers-color-scheme: dark)");
     const handleChange = (e: MediaQueryListEvent): void => {
       const current = resolvedThemeRef.current;
-      // Only the "system" resolution path consults `osThemeBase`; an explicit
-      // light/dark (or a theme file's concrete base) makes the change a no-op.
       if (current === "light" || current === "dark") return;
       setOsThemeBase(e.matches ? "dark" : "light");
     };
@@ -149,31 +123,25 @@ export function ThemeProvider({
     return () => mql.removeEventListener("change", handleChange);
   }, []);
 
-  // The effective theme: when a themeFile is active, its cached base takes
-  // precedence over the user's selection. When no file is active (or it hasn't
-  // loaded yet), the user's selection drives. `"system"` is resolved to the
-  // live OS preference (`osThemeBase`) so the `data-thinkbrain-theme` attribute
-  // is always a concrete `light` or `dark` — never `system`. Computed
-  // synchronously so the DOM attribute is always consistent with the React
-  // tree — no async gap.
+  // Effective theme: theme file's base > user's selection > OS preference.
+  // `"system"` resolves to `osThemeBase` so the attribute is always concrete.
+  // The `themeFile !== null` guard short-circuits stale `themeFileBase` when
+  // the file is cleared (avoids `setThemeFileBase(null)` in the effect body,
+  // which would trip `react-hooks/set-state-in-effect`).
   const resolvedTheme: AppTheme = themeFile !== null ? (themeFileBase ?? theme) : theme;
   const effectiveTheme: "light" | "dark" =
     resolvedTheme === "light" || resolvedTheme === "dark"
       ? (resolvedTheme as "light" | "dark")
       : osThemeBase;
 
-  // Keep the listener's guard ref in sync with the current `resolvedTheme`.
+  // Keep refs in sync for the matchMedia listener guard and the async
+  // file-read effect's log messages. Both refs avoid adding `theme`/
+  // `resolvedTheme` as effect deps (which would cause redundant disk reads
+  // or re-renders).
   useEffect(() => {
     resolvedThemeRef.current = resolvedTheme;
-  }, [resolvedTheme]);
-
-  // Track the user's theme selection in a ref so the async file-read effect can
-  // reference it in log messages without depending on it (which would trigger a
-  // redundant disk re-read on every theme toggle).
-  const themeRef = useRef(theme);
-  useEffect(() => {
     themeRef.current = theme;
-  }, [theme]);
+  }, [resolvedTheme, theme]);
 
   // Load settings from native storage on mount (Tauri only). The ref guard
   // prevents double-load in StrictMode or fast re-mounts.
@@ -188,48 +156,30 @@ export function ThemeProvider({
     });
   }, [loadSettings]);
 
-  // Single effect that writes the `data-thinkbrain-theme` attribute. This is
-  // the ONLY place the attribute is written — no race, no stale base. The
-  // effective theme is computed synchronously above, so the DOM always matches
-  // the React state.
+  // Single effect that writes the DOM attribute — the only place it's set.
   useEffect(() => {
-    const root = window.document.documentElement;
-    root.dataset.thinkbrainTheme = effectiveTheme;
+    window.document.documentElement.dataset.thinkbrainTheme = effectiveTheme;
   }, [effectiveTheme]);
 
-  // Async effect: read and parse the theme file, inject/remove overrides, and
-  // update `themeFileBase` state. This effect does NOT touch the DOM attribute
-  // — the attribute effect above picks up `themeFileBase` changes via the
-  // synchronous `effectiveTheme` computation. This separation eliminates the
-  // race where two effects both write the attribute.
-  //
-  // Depends only on `themeFile` — not `theme`. A user theme toggle while a
-  // themeFile is active does NOT re-read the file from disk; the effective
-  // base stays at the file's base (the file takes precedence). When the file
-  // is cleared or changes, the effect re-runs to load/clear overrides.
+  // Async effect: read/parse the theme file, inject/remove overrides, and
+  // update `themeFileBase`. Does NOT touch the DOM attribute — the effect
+  // above picks up `themeFileBase` changes via `effectiveTheme`. Depends only
+  // on `themeFile` (not `theme`) so a theme toggle while a file is active
+  // doesn't trigger a disk re-read.
   useEffect(() => {
-    // No custom theme file: clear overrides. The stale `themeFileBase` from a
-    // previous file is reset in the cleanup below (which runs on every path
-    // change, including to null) so it cannot leak through the
-    // `themeFileBase ?? theme` fallback when a new file is set later.
     if (themeFile === null) {
       removeThemeOverrides();
       return;
     }
 
-    // Capture the path at effect time so a fast change mid-read doesn't write
-    // stale overrides. The cleanup-on-rerun pattern below handles cancellation.
     let cancelled = false;
 
     readThemeFile(themeFile)
       .then((raw): void => {
-        if (cancelled) return;
-        // Non-Tauri contexts (tests, web preview) resolve to null — no-op.
-        if (raw === null) return;
+        if (cancelled || raw === null) return;
 
         const result = parseThemeFile(raw);
         if (result.theme === null) {
-          // Fail loudly: surface every diagnostic so the user can fix the file.
           for (const diag of result.diagnostics) {
             console.error(
               `[ThemeProvider] Theme file "${themeFile}" failed to parse: ` +
@@ -238,17 +188,11 @@ export function ThemeProvider({
             );
           }
           removeThemeOverrides();
-          // Reset the base so the user's theme drives the attribute again.
           setThemeFileBase(null);
           return;
         }
 
-        // Inject the overrides scoped to the file's base palette.
         injectThemeOverrides(result.theme);
-        // Cache the file's base so `effectiveTheme` picks it up synchronously.
-        // The attribute effect will write the new base on the next render.
-        // Read `theme` from the ref (not a dep) so this effect doesn't re-run
-        // on every theme toggle — the file path/contents haven't changed.
         if (result.theme.base !== themeRef.current) {
           console.info(
             `[ThemeProvider] Custom theme file "${themeFile}" uses base ` +
@@ -259,7 +203,6 @@ export function ThemeProvider({
       })
       .catch((error: unknown) => {
         if (cancelled) return;
-        // Fail loudly: a thrown read/parse error should be visible, not silent.
         console.error(
           `[ThemeProvider] Failed to load custom theme file "${themeFile}":`,
           error
@@ -269,15 +212,12 @@ export function ThemeProvider({
       });
 
     return () => {
-      // Mark this run as superseded so a slow file read doesn't write stale
-      // overrides after the user changed the path. We do NOT remove the
-      // overrides here — the next effect run (or the null branch above)
-      // handles cleanup, so a re-render with the same path doesn't flicker.
-      // Reset `themeFileBase` so a stale base from the previous file cannot
-      // leak through `themeFileBase ?? theme` before the next read completes
-      // (e.g. clear-then-set or direct file-to-file switches). This runs in
-      // the cleanup, not the effect body, to avoid tripping the
-      // `react-hooks/set-state-in-effect` lint rule.
+      // Cancel stale reads and reset `themeFileBase` so a previous file's
+      // base can't leak through `themeFileBase ?? theme` before the next read
+      // completes. In cleanup (not the effect body) to avoid tripping
+      // `react-hooks/set-state-in-effect`. Overrides are NOT removed here —
+      // the next effect run handles that, avoiding flicker on same-path
+      // re-renders.
       cancelled = true;
       setThemeFileBase(null);
     };
@@ -286,9 +226,8 @@ export function ThemeProvider({
   const value: ThemeProviderState = {
     theme,
     setTheme: (newTheme: AppTheme) => {
-      // Stage the change into the settings store. The DOM updates immediately
-      // (this component re-renders on store change), but persistence is deferred
-      // to `saveSettings()` in the settings tab per the single-Save design.
+      // Stage into the store; DOM updates immediately, persistence is
+      // deferred to `saveSettings()` per the single-Save design.
       stageChange("appearance.theme", newTheme);
     },
   };
