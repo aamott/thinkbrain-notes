@@ -39,14 +39,14 @@ export function PanelTitle({
   };
 
   return (
-    <div className="flex items-center justify-between h-9 px-3">
-      <h2 className="m-0 text-[0.68rem] tracking-[0.08em] uppercase font-semibold">{title}</h2>
-      <div className="flex items-center gap-1">
+    <div className="flex items-center justify-between h-9 px-3 pointer-coarse:h-12 pointer-coarse:px-4">
+      <h2 className="m-0 text-[0.68rem] tracking-[0.08em] uppercase font-semibold pointer-coarse:text-sm pointer-coarse:tracking-normal pointer-coarse:normal-case pointer-coarse:font-semibold">{title}</h2>
+      <div className="flex items-center gap-1 pointer-coarse:gap-2">
         {actions.map((action) => (
           <button
             key={action.id}
             type="button"
-            className="bg-transparent border-0 cursor-pointer px-1 text-muted-foreground hover:text-foreground [&>svg]:w-[0.9rem] [&>svg]:h-[0.9rem] [&>svg]:stroke-current"
+            className="bg-transparent border-0 cursor-pointer px-1 text-muted-foreground hover:text-foreground pointer-coarse:min-h-9 pointer-coarse:min-w-9 pointer-coarse:px-1.5 [&>svg]:w-[0.9rem] [&>svg]:h-[0.9rem] [&>svg]:stroke-current pointer-coarse:[&>svg]:w-4 pointer-coarse:[&>svg]:h-4"
             aria-label={action.label}
             title={action.label}
             onClick={() => run(action)}

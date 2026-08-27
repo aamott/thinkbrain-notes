@@ -62,6 +62,8 @@
   --color-panel-foreground: var(--tn-color-panel-foreground);
   --color-statusbar: var(--tn-color-statusbar);
   --color-statusbar-foreground: var(--tn-color-statusbar-foreground);
+  --color-hub: var(--tn-color-hub);
+  --color-hub-foreground: var(--tn-color-hub-foreground);
   --color-tab-active: var(--tn-color-tab-active);
   --color-tab-inactive: var(--tn-color-tab-inactive);
   --color-tab-active-foreground: var(--tn-color-tab-active-foreground);

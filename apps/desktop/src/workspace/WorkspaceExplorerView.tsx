@@ -64,10 +64,10 @@ export function WorkspaceExplorerView({
 
   return (
     <section className={cn("flex min-h-0 flex-1 flex-col text-sidebar-foreground bg-sidebar font-sans", className)} aria-label="Workspace explorer" aria-busy={isBusy}>
-      <header className="flex min-h-16 items-center justify-between gap-3 px-3 py-2.5 border-b border-border">
+      <header className="flex min-h-16 items-center justify-between gap-3 px-3 py-2.5 border-b border-border pointer-coarse:px-4 pointer-coarse:py-3">
         <div className="min-w-0">
-          <p className="mb-0.5 text-muted-foreground text-[0.625rem] font-bold tracking-[0.08em] leading-none uppercase">Workspace</p>
-          <h2 className="max-w-44 m-0 overflow-hidden text-[0.8125rem] font-[650] leading-tight truncate">{state.snapshot?.workspace.name ?? "No workspace open"}</h2>
+          <p className="mb-0.5 text-muted-foreground text-[0.625rem] font-bold tracking-[0.08em] leading-none uppercase pointer-coarse:text-xs">Workspace</p>
+          <h2 className="max-w-44 m-0 overflow-hidden text-[0.8125rem] font-[650] leading-tight truncate pointer-coarse:text-base pointer-coarse:max-w-60">{state.snapshot?.workspace.name ?? "No workspace open"}</h2>
         </div>
         <div className="relative">
           <button

@@ -310,8 +310,12 @@ describe("PhoneShell", () => {
   it("reports sync state in the header", async () => {
     const host = await render();
 
-    expect(pill(host)).not.toBeNull();
-    expect(host.querySelector("header")?.textContent).toContain("Versions not saved here");
+    // The pill renders symbol-only in the phone header (compact mode); the
+    // full sentence lives in the tooltip / accessible name, not the text.
+    const syncButton = pill(host);
+    expect(syncButton).not.toBeNull();
+    expect(syncButton?.getAttribute("title")).toContain("not being saved");
+    expect(syncButton?.textContent).toContain("—");
   });
 
   it("reveals the panel behind the sync pill instead of opening a desktop dock", async () => {

@@ -117,16 +117,16 @@ export function SearchPanel({ rootPath, onOpenFile }: SearchPanelProps) {
     <section aria-label="Search" className="flex flex-1 flex-col min-h-0 text-[.8rem]">
       <form
         onSubmit={(event: FormEvent<HTMLFormElement>) => event.preventDefault()}
-        className="flex items-center gap-2 px-3 py-2 border-b border-border"
+        className="flex items-center gap-2 px-3 py-2 border-b border-border pointer-coarse:px-4 pointer-coarse:py-3"
       >
-        <Search className="size-3.5 text-muted-foreground shrink-0" aria-hidden="true" />
+        <Search className="size-3.5 text-muted-foreground shrink-0 pointer-coarse:size-4" aria-hidden="true" />
         <input
           type="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Search workspace…"
           aria-label="Search query"
-          className="w-full bg-transparent text-[13px] outline-none placeholder:text-muted-foreground"
+          className="w-full bg-transparent text-[13px] outline-none placeholder:text-muted-foreground pointer-coarse:min-h-11 pointer-coarse:text-base"
         />
         {isSearching && (
           <span className="text-muted-foreground text-xs shrink-0" aria-hidden="true">
@@ -156,16 +156,16 @@ export function SearchPanel({ rootPath, onOpenFile }: SearchPanelProps) {
                   type="button"
                   onClick={() => handleResultClick(hit.relativePath)}
                   className={cn(
-                    "w-full text-left rounded px-1 py-1 hover:bg-accent/60 cursor-pointer"
+                    "w-full text-left rounded px-1 py-1 hover:bg-accent/60 cursor-pointer pointer-coarse:min-h-11 pointer-coarse:px-2 pointer-coarse:py-2"
                   )}
                 >
-                  <div className="flex items-center gap-1.5 text-[13px] font-medium">
+                  <div className="flex items-center gap-1.5 text-[13px] font-medium pointer-coarse:text-sm">
                     <span className="truncate">{hit.fileName}</span>
                     {hit.title && (
                       <span className="truncate text-muted-foreground">{hit.title}</span>
                     )}
                   </div>
-                  <div className="mt-0.5 pl-5 text-[12px] text-muted-foreground truncate">
+                  <div className="mt-0.5 pl-5 text-[12px] text-muted-foreground truncate pointer-coarse:text-[13px]">
                     {hit.snippet}
                   </div>
                 </button>

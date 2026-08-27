@@ -55,6 +55,9 @@ export function PhoneHub({
       icon: <PanelIcon name={entry.icon} className="size-5" />,
       active: entry.active,
       badge: entry.badge,
+      // Commands are actions (New Note), not destinations — they get the
+      // primary chip so they read as "do this" rather than "go here."
+      variant: entry.target.kind === "command" ? "primary" : "default",
       onSelect: () => {
         if (entry.target.kind === "menu") onOpenMenu();
         else if (entry.target.kind === "panel") onSelectPanel(entry.target.id);

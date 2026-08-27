@@ -101,6 +101,8 @@ export const KNOWN_THEME_TOKENS: readonly string[] = [
   "--tn-color-panel-foreground",
   "--tn-color-statusbar",
   "--tn-color-statusbar-foreground",
+  "--tn-color-hub",
+  "--tn-color-hub-foreground",
   "--tn-color-tab-active",
   "--tn-color-tab-inactive",
   "--tn-color-tab-active-foreground",

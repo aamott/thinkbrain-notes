@@ -45,6 +45,11 @@
   --tn-color-panel-foreground: hsl(222 47% 11%);
   --tn-color-statusbar: hsl(262 83% 58%);
   --tn-color-statusbar-foreground: hsl(0 0% 100%);
+  /* Phone hub: a neutral bar, not the desktop status bar's purple. The active
+     slot is coloured with --tn-color-activitybar-active, which needs a neutral
+     base to read against. */
+  --tn-color-hub: hsl(220 16% 97%);
+  --tn-color-hub-foreground: hsl(222 47% 11%);
   --tn-color-tab-active: hsl(0 0% 100%);
   --tn-color-tab-inactive: hsl(220 16% 94%);
   --tn-color-tab-active-foreground: hsl(222 47% 11%);
@@ -112,6 +117,8 @@
   --tn-color-panel-foreground: hsl(0 0% 98%);
   --tn-color-statusbar: hsl(0 0% 12%);
   --tn-color-statusbar-foreground: hsl(0 0% 98%);
+  --tn-color-hub: hsl(0 0% 12%);
+  --tn-color-hub-foreground: hsl(0 0% 98%);
   --tn-color-tab-active: hsl(0 0% 7%);
   --tn-color-tab-inactive: hsl(0 0% 12%);
   --tn-color-tab-active-foreground: hsl(0 0% 98%);
@@ -165,6 +172,8 @@
     --tn-color-panel-foreground: hsl(0 0% 98%);
     --tn-color-statusbar: hsl(0 0% 12%);
     --tn-color-statusbar-foreground: hsl(0 0% 98%);
+    --tn-color-hub: hsl(0 0% 12%);
+    --tn-color-hub-foreground: hsl(0 0% 98%);
     --tn-color-tab-active: hsl(0 0% 7%);
     --tn-color-tab-inactive: hsl(0 0% 12%);
     --tn-color-tab-active-foreground: hsl(0 0% 98%);

@@ -40,7 +40,11 @@ export function PhoneHeader({
   const button =
     "flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-small border-0 bg-transparent text-titlebar-foreground focus-visible:-outline-offset-2 focus-visible:outline-2 focus-visible:outline-ring";
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between gap-1 border-b border-border bg-titlebar px-1 text-titlebar-foreground">
+    // `min-h-14` (not `h-14`) so the safe-area inset is added *on top of* the
+    // 56px content area, not carved out of it. With `box-sizing: border-box`
+    // a fixed `h-14` includes the padding, so a 24px status-bar inset would
+    // squeeze the buttons into 32px.
+    <header className="flex min-h-14 shrink-0 items-center justify-between gap-1 border-b border-border bg-titlebar px-1 pt-[env(safe-area-inset-top)] text-titlebar-foreground">
       {canGoBack ? (
         <button type="button" aria-label="Back" className={button} onClick={onBack}>
           <ArrowLeft aria-hidden="true" className="size-5" />
@@ -59,13 +63,13 @@ export function PhoneHeader({
       <h1 className="min-w-0 flex-1 truncate text-center text-sm font-semibold">{title}</h1>
 
       <div className="flex min-w-0 items-center">
-        {/* Allowed to shrink and clip: the pill's longest sentence is wider
-            than a phone, and the title beside it is already truncating. The
-            whole of it stays in the tooltip and the accessible name. The
-            touch bump is real here — the pill's own box is text-height, well
-            under the 44px the icon buttons already clear. */}
-        <span className="flex min-w-0 shrink items-center overflow-hidden text-xs [&>button]:min-w-0 [&>button]:whitespace-nowrap pointer-coarse:[&>button]:min-h-11">
-          <SyncPill status={syncStatus} onOpen={onOpenSyncPanel} />
+        {/* On a phone the sync pill shows its symbol only — the full sentence
+            ("Versions not saved here", "Git sync healthy · Today 9:31 AM")
+            is designed for the desktop footer and eats the title's space here.
+            The symbol (✓ ↻ ⚠ —) is enough; the detail is one tap away and
+            stays in the tooltip / accessible name. */}
+        <span className="flex min-w-0 shrink items-center justify-center [&>button]:min-w-0 pointer-coarse:[&>button]:min-h-11 pointer-coarse:[&>button]:min-w-11">
+          <SyncPill status={syncStatus} onOpen={onOpenSyncPanel} compact />
         </span>
         <button
           type="button"

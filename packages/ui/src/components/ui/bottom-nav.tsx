@@ -9,6 +9,8 @@ export interface BottomNavItem {
   readonly icon: ReactNode;
   readonly active?: boolean;
   readonly badge?: number;
+  /** "primary" renders a boxed chip (e.g. New Note); "default" is plain. */
+  readonly variant?: "default" | "primary";
   readonly onSelect: () => void;
   readonly onLongPress?: () => void;
 }
@@ -53,7 +55,7 @@ export function BottomNav({
     <nav
       aria-label={label}
       className={cn(
-        "flex shrink-0 items-stretch justify-around border-t border-border bg-statusbar text-statusbar-foreground pb-[env(safe-area-inset-bottom)]",
+        "flex shrink-0 items-stretch justify-around border-t border-border bg-hub text-hub-foreground pb-[env(safe-area-inset-bottom)]",
         className
       )}
     >
@@ -64,16 +66,16 @@ export function BottomNav({
           aria-label={entry.label}
           aria-current={entry.active ? "page" : undefined}
           className={cn(
-            // Contrast comes from opacity against `text-statusbar-foreground`,
-            // not from a second colour. In the light theme
-            // `--tn-color-activitybar-active` is the very same purple as
-            // `--tn-color-statusbar`, so an active item coloured that way would
-            // be invisible on its own bar — and `text-muted-foreground` is grey
-            // on that purple. Dark theme hides both faults, which is how they
-            // would have shipped. 56px already clears the touch minimum, so no
-            // `pointer-coarse:` bump is needed.
-            "relative flex min-h-14 flex-1 cursor-pointer flex-col items-center justify-center gap-0.5 border-0 bg-transparent px-1 text-[0.65rem] font-medium opacity-70 focus-visible:-outline-offset-2 focus-visible:outline-2 focus-visible:outline-ring",
-            entry.active && "opacity-100"
+            // 56px clears the touch minimum. Active state is signalled two
+            // ways: the accent colour on icon+label, and a 2px top indicator
+            // that replaces the nav's own top border for that slot. Opacity
+            // alone was too subtle on a neutral bar.
+            "relative flex min-h-14 flex-1 cursor-pointer flex-col items-center justify-center gap-0.5 border-0 border-t-2 border-transparent bg-transparent px-1 text-[0.65rem] font-medium opacity-70 focus-visible:-outline-offset-2 focus-visible:outline-2 focus-visible:outline-ring",
+            entry.active && "border-t-primary opacity-100 text-activitybar-active",
+            // A primary slot (e.g. New Note) is a boxed chip, not a plain
+            // label — it reads as an action, not a destination.
+            entry.variant === "primary" &&
+              "my-1.5 rounded-medium bg-primary text-primary-foreground opacity-100"
           )}
           onPointerDown={() => {
             // Reset unconditionally, and before the long-press guard: a hold
