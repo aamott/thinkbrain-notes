@@ -240,7 +240,6 @@ jobs:
           TOOLCHAIN="$ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
           for triple in aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android; do
             api=21
-            if [[ "$triple" == "armv7-linux-androideabi" ]]; then api=24; fi
             upper=$(echo "$triple" | tr '[:lower:]-' '[:upper:]_')
             echo "CC_${upper}=$TOOLCHAIN/${triple}${api}-clang" >> "$GITHUB_ENV"
             echo "CXX_${upper}=$TOOLCHAIN/${triple}${api}-clang++" >> "$GITHUB_ENV"
