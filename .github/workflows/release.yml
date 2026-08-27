@@ -132,30 +132,28 @@ jobs:
           releaseBody: |
             A local-first Markdown workspace. Your notes stay ordinary `.md` files on disk, and everything built on top of them — the search index, the link graph, the calendar — is a cache the app can throw away and rebuild.
 
-            ## What's new in 0.2.0
+            ## What's new
 
-            **Phone shell** — header with tabs and tab-switcher grid, drawer with scrim, bottom hub with long-press pin/remove, inspector sheet for all right panels. Popout goes full-bleed, hub hides while the soft keyboard is open, sync state moves to the header. Verified on Android.
+            See [CHANGELOG.md](https://github.com/aamott/thinkbrain-notes/blob/main/CHANGELOG.md) for the full list of changes in this release.
 
-            **Overlay accessibility** — Drawer, BottomSheet and Scrim with focus trap, escape handling, `role="dialog"` / `aria-modal`. InspectorSheet has ARIA tabs with keyboard navigation. Fixed slide animations.
+            ---
 
-            **Platform capability gating** — desktop-only commands (terminal, process spawning) show as unavailable in the palette on platforms that can't serve them, rather than silently failing.
+            ## ↓ Which file should I download?
 
-            **Shell mode switch** — Settings > Appearance > Shell layout: force phone or desktop chrome regardless of device, for quick UI testing.
+            | Your platform | Download this file |
+            |---|---|
+            | **macOS (Apple Silicon)** | `*-darwin-aarch64.dmg` |
+            | **macOS (Intel)** | `*-darwin-x64.dmg` |
+            | **Linux (AppImage)** | `*-linux-amd64.AppImage` |
+            | **Linux (Debian/Ubuntu)** | `*-linux-amd64.deb` |
+            | **Linux (Fedora/RHEL)** | `*-linux-x86_64.rpm` |
+            | **Windows (installer)** | `*-windows-x64.msi` |
+            | **Windows (portable)** | `*-windows-x64.exe` |
+            | **Android (sideload)** | `*-android-universal.apk` |
 
-            **Settings** — responsive header bar with slide-in nav and fuzzy search; phone hub editor.
+            > **Ignore the other files.** The `.sig`, `.tar.gz`, `.aab`, and `latest.json` files are for the app's built-in auto-updater or Play Store distribution — you don't need to download them manually.
 
-            **Themes** — forest-gray and pastel-pink presets.
-
-            ## Downloads
-
-            | File | Platform |
-            |------|----------|
-            | `*-macos-aarch64.dmg` | macOS (Apple Silicon) |
-            | `*-macos-x86_64.dmg` | macOS (Intel) |
-            | `*-linux-x86_64.*` | Linux |
-            | `*-windows-x86_64.exe` | Windows |
-            | `*-android-universal.apk` | Android (sideload) |
-            | `*-android.aab` | Android (Play Store bundle) |
+            ---
 
             ## Known limits
 
@@ -170,14 +168,10 @@ jobs:
           prerelease: ${{ contains(github.ref_name, '-') }}
           # Label every asset with its OS and architecture so a downloader can
           # tell at a glance which file is theirs. Produces names like
-          # `Thinkbrain Notes-0.1.0-macos-aarch64.dmg` and
-          # `Thinkbrain Notes-0.1.0-windows-x86_64.exe`. Placeholders are
+          # `Thinkbrain.Notes-0.2.0-darwin-aarch64.dmg` and
+          # `Thinkbrain.Notes-0.2.0-windows-x64.exe`. Placeholders are
           # documented in tauri-action's README.
           assetNamePattern: '[name]-[version]-[platform]-[arch][ext]'
-          # Always upload workflow artifacts so `main`-push builds and the
-          # Android job can find the desktop bundles without a release. On a
-          # tag push these are uploaded in addition to the release assets.
-          uploadWorkflowArtifacts: true
           args: ${{ matrix.args }}
 
   # ───────────────────────────── Android ─────────────────────────────────
