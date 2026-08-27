@@ -132,26 +132,34 @@ jobs:
           releaseBody: |
             A local-first Markdown workspace. Your notes stay ordinary `.md` files on disk, and everything built on top of them — the search index, the link graph, the calendar — is a cache the app can throw away and rebuild.
 
-            ## In this release
+            ## What's new in 0.2.0
 
-            **Editor** — CodeMirror with live preview, wiki-link autocomplete and navigation, and vault-relative images. Writes refuse to overwrite a file that changed underneath them.
+            **Phone shell** — header with tabs and tab-switcher grid, drawer with scrim, bottom hub with long-press pin/remove, inspector sheet for all right panels. Popout goes full-bleed, hub hides while the soft keyboard is open, sync state moves to the header. Verified on Android.
 
-            **Explorer** — file tree with full CRUD, multi-window workspaces, and a native watcher that keeps the tree, the open tabs and the index in step with edits made outside the app.
+            **Overlay accessibility** — Drawer, BottomSheet and Scrim with focus trap, escape handling, `role="dialog"` / `aria-modal`. InspectorSheet has ARIA tabs with keyboard navigation. Fixed slide animations.
 
-            **Search** — full-text search over the vault or one folder, plus typed filters over frontmatter fields.
+            **Platform capability gating** — desktop-only commands (terminal, process spawning) show as unavailable in the palette on platforms that can't serve them, rather than silently failing.
 
-            **Journal and calendar** — dated entries as plain notes, filterable by what they record.
+            **Shell mode switch** — Settings > Appearance > Shell layout: force phone or desktop chrome regardless of device, for quick UI testing.
 
-            **Themes and settings** — importable themes, and searchable settings with validation, import/export and per-section reset.
+            **Settings** — responsive header bar with slide-in nav and fuzzy search; phone hub editor.
 
-            **Extensions** — load one from a local directory; it can contribute panels, editor headers and commands.
+            **Themes** — forest-gray and pastel-pink presets.
 
-            **Updates** — the app checks once at launch and offers to install a newer version. Updates are signed, and only one signed by this project's key is accepted.
+            ## Downloads
+
+            | File | Platform |
+            |------|----------|
+            | `*-macos-aarch64.dmg` | macOS (Apple Silicon) |
+            | `*-macos-x86_64.dmg` | macOS (Intel) |
+            | `*-linux-x86_64.*` | Linux |
+            | `*-windows-x86_64.exe` | Windows |
+            | `*-android-universal.apk` | Android (sideload) |
+            | `*-android.aab` | Android (Play Store bundle) |
 
             ## Known limits
 
-            - **Binaries are not code-signed.** macOS and Windows will both warn that the developer is unidentified. That is separate from the update signing above, which proves an update came from this project but says nothing to the OS.
-            - **Windows is untested.** The file watcher has been exercised by hand on Linux and macOS only, and CI builds Linux alone.
+            - **Binaries are not code-signed.** macOS and Windows will both warn that the developer is unidentified. That is separate from the update signing, which proves an update came from this project but says nothing to the OS.
             - **Search results are capped** at 200 matches, and nothing says so when a query matches more.
             - **Installing an update restarts the app** without checking for unsaved edits. Save before accepting one.
 
@@ -278,14 +286,17 @@ jobs:
         run: pnpm desktop:tauri android build --apk
 
       # Collect every APK and AAB the two builds produced into one staging
-      # directory so a single upload-artifact / gh release upload covers them.
+      # directory with clear names so a downloader knows what to grab.
       - name: Stage Android bundles
         run: |
           set -euo pipefail
           out="apps/desktop/src-tauri/gen/android/app/build/outputs"
           mkdir -p staging
-          find "$out" -type f \( -name '*.apk' -o -name '*.aab' \) \
-            -exec cp {} staging/ \;
+          version="${GITHUB_REF_NAME#v}"
+          # AAB for Play Store distribution
+          find "$out/bundle" -name '*.aab' -exec cp {} "staging/ThinkbrainNotes-${version}-android.aab" \;
+          # Universal APK for sideloading
+          find "$out/apk" -name '*universal*.apk' -exec cp {} "staging/ThinkbrainNotes-${version}-android-universal.apk" \;
           echo "Staged bundles:"
           ls -la staging/
 

@@ -3,6 +3,38 @@
 Newest first. Versions follow [semver](https://semver.org), except that before
 1.0 a minor bump may still change behaviour.
 
+## 0.2.0 — 2026-08-27
+
+Phone shell, overlay accessibility, platform capability gating, and settings polish.
+
+- **Phone shell** — header with tabs and tab-switcher grid, drawer with
+  scrim, bottom hub with long-press pin/remove, inspector sheet for all right
+  panels. Popout goes full-bleed, hub hides while the soft keyboard is open,
+  sync state moves to the header. Verified on Android.
+- **Overlay accessibility** — Drawer, BottomSheet and Scrim with focus trap,
+  escape handling, `role="dialog"` / `aria-modal`. InspectorSheet has ARIA
+  tabs with keyboard navigation. Fixed slide animations (Tailwind v4 uses
+  native CSS `translate`, not `transform`).
+- **Platform capability gating** — `platform_capabilities` command reports
+  what the current platform can serve (process spawning, keychain, folder
+  picker). Commands whose required capability is absent show as unavailable
+  in the palette rather than silently failing.
+- **Shell mode switch** — Settings > Appearance > Shell layout: force phone
+  or desktop chrome regardless of device, for quick UI testing.
+- **Settings** — responsive header bar with slide-in nav and fuzzy search;
+  phone hub editor with long-press pin/remove.
+- **Themes** — forest-gray and pastel-pink presets.
+- **Android** — managed vault access, CI pipeline for AAB + APK.
+
+### Known limits
+
+- **Binaries are not code-signed.** macOS and Windows will both warn that the
+  developer is unidentified.
+- **Search results are capped** at 200 matches, and nothing says so when a
+  query matches more.
+- **Installing an update restarts the app** without checking for unsaved edits.
+  Save before accepting one.
+
 ## 0.1.0 — 2026-08-16
 
 First release.

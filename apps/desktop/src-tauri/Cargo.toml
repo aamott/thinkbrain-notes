@@ -1,6 +1,6 @@
 [package]
 name = "thinkbrain-notes-desktop"
-version = "0.1.0"
+version = "0.2.0"
 description = "Thinkbrain Notes desktop shell"
 authors = ["Thinkbrain Notes Contributors"]
 edition = "2021"
