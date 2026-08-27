@@ -191,9 +191,11 @@
    of this stylesheet gets the transition without depending on a host-app
    Tailwind entry. `visibility` delays its flip to `hidden` until the end of
    the duration so the slide-out is visible; `opacity` is for Scrim (Drawer
-   and BottomSheet only toggle transform + visibility). */
+   and BottomSheet only toggle translate + visibility). Includes `translate`
+   because Tailwind v4's `translate-x-*`/`translate-y-*` utilities set the
+   native CSS `translate` property, not `transform: translateX(...)`. */
 .tn-slide {
-  transition-property: transform, visibility, opacity;
+  transition-property: translate, transform, visibility, opacity;
   transition-duration: var(--tn-duration-overlay);
   transition-timing-function: ease-out;
 }
