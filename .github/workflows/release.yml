@@ -223,6 +223,13 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      # pnpm/action-setup adds PNPM_HOME but the Gradle BuildTask that runs
+      # the Tauri CLI (`rustBuildArmRelease`) tries `pnpm` first, then falls
+      # back to `corepack pnpm` which fails on CI. Adding PNPM_HOME to PATH
+      # ensures Gradle's `project.exec` finds `pnpm` on the first attempt.
+      - name: Ensure pnpm is on PATH for Gradle
+        run: echo "$PNPM_HOME" >> "$GITHUB_PATH"
+
       # ubuntu-latest ships the Android SDK and NDK; Tauri's CLI and cargo-ndk
       # locate them via ANDROID_HOME / ANDROID_NDK_HOME. Point ANDROID_NDK_HOME
       # at the latest installed NDK so the C/assembly build of aws-lc-sys (pulled
