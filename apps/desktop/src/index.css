@@ -77,23 +77,12 @@
   --font-mono: var(--tn-font-mono);
   --shadow-soft: var(--tn-shadow-soft);
   --shadow-panel: var(--tn-shadow-panel);
-
-  /* Phone overlay slide transition duration. Used by Drawer, BottomSheet,
-     and Scrim via the `tn-slide` utility. */
-  --tn-duration-overlay: 200ms;
 }
 
-/* Slide transition for phone overlays (Drawer, BottomSheet, Scrim).
-   Defined as a utility class because Tailwind v4's `transition-[a,b]` arbitrary
-   syntax does not reliably parse commas inside the brackets. This guarantees
-   both `transform` and `visibility` are transitioned together — `visibility`
-   delays its flip to `hidden` until the end of the duration so the slide-out
-   animation is visible before the element becomes invisible. */
-@utility tn-slide {
-  transition-property: transform, visibility, opacity;
-  transition-duration: var(--tn-duration-overlay);
-  transition-timing-function: ease-out;
-}
+/* Overlay slide (`.tn-slide` + `--tn-duration-overlay`) ships with
+   `@thinkbrain/ui/styles.css` so Drawer, BottomSheet, and Scrim stay
+   self-contained. Desktop entrance animations below still consume the
+   token. */
 
 /* Shared focus ring for phone chrome buttons. Extracted because the same
    three-class pattern appeared in PhoneHeader, PhoneDrawer, InspectorSheet,
@@ -134,6 +123,38 @@
 
 @utility tn-slide-in-bottom {
   animation: tn-slide-in-bottom var(--tn-duration-overlay) ease-out;
+}
+
+/* Dock slide entrance animations for desktop popouts. Animates width and flex-basis
+   so the workspace shifts smoothly instead of popping open space first. */
+@keyframes tn-dock-slide-left {
+  from {
+    width: 0;
+    flex-basis: 0;
+  }
+  to {
+    width: var(--tn-shell-left-width, 288px);
+    flex-basis: var(--tn-shell-left-width, 288px);
+  }
+}
+
+@keyframes tn-dock-slide-right {
+  from {
+    width: 0;
+    flex-basis: 0;
+  }
+  to {
+    width: var(--tn-shell-right-width, 320px);
+    flex-basis: var(--tn-shell-right-width, 320px);
+  }
+}
+
+@utility tn-dock-slide-left {
+  animation: tn-dock-slide-left var(--tn-duration-overlay) ease-out;
+}
+
+@utility tn-dock-slide-right {
+  animation: tn-dock-slide-right var(--tn-duration-overlay) ease-out;
 }
 
 @layer base {

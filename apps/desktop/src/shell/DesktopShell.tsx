@@ -28,14 +28,17 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
   const rootRef = useRef<HTMLElement>(null);
   const { activeTab, activeDocument, tabState, dispatchTabs } = shell;
   const { leftPanel, leftWidth, rightPanel, rightWidth } = shell;
+  const resource = activeTab?.resource;
+  const rootPath = resource?.rootPath;
+  const relativePath = resource?.relativePath;
 
   // Dock widths are published as CSS custom properties so the popouts can size
   // themselves from tokens instead of inline styles. The left dock publishes 0
   // when collapsed so the title bar releases the reserved space.
   useEffect(() => {
     rootRef.current?.style.setProperty("--tn-shell-left-width", leftPanel ? `${leftWidth}px` : "0px");
-    rootRef.current?.style.setProperty("--tn-shell-right-width", `${rightWidth}px`);
-  }, [leftWidth, leftPanel, rightWidth]);
+    rootRef.current?.style.setProperty("--tn-shell-right-width", rightPanel ? `${rightWidth}px` : "0px");
+  }, [leftWidth, leftPanel, rightPanel, rightWidth]);
 
   return (
     <main
@@ -112,13 +115,13 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
                 onLoadFromDisk={() => shell.loadDiskVersion(activeTab)}
               />
             )}
-            {activeTab && activeDocument?.emptiedOutside && activeTab.resource?.rootPath && activeTab.resource?.relativePath && (
+            {activeTab && activeDocument?.emptiedOutside && rootPath && relativePath && (
               <EmptiedNoteBanner
-                rootPath={activeTab.resource.rootPath}
-                relativePath={activeTab.resource.relativePath}
+                rootPath={rootPath}
+                relativePath={relativePath}
                 fileName={activeTab.title}
                 onDismiss={() => shell.dismissEmptied(activeTab.id)}
-                onRestored={() => shell.loadDocumentIntoView(activeTab.id, activeTab.resource!.rootPath!, activeTab.resource!.relativePath!)}
+                onRestored={() => shell.loadDocumentIntoView(activeTab.id, rootPath, relativePath)}
               />
             )}
             <TabContent tab={activeTab} document={activeDocument} onChange={shell.updateDocument} onSave={shell.saveDocument} noteIndex={shell.noteIndex} onOpenNote={shell.onOpenNote} onReopenNote={shell.loadDocumentIntoView} unsavedNoteContents={shell.unsavedNoteContents} />

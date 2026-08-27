@@ -25,12 +25,17 @@ type Side = "left" | "right";
 const POPOUT_LEFT =
   "max-[760px]:left-[var(--tn-shell-popout-left,var(--tn-size-activitybar-width))]";
 
-// Desktop: slide in from the edge. Mobile: no animation — PhoneShell wraps
+// Desktop: slide in with smooth dock expansion. Mobile: no animation — PhoneShell wraps
 // its LeftPopout reveal in its own slide-in div, and RightPopout arrives
 // inside a BottomSheet that already slides up.
 const SIDE_CLASS: Record<Side, string> = {
-  left: `border-r border-border flex-[0_0_var(--tn-shell-left-width)] ${POPOUT_LEFT} max-[760px]:right-0 tn-slide-in-left max-[760px]:animate-none`,
-  right: `border-l border-border flex-[0_0_var(--tn-shell-right-width)] max-[760px]:right-0 ${POPOUT_LEFT} tn-slide-in-right max-[760px]:animate-none`
+  left: `border-r border-border flex-[0_0_var(--tn-shell-left-width,288px)] ${POPOUT_LEFT} max-[760px]:right-0 tn-dock-slide-left max-[760px]:animate-none`,
+  right: `border-l border-border flex-[0_0_var(--tn-shell-right-width,320px)] max-[760px]:right-0 ${POPOUT_LEFT} tn-dock-slide-right max-[760px]:animate-none`
+};
+
+const INNER_WIDTH: Record<Side, string> = {
+  left: "w-[var(--tn-shell-left-width,288px)]",
+  right: "w-[var(--tn-shell-right-width,320px)]"
 };
 
 const SHARED_CLASS =
@@ -53,6 +58,8 @@ export function Popout<Ctx extends LeftPanelContext | RightPanelContext>({
   readonly context: Ctx;
   readonly contributions: readonly SideContribution<Ctx>[];
 }): ReactNode {
+  // The registry owns panel metadata, while the caller owns which panel
+  // contributions are rendered; the two sources are intentionally separate.
   const contribution = getDesktopPanelOrUndefined(panel);
   const className = `${SHARED_CLASS} ${SIDE_CLASS[side]}`;
 
@@ -69,21 +76,23 @@ export function Popout<Ctx extends LeftPanelContext | RightPanelContext>({
 
   return (
     <aside className={className} aria-label={`${contribution.label} panel`}>
-      <PanelTitle title={contribution.label} actions={contribution.actions} />
-      {contributions.map((panelContribution) => {
-        const isActive = panelContribution.id === panel;
-        if (!isActive && !panelContribution.keepMounted) return null;
-        const isAvailable = panelContribution.availability?.(context) ?? true;
-        return (
-          <MountedPanel
-            key={panelContribution.id}
-            contribution={panelContribution}
-            context={context}
-            isActive={isActive}
-            isAvailable={isAvailable}
-          />
-        );
-      })}
+      <div className={`flex flex-col flex-1 min-h-0 max-[760px]:w-full ${INNER_WIDTH[side]}`}>
+        <PanelTitle title={contribution.label} actions={contribution.actions} />
+        {contributions.map((panelContribution) => {
+          const isActive = panelContribution.id === panel;
+          if (!isActive && !panelContribution.keepMounted) return null;
+          const isAvailable = panelContribution.availability?.(context) ?? true;
+          return (
+            <MountedPanel
+              key={panelContribution.id}
+              contribution={panelContribution}
+              context={context}
+              isActive={isActive}
+              isAvailable={isAvailable}
+            />
+          );
+        })}
+      </div>
     </aside>
   );
 }

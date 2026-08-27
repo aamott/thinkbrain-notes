@@ -361,7 +361,7 @@ export function SettingsNav({ open, onClose }: SettingsNavProps) {
       data-open={open ? "true" : "false"}
     >
       <div className="-mx-2 -mt-2 mb-1 flex shrink-0 items-center gap-1 bg-surface p-2">
-        <div className="relative flex-1">s
+        <div className="relative flex-1">
           <Search
             className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
             aria-hidden="true"

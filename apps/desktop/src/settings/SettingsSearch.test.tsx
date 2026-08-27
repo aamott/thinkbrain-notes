@@ -111,7 +111,7 @@ async function typeSearch(input: HTMLInputElement, value: string): Promise<void>
 }
 
 describe("SettingsSearch", () => {
-  it("renders a search input at the top of the nav", async () => {
+  it("renders a search input at the top of the nav with clean icon layout", async () => {
     const el = await renderSettingsTab();
 
     const searchInput = el.querySelector<HTMLInputElement>(
@@ -119,6 +119,15 @@ describe("SettingsSearch", () => {
     );
     expect(searchInput).not.toBeNull();
     expect(searchInput?.placeholder).toBe("Search settings…");
+
+    // The wrapper container around the search input and icon must not contain stray text nodes (like rogue 's').
+    const searchWrapper = searchInput?.parentElement;
+    expect(searchWrapper).not.toBeNull();
+    const textNodes = Array.from(searchWrapper!.childNodes).filter(
+      (node) => node.nodeType === Node.TEXT_NODE && (node.textContent ?? "").trim().length > 0
+    );
+    expect(textNodes).toHaveLength(0);
+    expect(searchWrapper!.querySelector("svg")).not.toBeNull();
   });
 
   it("fuzzy matches non-consecutive label characters", async () => {
