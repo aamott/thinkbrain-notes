@@ -8,15 +8,15 @@ Ensure dark theme values are complete and intentional, not just fallback.
 
 ## Acceptance Criteria
 
-- [ ] `:root[data-thinkbrain-theme="dark"]` explicitly defines every token.
-- [ ] Dark theme has `color-scheme: dark`.
-- [ ] `:root` retains a sensible default (dark) for the brief moment before the
+- [x] `:root[data-thinkbrain-theme="dark"]` explicitly defines every token.
+- [x] Dark theme has `color-scheme: dark`.
+- [x] `:root` retains a sensible default (dark) for the brief moment before the
       theme attribute is applied, but the authoritative dark values live in the
       `[data-thinkbrain-theme="dark"]` selector.
-- [ ] Hardcoded colors in shell surfaces are replaced with tokens that have
+- [x] Hardcoded colors in shell surfaces are replaced with tokens that have
       dark-mode values.
-- [ ] Dark theme is visually verified across all shell regions.
-- [ ] `pnpm lint`, `pnpm typecheck`, and `pnpm build` pass.
+- [x] Dark theme is visually verified across all shell regions.
+- [x] `pnpm lint`, `pnpm typecheck`, and `pnpm build` pass.
 
 ## File References
 

@@ -9,14 +9,14 @@ values.
 
 ## Acceptance Criteria
 
-- [ ] `:root[data-thinkbrain-theme="light"]` defines every token used by the
+- [x] `:root[data-thinkbrain-theme="light"]` defines every token used by the
       app — no token falls through to the dark `:root` default when light is
       active.
-- [ ] Light theme has `color-scheme: light`.
-- [ ] Hardcoded colors in shell surfaces (e.g. `#0c0f16` on activity bar and
+- [x] Light theme has `color-scheme: light`.
+- [x] Hardcoded colors in shell surfaces (e.g. `#0c0f16` on activity bar and
       status bar) are replaced with tokens that have light-mode values.
-- [ ] Light theme is visually verified across all shell regions.
-- [ ] `pnpm lint`, `pnpm typecheck`, and `pnpm build` pass.
+- [x] Light theme is visually verified across all shell regions.
+- [x] `pnpm lint`, `pnpm typecheck`, and `pnpm build` pass.
 
 ## File References
 

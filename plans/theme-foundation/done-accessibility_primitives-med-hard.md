@@ -9,15 +9,15 @@ dialog/modal, and dropdown menu. Avoid adopting a heavy component framework.
 
 ## Acceptance Criteria
 
-- [ ] At least one accessibility primitive (tooltip or dialog) is implemented
+- [x] At least one accessibility primitive (tooltip or dialog) is implemented
       in `packages/ui` with proper focus management and keyboard navigation.
-- [ ] Primitives use Radix UI-style patterns (uncontrolled, composable,
+- [x] Primitives use Radix UI-style patterns (uncontrolled, composable,
       accessible) — either via `radix-ui` packages or custom implementations
       following the same principles.
-- [ ] No heavy opinionated component framework is introduced.
-- [ ] Primitives use shared `--tn-*` design tokens.
-- [ ] Primitives are exported from `packages/ui/src/index.ts`.
-- [ ] `pnpm lint`, `pnpm typecheck`, and `pnpm build` pass.
+- [x] No heavy opinionated component framework is introduced.
+- [x] Primitives use shared `--tn-*` design tokens.
+- [x] Primitives are exported from `packages/ui/src/index.ts`.
+- [x] `pnpm lint`, `pnpm typecheck`, and `pnpm build` pass.
 
 ## File References
 

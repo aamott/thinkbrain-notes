@@ -8,16 +8,16 @@ editor, and sidebar surfaces consume the tokens from `packages/ui`.
 
 ## Acceptance Criteria
 
-- [ ] `apps/desktop/src/index.css` is reduced to truly global resets and
+- [x] `apps/desktop/src/index.css` is reduced to truly global resets and
       narrowly scoped third-party editor styling.
-- [ ] No hardcoded color values remain in surface styles (e.g. `#0c0f16`,
+- [x] No hardcoded color values remain in surface styles (e.g. `#0c0f16`,
       `#ff8d8d`) — all use shared `--tn-*` token variables.
-- [ ] Shell regions (title bar, activity bar, sidebar, editor area, right
+- [x] Shell regions (title bar, activity bar, sidebar, editor area, right
       panel, status bar) use shared tokens for background, foreground, border,
       and accent.
-- [ ] CodeMirror editor surface uses token-backed colors for background,
+- [x] CodeMirror editor surface uses token-backed colors for background,
       foreground, gutters, active line, and caret.
-- [ ] `pnpm lint`, `pnpm typecheck`, and `pnpm build` pass.
+- [x] `pnpm lint`, `pnpm typecheck`, and `pnpm build` pass.
 
 ## File References
 
