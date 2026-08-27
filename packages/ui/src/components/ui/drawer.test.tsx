@@ -24,14 +24,18 @@ const render = async (element: React.ReactElement): Promise<HTMLDivElement> => {
 };
 
 describe("Drawer", () => {
-  it("renders nothing while closed", async () => {
+  it("is hidden while closed", async () => {
     const host = await render(
       <Drawer open={false} onDismiss={() => undefined} label="Navigation">
         <button type="button">Files</button>
       </Drawer>
     );
 
-    expect(host.querySelector('[aria-label="Navigation"]')).toBeNull();
+    // Always mounted so it can slide in/out — closed means inert and
+    // hidden from the a11y tree, not absent from the DOM.
+    const panel = host.querySelector('[aria-label="Navigation"]');
+    expect(panel).not.toBeNull();
+    expect(panel?.getAttribute("aria-hidden")).toBe("true");
   });
 
   it("exposes its content as a labelled dialog when open", async () => {
@@ -57,7 +61,7 @@ describe("Drawer", () => {
 
     const scrim = host.querySelector('[aria-hidden="true"]');
     await act(async () => {
-      scrim?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      scrim?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
     });
 
     expect(onDismiss).toHaveBeenCalledOnce();

@@ -154,6 +154,15 @@ const click = async (host: HTMLDivElement, label: string): Promise<void> => {
   });
 };
 
+/** Finds a dialog by label that is actually visible (not `aria-hidden`).
+ *  Drawer/BottomSheet are always mounted for slide transitions, so a closed
+ *  dialog is still in the DOM — `toBeNull` on the selector alone can't tell
+ *  open from closed. */
+const visibleDialog = (host: HTMLElement, label: string): Element | null => {
+  const el = host.querySelector(`[role="dialog"][aria-label="${label}"]`);
+  return el?.getAttribute("aria-hidden") === "true" ? null : el;
+};
+
 describe("PhoneShell", () => {
   it("renders no activity rail", async () => {
     const host = await render();
@@ -181,11 +190,11 @@ describe("PhoneShell", () => {
 
   it("opens the drawer from the header menu button", async () => {
     const host = await render();
-    expect(host.querySelector('[aria-label="Navigation"]')).toBeNull();
+    expect(visibleDialog(host, "Navigation")).toBeNull();
 
     await click(host, "Open navigation");
 
-    expect(host.querySelector('[aria-label="Navigation"]')).not.toBeNull();
+    expect(visibleDialog(host, "Navigation")).not.toBeNull();
   });
 
   it("opens the same drawer from the hub Menu slot", async () => {
@@ -193,7 +202,7 @@ describe("PhoneShell", () => {
 
     await click(host, "Menu");
 
-    expect(host.querySelector('[aria-label="Navigation"]')).not.toBeNull();
+    expect(visibleDialog(host, "Navigation")).not.toBeNull();
   });
 
   it("lists every registered left panel in the drawer with a visible label", async () => {
@@ -201,7 +210,7 @@ describe("PhoneShell", () => {
 
     await click(host, "Open navigation");
 
-    const drawer = host.querySelector('[aria-label="Navigation"]');
+    const drawer = visibleDialog(host, "Navigation");
     expect(drawer?.textContent).toContain("Files");
     expect(drawer?.textContent).toContain("Search");
     expect(drawer?.textContent).toContain("Settings");
@@ -210,7 +219,7 @@ describe("PhoneShell", () => {
   it("closes the drawer after choosing a panel and reveals it full width", async () => {
     const host = await render();
     await click(host, "Open navigation");
-    const drawer = host.querySelector('[aria-label="Navigation"]');
+    const drawer = visibleDialog(host, "Navigation");
     expect(drawer).not.toBeNull();
 
     // Scoped to the drawer deliberately: the hub carries a "Search" slot of its
@@ -220,7 +229,7 @@ describe("PhoneShell", () => {
       drawer?.querySelector<HTMLButtonElement>('[aria-label="Search"]')?.click();
     });
 
-    expect(host.querySelector('[aria-label="Navigation"]')).toBeNull();
+    expect(visibleDialog(host, "Navigation")).toBeNull();
     expect(host.querySelector('[aria-label="Search panel"]')).not.toBeNull();
   });
 
@@ -229,11 +238,11 @@ describe("PhoneShell", () => {
   // exactly rather than by prefix, or the assertion would pass on the button.
   it("opens the tab switcher from the header count button", async () => {
     const host = await render();
-    expect(host.querySelector('[aria-label="Open tabs"]')).toBeNull();
+    expect(visibleDialog(host, "Open tabs")).toBeNull();
 
     await click(host, "Open tabs (0)");
 
-    const switcher = host.querySelector('[aria-label="Open tabs"]');
+    const switcher = visibleDialog(host, "Open tabs");
     expect(switcher).not.toBeNull();
     expect(switcher?.getAttribute("role")).toBe("dialog");
   });
@@ -252,7 +261,7 @@ describe("PhoneShell", () => {
   // an unscoped query would match the button, which is always present, and pass
   // whether or not the sheet ever opened.
   const inspector = (host: HTMLDivElement): Element | null =>
-    host.querySelector('[role="dialog"][aria-label="Document tools"]');
+    visibleDialog(host, "Document tools");
 
   it("opens the inspector sheet from the header's document tools button", async () => {
     const host = await render();
@@ -332,11 +341,11 @@ describe("PhoneShell", () => {
   // section alone and prove nothing about the sheet.
   it("renders the bottom panel as a sheet rather than a third bottom band", async () => {
     const { host, shell } = await renderWithShell();
-    expect(host.querySelector('[role="dialog"][aria-label="Tools"]')).toBeNull();
+    expect(visibleDialog(host, "Tools")).toBeNull();
 
     await act(async () => shell().updateBottomPanel("terminal"));
 
-    const sheet = host.querySelector('[role="dialog"][aria-label="Tools"]');
+    const sheet = visibleDialog(host, "Tools");
     expect(sheet).not.toBeNull();
     expect(sheet?.querySelector('[aria-label="Bottom panel tabs"]')).not.toBeNull();
   });
@@ -423,7 +432,7 @@ describe("PhoneShell", () => {
     await click(host, "Open navigation");
 
     // Scoped to the drawer: the hub renders its own slots with the same labels.
-    const drawer = host.querySelector('[aria-label="Navigation"]');
+    const drawer = visibleDialog(host, "Navigation");
     expect(drawer).not.toBeNull();
     await act(async () => {
       drawer?.querySelector<HTMLButtonElement>('[aria-label="Hello notebook"]')?.click();

@@ -10,6 +10,11 @@ import { useDismissable } from "./use-dismissable";
  * Deliberately narrower than the viewport (86%, capped at 300px): navigation
  * chrome peeks so it reads as something you tap out of, while content surfaces
  * take the full width. That contrast is the phone shell's main orientation cue.
+ *
+ * Always mounted so it can slide in/out via a CSS `transform` transition.
+ * When closed it is translated fully off-screen and made inert
+ * (`pointer-events-none`, `aria-hidden`) so it neither captures input nor
+ * appears in the a11y tree.
  */
 export function Drawer({
   open,
@@ -25,17 +30,18 @@ export function Drawer({
   readonly children: ReactNode;
 }) {
   const { containerRef } = useDismissable({ open, onDismiss });
-  if (!open) return null;
   return (
     <>
-      <Scrim open onDismiss={onDismiss} />
+      <Scrim open={open} onDismiss={onDismiss} />
       <div
         ref={containerRef}
         role="dialog"
         aria-modal="true"
         aria-label={label}
+        aria-hidden={!open}
         className={cn(
-          "absolute inset-y-0 left-0 z-50 flex w-[86%] max-w-75 flex-col overflow-y-auto bg-sidebar text-sidebar-foreground shadow-panel",
+          "absolute inset-y-0 left-0 z-50 flex w-[86%] max-w-75 flex-col overflow-y-auto bg-sidebar text-sidebar-foreground shadow-panel transition-[transform,visibility] duration-[var(--tn-duration-overlay)] ease-out",
+          open ? "visible translate-x-0" : "invisible -translate-x-full",
           className
         )}
       >

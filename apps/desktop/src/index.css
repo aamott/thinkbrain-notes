@@ -77,6 +77,30 @@
   --font-mono: var(--tn-font-mono);
   --shadow-soft: var(--tn-shadow-soft);
   --shadow-panel: var(--tn-shadow-panel);
+
+  /* Phone overlay slide transition duration. Used by Drawer, BottomSheet,
+     and Scrim via `duration-[var(--tn-duration-overlay)]`. */
+  --tn-duration-overlay: 200ms;
+}
+
+/* Entrance animation for the LeftPopout content swap in PhoneShell — a
+   one-shot slide-in, not a transition, because the old content unmounts.
+   Also used by the desktop LeftPopout dock for a slide-in when a panel opens. */
+@keyframes tn-slide-in-left {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
+/* Entrance animation for the desktop RightPopout dock. */
+@keyframes tn-slide-in-right {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+/* Entrance animation for the desktop BottomPanel. */
+@keyframes tn-slide-in-bottom {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
 }
 
 @layer base {

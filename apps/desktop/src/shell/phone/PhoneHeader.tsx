@@ -62,7 +62,7 @@ export function PhoneHeader({
 
       <h1 className="min-w-0 flex-1 truncate text-center text-sm font-semibold">{title}</h1>
 
-      <div className="flex min-w-0 items-center">
+      <div className="flex min-w-0 items-center gap-0.5">
         {/* On a phone the sync pill shows its symbol only — the full sentence
             ("Versions not saved here", "Git sync healthy · Today 9:31 AM")
             is designed for the desktop footer and eats the title's space here.

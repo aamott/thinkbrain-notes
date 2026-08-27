@@ -64,10 +64,13 @@ const grid = (host: HTMLDivElement): Element | null =>
   host.querySelector('[aria-label="Open tabs"]');
 
 describe("TabSwitcherSheet", () => {
-  it("renders nothing while closed", async () => {
+  it("is hidden while closed", async () => {
     const host = await render(sheet({ open: false }));
 
-    expect(grid(host)).toBeNull();
+    // Always mounted for slide transitions — closed means aria-hidden, not absent.
+    const panel = grid(host);
+    expect(panel).not.toBeNull();
+    expect(panel?.getAttribute("aria-hidden")).toBe("true");
   });
 
   it("lays the tabs out as a grid, not a list", async () => {

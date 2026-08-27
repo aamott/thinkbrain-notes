@@ -24,14 +24,18 @@ const render = async (element: React.ReactElement): Promise<HTMLDivElement> => {
 };
 
 describe("BottomSheet", () => {
-  it("renders nothing while closed", async () => {
+  it("is hidden while closed", async () => {
     const host = await render(
       <BottomSheet open={false} onDismiss={() => undefined} label="Open tabs">
         <p>content</p>
       </BottomSheet>
     );
 
-    expect(host.querySelector('[aria-label="Open tabs"]')).toBeNull();
+    // Always mounted so it can slide in/out — closed means inert and
+    // hidden from the a11y tree, not absent from the DOM.
+    const panel = host.querySelector('[aria-label="Open tabs"]');
+    expect(panel).not.toBeNull();
+    expect(panel?.getAttribute("aria-hidden")).toBe("true");
   });
 
   it("exposes its content as a labelled dialog when open", async () => {

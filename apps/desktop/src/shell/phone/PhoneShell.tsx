@@ -1,5 +1,5 @@
 import { BottomSheet } from "@thinkbrain/ui";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { BottomPanel } from "../../panels/BottomPanel";
 import { LeftPopout } from "../../panels/LeftPopout";
@@ -93,6 +93,30 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
     [shell]
   );
 
+  // Mobile autosave: the phone shell has no Save button, so the document is
+  // saved automatically after the user stops typing for 1.5s. The effect
+  // watches the active document's contents and dirty flag — only a dirty
+  // document triggers a save, and the timer is cancelled if the user keeps
+  // typing or switches tabs before it fires.
+  const autosaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (autosaveRef.current) {
+      clearTimeout(autosaveRef.current);
+      autosaveRef.current = null;
+    }
+    const tab = shell.activeTab;
+    if (!tab?.isDirty) return;
+    autosaveRef.current = setTimeout(() => {
+      void shell.saveDocument(tab);
+    }, 1500);
+    return () => {
+      if (autosaveRef.current) {
+        clearTimeout(autosaveRef.current);
+        autosaveRef.current = null;
+      }
+    };
+  }, [shell.activeTab?.id, shell.activeTab?.isDirty, shell.activeDocument?.contents, shell]);
+
   return (
     <main
       className="relative flex h-full min-w-0 flex-col overflow-hidden bg-background text-foreground [--tn-shell-popout-left:0px]"
@@ -139,21 +163,27 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
           />
         ) : (
           // Content takes over: full width between header and hub, unlike the
-          // drawer, which peeks at 86%.
-          <LeftPopout
-            panel={revealed}
-            rootPath={shell.restoredWorkspacePath}
-            explorerProps={shell.explorerProps}
-            onReviewConflict={shell.reviewConflict}
-            versionsOf={shell.versionsOf}
-            onShowEverything={shell.clearVersions}
-            onOpenSearchResult={(relativePath) => {
-              if (shell.restoredWorkspacePath) {
-                shell.openMarkdownDocument(shell.restoredWorkspacePath, relativePath);
-                setRevealed(null);
-              }
-            }}
-          />
+          // drawer, which peeks at 86%. Slides in from the left so the reveal
+          // reads as a panel pushing the note aside, not a pop.
+          <div
+            key={revealed}
+            className="flex min-h-0 flex-1 flex-col animate-[tn-slide-in-left_var(--tn-duration-overlay)_ease-out_forwards]"
+          >
+            <LeftPopout
+              panel={revealed}
+              rootPath={shell.restoredWorkspacePath}
+              explorerProps={shell.explorerProps}
+              onReviewConflict={shell.reviewConflict}
+              versionsOf={shell.versionsOf}
+              onShowEverything={shell.clearVersions}
+              onOpenSearchResult={(relativePath) => {
+                if (shell.restoredWorkspacePath) {
+                  shell.openMarkdownDocument(shell.restoredWorkspacePath, relativePath);
+                  setRevealed(null);
+                }
+              }}
+            />
+          </div>
         )}
       </div>
 

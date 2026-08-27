@@ -110,9 +110,12 @@ describe("InspectorSheet", () => {
     );
   });
 
-  it("renders nothing while closed", async () => {
+  it("is hidden while closed", async () => {
     const host = await render(sheet({ open: false }));
 
-    expect(host.querySelector('[aria-label="Document tools"]')).toBeNull();
+    // Always mounted for slide transitions — closed means aria-hidden, not absent.
+    const panel = host.querySelector('[aria-label="Document tools"]');
+    expect(panel).not.toBeNull();
+    expect(panel?.getAttribute("aria-hidden")).toBe("true");
   });
 });

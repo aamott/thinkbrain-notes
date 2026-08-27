@@ -124,11 +124,13 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
             <TabContent tab={activeTab} document={activeDocument} onChange={shell.updateDocument} onSave={shell.saveDocument} noteIndex={shell.noteIndex} onOpenNote={shell.onOpenNote} onReopenNote={shell.loadDocumentIntoView} unsavedNoteContents={shell.unsavedNoteContents} />
           </article>
           {shell.bottomPanel && (
-            <BottomPanelContent
-              active={shell.bottomPanel}
-              onChange={shell.updateBottomPanel}
-              onClose={() => shell.updateBottomPanel(null)}
-            />
+            <div className="animate-[tn-slide-in-bottom_var(--tn-duration-overlay)_ease-out_forwards]">
+              <BottomPanelContent
+                active={shell.bottomPanel}
+                onChange={shell.updateBottomPanel}
+                onClose={() => shell.updateBottomPanel(null)}
+              />
+            </div>
           )}
         </section>
 
