@@ -270,14 +270,22 @@ jobs:
             printf 'keyPassword=%s\n' "$ANDROID_KEY_PASSWORD"
           } > "$keystore_dir/keystore.properties"
 
+      # Build the frontend dist before the Android build. Tauri's
+      # `beforeBuildCommand` runs `pnpm build` via corepack, but CI installs
+      # pnpm via pnpm/action-setup — corepack doesn't see it and fails. Pre-
+      # building here and passing `-c` to clear `beforeBuildCommand` skips
+      # the frontend rebuild inside the Tauri build.
+      - name: Build frontend
+        run: pnpm build
+
       # Build the AAB (default) and APKs (--apk). The Rust compile dominates
       # the time and is cached across the two invocations, so the second run
       # only re-runs the Gradle assemble step.
       - name: Build Android AAB
-        run: pnpm desktop:tauri android build
+        run: pnpm desktop:tauri android build --ci -c '{"build":{"beforeBuildCommand":""}}'
 
       - name: Build Android APKs
-        run: pnpm desktop:tauri android build --apk
+        run: pnpm desktop:tauri android build --ci --apk -c '{"build":{"beforeBuildCommand":""}}'
 
       # Collect every APK and AAB the two builds produced into one staging
       # directory with clear names so a downloader knows what to grab.
