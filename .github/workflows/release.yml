@@ -238,13 +238,20 @@ jobs:
         run: |
           echo "ANDROID_NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> "$GITHUB_ENV"
           TOOLCHAIN="$ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          # NDK clang binaries use "armv7a-linux-androideabi" (with an `a`),
+          # but the Rust target triple is "armv7-linux-androideabi" (no `a`).
+          # Map the Rust triple to the NDK binary prefix for each target.
           for triple in aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android; do
             api=21
+            ndk_triple="$triple"
+            if [[ "$triple" == "armv7-linux-androideabi" ]]; then
+              ndk_triple="armv7a-linux-androideabi"
+            fi
             upper=$(echo "$triple" | tr '[:lower:]-' '[:upper:]_')
-            echo "CC_${upper}=$TOOLCHAIN/${triple}${api}-clang" >> "$GITHUB_ENV"
-            echo "CXX_${upper}=$TOOLCHAIN/${triple}${api}-clang++" >> "$GITHUB_ENV"
+            echo "CC_${upper}=$TOOLCHAIN/${ndk_triple}${api}-clang" >> "$GITHUB_ENV"
+            echo "CXX_${upper}=$TOOLCHAIN/${ndk_triple}${api}-clang++" >> "$GITHUB_ENV"
             echo "AR_${upper}=$TOOLCHAIN/llvm-ar" >> "$GITHUB_ENV"
-            echo "CARGO_TARGET_${upper}_LINKER=$TOOLCHAIN/${triple}${api}-clang" >> "$GITHUB_ENV"
+            echo "CARGO_TARGET_${upper}_LINKER=$TOOLCHAIN/${ndk_triple}${api}-clang" >> "$GITHUB_ENV"
           done
 
       - name: Cache cargo
