@@ -68,7 +68,7 @@ export function InspectorSheet({
             // 44px already clears the touch minimum, so no `pointer-coarse:`
             // bump — the same reasoning `PhoneDrawer` records for its rows.
             className={cn(
-              "min-h-11 shrink-0 cursor-pointer rounded-small border border-border bg-surface px-3 text-xs text-muted-foreground focus-visible:-outline-offset-2 focus-visible:outline-2 focus-visible:outline-ring",
+              "min-h-11 shrink-0 cursor-pointer rounded-small border border-border bg-surface px-3 text-xs text-muted-foreground tn-focus-ring",
               entry.id === panel && "bg-primary text-primary-foreground"
             )}
             onClick={() => onSelectPanel(entry.id)}

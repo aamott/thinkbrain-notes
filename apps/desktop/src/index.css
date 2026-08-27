@@ -79,28 +79,61 @@
   --shadow-panel: var(--tn-shadow-panel);
 
   /* Phone overlay slide transition duration. Used by Drawer, BottomSheet,
-     and Scrim via `duration-[var(--tn-duration-overlay)]`. */
+     and Scrim via the `tn-slide` utility. */
   --tn-duration-overlay: 200ms;
 }
 
-/* Entrance animation for the LeftPopout content swap in PhoneShell — a
-   one-shot slide-in, not a transition, because the old content unmounts.
-   Also used by the desktop LeftPopout dock for a slide-in when a panel opens. */
+/* Slide transition for phone overlays (Drawer, BottomSheet, Scrim).
+   Defined as a utility class because Tailwind v4's `transition-[a,b]` arbitrary
+   syntax does not reliably parse commas inside the brackets. This guarantees
+   both `transform` and `visibility` are transitioned together — `visibility`
+   delays its flip to `hidden` until the end of the duration so the slide-out
+   animation is visible before the element becomes invisible. */
+@utility tn-slide {
+  transition-property: transform, visibility, opacity;
+  transition-duration: var(--tn-duration-overlay);
+  transition-timing-function: ease-out;
+}
+
+/* Shared focus ring for phone chrome buttons. Extracted because the same
+   three-class pattern appeared in PhoneHeader, PhoneDrawer, InspectorSheet,
+   and TabSwitcherSheet. */
+@utility tn-focus-ring {
+  &:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: -2px;
+  }
+}
+
+/* Entrance slide-in animations. One-shot (no `forwards` fill) — the resting
+   state is already `translate(0)`, and `forwards` would leave a permanent
+   `transform` that creates a containing block for `position: fixed`
+   descendants, breaking overlay dialogs rendered inside the panel. */
 @keyframes tn-slide-in-left {
   from { transform: translateX(-100%); }
   to { transform: translateX(0); }
 }
 
-/* Entrance animation for the desktop RightPopout dock. */
 @keyframes tn-slide-in-right {
   from { transform: translateX(100%); }
   to { transform: translateX(0); }
 }
 
-/* Entrance animation for the desktop BottomPanel. */
 @keyframes tn-slide-in-bottom {
   from { transform: translateY(100%); }
   to { transform: translateY(0); }
+}
+
+@utility tn-slide-in-left {
+  animation: tn-slide-in-left var(--tn-duration-overlay) ease-out;
+}
+
+@utility tn-slide-in-right {
+  animation: tn-slide-in-right var(--tn-duration-overlay) ease-out;
+}
+
+@utility tn-slide-in-bottom {
+  animation: tn-slide-in-bottom var(--tn-duration-overlay) ease-out;
 }
 
 @layer base {

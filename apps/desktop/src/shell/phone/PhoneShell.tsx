@@ -98,16 +98,23 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
   // watches the active document's contents and dirty flag — only a dirty
   // document triggers a save, and the timer is cancelled if the user keeps
   // typing or switches tabs before it fires.
+  //
+  // Deps are destructed from `shell` because the shell object is a new literal
+  // every render — depending on `shell` directly would reset the timer on
+  // every render and the save would never fire under background state churn.
+  const { activeTab, activeDocument, saveDocument } = shell;
+  const activeTabDirty = activeTab?.isDirty;
+  const activeDocContents = activeDocument?.contents;
   const autosaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (autosaveRef.current) {
       clearTimeout(autosaveRef.current);
       autosaveRef.current = null;
     }
-    const tab = shell.activeTab;
-    if (!tab?.isDirty) return;
+    if (!activeTabDirty || !activeTab) return;
+    const tab = activeTab;
     autosaveRef.current = setTimeout(() => {
-      void shell.saveDocument(tab);
+      void saveDocument(tab);
     }, 1500);
     return () => {
       if (autosaveRef.current) {
@@ -115,7 +122,12 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
         autosaveRef.current = null;
       }
     };
-  }, [shell.activeTab?.id, shell.activeTab?.isDirty, shell.activeDocument?.contents, shell]);
+  }, [activeTab, activeTabDirty, activeDocContents, saveDocument]);
+
+  // When the note returns after a panel is dismissed, it slides in from the
+  // right — reading as the panel being pushed out to the left. The `key`
+  // changes between "note" and the panel id, so React remounts the content
+  // branch and the CSS animation fires on mount.
 
   return (
     <main
@@ -151,23 +163,25 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
 
       <div className="relative flex min-h-0 flex-1 flex-col">
         {revealed === null ? (
-          <TabContent
-            tab={shell.activeTab}
-            document={shell.activeDocument}
-            onChange={shell.updateDocument}
-            onSave={shell.saveDocument}
-            noteIndex={shell.noteIndex}
-            onOpenNote={shell.onOpenNote}
-            onReopenNote={shell.loadDocumentIntoView}
-            unsavedNoteContents={shell.unsavedNoteContents}
-          />
+          <div key="note" className="flex min-h-0 flex-1 flex-col">
+            <TabContent
+              tab={shell.activeTab}
+              document={shell.activeDocument}
+              onChange={shell.updateDocument}
+              onSave={shell.saveDocument}
+              noteIndex={shell.noteIndex}
+              onOpenNote={shell.onOpenNote}
+              onReopenNote={shell.loadDocumentIntoView}
+              unsavedNoteContents={shell.unsavedNoteContents}
+            />
+          </div>
         ) : (
           // Content takes over: full width between header and hub, unlike the
           // drawer, which peeks at 86%. Slides in from the left so the reveal
           // reads as a panel pushing the note aside, not a pop.
           <div
             key={revealed}
-            className="flex min-h-0 flex-1 flex-col animate-[tn-slide-in-left_var(--tn-duration-overlay)_ease-out_forwards]"
+            className="flex min-h-0 flex-1 flex-col tn-slide-in-left"
           >
             <LeftPopout
               panel={revealed}

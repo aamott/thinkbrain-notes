@@ -38,7 +38,7 @@ export function PhoneHeader({
   readonly onOpenSyncPanel: (panel: "conflicts" | "history") => void;
 }) {
   const button =
-    "flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-small border-0 bg-transparent text-titlebar-foreground focus-visible:-outline-offset-2 focus-visible:outline-2 focus-visible:outline-ring";
+    "flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-small border-0 bg-transparent text-titlebar-foreground tn-focus-ring";
   return (
     // `min-h-14` (not `h-14`) so the safe-area inset is added *on top of* the
     // 56px content area, not carved out of it. With `box-sizing: border-box`

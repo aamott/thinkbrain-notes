@@ -37,7 +37,7 @@ export function BottomSheet({
         aria-label={label}
         aria-hidden={!open}
         className={cn(
-          "absolute inset-x-0 bottom-0 z-50 flex max-h-[80%] flex-col overflow-y-auto rounded-t-lg bg-panel text-panel-foreground pb-[env(safe-area-inset-bottom)] shadow-panel transition-[transform,visibility] duration-[var(--tn-duration-overlay)] ease-out",
+          "absolute inset-x-0 bottom-0 z-50 flex max-h-[80%] flex-col overflow-y-auto rounded-t-lg bg-panel text-panel-foreground pb-[env(safe-area-inset-bottom)] shadow-panel tn-slide",
           open ? "visible translate-y-0" : "invisible translate-y-full",
           className
         )}

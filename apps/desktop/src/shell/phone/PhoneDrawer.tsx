@@ -41,7 +41,7 @@ export function PhoneDrawer({
   // 48px already clears the touch minimum, so no `pointer-coarse:` bump is
   // needed — the same reasoning `BottomNav` records for its 56px slots.
   const row =
-    "flex min-h-12 w-full cursor-pointer items-center gap-3 rounded-small border-0 bg-transparent px-3 text-left text-sm text-sidebar-foreground hover:bg-accent focus-visible:-outline-offset-2 focus-visible:outline-2 focus-visible:outline-ring";
+    "flex min-h-12 w-full cursor-pointer items-center gap-3 rounded-small border-0 bg-transparent px-3 text-left text-sm text-sidebar-foreground hover:bg-accent tn-focus-ring";
 
   return (
     <Drawer open={open} onDismiss={onDismiss} label="Navigation">

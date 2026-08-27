@@ -25,12 +25,12 @@ type Side = "left" | "right";
 const POPOUT_LEFT =
   "max-[760px]:left-[var(--tn-shell-popout-left,var(--tn-size-activitybar-width))]";
 
+// Desktop: slide in from the edge. Mobile: no animation — PhoneShell wraps
+// its LeftPopout reveal in its own slide-in div, and RightPopout arrives
+// inside a BottomSheet that already slides up.
 const SIDE_CLASS: Record<Side, string> = {
-  // Desktop: slide in from the edge. Mobile: no animation here — the
-  // PhoneShell wraps its LeftPopout reveal in its own slide-in div, and
-  // the RightPopout arrives inside a BottomSheet that already slides up.
-  left: `border-r border-border flex-[0_0_var(--tn-shell-left-width)] ${POPOUT_LEFT} max-[760px]:right-0 animate-[tn-slide-in-left_var(--tn-duration-overlay)_ease-out_forwards] max-[760px]:animate-none`,
-  right: `border-l border-border flex-[0_0_var(--tn-shell-right-width)] max-[760px]:right-0 ${POPOUT_LEFT} animate-[tn-slide-in-right_var(--tn-duration-overlay)_ease-out_forwards] max-[760px]:animate-none`
+  left: `border-r border-border flex-[0_0_var(--tn-shell-left-width)] ${POPOUT_LEFT} max-[760px]:right-0 tn-slide-in-left max-[760px]:animate-none`,
+  right: `border-l border-border flex-[0_0_var(--tn-shell-right-width)] max-[760px]:right-0 ${POPOUT_LEFT} tn-slide-in-right max-[760px]:animate-none`
 };
 
 const SHARED_CLASS =

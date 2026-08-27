@@ -71,7 +71,7 @@ export function TabSwitcherSheet({
                   aria-label={tab.title}
                   aria-current={isActive ? "page" : undefined}
                   className={cn(
-                    "flex h-44 w-full cursor-pointer flex-col items-stretch overflow-hidden rounded-medium border border-border bg-tab-active p-0 text-left text-tab-active-foreground focus-visible:-outline-offset-2 focus-visible:outline-2 focus-visible:outline-ring",
+                    "flex h-44 w-full cursor-pointer flex-col items-stretch overflow-hidden rounded-medium border border-border bg-tab-active p-0 text-left text-tab-active-foreground tn-focus-ring",
                     isActive && "border-primary ring-2 ring-primary"
                   )}
                   onClick={() => {
@@ -104,7 +104,7 @@ export function TabSwitcherSheet({
                 <button
                   type="button"
                   aria-label={`Close ${tab.title}`}
-                  className="absolute top-0 right-0 flex size-9 cursor-pointer items-center justify-center rounded-medium border-0 bg-transparent text-muted-foreground hover:text-foreground focus-visible:-outline-offset-2 focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:size-11"
+                  className="absolute top-0 right-0 flex size-9 cursor-pointer items-center justify-center rounded-medium border-0 bg-transparent text-muted-foreground hover:text-foreground tn-focus-ring pointer-coarse:size-11"
                   onClick={() => onClose(tab.id)}
                 >
                   <X aria-hidden="true" className="size-3.5" />

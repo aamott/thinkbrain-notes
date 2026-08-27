@@ -27,7 +27,7 @@ export function Scrim({
     <div
       aria-hidden="true"
       className={cn(
-        "absolute inset-0 z-40 bg-overlay transition-[opacity,visibility] duration-[var(--tn-duration-overlay)] ease-out",
+        "absolute inset-0 z-40 bg-overlay tn-slide",
         open ? "visible opacity-100" : "invisible opacity-0",
         className
       )}
