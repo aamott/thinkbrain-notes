@@ -36,11 +36,12 @@ fn an_edit_is_recorded_only_once_it_settles() {
             .expect("recording succeeds"),
         None
     );
-    assert!(f
-        .engine
-        .record_settled(start + SETTLE)
-        .expect("recording succeeds")
-        .is_some());
+    assert!(
+        f.engine
+            .record_settled(start + SETTLE)
+            .expect("recording succeeds")
+            .is_some()
+    );
 }
 
 #[test]
@@ -215,11 +216,12 @@ fn a_deleted_note_is_recorded_when_it_settles() {
     f.engine
         .note_changes([PathBuf::from("one.md")], start + SETTLE);
 
-    assert!(f
-        .engine
-        .record_settled(start + SETTLE + SETTLE)
-        .expect("recording succeeds")
-        .is_some());
+    assert!(
+        f.engine
+            .record_settled(start + SETTLE + SETTLE)
+            .expect("recording succeeds")
+            .is_some()
+    );
 }
 
 /// Every commit the engine reports must be reachable from the branch it

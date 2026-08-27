@@ -14,9 +14,9 @@ use std::collections::BTreeSet;
 use std::io::{BufRead, Write};
 
 use gix::protocol::transport;
+use transport::Service;
 use transport::client::blocking_io::Transport as _;
 use transport::client::{MessageKind, WriteMode};
-use transport::Service;
 
 use crate::error::NativeError;
 

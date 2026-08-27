@@ -1,7 +1,6 @@
 use rusqlite::{
-    params, params_from_iter,
+    Connection, Transaction, params, params_from_iter,
     types::{Type, Value},
-    Connection, Transaction,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Number;

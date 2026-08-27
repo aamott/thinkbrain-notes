@@ -14,12 +14,12 @@
 //! file is still selectable (and the frontend's parser will surface the error
 //! when the user picks it).
 
-use crate::error::{failed, NativeError};
+use crate::error::{NativeError, failed};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
-use tauri::path::BaseDirectory;
 use tauri::Manager;
+use tauri::path::BaseDirectory;
 
 /// File extension for theme files (without the leading dot).
 const THEME_EXTENSION: &str = "tbtheme.json";

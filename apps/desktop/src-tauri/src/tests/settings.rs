@@ -141,74 +141,88 @@ fn an_empty_settings_document_is_read_as_absent_rather_than_set_aside() {
 fn workspace_settings_write_is_refused_when_the_file_moved_underneath_it() {
     // Another window wrote between this window's read and its write, so the
     // document it revised is no longer the one on disk.
-    assert!(check_settings_precondition(
-        Some("{\"showHidden\":true}"),
-        Some("{\"fieldDefinitions\":[]}"),
-        "settings.workspace_conflict",
-        "The workspace settings changed while this one was being saved.",
-    )
-    .is_err());
+    assert!(
+        check_settings_precondition(
+            Some("{\"showHidden\":true}"),
+            Some("{\"fieldDefinitions\":[]}"),
+            "settings.workspace_conflict",
+            "The workspace settings changed while this one was being saved.",
+        )
+        .is_err()
+    );
 
     // Nobody interfered.
-    assert!(check_settings_precondition(
-        Some("{\"showHidden\":true}"),
-        Some("{\"showHidden\":true}"),
-        "settings.workspace_conflict",
-        "The workspace settings changed while this one was being saved.",
-    )
-    .is_ok());
+    assert!(
+        check_settings_precondition(
+            Some("{\"showHidden\":true}"),
+            Some("{\"showHidden\":true}"),
+            "settings.workspace_conflict",
+            "The workspace settings changed while this one was being saved.",
+        )
+        .is_ok()
+    );
 }
 
 #[test]
 fn workspace_settings_write_treats_an_absent_file_as_a_precondition_of_its_own() {
     // The first writer read nothing and expects to still find nothing.
-    assert!(check_settings_precondition(
-        None,
-        None,
-        "settings.workspace_conflict",
-        "The workspace settings changed while this one was being saved.",
-    )
-    .is_ok());
+    assert!(
+        check_settings_precondition(
+            None,
+            None,
+            "settings.workspace_conflict",
+            "The workspace settings changed while this one was being saved.",
+        )
+        .is_ok()
+    );
 
     // A file appeared where this writer saw none.
-    assert!(check_settings_precondition(
-        Some("{}"),
-        None,
-        "settings.workspace_conflict",
-        "The workspace settings changed while this one was being saved.",
-    )
-    .is_err());
+    assert!(
+        check_settings_precondition(
+            Some("{}"),
+            None,
+            "settings.workspace_conflict",
+            "The workspace settings changed while this one was being saved.",
+        )
+        .is_err()
+    );
 
     // The file this writer read has since been removed.
-    assert!(check_settings_precondition(
-        None,
-        Some("{}"),
-        "settings.workspace_conflict",
-        "The workspace settings changed while this one was being saved.",
-    )
-    .is_err());
+    assert!(
+        check_settings_precondition(
+            None,
+            Some("{}"),
+            "settings.workspace_conflict",
+            "The workspace settings changed while this one was being saved.",
+        )
+        .is_err()
+    );
 }
 
 #[test]
 fn app_settings_write_is_refused_when_desktop_state_changed_underneath_it() {
     // `update_desktop_state` landed (a tab opened) between the store's read and
     // its write, so the document the store revised is no longer the one on disk.
-    assert!(check_settings_precondition(
-        Some("{\"desktopState\":{\"openTabs\":[\"a\"]}}"),
-        Some("{\"desktopState\":{\"openTabs\":[]}}"),
-        "settings.app_conflict",
-        "The application settings changed while this one was being saved.",
-    )
-    .is_err());
+    assert!(
+        check_settings_precondition(
+            Some("{\"desktopState\":{\"openTabs\":[\"a\"]}}"),
+            Some("{\"desktopState\":{\"openTabs\":[]}}"),
+            "settings.app_conflict",
+            "The application settings changed while this one was being saved.",
+        )
+        .is_err()
+    );
 
     // Nobody interfered.
-    assert!(check_settings_precondition(
-        Some("{\"appearance.theme\":\"dark\"}"),
-        Some("{\"appearance.theme\":\"dark\"}"),
-        "settings.app_conflict",
-        "The application settings changed while this one was being saved.",
-    )
-    .is_ok());
+    assert!(
+        check_settings_precondition(
+            Some("{\"appearance.theme\":\"dark\"}"),
+            Some("{\"appearance.theme\":\"dark\"}"),
+            "settings.app_conflict",
+            "The application settings changed while this one was being saved.",
+        )
+        .is_ok()
+    );
 }
 
 #[test]

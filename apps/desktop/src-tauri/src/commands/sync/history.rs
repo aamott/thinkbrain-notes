@@ -14,8 +14,8 @@ use std::path::Path;
 
 use serde::Serialize;
 
-use crate::commands::workspace::{acquire_workspace_mutation_lock, resolve_workspace_root};
 use crate::NativeError;
+use crate::commands::workspace::{acquire_workspace_mutation_lock, resolve_workspace_root};
 
 use super::engine::Engine;
 use super::failed;

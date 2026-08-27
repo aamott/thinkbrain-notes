@@ -1,4 +1,4 @@
-use super::tests::{device, files, read, shared, trip, write, write_only, Device};
+use super::tests::{Device, device, files, read, shared, trip, write, write_only};
 use super::*;
 use std::fs;
 use std::time::{Duration, Instant};

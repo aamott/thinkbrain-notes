@@ -6,8 +6,8 @@ use crate::commands::sync::history;
 use crate::commands::sync::snapshot::{self, HISTORY_REF};
 use std::fs;
 use std::path::Path;
-use std::sync::mpsc;
 use std::sync::Arc;
+use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -358,9 +358,11 @@ fn clearing_undo_history_leaves_notes_and_synced_history() {
 
     let done = clear_undo(&f.repo).expect("clear succeeds");
 
-    assert!(snapshot::checkpoint_head(&f.repo)
-        .expect("readable")
-        .is_none());
+    assert!(
+        snapshot::checkpoint_head(&f.repo)
+            .expect("readable")
+            .is_none()
+    );
     assert_eq!(
         snapshot::head_commit(&f.repo).expect("main is readable"),
         Some(main)

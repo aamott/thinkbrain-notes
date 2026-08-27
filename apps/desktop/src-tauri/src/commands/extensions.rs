@@ -14,7 +14,7 @@
 //! does once loaded: a loaded extension is trusted local code running with full
 //! application privileges.
 
-use crate::error::{failed, NativeError};
+use crate::error::{NativeError, failed};
 use std::fs;
 use std::io::Read;
 use std::path::{Component, Path, PathBuf};

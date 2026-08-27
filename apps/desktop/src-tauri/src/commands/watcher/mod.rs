@@ -37,19 +37,19 @@ mod lifecycle;
 mod self_write;
 
 #[cfg(test)]
-pub(crate) use classify::{classify_all, Audience};
+pub(crate) use classify::{Audience, classify_all};
+pub(crate) use classify::{Changes, collect_changes};
 #[allow(unused_imports)]
 pub use classify::{classify_event, is_in_watched_area, workspace_relative_path};
-pub(crate) use classify::{collect_changes, Changes};
 #[allow(unused_imports)]
 pub use lifecycle::{
     __cmd__unwatch_workspace, __cmd__watch_workspace, __tauri_command_name_unwatch_workspace,
-    __tauri_command_name_watch_workspace, attach_window_destroy_cleanup, release_window_watchers,
-    unwatch_workspace, watch_workspace, WatchInterest,
+    __tauri_command_name_watch_workspace, WatchInterest, attach_window_destroy_cleanup,
+    release_window_watchers, unwatch_workspace, watch_workspace,
 };
 pub(crate) use self_write::take_self_write;
 #[allow(unused_imports)]
-pub use self_write::{record_self_write, SelfWriteLog, SELF_WRITE_TTL};
+pub use self_write::{SELF_WRITE_TTL, SelfWriteLog, record_self_write};
 
 use serde::Serialize;
 use tauri::Emitter;

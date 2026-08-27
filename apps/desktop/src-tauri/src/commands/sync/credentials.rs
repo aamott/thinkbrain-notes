@@ -8,8 +8,8 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-use crate::error::lock_or_recover;
 use crate::NativeError;
+use crate::error::lock_or_recover;
 
 #[cfg(all(
     not(test),

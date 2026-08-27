@@ -373,18 +373,22 @@ fn churn_inside_ignored_folders_never_triggers_a_rebuild() {
 fn irrelevant_events_produce_nothing_at_all() {
     let root = Path::new("/vault");
 
-    assert!(classify_event(
-        root,
-        &EventKind::Access(notify::event::AccessKind::Read),
-        &[root.join("note.md")]
-    )
-    .is_empty());
-    assert!(classify_event(
-        root,
-        &EventKind::Create(CreateKind::File),
-        &[root.join("picture.png")]
-    )
-    .is_empty());
+    assert!(
+        classify_event(
+            root,
+            &EventKind::Access(notify::event::AccessKind::Read),
+            &[root.join("note.md")]
+        )
+        .is_empty()
+    );
+    assert!(
+        classify_event(
+            root,
+            &EventKind::Create(CreateKind::File),
+            &[root.join("picture.png")]
+        )
+        .is_empty()
+    );
 }
 
 /// FSEvents cannot pair the two halves of a rename, so macOS reports one

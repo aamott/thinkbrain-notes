@@ -4,8 +4,8 @@
 //! backup/restore, and note-write preconditions (conflict detection, atomic
 //! replacement).
 
-use crate::commands::{backup::*, markdown::*, workspace::*};
 use crate::NativeError;
+use crate::commands::{backup::*, markdown::*, workspace::*};
 use std::{fs, path::Path};
 
 use super::temp_test_dir;

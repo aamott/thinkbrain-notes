@@ -4,8 +4,8 @@ use crate::commands::sync::snapshot;
 use crate::tests::make_temp_test_dir;
 use std::fs;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 /// One device: a notes folder and the hidden repository that records it.
@@ -727,10 +727,12 @@ fn an_incoming_gitlink_is_reported_and_other_notes_still_arrive() {
     assert_eq!(read(&two, "kept.md"), "stays\n");
     assert_eq!(read(&two, "later.md"), "also arrives\n");
     assert!(!two.vault.join("nested").exists());
-    assert!(synced
-        .skipped
-        .iter()
-        .any(|note| note.code == "sync.submodule_skipped" && note.path == "nested"));
+    assert!(
+        synced
+            .skipped
+            .iter()
+            .any(|note| note.code == "sync.submodule_skipped" && note.path == "nested")
+    );
 }
 
 /// Leaving the unsupported entry in the tree means this device does not

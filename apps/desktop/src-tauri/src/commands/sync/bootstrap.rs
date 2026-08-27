@@ -12,10 +12,10 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::commands::workspace::{
-    is_ignored_entry_name, stable_workspace_hash, MAX_WORKSPACE_ENTRIES,
-};
 use crate::NativeError;
+use crate::commands::workspace::{
+    MAX_WORKSPACE_ENTRIES, is_ignored_entry_name, stable_workspace_hash,
+};
 
 use super::failed;
 use super::{hidden_repo, snapshot};

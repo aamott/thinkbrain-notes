@@ -7,17 +7,17 @@
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde::Serialize;
 
-use crate::error::lock_or_recover;
 use crate::NativeError;
+use crate::error::lock_or_recover;
 
 use super::conflict::ConflictCopy;
-use super::pending::{commit_message, PendingChanges};
+use super::pending::{PendingChanges, commit_message};
 use super::snapshot;
 
 /// How long a note must be still before it is recorded.

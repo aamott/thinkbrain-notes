@@ -13,7 +13,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use super::credentials;
 use super::push;
-use super::round::{run_trip, Synced};
+use super::round::{Synced, run_trip};
 use super::snapshot;
 use super::test_support;
 

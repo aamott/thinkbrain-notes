@@ -12,8 +12,8 @@
 
 use serde::Serialize;
 
-use crate::commands::workspace::resolve_workspace_root;
 use crate::NativeError;
+use crate::commands::workspace::resolve_workspace_root;
 
 use super::engine::{Engine, StuckNote, SyncHealth, SyncPhase};
 use super::history;

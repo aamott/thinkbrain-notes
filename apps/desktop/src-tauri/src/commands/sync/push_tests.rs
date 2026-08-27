@@ -141,9 +141,11 @@ fn a_remote_already_at_our_tip_needs_nothing() {
     write(&f.vault, "one.md", "first\n");
     let tip = record(&f, "one", &["one.md"]);
 
-    assert!(carried(&f.repo, tip, Some(tip))
-        .expect("the objects are counted")
-        .is_empty());
+    assert!(
+        carried(&f.repo, tip, Some(tip))
+            .expect("the objects are counted")
+            .is_empty()
+    );
 }
 
 /// A commit whose note went back to an earlier wording reuses that earlier

@@ -17,11 +17,11 @@ use std::time::Instant;
 
 use serde::{Deserialize, Serialize};
 
+use crate::NativeError;
 use crate::commands::workspace::{
     acquire_workspace_mutation_lock, entry_metadata, resolve_workspace_entry_path,
     resolve_workspace_root,
 };
-use crate::NativeError;
 
 use super::conflict::{self, ConflictCopy};
 use super::engine::Engine;

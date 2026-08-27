@@ -4,13 +4,13 @@
 //! a single child only; it never receives authority to construct an app-data
 //! path or escape the dedicated `vaults` directory.
 
-use crate::error::{failed, NativeError};
+use crate::error::{NativeError, failed};
 use serde::Serialize;
 use std::fs;
 use std::path::{Path, PathBuf};
 use tauri::Manager;
 
-use super::workspace_paths::{describe_workspace, WorkspaceDescriptor};
+use super::workspace_paths::{WorkspaceDescriptor, describe_workspace};
 
 const MANAGED_VAULTS_DIR: &str = "vaults";
 const MAX_MANAGED_VAULT_NAME_BYTES: usize = 120;
@@ -301,9 +301,13 @@ mod tests {
 
     #[test]
     fn workspace_access_commands_are_registered() {
-        assert!(crate::commands::APP_COMMAND_PATHS
-            .contains(&"workspace::workspace_access_capabilities"));
+        assert!(
+            crate::commands::APP_COMMAND_PATHS
+                .contains(&"workspace::workspace_access_capabilities")
+        );
         assert!(crate::commands::APP_COMMAND_PATHS.contains(&"workspace::list_managed_workspaces"));
-        assert!(crate::commands::APP_COMMAND_PATHS.contains(&"workspace::create_managed_workspace"));
+        assert!(
+            crate::commands::APP_COMMAND_PATHS.contains(&"workspace::create_managed_workspace")
+        );
     }
 }

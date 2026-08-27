@@ -808,7 +808,7 @@ pub fn read_settings_file(path: &Path) -> Result<Option<String>, NativeError> {
                 "settings.read_failed",
                 "Failed to read the settings file.",
                 error,
-            ))
+            ));
         }
     };
 

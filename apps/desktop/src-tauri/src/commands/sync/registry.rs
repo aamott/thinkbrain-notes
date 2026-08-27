@@ -14,9 +14,9 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use crate::NativeError;
 use crate::commands::watcher::{WatchInterest, WorkspaceChange, WorkspaceChangeKind};
 use crate::error::lock_or_recover;
-use crate::NativeError;
 
 use super::bootstrap::bootstrap;
 use super::conflict;
@@ -354,43 +354,45 @@ fn changed_paths(changes: &[WorkspaceChange]) -> Vec<PathBuf> {
 fn spawn_sweeper() {
     std::thread::Builder::new()
         .name("thinkbrain-sync".into())
-        .spawn(|| loop {
-            std::thread::sleep(TICK);
+        .spawn(|| {
+            loop {
+                std::thread::sleep(TICK);
 
-            let engines: Vec<(String, Arc<Engine>)> = {
-                let guard = registry();
-                let Some(state) = guard.as_ref() else {
-                    continue;
+                let engines: Vec<(String, Arc<Engine>)> = {
+                    let guard = registry();
+                    let Some(state) = guard.as_ref() else {
+                        continue;
+                    };
+                    state
+                        .engines
+                        .iter()
+                        .map(|(key, engine)| (key.clone(), Arc::clone(engine)))
+                        .collect()
                 };
-                state
-                    .engines
-                    .iter()
-                    .map(|(key, engine)| (key.clone(), Arc::clone(engine)))
-                    .collect()
-            };
 
-            // Outside the lock: recording hashes and writes files, and holding
-            // the registry through that would block every window opening or
-            // closing a workspace.
-            let now = Instant::now();
-            for (key, engine) in engines {
-                let was_broken = engine.problem().is_some();
-                let was_stuck = engine.stuck().len();
-                let recorded = engine.record_settled(now);
-                if let Err(error) = &recorded {
-                    eprintln!("[sync] could not record changes for {key}: {error:?}");
+                // Outside the lock: recording hashes and writes files, and holding
+                // the registry through that would block every window opening or
+                // closing a workspace.
+                let now = Instant::now();
+                for (key, engine) in engines {
+                    let was_broken = engine.problem().is_some();
+                    let was_stuck = engine.stuck().len();
+                    let recorded = engine.record_settled(now);
+                    if let Err(error) = &recorded {
+                        eprintln!("[sync] could not record changes for {key}: {error:?}");
+                    }
+                    // Only when the footer would read differently. This runs twice
+                    // a second against every open workspace, and almost all of
+                    // those ticks are the same answer as the one before.
+                    if matches!(recorded, Ok(Some(_)))
+                        || engine.problem().is_some() != was_broken
+                        || engine.stuck().len() != was_stuck
+                    {
+                        crate::commands::watcher::announce_sync_status(&key);
+                    }
+                    maybe_sync(&key, &engine, now);
+                    maybe_maintain(&key, &engine);
                 }
-                // Only when the footer would read differently. This runs twice
-                // a second against every open workspace, and almost all of
-                // those ticks are the same answer as the one before.
-                if matches!(recorded, Ok(Some(_)))
-                    || engine.problem().is_some() != was_broken
-                    || engine.stuck().len() != was_stuck
-                {
-                    crate::commands::watcher::announce_sync_status(&key);
-                }
-                maybe_sync(&key, &engine, now);
-                maybe_maintain(&key, &engine);
             }
         })
         .expect("the sync sweeper thread starts");

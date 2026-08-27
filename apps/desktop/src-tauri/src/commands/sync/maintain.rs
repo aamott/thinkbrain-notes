@@ -20,9 +20,9 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde::Serialize;
 
+use crate::NativeError;
 use crate::commands::workspace::resolve_workspace_root;
 use crate::error::lock_or_recover;
-use crate::NativeError;
 
 use super::failed;
 use super::network::REMOTE_REF;

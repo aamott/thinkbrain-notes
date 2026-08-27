@@ -12,7 +12,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::Serialize;
 use tauri::Emitter;
 
-use crate::error::{lock_or_recover, NativeError};
+use crate::error::{NativeError, lock_or_recover};
 
 use super::bootstrap::{self, hidden_repo_path};
 use super::credentials::take_from_url;

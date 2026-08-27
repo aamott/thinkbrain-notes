@@ -2,13 +2,13 @@
 //!
 //! Real webview creation still requires a live Tauri runtime.
 
+use crate::NativeError;
 use crate::commands::workspace::{
-    describe_workspace, next_workspace_window_label, open_workspace_window,
+    WorkspaceWindowRoots, describe_workspace, next_workspace_window_label, open_workspace_window,
     register_workspace_window_root, resolve_workspace_root, unregister_workspace_window_root,
-    workspace_window_root, WorkspaceWindowRoots,
+    workspace_window_root,
 };
 use crate::tests::make_temp_test_dir;
-use crate::NativeError;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;

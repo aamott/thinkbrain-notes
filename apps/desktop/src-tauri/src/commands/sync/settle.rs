@@ -22,8 +22,8 @@
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use crate::error::lock_or_recover;
 use crate::NativeError;
+use crate::error::lock_or_recover;
 
 use super::conflict::ConflictCopy;
 use super::engine::Engine;

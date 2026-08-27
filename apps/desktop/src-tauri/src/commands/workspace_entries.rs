@@ -5,16 +5,16 @@
 
 use crate::commands::markdown::is_markdown_path;
 use crate::commands::watcher::record_self_write;
-use crate::error::{failed, NativeError};
+use crate::error::{NativeError, failed};
 use serde::Serialize;
 use std::fs;
 use std::io::Write;
 use std::path::Path;
 
 use super::workspace_paths::{
-    acquire_workspace_mutation_lock, ensure_parent_dir, entry_metadata, is_hidden_name,
-    remove_search_index_entry, resolve_workspace_entry_path, resolve_workspace_root,
-    IGNORED_FOLDERS, MAX_WORKSPACE_ENTRIES,
+    IGNORED_FOLDERS, MAX_WORKSPACE_ENTRIES, acquire_workspace_mutation_lock, ensure_parent_dir,
+    entry_metadata, is_hidden_name, remove_search_index_entry, resolve_workspace_entry_path,
+    resolve_workspace_root,
 };
 
 /// A single file-manager entry: a folder or a file of any type.

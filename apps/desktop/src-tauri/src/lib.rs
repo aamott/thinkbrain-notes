@@ -30,7 +30,9 @@ fn disable_dmabuf_renderer_on_nvidia() {
     if std::path::Path::new("/proc/driver/nvidia/version").exists() {
         // Edition 2024 made env::set_var unsafe (mutable static state).
         // This runs before any threads are spawned, so it's safe.
-        unsafe { std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1"); }
+        unsafe {
+            std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+        }
     }
 }
 

@@ -1,10 +1,10 @@
 use super::metadata::{
-    query_metadata, MetadataFacet, MetadataField, MetadataPredicate, MetadataQuery, MetadataValue,
-    INDEX_SCHEMA_VERSION,
+    INDEX_SCHEMA_VERSION, MetadataFacet, MetadataField, MetadataPredicate, MetadataQuery,
+    MetadataValue, query_metadata,
 };
 use super::{
-    clear_documents, delete_document, index_document_records, init_index_schema, search_documents,
-    DocumentRecord, SearchQuery,
+    DocumentRecord, SearchQuery, clear_documents, delete_document, index_document_records,
+    init_index_schema, search_documents,
 };
 use rusqlite::Connection;
 use serde_json::Number;
@@ -278,18 +278,20 @@ fn schema_migrates_an_existing_fts_only_cache() {
             .expect("schema version reads"),
         INDEX_SCHEMA_VERSION
     );
-    assert!(query_metadata(
-        &connection,
-        &MetadataQuery {
-            path_prefix: String::new(),
-            facet_keys: vec!["status".to_string()],
-            predicates: Vec::new(),
-        },
-    )
-    .expect("metadata query succeeds")
-    .facets[0]
-        .values
-        .is_empty());
+    assert!(
+        query_metadata(
+            &connection,
+            &MetadataQuery {
+                path_prefix: String::new(),
+                facet_keys: vec!["status".to_string()],
+                predicates: Vec::new(),
+            },
+        )
+        .expect("metadata query succeeds")
+        .facets[0]
+            .values
+            .is_empty()
+    );
 
     clear_documents(&mut connection).expect("legacy cache clears for rebuild");
     index_document_records(

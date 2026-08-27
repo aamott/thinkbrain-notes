@@ -3,7 +3,7 @@
 //! Rejects traversal and symlink escapes; owns the mutation lock, ignored-name
 //! policy, entry metadata, stable hash, and atomic-write re-export.
 
-use crate::error::{failed, NativeError};
+use crate::error::{NativeError, failed};
 use serde::Serialize;
 use std::fs;
 use std::path::{Component, Path, PathBuf};

@@ -55,9 +55,11 @@ fn paths_in(entry: &Recorded) -> Vec<&str> {
 fn a_vault_that_has_never_been_recorded_has_no_history() {
     let f = fixture("history-empty");
 
-    assert!(read(&f.repo, None, 20)
-        .expect("the history is readable")
-        .is_empty());
+    assert!(
+        read(&f.repo, None, 20)
+            .expect("the history is readable")
+            .is_empty()
+    );
 }
 
 /// The list is the whole of what a nontechnical person sees of git, so an entry
@@ -77,10 +79,12 @@ fn each_recorded_change_names_the_notes_it_touched() {
 
     assert_eq!(history.len(), 1);
     assert_eq!(paths_in(&history[0]), ["journal/two.md", "one.md"]);
-    assert!(history[0]
-        .notes
-        .iter()
-        .all(|note| note.change == NoteChange::Added));
+    assert!(
+        history[0]
+            .notes
+            .iter()
+            .all(|note| note.change == NoteChange::Added)
+    );
 }
 
 /// The message is kept word for word: it is the escape hatch for anyone who

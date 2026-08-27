@@ -8,18 +8,18 @@
 use std::path::Path;
 #[cfg(not(test))]
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::lock_or_recover;
 use crate::NativeError;
+use crate::error::lock_or_recover;
 
 use super::credentials::{
-    delete_profile, get_legacy, get_profile, is_clean_https_url, storage_status, store_profile,
-    StorageKind,
+    StorageKind, delete_profile, get_legacy, get_profile, is_clean_https_url, storage_status,
+    store_profile,
 };
 
 /// Workspace setting naming which saved sign-in this folder uses.
@@ -440,7 +440,9 @@ fn schedule_setup(
     };
     let key = root.to_string_lossy().to_string();
     let Some(engine) = super::registry::engine(&key) else {
-        eprintln!("[sync] git link saved; this folder's history is not being kept, so it was not checked yet");
+        eprintln!(
+            "[sync] git link saved; this folder's history is not being kept, so it was not checked yet"
+        );
         return;
     };
     super::registry::start_setup_round(

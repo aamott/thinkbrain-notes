@@ -5,8 +5,8 @@
 //! the repository git sync pushes from are all the same repo, and it lives in
 //! OS app-data rather than the vault so that no sync daemon ever sees it.
 
-pub(super) use crate::error::failed;
 use crate::NativeError;
+pub(super) use crate::error::failed;
 
 /// Strips the Windows verbatim-path prefix (`\\?\`) so a local path can be
 /// parsed as a git remote URL by `gix::url::parse`.

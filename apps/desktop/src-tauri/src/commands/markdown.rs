@@ -1,5 +1,5 @@
 use crate::commands::watcher::record_self_write;
-use crate::error::{failed, NativeError};
+use crate::error::{NativeError, failed};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 use tauri::Manager;
@@ -9,9 +9,9 @@ use std::fs;
 const MAX_MARKDOWN_DEPTH: usize = 20;
 
 use crate::commands::workspace::{
-    acquire_workspace_mutation_lock, ensure_parent_dir, entry_metadata, is_ignored_entry_name,
-    normalize_relative_path, remove_search_index_entry, resolve_workspace_entry_path,
-    resolve_workspace_root, write_file_atomically, MAX_WORKSPACE_ENTRIES,
+    MAX_WORKSPACE_ENTRIES, acquire_workspace_mutation_lock, ensure_parent_dir, entry_metadata,
+    is_ignored_entry_name, normalize_relative_path, remove_search_index_entry,
+    resolve_workspace_entry_path, resolve_workspace_root, write_file_atomically,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]

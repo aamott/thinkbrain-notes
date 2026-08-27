@@ -19,8 +19,8 @@
 //! them. See `plans/auto-sync/done-the_round_trip-high-hard.md`.
 
 use std::path::Path;
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 use gix::merge::tree::{FileFavor, TreatAsUnresolved, TreeFavor};
 use serde::Serialize;

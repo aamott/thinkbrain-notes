@@ -1,6 +1,6 @@
 use crate::commands::workspace::{resolve_workspace_root, stable_workspace_hash};
-use crate::error::{failed, lock_or_recover, NativeError};
-use rusqlite::{params, Connection, Transaction};
+use crate::error::{NativeError, failed, lock_or_recover};
+use rusqlite::{Connection, Transaction, params};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -14,11 +14,11 @@ mod metadata;
 #[cfg(test)]
 mod metadata_tests;
 
+pub use metadata::{MetadataField, MetadataPredicate, MetadataQueryResult};
 use metadata::{
     clear_document_metadata, delete_document_metadata, init_metadata_schema, normalize_path_prefix,
     path_prefix_sql, replace_document_metadata,
 };
-pub use metadata::{MetadataField, MetadataPredicate, MetadataQueryResult};
 
 static SEARCH_CONNECTIONS: Mutex<Option<HashMap<String, Arc<Mutex<Connection>>>>> =
     Mutex::new(None);
