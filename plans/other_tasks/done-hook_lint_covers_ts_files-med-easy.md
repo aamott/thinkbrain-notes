@@ -1,6 +1,6 @@
 # Story: Hook Lint Reaches Hooks Written in `.ts`
 
-**Status:** ⬜ pending · **Urgency:** medium · **Difficulty:** easy (mechanically) —
+**Status:** ✅ done · **Urgency:** medium · **Difficulty:** easy (mechanically) —
 the risk is entirely in what it uncovers
 
 ## The gap
@@ -68,11 +68,11 @@ found"** — the rule was not merely passing, it was not loaded.
 
 ## Acceptance
 
-- [ ] `react-hooks` rules run against `.ts` as well as `.tsx`
-- [ ] `pnpm lint` passes with every finding either fixed or individually
+- [x] `react-hooks` rules run against `.ts` as well as `.tsx`
+- [x] `pnpm lint` passes with every finding either fixed or individually
       disabled with a stated reason
-- [ ] No config-level or file-level blanket suppression of either rule
-- [ ] Any dependency actually added is checked for a behavior change — a newly
+- [x] No config-level or file-level blanket suppression of either rule
+- [x] Any dependency actually added is checked for a behavior change — a newly
       complete deps array can turn a mount-once effect into one that re-runs;
       the full suite passing is necessary but not sufficient, so say in the PR
       which effects changed shape

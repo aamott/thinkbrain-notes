@@ -1,11 +1,14 @@
 // @vitest-environment happy-dom
 
 import { act } from "react";
-import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SettingsTab } from "./SettingsTab";
 import { appSettingsRegistry, useSettingsStore } from "./settingsStore";
+import {
+  createSettingsTestHarness,
+  seedSettingsStore
+} from "./settingsTestHelpers";
 
 /**
  * Settings search/filter component tests (Story 5).
@@ -15,18 +18,8 @@ import { appSettingsRegistry, useSettingsStore } from "./settingsStore";
  * convention: `createRoot` + `act` + DOM queries (no @testing-library/react).
  */
 
-let root: Root | null = null;
-let container: HTMLDivElement | null = null;
+const harness = createSettingsTestHarness();
 let temporaryRegistrations: Array<{ dispose(): void }> = [];
-
-/** Default app values seeded into the store for most tests. */
-const SEEDED_APP_VALUES: Record<string, unknown> = {
-  "appearance.theme": "system",
-  "appearance.themeFile": null,
-  "editor.fontSize": 16,
-  "editor.lineWrapping": true,
-  "settings.autosave": false
-};
 
 beforeEach(() => {
   // happy-dom has no layout engine; give the virtualizer a deterministic
@@ -44,29 +37,13 @@ beforeEach(() => {
   });
   vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(224);
   vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(400);
-  useSettingsStore.setState({
-    appValues: { ...SEEDED_APP_VALUES },
-    workspaceValues: null,
-    workspaceRootPath: null,
-    stagedChanges: {},
-    isDirty: false,
-    dirtyCount: 0,
-    activeSection: "editor.display",
-    searchQuery: "",
-    loadError: null,
-    saveError: null,
-    validationDiagnostics: [],
-    loaded: true
-  });
+  seedSettingsStore({ activeSection: "editor.display" });
 });
 
 afterEach(async () => {
-  await act(async () => root?.unmount());
+  await harness.unmount();
   for (const registration of temporaryRegistrations) registration.dispose();
   temporaryRegistrations = [];
-  container?.remove();
-  root = null;
-  container = null;
   vi.restoreAllMocks();
 });
 
@@ -75,13 +52,7 @@ afterEach(async () => {
  * Returns the container for querying.
  */
 async function renderSettingsTab(): Promise<HTMLDivElement> {
-  container = document.createElement("div");
-  document.body.append(container);
-  root = createRoot(container);
-  await act(async () => {
-    root?.render(<SettingsTab />);
-  });
-  return container;
+  return harness.render(<SettingsTab />);
 }
 
 /** Sets the search query via the store and flushes React updates. */
@@ -93,9 +64,7 @@ async function setSearchQuery(query: string): Promise<void> {
 
 /** Clicks an element and flushes React updates. */
 async function click(element: Element): Promise<void> {
-  await act(async () => {
-    element.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
-  });
+  return harness.click(element);
 }
 
 /** Types into React's controlled search input and flushes the input event. */
@@ -307,17 +276,10 @@ describe("SettingsSearch", () => {
     vi.useFakeTimers();
     try {
       useSettingsStore.setState({ activeSection: "appearance.theme" });
-      await act(async () => {
-        container = document.createElement("div");
-        document.body.append(container);
-        root = createRoot(container);
-        root?.render(<SettingsTab />);
-      });
+      const el = await harness.render(<SettingsTab />);
       await act(async () => {
         useSettingsStore.setState({ searchQuery: "font" });
       });
-
-      const el = container!;
       const resultButton = Array.from(
         el.querySelectorAll<HTMLButtonElement>('[role="list"] button')
       ).find((b) => b.textContent?.includes("Font size"));

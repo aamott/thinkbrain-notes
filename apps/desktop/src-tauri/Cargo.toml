@@ -3,7 +3,7 @@ name = "thinkbrain-notes-desktop"
 version = "0.2.0"
 description = "Thinkbrain Notes desktop shell"
 authors = ["Thinkbrain Notes Contributors"]
-edition = "2021"
+edition = "2024"
 
 [lib]
 name = "thinkbrain_notes_desktop_lib"
@@ -13,7 +13,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-agent-client-protocol = "1.2"
+agent-client-protocol = "2"
 gix = { version = "0.86", default-features = false, features = ["blocking-network-client", "blocking-http-transport-reqwest-rust-tls", "merge", "worktree-mutation", "max-performance-safe", "index", "status", "credentials", "tree-editor", "revision", "sha1", "attributes", "excludes", "dirwalk", "parallel"] }
 flate2 = "1"
 notify = "8.2.0"

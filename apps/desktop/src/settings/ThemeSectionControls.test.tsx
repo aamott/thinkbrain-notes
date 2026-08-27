@@ -1,13 +1,17 @@
 // @vitest-environment happy-dom
 
 import { act } from "react";
-import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ThemePicker, ThemeToolbar } from "./ThemeSectionControls";
 import { useSettingsStore } from "./settingsStore";
 import type { ImportThemeResult } from "./themeImportExport";
 import type { ThemeEntry } from "./themeAdapter";
+import {
+  SEEDED_APP_VALUES,
+  createSettingsTestHarness,
+  seedSettingsStore
+} from "./settingsTestHelpers";
 
 /**
  * ThemePicker & ThemeToolbar component tests.
@@ -45,34 +49,11 @@ import {
 } from "./themeImportExport";
 import { listThemes } from "./themeAdapter";
 
-let root: Root | null = null;
-let container: HTMLDivElement | null = null;
-
-/** Default app values seeded into the store for most tests. */
-const SEEDED_APP_VALUES: Record<string, unknown> = {
-  "appearance.theme": "system",
-  "appearance.themeFile": null,
-  "editor.fontSize": 16,
-  "editor.lineWrapping": true,
-  "settings.autosave": false
-};
+const harness = createSettingsTestHarness();
 
 beforeEach(() => {
   // Reset the singleton store to a clean, loaded state before each test.
-  useSettingsStore.setState({
-    appValues: { ...SEEDED_APP_VALUES },
-    workspaceValues: null,
-    workspaceRootPath: null,
-    stagedChanges: {},
-    isDirty: false,
-    dirtyCount: 0,
-    activeSection: null,
-    searchQuery: "",
-    loadError: null,
-    saveError: null,
-    validationDiagnostics: [],
-    loaded: true
-  });
+  seedSettingsStore();
 
   // Reset mock call counts and default implementations.
   vi.mocked(buildThemeExport).mockReset();
@@ -90,32 +71,8 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
-  await act(async () => root?.unmount());
-  container?.remove();
-  root = null;
-  container = null;
+  await harness.unmount();
 });
-
-/**
- * Renders a component into a fresh container and waits for effects.
- * Returns the container for querying.
- */
-async function render(component: React.ReactElement): Promise<HTMLDivElement> {
-  container = document.createElement("div");
-  document.body.append(container);
-  root = createRoot(container);
-  await act(async () => {
-    root?.render(component);
-  });
-  return container;
-}
-
-/** Clicks an element and flushes React updates. */
-async function click(element: Element): Promise<void> {
-  await act(async () => {
-    element.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
-  });
-}
 
 /** Returns the toolbar's transient status message, or null if none is rendered. */
 function getStatus(el: HTMLElement): string | null {
@@ -139,7 +96,7 @@ describe("ThemePicker", () => {
     vi.mocked(listThemes).mockResolvedValue([
       { name: "Forest Dark", path: "/themes/forest-dark.tbtheme.json" }
     ]);
-    const el = await render(<ThemePicker />);
+    const el = await harness.render(<ThemePicker />);
 
     const select = el.querySelector<HTMLSelectElement>("select#theme-picker-select");
     expect(select).not.toBeNull();
@@ -170,7 +127,7 @@ describe("ThemePicker", () => {
     useSettingsStore.setState({
       appValues: { ...SEEDED_APP_VALUES, "appearance.theme": "dark" }
     });
-    const el = await render(<ThemePicker />);
+    const el = await harness.render(<ThemePicker />);
 
     const select = el.querySelector<HTMLSelectElement>("select#theme-picker-select");
     expect(select?.value).toBe("dark");
@@ -184,7 +141,7 @@ describe("ThemePicker", () => {
     vi.mocked(listThemes).mockResolvedValue([
       { name: "Forest Dark", path }
     ]);
-    const el = await render(<ThemePicker />);
+    const el = await harness.render(<ThemePicker />);
 
     const select = el.querySelector<HTMLSelectElement>("select#theme-picker-select");
     expect(select?.value).toBe(path);
@@ -202,7 +159,7 @@ describe("ThemePicker", () => {
     vi.mocked(listThemes).mockResolvedValue([
       { name: "Forest Dark", path: "/themes/forest-dark.tbtheme.json" }
     ]);
-    const el = await render(<ThemePicker />);
+    const el = await harness.render(<ThemePicker />);
 
     const select = el.querySelector<HTMLSelectElement>("select#theme-picker-select")!;
     await changeSelect(select, "dark");
@@ -220,7 +177,7 @@ describe("ThemePicker", () => {
     vi.mocked(listThemes).mockResolvedValue([
       { name: "Forest Dark", path }
     ]);
-    const el = await render(<ThemePicker />);
+    const el = await harness.render(<ThemePicker />);
 
     const select = el.querySelector<HTMLSelectElement>("select#theme-picker-select")!;
     await changeSelect(select, path);
@@ -233,7 +190,7 @@ describe("ThemePicker", () => {
 
   it("renders a load error when listThemes rejects", async () => {
     vi.mocked(listThemes).mockRejectedValue(new Error("boom"));
-    const el = await render(<ThemePicker />);
+    const el = await harness.render(<ThemePicker />);
 
     const alert = el.querySelector('[role="alert"]');
     expect(alert).not.toBeNull();
@@ -243,7 +200,7 @@ describe("ThemePicker", () => {
 
 describe("ThemeToolbar", () => {
   it("renders Export and Import buttons", async () => {
-    const el = await render(<ThemeToolbar />);
+    const el = await harness.render(<ThemeToolbar />);
 
     const exportBtn = el.querySelector<HTMLButtonElement>(
       'button[aria-label="Export Theme"]'
@@ -258,12 +215,12 @@ describe("ThemeToolbar", () => {
   describe("handleExport", () => {
     it("shows 'Theme exported.' on a successful write", async () => {
       vi.mocked(writeThemeExportFile).mockResolvedValue(true);
-      const el = await render(<ThemeToolbar />);
+      const el = await harness.render(<ThemeToolbar />);
 
       const exportBtn = el.querySelector<HTMLButtonElement>(
         'button[aria-label="Export Theme"]'
       )!;
-      await click(exportBtn);
+      await harness.click(exportBtn);
 
       expect(writeThemeExportFile).toHaveBeenCalledWith('{"name":"x"}');
       expect(getStatus(el)).toBe("Theme exported.");
@@ -272,12 +229,12 @@ describe("ThemeToolbar", () => {
     it("shows no status message when the user cancels the save dialog", async () => {
       // Cancel resolves false — a non-event the toolbar ignores.
       vi.mocked(writeThemeExportFile).mockResolvedValue(false);
-      const el = await render(<ThemeToolbar />);
+      const el = await harness.render(<ThemeToolbar />);
 
       const exportBtn = el.querySelector<HTMLButtonElement>(
         'button[aria-label="Export Theme"]'
       )!;
-      await click(exportBtn);
+      await harness.click(exportBtn);
 
       expect(getStatus(el)).toBeNull();
     });
@@ -287,12 +244,12 @@ describe("ThemeToolbar", () => {
       vi.mocked(writeThemeExportFile).mockRejectedValue(
         new Error("disk full")
       );
-      const el = await render(<ThemeToolbar />);
+      const el = await harness.render(<ThemeToolbar />);
 
       const exportBtn = el.querySelector<HTMLButtonElement>(
         'button[aria-label="Export Theme"]'
       )!;
-      await click(exportBtn);
+      await harness.click(exportBtn);
 
       const status = getStatus(el);
       expect(status).not.toBeNull();
@@ -306,12 +263,12 @@ describe("ThemeToolbar", () => {
         themeName: "Test",
         diagnostics: []
       });
-      const el = await render(<ThemeToolbar />);
+      const el = await harness.render(<ThemeToolbar />);
 
       const importBtn = el.querySelector<HTMLButtonElement>(
         'button[aria-label="Import Theme"]'
       )!;
-      await click(importBtn);
+      await harness.click(importBtn);
 
       const status = getStatus(el);
       expect(status).not.toBeNull();
@@ -323,12 +280,12 @@ describe("ThemeToolbar", () => {
         themeName: "Test",
         diagnostics: [{ code: "x", message: "bad", severity: "warning" }]
       });
-      const el = await render(<ThemeToolbar />);
+      const el = await harness.render(<ThemeToolbar />);
 
       const importBtn = el.querySelector<HTMLButtonElement>(
         'button[aria-label="Import Theme"]'
       )!;
-      await click(importBtn);
+      await harness.click(importBtn);
 
       const status = getStatus(el);
       expect(status).not.toBeNull();
@@ -343,12 +300,12 @@ describe("ThemeToolbar", () => {
           { code: "name.missing", message: "name is required", severity: "error" }
         ]
       });
-      const el = await render(<ThemeToolbar />);
+      const el = await harness.render(<ThemeToolbar />);
 
       const importBtn = el.querySelector<HTMLButtonElement>(
         'button[aria-label="Import Theme"]'
       )!;
-      await click(importBtn);
+      await harness.click(importBtn);
 
       const status = getStatus(el);
       expect(status).not.toBeNull();
@@ -363,12 +320,12 @@ describe("ThemeToolbar", () => {
         themeName: null,
         diagnostics: []
       });
-      const el = await render(<ThemeToolbar />);
+      const el = await harness.render(<ThemeToolbar />);
 
       const importBtn = el.querySelector<HTMLButtonElement>(
         'button[aria-label="Import Theme"]'
       )!;
-      await click(importBtn);
+      await harness.click(importBtn);
 
       const status = getStatus(el);
       expect(status).not.toBeNull();
@@ -379,12 +336,12 @@ describe("ThemeToolbar", () => {
     it("shows no status message when the user cancels the open dialog", async () => {
       // Cancel resolves null — a non-event the toolbar ignores.
       vi.mocked(importTheme).mockResolvedValue(null);
-      const el = await render(<ThemeToolbar />);
+      const el = await harness.render(<ThemeToolbar />);
 
       const importBtn = el.querySelector<HTMLButtonElement>(
         'button[aria-label="Import Theme"]'
       )!;
-      await click(importBtn);
+      await harness.click(importBtn);
 
       expect(getStatus(el)).toBeNull();
     });
@@ -392,12 +349,12 @@ describe("ThemeToolbar", () => {
     it("shows an 'Import failed' status message when the read throws", async () => {
       // Read failures now throw (fail-loudly) and are surfaced via .catch().
       vi.mocked(importTheme).mockRejectedValue(new Error("permission denied"));
-      const el = await render(<ThemeToolbar />);
+      const el = await harness.render(<ThemeToolbar />);
 
       const importBtn = el.querySelector<HTMLButtonElement>(
         'button[aria-label="Import Theme"]'
       )!;
-      await click(importBtn);
+      await harness.click(importBtn);
 
       const status = getStatus(el);
       expect(status).not.toBeNull();

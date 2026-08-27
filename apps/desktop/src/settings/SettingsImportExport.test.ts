@@ -8,6 +8,10 @@ import {
   importSettings
 } from "./settingsImportExport";
 import { useSettingsStore } from "./settingsStore";
+import {
+  SEEDED_APP_VALUES as BASE_SEEDED_APP_VALUES,
+  seedSettingsStore
+} from "./settingsTestHelpers";
 
 /**
  * Settings import/export logic tests.
@@ -34,15 +38,14 @@ vi.mock("../native/fs", () => ({
 import { saveFilePath, pickFilePath } from "../native/dialogs";
 import { writeTextFileNative, readTextFileNative } from "../native/fs";
 
-/** Default app values seeded into the store for most tests. */
+/**
+ * Default app values seeded into the store for most tests. Extends the shared
+ * base with the extra keys this module's export payload asserts on.
+ */
 const SEEDED_APP_VALUES: Record<string, unknown> = {
+  ...BASE_SEEDED_APP_VALUES,
   "appearance.shellMode": "auto",
-  "appearance.theme": "system",
-  "appearance.themeFile": null,
-  "editor.fontSize": 16,
-  "editor.lineWrapping": true,
   "editor.livePreview": true,
-  "settings.autosave": false,
   "sync.settleAutomatically": true,
   "sync.historyPolicy": "",
   "ui.mobileHub": ""
@@ -50,20 +53,7 @@ const SEEDED_APP_VALUES: Record<string, unknown> = {
 
 beforeEach(() => {
   // Reset the singleton store to a clean, loaded state before each test.
-  useSettingsStore.setState({
-    appValues: { ...SEEDED_APP_VALUES },
-    workspaceValues: null,
-    workspaceRootPath: null,
-    stagedChanges: {},
-    isDirty: false,
-    dirtyCount: 0,
-    activeSection: null,
-    searchQuery: "",
-    loadError: null,
-    saveError: null,
-    validationDiagnostics: [],
-    loaded: true
-  });
+  seedSettingsStore({ appValues: SEEDED_APP_VALUES });
 
   // Reset mock call counts and default implementations.
   vi.mocked(saveFilePath).mockReset();

@@ -46,15 +46,7 @@ import {
   readCurrentThemeBase
 } from "./themeImportExport";
 import { useSettingsStore } from "./settingsStore";
-
-/** Default app values seeded into the store for most tests. */
-const SEEDED_APP_VALUES: Record<string, unknown> = {
-  "appearance.theme": "system",
-  "appearance.themeFile": null,
-  "editor.fontSize": 16,
-  "editor.lineWrapping": true,
-  "settings.autosave": false
-};
+import { seedSettingsStore } from "./settingsTestHelpers";
 
 /** A small representative token map used by export tests. */
 const MOCK_TOKENS: Record<string, string> = {
@@ -78,20 +70,7 @@ function stubGetComputedStyle(tokens: Record<string, string>): void {
 
 beforeEach(() => {
   // Reset the singleton store to a clean, loaded state before each test.
-  useSettingsStore.setState({
-    appValues: { ...SEEDED_APP_VALUES },
-    workspaceValues: null,
-    workspaceRootPath: null,
-    stagedChanges: {},
-    isDirty: false,
-    dirtyCount: 0,
-    activeSection: null,
-    searchQuery: "",
-    loadError: null,
-    saveError: null,
-    validationDiagnostics: [],
-    loaded: true
-  });
+  seedSettingsStore();
 
   // Reset mock call counts and default implementations.
   vi.mocked(saveFilePath).mockReset();

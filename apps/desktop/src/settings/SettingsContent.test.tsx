@@ -1,13 +1,16 @@
 // @vitest-environment happy-dom
 
 import { act } from "react";
-import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SettingsContent } from "./SettingsContent";
 import { createScrollSpyHarness } from "./scrollSpyTestUtils";
 import { requestSettingHighlight } from "./settingHighlight";
 import { useSettingsStore } from "./settingsStore";
+import {
+  createSettingsTestHarness,
+  seedSettingsStore
+} from "./settingsTestHelpers";
 
 /**
  * SettingsContent tests for inline validation diagnostics and per-section
@@ -29,37 +32,15 @@ vi.mock("../native/fs", () => ({
   readTextFileNative: vi.fn<(path: string) => Promise<string | null>>()
 }));
 
-let root: Root | null = null;
-let container: HTMLDivElement | null = null;
+const harness = createSettingsTestHarness();
 const scrollSpy = createScrollSpyHarness();
-
-/** Default app values seeded into the store for most tests. */
-const SEEDED_APP_VALUES: Record<string, unknown> = {
-  "appearance.theme": "system",
-  "appearance.themeFile": null,
-  "editor.fontSize": 16,
-  "editor.lineWrapping": true,
-  "settings.autosave": false
-};
 
 beforeEach(() => {
   scrollSpy.install();
 
   // Reset the singleton store to a clean, loaded state before every test.
   // Replace resetSection with a spy so the click test can assert its argument.
-  useSettingsStore.setState({
-    appValues: { ...SEEDED_APP_VALUES },
-    workspaceValues: null,
-    workspaceRootPath: null,
-    stagedChanges: {},
-    isDirty: false,
-    dirtyCount: 0,
-    activeSection: null,
-    searchQuery: "",
-    loadError: null,
-    saveError: null,
-    validationDiagnostics: [],
-    loaded: true,
+  seedSettingsStore({
     saveSettings: vi.fn(async () => ({ success: true, diagnostics: [] })),
     resetStaged: vi.fn(() => undefined),
     resetSection: vi.fn(() => undefined)
@@ -67,36 +48,10 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
-  await act(async () => root?.unmount());
-  container?.remove();
-  root = null;
-  container = null;
+  await harness.unmount();
   vi.useRealTimers();
   scrollSpy.restore();
 });
-
-/**
- * Renders a component into a fresh container and flushes React effects.
- *
- * @param component The React element under test.
- * @returns The container containing the rendered component.
- */
-async function render(component: React.ReactElement): Promise<HTMLDivElement> {
-  container = document.createElement("div");
-  document.body.append(container);
-  root = createRoot(container);
-  await act(async () => {
-    root?.render(component);
-  });
-  return container;
-}
-
-/** Dispatches a click and flushes resulting React updates. */
-async function click(element: Element): Promise<void> {
-  await act(async () => {
-    element.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
-  });
-}
 
 /** Publishes one visible section to the content observer. */
 async function intersectSection(section: Element): Promise<void> {
@@ -107,7 +62,7 @@ async function intersectSection(section: Element): Promise<void> {
 
 describe("SettingsContent single-page layout", () => {
   it("renders every app section in registry order", async () => {
-    const el = await render(<SettingsContent />);
+    const el = await harness.render(<SettingsContent />);
     const ids = Array.from(el.querySelectorAll("section"), (section) => section.id);
 
     expect(ids).toContain("settings-section-app:appearance.theme");
@@ -120,7 +75,7 @@ describe("SettingsContent single-page layout", () => {
 
   it("appends workspace sections only when a workspace is open", async () => {
     useSettingsStore.setState({ workspaceValues: { "sync.destination": "" } });
-    const el = await render(<SettingsContent />);
+    const el = await harness.render(<SettingsContent />);
     const ids = Array.from(el.querySelectorAll("section"), (section) => section.id);
 
     expect(ids).toContain("settings-section-workspace:sync.destination");
@@ -130,7 +85,7 @@ describe("SettingsContent single-page layout", () => {
   });
 
   it("updates activeSection from scroll position", async () => {
-    const el = await render(<SettingsContent />);
+    const el = await harness.render(<SettingsContent />);
     const display = el.querySelector("#settings-section-app\\:editor\\.display")!;
 
     await intersectSection(display);
@@ -139,7 +94,7 @@ describe("SettingsContent single-page layout", () => {
 
   it("scrolls to and highlights a setting requested by search", async () => {
     vi.useFakeTimers();
-    const el = await render(<SettingsContent />);
+    const el = await harness.render(<SettingsContent />);
     const display = el.querySelector<HTMLElement>("#settings-section-app\\:editor\\.display")!;
 
     await act(async () => requestSettingHighlight("editor.fontSize"));
@@ -170,7 +125,7 @@ describe("SettingsContent inline validation errors", () => {
         }
       ]
     });
-    const el = await render(<SettingsContent />);
+    const el = await harness.render(<SettingsContent />);
 
     const alerts = el.querySelectorAll('[role="alert"]');
     expect(alerts.length).toBe(1);
@@ -189,7 +144,7 @@ describe("SettingsContent inline validation errors", () => {
         }
       ]
     });
-    const el = await render(<SettingsContent />);
+    const el = await harness.render(<SettingsContent />);
 
     expect(el.querySelectorAll('[role="alert"]').length).toBe(1);
 
@@ -213,7 +168,7 @@ describe("SettingsContent inline validation errors", () => {
         }
       ]
     });
-    const el = await render(<SettingsContent />);
+    const el = await harness.render(<SettingsContent />);
 
     // All sections remain mounted, so diagnostics never disappear while scrolling.
     expect(el.querySelectorAll('[role="alert"]').length).toBe(1);
@@ -223,7 +178,7 @@ describe("SettingsContent inline validation errors", () => {
 describe("SettingsContent per-section reset button", () => {
   it("is disabled without staged changes, enabled with them, and calls resetSection on click", async () => {
     useSettingsStore.setState({ activeSection: "editor.display" });
-    const el = await render(<SettingsContent />);
+    const el = await harness.render(<SettingsContent />);
 
     const resetBtn = el.querySelector<HTMLButtonElement>(
       'button[aria-label="Reset Display to defaults"]'
@@ -235,7 +190,7 @@ describe("SettingsContent per-section reset button", () => {
     });
     expect(resetBtn.disabled).toBe(false);
 
-    await click(resetBtn);
+    await harness.click(resetBtn);
     expect(useSettingsStore.getState().resetSection).toHaveBeenCalledWith("editor.display");
   });
 });

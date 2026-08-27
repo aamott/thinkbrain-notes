@@ -1,13 +1,17 @@
 // @vitest-environment happy-dom
 
 import { act } from "react";
-import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SettingsHeaderBar } from "./SettingsHeaderBar";
 import { pickFilePath, saveFilePath } from "../native/dialogs";
 import { readTextFileNative, writeTextFileNative } from "../native/fs";
 import { useSettingsStore } from "./settingsStore";
+import {
+  SEEDED_APP_VALUES,
+  createSettingsTestHarness,
+  seedSettingsStore
+} from "./settingsTestHelpers";
 
 /**
  * SettingsHeaderBar action, breadcrumb, and import/export tests.
@@ -27,33 +31,11 @@ vi.mock("../native/fs", () => ({
   readTextFileNative: vi.fn<(path: string) => Promise<string | null>>()
 }));
 
-let root: Root | null = null;
-let container: HTMLDivElement | null = null;
-
-/** Default app values seeded into the store for most tests. */
-const SEEDED_APP_VALUES: Record<string, unknown> = {
-  "appearance.theme": "system",
-  "appearance.themeFile": null,
-  "editor.fontSize": 16,
-  "editor.lineWrapping": true,
-  "settings.autosave": false
-};
+const harness = createSettingsTestHarness();
 
 beforeEach(() => {
   vi.clearAllMocks();
-  useSettingsStore.setState({
-    appValues: { ...SEEDED_APP_VALUES },
-    workspaceValues: null,
-    workspaceRootPath: null,
-    stagedChanges: {},
-    isDirty: false,
-    dirtyCount: 0,
-    activeSection: null,
-    searchQuery: "",
-    loadError: null,
-    saveError: null,
-    validationDiagnostics: [],
-    loaded: true,
+  seedSettingsStore({
     saveSettings: vi.fn(async () => ({ success: true, diagnostics: [] })),
     resetStaged: vi.fn(() => undefined),
     resetSection: vi.fn(() => undefined)
@@ -61,33 +43,12 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
-  await act(async () => root?.unmount());
-  container?.remove();
-  root = null;
-  container = null;
+  await harness.unmount();
 });
-
-/** Renders a component into a fresh host and flushes its initial updates. */
-async function render(component: React.ReactElement): Promise<HTMLDivElement> {
-  container = document.createElement("div");
-  document.body.append(container);
-  root = createRoot(container);
-  await act(async () => {
-    root?.render(component);
-  });
-  return container;
-}
-
-/** Dispatches a click and flushes React state updates. */
-async function click(element: Element): Promise<void> {
-  await act(async () => {
-    element.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
-  });
-}
 
 describe("SettingsHeaderBar", () => {
   it("renders Export, Import, Reset, and Save buttons", async () => {
-    const el = await render(<SettingsHeaderBar />);
+    const el = await harness.render(<SettingsHeaderBar />);
     const buttons = Array.from(el.querySelectorAll<HTMLButtonElement>("button"));
 
     expect(buttons).toHaveLength(4);
@@ -100,7 +61,7 @@ describe("SettingsHeaderBar", () => {
 
   it("enables Reset and Save when dirty and shows dirty count", async () => {
     useSettingsStore.setState({ isDirty: true, dirtyCount: 3 });
-    const el = await render(<SettingsHeaderBar />);
+    const el = await harness.render(<SettingsHeaderBar />);
     const buttons = Array.from(el.querySelectorAll<HTMLButtonElement>("button"));
 
     expect(buttons[2]!.disabled).toBe(false);
@@ -110,18 +71,18 @@ describe("SettingsHeaderBar", () => {
 
   it("clicking Save calls saveSettings from the store", async () => {
     useSettingsStore.setState({ isDirty: true, dirtyCount: 1 });
-    const el = await render(<SettingsHeaderBar />);
+    const el = await harness.render(<SettingsHeaderBar />);
 
-    await click(el.querySelectorAll("button")[3]!);
+    await harness.click(el.querySelectorAll("button")[3]!);
 
     expect(useSettingsStore.getState().saveSettings).toHaveBeenCalledTimes(1);
   });
 
   it("clicking Reset calls resetStaged from the store", async () => {
     useSettingsStore.setState({ isDirty: true, dirtyCount: 1 });
-    const el = await render(<SettingsHeaderBar />);
+    const el = await harness.render(<SettingsHeaderBar />);
 
-    await click(el.querySelectorAll("button")[2]!);
+    await harness.click(el.querySelectorAll("button")[2]!);
 
     expect(useSettingsStore.getState().resetStaged).toHaveBeenCalledTimes(1);
   });
@@ -132,7 +93,7 @@ describe("SettingsHeaderBar", () => {
       dirtyCount: 1,
       saveError: "Failed to save settings: disk full"
     });
-    const el = await render(<SettingsHeaderBar />);
+    const el = await harness.render(<SettingsHeaderBar />);
 
     const alert = el.querySelector('[role="alert"]');
     expect(alert).not.toBeNull();
@@ -140,7 +101,7 @@ describe("SettingsHeaderBar", () => {
   });
 
   it("does not display saveError when null", async () => {
-    const el = await render(<SettingsHeaderBar />);
+    const el = await harness.render(<SettingsHeaderBar />);
 
     expect(el.querySelector('[role="alert"]')).toBeNull();
   });
@@ -148,7 +109,7 @@ describe("SettingsHeaderBar", () => {
 
 describe("SettingsHeaderBar accessibility and autosave", () => {
   it("gives Export and Import buttons titles and aria-labels", async () => {
-    const el = await render(<SettingsHeaderBar />);
+    const el = await harness.render(<SettingsHeaderBar />);
 
     for (const label of ["Export settings", "Import settings"]) {
       const button = el.querySelector<HTMLButtonElement>(`button[title="${label}"]`);
@@ -163,7 +124,7 @@ describe("SettingsHeaderBar accessibility and autosave", () => {
       isDirty: true,
       dirtyCount: 1
     });
-    const el = await render(<SettingsHeaderBar />);
+    const el = await harness.render(<SettingsHeaderBar />);
 
     expect(el.querySelector('[aria-label="Export settings"]')).not.toBeNull();
     expect(el.querySelector('[aria-label="Import settings"]')).not.toBeNull();
@@ -178,7 +139,7 @@ describe("SettingsHeaderBar accessibility and autosave", () => {
       isDirty: true,
       dirtyCount: 1
     });
-    const el = await render(<SettingsHeaderBar />);
+    const el = await harness.render(<SettingsHeaderBar />);
 
     expect(el.textContent).toContain("Autosave enabled");
     expect(el.querySelector('[aria-label="Reset all unsaved settings"]')).toBeNull();
@@ -187,7 +148,7 @@ describe("SettingsHeaderBar accessibility and autosave", () => {
 
 describe("SettingsHeaderBar breadcrumbs", () => {
   it("renders fallback breadcrumb 'Settings' when no active section", async () => {
-    const el = await render(<SettingsHeaderBar />);
+    const el = await harness.render(<SettingsHeaderBar />);
     const breadcrumb = el.querySelector('[aria-label="Settings location"]');
 
     expect(breadcrumb?.textContent).toBe("Settings");
@@ -195,7 +156,7 @@ describe("SettingsHeaderBar breadcrumbs", () => {
 
   it("renders active section breadcrumb path", async () => {
     useSettingsStore.setState({ activeSection: "editor.display" });
-    const el = await render(<SettingsHeaderBar />);
+    const el = await harness.render(<SettingsHeaderBar />);
     const breadcrumb = el.querySelector('[aria-label="Settings location"]');
 
     expect(breadcrumb?.textContent).toContain("Editor");
@@ -212,17 +173,17 @@ describe("SettingsHeaderBar saving state", () => {
     });
     const saveSettings = vi.fn(() => savePromise);
     useSettingsStore.setState({ isDirty: true, dirtyCount: 1, saveSettings });
-    const el = await render(<SettingsHeaderBar />);
+    const el = await harness.render(<SettingsHeaderBar />);
     const saveButton = el.querySelectorAll<HTMLButtonElement>("button")[3]!;
 
-    await click(saveButton);
+    await harness.click(saveButton);
     expect(saveButton.textContent).toBe("Saving…");
     expect(saveButton.disabled).toBe(true);
     expect(el.querySelector('[aria-label="Reset all unsaved settings"]')?.getAttribute("disabled")).toBe(
       ""
     );
 
-    await click(saveButton);
+    await harness.click(saveButton);
     expect(saveSettings).toHaveBeenCalledTimes(1);
 
     await act(async () => {
@@ -243,7 +204,7 @@ describe("SettingsHeaderBar export/import outcomes", () => {
     host.querySelector('[role="status"]')?.textContent ?? null;
 
   const clickExport = async (host: HTMLElement): Promise<void> => {
-    await click(host.querySelector('[aria-label="Export settings"]')!);
+    await harness.click(host.querySelector('[aria-label="Export settings"]')!);
     await act(async () => {
       await Promise.resolve();
       await Promise.resolve();
@@ -251,7 +212,7 @@ describe("SettingsHeaderBar export/import outcomes", () => {
   };
 
   const clickImport = async (host: HTMLElement): Promise<void> => {
-    await click(host.querySelector('[aria-label="Import settings"]')!);
+    await harness.click(host.querySelector('[aria-label="Import settings"]')!);
     await act(async () => {
       await Promise.resolve();
       await Promise.resolve();
@@ -261,7 +222,7 @@ describe("SettingsHeaderBar export/import outcomes", () => {
   it("says so when the settings file cannot be written", async () => {
     vi.mocked(saveFilePath).mockResolvedValue("/tmp/settings.json");
     vi.mocked(writeTextFileNative).mockResolvedValue(false);
-    const host = await render(<SettingsHeaderBar />);
+    const host = await harness.render(<SettingsHeaderBar />);
 
     await clickExport(host);
 
@@ -270,7 +231,7 @@ describe("SettingsHeaderBar export/import outcomes", () => {
 
   it("stays quiet when the user dismisses the save dialog", async () => {
     vi.mocked(saveFilePath).mockResolvedValue(null);
-    const host = await render(<SettingsHeaderBar />);
+    const host = await harness.render(<SettingsHeaderBar />);
 
     await clickExport(host);
 
@@ -280,7 +241,7 @@ describe("SettingsHeaderBar export/import outcomes", () => {
   it("says so when the chosen settings file cannot be read", async () => {
     vi.mocked(pickFilePath).mockResolvedValue("/tmp/settings.json");
     vi.mocked(readTextFileNative).mockResolvedValue(null);
-    const host = await render(<SettingsHeaderBar />);
+    const host = await harness.render(<SettingsHeaderBar />);
 
     await clickImport(host);
 
@@ -289,7 +250,7 @@ describe("SettingsHeaderBar export/import outcomes", () => {
 
   it("stays quiet when the user dismisses the open dialog", async () => {
     vi.mocked(pickFilePath).mockResolvedValue(null);
-    const host = await render(<SettingsHeaderBar />);
+    const host = await harness.render(<SettingsHeaderBar />);
 
     await clickImport(host);
 

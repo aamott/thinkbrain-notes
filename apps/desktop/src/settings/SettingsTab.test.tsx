@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 
 import { act } from "react";
-import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock the Tauri core `isTauri` check so we can toggle the mount-load branch.
@@ -35,21 +34,15 @@ import { setExtensionBootstrap } from "../extensions/bootstrapRef";
 import { setWorkspaceBridge } from "../extensions/workspaceBridge";
 import { registerControl, type ControlProps } from "./controlRegistry";
 import { createScrollSpyHarness } from "./scrollSpyTestUtils";
+import {
+  createSettingsTestHarness,
+  seedSettingsStore
+} from "./settingsTestHelpers";
 
 /** SettingsTab DOM tests backed by the real module-scoped settings store. */
 
-let root: Root | null = null;
-let container: HTMLDivElement | null = null;
+const harness = createSettingsTestHarness();
 const scrollSpy = createScrollSpyHarness();
-
-/** Default app values seeded into the store for most tests. */
-const SEEDED_APP_VALUES: Record<string, unknown> = {
-  "appearance.theme": "system",
-  "appearance.themeFile": null,
-  "editor.fontSize": 16,
-  "editor.lineWrapping": true,
-  "settings.autosave": false
-};
 
 beforeEach(() => {
   scrollSpy.install();
@@ -63,27 +56,11 @@ beforeEach(() => {
   );
 
   // Reset the singleton store to a clean, loaded state before each test.
-  useSettingsStore.setState({
-    appValues: { ...SEEDED_APP_VALUES },
-    workspaceValues: null,
-    workspaceRootPath: null,
-    stagedChanges: {},
-    isDirty: false,
-    dirtyCount: 0,
-    activeSection: null,
-    searchQuery: "",
-    loadError: null,
-    saveError: null,
-    validationDiagnostics: [],
-    loaded: true
-  });
+  seedSettingsStore();
 });
 
 afterEach(async () => {
-  await act(async () => root?.unmount());
-  container?.remove();
-  root = null;
-  container = null;
+  await harness.unmount();
   vi.mocked(isTauri).mockReset();
   vi.mocked(workspaceDesktopApi.windowWorkspaceRoot).mockReset();
   vi.mocked(invokeNativeCommand).mockReset();
@@ -92,20 +69,12 @@ afterEach(async () => {
 
 /** Renders SettingsTab into a fresh container and flushes effects. */
 async function renderSettingsTab(): Promise<HTMLDivElement> {
-  container = document.createElement("div");
-  document.body.append(container);
-  root = createRoot(container);
-  await act(async () => {
-    root?.render(<SettingsTab />);
-  });
-  return container;
+  return harness.render(<SettingsTab />);
 }
 
 /** Clicks an element and flushes React updates. */
 async function click(element: Element): Promise<void> {
-  await act(async () => {
-    element.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
-  });
+  return harness.click(element);
 }
 
 /** Counts only settings-document reads, excluding controls' native queries. */
@@ -387,8 +356,7 @@ describe("SettingsTab", () => {
     });
     expect(useSettingsStore.getState().stagedChanges["editor.fontSize"]).toBe(99);
 
-    await act(async () => root?.unmount());
-    root = null;
+    await harness.unmount();
 
     await renderSettingsTab();
 
