@@ -12,7 +12,11 @@ import { cn } from "../../lib/utils";
  *
  * `onPointerDown` is used instead of `onClick` because pointer events fire
  * earlier in the touch chain and are not subject to the 300ms click delay that
- * some WebViews still apply.
+ * some WebViews still apply. The trade-off is there is no drag-off-to-cancel
+ * (a `click` would cancel if the pointer left the scrim before release). For a
+ * full-bleed dim backdrop that is acceptable: there is nothing on the scrim to
+ * scroll, and accidental brushes are rare. If dismiss ever becomes destructive,
+ * move to `pointerup` with a recorded start target.
  */
 export function Scrim({
   open,
@@ -25,6 +29,7 @@ export function Scrim({
 }) {
   return (
     <div
+      data-tn-scrim=""
       aria-hidden="true"
       className={cn(
         "absolute inset-0 z-40 bg-overlay tn-slide",

@@ -14,7 +14,8 @@ import { useDismissable } from "./use-dismissable";
  * Always mounted so it can slide in/out via a CSS `transform` transition.
  * When closed it is translated fully off-screen and made invisible
  * (`visibility: hidden`, `aria-hidden`) so it neither captures input nor
- * appears in the a11y tree.
+ * appears in the a11y tree. Dialog semantics (`role` / `aria-modal`) are
+ * applied only while open so they are not contradicted by `aria-hidden`.
  */
 export function Drawer({
   open,
@@ -35,8 +36,8 @@ export function Drawer({
       <Scrim open={open} onDismiss={onDismiss} />
       <div
         ref={containerRef}
-        role="dialog"
-        aria-modal="true"
+        role={open ? "dialog" : undefined}
+        aria-modal={open ? true : undefined}
         aria-label={label}
         aria-hidden={!open}
         className={cn(

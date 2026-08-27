@@ -12,6 +12,8 @@ import { useDismissable } from "./use-dismissable";
  *
  * Always mounted so it can slide up/down via a CSS `transform` transition.
  * When closed it is translated fully below the viewport and made inert.
+ * Dialog semantics (`role` / `aria-modal`) are applied only while open so
+ * they are not contradicted by `aria-hidden`.
  */
 export function BottomSheet({
   open,
@@ -32,8 +34,8 @@ export function BottomSheet({
       <Scrim open={open} onDismiss={onDismiss} />
       <div
         ref={containerRef}
-        role="dialog"
-        aria-modal="true"
+        role={open ? "dialog" : undefined}
+        aria-modal={open ? true : undefined}
         aria-label={label}
         aria-hidden={!open}
         className={cn(

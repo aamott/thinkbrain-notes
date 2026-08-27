@@ -23,6 +23,12 @@ const render = async (element: React.ReactElement): Promise<HTMLDivElement> => {
   return container;
 };
 
+const panelOf = (host: HTMLDivElement): HTMLElement => {
+  const panel = host.querySelector<HTMLElement>('[aria-label="Navigation"]');
+  if (!panel) throw new Error("no Navigation panel");
+  return panel;
+};
+
 describe("Drawer", () => {
   it("is hidden while closed", async () => {
     const host = await render(
@@ -32,10 +38,15 @@ describe("Drawer", () => {
     );
 
     // Always mounted so it can slide in/out — closed means inert and
-    // hidden from the a11y tree, not absent from the DOM.
-    const panel = host.querySelector('[aria-label="Navigation"]');
-    expect(panel).not.toBeNull();
-    expect(panel?.getAttribute("aria-hidden")).toBe("true");
+    // hidden from the a11y tree, not absent from the DOM. Dialog
+    // semantics stay off so they do not contradict aria-hidden.
+    const panel = panelOf(host);
+    expect(panel.getAttribute("aria-hidden")).toBe("true");
+    expect(panel.getAttribute("role")).toBeNull();
+    expect(panel.getAttribute("aria-modal")).toBeNull();
+    expect(panel.classList.contains("invisible")).toBe(true);
+    expect(panel.classList.contains("-translate-x-full")).toBe(true);
+    expect(panel.classList.contains("tn-slide")).toBe(true);
   });
 
   it("exposes its content as a labelled dialog when open", async () => {
@@ -45,10 +56,12 @@ describe("Drawer", () => {
       </Drawer>
     );
 
-    const panel = host.querySelector('[aria-label="Navigation"]');
-    expect(panel?.getAttribute("role")).toBe("dialog");
-    expect(panel?.getAttribute("aria-modal")).toBe("true");
-    expect(panel?.textContent).toContain("Files");
+    const panel = panelOf(host);
+    expect(panel.getAttribute("role")).toBe("dialog");
+    expect(panel.getAttribute("aria-modal")).toBe("true");
+    expect(panel.textContent).toContain("Files");
+    expect(panel.classList.contains("visible")).toBe(true);
+    expect(panel.classList.contains("translate-x-0")).toBe(true);
   });
 
   it("dismisses when the scrim is tapped", async () => {
@@ -59,9 +72,24 @@ describe("Drawer", () => {
       </Drawer>
     );
 
-    const scrim = host.querySelector('[aria-hidden="true"]');
+    const scrim = host.querySelector("[data-tn-scrim]");
     await act(async () => {
       scrim?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+    });
+
+    expect(onDismiss).toHaveBeenCalledOnce();
+  });
+
+  it("dismisses on Escape", async () => {
+    const onDismiss = vi.fn();
+    await render(
+      <Drawer open onDismiss={onDismiss} label="Navigation">
+        <button type="button">Files</button>
+      </Drawer>
+    );
+
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     });
 
     expect(onDismiss).toHaveBeenCalledOnce();

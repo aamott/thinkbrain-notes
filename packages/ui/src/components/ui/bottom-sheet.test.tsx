@@ -23,6 +23,12 @@ const render = async (element: React.ReactElement): Promise<HTMLDivElement> => {
   return container;
 };
 
+const panelOf = (host: HTMLDivElement): HTMLElement => {
+  const panel = host.querySelector<HTMLElement>('[aria-label="Open tabs"]');
+  if (!panel) throw new Error("no Open tabs panel");
+  return panel;
+};
+
 describe("BottomSheet", () => {
   it("is hidden while closed", async () => {
     const host = await render(
@@ -32,10 +38,15 @@ describe("BottomSheet", () => {
     );
 
     // Always mounted so it can slide in/out — closed means inert and
-    // hidden from the a11y tree, not absent from the DOM.
-    const panel = host.querySelector('[aria-label="Open tabs"]');
-    expect(panel).not.toBeNull();
-    expect(panel?.getAttribute("aria-hidden")).toBe("true");
+    // hidden from the a11y tree, not absent from the DOM. Dialog
+    // semantics stay off so they do not contradict aria-hidden.
+    const panel = panelOf(host);
+    expect(panel.getAttribute("aria-hidden")).toBe("true");
+    expect(panel.getAttribute("role")).toBeNull();
+    expect(panel.getAttribute("aria-modal")).toBeNull();
+    expect(panel.classList.contains("invisible")).toBe(true);
+    expect(panel.classList.contains("translate-y-full")).toBe(true);
+    expect(panel.classList.contains("tn-slide")).toBe(true);
   });
 
   it("exposes its content as a labelled dialog when open", async () => {
@@ -45,9 +56,12 @@ describe("BottomSheet", () => {
       </BottomSheet>
     );
 
-    const panel = host.querySelector('[aria-label="Open tabs"]');
-    expect(panel?.getAttribute("role")).toBe("dialog");
-    expect(panel?.textContent).toContain("content");
+    const panel = panelOf(host);
+    expect(panel.getAttribute("role")).toBe("dialog");
+    expect(panel.getAttribute("aria-modal")).toBe("true");
+    expect(panel.textContent).toContain("content");
+    expect(panel.classList.contains("visible")).toBe(true);
+    expect(panel.classList.contains("translate-y-0")).toBe(true);
   });
 
   it("dismisses on Escape", async () => {
@@ -60,6 +74,22 @@ describe("BottomSheet", () => {
 
     await act(async () => {
       document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+
+    expect(onDismiss).toHaveBeenCalledOnce();
+  });
+
+  it("dismisses when the scrim is tapped", async () => {
+    const onDismiss = vi.fn();
+    const host = await render(
+      <BottomSheet open onDismiss={onDismiss} label="Open tabs">
+        <button type="button">close me</button>
+      </BottomSheet>
+    );
+
+    const scrim = host.querySelector("[data-tn-scrim]");
+    await act(async () => {
+      scrim?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
     });
 
     expect(onDismiss).toHaveBeenCalledOnce();

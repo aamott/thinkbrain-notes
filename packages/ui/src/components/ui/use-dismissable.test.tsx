@@ -15,11 +15,20 @@ afterEach(async () => {
   container = null;
 });
 
-const Panel = ({ open, onDismiss }: { open: boolean; onDismiss: () => void }) => {
+const Panel = ({
+  open,
+  onDismiss,
+  extra
+}: {
+  open: boolean;
+  onDismiss: () => void;
+  extra?: boolean;
+}) => {
   const { containerRef } = useDismissable({ open, onDismiss });
   return (
-    <div ref={containerRef}>
+    <div ref={containerRef} data-tn-panel="">
       <button type="button">inside</button>
+      {extra ? <button type="button">second</button> : null}
     </div>
   );
 };
@@ -89,5 +98,53 @@ describe("useDismissable", () => {
     expect(document.activeElement).toBe(opener);
 
     opener.remove();
+  });
+
+  it("dismisses the top-most overlay when several are open", async () => {
+    const dismissLower = vi.fn();
+    const dismissTop = vi.fn();
+    await render(
+      <>
+        <Panel open onDismiss={dismissLower} />
+        <Panel open onDismiss={dismissTop} />
+      </>
+    );
+
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+
+    expect(dismissTop).toHaveBeenCalledOnce();
+    expect(dismissLower).not.toHaveBeenCalled();
+  });
+
+  it("traps Tab within the open panel", async () => {
+    const onDismiss = vi.fn();
+    const host = await render(<Panel open extra onDismiss={onDismiss} />);
+    const panel = host.querySelector("[data-tn-panel]");
+    const [first, second] = host.querySelectorAll("button");
+    if (!panel || !first || !second) throw new Error("expected two buttons");
+
+    second.focus();
+    await act(async () => {
+      document.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true })
+      );
+    });
+    expect(document.activeElement).toBe(first);
+
+    first.focus();
+    await act(async () => {
+      document.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Tab",
+          shiftKey: true,
+          bubbles: true,
+          cancelable: true
+        })
+      );
+    });
+    expect(document.activeElement).toBe(second);
+    expect(panel.contains(document.activeElement)).toBe(true);
   });
 });
