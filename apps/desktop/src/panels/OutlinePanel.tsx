@@ -70,7 +70,7 @@ function OutlineList({
     <ul className={cn("m-0 list-none space-y-0.5 p-0", nested && "ml-3 border-l border-border pl-2")}>
       {nodes.map((node) => (
         <li key={`${node.heading.line}-${node.heading.text}`}>
-          <div className="w-full rounded px-2 py-1 text-left text-xs leading-relaxed text-foreground">
+          <div className="w-full rounded px-2 py-1 text-left text-xs leading-relaxed text-foreground pointer-coarse:min-h-11 pointer-coarse:flex pointer-coarse:items-center pointer-coarse:text-sm pointer-coarse:py-2">
             {node.heading.text}
           </div>
           {node.children.length > 0 && <OutlineList nodes={node.children} nested />}

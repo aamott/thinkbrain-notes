@@ -3,7 +3,8 @@ import {
   type CommandContribution,
   type ContributionRegistry
 } from "@thinkbrain/core";
-import { useSyncExternalStore } from "react";
+import { useMemo, useSyncExternalStore } from "react";
+import { usePlatformCapabilities } from "../native/platformCapabilities";
 
 /** Stable command identifiers owned by the desktop shell or an extension. */
 export type DesktopCommandId =
@@ -57,7 +58,19 @@ export interface DesktopCommand
   readonly unavailableMessage?: string;
   /** Capability that must exist before an unavailable command becomes usable. */
   readonly prerequisite?: string;
+  /**
+   * Platform capability required for this command to be available. When the
+   * capability is absent, the command is shown as unavailable with a
+   * platform-appropriate message. Omit for commands that work everywhere.
+   */
+  readonly requires?: PlatformCapability;
 }
+
+/** Platform capabilities a command can declare a dependency on. */
+export type PlatformCapability =
+  | "canSpawnProcess" // terminal, ACP agent host
+  | "hasKeychain" // sync credentials
+  | "opensWorkspaceInNewWindow"; // multi-window workspace
 
 export type DesktopCommandRegistry = ContributionRegistry<DesktopCommand>;
 
@@ -96,6 +109,7 @@ export const builtInDesktopCommands: readonly DesktopCommand[] = [
   available({
     id: "new-note",
     title: "New note",
+    icon: "plus",
     keywords: ["create", "markdown", "file"],
     handler: ({ showExplorer, focusNewNote, closePalette }) => {
       showExplorer();
@@ -131,7 +145,7 @@ export const builtInDesktopCommands: readonly DesktopCommand[] = [
   }),
   available({
     id: "toggle-explorer",
-    title: "Toggle Explorer",
+    title: "Toggle Files",
     keywords: ["sidebar", "files"],
     handler: withClosePalette(({ toggleExplorer }) => {
       toggleExplorer();
@@ -157,6 +171,8 @@ export const builtInDesktopCommands: readonly DesktopCommand[] = [
     id: "toggle-bottom-panel",
     title: "Toggle bottom panel",
     keywords: ["terminal", "dock"],
+    // The terminal dock needs process spawning, which is desktop-only.
+    requires: "canSpawnProcess",
     handler: withClosePalette(({ toggleBottomPanel }) => {
       toggleBottomPanel();
     })
@@ -205,15 +221,32 @@ export function createDesktopCommandRegistry(
 export const desktopCommandRegistry = createDesktopCommandRegistry();
 
 /**
- * Subscribes a component to the registered commands.
+ * Subscribes a component to the registered commands, filtered by platform
+ * capabilities.
  *
  * An extension loaded from disk registers its commands while the app is already
  * running, so the palette follows the registry rather than reading it once.
+ * Commands with a `requires` field whose platform capability is absent are
+ * downgraded to `unavailable` so the palette shows them greyed-out with a
+ * message rather than silently failing when invoked.
  */
 export function useDesktopCommands(): readonly DesktopCommand[] {
-  return useSyncExternalStore(
+  const raw = useSyncExternalStore(
     desktopCommandRegistry.subscribe,
     desktopCommandRegistry.entries,
     desktopCommandRegistry.entries
   );
+  const capabilities = usePlatformCapabilities((s) => s.capabilities);
+
+  return useMemo(() => {
+    return raw.map((command) => {
+      if (!command.requires) return command;
+      if (capabilities[command.requires]) return command;
+      return {
+        ...command,
+        availability: "unavailable" as const,
+        unavailableMessage: command.unavailableMessage ?? "This command is not available on this platform."
+      };
+    });
+  }, [raw, capabilities]);
 }

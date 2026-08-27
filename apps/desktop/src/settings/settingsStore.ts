@@ -24,6 +24,7 @@ import {
   editorModule,
   settingsModule,
   syncModule,
+  uiModule,
   validateSettings,
   type SettingsDiagnostic,
   type SettingsRegistry
@@ -48,8 +49,8 @@ import {
 // ---------------------------------------------------------------------------
 
 /**
- * Module-scoped registry with the built-in Appearance, Editor, Settings, and
- * Sync modules.
+ * Module-scoped registry with the built-in Appearance, Editor, Settings, Sync,
+ * and UI modules.
  *
  * Exported so UI components (Story 3+) can look up definitions, sections, and
  * modules for rendering. Extensions will register additional modules here in a
@@ -60,6 +61,7 @@ appSettingsRegistry.register(appearanceModule);
 appSettingsRegistry.register(editorModule);
 appSettingsRegistry.register(settingsModule);
 appSettingsRegistry.register(syncModule);
+appSettingsRegistry.register(uiModule);
 
 // ---------------------------------------------------------------------------
 // Gateway: abstraction over native settings I/O (for testability).

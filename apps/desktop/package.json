@@ -24,6 +24,7 @@
     "@lezer/common": "^1.5.2",
     "@lezer/markdown": "^1.6.4",
     "@tailwindcss/vite": "^4.3.3",
+    "@tanstack/react-virtual": "3.14.9",
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-dialog": "^2.7.1",
     "@tauri-apps/plugin-fs": "^2.5.1",

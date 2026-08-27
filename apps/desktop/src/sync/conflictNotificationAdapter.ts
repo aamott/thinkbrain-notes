@@ -69,7 +69,12 @@ export function useConflictNotificationAdapter({
   // Held in a ref so a caller that rebuilds the callback each render does not
   // re-trigger the read; the effect is about the workspace, not the handler.
   const reviewRef = useRef(onReview);
-  reviewRef.current = onReview;
+  // Written in an effect rather than during render: a ref write in the render
+  // body is not safe under concurrent rendering, where a render can be thrown
+  // away after it has already overwritten the handler.
+  useEffect(() => {
+    reviewRef.current = onReview;
+  }, [onReview]);
 
   useEffect(() => {
     if (!rootPath) {

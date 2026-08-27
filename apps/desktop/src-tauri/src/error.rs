@@ -7,6 +7,14 @@ pub fn lock_or_recover<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(|error| error.into_inner())
 }
 
+pub fn failed(
+    code: &'static str,
+    message: &'static str,
+    error: impl std::fmt::Display,
+) -> NativeError {
+    NativeError::with_details(code, message, error)
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct NativeError {
     pub code: String,

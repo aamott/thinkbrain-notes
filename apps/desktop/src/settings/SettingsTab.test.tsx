@@ -18,9 +18,13 @@ vi.mock("../workspace/workspaceAdapter", () => ({
 
 // Mock native commands so `loadSettings` (via the native gateway) doesn't hit
 // Tauri IPC. Returns null by default (no settings files on disk).
-vi.mock("../native/commands", () => ({
-  invokeNativeCommand: vi.fn<() => Promise<unknown>>()
-}));
+vi.mock("../native/commands", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../native/commands")>();
+  return {
+    ...actual,
+    invokeNativeCommand: vi.fn<(command: string) => Promise<unknown>>()
+  };
+});
 
 import { isTauri } from "@tauri-apps/api/core";
 import { workspaceDesktopApi } from "../workspace/workspaceAdapter";
@@ -30,21 +34,13 @@ import { useSettingsStore, appSettingsRegistry } from "./settingsStore";
 import { setExtensionBootstrap } from "../extensions/bootstrapRef";
 import { setWorkspaceBridge } from "../extensions/workspaceBridge";
 import { registerControl, type ControlProps } from "./controlRegistry";
+import { createScrollSpyHarness } from "./scrollSpyTestUtils";
 
-/**
- * SettingsTab component tests.
- *
- * Uses the real module-scoped `useSettingsStore` singleton. Before each test,
- * state is seeded directly via `setState` (no async gateway load needed since
- * `isTauri()` is false under Node, so the mount effect is a no-op). After each
- * test, the store is reset to its initial state to keep tests isolated.
- *
- * Rendering follows the codebase convention: `createRoot` + `act` + DOM
- * queries (no @testing-library/react dependency is available).
- */
+/** SettingsTab DOM tests backed by the real module-scoped settings store. */
 
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
+const scrollSpy = createScrollSpyHarness();
 
 /** Default app values seeded into the store for most tests. */
 const SEEDED_APP_VALUES: Record<string, unknown> = {
@@ -56,11 +52,15 @@ const SEEDED_APP_VALUES: Record<string, unknown> = {
 };
 
 beforeEach(() => {
+  scrollSpy.install();
+
   // `isTauri` is false by default so the mount effect is a no-op for existing
   // tests. The remount-persistence test overrides this to true.
   vi.mocked(isTauri).mockReturnValue(false);
   vi.mocked(workspaceDesktopApi.windowWorkspaceRoot).mockResolvedValue(null);
-  vi.mocked(invokeNativeCommand).mockResolvedValue(null);
+  vi.mocked(invokeNativeCommand).mockImplementation(async (command) =>
+    command === "list_themes" ? [] : null
+  );
 
   // Reset the singleton store to a clean, loaded state before each test.
   useSettingsStore.setState({
@@ -87,12 +87,10 @@ afterEach(async () => {
   vi.mocked(isTauri).mockReset();
   vi.mocked(workspaceDesktopApi.windowWorkspaceRoot).mockReset();
   vi.mocked(invokeNativeCommand).mockReset();
+  scrollSpy.restore();
 });
 
-/**
- * Renders the SettingsTab into a fresh container and waits for effects.
- * Returns the container for querying.
- */
+/** Renders SettingsTab into a fresh container and flushes effects. */
 async function renderSettingsTab(): Promise<HTMLDivElement> {
   container = document.createElement("div");
   document.body.append(container);
@@ -110,23 +108,124 @@ async function click(element: Element): Promise<void> {
   });
 }
 
+/** Counts only settings-document reads, excluding controls' native queries. */
+function settingsReadCallCount(): number {
+  return vi
+    .mocked(invokeNativeCommand)
+    .mock.calls.filter(
+      ([command]) =>
+        command === "read_app_settings" || command === "read_workspace_settings"
+    ).length;
+}
+
+/** Publishes one visible content section to the scroll-spy observer. */
+async function intersectSection(section: Element): Promise<void> {
+  await act(async () => {
+    scrollSpy.intersect(section);
+  });
+}
+
 describe("SettingsTab", () => {
-  it("renders a two-pane layout with Application group and built-in module sections", async () => {
+  it("renders the header, navigation, and content layout without the old save bar", async () => {
     const el = await renderSettingsTab();
 
-    // The nav tree exists.
-    const tree = el.querySelector('[role="tree"]');
-    expect(tree).not.toBeNull();
+    expect(el.querySelector('[data-testid="settings-header-bar"]')).not.toBeNull();
 
-    // "Application" top-level group is present.
+    const nav = el.querySelector<HTMLElement>("#settings-navigation");
+    expect(nav).not.toBeNull();
+    expect(nav?.querySelector('[role="tree"]')).not.toBeNull();
     expect(el.textContent).toContain("Application");
-
-    // Built-in modules' section labels appear in the nav.
     expect(el.textContent).toContain("Theme");
     expect(el.textContent).toContain("Display");
-
-    // "Workspace" group is NOT present when no workspace is open.
     expect(el.textContent).not.toContain("Workspace");
+    expect(el.querySelector("main")).not.toBeNull();
+    expect(el.querySelectorAll('[role="toolbar"][aria-label="Settings actions"]')).toHaveLength(1);
+    expect(el.querySelector('[data-testid="settings-save-bar"]')).toBeNull();
+  });
+
+  it("gives the hamburger button the navigation ARIA relationship", async () => {
+    const el = await renderSettingsTab();
+    const hamburger = el.querySelector<HTMLButtonElement>(
+      'button[aria-label="Open settings navigation"]'
+    );
+
+    expect(hamburger).not.toBeNull();
+    expect(hamburger?.getAttribute("aria-controls")).toBe("settings-navigation");
+    expect(hamburger?.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("opens the navigation and scrim from the hamburger button", async () => {
+    const el = await renderSettingsTab();
+    const hamburger = el.querySelector<HTMLButtonElement>(
+      'button[aria-label="Open settings navigation"]'
+    )!;
+
+    await click(hamburger);
+
+    expect(hamburger.getAttribute("aria-expanded")).toBe("true");
+    expect(el.querySelector("#settings-navigation")?.getAttribute("data-open")).toBe("true");
+    expect(el.querySelector('[data-testid="settings-navigation-scrim"]')).not.toBeNull();
+  });
+
+  it("closes the navigation from its close button", async () => {
+    const el = await renderSettingsTab();
+    await click(el.querySelector('button[aria-label="Open settings navigation"]')!);
+    const nav = el.querySelector<HTMLElement>("#settings-navigation")!;
+    const closeButton = nav.querySelector<HTMLButtonElement>(
+      'button[aria-label="Close settings navigation"]'
+    )!;
+
+    await click(closeButton);
+
+    expect(nav.getAttribute("data-open")).toBe("false");
+    expect(el.querySelector('[data-testid="settings-navigation-scrim"]')).toBeNull();
+  });
+
+  it("closes the navigation from the scrim", async () => {
+    const el = await renderSettingsTab();
+    await click(el.querySelector('button[aria-label="Open settings navigation"]')!);
+    const scrim = el.querySelector<HTMLButtonElement>(
+      '[data-testid="settings-navigation-scrim"]'
+    )!;
+
+    await click(scrim);
+
+    expect(el.querySelector("#settings-navigation")?.getAttribute("data-open")).toBe("false");
+    expect(el.querySelector('[data-testid="settings-navigation-scrim"]')).toBeNull();
+  });
+
+  it("closes the navigation when Escape is pressed", async () => {
+    const el = await renderSettingsTab();
+    await click(el.querySelector('button[aria-label="Open settings navigation"]')!);
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+
+    expect(el.querySelector("#settings-navigation")?.getAttribute("data-open")).toBe("false");
+    expect(el.querySelector('[data-testid="settings-navigation-scrim"]')).toBeNull();
+  });
+
+  it("scrolls to the selected section without closing the overlay", async () => {
+    const el = await renderSettingsTab();
+    await click(el.querySelector('button[aria-label="Open settings navigation"]')!);
+    const displayButton = Array.from(el.querySelectorAll<HTMLButtonElement>("button")).find(
+      (button) => button.textContent === "Display"
+    )!;
+
+    await click(displayButton);
+
+    expect(scrollSpy.scrollIntoView).toHaveBeenCalledWith({
+      behavior: "smooth",
+      block: "start"
+    });
+    expect(scrollSpy.scrollIntoView.mock.instances.at(-1)).toBe(
+      el.querySelector("#settings-section-app\\:editor\\.display")
+    );
+    // Clicks do not own active state; the observer updates it after scrolling.
+    expect(useSettingsStore.getState().activeSection).toBeNull();
+    // Nav stays open so the user can browse multiple sections.
+    expect(el.querySelector("#settings-navigation")?.getAttribute("data-open")).toBe("true");
   });
 
   it("shows the Workspace group when a workspace is open", async () => {
@@ -138,54 +237,36 @@ describe("SettingsTab", () => {
     expect(el.textContent).toContain("Cloud copies");
   });
 
-  it("highlights the active section with aria-current after clicking it", async () => {
+  it("highlights the active section with aria-current after scroll-spy updates", async () => {
     const el = await renderSettingsTab();
 
-    // Before clicking, no section has aria-current="true".
+    // Before an intersection, no section has aria-current="true".
     expect(el.querySelector('[aria-current="true"]')).toBeNull();
 
-    // Click the "Display" section (editor.display).
-    const displayButton = Array.from(el.querySelectorAll<HTMLButtonElement>("button")).find(
-      (b) => b.textContent === "Display"
-    );
-    expect(displayButton).toBeDefined();
-    await click(displayButton!);
+    await intersectSection(el.querySelector("#settings-section-app\\:editor\\.display")!);
 
-    // After clicking, the active section should have aria-current="true".
+    // The observer drives both the store and navigation highlight.
+    expect(useSettingsStore.getState().activeSection).toBe("app:editor.display");
     const active = el.querySelector('[aria-current="true"]');
     expect(active).not.toBeNull();
     expect(active?.textContent).toContain("Display");
+    expect(el.querySelector('[aria-label="Settings location"]')?.textContent).toContain(
+      "Editor›Display"
+    );
   });
 
-  it("renders collapsible subsection chevrons that toggle expansion", async () => {
+  it("renders all sections and their controls without a selection or empty-state", async () => {
     const el = await renderSettingsTab();
 
-    // The built-in modules have no subsections, so we verify the chevron
-    // button infrastructure exists: any button with an aria-label containing
-    // "Collapse" or "Expand". Since there are no subsections, there should be
-    // zero such buttons — confirming the nav handles the no-subsection case.
-    const chevronButtons = el.querySelectorAll<HTMLButtonElement>(
-      'button[aria-label*="Collapse"], button[aria-label*="Expand"]'
-    );
-    expect(chevronButtons.length).toBe(0);
+    expect(el.querySelector("#settings-section-app\\:appearance\\.theme")).not.toBeNull();
+    expect(el.querySelector("#settings-section-app\\:editor\\.display")).not.toBeNull();
+    expect(el.querySelector("#settings-section-app\\:settings\\.general")).not.toBeNull();
 
-    // The section still renders as a clickable nav item.
-    const displayButton = Array.from(el.querySelectorAll<HTMLButtonElement>("button")).find(
-      (b) => b.textContent === "Display"
-    );
-    expect(displayButton).not.toBeNull();
-  });
-
-  it("renders the selected section's settings with labels and controls", async () => {
-    useSettingsStore.setState({ activeSection: "editor.display" });
-    const el = await renderSettingsTab();
-
-    // Section header label.
-    expect(el.textContent).toContain("Display");
-
-    // Setting labels are present.
+    // Settings from separate sections coexist in the document.
     expect(el.textContent).toContain("Font size");
     expect(el.textContent).toContain("Line wrapping");
+    expect(el.textContent).toContain("Autosave changes");
+    expect(el.textContent).not.toContain("No section selected");
 
     // A number input (for fontSize) and a toggle switch (for lineWrapping).
     const numberInput = el.querySelector<HTMLInputElement>('input[type="number"]');
@@ -197,36 +278,15 @@ describe("SettingsTab", () => {
     expect(toggle?.getAttribute("aria-checked")).toBe("true");
   });
 
-  it("auto-generates controls by type: enum→select, number→number input, boolean→switch, string→text", async () => {
-    useSettingsStore.setState({ activeSection: "appearance.theme" });
+  it("replaces standalone theme rows with the unified ThemePicker", async () => {
     const el = await renderSettingsTab();
 
-    // The appearance.theme section uses the unified ThemePicker instead of the
-    // auto-generated enum control. The picker's <select> is targeted by its
-    // stable id and exposes the three base options (System/Light/Dark) under a
-    // "Base" optgroup. The standalone appearance.theme/appearance.themeFile
-    // rows are filtered out of the generic row rendering.
     const select = el.querySelector<HTMLSelectElement>("select#theme-picker-select");
     expect(select).not.toBeNull();
-    const options = select?.querySelectorAll("option");
-    expect(options?.length).toBe(3); // system, light, dark
+    expect(select?.querySelectorAll("option").length).toBe(3); // system, light, dark
     expect(select?.value).toBe("system");
-
-    // The standalone appearance.theme enum row should NOT render (it's now
-    // folded into the unified picker).
+    // The standalone appearance.theme select is filtered out.
     expect(el.querySelector("select#appearance\\.theme")).toBeNull();
-
-    // Now switch to editor.display for number + boolean.
-    useSettingsStore.setState({ activeSection: "editor.display" });
-    await act(async () => {
-      // Re-render is automatic via store subscription; just flush.
-    });
-
-    const numberInput = el.querySelector<HTMLInputElement>('input[type="number"]');
-    expect(numberInput).not.toBeNull();
-
-    const toggle = el.querySelector('[role="switch"]');
-    expect(toggle).not.toBeNull();
   });
 
   it("calls stageChange when a control is interacted with", async () => {
@@ -278,7 +338,7 @@ describe("SettingsTab", () => {
     };
     appSettingsRegistry.register(tempModule);
 
-    useSettingsStore.setState({ activeSection: "test-custom.section" });
+    useSettingsStore.setState({ activeSection: "app:test-custom.section" });
     const el = await renderSettingsTab();
 
     // The custom control rendered instead of a text input.
@@ -286,17 +346,11 @@ describe("SettingsTab", () => {
     expect(custom).not.toBeNull();
     expect(custom?.textContent).toBe("custom");
 
-    // No text input should be present for this setting.
-    const textInput = el.querySelector<HTMLInputElement>('input[type="text"]');
+    // No generated text input appears inside this custom setting's section.
+    const textInput = el.querySelector<HTMLInputElement>(
+      "#settings-section-app\\:test-custom\\.section input[type=\"text\"]"
+    );
     expect(textInput).toBeNull();
-  });
-
-  it("shows an empty-state prompt when no section is selected", async () => {
-    // activeSection is null by default (set in beforeEach).
-    const el = await renderSettingsTab();
-
-    expect(el.textContent).toContain("No section selected");
-    expect(el.textContent).toContain("Select a section from the left");
   });
 
   it("renders a load error banner when loadError is set", async () => {
@@ -309,23 +363,22 @@ describe("SettingsTab", () => {
   });
 
   it("preserves staged changes across unmount/remount (Tauri)", async () => {
-    // Simulate a Tauri environment so the mount-load effect runs.
+    // Simulate the native mount-load path.
     vi.mocked(isTauri).mockReturnValue(true);
     const WORKSPACE_ROOT = "/test/workspace";
     vi.mocked(workspaceDesktopApi.windowWorkspaceRoot).mockResolvedValue(WORKSPACE_ROOT);
-    // No settings files on disk — loadSettings populates defaults only.
-    vi.mocked(invokeNativeCommand).mockResolvedValue(null);
+    vi.mocked(invokeNativeCommand).mockImplementation(async (command) =>
+      command === "list_themes" ? [] : null
+    );
 
-    // First mount: triggers loadSettings, which sets loaded=true and
-    // workspaceRootPath=WORKSPACE_ROOT.
+    // The first mount loads defaults for the current workspace.
     await renderSettingsTab();
     expect(useSettingsStore.getState().loaded).toBe(true);
     expect(useSettingsStore.getState().workspaceRootPath).toBe(WORKSPACE_ROOT);
 
-    // Capture the native-command call count after the initial load.
-    const callsAfterFirstMount = vi.mocked(invokeNativeCommand).mock.calls.length;
+    const callsAfterFirstMount = settingsReadCallCount();
 
-    // Stage an unsaved change (simulating user editing a setting).
+    // Stage an unsaved edit, then simulate switching away and back.
     useSettingsStore.setState({
       activeSection: "editor.display",
       stagedChanges: { "editor.fontSize": 99 },
@@ -334,32 +387,22 @@ describe("SettingsTab", () => {
     });
     expect(useSettingsStore.getState().stagedChanges["editor.fontSize"]).toBe(99);
 
-    // Unmount the settings tab (simulates switching to another tab).
     await act(async () => root?.unmount());
     root = null;
 
-    // Remount the settings tab (simulates switching back). Without the fix,
-    // the mount effect would call loadSettings again, clearing stagedChanges.
     await renderSettingsTab();
 
-    // Staged changes must survive the remount.
     const staged = useSettingsStore.getState().stagedChanges;
     expect(staged["editor.fontSize"]).toBe(99);
     expect(useSettingsStore.getState().isDirty).toBe(true);
 
-    // loadSettings must NOT have been called again on remount (no additional
-    // native command invocations for read_app_settings / read_workspace_settings).
-    expect(vi.mocked(invokeNativeCommand).mock.calls.length).toBe(callsAfterFirstMount);
+    // Remounting must not reread documents and clear staged changes.
+    expect(settingsReadCallCount()).toBe(callsAfterFirstMount);
   });
 });
 
 describe("SettingsTab and lazy extensions", () => {
-  /**
-   * The bug this covers: the journal registers its settings when it activates,
-   * and it activates lazily, so opening Settings without having opened the
-   * journal first showed no Journal section at all — nothing to configure, and
-   * no hint that anything was missing.
-   */
+  /** Opening settings activates extensions so lazy schemas become available. */
   it("wakes every extension so their sections exist", async () => {
     const activateAll = vi.fn(async () => undefined);
     setExtensionBootstrap({
@@ -379,13 +422,7 @@ describe("SettingsTab and lazy extensions", () => {
 });
 
 describe("finding the workspace a setting belongs to", () => {
-  /**
-   * The bug this covers: only a *secondary* workspace window registers a root
-   * natively, so in the main window `windowWorkspaceRoot` is null even with a
-   * vault open. Settings then loaded with no workspace, and every
-   * workspace-scoped setting — the journal folder, the metadata fields — could
-   * be staged and never saved: Save did nothing and the bar stayed dirty.
-   */
+  /** The main window falls back to the shell bridge when no native root exists. */
   it("falls back to the shell's open workspace", async () => {
     vi.mocked(isTauri).mockReturnValue(true);
     vi.mocked(workspaceDesktopApi.windowWorkspaceRoot).mockResolvedValue(null);

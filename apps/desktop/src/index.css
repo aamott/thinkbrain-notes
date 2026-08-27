@@ -10,6 +10,14 @@
 
 @import "tailwindcss";
 
+/* Tailwind v4 auto-detects sources from the Vite root, which is apps/desktop —
+   so the shared components in packages/ui are never scanned and their classes
+   are never emitted. Nothing caught this before because the desktop imported
+   only the token stylesheet from that package, never a component. The phone
+   shell renders Drawer, BottomSheet and BottomNav from there, so the directory
+   has to be declared. */
+@source "../../../packages/ui/src";
+
 @theme inline {
   /* Core semantic colors → bg-*, text-*, border-*, etc. */
   --color-background: var(--tn-color-background);
@@ -54,6 +62,8 @@
   --color-panel-foreground: var(--tn-color-panel-foreground);
   --color-statusbar: var(--tn-color-statusbar);
   --color-statusbar-foreground: var(--tn-color-statusbar-foreground);
+  --color-hub: var(--tn-color-hub);
+  --color-hub-foreground: var(--tn-color-hub-foreground);
   --color-tab-active: var(--tn-color-tab-active);
   --color-tab-inactive: var(--tn-color-tab-inactive);
   --color-tab-active-foreground: var(--tn-color-tab-active-foreground);
@@ -67,6 +77,84 @@
   --font-mono: var(--tn-font-mono);
   --shadow-soft: var(--tn-shadow-soft);
   --shadow-panel: var(--tn-shadow-panel);
+}
+
+/* Overlay slide (`.tn-slide` + `--tn-duration-overlay`) ships with
+   `@thinkbrain/ui/styles.css` so Drawer, BottomSheet, and Scrim stay
+   self-contained. Desktop entrance animations below still consume the
+   token. */
+
+/* Shared focus ring for phone chrome buttons. Extracted because the same
+   three-class pattern appeared in PhoneHeader, PhoneDrawer, InspectorSheet,
+   and TabSwitcherSheet. */
+@utility tn-focus-ring {
+  &:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: -2px;
+  }
+}
+
+/* Entrance slide-in animations. One-shot (no `forwards` fill) — the resting
+   state is already `translate(0)`, and `forwards` would leave a permanent
+   `transform` that creates a containing block for `position: fixed`
+   descendants, breaking overlay dialogs rendered inside the panel. */
+@keyframes tn-slide-in-left {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes tn-slide-in-right {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes tn-slide-in-bottom {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+@utility tn-slide-in-left {
+  animation: tn-slide-in-left var(--tn-duration-overlay) ease-out;
+}
+
+@utility tn-slide-in-right {
+  animation: tn-slide-in-right var(--tn-duration-overlay) ease-out;
+}
+
+@utility tn-slide-in-bottom {
+  animation: tn-slide-in-bottom var(--tn-duration-overlay) ease-out;
+}
+
+/* Dock slide entrance animations for desktop popouts. Animates width and flex-basis
+   so the workspace shifts smoothly instead of popping open space first. */
+@keyframes tn-dock-slide-left {
+  from {
+    width: 0;
+    flex-basis: 0;
+  }
+  to {
+    width: var(--tn-shell-left-width, 288px);
+    flex-basis: var(--tn-shell-left-width, 288px);
+  }
+}
+
+@keyframes tn-dock-slide-right {
+  from {
+    width: 0;
+    flex-basis: 0;
+  }
+  to {
+    width: var(--tn-shell-right-width, 320px);
+    flex-basis: var(--tn-shell-right-width, 320px);
+  }
+}
+
+@utility tn-dock-slide-left {
+  animation: tn-dock-slide-left var(--tn-duration-overlay) ease-out;
+}
+
+@utility tn-dock-slide-right {
+  animation: tn-dock-slide-right var(--tn-duration-overlay) ease-out;
 }
 
 @layer base {
@@ -135,6 +223,10 @@
    base and scoped under .cm-editor for enough specificity to beat
    CodeMirror's runtime-injected scoped class styles. Also set caret-color
    on the contenteditable for the native cursor fallback. */
+.cm-editor,
+.cm-editor .cm-scroller {
+  cursor: text;
+}
 .cm-editor .cm-content {
   caret-color: var(--tn-color-foreground);
 }

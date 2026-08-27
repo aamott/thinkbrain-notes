@@ -19,7 +19,6 @@ Depends on the graph view story (`pending-graph_view`).
       filtered-out nodes becomes an isolated node (not silently dropped).
 - [ ] Filter logic lives in `packages/core` and is reusable by both full and
       local graph.
-- [ ] No inline styles; CSS Modules for the filter controls.
 - [ ] Vitest covers filter combinations and edge cases in `packages/core`.
 
 ## References

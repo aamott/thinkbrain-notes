@@ -4,6 +4,7 @@
 //! and the Rust backend.
 //!
 //! Submodules:
+//! - `atomic_write`: Temp-then-rename file replacement that never deletes the destination first.
 //! - `workspace`: Vault/workspace window lifecycle, file and directory hierarchy operations.
 //! - `markdown`: Content reading, writing, creation, renaming, and listing of markdown files.
 //! - `search`: Full-text document indexing and search query execution.
@@ -18,6 +19,7 @@
 //! - Input Validation: User inputs (such as paths or filenames) must be sanitized and checked before execution.
 //! - State Safety: Desktop state and workspace window mappings use synchronized thread-safe primitives.
 
+pub mod atomic_write;
 pub mod backup;
 pub mod extensions;
 pub mod markdown;
@@ -41,6 +43,10 @@ macro_rules! app_command_handlers {
     () => {
         tauri::generate_handler![
             $crate::commands::workspace::desktop_shell_status,
+            $crate::commands::workspace::workspace_access_capabilities,
+            $crate::commands::workspace::platform_capabilities,
+            $crate::commands::workspace::list_managed_workspaces,
+            $crate::commands::workspace::create_managed_workspace,
             $crate::commands::workspace::open_workspace,
             $crate::commands::markdown::list_markdown_files,
             $crate::commands::workspace::list_workspace_entries,
@@ -90,7 +96,9 @@ macro_rules! app_command_handlers {
             $crate::commands::sync::sign_in::sync_sign_in_status,
             $crate::commands::sync::sign_in::forget_sync_sign_in,
             $crate::commands::sync::import::preview_workspace_from_git_link,
-            $crate::commands::sync::import::import_workspace_from_git_link
+            $crate::commands::sync::import::preview_managed_workspace_from_git_link,
+            $crate::commands::sync::import::import_workspace_from_git_link,
+            $crate::commands::sync::import::import_managed_workspace_from_git_link
         ]
     };
 }
@@ -104,6 +112,10 @@ macro_rules! app_command_handlers {
 #[cfg(test)]
 pub const APP_COMMAND_PATHS: &[&str] = &[
     "workspace::desktop_shell_status",
+    "workspace::workspace_access_capabilities",
+    "workspace::platform_capabilities",
+    "workspace::list_managed_workspaces",
+    "workspace::create_managed_workspace",
     "workspace::open_workspace",
     "markdown::list_markdown_files",
     "workspace::list_workspace_entries",
@@ -153,7 +165,9 @@ pub const APP_COMMAND_PATHS: &[&str] = &[
     "sync::sign_in::sync_sign_in_status",
     "sync::sign_in::forget_sync_sign_in",
     "sync::import::preview_workspace_from_git_link",
+    "sync::import::preview_managed_workspace_from_git_link",
     "sync::import::import_workspace_from_git_link",
+    "sync::import::import_managed_workspace_from_git_link",
 ];
 
 #[cfg(test)]
@@ -170,6 +184,10 @@ mod tests {
     fn all_registered_commands_match_expected() {
         // Workspace
         assert!(APP_COMMAND_PATHS.contains(&"workspace::desktop_shell_status"));
+        assert!(APP_COMMAND_PATHS.contains(&"workspace::workspace_access_capabilities"));
+        assert!(APP_COMMAND_PATHS.contains(&"workspace::platform_capabilities"));
+        assert!(APP_COMMAND_PATHS.contains(&"workspace::list_managed_workspaces"));
+        assert!(APP_COMMAND_PATHS.contains(&"workspace::create_managed_workspace"));
         assert!(APP_COMMAND_PATHS.contains(&"workspace::open_workspace"));
         assert!(APP_COMMAND_PATHS.contains(&"workspace::list_workspace_entries"));
         assert!(APP_COMMAND_PATHS.contains(&"workspace::create_workspace_file"));
@@ -223,7 +241,11 @@ mod tests {
         assert!(APP_COMMAND_PATHS.contains(&"sync::sign_in::sync_sign_in_status"));
         assert!(APP_COMMAND_PATHS.contains(&"sync::sign_in::forget_sync_sign_in"));
         assert!(APP_COMMAND_PATHS.contains(&"sync::import::preview_workspace_from_git_link"));
+        assert!(
+            APP_COMMAND_PATHS.contains(&"sync::import::preview_managed_workspace_from_git_link")
+        );
         assert!(APP_COMMAND_PATHS.contains(&"sync::import::import_workspace_from_git_link"));
+        assert!(APP_COMMAND_PATHS.contains(&"sync::import::import_managed_workspace_from_git_link"));
 
         // Sanity: no duplicates and the count matches the macro entries.
         let mut sorted = APP_COMMAND_PATHS.to_vec();
@@ -236,8 +258,8 @@ mod tests {
         );
         assert_eq!(
             APP_COMMAND_PATHS.len(),
-            51,
-            "expected 51 registered commands"
+            57,
+            "expected 57 registered commands"
         );
     }
 }

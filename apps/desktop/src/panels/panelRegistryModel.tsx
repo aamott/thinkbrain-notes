@@ -218,7 +218,7 @@ export type RightPanelContribution = DesktopPanelContributionBase & {
 export const builtInDesktopPanels: readonly (LeftPanelContribution | RightPanelContribution)[] = [
   {
     id: "explorer",
-    label: "Explorer",
+    label: "Files",
     icon: "files",
     side: "left",
     keepMounted: true,

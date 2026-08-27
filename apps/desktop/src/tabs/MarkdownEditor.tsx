@@ -223,17 +223,6 @@ export function MarkdownEditor({
 
   return (
     <section className="flex min-h-0 flex-1 flex-col" aria-busy={isSaving} aria-label="Markdown document">
-      <div className="flex min-h-8 items-center justify-between gap-3 px-[0.9rem] border-b border-border text-muted-foreground text-[0.6875rem]">
-        <span>{isSaving ? "Saving…" : "Markdown"}</span>
-        <button
-          type="button"
-          className="rounded-small border border-border bg-primary px-2 py-1 text-primary-foreground cursor-pointer disabled:cursor-wait disabled:opacity-70"
-          onClick={onSave}
-          disabled={isSaving}
-        >
-          Save
-        </button>
-      </div>
       {error && (
         <p
           className="m-0 px-[0.9rem] py-2 border-b border-b-[color-mix(in_srgb,var(--color-destructive)_50%,var(--color-border))] text-danger bg-[color-mix(in_srgb,var(--color-destructive)_8%,transparent)] text-xs"
@@ -246,8 +235,18 @@ export function MarkdownEditor({
         context={headerContext}
       />
       <div
-        className="min-h-0 flex-1 overflow-auto [&_.cm-editor]:min-h-full [&_.cm-editor]:bg-editor [&_.cm-editor]:text-foreground [&_.cm-editor]:font-mono [&_.cm-editor]:text-sm [&_.cm-editor]:leading-1.65 [&_.cm-scroller]:overflow-auto [&_.cm-content]:pt-4 [&_.cm-content]:px-5 [&_.cm-content]:pb-16 [&_.cm-focused]:outline-none"
+        className="min-h-0 flex-1 overflow-auto cursor-text [&_.cm-editor]:min-h-full [&_.cm-editor]:cursor-text [&_.cm-editor]:bg-editor [&_.cm-editor]:text-foreground [&_.cm-editor]:font-mono [&_.cm-editor]:text-sm [&_.cm-editor]:leading-1.65 [&_.cm-scroller]:overflow-auto [&_.cm-scroller]:cursor-text [&_.cm-content]:min-h-full [&_.cm-content]:pt-4 [&_.cm-content]:px-5 [&_.cm-content]:pb-16 [&_.cm-focused]:outline-none"
         ref={hostRef}
+        onPointerDown={(event) => {
+          if (event.pointerType === "mouse") return;
+          const view = viewRef.current;
+          if (!view) return;
+          const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
+          if (pos === null || pos < view.state.doc.length) return;
+          event.preventDefault();
+          view.dispatch({ selection: { anchor: view.state.doc.length } });
+          view.focus();
+        }}
       />
     </section>
   );

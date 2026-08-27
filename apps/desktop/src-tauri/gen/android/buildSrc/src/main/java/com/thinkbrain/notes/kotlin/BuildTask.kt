@@ -16,39 +16,36 @@ open class BuildTask : DefaultTask() {
 
     @TaskAction
     fun assemble() {
-        val executable = """pnpm""";
-        try {
-            runTauriCli(executable)
-        } catch (e: Exception) {
-            if (Os.isFamily(Os.FAMILY_WINDOWS)) {
-                // Try different Windows-specific extensions
-                val fallbacks = listOf(
-                    "$executable.exe",
-                    "$executable.cmd",
-                    "$executable.bat",
-                )
-                
-                var lastException: Exception = e
-                for (fallback in fallbacks) {
-                    try {
-                        runTauriCli(fallback)
-                        return
-                    } catch (fallbackException: Exception) {
-                        lastException = fallbackException
-                    }
-                }
-                throw lastException
-            } else {
-                throw e;
+        val attempts = mutableListOf<Pair<String, List<String>>>()
+        attempts.add("pnpm" to emptyList())
+
+        if (Os.isFamily(Os.FAMILY_WINDOWS)) {
+            attempts.add("pnpm.exe" to emptyList())
+            attempts.add("pnpm.cmd" to emptyList())
+            attempts.add("pnpm.bat" to emptyList())
+        }
+
+        attempts.add("npx" to listOf("pnpm"))
+        attempts.add("corepack" to listOf("pnpm"))
+
+        var lastException: Exception? = null
+        for ((executable, prependArgs) in attempts) {
+            try {
+                runTauriCli(executable, prependArgs)
+                return
+            } catch (e: Exception) {
+                lastException = e
             }
         }
+        throw lastException ?: GradleException("Failed to run tauri cli")
     }
 
-    fun runTauriCli(executable: String) {
+    fun runTauriCli(executable: String, prependArgs: List<String> = emptyList()) {
         val rootDirRel = rootDirRel ?: throw GradleException("rootDirRel cannot be null")
         val target = target ?: throw GradleException("target cannot be null")
         val release = release ?: throw GradleException("release cannot be null")
-        val args = listOf("tauri", "android", "android-studio-script");
+        val baseArgs = listOf("tauri", "android", "android-studio-script");
+        val args = prependArgs + baseArgs
 
         project.exec {
             workingDir(File(project.projectDir, rootDirRel))

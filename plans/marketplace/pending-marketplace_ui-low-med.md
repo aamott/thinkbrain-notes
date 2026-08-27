@@ -21,7 +21,6 @@ Control).
   access-control enforcement or sandbox guarantees.
 - Errors (fetch failure, signature failure, compatibility failure) fail loudly
   with useful messages, and the UI warns that extension code has app privileges.
-- No inline styles; CSS Modules co-located with components.
 
 ## References
 

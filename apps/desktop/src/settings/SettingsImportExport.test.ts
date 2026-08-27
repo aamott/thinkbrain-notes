@@ -36,6 +36,7 @@ import { writeTextFileNative, readTextFileNative } from "../native/fs";
 
 /** Default app values seeded into the store for most tests. */
 const SEEDED_APP_VALUES: Record<string, unknown> = {
+  "appearance.shellMode": "auto",
   "appearance.theme": "system",
   "appearance.themeFile": null,
   "editor.fontSize": 16,
@@ -43,7 +44,8 @@ const SEEDED_APP_VALUES: Record<string, unknown> = {
   "editor.livePreview": true,
   "settings.autosave": false,
   "sync.settleAutomatically": true,
-  "sync.historyPolicy": ""
+  "sync.historyPolicy": "",
+  "ui.mobileHub": ""
 };
 
 beforeEach(() => {
@@ -124,6 +126,7 @@ describe("buildExportPayload", () => {
     const parsed = JSON.parse(json);
     const keys = Object.keys(parsed.settings);
 
+    expect(keys).toContain("appearance.shellMode");
     expect(keys).toContain("appearance.theme");
     expect(keys).toContain("appearance.themeFile");
     expect(keys).toContain("editor.fontSize");
@@ -132,7 +135,7 @@ describe("buildExportPayload", () => {
     expect(keys).toContain("sync.settleAutomatically");
     expect(keys).toContain("sync.historyPolicy");
     expect(keys).not.toContain("sync.destination");
-    expect(keys).toHaveLength(8);
+    expect(keys).toHaveLength(10);
   });
 });
 

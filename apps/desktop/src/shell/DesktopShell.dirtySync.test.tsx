@@ -73,6 +73,7 @@ import { getWorkspaceBridge } from "../extensions/workspaceBridge";
 import { useSettingsStore } from "../settings/settingsStore";
 import { ThemeProvider } from "../settings/ThemeProvider";
 import { DesktopShell } from "./DesktopShell";
+import { useShellState } from "./useShellState";
 
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
@@ -108,6 +109,10 @@ afterEach(async () => {
  * Wrapping in {@link ThemeProvider} is required because `DesktopShell` consumes
  * `useTheme()` — without the provider the hook throws outside its context.
  */
+function Shell() {
+  return <DesktopShell shell={useShellState()} />;
+}
+
 async function renderShell(): Promise<HTMLDivElement> {
   container = document.createElement("div");
   document.body.append(container);
@@ -115,7 +120,7 @@ async function renderShell(): Promise<HTMLDivElement> {
   await act(async () => {
     root?.render(
       <ThemeProvider>
-        <DesktopShell />
+        <Shell />
       </ThemeProvider>
     );
   });
@@ -170,12 +175,14 @@ describe("DesktopShell settings dirty-sync", () => {
       useSettingsStore.setState({ isDirty: true, stagedChanges: { "x": 1 }, dirtyCount: 1 });
     });
     expect(settingsDirtyDispatchCount()).toBe(2);
+    expect(container!.querySelector('[aria-label="Unsaved changes"]')).not.toBeNull();
 
     // Clearing settings dirty flips settingsIsDirty true→false → one dispatch.
     await act(async () => {
       useSettingsStore.setState({ isDirty: false, stagedChanges: {}, dirtyCount: 0 });
     });
     expect(settingsDirtyDispatchCount()).toBe(3);
+    expect(container!.querySelector('[aria-label="Unsaved changes"]')).toBeNull();
   });
 
   it("does not dispatch a redundant setDirty when unrelated tabs open or close", async () => {
@@ -227,5 +234,73 @@ describe("DesktopShell settings dirty-sync", () => {
       useSettingsStore.setState({ isDirty: true, stagedChanges: { "x": 1 }, dirtyCount: 1 });
     });
     expect(settingsDirtyDispatchCount()).toBe(baseline);
+  });
+
+  it("opens the dirty-close dialog for a dirty settings tab and cancels", async () => {
+    await renderShell();
+    const bridge = getWorkspaceBridge()!;
+
+    await act(async () => bridge.openTab("settings", "Settings"));
+    await act(async () => {
+      useSettingsStore.setState({ isDirty: true, stagedChanges: { "x": 1 }, dirtyCount: 1 });
+    });
+    await click(container!.querySelector('[aria-label="Close Settings"]')!);
+
+    const dialog = container!.querySelector<HTMLElement>(
+      '[role="dialog"][aria-label="Unsaved changes"]'
+    );
+    expect(dialog).not.toBeNull();
+    expect(dialog?.textContent).toContain("Cancel");
+    expect(dialog?.textContent).toContain("Discard");
+    expect(dialog?.textContent).toContain("Save and close");
+
+    await click(dialog!.querySelector('button[type="button"]')!);
+
+    expect(container!.querySelector('[role="dialog"][aria-label="Unsaved changes"]')).toBeNull();
+    expect(container!.querySelector('[aria-label="Close Settings"]')).not.toBeNull();
+    expect(useSettingsStore.getState().isDirty).toBe(true);
+  });
+
+  it("discards dirty settings through resetStaged before closing", async () => {
+    const resetStaged = vi.fn(() => {
+      useSettingsStore.setState({ stagedChanges: {}, isDirty: false, dirtyCount: 0 });
+    });
+    useSettingsStore.setState({
+      resetStaged,
+      isDirty: true,
+      stagedChanges: { "x": 1 },
+      dirtyCount: 1
+    });
+    await renderShell();
+    const bridge = getWorkspaceBridge()!;
+
+    await act(async () => bridge.openTab("settings", "Settings"));
+    await click(container!.querySelector('[aria-label="Close Settings"]')!);
+    await click(container!.querySelector('[role="dialog"] button:nth-of-type(2)')!);
+
+    expect(resetStaged).toHaveBeenCalledTimes(1);
+    expect(container!.querySelector('[aria-label="Close Settings"]')).toBeNull();
+    expect(container!.querySelector('[role="dialog"]')).toBeNull();
+    expect(useSettingsStore.getState().isDirty).toBe(false);
+  });
+
+  it("saves dirty settings before closing when Save and close is chosen", async () => {
+    const saveSettings = vi.fn(async () => ({ success: true as const, diagnostics: [] }));
+    useSettingsStore.setState({
+      saveSettings,
+      isDirty: true,
+      stagedChanges: { "x": 1 },
+      dirtyCount: 1
+    });
+    await renderShell();
+    const bridge = getWorkspaceBridge()!;
+
+    await act(async () => bridge.openTab("settings", "Settings"));
+    await click(container!.querySelector('[aria-label="Close Settings"]')!);
+    await click(container!.querySelector('[role="dialog"] button:nth-of-type(3)')!);
+
+    expect(saveSettings).toHaveBeenCalledTimes(1);
+    expect(container!.querySelector('[aria-label="Close Settings"]')).toBeNull();
+    expect(container!.querySelector('[role="dialog"]')).toBeNull();
   });
 });

@@ -19,8 +19,7 @@ shell surfaces without a heavy opinionated UI framework.
   component framework.
 - Theme selection state/setting — settings persistence is already implemented;
   this epic wires the setting to actual theme application.
-- Basic styling for shell/editor/sidebar surfaces using shared `--tn-*` tokens
-  and co-located CSS Modules.
+- Basic styling for shell/editor/sidebar surfaces using shared `--tn-*` tokens.
 
 ## Architecture Decisions
 
@@ -34,10 +33,9 @@ shell surfaces without a heavy opinionated UI framework.
   `document.documentElement`. The `"system"` value must resolve to `light` or
   `dark` based on `prefers-color-scheme`, not be passed through as a literal
   attribute value with no matching CSS rule.
-- **No inline styles.** Use co-located CSS Modules for desktop surfaces,
-  backed by the shared `--tn-*` variables in `packages/ui`; keep shared
-  tokens/themes as CSS variables. Tailwind utility classes must not be copied
-  into production JSX.
+- **Shared tokens back desktop surface styling.** Desktop surfaces use the
+  shared `--tn-*` variables in `packages/ui`; shared tokens/themes remain CSS
+  variables.
 - **Custom components over framework.** Build app components backed by Radix
   UI-style primitives where useful. Avoid a heavy, opinionated component
   framework that fights a desktop/editor UI.
@@ -71,9 +69,8 @@ shell surfaces without a heavy opinionated UI framework.
 - 🟨 System theme has CSS fallback coverage, but `ThemeProvider.tsx` still writes literal `system`; full light/dark resolution and OS-change handling remain in `pending-system_theme_resolution-med-med.md`.
 - ✅ Reusable base components in `packages/ui` — `shadcn/ui` initialized and `Button` component added.
 - ✅ Accessibility-focused primitives (Radix UI-style) — implemented via `shadcn/ui` (Radix UI under the hood).
-- ⬜ Shell/editor/sidebar surfaces use shared `--tn-*` tokens + co-located CSS
-  Modules — the current production source still uses Tailwind utility classes,
-  so CSS-module migration remains pending.
+- ⬜ Shell/editor/sidebar surfaces use shared `--tn-*` tokens — the current
+  production source already uses the shared-token approach.
 - Importable themes are substantially implemented — parser/serialization in
   `packages/core/src/theme.ts`, application in
   `apps/desktop/src/settings/ThemeProvider.tsx`, and import/export in

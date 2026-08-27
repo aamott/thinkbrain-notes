@@ -7,8 +7,12 @@ import type { SignInStatus } from "../sync/historyTypes";
 import type { GitLinkPreview, ImportStarted, WorkspaceImportProgress } from "./gitLinkImport";
 
 const previewWorkspaceFromGitLink = vi.fn<(destination: string, parentPath: string) => Promise<GitLinkPreview>>();
+const previewManagedWorkspaceFromGitLink = vi.fn<(destination: string) => Promise<GitLinkPreview>>();
 const importWorkspaceFromGitLink = vi.fn<
   (destination: string, parentPath: string, profileId?: string | null) => Promise<ImportStarted>
+>();
+const importManagedWorkspaceFromGitLink = vi.fn<
+  (destination: string, profileId?: string | null) => Promise<ImportStarted>
 >();
 const subscribeToWorkspaceImport = vi.fn<(onEvent: (payload: WorkspaceImportProgress) => void) => Promise<() => void>>();
 const readSignInStatus = vi.fn<(rootPath: string, destination: string, profileId?: string | null) => Promise<SignInStatus>>();
@@ -27,8 +31,12 @@ const pickDirectoryPath = vi.fn<(title: string) => Promise<string | null>>();
 vi.mock("./gitLinkImport", () => ({
   previewWorkspaceFromGitLink: (destination: string, parentPath: string) =>
     previewWorkspaceFromGitLink(destination, parentPath),
+  previewManagedWorkspaceFromGitLink: (destination: string) =>
+    previewManagedWorkspaceFromGitLink(destination),
   importWorkspaceFromGitLink: (destination: string, parentPath: string, profileId?: string | null) =>
     importWorkspaceFromGitLink(destination, parentPath, profileId),
+  importManagedWorkspaceFromGitLink: (destination: string, profileId?: string | null) =>
+    importManagedWorkspaceFromGitLink(destination, profileId),
   subscribeToWorkspaceImport: (onEvent: (payload: WorkspaceImportProgress) => void) =>
     subscribeToWorkspaceImport(onEvent)
 }));
@@ -66,12 +74,22 @@ const emptyStatus: SignInStatus = {
   legacy: null
 };
 
-async function renderDialog(onClose = vi.fn()) {
+async function renderDialog(
+  onClose = vi.fn(),
+  managedDestination = false,
+  onImported?: (rootPath: string) => void
+) {
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
   await act(async () => {
-    root?.render(<GitLinkImportDialog onClose={onClose} />);
+    root?.render(
+      <GitLinkImportDialog
+        managedDestination={managedDestination}
+        onClose={onClose}
+        onImported={onImported}
+      />
+    );
   });
   await act(async () => undefined);
   return onClose;
@@ -94,14 +112,18 @@ async function typeInto(element: HTMLInputElement, value: string) {
 
 beforeEach(() => {
   importListener = null;
-  previewWorkspaceFromGitLink.mockReset().mockResolvedValue({
+  const preview = {
     childName: "notes",
     targetPath: "/home/you/notes"
-  });
-  importWorkspaceFromGitLink.mockReset().mockResolvedValue({
+  };
+  const started = {
     requestId: "imp-1",
     targetPath: "/home/you/notes"
-  });
+  };
+  previewWorkspaceFromGitLink.mockReset().mockResolvedValue(preview);
+  previewManagedWorkspaceFromGitLink.mockReset().mockResolvedValue(preview);
+  importWorkspaceFromGitLink.mockReset().mockResolvedValue(started);
+  importManagedWorkspaceFromGitLink.mockReset().mockResolvedValue(started);
   subscribeToWorkspaceImport.mockReset().mockImplementation(async (onEvent) => {
     importListener = onEvent;
     return () => undefined;
@@ -137,6 +159,31 @@ describe("GitLinkImportDialog", () => {
     await act(async () => undefined);
     expect(previewWorkspaceFromGitLink).toHaveBeenCalledWith("https://github.com/you/notes.git", "/home/you");
     expect(host?.textContent).toContain("New folder: notes");
+  });
+
+  it("uses managed app storage without a folder picker and opens the imported vault in place", async () => {
+    const onClose = vi.fn();
+    const onImported = vi.fn();
+    await renderDialog(onClose, true, onImported);
+    await typeInto(
+      host!.querySelector("#git-link-import-url") as HTMLInputElement,
+      "https://github.com/you/notes.git"
+    );
+    await act(async () => undefined);
+
+    expect(host?.textContent).toContain("Managed app storage");
+    expect([...host!.querySelectorAll("button")].some((button) => button.textContent === "Browse…")).toBe(false);
+    expect(previewManagedWorkspaceFromGitLink).toHaveBeenCalledWith("https://github.com/you/notes.git");
+    await click([...host!.querySelectorAll("button")].find((button) => button.textContent === "Bring in")!);
+    expect(importManagedWorkspaceFromGitLink).toHaveBeenCalledWith(
+      "https://github.com/you/notes.git",
+      null
+    );
+    await act(async () => {
+      importListener?.({ requestId: "imp-1", state: "ok", targetPath: "/home/you/notes" });
+    });
+    expect(onImported).toHaveBeenCalledWith("/home/you/notes");
+    expect(onClose).toHaveBeenCalledOnce();
   });
 
   it("lists host-filtered profiles and allows public import with no profile", async () => {

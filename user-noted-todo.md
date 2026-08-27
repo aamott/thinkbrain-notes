@@ -5,7 +5,7 @@ These are random issues or shortcomings users have noted. They may or may not be
 ## Editor
 - [ ] Only markdown files can be edited. Any filetype that can reasonably be edited or viewed should be able to be. If a file can't be edited, clicking it should open something in the canvas with an option to open in the system's default app. 
   - Types of files: text-based (code, markdown, txt, etc.), images, videos, audio, pdf (if easy), etc.
-- [ ] When mouse is over editor, cursor should show over the whole thing. Currently only shows down to the last line. 
+- [x] When mouse is over editor, cursor should show over the whole thing. Currently only shows down to the last line. 
 
 ## Workspace Viewer
 - [ ] File icons should represent the current file and be themed. They exist to a degree but should include everything from mp3 to markdown to docx. Should be adaptable to different themes.
@@ -14,8 +14,8 @@ These are random issues or shortcomings users have noted. They may or may not be
 ## Other
 - [ ] Save unsaved tabs on reload. Currently unsaved tab content is lost on reload.
 - [ ] Command palette fuzzy search and separate file search from command search. If you put `>` at the start of the search it searches commands. Take it away and it searches files. Optimize for tens of thousands of files. Use an ignore list of common issues, like `node_modules`.
-- [ ] Action menu items are spaced right, but their button hitboxes aren't square, they're skinny and tall. 
-- [ ] Ctrl+tab to switch tabs, Ctrl+Shift+tab to switch tabs in reverse.
+- [x] Action menu items are spaced right, but their button hitboxes aren't square, they're skinny and tall. 
+- [x] Ctrl+tab to switch tabs, Ctrl+Shift+tab to switch tabs in reverse.
 - [ ] Mobile has no layout for tabs
 - [ ] Activity bar icons are super generic and need updating. Same for activity menu items. 
 

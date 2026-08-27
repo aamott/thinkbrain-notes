@@ -10,11 +10,14 @@ import type { SyncStatus } from "./historyTypes";
  */
 export function SyncPill({
   status,
-  onOpen
+  onOpen,
+  compact = false
 }: {
   readonly status: SyncStatus;
   /** Somewhere to go about it: the list to decide, or the history to look. */
   readonly onOpen: (panel: "conflicts" | "history") => void;
+  /** Symbol-only — for the phone header, where the full sentence eats title space. */
+  readonly compact?: boolean;
 }) {
   const pill = describePill(status);
 
@@ -29,7 +32,7 @@ export function SyncPill({
       onClick={() => onOpen(status.state === "attention" ? "conflicts" : "history")}
     >
       <span aria-hidden="true">{pill.symbol}</span>
-      {pill.text}
+      {!compact && pill.text}
     </button>
   );
 }

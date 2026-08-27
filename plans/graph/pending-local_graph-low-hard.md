@@ -21,7 +21,6 @@ resolution (shipped; see `plans/graph/done-summary.md`).
 - [ ] Local graph updates when the active note changes or the index updates.
 - [ ] Reuses the same node/edge assembly and rendering as the full graph view
       (no separate rendering pipeline).
-- [ ] No inline styles; CSS Modules for chrome.
 - [ ] Vitest covers the neighborhood-selection logic in `packages/core`.
 
 ## References

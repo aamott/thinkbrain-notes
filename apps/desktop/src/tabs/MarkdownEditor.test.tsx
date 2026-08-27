@@ -107,7 +107,9 @@ describe("MarkdownEditor", () => {
     });
 
     expect(content?.textContent).toContain("# Updated");
-    container.querySelector<HTMLButtonElement>("button")?.click();
+    content?.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true })
+    );
     expect(onSave).toHaveBeenCalledOnce();
 
     await act(async () => root?.unmount());

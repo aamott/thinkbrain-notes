@@ -13,7 +13,7 @@
  */
 
 import type { ComponentType } from "react";
-import type { Disposable, SettingDefinition, SettingType } from "@thinkbrain/core";
+import { MOBILE_HUB_CONTROL, type Disposable, type SettingDefinition, type SettingType } from "@thinkbrain/core";
 
 import { ToggleControl } from "./controls/ToggleControl";
 import { TextControl } from "./controls/TextControl";
@@ -22,6 +22,7 @@ import { SelectControl } from "./controls/SelectControl";
 import { PathControl } from "./controls/PathControl";
 import { GitLinkControl } from "./controls/GitLinkControl";
 import { HistoryPolicyControl } from "./controls/HistoryPolicyControl";
+import { MobileHubControl } from "./controls/MobileHubControl";
 
 /** Shared input className for text/number/select/path controls. */
 export const inputClassName =
@@ -140,3 +141,6 @@ registerControl("select", SelectControl);
 registerControl("path", PathControl);
 registerControl("sync-git-link", GitLinkControl);
 registerControl("sync-history-policy", HistoryPolicyControl);
+// `ui.mobileHub` names this key; without it the registry logs a miss and hands
+// the user a text box containing raw JSON.
+registerControl(MOBILE_HUB_CONTROL, MobileHubControl);

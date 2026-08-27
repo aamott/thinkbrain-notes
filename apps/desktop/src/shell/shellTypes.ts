@@ -6,7 +6,11 @@
  * contribution registry rather than in shell-specific action arrays.
  */
 
-import { getDesktopPanelOrUndefined, type RightPanel } from "../panels/panelRegistryModel";
+import {
+  getDesktopPanelOrUndefined,
+  type LeftPanel,
+  type RightPanel
+} from "../panels/panelRegistryModel";
 
 /**
  * Narrow shell selection types re-exported from the panel registry.
@@ -38,6 +42,21 @@ export type {
  */
 export function isSelectableRightPanel(id: string): id is RightPanel {
   return getDesktopPanelOrUndefined(id)?.side === "right";
+}
+
+/**
+ * The left-side mirror of {@link isSelectableRightPanel}.
+ *
+ * `isBuiltInLeftPanel` answers a narrower question — it is a literal list of
+ * the six first-party ids — so it rejects every extension-contributed left
+ * panel. That is right for guarding a *built-in* union, and wrong for asking
+ * "may this id be the open left panel", which `LeftPanel` has admitted
+ * extension ids for since panels became contributable. Asking the registry
+ * keeps the two in step, and drops a typo or a stale id from a deactivated
+ * extension just as the right-side guard does.
+ */
+export function isSelectableLeftPanel(id: string): id is LeftPanel {
+  return getDesktopPanelOrUndefined(id)?.side === "left";
 }
 
 /**

@@ -15,6 +15,28 @@ import { pickDirectoryPath } from "../native/dialogs";
 import { appEvents } from "../events/appEvents";
 import { workspaceDesktopApi } from "./workspaceAdapter";
 
+describe("workspace access", () => {
+  it("reads native platform capabilities", async () => {
+    const capabilities = {
+      canOpenFolder: false,
+      canCreateManagedWorkspace: true,
+      opensWorkspaceInNewWindow: false
+    };
+    vi.mocked(invokeNativeCommand).mockResolvedValueOnce(capabilities as never);
+
+    await expect(workspaceDesktopApi.workspaceAccessCapabilities()).resolves.toEqual(capabilities);
+    expect(invokeNativeCommand).toHaveBeenCalledWith("workspace_access_capabilities");
+  });
+
+  it("creates a managed workspace from a name only", async () => {
+    const workspace = { root_path: "/app/vaults/Notes", name: "Notes" };
+    vi.mocked(invokeNativeCommand).mockResolvedValueOnce(workspace as never);
+
+    await expect(workspaceDesktopApi.createManagedWorkspace("Notes")).resolves.toEqual(workspace);
+    expect(invokeNativeCommand).toHaveBeenCalledWith("create_managed_workspace", { name: "Notes" });
+  });
+});
+
 describe("pickWorkspaceDirectory", () => {
   it("delegates to the native directory picker with the workspace title", async () => {
     vi.mocked(pickDirectoryPath).mockResolvedValueOnce("/vault");

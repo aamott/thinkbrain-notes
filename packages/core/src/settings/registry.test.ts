@@ -482,6 +482,7 @@ describe("extractDefaults", () => {
     const registry = registryWithBuiltIns();
 
     expect(extractDefaults(registry, "app")).toEqual({
+      "appearance.shellMode": "auto",
       "appearance.theme": "system",
       "appearance.themeFile": null,
       "editor.fontSize": 16,

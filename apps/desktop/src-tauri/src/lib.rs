@@ -8,6 +8,8 @@ mod error;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod workspace_window_lifecycle_tests;
 
 pub use error::NativeError;
 

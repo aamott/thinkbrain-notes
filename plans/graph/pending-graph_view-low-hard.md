@@ -23,7 +23,6 @@ Depends on link target resolution (shipped; see `plans/graph/done-summary.md`).
 - [ ] Graph recomputes when the index updates (file save / reindex).
 - [ ] Graph assembly (nodes/edges) is in `packages/core` with no rendering
       dependency; rendering is desktop-only in `apps/desktop`.
-- [ ] No inline styles; CSS Modules for any non-canvas UI chrome.
 - [ ] Vitest covers graph assembly in `packages/core`.
 
 ## References

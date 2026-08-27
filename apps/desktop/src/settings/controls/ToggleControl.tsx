@@ -34,6 +34,9 @@ export function ToggleControl({ definition, value, onChange, disabled }: Control
       className={cn(
         "flex h-5 w-9 shrink-0 items-center rounded-full px-0.5 transition-colors",
         "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+        // On touch screens, pad the tappable area to ≥44px without stretching
+        // the visual switch itself.
+        "max-[760px]:m-2.5",
         checked ? "bg-primary" : "bg-secondary",
         disabled && "opacity-50"
       )}

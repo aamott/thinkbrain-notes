@@ -4,7 +4,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { NativeWorkspaceSnapshot } from "../native/commands";
+import type { NativeWorkspaceAccessCapabilities, NativeWorkspaceSnapshot } from "../native/commands";
 import { WorkspaceExplorer, WorkspaceSelector } from "./WorkspaceExplorer";
 import { WorkspaceFileIcon } from "./WorkspaceFileIcon";
 import { workspaceDesktopApi, type WorkspaceDesktopApi } from "./workspaceAdapter";
@@ -23,6 +23,17 @@ vi.mock("./gitLinkImport", () => ({
   subscribeToWorkspaceImport: vi.fn(() => Promise.resolve(() => undefined))
 }));
 
+const desktopCapabilities: NativeWorkspaceAccessCapabilities = {
+  canOpenFolder: true,
+  canCreateManagedWorkspace: false,
+  opensWorkspaceInNewWindow: true
+};
+const managedCapabilities: NativeWorkspaceAccessCapabilities = {
+  canOpenFolder: false,
+  canCreateManagedWorkspace: true,
+  opensWorkspaceInNewWindow: false
+};
+
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
 
@@ -33,37 +44,45 @@ afterEach(async () => {
   container = null;
 });
 
-async function renderSelector() {
+async function renderSelector(capabilities = desktopCapabilities) {
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
   const onSelect = vi.fn();
   const onAdd = vi.fn();
+  const onCreateManaged = vi.fn();
   const onImportFromGit = vi.fn();
 
   await act(async () => {
     root?.render(
       <WorkspaceSelector
+        capabilities={capabilities}
         currentPath="/notes/current"
         paths={["/notes/previous", "/notes/current"]}
         onSelect={onSelect}
         onAdd={onAdd}
+        onCreateManaged={onCreateManaged}
         onImportFromGit={onImportFromGit}
       />
     );
   });
 
-  return { onAdd, onImportFromGit, onSelect };
+  return { onAdd, onCreateManaged, onImportFromGit, onSelect };
 }
 
-async function renderExplorer(api: WorkspaceDesktopApi, initialWorkspacePath?: string) {
+async function renderExplorer(
+  api: WorkspaceDesktopApi,
+  initialWorkspacePath?: string,
+  capabilities = desktopCapabilities
+) {
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
+  const resolvedApi = { ...api, workspaceAccessCapabilities: async () => capabilities };
   await act(async () => {
     root?.render(
       <WorkspaceExplorer
-        api={api}
+        api={resolvedApi}
         initialWorkspacePath={initialWorkspacePath}
         recentWorkspacePaths={["/notes/previous"]}
       />
@@ -74,6 +93,15 @@ async function renderExplorer(api: WorkspaceDesktopApi, initialWorkspacePath?: s
 async function click(element: Element) {
   await act(async () => {
     element.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+  });
+}
+
+async function typeInto(element: HTMLInputElement, value: string) {
+  await act(async () => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    setter?.call(element, value);
+    element.dispatchEvent(new Event("input", { bubbles: true }));
+    element.dispatchEvent(new Event("change", { bubbles: true }));
   });
 }
 
@@ -134,6 +162,28 @@ describe("WorkspaceExplorer presentation", () => {
     expect(onImportFromGit).toHaveBeenCalledOnce();
     expect(container?.querySelector("[role='menu']")).toBeNull();
     expect(document.activeElement).toBe(trigger);
+  });
+
+  it("offers managed vault creation and Git import without Open folder on Android", async () => {
+    const { onAdd, onCreateManaged, onImportFromGit } = await renderSelector(managedCapabilities);
+    const trigger = container?.querySelector<HTMLButtonElement>("button[aria-haspopup='menu']");
+    if (!trigger) throw new Error("Workspace selector trigger was not rendered.");
+    await click(trigger);
+
+    const actions = Array.from(container?.querySelectorAll<HTMLButtonElement>("[role='menuitem']") ?? []);
+    expect(actions.some((button) => button.textContent?.includes("Open folder"))).toBe(false);
+    const create = actions.find((button) => button.textContent?.includes("Create vault"));
+    const clone = actions.find((button) => button.textContent?.includes("Bring in from Git link"));
+    expect(create).toBeTruthy();
+    expect(clone).toBeTruthy();
+
+    await click(create!);
+    expect(onCreateManaged).toHaveBeenCalledOnce();
+    expect(onAdd).not.toHaveBeenCalled();
+    await click(trigger);
+    await click(Array.from(container?.querySelectorAll<HTMLButtonElement>("[role='menuitem']") ?? [])
+      .find((button) => button.textContent?.includes("Bring in from Git link"))!);
+    expect(onImportFromGit).toHaveBeenCalledOnce();
   });
 
   it("focuses the current workspace and supports menu keyboard navigation", async () => {
@@ -208,6 +258,41 @@ describe("WorkspaceExplorer presentation", () => {
     expect(openWorkspaceWindow).toHaveBeenCalledWith("/notes/new");
   });
 
+  it("creates and opens a managed vault in the current window with a one-time storage notice", async () => {
+    const descriptor = { root_path: "/app/vaults/Personal Notes", name: "Personal Notes" };
+    const snapshot: NativeWorkspaceSnapshot = { workspace: descriptor, files: [] };
+    const createManagedWorkspace = vi.fn(async () => descriptor);
+    const openWorkspace = vi.fn(async () => snapshot);
+    const openWorkspaceWindow = vi.fn(async () => undefined);
+    const api = {
+      ...workspaceDesktopApi,
+      createManagedWorkspace,
+      listManagedWorkspaces: vi.fn(async () => []),
+      listWorkspaceEntries: vi.fn(async () => []),
+      openWorkspace,
+      openWorkspaceWindow
+    };
+    await renderExplorer(api, undefined, managedCapabilities);
+
+    const trigger = container?.querySelector<HTMLButtonElement>("button[aria-haspopup='menu']");
+    if (!trigger) throw new Error("Workspace selector trigger was not rendered.");
+    await click(trigger);
+    const createAction = Array.from(container?.querySelectorAll<HTMLButtonElement>("[role='menuitem']") ?? [])
+      .find((button) => button.textContent?.includes("Create vault"));
+    await click(createAction!);
+    const input = container?.querySelector<HTMLInputElement>("[role='dialog'] input");
+    if (!input) throw new Error("Managed workspace name input was not rendered.");
+    await typeInto(input, "Personal Notes");
+    await click(container!.querySelector<HTMLButtonElement>("[role='dialog'] button[type='submit']")!);
+    await act(async () => undefined);
+
+    expect(createManagedWorkspace).toHaveBeenCalledWith("Personal Notes");
+    expect(openWorkspace).toHaveBeenCalledWith(descriptor.root_path);
+    expect(openWorkspaceWindow).not.toHaveBeenCalled();
+    expect(container?.textContent).toContain("Android removes managed vaults");
+    expect(container?.textContent).toContain("This workspace is empty");
+  });
+
   it("distinguishes plain and Git-linked workspaces in the selector with accessible labels and icons", async () => {
     container = document.createElement("div");
     document.body.append(container);
@@ -215,10 +300,12 @@ describe("WorkspaceExplorer presentation", () => {
     await act(async () => {
       root?.render(
         <WorkspaceSelector
+          capabilities={desktopCapabilities}
           currentPath="/notes/git-linked-vault"
           paths={["/notes/plain-notes", "/notes/git-linked-vault"]}
           onSelect={vi.fn()}
           onAdd={vi.fn()}
+          onCreateManaged={vi.fn()}
           onImportFromGit={vi.fn()}
         />
       );
@@ -242,6 +329,27 @@ describe("WorkspaceExplorer presentation", () => {
     expect(linkedItem?.getAttribute("aria-label")).toBe("git-linked-vault (Git-linked workspace)");
     expect(linkedItem?.getAttribute("title")).toBe("/notes/git-linked-vault (Git-linked workspace)");
     expect(linkedItem?.querySelector(".lucide-folder-git2")).not.toBeNull();
+  });
+
+  it("still lets a workspace be chosen when the capability probe fails", async () => {
+    // A host whose `workspace_access_capabilities` command is missing or simply
+    // fails used to leave capabilities null forever — which the view reads as
+    // "still checking", not "unknown": permanent placeholder copy and a
+    // permanently disabled button, with no way to open a vault at all.
+    container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
+    const failing = {
+      ...workspaceDesktopApi,
+      workspaceAccessCapabilities: () => Promise.reject(new Error("no such command"))
+    };
+    await act(async () => {
+      root?.render(<WorkspaceExplorer api={failing} recentWorkspacePaths={[]} />);
+    });
+
+    const choose = container.querySelector<HTMLButtonElement>('[aria-label="Choose workspace"]');
+    expect(choose).not.toBeNull();
+    expect(choose?.disabled).toBe(false);
   });
 });
 

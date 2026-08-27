@@ -47,6 +47,22 @@ export interface NativeCommandMap {
     readonly args: undefined;
     readonly result: NativeShellStatus;
   };
+  readonly workspace_access_capabilities: {
+    readonly args: undefined;
+    readonly result: NativeWorkspaceAccessCapabilities;
+  };
+  readonly platform_capabilities: {
+    readonly args: undefined;
+    readonly result: NativePlatformCapabilities;
+  };
+  readonly list_managed_workspaces: {
+    readonly args: undefined;
+    readonly result: readonly NativeWorkspaceDescriptor[];
+  };
+  readonly create_managed_workspace: {
+    readonly args: { readonly name: string };
+    readonly result: NativeWorkspaceDescriptor;
+  };
   readonly open_workspace: {
     readonly args: { readonly rootPath: string };
     readonly result: NativeWorkspaceSnapshot;
@@ -288,10 +304,21 @@ export interface NativeCommandMap {
     readonly args: { readonly destination: string; readonly parentPath: string };
     readonly result: NativeGitLinkPreview;
   };
+  readonly preview_managed_workspace_from_git_link: {
+    readonly args: { readonly destination: string };
+    readonly result: NativeGitLinkPreview;
+  };
   readonly import_workspace_from_git_link: {
     readonly args: {
       readonly destination: string;
       readonly parentPath: string;
+      readonly profileId?: string | null;
+    };
+    readonly result: NativeImportStarted;
+  };
+  readonly import_managed_workspace_from_git_link: {
+    readonly args: {
+      readonly destination: string;
       readonly profileId?: string | null;
     };
     readonly result: NativeImportStarted;
@@ -381,6 +408,30 @@ export type NativeCommandName = keyof NativeCommandMap;
 export interface NativeWorkspaceDescriptor {
   readonly root_path: string;
   readonly name: string;
+}
+
+export interface NativeWorkspaceAccessCapabilities {
+  readonly canOpenFolder: boolean;
+  readonly canCreateManagedWorkspace: boolean;
+  readonly opensWorkspaceInNewWindow: boolean;
+}
+
+/**
+ * Platform-level capability declarations for soft compatibility gating.
+ *
+ * These are NOT a security boundary — the Rust side remains the authority.
+ * The renderer uses them to hide/disable UI for commands the platform cannot
+ * serve, so the user never hits a silent failure. See
+ * `plans/mobile/pending-mobile_tauri_config-med-easy.md`.
+ */
+export interface NativePlatformCapabilities {
+  readonly canOpenFolder: boolean;
+  readonly canCreateManagedWorkspace: boolean;
+  readonly opensWorkspaceInNewWindow: boolean;
+  /** Can spawn a child process (terminal, ACP agent host). Desktop-only. */
+  readonly canSpawnProcess: boolean;
+  /** Can store credentials in the OS keychain. Android has no keyring backend. */
+  readonly hasKeychain: boolean;
 }
 
 export interface NativeDesktopStateUpdate {

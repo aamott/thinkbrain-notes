@@ -1,11 +1,72 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+
+type WorkspaceRestoreHarness = {
+  readonly settingsKey: string;
+  readonly windowRoot: string | null;
+  readonly entries?: boolean;
+};
+
+async function installWorkspaceRestoreHarness(page: Page, options: WorkspaceRestoreHarness) {
+  await page.addInitScript(({ settingsKey, windowRoot, entries }) => {
+    const appWindow = window as Window & {
+      isTauri?: boolean;
+      __TAURI_INTERNALS__?: { invoke: (command: string, args: Record<string, unknown>) => Promise<unknown> };
+    };
+    appWindow.isTauri = true;
+    appWindow.__TAURI_INTERNALS__ = {
+      async invoke(command, args) {
+        if (command === "plugin:dialog|open") return "/workspace/demo-vault";
+        if (command === "window_workspace_root") return windowRoot;
+        if (command === "open_workspace_window") return null;
+        if (command === "read_app_settings") return sessionStorage.getItem(settingsKey);
+        if (command === "write_app_settings") {
+          sessionStorage.setItem(settingsKey, String(args.contents));
+          return null;
+        }
+        if (command === "update_desktop_state") {
+          const current = JSON.parse(sessionStorage.getItem(settingsKey) ?? "{}") as Record<string, unknown>;
+          const previous = (current.desktopState ?? {}) as Record<string, unknown>;
+          const update = (args.update ?? {}) as Record<string, unknown>;
+          const desktopState = {
+            version: 3,
+            lastWorkspacePath: update.lastWorkspacePath ?? previous.lastWorkspacePath ?? null,
+            recentWorkspacePaths: update.recentWorkspacePaths ?? previous.recentWorkspacePaths ?? [],
+            explorerOpen: update.explorerOpen ?? previous.explorerOpen ?? true,
+            leftPanelWidth: update.leftPanelWidth ?? previous.leftPanelWidth ?? 288,
+            rightPanelWidth: update.rightPanelWidth ?? previous.rightPanelWidth ?? 320,
+            bottomPanelOpen: update.bottomPanelOpen ?? previous.bottomPanelOpen ?? false
+          };
+          const serialized = JSON.stringify({ ...current, desktopState });
+          sessionStorage.setItem(settingsKey, serialized);
+          return serialized;
+        }
+        if (command === "open_workspace") {
+          const rootPath = String(args.rootPath);
+          return {
+            workspace: { root_path: rootPath, name: rootPath.split("/").pop() ?? "vault" },
+            files: []
+          };
+        }
+        if (command === "list_workspace_entries") {
+          return entries
+            ? [
+                { relative_path: "Notes", name: "Notes", parent_path: "", kind: "directory", is_markdown: false, byte_size: 0, updated_at: null },
+                { relative_path: "Notes/welcome.md", name: "welcome.md", parent_path: "Notes", kind: "file", is_markdown: true, byte_size: 12, updated_at: null }
+              ]
+            : [];
+        }
+        throw new Error(`Unexpected native command: ${command}`);
+      }
+    };
+  }, options);
+}
 
 test("desktop workspace shell boots in the browser harness", async ({ page }) => {
   await page.goto("/");
 
   await expect(page.getByRole("main", { name: "ThinkBrain desktop workspace" })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Open tabs" })).toBeVisible();
-  await expect(page.getByRole("complementary", { name: "Explorer panel" })).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "Files panel" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Choose workspace" })).toBeVisible();
   await expect(page.getByText(/Welcome to ThinkBrain/)).toBeVisible();
 });
@@ -18,70 +79,23 @@ test("activity bar toggles between the explorer and search panels", async ({ pag
   await expect(page.getByRole("complementary", { name: "Search panel" })).toBeVisible();
   await expect(page.getByText("Open a workspace to search its notes.")).toBeVisible();
 
-  await page.getByRole("button", { name: "Explorer", exact: true }).click();
-  await expect(page.getByRole("complementary", { name: "Explorer panel" })).toBeVisible();
+  await page.getByRole("button", { name: "Files", exact: true }).click();
+  await expect(page.getByRole("complementary", { name: "Files panel" })).toBeVisible();
   await expect(page.getByText("ThinkBrain will show the current folder hierarchy without changing any files.")).toBeVisible();
 
-  await page.getByRole("button", { name: "Explorer", exact: true }).click();
-  await expect(page.getByRole("complementary", { name: "Explorer panel" })).not.toBeVisible();
-  await page.getByRole("button", { name: "Explorer", exact: true }).click();
-  await expect(page.getByRole("complementary", { name: "Explorer panel" })).toBeVisible();
+  await page.getByRole("button", { name: "Files", exact: true }).click();
+  await expect(page.getByRole("complementary", { name: "Files panel" })).not.toBeVisible();
+  await page.getByRole("button", { name: "Files", exact: true }).click();
+  await expect(page.getByRole("complementary", { name: "Files panel" })).toBeVisible();
 });
 
-test("opens a workspace in a new window and restores the last workspace on reload", async ({ page }) => {
-  await page.addInitScript(() => {
-    const settingsKey = "thinkbrain-e2e-app-settings";
-    const appWindow = window as Window & {
-      isTauri?: boolean;
-      __TAURI_INTERNALS__?: { invoke: (command: string, args: Record<string, unknown>) => Promise<unknown> };
-    };
-    appWindow.isTauri = true;
-    appWindow.__TAURI_INTERNALS__ = {
-      async invoke(command, args) {
-        if (command === "plugin:dialog|open") return "/workspace/demo-vault";
-        if (command === "window_workspace_root") return null;
-        if (command === "open_workspace_window") return null;
-        if (command === "read_app_settings") return sessionStorage.getItem(settingsKey);
-        if (command === "write_app_settings") {
-          sessionStorage.setItem(settingsKey, String(args.contents));
-          return null;
-        }
-        // The host's `update_desktop_state` command returns the full serialized
-        // settings document after merging the partial update into `desktopState`.
-        // The mock mirrors that contract so `loadDesktopState` can read it back.
-        if (command === "update_desktop_state") {
-          const current = JSON.parse(sessionStorage.getItem(settingsKey) ?? "{}") as Record<string, unknown>;
-          const previousDesktopState = (current.desktopState ?? {}) as Record<string, unknown>;
-          const update = (args.update ?? {}) as Record<string, unknown>;
-          const merged = {
-            version: 3,
-            lastWorkspacePath: update.lastWorkspacePath ?? previousDesktopState.lastWorkspacePath ?? null,
-            recentWorkspacePaths: update.recentWorkspacePaths ?? previousDesktopState.recentWorkspacePaths ?? [],
-            explorerOpen: update.explorerOpen ?? previousDesktopState.explorerOpen ?? true,
-            leftPanelWidth: update.leftPanelWidth ?? previousDesktopState.leftPanelWidth ?? 288,
-            rightPanelWidth: update.rightPanelWidth ?? previousDesktopState.rightPanelWidth ?? 320,
-            bottomPanelOpen: update.bottomPanelOpen ?? previousDesktopState.bottomPanelOpen ?? false
-          };
-          const next = { ...current, desktopState: merged };
-          const serialized = JSON.stringify(next);
-          sessionStorage.setItem(settingsKey, serialized);
-          return serialized;
-        }
-        if (command === "open_workspace") {
-          return {
-            workspace: { root_path: String(args.rootPath), name: "demo-vault" },
-            files: []
-          };
-        }
-        if (command === "list_workspace_entries") {
-          return [
-            { relative_path: "Notes", name: "Notes", parent_path: "", kind: "directory", is_markdown: false, byte_size: 0, updated_at: null },
-            { relative_path: "Notes/welcome.md", name: "welcome.md", parent_path: "Notes", kind: "file", is_markdown: true, byte_size: 12, updated_at: null }
-          ];
-        }
-        throw new Error(`Unexpected native command: ${command}`);
-      }
-    };
+// Browser-only: proves renderer persistence, not native webview creation.
+// Rust covers lifecycle primitives; a real webview requires Tauri runtime.
+test("renderer persists and restores the last workspace across reload (no native webview is created)", async ({ page }) => {
+  await installWorkspaceRestoreHarness(page, {
+    settingsKey: "thinkbrain-e2e-app-settings",
+    windowRoot: null,
+    entries: true
   });
 
   await page.goto("/");
@@ -94,6 +108,19 @@ test("opens a workspace in a new window and restores the last workspace on reloa
   await page.reload();
   await expect(page.getByRole("heading", { name: "demo-vault" })).toBeVisible();
   await expect(page.getByRole("treeitem", { name: /Notes/ })).toBeVisible();
+});
+
+// Browser-only: a native window root must beat the persisted fallback.
+test("renderer prefers the native window root over the persisted last workspace on reload", async ({ page }) => {
+  await installWorkspaceRestoreHarness(page, {
+    settingsKey: "thinkbrain-e2e-app-settings-window-root",
+    windowRoot: "/workspace/window-root-vault"
+  });
+
+  await page.goto("/");
+  // The native window root takes precedence, so the window-root vault
+  // opens even though no workspace was picked in this page session.
+  await expect(page.getByRole("heading", { name: "window-root-vault" })).toBeVisible();
 });
 
 test("command palette opens workspace files, runs commands, and restores focus", async ({ page }) => {
@@ -237,7 +264,7 @@ test("opens, saves, protects, and creates Markdown notes through the fresh shell
   await expect(page.getByRole("dialog", { name: "Unsaved changes" })).toBeVisible();
   await page.getByRole("button", { name: "Cancel" }).click();
   await expect(editor).toBeVisible();
-  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await page.getByRole("button", { name: "Save note" }).click();
   await expect(page.getByLabel("Unsaved changes")).not.toBeVisible();
   await expect.poll(() => page.evaluate(() => sessionStorage.getItem("thinkbrain-e2e-markdown-documents"))).toContain("# Updated welcome");
 
@@ -288,8 +315,8 @@ test("assistant and bottom panel toggles preserve the editor", async ({ page }) 
 
   await page.getByRole("button", { name: "Assistant", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Assistant" })).toBeVisible();
-  await page.getByRole("button", { name: "Explorer", exact: true }).click();
-  await expect(page.getByRole("complementary", { name: "Explorer panel" })).not.toBeVisible();
+  await page.getByRole("button", { name: "Files", exact: true }).click();
+  await expect(page.getByRole("complementary", { name: "Files panel" })).not.toBeVisible();
   await expect(page.getByRole("heading", { name: "Assistant" })).toBeVisible();
   await page.getByRole("button", { name: "Assistant", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Assistant" })).not.toBeVisible();
@@ -311,7 +338,7 @@ test("the editor remains usable without horizontal page overflow on a narrow scr
   await page.goto("/");
 
   await expect(page.getByRole("main")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Explorer", exact: true })).toHaveCSS("transition-duration", "0s");
+  await expect(page.getByRole("button", { name: "Files", exact: true })).toHaveCSS("transition-duration", "0s");
 
   const hasHorizontalOverflow = await page.evaluate(
     () => document.documentElement.scrollWidth > window.innerWidth

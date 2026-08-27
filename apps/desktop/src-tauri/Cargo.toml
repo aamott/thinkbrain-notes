@@ -33,6 +33,14 @@ tauri-plugin-process = "2"
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
+# `MoveFileExW(MOVEFILE_REPLACE_EXISTING)` is the only Win32 call used to make
+# `write_file_atomically` a true replace-existing operation on Windows. Gated
+# to Windows so the mobile (Android) build never pulls it in. Pinned to 0.59,
+# the version already locked in `Cargo.lock` by transitive deps (winreg,
+# xdg-home), so this declaration resolves to an already-pinned, mature crate.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_Storage_FileSystem", "Win32_Foundation"] }
+
 # The updater is desktop-only upstream, and this crate also builds for Android.
 # Gating it here rather than in `[dependencies]` keeps the mobile build from
 # trying to compile a plugin that has no mobile implementation.

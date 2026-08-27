@@ -1,0 +1,171 @@
+// @vitest-environment happy-dom
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { ThemeProvider } from "../settings/ThemeProvider";
+import { useSettingsStore } from "../settings/settingsStore";
+import { ShellRoot, usePhoneChrome } from "./ShellRoot";
+
+let narrow = false;
+let coarse = false;
+
+// The gate's two inputs are stubbed so each form factor is a plain assignment;
+// driving them through matchMedia is `useNarrowViewport`'s own test's job.
+vi.mock("./useNarrowViewport", () => ({ useNarrowViewport: () => narrow }));
+vi.mock("../journal/useCoarsePointer", () => ({ useCoarsePointer: () => coarse }));
+
+// `ShellRoot` mounts the real shell state, which boots the workspace lifecycle
+// and reaches for Tauri IPC when it believes it is running under Tauri. Mock
+// both so the restore path is a no-op, matching `useShellState.test.tsx`.
+vi.mock("@tauri-apps/api/core", () => ({
+  isTauri: vi.fn(() => false)
+}));
+
+vi.mock("../native/commands", () => ({
+  invokeNativeCommand: vi.fn(() => Promise.resolve(null))
+}));
+
+let root: Root | null = null;
+let container: HTMLDivElement | null = null;
+
+afterEach(async () => {
+  await act(async () => root?.unmount());
+  container?.remove();
+  root = null;
+  container = null;
+  // Reset shellMode to "auto" so tests don't leak the override into each other.
+  useSettingsStore.setState({
+    appValues: { ...useSettingsStore.getState().appValues, "appearance.shellMode": "auto" }
+  });
+});
+
+/** Sets `appearance.shellMode` in the real settings store. */
+const setShellMode = (mode: string): void => {
+  useSettingsStore.setState({
+    appValues: { ...useSettingsStore.getState().appValues, "appearance.shellMode": mode }
+  });
+};
+
+/**
+ * Mounts `ShellRoot` under `ThemeProvider` — `useShellState` consumes
+ * `useTheme()` for the theme-toggle command and throws outside the provider.
+ */
+const render = async (): Promise<HTMLDivElement> => {
+  container = document.createElement("div");
+  document.body.append(container);
+  root = createRoot(container);
+  await act(async () => {
+    root?.render(
+      <ThemeProvider>
+        <ShellRoot />
+      </ThemeProvider>
+    );
+  });
+  return container;
+};
+
+describe("ShellRoot", () => {
+  it("renders desktop chrome on a wide mouse-driven window", async () => {
+    narrow = false;
+    coarse = false;
+
+    const host = await render();
+
+    expect(host.querySelector('[aria-label="ThinkBrain desktop workspace"]')).not.toBeNull();
+  });
+
+  it("keeps desktop chrome in a narrow window driven by a mouse", async () => {
+    narrow = true;
+    coarse = false;
+
+    const host = await render();
+
+    expect(host.querySelector('[aria-label="ThinkBrain desktop workspace"]')).not.toBeNull();
+  });
+
+  it("keeps desktop chrome on a wide touch screen", async () => {
+    narrow = false;
+    coarse = true;
+
+    const host = await render();
+
+    expect(host.querySelector('[aria-label="ThinkBrain desktop workspace"]')).not.toBeNull();
+  });
+
+  it("renders phone chrome on a narrow touch screen", async () => {
+    narrow = true;
+    coarse = true;
+
+    const host = await render();
+
+    expect(host.querySelector('[aria-label="ThinkBrain mobile workspace"]')).not.toBeNull();
+  });
+
+  // The two chromes are alternatives, not layers: mounting both would run two
+  // editors over one document and give the phone an icon rail it has no room for.
+  it("renders one chrome at a time", async () => {
+    narrow = true;
+    coarse = true;
+
+    const host = await render();
+
+    expect(host.querySelector('[aria-label="ThinkBrain desktop workspace"]')).toBeNull();
+    expect(host.querySelector('[aria-label="Workspace sections"]')).toBeNull();
+  });
+
+  it("forces phone chrome when shellMode is phone, even on a wide mouse window", async () => {
+    narrow = false;
+    coarse = false;
+    setShellMode("phone");
+
+    const host = await render();
+
+    expect(host.querySelector('[aria-label="ThinkBrain mobile workspace"]')).not.toBeNull();
+  });
+
+  it("forces desktop chrome when shellMode is desktop, even on a narrow touch screen", async () => {
+    narrow = true;
+    coarse = true;
+    setShellMode("desktop");
+
+    const host = await render();
+
+    expect(host.querySelector('[aria-label="ThinkBrain desktop workspace"]')).not.toBeNull();
+  });
+});
+
+describe("usePhoneChrome", () => {
+  /** Reads the gate with no chrome mounted, so only the gate is under test. */
+  const gate = async (): Promise<boolean> => {
+    const box: { current: boolean | null } = { current: null };
+    function Probe(): null {
+      box.current = usePhoneChrome();
+      return null;
+    }
+    container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
+    await act(async () => root?.render(<Probe />));
+    if (box.current === null) throw new Error("usePhoneChrome did not render");
+    return box.current;
+  };
+
+  // The whole truth table. Without the fourth row, `coarse && narrow` and
+  // `coarse || narrow` are indistinguishable — and the `||` version would hand
+  // phone chrome to every touchscreen laptop and every narrow desktop window.
+  it.each([
+    { coarseInput: false, narrowInput: false, expected: false },
+    { coarseInput: false, narrowInput: true, expected: false },
+    { coarseInput: true, narrowInput: false, expected: false },
+    { coarseInput: true, narrowInput: true, expected: true }
+  ])(
+    "is $expected for a coarse=$coarseInput narrow=$narrowInput window",
+    async ({ coarseInput, narrowInput, expected }) => {
+      coarse = coarseInput;
+      narrow = narrowInput;
+
+      expect(await gate()).toBe(expected);
+    }
+  );
+});

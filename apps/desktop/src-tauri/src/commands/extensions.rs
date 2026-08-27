@@ -14,7 +14,7 @@
 //! does once loaded: a loaded extension is trusted local code running with full
 //! application privileges.
 
-use crate::error::NativeError;
+use crate::error::{failed, NativeError};
 use std::fs;
 use std::io::Read;
 use std::path::{Component, Path, PathBuf};
@@ -22,12 +22,6 @@ use std::path::{Component, Path, PathBuf};
 /// Largest entry module accepted, guarding against reading a huge file into the
 /// webview by mistake.
 const MAX_EXTENSION_FILE_BYTES: u64 = 8 * 1024 * 1024;
-
-/// Builds a `NativeError::with_details` from a static code/message and a
-/// displayable error, matching the shared pattern used across command modules.
-fn failed(code: &'static str, message: &'static str, error: impl std::fmt::Display) -> NativeError {
-    NativeError::with_details(code, message, error.to_string())
-}
 
 /// Rejects a relative path that is absolute, empty, or leaves the directory.
 fn normalize_extension_relative_path(relative_path: &str) -> Result<PathBuf, NativeError> {

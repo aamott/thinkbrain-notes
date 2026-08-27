@@ -18,6 +18,13 @@ export type UpdateState =
   | { readonly kind: "installing" }
   | { readonly kind: "failed"; readonly message: string };
 
+/** What the shell renders from the updater. */
+export interface AppUpdate {
+  readonly state: UpdateState;
+  readonly install: () => void;
+  readonly dismiss: () => void;
+}
+
 /**
  * Looks once for a newer version, and installs it when the user says so.
  *
@@ -33,11 +40,7 @@ export type UpdateState =
 export function useAppUpdate(
   check: (() => Promise<AvailableUpdate | null>) | null,
   relaunch: () => Promise<void>
-): {
-  readonly state: UpdateState;
-  readonly install: () => void;
-  readonly dismiss: () => void;
-} {
+): AppUpdate {
   const [state, setState] = useState<UpdateState>({ kind: "none" });
   const found = useRef<AvailableUpdate | null>(null);
 

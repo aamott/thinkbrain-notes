@@ -57,7 +57,7 @@ This story owns ONLY journal-specific mobile concerns:
 
 This story does NOT own:
 
-- Popout placement, return path, bottom-nav subset, or hamburger — those belong to `plans/mobile/pending-responsive_layout-med-med.md`. Coordinate; do not duplicate.
+- Popout placement, return path, hub slots, or the drawer — those belong to the mobile `phone_shell_chrome` story. Coordinate; do not duplicate.
 - Bespoke mobile navigation, a private bottom bar, or a custom back gesture (D26).
 - Calendar tab behavior on a phone (D57) — shipped 2026-08-08 in `CalendarTab.tsx` via
   container queries; do not re-implement it here.
@@ -68,20 +68,18 @@ Refine journal-owned surfaces for phone-sized viewports using the existing respo
 
 ## Likely files
 
-- `apps/desktop/src/journal/JournalPanel.module.css` (responsive refinements for compact list density and narrow dateline).
-- `apps/desktop/src/journal/JournalPanel.tsx` (only semantic/interaction changes required by D40; no mobile-only screen tree).
+- `apps/desktop/src/journal/JournalPanel.tsx` (responsive refinements for compact list density and narrow dateline; only semantic/interaction changes required by D40; no mobile-only screen tree).
 - `apps/desktop/src/journal/MetadataBottomSheet.tsx` (new; M-2 bottom sheet confined to metadata editing).
-- `apps/desktop/src/journal/MetadataBottomSheet.module.css` (new; CSS Modules, `--tn-*` tokens only).
 - `apps/desktop/src/journal/MetadataBottomSheet.test.tsx` (new).
 - `apps/desktop/src/journal/JournalPanel.mobile.test.tsx` (new or colocated viewport tests).
-- `apps/desktop/src/shell/DesktopShell.tsx`, `panels/LeftPopout.tsx` (reuse existing responsive full-screen behavior; avoid separate screen tree — coordinate with `pending-responsive_layout-med-med.md` owner).
+- `apps/desktop/src/shell/DesktopShell.tsx`, `panels/LeftPopout.tsx` (reuse existing responsive full-screen behavior; avoid separate screen tree — coordinate with the mobile `phone_shell_chrome` owner).
 - `apps/desktop/src/journal/mobile-a11y-checklist.md` (new manual matrix for VoiceOver/TalkBack).
 
 Do NOT create `apps/mobile/` or add a separate mobile screen tree.
 
 ## Dependencies
 
-- `plans/mobile/pending-responsive_layout-med-med.md` — owns popout placement and return path. This story must coordinate but not duplicate.
+- Mobile `phone_shell_chrome` — owns popout placement and return path; `phone_surface_fixes` owns the popout's full-width treatment. This story must coordinate but not duplicate.
 - Completed `pending-journal_panel_ui-high-hard.md` (JournalPanel, MetadataWidget, compact-list state).
 - Same `apps/desktop` adapters and `packages/core` models; no Tauri direct calls — go through `apps/desktop/src/native/` adapters.
 
@@ -107,13 +105,13 @@ Do NOT create `apps/mobile/` or add a separate mobile screen tree.
 - No bespoke mobile navigation, private bottom bar, custom return path, or `apps/mobile/` directory.
 - No calendar tab phone layout beyond D57; `pending-calendar_tab_ui-high-hard.md` implements it.
 - No separate mobile app, React Native layer, cloud sync, tablet-specific design, or app-store work.
-- No fix for unrelated CodeMirror/Tauri keyboard issues — link to `pending-codemirror_mobile_testing-low-med.md`.
+- No fix for unrelated CodeMirror/Tauri keyboard issues — link to `done-codemirror_mobile_testing-med-med.md`.
 - High contrast is out of scope (themes own it).
 
 ## Handoff artifacts
 
 The following stories need from this one:
 
-- `MetadataBottomSheet` component API and CSS Module for reuse if the metadata widget is extended in future slices.
+- `MetadataBottomSheet` component API for reuse if the metadata widget is extended in future slices.
 - `mobile-a11y-checklist.md` for sign-off by the product owner and for reference by the calendar tab story.
 - Confirmation (in test output) that the wide-desktop layout is unchanged, for the calendar tab story to rely on.

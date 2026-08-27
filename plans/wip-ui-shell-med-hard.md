@@ -1,7 +1,7 @@
 # UI Shell
 
 > The desktop UI shell is a visual/interaction specification translated to the
-> established React, CSS Module, Tauri, and shared-token architecture.
+> established React, Tauri, and shared-token architecture.
 
 ## Goal
 
@@ -68,16 +68,13 @@ point for the `ai` epic, not a hand-built chat UI.
 
 Keep chrome surfaces in `packages/ui/src/styles/tokens.css`
 using the `--tn-*` prefix, with light and dark values for title bar, activity
-bar, sidebar, editor, panel, status bar, and active/inactive tabs. Translate
-Tailwind utility classes into co-located CSS Modules backed by those variables;
-keep only reset, app root, and third-party editor overrides global. The current
-production source still uses utility classes, so this migration remains pending.
+bar, sidebar, editor, panel, status bar, and active/inactive tabs. Keep only
+reset, app root, and third-party editor overrides global.
+The current production source already uses this utility-class approach.
 
 Panel widths are state in pixels, clamped in the resize controller and applied
-to the shell root with scoped CSSOM custom properties. This is the approved
-dynamic-value exception to the no-inline-style rule: `setProperty` updates only
-`--tn-shell-left-width` and `--tn-shell-right-width`; CSS Modules provide their
-defaults and hidden-panel values.
+to the shell root with scoped CSSOM custom properties. `setProperty` updates
+only `--tn-shell-left-width` and `--tn-shell-right-width`.
 
 ### Interaction and accessibility
 
@@ -93,8 +90,7 @@ the persisted app setting and `data-thinkbrain-theme`.
 - ✅ fresh-shell startup and browser-harness wiring
 - ✅ persisted Explorer visibility and workspace restoration
 - ✅ fresh shell rebuild
-- ⬜ shell token and CSS Module migration — production JSX still uses Tailwind
-  utility classes; see
+- ⬜ shell token consolidation — production JSX uses shared `--tn-*` tokens; see
   `plans/theme-foundation/pending-surface_styling_migration-med-med.md`
 - ✅ desktop shell composition (panel separation) — rebuilt after the earlier
   rollback

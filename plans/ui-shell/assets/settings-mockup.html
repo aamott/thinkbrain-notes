@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ThinkBrain Notes — Settings Tab Mockup</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ground:#11141a; --surface:#171b22; --ink:#e6e9ee; --ink-mut:#98a2b1;
+    --rule:#262c35; --rl:#d69a62; --rl-soft:#2b2018;
+    --sans:'Inter',ui-sans-serif,system-ui,sans-serif; --mono:ui-monospace,monospace;
+    /* App tokens (dark) from packages/ui/src/styles/tokens.css */
+    --tn-bg:hsl(0 0% 7%); --tn-fg:hsl(0 0% 98%); --tn-surface:hsl(0 0% 10%);
+    --tn-card:hsl(0 0% 10%); --tn-primary:hsl(152 60% 38%); --tn-primary-fg:hsl(0 0% 100%);
+    --tn-secondary:hsl(0 0% 16%); --tn-secondary-fg:hsl(0 0% 98%);
+    --tn-muted:hsl(0 0% 16%); --tn-muted-fg:hsl(0 0% 60%);
+    --tn-accent:hsl(152 40% 18%); --tn-accent-fg:hsl(152 60% 55%);
+    --tn-border:hsl(0 0% 18%); --tn-input:hsl(0 0% 18%); --tn-ring:hsl(152 60% 45%);
+    --tn-overlay:rgb(0 0% 0/55%); --tn-titlebar:hsl(0 0% 9%);
+    --tn-activitybar:hsl(0 0% 11%); --tn-activitybar-fg:hsl(0 0% 60%);
+    --tn-activitybar-on:hsl(152 60% 45%); --tn-sidebar:hsl(0 0% 9%);
+    --tn-editor:hsl(0 0% 7%); --tn-tab-active:hsl(0 0% 7%); --tn-tab-inactive:hsl(0 0% 12%);
+    --tn-tab-active-fg:hsl(0 0% 98%); --tn-tab-inactive-fg:hsl(0 0% 60%);
+    --tn-statusbar:hsl(0 0% 12%); --tn-statusbar-fg:hsl(0 0% 98%);
+    --r-s:0.25rem; --r-m:0.5rem; --r-l:0.75rem; --aw:3rem;
+    --shadow:0 18px 50px rgb(0 0%/18%); --shadow-panel:0 0 24px 4px rgb(0 0%/55%);
+  }
+  *{box-sizing:border-box} html,body{margin:0;padding:0}
+  body{background:var(--ground);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+  .sheet{max-width:72rem;margin:0 auto;padding:clamp(2rem,5vw,4rem) clamp(1rem,4vw,2.5rem) 5rem}
+
+  /* Masthead */
+  .masthead{border-bottom:1px solid var(--rule);padding-bottom:2rem;margin-bottom:3rem}
+  .eyebrow{font-size:.7rem;letter-spacing:.14em;text-transform:uppercase;color:var(--rl);margin:0 0 1rem;font-weight:600}
+  h1{font-size:clamp(1.8rem,4vw,2.6rem);line-height:1.1;letter-spacing:-.02em;font-weight:700;margin:0 0 .75rem}
+  .standfirst{font-size:1.05rem;color:var(--ink-mut);max-width:52ch;margin:0 0 1.5rem}
+  .facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(11rem,1fr));gap:1rem 2rem;font-size:.82rem}
+  .facts dt{font-size:.66rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-mut);margin-bottom:.25rem}
+  .facts dd{margin:0} .facts code{font-family:var(--mono);color:var(--rl)}
+  .legend{display:flex;gap:1.25rem;flex-wrap:wrap;font-size:.78rem;color:var(--ink-mut);margin-bottom:1rem}
+  .legend .sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:.35rem;vertical-align:middle}
+  .legend .sw.illus{background:var(--rl)} .legend .sw.def{background:var(--tn-primary)}
+
+  /* Figures */
+  .figure{margin:0 0 3.5rem}
+  .fig-head{display:flex;align-items:baseline;gap:.75rem;margin-bottom:1rem;flex-wrap:wrap}
+  .fig-num{font-size:.7rem;letter-spacing:.12em;text-transform:uppercase;color:var(--rl);font-weight:600}
+  .fig-title{font-size:1.15rem;font-weight:600;margin:0}
+  .fig-note{color:var(--ink-mut);font-size:.88rem;margin-left:auto}
+  .callout{margin-top:1rem;padding:.85rem 1rem;background:var(--surface);border:1px solid var(--rule);border-left:3px solid var(--rl);border-radius:6px;font-size:.85rem;color:var(--ink-mut);line-height:1.5}
+  .callout b{color:var(--rl);font-weight:600} .callout code{font-family:var(--mono);color:var(--rl)}
+  .callout+.callout{margin-top:.6rem}
+
+  /* App window */
+  .win{position:relative;background:var(--tn-bg);color:var(--tn-fg);border:1px solid var(--tn-border);border-radius:var(--r-l);overflow:hidden;font-family:var(--sans);font-size:13px;box-shadow:var(--shadow)}
+  .titlebar{height:32px;display:flex;align-items:center;gap:.5rem;background:var(--tn-titlebar);color:var(--tn-fg);border-bottom:1px solid var(--tn-border);padding:0 .6rem;user-select:none}
+  .traffic{display:flex;gap:.4rem} .traffic span{width:11px;height:11px;border-radius:50%}
+  .traffic .r{background:#ff5f57} .traffic .y{background:#febc2e} .traffic .g{background:#28c840}
+  .titlebar .crumb{margin-left:.5rem;font-size:12px;color:var(--tn-muted-fg)}
+  .titlebar .crumb b{color:var(--tn-fg);font-weight:500}
+  .tabs{display:flex;align-items:stretch;background:var(--tn-tab-inactive);border-bottom:1px solid var(--tn-border);height:34px}
+  .tab{display:flex;align-items:center;gap:.4rem;padding:0 .85rem;background:var(--tn-tab-inactive);color:var(--tn-tab-inactive-fg);border-right:1px solid var(--tn-border);font-size:12px}
+  .tab.active{background:var(--tn-tab-active);color:var(--tn-tab-active-fg)}
+  .tab .dot{width:7px;height:7px;border-radius:50%;background:var(--tn-primary)}
+  .tab .x{color:var(--tn-muted-fg);margin-left:.25rem}
+  .activitybar{width:var(--aw);flex-shrink:0;background:var(--tn-activitybar);color:var(--tn-activitybar-fg);display:flex;flex-direction:column;align-items:center;gap:.35rem;padding:.5rem 0;border-right:1px solid var(--tn-border)}
+  .activitybar .ico{width:28px;height:28px;display:grid;place-items:center;border-radius:6px;font-size:15px}
+  .activitybar .ico.on{color:var(--tn-activitybar-on);background:var(--tn-accent)}
+  .activitybar .spacer{flex:1}
+  .shell-body{display:flex;min-height:0}
+  .main{flex:1;display:flex;flex-direction:column;min-width:0;background:var(--tn-editor)}
+
+  /* Settings tab: column layout — header bar, then body */
+  .settings{flex:1;display:flex;flex-direction:column;min-height:0}
+  .settings-header{display:flex;align-items:center;gap:.5rem;padding:.45rem .85rem;min-height:32px;border-bottom:1px solid var(--tn-border);background:var(--tn-editor);font-size:.72rem;flex-shrink:0}
+  .settings-header .crumb{font-size:12px;color:var(--tn-muted-fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .settings-header .crumb b{color:var(--tn-fg);font-weight:500}
+  .settings-header .save{margin-left:auto;border-radius:var(--r-s);padding:.3rem .8rem;font-size:12px;cursor:pointer;min-height:28px;background:var(--tn-primary);color:var(--tn-primary-fg);border:1px solid transparent}
+  .settings-header .save[disabled]{background:var(--tn-muted);color:var(--tn-muted-fg);opacity:.5;cursor:not-allowed}
+
+  /* Body: nav + content. Anchors slide-in panel + scrim. */
+  .settings-body{position:relative;flex:1;display:flex;min-height:0}
+  .settings-nav{width:220px;flex-shrink:0;background:var(--tn-sidebar);color:var(--tn-fg);border-right:1px solid var(--tn-border);display:flex;flex-direction:column;min-height:0}
+  .nav-search{padding:.6rem;border-bottom:1px solid var(--tn-border);display:flex;align-items:center;gap:.4rem;background:var(--tn-sidebar)}
+  .nav-search .si{color:var(--tn-muted-fg);font-size:13px}
+  .nav-search input{flex:1;background:var(--tn-input);border:1px solid var(--tn-border);color:var(--tn-fg);border-radius:var(--r-s);padding:.3rem .5rem;font-size:12px;outline:none}
+  .nav-search input::placeholder{color:var(--tn-muted-fg)}
+  .nav-search input:focus{border-color:var(--tn-ring)}
+  .nav-tree{flex:1;overflow-y:auto;padding:.4rem 0}
+  .nav-grp{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--tn-muted-fg);padding:.6rem .75rem .25rem;font-weight:600}
+  .nav-item{display:flex;align-items:center;gap:.4rem;padding:.32rem .75rem;font-size:12.5px;color:var(--tn-fg);border-left:2px solid transparent;min-height:28px}
+  .nav-item.sub{padding-left:1.5rem;color:var(--tn-muted-fg);font-size:12px}
+  .nav-item.active{background:var(--tn-accent);color:var(--tn-accent-fg);border-left-color:var(--tn-primary);font-weight:500}
+  .nav-item .chev{font-size:10px;color:var(--tn-muted-fg);width:12px}
+  .nav-item.active .chev{color:var(--tn-accent-fg)}
+  .nav-item .badge{margin-left:auto;font-size:9px;padding:1px 5px;border-radius:8px;background:var(--tn-secondary);color:var(--tn-muted-fg);letter-spacing:.04em;text-transform:uppercase;font-weight:600}
+  .nav-item.illus{color:var(--rl)} .nav-item.illus .badge{background:var(--rl-soft);color:var(--rl)}
+
+  /* Content area */
+  .content{flex:1;overflow-y:auto;padding:1.5rem 2rem 2rem;min-width:0;position:relative}
+  .content-header{display:flex;align-items:baseline;gap:.75rem;margin-bottom:1.5rem;border-bottom:1px solid var(--tn-border);padding-bottom:1rem}
+  .content-header h2{margin:0;font-size:1.05rem;font-weight:600}
+  .content-header .reset{margin-left:auto;font-size:11px;color:var(--tn-muted-fg);background:none;border:none;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+  .setting{display:grid;grid-template-columns:1fr auto;gap:.5rem 1rem;padding:.9rem 0;border-bottom:1px solid var(--tn-border);align-items:start}
+  .setting:last-child{border-bottom:none}
+  .setting-label{font-size:13px;font-weight:500}
+  .setting-desc{font-size:11.5px;color:var(--tn-muted-fg);margin-top:.2rem;max-width:48ch}
+  .setting-control{align-self:center}
+
+  /* Controls */
+  .toggle{width:34px;height:19px;border-radius:10px;background:var(--tn-input);position:relative;border:1px solid var(--tn-border);cursor:pointer}
+  .toggle.on{background:var(--tn-primary);border-color:var(--tn-primary)}
+  .toggle::after{content:'';position:absolute;top:1px;left:1px;width:15px;height:15px;border-radius:50%;background:var(--tn-fg);transition:transform .15s}
+  .toggle.on::after{transform:translateX(15px);background:var(--tn-primary-fg)}
+  .select,.text,.number{background:var(--tn-input);border:1px solid var(--tn-border);color:var(--tn-fg);border-radius:var(--r-s);padding:.3rem .5rem;font-size:12px;outline:none;min-height:28px}
+  .select:focus,.text:focus,.number:focus{border-color:var(--tn-ring)}
+  .number{width:5rem} .text{width:14rem}
+  .path{display:flex;gap:.4rem;align-items:center} .path .text{width:16rem}
+  .browse{background:var(--tn-secondary);color:var(--tn-secondary-fg);border:1px solid var(--tn-border);border-radius:var(--r-s);padding:.3rem .55rem;font-size:11px;cursor:pointer;min-height:28px}
+
+  /* Hamburger — in the content area (canvas). Fades out when nav opens. */
+  .hamburger{display:none;position:absolute;top:.5rem;left:.5rem;width:30px;height:30px;place-items:center;border-radius:6px;background:var(--tn-secondary);color:var(--tn-fg);border:1px solid var(--tn-border);cursor:pointer;font-size:16px;z-index:6;line-height:1;opacity:1;transition:opacity .15s}
+  .nav-open .hamburger{opacity:0;pointer-events:none}
+
+  /* ✕ close button — right side of nav panel, next to search */
+  .nav-close{display:none;width:28px;height:28px;place-items:center;border-radius:6px;background:transparent;color:var(--tn-muted-fg);border:none;cursor:pointer;font-size:16px;flex-shrink:0}
+  .nav-open .nav-close{display:grid}
+
+  /* Narrow: show hamburger, hide side nav */
+  .narrow .hamburger{display:grid}
+  .narrow .settings-nav{display:none}
+  .narrow .content{padding:1.25rem 1.25rem 2rem 3rem}
+
+  /* Slide-in nav panel */
+  .nav-panel{position:absolute;top:0;bottom:0;left:0;width:240px;background:var(--tn-sidebar);border-right:1px solid var(--tn-border);box-shadow:var(--shadow-panel);z-index:5;display:none;flex-direction:column}
+  .nav-open .nav-panel{display:flex}
+  .nav-open .scrim{display:block}
+  .scrim{display:none;position:absolute;inset:0;background:var(--tn-overlay);z-index:4}
+
+  /* Phone */
+  .phone-wrap{display:flex;justify-content:center}
+  .phone{width:360px;background:var(--tn-bg);border:1px solid var(--tn-border);border-radius:28px;overflow:hidden;box-shadow:var(--shadow);position:relative;min-height:640px}
+  .phone .titlebar{justify-content:center;font-size:11px}
+  .phone .settings{height:580px}
+  .phone .content{padding:1rem 1rem 2rem 3rem}
+  .phone .setting{grid-template-columns:1fr;gap:.4rem}
+  .phone .setting-control{justify-self:stretch}
+  .phone .text,.phone .path .text{width:100%}
+  /* Touch targets ≥44px */
+  .phone .settings-header{min-height:44px;padding:.5rem .75rem}
+  .phone .hamburger{width:44px;height:44px;font-size:20px;top:.5rem;left:.5rem}
+  .phone .nav-close{width:44px;height:44px;font-size:20px}
+  .phone .nav-item{min-height:44px;padding:.6rem .75rem;font-size:14px}
+  .phone .nav-item.sub{font-size:13px}
+  .phone .toggle{width:44px;height:26px}
+  .phone .toggle::after{width:20px;height:20px}
+  .phone .toggle.on::after{transform:translateX(18px)}
+  .phone .select,.phone .text,.phone .number,.phone .browse,.phone .save{min-height:44px;font-size:14px}
+
+  .statusbar{height:24px;background:var(--tn-statusbar);color:var(--tn-statusbar-fg);display:flex;align-items:center;padding:0 .6rem;font-size:11px;gap:.75rem}
+  .statusbar .spacer{flex:1}
+</style>
+</head>
+<body>
+<div class="sheet">
+
+  <header class="masthead">
+    <p class="eyebrow">UI Mockup · Story 3 · Settings Tab</p>
+    <h1>Modular Settings — Nav, Content &amp; Responsive States</h1>
+    <p class="standfirst">
+      Three dark-theme figures: desktop two-pane, narrow hamburger collapse,
+      and phone. Single-page click-to-select nav. Save in the header bar
+      (matches <code>WorkspaceHeaderBar</code>). Hamburger in the canvas.
+      Built-in modules (Appearance, Editor, Sync) are specced; future modules
+      (Extensions, Keyboard) are <span style="color:var(--rl)">illustrative</span>.
+    </p>
+    <dl class="facts">
+      <div><dt>Theme</dt><dd>Dark (<code>data-thinkbrain-theme="dark"</code>)</dd></div>
+      <div><dt>Breakpoint</dt><dd><code>760px</code></dd></div>
+      <div><dt>Nav</dt><dd>Click-to-select, no scroll-spy</dd></div>
+      <div><dt>Save</dt><dd>Header bar (matches <code>WorkspaceHeaderBar</code>)</dd></div>
+      <div><dt>Touch</dt><dd><code>≥44px</code> on phone</dd></div>
+    </dl>
+  </header>
+
+  <div class="legend">
+    <span><span class="sw def"></span>Defined (Appearance, Editor, Sync)</span>
+    <span><span class="sw illus"></span><span style="color:var(--rl)">Illustrative</span> future modules</span>
+  </div>
+
+  <!-- FIGURE 1: DESKTOP -->
+  <section class="figure">
+    <div class="fig-head">
+      <span class="fig-num">Figure 1</span>
+      <h2 class="fig-title">Desktop — two-pane layout</h2>
+      <span class="fig-note">Wide window · nav tree + content</span>
+    </div>
+    <div class="win">
+      <div class="titlebar"><div class="traffic"><span class="r"></span><span class="y"></span><span class="g"></span></div><span class="crumb">ThinkBrain Notes — <b>Settings</b></span></div>
+      <div class="tabs"><div class="tab">README.md <span class="x">×</span></div><div class="tab active">Settings <span class="dot"></span><span class="x">×</span></div></div>
+      <div class="shell-body">
+        <div class="activitybar"><div class="ico">▤</div><div class="ico">⌕</div><div class="ico on">⚙</div><div class="spacer"></div><div class="ico">⎚</div></div>
+        <div class="main">
+          <div class="settings">
+            <div class="settings-header"><span class="crumb">Appearance › <b>Theme</b></span><button class="save">Save (2)</button></div>
+            <div class="settings-body">
+              <nav class="settings-nav" role="tree" aria-label="Settings sections">
+                <div class="nav-search"><span class="si">⌕</span><input type="text" placeholder="Search settings…" aria-label="Search settings"></div>
+                <div class="nav-tree">
+                  <div class="nav-grp">Application</div>
+                  <div class="nav-item"><span class="chev">▾</span>Appearance</div>
+                  <div class="nav-item sub active" aria-current="true">Theme</div>
+                  <div class="nav-item sub">Window</div>
+                  <div class="nav-item"><span class="chev">▾</span>Editor</div>
+                  <div class="nav-item sub">Display</div>
+                  <div class="nav-item sub">Typography</div>
+                  <div class="nav-item"><span class="chev">▸</span>Sync</div>
+                  <div class="nav-item illus"><span class="chev">▸</span>Extensions <span class="badge">illus</span></div>
+                  <div class="nav-item illus"><span class="chev">▸</span>Keyboard <span class="badge">illus</span></div>
+                  <div class="nav-grp">Workspace</div>
+                  <div class="nav-item"><span class="chev">▸</span>Notes</div>
+                  <div class="nav-item"><span class="chev">▸</span>Indexing</div>
+                </div>
+              </nav>
+              <main class="content">
+                <div class="content-header"><h2>Appearance · Theme</h2><button class="reset">Reset to defaults</button></div>
+                <div class="setting"><div><div class="setting-label">Theme</div><div class="setting-desc">Color scheme for the whole app. <em>System</em> follows your OS preference.</div></div><div class="setting-control"><select class="select"><option>System</option><option>Light</option><option selected>Dark</option></select></div></div>
+                <div class="setting"><div><div class="setting-label">Accent follows theme</div><div class="setting-desc">Use the theme's built-in accent color instead of a custom pick.</div></div><div class="setting-control"><div class="toggle on" role="switch" aria-checked="true"></div></div></div>
+                <div class="setting"><div><div class="setting-label">Custom accent</div><div class="setting-desc">Visible when "Accent follows theme" is off.</div></div><div class="setting-control"><input class="text" type="text" value="hsl(152 60% 38%)" disabled></div></div>
+              </main>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="statusbar"><span>● Ready</span><span class="spacer"></span><span>2 unsaved</span></div>
+    </div>
+    <div class="callout"><b>Header bar matches the editor.</b> Save in the header bar right of the breadcrumb, same as <code>WorkspaceHeaderBar</code>. Reset in the section header. Consistent across all screen sizes.</div>
+    <div class="callout"><b>Click-to-select, no scroll-spy.</b> Active section changes only on click or search navigation. Scrolling content preserves the highlight — deterministic, no bounce.</div>
+    <div class="callout"><b>Theme tokens throughout.</b> <code>--tn-color-accent</code> background + <code>--tn-color-primary</code> left border for active. Adapts when theme changes.</div>
+  </section>
+
+  <!-- FIGURE 2: NARROW (hamburger open) -->
+  <section class="figure">
+    <div class="fig-head">
+      <span class="fig-num">Figure 2</span>
+      <h2 class="fig-title">Narrow window — hamburger open</h2>
+      <span class="fig-note">Below 760px · hamburger in canvas · nav slid in</span>
+    </div>
+    <div class="win narrow" style="max-width:520px">
+      <div class="titlebar"><div class="traffic"><span class="r"></span><span class="y"></span><span class="g"></span></div><span class="crumb">Settings</span></div>
+      <div class="tabs"><div class="tab">README.md <span class="x">×</span></div><div class="tab active">Settings <span class="dot"></span><span class="x">×</span></div></div>
+      <div class="shell-body">
+        <div class="activitybar"><div class="ico">▤</div><div class="ico">⌕</div><div class="ico on">⚙</div></div>
+        <div class="main">
+          <div class="settings">
+            <div class="settings-header"><span class="crumb">Editor › <b>Display</b></span><button class="save">Save (1)</button></div>
+            <div class="settings-body nav-open">
+              <div class="scrim"></div>
+              <aside class="nav-panel" aria-label="Settings navigation">
+                <div class="nav-search"><span class="si">⌕</span><input type="text" placeholder="Search settings…"><button class="nav-close" aria-label="Close settings navigation">✕</button></div>
+                <div class="nav-tree">
+                  <div class="nav-grp">Application</div>
+                  <div class="nav-item"><span class="chev">▾</span>Appearance</div>
+                  <div class="nav-item sub">Theme</div>
+                  <div class="nav-item sub">Window</div>
+                  <div class="nav-item"><span class="chev">▾</span>Editor</div>
+                  <div class="nav-item sub active" aria-current="true">Display</div>
+                  <div class="nav-item sub">Typography</div>
+                  <div class="nav-item"><span class="chev">▸</span>Sync</div>
+                  <div class="nav-item illus"><span class="chev">▸</span>Extensions <span class="badge">illus</span></div>
+                  <div class="nav-item illus"><span class="chev">▸</span>Keyboard <span class="badge">illus</span></div>
+                  <div class="nav-grp">Workspace</div>
+                  <div class="nav-item"><span class="chev">▸</span>Notes</div>
+                  <div class="nav-item"><span class="chev">▸</span>Indexing</div>
+                </div>
+              </aside>
+              <main class="content">
+                <button class="hamburger" aria-label="Open settings navigation">☰</button>
+                <div class="content-header"><h2>Editor · Display</h2><button class="reset">Reset to defaults</button></div>
+                <div class="setting"><div><div class="setting-label">Font size</div><div class="setting-desc">Editor font size in pixels. 10–32.</div></div><div class="setting-control"><input class="number" type="number" value="16" min="10" max="32"></div></div>
+                <div class="setting"><div><div class="setting-label">Line wrapping</div><div class="setting-desc">Wrap long lines instead of horizontal scrolling.</div></div><div class="setting-control"><div class="toggle on" role="switch" aria-checked="true"></div></div></div>
+                <div class="setting"><div><div class="setting-label">Show line numbers</div><div class="setting-desc">Gutter with line numbers in the editor.</div></div><div class="setting-control"><div class="toggle" role="switch" aria-checked="false"></div></div></div>
+              </main>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="callout"><b>Hamburger in the canvas.</b> Below 760px a hamburger button appears in the content area (top-left). Tapping it slides the nav in over a scrim. The hamburger fades out when the nav opens. An ✕ button on the right side of the nav panel (next to search) closes it. Tap scrim or press Escape also closes. Above 760px the two-pane layout restores and the hamburger hides.</div>
+  </section>
+
+  <!-- FIGURE 3: PHONE (hamburger open) -->
+  <section class="figure">
+    <div class="fig-head">
+      <span class="fig-num">Figure 3</span>
+      <h2 class="fig-title">Phone — slide-in nav, touch targets</h2>
+      <span class="fig-note">360px · hamburger open · 44px targets · single-column</span>
+    </div>
+    <div class="phone-wrap">
+      <div class="phone">
+        <div class="titlebar">ThinkBrain Notes</div>
+        <div class="tabs"><div class="tab">README <span class="x">×</span></div><div class="tab active">Settings <span class="dot"></span><span class="x">×</span></div></div>
+        <div class="settings">
+          <div class="settings-header"><span class="crumb">Editor › <b>Display</b></span><button class="save">Save</button></div>
+          <div class="settings-body nav-open">
+            <div class="scrim"></div>
+            <aside class="nav-panel">
+              <div class="nav-search"><span class="si">⌕</span><input type="text" placeholder="Search settings…"><button class="nav-close" aria-label="Close settings navigation">✕</button></div>
+              <div class="nav-tree">
+                <div class="nav-grp">Application</div>
+                <div class="nav-item"><span class="chev">▾</span>Appearance</div>
+                <div class="nav-item sub">Theme</div>
+                <div class="nav-item sub">Window</div>
+                <div class="nav-item"><span class="chev">▾</span>Editor</div>
+                <div class="nav-item sub active" aria-current="true">Display</div>
+                <div class="nav-item sub">Typography</div>
+                <div class="nav-item"><span class="chev">▸</span>Sync</div>
+                <div class="nav-item illus"><span class="chev">▸</span>Extensions <span class="badge">illus</span></div>
+                <div class="nav-grp">Workspace</div>
+                <div class="nav-item"><span class="chev">▸</span>Notes</div>
+              </div>
+            </aside>
+            <main class="content">
+              <button class="hamburger" aria-label="Open settings navigation">☰</button>
+              <div class="content-header"><h2>Editor · Display</h2><button class="reset">Reset</button></div>
+              <div class="setting"><div><div class="setting-label">Font size</div><div class="setting-desc">Editor font size in pixels. 10–32.</div></div><div class="setting-control"><input class="number" type="number" value="16" min="10" max="32"></div></div>
+              <div class="setting"><div><div class="setting-label">Line wrapping</div><div class="setting-desc">Wrap long lines instead of horizontal scroll.</div></div><div class="setting-control"><div class="toggle on" role="switch" aria-checked="true"></div></div></div>
+              <div class="setting"><div><div class="setting-label">Notes folder</div><div class="setting-desc">Root folder for this workspace's notes.</div></div><div class="setting-control"><div class="path"><input class="text" type="text" value="/storage/notes"><button class="browse">Browse</button></div></div></div>
+            </main>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="callout"><b>Touch targets ≥44px.</b> Nav items, toggles, inputs, buttons, and the hamburger all meet 44px minimum. Toggle is 44×26. Scrim or Escape dismisses the nav.</div>
+    <div class="callout"><b>Single-column content.</b> Label stacks above control. PathControl's Browse uses the native mobile picker where available. Content padding-left accommodates the hamburger button.</div>
+  </section>
+
+</div>
+</body>
+</html>

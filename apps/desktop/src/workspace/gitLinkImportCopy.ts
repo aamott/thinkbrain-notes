@@ -7,6 +7,7 @@ import { validateSyncDestination } from "@thinkbrain/core";
 import { recoveryFor } from "../sync/syncCopy";
 
 export const OPEN_FOLDER_LABEL = "Open folder…";
+export const CREATE_MANAGED_WORKSPACE_LABEL = "Create vault…";
 export const IMPORT_FROM_GIT_LABEL = "Bring in from Git link…";
 export const IMPORT_DIALOG_TITLE = "Bring in workspace from Git link";
 export const NO_PROFILE_LABEL = "No sign-in (public or local)";
@@ -41,10 +42,12 @@ export function importPhaseText(state: string): string {
   return PHASE_TEXT[state] ?? "Bringing notes in…";
 }
 
-export function recoveryForImport(code: string): string {
+export function recoveryForImport(code: string, managedDestination = false): string {
   switch (code) {
     case "sync.import_target_exists":
-      return "Choose another parent folder, or rename the folder that is already there.";
+      return managedDestination
+        ? "Open the existing managed vault, or use a git link with a different repository name."
+        : "Choose another parent folder, or rename the folder that is already there.";
     case "sync.import_name_invalid":
       return "Check the git link. The last part of it has to be a usable folder name.";
     case "sync.import_parent_invalid":

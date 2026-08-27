@@ -41,6 +41,7 @@ export interface WorkspaceExplorerActions {
   /** Lists one file's earlier versions, in the history panel. */
   readonly showVersions: (entry: NativeWorkspaceEntry) => void;
   readonly refreshEntries: () => Promise<void>;
+  readonly createManagedWorkspace: (name: string) => Promise<boolean>;
   readonly openWorkspace: () => Promise<void>;
   readonly openGitLinkImport: () => void;
   readonly launchWorkspace: (rootPath: string) => Promise<void>;
@@ -49,7 +50,9 @@ export interface WorkspaceExplorerActions {
   readonly setRenaming: (value: RenameState | null) => void;
   readonly setCreating: (value: CreateState | null) => void;
   readonly setPendingDelete: (value: NativeWorkspaceEntry | null) => void;
+  readonly setCreateManagedWorkspaceOpen: Dispatch<SetStateAction<boolean>>;
   readonly setImportFromGitOpen: Dispatch<SetStateAction<boolean>>;
+  readonly setManagedStorageNoticeOpen: Dispatch<SetStateAction<boolean>>;
   readonly dismissError: () => void;
 }
 

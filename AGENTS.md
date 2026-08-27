@@ -2,13 +2,15 @@
 
 Open, local-first knowledge workspace inspired by Obsidian & VS Code. Standard Markdown files with zero database lock-in. Fast, extensible, including extensions, and can view and edit all sorts of files. Supports Mac, Windows, Linux, ios, and Android. Stores metadata separate from the repo to avoid syncing issues with OneDrive and SyncThing. 
 
-Future extensions include: 
+Extensions include: 
 - ACP Agent Chat
 - Auto Sync: git push/pull via bundled gix, plus rescue of cloud-daemon conflict files
 - Automatic conflict resolution for
   - OneDrive
   - SyncThing
   - Other
+
+All include mobile friendly UI / design to work on both mobile and desktop.
 
 ## File Map
 
@@ -37,7 +39,7 @@ apps/desktop/  # React UI + Tauri Rust host (See apps/desktop/AGENTS.md)
 packages/core/  # Platform-agnostic TS: note model, markdown, frontmatter, settings, layout, extensions (See packages/core/AGENTS.md)
 packages/ui/  # Design system: tokens, shadcn components (See packages/ui/AGENTS.md)
 plans/  # Epics, feature specs, task tracking (See ## Plans below)
-scripts/  # qa.sh, rust-env.sh, with-rust-env.sh
+scripts/  # qa.mjs (run via `pnpm qa`), with-rust-env.mjs — cross-platform Node wrappers; plus qa.sh, rust-env.sh, with-rust-env.sh
 docs/  # Reviews, known issues, superpowers specs
 examples/extensions/  # Sample extension (hello-notes)
 ```
@@ -49,16 +51,17 @@ examples/extensions/  # Sample extension (hello-notes)
 - **ACP Integration**: Tauri Rust host owns agent process lifecycle via `agent-client-protocol` crate. Renderer receives Tauri events directly.
 
 ## Quality & Conventions
-- Run `./scripts/qa.sh` before completing tasks. Runs all linting, formatting, and tests.
+- Run `pnpm qa` before completing tasks. Runs all linting, formatting, and tests (cross-platform; backed by `scripts/qa.mjs`).
 - Avoid `any` types; prefer strict types or `unknown`.
 - Fail loudly: log errors clearly and return typed results.
 
 ## Development & Launching
 - To run the Tauri desktop app in development mode, use `pnpm desktop:tauri dev` in the project root. Note: `pnpm dev` only launches the web UI, so always use `pnpm desktop:tauri dev` to test native functionality.
+- Android builds must be initiated from the terminal via `pnpm android:dev` or `pnpm android:build`. Android Studio's build button calls Gradle directly, which panics because the Tauri CLI's WebSocket coordination server isn't running. Use Android Studio only for the emulator, Logcat, and native debugging.
 
 
 ## Plans
-List relevant folder to see task status. Status lives in the filename — `pending`, `wip`, or `done` — and the filename, the file's own `## Status` section, and reality must all agree. When you finish work, change all three in the same commit. An epic's `## Status` must not contradict its own stories: if a story shipped, say so in the epic too, and never leave an epic naming a prerequisite as blocked when the story that provides it is `done`. When a story file is consolidated into a `done-summary.md` or deleted, grep `plans/` for its filename and fix every reference — a plan pointing at a file that no longer exists reads as unfinished work and will send the next session at it. Review after milestones. Delete tasks after review, or fix status if work is not complete. Add action items from review as stories unless they are immediately fixable. Plans should be concise. Avoid duplicating info in files and long worklogs. Compare file layouts and architectures before starting work.
+List relevant folder to see task status. Status lives in the filename — `pending`, `wip`, `done`, etc. — and the filename and reality must agree. When you finish work, change the filename in the same commit as the work. An epic does not track story status internally. Use epic/story slug rather than full filename to avoid repeated updating of the same things across files. Add action items from findings as stories unless they are immediately fixable. Plans should be concise. Avoid duplicating info in files and long worklogs. Compare file layouts and architectures before starting work.
 
 **Plan Folder**
 

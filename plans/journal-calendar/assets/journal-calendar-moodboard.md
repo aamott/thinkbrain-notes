@@ -17,7 +17,7 @@ outright.
 
 The constraint that makes this tractable: per `plans/technical-decisions.md` the
 journal has **no license to invent visual language**. It uses the existing `--tn-*`
-tokens, CSS Modules, and the established shell chrome. So this is not a palette
+tokens and the established shell chrome. So this is not a palette
 exercise. It is a decision about *where the journal sits on the spectrum between
 tool chrome and writing surface*, expressed through density, hierarchy, and
 restraint rather than new colors.

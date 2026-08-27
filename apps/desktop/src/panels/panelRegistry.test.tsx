@@ -339,4 +339,12 @@ describe("desktop panel registry", () => {
       renderToStaticMarkup(rightSpy.factory({ ...context, documentContents: "doc" }))
     ).toBe("<span>doc</span>");
   });
+
+  it("labels the explorer panel Files", () => {
+    const explorer = builtInDesktopPanels.find((panel) => panel.id === "explorer");
+
+    expect(explorer?.label).toBe("Files");
+    // The id is persisted in workspace state and settings keys; it must not drift.
+    expect(explorer?.id).toBe("explorer");
+  });
 });

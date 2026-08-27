@@ -31,6 +31,7 @@ import {
   History,
   Link,
   List,
+  Menu,
   Notebook,
   NotebookPen,
   Plus,
@@ -61,6 +62,7 @@ export const panelIcons: Readonly<Record<string, LucideIcon>> = {
   assistant: Sparkles,
   // Settings + chrome
   settings: Settings,
+  menu: Menu,
   // Panel header actions
   refresh: RefreshCw,
   // "Today" = a calendar with today's date checked. Visually distinct from

@@ -60,5 +60,28 @@ else
   unset CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS
 fi
 
+# Detect the Android NDK so `pnpm desktop:tauri android ...` works without a
+# manually exported NDK_HOME. Honors an existing NDK_HOME; otherwise picks the
+# highest-versioned NDK under ANDROID_HOME/ndk (or ANDROID_SDK_ROOT). Silently
+# skipped when no SDK/NDK is installed — desktop-only devs never need it.
+if [ -z "${NDK_HOME:-}" ]; then
+  _sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+  if [ -n "$_sdk_root" ] && [ -d "$_sdk_root/ndk" ]; then
+    # Shell glob sorts lexicographically; NDK dirs are version strings
+    # (e.g. 30.0.15729638), so the last match is the highest version.
+    _ndk_dir=""
+    for _candidate in "$_sdk_root"/ndk/*/; do
+      _ndk_dir="$_candidate"
+    done
+    if [ -n "$_ndk_dir" ]; then
+      export NDK_HOME="${_ndk_dir%/}"
+      echo "rust-env: NDK_HOME set to $NDK_HOME"
+    fi
+  fi
+  unset _sdk_root _ndk_dir _candidate
+else
+  echo "rust-env: NDK_HOME already set ($NDK_HOME)"
+fi
+
 # Sourcing this helper must never fail the caller when an optional tool is absent.
 true
