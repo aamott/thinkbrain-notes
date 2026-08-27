@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ThemeProvider } from "../settings/ThemeProvider";
+import { useSettingsStore } from "../settings/settingsStore";
 import { ShellRoot, usePhoneChrome } from "./ShellRoot";
 
 let narrow = false;
@@ -33,7 +34,18 @@ afterEach(async () => {
   container?.remove();
   root = null;
   container = null;
+  // Reset shellMode to "auto" so tests don't leak the override into each other.
+  useSettingsStore.setState({
+    appValues: { ...useSettingsStore.getState().appValues, "appearance.shellMode": "auto" }
+  });
 });
+
+/** Sets `appearance.shellMode` in the real settings store. */
+const setShellMode = (mode: string): void => {
+  useSettingsStore.setState({
+    appValues: { ...useSettingsStore.getState().appValues, "appearance.shellMode": mode }
+  });
+};
 
 /**
  * Mounts `ShellRoot` under `ThemeProvider` — `useShellState` consumes
@@ -100,6 +112,26 @@ describe("ShellRoot", () => {
 
     expect(host.querySelector('[aria-label="ThinkBrain desktop workspace"]')).toBeNull();
     expect(host.querySelector('[aria-label="Workspace sections"]')).toBeNull();
+  });
+
+  it("forces phone chrome when shellMode is phone, even on a wide mouse window", async () => {
+    narrow = false;
+    coarse = false;
+    setShellMode("phone");
+
+    const host = await render();
+
+    expect(host.querySelector('[aria-label="ThinkBrain mobile workspace"]')).not.toBeNull();
+  });
+
+  it("forces desktop chrome when shellMode is desktop, even on a narrow touch screen", async () => {
+    narrow = true;
+    coarse = true;
+    setShellMode("desktop");
+
+    const host = await render();
+
+    expect(host.querySelector('[aria-label="ThinkBrain desktop workspace"]')).not.toBeNull();
   });
 });
 
