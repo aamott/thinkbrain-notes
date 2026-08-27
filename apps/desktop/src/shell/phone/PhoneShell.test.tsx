@@ -6,6 +6,7 @@ import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import { desktopPanelRegistry } from "../../panels/panelRegistryModel";
 import { useSettingsStore } from "../../settings/settingsStore";
 import { ThemeProvider } from "../../settings/ThemeProvider";
+import { workspaceDocumentApi } from "../../workspace/workspaceDocumentAdapter";
 import { useShellState, type ShellState } from "../useShellState";
 import { PhoneShell } from "./PhoneShell";
 
@@ -28,7 +29,15 @@ vi.mock("../../workspace/workspaceDocumentAdapter", () => ({
         modifiedAtMs: 0
       })
     ),
-    writeMarkdownDocument: vi.fn(),
+    writeMarkdownDocument: vi.fn(() =>
+      Promise.resolve({
+        relative_path: "note.md",
+        file_name: "note.md",
+        parent_path: "",
+        byte_size: 0,
+        updated_at: null
+      })
+    ),
     createMarkdownDocument: vi.fn()
   }
 }));
@@ -59,6 +68,7 @@ afterEach(async () => {
   container?.remove();
   vi.unstubAllGlobals();
   vi.useRealTimers();
+  vi.mocked(workspaceDocumentApi.writeMarkdownDocument).mockClear();
   clearStoredHub();
   root = null;
   container = null;
@@ -159,7 +169,10 @@ const click = async (host: HTMLDivElement, label: string): Promise<void> => {
  *  dialog is still in the DOM — `toBeNull` on the selector alone can't tell
  *  open from closed. */
 const visibleDialog = (host: HTMLElement, label: string): Element | null => {
-  const el = host.querySelector(`[role="dialog"][aria-label="${label}"]`);
+  // `role="dialog"` is only set when open (closed overlays omit it to avoid
+  // contradicting `aria-hidden`), so query by `aria-label` alone and check
+  // `aria-hidden` to determine visibility.
+  const el = host.querySelector(`[aria-label="${label}"][aria-hidden]`);
   return el?.getAttribute("aria-hidden") === "true" ? null : el;
 };
 
@@ -348,6 +361,15 @@ describe("PhoneShell", () => {
     const sheet = visibleDialog(host, "Tools");
     expect(sheet).not.toBeNull();
     expect(sheet?.querySelector('[aria-label="Bottom panel tabs"]')).not.toBeNull();
+
+    // Dismissing the sheet must leave its content mounted so the slide-down
+    // close animation has something to animate, matching InspectorSheet.
+    // `role="dialog"` is omitted when closed (to avoid contradicting
+    // `aria-hidden`), so query by `aria-label` alone.
+    await act(async () => shell().updateBottomPanel(null));
+    const closed = host.querySelector('[aria-label="Tools"][aria-hidden]');
+    expect(closed?.getAttribute("aria-hidden")).toBe("true");
+    expect(closed?.querySelector('[aria-label="Bottom panel tabs"]')).not.toBeNull();
   });
 
   it("hides the hub while the soft keyboard covers the bottom of the viewport", async () => {
@@ -441,5 +463,134 @@ describe("PhoneShell", () => {
     // The panel that was asked for, not whichever one the shell last selected.
     expect(host.querySelector('[aria-label="Hello notebook panel"]')).not.toBeNull();
     expect(host.querySelector('[aria-label="Files panel"]')).toBeNull();
+  });
+
+  it("slides a revealed panel in from the left", async () => {
+    const host = await render();
+
+    await click(host, "Search");
+
+    const panel = host.querySelector('[aria-label="Search panel"]');
+    expect(panel?.closest(".tn-slide-in-left")).not.toBeNull();
+  });
+
+  it("clears the drawer highlight after going back from a revealed panel", async () => {
+    const { host, shell } = await renderWithShell();
+    await click(host, "Search");
+    expect(host.querySelector('[aria-label="Search panel"]')).not.toBeNull();
+    expect(shell().leftPanel).toBe("search");
+
+    await click(host, "Back");
+
+    expect(host.querySelector('[aria-label="Search panel"]')).toBeNull();
+    expect(shell().leftPanel).toBeNull();
+    expect(hubOf(host)?.querySelector('[aria-label="Search"]')?.getAttribute("aria-current")).toBeNull();
+    expect(drawerOf(host)?.querySelector('[aria-label="Search"]')?.getAttribute("aria-current")).toBeNull();
+  });
+
+  /**
+   * Waits until the note has actually loaded. Autosave writes through
+   * `saveDocument`, which refuses a tab still in `loading`.
+   */
+  const openReadyNote = async (
+    shell: () => ShellState,
+    relativePath: string = "note.md"
+  ): Promise<string> => {
+    await act(async () => shell().openMarkdownDocument("/vault", relativePath));
+    const tabId = shell().tabState.tabs.find((tab) => tab.resource?.relativePath === relativePath)?.id;
+    expect(tabId).toBeDefined();
+    // `openMarkdownDocument` loads in a fire-and-forget `.then`; drain
+    // microtasks until the mocked read lands so `saveDocument` sees a ready tab.
+    for (let i = 0; i < 10 && shell().documents[tabId!]?.phase !== "ready"; i++) {
+      await act(async () => {
+        await Promise.resolve();
+      });
+    }
+    expect(shell().documents[tabId!]?.phase).toBe("ready");
+    return tabId!;
+  };
+
+  const writeMock = (): ReturnType<typeof vi.mocked<typeof workspaceDocumentApi.writeMarkdownDocument>> =>
+    vi.mocked(workspaceDocumentApi.writeMarkdownDocument);
+
+  it("autosaves a dirty document after 1.5s of inactivity", async () => {
+    const { shell } = await renderWithShell();
+    const tabId = await openReadyNote(shell);
+    vi.useFakeTimers();
+
+    await act(async () => shell().updateDocument(tabId, "edited text"));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1400);
+    });
+    expect(writeMock()).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200);
+    });
+    expect(writeMock()).toHaveBeenCalledOnce();
+  });
+
+  it("resets the autosave timer when typing continues", async () => {
+    const { shell } = await renderWithShell();
+    const tabId = await openReadyNote(shell);
+    vi.useFakeTimers();
+
+    await act(async () => shell().updateDocument(tabId, "first edit"));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1400);
+    });
+    expect(writeMock()).not.toHaveBeenCalled();
+
+    await act(async () => shell().updateDocument(tabId, "second edit"));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1400);
+    });
+    expect(writeMock()).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200);
+    });
+    expect(writeMock()).toHaveBeenCalledOnce();
+  });
+
+  it("cancels a pending autosave when switching tabs", async () => {
+    const { shell } = await renderWithShell();
+    const firstId = await openReadyNote(shell, "note.md");
+    await openReadyNote(shell, "other.md");
+    await act(async () => shell().dispatchTabs({ type: "activate", tabId: firstId }));
+    vi.useFakeTimers();
+
+    await act(async () => shell().updateDocument(firstId, "edited, then left"));
+    await act(async () => shell().dispatchTabs({ type: "activate", tabId: shell().tabState.tabs[1]!.id }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+    });
+
+    expect(writeMock()).not.toHaveBeenCalled();
+  });
+
+  it("does not autosave a document that is not dirty", async () => {
+    const { shell } = await renderWithShell();
+    await openReadyNote(shell);
+    vi.useFakeTimers();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+    });
+
+    expect(writeMock()).not.toHaveBeenCalled();
+  });
+
+  it("cancels a pending autosave on unmount", async () => {
+    const { shell } = await renderWithShell();
+    const tabId = await openReadyNote(shell);
+    vi.useFakeTimers();
+
+    await act(async () => shell().updateDocument(tabId, "edited then left the shell"));
+    await act(async () => root?.unmount());
+    root = null;
+    await vi.advanceTimersByTimeAsync(2000);
+
+    expect(writeMock()).not.toHaveBeenCalled();
   });
 });

@@ -1,3 +1,4 @@
+import { useId, useRef, type KeyboardEvent } from "react";
 import { BottomSheet } from "@thinkbrain/ui";
 
 import { cn } from "../../lib/utils";
@@ -50,6 +51,38 @@ export function InspectorSheet({
   readonly onSelectPanel: (panel: RightPanel) => void;
 }) {
   const panels = useRightPanelContributions();
+  const idPrefix = useId();
+  const panelId = `${idPrefix}-panel`;
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
+
+  const handleTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+    if (panels.length === 0) return;
+
+    let nextIndex: number;
+    switch (event.key) {
+      case "ArrowLeft":
+        nextIndex = (index - 1 + panels.length) % panels.length;
+        break;
+      case "ArrowRight":
+        nextIndex = (index + 1) % panels.length;
+        break;
+      case "Home":
+        nextIndex = 0;
+        break;
+      case "End":
+        nextIndex = panels.length - 1;
+        break;
+      default:
+        return;
+    }
+
+    event.preventDefault();
+    const nextPanel = panels[nextIndex];
+    if (!nextPanel) return;
+
+    onSelectPanel(nextPanel.id);
+    tabRefs.current[nextIndex]?.focus();
+  };
 
   return (
     <BottomSheet open={open} onDismiss={onDismiss} label="Document tools" className="h-[80%]">
@@ -58,26 +91,43 @@ export function InspectorSheet({
         aria-label="Inspectors"
         className="flex shrink-0 gap-1 overflow-x-auto border-b border-border p-2"
       >
-        {panels.map((entry) => (
-          <button
-            key={entry.id}
-            type="button"
-            role="tab"
-            aria-label={entry.label}
-            aria-selected={entry.id === panel}
-            // 44px already clears the touch minimum, so no `pointer-coarse:`
-            // bump — the same reasoning `PhoneDrawer` records for its rows.
-            className={cn(
-              "min-h-11 shrink-0 cursor-pointer rounded-small border border-border bg-surface px-3 text-xs text-muted-foreground tn-focus-ring",
-              entry.id === panel && "bg-primary text-primary-foreground"
-            )}
-            onClick={() => onSelectPanel(entry.id)}
-          >
-            {entry.label}
-          </button>
-        ))}
+        {panels.map((entry, index) => {
+          const tabId = `${idPrefix}-tab-${entry.id}`;
+          const isSelected = entry.id === panel;
+
+          return (
+            <button
+              key={entry.id}
+              ref={(element) => {
+                tabRefs.current[index] = element;
+              }}
+              type="button"
+              role="tab"
+              id={tabId}
+              aria-label={entry.label}
+              aria-controls={panelId}
+              aria-selected={isSelected}
+              tabIndex={isSelected ? 0 : -1}
+              // 44px already clears the touch minimum, so no `pointer-coarse:`
+              // bump — the same reasoning `PhoneDrawer` records for its rows.
+              className={cn(
+                "min-h-11 shrink-0 cursor-pointer rounded-small border border-border bg-surface px-3 text-xs text-muted-foreground tn-focus-ring",
+                isSelected && "bg-primary text-primary-foreground"
+              )}
+              onClick={() => onSelectPanel(entry.id)}
+              onKeyDown={(event) => handleTabKeyDown(event, index)}
+            >
+              {entry.label}
+            </button>
+          );
+        })}
       </div>
-      <div className={cn("flex min-h-0 flex-1 flex-col", AS_FLOW_CHILD)}>
+      <div
+        id={panelId}
+        role="tabpanel"
+        aria-labelledby={`${idPrefix}-tab-${panel}`}
+        className={cn("flex min-h-0 flex-1 flex-col", AS_FLOW_CHILD)}
+      >
         <RightPopout panel={panel} rootPath={rootPath} documentContents={documentContents} />
       </div>
     </BottomSheet>

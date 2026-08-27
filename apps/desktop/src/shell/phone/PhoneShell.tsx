@@ -41,6 +41,20 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const { items, setItems } = useHubItems();
 
+  // Callbacks and effects must take these as values, never `shell` itself:
+  // useShellState returns a new object every render.
+  const {
+    activeTab,
+    activeDocument,
+    saveDocument,
+    selectLeftPanel,
+    setLeftPanel,
+    setRightPanel,
+    paletteCommands,
+    runCommand: runPaletteCommand,
+    clearVersions
+  } = shell;
+
   const closeDrawer = useCallback(() => setDrawerOpen(false), []);
 
   // Long press is the whole v1 customization affordance: hold a drawer row to
@@ -60,6 +74,14 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
     [items]
   );
 
+  // `revealed` and `shell.leftPanel` must stay in step: the drawer highlights
+  // from `leftPanel`, the screen fills from `revealed`. Clearing only one
+  // leaves a lit row for a panel that is not on screen (or the reverse).
+  const dismissRevealed = useCallback(() => {
+    setRevealed(null);
+    setLeftPanel(null);
+  }, [setLeftPanel]);
+
   const revealPanel = useCallback(
     (panelId: string) => {
       setDrawerOpen(false);
@@ -71,26 +93,40 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
         // note. A left panel takes over the screen, so any open sheet goes.
         setInspectorOpen(false);
         setRevealed((current) => (current === panelId ? null : panelId));
-        shell.selectLeftPanel(panelId);
+        selectLeftPanel(panelId);
       } else if (isSelectableRightPanel(panelId)) {
         // A right-side target is an inspector, not a screen: it opens over the
         // note rather than replacing it. Revealing it would have shown the
         // *left* popout instead, since that is all the content branch renders.
-        shell.setRightPanel(panelId);
+        setRightPanel(panelId);
         setInspectorOpen(true);
       }
     },
-    [shell]
+    [selectLeftPanel, setRightPanel]
   );
 
   const runCommand = useCallback(
     (commandId: string) => {
-      const command = shell.paletteCommands.find((candidate) => candidate.id === commandId);
-      if (command) shell.runCommand(command);
+      const command = paletteCommands.find((candidate) => candidate.id === commandId);
+      if (command) runPaletteCommand(command);
       setDrawerOpen(false);
-      setRevealed(null);
+      dismissRevealed();
     },
-    [shell]
+    [dismissRevealed, paletteCommands, runPaletteCommand]
+  );
+
+  // Not `revealPanel` and not `shell.openSyncPanel`: both toggle, and the
+  // pill always means "show me this". History still drops the version filter
+  // so the panel is the whole workspace, not the last note asked.
+  const openSyncPanel = useCallback(
+    (panel: "conflicts" | "history") => {
+      if (panel === "history") clearVersions();
+      setLeftPanel(panel);
+      setInspectorOpen(false);
+      setTabsOpen(false);
+      setRevealed(panel);
+    },
+    [clearVersions, setLeftPanel]
   );
 
   // Mobile autosave: the phone shell has no Save button, so the document is
@@ -102,7 +138,6 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
   // Deps are destructed from `shell` because the shell object is a new literal
   // every render — depending on `shell` directly would reset the timer on
   // every render and the save would never fire under background state churn.
-  const { activeTab, activeDocument, saveDocument } = shell;
   const activeTabDirty = activeTab?.isDirty;
   const activeDocContents = activeDocument?.contents;
   const autosaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -139,7 +174,7 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
         canGoBack={revealed !== null}
         tabCount={shell.tabState.tabs.length}
         syncStatus={shell.syncStatus}
-        onBack={() => setRevealed(null)}
+        onBack={dismissRevealed}
         onOpenNavigation={() => setDrawerOpen(true)}
         onOpenTabs={() => {
           setInspectorOpen(false);
@@ -149,16 +184,7 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
           setTabsOpen(false);
           setInspectorOpen(true);
         }}
-        // Not `revealPanel`: that one toggles, so tapping the pill while the
-        // panel it names is already open would close it, and it skips the
-        // version-filter reset `openSyncPanel` does for history. The pill
-        // always means "show me this".
-        onOpenSyncPanel={(panel) => {
-          shell.openSyncPanel(panel);
-          setInspectorOpen(false);
-          setTabsOpen(false);
-          setRevealed(panel);
-        }}
+        onOpenSyncPanel={openSyncPanel}
       />
 
       <div className="relative flex min-h-0 flex-1 flex-col">
@@ -189,11 +215,11 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
               explorerProps={shell.explorerProps}
               onReviewConflict={shell.reviewConflict}
               versionsOf={shell.versionsOf}
-              onShowEverything={shell.clearVersions}
+              onShowEverything={clearVersions}
               onOpenSearchResult={(relativePath) => {
                 if (shell.restoredWorkspacePath) {
                   shell.openMarkdownDocument(shell.restoredWorkspacePath, relativePath);
-                  setRevealed(null);
+                  dismissRevealed();
                 }
               }}
             />
@@ -224,13 +250,14 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
         // a dialog echoing its only child's name reads twice to a screen reader.
         label="Tools"
       >
-        {shell.bottomPanel && (
-          <BottomPanel
-            active={shell.bottomPanel}
-            onChange={shell.updateBottomPanel}
-            onClose={() => shell.updateBottomPanel(null)}
-          />
-        )}
+        {/* Always mounted, matching InspectorSheet: `open` drives the slide,
+            so unmounting on dismiss would empty the sheet mid-animation.
+            Only `terminal` exists today; keep the last id if more arrive. */}
+        <BottomPanel
+          active={shell.bottomPanel ?? "terminal"}
+          onChange={shell.updateBottomPanel}
+          onClose={() => shell.updateBottomPanel(null)}
+        />
       </BottomSheet>
 
       <TabSwitcherSheet
@@ -243,7 +270,7 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
           shell.dispatchTabs({ type: "activate", tabId });
           // A tab is the note, not a panel: choosing one leaves whatever panel
           // was revealed and puts the editor back on screen.
-          setRevealed(null);
+          dismissRevealed();
         }}
         onClose={(tabId) => shell.dispatchTabs({ type: "requestClose", tabId })}
       />
@@ -258,7 +285,7 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
           shell.activeDocument?.phase === "ready" ? shell.activeDocument.contents : null
         }
         onDismiss={() => setInspectorOpen(false)}
-        onSelectPanel={(panel) => shell.setRightPanel(panel)}
+        onSelectPanel={setRightPanel}
       />
 
       {/* Closing a dirty tab parks a request and waits for an answer. Without
@@ -279,7 +306,7 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
         onOpenSettings={() => {
           shell.openSettingsTab();
           setDrawerOpen(false);
-          setRevealed(null);
+          dismissRevealed();
         }}
       />
     </main>

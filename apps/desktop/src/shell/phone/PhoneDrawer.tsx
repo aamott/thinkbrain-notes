@@ -1,8 +1,17 @@
+import { useEffect, useRef } from "react";
+
 import { Drawer } from "@thinkbrain/ui";
 
 import { useLeftPanelContributions } from "../../panels/panelRegistryModel";
 import { PanelIcon } from "../panelIcons";
 import type { LeftPanel } from "../shellTypes";
+
+const LONG_PRESS_DELAY_MS = 500;
+
+// 48px already clears the touch minimum, so no `pointer-coarse:` bump is
+// needed — the same reasoning `BottomNav` records for its 56px slots.
+const row =
+  "flex min-h-12 w-full cursor-pointer items-center gap-3 rounded-small border-0 bg-transparent px-3 text-left text-sm text-sidebar-foreground hover:bg-accent tn-focus-ring";
 
 /**
  * The phone's navigation drawer.
@@ -38,10 +47,15 @@ export function PhoneDrawer({
   readonly hubFull?: boolean;
 }) {
   const panels = useLeftPanelContributions();
-  // 48px already clears the touch minimum, so no `pointer-coarse:` bump is
-  // needed — the same reasoning `BottomNav` records for its 56px slots.
-  const row =
-    "flex min-h-12 w-full cursor-pointer items-center gap-3 rounded-small border-0 bg-transparent px-3 text-left text-sm text-sidebar-foreground hover:bg-accent tn-focus-ring";
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressTriggeredRef = useRef(false);
+
+  useEffect(
+    () => () => {
+      if (longPressTimerRef.current !== null) clearTimeout(longPressTimerRef.current);
+    },
+    []
+  );
 
   return (
     <Drawer open={open} onDismiss={onDismiss} label="Navigation">
@@ -69,21 +83,53 @@ export function PhoneDrawer({
             <button
               key={panel.id}
               type="button"
-              aria-label={panel.label}
+              aria-label={`${panel.label}${badge !== undefined && badge > 0 ? `, ${badge} conflicts` : ""}`}
               aria-current={activePanel === panel.id ? "page" : undefined}
               className={row}
               onClick={() => onSelectPanel(panel.id)}
+              onTouchStart={(event) => {
+                if (!onLongPressPanel) return;
+                if (longPressTimerRef.current !== null) clearTimeout(longPressTimerRef.current);
+                longPressTriggeredRef.current = false;
+                longPressTimerRef.current = setTimeout(() => {
+                  longPressTimerRef.current = null;
+                  longPressTriggeredRef.current = true;
+                  event.preventDefault();
+                  onLongPressPanel(panel.id);
+                }, LONG_PRESS_DELAY_MS);
+              }}
+              onTouchEnd={(event) => {
+                if (longPressTimerRef.current !== null) {
+                  clearTimeout(longPressTimerRef.current);
+                  longPressTimerRef.current = null;
+                }
+                if (longPressTriggeredRef.current) event.preventDefault();
+              }}
+              onTouchMove={() => {
+                if (longPressTimerRef.current !== null) {
+                  clearTimeout(longPressTimerRef.current);
+                  longPressTimerRef.current = null;
+                }
+                longPressTriggeredRef.current = false;
+              }}
+              onTouchCancel={() => {
+                if (longPressTimerRef.current !== null) {
+                  clearTimeout(longPressTimerRef.current);
+                  longPressTimerRef.current = null;
+                }
+                longPressTriggeredRef.current = false;
+              }}
               onContextMenu={(event) => {
                 if (!onLongPressPanel) return;
                 event.preventDefault();
+                if (longPressTriggeredRef.current) return;
                 onLongPressPanel(panel.id);
               }}
             >
               <PanelIcon name={panel.icon} />
               <span className="flex-1 truncate">{panel.label}</span>
-              {/* Visible, but deliberately not part of the accessible name: the
-                  row is named for its panel, the same string the hub and the
-                  desktop rail use. Announcing the pin state is a follow-up. */}
+              {/* Visible, but deliberately not part of the accessible name:
+                  announcing the pin state is a follow-up. */}
               {pinned && (
                 <span className="shrink-0 text-[0.6rem] font-bold tracking-wide uppercase opacity-60">
                   Pinned

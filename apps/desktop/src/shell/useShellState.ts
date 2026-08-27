@@ -92,6 +92,8 @@ export interface ShellState {
   readonly leftPanel: LeftPanel | null;
   readonly rightPanel: RightPanel | null;
   readonly setRightPanel: Dispatch<SetStateAction<RightPanel | null>>;
+  /** Sets the left panel without toggling. Prefer {@link selectLeftPanel} for user toggles. */
+  readonly setLeftPanel: Dispatch<SetStateAction<LeftPanel | null>>;
   readonly selectLeftPanel: (panel: LeftPanel) => void;
   /** Reveals a right panel, or closes it when it is already the open one. */
   readonly toggleRightPanel: (panel: RightPanel) => void;
@@ -461,6 +463,7 @@ export function useShellState(): ShellState {
     leftPanel,
     rightPanel,
     setRightPanel,
+    setLeftPanel,
     selectLeftPanel,
     toggleRightPanel,
     bottomPanel,

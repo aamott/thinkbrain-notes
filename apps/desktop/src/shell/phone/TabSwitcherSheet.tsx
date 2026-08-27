@@ -50,7 +50,7 @@ export function TabSwitcherSheet({
       {tabs.length === 0 ? (
         // Closing the last tab leaves this sheet open over an empty workspace.
         // An empty grid is a blank rectangle that explains nothing.
-        <p className="m-0 p-6 text-center text-xs text-muted-foreground">
+        <p role="status" className="m-0 p-6 text-center text-xs text-muted-foreground">
           No open tabs. Choose a note from Files to start one.
         </p>
       ) : (
