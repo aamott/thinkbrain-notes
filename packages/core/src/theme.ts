@@ -217,21 +217,34 @@ const CSS_COLOR_FUNCTIONS: ReadonlySet<string> = new Set([
 const HEX_COLOR_PATTERN = /^#(?:[0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
 
 /**
+ * CSS-wide keywords valid on any property, including color properties and
+ * custom properties that resolve to colors. A theme author may legitimately
+ * want a token to inherit from its parent or reset to the UA default.
+ *
+ * Source: https://www.w3.org/TR/css-cascade-5/#defaulting-keywords
+ */
+const CSS_WIDE_KEYWORDS: ReadonlySet<string> = new Set([
+  "inherit", "initial", "unset", "revert", "revert-layer"
+]);
+
+/**
  * Validates that a string is a plausible CSS color value.
  *
  * This is a syntax-level check, not a full CSS parse — it verifies the value
  * matches one of the recognized color formats (hex, named color, system color,
- * or a known color function with balanced parentheses). It does NOT parse the
- * arguments inside functional notations (e.g. it won't catch `rgb(300, -5, 0)`
- * as out-of-range), because that requires a full CSS value parser and the
- * browser will silently ignore invalid declarations anyway. The check catches
- * typos and non-color values that would otherwise be silently dropped by the
- * CSS engine, giving the user actionable feedback at import time.
+ * CSS-wide keyword, or a known color function with balanced parentheses). It
+ * does NOT parse the arguments inside functional notations (e.g. it won't
+ * catch `rgb(300, -5, 0)` as out-of-range), because that requires a full CSS
+ * value parser and the browser will silently ignore invalid declarations
+ * anyway. The check catches typos and non-color values that would otherwise
+ * be silently dropped by the CSS engine, giving the user actionable feedback
+ * at import time.
  *
  * Accepted formats (per theme-foundation design decision #4):
  * - Hex: `#rgb`, `#rgba`, `#rrggbb`, `#rrggbbaa`
  * - Named colors: `red`, `cornflowerblue`, `transparent`, `currentcolor`, …
  * - System colors: `Canvas`, `ButtonFace`, `Highlight`, `Field`, …
+ * - CSS-wide keywords: `inherit`, `initial`, `unset`, `revert`, `revert-layer`
  * - Functions: `rgb()`, `rgba()`, `hsl()`, `hsla()`, `hwb()`, `lab()`,
  *   `lch()`, `oklab()`, `oklch()`, `color()`, `color-mix()`,
  *   `color-contrast()`, `var()`, `light-dark()`
@@ -242,36 +255,59 @@ const HEX_COLOR_PATTERN = /^#(?:[0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})
  * Returns:
  *   `true` if the value matches a recognized CSS color format.
  */
-function isValidCssColorValue(value: string): boolean {
+export function isValidCssColorValue(value: string): boolean {
   const trimmed = value.trim().toLowerCase();
 
   // Hex colors.
   if (HEX_COLOR_PATTERN.test(trimmed)) return true;
 
-  // Named colors and system colors (case-insensitive).
+  // Named colors, system colors, and CSS-wide keywords (case-insensitive).
   if (CSS_NAMED_COLORS.has(trimmed)) return true;
   if (CSS_SYSTEM_COLORS.has(trimmed)) return true;
+  if (CSS_WIDE_KEYWORDS.has(trimmed)) return true;
 
   // Functional notations: check the function name is recognized, the value
-  // has content inside the parentheses, and parentheses are balanced. The
-  // content inside is not parsed — the browser will reject invalid arguments,
-  // and a full CSS value parser is out of scope for a platform-agnostic
-  // module. Empty parens like `rgb()` are rejected because no valid color
-  // function produces a color with zero arguments.
+  // has non-whitespace content inside the parentheses, and parentheses are
+  // balanced with the first function closing exactly at the end of the
+  // string. The content inside is not parsed — the browser will reject
+  // invalid arguments, and a full CSS value parser is out of scope for a
+  // platform-agnostic module. The `s` (dotAll) flag is intentional: a
+  // JSON-parsed value may contain real newlines between tokens, and CSS
+  // permits whitespace including newlines there.
   const funcMatch = /^([a-z-]+)\s*\((.+)\)$/s.exec(trimmed);
   if (funcMatch !== null) {
     const funcName = funcMatch[1]!;
     if (CSS_COLOR_FUNCTIONS.has(funcName)) {
+      // Whitespace-only args (e.g. `rgb( )`, `var(\n)`) are invalid — no
+      // color function produces a color with zero real arguments.
+      if (funcMatch[2]!.trim().length === 0) return false;
+
       // Verify parentheses are balanced (the unsafe-char check already
-      // blocked `;{}@`, so we only need to count parens). The regex already
-      // ensured there's content between the outermost parens, but nested
-      // functions like `color-mix(in srgb, var(--x) 50%, blue)` need balanced
-      // counting.
+      // blocked `;{}@`, so we only need to count parens). The regex
+      // guarantees the string ends with `)`, so a single top-level function
+      // reaches depth 0 exactly at the last character. Reaching 0 earlier
+      // means there is trailing content (e.g. a second concatenated
+      // function like `rgb(0 0 0) hsl(0 0 0)`), which is not a valid single
+      // color value. Nested functions like
+      // `color-mix(in srgb, var(--x) 50%, blue)` reach depth 0 only at
+      // their final closing paren, so they still pass.
       let depth = 0;
-      for (const ch of trimmed) {
+      for (let i = 0; i < trimmed.length; i++) {
+        const ch = trimmed[i]!;
         if (ch === "(") depth++;
-        else if (ch === ")") depth--;
-        if (depth < 0) return false;
+        else if (ch === ")") {
+          depth--;
+          // The regex guarantees the string ends with `)`, so a single
+          // top-level function reaches depth 0 exactly at the last
+          // character. Reaching 0 earlier means there is trailing content
+          // (e.g. a second concatenated function like
+          // `rgb(0 0 0) hsl(0 0 0)`), which is not a valid single color
+          // value. Nested functions like
+          // `color-mix(in srgb, var(--x) 50%, blue)` reach depth 0 only at
+          // their final closing paren, so they still pass.
+          if (depth < 0) return false;
+          if (depth === 0 && i < trimmed.length - 1) return false;
+        }
       }
       return depth === 0;
     }

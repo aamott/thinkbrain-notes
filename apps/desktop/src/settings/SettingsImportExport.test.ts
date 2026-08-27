@@ -10,6 +10,7 @@ import {
 import { useSettingsStore } from "./settingsStore";
 import {
   SEEDED_APP_VALUES as BASE_SEEDED_APP_VALUES,
+  installStageChangeSpy,
   seedSettingsStore
 } from "./settingsTestHelpers";
 
@@ -165,14 +166,9 @@ describe("importSettings", () => {
     vi.mocked(pickFilePath).mockResolvedValue("/tmp/import.json");
     vi.mocked(readTextFileNative).mockResolvedValue(importJson);
 
-    // Spy on stageChange so we can assert it was called.
-    const stageChangeSpy = vi.fn((key: string, value: unknown) => {
-      useSettingsStore.setState((s) => {
-        const staged = { ...s.stagedChanges, [key]: value };
-        return { stagedChanges: staged, isDirty: true, dirtyCount: Object.keys(staged).length };
-      });
-    });
-    useSettingsStore.setState({ stageChange: stageChangeSpy });
+    // Spy on stageChange so we can assert it was called. The spy replicates
+    // the real staging logic so the resulting stagedChanges reflect the import.
+    const stageChangeSpy = installStageChangeSpy(true);
 
     const result = await importSettings();
 
@@ -198,8 +194,7 @@ describe("importSettings", () => {
     vi.mocked(pickFilePath).mockResolvedValue("/tmp/import.json");
     vi.mocked(readTextFileNative).mockResolvedValue(importJson);
 
-    const stageChangeSpy = vi.fn();
-    useSettingsStore.setState({ stageChange: stageChangeSpy });
+    const stageChangeSpy = installStageChangeSpy();
 
     const result = await importSettings();
 
@@ -223,8 +218,7 @@ describe("importSettings", () => {
     vi.mocked(pickFilePath).mockResolvedValue("/tmp/import.json");
     vi.mocked(readTextFileNative).mockResolvedValue(importJson);
 
-    const stageChangeSpy = vi.fn();
-    useSettingsStore.setState({ stageChange: stageChangeSpy });
+    const stageChangeSpy = installStageChangeSpy();
 
     const result = await importSettings();
 
@@ -252,8 +246,7 @@ describe("importSettings", () => {
     vi.mocked(pickFilePath).mockResolvedValue("/tmp/import.json");
     vi.mocked(readTextFileNative).mockResolvedValue(importJson);
 
-    const stageChangeSpy = vi.fn();
-    useSettingsStore.setState({ stageChange: stageChangeSpy });
+    installStageChangeSpy();
 
     const result = await importSettings();
 

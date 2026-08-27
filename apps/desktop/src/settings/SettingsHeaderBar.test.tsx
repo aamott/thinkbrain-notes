@@ -8,8 +8,8 @@ import { pickFilePath, saveFilePath } from "../native/dialogs";
 import { readTextFileNative, writeTextFileNative } from "../native/fs";
 import { useSettingsStore } from "./settingsStore";
 import {
-  SEEDED_APP_VALUES,
   createSettingsTestHarness,
+  flushPromises,
   seedSettingsStore
 } from "./settingsTestHelpers";
 
@@ -119,8 +119,8 @@ describe("SettingsHeaderBar accessibility and autosave", () => {
   });
 
   it("hides Save and Reset and shows Autosave enabled when autosave is on", async () => {
-    useSettingsStore.setState({
-      appValues: { ...SEEDED_APP_VALUES, "settings.autosave": true },
+    seedSettingsStore({
+      appValues: { "settings.autosave": true },
       isDirty: true,
       dirtyCount: 1
     });
@@ -205,18 +205,12 @@ describe("SettingsHeaderBar export/import outcomes", () => {
 
   const clickExport = async (host: HTMLElement): Promise<void> => {
     await harness.click(host.querySelector('[aria-label="Export settings"]')!);
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await flushPromises();
   };
 
   const clickImport = async (host: HTMLElement): Promise<void> => {
     await harness.click(host.querySelector('[aria-label="Import settings"]')!);
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await flushPromises();
   };
 
   it("says so when the settings file cannot be written", async () => {

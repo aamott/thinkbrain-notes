@@ -5,29 +5,8 @@ import { parseThemeFile, type AppThemeSetting, type ThemeBase } from "@thinkbrai
 import { useSettingsStore } from "./settingsStore";
 import { readThemeFile } from "./themeAdapter";
 import { injectThemeOverrides, removeThemeOverrides } from "./themeInjection";
+import { resolveThemeBase } from "./themeResolution";
 import { useEffectiveValue } from "./useEffectiveValue";
-
-/**
- * Resolves a theme value to a concrete `light` or `dark` base.
- *
- * `"system"` is resolved against the OS `prefers-color-scheme` media query so
- * the `data-thinkbrain-theme` attribute is always a concrete base — never
- * `"system"`. This keeps custom-theme-file override selectors (scoped under
- * `:root[data-thinkbrain-theme="<base>"]`) matching correctly, and gives JS
- * consumers a readable base. Any value that is not `"light"` or `"dark"` is
- * treated as `"system"` and resolved the same way.
- *
- * Returns `"light"` when `matchMedia` is unavailable (SSR / very old webview).
- */
-function resolveThemeBase(theme: string): "light" | "dark" {
-  if (theme === "light") return "light";
-  if (theme === "dark") return "dark";
-  // "system" or any unexpected value: resolve via the OS preference.
-  if (typeof window !== "undefined" && window.matchMedia) {
-    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-  }
-  return "light";
-}
 
 // Support system, light, dark, and potentially custom imported themes later.
 // `AppTheme` extends `AppThemeSetting` with the `(string & {})` escape hatch so
@@ -148,11 +127,22 @@ export function ThemeProvider({
   // Subscribe to OS theme changes so `"system"` tracks the OS live. The
   // listener is removed on unmount. `matchMedia` may be unavailable in very
   // old webviews or SSR; the guard prevents a crash and falls back to the
-  // initial `osThemeBase` value.
+  // initial `osThemeBase` value. The listener only updates `osThemeBase` when
+  // the current effective theme resolves through the "system" path (no theme
+  // file active and the user did not pick an explicit light/dark) — otherwise
+  // `effectiveTheme` short-circuits and a `setOsThemeBase` call would be a
+  // wasted re-render. The listener is set up once with empty deps, so a ref
+  // tracks the current `resolvedTheme` for the guard check.
+  const resolvedThemeRef = useRef<AppTheme | null>(null);
+
   useEffect(() => {
     if (typeof window === "undefined" || !window.matchMedia) return;
     const mql = window.matchMedia("(prefers-color-scheme: dark)");
     const handleChange = (e: MediaQueryListEvent): void => {
+      const current = resolvedThemeRef.current;
+      // Only the "system" resolution path consults `osThemeBase`; an explicit
+      // light/dark (or a theme file's concrete base) makes the change a no-op.
+      if (current === "light" || current === "dark") return;
       setOsThemeBase(e.matches ? "dark" : "light");
     };
     mql.addEventListener("change", handleChange);
@@ -165,15 +155,17 @@ export function ThemeProvider({
   // live OS preference (`osThemeBase`) so the `data-thinkbrain-theme` attribute
   // is always a concrete `light` or `dark` — never `system`. Computed
   // synchronously so the DOM attribute is always consistent with the React
-  // tree — no async gap. The `themeFile !== null` guard short-circuits stale
-  // `themeFileBase` values when the file is cleared, so the effect doesn't
-  // need to call `setThemeFileBase(null)` synchronously (which would trip the
-  // `react-hooks/set-state-in-effect` lint rule).
+  // tree — no async gap.
   const resolvedTheme: AppTheme = themeFile !== null ? (themeFileBase ?? theme) : theme;
   const effectiveTheme: "light" | "dark" =
     resolvedTheme === "light" || resolvedTheme === "dark"
       ? (resolvedTheme as "light" | "dark")
       : osThemeBase;
+
+  // Keep the listener's guard ref in sync with the current `resolvedTheme`.
+  useEffect(() => {
+    resolvedThemeRef.current = resolvedTheme;
+  }, [resolvedTheme]);
 
   // Track the user's theme selection in a ref so the async file-read effect can
   // reference it in log messages without depending on it (which would trigger a
@@ -216,11 +208,10 @@ export function ThemeProvider({
   // base stays at the file's base (the file takes precedence). When the file
   // is cleared or changes, the effect re-runs to load/clear overrides.
   useEffect(() => {
-    // No custom theme file: clear overrides. The `effectiveTheme` computation
-    // above already short-circuits to the user's `theme` when `themeFile` is
-    // null, so we don't need to reset `themeFileBase` here — the stale value
-    // is ignored. This avoids calling `setThemeFileBase` synchronously in the
-    // effect body (which would trip `react-hooks/set-state-in-effect`).
+    // No custom theme file: clear overrides. The stale `themeFileBase` from a
+    // previous file is reset in the cleanup below (which runs on every path
+    // change, including to null) so it cannot leak through the
+    // `themeFileBase ?? theme` fallback when a new file is set later.
     if (themeFile === null) {
       removeThemeOverrides();
       return;
@@ -282,7 +273,13 @@ export function ThemeProvider({
       // overrides after the user changed the path. We do NOT remove the
       // overrides here — the next effect run (or the null branch above)
       // handles cleanup, so a re-render with the same path doesn't flicker.
+      // Reset `themeFileBase` so a stale base from the previous file cannot
+      // leak through `themeFileBase ?? theme` before the next read completes
+      // (e.g. clear-then-set or direct file-to-file switches). This runs in
+      // the cleanup, not the effect body, to avoid tripping the
+      // `react-hooks/set-state-in-effect` lint rule.
       cancelled = true;
+      setThemeFileBase(null);
     };
   }, [themeFile]);
 

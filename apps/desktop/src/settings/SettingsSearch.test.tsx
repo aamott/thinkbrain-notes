@@ -62,11 +62,6 @@ async function setSearchQuery(query: string): Promise<void> {
   });
 }
 
-/** Clicks an element and flushes React updates. */
-async function click(element: Element): Promise<void> {
-  return harness.click(element);
-}
-
 /** Types into React's controlled search input and flushes the input event. */
 async function typeSearch(input: HTMLInputElement, value: string): Promise<void> {
   await act(async () => {
@@ -233,7 +228,7 @@ describe("SettingsSearch", () => {
       el.querySelectorAll<HTMLButtonElement>('[role="list"] button')
     ).find((b) => b.textContent?.includes("Font size"));
     expect(resultButton).toBeDefined();
-    await click(resultButton!);
+    await harness.click(resultButton!);
 
     // Query should be cleared.
     expect(useSettingsStore.getState().searchQuery).toBe("");

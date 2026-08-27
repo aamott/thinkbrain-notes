@@ -1,11 +1,11 @@
 // @vitest-environment happy-dom
 
 import { act, createElement } from "react";
-import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { useEffectiveValue } from "./useEffectiveValue";
 import { useSettingsStore } from "./settingsStore";
+import { createSettingsTestHarness } from "./settingsTestHelpers";
 
 /**
  * Exercises the hook through a small React component because its contract
@@ -20,7 +20,7 @@ function Probe({ settingKey }: { settingKey: string }) {
   );
 }
 
-let root: Root | null = null;
+const harness = createSettingsTestHarness();
 let container: HTMLDivElement | null = null;
 
 beforeEach(() => {
@@ -32,25 +32,16 @@ beforeEach(() => {
     dirtyCount: 0,
     loaded: false
   });
-  container = document.createElement("div");
-  document.body.append(container);
-  root = createRoot(container);
 });
 
 afterEach(async () => {
-  await act(async () => {
-    root?.unmount();
-  });
-  container?.remove();
-  root = null;
+  await harness.unmount();
   container = null;
 });
 
 /** Renders the probe and flushes its initial render. */
 async function renderProbe(settingKey: string): Promise<void> {
-  await act(async () => {
-    root?.render(createElement(Probe, { settingKey }));
-  });
+  container = await harness.render(createElement(Probe, { settingKey }));
 }
 
 /** Reads the value currently rendered by the probe. */

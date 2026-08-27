@@ -1,5 +1,6 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { vi } from "vitest";
 
 import { useSettingsStore, type SettingsStoreState } from "./settingsStore";
 
@@ -22,13 +23,36 @@ export const SEEDED_APP_VALUES: Record<string, unknown> = {
 };
 
 /**
+ * Snapshot of the store's real action implementations, captured once at module
+ * load (before any test mutates the singleton). `seedSettingsStore` restores
+ * these so callers that pass no action overrides get the real actions back
+ * rather than a stale spy from a previous test.
+ */
+const INITIAL_ACTIONS: Partial<SettingsStoreState> = (() => {
+  const s = useSettingsStore.getState();
+  return {
+    loadSettings: s.loadSettings,
+    stageChange: s.stageChange,
+    saveSettings: s.saveSettings,
+    resetStaged: s.resetStaged,
+    resetSection: s.resetSection,
+    setActiveSection: s.setActiveSection,
+    setSearchQuery: s.setSearchQuery,
+    getEffectiveValue: s.getEffectiveValue,
+    setSettingImmediately: s.setSettingImmediately
+  };
+})();
+
+/**
  * Resets the singleton settings store to a clean, loaded state.
  *
- * The 12 standard fields are always set; `overrides` merges on top. If
+ * The 12 standard data fields are always set; `overrides` merges on top. If
  * `overrides.appValues` is provided it is merged with {@link SEEDED_APP_VALUES}
  * (extra keys added, existing keys replaced) rather than replacing the whole
- * map. Pass action mocks (e.g. `saveSettings: vi.fn(...)`) via `overrides` to
- * spy on store actions.
+ * map. Action functions are restored to their real implementations before
+ * `overrides` are applied, so a bare `seedSettingsStore()` always clears any
+ * action spy a prior test installed via `setState`. Pass action mocks (e.g.
+ * `saveSettings: vi.fn(...)`) via `overrides` to spy on store actions.
  */
 export function seedSettingsStore(
   overrides: Partial<SettingsStoreState> = {}
@@ -47,7 +71,50 @@ export function seedSettingsStore(
     saveError: null,
     validationDiagnostics: [],
     loaded: true,
+    ...INITIAL_ACTIONS,
     ...rest
+  });
+}
+
+/**
+ * Installs a `stageChange` spy on the singleton store.
+ *
+ * When `replicateStoreUpdates` is true the spy mirrors the real action by
+ * updating `stagedChanges`/`isDirty`/`dirtyCount`, so tests that assert on the
+ * resulting staged state see realistic values. When false the spy is a bare
+ * no-op, suitable for tests that only assert whether `stageChange` was called
+ * and with what arguments. Returns the spy so the caller can assert on it.
+ */
+export function installStageChangeSpy(
+  replicateStoreUpdates = false
+): ReturnType<typeof vi.fn> {
+  const spy = vi.fn();
+  if (replicateStoreUpdates) {
+    spy.mockImplementation((key: string, value: unknown) => {
+      useSettingsStore.setState((s) => {
+        const staged = { ...s.stagedChanges, [key]: value };
+        return {
+          stagedChanges: staged,
+          isDirty: true,
+          dirtyCount: Object.keys(staged).length
+        };
+      });
+    });
+  }
+  useSettingsStore.setState({ stageChange: spy });
+  return spy;
+}
+
+/**
+ * Drains pending microtasks/macrotasks inside `act`.
+ *
+ * Replaces the fragile double-`Promise.resolve()` flush with a single
+ * `setTimeout(0)` macrotask flush, which drains the microtask queue as well and
+ * is robust to an implementation adding one more `await` to a handler.
+ */
+export async function flushPromises(): Promise<void> {
+  await act(async () => {
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
   });
 }
 
@@ -61,6 +128,8 @@ export interface SettingsTestHarness {
   render(component: React.ReactElement): Promise<HTMLDivElement>;
   /** Dispatches a click and flushes resulting React updates. */
   click(element: Element): Promise<void>;
+  /** Dispatches an arbitrary event and flushes resulting React updates. */
+  dispatch(element: Element, event: Event): Promise<void>;
   /** Unmounts the root and removes the container from the DOM. */
   unmount(): Promise<void>;
 }
@@ -93,6 +162,12 @@ export function createSettingsTestHarness(): SettingsTestHarness {
         element.dispatchEvent(
           new MouseEvent("click", { bubbles: true, cancelable: true })
         );
+      });
+    },
+
+    async dispatch(element: Element, event: Event): Promise<void> {
+      await act(async () => {
+        element.dispatchEvent(event);
       });
     },
 

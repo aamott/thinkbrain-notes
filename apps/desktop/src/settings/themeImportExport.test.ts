@@ -45,8 +45,7 @@ import {
   readCurrentTokenValues,
   readCurrentThemeBase
 } from "./themeImportExport";
-import { useSettingsStore } from "./settingsStore";
-import { seedSettingsStore } from "./settingsTestHelpers";
+import { installStageChangeSpy, seedSettingsStore } from "./settingsTestHelpers";
 
 /** A small representative token map used by export tests. */
 const MOCK_TOKENS: Record<string, string> = {
@@ -247,18 +246,10 @@ describe("importTheme", () => {
     vi.mocked(pickFilePath).mockResolvedValue("/tmp/my-theme.tbtheme.json");
     vi.mocked(readTextFileNative).mockResolvedValue(themeJson);
 
-    // Spy on stageChange so we can assert it was called with the path.
-    const stageChangeSpy = vi.fn((key: string, value: unknown) => {
-      useSettingsStore.setState((s) => {
-        const staged = { ...s.stagedChanges, [key]: value };
-        return {
-          stagedChanges: staged,
-          isDirty: true,
-          dirtyCount: Object.keys(staged).length
-        };
-      });
-    });
-    useSettingsStore.setState({ stageChange: stageChangeSpy });
+    // Spy on stageChange so we can assert it was called with the path. The spy
+    // replicates the real staging logic so the resulting stagedChanges reflect
+    // the import for any downstream assertions.
+    const stageChangeSpy = installStageChangeSpy(true);
 
     const result = await importTheme();
 
@@ -284,8 +275,7 @@ describe("importTheme", () => {
     vi.mocked(pickFilePath).mockResolvedValue("/tmp/bad.tbtheme.json");
     vi.mocked(readTextFileNative).mockResolvedValue(badJson);
 
-    const stageChangeSpy = vi.fn();
-    useSettingsStore.setState({ stageChange: stageChangeSpy });
+    const stageChangeSpy = installStageChangeSpy();
 
     const result = await importTheme();
 
@@ -313,8 +303,7 @@ describe("importTheme", () => {
     vi.mocked(pickFilePath).mockResolvedValue("/tmp/missing.tbtheme.json");
     vi.mocked(readTextFileNative).mockResolvedValue(null);
 
-    const stageChangeSpy = vi.fn();
-    useSettingsStore.setState({ stageChange: stageChangeSpy });
+    const stageChangeSpy = installStageChangeSpy();
 
     // Read failures now throw instead of returning null, so the caller can
     // surface a destructive status message. Cancel (above) still returns null.
@@ -326,8 +315,7 @@ describe("importTheme", () => {
     vi.mocked(pickFilePath).mockResolvedValue("/tmp/broken.tbtheme.json");
     vi.mocked(readTextFileNative).mockResolvedValue("not valid json {{{");
 
-    const stageChangeSpy = vi.fn();
-    useSettingsStore.setState({ stageChange: stageChangeSpy });
+    const stageChangeSpy = installStageChangeSpy();
 
     const result = await importTheme();
 
@@ -355,8 +343,7 @@ describe("importTheme", () => {
     vi.mocked(pickFilePath).mockResolvedValue("/tmp/warned.tbtheme.json");
     vi.mocked(readTextFileNative).mockResolvedValue(themeJson);
 
-    const stageChangeSpy = vi.fn();
-    useSettingsStore.setState({ stageChange: stageChangeSpy });
+    const stageChangeSpy = installStageChangeSpy();
 
     const result = await importTheme();
 
@@ -398,11 +385,7 @@ describe("exporting while a theme file is active", () => {
 
   it("hands back the file's own bytes rather than a flattened snapshot", async () => {
     vi.mocked(readThemeFile).mockResolvedValue(THEME_SOURCE);
-    useSettingsStore.setState({
-      loaded: true,
-      appValues: { "appearance.themeFile": "/tmp/hand.tbtheme.json" },
-      stagedChanges: {}
-    });
+    seedSettingsStore({ appValues: { "appearance.themeFile": "/tmp/hand.tbtheme.json" } });
 
     const { json } = await buildThemeExport();
 
@@ -411,11 +394,7 @@ describe("exporting while a theme file is active", () => {
   });
 
   it("snapshots the document when no theme file is active", async () => {
-    useSettingsStore.setState({
-      loaded: true,
-      appValues: { "appearance.themeFile": null },
-      stagedChanges: {}
-    });
+    seedSettingsStore({ appValues: { "appearance.themeFile": null } });
 
     const { json } = await buildThemeExport();
 
@@ -425,11 +404,7 @@ describe("exporting while a theme file is active", () => {
   /** An unreadable file is no reason to refuse the export outright. */
   it("falls back to a snapshot when the file cannot be read", async () => {
     vi.mocked(readThemeFile).mockResolvedValue(null);
-    useSettingsStore.setState({
-      loaded: true,
-      appValues: { "appearance.themeFile": "/tmp/gone.tbtheme.json" },
-      stagedChanges: {}
-    });
+    seedSettingsStore({ appValues: { "appearance.themeFile": "/tmp/gone.tbtheme.json" } });
 
     const { json } = await buildThemeExport();
 
@@ -439,11 +414,7 @@ describe("exporting while a theme file is active", () => {
   /** A file that no longer parses would export a broken theme verbatim. */
   it("falls back to a snapshot when the file no longer parses", async () => {
     vi.mocked(readThemeFile).mockResolvedValue("not json {{{");
-    useSettingsStore.setState({
-      loaded: true,
-      appValues: { "appearance.themeFile": "/tmp/broken.tbtheme.json" },
-      stagedChanges: {}
-    });
+    seedSettingsStore({ appValues: { "appearance.themeFile": "/tmp/broken.tbtheme.json" } });
 
     const { json } = await buildThemeExport();
 

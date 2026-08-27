@@ -44,6 +44,7 @@ import {
 import { appSettingsRegistry, useSettingsStore } from "./settingsStore";
 import { resolveEffectiveValue } from "./settingsHelpers";
 import { readThemeFile } from "./themeAdapter";
+import { resolveThemeBase } from "./themeResolution";
 import { readPickedFile, writeJsonViaSaveDialog } from "./importExportFiles";
 
 // ---------------------------------------------------------------------------
@@ -81,14 +82,15 @@ export function readCurrentTokenValues(): Record<string, string> {
  * Reads the currently active base palette from the root element's
  * `data-thinkbrain-theme` attribute.
  *
- * The ThemeProvider sets this attribute to `"light"`, `"dark"`, or `"system"`.
- * Custom theme files force it to the file's base, so reading it here captures
- * the effective base even when a custom theme is active. A `.tbtheme.json`
- * `base` must be a concrete palette (per `ThemeBase`), so `"system"` cannot be
- * exported directly. Instead, `"system"` (and any missing/unexpected value) is
- * resolved against the OS color-scheme preference via `matchMedia` so the
- * exported base matches the palette the user actually sees. Without this, a
- * dark-OS user on "system" would export a file with dark token values but
+ * The ThemeProvider sets this attribute to a concrete `"light"` or `"dark"`
+ * (never `"system"` — the system setting is resolved in JS before the attribute
+ * is written). Custom theme files force it to the file's base, so reading it
+ * here captures the effective base even when a custom theme is active. A
+ * `.tbtheme.json` `base` must be a concrete palette (per `ThemeBase`), so a
+ * missing or unexpected attribute value is resolved against the OS
+ * color-scheme preference via the shared `resolveThemeBase` so the exported
+ * base matches the palette the user actually sees. Without this, a dark-OS
+ * user on "system" would export a file with dark token values but
  * `base: "light"` — a self-contradictory theme that fails to round-trip.
  *
  * Returns:
@@ -96,18 +98,10 @@ export function readCurrentTokenValues(): Record<string, string> {
  */
 export function readCurrentThemeBase(): ThemeBase {
   const raw = document.documentElement.dataset.thinkbrainTheme;
-  if (raw === "light") return "light";
-  if (raw === "dark") return "dark";
-  // "system", missing, or unexpected: resolve via the OS color-scheme
-  // preference so the exported base matches the palette the user actually
-  // sees. Without this, a dark-OS user on "system" would export a file with
-  // dark token values but base "light" — a self-contradictory theme.
-  if (typeof window !== "undefined" && window.matchMedia) {
-    return window.matchMedia("(prefers-color-scheme: dark)").matches
-      ? "dark"
-      : "light";
-  }
-  return "light";
+  // `resolveThemeBase` handles "light"/"dark" literally and resolves any
+  // missing/unexpected value via the OS color-scheme preference, matching the
+  // live resolution used by ThemeProvider.
+  return resolveThemeBase(raw ?? "");
 }
 
 // ---------------------------------------------------------------------------

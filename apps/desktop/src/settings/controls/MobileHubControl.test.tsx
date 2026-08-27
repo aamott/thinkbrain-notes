@@ -1,20 +1,15 @@
 // @vitest-environment happy-dom
-import { act } from "react";
-import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { MOBILE_HUB_CONTROL, type SettingDefinition } from "@thinkbrain/core";
 import { getControlForDefinition } from "../controlRegistry";
+import { createSettingsTestHarness } from "../settingsTestHelpers";
 import { MobileHubControl } from "./MobileHubControl";
 
-let root: Root | null = null;
-let container: HTMLDivElement | null = null;
+const harness = createSettingsTestHarness();
 
 afterEach(async () => {
-  await act(async () => root?.unmount());
-  container?.remove();
-  root = null;
-  container = null;
+  await harness.unmount();
 });
 
 const definition: SettingDefinition = {
@@ -29,15 +24,9 @@ const definition: SettingDefinition = {
 };
 
 const render = async (value: unknown, onChange = vi.fn()): Promise<HTMLDivElement> => {
-  container = document.createElement("div");
-  document.body.append(container);
-  root = createRoot(container);
-  await act(async () => {
-    root?.render(
-      <MobileHubControl definition={definition} value={value} onChange={onChange} />
-    );
-  });
-  return container;
+  return harness.render(
+    <MobileHubControl definition={definition} value={value} onChange={onChange} />
+  );
 };
 
 describe("MobileHubControl", () => {
@@ -71,9 +60,7 @@ describe("MobileHubControl", () => {
     const onChange = vi.fn();
     const host = await render('[{"kind":"panel","id":"search"},{"kind":"menu"}]', onChange);
 
-    await act(async () => {
-      host.querySelector<HTMLButtonElement>("button")?.click();
-    });
+    await harness.click(host.querySelector<HTMLButtonElement>("button")!);
 
     expect(onChange).toHaveBeenCalledWith("");
   });

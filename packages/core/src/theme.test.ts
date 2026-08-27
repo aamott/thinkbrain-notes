@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   KNOWN_THEME_TOKENS,
+  isValidCssColorValue,
   parseThemeFile,
   serializeThemeFile,
   type ThemeFile
@@ -410,6 +411,43 @@ describe("parseThemeFile - CSS color validation", () => {
     expect(result.diagnostics[0]!.code).toBe("theme.token.value_not_color");
     expect(result.diagnostics[0]!.severity).toBe("error");
     expect(result.diagnostics[0]!.path).toBe("tokens.--tn-color-background");
+  });
+});
+
+describe("isValidCssColorValue - direct edge cases", () => {
+  it.each([
+    ["nested var() fallback", "var(--tn-color-primary, #fff)"],
+    ["color-mix with nested var()", "color-mix(in srgb, var(--x) 50%, blue)"],
+    ["var with nested function fallback", "var(--x, rgb(0 0 0))"],
+    ["mixed-case hex", "#AbCdEf"],
+    ["hwb with alpha", "hwb(152 10% 20% / 50%)"],
+    ["oklch with alpha", "oklch(0.7 0.15 150 / 50%)"],
+    ["color() srgb", "color(srgb 0 0 0)"],
+    ["color() xyz", "color(xyz 0 0 0)"],
+    ["color() rec2020", "color(rec2020 0 0 0)"],
+    ["light-dark with function args", "light-dark(hsl(0 0% 50%), hsl(0 0% 100%))"],
+    ["color-contrast multi-operand", "color-contrast(wheat vs tan, sienna, #d2691e)"],
+    ["CSS-wide keyword inherit", "inherit"],
+    ["CSS-wide keyword initial", "initial"],
+    ["CSS-wide keyword unset", "unset"],
+    ["CSS-wide keyword revert", "revert"],
+    ["CSS-wide keyword revert-layer", "revert-layer"],
+    ["CSS-wide keyword uppercase", "INHERIT"]
+  ])("accepts %s", (_label, value) => {
+    expect(isValidCssColorValue(value)).toBe(true);
+  });
+
+  it.each([
+    ["concatenated rgb+hsl", "rgb(0 0 0) hsl(0 0 0)"],
+    ["concatenated var() calls", "var(--x) var(--y)"],
+    ["concatenated duplicate rgb", "rgb(0 0 0) rgb(0 0 0)"],
+    ["whitespace-only rgb args", "rgb( )"],
+    ["whitespace-only var args", "var( )"],
+    ["newline-only args", "rgb(\n)"],
+    ["trailing non-function content", "rgb(0 0 0) extra"],
+    ["device-cmyk (not a known color function)", "device-cmyk(0 0 0 0)"]
+  ])("rejects %s", (_label, value) => {
+    expect(isValidCssColorValue(value)).toBe(false);
   });
 });
 

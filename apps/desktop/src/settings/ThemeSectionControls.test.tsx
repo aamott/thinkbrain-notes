@@ -8,7 +8,6 @@ import { useSettingsStore } from "./settingsStore";
 import type { ImportThemeResult } from "./themeImportExport";
 import type { ThemeEntry } from "./themeAdapter";
 import {
-  SEEDED_APP_VALUES,
   createSettingsTestHarness,
   seedSettingsStore
 } from "./settingsTestHelpers";
@@ -124,9 +123,7 @@ describe("ThemePicker", () => {
   });
 
   it("reflects the effective appearance.theme value when no theme file is set", async () => {
-    useSettingsStore.setState({
-      appValues: { ...SEEDED_APP_VALUES, "appearance.theme": "dark" }
-    });
+    seedSettingsStore({ appValues: { "appearance.theme": "dark" } });
     const el = await harness.render(<ThemePicker />);
 
     const select = el.querySelector<HTMLSelectElement>("select#theme-picker-select");
@@ -135,9 +132,7 @@ describe("ThemePicker", () => {
 
   it("reflects the themeFile path when a theme file is set", async () => {
     const path = "/themes/forest-dark.tbtheme.json";
-    useSettingsStore.setState({
-      appValues: { ...SEEDED_APP_VALUES, "appearance.themeFile": path }
-    });
+    seedSettingsStore({ appValues: { "appearance.themeFile": path } });
     vi.mocked(listThemes).mockResolvedValue([
       { name: "Forest Dark", path }
     ]);
@@ -149,9 +144,8 @@ describe("ThemePicker", () => {
 
   it("stages appearance.theme and clears themeFile when a base option is selected", async () => {
     // Start with a theme file active.
-    useSettingsStore.setState({
+    seedSettingsStore({
       appValues: {
-        ...SEEDED_APP_VALUES,
         "appearance.theme": "system",
         "appearance.themeFile": "/themes/forest-dark.tbtheme.json"
       }
@@ -171,9 +165,7 @@ describe("ThemePicker", () => {
 
   it("stages appearance.themeFile and leaves appearance.theme untouched when a preset is selected", async () => {
     const path = "/themes/forest-dark.tbtheme.json";
-    useSettingsStore.setState({
-      appValues: { ...SEEDED_APP_VALUES, "appearance.theme": "light" }
-    });
+    seedSettingsStore({ appValues: { "appearance.theme": "light" } });
     vi.mocked(listThemes).mockResolvedValue([
       { name: "Forest Dark", path }
     ]);

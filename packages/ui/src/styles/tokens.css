@@ -131,6 +131,21 @@
   --tn-shadow-panel: 0 0 24px 4px rgb(0 0 0 / 55%);
 }
 
+/* Pre-React-mount dark-mode mitigation. The `:root` block above applies the
+   light palette (and `color-scheme: light`) unconditionally, so before React
+   mounts and sets `data-thinkbrain-theme`, dark-OS users see a brief light
+   flash (and native scrollbar/form chrome flashes light). This block applies
+   dark `color-scheme` only while the attribute is absent — once React writes
+   `data-thinkbrain-theme="light"|"dark"`, the `:not()` selector stops matching
+   and the attribute-scoped rules above take over. The full dark token values
+   still require the attribute; this only fixes native chrome and the
+   `color-scheme` property for the first paint. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-thinkbrain-theme]) {
+    color-scheme: dark;
+  }
+}
+
 /* Overlay slide. A regular class (not a Tailwind `@utility`) so any consumer
    of this stylesheet gets the transition without depending on a host-app
    Tailwind entry. `visibility` delays its flip to `hidden` until the end of

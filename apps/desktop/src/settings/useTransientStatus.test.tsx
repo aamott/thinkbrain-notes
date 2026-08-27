@@ -1,10 +1,10 @@
 // @vitest-environment happy-dom
 
 import { act, useEffect } from "react";
-import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useTransientStatus, type TransientStatus } from "./useTransientStatus";
+import { createSettingsTestHarness } from "./settingsTestHelpers";
 
 /**
  * Tests for {@link useTransientStatus}.
@@ -37,33 +37,24 @@ function Probe({ captureRef }: { captureRef: HookCapture }) {
   return <span data-testid="message">{status.message ?? ""}</span>;
 }
 
-let root: Root | null = null;
+const harness = createSettingsTestHarness();
 let container: HTMLDivElement | null = null;
 let captureRef: HookCapture;
 
 beforeEach(() => {
   vi.useFakeTimers();
   captureRef = { current: null };
-  container = document.createElement("div");
-  document.body.append(container);
-  root = createRoot(container);
 });
 
 afterEach(async () => {
-  await act(async () => {
-    root?.unmount();
-  });
-  container?.remove();
-  root = null;
+  await harness.unmount();
   container = null;
   vi.useRealTimers();
 });
 
 /** Renders the probe and flushes effects. */
 async function renderProbe(): Promise<HookCapture> {
-  await act(async () => {
-    root?.render(<Probe captureRef={captureRef} />);
-  });
+  container = await harness.render(<Probe captureRef={captureRef} />);
   return captureRef;
 }
 
@@ -187,9 +178,8 @@ describe("useTransientStatus", () => {
     expect(cap.current!.message).toBe("test");
 
     // Unmount while the timeout is still pending.
-    await act(async () => {
-      root?.unmount();
-    });
+    await harness.unmount();
+    container = null;
 
     // Advancing timers after unmount must not throw or log errors. (If the
     // cleanup effect failed to clear the timeout, React would attempt a state

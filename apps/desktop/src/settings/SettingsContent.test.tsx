@@ -4,7 +4,7 @@ import { act } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SettingsContent } from "./SettingsContent";
-import { createScrollSpyHarness } from "./scrollSpyTestUtils";
+import { createScrollSpyHarness, intersectSection } from "./scrollSpyTestUtils";
 import { requestSettingHighlight } from "./settingHighlight";
 import { useSettingsStore } from "./settingsStore";
 import {
@@ -53,13 +53,6 @@ afterEach(async () => {
   scrollSpy.restore();
 });
 
-/** Publishes one visible section to the content observer. */
-async function intersectSection(section: Element): Promise<void> {
-  await act(async () => {
-    scrollSpy.intersect(section);
-  });
-}
-
 describe("SettingsContent single-page layout", () => {
   it("renders every app section in registry order", async () => {
     const el = await harness.render(<SettingsContent />);
@@ -88,7 +81,7 @@ describe("SettingsContent single-page layout", () => {
     const el = await harness.render(<SettingsContent />);
     const display = el.querySelector("#settings-section-app\\:editor\\.display")!;
 
-    await intersectSection(display);
+    await intersectSection(scrollSpy, display);
     expect(useSettingsStore.getState().activeSection).toBe("app:editor.display");
   });
 

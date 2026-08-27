@@ -1,9 +1,9 @@
 // @vitest-environment happy-dom
 import { act } from "react";
-import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SettingDefinition } from "@thinkbrain/core";
 import { useSettingsStore } from "../settingsStore";
+import { createSettingsTestHarness } from "../settingsTestHelpers";
 import type { SavedSignIn, SignInStatus } from "../../sync/historyTypes";
 
 const saveSyncCredentials = vi.fn<
@@ -43,7 +43,7 @@ vi.mock("../../sync/syncService", () => ({
 
 const { GitLinkControl } = await import("./GitLinkControl");
 
-let root: Root | null = null;
+const harness = createSettingsTestHarness();
 let host: HTMLDivElement | null = null;
 
 const emptyStatus: SignInStatus = {
@@ -75,9 +75,7 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
-  await act(async () => root?.unmount());
-  host?.remove();
-  root = null;
+  await harness.unmount();
   host = null;
   useSettingsStore.setState({
     workspaceRootPath: null,
@@ -105,10 +103,9 @@ async function render(value: string, profileId: string = "") {
     workspaceValues: { "sync.destination": value, "sync.signInProfile": profileId },
     stagedChanges: {}
   });
-  host = document.createElement("div");
-  document.body.append(host);
-  root = createRoot(host);
-  await act(async () => root?.render(<GitLinkControl definition={definition} value={value} onChange={() => undefined} />));
+  host = await harness.render(
+    <GitLinkControl definition={definition} value={value} onChange={() => undefined} />
+  );
   await act(async () => undefined);
   return host;
 }
@@ -130,13 +127,11 @@ function button(label: string): HTMLButtonElement {
 async function fillSignIn(user: string, secret: string): Promise<void> {
   const username = input("sync.destination-username");
   const token = input("sync.destination-token");
-  await act(async () => {
-    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
-    setter?.call(username, user);
-    username.dispatchEvent(new Event("input", { bubbles: true }));
-    setter?.call(token, secret);
-    token.dispatchEvent(new Event("input", { bubbles: true }));
-  });
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+  setter?.call(username, user);
+  await harness.dispatch(username, new Event("input", { bubbles: true }));
+  setter?.call(token, secret);
+  await harness.dispatch(token, new Event("input", { bubbles: true }));
 }
 
 describe("GitLinkControl", () => {
@@ -151,17 +146,12 @@ describe("GitLinkControl", () => {
 
   it("never renders a credential embedded by an older link field", async () => {
     const onChange = vi.fn();
-    host = document.createElement("div");
-    document.body.append(host);
-    root = createRoot(host);
-    await act(async () =>
-      root?.render(
-        <GitLinkControl
-          definition={definition}
-          value="https://me:secret@example.test/notes.git"
-          onChange={onChange}
-        />
-      )
+    host = await harness.render(
+      <GitLinkControl
+        definition={definition}
+        value="https://me:secret@example.test/notes.git"
+        onChange={onChange}
+      />
     );
 
     expect(input("sync.destination").value).toBe("https://example.test/notes.git");
@@ -172,7 +162,7 @@ describe("GitLinkControl", () => {
   it("saves a new sign-in without waiting on the round trip in the button label", async () => {
     const rendered = await render("https://github.com/you/notes.git");
     await fillSignIn("you", "secret");
-    await act(async () => button("Update sign-in").click());
+    await harness.click(button("Update sign-in"));
 
     expect(saveSyncCredentials).toHaveBeenCalledWith(
       "/notes",
@@ -196,7 +186,7 @@ describe("GitLinkControl", () => {
       profiles: [savedProfile]
     });
     const rendered = await render("https://github.com/you/other.git", "p-saved");
-    await act(async () => button("Save link").click());
+    await harness.click(button("Save link"));
 
     expect(saveSyncLink).toHaveBeenCalledWith("/notes", "https://github.com/you/other.git", "p-saved");
     expect(saveSyncCredentials).not.toHaveBeenCalled();
@@ -223,7 +213,7 @@ describe("GitLinkControl", () => {
     saveSettings.mockResolvedValue({ success: false, diagnostics: [] });
     const rendered = await render("https://github.com/you/notes.git");
     await fillSignIn("you", "secret");
-    await act(async () => button("Update sign-in").click());
+    await harness.click(button("Update sign-in"));
 
     expect(saveSyncCredentials).not.toHaveBeenCalled();
     expect(input("sync.destination-token").value).toBe("secret");
@@ -238,7 +228,7 @@ describe("GitLinkControl", () => {
       profiles: [savedProfile]
     });
     const rendered = await render("https://github.com/you/notes.git", "p-saved");
-    await act(async () => button("Forget sign-in").click());
+    await harness.click(button("Forget sign-in"));
 
     expect(forgetSignIn).toHaveBeenCalledWith("p-saved");
     expect(useSettingsStore.getState().stagedChanges["sync.signInProfile"]).toBe("");
