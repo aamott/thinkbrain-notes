@@ -51,6 +51,10 @@ export interface NativeCommandMap {
     readonly args: undefined;
     readonly result: NativeWorkspaceAccessCapabilities;
   };
+  readonly platform_capabilities: {
+    readonly args: undefined;
+    readonly result: NativePlatformCapabilities;
+  };
   readonly list_managed_workspaces: {
     readonly args: undefined;
     readonly result: readonly NativeWorkspaceDescriptor[];
@@ -410,6 +414,24 @@ export interface NativeWorkspaceAccessCapabilities {
   readonly canOpenFolder: boolean;
   readonly canCreateManagedWorkspace: boolean;
   readonly opensWorkspaceInNewWindow: boolean;
+}
+
+/**
+ * Platform-level capability declarations for soft compatibility gating.
+ *
+ * These are NOT a security boundary — the Rust side remains the authority.
+ * The renderer uses them to hide/disable UI for commands the platform cannot
+ * serve, so the user never hits a silent failure. See
+ * `plans/mobile/pending-mobile_tauri_config-med-easy.md`.
+ */
+export interface NativePlatformCapabilities {
+  readonly canOpenFolder: boolean;
+  readonly canCreateManagedWorkspace: boolean;
+  readonly opensWorkspaceInNewWindow: boolean;
+  /** Can spawn a child process (terminal, ACP agent host). Desktop-only. */
+  readonly canSpawnProcess: boolean;
+  /** Can store credentials in the OS keychain. Android has no keyring backend. */
+  readonly hasKeychain: boolean;
 }
 
 export interface NativeDesktopStateUpdate {

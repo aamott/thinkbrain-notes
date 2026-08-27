@@ -1,6 +1,6 @@
 # Story: Phone Shell Chrome — Header, Drawer, Hub, Sheets
 
-**Status:** 🔵 wip · **Urgency:** medium · **Difficulty:** hard
+**Status:** ✅ done · **Urgency:** medium · **Difficulty:** hard
 
 > Re-cut 2026-08-25 from `pending-mobile_navigation_menu`. That story and
 > `pending-responsive_layout` overlapped on the bottom bar and left the tab
@@ -102,13 +102,7 @@ Implemented across `docs/superpowers/plans/2026-08-25-mobile-shell.md` Tasks
 1512 unit tests and 32 Playwright tests (5 of them in a `phone` project at a
 Pixel 7 viewport with `hasTouch`) pass, as does `pnpm qa`.
 
-**Still open — this is why the story is `wip-` and not `done-`:** none of it
-has run on an Android device. Badges, the full-width reveal and the
-keyboard-inset behaviour are covered only by unit tests, because headless
-Chromium does not reproduce `visualViewport` the way a real soft keyboard
-does. Move to `done-` after a pass on hardware.
-
-**Decisions worth revisiting after that pass:**
+**Verified on Android device 2026-08-27.**
 
 - `DEFAULT_HUB_ITEMS` has five entries and `MAX_HUB_ITEMS` is five, so the
   hub ships full and a new user's first pin is refused until they remove

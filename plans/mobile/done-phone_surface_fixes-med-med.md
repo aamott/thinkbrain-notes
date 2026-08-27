@@ -1,6 +1,6 @@
 # Story: Phone Surface Fixes
 
-**Status:** 🔵 wip · **Urgency:** medium · **Difficulty:** medium
+**Status:** ✅ done · **Urgency:** medium · **Difficulty:** medium
 
 > Re-cut 2026-08-25 from `pending-responsive_layout`. The old story's acceptance
 > criteria duplicated the bottom bar (owned by
@@ -78,5 +78,4 @@ Two findings changed the shape of the fix:
 `Popout.inset.test.tsx` asserts this by compiling the real Tailwind and
 reading `getComputedStyle`, not by matching class strings.
 
-**Still open:** the on-device pass. `useKeyboardInset` is unit-tested against
-a stubbed `visualViewport`; headless Chromium does not raise a soft keyboard.
+**Verified on Android device 2026-08-27, including keyboard-inset behavior.**

@@ -39,6 +39,55 @@ pub fn workspace_access_capabilities() -> WorkspaceAccessCapabilities {
     }
 }
 
+/// Platform-level capability declarations for soft compatibility gating.
+///
+/// These are **not** a security sandbox: the renderer uses them to hide or
+/// disable UI that would call a command the platform cannot serve, so the
+/// user never sees a silent failure. The Rust side remains the authority for
+/// every command — if a renderer bypasses the gate and invokes anyway, the
+/// command returns its normal error, not a permission denial.
+///
+/// Desktop-only commands that are already stubbed at the Rust level (sync
+/// credentials on Android) do not need a gate here: the stub is the
+/// declaration. This struct covers the commands whose Rust implementation
+/// exists on every platform but whose *effect* is meaningless or broken on
+/// some — e.g. spawning a terminal process, opening a folder picker.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlatformCapabilities {
+    /// Can open a native folder-picker dialog to choose a workspace.
+    pub can_open_folder: bool,
+    /// Can create app-managed vaults in app-private storage.
+    pub can_create_managed_workspace: bool,
+    /// Can open a second webview window for a different workspace.
+    pub opens_workspace_in_new_window: bool,
+    /// Can spawn a child process (terminal, ACP agent host).
+    pub can_spawn_process: bool,
+    /// Can store credentials in the OS keychain.
+    pub has_keychain: bool,
+}
+
+/// Reports platform capabilities for soft compatibility gating in the renderer.
+#[tauri::command]
+pub fn platform_capabilities() -> PlatformCapabilities {
+    let desktop = cfg!(desktop);
+    PlatformCapabilities {
+        can_open_folder: desktop,
+        can_create_managed_workspace: cfg!(target_os = "android"),
+        opens_workspace_in_new_window: desktop,
+        // Process spawning (terminal, ACP) is desktop-only. Android does not
+        // expose `Command::new` in the way the terminal/ACP host expects.
+        can_spawn_process: desktop,
+        // `keyring` has no Android backend; sync credentials stub to
+        // `unsupported!` on non-desktop-OS targets (see `sync/credentials.rs`).
+        has_keychain: cfg!(any(
+            target_os = "linux",
+            target_os = "macos",
+            target_os = "windows"
+        )),
+    }
+}
+
 /// Lists direct child directories under the app-managed vault root.
 #[tauri::command]
 pub fn list_managed_workspaces(

@@ -44,6 +44,7 @@ macro_rules! app_command_handlers {
         tauri::generate_handler![
             $crate::commands::workspace::desktop_shell_status,
             $crate::commands::workspace::workspace_access_capabilities,
+            $crate::commands::workspace::platform_capabilities,
             $crate::commands::workspace::list_managed_workspaces,
             $crate::commands::workspace::create_managed_workspace,
             $crate::commands::workspace::open_workspace,
@@ -112,6 +113,7 @@ macro_rules! app_command_handlers {
 pub const APP_COMMAND_PATHS: &[&str] = &[
     "workspace::desktop_shell_status",
     "workspace::workspace_access_capabilities",
+    "workspace::platform_capabilities",
     "workspace::list_managed_workspaces",
     "workspace::create_managed_workspace",
     "workspace::open_workspace",
@@ -183,6 +185,7 @@ mod tests {
         // Workspace
         assert!(APP_COMMAND_PATHS.contains(&"workspace::desktop_shell_status"));
         assert!(APP_COMMAND_PATHS.contains(&"workspace::workspace_access_capabilities"));
+        assert!(APP_COMMAND_PATHS.contains(&"workspace::platform_capabilities"));
         assert!(APP_COMMAND_PATHS.contains(&"workspace::list_managed_workspaces"));
         assert!(APP_COMMAND_PATHS.contains(&"workspace::create_managed_workspace"));
         assert!(APP_COMMAND_PATHS.contains(&"workspace::open_workspace"));
@@ -255,8 +258,8 @@ mod tests {
         );
         assert_eq!(
             APP_COMMAND_PATHS.len(),
-            56,
-            "expected 56 registered commands"
+            57,
+            "expected 57 registered commands"
         );
     }
 }
