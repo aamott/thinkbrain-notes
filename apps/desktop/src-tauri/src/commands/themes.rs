@@ -30,11 +30,13 @@ const THEME_EXTENSION: &str = "tbtheme.json";
 /// match the glob in `tauri.conf.json` (`presets/themes/*.tbtheme.json`).
 const PRESET_THEME_FILES: &[&str] = &[
     "forest-dark.tbtheme.json",
+    "forest-gray.tbtheme.json",
     "solarized-light.tbtheme.json",
     "one-dark-pro.tbtheme.json",
     "gruvbox-light.tbtheme.json",
     "nord-light.tbtheme.json",
     "catppuccin-latte.tbtheme.json",
+    "pastel-pink.tbtheme.json",
 ];
 
 /// One discovered theme file returned by `list_themes`.
@@ -139,24 +141,39 @@ pub fn seed_missing_presets(app: &tauri::AppHandle, themes_dir: &Path) -> Result
         }
 
         // Resolve the bundled resource path. In dev mode (before bundling), the
-        // resource may not exist; skip it rather than failing the whole command.
-        let resource_path = app.path().resolve(
-            format!("presets/themes/{preset_file_name}"),
-            BaseDirectory::Resource,
-        );
-        let Ok(resource_path) = resource_path else {
-            // Resource not bundled (typical in `cargo test` and dev runs without
-            // a built bundle). Skip — the picker still lists user-added themes.
-            eprintln!("[themes] resource resolution failed for {preset_file_name}");
+        // resource may not exist at the bundled location; fall back to the
+        // source directory so newly added presets are immediately seeded.
+        let resource_path = app
+            .path()
+            .resolve(
+                format!("presets/themes/{preset_file_name}"),
+                BaseDirectory::Resource,
+            )
+            .ok()
+            .filter(|p| p.exists())
+            .or_else(|| {
+                let dev_path = PathBuf::from("presets/themes").join(preset_file_name);
+                if dev_path.exists() {
+                    Some(dev_path)
+                } else {
+                    None
+                }
+            })
+            .or_else(|| {
+                let dev_path =
+                    PathBuf::from("apps/desktop/src-tauri/presets/themes").join(preset_file_name);
+                if dev_path.exists() {
+                    Some(dev_path)
+                } else {
+                    None
+                }
+            });
+
+        let Some(resource_path) = resource_path else {
+            // Resource not found in bundle or dev sources. Skip.
+            eprintln!("[themes] resource path not found for {preset_file_name}");
             continue;
         };
-        if !resource_path.exists() {
-            eprintln!(
-                "[themes] resource path does not exist: {}",
-                resource_path.display()
-            );
-            continue;
-        }
 
         // Copy the file. A failure on one preset does not abort the others, but
         // is collected and surfaced after the loop instead of swallowed.

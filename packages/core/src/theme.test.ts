@@ -415,3 +415,30 @@ describe("serializeThemeFile", () => {
     expect(result.theme).toEqual(empty);
   });
 });
+
+describe("bundled preset themes", () => {
+  const presets = [
+    "forest-dark.tbtheme.json",
+    "forest-gray.tbtheme.json",
+    "solarized-light.tbtheme.json",
+    "one-dark-pro.tbtheme.json",
+    "gruvbox-light.tbtheme.json",
+    "nord-light.tbtheme.json",
+    "catppuccin-latte.tbtheme.json",
+    "pastel-pink.tbtheme.json"
+  ];
+
+  it.each(presets)("parses %s cleanly with zero diagnostics", (filename) => {
+    const filePath = new URL(
+      `../../../apps/desktop/src-tauri/presets/themes/${filename}`,
+      import.meta.url
+    );
+    const content = readFileSync(filePath, "utf8");
+    const result = parseThemeFile(content);
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.theme).not.toBeNull();
+    expect(result.theme!.name.length).toBeGreaterThan(0);
+    expect(["light", "dark"]).toContain(result.theme!.base);
+  });
+});
