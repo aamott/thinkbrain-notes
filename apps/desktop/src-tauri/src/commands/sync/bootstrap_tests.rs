@@ -1,15 +1,8 @@
+use super::super::test_support::write;
 use super::*;
 use crate::tests::make_temp_test_dir;
 use std::fs;
 use std::path::PathBuf;
-
-fn write(root: &Path, relative: &str, contents: &str) {
-    let path = root.join(relative);
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).expect("the folder exists");
-    }
-    fs::write(path, contents).expect("the file is written");
-}
 
 fn recorded_paths(repo: &gix::Repository) -> Vec<String> {
     let Some(commit) = snapshot::head_commit(repo).expect("the history is readable") else {

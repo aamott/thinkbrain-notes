@@ -1,5 +1,6 @@
 use super::super::engine::Engine;
 use super::super::hidden_repo;
+use super::super::test_support::write;
 use super::*;
 use crate::tests::make_temp_test_dir;
 use std::fs;
@@ -22,14 +23,6 @@ fn fixture(name: &str) -> Fixture {
         repo,
         engine,
     }
-}
-
-fn write(vault: &Path, relative: &str, contents: &str) {
-    let path = vault.join(relative);
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).expect("the note's folder exists");
-    }
-    fs::write(path, contents).expect("the note is written");
 }
 
 /// Records the current state of `paths` under a message of our choosing, so a
