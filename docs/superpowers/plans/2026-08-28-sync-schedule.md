@@ -215,7 +215,13 @@ Pass `revealedKeys` and `showAdvanced` down to `SettingsSection`, and extend its
 ```typescript
   const definitions = allDefinitions
     .filter((d) => !HIDDEN_SETTING_ROWS.has(d.key))
-    .filter((d) => !d.advanced || showAdvanced || revealedKeys.has(d.key) || isChanged(d));
+    .filter(
+      (d) =>
+        !d.advanced ||
+        showAdvanced ||
+        revealedKeys.has(d.key) ||
+        isChanged(d, stagedChanges, appValues, workspaceValues)
+    );
 ```
 
 with, in the same file:
@@ -245,7 +251,7 @@ function isChanged(
 }
 ```
 
-Read `showAdvanced` in the `SettingsContent` component with the existing `useEffectiveValue("settings.showAdvanced") === true` and pass it down, so it re-renders when the toggle is staged rather than only after a save.
+`SettingsSection` already selects `stagedChanges`; it must also select `appValues` and `workspaceValues` from the store to feed `isChanged`. Read `showAdvanced` in the `SettingsContent` component with the existing `useEffectiveValue("settings.showAdvanced") === true` and pass it down, so the list re-renders when the toggle is staged rather than only after a save.
 
 - [ ] **Step 4: Add the header toggle**
 
@@ -781,24 +787,24 @@ fn a_frozen_process_does_not_manufacture_an_elapsed_interval() {
     // The monotonic clock jumps an hour while the wall clock says four
     // seconds passed — the shape of a freeze on a device whose clock the app
     // cannot trust. The interval must believe the wall clock.
-    let engine = engine_for_tests();
+    let f = fixture("frozen-interval");
     let start = Instant::now();
-    engine.note_changes([PathBuf::from("a.md")], start);
-    engine.mark_attempt(1_000);
+    f.engine.note_changes([PathBuf::from("a.md")], start);
+    f.engine.mark_attempt(1_000);
 
     let long_after = start + Duration::from_secs(3_600);
-    assert!(!engine.ready_to_sync(Duration::from_secs(30), 60, long_after, 1_004));
-    assert!(engine.ready_to_sync(Duration::from_secs(30), 60, long_after, 1_070));
+    assert!(!f.engine.ready_to_sync(Duration::from_secs(30), 60, long_after, 1_004));
+    assert!(f.engine.ready_to_sync(Duration::from_secs(30), 60, long_after, 1_070));
 }
 
 #[test]
 fn a_vault_that_has_never_been_attempted_is_due_once_it_is_quiet() {
-    let engine = engine_for_tests();
+    let f = fixture("never-attempted");
     let start = Instant::now();
-    engine.note_changes([PathBuf::from("a.md")], start);
+    f.engine.note_changes([PathBuf::from("a.md")], start);
 
-    assert!(!engine.ready_to_sync(Duration::from_secs(30), 60, start, 1_000));
-    assert!(engine.ready_to_sync(
+    assert!(!f.engine.ready_to_sync(Duration::from_secs(30), 60, start, 1_000));
+    assert!(f.engine.ready_to_sync(
         Duration::from_secs(30),
         60,
         start + Duration::from_secs(31),
@@ -807,7 +813,7 @@ fn a_vault_that_has_never_been_attempted_is_due_once_it_is_quiet() {
 }
 ```
 
-Follow whatever the file already uses to build an `Engine`; if there is no helper, add one beside the existing tests rather than inventing a new fixture module.
+`engine_tests.rs` builds engines with `fixture(name) -> Fixture` (`:10`), whose `.engine` field is the `Engine`; every test in that file uses it and these must too. The existing `a_vault_is_ready_to_sync_only_once_it_has_been_still_and_the_cap_has_passed` (`:386`) is the one to rewrite against the new signature — it calls `mark_synced`, which is gone.
 
 - [ ] **Step 2: Run them and watch them fail**
 
@@ -912,9 +918,9 @@ In `engine_tests.rs`:
 ```rust
 #[test]
 fn a_fresh_claim_cannot_be_taken_over() {
-    let engine = engine_for_tests();
-    assert!(engine.claim_sync(1_000, 600).is_some());
-    assert!(engine.claim_sync(1_060, 600).is_none());
+    let f = fixture("sync-claim");
+    assert!(f.engine.claim_sync(1_000, 600).is_some());
+    assert!(f.engine.claim_sync(1_060, 600).is_none());
 }
 
 #[test]
@@ -922,29 +928,29 @@ fn a_claim_left_by_a_frozen_process_can_be_taken_over() {
     // A freeze pauses the worker mid-flight, so the `Drop` guard that clears
     // the flag never runs. Without a takeover, one frozen trip stops every
     // later one for the life of the process.
-    let engine = engine_for_tests();
-    assert!(engine.claim_sync(1_000, 600).is_some());
-    assert!(engine.claim_sync(1_601, 600).is_some());
+    let f = fixture("sync-claim");
+    assert!(f.engine.claim_sync(1_000, 600).is_some());
+    assert!(f.engine.claim_sync(1_601, 600).is_some());
 }
 
 #[test]
 fn a_superseded_trip_does_not_clear_the_flag_under_the_one_that_replaced_it() {
-    let engine = engine_for_tests();
-    let first = engine.claim_sync(1_000, 600).expect("the first trip claims");
-    let second = engine.claim_sync(1_601, 600).expect("the frozen claim is taken over");
+    let f = fixture("sync-claim");
+    let first = f.engine.claim_sync(1_000, 600).expect("the first trip claims");
+    let second = f.engine.claim_sync(1_601, 600).expect("the frozen claim is taken over");
 
-    assert!(!engine.end_sync(first));
-    assert!(engine.syncing());
-    assert!(engine.end_sync(second));
-    assert!(!engine.syncing());
+    assert!(!f.engine.end_sync(first));
+    assert!(f.engine.syncing());
+    assert!(f.engine.end_sync(second));
+    assert!(!f.engine.syncing());
 }
 
 #[test]
 fn a_trip_that_is_still_reporting_progress_is_not_orphaned() {
-    let engine = engine_for_tests();
-    assert!(engine.claim_sync(1_000, 600).is_some());
-    engine.note_sync_progress(1_500);
-    assert!(engine.claim_sync(1_601, 600).is_none());
+    let f = fixture("sync-claim");
+    assert!(f.engine.claim_sync(1_000, 600).is_some());
+    f.engine.note_sync_progress(1_500);
+    assert!(f.engine.claim_sync(1_601, 600).is_none());
 }
 ```
 
@@ -1053,7 +1059,7 @@ initialise them `Mutex::new(None)` and `AtomicU64::new(0)`, add `use std::sync::
 `registry.rs:551`:
 
 ```rust
-    let Some(generation) = engine.claim_sync(
+    let Some(generation) = f.engine.claim_sync(
         super::schedule::now_epoch_secs(),
         super::schedule::ORPHAN_AFTER_SECS,
     ) else {
@@ -1061,7 +1067,7 @@ initialise them `Mutex::new(None)` and `AtomicU64::new(0)`, add `use std::sync::
     };
 ```
 
-and `registry.rs:576` (the spawn-failure arm): `if engine.end_sync(generation) { crate::commands::watcher::announce_sync_status(key); }`.
+and `registry.rs:576` (the spawn-failure arm): `if f.engine.end_sync(generation) { crate::commands::watcher::announce_sync_status(key); }`.
 
 Update `status_tests.rs:66,97,100` to use `begin_sync`/`end_sync`.
 
