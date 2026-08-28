@@ -6,6 +6,7 @@
 #[cfg(target_os = "android")]
 mod android_tls;
 mod commands;
+mod credential_store;
 mod error;
 
 #[cfg(test)]
@@ -42,6 +43,11 @@ fn disable_dmabuf_renderer_on_nvidia() {
 pub fn run() {
     #[cfg(target_os = "linux")]
     disable_dmabuf_renderer_on_nvidia();
+
+    // keyring v4 picks its backend at runtime, so the store has to be
+    // registered before anything can read a sign-in. Must happen before any
+    // command runs, which is why it is here and not behind a lazy init.
+    credential_store::register();
 
     let builder = tauri::Builder::default();
 

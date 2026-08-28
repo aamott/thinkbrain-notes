@@ -78,13 +78,10 @@ pub fn platform_capabilities() -> PlatformCapabilities {
         // Process spawning (terminal, ACP) is desktop-only. Android does not
         // expose `Command::new` in the way the terminal/ACP host expects.
         can_spawn_process: desktop,
-        // `keyring` has no Android backend; sync credentials stub to
-        // `unsupported!` on non-desktop-OS targets (see `sync/credentials.rs`).
-        has_keychain: cfg!(any(
-            target_os = "linux",
-            target_os = "macos",
-            target_os = "windows"
-        )),
+        // Reports whether a credential store was actually registered at
+        // startup, not which targets ought to have one. A keychain that failed
+        // to start therefore reads as absent rather than present-but-broken.
+        has_keychain: crate::credential_store::is_available(),
     }
 }
 

@@ -56,7 +56,41 @@ jni = "0.22"
 # trying to compile a plugin that has no mobile implementation.
 [target.'cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))'.dependencies]
 tauri-plugin-updater = "2"
-keyring = { version = "3", features = ["apple-native", "windows-native", "linux-native-sync-persistent", "crypto-rust"] }
+
+# keyring v4 split the API (`keyring-core`) from the backends (one crate per
+# platform) and moved store selection from a compile-time feature to an
+# explicit registration at startup. We depend on the stores directly rather
+# than on the `keyring` facade, so each target gets exactly one and the choice
+# is visible here instead of buried in feature unification.
+[dependencies.keyring-core]
+version = "1"
+
+# Linux: the Secret Service, because that is where keyring v3 actually kept
+# these secrets. v3's `linux-native-sync-persistent` is a *pair* — keyutils as
+# a cache for headless processes, Secret Service for storage that survives a
+# reboot. Only the Secret Service half is durable, so it is the half that
+# carries existing sign-ins forward.
+#
+# Verified rather than assumed: a credential written by the shipped v3 build is
+# read back by this store, and is NOT found by `linux-keyutils-keyring-store`.
+#
+# `dbus-`, not `zbus-`: v3's `sync-secret-service` is the blocking libdbus
+# crate, and the sync worker calls into this from a plain thread. The zbus
+# store reads the same data, but pulls an async runtime into a blocking call
+# path for no benefit. `crypto-rust` matches v3's feature set exactly, so no
+# new system dependency appears.
+#
+# Known regression: v4 ships no combined store, so the keyutils cache is gone.
+# A headless Linux session with no D-Bus that previously read from the cache
+# will now report no credential store instead. Tracked in the migration story.
+[target.'cfg(target_os = "linux")'.dependencies]
+dbus-secret-service-keyring-store = { version = "1", features = ["crypto-rust"] }
+
+[target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
+apple-native-keyring-store = { version = "1", features = ["keychain"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-native-keyring-store = "1"
 
 # ---------------------------------------------------------------------------
 # Build profiles

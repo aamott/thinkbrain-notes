@@ -1,6 +1,6 @@
 # Story: Migrate keyring v3 → v4
 
-**Status:** ⬜ pending · **Urgency:** high · **Difficulty:** med
+**Status:** 🟨 wip · **Urgency:** high · **Difficulty:** med
 
 > Desktop-only groundwork, pulled out of
 > `../mobile/pending-mobile_git_access-high-hard.md` so that a keychain
@@ -45,17 +45,131 @@ the highest-consequence risk in the whole design.
 It cannot be faked in a test, because the thing under test is the real OS
 store. It is a manual per-OS check, and it is acceptance, not assumption.
 
+## What shipped (2026-08-27)
+
+- `keyring = "3"` replaced by `keyring-core = "1"` plus one store crate per
+  target, chosen explicitly in `Cargo.toml` rather than by feature unification.
+- New `src/credential_store.rs` registers the store once in `run()`, and
+  answers `is_available()` from what was actually registered.
+- `supported!` / `unsupported!` and every `cfg` that fed them are **deleted**.
+  `credentials.rs` went from 622 lines with two compiled bodies to 506 with
+  one. `SERVICE` and `STORAGE_PROBE` are no longer target-gated.
+- `storage_status` and `has_keychain` now report registration rather than
+  `cfg!`, so a keychain that fails to start reads as absent instead of
+  present-but-broken.
+- Tests register `keyring_core::mock::Store` instead of a bespoke `#[cfg(test)]`
+  `HashMap`, so they exercise the shipped code path and swap only the backend.
+
+413 Rust tests pass; `pnpm qa` green.
+
+## The Linux backend: two wrong answers before the right one
+
+This is the part worth reading, because the obvious choice was wrong twice.
+
+v3 was built with `linux-native-sync-persistent`. That reads like "the Linux
+native store", and the v4 crate with the matching name is
+`linux-keyutils-keyring-store`. **Both of those inferences are wrong.**
+
+In keyring v3 that feature expands to `linux-native` + `sync-secret-service` —
+a *pair* of stores. keyutils is only a cache for headless processes; the
+**Secret Service** is what survives a reboot. And `sync-secret-service` is
+`dbus-secret-service`, the blocking libdbus crate, not zbus.
+
+Verified by experiment rather than by reading, using the app's exact service
+name and account format:
+
+| store used to read | result |
+|---|---|
+| `linux-keyutils-keyring-store` (name-matched guess) | **NoEntry** |
+| same, with v3's `keyring-rs:` key prefix configured | **NoEntry** |
+| `zbus-secret-service-keyring-store` | reads it |
+| `dbus-secret-service-keyring-store` (chosen) | reads it |
+
+A control confirmed v3 entries do persist across processes, so the failures
+above were real and not an artefact of the probe.
+
+**Had this shipped on the name match, every Linux user would have been silently
+signed out.** That is precisely the risk this story was split out to contain.
+
+`dbus-` is chosen over `zbus-` because the sync worker calls credentials from a
+plain blocking thread; both read the same data, but the zbus store drags an
+async runtime into that path for no benefit. `crypto-rust` matches v3 exactly,
+so no new system dependency appears.
+
+### Known regression
+
+v4 ships no combined keyutils+Secret-Service store. A headless Linux session
+with no D-Bus that previously read from the keyutils cache will now report no
+credential store rather than finding a cached secret. Reproducing v3's pair
+would mean writing a composite store by hand; not done, and not obviously
+worth it.
+
 ## Acceptance
 
-- [ ] `keyring-core` v1 plus per-platform stores replace `keyring` v3
-- [ ] The default store is registered once at startup, selected by target
-- [ ] `supported!` / `unsupported!` and their `cfg` gates are deleted, not
+- [x] `keyring-core` v1 plus per-platform stores replace `keyring` v3
+- [x] The default store is registered once at startup, selected by target
+- [x] `supported!` / `unsupported!` and their `cfg` gates are deleted, not
       extended; `credentials.rs` has one code path
-- [ ] `storage_status` and `has_keychain` follow store registration, not `cfg!`
-- [ ] A credential saved by the shipped v3 build is read back by the v4 build
-      on **each** of macOS, Windows and Linux
-- [ ] Sign-in, save-link, forget and a full round trip still work on desktop
-- [ ] `pnpm qa` green
+- [x] `storage_status` and `has_keychain` follow store registration, not `cfg!`
+- [x] A credential saved by the shipped v3 build is read back by the v4 build
+      on **Linux** — verified with a two-crate probe against the real store
+- [ ] The same read-back on **macOS** and **Windows** — not verified, no machine
+      available. `apple-native-keyring-store` (feature `keychain`) and
+      `windows-native-keyring-store` are wired but unexercised. **Do not ship
+      to those platforms until someone runs the same probe there**, given what
+      the Linux investigation turned up.
+- [ ] Sign-in, save-link, forget and a full round trip still work on desktop —
+      unit-tested, not yet exercised through the running app
+- [x] `pnpm qa` green
+
+## The probe, to repeat on macOS and Windows
+
+Two throwaway crates. Run the v3 one first (it writes), then the v4 one (it
+only reads). Deliberately not committed as a script: it cannot be tested from
+Linux, and an untested cross-platform script is worse than a recipe.
+
+`v3probe/Cargo.toml` — the feature set the shipped v3 build used:
+
+```toml
+[dependencies]
+keyring = { version = "3", features = [
+  "apple-native", "windows-native", "linux-native-sync-persistent", "crypto-rust",
+] }
+```
+
+```rust
+fn main() {
+    let entry = keyring::Entry::new("ThinkBrain Notes", "profile:__migration_probe").unwrap();
+    if std::env::args().nth(1).as_deref() == Some("write") {
+        entry.set_password("probeuser\nprobesecret").unwrap();
+    }
+    println!("v3: {:?}", entry.get_password());
+}
+```
+
+`v4probe/Cargo.toml` — swap the store crate for the platform under test
+(`apple-native-keyring-store` with feature `keychain` on macOS,
+`windows-native-keyring-store` on Windows):
+
+```toml
+[dependencies]
+keyring-core = "1"
+windows-native-keyring-store = "1"
+```
+
+```rust
+fn main() {
+    keyring_core::set_default_store(windows_native_keyring_store::Store::new().unwrap());
+    let entry = keyring_core::Entry::new("ThinkBrain Notes", "profile:__migration_probe").unwrap();
+    println!("v4: {:?}", entry.get_password());
+}
+```
+
+Run `v3probe write`, then `v3probe` again in a fresh process as a control that
+the entry persists at all, then `v4probe`. The migration is safe on that
+platform only if the third command prints the secret.
+
+On macOS the store is `apple_native_keyring_store::keychain::Store::new()`.
 
 ## Not in scope
 
