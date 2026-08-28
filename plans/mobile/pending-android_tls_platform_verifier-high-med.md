@@ -67,6 +67,30 @@ re-applied if the scaffold is ever regenerated. Note that alongside a
 `rustls_platform_verifier::android::init_with_env(env, context)` exactly once,
 in the mobile entry point (`lib.rs:39`), before anything can make a request.
 
+## The sharp edge: two `jni` versions
+
+`cargo tree --target aarch64-linux-android -i jni` reports **both**:
+
+```
+jni@0.21.1   (Tauri / ndk glue)
+jni@0.22.4   (rustls-platform-verifier 0.7.0)
+```
+
+`init_with_env(&mut Env, JObject)` wants **0.22.4** types, so the init cannot
+simply reuse whatever handle Tauri's own Android glue holds — those are 0.21.1
+types and will not typecheck against it. Expect to add an explicit
+`jni = "0.22"` dependency for Android and construct the pair from raw pointers
+(`ndk_context::android_context()` gives `vm()` and `context()` as
+`*mut c_void`, which is exactly the shape the crate's own example starts from).
+
+`init_with_refs` and `init_with_runtime` are the other two entry points if
+`init_with_env` proves awkward; all three are in
+`rustls-platform-verifier-0.7.0/src/android.rs:97,124,152`.
+
+Whether `ndk_context` is populated under Tauri Mobile is still unproven — the
+same open question the credential story carries. This story is where it gets
+answered.
+
 ## Verification
 
 This one cannot be unit-tested — the thing under test is a JVM handshake. It is
