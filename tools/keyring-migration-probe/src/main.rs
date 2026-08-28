@@ -12,6 +12,7 @@
 //! cargo run -- write     # v3 stores a credential
 //! cargo run -- verify    # v3 reads it back (control), then v4 reads it
 //! cargo run -- clean     # remove it again
+//! cargo run -- time      # how long registering the store costs at startup
 //! ```
 //!
 //! Separate processes matter: a single run could be answered from an
@@ -126,7 +127,7 @@ fn main() {
         },
 
         other => {
-            println!("Unknown mode {other:?}. Expected one of: write, verify, clean.");
+            println!("Unknown mode {other:?}. Expected one of: write, verify, clean, time.");
         }
     }
 }
