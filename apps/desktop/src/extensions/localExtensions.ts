@@ -153,7 +153,7 @@ export function createLocalExtensions(options: LocalExtensionsOptions): LocalExt
         const outcome = await load(directory);
         if (!outcome.loaded) found.push({ directory, diagnostics: outcome.diagnostics });
       }
-      if (found.length > 0) setFailures(found);
+      setFailures(found);
     },
 
     startupFailures: () => failures,
