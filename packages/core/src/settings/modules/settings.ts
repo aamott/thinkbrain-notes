@@ -16,8 +16,11 @@ import type { SettingsModule } from "../types";
  * store triggers a debounced `saveSettings()` after each `stageChange` instead
  * of waiting for an explicit Save click.
  *
- * The `showAdvanced` setting controls whether advanced settings are shown in the
- * settings UI. Advanced settings are those marked with `advanced: true`.
+ * The `showAdvanced` setting lives here rather than in `appearance` because it
+ * changes what the settings screen shows, not how the app looks. It hides rows
+ * without disabling them, and `SettingsContent` reveals an advanced row anyway
+ * when a search lands on it or when its value is no longer the default — so
+ * turning this off cannot strand a setting somebody already changed.
  */
 export const settingsModule: SettingsModule = {
   id: "settings",
