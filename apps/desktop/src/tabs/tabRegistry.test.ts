@@ -9,6 +9,10 @@ describe("desktop tab registry", () => {
     expect(registry.get("editor")).toMatchObject({ isAvailable: true });
     expect(registry.get("preview")).toMatchObject({ isAvailable: true });
     expect(registry.get("settings")).toMatchObject({ isAvailable: true });
+    expect(registry.get("code-editor")).toMatchObject({ isAvailable: true });
+    expect(registry.get("image-viewer")).toMatchObject({ isAvailable: true });
+    expect(registry.get("audio-viewer")).toMatchObject({ isAvailable: true });
+    expect(registry.get("video-viewer")).toMatchObject({ isAvailable: true });
     expect(registry.get("graph")).toMatchObject({ isAvailable: false });
     expect(registry.get("browser")?.unavailableMessage).toContain("unavailable");
   });

@@ -1,4 +1,5 @@
 import type { Tab, TabKind, TabResource } from "@thinkbrain/core";
+import { inferTabKind } from "@thinkbrain/core";
 
 export interface DesktopTab extends Tab {
   readonly kind: TabKind;
@@ -11,6 +12,14 @@ export interface DesktopTab extends Tab {
    * the version the user is actually looking at.
    */
   readonly comparedNotePath?: string;
+}
+
+/** Media viewer tab kinds — read-only, no document state, no save button. */
+const MEDIA_VIEWER_KINDS: ReadonlySet<string> = new Set(["image-viewer", "audio-viewer", "video-viewer"]);
+
+/** True for image/audio/video viewer tabs (read-only, no document state). */
+export function isMediaViewerKind(kind: string): boolean {
+  return MEDIA_VIEWER_KINDS.has(kind);
 }
 
 export interface CloseRequest {
@@ -59,6 +68,29 @@ export function createEditorTab(resource: Required<TabResource>): DesktopTab {
     id: editorTabId(resource),
     title,
     kind: "editor",
+    resource
+  };
+}
+
+/** Stable identity for a file tab of any kind. */
+export function fileTabId(resource: TabResource): string {
+  return `file:${encodeURIComponent(resource.rootPath ?? "")}:${encodeURIComponent(resource.relativePath ?? "")}`;
+}
+
+/**
+ * Builds a tab for any file, inferring the tab kind from the extension.
+ * Uses `inferTabKind` so `.md` → editor, `.png` → image-viewer, `.ts` →
+ * code-editor, etc. The tab kind determines which renderer `TabContent` selects.
+ */
+export function createFileTab(resource: Required<TabResource>): DesktopTab {
+  const relativePath = resource.relativePath;
+  const title = relativePath.split("/").filter(Boolean).at(-1) ?? relativePath;
+  const kind = inferTabKind(relativePath);
+
+  return {
+    id: fileTabId(resource),
+    title,
+    kind,
     resource
   };
 }

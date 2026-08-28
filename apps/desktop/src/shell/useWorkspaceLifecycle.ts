@@ -22,7 +22,7 @@ import {
 import { useSearchIndexStore } from "../search/searchIndexStore";
 import { useSettingsStore } from "../settings/settingsStore";
 import {
-  createEditorTab,
+  createFileTab,
   createStaticTab,
   type DesktopTab,
   type DesktopTabAction,
@@ -43,12 +43,14 @@ interface UseWorkspaceLifecycleOptions {
   readonly dispatchTabs: Dispatch<DesktopTabAction>;
   readonly loadDocumentIntoView: (tabId: string, rootPath: string, relativePath: string) => void;
   readonly openMarkdownDocument: (rootPath: string, relativePath: string) => void;
+  readonly openFileDocument?: (rootPath: string, relativePath: string) => void;
 }
 export function useWorkspaceLifecycle({
   tabState,
   dispatchTabs,
   loadDocumentIntoView,
-  openMarkdownDocument
+  openMarkdownDocument,
+  openFileDocument
 }: UseWorkspaceLifecycleOptions) {
   const [leftPanel, setLeftPanel] = useState<LeftPanel | null>("explorer");
   const [bottomPanel, setBottomPanel] = useState<BottomPanel | null>(null);
@@ -291,12 +293,18 @@ export function useWorkspaceLifecycle({
         if (!restoredWorkspacePath) return;
         openMarkdownDocument(restoredWorkspacePath, relativePath);
       },
+      openFile: openFileDocument
+        ? (relativePath) => {
+            if (!restoredWorkspacePath) return;
+            openFileDocument(restoredWorkspacePath, relativePath);
+          }
+        : undefined,
       openTab: (kind, title) => {
         dispatchTabs({ type: "open", tab: createStaticTab(kind, title) });
       }
     });
     return () => setWorkspaceBridge(null);
-  }, [restoredWorkspacePath, openMarkdownDocument, dispatchTabs]);
+  }, [restoredWorkspacePath, openMarkdownDocument, openFileDocument, dispatchTabs]);
 
   // Reload settings whenever the workspace root changes so the settings store
   // knows the workspace root path. Without this, workspace-scoped settings
@@ -500,15 +508,15 @@ function tabToPersisted(tab: DesktopTab): PersistedTab {
  * are restored by kind alone.
  */
 function restoreTab(persisted: PersistedTab, fallbackRootPath: string | null): DesktopTab | null {
-  if (persisted.kind === "editor") {
+  if (persisted.kind === "editor" || persisted.kind === "code-editor" ||
+      persisted.kind === "image-viewer" || persisted.kind === "audio-viewer" ||
+      persisted.kind === "video-viewer") {
     const rootPath = persisted.rootPath ?? fallbackRootPath;
     const relativePath = persisted.relativePath;
     if (!rootPath || !relativePath) return null;
-    return createEditorTab({ rootPath, relativePath });
+    return createFileTab({ rootPath, relativePath });
   }
   // Validate the persisted static kind against the tab registry before casting.
-  // A stale or corrupted persisted state with an unknown kind is skipped rather
-  // than silently producing a broken tab that renders an Unavailable placeholder.
   if (desktopTabRegistry.get(persisted.kind) === undefined) return null;
   return createStaticTab(
     persisted.kind as Exclude<import("@thinkbrain/core").TabKind, "editor">,

@@ -83,6 +83,7 @@ export interface ShellState {
   readonly updateDocument: (tabId: string, contents: string) => void;
   readonly loadDocumentIntoView: (tabId: string, rootPath: string, relativePath: string) => void;
   readonly openMarkdownDocument: (rootPath: string, relativePath: string) => void;
+  readonly openFileDocument: (rootPath: string, relativePath: string) => void;
   readonly keepMyVersion: (tab: DesktopTab) => void;
   readonly loadDiskVersion: (tab: DesktopTab) => void;
   readonly dismissEmptied: (tabId: string) => void;
@@ -183,6 +184,7 @@ export function useShellState(): ShellState {
     conflicts,
     loadDocumentIntoView,
     openMarkdownDocument,
+    openFileDocument,
     reloadDocumentInPlace,
     updateDocument,
     saveDocument,
@@ -221,7 +223,7 @@ export function useShellState(): ShellState {
     updatePanelWidth,
     workspaceFiles,
     workspaceName
-  } = useWorkspaceLifecycle({ tabState, dispatchTabs, loadDocumentIntoView, openMarkdownDocument });
+  } = useWorkspaceLifecycle({ tabState, dispatchTabs, loadDocumentIntoView, openMarkdownDocument, openFileDocument });
 
   // Cancel deferred writes if the shell unmounts. An in-flight drag is the
   // resize hook's own to clean up.
@@ -455,6 +457,7 @@ export function useShellState(): ShellState {
     updateDocument,
     loadDocumentIntoView,
     openMarkdownDocument,
+    openFileDocument,
     keepMyVersion,
     loadDiskVersion,
     dismissEmptied,

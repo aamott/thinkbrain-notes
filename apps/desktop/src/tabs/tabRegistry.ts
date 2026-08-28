@@ -58,6 +58,26 @@ export const builtInDesktopTabViews: readonly DesktopTabView[] = [
     isAvailable: true
   },
   {
+    kind: "code-editor",
+    label: "Code editor",
+    isAvailable: true
+  },
+  {
+    kind: "image-viewer",
+    label: "Image viewer",
+    isAvailable: true
+  },
+  {
+    kind: "audio-viewer",
+    label: "Audio player",
+    isAvailable: true
+  },
+  {
+    kind: "video-viewer",
+    label: "Video player",
+    isAvailable: true
+  },
+  {
     kind: "graph",
     label: "Graph",
     isAvailable: false,

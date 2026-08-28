@@ -4,12 +4,32 @@ import { cn } from "../lib/utils";
 import { createVaultAssetResolver } from "../native/assets";
 import { useSettingsStore } from "../settings/settingsStore";
 import { desktopTabRegistry } from "../tabs/tabRegistry";
-import type { DesktopTab } from "../tabs/tabModel";
+import { isMediaViewerKind, type DesktopTab } from "../tabs/tabModel";
 import type { DocumentViewState } from "./shellTypes";
 import { SettingsTab } from "../settings/SettingsTab";
 import { MergeTab } from "../sync/MergeTab";
 import { DamagedNote } from "./DamagedNote";
 import { Unavailable } from "./Unavailable";
+
+/** Lazy-loaded CodeEditor; only fetched when a code-editor tab is rendered. */
+const CodeEditor = lazy(async () => {
+  const module = await import("../tabs/CodeEditor");
+  return { default: module.CodeEditor };
+});
+
+/** Lazy-loaded media viewers; only fetched when a media tab is rendered. */
+const ImageViewer = lazy(async () => {
+  const module = await import("../tabs/MediaViewers");
+  return { default: module.ImageViewer };
+});
+const AudioViewer = lazy(async () => {
+  const module = await import("../tabs/MediaViewers");
+  return { default: module.AudioViewer };
+});
+const VideoViewer = lazy(async () => {
+  const module = await import("../tabs/MediaViewers");
+  return { default: module.VideoViewer };
+});
 
 /**
  * Props for the active tab content surface.
@@ -145,6 +165,54 @@ export function TabContent({
         copyPath={relativePath ?? null}
         buffer={unsavedNoteContents ?? null}
       />
+    );
+  }
+
+  // Code editor for non-Markdown text files.
+  if (tab.kind === "code-editor") {
+    if (!document || document.phase === "loading") {
+      return (
+        <Unavailable title="Loading file" description="Reading the file from the workspace…" />
+      );
+    }
+    if (document.phase === "error" && !document.contents) {
+      return (
+        <Unavailable
+          title="Could not open file"
+          description={document.error ?? "The file could not be read."}
+        />
+      );
+    }
+    return (
+      <Suspense
+        fallback={<Unavailable title="Loading editor" description="Preparing the code editor…" />}
+      >
+        <CodeEditor
+          key={tab.id}
+          value={document.contents}
+          isSaving={document.phase === "saving"}
+          error={document.error}
+          rootPath={rootPath ?? null}
+          relativePath={relativePath ?? null}
+          stateKey={tab.id}
+          onChange={(contents) => onChange(tab.id, contents)}
+          onSave={() => { void onSave(tab); }}
+        />
+      </Suspense>
+    );
+  }
+
+  // Media viewers (image, audio, video) — read-only, no save button.
+  if (isMediaViewerKind(tab.kind)) {
+    const viewerProps = { rootPath: rootPath ?? null, relativePath: relativePath ?? null };
+    return (
+      <Suspense
+        fallback={<Unavailable title="Loading viewer" description="Preparing the media viewer…" />}
+      >
+        {tab.kind === "image-viewer" && <ImageViewer {...viewerProps} />}
+        {tab.kind === "audio-viewer" && <AudioViewer {...viewerProps} />}
+        {tab.kind === "video-viewer" && <VideoViewer {...viewerProps} />}
+      </Suspense>
     );
   }
 

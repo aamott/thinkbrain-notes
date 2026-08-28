@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   createEditorTab,
+  createFileTab,
   createStaticTab,
   desktopTabReducer,
   initialDesktopTabState
@@ -193,5 +194,47 @@ describe("desktopTabReducer", () => {
 
     expect(desktopTabReducer(state, { type: "activate", tabId: "missing" })).toBe(state);
     expect(desktopTabReducer(state, { type: "requestClose", tabId: "missing" })).toBe(state);
+  });
+});
+
+describe("createFileTab", () => {
+  it("infers editor kind for Markdown files", () => {
+    const tab = createFileTab({ rootPath: "/vault", relativePath: "notes/hello.md" });
+    expect(tab.kind).toBe("editor");
+    expect(tab.title).toBe("hello.md");
+    expect(tab.resource).toEqual({ rootPath: "/vault", relativePath: "notes/hello.md" });
+  });
+
+  it("infers code-editor kind for TypeScript files", () => {
+    const tab = createFileTab({ rootPath: "/vault", relativePath: "src/main.ts" });
+    expect(tab.kind).toBe("code-editor");
+    expect(tab.title).toBe("main.ts");
+  });
+
+  it("infers image-viewer kind for PNG files", () => {
+    const tab = createFileTab({ rootPath: "/vault", relativePath: "assets/logo.png" });
+    expect(tab.kind).toBe("image-viewer");
+  });
+
+  it("infers audio-viewer kind for MP3 files", () => {
+    const tab = createFileTab({ rootPath: "/vault", relativePath: "audio/song.mp3" });
+    expect(tab.kind).toBe("audio-viewer");
+  });
+
+  it("infers video-viewer kind for MP4 files", () => {
+    const tab = createFileTab({ rootPath: "/vault", relativePath: "video/clip.mp4" });
+    expect(tab.kind).toBe("video-viewer");
+  });
+
+  it("produces stable IDs for the same file path", () => {
+    const a = createFileTab({ rootPath: "/vault", relativePath: "config.json" });
+    const b = createFileTab({ rootPath: "/vault", relativePath: "config.json" });
+    expect(a.id).toBe(b.id);
+  });
+
+  it("produces different IDs for different files", () => {
+    const a = createFileTab({ rootPath: "/vault", relativePath: "a.ts" });
+    const b = createFileTab({ rootPath: "/vault", relativePath: "b.ts" });
+    expect(a.id).not.toBe(b.id);
   });
 });

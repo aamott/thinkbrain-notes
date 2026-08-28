@@ -16,9 +16,10 @@ import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch } from
 
 import { appEvents } from "../events/appEvents";
 import { releaseEditorStatesExcept } from "../tabs/editorStateCache";
-import { createEditorTab, type DesktopTab, type DesktopTabAction, type DesktopTabState } from "../tabs/tabModel";
+import { createEditorTab, createFileTab, isMediaViewerKind, type DesktopTab, type DesktopTabAction, type DesktopTabState } from "../tabs/tabModel";
 import { workspaceDocumentApi } from "../workspace/workspaceDocumentAdapter";
-import { loadWorkspaceDocument, saveWorkspaceDocument } from "../workspace/workspaceDocumentModel";
+import { textFileApi } from "../workspace/textFileAdapter";
+import { loadWorkspaceDocument, loadTextFile, saveWorkspaceDocument, saveTextFile } from "../workspace/workspaceDocumentModel";
 import {
   anchorDiskContents,
   applyRefusedSave,
@@ -49,6 +50,8 @@ export interface DocumentViews {
   readonly loadDocumentIntoView: (tabId: string, rootPath: string, relativePath: string) => void;
   /** Opens a note: makes the tab, announces it, loads it. */
   readonly openMarkdownDocument: (rootPath: string, relativePath: string) => void;
+  /** Opens any file: infers tab kind from extension, loads via the right API. */
+  readonly openFileDocument: (rootPath: string, relativePath: string) => void;
   /** Re-reads a changed file into the tab already showing it. */
   readonly reloadDocumentInPlace: (tabId: string, rootPath: string, relativePath: string) => void;
   /** Records an edit and marks the tab dirty. */
@@ -118,12 +121,16 @@ export function useDocumentViews({ tabState, dispatchTabs }: DocumentViewsProps)
    * (restart). The caller dispatches the tab and, for live opens, announces it.
    */
   const loadDocumentIntoView = useCallback(
-    (tabId: string, rootPath: string, relativePath: string) => {
+    (tabId: string, rootPath: string, relativePath: string, kind?: string) => {
       setDocuments((current) => ({
         ...current,
         [tabId]: { phase: "loading", contents: "", diskContents: null, error: null }
       }));
-      void loadWorkspaceDocument(workspaceDocumentApi, { rootPath, relativePath }).then((result) => {
+      const isCodeEditor = kind === "code-editor";
+      const loadPromise = isCodeEditor
+        ? loadTextFile(textFileApi, { rootPath, relativePath })
+        : loadWorkspaceDocument(workspaceDocumentApi, { rootPath, relativePath });
+      void loadPromise.then((result) => {
         setDocuments((current) => ({
           ...current,
           [tabId]: result.ok
@@ -156,6 +163,28 @@ export function useDocumentViews({ tabState, dispatchTabs }: DocumentViewsProps)
       // throw away edits the user has not saved.
       if (documentsRef.current[tab.id]) return;
       loadDocumentIntoView(tab.id, rootPath, relativePath);
+    },
+    [dispatchTabs, loadDocumentIntoView]
+  );
+
+  /**
+   * Opens any file, inferring the tab kind from the extension. Markdown files
+   * use the Markdown API; code/text files use the text file API; media files
+   * (image/audio/video) open as read-only viewer tabs with no document state.
+   */
+  const openFileDocument = useCallback(
+    (rootPath: string, relativePath: string) => {
+      const tab = createFileTab({ rootPath, relativePath });
+      dispatchTabs({ type: "open", tab });
+      appEvents.emit("note.opened", { rootPath, relativePath });
+
+      // Media viewer tabs have no document state — they load directly from disk
+      // via the asset protocol in the viewer component.
+      if (isMediaViewerKind(tab.kind)) return;
+
+      // Already open: raising the tab is the whole action.
+      if (documentsRef.current[tab.id]) return;
+      loadDocumentIntoView(tab.id, rootPath, relativePath, tab.kind);
     },
     [dispatchTabs, loadDocumentIntoView]
   );
@@ -215,12 +244,10 @@ export function useDocumentViews({ tabState, dispatchTabs }: DocumentViewsProps)
       ...current,
       [tab.id]: { ...document, phase: "saving", error: null }
     }));
-    const result = await saveWorkspaceDocument(workspaceDocumentApi, {
-      rootPath,
-      relativePath,
-      contents: document.contents,
-      expected
-    });
+    const saveRequest = { rootPath, relativePath, contents: document.contents, expected };
+    const result = tab.kind === "code-editor"
+      ? await saveTextFile(textFileApi, saveRequest)
+      : await saveWorkspaceDocument(workspaceDocumentApi, saveRequest);
     if (!result.ok) {
       // A refusal is not a failure to report. The tab keeps the user's text and
       // its dirty flag, and the banner puts the choice to them instead.
@@ -312,6 +339,7 @@ export function useDocumentViews({ tabState, dispatchTabs }: DocumentViewsProps)
     conflicts,
     loadDocumentIntoView,
     openMarkdownDocument,
+    openFileDocument,
     reloadDocumentInPlace,
     updateDocument,
     saveDocument,
