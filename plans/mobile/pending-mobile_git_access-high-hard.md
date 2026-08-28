@@ -90,8 +90,13 @@ Separable from credentials; split this out if it grows.
 
 ## Dependencies
 
-1. `pending-device_git_clone_spike-high-easy.md` — proves the premise
-2. `../auto-sync/pending-keyring_v4_migration-high-med.md` — desktop groundwork
+1. `pending-device_git_clone_spike-high-easy.md` — proves the premise. **Run
+   2026-08-27: the build links and the app runs, but the clone fails.**
+2. `pending-android_tls_platform_verifier-high-med.md` — **the actual first
+   blocker.** Every TLS request from Rust panics on Android because
+   `rustls-platform-verifier` is never initialised, so public and private
+   clones fail alike. Credentials are the *second* blocker, not the first.
+3. `../auto-sync/pending-keyring_v4_migration-high-med.md` — desktop groundwork
 
 ## Acceptance
 

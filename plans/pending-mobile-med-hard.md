@@ -102,8 +102,16 @@ must not convert `content://` URIs into guessed `/storage/...` paths.
 - **gix cross-compiles** for `aarch64-linux-android` and `aarch64-apple-ios`,
   gated in CI. But the gate is `cargo check -p gix` on that one package, by
   design — CI's own comment says Tauri's mobile build "needs an SDK, a linker
-  and a generated project, none of which this gate is asking about." gix has
-  never been *run* on a device.
+  and a generated project, none of which this gate is asking about."
+- **Run on a device 2026-08-27** (`mobile/pending-device_git_clone_spike-high-easy.md`):
+  the full Android build links, the app runs, managed vaults open, and
+  clone-first onboarding is wired — but **the clone fails**. Every TLS request
+  panics at `rustls-platform-verifier-0.7.0/src/android.rs:90`, "Expect
+  rustls-platform-verifier to be initialized", because the crate needs a Kotlin
+  component and a JNI init that `gen/android/` does not have. Public and
+  private repositories alike. This, not credentials, is the first blocker —
+  `mobile/pending-android_tls_platform_verifier-high-med.md`. Exactly the class
+  of failure `cargo check` cannot catch.
 - **Credentials do not persist.** On Android `credentials.rs` compiles to stubs
   that return `sync.auth_required` — "Sign-in is not available on this device
   yet." Public clones would work; private ones have nowhere to keep a token.

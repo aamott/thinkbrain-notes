@@ -41,6 +41,57 @@ Does `ndk_context`'s application context arrive initialised under Tauri Mobile?
 already taught us to distrust. Ten throwaway lines settle whether the Android
 credential story needs a JNI init shim.
 
+## Findings (2026-08-27, Pixel_7a emulator, x86_64 debug APK)
+
+**The build works. The clone does not.** The spike paid for itself.
+
+What passed, and is now known rather than assumed:
+
+- The **full Tauri Android build links**, gix and rustls included — something
+  `cargo check -p gix` never proved. `pnpm desktop:tauri android build --debug
+  --apk --target x86_64` produced a working APK.
+- The app installs, launches and renders the phone shell with no panic;
+  `libthinkbrain_notes_desktop_lib.so` loads cleanly.
+- **Managed vaults work.** An existing vault at
+  `/data/data/com.thinkbrain.notes/vaults/test` opens, lists and browses.
+- **Clone-first onboarding is wired.** The workspace switcher offers "Bring in
+  from Git link…"; the dialog resolves the managed destination, derives the
+  child folder name, and honestly reports "Sign-in is not available on this
+  device yet."
+
+**The blocker, and it is not credentials:**
+
+```
+thread 'reqwest-internal-sync-runtime' panicked at
+  rustls-platform-verifier-0.7.0/src/android.rs:90:
+  Expect rustls-platform-verifier to be initialized
+```
+
+`gix-transport → reqwest 0.13.4 → rustls-platform-verifier 0.7.0`. On Android
+that crate validates certificates through the JVM's Trust Manager, so it needs
+a Kotlin component in the Gradle build and a one-time JNI init before any
+networking. Neither exists here, so **every TLS connection panics** — public
+and private repositories alike.
+
+This is more fundamental than the credential question the epic treats as the
+blocker. No TLS means no clone at all.
+
+The app degrades honestly — no crash, and it recovers — but the message it
+shows ("Could not reach the place these notes sync to. Check the git link and
+your connection") misdiagnoses a missing platform init as a network fault.
+
+Tracked as `pending-android_tls_platform_verifier-high-med.md`, which now
+gates this spike's remaining acceptance.
+
+**Bonus finding:** bundled themes do not resolve on Android — logcat repeats
+`[themes] resource path not found for <name>.tbtheme.json` for all eight
+presets. Unrelated to git; recorded so it is not lost.
+
+**On `ndk_context`:** not directly answered, but rustls-platform-verifier
+needing its own explicit JNI init is evidence that Tauri does **not**
+auto-initialise Android JNI bridges for its dependencies. Assume
+`android-native-keyring-store` needs the same treatment until proven otherwise.
+
 ## Acceptance
 
 - [ ] A public repository clones into a managed vault on an Android emulator

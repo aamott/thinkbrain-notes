@@ -120,6 +120,27 @@ and every `cfg` on them are deleted rather than extended. `has_keychain` in
 The same registration is the answer the extensions epic is waiting for: one
 `Entry`-shaped boundary, one namespace convention, every platform included.
 
+## Update: story 1 has been run (2026-08-27)
+
+The spike was executed the day this was drafted, and it changed the ordering.
+
+The Android build links and the app runs — but **the clone fails before it
+reaches the network**. `gix-transport → reqwest 0.13.4 →
+rustls-platform-verifier 0.7.0` panics on Android with "Expect
+rustls-platform-verifier to be initialized", because that crate validates
+through the JVM Trust Manager and needs a Kotlin component plus a JNI init that
+`gen/android/` does not have.
+
+That makes TLS initialisation the **first** blocker and credentials the second.
+A new story owns it: `plans/mobile/pending-android_tls_platform_verifier-high-med.md`.
+The credential design below is unchanged and still correct; it simply cannot be
+exercised until TLS works.
+
+It also sharpens the `ndk_context` risk: a dependency needing its own explicit
+JNI init is evidence Tauri does not auto-initialise these bridges, so
+`android-native-keyring-store` should be assumed to need the same until proven
+otherwise.
+
 ## Scope split
 
 Three stories, in dependency order. The split is deliberate: the migration is
