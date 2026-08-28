@@ -110,7 +110,6 @@ macro_rules! app_command_list {
         sync::import::preview_managed_workspace_from_git_link,
         sync::import::import_workspace_from_git_link,
         sync::import::import_managed_workspace_from_git_link,
-        sync::registry::sync_app_foregrounded,
         sync::registry::sync_app_backgrounded,
         }
     };
@@ -182,7 +181,7 @@ mod tests {
         );
         assert_eq!(
             APP_COMMAND_PATHS.len(),
-            59,
+            58,
             "the number of registered commands changed; update this count if it was deliberate"
         );
     }

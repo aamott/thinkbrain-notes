@@ -1,3 +1,4 @@
+use super::super::schedule::Schedule;
 use super::*;
 use crate::tests::make_temp_test_dir;
 
@@ -383,5 +384,113 @@ fn attaching_settles_the_obvious_copies_without_deadlocking() {
     assert!(
         !vault.join(copy).exists(),
         "and it should have been tidied away"
+    );
+}
+
+/// A vault, its engine, and a destination it can actually reach.
+///
+/// The destination is written under `settle::settings_home`, which is
+/// remembered once per process — so this asks where that landed rather than
+/// assuming its own folder won. That is the folder `maybe_sync` reads.
+fn syncable(name: &str) -> (String, Arc<Engine>) {
+    let app_data = make_temp_test_dir(&format!("{name}-appdata"), "sync", true);
+    let vault = make_temp_test_dir(&format!("{name}-vault"), "sync", true);
+    let managed = bootstrap(&app_data, &vault).expect("bootstrap succeeds");
+    let engine = Arc::new(Engine::new(managed.repo, managed.has_own_git));
+
+    settle::remember_settings_home(&app_data);
+    let home = settle::settings_home().expect("a settings home is remembered");
+    let remote = make_temp_test_dir(&format!("{name}-remote"), "sync", true);
+    gix::init_bare(&remote).expect("the destination is created");
+    let settings = crate::commands::settings::workspace_settings_path(&home, &vault);
+    std::fs::create_dir_all(settings.parent().expect("the settings folder has a parent"))
+        .expect("the settings folder exists");
+    std::fs::write(
+        &settings,
+        serde_json::json!({ "sync.destination": remote.to_string_lossy() }).to_string(),
+    )
+    .expect("the destination is written");
+
+    (vault.to_string_lossy().to_string(), engine)
+}
+
+/// Far enough ahead that any quiet window has passed, so a test can say "this
+/// vault has been still" without sleeping for it.
+fn long_since_touched() -> Instant {
+    Instant::now() + Duration::from_secs(3600)
+}
+
+/// "Sync automatically" off means no automatic network, whatever the timers
+/// say. This is the whole promise of the setting.
+#[test]
+fn the_sweeper_starts_nothing_when_automatic_sync_is_off() {
+    let (key, engine) = syncable("registry-schedule-off");
+    let schedule = Schedule {
+        automatically: false,
+        ..Schedule::default()
+    };
+
+    maybe_sync(
+        &key,
+        &engine,
+        schedule,
+        long_since_touched(),
+        super::super::schedule::now_epoch_secs(),
+    );
+
+    assert!(
+        !engine.syncing(),
+        "a round trip started with automatic sync turned off"
+    );
+}
+
+/// Quiet for long enough, and nothing attempted yet: the tick is what starts a
+/// round trip now, on every platform.
+#[test]
+fn the_sweeper_starts_a_round_trip_once_the_vault_is_quiet_and_due() {
+    let (key, engine) = syncable("registry-schedule-due");
+    let schedule = Schedule {
+        interval_secs: super::super::schedule::MIN_INTERVAL_SECS,
+        quiet_secs: super::super::schedule::MIN_QUIET_SECS,
+        ..Schedule::default()
+    };
+
+    // The lane the trip takes as its first act, held here so the worker cannot
+    // finish and clear the flag before the assertion reads it.
+    let lane = lane(&key);
+    let _held = lock_or_recover(&lane);
+
+    maybe_sync(
+        &key,
+        &engine,
+        schedule,
+        long_since_touched(),
+        super::super::schedule::now_epoch_secs(),
+    );
+
+    assert!(
+        engine.syncing(),
+        "a quiet vault whose interval had come round never started a trip"
+    );
+}
+
+/// The interval is the user's number, not a constant. A vault that attempted a
+/// moment ago waits out the interval it was actually given.
+#[test]
+fn the_sweeper_waits_out_the_interval_the_user_asked_for() {
+    let (key, engine) = syncable("registry-schedule-early");
+    let now_secs = super::super::schedule::now_epoch_secs();
+    engine.mark_attempt(now_secs);
+    let schedule = Schedule {
+        interval_secs: super::super::schedule::MAX_INTERVAL_SECS,
+        quiet_secs: super::super::schedule::MIN_QUIET_SECS,
+        ..Schedule::default()
+    };
+
+    maybe_sync(&key, &engine, schedule, long_since_touched(), now_secs);
+
+    assert!(
+        !engine.syncing(),
+        "a round trip started before the interval had come round"
     );
 }
