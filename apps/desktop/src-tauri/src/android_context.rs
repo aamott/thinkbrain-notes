@@ -22,7 +22,8 @@ use std::sync::OnceLock;
 
 use jni::EnvUnowned;
 use jni::errors::ThrowRuntimeExAndDefault;
-use jni::objects::{GlobalRef, JObject};
+use jni::objects::JObject;
+use jni::refs::Global;
 
 /// Holds the context reference for the life of the process.
 ///
@@ -30,7 +31,7 @@ use jni::objects::{GlobalRef, JObject};
 /// the global reference behind that pointer has to outlive every use of it —
 /// which, for the app `Context`, means forever. Dropping it would leave
 /// `ndk-context` handing out a dangling reference.
-static CONTEXT: OnceLock<GlobalRef<JObject<'static>>> = OnceLock::new();
+static CONTEXT: OnceLock<Global<JObject<'static>>> = OnceLock::new();
 
 /// Publishes the JavaVM and app `Context` through `ndk-context`.
 ///
