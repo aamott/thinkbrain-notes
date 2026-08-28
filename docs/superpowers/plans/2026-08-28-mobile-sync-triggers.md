@@ -92,9 +92,13 @@ git commit -m "Confirm visibilitychange fires on Android before building on it"
 
 - [ ] **Step 1: Write the failing test**
 
+Add to the existing `describe` block, using the imports already at the top of
+that file — `createSettingsRegistry` from `../registry`, `validateSettings`
+from `../validation`, and `syncModule` from `./sync`:
+
 ```ts
 it("offers a sync trigger policy that defaults to auto", () => {
-  const registry = createRegistry([syncSettingsModule]);
+  const registry = createSettingsRegistry([syncModule]);
   const definition = registry.getDefinition("sync.trigger");
 
   expect(definition?.default).toBe("auto");
@@ -103,7 +107,8 @@ it("offers a sync trigger policy that defaults to auto", () => {
 });
 ```
 
-Match the import and helper names already used at the top of `sync.test.ts` — do not invent new ones.
+Verified names, do not substitute: the module export is `syncModule`, and the
+registry helper is `createSettingsRegistry`.
 
 - [ ] **Step 2: Run it and watch it fail**
 
