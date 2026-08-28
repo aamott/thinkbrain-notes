@@ -1017,10 +1017,17 @@ git commit -m "Report app lifecycle so the native side can decide to sync"
 
 ```bash
 pnpm desktop:tauri android build --debug --apk --target x86_64
-adb install -r apps/desktop/src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk
+# Do not assume the output path — a single-target build does not write the
+# universal APK. Find what the build actually produced:
+find apps/desktop/src-tauri/gen/android/app/build/outputs/apk -name '*debug*.apk' -newermt '-10 minutes'
+adb install -r <the apk that command printed>
 adb shell monkey -p com.thinkbrain.notes -c android.intent.category.LAUNCHER 1
-adb forward tcp:9222 localabstract:webview_devtools_remote_$(adb shell pidof com.thinkbrain.notes)
+adb forward tcp:9222 localabstract:webview_devtools_remote_$(adb shell pidof com.thinkbrain.notes | tr -d '\r')
 ```
+
+`pnpm android:build` is the same build without the target narrowing, if the
+emulator is not x86_64. The `tr -d '\r'` matters: `adb shell` returns a
+trailing carriage return, and Task 1 needed it for `adb forward` to bind.
 
 - [ ] **Step 2: Confirm the commands exist and are reachable**
 
@@ -1032,7 +1039,7 @@ Expected: `ok`.
 
 - [ ] **Step 3: Confirm the stale-clock symptom is gone**
 
-Open a managed vault, background the app with `adb shell input keyevent KEYCODE_HOME`, wait longer than the old 30-second `IDLE`, then foreground it. Watch logcat throughout:
+Open a managed vault, background the app with `adb shell input keyevent KEYCODE_HOME`, wait longer than the old 30-second `IDLE` (`registry.rs:34`, with `CAP` at 60s), then foreground it. Watch logcat throughout:
 
 ```bash
 adb logcat -c && adb shell input keyevent KEYCODE_HOME && adb shell 'sleep 45' \
