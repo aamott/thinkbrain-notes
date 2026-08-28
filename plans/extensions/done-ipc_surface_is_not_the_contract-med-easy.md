@@ -1,6 +1,6 @@
 # Story: Tauri Command Names Are Not the Extension Contract
 
-**Status:** ⬜ pending · **Urgency:** med · **Difficulty:** easy
+**Status:** ✅ done · **Urgency:** med · **Difficulty:** easy
 
 > Prompted 2026-08-28 by
 > `docs/reviews/2026-08-28/rust-backend/redundant-markdown-rename-delete-ipc,med,low.md`,
@@ -88,13 +88,33 @@ part of this story rather than left contradicting the code.
 
 ## Acceptance
 
-- [ ] The tier rule above is stated where an implementer will find it, not only
-      in this story
-- [ ] `rename_markdown_file` and `delete_markdown_file` removed: Rust
-      implementations, `NativeCommandMap` entries, `app_command_handlers!`
-      registration, and `APP_COMMAND_PATHS` with its count and assertions
-- [ ] `wip-workspace-explorer-med-med.md`'s retention note corrected, so the
+- [x] The tier rule above is stated where an implementer will find it, not only
+      in this story — it is in `commands/mod.rs`'s module doc, which is the file
+      anyone adding a command opens
+- [x] `rename_markdown_file` and `delete_markdown_file` removed: Rust
+      implementations, `NativeCommandMap` entries, registration, and the path
+      mirror. 102 lines
+- [x] `wip-workspace-explorer-med-med.md`'s retention note corrected, so the
       next reader is not told to preserve something that no longer exists
-- [ ] Markdown path validation and error contracts still covered for the
-      commands that remain — the generic ones must not have inherited a gap
-- [ ] `pnpm qa` green
+- [x] Markdown path validation and error contracts still covered for the
+      commands that remain. `create_markdown_file` and the read/write commands
+      keep `resolve_markdown_file_path`; the generic entry commands were
+      already covered by `workspace_entry_commands_reject_paths_that_escape_the_workspace_root`
+      and its symlink sibling
+- [x] `pnpm qa` green
+
+## Done alongside
+
+The same branch took the sibling finding,
+`docs/reviews/2026-08-28/rust-backend/command-registration-single-source,med,low.md`.
+Every command had been written out three times — the handler macro, the
+`APP_COMMAND_PATHS` array, and a presence assertion — and the test that claimed
+to guard that boundary compared one hand-written array against a hand-written
+count. `app_command_list!` now holds the names once and hands them to an
+expander, so both come from the same tokens.
+
+Worth recording for the next person near that macro: `stringify!` on a whole
+path inserts spaces around `::`, so the obvious expansion yields
+`"sync :: round :: sync_now"`. The list is built with `concat!` over
+per-segment `stringify!` instead, and a test asserts the strings hold no
+spaces, because nothing else reads them.

@@ -6,13 +6,21 @@
 //! Submodules:
 //! - `atomic_write`: Temp-then-rename file replacement that never deletes the destination first.
 //! - `workspace`: Vault/workspace window lifecycle, file and directory hierarchy operations.
-//! - `markdown`: Content reading, writing, creation, renaming, and listing of markdown files.
+//! - `markdown`: Content reading, writing, creation, and listing of markdown files.
 //! - `search`: Full-text document indexing and search query execution.
 //! - `settings`: Application-level and workspace-level configuration reading and writing.
 //! - `sync`: Auto Sync native layer — the hidden per-workspace repository.
 //! - `themes`: Discovery and listing of `.tbtheme.json` theme files in the app-data themes directory.
 //! - `extensions`: Contained reads of files inside a locally loaded extension directory.
 //! - `watcher`: Watches the open workspace for edits made outside the app and reports them.
+//!
+//! Command names are **not** a supported contract. Extensions run in the app's
+//! own realm, so they can reach any command whether it is registered here or
+//! not, and keeping an unused one protects nobody. The contract is the host
+//! API — `workspaceBridge`, the contribution registries, the settings bridge.
+//! A command may be promoted to a contract deliberately, in writing, with a
+//! reason; until then an unused command is deletable like any dead code. See
+//! `plans/extensions/done-ipc_surface_is_not_the_contract-med-easy.md`.
 //!
 //! Security Guarantees & Safety Invariants:
 //! - Path Scoping: File and directory operations must validate paths to prevent directory traversal outside workspace boundaries.
