@@ -88,6 +88,8 @@ export function SettingsHeaderBar() {
   const dirtyCount = useSettingsStore((s) => s.dirtyCount);
   const saveError = useSettingsStore((s) => s.saveError);
   const autosave = useEffectiveValue("settings.autosave");
+  const showAdvanced = useEffectiveValue("settings.showAdvanced") === true;
+  const stageChange = useSettingsStore((s) => s.stageChange);
   const [isSaving, setIsSaving] = useState(false);
   const status = useTransientStatus();
   const breadcrumbPath = buildBreadcrumbPath(activeSection);
@@ -198,6 +200,16 @@ export function SettingsHeaderBar() {
             {saveError}
           </span>
         )}
+
+        <label className="flex items-center gap-1 whitespace-nowrap text-xs text-muted-foreground">
+          <input
+            type="checkbox"
+            checked={showAdvanced}
+            onChange={(event) => stageChange("settings.showAdvanced", event.target.checked)}
+            aria-label="Show advanced settings"
+          />
+          <span>Advanced</span>
+        </label>
 
         <button
           type="button"

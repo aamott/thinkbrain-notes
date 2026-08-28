@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SettingsContent } from "./SettingsContent";
 import { createScrollSpyHarness, intersectSection } from "./scrollSpyTestUtils";
 import { requestSettingHighlight } from "./settingHighlight";
-import { useSettingsStore } from "./settingsStore";
+import { appSettingsRegistry, useSettingsStore } from "./settingsStore";
 import {
   createSettingsTestHarness,
   seedSettingsStore
@@ -34,6 +34,7 @@ vi.mock("../native/fs", () => ({
 
 const harness = createSettingsTestHarness();
 const scrollSpy = createScrollSpyHarness();
+let temporaryRegistrations: Array<{ dispose(): void }> = [];
 
 beforeEach(() => {
   scrollSpy.install();
@@ -49,9 +50,58 @@ beforeEach(() => {
 
 afterEach(async () => {
   await harness.unmount();
+  for (const registration of temporaryRegistrations) registration.dispose();
+  temporaryRegistrations = [];
   vi.useRealTimers();
   scrollSpy.restore();
 });
+
+/** Full key of the plain (non-advanced) setting in the advanced-test module. */
+const ADVANCED_TEST_PLAIN_KEY = "advanced-test.plainSetting";
+/** Full key of the advanced setting in the advanced-test module. */
+const ADVANCED_TEST_ADVANCED_KEY = "advanced-test.advancedSetting";
+
+/**
+ * Registers a throwaway module with one plain and one advanced boolean
+ * setting, disposed automatically in `afterEach`.
+ */
+function registerAdvancedTestModule(): void {
+  const sectionId = "advanced-test.settings";
+  temporaryRegistrations.push(
+    appSettingsRegistry.register({
+      id: "advanced-test",
+      label: "Advanced Test",
+      scope: "app",
+      sections: [
+        {
+          id: sectionId,
+          label: "Advanced Test",
+          settings: [
+            {
+              key: "plainSetting",
+              type: "boolean",
+              default: false,
+              scope: "app",
+              section: sectionId,
+              label: "Plain setting",
+              description: "A setting with nothing hidden about it."
+            },
+            {
+              key: "advancedSetting",
+              type: "boolean",
+              default: false,
+              scope: "app",
+              section: sectionId,
+              label: "Advanced setting",
+              description: "A setting hidden behind the advanced toggle.",
+              advanced: true
+            }
+          ]
+        }
+      ]
+    })
+  );
+}
 
 describe("SettingsContent single-page layout", () => {
   it("renders every app section in registry order", async () => {
@@ -165,6 +215,73 @@ describe("SettingsContent inline validation errors", () => {
 
     // All sections remain mounted, so diagnostics never disappear while scrolling.
     expect(el.querySelectorAll('[role="alert"]').length).toBe(1);
+  });
+});
+
+describe("SettingsContent advanced settings", () => {
+  it("hides advanced rows until the toggle is on", async () => {
+    registerAdvancedTestModule();
+    const el = await harness.render(<SettingsContent />);
+
+    expect(
+      el.querySelector(`[data-setting-key="${ADVANCED_TEST_PLAIN_KEY}"]`)
+    ).not.toBeNull();
+    expect(
+      el.querySelector(`[data-setting-key="${ADVANCED_TEST_ADVANCED_KEY}"]`)
+    ).toBeNull();
+
+    await act(async () => {
+      useSettingsStore.setState({
+        stagedChanges: { "settings.showAdvanced": true }
+      });
+    });
+
+    expect(
+      el.querySelector(`[data-setting-key="${ADVANCED_TEST_PLAIN_KEY}"]`)
+    ).not.toBeNull();
+    expect(
+      el.querySelector(`[data-setting-key="${ADVANCED_TEST_ADVANCED_KEY}"]`)
+    ).not.toBeNull();
+  });
+
+  it("keeps showing an advanced row whose value is not the default", async () => {
+    registerAdvancedTestModule();
+    useSettingsStore.setState({
+      stagedChanges: { [ADVANCED_TEST_ADVANCED_KEY]: true }
+    });
+
+    const el = await harness.render(<SettingsContent />);
+
+    expect(
+      el.querySelector(`[data-setting-key="${ADVANCED_TEST_ADVANCED_KEY}"]`)
+    ).not.toBeNull();
+  });
+
+  it("keeps an advanced row visible after its search highlight clears", async () => {
+    vi.useFakeTimers();
+    registerAdvancedTestModule();
+    const el = await harness.render(<SettingsContent />);
+
+    await act(async () => requestSettingHighlight(ADVANCED_TEST_ADVANCED_KEY));
+
+    expect(
+      el
+        .querySelector(`[data-setting-key="${ADVANCED_TEST_ADVANCED_KEY}"]`)
+        ?.getAttribute("data-highlighted")
+    ).toBe("true");
+
+    // HIGHLIGHT_DURATION_MS (settingHighlight.ts) is 1200ms; advance past it
+    // so the highlight bus clears the highlight on its own.
+    await act(async () => vi.advanceTimersByTime(1200));
+
+    expect(
+      el.querySelector(`[data-setting-key="${ADVANCED_TEST_ADVANCED_KEY}"]`)
+    ).not.toBeNull();
+    expect(
+      el
+        .querySelector(`[data-setting-key="${ADVANCED_TEST_ADVANCED_KEY}"]`)
+        ?.getAttribute("data-highlighted")
+    ).not.toBe("true");
   });
 });
 
