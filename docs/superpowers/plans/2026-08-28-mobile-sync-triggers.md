@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- `run_trip` and the round-trip code in `round.rs` are **unchanged**. This is a scheduling change. If a task starts editing the round trip, stop — the design was wrong.
+- `run_trip` and the round-trip code in `round.rs` are **unchanged**. This is a scheduling change. If a task starts editing the round trip, stop — the design was wrong. The single permitted exception is Task 4's three-line recording call in `sync`, placed after the trip has returned, beside the maintenance bookkeeping already there; it adds no round-trip logic and `run_trip` and everything it calls stay untouched. Any other edit to `round.rs` is out of scope.
 - The sweeper thread runs on **every** platform. `record_settled` and `maybe_maintain` are untouched; only `maybe_sync` changes.
 - `cfg!(target_os = ...)` appears in **exactly one** place: resolving `auto`. Nowhere else in the sync code asks what platform it is on.
 - Staleness threshold: **3 minutes**.
@@ -98,7 +98,8 @@ from `../validation`, and `syncModule` from `./sync`:
 
 ```ts
 it("offers a sync trigger policy that defaults to auto", () => {
-  const registry = createSettingsRegistry([syncModule]);
+  const registry = createSettingsRegistry();
+  registry.register(syncModule);
   const definition = registry.getDefinition("sync.trigger");
 
   expect(definition?.default).toBe("auto");
@@ -107,8 +108,9 @@ it("offers a sync trigger policy that defaults to auto", () => {
 });
 ```
 
-Verified names, do not substitute: the module export is `syncModule`, and the
-registry helper is `createSettingsRegistry`.
+Verified against `sync.test.ts:49-50`, do not substitute: the module export is
+`syncModule`, the registry helper is `createSettingsRegistry`, and it takes no
+arguments — modules are added with a separate `registry.register(...)` call.
 
 - [ ] **Step 2: Run it and watch it fail**
 
@@ -324,20 +326,26 @@ git commit -m "Read the sync trigger policy, resolving auto per platform"
 **Files:**
 - Modify: `apps/desktop/src-tauri/src/commands/sync/trigger.rs`
 - Modify: `apps/desktop/src-tauri/src/commands/sync/trigger_tests.rs`
-- Modify: `apps/desktop/src-tauri/src/commands/sync/round.rs` — in `sync`, after `outcome` is computed and found to be `Ok`, next to the existing `engine.maintain(false)` call
+- Modify: `apps/desktop/src-tauri/src/commands/sync/round.rs` — in `sync`, next to the existing `engine.maintain(false)` call
 
 **Interfaces:**
 - Consumes: `Trigger` from Task 3.
 - Produces:
-  - `pub fn mark_synced_now(app_data_dir: &Path, root: &Path)`
+  - `pub fn record_round_trip(app_data_dir: &Path, root: &Path, succeeded: bool)`
   - `pub fn is_stale(app_data_dir: &Path, root: &Path, now_secs: u64) -> bool`
+  - `pub(super) fn last_synced_at(app_data_dir: &Path, root: &Path) -> Option<u64>`
+  - `pub(super) fn now_epoch_secs() -> u64`
   - Constant `pub const STALE_AFTER_SECS: u64 = 180;`
   - Workspace settings key `sync.lastSyncedAt`, holding seconds since the Unix epoch.
+
+**Why `record_round_trip` takes the outcome rather than being called inside an `if`:** the rule that only success moves the timestamp is the sharpest requirement the spec makes about it, and the spec asks for it as a *unit test*. A bare `mark_synced_now` called inside `if outcome.is_ok()` puts that rule at the call site, where no unit test in `trigger_tests.rs` can reach it — the only writer would be provably correct and the rule provably untested. Passing the outcome moves the rule inside the function, where a test can hold it.
 
 - [ ] **Step 1: Write the failing tests**
 
 ```rust
-use super::trigger::{STALE_AFTER_SECS, is_stale, mark_synced_now};
+use super::trigger::{
+    STALE_AFTER_SECS, is_stale, last_synced_at, now_epoch_secs, record_round_trip,
+};
 
 #[test]
 fn a_vault_that_has_never_synced_is_stale() {
@@ -348,8 +356,8 @@ fn a_vault_that_has_never_synced_is_stale() {
 #[test]
 fn a_recent_sync_is_not_stale_but_an_old_one_is() {
     let (app_data, root) = a_workspace("recency");
-    mark_synced_now(&app_data, &root);
-    let now = now_secs();
+    record_round_trip(&app_data, &root, true);
+    let now = now_epoch_secs();
 
     assert!(!is_stale(&app_data, &root, now + STALE_AFTER_SECS - 1));
     assert!(is_stale(&app_data, &root, now + STALE_AFTER_SECS + 1));
@@ -361,32 +369,84 @@ fn a_recent_sync_is_not_stale_but_an_old_one_is() {
 #[test]
 fn the_timestamp_survives_being_read_by_a_different_call() {
     let (app_data, root) = a_workspace("persisted");
-    mark_synced_now(&app_data, &root);
-    assert!(!is_stale(&app_data, &root, now_secs()));
+    record_round_trip(&app_data, &root, true);
+    assert!(!is_stale(&app_data, &root, now_epoch_secs()));
 }
 
 /// The spec's sharpest requirement about this timestamp: it records success,
-/// not attempts. A vault whose sync failed must still read as stale, or the
-/// next return to the app will skip the retry that would have fixed it.
+/// not attempts. A failed sync that refreshed it would make a vault look fresh
+/// at exactly the moment it is not, and the next return to the app would skip
+/// the retry that would have fixed it.
 #[test]
-fn a_vault_stays_stale_until_a_sync_actually_succeeds() {
+fn a_failed_round_trip_does_not_refresh_the_timestamp() {
     let (app_data, root) = a_workspace("only-on-success");
-    let old = now_secs();
-    mark_synced_now(&app_data, &root);
+    record_round_trip(&app_data, &root, true);
+    let after_success = last_synced_at(&app_data, &root);
+    assert!(
+        after_success.is_some(),
+        "a successful round trip recorded nothing"
+    );
 
-    // Nothing writes the key except `mark_synced_now`, so a failed round trip
-    // leaves the previous value — here, none at all beyond this first one.
-    let (untouched_app_data, untouched_root) = a_workspace("failed-sync");
-    assert!(is_stale(&untouched_app_data, &untouched_root, old));
+    record_round_trip(&app_data, &root, false);
+
+    assert_eq!(last_synced_at(&app_data, &root), after_success);
+}
+
+/// A vault that has never synced at all must stay that way after a failure,
+/// or the first failed sync would look like a first successful one.
+#[test]
+fn a_failed_first_round_trip_records_nothing_at_all() {
+    let (app_data, root) = a_workspace("failed-first");
+    record_round_trip(&app_data, &root, false);
+
+    assert_eq!(last_synced_at(&app_data, &root), None);
+    assert!(is_stale(&app_data, &root, now_epoch_secs()));
+}
+
+/// `record_round_trip` rewrites the whole workspace settings file, so it has
+/// to merge rather than replace. Clobbering `sync.destination` would leave the
+/// vault pointing nowhere — a sync that breaks syncing.
+#[test]
+fn recording_a_sync_keeps_the_rest_of_the_workspace_settings() {
+    let (app_data, root) = a_workspace("merges");
+    let path = crate::commands::settings::workspace_settings_path(&app_data, &root);
+    std::fs::create_dir_all(path.parent().expect("a parent")).expect("settings dir");
+    std::fs::write(&path, r#"{"sync.destination":"https://example.test/notes.git"}"#)
+        .expect("settings written");
+
+    record_round_trip(&app_data, &root, true);
+
+    let contents = crate::commands::settings::read_settings_file(&path)
+        .expect("the settings are readable")
+        .expect("the settings are present");
+    let record = crate::commands::settings::parse_app_settings_record(Some(&contents));
+    assert_eq!(
+        record
+            .get("sync.destination")
+            .and_then(serde_json::Value::as_str),
+        Some("https://example.test/notes.git"),
+        "recording the sync time discarded the destination"
+    );
+    assert!(record.contains_key("sync.lastSyncedAt"));
 }
 ```
 
-Add `a_workspace(name)` returning `(PathBuf, PathBuf)` for app-data and root, and `now_secs()` returning `SystemTime::now()` as epoch seconds, alongside the Task 3 helpers.
+Add `a_workspace(name)` alongside the Task 3 helpers. Model it on `with_setting` in `apps/desktop/src-tauri/src/commands/sync/round_tests.rs:89`, which already returns `(app_data, root)` from two `make_temp_test_dir` calls for exactly this purpose — copy that shape rather than inventing one:
+
+```rust
+fn a_workspace(name: &str) -> (std::path::PathBuf, std::path::PathBuf) {
+    let app_data = crate::tests::make_temp_test_dir(&format!("{name}-appdata"), "trigger", true);
+    let root = crate::tests::make_temp_test_dir(&format!("{name}-vault"), "trigger", true);
+    (app_data, root)
+}
+```
+
+Do **not** write a test-local `now_secs()`. The tests call `now_epoch_secs()`, which Step 3 declares `pub(super)` and Task 6 also consumes. A second function computing the same epoch seconds is duplication a reviewer will rightly reject.
 
 - [ ] **Step 2: Run them and watch them fail**
 
 Run: `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --lib trigger`
-Expected: FAIL — `mark_synced_now` not found.
+Expected: FAIL — `record_round_trip` not found.
 
 - [ ] **Step 3: Implement, reusing the settings helpers `round::destination` already uses**
 
@@ -407,13 +467,21 @@ pub(super) fn now_epoch_secs() -> u64 {
         .unwrap_or(0)
 }
 
-/// Records that a round trip just succeeded, in wall-clock time.
+/// Records the result of a round trip, in wall-clock time.
 ///
-/// Only ever called after success. A failed sync that refreshed this would
-/// make a vault look fresh precisely when it is not.
-pub fn mark_synced_now(app_data_dir: &Path, root: &Path) {
+/// Only success moves the timestamp. A failed sync that refreshed it would
+/// make a vault look fresh at exactly the moment it is not, and the next
+/// return to the app would skip the retry that would have fixed it. The
+/// outcome is a parameter rather than an `if` at the call site so that the
+/// rule lives here, where a test can hold it.
+pub fn record_round_trip(app_data_dir: &Path, root: &Path, succeeded: bool) {
+    if !succeeded {
+        return;
+    }
     let path = crate::commands::settings::workspace_settings_path(app_data_dir, root);
-    let contents = crate::commands::settings::read_settings_file(&path).ok().flatten();
+    let contents = crate::commands::settings::read_settings_file(&path)
+        .ok()
+        .flatten();
     let mut record = crate::commands::settings::parse_app_settings_record(contents.as_deref());
     record.insert(
         LAST_SYNCED.to_string(),
@@ -421,7 +489,8 @@ pub fn mark_synced_now(app_data_dir: &Path, root: &Path) {
     );
     match crate::commands::settings::serialize_app_settings_record(record) {
         Ok(written) => {
-            if let Err(error) = crate::commands::workspace::write_file_atomically(&path, written) {
+            if let Err(error) = crate::commands::atomic_write::write_file_atomically(&path, written)
+            {
                 eprintln!("[sync] could not record the last sync time: {error:?}");
             }
         }
@@ -429,43 +498,65 @@ pub fn mark_synced_now(app_data_dir: &Path, root: &Path) {
     }
 }
 
+/// When this vault last synced successfully, if it ever has.
+pub(super) fn last_synced_at(app_data_dir: &Path, root: &Path) -> Option<u64> {
+    let path = crate::commands::settings::workspace_settings_path(app_data_dir, root);
+    let contents = crate::commands::settings::read_settings_file(&path).ok()?;
+    crate::commands::settings::parse_app_settings_record(contents.as_deref())
+        .get(LAST_SYNCED)
+        .and_then(serde_json::Value::as_u64)
+}
+
 /// Whether a vault's last successful sync is old enough to repeat.
 ///
 /// A vault that has never synced is stale: the first return to the app should
 /// fetch, not wait three minutes to decide it is allowed to.
 pub fn is_stale(app_data_dir: &Path, root: &Path, now_secs: u64) -> bool {
-    let path = crate::commands::settings::workspace_settings_path(app_data_dir, root);
-    let Ok(contents) = crate::commands::settings::read_settings_file(&path) else {
-        return true;
-    };
-    let Some(last) = crate::commands::settings::parse_app_settings_record(contents.as_deref())
-        .get(LAST_SYNCED)
-        .and_then(serde_json::Value::as_u64)
-    else {
-        return true;
-    };
-    now_secs.saturating_sub(last) >= STALE_AFTER_SECS
+    match last_synced_at(app_data_dir, root) {
+        Some(last) => now_secs.saturating_sub(last) >= STALE_AFTER_SECS,
+        None => true,
+    }
 }
 ```
 
-If `read_settings_file` returns `Result<Option<String>, _>`, keep the `.ok().flatten()`; if it returns `Result<String, _>`, drop the `.flatten()`. Check the signature in `settings.rs` before writing — `round.rs:79` calls it and shows the shape.
+Verified signatures, use them as written: `read_settings_file` returns `Result<Option<String>, NativeError>` (`settings.rs:802`), so the `.ok().flatten()` above is correct; `write_file_atomically` returns `io::Result<()>` and lives in `crate::commands::atomic_write` (`atomic_write.rs:13`), **not** in `commands::workspace`; `serialize_app_settings_record` takes a `Map<String, Value>` and returns `Result<String, NativeError>` (`settings.rs:378`); `workspace_settings_path(app_data_dir, canonical_root)` is at `settings.rs:324`.
 
-- [ ] **Step 4: Call it on success in `round.rs`**
+- [ ] **Step 4: Call it in `round.rs`**
 
-In `sync`, where the outcome is already known to be `Ok`:
+`round::sync` takes `(engine, key, root, destination, profile_id)` and has no app-data path of its own, so read it from the same place `maybe_sync` does.
 
-`round::sync` takes `(engine, key, root, destination, profile_id)` and has no
-app-data path of its own, so read it from the same place `maybe_sync` does:
+This is the one call site both paths pass through: the manual `sync_now` command (`round.rs:563`) and the sweeper's `maybe_sync` (`registry.rs:483`) both call `round::sync`, so recording here covers both, and recording anywhere else would miss one.
+
+`round.rs:497-502` currently reads:
 
 ```rust
+    engine.set_sync_problem(outcome.as_ref().err().cloned());
     if outcome.is_ok() {
-        // Only on success. A failed sync that refreshed this would make a
-        // vault look fresh at exactly the moment it is not.
-        if let Some(home) = super::settle::settings_home() {
-            super::trigger::mark_synced_now(&home, root);
-        }
         if let Err(error) = engine.maintain(false) {
+            eprintln!("[sync] history maintenance after a round trip failed: {error:?}");
+        }
+    }
+    outcome
 ```
+
+Add the recording call above that block, outside the `if` — `record_round_trip` decides for itself, which is the whole point of it taking the outcome:
+
+```rust
+    engine.set_sync_problem(outcome.as_ref().err().cloned());
+    if let Some(home) = super::settle::settings_home() {
+        super::trigger::record_round_trip(&home, root, outcome.is_ok());
+    }
+    if outcome.is_ok() {
+        if let Err(error) = engine.maintain(false) {
+            eprintln!("[sync] history maintenance after a round trip failed: {error:?}");
+        }
+    }
+    outcome
+```
+
+This is the only edit to `round.rs` in this plan, and it adds no round-trip logic: it sits after the trip has finished, beside the maintenance bookkeeping that is already there. The Global Constraint on `round.rs` is about the round trip itself — `run_trip` and everything it calls stay untouched.
+
+Note that `settings_home()` is `None` until `remember_settings_home` has been called, so in unit tests this call does nothing. That is why Step 1's tests drive `record_round_trip` directly with a temp directory rather than going through `sync`.
 
 - [ ] **Step 5: Run the tests and watch them pass**
 
@@ -480,6 +571,7 @@ git commit -m "Record the last successful sync in wall-clock time"
 ```
 
 ---
+
 
 ### Task 5: `maybe_sync` obeys the policy
 
