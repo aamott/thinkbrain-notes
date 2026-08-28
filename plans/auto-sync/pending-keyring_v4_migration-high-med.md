@@ -113,15 +113,17 @@ worth it.
 - [x] `storage_status` and `has_keychain` follow store registration, not `cfg!`
 - [x] A credential saved by the shipped v3 build is read back by the v4 build
       on **Linux** — verified with a two-crate probe against the real store
-- [ ] The same read-back on **macOS** — predicted to pass from source, not run
-- [ ] The same read-back on **Windows** — predicted to pass from source, not run
-      Both are wired but unexercised. **Do not ship to either platform until
-      `tools/keyring-migration-probe` has printed PASS there**, given what the
-      Linux investigation turned up.
+- [x] The same read-back on **macOS** — probe run 2026-08-28, v4 read the
+      credential v3 wrote
+- [x] The same read-back on **Windows** — probe run 2026-08-28, same result
 - [x] The probe itself is trustworthy — reproduces the Linux PASS and produces
       a FAIL against the known-wrong store
 - [ ] Sign-in, save-link, forget and a full round trip still work on desktop —
-      unit-tested, not yet exercised through the running app
+      unit-tested. Partially exercised: a git clone through the running app on
+      Windows succeeded post-migration (2026-08-28), which covers reading a
+      credential on a real desktop. Saving a new sign-in and forgetting one
+      have still only been covered by tests. **This is all that keeps this
+      story open** — the migration risk itself is closed.
 - [x] `pnpm qa` green
 
 ## What the crate sources predict for macOS and Windows
@@ -150,7 +152,13 @@ concatenation. **Predicted: reads back.** The trap avoided here was the
 `protected` module, which is the modern data-protection store — a different
 place entirely.
 
-Neither prediction is worth shipping on by itself. Run the probe.
+Neither prediction was worth shipping on by itself, so both were run.
+
+**Both passed on 2026-08-28**, on real hardware, matching the predictions: v4
+read back the credential v3 wrote on macOS and on Windows. All three shipping
+platforms are now verified by experiment rather than by inference, which is the
+bar this story was created to meet. `tools/keyring-migration-probe` can be
+deleted whenever it stops being useful as a regression check.
 
 ### One macOS-specific caveat when interpreting the result
 

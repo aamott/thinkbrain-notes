@@ -1,4 +1,4 @@
-# Story: A Public Repository Clones Without a Sign-In
+# Story: Importing a Repository You Cannot Push To
 
 **Status:** ⬜ pending · **Urgency:** high · **Difficulty:** med
 
@@ -91,20 +91,129 @@ The one thing established beyond doubt is the gix behaviour above: **anonymous
 means not configuring a helper**, and `Ok(None)` from a configured helper is an
 error by construction.
 
-## Shape of the fix
+## Diagnosed 2026-08-28: the clone was never the problem
 
-Make the credential helper conditional rather than unconditional: when there is
-no credential store, and no sign-in is selected or saved for the destination,
-connect without a helper so gix performs a plain anonymous fetch.
+Reproduced deterministically (see harness below) and the answer overturns this
+story's original premise. The full failure, captured from the `sync://import`
+event payload rather than read off a screen:
 
-Worth settling while doing it:
+```
+code:    sync.credentials_invalid
+message: The username or access token was not accepted.
+details: No credentials were returned at all as if the credential helper
+         isn't functioning unknowingly
+```
 
-- Does this apply only where there is no store, or also on desktop when the
-  user has chosen "No sign-in (public or local)"? The desktop dialog offers
-  that option, so the same path plausibly matters there too.
-- Push is different from fetch: an anonymous push cannot succeed, so `push.rs`
-  should keep demanding an identity and fail with a useful message rather than
-  silently attempting anonymous.
+The phase sequence is what gives it away: `saving` -> `checking` ->
+`combining` -> `sending` -> `failed`. Per `engine.rs:59-68`, `Checking` is the
+**fetch** and `Combining` is the **merge**. Both completed. It failed at
+`Sending`, which is the **push**.
+
+**So the public clone works.** TLS works, the fetch works, the merge works.
+What fails is the push that `complete_import` performs immediately afterwards,
+to a repository the device has no credentials for and no right to write to.
+GitHub answers the push with a 401, gix then consults the credential helper
+exactly as documented, the helper has no store to read from, and gix rejects
+the resulting nothing as `EmptyCredentials`.
+
+Worse than a bad error message: `complete_import` (`import.rs:182-184`) treats
+any error from `run_trip` as fatal and calls `cleanup_import`. So a repository
+that fetched and merged perfectly is **deleted** because the push failed. The
+vault directory is gone afterwards — confirmed by inspecting
+`/data/data/com.thinkbrain.notes/vaults/` after the failure.
+
+`round.rs:207-217` is the site: once a HEAD commit exists, `push::send` runs
+unconditionally. Adopting the remote's history creates that HEAD, so importing
+any repository guarantees a push attempt.
+
+### This is not an Android bug
+
+`complete_import` -> `run_trip` -> `push::send` is shared code with no target
+gating. Any desktop user importing a repository they cannot push to — a public
+repo they do not own, a read-only mirror, "No sign-in (public or local)" —
+should hit the same rollback. Android only surfaced it first because it has no
+credential store at all. **Confirm on desktop before designing the fix**; it
+widens the story considerably if true, and it is cheap to check.
+
+### What this retires
+
+The three error codes recorded below as untrustworthy can now be set aside;
+`sync.credentials_invalid` was the real one, arriving for a reason nobody
+guessed. The earlier reasoning about gix's helper-after-401 behaviour was
+correct but was applied to the wrong operation — the 401 comes from the push,
+never from the fetch.
+
+## The harness, which now exists
+
+The previous session's suggestions were wrong in one case and unnecessary in
+the other.
+
+**`uiautomator dump` does not work here.** The WebView exposes no accessibility
+tree, so a dump returns only `action_bar_root` and an empty content frame. No
+element of the app's UI is visible to it at any point. Do not spend time on it.
+
+**What works: the WebView's own DevTools protocol.** Debug builds expose
+`@webview_devtools_remote_<pid>`, so the app can be driven exactly:
+
+```bash
+adb forward tcp:9222 localabstract:webview_devtools_remote_$(adb shell pidof com.thinkbrain.notes)
+python3 tools/android-devtools/wveval.py "<javascript>"
+```
+
+That gives the ability to call a Tauri command with exact arguments and to
+subscribe to events, which is how the payload above was captured — no tapping,
+no coordinates, no keyboard shifting the layout. `tools/android-devtools/`
+holds the script and the recipe.
+
+One gotcha, already handled in the script: the DevTools endpoint rejects a
+WebSocket carrying an `Origin` header, so the connection must suppress it.
+
+## Console logging now reaches logcat
+
+`invokeNativeCommand` logs every failed native command as a single formatted
+line, which wry forwards to logcat under tag `Tauri/Console` at level `E`.
+Verified on the emulator.
+
+Two limits found by reading `wry-0.55.1/src/android/kotlin/`:
+
+- **Objects are silently dropped.** `RustWebChromeClient.isValidMsg` discards
+  any message equal to `[object Object]`, so `console.error("...", errorObject)`
+  logs *nothing*. Confirmed empirically. This is why the log is one
+  pre-formatted string, and it must stay that way.
+- **Debug builds only.** `Logger.error` is gated on `BuildConfig.DEBUG`
+  (`Logger.kt:83-85`), so console output vanishes in release. Field diagnostics
+  from a user's installed build would need a Rust-side log instead.
+
+**It did not catch this failure**, and that is worth knowing: the import
+reports through the `sync://import` event, not through a command rejection, so
+it never passes through `invokeNativeCommand`. The event payload carries the
+same `details`, which is how it was read here. Any future work that wants
+device-visible logging of sync failures has to cover the event path too.
+
+## Shape of the fix — needs a design decision
+
+The original shape (make the *fetch* credential helper conditional) addresses a
+problem that does not exist. The fetch already works. The question is what an
+import should do when the push at the end of it cannot succeed, and that is a
+product decision rather than a mechanical one:
+
+1. **Do not push during an import at all.** An import is "get me this
+   repository"; pushing is the next sync's job. Simplest, and makes the import
+   succeed for read-only repositories. Leaves the vault linked to a remote it
+   may never be able to write to, which the next sync surfaces anyway.
+2. **Push, but do not let its failure destroy the import.** Keep the vault,
+   report it as fetched-but-not-sent. Preserves current behaviour where the
+   push does work, and needs a state for "linked, read-only".
+3. **Decide up front from the sign-in choice.** If there is no credential
+   store, or the user picked "No sign-in", import read-only and say so.
+   Clearest to the user, most work, needs UI copy.
+
+Whichever is chosen, an anonymous push must still fail loudly when the user
+actually asked to push — silently swallowing that would be worse than today.
+
+Recommendation: **2**, because it is the smallest change that stops deleting
+good data, and it keeps the existing behaviour for the common case. 1 and 3 can
+follow if the read-only state deserves first-class treatment.
 
 ## Also worth fixing here
 
