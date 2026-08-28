@@ -265,8 +265,8 @@ mod tests {
         );
         assert_eq!(
             APP_COMMAND_PATHS.len(),
-            57,
-            "expected 57 registered commands"
+            59,
+            "expected 59 registered commands"
         );
     }
 }

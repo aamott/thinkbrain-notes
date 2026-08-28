@@ -1,0 +1,101 @@
+name: codeql
+
+# Runs CodeQL semantic analysis on the TypeScript frontend and Rust backend
+# to catch security vulnerabilities (XSS, path traversal, injection, etc.).
+# Runs on every PR and push to main/dev, plus a weekly schedule to catch
+# new queries added to the CodeQL query packs.
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+  schedule:
+    # Weekly on Monday at 00:00 UTC — picks up new CodeQL query releases.
+    - cron: "0 0 * * 1"
+  workflow_dispatch:
+
+permissions:
+  # Needed to upload results to GitHub Security tab.
+  security-events: write
+  # Needed to read the repo.
+  contents: read
+  # Needed by actions/checkout.
+  actions: read
+
+jobs:
+  analyze:
+    name: ${{ matrix.language }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: javascript-typescript
+            # Build mode for interpreted languages — no autobuild needed,
+            # CodeQL scans the source directly.
+            build_mode: none
+          - language: rust
+            # Rust needs to be compiled so CodeQL can trace the build.
+            build_mode: autobuild
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.8.0
+          run_install: false
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Tauri Linux system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            libc6 \
+            librsvg2-dev \
+            libgtk-3-dev \
+            libsoup-3.0-dev \
+            libjavascriptcoregtk-4.1-dev \
+            patchelf
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          # Use the security-extended suite for deeper analysis beyond the
+          # default security-and-quality suite. Catches more issues at the
+          # cost of longer run times.
+          queries: security-extended
+
+      - name: Build (Rust only)
+        if: matrix.language == 'rust'
+        run: cargo build --manifest-path apps/desktop/src-tauri/Cargo.toml --lib
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
