@@ -1,0 +1,295 @@
+name: nightly
+
+# Builds downloadable artifacts from the `dev` branch on a nightly schedule
+# and publishes them to a rolling "Nightly" prerelease. The release is
+# clobbered each night so there's always one URL for the latest dev build.
+#
+# Only runs if `dev` has new commits in the last 24 hours — skip the build
+# entirely on quiet days to save CI minutes.
+#
+# The nightly release is separate from versioned releases (v0.2.0, etc.) so
+# it never clutters the releases page. It uses a fixed `nightly` tag and
+# `prerelease: true` so GitHub sorts it below real releases.
+
+on:
+  schedule:
+    # 02:00 UTC daily — picks a quiet hour for most time zones.
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  # ───────────────────────────── Check for changes ────────────────────────
+  # Skip the build entirely if dev hasn't had new commits since the last
+  # nightly run. This saves ~40 CI minutes per day on quiet days.
+  check:
+    name: Check for changes
+    runs-on: ubuntu-latest
+    outputs:
+      should-build: ${{ steps.check.outputs.should-build }}
+      sha: ${{ steps.check.outputs.sha }}
+    steps:
+      - name: Checkout dev
+        uses: actions/checkout@v4
+        with:
+          ref: dev
+
+      - name: Check for recent commits
+        id: check
+        run: |
+          # Get the latest commit SHA and its timestamp on dev.
+          sha=$(git rev-parse HEAD)
+          commit_time=$(git log -1 --format='%ct' HEAD)
+          now=$(date +%s)
+          # 24 hours in seconds, with a 1-hour buffer so we don't miss a
+          # commit that landed right after the previous nightly ran.
+          window=$((25 * 3600))
+          age=$((now - commit_time))
+          if [[ $age -lt $window ]]; then
+            echo "should-build=true" >> "$GITHUB_OUTPUT"
+            echo "Latest commit on dev is $((age / 3600))h old — building."
+          else
+            echo "should-build=false" >> "$GITHUB_OUTPUT"
+            echo "Latest commit on dev is $((age / 3600))h old — skipping."
+          fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+  # ───────────────────────────── Desktop (Linux / macOS / Windows) ────────
+  desktop:
+    name: ${{ matrix.label }}
+    needs: check
+    if: needs.check.outputs.should-build == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: macOS (Apple Silicon)
+            platform: macos-latest
+            args: "--target aarch64-apple-darwin"
+          - label: macOS (Intel)
+            platform: macos-latest
+            args: "--target x86_64-apple-darwin"
+          - label: Linux
+            platform: ubuntu-22.04
+            args: ""
+          - label: Windows
+            platform: windows-latest
+            args: ""
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - name: Checkout dev
+        uses: actions/checkout@v4
+        with:
+          ref: dev
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.8.0
+          run_install: false
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: Install Tauri Linux system dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            libc6 \
+            librsvg2-dev \
+            libgtk-3-dev \
+            libsoup-3.0-dev \
+            libjavascriptcoregtk-4.1-dev \
+            patchelf
+
+      - name: Cache cargo
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build and publish
+        uses: tauri-apps/tauri-action@v0.6.2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          # Always use the fixed `nightly` tag — clobbers the previous
+          # nightly release so there's only ever one.
+          tagName: nightly
+          releaseName: "Nightly (dev)"
+          releaseBody: |
+            Automated nightly build from the `dev` branch. This is a rolling
+            release — it is overwritten each night that `dev` has new commits,
+            so it always reflects the latest development state.
+
+            **Commit:** ${{ needs.check.outputs.sha }}
+
+            ## ↓ Which file should I download?
+
+            | Your platform | Download this file |
+            |---|---|
+            | **macOS (Apple Silicon)** | `*-darwin-aarch64.dmg` |
+            | **macOS (Intel)** | `*-darwin-x64.dmg` |
+            | **Linux (AppImage)** | `*-linux-amd64.AppImage` |
+            | **Linux (Debian/Ubuntu)** | `*-linux-amd64.deb` |
+            | **Linux (Fedora/RHEL)** | `*-linux-x86_64.rpm` |
+            | **Windows (installer)** | `*-windows-x64.msi` |
+            | **Windows (portable)** | `*-windows-x64.exe` |
+            | **Android (sideload)** | `*-android-universal.apk` |
+
+            > **Ignore the other files.** The `.sig`, `.tar.gz`, `.aab`, and
+            > `latest.json` files are for the auto-updater or Play Store.
+
+            ---
+
+            ⚠️ **This is an unstable build.** It may crash, lose data, or
+            behave unexpectedly. Do not use it for important work.
+          releaseDraft: false
+          prerelease: true
+          assetNamePattern: '[name]-[version]-[platform]-[arch][ext]'
+          args: ${{ matrix.args }}
+
+  # ───────────────────────────── Android ─────────────────────────────────
+  android:
+    name: Android
+    needs: check
+    if: needs.check.outputs.should-build == 'true' && vars.ANDROID_RELEASE_ENABLED == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout dev
+        uses: actions/checkout@v4
+        with:
+          ref: dev
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.8.0
+          run_install: false
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Ensure pnpm is on PATH for Gradle
+        run: echo "$PNPM_HOME" >> "$GITHUB_PATH"
+
+      - name: Point cargo at the Android NDK cross-compilers
+        run: |
+          echo "ANDROID_NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> "$GITHUB_ENV"
+          TOOLCHAIN="$ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          # NDK clang binaries use "armv7a-linux-androideabi" (with an `a`),
+          # but the Rust target triple is "armv7-linux-androideabi" (no `a`).
+          for triple in aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android; do
+            api=21
+            ndk_triple="$triple"
+            if [[ "$triple" == "armv7-linux-androideabi" ]]; then
+              ndk_triple="armv7a-linux-androideabi"
+            fi
+            upper=$(echo "$triple" | tr '[:lower:]-' '[:upper:]_')
+            echo "CC_${upper}=$TOOLCHAIN/${ndk_triple}${api}-clang" >> "$GITHUB_ENV"
+            echo "CXX_${upper}=$TOOLCHAIN/${ndk_triple}${api}-clang++" >> "$GITHUB_ENV"
+            echo "AR_${upper}=$TOOLCHAIN/llvm-ar" >> "$GITHUB_ENV"
+            echo "CARGO_TARGET_${upper}_LINKER=$TOOLCHAIN/${ndk_triple}${api}-clang" >> "$GITHUB_ENV"
+          done
+
+      - name: Cache cargo
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+          key: android
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Set up Android release signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          keystore_dir="apps/desktop/src-tauri/gen/android"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$keystore_dir/release.keystore"
+          {
+            printf 'storeFile=release.keystore\n'
+            printf 'storePassword=%s\n' "$ANDROID_KEYSTORE_PASSWORD"
+            printf 'keyAlias=%s\n' "$ANDROID_KEY_ALIAS"
+            printf 'keyPassword=%s\n' "$ANDROID_KEY_PASSWORD"
+          } > "$keystore_dir/keystore.properties"
+
+      - name: Build frontend
+        run: pnpm build
+
+      - name: Build Android AAB
+        run: pnpm desktop:tauri android build --ci -c '{"build":{"beforeBuildCommand":""}}'
+
+      - name: Build Android APKs
+        run: pnpm desktop:tauri android build --ci --apk -c '{"build":{"beforeBuildCommand":""}}'
+
+      - name: Stage Android bundles
+        run: |
+          set -euo pipefail
+          out="apps/desktop/src-tauri/gen/android/app/build/outputs"
+          mkdir -p staging
+          find "$out/bundle" -name '*.aab' -exec cp {} "staging/ThinkbrainNotes-nightly-android.aab" \;
+          find "$out/apk" -name '*universal*.apk' -exec cp {} "staging/ThinkbrainNotes-nightly-android-universal.apk" \;
+          echo "Staged bundles:"
+          ls -la staging/
+
+      - name: Attach bundles to the Nightly release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # Poll until the desktop job has created the nightly release.
+          for i in $(seq 1 30); do
+            if gh release view nightly --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+              gh release upload nightly staging/* --repo "$GITHUB_REPOSITORY" --clobber
+              echo "Uploaded Android bundles to nightly release"
+              exit 0
+            fi
+            echo "Nightly release not ready yet (attempt $i/30); waiting 60s..."
+            sleep 60
+          done
+          echo "::error::Nightly release never appeared after 30 minutes; desktop job may have failed." >&2
+          exit 1
