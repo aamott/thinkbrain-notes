@@ -495,6 +495,9 @@ pub fn sync(
         })
     })();
     engine.set_sync_problem(outcome.as_ref().err().cloned());
+    if let Some(home) = super::settle::settings_home() {
+        super::trigger::record_round_trip(&home, root, outcome.is_ok());
+    }
     if outcome.is_ok() {
         if let Err(error) = engine.maintain(false) {
             eprintln!("[sync] history maintenance after a round trip failed: {error:?}");

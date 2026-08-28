@@ -178,8 +178,15 @@ pub fn attach(app_data_dir: &Path, root: &Path, key: &str, label: &str) -> Resul
     // A configured destination is checked when the workspace opens. This is
     // the first useful moment to report a bad link or sign-in, rather than
     // making someone wait for the idle timer or discover a manual button.
-    if let Some(destination) = round::destination(app_data_dir, root) {
-        start_round(key, &engine, root.to_path_buf(), destination);
+    //
+    // Opening is deliberate, so it does not consult staleness — `foreground`
+    // syncs here every time. `manual` is the one policy that does not: it
+    // promises no automatic network in any lifecycle event. `idle` keeps this
+    // because this call is part of the desktop behaviour `idle` preserves.
+    if super::trigger::open_start_allowed(super::trigger::resolved()) {
+        if let Some(destination) = round::destination(app_data_dir, root) {
+            start_round(key, &engine, root.to_path_buf(), destination);
+        }
     }
     Ok(())
 }
@@ -358,17 +365,10 @@ fn spawn_sweeper() {
             loop {
                 std::thread::sleep(TICK);
 
-                let engines: Vec<(String, Arc<Engine>)> = {
-                    let guard = registry();
-                    let Some(state) = guard.as_ref() else {
-                        continue;
-                    };
-                    state
-                        .engines
-                        .iter()
-                        .map(|(key, engine)| (key.clone(), Arc::clone(engine)))
-                        .collect()
-                };
+                let engines = open_engines();
+                if engines.is_empty() {
+                    continue;
+                }
 
                 // Outside the lock: recording hashes and writes files, and holding
                 // the registry through that would block every window opening or
@@ -405,6 +405,18 @@ fn maybe_sync(key: &str, engine: &Arc<Engine>, now: Instant) {
     if !engine.ready_to_sync(IDLE, CAP, now) {
         return;
     }
+    // Asked after `ready_to_sync`, not before: resolving the policy reads and
+    // parses the settings file, and the sweeper asks this of every open
+    // workspace twice a second. `ready_to_sync` is pure and in memory, so
+    // letting it reject first keeps an idle tick free of I/O — the same care
+    // `record_settled` takes for the same reason (`engine.rs:271`).
+    //
+    // Idle time is only evidence under the policy that says so. Under the
+    // others this timer is measuring a clock that may have jumped while the
+    // process was frozen, which is the whole reason the policy exists.
+    if !super::trigger::idle_start_allowed(super::trigger::resolved()) {
+        return;
+    }
     let Some(home) = settle::settings_home() else {
         return;
     };
@@ -437,6 +449,72 @@ fn maybe_maintain(key: &str, engine: &Arc<Engine>) {
     if result.is_err() || had_problem != engine.maintenance_problem().is_some() {
         crate::commands::watcher::announce_sync_status(key);
     }
+}
+
+/// The app came back to the foreground.
+///
+/// The webview reports the lifecycle event and nothing else: which vaults that
+/// affects is answered here, where the registry already holds every open
+/// engine keyed by its root.
+#[tauri::command]
+pub fn sync_app_foregrounded() -> Result<(), NativeError> {
+    let trigger = super::trigger::resolved();
+    let Some(home) = settle::settings_home() else {
+        return Ok(());
+    };
+    for (key, engine) in open_engines() {
+        let root = PathBuf::from(&key);
+        if !super::trigger::should_sync_on_foreground(
+            trigger,
+            super::trigger::is_stale(&home, &root, super::trigger::now_epoch_secs()),
+        ) {
+            continue;
+        }
+        let Some(destination) = round::destination(&home, &root) else {
+            continue;
+        };
+        start_round(&key, &engine, root, destination);
+    }
+    Ok(())
+}
+
+/// The app is going away. Record what is pending, then try to send it.
+#[tauri::command]
+pub fn sync_app_backgrounded() -> Result<(), NativeError> {
+    if !super::trigger::should_flush_on_background(super::trigger::resolved()) {
+        return Ok(());
+    }
+    let now = Instant::now();
+    let Some(home) = settle::settings_home() else {
+        return Ok(());
+    };
+    for (key, engine) in open_engines() {
+        if let Err(error) = engine.record_settled(now) {
+            eprintln!("[sync] could not record changes for {key}: {error:?}");
+        }
+        let root = PathBuf::from(&key);
+        let Some(destination) = round::destination(&home, &root) else {
+            continue;
+        };
+        start_round(&key, &engine, root, destination);
+    }
+    Ok(())
+}
+
+/// Every open engine with its key, copied out from under the lock.
+///
+/// The same shape the sweeper uses: recording and syncing must not happen with
+/// the registry held, or every window opening a workspace waits behind them.
+fn open_engines() -> Vec<(String, Arc<Engine>)> {
+    let guard = registry();
+    let Some(state) = guard.as_ref() else {
+        return Vec::new();
+    };
+    state
+        .engines
+        .iter()
+        .map(|(key, engine)| (key.clone(), Arc::clone(engine)))
+        .collect()
 }
 
 /// Starts one round trip, if one is not already underway.
