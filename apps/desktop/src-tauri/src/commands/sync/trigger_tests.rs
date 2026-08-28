@@ -78,9 +78,11 @@ fn a_recent_sync_is_not_stale_but_an_old_one_is() {
     assert!(is_stale(&app_data, &root, now + STALE_AFTER_SECS + 1));
 }
 
-/// Wall clock, not a monotonic instant: the whole point is surviving a
-/// restart, and a process that has just started has no earlier `Instant` to
-/// compare against.
+/// The value written by one call to `record_round_trip` is read back by a
+/// separate call to `is_stale` — nothing in between holds it in memory. That
+/// matters because a monotonic `Instant` could not do this at all: it only
+/// means anything compared against another `Instant` from the same process,
+/// so a value like it would have nothing to be read back as.
 #[test]
 fn the_timestamp_survives_being_read_by_a_different_call() {
     let (app_data, root) = a_workspace("persisted");
@@ -95,16 +97,18 @@ fn the_timestamp_survives_being_read_by_a_different_call() {
 #[test]
 fn a_failed_round_trip_does_not_refresh_the_timestamp() {
     let (app_data, root) = a_workspace("only-on-success");
-    record_round_trip(&app_data, &root, true);
-    let after_success = last_synced_at(&app_data, &root);
-    assert!(
-        after_success.is_some(),
-        "a successful round trip recorded nothing"
-    );
+    let path = crate::commands::settings::workspace_settings_path(&app_data, &root);
+    std::fs::create_dir_all(path.parent().expect("a parent")).expect("settings dir");
+    // Written by hand rather than recorded, so the stored time is nowhere near
+    // now. Recording a success first would land in the same epoch second as the
+    // failure below, and a `record_round_trip` whose success guard had been
+    // deleted would write back an identical value — this test would pass while
+    // the rule it names was gone.
+    std::fs::write(&path, r#"{"sync.lastSyncedAt":1000}"#).expect("settings written");
 
     record_round_trip(&app_data, &root, false);
 
-    assert_eq!(last_synced_at(&app_data, &root), after_success);
+    assert_eq!(last_synced_at(&app_data, &root), Some(1000));
 }
 
 /// A vault that has never synced at all must stay that way after a failure,
@@ -146,4 +150,49 @@ fn recording_a_sync_keeps_the_rest_of_the_workspace_settings() {
         "recording the sync time discarded the destination"
     );
     assert!(record.contains_key("sync.lastSyncedAt"));
+}
+
+/// A settings file that exists but cannot be read must not be replaced. The
+/// old `.ok().flatten()` over `read_settings_file` could not tell "nothing
+/// there" from "there, but unreadable" — both read as an empty record, and
+/// `record_round_trip` would then write back a document holding only
+/// `sync.lastSyncedAt`, discarding `sync.destination` in the same write that
+/// was supposed to mark the vault as synced. Root bypasses Unix permission
+/// checks, so this test is meaningless run as root; it is not run in CI as
+/// root.
+#[cfg(unix)]
+#[test]
+fn a_settings_file_that_cannot_be_read_is_left_untouched() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let (app_data, root) = a_workspace("unreadable");
+    let path = crate::commands::settings::workspace_settings_path(&app_data, &root);
+    std::fs::create_dir_all(path.parent().expect("a parent")).expect("settings dir");
+    std::fs::write(
+        &path,
+        r#"{"sync.destination":"https://example.test/notes.git"}"#,
+    )
+    .expect("settings written");
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o000))
+        .expect("settings file is made unreadable");
+
+    record_round_trip(&app_data, &root, true);
+
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))
+        .expect("settings file is made readable again for the assertion");
+    let contents = crate::commands::settings::read_settings_file(&path)
+        .expect("the settings are readable now that permissions are restored")
+        .expect("the settings are present");
+    let record = crate::commands::settings::parse_app_settings_record(Some(&contents));
+    assert_eq!(
+        record
+            .get("sync.destination")
+            .and_then(serde_json::Value::as_str),
+        Some("https://example.test/notes.git"),
+        "an unreadable settings file was overwritten, discarding the destination"
+    );
+    assert!(
+        !record.contains_key("sync.lastSyncedAt"),
+        "a write that should have been refused happened anyway"
+    );
 }
