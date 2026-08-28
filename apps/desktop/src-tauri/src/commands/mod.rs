@@ -31,242 +31,174 @@ pub mod themes;
 pub mod watcher;
 pub mod workspace;
 
-/// Macro aggregating all Tauri IPC invoke handlers for registration in `tauri::Builder`.
+/// Every command this app registers, named exactly once.
 ///
-/// Centralizes command registration so adding new commands to submodules does not
-/// require editing `lib.rs`.
+/// Hands the list to `$expand`, so the same tokens produce both the Tauri
+/// handler registration and the test's path strings. There is no second list
+/// to keep in step: adding a line here adds the command to both.
 ///
-/// Keep `app_command_handlers!` and `APP_COMMAND_PATHS` in sync: every path in
-/// the macro must also appear in the const array, and vice versa. The
-/// `all_registered_commands_match_expected` test guards the array against drift.
+/// This replaced a hand-maintained mirror whose guard test could not do what
+/// it claimed. It compared one hand-written array against a hand-written
+/// count, so a command added to the macro but not the array was caught only
+/// when the count happened to disagree too.
 #[macro_export]
-macro_rules! app_command_handlers {
-    () => {
+macro_rules! app_command_list {
+    ($expand:ident) => {
+        $crate::$expand! {
+        workspace::desktop_shell_status,
+        workspace::workspace_access_capabilities,
+        workspace::platform_capabilities,
+        workspace::list_managed_workspaces,
+        workspace::create_managed_workspace,
+        workspace::open_workspace,
+        markdown::list_markdown_files,
+        workspace::list_workspace_entries,
+        markdown::read_markdown_file,
+        markdown::write_markdown_file,
+        markdown::create_markdown_file,
+        text_files::read_text_file,
+        text_files::write_text_file,
+        workspace::create_workspace_file,
+        workspace::create_workspace_folder,
+        workspace::rename_workspace_entry,
+        workspace::delete_workspace_entry,
+        search::index_documents,
+        search::search_index,
+        search::query_index_metadata,
+        search::clear_index,
+        search::remove_index_document,
+        settings::quarantined_settings,
+        settings::read_app_settings,
+        settings::write_app_settings,
+        settings::update_desktop_state,
+        settings::update_app_theme,
+        settings::read_workspace_settings,
+        settings::write_workspace_settings,
+        themes::list_themes,
+        themes::read_theme_file,
+        extensions::read_extension_file,
+        backup::list_note_versions,
+        backup::restore_note_backup,
+        workspace::open_workspace_window,
+        workspace::window_workspace_root,
+        watcher::watch_workspace,
+        watcher::unwatch_workspace,
+        sync::resolve::list_conflicts,
+        sync::resolve::read_conflict,
+        sync::resolve::resolve_conflict,
+        sync::history::sync_history,
+        sync::history::restore_version,
+        sync::history::sync_conflict_rate,
+        sync::maintain::sync_history_usage,
+        sync::maintain::sync_free_space,
+        sync::maintain::sync_clear_undo_history,
+        sync::status::sync_status,
+        sync::round::sync_now,
+        sync::sign_in::save_sync_credentials,
+        sync::sign_in::save_sync_link,
+        sync::sign_in::sync_sign_in_status,
+        sync::sign_in::forget_sync_sign_in,
+        sync::import::preview_workspace_from_git_link,
+        sync::import::preview_managed_workspace_from_git_link,
+        sync::import::import_workspace_from_git_link,
+        sync::import::import_managed_workspace_from_git_link,
+        sync::registry::sync_app_foregrounded,
+        sync::registry::sync_app_backgrounded,
+        }
+    };
+}
+
+/// Expands the command list into Tauri's handler registration.
+#[macro_export]
+macro_rules! app_command_handlers_expand {
+    ($($first:ident $(:: $rest:ident)*),* $(,)?) => {
         tauri::generate_handler![
-            $crate::commands::workspace::desktop_shell_status,
-            $crate::commands::workspace::workspace_access_capabilities,
-            $crate::commands::workspace::platform_capabilities,
-            $crate::commands::workspace::list_managed_workspaces,
-            $crate::commands::workspace::create_managed_workspace,
-            $crate::commands::workspace::open_workspace,
-            $crate::commands::markdown::list_markdown_files,
-            $crate::commands::workspace::list_workspace_entries,
-            $crate::commands::markdown::read_markdown_file,
-            $crate::commands::markdown::write_markdown_file,
-            $crate::commands::markdown::create_markdown_file,
-            $crate::commands::text_files::read_text_file,
-            $crate::commands::text_files::write_text_file,
-            $crate::commands::workspace::create_workspace_file,
-            $crate::commands::workspace::create_workspace_folder,
-            $crate::commands::workspace::rename_workspace_entry,
-            $crate::commands::workspace::delete_workspace_entry,
-            $crate::commands::search::index_documents,
-            $crate::commands::search::search_index,
-            $crate::commands::search::query_index_metadata,
-            $crate::commands::search::clear_index,
-            $crate::commands::search::remove_index_document,
-            $crate::commands::settings::quarantined_settings,
-            $crate::commands::settings::read_app_settings,
-            $crate::commands::settings::write_app_settings,
-            $crate::commands::settings::update_desktop_state,
-            $crate::commands::settings::update_app_theme,
-            $crate::commands::settings::read_workspace_settings,
-            $crate::commands::settings::write_workspace_settings,
-            $crate::commands::themes::list_themes,
-            $crate::commands::themes::read_theme_file,
-            $crate::commands::extensions::read_extension_file,
-            $crate::commands::backup::list_note_versions,
-            $crate::commands::backup::restore_note_backup,
-            $crate::commands::workspace::open_workspace_window,
-            $crate::commands::workspace::window_workspace_root,
-            $crate::commands::watcher::watch_workspace,
-            $crate::commands::watcher::unwatch_workspace,
-            $crate::commands::sync::resolve::list_conflicts,
-            $crate::commands::sync::resolve::read_conflict,
-            $crate::commands::sync::resolve::resolve_conflict,
-            $crate::commands::sync::history::sync_history,
-            $crate::commands::sync::history::restore_version,
-            $crate::commands::sync::history::sync_conflict_rate,
-            $crate::commands::sync::maintain::sync_history_usage,
-            $crate::commands::sync::maintain::sync_free_space,
-            $crate::commands::sync::maintain::sync_clear_undo_history,
-            $crate::commands::sync::status::sync_status,
-            $crate::commands::sync::round::sync_now,
-            $crate::commands::sync::sign_in::save_sync_credentials,
-            $crate::commands::sync::sign_in::save_sync_link,
-            $crate::commands::sync::sign_in::sync_sign_in_status,
-            $crate::commands::sync::sign_in::forget_sync_sign_in,
-            $crate::commands::sync::import::preview_workspace_from_git_link,
-            $crate::commands::sync::import::preview_managed_workspace_from_git_link,
-            $crate::commands::sync::import::import_workspace_from_git_link,
-            $crate::commands::sync::import::import_managed_workspace_from_git_link,
-            $crate::commands::sync::registry::sync_app_foregrounded,
-            $crate::commands::sync::registry::sync_app_backgrounded
+            $( $crate::commands::$first $(:: $rest)* ),*
         ]
     };
 }
 
-/// Introspectable mirror of `app_command_handlers!` as path strings.
+/// Macro aggregating all Tauri IPC invoke handlers for registration in `tauri::Builder`.
 ///
-/// Used by `all_registered_commands_match_expected` to guard against drift: a
-/// command added to a submodule but missing from the registry will fail the
-/// test once it is also added here. Update both lists together when adding a
-/// `#[tauri::command]`.
+/// Centralizes command registration so adding new commands to submodules does not
+/// require editing `lib.rs`.
+#[macro_export]
+macro_rules! app_command_handlers {
+    () => {
+        $crate::app_command_list!(app_command_handlers_expand)
+    };
+}
+
+/// Expands the command list into path strings for the test below.
+///
+/// Built with `concat!` over per-segment `stringify!` rather than `stringify!`
+/// on the whole path: stringifying a path inserts spaces around `::`, which
+/// would yield "sync :: round :: sync_now".
 #[cfg(test)]
-pub const APP_COMMAND_PATHS: &[&str] = &[
-    "workspace::desktop_shell_status",
-    "workspace::workspace_access_capabilities",
-    "workspace::platform_capabilities",
-    "workspace::list_managed_workspaces",
-    "workspace::create_managed_workspace",
-    "workspace::open_workspace",
-    "markdown::list_markdown_files",
-    "workspace::list_workspace_entries",
-    "markdown::read_markdown_file",
-    "markdown::write_markdown_file",
-    "markdown::create_markdown_file",
-    "text_files::read_text_file",
-    "text_files::write_text_file",
-    "workspace::create_workspace_file",
-    "workspace::create_workspace_folder",
-    "workspace::rename_workspace_entry",
-    "workspace::delete_workspace_entry",
-    "search::index_documents",
-    "search::search_index",
-    "search::query_index_metadata",
-    "search::clear_index",
-    "search::remove_index_document",
-    "settings::quarantined_settings",
-    "settings::read_app_settings",
-    "settings::write_app_settings",
-    "settings::update_desktop_state",
-    "settings::update_app_theme",
-    "settings::read_workspace_settings",
-    "settings::write_workspace_settings",
-    "themes::list_themes",
-    "themes::read_theme_file",
-    "extensions::read_extension_file",
-    "backup::list_note_versions",
-    "backup::restore_note_backup",
-    "workspace::open_workspace_window",
-    "workspace::window_workspace_root",
-    "watcher::watch_workspace",
-    "watcher::unwatch_workspace",
-    "sync::resolve::list_conflicts",
-    "sync::resolve::read_conflict",
-    "sync::resolve::resolve_conflict",
-    "sync::history::sync_history",
-    "sync::history::restore_version",
-    "sync::history::sync_conflict_rate",
-    "sync::maintain::sync_history_usage",
-    "sync::maintain::sync_free_space",
-    "sync::maintain::sync_clear_undo_history",
-    "sync::status::sync_status",
-    "sync::round::sync_now",
-    "sync::sign_in::save_sync_credentials",
-    "sync::sign_in::save_sync_link",
-    "sync::sign_in::sync_sign_in_status",
-    "sync::sign_in::forget_sync_sign_in",
-    "sync::import::preview_workspace_from_git_link",
-    "sync::import::preview_managed_workspace_from_git_link",
-    "sync::import::import_workspace_from_git_link",
-    "sync::import::import_managed_workspace_from_git_link",
-    "sync::registry::sync_app_foregrounded",
-    "sync::registry::sync_app_backgrounded",
-];
+#[macro_export]
+macro_rules! app_command_paths_expand {
+    ($($first:ident $(:: $rest:ident)*),* $(,)?) => {
+        &[ $( concat!(stringify!($first) $(, "::", stringify!($rest))*) ),* ]
+    };
+}
+
+/// Introspectable view of the registered commands, generated from the same
+/// list the handlers come from.
+#[cfg(test)]
+pub const APP_COMMAND_PATHS: &[&str] = app_command_list!(app_command_paths_expand);
 
 #[cfg(test)]
 mod tests {
     use super::APP_COMMAND_PATHS;
 
-    /// Guards the command registry against silent drift.
+    /// Guards the command list against accidental loss and duplication.
     ///
-    /// Each line references a registered command function by path (compile-
-    /// checked: a rename or removal breaks the build) and asserts its string
-    /// appears in `APP_COMMAND_PATHS`. When adding a `#[tauri::command]`, add
-    /// it to `app_command_handlers!`, `APP_COMMAND_PATHS`, and a line here.
+    /// Deliberately short. `APP_COMMAND_PATHS` and the Tauri registration are
+    /// both expanded from `app_command_list!`, so they cannot disagree — a
+    /// per-command `contains` assertion here would only be checking that a
+    /// macro expanded twice from one source produced the same thing twice,
+    /// which it does by construction.
+    ///
+    /// What is still worth asserting is what the single list cannot enforce
+    /// about itself: that no command is named twice, and that the number of
+    /// them has not changed without someone meaning it. Removing a command is
+    /// then a two-line change — the list and this count — which is the point
+    /// at which a reviewer sees it.
     #[test]
-    fn all_registered_commands_match_expected() {
-        // Workspace
-        assert!(APP_COMMAND_PATHS.contains(&"workspace::desktop_shell_status"));
-        assert!(APP_COMMAND_PATHS.contains(&"workspace::workspace_access_capabilities"));
-        assert!(APP_COMMAND_PATHS.contains(&"workspace::platform_capabilities"));
-        assert!(APP_COMMAND_PATHS.contains(&"workspace::list_managed_workspaces"));
-        assert!(APP_COMMAND_PATHS.contains(&"workspace::create_managed_workspace"));
-        assert!(APP_COMMAND_PATHS.contains(&"workspace::open_workspace"));
-        assert!(APP_COMMAND_PATHS.contains(&"workspace::list_workspace_entries"));
-        assert!(APP_COMMAND_PATHS.contains(&"workspace::create_workspace_file"));
-        assert!(APP_COMMAND_PATHS.contains(&"workspace::create_workspace_folder"));
-        assert!(APP_COMMAND_PATHS.contains(&"workspace::rename_workspace_entry"));
-        assert!(APP_COMMAND_PATHS.contains(&"workspace::delete_workspace_entry"));
-        assert!(APP_COMMAND_PATHS.contains(&"workspace::open_workspace_window"));
-        assert!(APP_COMMAND_PATHS.contains(&"workspace::window_workspace_root"));
-        // Markdown
-        assert!(APP_COMMAND_PATHS.contains(&"markdown::list_markdown_files"));
-        assert!(APP_COMMAND_PATHS.contains(&"markdown::read_markdown_file"));
-        assert!(APP_COMMAND_PATHS.contains(&"markdown::write_markdown_file"));
-        assert!(APP_COMMAND_PATHS.contains(&"markdown::create_markdown_file"));
-        // Search
-        assert!(APP_COMMAND_PATHS.contains(&"search::index_documents"));
-        assert!(APP_COMMAND_PATHS.contains(&"search::search_index"));
-        assert!(APP_COMMAND_PATHS.contains(&"search::query_index_metadata"));
-        assert!(APP_COMMAND_PATHS.contains(&"search::clear_index"));
-        assert!(APP_COMMAND_PATHS.contains(&"search::remove_index_document"));
-        // Settings
-        assert!(APP_COMMAND_PATHS.contains(&"settings::read_app_settings"));
-        assert!(APP_COMMAND_PATHS.contains(&"settings::write_app_settings"));
-        assert!(APP_COMMAND_PATHS.contains(&"settings::update_desktop_state"));
-        assert!(APP_COMMAND_PATHS.contains(&"settings::update_app_theme"));
-        assert!(APP_COMMAND_PATHS.contains(&"settings::read_workspace_settings"));
-        assert!(APP_COMMAND_PATHS.contains(&"settings::write_workspace_settings"));
-        // Themes
-        assert!(APP_COMMAND_PATHS.contains(&"themes::list_themes"));
-        assert!(APP_COMMAND_PATHS.contains(&"themes::read_theme_file"));
-        // Extensions
-        assert!(APP_COMMAND_PATHS.contains(&"extensions::read_extension_file"));
-        // Watcher
-        assert!(APP_COMMAND_PATHS.contains(&"watcher::watch_workspace"));
-        assert!(APP_COMMAND_PATHS.contains(&"watcher::unwatch_workspace"));
-        // Sync
-        assert!(APP_COMMAND_PATHS.contains(&"sync::resolve::list_conflicts"));
-        assert!(APP_COMMAND_PATHS.contains(&"sync::resolve::read_conflict"));
-        assert!(APP_COMMAND_PATHS.contains(&"sync::resolve::resolve_conflict"));
-        assert!(APP_COMMAND_PATHS.contains(&"sync::history::sync_history"));
-        assert!(APP_COMMAND_PATHS.contains(&"sync::history::restore_version"));
-        assert!(APP_COMMAND_PATHS.contains(&"sync::history::sync_conflict_rate"));
-        assert!(APP_COMMAND_PATHS.contains(&"sync::maintain::sync_history_usage"));
-        assert!(APP_COMMAND_PATHS.contains(&"sync::maintain::sync_free_space"));
-        assert!(APP_COMMAND_PATHS.contains(&"sync::maintain::sync_clear_undo_history"));
-        assert!(APP_COMMAND_PATHS.contains(&"sync::status::sync_status"));
-        assert!(APP_COMMAND_PATHS.contains(&"sync::round::sync_now"));
-        assert!(APP_COMMAND_PATHS.contains(&"sync::sign_in::save_sync_credentials"));
-        assert!(APP_COMMAND_PATHS.contains(&"sync::sign_in::save_sync_link"));
-        assert!(APP_COMMAND_PATHS.contains(&"sync::sign_in::sync_sign_in_status"));
-        assert!(APP_COMMAND_PATHS.contains(&"sync::sign_in::forget_sync_sign_in"));
-        assert!(APP_COMMAND_PATHS.contains(&"sync::import::preview_workspace_from_git_link"));
-        assert!(
-            APP_COMMAND_PATHS.contains(&"sync::import::preview_managed_workspace_from_git_link")
-        );
-        assert!(APP_COMMAND_PATHS.contains(&"sync::import::import_workspace_from_git_link"));
-        assert!(
-            APP_COMMAND_PATHS.contains(&"sync::import::import_managed_workspace_from_git_link")
-        );
-        assert!(APP_COMMAND_PATHS.contains(&"sync::registry::sync_app_foregrounded"));
-        assert!(APP_COMMAND_PATHS.contains(&"sync::registry::sync_app_backgrounded"));
-
-        // Sanity: no duplicates and the count matches the macro entries.
-        let mut sorted = APP_COMMAND_PATHS.to_vec();
-        sorted.sort();
-        let unique: std::collections::BTreeSet<&&str> = sorted.iter().collect();
+    fn the_command_list_has_no_duplicates_and_the_expected_size() {
+        let unique: std::collections::BTreeSet<&&str> = APP_COMMAND_PATHS.iter().collect();
         assert_eq!(
             unique.len(),
             APP_COMMAND_PATHS.len(),
-            "APP_COMMAND_PATHS has duplicates"
+            "a command is named twice in app_command_list!"
         );
         assert_eq!(
             APP_COMMAND_PATHS.len(),
             59,
-            "expected 59 registered commands"
+            "the number of registered commands changed; update this count if it was deliberate"
         );
+    }
+
+    /// The path strings must survive macro expansion intact.
+    ///
+    /// `stringify!` on a whole path inserts spaces around `::`, so a naive
+    /// expansion yields "sync :: round :: sync_now". The list is built with
+    /// `concat!` over per-segment `stringify!` to avoid that, and this proves
+    /// it, because nothing else would notice: the strings are only read by
+    /// this test.
+    #[test]
+    fn generated_paths_are_written_the_way_a_command_path_is_written() {
+        for path in APP_COMMAND_PATHS {
+            assert!(
+                !path.contains(' '),
+                "generated path {path:?} contains a space"
+            );
+            assert!(
+                !path.starts_with("::") && !path.ends_with("::"),
+                "generated path {path:?} has a dangling separator"
+            );
+        }
+        assert!(APP_COMMAND_PATHS.contains(&"sync::round::sync_now"));
+        assert!(APP_COMMAND_PATHS.contains(&"workspace::desktop_shell_status"));
     }
 }
