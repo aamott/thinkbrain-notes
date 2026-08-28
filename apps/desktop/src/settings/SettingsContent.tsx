@@ -184,6 +184,8 @@ function SettingRow({
 function SettingsSection({
   renderedSection,
   stagedChanges,
+  appValues,
+  workspaceValues,
   validationDiagnostics,
   highlightKey,
   revealedKeys,
@@ -192,6 +194,8 @@ function SettingsSection({
 }: {
   readonly renderedSection: RenderedSection;
   readonly stagedChanges: Readonly<Record<string, unknown>>;
+  readonly appValues: Readonly<Record<string, unknown>>;
+  readonly workspaceValues: Readonly<Record<string, unknown>> | null;
   readonly validationDiagnostics: readonly SettingsDiagnostic[];
   readonly highlightKey: string | null;
   readonly revealedKeys: ReadonlySet<string>;
@@ -201,8 +205,6 @@ function SettingsSection({
   const { section, scope } = renderedSection;
   const qualifiedId = scopeQualifiedId(scope, section.id);
   const stageChange = useSettingsStore((state) => state.stageChange);
-  const appValues = useSettingsStore((state) => state.appValues);
-  const workspaceValues = useSettingsStore((state) => state.workspaceValues);
   const allDefinitions = appSettingsRegistry
     .getDefinitionsForSection(section.id)
     .filter((definition) => definition.scope === scope);
@@ -301,6 +303,7 @@ function SettingsSection({
  */
 export function SettingsContent() {
   const workspaceValues = useSettingsStore((state) => state.workspaceValues);
+  const appValues = useSettingsStore((state) => state.appValues);
   const stagedChanges = useSettingsStore((state) => state.stagedChanges);
   // Subscribe so inline validation diagnostics render and clear reactively.
   const validationDiagnostics = useSettingsStore((state) => state.validationDiagnostics);
@@ -412,6 +415,8 @@ export function SettingsContent() {
             key={`${renderedSection.scope}:${renderedSection.section.id}`}
             renderedSection={renderedSection}
             stagedChanges={stagedChanges}
+            appValues={appValues}
+            workspaceValues={workspaceValues}
             validationDiagnostics={validationDiagnostics}
             highlightKey={highlightKey}
             revealedKeys={revealedKeys}
