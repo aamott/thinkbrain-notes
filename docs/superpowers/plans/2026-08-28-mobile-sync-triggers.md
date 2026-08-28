@@ -645,7 +645,7 @@ git commit -m "Start an automatic round trip only under a policy that allows it"
 
 **Files:**
 - Modify: `apps/desktop/src-tauri/src/commands/sync/registry.rs` (add the two functions near `start_round`)
-- Modify: `apps/desktop/src-tauri/src/lib.rs` (register both commands in the existing `generate_handler!` list)
+- Modify: `apps/desktop/src-tauri/src/commands/mod.rs` (register both commands in the `app_command_handlers!` macro **and** in its `APP_COMMAND_PATHS` test mirror — see Step 5; it is not `lib.rs`)
 - Test: `apps/desktop/src-tauri/src/commands/sync/trigger_tests.rs`
 
 **Interfaces:**
@@ -779,44 +779,80 @@ fn open_engines() -> Vec<(String, Arc<Engine>)> {
 the same vector inline; replace that block with a call to `open_engines` so
 there is one copy.
 
-- [ ] **Step 4b: Sync when a workspace opens**
+- [ ] **Step 4b: Let the policy gate the sync `attach` already does on open**
 
-The spec requires this and nothing above delivers it: under `foreground`,
-opening a vault syncs **unconditionally**, threshold or not. Opening is a
-deliberate act and the moment a stale vault is most visible; staleness gates
-only the far more frequent, usually incidental *return* to foreground.
-
-At the end of `attach` (`registry.rs:127`), after it has otherwise succeeded:
+**`attach` already starts a round trip when a workspace opens.** `registry.rs:179-183`, at the end of `attach`, reads:
 
 ```rust
-    // Opening is deliberate, so it does not consult staleness. Under `Idle`
-    // the sweeper will get there on its own; under `Manual` nothing automatic
-    // should happen at all.
-    if matches!(super::trigger::resolved(), super::trigger::Trigger::Foreground) {
+    // A configured destination is checked when the workspace opens. This is
+    // the first useful moment to report a bad link or sign-in, rather than
+    // making someone wait for the idle timer or discover a manual button.
+    if let Some(destination) = round::destination(app_data_dir, root) {
+        start_round(key, &engine, root.to_path_buf(), destination);
+    }
+```
+
+So the spec's "opening a vault syncs unconditionally under `foreground`" is
+already true, on every platform. Do **not** add a second call — that would
+fire two round trips on every open, which is the double-sync this task's next
+paragraph warns about, arriving from a source the plan had not read.
+
+What is actually missing is the other half of the policy: `manual` promises
+"no automatic network at all, in any lifecycle event", and this existing call
+breaks that promise. `idle` must keep it, because `idle` is today's desktop
+behaviour exactly unchanged, and this call is part of today's behaviour.
+
+So gate the existing block rather than adding to it:
+
+```rust
+    // A configured destination is checked when the workspace opens. This is
+    // the first useful moment to report a bad link or sign-in, rather than
+    // making someone wait for the idle timer or discover a manual button.
+    //
+    // Opening is deliberate, so it does not consult staleness — `foreground`
+    // syncs here every time. `manual` is the one policy that does not: it
+    // promises no automatic network in any lifecycle event. `idle` keeps this
+    // because this call is part of the desktop behaviour `idle` preserves.
+    if !matches!(super::trigger::resolved(), super::trigger::Trigger::Manual) {
         if let Some(destination) = round::destination(app_data_dir, root) {
             start_round(key, &engine, root.to_path_buf(), destination);
         }
     }
 ```
 
-Use whichever binding `attach` already holds for the engine it just registered;
-do not re-read the registry.
-
 Then check the interaction with `start_setup_round` (`registry.rs:454`), which
 already fires a round trip when a link is first set up. Open a freshly linked
-vault under `foreground` and count the round trips in the log. Expected: **one**.
-If two, gate this new call on the setup round not having just run, and say so
-in a comment — two syncs racing on one vault is what `lane` exists to prevent,
-but doing it twice is still wrong.
+vault under `foreground` and count the round trips in the log. Expected:
+**one**. If two, that is a pre-existing overlap between `attach` and
+`start_setup_round` rather than something this task introduced — report it as
+a concern rather than fixing it here, because narrowing it touches the setup
+path, which is outside this plan.
 
 - [ ] **Step 5: Register the commands**
 
-In `lib.rs`, add to the existing `tauri::generate_handler![...]` list, in the same style as its neighbours:
+**Not `lib.rs`.** Commands are registered in
+`apps/desktop/src-tauri/src/commands/mod.rs`, and in **two** places that a
+test holds together.
+
+First, the `app_command_handlers!` macro (`commands/mod.rs:45`), at the end of
+the list beside its `sync::` neighbours:
 
 ```rust
-            commands::sync::registry::sync_app_foregrounded,
-            commands::sync::registry::sync_app_backgrounded,
+            $crate::commands::sync::registry::sync_app_foregrounded,
+            $crate::commands::sync::registry::sync_app_backgrounded
 ```
+
+Second, its `#[cfg(test)]` mirror `APP_COMMAND_PATHS` (`commands/mod.rs:116`),
+in the same order:
+
+```rust
+    "sync::registry::sync_app_foregrounded",
+    "sync::registry::sync_app_backgrounded",
+```
+
+The mirror's own doc comment says why: `all_registered_commands_match_expected`
+fails when the two drift. Update both together — updating only the macro leaves
+the suite red, and updating only the mirror registers nothing.
 
 - [ ] **Step 6: Run the suite**
 
@@ -826,7 +862,7 @@ Expected: PASS.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add apps/desktop/src-tauri/src/commands/sync/trigger.rs apps/desktop/src-tauri/src/commands/sync/trigger_tests.rs apps/desktop/src-tauri/src/commands/sync/registry.rs apps/desktop/src-tauri/src/lib.rs
+git add apps/desktop/src-tauri/src/commands/sync/trigger.rs apps/desktop/src-tauri/src/commands/sync/trigger_tests.rs apps/desktop/src-tauri/src/commands/sync/registry.rs apps/desktop/src-tauri/src/commands/mod.rs
 git commit -m "Add foreground and background sync commands"
 ```
 
