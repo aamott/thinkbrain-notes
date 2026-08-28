@@ -133,6 +133,31 @@ describe("SettingsHeaderBar accessibility and autosave", () => {
     expect(el.querySelector("button:not([aria-label])")).toBeNull();
   });
 
+  it("ticking Advanced stages the setting that reveals the hidden rows", async () => {
+    const el = await harness.render(<SettingsHeaderBar />);
+    const toggle = el.querySelector<HTMLInputElement>('[aria-label="Show advanced settings"]')!;
+
+    expect(toggle.checked).toBe(false);
+    await harness.click(toggle);
+
+    expect(useSettingsStore.getState().stagedChanges["settings.showAdvanced"]).toBe(true);
+  });
+
+  it("shows the Advanced box ticked from a staged value, before any save", async () => {
+    // The rows it reveals read the same staged value, so a toggle that only
+    // caught up after a save would disagree with the list underneath it.
+    useSettingsStore.setState({
+      stagedChanges: { "settings.showAdvanced": true },
+      isDirty: true,
+      dirtyCount: 1
+    });
+    const el = await harness.render(<SettingsHeaderBar />);
+
+    expect(
+      el.querySelector<HTMLInputElement>('[aria-label="Show advanced settings"]')!.checked
+    ).toBe(true);
+  });
+
   it("honors staged autosave over the app value", async () => {
     useSettingsStore.setState({
       stagedChanges: { "settings.autosave": true },
