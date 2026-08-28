@@ -117,13 +117,22 @@ val rustlsVerifierMaven: File = run {
 // `latest.release` cannot work. Read the version off the directory instead of
 // hardcoding one, so a cargo update of the crate does not silently leave the
 // Kotlin half behind the Rust half.
-val rustlsVerifierVersion: String =
-    File(rustlsVerifierMaven, "rustls/rustls-platform-verifier")
+//
+// Exactly one directory is expected: this repository lives inside one crate
+// version's own source tree, so it describes that version and no other.
+// Deliberately not `maxOrNull()` — that compares version strings
+// lexicographically, which would pick 0.9.0 over 0.10.0 and wire the Kotlin
+// half to the wrong artifact. Failing the build is far better than shipping a
+// TLS component that silently does not match its Rust side.
+val rustlsVerifierVersion: String = run {
+    val versions = File(rustlsVerifierMaven, "rustls/rustls-platform-verifier")
         .listFiles()
         ?.filter { it.isDirectory }
         ?.map { it.name }
-        ?.maxOrNull()
         ?: error("no versioned artifact under $rustlsVerifierMaven")
+    versions.singleOrNull()
+        ?: error("expected one version under $rustlsVerifierMaven, found: $versions")
+}
 
 repositories {
     maven {

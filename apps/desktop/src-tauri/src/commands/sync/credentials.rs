@@ -27,7 +27,6 @@ thread_local! {
 
 /// Whether the OS keychain (or the in-memory test stand-in) can be asked.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)] // Unavailable/Unsupported are constructed only in non-test builds.
 pub enum StorageKind {
     Available,
     Unavailable,

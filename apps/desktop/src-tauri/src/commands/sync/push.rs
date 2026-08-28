@@ -46,6 +46,13 @@ pub enum Landed {
     /// never landing — no write access, no credentials, no route — while
     /// everything before it succeeded. Only an import asks for this; a sync
     /// treats a failed push as a failure, because the user asked to send.
+    ///
+    /// Reachable only through [`super::round::PushPolicy::Optional`]. The
+    /// frontend's `SyncLanded` union (`sync/historyTypes.ts`) deliberately
+    /// models only `moved` and `refused`, which is accurate because `sync_now`
+    /// always requires a push. If a command that returns `Synced` to the
+    /// frontend ever opts into `Optional`, that union has to grow this variant
+    /// first.
     NotSent { reason: String },
 }
 
