@@ -69,6 +69,11 @@ pub fn resolved_in(app_data_dir: Option<&Path>) -> Trigger {
     }
 }
 
+/// Whether the sweeper's idle timer may start a round trip under this policy.
+pub(super) fn idle_start_allowed(trigger: Trigger) -> bool {
+    matches!(trigger, Trigger::Idle)
+}
+
 /// How old a successful sync must be before returning to the app repeats it.
 ///
 /// Long enough that flicking to another app and back does not resync; short

@@ -402,6 +402,12 @@ fn spawn_sweeper() {
 /// enough since the last one. "Sync now" does not go through here, and the
 /// per-workspace lane still keeps two trips from interleaving.
 fn maybe_sync(key: &str, engine: &Arc<Engine>, now: Instant) {
+    // Idle time is only evidence under the policy that says so. Under the
+    // others this timer is measuring a clock that may have jumped while the
+    // process was frozen, which is the whole reason the policy exists.
+    if !super::trigger::idle_start_allowed(super::trigger::resolved()) {
+        return;
+    }
     if !engine.ready_to_sync(IDLE, CAP, now) {
         return;
     }

@@ -4,6 +4,17 @@ use super::{
 };
 use crate::tests::make_temp_test_dir;
 
+/// The sweeper's idle rule is one policy among three, not a law. Only `Idle`
+/// may start a round trip from a timer; the others wait to be told.
+#[test]
+fn only_the_idle_policy_starts_a_round_trip_from_a_timer() {
+    use super::{Trigger, idle_start_allowed};
+
+    assert!(idle_start_allowed(Trigger::Idle));
+    assert!(!idle_start_allowed(Trigger::Foreground));
+    assert!(!idle_start_allowed(Trigger::Manual));
+}
+
 fn home_with(setting: Option<&str>) -> std::path::PathBuf {
     let dir = make_temp_test_dir("trigger", "sync", true);
     if let Some(json) = setting {
