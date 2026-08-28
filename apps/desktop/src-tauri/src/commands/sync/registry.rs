@@ -475,20 +475,16 @@ pub fn sync_app_foregrounded() -> Result<(), NativeError> {
 /// The app is going away. Record what is pending, then try to send it.
 #[tauri::command]
 pub fn sync_app_backgrounded() -> Result<(), NativeError> {
-    let trigger = super::trigger::resolved();
+    if !super::trigger::should_flush_on_background(super::trigger::resolved()) {
+        return Ok(());
+    }
     let now = Instant::now();
     let Some(home) = settle::settings_home() else {
         return Ok(());
     };
     for (key, engine) in open_engines() {
-        // The local half runs under every policy: recording what is pending is
-        // what protects the notes if the process is killed, and it touches no
-        // network.
         if let Err(error) = engine.record_settled(now) {
             eprintln!("[sync] could not record changes for {key}: {error:?}");
-        }
-        if !super::trigger::should_push_on_background(trigger) {
-            continue;
         }
         let root = PathBuf::from(&key);
         let Some(destination) = round::destination(&home, &root) else {

@@ -153,12 +153,19 @@ pub fn should_sync_on_foreground(trigger: Trigger, stale: bool) -> bool {
     matches!(trigger, Trigger::Foreground) && stale
 }
 
-/// Whether leaving the app should attempt a push.
+/// Whether leaving the app should flush and push.
 ///
-/// Best effort by nature: Android may cut it short, and its outcome is not
-/// observable. That is acceptable only because returning to the app syncs
+/// One decision, not two: the spec's Decision 4 is "record settled edits, then
+/// attempt a push", and it belongs to `Foreground` alone. Under `Idle` the
+/// sweeper is still running and recorded this vault within the last tick, so a
+/// record here would add nothing; under `Manual` nothing automatic happens at
+/// all. Only a policy that expects the process to be frozen needs a last
+/// record before it is.
+///
+/// Best effort by nature: Android may cut the push short, and its outcome is
+/// not observable. That is acceptable only because returning to the app syncs
 /// again when stale, so nothing depends on this landing.
-pub fn should_push_on_background(trigger: Trigger) -> bool {
+pub fn should_flush_on_background(trigger: Trigger) -> bool {
     matches!(trigger, Trigger::Foreground)
 }
 

@@ -163,14 +163,6 @@ fn recording_a_sync_keeps_the_rest_of_the_workspace_settings() {
     assert!(record.contains_key("sync.lastSyncedAt"));
 }
 
-/// A settings file that exists but cannot be read must not be replaced. The
-/// old `.ok().flatten()` over `read_settings_file` could not tell "nothing
-/// there" from "there, but unreadable" — both read as an empty record, and
-/// `record_round_trip` would then write back a document holding only
-/// `sync.lastSyncedAt`, discarding `sync.destination` in the same write that
-/// was supposed to mark the vault as synced. Root bypasses Unix permission
-/// checks, so this test is meaningless run as root; it is not run in CI as
-/// root.
 /// Returning to the app syncs only under `Foreground`, and only when the last
 /// successful round trip is old enough to be worth repeating.
 #[test]
@@ -183,17 +175,25 @@ fn returning_to_the_app_syncs_only_when_the_policy_says_so_and_it_is_stale() {
     assert!(!should_sync_on_foreground(Trigger::Manual, true));
 }
 
-/// Backgrounding pushes under `Foreground` only. A desktop user who never
-/// touches the setting sees no new behaviour at all from this work.
+/// Backgrounding flushes and pushes under `Foreground` only. A desktop user
+/// who never touches the setting sees no new behaviour at all from this work.
 #[test]
-fn leaving_the_app_pushes_only_under_the_foreground_policy() {
-    use super::{Trigger, should_push_on_background};
+fn leaving_the_app_flushes_only_under_the_foreground_policy() {
+    use super::{Trigger, should_flush_on_background};
 
-    assert!(should_push_on_background(Trigger::Foreground));
-    assert!(!should_push_on_background(Trigger::Idle));
-    assert!(!should_push_on_background(Trigger::Manual));
+    assert!(should_flush_on_background(Trigger::Foreground));
+    assert!(!should_flush_on_background(Trigger::Idle));
+    assert!(!should_flush_on_background(Trigger::Manual));
 }
 
+/// A settings file that exists but cannot be read must not be replaced. The
+/// old `.ok().flatten()` over `read_settings_file` could not tell "nothing
+/// there" from "there, but unreadable" — both read as an empty record, and
+/// `record_round_trip` would then write back a document holding only
+/// `sync.lastSyncedAt`, discarding `sync.destination` in the same write that
+/// was supposed to mark the vault as synced. Root bypasses Unix permission
+/// checks, so this test is meaningless run as root; it is not run in CI as
+/// root.
 #[cfg(unix)]
 #[test]
 fn a_settings_file_that_cannot_be_read_is_left_untouched() {
