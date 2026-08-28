@@ -334,9 +334,11 @@ fn split_userinfo(destination: &str) -> Option<(String, String, String)> {
             (username, String::new())
         }
     };
-    if secret.is_empty() {
-        return None;
-    }
+    // No `return None` for an empty secret. `https://TOKEN@host/repo.git` — the
+    // form GitHub's own documentation suggests for a personal access token —
+    // has no password half, and treating it as "not a credential" left the
+    // whole URL, token and all, to be written verbatim into `sync.destination`
+    // in a settings file on disk. A colon-less userinfo is still a secret.
     Some((format!("{}://{host}", &trimmed[..scheme]), username, secret))
 }
 
@@ -370,10 +372,11 @@ fn decode(payload: &str) -> Option<(String, String)> {
         eprintln!("[sync] malformed keychain entry detected");
         None
     })?;
-    if secret.is_empty() {
-        eprintln!("[sync] malformed keychain entry detected");
-        return None;
-    }
+    // An empty secret is well-formed, not malformed. Git sends a token-only
+    // URL as username-with-no-password, and reproducing that exactly is what
+    // lets the token move off disk without changing how the request looks to
+    // the far end. The missing-newline check above still catches a truly
+    // half-written entry, which is what that guard was for.
     Some((username.to_string(), secret.to_string()))
 }
 
@@ -395,6 +398,29 @@ mod tests {
                 keyring_core::mock::Store::new().expect("mock credential store"),
             );
         });
+    }
+
+    /// A token pasted as the whole userinfo — `https://TOKEN@host/repo.git` —
+    /// is how GitHub's own docs suggest cloning with a PAT, so it is a shape
+    /// real users arrive with. It has no colon, so there is no "password" half,
+    /// and it must still be treated as a secret: whatever this returns is what
+    /// gets written to `sync.destination` in a settings file on disk.
+    #[test]
+    fn a_url_whose_whole_userinfo_is_a_token_does_not_keep_the_token() {
+        with_a_store();
+        let destination = take_from_url("https://ghp_faketoken123@token-only.test/notes.git");
+
+        assert!(
+            !destination.contains("ghp_faketoken123"),
+            "the token survived into the stored destination: {destination}"
+        );
+        assert_eq!(destination, "https://token-only.test/notes.git");
+
+        // Stripping alone would be a silent sign-out. The token has to land in
+        // the store as git would send it: as the username, with no password.
+        let (user, secret) = get(&destination).expect("readable").expect("stored");
+        assert_eq!(user, "ghp_faketoken123");
+        assert_eq!(secret, "");
     }
 
     #[test]

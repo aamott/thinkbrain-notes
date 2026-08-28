@@ -138,6 +138,32 @@ fn a_token_embedded_in_the_link_never_leaves_with_the_destination() {
     );
 }
 
+/// The sibling of the test above, for the form that actually leaked.
+///
+/// `https://TOKEN@host/repo.git` has no password half, and it used to be
+/// treated as "no credential here" and written through to the settings file
+/// untouched. Because `destination` rewrites the file whenever redaction
+/// changes the URL, fixing the parser also cleans up tokens already sitting on
+/// disk from before the fix — which is the only migration this needs.
+#[test]
+fn a_token_that_is_the_whole_userinfo_is_also_scrubbed_from_the_settings() {
+    let (app_data, root) = with_setting(
+        "round-token-only",
+        Some(r#"{"sync.destination": "https://ghp_leakedtoken@example.test/notes.git"}"#),
+    );
+
+    let named = destination(&app_data, &root).expect("a destination is set");
+    assert_eq!(named, "https://example.test/notes.git");
+    let stored = fs::read_to_string(crate::commands::settings::workspace_settings_path(
+        &app_data, &root,
+    ))
+    .expect("the settings are still there");
+    assert!(
+        !stored.contains("ghp_leakedtoken"),
+        "a token already on disk was left there: {stored}"
+    );
+}
+
 /// Someone clearing the box means "stop syncing", not "sync to the empty
 /// string" — and an empty destination would otherwise fail on every attempt.
 #[test]
