@@ -66,11 +66,20 @@ epic's non-goals exclude third-party sync provider extensions outright.
 
 `rename_markdown_file` and `delete_markdown_file` (`markdown.rs:243-312`)
 duplicate `rename_workspace_entry` and `delete_workspace_entry`
-(`workspace_entries.rs:128-259`), have no caller anywhere in the repo, and are
-**worse than what they duplicate**: the generic commands preserve watcher
-suppression and search-index removal, and these do not. If anything did start
-calling them, the reward would be a stale search index and spurious watcher
-events. That is not compatibility, it is a trap with a familiar name.
+(`workspace_entries.rs:128-259`) and have no caller anywhere in the repo.
+
+They are also **worse than what they duplicate**, though not in the way the
+review's wording first suggested to me. Both pairs do watcher suppression
+(`record_self_write`) and search-index removal. What the Markdown-specific
+pair lacks is `acquire_workspace_mutation_lock()`, which the generic
+implementation takes for the whole operation — so a Markdown rename can race
+any other workspace mutation. It also lacks the generic version's no-op
+handling, where renaming an entry to its own path returns it unchanged instead
+of failing with `file_exists`.
+
+So calling them would buy a lock-free rename and a spurious error on a no-op.
+That is not compatibility worth preserving, it is a trap with a familiar
+name.
 
 `wip-workspace-explorer-med-med.md:25-28` said to keep them "for the
 editor/index flows that depend on them". Those flows migrated to the generic
