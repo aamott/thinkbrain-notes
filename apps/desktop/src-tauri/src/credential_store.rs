@@ -89,10 +89,26 @@ fn platform_store() -> Option<keyring_core::Result<std::sync::Arc<keyring_core::
     )
 }
 
-#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+// Secrets go into SharedPreferences encrypted under a dedicated Android
+// Keystore entry, so this app never writes or owns the encryption. The store
+// reads the app `Context` from `ndk-context`, which Tauri populates nowhere —
+// `android_context.rs` must have run first, and does, from `MainActivity`.
+#[cfg(target_os = "android")]
 fn platform_store() -> Option<keyring_core::Result<std::sync::Arc<keyring_core::CredentialStore>>> {
-    // Android and iOS reach here. `android-native-keyring-store` is the intended
-    // backend and is tracked separately — it needs a JNI hook of the same shape
-    // as `android_tls.rs`, because Tauri does not populate `ndk-context`.
+    Some(
+        android_native_keyring_store::Store::new()
+            .map(|store| store as std::sync::Arc<keyring_core::CredentialStore>),
+    )
+}
+
+#[cfg(not(any(
+    target_os = "linux",
+    target_os = "macos",
+    target_os = "windows",
+    target_os = "android"
+)))]
+fn platform_store() -> Option<keyring_core::Result<std::sync::Arc<keyring_core::CredentialStore>>> {
+    // iOS reaches here. It needs `apple-native-keyring-store`'s `protected`
+    // module rather than `keychain`, which is separate work.
     None
 }

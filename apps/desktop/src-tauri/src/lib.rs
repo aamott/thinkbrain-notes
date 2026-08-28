@@ -4,6 +4,8 @@
 //! plugins, and command handlers.
 
 #[cfg(target_os = "android")]
+mod android_context;
+#[cfg(target_os = "android")]
 mod android_tls;
 mod commands;
 mod credential_store;
