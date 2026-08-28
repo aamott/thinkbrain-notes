@@ -643,26 +643,39 @@ impl Engine {
     /// finished, but another is running in its place, so clearing here would
     /// tell the footer the vault is idle while it is not.
     pub fn end_sync(&self, generation: u64) -> bool {
+        // Ownership first, and nothing cleared yet: a superseded generation
+        // belongs to a trip that was taken over, and it must leave both the
+        // flag and the phase to the trip running in its place.
         {
-            let mut claim = lock_or_recover(&self.sync_claim);
+            let claim = lock_or_recover(&self.sync_claim);
             match *claim {
-                Some((current, _)) if current == generation => *claim = None,
+                Some((current, _)) if current == generation => {}
                 _ => return false,
             }
         }
-        // Outside the claim lock: `set_phase` takes another, and two locks
-        // held in one order here and the other order elsewhere is how a
-        // deadlock gets written.
-        //
-        // Phase first, then the flag, because `status::of` reads the two
-        // separately: it derives `State::Syncing` from the flag and copies
-        // `phase` beside it. Clearing the flag first makes "idle, pushing"
-        // briefly readable. This way the only reachable in-between state is
-        // "syncing, no phase yet", which is also what every round trip looks
-        // like for its first moments.
+        // Phase before the flag, and outside the claim lock. Outside, because
+        // `set_phase` takes another lock and two locks held in one order here
+        // and the other order elsewhere is how a deadlock gets written.
+        // Before, because `status::of` reads the two separately — it derives
+        // `State::Syncing` from the flag and copies `phase` beside it — so
+        // clearing the flag first makes "idle, pushing" briefly readable. This
+        // way the only reachable in-between state is "syncing, no phase yet",
+        // which is what every round trip looks like for its first moments.
         self.set_phase(None);
-        self.syncing.store(false, Ordering::Relaxed);
-        true
+        // Claim and flag together, under one lock. Clearing them separately
+        // leaves a window where the claim reads free while the flag still says
+        // busy, and a tick landing in it would take a claim this trip is about
+        // to clear out from under it.
+        let mut claim = lock_or_recover(&self.sync_claim);
+        match *claim {
+            Some((current, _)) if current == generation => {
+                *claim = None;
+                self.syncing.store(false, Ordering::Relaxed);
+                true
+            }
+            // Taken over between the two checks. Not ours to clear after all.
+            _ => false,
+        }
     }
 
     /// Marks a round trip as started, for the frequency gate.

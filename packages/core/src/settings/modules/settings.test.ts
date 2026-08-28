@@ -20,7 +20,12 @@ describe("settings module", () => {
     expect(registry.getDefinition("settings.showAdvanced")?.advanced).toBeUndefined();
   });
 
-  it("keeps `advanced` on a definition through registration", () => {
+  // `advanced` is a type-only addition, so no runtime test can prove the field
+  // exists on the interface. What this does guard is the registry passing a
+  // definition through whole: if `resolveDefinition` ever picked fields out by
+  // name instead of spreading, `advanced` would vanish and every advanced row
+  // would quietly become an ordinary one.
+  it("does not drop `advanced` while resolving a definition", () => {
     const registry = createSettingsRegistry();
     registry.register({
       id: "probe",

@@ -26,19 +26,23 @@ fn a_vault_that_has_never_synced_is_stale() {
 fn a_recent_sync_is_not_stale_but_an_old_one_is() {
     let (app_data, root) = a_workspace("recency");
     super::record_round_trip(&app_data, &root, true);
-    let now = super::now_epoch_secs();
     let schedule = super::Schedule::default();
-    let last_synced = super::last_synced_at(&app_data, &root);
+    // Measured from the timestamp that was actually written, not from a second
+    // reading of the clock. `record_round_trip` stamps the file and the test
+    // then re-read `now_epoch_secs()`; when the epoch second rolled over
+    // between the two, the "not yet due" case sat exactly on the boundary and
+    // failed. Rare, and it cost a real afternoon.
+    let last = super::last_synced_at(&app_data, &root).expect("the sync was recorded");
 
     assert!(!super::should_sync_on_open(
         schedule,
-        last_synced,
-        now + schedule.interval_secs - 1
+        Some(last),
+        last + schedule.interval_secs - 1
     ));
     assert!(super::should_sync_on_open(
         schedule,
-        last_synced,
-        now + schedule.interval_secs + 1
+        Some(last),
+        last + schedule.interval_secs
     ));
 }
 
@@ -222,6 +226,40 @@ fn nothing_automatic_happens_with_the_toggle_off() {
     };
     assert!(!super::should_sync_on_open(off, None, 10_000));
     assert!(!super::should_flush_on_leave(off));
+}
+
+#[test]
+fn a_quiet_window_from_outside_the_bounds_is_clamped() {
+    let jumpy = home_with(r#"{ "sync.quietSeconds": 1 }"#);
+    assert_eq!(
+        super::resolved_in(Some(&jumpy)).quiet_secs,
+        super::MIN_QUIET_SECS
+    );
+
+    let patient = home_with(r#"{ "sync.quietSeconds": 99999 }"#);
+    assert_eq!(
+        super::resolved_in(Some(&patient)).quiet_secs,
+        super::MAX_QUIET_SECS
+    );
+}
+
+#[test]
+fn an_interval_typed_with_a_decimal_point_is_rounded_not_discarded() {
+    // It reaches the file through a hand edit or an import, and `as_u64`
+    // rejects it outright — which showed the user 45.5 and gave them the
+    // default instead.
+    let fractional = home_with(r#"{ "sync.intervalSeconds": 45.5 }"#);
+    assert_eq!(super::resolved_in(Some(&fractional)).interval_secs, 46);
+}
+
+#[test]
+fn opening_can_be_turned_off_on_its_own() {
+    let schedule = super::Schedule {
+        on_open: false,
+        ..super::Schedule::default()
+    };
+    assert!(!super::should_sync_on_open(schedule, None, 10_000));
+    assert!(super::should_flush_on_leave(schedule));
 }
 
 #[test]

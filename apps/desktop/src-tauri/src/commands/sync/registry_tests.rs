@@ -480,6 +480,73 @@ fn the_sweeper_starts_a_round_trip_once_the_vault_is_quiet_and_due() {
     );
 }
 
+/// Reopening a vault that synced moments ago must not sync a quiet window
+/// later. The open gate declines, and the frequency gate has to know why.
+#[test]
+fn a_relaunch_soon_after_a_sync_does_not_sync_a_quiet_window_later() {
+    let app_data = make_temp_test_dir("registry-reopen-appdata", "sync", true);
+    let vault = make_temp_test_dir("registry-reopen-vault", "sync", true);
+    let key = vault.to_string_lossy().to_string();
+    let now_secs = super::super::schedule::now_epoch_secs();
+
+    let settings = crate::commands::settings::workspace_settings_path(&app_data, &vault);
+    std::fs::create_dir_all(settings.parent().expect("the settings folder has a parent"))
+        .expect("the settings folder exists");
+    std::fs::write(
+        &settings,
+        serde_json::json!({ "sync.lastSyncedAt": now_secs }).to_string(),
+    )
+    .expect("the last sync time is written");
+
+    attach(&app_data, &vault, &key, "reopen-1").expect("attaching succeeds");
+    let engine = engine(&key).expect("the engine is registered");
+
+    assert!(
+        !engine.ready_to_sync(
+            Duration::from_secs(super::super::schedule::DEFAULT_QUIET_SECS),
+            super::super::schedule::DEFAULT_INTERVAL_SECS,
+            long_since_touched(),
+            now_secs + 5,
+        ),
+        "a relaunched vault read as never-attempted and was about to sync anyway"
+    );
+    detach(&key, "reopen-1");
+}
+
+/// Leaving the app records what is pending whatever the schedule says. On a
+/// phone this is the last code to run before the process is frozen.
+#[test]
+fn leaving_the_app_records_local_history_even_with_syncing_turned_off() {
+    let app_data = make_temp_test_dir("registry-leave-appdata", "sync", true);
+    let vault = make_temp_test_dir("registry-leave-vault", "sync", true);
+    let key = vault.to_string_lossy().to_string();
+
+    attach(&app_data, &vault, &key, "leave-1").expect("attaching succeeds");
+    std::fs::write(vault.join("kept.md"), "# Kept\n").expect("the note is written");
+    note_changes(
+        &key,
+        &vault,
+        &[change(WorkspaceChangeKind::Created, "kept.md")],
+    );
+
+    let off = Schedule {
+        automatically: false,
+        ..Schedule::default()
+    };
+    flush_on_leave(off, long_since_touched());
+
+    let git_dir = crate::commands::sync::bootstrap::hidden_repo_path(&app_data, &key);
+    let reopened = crate::commands::sync::hidden_repo::open_or_create(&git_dir, &vault)
+        .expect("the hidden repository opens");
+    assert!(
+        super::super::snapshot::head_commit(&reopened)
+            .expect("reading the branch succeeds")
+            .is_some(),
+        "leaving the app with syncing off threw away the last few seconds of typing"
+    );
+    detach(&key, "leave-1");
+}
+
 /// The quiet window is the user's number too. A vault touched recently is not
 /// still, however long the interval has been idle.
 #[test]

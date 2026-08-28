@@ -179,9 +179,20 @@ pub fn attach(app_data_dir: &Path, root: &Path, key: &str, label: &str) -> Resul
     // design exists to avoid. A vault whose link is broken never records a
     // success, so it does still attempt on every open — which is where a
     // broken link should surface.
+    //
+    // Seeding the frequency gate is part of the same decision. `last_attempt`
+    // starts empty in a fresh process, which reads as "never attempted" and so
+    // as due — and Android relaunches this process every time it kills the app
+    // in someone's pocket. Without this, declining to sync on open would buy
+    // nothing: the sweeper would fire a quiet window later anyway, and
+    // `sync.onOpen: false` would be defeated the same way.
+    let last_synced = super::schedule::last_synced_at(app_data_dir, root);
+    if let Some(last) = last_synced {
+        engine.mark_attempt(last);
+    }
     if super::schedule::should_sync_on_open(
         super::schedule::resolved(),
-        super::schedule::last_synced_at(app_data_dir, root),
+        last_synced,
         super::schedule::now_epoch_secs(),
     ) {
         if let Some(destination) = round::destination(app_data_dir, root) {
@@ -417,7 +428,7 @@ fn sweep_once(
         crate::commands::watcher::announce_sync_status(key);
     }
     maybe_sync(key, engine, schedule, now, now_secs);
-    maybe_maintain(key, engine);
+    maybe_maintain(key, engine, now_secs);
 }
 
 /// Fires a round trip when the vault has been still and the interval has come
@@ -451,13 +462,20 @@ fn maybe_sync(
 /// Takes the workspace lane so a round trip cannot interleave, then the
 /// recording lock inside `maintain`. A failure is announced but does not
 /// stop the next edit from being recorded.
-fn maybe_maintain(key: &str, engine: &Arc<Engine>) {
-    if engine.syncing() || engine.waiting() > 0 || !engine.due_for_maintenance() {
+fn maybe_maintain(key: &str, engine: &Arc<Engine>, now_secs: u64) {
+    // A *live* trip, not a set flag: a freeze leaves the flag set for ever,
+    // and asking it here would stop this vault's history ever being tidied
+    // again. Syncing recovers from that through the claim takeover; tidying
+    // has no equivalent, so it asks the same question the sweeper does.
+    let busy = |engine: &Arc<Engine>| {
+        engine.claim_is_live(now_secs, super::schedule::ORPHAN_AFTER_SECS) || engine.waiting() > 0
+    };
+    if busy(engine) || !engine.due_for_maintenance() {
         return;
     }
     let lane = lane(key);
     let _lane = lock_or_recover(&lane);
-    if engine.syncing() || engine.waiting() > 0 {
+    if busy(engine) {
         return;
     }
     let had_problem = engine.maintenance_problem().is_some();
@@ -473,24 +491,40 @@ fn maybe_maintain(key: &str, engine: &Arc<Engine>) {
 /// The app is going away. Record what is pending, then try to send it.
 #[tauri::command]
 pub fn sync_app_backgrounded() -> Result<(), NativeError> {
-    if !super::schedule::should_flush_on_leave(super::schedule::resolved()) {
-        return Ok(());
-    }
-    let now = Instant::now();
-    let Some(home) = settle::settings_home() else {
-        return Ok(());
-    };
-    for (key, engine) in open_engines() {
+    flush_on_leave(super::schedule::resolved(), Instant::now());
+    Ok(())
+}
+
+/// The leaving half of a tick, split out so a test can hold the schedule
+/// still. `sync_app_backgrounded` reads the schedule from the settings file,
+/// which is process-wide state a test cannot set without deciding it for every
+/// other test in the binary.
+fn flush_on_leave(schedule: super::schedule::Schedule, now: Instant) {
+    let engines = open_engines();
+    // Recording is not part of the sync gate, here as in `sweep_once`. This is
+    // the last code to run before Android freezes the process, so anything
+    // still inside the settle window is written whatever the schedule says.
+    // Putting it behind the gate would make "Sync automatically, off" mean
+    // "lose the last few seconds of typing every time you leave", which is the
+    // opposite of what the setting's description promises.
+    for (key, engine) in &engines {
         if let Err(error) = engine.record_settled(now) {
             eprintln!("[sync] could not record changes for {key}: {error:?}");
         }
+    }
+    if !super::schedule::should_flush_on_leave(schedule) {
+        return;
+    }
+    let Some(home) = settle::settings_home() else {
+        return;
+    };
+    for (key, engine) in engines {
         let root = PathBuf::from(&key);
         let Some(destination) = round::destination(&home, &root) else {
             continue;
         };
         start_round(&key, &engine, root, destination);
     }
-    Ok(())
 }
 
 /// Every open engine with its key, copied out from under the lock.

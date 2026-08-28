@@ -145,8 +145,13 @@ pub fn resolved_in(app_data_dir: Option<&Path>) -> Schedule {
     let secs = |key: &str, fallback: u64, min: u64, max: u64| {
         record
             .get(key)
-            .and_then(serde_json::Value::as_u64)
-            .map_or(fallback, |value| value.clamp(min, max))
+            // `as_f64` rather than `as_u64` so a number someone typed with a
+            // decimal point is rounded into range instead of failing to parse
+            // and silently falling back — which showed them one interval and
+            // gave them another.
+            .and_then(serde_json::Value::as_f64)
+            .filter(|value| value.is_finite() && *value >= 0.0)
+            .map_or(fallback, |value| (value.round() as u64).clamp(min, max))
     };
     Schedule {
         automatically: flag(AUTOMATICALLY, DEFAULT_AUTOMATICALLY),
