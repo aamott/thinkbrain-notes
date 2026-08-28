@@ -1,11 +1,29 @@
 # Story: "When I Return" May Never Return, on a Desktop
 
-**Status:** ⬜ pending · **Urgency:** med · **Difficulty:** med
+**Status:** ✅ done · **Urgency:** med · **Difficulty:** med
 
 > Found 2026-08-28 by the whole-branch review of `mobile-sync-triggers`. The
 > `visibilitychange` assumption behind that branch was verified on an Android
 > device and never on a desktop, because on Android it is the only signal that
 > exists. On a desktop it is the wrong one.
+
+## Closed by deletion, 2026-08-28
+
+`docs/superpowers/specs/2026-08-28-sync-schedule-design.md` removed the
+`foreground` option along with the rest of `sync.trigger`, so the trap this
+story describes no longer has a door. There is now no foreground-triggered
+sync on any platform: the sweeper's interval covers returning to the app,
+because the sweeper thread resumes with the process and finds the interval
+elapsed on its next tick.
+
+The `visibilitychange`-versus-`focus` question the story frames was therefore
+never answered — it stopped being a question. The one lifecycle event that
+survives is *leaving*, where `visibilitychange` is the right signal and `blur`
+is explicitly not, for the alt-tab reason this story gives.
+
+The last acceptance box — that the setting's description match the behaviour —
+is met by the new `sync.onLeave` copy, which promises what it delivers on each
+platform and says plainly that a desktop rarely fires it.
 
 ## What happens
 
