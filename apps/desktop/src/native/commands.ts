@@ -117,21 +117,6 @@ export interface NativeCommandMap {
     };
     readonly result: NativeMarkdownFileEntry;
   };
-  readonly rename_markdown_file: {
-    readonly args: {
-      readonly rootPath: string;
-      readonly relativePath: string;
-      readonly newRelativePath: string;
-    };
-    readonly result: NativeMarkdownFileEntry;
-  };
-  readonly delete_markdown_file: {
-    readonly args: {
-      readonly rootPath: string;
-      readonly relativePath: string;
-    };
-    readonly result: null;
-  };
   readonly read_text_file: {
     readonly args: {
       readonly rootPath: string;

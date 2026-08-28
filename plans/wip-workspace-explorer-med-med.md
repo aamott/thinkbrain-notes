@@ -21,12 +21,18 @@ default application.
 
 ## Architecture Decisions
 
-- **Generic file ops reuse the existing native bridge.** The current Rust
-  commands are Markdown-specific (`create_markdown_file`,
-  `rename_markdown_file`, `delete_markdown_file`). Generic operations should
-  be added as new commands (e.g. `rename_workspace_entry`,
-  `delete_workspace_entry`) that accept any path, keeping the Markdown-specific
-  commands intact for the editor/index flows that depend on them.
+- **Generic file ops reuse the existing native bridge.** The Rust commands
+  were Markdown-specific (`create_markdown_file`, `rename_markdown_file`,
+  `delete_markdown_file`). Generic operations were added as new commands
+  (`rename_workspace_entry`, `delete_workspace_entry`) that accept any path.
+
+  This decision originally said to keep the Markdown-specific commands intact
+  "for the editor/index flows that depend on them". Those flows moved to the
+  generic commands, and on 2026-08-28 `rename_markdown_file` and
+  `delete_markdown_file` were removed with no caller left anywhere — see
+  `plans/extensions/pending-ipc_surface_is_not_the_contract-med-easy.md` for
+  why an unused Tauri command is safe to delete. `create_markdown_file`
+  remains and is still used.
 - **Move = rename across directories.** A drag-and-drop move is a rename to a
   new relative path; no separate "move" command is needed. Folders must move
   recursively.
