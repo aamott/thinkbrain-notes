@@ -80,17 +80,33 @@ The app degrades honestly — no crash, and it recovers — but the message it
 shows ("Could not reach the place these notes sync to. Check the git link and
 your connection") misdiagnoses a missing platform init as a network fault.
 
-Tracked as `pending-android_tls_platform_verifier-high-med.md`, which now
-gates this spike's remaining acceptance.
+Tracked as `pending-android_tls_platform_verifier-high-med.md`. **Fixed and
+verified the same session** — the panic is gone and the clone now reaches the
+credential stage.
+
+**The next blocker, found immediately behind it:** gix does not accept a
+credential helper that returns nothing. A public clone fails with
+`sync.credentials_invalid` because anonymous access means *not configuring a
+helper*, not configuring one that declines. Tracked as
+`pending-android_anonymous_clone-high-med.md`, which now gates this spike's
+remaining acceptance.
+
+The emulator's network is fine (`ping github.com` succeeds), so nothing here is
+an environment artefact.
 
 **Bonus finding:** bundled themes do not resolve on Android — logcat repeats
 `[themes] resource path not found for <name>.tbtheme.json` for all eight
 presets. Unrelated to git; recorded so it is not lost.
 
-**On `ndk_context`:** not directly answered, but rustls-platform-verifier
-needing its own explicit JNI init is evidence that Tauri does **not**
-auto-initialise Android JNI bridges for its dependencies. Assume
-`android-native-keyring-store` needs the same treatment until proven otherwise.
+**On `ndk_context`: answered, and negatively.** `ndk-context` is not in the
+dependency tree at all, and neither `tao` nor `wry` initialise it. Tauri does
+**not** populate it. The TLS fix therefore had to take its JNI handles from
+Java, via a native method called from `MainActivity.onCreate`.
+
+That is a direct hit on the credential design: `android-native-keyring-store`
+requires the `ndk-context` application context, so it will need the same
+treatment. The pattern to copy is now in the repo — `src/android_tls.rs` plus
+the `MainActivity` hook.
 
 ## Acceptance
 

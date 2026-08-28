@@ -225,6 +225,28 @@ pub fn take_from_url(destination: &str) -> String {
     redacted
 }
 
+/// Distinguishes "this platform has nowhere to keep a sign-in" from "the store
+/// is here and it failed".
+///
+/// A credential helper that has nothing to offer is supposed to say so and let
+/// the request proceed anonymously — that is how a public repository is cloned
+/// without a token. Android has no credential store at all, so probing it
+/// returns `sync.auth_required`; treating that as a hard error made *public*
+/// clones fail on a phone, which is not what anyone means by "sign-in is not
+/// available".
+///
+/// A locked or broken keychain is deliberately *not* included. There the user
+/// does have a saved sign-in, and quietly retrying anonymously would turn a
+/// fixable "unlock your keychain" into a confusing authentication failure.
+fn offer_or_anonymous(
+    result: Result<Option<(String, String)>, NativeError>,
+) -> Result<Option<(String, String)>, NativeError> {
+    match result {
+        Err(error) if error.code == "sync.auth_required" => Ok(None),
+        other => other,
+    }
+}
+
 /// What gix calls when a remote asks who we are.
 #[allow(clippy::result_large_err)]
 pub fn provide(
@@ -240,7 +262,7 @@ pub fn provide(
             else {
                 return Ok(None);
             };
-            let Some((username, password)) = get(url).map_err(|source| {
+            let Some((username, password)) = offer_or_anonymous(get(url)).map_err(|source| {
                 gix::protocol::credentials::protocol::Error::ConfigureCredentialHelpers {
                     source: Box::new(source),
                 }
@@ -561,6 +583,33 @@ mod tests {
         assert_eq!(
             get_profile("p-two").expect("readable"),
             Some(("me".to_string(), "token-two".to_string()))
+        );
+    }
+
+    #[test]
+    fn a_device_with_no_credential_store_offers_no_identity_rather_than_failing() {
+        let no_store = NativeError::new(
+            "sync.auth_required",
+            "Sign-in is not available on this device yet.",
+        );
+
+        let offered = offer_or_anonymous(Err(no_store)).expect("no store is not a failure");
+
+        assert_eq!(offered, None);
+    }
+
+    #[test]
+    fn a_store_that_is_present_but_failing_is_still_an_error() {
+        let locked = NativeError::new(
+            "sync.credentials_unavailable",
+            "Could not use this computer's keychain.",
+        );
+
+        let result = offer_or_anonymous(Err(locked));
+
+        assert!(
+            result.is_err(),
+            "a locked keychain must not fall back to anonymous"
         );
     }
 

@@ -41,6 +41,16 @@ libc = "0.2"
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = ["Win32_Storage_FileSystem", "Win32_Foundation"] }
 
+# `rustls-platform-verifier` needs a JNI handshake before any TLS connection on
+# Android (see `src/android_tls.rs`). It arrives transitively via
+# `gix-transport -> reqwest`, but calling its initialiser means depending on it
+# directly. `jni` must be 0.22 to match the version that crate builds against —
+# Tauri's own Android glue uses 0.21, and the two sets of types are not
+# interchangeable.
+[target.'cfg(target_os = "android")'.dependencies]
+rustls-platform-verifier = "0.7"
+jni = "0.22"
+
 # The updater is desktop-only upstream, and this crate also builds for Android.
 # Gating it here rather than in `[dependencies]` keeps the mobile build from
 # trying to compile a plugin that has no mobile implementation.

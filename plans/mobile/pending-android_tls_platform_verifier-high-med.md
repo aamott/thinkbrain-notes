@@ -1,6 +1,6 @@
 # Story: TLS Works on Android — Initialise rustls-platform-verifier
 
-**Status:** ⬜ pending · **Urgency:** high · **Difficulty:** med
+**Status:** 🟩 done · **Urgency:** high · **Difficulty:** med
 
 > Found by running the app, 2026-08-27. See
 > `pending-device_git_clone_spike-high-easy.md` for the session that turned it
@@ -103,15 +103,43 @@ verified the way it was found:
 4. assert no `rustls-platform-verifier` panic in logcat, and the vault appears
    under `/data/data/com.thinkbrain.notes/vaults/`
 
+## What shipped (2026-08-27, verified on the Pixel_7a emulator)
+
+- `src-tauri/src/android_tls.rs` exports
+  `Java_com_thinkbrain_notes_MainActivity_initRustlsPlatformVerifier`, called
+  from `MainActivity.onCreate` after `super.onCreate`.
+- `rustls-platform-verifier` and `jni = "0.22"` added as
+  `cfg(target_os = "android")` dependencies.
+- `app/build.gradle.kts` locates the crate's bundled Maven repository through
+  `cargo metadata` and depends on the `.aar`.
+
+Two things the crate's own instructions do not mention, both of which cost a
+build cycle to find:
+
+- The artifact must be requested as **`@aar`**. `metadataSources { artifact() }`
+  skips the POM that declares `<packaging>aar</packaging>`, so Gradle otherwise
+  looks for a `.jar` that does not exist.
+- **`latest.release` cannot resolve.** The bundled repo ships
+  `maven-metadata-local.xml`, not the `maven-metadata.xml` Gradle needs for a
+  dynamic version. The version is now read off the directory rather than
+  hardcoded, so a cargo update cannot leave the Kotlin half behind the Rust
+  half.
+
+**Result:** zero `rustls-platform-verifier` panics, and the clone now proceeds
+past TLS to fail at credentials instead — a different, later blocker. Confirmed
+by clearing logcat and re-running the same clone that produced the panic.
+
 ## Acceptance
 
-- [ ] The Kotlin component is wired into `gen/android/`, with a comment saying
+- [x] The Kotlin component is wired into `gen/android/`, with a comment saying
       why it must survive scaffold regeneration
-- [ ] `init_with_env` is called once on the Android entry path before any
+- [x] `init_with_env` is called once on the Android entry path before any
       network use
-- [ ] A public repository clones on an emulator with no panic in logcat
+- [x] No `rustls-platform-verifier` panic on an emulator; TLS is reached
+- [ ] A public repository actually clones — blocked by
+      `pending-android_anonymous_clone-high-med.md`, not by TLS
 - [ ] The same clone succeeds on physical hardware
-- [ ] `pnpm qa` green; desktop builds and behaviour unchanged
+- [x] `pnpm qa` green; desktop builds and behaviour unchanged
 
 ## Also worth fixing here
 

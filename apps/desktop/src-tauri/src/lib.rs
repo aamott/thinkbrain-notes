@@ -3,6 +3,8 @@
 //! Main entry point for the Tauri desktop application, registering application state,
 //! plugins, and command handlers.
 
+#[cfg(target_os = "android")]
+mod android_tls;
 mod commands;
 mod error;
 
