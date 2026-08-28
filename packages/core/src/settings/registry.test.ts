@@ -491,9 +491,13 @@ describe("extractDefaults", () => {
       "editor.livePreview": true,
       "settings.autosave": false,
       "settings.showAdvanced": false,
-      "sync.settleAutomatically": true,
+      "sync.automatically": true,
       "sync.historyPolicy": "",
-      "sync.trigger": "auto"
+      "sync.intervalSeconds": 60,
+      "sync.onLeave": true,
+      "sync.onOpen": true,
+      "sync.quietSeconds": 30,
+      "sync.settleAutomatically": true
     });
   });
 
