@@ -94,68 +94,12 @@ pub(super) fn open_start_allowed(trigger: Trigger) -> bool {
 /// than a setting: one less thing to explain, and easy to move if it is wrong.
 pub const STALE_AFTER_SECS: u64 = 180;
 
-const LAST_SYNCED: &str = "sync.lastSyncedAt";
-
-pub(super) fn now_epoch_secs() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|since| since.as_secs())
-        .unwrap_or(0)
-}
-
-/// Records the result of a round trip, in wall-clock time.
-///
-/// Only success moves the timestamp. A failed sync that refreshed it would
-/// make a vault look fresh at exactly the moment it is not, and the next
-/// return to the app would skip the retry that would have fixed it. The
-/// outcome is a parameter rather than an `if` at the call site so that the
-/// rule lives here, where a test can hold it.
-pub fn record_round_trip(app_data_dir: &Path, root: &Path, succeeded: bool) {
-    if !succeeded {
-        return;
-    }
-    let path = crate::commands::settings::workspace_settings_path(app_data_dir, root);
-    let contents = match crate::commands::settings::read_settings_file(&path) {
-        Ok(contents) => contents,
-        Err(error) => {
-            // Never write on top of a file we could not read. `parse_app_settings_record`
-            // would hand back an empty map, and the write would drop `sync.destination` —
-            // unlinking the vault because it synced. Missing is `Ok(None)`, which is fine
-            // and lands below; this arm is a real I/O failure.
-            eprintln!("[sync] could not read settings to record the last sync time: {error:?}");
-            return;
-        }
-    };
-    let mut record = crate::commands::settings::parse_app_settings_record(contents.as_deref());
-    record.insert(
-        LAST_SYNCED.to_string(),
-        serde_json::Value::from(now_epoch_secs()),
-    );
-    match crate::commands::settings::serialize_app_settings_record(record) {
-        Ok(written) => {
-            if let Err(error) = crate::commands::workspace::write_file_atomically(&path, written) {
-                eprintln!("[sync] could not record the last sync time: {error:?}");
-            }
-        }
-        Err(error) => eprintln!("[sync] could not serialize the last sync time: {error:?}"),
-    }
-}
-
-/// When this vault last synced successfully, if it ever has.
-pub(super) fn last_synced_at(app_data_dir: &Path, root: &Path) -> Option<u64> {
-    let path = crate::commands::settings::workspace_settings_path(app_data_dir, root);
-    let contents = crate::commands::settings::read_settings_file(&path).ok()?;
-    crate::commands::settings::parse_app_settings_record(contents.as_deref())
-        .get(LAST_SYNCED)
-        .and_then(serde_json::Value::as_u64)
-}
-
 /// Whether a vault's last successful sync is old enough to repeat.
 ///
 /// A vault that has never synced is stale: the first return to the app should
 /// fetch, not wait three minutes to decide it is allowed to.
 pub fn is_stale(app_data_dir: &Path, root: &Path, now_secs: u64) -> bool {
-    match last_synced_at(app_data_dir, root) {
+    match super::schedule::last_synced_at(app_data_dir, root) {
         Some(last) => now_secs.saturating_sub(last) >= STALE_AFTER_SECS,
         None => true,
     }

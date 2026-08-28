@@ -148,6 +148,7 @@ pub mod push;
 pub mod registry;
 pub mod resolve;
 pub mod round;
+pub mod schedule;
 pub mod settle;
 pub mod sign_in;
 pub mod snapshot;

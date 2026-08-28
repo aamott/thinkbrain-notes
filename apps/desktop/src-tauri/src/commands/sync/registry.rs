@@ -466,7 +466,7 @@ pub fn sync_app_foregrounded() -> Result<(), NativeError> {
         let root = PathBuf::from(&key);
         if !super::trigger::should_sync_on_foreground(
             trigger,
-            super::trigger::is_stale(&home, &root, super::trigger::now_epoch_secs()),
+            super::trigger::is_stale(&home, &root, super::schedule::now_epoch_secs()),
         ) {
             continue;
         }
