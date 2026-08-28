@@ -80,3 +80,36 @@ Credentials, and therefore private repositories — that is
 `pending-mobile_git_access-high-hard.md`. This story is worth doing even if
 only public repositories ever sync, and that story is worth finishing even if
 sync only ever runs when someone asks for it.
+
+## Verified on a device
+
+Confirmed 2026-08-28 on an Android emulator (emulator-5554, existing debug
+install of `com.thinkbrain.notes`, pid 14213) via the WebView DevTools
+protocol (`tools/android-devtools/wveval.py`):
+
+A listener was installed in the webview:
+
+```js
+window.__vis = [];
+document.addEventListener('visibilitychange', () => window.__vis.push(document.visibilityState));
+```
+
+The app was then backgrounded with `adb shell input keyevent KEYCODE_HOME`
+and re-foregrounded 3 seconds later with
+`adb shell monkey -p com.thinkbrain.notes -c android.intent.category.LAUNCHER 1`
+(the process pid did not change across this cycle — the DevTools port forward
+was re-established against the same pid before reading the result).
+
+Reading `JSON.stringify(window.__vis)` afterward returned:
+
+```
+["hidden","visible"]
+```
+
+This matches the expected result exactly. `document.visibilityState`
+immediately after also read back `"visible"`, consistent with the app being
+foregrounded at read time. **The assumption holds**: `document.visibilitychange`
+fires on this app on background/foreground with `hidden`/`visible` states, in
+that order. The design may proceed using the webview visibility event as the
+foreground/background signal; the Kotlin-lifecycle-hook fallback is not
+needed.
