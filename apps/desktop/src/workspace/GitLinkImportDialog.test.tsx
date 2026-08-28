@@ -3,6 +3,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { resetNotificationStore, useNotificationStore } from "../notifications/notificationStore";
 import type { SignInStatus } from "../sync/historyTypes";
 import type { GitLinkPreview, ImportStarted, WorkspaceImportProgress } from "./gitLinkImport";
 
@@ -111,6 +112,7 @@ async function typeInto(element: HTMLInputElement, value: string) {
 }
 
 beforeEach(() => {
+  resetNotificationStore();
   importListener = null;
   const preview = {
     childName: "notes",
@@ -184,6 +186,44 @@ describe("GitLinkImportDialog", () => {
     });
     expect(onImported).toHaveBeenCalledWith("/home/you/notes");
     expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  /**
+   * An import fetches, merges and then pushes. When only the push fails — a
+   * public repository, a read-only mirror, a phone with nowhere to keep a
+   * token — the notes are still brought in and the vault is kept. Closing the
+   * dialog on a plain success would leave the user believing their edits will
+   * travel back, so the one-way trip has to be said out loud.
+   */
+  it("says so when the notes came in but nothing could be sent back", async () => {
+    const onClose = vi.fn();
+    const onImported = vi.fn();
+    await renderDialog(onClose, true, onImported);
+    await typeInto(
+      host!.querySelector("#git-link-import-url") as HTMLInputElement,
+      "https://github.com/someone/public.git"
+    );
+    await act(async () => undefined);
+    await click([...host!.querySelectorAll("button")].find((button) => button.textContent === "Bring in")!);
+    await act(async () => {
+      importListener?.({
+        requestId: "imp-1",
+        state: "ok",
+        targetPath: "/home/you/public",
+        notSent: "The username or access token was not accepted."
+      });
+    });
+
+    // The import still counts as a success: the vault is real and opens.
+    expect(onImported).toHaveBeenCalledWith("/home/you/public");
+    expect(onClose).toHaveBeenCalledOnce();
+
+    const announced = useNotificationStore
+      .getState()
+      .notifications.filter((entry) => entry.source === "sync");
+    expect(announced).toHaveLength(1);
+    expect(announced[0]?.message).toContain("could not be sent back");
+    expect(announced[0]?.details).toContain("The username or access token was not accepted.");
   });
 
   it("lists host-filtered profiles and allows public import with no profile", async () => {

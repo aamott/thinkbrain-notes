@@ -8,6 +8,7 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 
 import { NativeCommandError } from "../native/commands";
+import { useNotificationStore } from "../notifications/notificationStore";
 import { pickDirectoryPath } from "../native/dialogs";
 import { readSignInStatus, saveSyncCredentials } from "../sync/syncService";
 import type { SignInStatus } from "../sync/historyTypes";
@@ -437,6 +438,7 @@ function applyProgress(
 ): void {
   if (event.state === "ok") {
     setBusy(false);
+    if (event.notSent) announceOneWayImport(event.notSent);
     onImported(event.targetPath);
     onClose();
     return;
@@ -448,6 +450,28 @@ function applyProgress(
     return;
   }
   setPhase(event.phase ?? event.state);
+}
+
+/**
+ * Says that the notes arrived but nothing could be sent back.
+ *
+ * Not an error: the vault is real and the notes are in it, which is why the
+ * dialog still closes on success. But letting it pass silently would leave
+ * someone believing their edits will travel back to the git link, and that is
+ * the more expensive misunderstanding — it is only discovered later, by
+ * finding out the hard way that they did not.
+ */
+function announceOneWayImport(reason: string): void {
+  useNotificationStore.getState().addNotification({
+    source: "sync",
+    dedupKey: "sync:import-not-sent",
+    title: "Brought in, but not linked both ways",
+    message: "These notes came in, but changes made here could not be sent back.",
+    recovery: "Sign in for this git link in Settings if you need to send changes.",
+    details: reason,
+    severity: "sticky",
+    variant: "warning"
+  });
 }
 
 function importError(cause: unknown, fallback: string, managedDestination: boolean): string {

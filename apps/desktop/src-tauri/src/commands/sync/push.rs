@@ -40,6 +40,13 @@ pub enum Landed {
     /// the answer is to fetch, merge and come back — which the caller can only
     /// decide to do if this arrives as something other than an error.
     Refused { reason: String },
+    /// The push could not be made at all, and the caller chose to carry on.
+    ///
+    /// Distinct from `Refused`, which is the remote answering. This is the push
+    /// never landing — no write access, no credentials, no route — while
+    /// everything before it succeeded. Only an import asks for this; a sync
+    /// treats a failed push as a failure, because the user asked to send.
+    NotSent { reason: String },
 }
 
 /// What one push carried and what became of it.

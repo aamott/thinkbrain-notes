@@ -554,6 +554,15 @@ export interface NativeImportProgress {
   readonly phase?: NativeSyncStatus["phase"];
   readonly targetPath: string;
   readonly error?: NativeCommandErrorShape;
+  /**
+   * Why nothing was sent back, on an import that otherwise succeeded.
+   *
+   * An import fetches, merges and then pushes. That push can fail on its own —
+   * a public repository, a read-only mirror, a device with nowhere to keep a
+   * token — while everything before it worked. The vault is kept either way,
+   * so this is what separates a full round trip from a one-way one.
+   */
+  readonly notSent?: string;
 }
 
 // Sent to `index_documents`. Field names are camelCase here and mapped to the

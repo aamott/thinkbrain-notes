@@ -18,6 +18,7 @@ use super::bootstrap::{self, hidden_repo_path};
 use super::credentials::take_from_url;
 use super::engine::SyncPhase;
 use super::failed;
+use super::push;
 use super::sign_in;
 
 /// Frontend event for one import dialog. Payload never includes the git URL.
@@ -59,6 +60,22 @@ pub struct ImportProgress {
     pub target_path: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<NativeError>,
+    /// Why nothing was sent back, when the import otherwise succeeded.
+    ///
+    /// An import fetches, merges and then pushes. The push can fail on its own
+    /// — a public repository, a read-only mirror, a device with nowhere to keep
+    /// a token — without any of the rest being in doubt. The vault is kept, and
+    /// this says the round trip was one-way so the caller can tell the user
+    /// rather than reporting a plain success.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub not_sent: Option<String>,
+}
+
+/// A finished import: where it landed, and whether it could send.
+#[derive(Debug)]
+pub struct Imported {
+    pub path: PathBuf,
+    pub landed: push::Landed,
 }
 
 /// Folder created for this operation, with the link already persisted.
@@ -162,7 +179,7 @@ pub fn complete_import(
     app_data: &Path,
     prepared: PreparedImport,
     mut on_phase: impl FnMut(SyncPhase),
-) -> Result<PathBuf, NativeError> {
+) -> Result<Imported, NativeError> {
     super::settle::remember_settings_home(app_data);
     let key = prepared.target.to_string_lossy().to_string();
     let lane = super::registry::lane(&key);
@@ -170,14 +187,22 @@ pub fn complete_import(
     let result = (|| {
         on_phase(SyncPhase::Saving);
         let managed = bootstrap::bootstrap(app_data, &prepared.target)?;
-        super::round::run_trip(
+        // A push that cannot be made must not undo a fetch and merge that
+        // worked: importing a repository this device may never write to is a
+        // normal thing to do, and rolling it back deletes the notes it just
+        // brought down.
+        let synced = super::round::run_trip(
             &managed.repo,
             &prepared.target,
             &prepared.destination,
             prepared.profile_id.as_deref(),
+            super::round::PushPolicy::Optional,
             &mut on_phase,
         )?;
-        Ok(prepared.target.clone())
+        Ok(Imported {
+            path: prepared.target.clone(),
+            landed: synced.landed,
+        })
     })();
     if result.is_err() {
         cleanup_import(app_data, &prepared.target);
@@ -314,27 +339,32 @@ fn run_imported(
     prepared: PreparedImport,
     open_in_new_window: bool,
 ) {
-    let emit = |state: &str, phase: Option<SyncPhase>, error: Option<NativeError>| {
+    let emit = |state: &str,
+                phase: Option<SyncPhase>,
+                error: Option<NativeError>,
+                not_sent: Option<String>| {
         let payload = ImportProgress {
             request_id: request_id.clone(),
             state: state.to_string(),
             phase,
             target_path: target_path.clone(),
             error,
+            not_sent,
         };
         if let Err(error) = app.emit(IMPORT_EVENT, payload) {
             eprintln!("[sync] failed to deliver {IMPORT_EVENT}: {error}");
         }
     };
     match complete_import(&app_data, prepared, |phase| {
-        emit("running", Some(phase), None);
+        emit("running", Some(phase), None, None);
     }) {
-        Ok(path) if open_in_new_window => {
+        Ok(imported) if open_in_new_window => {
+            let not_sent = not_sent_reason(&imported.landed);
             match crate::commands::workspace::create_workspace_window_off_main_thread(
                 app.clone(),
-                path.to_string_lossy().into_owned(),
+                imported.path.to_string_lossy().into_owned(),
             ) {
-                Ok(()) => emit("ok", None, None),
+                Ok(()) => emit("ok", None, None, not_sent),
                 Err(error) => emit(
                     "failed",
                     None,
@@ -343,11 +373,20 @@ fn run_imported(
                         "The new workspace is ready, but its window could not open.",
                         error,
                     )),
+                    None,
                 ),
             }
         }
-        Ok(_) => emit("ok", None, None),
-        Err(error) => emit("failed", None, Some(error)),
+        Ok(imported) => emit("ok", None, None, not_sent_reason(&imported.landed)),
+        Err(error) => emit("failed", None, Some(error), None),
+    }
+}
+
+/// The reason an otherwise successful import sent nothing, if it sent nothing.
+fn not_sent_reason(landed: &push::Landed) -> Option<String> {
+    match landed {
+        push::Landed::NotSent { reason } => Some(reason.clone()),
+        _ => None,
     }
 }
 

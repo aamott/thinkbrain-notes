@@ -117,7 +117,22 @@ pub fn once(
     vault: &Path,
     destination: &str,
 ) -> Result<Synced, NativeError> {
-    run_trip(repo, vault, destination, None, |_| {})
+    run_trip(repo, vault, destination, None, PushPolicy::Required, |_| {})
+}
+
+/// Whether a round trip has to be able to send, or may stop after fetching.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum PushPolicy {
+    /// A failed push fails the whole round trip. What a sync does: the user
+    /// asked to send their notes, and quietly not sending them would be worse
+    /// than an error.
+    Required,
+    /// A failed push leaves the fetched and merged work in place and reports
+    /// [`push::Landed::NotSent`]. What an import does: a repository that
+    /// fetched and merged cleanly is worth keeping even when this device can
+    /// never write to it — a public repository, a read-only mirror, or a phone
+    /// with nowhere to store a token.
+    Optional,
 }
 
 /// Fetch, merge, and send with an explicit profile and phase callback.
@@ -130,6 +145,7 @@ pub(super) fn run_trip(
     vault: &Path,
     destination: &str,
     profile_id: Option<&str>,
+    push_policy: PushPolicy,
     on_phase: impl FnMut(SyncPhase),
 ) -> Result<Synced, NativeError> {
     trip(
@@ -138,6 +154,7 @@ pub(super) fn run_trip(
         destination,
         Arc::new(AtomicBool::new(false)),
         profile_id.map(str::to_owned),
+        push_policy,
         on_phase,
     )
 }
@@ -148,6 +165,7 @@ fn trip(
     destination: &str,
     cancel: Arc<AtomicBool>,
     profile_id: Option<String>,
+    push_policy: PushPolicy,
     mut on_phase: impl FnMut(SyncPhase),
 ) -> Result<Synced, NativeError> {
     on_phase(SyncPhase::Checking);
@@ -215,7 +233,27 @@ fn trip(
                 push::send(&repo, &destination, BRANCH, tip)
             })
         })
-    }?;
+    };
+    let sent = match sent {
+        Ok(sent) => sent,
+        // Everything before this point already landed on disk. Failing here
+        // would send the caller down a rollback path that deletes a fetch and
+        // a merge that both worked, so an import keeps them and records that
+        // nothing was sent.
+        Err(error) if push_policy == PushPolicy::Optional => {
+            return Ok(Synced {
+                brought_down,
+                asked_about,
+                sent: 0,
+                landed: push::Landed::NotSent {
+                    reason: error.message,
+                },
+                conflict_copies: copies,
+                skipped,
+            });
+        }
+        Err(error) => return Err(error),
+    };
 
     Ok(Synced {
         brought_down,
@@ -414,6 +452,9 @@ pub fn sync(
             destination,
             Arc::clone(&cancel),
             profile.clone(),
+            // A sync is the user asking to send. If the push cannot be made,
+            // they need to hear about it rather than see a quiet success.
+            PushPolicy::Required,
             |phase| report_phase(engine, key, phase),
         )?;
         engine.forget_unsupported();
@@ -422,9 +463,15 @@ pub fn sync(
             return Ok(synced);
         }
 
-        let again = trip(&repo, root, destination, cancel, profile.clone(), |phase| {
-            report_phase(engine, key, phase)
-        })?;
+        let again = trip(
+            &repo,
+            root,
+            destination,
+            cancel,
+            profile.clone(),
+            PushPolicy::Required,
+            |phase| report_phase(engine, key, phase),
+        )?;
         engine.forget_unsupported();
         engine.note_stuck(again.skipped.clone());
 

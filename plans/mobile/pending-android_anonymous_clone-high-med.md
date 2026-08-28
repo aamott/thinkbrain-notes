@@ -1,6 +1,6 @@
 # Story: Importing a Repository You Cannot Push To
 
-**Status:** ⬜ pending · **Urgency:** high · **Difficulty:** med
+**Status:** 🟨 wip · **Urgency:** high · **Difficulty:** med
 
 > Found by running the clone on a device after the TLS fix landed, 2026-08-27
 > (`pending-android_tls_platform_verifier-high-med.md`). This is what now
@@ -222,12 +222,52 @@ that names "this computer's keychain". On a phone that sentence is wrong twice
 over — wrong device noun, and wrong diagnosis. Whatever this story does to the
 credential path, the copy should not tell a phone user to unlock a keychain.
 
+## Fixed 2026-08-28 (option 2: keep the vault, report the one-way trip)
+
+`round.rs` gained a `PushPolicy`. A sync passes `Required` and still fails
+loudly when it cannot send, because the user asked to send. An import passes
+`Optional`: a failed push returns `push::Landed::NotSent { reason }` with the
+fetch and merge intact, instead of an error that would trigger
+`cleanup_import`.
+
+`complete_import` now returns `Imported { path, landed }` rather than a bare
+path, so the outcome survives to the caller, and `ImportProgress` carries
+`notSent`. The dialog raises a sticky warning — "Brought in, but not linked
+both ways" — instead of closing on a silent success, because someone who
+believes their edits are travelling back only finds out otherwise much later.
+
+Verified on the emulator against `https://github.com/octocat/Hello-World.git`
+with no sign-in:
+
+```
+saving -> checking -> combining -> sending -> ok (notSent: "The username or
+access token was not accepted.")
+```
+
+and the vault survives with its content:
+
+```
+/data/data/com.thinkbrain.notes/vaults/Hello-World/README  ->  "Hello World!"
+```
+
+Also fixed in passing: `vite.config.ts` set `reporters: undefined` when
+`QA_QUIET` was unset, and vitest 4 reads `.length` off that during config
+resolution, so plain `pnpm test` died at startup without running anything.
+`pnpm qa` always sets `QA_QUIET`, which is why it never surfaced there.
+
 ## Acceptance
 
-- [ ] A public repository clones on an Android emulator with no sign-in
-- [ ] The same clone succeeds on physical hardware
-- [ ] Notes from the cloned vault open, edit and save
-- [ ] Desktop anonymous and authenticated clones are both unchanged
-- [ ] Push still requires an identity and says so clearly
-- [ ] No user-visible copy tells a phone user to unlock a computer's keychain
-- [ ] `pnpm qa` green
+- [x] A public repository clones on an Android emulator with no sign-in
+- [ ] The same clone succeeds on physical hardware — no device available
+- [ ] Notes from the cloned vault open, edit and save — the file is on disk and
+      readable, but opening and editing it through the UI has not been driven
+- [x] Desktop anonymous and authenticated clones are both unchanged — the sync
+      path keeps `PushPolicy::Required`, covered by the existing suite. Note
+      that desktop import of a repository the user cannot push to is *changed*,
+      and deliberately: it used to delete the vault too
+- [x] Push still requires an identity — a sync's push failure is still an error
+- [ ] No user-visible copy tells a phone user to unlock a computer's keychain —
+      **still open**. `mod.rs:78` still says "this computer's keychain". Less
+      reachable now that imports succeed, but not gone, and the replacement
+      wording is a product decision rather than a mechanical edit
+- [x] `pnpm qa` green — 414 Rust tests, full frontend suite
