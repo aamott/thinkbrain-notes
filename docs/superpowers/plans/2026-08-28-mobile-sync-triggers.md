@@ -18,7 +18,7 @@
 - Staleness threshold: **3 minutes**.
 - Setting key: `sync.trigger`. Values: `auto` (default), `idle`, `foreground`, `manual`.
 - A Rust default constant duplicated from TypeScript must carry a comment naming the other file, matching the existing convention in `settle.rs:36-41`.
-- `pnpm qa` green before every commit.
+- `pnpm qa` green before every commit. It runs lint, typecheck, `cargo fmt --check`, the TypeScript tests and the Rust tests (`scripts/qa.mjs`). Because the Rust step is a **format check**, run `pnpm format:rust:fix` before committing any Rust task or qa fails on formatting alone.
 
 ---
 
@@ -163,7 +163,15 @@ git commit -m "Add a sync trigger policy setting"
 **Files:**
 - Create: `apps/desktop/src-tauri/src/commands/sync/trigger.rs`
 - Create: `apps/desktop/src-tauri/src/commands/sync/trigger_tests.rs`
-- Modify: `apps/desktop/src-tauri/src/commands/sync/mod.rs` (add `pub mod trigger;` and the `#[cfg(test)] #[path = "trigger_tests.rs"] mod trigger_test;` pair, matching how `settle` is wired)
+- Modify: `apps/desktop/src-tauri/src/commands/sync/mod.rs` — add `pub mod trigger;` to the module list, after `pub mod status;`. **Only that line.** The test module is *not* declared here: this codebase puts it at the bottom of the module's own file, exactly as `settle.rs:202-204` does —
+
+  ```rust
+  #[cfg(test)]
+  #[path = "trigger_tests.rs"]
+  mod tests;
+  ```
+
+  goes at the end of `trigger.rs`. That is why every import in `trigger_tests.rs` reads `use super::{...}` and not `use super::trigger::{...}`: inside that file, `super` *is* the `trigger` module. (`round_tests.rs` and `settle_tests.rs` both work this way; production code in `registry.rs` and `round.rs` still says `super::trigger::` because for those files `super` is `commands::sync`.)
 
 **Interfaces:**
 - Consumes: setting key `sync.trigger` from Task 2.
@@ -175,7 +183,7 @@ git commit -m "Add a sync trigger policy setting"
 - [ ] **Step 1: Write the failing tests**
 
 ```rust
-use super::trigger::{Trigger, resolved_in};
+use super::{Trigger, resolved_in};
 use crate::tests::make_temp_test_dir;
 
 fn home_with(setting: Option<&str>) -> std::path::PathBuf {
@@ -343,9 +351,7 @@ git commit -m "Read the sync trigger policy, resolving auto per platform"
 - [ ] **Step 1: Write the failing tests**
 
 ```rust
-use super::trigger::{
-    STALE_AFTER_SECS, is_stale, last_synced_at, now_epoch_secs, record_round_trip,
-};
+use super::{STALE_AFTER_SECS, is_stale, last_synced_at, now_epoch_secs, record_round_trip};
 
 #[test]
 fn a_vault_that_has_never_synced_is_stale() {
@@ -590,7 +596,7 @@ git commit -m "Record the last successful sync in wall-clock time"
 /// may start a round trip from a timer; the others wait to be told.
 #[test]
 fn only_the_idle_policy_starts_a_round_trip_from_a_timer() {
-    use super::trigger::{Trigger, idle_start_allowed};
+    use super::{Trigger, idle_start_allowed};
 
     assert!(idle_start_allowed(Trigger::Idle));
     assert!(!idle_start_allowed(Trigger::Foreground));
@@ -661,7 +667,7 @@ The command bodies iterate a process-wide registry, which a unit test cannot pop
 /// successful round trip is old enough to be worth repeating.
 #[test]
 fn returning_to_the_app_syncs_only_when_the_policy_says_so_and_it_is_stale() {
-    use super::trigger::{Trigger, should_sync_on_foreground};
+    use super::{Trigger, should_sync_on_foreground};
 
     assert!(should_sync_on_foreground(Trigger::Foreground, true));
     assert!(!should_sync_on_foreground(Trigger::Foreground, false));
@@ -673,7 +679,7 @@ fn returning_to_the_app_syncs_only_when_the_policy_says_so_and_it_is_stale() {
 /// touches the setting sees no new behaviour at all from this work.
 #[test]
 fn leaving_the_app_pushes_only_under_the_foreground_policy() {
-    use super::trigger::{Trigger, should_push_on_background};
+    use super::{Trigger, should_push_on_background};
 
     assert!(should_push_on_background(Trigger::Foreground));
     assert!(!should_push_on_background(Trigger::Idle));
