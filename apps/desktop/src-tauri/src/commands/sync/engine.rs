@@ -560,11 +560,35 @@ impl Engine {
         self.syncing.load(Ordering::Relaxed)
     }
 
+    /// Whether a round trip is in flight *and* has shown signs of life within
+    /// `orphan_after` seconds.
+    ///
+    /// The distinction `syncing()` cannot draw. A frozen process keeps the
+    /// flag set for ever, so anything that treats the raw flag as "busy" stops
+    /// dead the first time Android freezes a trip mid-flight.
+    ///
+    /// The atomic load comes first so the common answer costs no lock: the
+    /// sweeper asks this of every open workspace twice a second, and almost
+    /// always the answer is "nothing is running".
+    pub fn claim_is_live(&self, now_secs: u64, orphan_after: u64) -> bool {
+        if !self.syncing() {
+            return false;
+        }
+        match *lock_or_recover(&self.sync_claim) {
+            Some((_, since)) => !super::schedule::elapsed_at_least(since, now_secs, orphan_after),
+            None => false,
+        }
+    }
+
     /// Takes the claim, unconditionally. The caller holds the workspace lane,
     /// so it already knows it is the only trip running.
     pub fn begin_sync(&self, now_secs: u64) -> u64 {
-        let mut claim = lock_or_recover(&self.sync_claim);
-        self.take_claim(&mut claim, now_secs)
+        let generation = {
+            let mut claim = lock_or_recover(&self.sync_claim);
+            self.take_claim(&mut claim, now_secs)
+        };
+        self.clear_superseded_phase();
+        generation
     }
 
     /// Takes the claim if it is free, or if the trip holding it has neither
@@ -574,13 +598,27 @@ impl Engine {
     /// that clears the flag does not run — it pauses, holding a claim that no
     /// longer describes anything happening.
     pub fn claim_sync(&self, now_secs: u64, orphan_after: u64) -> Option<u64> {
-        let mut claim = lock_or_recover(&self.sync_claim);
-        if let Some((_, since)) = *claim {
-            if !super::schedule::elapsed_at_least(since, now_secs, orphan_after) {
-                return None;
+        let generation = {
+            let mut claim = lock_or_recover(&self.sync_claim);
+            if let Some((_, since)) = *claim {
+                if !super::schedule::elapsed_at_least(since, now_secs, orphan_after) {
+                    return None;
+                }
             }
-        }
-        Some(self.take_claim(&mut claim, now_secs))
+            self.take_claim(&mut claim, now_secs)
+        };
+        self.clear_superseded_phase();
+        Some(generation)
+    }
+
+    /// Drops the step name the previous trip left behind.
+    ///
+    /// A taken-over trip never runs its own `end_sync`, so without this its
+    /// last phase — "Sending", say — stays on screen under the new trip until
+    /// that one reports a step of its own. Always outside the claim lock; see
+    /// `end_sync` for why the phase lock is never nested inside it.
+    fn clear_superseded_phase(&self) {
+        self.set_phase(None);
     }
 
     fn take_claim(&self, claim: &mut Option<(u64, u64)>, now_secs: u64) -> u64 {
@@ -639,6 +677,15 @@ impl Engine {
     /// seconds between local edits inside one run, where a user changing their
     /// clock must not count as typing. The interval is wall-clock, so a freeze
     /// cannot fake it.
+    ///
+    /// The first gate asks whether a trip is *live*, not whether the flag is
+    /// set. Asking the raw flag would make the takeover in `claim_sync`
+    /// unreachable from here: a trip frozen mid-flight leaves the flag set for
+    /// ever, this would return `false` for ever, and the sweeper would never
+    /// get as far as offering to take the claim over. Since the timer is the
+    /// only thing that starts an automatic sync, that would leave the vault
+    /// stuck until the app restarted — the exact failure the claim stamp
+    /// exists to end.
     pub fn ready_to_sync(
         &self,
         quiet: Duration,
@@ -646,7 +693,7 @@ impl Engine {
         now: Instant,
         now_secs: u64,
     ) -> bool {
-        if self.syncing() {
+        if self.claim_is_live(now_secs, super::schedule::ORPHAN_AFTER_SECS) {
             return false;
         }
         let touched = *lock_or_recover(&self.last_touched);

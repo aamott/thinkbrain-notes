@@ -493,6 +493,46 @@ fn a_superseded_trip_does_not_clear_the_flag_under_the_one_that_replaced_it() {
 }
 
 #[test]
+fn a_frozen_trip_does_not_stop_the_sweeper_from_syncing_again() {
+    // The property the whole claim stamp exists for, asked the way the
+    // sweeper asks it. `ready_to_sync` used to consult the raw `syncing`
+    // flag, which a freeze leaves set for ever — so the sweeper returned
+    // early, never reached `claim_sync`, and the takeover below was
+    // unreachable on the only path that starts an automatic sync.
+    let f = fixture("frozen-claim-sweeper");
+    let start = Instant::now();
+    f.engine.note_changes([PathBuf::from("a.md")], start);
+    f.engine.mark_attempt(1_000);
+    f.engine.claim_sync(1_000, 600).expect("a trip starts");
+
+    let quiet = Duration::from_secs(30);
+    let later = start + Duration::from_secs(120);
+
+    // Still within the orphan bound: the trip is presumed alive, so no.
+    assert!(!f.engine.ready_to_sync(quiet, 60, later, 1_100));
+    assert!(f.engine.syncing());
+
+    // Past it, with nothing reported since: the sweeper may try again.
+    assert!(f.engine.ready_to_sync(quiet, 60, later, 1_700));
+}
+
+#[test]
+fn taking_a_claim_over_drops_the_step_the_frozen_trip_left_showing() {
+    // `status::of` copies the phase beside the state, and a taken-over trip
+    // never runs its own `end_sync`. Without clearing here, the frozen
+    // trip's last step stays on screen under its replacement.
+    let f = fixture("superseded-phase");
+    f.engine.claim_sync(1_000, 600).expect("a trip starts");
+    f.engine.set_phase(Some(SyncPhase::Sending));
+
+    f.engine
+        .claim_sync(1_601, 600)
+        .expect("the frozen claim is taken over");
+
+    assert_eq!(f.engine.phase(), None);
+}
+
+#[test]
 fn a_trip_that_is_still_reporting_progress_is_not_orphaned() {
     let f = fixture("sync-claim");
     assert!(f.engine.claim_sync(1_000, 600).is_some());
