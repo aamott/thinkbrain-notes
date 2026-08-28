@@ -391,26 +391,151 @@ fn a_vault_is_ready_to_sync_only_once_it_has_been_still_and_the_cap_has_passed()
     assert!(
         !f.engine.ready_to_sync(
             Duration::from_secs(30),
-            Duration::from_secs(60),
-            start + Duration::from_secs(5)
+            60,
+            start + Duration::from_secs(5),
+            1_005
         ),
         "a vault still being edited was ready"
     );
     assert!(
         f.engine.ready_to_sync(
             Duration::from_secs(30),
-            Duration::from_secs(60),
-            start + Duration::from_secs(30)
+            60,
+            start + Duration::from_secs(30),
+            1_030
         ),
         "a still vault was not ready before its first trip"
     );
-    f.engine.mark_synced();
+    f.engine.mark_attempt(1_030);
     assert!(
         !f.engine.ready_to_sync(
             Duration::from_secs(30),
-            Duration::from_secs(60),
-            start + Duration::from_secs(30)
+            60,
+            start + Duration::from_secs(30),
+            1_030
         ),
         "the frequency cap did not hold"
     );
+}
+
+/// The monotonic clock jumps an hour while the wall clock says four
+/// seconds passed — the shape of a freeze on a device whose clock the app
+/// cannot trust. The interval must believe the wall clock.
+#[test]
+fn a_frozen_process_does_not_manufacture_an_elapsed_interval() {
+    let f = fixture("frozen-interval");
+    let start = Instant::now();
+    f.engine.note_changes([PathBuf::from("a.md")], start);
+    f.engine.mark_attempt(1_000);
+
+    let long_after = start + Duration::from_secs(3_600);
+    assert!(
+        !f.engine
+            .ready_to_sync(Duration::from_secs(30), 60, long_after, 1_004)
+    );
+    assert!(
+        f.engine
+            .ready_to_sync(Duration::from_secs(30), 60, long_after, 1_070)
+    );
+}
+
+#[test]
+fn a_vault_that_has_never_been_attempted_is_due_once_it_is_quiet() {
+    let f = fixture("never-attempted");
+    let start = Instant::now();
+    f.engine.note_changes([PathBuf::from("a.md")], start);
+
+    assert!(
+        !f.engine
+            .ready_to_sync(Duration::from_secs(30), 60, start, 1_000)
+    );
+    assert!(f.engine.ready_to_sync(
+        Duration::from_secs(30),
+        60,
+        start + Duration::from_secs(31),
+        1_031
+    ));
+}
+
+#[test]
+fn a_fresh_claim_cannot_be_taken_over() {
+    let f = fixture("sync-claim");
+    assert!(f.engine.claim_sync(1_000, 600).is_some());
+    assert!(f.engine.claim_sync(1_060, 600).is_none());
+}
+
+#[test]
+fn a_claim_left_by_a_frozen_process_can_be_taken_over() {
+    // A freeze pauses the worker mid-flight, so the `Drop` guard that clears
+    // the flag never runs. Without a takeover, one frozen trip stops every
+    // later one for the life of the process.
+    let f = fixture("sync-claim");
+    assert!(f.engine.claim_sync(1_000, 600).is_some());
+    assert!(f.engine.claim_sync(1_601, 600).is_some());
+}
+
+#[test]
+fn a_superseded_trip_does_not_clear_the_flag_under_the_one_that_replaced_it() {
+    let f = fixture("sync-claim");
+    let first = f
+        .engine
+        .claim_sync(1_000, 600)
+        .expect("the first trip claims");
+    let second = f
+        .engine
+        .claim_sync(1_601, 600)
+        .expect("the frozen claim is taken over");
+
+    assert!(!f.engine.end_sync(first));
+    assert!(f.engine.syncing());
+    assert!(f.engine.end_sync(second));
+    assert!(!f.engine.syncing());
+}
+
+#[test]
+fn a_frozen_trip_does_not_stop_the_sweeper_from_syncing_again() {
+    // The property the whole claim stamp exists for, asked the way the
+    // sweeper asks it. `ready_to_sync` used to consult the raw `syncing`
+    // flag, which a freeze leaves set for ever — so the sweeper returned
+    // early, never reached `claim_sync`, and the takeover below was
+    // unreachable on the only path that starts an automatic sync.
+    let f = fixture("frozen-claim-sweeper");
+    let start = Instant::now();
+    f.engine.note_changes([PathBuf::from("a.md")], start);
+    f.engine.mark_attempt(1_000);
+    f.engine.claim_sync(1_000, 600).expect("a trip starts");
+
+    let quiet = Duration::from_secs(30);
+    let later = start + Duration::from_secs(120);
+
+    // Still within the orphan bound: the trip is presumed alive, so no.
+    assert!(!f.engine.ready_to_sync(quiet, 60, later, 1_100));
+    assert!(f.engine.syncing());
+
+    // Past it, with nothing reported since: the sweeper may try again.
+    assert!(f.engine.ready_to_sync(quiet, 60, later, 1_700));
+}
+
+#[test]
+fn taking_a_claim_over_drops_the_step_the_frozen_trip_left_showing() {
+    // `status::of` copies the phase beside the state, and a taken-over trip
+    // never runs its own `end_sync`. Without clearing here, the frozen
+    // trip's last step stays on screen under its replacement.
+    let f = fixture("superseded-phase");
+    f.engine.claim_sync(1_000, 600).expect("a trip starts");
+    f.engine.set_phase(Some(SyncPhase::Sending));
+
+    f.engine
+        .claim_sync(1_601, 600)
+        .expect("the frozen claim is taken over");
+
+    assert_eq!(f.engine.phase(), None);
+}
+
+#[test]
+fn a_trip_that_is_still_reporting_progress_is_not_orphaned() {
+    let f = fixture("sync-claim");
+    assert!(f.engine.claim_sync(1_000, 600).is_some());
+    f.engine.note_sync_progress(1_500);
+    assert!(f.engine.claim_sync(1_601, 600).is_none());
 }

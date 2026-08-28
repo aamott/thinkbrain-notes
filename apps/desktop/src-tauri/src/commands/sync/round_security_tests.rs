@@ -143,7 +143,7 @@ fn a_sync_waits_for_the_workspace_lane_before_entering_the_trip() {
             })
             .collect();
 
-        // Without the lane, `set_syncing(true)` is a few calls after spawn.
+        // Without the lane, `begin_sync` is a few calls after spawn.
         // Holding here for well past that window is what makes a missing lock
         // fail rather than race green.
         let started = Instant::now();

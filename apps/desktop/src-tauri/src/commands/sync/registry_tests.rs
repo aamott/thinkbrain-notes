@@ -1,3 +1,4 @@
+use super::super::schedule::Schedule;
 use super::*;
 use crate::tests::make_temp_test_dir;
 
@@ -383,5 +384,252 @@ fn attaching_settles_the_obvious_copies_without_deadlocking() {
     assert!(
         !vault.join(copy).exists(),
         "and it should have been tidied away"
+    );
+}
+
+/// A vault, its engine, and a destination it can actually reach.
+///
+/// The destination is written under `settle::settings_home`, which is
+/// remembered once per process — so this asks where that landed rather than
+/// assuming its own folder won. That is the folder `maybe_sync` reads.
+fn syncable(name: &str) -> (String, Arc<Engine>) {
+    let app_data = make_temp_test_dir(&format!("{name}-appdata"), "sync", true);
+    let vault = make_temp_test_dir(&format!("{name}-vault"), "sync", true);
+    let managed = bootstrap(&app_data, &vault).expect("bootstrap succeeds");
+    let engine = Arc::new(Engine::new(managed.repo, managed.has_own_git));
+
+    settle::remember_settings_home(&app_data);
+    let home = settle::settings_home().expect("a settings home is remembered");
+    let remote = make_temp_test_dir(&format!("{name}-remote"), "sync", true);
+    gix::init_bare(&remote).expect("the destination is created");
+    let settings = crate::commands::settings::workspace_settings_path(&home, &vault);
+    std::fs::create_dir_all(settings.parent().expect("the settings folder has a parent"))
+        .expect("the settings folder exists");
+    std::fs::write(
+        &settings,
+        serde_json::json!({ "sync.destination": remote.to_string_lossy() }).to_string(),
+    )
+    .expect("the destination is written");
+
+    (vault.to_string_lossy().to_string(), engine)
+}
+
+/// Far enough ahead that any quiet window has passed, so a test can say "this
+/// vault has been still" without sleeping for it.
+fn long_since_touched() -> Instant {
+    Instant::now() + Duration::from_secs(3600)
+}
+
+/// "Sync automatically" off means no automatic network, whatever the timers
+/// say. This is the whole promise of the setting.
+#[test]
+fn the_sweeper_starts_nothing_when_automatic_sync_is_off() {
+    let (key, engine) = syncable("registry-schedule-off");
+    let schedule = Schedule {
+        automatically: false,
+        ..Schedule::default()
+    };
+
+    // Held for the same reason its sibling holds it: if the gate were ever
+    // reverted, the worker this would spawn must not be able to finish and
+    // clear the flag before the assertion reads it.
+    let lane = lane(&key);
+    let _held = lock_or_recover(&lane);
+
+    maybe_sync(
+        &key,
+        &engine,
+        schedule,
+        long_since_touched(),
+        super::super::schedule::now_epoch_secs(),
+    );
+
+    assert!(
+        !engine.syncing(),
+        "a round trip started with automatic sync turned off"
+    );
+}
+
+/// Quiet for long enough, and nothing attempted yet: the tick is what starts a
+/// round trip now, on every platform.
+#[test]
+fn the_sweeper_starts_a_round_trip_once_the_vault_is_quiet_and_due() {
+    let (key, engine) = syncable("registry-schedule-due");
+    let schedule = Schedule {
+        interval_secs: super::super::schedule::MIN_INTERVAL_SECS,
+        quiet_secs: super::super::schedule::MIN_QUIET_SECS,
+        ..Schedule::default()
+    };
+
+    // The lane the trip takes as its first act, held here so the worker cannot
+    // finish and clear the flag before the assertion reads it.
+    let lane = lane(&key);
+    let _held = lock_or_recover(&lane);
+
+    maybe_sync(
+        &key,
+        &engine,
+        schedule,
+        long_since_touched(),
+        super::super::schedule::now_epoch_secs(),
+    );
+
+    assert!(
+        engine.syncing(),
+        "a quiet vault whose interval had come round never started a trip"
+    );
+}
+
+/// Reopening a vault that synced moments ago must not sync a quiet window
+/// later. The open gate declines, and the frequency gate has to know why.
+#[test]
+fn a_relaunch_soon_after_a_sync_does_not_sync_a_quiet_window_later() {
+    let app_data = make_temp_test_dir("registry-reopen-appdata", "sync", true);
+    let vault = make_temp_test_dir("registry-reopen-vault", "sync", true);
+    let key = vault.to_string_lossy().to_string();
+    let now_secs = super::super::schedule::now_epoch_secs();
+
+    let settings = crate::commands::settings::workspace_settings_path(&app_data, &vault);
+    std::fs::create_dir_all(settings.parent().expect("the settings folder has a parent"))
+        .expect("the settings folder exists");
+    std::fs::write(
+        &settings,
+        serde_json::json!({ "sync.lastSyncedAt": now_secs }).to_string(),
+    )
+    .expect("the last sync time is written");
+
+    attach(&app_data, &vault, &key, "reopen-1").expect("attaching succeeds");
+    let engine = engine(&key).expect("the engine is registered");
+
+    assert!(
+        !engine.ready_to_sync(
+            Duration::from_secs(super::super::schedule::DEFAULT_QUIET_SECS),
+            super::super::schedule::DEFAULT_INTERVAL_SECS,
+            long_since_touched(),
+            now_secs + 5,
+        ),
+        "a relaunched vault read as never-attempted and was about to sync anyway"
+    );
+    detach(&key, "reopen-1");
+}
+
+/// Leaving the app records what is pending whatever the schedule says. On a
+/// phone this is the last code to run before the process is frozen.
+#[test]
+fn leaving_the_app_records_local_history_even_with_syncing_turned_off() {
+    let app_data = make_temp_test_dir("registry-leave-appdata", "sync", true);
+    let vault = make_temp_test_dir("registry-leave-vault", "sync", true);
+    let key = vault.to_string_lossy().to_string();
+
+    attach(&app_data, &vault, &key, "leave-1").expect("attaching succeeds");
+    std::fs::write(vault.join("kept.md"), "# Kept\n").expect("the note is written");
+    note_changes(
+        &key,
+        &vault,
+        &[change(WorkspaceChangeKind::Created, "kept.md")],
+    );
+
+    let off = Schedule {
+        automatically: false,
+        ..Schedule::default()
+    };
+    flush_on_leave(off, long_since_touched());
+
+    let git_dir = crate::commands::sync::bootstrap::hidden_repo_path(&app_data, &key);
+    let reopened = crate::commands::sync::hidden_repo::open_or_create(&git_dir, &vault)
+        .expect("the hidden repository opens");
+    assert!(
+        super::super::snapshot::head_commit(&reopened)
+            .expect("reading the branch succeeds")
+            .is_some(),
+        "leaving the app with syncing off threw away the last few seconds of typing"
+    );
+    detach(&key, "leave-1");
+}
+
+/// The quiet window is the user's number too. A vault touched recently is not
+/// still, however long the interval has been idle.
+#[test]
+fn the_sweeper_waits_out_the_quiet_window_the_user_asked_for() {
+    let (key, engine) = syncable("registry-schedule-noisy");
+    let touched = Instant::now();
+    engine.note_changes([std::path::PathBuf::from("a.md")], touched);
+    let schedule = Schedule {
+        interval_secs: super::super::schedule::MIN_INTERVAL_SECS,
+        quiet_secs: super::super::schedule::MAX_QUIET_SECS,
+        ..Schedule::default()
+    };
+
+    // Two minutes since the last edit: past the thirty-second constant this
+    // replaced, nowhere near the window the user asked for.
+    maybe_sync(
+        &key,
+        &engine,
+        schedule,
+        touched + Duration::from_secs(120),
+        super::super::schedule::now_epoch_secs(),
+    );
+
+    assert!(
+        !engine.syncing(),
+        "a round trip started while the vault was still being typed in"
+    );
+}
+
+/// Turning automatic sync off stops the network, not the history. The
+/// setting's description promises notes and saved versions are still kept on
+/// this device, and that promise is a fact about where the gate sits.
+#[test]
+fn turning_automatic_sync_off_still_records_local_history() {
+    let (key, engine) = syncable("registry-schedule-off-records");
+    let vault = std::path::PathBuf::from(&key);
+    std::fs::write(vault.join("kept.md"), "# Kept\n").expect("the note is written");
+    engine.note_changes([vault.join("kept.md")], Instant::now());
+
+    let off = Schedule {
+        automatically: false,
+        ..Schedule::default()
+    };
+    sweep_once(
+        &key,
+        &engine,
+        off,
+        long_since_touched(),
+        super::super::schedule::now_epoch_secs(),
+    );
+
+    assert!(
+        !engine.syncing(),
+        "a round trip started with automatic sync turned off"
+    );
+    assert!(
+        super::super::snapshot::head_commit(&engine.repository())
+            .expect("reading the branch succeeds")
+            .is_some(),
+        "turning automatic sync off stopped the note being recorded at all"
+    );
+}
+
+/// The interval is the user's number, not a constant. A vault that attempted a
+/// moment ago waits out the interval it was actually given.
+#[test]
+fn the_sweeper_waits_out_the_interval_the_user_asked_for() {
+    let (key, engine) = syncable("registry-schedule-early");
+    let now_secs = super::super::schedule::now_epoch_secs();
+    // Two minutes ago: past the sixty-second constant this replaced, and well
+    // inside the interval the user asked for. A gate still hard-coded to the
+    // old number would start a trip here.
+    engine.mark_attempt(now_secs.saturating_sub(120));
+    let schedule = Schedule {
+        interval_secs: super::super::schedule::MAX_INTERVAL_SECS,
+        quiet_secs: super::super::schedule::MIN_QUIET_SECS,
+        ..Schedule::default()
+    };
+
+    maybe_sync(&key, &engine, schedule, long_since_touched(), now_secs);
+
+    assert!(
+        !engine.syncing(),
+        "a round trip started before the interval had come round"
     );
 }

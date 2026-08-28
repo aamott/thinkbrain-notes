@@ -148,11 +148,11 @@ pub mod push;
 pub mod registry;
 pub mod resolve;
 pub mod round;
+pub mod schedule;
 pub mod settle;
 pub mod sign_in;
 pub mod snapshot;
 pub mod status;
-pub mod trigger;
 
 #[cfg(test)]
 #[path = "test_support.rs"]

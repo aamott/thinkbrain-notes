@@ -63,7 +63,7 @@ fn a_workspace_that_has_never_been_recorded_is_still_idle() {
 #[test]
 fn a_round_trip_in_flight_says_so() {
     let v = vault("status-syncing");
-    v.engine.set_syncing(true);
+    v.engine.begin_sync(1_000);
     v.engine
         .set_phase(Some(crate::commands::sync::engine::SyncPhase::Checking));
 
@@ -94,10 +94,10 @@ fn a_successful_git_check_is_healthy_until_the_next_failure() {
 #[test]
 fn finishing_a_round_trip_clears_the_named_step() {
     let v = vault("status-phase-clear");
-    v.engine.set_syncing(true);
+    let generation = v.engine.begin_sync(1_000);
     v.engine
         .set_phase(Some(crate::commands::sync::engine::SyncPhase::Sending));
-    v.engine.set_syncing(false);
+    v.engine.end_sync(generation);
 
     let status = of(Recording::By(&v.engine)).expect("the status is readable");
 

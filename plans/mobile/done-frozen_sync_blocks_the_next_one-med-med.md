@@ -1,12 +1,42 @@
 # Story: A Sync Frozen Mid-Flight Blocks the One Meant to Replace It
 
-**Status:** ⬜ pending · **Urgency:** med · **Difficulty:** med
+**Status:** ✅ done · **Urgency:** med · **Difficulty:** med
 
 > Found 2026-08-28 by the whole-branch review of `mobile-sync-triggers`, which
 > asked what happens to the `syncing` flag when Android freezes a process
 > rather than killing it. The device check on that branch could not reach this:
 > it used a fail-fast fake remote, so no round trip was ever still in flight at
 > the moment of freezing.
+
+## Closed 2026-08-28
+
+Fixed on the `sync-schedule` branch, by the third and fourth options this
+story lists composed into one: the `syncing` flag now carries a wall-clock
+start stamp and a generation, and `report_phase` refreshes the stamp, so a
+trip that is alive keeps its claim while one that was frozen ages out of it
+after `ORPHAN_AFTER_SECS` (600). A later trip then takes the claim over. The
+per-workspace lane, which `round::sync` takes before touching the claim, is
+what makes the takeover safe: the replacement queues behind the original
+rather than running alongside it.
+
+The generation is the part this story did not anticipate. After a takeover two
+workers each hold a `Clear` guard, and without generations the first to finish
+would clear a flag the second still owned — reporting the vault idle during a
+live sync.
+
+**One acceptance box is deliberately not ticked:** the device check re-run
+against a slow rather than fail-fast remote. The fix is proven by unit test at
+the `Engine` level, which is what this story asked for, and by a sweeper-level
+test that fails against the old gate. The device re-run has not happened.
+
+A related defect this work found: the takeover was at first unreachable from
+the timer path, because `ready_to_sync` gated on the raw `syncing` flag, which
+a freeze leaves set for ever. `Engine::claim_is_live` draws the distinction the
+flag cannot. Without that, this story would have shipped looking fixed.
+
+The story's "related, and probably the same fix" note — that the background
+flush runs a full round trip rather than a push — is **not** addressed and
+remains true.
 
 ## What happens
 

@@ -49,8 +49,25 @@ static SETTINGS_HOME: Mutex<Option<PathBuf>> = Mutex::new(None);
 
 /// Remembers where to look for the setting, for the paths that have no window.
 pub fn remember_settings_home(app_data_dir: &Path) {
-    let mut home = lock_or_recover(&SETTINGS_HOME);
-    home.get_or_insert_with(|| app_data_dir.to_path_buf());
+    let newly_known = {
+        let mut home = lock_or_recover(&SETTINGS_HOME);
+        let was_unknown = home.is_none();
+        home.get_or_insert_with(|| app_data_dir.to_path_buf());
+        was_unknown
+    };
+    if newly_known {
+        // Anything that asked for the schedule before this point was answered
+        // from nowhere — `resolved_in(None)` hands back the compiled-in
+        // defaults — and that answer was cached. Left alone, the app would run
+        // on defaults rather than on the user's settings until the cache aged
+        // out, which for someone who turned automatic syncing off means it
+        // syncing anyway, once, at launch.
+        //
+        // Outside the lock above: `forget_cached` takes the schedule cache's
+        // own lock, and nesting these two in one order here would have to be
+        // matched everywhere else for ever.
+        super::schedule::forget_cached();
+    }
 }
 
 /// Where the app keeps its settings, if anyone has said.

@@ -427,19 +427,20 @@ pub fn sync(
         error.into_inner()
     });
 
-    engine.set_syncing(true);
+    let generation = engine.begin_sync(super::schedule::now_epoch_secs());
     crate::commands::watcher::announce_sync_status(key);
-    struct Clear<'a>(&'a super::engine::Engine, &'a str);
+    struct Clear<'a>(&'a super::engine::Engine, &'a str, u64);
     impl Drop for Clear<'_> {
         fn drop(&mut self) {
-            self.0.set_syncing(false);
-            crate::commands::watcher::announce_sync_status(self.1);
+            if self.0.end_sync(self.2) {
+                crate::commands::watcher::announce_sync_status(self.1);
+            }
         }
     }
-    let _clear = Clear(engine, key);
+    let _clear = Clear(engine, key, generation);
     // Count an attempted round, not only a successful one. Otherwise a bad
     // link or missing sign-in starts a new automatic attempt every sweep tick.
-    engine.mark_synced();
+    engine.mark_attempt(super::schedule::now_epoch_secs());
     let profile = profile_id.map(str::to_owned);
     let outcome = (|| {
         // Whatever is still sitting in the settle window belongs in this sync.
@@ -496,7 +497,7 @@ pub fn sync(
     })();
     engine.set_sync_problem(outcome.as_ref().err().cloned());
     if let Some(home) = super::settle::settings_home() {
-        super::trigger::record_round_trip(&home, root, outcome.is_ok());
+        super::schedule::record_round_trip(&home, root, outcome.is_ok());
     }
     if outcome.is_ok() {
         if let Err(error) = engine.maintain(false) {
@@ -507,6 +508,7 @@ pub fn sync(
 }
 
 fn report_phase(engine: &super::engine::Engine, key: &str, phase: SyncPhase) {
+    engine.note_sync_progress(super::schedule::now_epoch_secs());
     engine.set_phase(Some(phase));
     crate::commands::watcher::announce_sync_status(key);
 }

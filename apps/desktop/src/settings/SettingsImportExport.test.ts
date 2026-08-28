@@ -49,7 +49,12 @@ const SEEDED_APP_VALUES: Record<string, unknown> = {
   "editor.livePreview": true,
   "sync.settleAutomatically": true,
   "sync.historyPolicy": "",
-  "sync.trigger": "auto",
+  "sync.automatically": true,
+  "sync.intervalSeconds": 60,
+  "sync.quietSeconds": 30,
+  "sync.onOpen": true,
+  "sync.onLeave": true,
+  "settings.showAdvanced": false,
   "ui.mobileHub": ""
 };
 
@@ -126,9 +131,19 @@ describe("buildExportPayload", () => {
     expect(keys).toContain("editor.livePreview");
     expect(keys).toContain("sync.settleAutomatically");
     expect(keys).toContain("sync.historyPolicy");
-    expect(keys).toContain("sync.trigger");
+    // Every part of the sync schedule travels. None of it is a fact about
+    // one device any more, which is what makes exporting it safe: the policy
+    // enum this replaced could carry `idle` onto a phone, where it did not
+    // work. An advanced setting exports like any other.
+    expect(keys).toContain("sync.automatically");
+    expect(keys).toContain("sync.intervalSeconds");
+    expect(keys).toContain("sync.quietSeconds");
+    expect(keys).toContain("sync.onOpen");
+    expect(keys).toContain("sync.onLeave");
+    expect(keys).toContain("settings.showAdvanced");
+    expect(keys).not.toContain("sync.trigger");
     expect(keys).not.toContain("sync.destination");
-    expect(keys).toHaveLength(11);
+    expect(keys).toHaveLength(16);
   });
 });
 

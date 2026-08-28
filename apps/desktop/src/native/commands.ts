@@ -336,10 +336,6 @@ export interface NativeCommandMap {
     readonly args: { readonly rootPath: string };
     readonly result: NativeHistoryCleanup;
   };
-  readonly sync_app_foregrounded: {
-    readonly args: undefined;
-    readonly result: null;
-  };
   readonly sync_app_backgrounded: {
     readonly args: undefined;
     readonly result: null;
