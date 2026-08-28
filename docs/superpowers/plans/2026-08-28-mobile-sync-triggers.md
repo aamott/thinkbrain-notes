@@ -140,7 +140,7 @@ and above the module:
 export const DEFAULT_SYNC_TRIGGER = "auto";
 ```
 
-If the registry has no `"enum"` type, use whatever the existing `historyPolicy` setting uses — read it first and copy that shape exactly rather than inventing one.
+`"enum"` is a real `SettingType` (`packages/core/src/settings/types.ts:11`); it requires `options` and renders as a select control automatically. Do not copy `historyPolicy` — that one is `type: "string"` with a custom control, which would give this setting a free-text box.
 
 - [ ] **Step 4: Run the test and watch it pass**
 
