@@ -54,8 +54,6 @@ macro_rules! app_command_handlers {
             $crate::commands::markdown::read_markdown_file,
             $crate::commands::markdown::write_markdown_file,
             $crate::commands::markdown::create_markdown_file,
-            $crate::commands::markdown::rename_markdown_file,
-            $crate::commands::markdown::delete_markdown_file,
             $crate::commands::text_files::read_text_file,
             $crate::commands::text_files::write_text_file,
             $crate::commands::workspace::create_workspace_file,
@@ -127,8 +125,6 @@ pub const APP_COMMAND_PATHS: &[&str] = &[
     "markdown::read_markdown_file",
     "markdown::write_markdown_file",
     "markdown::create_markdown_file",
-    "markdown::rename_markdown_file",
-    "markdown::delete_markdown_file",
     "text_files::read_text_file",
     "text_files::write_text_file",
     "workspace::create_workspace_file",
@@ -210,8 +206,6 @@ mod tests {
         assert!(APP_COMMAND_PATHS.contains(&"markdown::read_markdown_file"));
         assert!(APP_COMMAND_PATHS.contains(&"markdown::write_markdown_file"));
         assert!(APP_COMMAND_PATHS.contains(&"markdown::create_markdown_file"));
-        assert!(APP_COMMAND_PATHS.contains(&"markdown::rename_markdown_file"));
-        assert!(APP_COMMAND_PATHS.contains(&"markdown::delete_markdown_file"));
         // Search
         assert!(APP_COMMAND_PATHS.contains(&"search::index_documents"));
         assert!(APP_COMMAND_PATHS.contains(&"search::search_index"));
@@ -271,8 +265,8 @@ mod tests {
         );
         assert_eq!(
             APP_COMMAND_PATHS.len(),
-            61,
-            "expected 61 registered commands"
+            59,
+            "expected 59 registered commands"
         );
     }
 }

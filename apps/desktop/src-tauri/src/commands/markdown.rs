@@ -10,8 +10,8 @@ const MAX_MARKDOWN_DEPTH: usize = 20;
 
 use crate::commands::workspace::{
     MAX_WORKSPACE_ENTRIES, acquire_workspace_mutation_lock, ensure_parent_dir, entry_metadata,
-    is_ignored_entry_name, normalize_relative_path, remove_search_index_entry,
-    resolve_workspace_entry_path, resolve_workspace_root, write_file_atomically,
+    is_ignored_entry_name, normalize_relative_path, resolve_workspace_entry_path,
+    resolve_workspace_root, write_file_atomically,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -238,77 +238,6 @@ pub fn create_markdown_file(
     })?;
 
     markdown_file_entry(&root, &file_path)
-}
-
-#[tauri::command]
-pub fn rename_markdown_file(
-    app: tauri::AppHandle,
-    root_path: String,
-    relative_path: String,
-    new_relative_path: String,
-) -> Result<MarkdownFileEntry, NativeError> {
-    let root = resolve_workspace_root(&root_path)?;
-    let file_path = resolve_markdown_file_path(&root, &relative_path)?;
-    let new_file_path = resolve_markdown_file_path(&root, &new_relative_path)?;
-
-    if !file_path.is_file() {
-        return Err(NativeError::new(
-            "workspace.file_missing",
-            "Cannot rename a Markdown file that does not exist.",
-        ));
-    }
-
-    if new_file_path.exists() {
-        return Err(NativeError::new(
-            "workspace.file_exists",
-            "A Markdown file already exists at the new path.",
-        ));
-    }
-
-    ensure_parent_dir(&new_file_path, "Failed to create the destination folder.")?;
-
-    record_self_write(&file_path);
-    record_self_write(&new_file_path);
-    fs::rename(&file_path, &new_file_path).map_err(|error| {
-        failed(
-            "workspace.rename_failed",
-            "Failed to rename the Markdown file.",
-            error,
-        )
-    })?;
-
-    remove_search_index_entry(app, root_path, &relative_path, "markdown");
-    markdown_file_entry(&root, &new_file_path)
-}
-
-#[tauri::command]
-pub fn delete_markdown_file(
-    app: tauri::AppHandle,
-    root_path: String,
-    relative_path: String,
-) -> Result<(), NativeError> {
-    let root = resolve_workspace_root(&root_path)?;
-    let file_path = resolve_markdown_file_path(&root, &relative_path)?;
-
-    if !file_path.is_file() {
-        return Err(NativeError::new(
-            "workspace.file_missing",
-            "Cannot delete a Markdown file that does not exist.",
-        ));
-    }
-
-    record_self_write(&file_path);
-    fs::remove_file(&file_path).map_err(|error| {
-        failed(
-            "workspace.delete_failed",
-            "Failed to delete the Markdown file.",
-            error,
-        )
-    })?;
-
-    remove_search_index_entry(app, root_path, &relative_path, "markdown");
-
-    Ok(())
 }
 
 pub fn resolve_markdown_file_path(
