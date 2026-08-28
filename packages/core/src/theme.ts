@@ -103,7 +103,20 @@ export const KNOWN_THEME_TOKENS: readonly string[] = [
   "--tn-color-tab-active",
   "--tn-color-tab-inactive",
   "--tn-color-tab-active-foreground",
-  "--tn-color-tab-inactive-foreground"
+  "--tn-color-tab-inactive-foreground",
+
+  // Syntax highlighting — code editor token colors.
+  "--tn-color-syntax-keyword",
+  "--tn-color-syntax-string",
+  "--tn-color-syntax-comment",
+  "--tn-color-syntax-number",
+  "--tn-color-syntax-type",
+  "--tn-color-syntax-function",
+  "--tn-color-syntax-variable",
+  "--tn-color-syntax-property",
+  "--tn-color-syntax-operator",
+  "--tn-color-syntax-punctuation",
+  "--tn-color-syntax-invalid"
 ];
 
 /** Set form of {@link KNOWN_THEME_TOKENS} for O(1) membership checks. */

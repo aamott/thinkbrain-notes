@@ -55,6 +55,19 @@
   --tn-color-tab-active-foreground: hsl(222 47% 11%);
   --tn-color-tab-inactive-foreground: hsl(220 9% 46%);
 
+  /* Syntax highlighting — code editor token colors. */
+  --tn-color-syntax-keyword: hsl(262 83% 58%);
+  --tn-color-syntax-string: hsl(152 60% 30%);
+  --tn-color-syntax-comment: hsl(220 9% 46%);
+  --tn-color-syntax-number: hsl(28 90% 45%);
+  --tn-color-syntax-type: hsl(200 85% 38%);
+  --tn-color-syntax-function: hsl(262 83% 40%);
+  --tn-color-syntax-variable: hsl(222 47% 11%);
+  --tn-color-syntax-property: hsl(200 85% 38%);
+  --tn-color-syntax-operator: hsl(220 9% 46%);
+  --tn-color-syntax-punctuation: hsl(220 9% 46%);
+  --tn-color-syntax-invalid: hsl(0 84% 60%);
+
   --tn-radius-small: 0.25rem;
   --tn-radius-medium: 0.5rem;
   --tn-radius-large: 0.75rem;
@@ -126,6 +139,19 @@
   --tn-color-tab-inactive: hsl(0 0% 12%);
   --tn-color-tab-active-foreground: hsl(0 0% 98%);
   --tn-color-tab-inactive-foreground: hsl(0 0% 60%);
+
+  /* Syntax highlighting — code editor token colors. */
+  --tn-color-syntax-keyword: hsl(152 60% 45%);
+  --tn-color-syntax-string: hsl(152 50% 60%);
+  --tn-color-syntax-comment: hsl(0 0% 55%);
+  --tn-color-syntax-number: hsl(28 90% 60%);
+  --tn-color-syntax-type: hsl(200 85% 60%);
+  --tn-color-syntax-function: hsl(152 60% 55%);
+  --tn-color-syntax-variable: hsl(0 0% 98%);
+  --tn-color-syntax-property: hsl(200 85% 60%);
+  --tn-color-syntax-operator: hsl(0 0% 65%);
+  --tn-color-syntax-punctuation: hsl(0 0% 65%);
+  --tn-color-syntax-invalid: hsl(0 72% 51%);
 
   /* Stronger popout shadow for dark palettes. */
   --tn-shadow-panel: 0 0 24px 4px rgb(0 0 0 / 55%);
