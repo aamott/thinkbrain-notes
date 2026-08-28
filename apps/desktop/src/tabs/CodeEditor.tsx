@@ -202,7 +202,7 @@ export function CodeEditor({
           const view = viewRef.current;
           if (!view) return;
           const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
-          if (pos !== null && pos < view.state.doc.length) return;
+          if (pos === null || pos < view.state.doc.length) return;
           event.preventDefault();
           view.dispatch({ selection: { anchor: view.state.doc.length } });
           view.focus();

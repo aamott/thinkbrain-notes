@@ -245,7 +245,7 @@ export function MarkdownEditor({
           // (i.e. below the last line of text). Clicks within the document are
           // left to CodeMirror's native handling so selection, double-click,
           // and drag all work normally.
-          if (pos !== null && pos < view.state.doc.length) return;
+          if (pos === null || pos < view.state.doc.length) return;
           event.preventDefault();
           view.dispatch({ selection: { anchor: view.state.doc.length } });
           view.focus();
