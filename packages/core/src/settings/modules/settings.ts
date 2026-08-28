@@ -15,6 +15,9 @@ import type { SettingsModule } from "../types";
  * is preserved unless the user explicitly opts in. When enabled, the desktop
  * store triggers a debounced `saveSettings()` after each `stageChange` instead
  * of waiting for an explicit Save click.
+ *
+ * The `showAdvanced` setting controls whether advanced settings are shown in the
+ * settings UI. Advanced settings are those marked with `advanced: true`.
  */
 export const settingsModule: SettingsModule = {
   id: "settings",
@@ -34,6 +37,16 @@ export const settingsModule: SettingsModule = {
           label: "Autosave changes",
           description:
             "Automatically save setting changes without clicking Save."
+        },
+        {
+          key: "showAdvanced",
+          type: "boolean",
+          default: false,
+          scope: "app",
+          section: "settings.general",
+          label: "Show advanced settings",
+          description:
+            "Show every setting, including the ones most people never need to change. Advanced settings you have already changed stay visible whether this is on or off."
         }
       ]
     }
