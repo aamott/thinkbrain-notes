@@ -152,6 +152,7 @@ pub mod settle;
 pub mod sign_in;
 pub mod snapshot;
 pub mod status;
+pub mod trigger;
 
 #[cfg(test)]
 #[path = "test_support.rs"]
