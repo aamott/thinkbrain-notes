@@ -148,6 +148,20 @@ pub fn is_stale(app_data_dir: &Path, root: &Path, now_secs: u64) -> bool {
     }
 }
 
+/// Whether returning to the app should start a round trip for a vault.
+pub fn should_sync_on_foreground(trigger: Trigger, stale: bool) -> bool {
+    matches!(trigger, Trigger::Foreground) && stale
+}
+
+/// Whether leaving the app should attempt a push.
+///
+/// Best effort by nature: Android may cut it short, and its outcome is not
+/// observable. That is acceptable only because returning to the app syncs
+/// again when stale, so nothing depends on this landing.
+pub fn should_push_on_background(trigger: Trigger) -> bool {
+    matches!(trigger, Trigger::Foreground)
+}
+
 #[cfg(test)]
 #[path = "trigger_tests.rs"]
 mod tests;

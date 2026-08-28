@@ -101,7 +101,9 @@ macro_rules! app_command_handlers {
             $crate::commands::sync::import::preview_workspace_from_git_link,
             $crate::commands::sync::import::preview_managed_workspace_from_git_link,
             $crate::commands::sync::import::import_workspace_from_git_link,
-            $crate::commands::sync::import::import_managed_workspace_from_git_link
+            $crate::commands::sync::import::import_managed_workspace_from_git_link,
+            $crate::commands::sync::registry::sync_app_foregrounded,
+            $crate::commands::sync::registry::sync_app_backgrounded
         ]
     };
 }
@@ -173,6 +175,8 @@ pub const APP_COMMAND_PATHS: &[&str] = &[
     "sync::import::preview_managed_workspace_from_git_link",
     "sync::import::import_workspace_from_git_link",
     "sync::import::import_managed_workspace_from_git_link",
+    "sync::registry::sync_app_foregrounded",
+    "sync::registry::sync_app_backgrounded",
 ];
 
 #[cfg(test)]
@@ -253,6 +257,8 @@ mod tests {
         assert!(
             APP_COMMAND_PATHS.contains(&"sync::import::import_managed_workspace_from_git_link")
         );
+        assert!(APP_COMMAND_PATHS.contains(&"sync::registry::sync_app_foregrounded"));
+        assert!(APP_COMMAND_PATHS.contains(&"sync::registry::sync_app_backgrounded"));
 
         // Sanity: no duplicates and the count matches the macro entries.
         let mut sorted = APP_COMMAND_PATHS.to_vec();
@@ -265,8 +271,8 @@ mod tests {
         );
         assert_eq!(
             APP_COMMAND_PATHS.len(),
-            59,
-            "expected 59 registered commands"
+            61,
+            "expected 61 registered commands"
         );
     }
 }

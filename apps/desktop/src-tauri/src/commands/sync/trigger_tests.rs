@@ -171,6 +171,29 @@ fn recording_a_sync_keeps_the_rest_of_the_workspace_settings() {
 /// was supposed to mark the vault as synced. Root bypasses Unix permission
 /// checks, so this test is meaningless run as root; it is not run in CI as
 /// root.
+/// Returning to the app syncs only under `Foreground`, and only when the last
+/// successful round trip is old enough to be worth repeating.
+#[test]
+fn returning_to_the_app_syncs_only_when_the_policy_says_so_and_it_is_stale() {
+    use super::{Trigger, should_sync_on_foreground};
+
+    assert!(should_sync_on_foreground(Trigger::Foreground, true));
+    assert!(!should_sync_on_foreground(Trigger::Foreground, false));
+    assert!(!should_sync_on_foreground(Trigger::Idle, true));
+    assert!(!should_sync_on_foreground(Trigger::Manual, true));
+}
+
+/// Backgrounding pushes under `Foreground` only. A desktop user who never
+/// touches the setting sees no new behaviour at all from this work.
+#[test]
+fn leaving_the_app_pushes_only_under_the_foreground_policy() {
+    use super::{Trigger, should_push_on_background};
+
+    assert!(should_push_on_background(Trigger::Foreground));
+    assert!(!should_push_on_background(Trigger::Idle));
+    assert!(!should_push_on_background(Trigger::Manual));
+}
+
 #[cfg(unix)]
 #[test]
 fn a_settings_file_that_cannot_be_read_is_left_untouched() {
