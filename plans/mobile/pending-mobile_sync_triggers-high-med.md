@@ -26,6 +26,10 @@ sweeper's point of view no time passed at all.
 Idle inference is a desktop idea. A desktop process keeps running and its clock
 keeps meaning something.
 
+> Design: `docs/superpowers/specs/2026-08-28-mobile-sync-triggers-design.md`,
+> which settles this as a cross-platform `sync.trigger` policy rather than a
+> mobile branch, and records why.
+
 ## Shape
 
 Replace inference with explicit triggers on mobile:
@@ -58,7 +62,12 @@ round-trip code, something has gone wrong in the design.
 
 ## Acceptance
 
-- [ ] The sweeper thread does not run on Android
+- [ ] `maybe_sync` fires from an explicit policy rather than from idle
+      inference. **Corrected 2026-08-28:** this item used to read "the sweeper
+      thread does not run on Android", which would also have killed local
+      version recording and history maintenance — the sweeper does three things
+      per tick and only `maybe_sync` touches the network. The sweeper keeps
+      running everywhere
 - [ ] Sync runs on workspace open, on foreground, and on explicit request
 - [ ] A returning user does not get an unrequested sync fired by a stale clock
 - [ ] Backgrounding does not leave a vault in a state a restart cannot recover
