@@ -67,6 +67,10 @@ export function GitLinkControl({ definition, value, onChange, disabled }: Contro
     rootPath !== null &&
     validation === null &&
     isHttps &&
+    // No credential store (Android today), no point offering to save a token:
+    // `store_profile` would only return `sync.auth_required`. Mirrors the
+    // import dialog, which hides these fields outright.
+    status?.storage === "available" &&
     (selectValue === NEW_VALUE || selectValue === LEGACY_VALUE || selectedForHost) &&
     username.trim() !== "" &&
     token !== "";

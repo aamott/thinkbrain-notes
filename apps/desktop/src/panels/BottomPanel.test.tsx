@@ -6,8 +6,6 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { BottomPanel as BottomPanelId } from "../shell/shellTypes";
 import { BottomPanel } from "./BottomPanel";
 
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
 

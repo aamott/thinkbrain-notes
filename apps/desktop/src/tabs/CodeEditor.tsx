@@ -196,8 +196,17 @@ export function CodeEditor({
         </p>
       )}
       <div
-        className="min-h-0 flex-1 overflow-auto cursor-text [&_.cm-editor]:min-h-full [&_.cm-editor]:cursor-text [&_.cm-editor]:bg-editor [&_.cm-editor]:text-foreground [&_.cm-editor]:font-mono [&_.cm-editor]:text-sm [&_.cm-editor]:leading-1.65 [&_.cm-scroller]:overflow-auto [&_.cm-scroller]:cursor-text [&_.cm-content]:min-h-full [&_.cm-content]:pt-4 [&_.cm-content]:px-5 [&_.cm-content]:pb-16 [&_.cm-focused]:outline-none"
+        className="min-h-0 flex-1 overflow-auto cursor-text [&_.cm-editor]:min-h-full [&_.cm-editor]:cursor-text [&_.cm-editor]:bg-editor [&_.cm-editor]:font-mono [&_.cm-editor]:text-sm [&_.cm-editor]:leading-1.65 [&_.cm-scroller]:overflow-auto [&_.cm-scroller]:cursor-text [&_.cm-content]:min-h-full [&_.cm-content]:pt-4 [&_.cm-content]:px-5 [&_.cm-content]:pb-16 [&_.cm-focused]:outline-none"
         ref={hostRef}
+        onPointerDown={(event) => {
+          const view = viewRef.current;
+          if (!view) return;
+          const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
+          if (pos === null || pos < view.state.doc.length) return;
+          event.preventDefault();
+          view.dispatch({ selection: { anchor: view.state.doc.length } });
+          view.focus();
+        }}
       />
     </section>
   );

@@ -13,7 +13,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use super::credentials;
 use super::push;
-use super::round::{Synced, run_trip};
+use super::round::{PushPolicy, Synced, run_trip};
 use super::snapshot;
 use super::test_support;
 
@@ -62,6 +62,8 @@ fn trip(device: &Device, destination: &str, profile: &str) -> Synced {
         &device.vault,
         destination,
         Some(profile),
+        // A live sync must still fail loudly if it cannot send.
+        PushPolicy::Required,
         |_| {},
     )
     .unwrap_or_else(|error| panic!("live sync failed: {} ({})", error.message, error.code))

@@ -8,6 +8,19 @@
 
 Provide a typed Rust/native boundary for one extension and credential key at a time, using the platform credential store and never JSON settings, workspace files, logs, renderer-wide state, or bulk cross-extension reads.
 
+## Direction set by the mobile epic (2026-08-27)
+
+The store question this article left open has a drafted answer, because mobile
+forced it: **keyring v4 (`keyring-core`) plus per-platform store crates**, with
+`android-native-keyring-store` on Android. See
+`docs/superpowers/specs/2026-08-27-android-git-access-design.md` and
+`../auto-sync/pending-keyring_v4_migration-high-med.md`.
+
+That migration registers one default store per platform at startup, giving this
+story an `Entry`-shaped boundary that already covers desktop and Android. What
+remains here is extension-scoped naming, isolation and the API surface — not
+the choice of backend, and still not an encrypted fallback.
+
 ## Discovery questions
 
 - Which credential-store crate and minimum OS versions are approved for macOS Keychain, Windows Credential Manager, and Linux Secret Service/equivalent?

@@ -303,7 +303,9 @@ fn an_empty_remote_creates_an_empty_linked_workspace_without_git_in_the_vault() 
         None,
     )
     .expect("prepared");
-    let target = complete_import(&app_data, prepared, |_| {}).expect("empty remote is fine");
+    let target = complete_import(&app_data, prepared, |_| {})
+        .expect("empty remote is fine")
+        .path;
 
     assert!(target.is_dir());
     assert!(!target.join(".git").exists(), "vault grew a .git");
@@ -351,7 +353,9 @@ fn a_local_bare_remote_on_a_nonstandard_default_branch_is_adopted() {
         None,
     )
     .expect("prepared");
-    let target = complete_import(&app_data, prepared, |_| {}).expect("import");
+    let target = complete_import(&app_data, prepared, |_| {})
+        .expect("import")
+        .path;
 
     assert_eq!(
         fs::read_to_string(target.join("hello.md")).expect("adopted"),
@@ -377,7 +381,9 @@ fn a_second_check_after_import_does_not_interleave_or_rewrite_notes() {
         None,
     )
     .expect("prepared");
-    let target = complete_import(&app_data, prepared, |_| {}).expect("import");
+    let target = complete_import(&app_data, prepared, |_| {})
+        .expect("import")
+        .path;
     let hidden = hidden_repo_path(&app_data, &target.to_string_lossy());
     let repo = gix::open(&hidden).expect("hidden repo");
     let again = crate::commands::sync::round::once(&repo, &target, &there.to_string_lossy())
@@ -413,6 +419,7 @@ fn import_progress_never_carries_url_credentials() {
         phase: None,
         target_path: "/notes/notes".to_string(),
         error: Some(error),
+        not_sent: None,
     };
     let json = serde_json::to_string(&payload).expect("json");
     assert!(!json.contains("token"));
@@ -438,5 +445,62 @@ fn import_commands_are_registered() {
     assert!(
         crate::commands::APP_COMMAND_PATHS
             .contains(&"sync::import::import_managed_workspace_from_git_link")
+    );
+}
+
+/// An import fetches, merges, and then pushes. When that push cannot succeed —
+/// a public repository nobody has write access to, a read-only mirror, or a
+/// phone with nowhere to keep a token — the whole import used to be rolled
+/// back and the vault deleted, discarding a fetch and merge that had both
+/// worked.
+///
+/// The remote is taken away at the `Sending` phase, which fires after the
+/// fetch and merge and immediately before the push. That makes the push the
+/// only thing that fails, which is the situation under test; locking the
+/// remote up front does not work, because against a local remote there is
+/// nothing left to send and the push never has to reach it.
+#[test]
+fn an_import_keeps_the_vault_when_the_push_fails() {
+    let app_data = app_data("readonly");
+    let parent = parent("readonly");
+    let source = source_device("import-readonly-src");
+    record_note(&source, "hello.md", "fetched but not sendable\n");
+    let tip = snapshot::head_commit(&source.repo)
+        .expect("readable")
+        .expect("recorded");
+    let remote = bare_remote("readonly-remote");
+    push::send(
+        &source.repo,
+        &remote.to_string_lossy(),
+        "refs/heads/main",
+        tip,
+    )
+    .expect("seeded the remote");
+
+    let prepared = prepare_import(
+        &app_data,
+        &remote.to_string_lossy(),
+        &parent.to_string_lossy(),
+        None,
+    )
+    .expect("prepared");
+
+    let moved_aside = remote.with_extension("gone");
+    let target = complete_import(&app_data, prepared, |phase| {
+        if matches!(phase, SyncPhase::Sending) {
+            fs::rename(&remote, &moved_aside).expect("take the remote away before the push");
+        }
+    })
+    .expect("a repository we cannot push to still imports");
+
+    assert!(target.path.is_dir(), "the vault was rolled back");
+    assert_eq!(
+        fs::read_to_string(target.path.join("hello.md")).expect("the fetched note survived"),
+        "fetched but not sendable\n"
+    );
+    assert!(
+        matches!(target.landed, push::Landed::NotSent { .. }),
+        "the import should report that it sent nothing, got {:?}",
+        target.landed
     );
 }

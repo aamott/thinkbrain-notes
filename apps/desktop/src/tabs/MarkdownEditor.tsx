@@ -238,10 +238,13 @@ export function MarkdownEditor({
         className="min-h-0 flex-1 overflow-auto cursor-text [&_.cm-editor]:min-h-full [&_.cm-editor]:cursor-text [&_.cm-editor]:bg-editor [&_.cm-editor]:text-foreground [&_.cm-editor]:font-mono [&_.cm-editor]:text-sm [&_.cm-editor]:leading-1.65 [&_.cm-scroller]:overflow-auto [&_.cm-scroller]:cursor-text [&_.cm-content]:min-h-full [&_.cm-content]:pt-4 [&_.cm-content]:px-5 [&_.cm-content]:pb-16 [&_.cm-focused]:outline-none"
         ref={hostRef}
         onPointerDown={(event) => {
-          if (event.pointerType === "mouse") return;
           const view = viewRef.current;
           if (!view) return;
           const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
+          // Only intercept clicks that land at or past the end of the document
+          // (i.e. below the last line of text). Clicks within the document are
+          // left to CodeMirror's native handling so selection, double-click,
+          // and drag all work normally.
           if (pos === null || pos < view.state.doc.length) return;
           event.preventDefault();
           view.dispatch({ selection: { anchor: view.state.doc.length } });

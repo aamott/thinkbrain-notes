@@ -554,6 +554,15 @@ export interface NativeImportProgress {
   readonly phase?: NativeSyncStatus["phase"];
   readonly targetPath: string;
   readonly error?: NativeCommandErrorShape;
+  /**
+   * Why nothing was sent back, on an import that otherwise succeeded.
+   *
+   * An import fetches, merges and then pushes. That push can fail on its own —
+   * a public repository, a read-only mirror, a device with nowhere to keep a
+   * token — while everything before it worked. The vault is kept either way,
+   * so this is what separates a full round trip from a one-way one.
+   */
+  readonly notSent?: string;
 }
 
 // Sent to `index_documents`. Field names are camelCase here and mapped to the
@@ -609,8 +618,30 @@ export async function invokeNativeCommand<TCommand extends NativeCommandName>(
       args as (NativeCommandMap[TCommand]["args"] & Record<string, unknown>) | undefined
     );
   } catch (error) {
-    throw normalizeNativeError(error);
+    const normalized = normalizeNativeError(error);
+    logCommandFailure(command, normalized);
+    throw normalized;
   }
+}
+
+/**
+ * Records a failed native command where a log reader can find it.
+ *
+ * This is the only place that knows both the command name and the error, which
+ * is why the log lives here rather than in the panels that render the message.
+ * The Rust side assembles a redacted `details` chain for exactly this purpose,
+ * but until now it only reached a collapsed "Technical details" element — fine
+ * on a desktop with devtools open, useless on a phone, where reading it means
+ * tapping a disclosure triangle you cannot see from `adb`.
+ *
+ * Emitted as one pre-formatted, ASCII-only string on purpose: Android's WebView
+ * forwards console output to logcat but renders object arguments as
+ * `[object Object]`, so passing the error itself would log nothing useful on
+ * the one platform this is most needed for.
+ */
+function logCommandFailure(command: string, error: NativeCommandError): void {
+  const details = error.details ? ` | ${error.details}` : "";
+  console.error(`[native] ${command} failed: [${error.code}] ${error.message}${details}`);
 }
 
 export function normalizeNativeError(error: unknown): NativeCommandError {

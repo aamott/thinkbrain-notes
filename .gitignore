@@ -66,3 +66,5 @@ ehthumbs.db
 *.orig
 temp/
 tmp/
+tools/keyring-migration-probe/target/
+tools/keyring-migration-probe/Cargo.lock

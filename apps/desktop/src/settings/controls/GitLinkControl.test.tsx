@@ -234,4 +234,17 @@ describe("GitLinkControl", () => {
     expect(useSettingsStore.getState().stagedChanges["sync.signInProfile"]).toBe("");
     expect(rendered.textContent).toContain("That sign-in was forgotten");
   });
+
+  it("does not offer a sign-in a device with no credential store cannot keep", async () => {
+    readSignInStatus.mockResolvedValue({
+      ...emptyStatus,
+      storage: "unsupported",
+      storageMessage: "Sign-in is not available on this device yet."
+    });
+    const rendered = await render("https://github.com/you/notes.git");
+    await fillSignIn("you", "secret");
+
+    expect(button("Update sign-in").disabled).toBe(true);
+    expect(rendered.textContent).toContain("Sign-in is not available on this device yet.");
+  });
 });
