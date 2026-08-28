@@ -183,7 +183,7 @@ pub fn attach(app_data_dir: &Path, root: &Path, key: &str, label: &str) -> Resul
     // syncs here every time. `manual` is the one policy that does not: it
     // promises no automatic network in any lifecycle event. `idle` keeps this
     // because this call is part of the desktop behaviour `idle` preserves.
-    if !matches!(super::trigger::resolved(), super::trigger::Trigger::Manual) {
+    if super::trigger::open_start_allowed(super::trigger::resolved()) {
         if let Some(destination) = round::destination(app_data_dir, root) {
             start_round(key, &engine, root.to_path_buf(), destination);
         }
@@ -402,13 +402,19 @@ fn spawn_sweeper() {
 /// enough since the last one. "Sync now" does not go through here, and the
 /// per-workspace lane still keeps two trips from interleaving.
 fn maybe_sync(key: &str, engine: &Arc<Engine>, now: Instant) {
+    if !engine.ready_to_sync(IDLE, CAP, now) {
+        return;
+    }
+    // Asked after `ready_to_sync`, not before: resolving the policy reads and
+    // parses the settings file, and the sweeper asks this of every open
+    // workspace twice a second. `ready_to_sync` is pure and in memory, so
+    // letting it reject first keeps an idle tick free of I/O — the same care
+    // `record_settled` takes for the same reason (`engine.rs:271`).
+    //
     // Idle time is only evidence under the policy that says so. Under the
     // others this timer is measuring a clock that may have jumped while the
     // process was frozen, which is the whole reason the policy exists.
     if !super::trigger::idle_start_allowed(super::trigger::resolved()) {
-        return;
-    }
-    if !engine.ready_to_sync(IDLE, CAP, now) {
         return;
     }
     let Some(home) = settle::settings_home() else {

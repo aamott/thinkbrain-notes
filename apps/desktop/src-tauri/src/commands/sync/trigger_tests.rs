@@ -15,6 +15,18 @@ fn only_the_idle_policy_starts_a_round_trip_from_a_timer() {
     assert!(!idle_start_allowed(Trigger::Manual));
 }
 
+/// Opening a workspace is deliberate, so every policy but `Manual` syncs —
+/// `idle` because that is today's behaviour, `foreground` because opening is
+/// when a stale vault is most visible.
+#[test]
+fn opening_a_workspace_syncs_under_every_policy_except_manual() {
+    use super::{Trigger, open_start_allowed};
+
+    assert!(open_start_allowed(Trigger::Idle));
+    assert!(open_start_allowed(Trigger::Foreground));
+    assert!(!open_start_allowed(Trigger::Manual));
+}
+
 fn home_with(setting: Option<&str>) -> std::path::PathBuf {
     let dir = make_temp_test_dir("trigger", "sync", true);
     if let Some(json) = setting {

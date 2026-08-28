@@ -74,6 +74,19 @@ pub(super) fn idle_start_allowed(trigger: Trigger) -> bool {
     matches!(trigger, Trigger::Idle)
 }
 
+/// Whether opening a workspace may start a round trip under this policy.
+///
+/// The odd one out: gated on `Manual` rather than on `Foreground`, because
+/// `attach` synced on open long before this policy existed. `idle` must keep
+/// it — `idle` is today's desktop behaviour exactly unchanged, and this call
+/// is part of today's behaviour. `foreground` syncs on open unconditionally,
+/// staleness gating only the far more frequent *return* to foreground. Only
+/// `manual` is excluded, because manual means no automatic network in any
+/// lifecycle event.
+pub(super) fn open_start_allowed(trigger: Trigger) -> bool {
+    !matches!(trigger, Trigger::Manual)
+}
+
 /// How old a successful sync must be before returning to the app repeats it.
 ///
 /// Long enough that flicking to another app and back does not resync; short
