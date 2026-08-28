@@ -49,6 +49,7 @@ const SEEDED_APP_VALUES: Record<string, unknown> = {
   "editor.livePreview": true,
   "sync.settleAutomatically": true,
   "sync.historyPolicy": "",
+  "sync.trigger": "auto",
   "ui.mobileHub": ""
 };
 
@@ -125,8 +126,9 @@ describe("buildExportPayload", () => {
     expect(keys).toContain("editor.livePreview");
     expect(keys).toContain("sync.settleAutomatically");
     expect(keys).toContain("sync.historyPolicy");
+    expect(keys).toContain("sync.trigger");
     expect(keys).not.toContain("sync.destination");
-    expect(keys).toHaveLength(10);
+    expect(keys).toHaveLength(11);
   });
 });
 

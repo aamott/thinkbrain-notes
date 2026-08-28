@@ -242,10 +242,10 @@ Expected: FAIL — module `trigger` does not exist.
 
 use std::path::Path;
 
-/// Repeated from `DEFAULT_SYNC_TRIGGER` in
-/// `packages/core/src/settings/modules/sync.ts` rather than derived, because
-/// this side answers the question before any window is listening. Changing one
-/// means changing the other.
+/// The composed settings key: module `sync`, setting `trigger`, declared in
+/// `packages/core/src/settings/modules/sync.ts`. Spelled out here rather than
+/// derived because this side answers the question before any window is
+/// listening. Changing the key there means changing it here.
 const SETTING: &str = "sync.trigger";
 
 /// What starts an automatic round trip.

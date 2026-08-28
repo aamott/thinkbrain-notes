@@ -18,6 +18,11 @@ import type { SettingsModule } from "../types";
 export const DEFAULT_SETTLE_AUTOMATICALLY = true;
 
 /**
+ * Repeated in `apps/desktop/src-tauri/src/commands/sync/trigger.rs`. Changing one means changing the other.
+ */
+export const DEFAULT_SYNC_TRIGGER = "auto";
+
+/**
  * How long private undo copies are kept. Repeated on the native side as
  * `RETENTION_DAYS` in `apps/desktop/src-tauri/src/commands/sync/maintain.rs`.
  */
@@ -162,6 +167,17 @@ export const syncModule: SettingsModule = {
           label: "Saved sign-in",
           description: "Which saved sign-in this folder uses. Shown with the git link.",
           portable: false
+        },
+        {
+          key: "trigger",
+          type: "enum",
+          default: DEFAULT_SYNC_TRIGGER,
+          options: ["auto", "idle", "foreground", "manual"],
+          scope: "app",
+          section: "sync.destination",
+          label: "When to sync",
+          description:
+            "Automatic suits most people: this computer syncs when a folder has been still for a moment, and a phone syncs when you come back to it. When idle only syncs after you stop typing. When I return syncs when you open the app again, if it has been a few minutes. Only when I ask never syncs on its own — your notes stay on this device until you press Sync now."
         }
       ]
     }

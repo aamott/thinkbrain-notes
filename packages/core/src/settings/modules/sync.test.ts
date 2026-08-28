@@ -101,4 +101,14 @@ describe("sync module", () => {
     expect(history?.settings?.[0]?.description).not.toMatch(/size cap/i);
     expect(history?.settings?.[0]?.description).not.toMatch(/\bcheckpoint\b/i);
   });
+
+  it("offers a sync trigger policy that defaults to auto", () => {
+    const registry = createSettingsRegistry();
+    registry.register(syncModule);
+    const definition = registry.getDefinition("sync.trigger");
+
+    expect(definition?.default).toBe("auto");
+    expect(validateSettings(registry, { "sync.trigger": "manual" })).toEqual([]);
+    expect(validateSettings(registry, { "sync.trigger": "whenever" })).not.toEqual([]);
+  });
 });
