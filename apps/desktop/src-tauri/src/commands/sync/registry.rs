@@ -379,27 +379,45 @@ fn spawn_sweeper() {
                 // and the schedule is the same answer for all of them.
                 let schedule = super::schedule::resolved();
                 for (key, engine) in engines {
-                    let was_broken = engine.problem().is_some();
-                    let was_stuck = engine.stuck().len();
-                    let recorded = engine.record_settled(now);
-                    if let Err(error) = &recorded {
-                        eprintln!("[sync] could not record changes for {key}: {error:?}");
-                    }
-                    // Only when the footer would read differently. This runs twice
-                    // a second against every open workspace, and almost all of
-                    // those ticks are the same answer as the one before.
-                    if matches!(recorded, Ok(Some(_)))
-                        || engine.problem().is_some() != was_broken
-                        || engine.stuck().len() != was_stuck
-                    {
-                        crate::commands::watcher::announce_sync_status(&key);
-                    }
-                    maybe_sync(&key, &engine, schedule, now, now_secs);
-                    maybe_maintain(&key, &engine);
+                    sweep_once(&key, &engine, schedule, now, now_secs);
                 }
             }
         })
         .expect("the sync sweeper thread starts");
+}
+
+/// One workspace's turn at one tick.
+///
+/// Split out of the loop so a test can hold the whole tick still. What it is
+/// worth pinning is the *shape*: recording and tidying sit outside the
+/// schedule's gate, and only the network call sits inside it. That is what
+/// makes "Sync automatically, off" mean "nothing leaves this device" rather
+/// than "stop keeping my history", which is what the setting's description
+/// promises.
+fn sweep_once(
+    key: &str,
+    engine: &Arc<Engine>,
+    schedule: super::schedule::Schedule,
+    now: Instant,
+    now_secs: u64,
+) {
+    let was_broken = engine.problem().is_some();
+    let was_stuck = engine.stuck().len();
+    let recorded = engine.record_settled(now);
+    if let Err(error) = &recorded {
+        eprintln!("[sync] could not record changes for {key}: {error:?}");
+    }
+    // Only when the footer would read differently. This runs twice a second
+    // against every open workspace, and almost all of those ticks are the same
+    // answer as the one before.
+    if matches!(recorded, Ok(Some(_)))
+        || engine.problem().is_some() != was_broken
+        || engine.stuck().len() != was_stuck
+    {
+        crate::commands::watcher::announce_sync_status(key);
+    }
+    maybe_sync(key, engine, schedule, now, now_secs);
+    maybe_maintain(key, engine);
 }
 
 /// Fires a round trip when the vault has been still and the interval has come
