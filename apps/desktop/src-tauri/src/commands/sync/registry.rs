@@ -548,9 +548,12 @@ fn start_round_inner(
     destination: String,
     profile_id: Option<String>,
 ) {
-    if !engine.set_syncing(true) {
+    let Some(generation) = engine.claim_sync(
+        super::schedule::now_epoch_secs(),
+        super::schedule::ORPHAN_AFTER_SECS,
+    ) else {
         return;
-    }
+    };
     crate::commands::watcher::announce_sync_status(key);
     let worker = Arc::clone(engine);
     let worker_key = key.to_string();
@@ -573,8 +576,9 @@ fn start_round_inner(
         })
         .is_err()
     {
-        engine.set_syncing(false);
-        crate::commands::watcher::announce_sync_status(key);
+        if engine.end_sync(generation) {
+            crate::commands::watcher::announce_sync_status(key);
+        }
     }
 }
 

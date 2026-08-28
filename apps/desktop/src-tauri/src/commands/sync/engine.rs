@@ -8,7 +8,7 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde::Serialize;
@@ -130,6 +130,12 @@ pub struct Engine {
     stuck: Mutex<BTreeMap<String, StuckNote>>,
     /// A round trip to another device is in flight.
     syncing: AtomicBool,
+    /// The round trip in flight: its generation, and when it started or last
+    /// reported progress, in seconds since the epoch.
+    sync_claim: Mutex<Option<(u64, u64)>>,
+    /// Hands out generations. A taken-over trip keeps its old one, so the
+    /// guard it holds can tell that it no longer owns the flag.
+    next_generation: AtomicU64,
     /// The named step of the in-flight round trip, if any.
     phase: Mutex<Option<SyncPhase>>,
     /// When a round trip last completed successfully, in milliseconds since the epoch.
@@ -179,6 +185,8 @@ impl Engine {
             conflicts: Mutex::new(BTreeMap::new()),
             stuck: Mutex::new(BTreeMap::new()),
             syncing: AtomicBool::new(false),
+            sync_claim: Mutex::new(None),
+            next_generation: AtomicU64::new(0),
             phase: Mutex::new(None),
             last_checked_at: Mutex::new(None),
             problem: Mutex::new(None),
@@ -552,15 +560,64 @@ impl Engine {
         self.syncing.load(Ordering::Relaxed)
     }
 
-    /// Marks a round trip as started or finished.
+    /// Takes the claim, unconditionally. The caller holds the workspace lane,
+    /// so it already knows it is the only trip running.
+    pub fn begin_sync(&self, now_secs: u64) -> u64 {
+        let mut claim = lock_or_recover(&self.sync_claim);
+        self.take_claim(&mut claim, now_secs)
+    }
+
+    /// Takes the claim if it is free, or if the trip holding it has neither
+    /// finished nor reported progress for `orphan_after` seconds.
     ///
-    /// Returns whether this call changed the flag, so the caller can announce
-    /// only when the footer would actually read differently.
-    pub fn set_syncing(&self, on: bool) -> bool {
-        if !on {
-            self.set_phase(None);
+    /// Android freezes processes rather than killing them, so the `Drop` guard
+    /// that clears the flag does not run — it pauses, holding a claim that no
+    /// longer describes anything happening.
+    pub fn claim_sync(&self, now_secs: u64, orphan_after: u64) -> Option<u64> {
+        let mut claim = lock_or_recover(&self.sync_claim);
+        if let Some((_, since)) = *claim {
+            if !super::schedule::elapsed_at_least(since, now_secs, orphan_after) {
+                return None;
+            }
         }
-        self.syncing.swap(on, Ordering::Relaxed) != on
+        Some(self.take_claim(&mut claim, now_secs))
+    }
+
+    fn take_claim(&self, claim: &mut Option<(u64, u64)>, now_secs: u64) -> u64 {
+        let generation = self.next_generation.fetch_add(1, Ordering::Relaxed) + 1;
+        *claim = Some((generation, now_secs));
+        self.syncing.store(true, Ordering::Relaxed);
+        generation
+    }
+
+    /// Says a trip is still alive, so a long one is not mistaken for a frozen
+    /// one. Called from every phase report.
+    pub fn note_sync_progress(&self, now_secs: u64) {
+        let mut claim = lock_or_recover(&self.sync_claim);
+        if let Some((generation, _)) = *claim {
+            *claim = Some((generation, now_secs));
+        }
+    }
+
+    /// Releases the claim, reporting whether the flag actually changed.
+    ///
+    /// A superseded generation belongs to a trip that was taken over: it has
+    /// finished, but another is running in its place, so clearing here would
+    /// tell the footer the vault is idle while it is not.
+    pub fn end_sync(&self, generation: u64) -> bool {
+        {
+            let mut claim = lock_or_recover(&self.sync_claim);
+            match *claim {
+                Some((current, _)) if current == generation => *claim = None,
+                _ => return false,
+            }
+        }
+        // Outside the claim lock: `set_phase` takes another, and two locks
+        // held in one order here and the other order elsewhere is how a
+        // deadlock gets written.
+        self.syncing.store(false, Ordering::Relaxed);
+        self.set_phase(None);
+        true
     }
 
     /// Marks a round trip as started, for the frequency gate.

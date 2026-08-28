@@ -456,3 +456,46 @@ fn a_vault_that_has_never_been_attempted_is_due_once_it_is_quiet() {
         1_031
     ));
 }
+
+#[test]
+fn a_fresh_claim_cannot_be_taken_over() {
+    let f = fixture("sync-claim");
+    assert!(f.engine.claim_sync(1_000, 600).is_some());
+    assert!(f.engine.claim_sync(1_060, 600).is_none());
+}
+
+#[test]
+fn a_claim_left_by_a_frozen_process_can_be_taken_over() {
+    // A freeze pauses the worker mid-flight, so the `Drop` guard that clears
+    // the flag never runs. Without a takeover, one frozen trip stops every
+    // later one for the life of the process.
+    let f = fixture("sync-claim");
+    assert!(f.engine.claim_sync(1_000, 600).is_some());
+    assert!(f.engine.claim_sync(1_601, 600).is_some());
+}
+
+#[test]
+fn a_superseded_trip_does_not_clear_the_flag_under_the_one_that_replaced_it() {
+    let f = fixture("sync-claim");
+    let first = f
+        .engine
+        .claim_sync(1_000, 600)
+        .expect("the first trip claims");
+    let second = f
+        .engine
+        .claim_sync(1_601, 600)
+        .expect("the frozen claim is taken over");
+
+    assert!(!f.engine.end_sync(first));
+    assert!(f.engine.syncing());
+    assert!(f.engine.end_sync(second));
+    assert!(!f.engine.syncing());
+}
+
+#[test]
+fn a_trip_that_is_still_reporting_progress_is_not_orphaned() {
+    let f = fixture("sync-claim");
+    assert!(f.engine.claim_sync(1_000, 600).is_some());
+    f.engine.note_sync_progress(1_500);
+    assert!(f.engine.claim_sync(1_601, 600).is_none());
+}
