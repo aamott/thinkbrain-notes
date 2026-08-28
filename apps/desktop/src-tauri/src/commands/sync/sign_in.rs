@@ -210,10 +210,7 @@ pub(super) fn upsert_profile(
     label: Option<String>,
 ) -> Result<SignInProfile, NativeError> {
     if !is_clean_https_url(destination) {
-        return Err(NativeError::new(
-            "sync.credentials_need_https",
-            "Paste a secret-free HTTPS git link before saving a sign-in.",
-        ));
+        return Err(credentials_need_https());
     }
     if username.is_empty() {
         return Err(NativeError::new(
@@ -227,12 +224,7 @@ pub(super) fn upsert_profile(
             "Enter an access token.",
         ));
     }
-    let host = host_of(destination).ok_or_else(|| {
-        NativeError::new(
-            "sync.credentials_need_https",
-            "Paste a secret-free HTTPS git link before saving a sign-in.",
-        )
-    })?;
+    let host = host_of(destination).ok_or_else(credentials_need_https)?;
     let _update = lock_or_recover(&CATALOG_UPDATE);
     let mut catalog = load_catalog()?;
     let existing_id = profile_id
@@ -344,6 +336,13 @@ pub(super) fn require_saved_profile(
     Ok(profile)
 }
 
+fn credentials_need_https() -> NativeError {
+    NativeError::new(
+        "sync.credentials_need_https",
+        "Paste a secret-free HTTPS git link before saving a sign-in.",
+    )
+}
+
 fn wrong_host() -> NativeError {
     NativeError::new(
         "sync.sign_in_wrong_host",
@@ -401,12 +400,7 @@ fn migrate_legacy(
     username: &str,
     secret: &str,
 ) -> Result<SignInProfile, NativeError> {
-    let host = host_of(destination).ok_or_else(|| {
-        NativeError::new(
-            "sync.credentials_need_https",
-            "Paste a secret-free HTTPS git link before saving a sign-in.",
-        )
-    })?;
+    let host = host_of(destination).ok_or_else(credentials_need_https)?;
     let _update = lock_or_recover(&CATALOG_UPDATE);
     let mut catalog = load_catalog()?;
     let id = new_profile_id();

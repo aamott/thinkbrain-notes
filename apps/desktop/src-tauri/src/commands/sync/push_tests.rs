@@ -1,4 +1,5 @@
 use super::super::hidden_repo;
+use super::super::test_support::write;
 use super::*;
 use crate::commands::sync::snapshot;
 use crate::commands::sync::snapshot::HISTORY_REF as BRANCH;
@@ -16,14 +17,6 @@ fn fixture(name: &str) -> Fixture {
     let git_dir = make_temp_test_dir(&format!("{name}-gitdir"), "push", true);
     let repo = hidden_repo::open_or_create(&git_dir, &vault).expect("the hidden repository opens");
     Fixture { vault, repo }
-}
-
-fn write(vault: &Path, relative: &str, contents: &str) {
-    let path = vault.join(relative);
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).expect("the note's folder exists");
-    }
-    fs::write(path, contents).expect("the note is written");
 }
 
 /// Records the vault's current state, and answers with the commit it made.

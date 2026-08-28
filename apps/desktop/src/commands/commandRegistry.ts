@@ -86,11 +86,13 @@ const unavailable = (command: DesktopCommandDefinition): DesktopCommand => ({
   availability: "unavailable"
 });
 
-/** Wraps a command action so the palette closes after it runs. */
-const withClosePalette = (
-  action: (context: DesktopCommandContext) => void
-): ((context: DesktopCommandContext) => void) => (context) => {
-  action(context);
+type NoArgContextAction = Exclude<{
+  [Key in keyof DesktopCommandContext]: DesktopCommandContext[Key] extends () => void ? Key : never
+}[keyof DesktopCommandContext], "closePalette">;
+
+/** Runs a no-argument context action, then closes the palette. */
+const withClosePalette = (action: NoArgContextAction) => (context: DesktopCommandContext): void => {
+  context[action]();
   context.closePalette();
 };
 
@@ -101,7 +103,6 @@ export const builtInDesktopCommands: readonly DesktopCommand[] = [
     title: "Open file",
     keywords: ["file", "note", "workspace"],
     keybinding: "Ctrl/Cmd+P",
-    shortcut: "Ctrl/Cmd+P",
     prerequisite: "native file picker",
     unavailableMessage: "Open file is unavailable until the native file picker is connected.",
     handler: () => undefined
@@ -122,50 +123,37 @@ export const builtInDesktopCommands: readonly DesktopCommand[] = [
     title: "Search workspace",
     keywords: ["find", "full text"],
     keybinding: "Ctrl/Cmd+Shift+F",
-    shortcut: "Ctrl/Cmd+Shift+F",
-    handler: withClosePalette(({ openSearch }) => {
-      openSearch();
-    })
+    handler: withClosePalette("openSearch")
   }),
   available({
     id: "toggle-live-preview",
     title: "Toggle live preview",
     keywords: ["markdown", "wysiwyg", "preview", "source", "editor"],
-    handler: withClosePalette(({ toggleLivePreview }) => {
-      toggleLivePreview();
-    })
+    handler: withClosePalette("toggleLivePreview")
   }),
   available({
     id: "toggle-theme",
     title: "Toggle theme",
     keywords: ["dark", "light", "appearance"],
-    handler: withClosePalette(({ toggleTheme }) => {
-      toggleTheme();
-    })
+    handler: withClosePalette("toggleTheme")
   }),
   available({
     id: "toggle-explorer",
     title: "Toggle Files",
     keywords: ["sidebar", "files"],
-    handler: withClosePalette(({ toggleExplorer }) => {
-      toggleExplorer();
-    })
+    handler: withClosePalette("toggleExplorer")
   }),
   available({
     id: "toggle-outline",
     title: "Toggle Outline",
     keywords: ["sidebar", "headings"],
-    handler: withClosePalette(({ toggleOutline }) => {
-      toggleOutline();
-    })
+    handler: withClosePalette("toggleOutline")
   }),
   available({
     id: "toggle-assistant",
     title: "Toggle Assistant",
     keywords: ["chat", "agent", "ai"],
-    handler: withClosePalette(({ toggleAssistant }) => {
-      toggleAssistant();
-    })
+    handler: withClosePalette("toggleAssistant")
   }),
   available({
     id: "toggle-bottom-panel",
@@ -173,25 +161,19 @@ export const builtInDesktopCommands: readonly DesktopCommand[] = [
     keywords: ["terminal", "dock"],
     // The terminal dock needs process spawning, which is desktop-only.
     requires: "canSpawnProcess",
-    handler: withClosePalette(({ toggleBottomPanel }) => {
-      toggleBottomPanel();
-    })
+    handler: withClosePalette("toggleBottomPanel")
   }),
   available({
     id: "open-settings",
     title: "Open settings",
     keywords: ["preferences", "configuration"],
-    handler: withClosePalette(({ openSettings }) => {
-      openSettings();
-    })
+    handler: withClosePalette("openSettings")
   }),
   available({
     id: "rebuild-index",
     title: "Rebuild workspace index",
     keywords: ["search", "index", "refresh"],
-    handler: withClosePalette(({ rebuildIndex }) => {
-      rebuildIndex();
-    })
+    handler: withClosePalette("rebuildIndex")
   }),
   unavailable({
     id: "open-graph",
@@ -205,9 +187,10 @@ export const builtInDesktopCommands: readonly DesktopCommand[] = [
     id: "open-extensions",
     title: "Open extensions",
     keywords: ["plugins", "add-ons"],
-    handler: withClosePalette(({ revealLeftPanel }) => {
+    handler: ({ revealLeftPanel, closePalette }) => {
       revealLeftPanel("extensions");
-    })
+      closePalette();
+    }
   })
 ];
 

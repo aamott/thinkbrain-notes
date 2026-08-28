@@ -213,7 +213,7 @@ describe("directory persistence", () => {
     expect(listener).toHaveBeenCalled();
   });
 
-  it("clears a startup failure when its directory later loads", async () => {
+  it("clears a startup failure when a later restore succeeds", async () => {
     const store = memoryStore(["/ext/a"]);
     const results: Record<string, LoadExtensionResult> = {
       "/ext/a": {
@@ -226,7 +226,7 @@ describe("directory persistence", () => {
     expect(local.startupFailures()).toHaveLength(1);
 
     results["/ext/a"] = ok("/ext/a");
-    await local.add("/ext/a");
+    await local.restore();
 
     expect(local.startupFailures()).toEqual([]);
     expect(store.saved()).toEqual(["/ext/a"]);

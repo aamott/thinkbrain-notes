@@ -222,7 +222,6 @@ export const builtInDesktopPanels: readonly (LeftPanelContribution | RightPanelC
     icon: "files",
     side: "left",
     keepMounted: true,
-    availability: () => true,
     factory: ({ explorerProps }) => <WorkspaceExplorer {...explorerProps} />
   },
   {
@@ -230,7 +229,6 @@ export const builtInDesktopPanels: readonly (LeftPanelContribution | RightPanelC
     label: "Search",
     icon: "search",
     side: "left",
-    availability: () => true,
     factory: ({ onOpenSearchResult, rootPath }) => (
       <SearchPanel rootPath={rootPath} onOpenFile={onOpenSearchResult} />
     )
@@ -240,7 +238,6 @@ export const builtInDesktopPanels: readonly (LeftPanelContribution | RightPanelC
     label: "Decisions needed",
     icon: "conflicts",
     side: "left",
-    availability: () => true,
     factory: ({ onReviewConflict, rootPath }) => (
       <ConflictsPanel rootPath={rootPath} onReview={onReviewConflict} />
     )
@@ -250,7 +247,6 @@ export const builtInDesktopPanels: readonly (LeftPanelContribution | RightPanelC
     label: "Saved versions",
     icon: "history",
     side: "left",
-    availability: () => true,
     factory: ({ rootPath, versionsOf, onShowEverything }) => (
       <HistoryPanel rootPath={rootPath} note={versionsOf} onShowEverything={onShowEverything} />
     )
@@ -278,7 +274,6 @@ export const builtInDesktopPanels: readonly (LeftPanelContribution | RightPanelC
     icon: "outline",
     side: "right",
     keepMounted: true,
-    availability: () => true,
     factory: ({ documentContents }) => <OutlinePanel contents={documentContents} />
   },
   {
@@ -300,7 +295,6 @@ export const builtInDesktopPanels: readonly (LeftPanelContribution | RightPanelC
     icon: "properties",
     side: "right",
     keepMounted: true,
-    availability: () => true,
     factory: ({ documentContents }) => <PropertiesPanel contents={documentContents} />
   },
   {
@@ -309,7 +303,6 @@ export const builtInDesktopPanels: readonly (LeftPanelContribution | RightPanelC
     icon: "assistant",
     side: "right",
     keepMounted: true,
-    availability: () => true,
     factory: () => <AssistantPanelSurface />
   }
 ];
