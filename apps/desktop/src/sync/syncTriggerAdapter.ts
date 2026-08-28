@@ -11,6 +11,12 @@ import { useEffect } from "react";
 
 import { invokeNativeCommand } from "../native/commands";
 
+/**
+ * Tells the native side the app has become visible or hidden.
+ *
+ * Exported separately from the hook so the decision can be tested without
+ * mounting a component or dispatching a DOM event.
+ */
 export async function reportVisibility(state: DocumentVisibilityState): Promise<void> {
   try {
     await invokeNativeCommand(
