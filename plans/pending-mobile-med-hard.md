@@ -243,14 +243,22 @@ point tuning a layout for a workspace that cannot be opened.
   vaults beneath app data. Native managed-vault commands, capability-gated
   UI, clone-first onboarding, and one-time uninstall notice all shipped.
   `mobile/done-android_workspace_access-high-hard.md`
-- ⬜ Git clone as the mobile way in, split three ways 2026-08-27 against
-  `docs/superpowers/specs/2026-08-27-android-git-access-design.md`:
-  prove gix runs on a device (`mobile/pending-device_git_clone_spike-high-easy.md`),
-  migrate keyring v3→v4 on desktop
-  (`auto-sync/pending-keyring_v4_migration-high-med.md`), then Android
-  credentials and mobile sync triggers
-  (`mobile/pending-mobile_git_access-high-hard.md`). Storage decision drafted:
-  keyring v4 plus `android-native-keyring-store`, not a bespoke Kotlin plugin.
+- 🟨 Git clone as the mobile way in, split 2026-08-27 against
+  `docs/superpowers/specs/2026-08-27-android-git-access-design.md` and split
+  once more 2026-08-28. **A public repository now clones and opens on a
+  device.** Done: the device spike
+  (`mobile/pending-device_git_clone_spike-high-easy.md`), TLS initialisation
+  (`mobile/pending-android_tls_platform_verifier-high-med.md`), the desktop
+  keyring v3→v4 migration
+  (`auto-sync/pending-keyring_v4_migration-high-med.md`), and an import that no
+  longer deletes a vault when only its push fails
+  (`mobile/pending-android_anonymous_clone-high-med.md`). Remaining, and now
+  unblocked: Android credentials for **private** repositories
+  (`mobile/pending-mobile_git_access-high-hard.md`) and, separately, when a
+  sync runs at all (`mobile/pending-mobile_sync_triggers-high-med.md`) —
+  Android's process freezing makes the desktop sweeper's idle timers actively
+  wrong, not merely absent. Storage decision confirmed: keyring v4 plus
+  `android-native-keyring-store`, not a bespoke Kotlin plugin.
 - 🟨 Phone shell chrome — headless shell state, form-factor gate, header,
   drawer, shortcut hub, tab-switcher and inspector sheets. Built and green
   under test; awaiting a pass on an Android device —

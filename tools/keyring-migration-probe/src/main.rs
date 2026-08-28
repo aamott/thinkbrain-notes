@@ -13,7 +13,20 @@
 //! cargo run -- verify    # v3 reads it back (control), then v4 reads it
 //! cargo run -- clean     # remove it again
 //! cargo run -- time      # how long registering the store costs at startup
+//! cargo run -- roundtrip # save, read, forget, confirm gone -- all through v4
 //! ```
+//!
+//! `roundtrip` answers a different question from `verify`. `verify` asks
+//! whether v4 can read what v3 left behind, which is the upgrade risk.
+//! `roundtrip` asks whether saving and forgetting a sign-in works against the
+//! real OS store at all, which is what the app does every day and what no test
+//! covers: the unit tests swap in `keyring_core::mock`, so the path to a real
+//! keychain has never been executed by a test on any platform.
+//!
+//! It deliberately lives here rather than as an `#[ignore]`d test in the app
+//! crate. `set_default_store` is process-global and the app's tests register a
+//! mock through a `Once`, so a real-store test sharing that binary could
+//! replace the mock and leave every later test writing to a real keychain.
 //!
 //! Separate processes matter: a single run could be answered from an
 //! in-process cache and prove nothing about what is actually persisted.
@@ -33,6 +46,10 @@ const ACCOUNT: &str = "profile:__migration_probe";
 /// The app stores `username\npassword`; keeping that shape exercises the same
 /// encoding path rather than a simplified one.
 const SECRET: &str = "probeuser\nprobesecret";
+
+/// Separate from `ACCOUNT` so a round trip can never disturb a migration
+/// check that is halfway through, and so a failure names which one broke.
+const ROUND_TRIP_ACCOUNT: &str = "profile:__round_trip_probe";
 
 fn v3() -> keyring::Entry {
     keyring::Entry::new(SERVICE, ACCOUNT).expect("v3 could not build an entry")
@@ -121,13 +138,59 @@ fn main() {
             println!("first read took {:?}", start.elapsed());
         }
 
+        // Save, read, forget, confirm gone. The account format and payload
+        // match what `commands/sync/credentials.rs` writes, so a pass here says
+        // the shipped shape survives this platform's store.
+        "roundtrip" => {
+            register_v4_store();
+            let entry = keyring_core::Entry::new(SERVICE, ROUND_TRIP_ACCOUNT)
+                .expect("v4 could not build an entry");
+
+            // Leftovers from an interrupted run would make "save" untrustworthy.
+            let _ = entry.delete_credential();
+
+            if let Err(error) = entry.set_password(SECRET) {
+                println!("FAIL - could not save a sign-in: {error}");
+                return;
+            }
+            match entry.get_password() {
+                Ok(found) if found == SECRET => println!("[save]   stored and read back."),
+                Ok(other) => {
+                    println!("FAIL - read back a different value: {other:?}");
+                    return;
+                }
+                Err(error) => {
+                    println!("FAIL - saved a sign-in but could not read it: {error}");
+                    return;
+                }
+            }
+
+            if let Err(error) = entry.delete_credential() {
+                println!("FAIL - could not forget the sign-in: {error}");
+                return;
+            }
+            // Forgetting has to actually remove it. A delete that reports
+            // success while leaving the secret readable is the failure worth
+            // catching here.
+            match entry.get_password() {
+                Err(keyring_core::Error::NoEntry) => {
+                    println!("[forget] gone.");
+                    println!("\nPASS - saving and forgetting a sign-in both work here.");
+                }
+                Ok(_) => println!("\nFAIL - the sign-in is still readable after being forgotten."),
+                Err(error) => println!("\nFAIL - unexpected error after forgetting: {error}"),
+            }
+        }
+
         "clean" => match v3().delete_credential() {
             Ok(()) => println!("Probe credential removed."),
             Err(error) => println!("Nothing to remove, or removal failed: {error}"),
         },
 
         other => {
-            println!("Unknown mode {other:?}. Expected one of: write, verify, clean, time.");
+            println!(
+                "Unknown mode {other:?}. Expected one of: write, verify, roundtrip, clean, time."
+            );
         }
     }
 }

@@ -80,21 +80,18 @@ This decision serves the extensions epic's secret storage too: one `Entry`-shape
 boundary, one namespace convention, every platform included. See
 `../extensions/pending-extension_secret_storage-med-hard.md`.
 
-## The other constraint: no background sync
+## Split out: when a sync runs
 
-Worse than absent — actively wrong on Android. `registry.rs` runs a sweeper
-thread on a 500ms tick (`TICK`), firing a round trip after 30s idle (`IDLE`),
-capped at once per 60s (`CAP`). Android freezes the process on background, so
-those timers do not merely fail to fire; they fire against a stale clock on
-resume, and a returning user gets a sync they did not ask for.
+Android freezes the process on background, so the desktop sweeper's idle timers
+fire against a stale clock on resume and sync a returning user who did not ask.
+That is a real problem and it is **not this story** — it moved to
+`pending-mobile_sync_triggers-high-med.md` on 2026-08-28.
 
-Mobile needs explicit triggers instead of idle inference: on workspace open, on
-foreground, on explicit user request, and a best-effort flush on background.
-`run_trip` already takes everything it needs as arguments, so this is a
-scheduling change rather than a sync-engine change — the sweeper stays
-desktop-only and mobile drives the same core from lifecycle events.
-
-Separable from credentials; split this out if it grows.
+The two share a directory and nothing else. Keeping them together would have
+meant "private repositories work on Android" could not be called done until a
+scheduling rewrite landed with it. Each is worth doing without the other: this
+story matters even if sync only ever runs when someone asks, and that one
+matters even if only public repositories ever sync.
 
 ## Dependencies
 
@@ -120,8 +117,6 @@ it failed.
       under a `cfg(target_os = "android")` dependency
 - [ ] A **private** repository is cloned on a real device
 - [ ] A round trip (fetch, merge, push) completes on a real device
-- [ ] Mobile sync triggers are defined and implemented, and do not rely on
-      background execution Android will not grant
 - [ ] Where the token lives is written down with its reasoning and serves the
       extensions epic's secret storage
 - [ ] The desktop import flow is reused rather than duplicated — already true

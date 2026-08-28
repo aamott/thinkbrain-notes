@@ -118,12 +118,18 @@ worth it.
 - [x] The same read-back on **Windows** — probe run 2026-08-28, same result
 - [x] The probe itself is trustworthy — reproduces the Linux PASS and produces
       a FAIL against the known-wrong store
-- [ ] Sign-in, save-link, forget and a full round trip still work on desktop —
-      unit-tested. Partially exercised: a git clone through the running app on
-      Windows succeeded post-migration (2026-08-28), which covers reading a
-      credential on a real desktop. Saving a new sign-in and forgetting one
-      have still only been covered by tests. **This is all that keeps this
-      story open** — the migration risk itself is closed.
+- [x] Saving and forgetting a sign-in work against the **real** OS store —
+      `cargo run -- roundtrip` in `tools/keyring-migration-probe`. PASS on
+      Linux 2026-08-28. This closes a gap the unit tests cannot: they register
+      `keyring_core::mock`, so before this the path to an actual keychain had
+      never been executed by a test on any platform. The check that matters is
+      the last one — a delete that reports success while leaving the secret
+      readable is the failure worth catching, and the probe was confirmed to
+      report FAIL when the delete is skipped
+- [ ] The same round trip through the running app's UI on desktop — the probe
+      covers the store, not the wiring between the settings form and it. One
+      manual pass on any desktop closes this; a git clone through the app on
+      Windows (2026-08-28) already covers the read side
 - [x] `pnpm qa` green
 
 ## What the crate sources predict for macOS and Windows
