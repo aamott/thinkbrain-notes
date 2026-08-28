@@ -87,6 +87,18 @@ round-trip code, something has gone wrong in the design.
       cleanly afterward. Neither this task nor the device check attempted
       that; no test in the suite names this scenario either. Left unticked
       rather than assumed.
+
+      This story is still marked done, because the design argues the property
+      by construction rather than leaving it to be discovered: "a killed sync
+      is safe — `last_synced` is in-memory, the `syncing` flag is cleared by a
+      `Drop` guard that simply never runs, and a git push is atomic per ref, so
+      a push that does not finish does not land"
+      (`docs/superpowers/specs/2026-08-28-mobile-sync-triggers-design.md:147`).
+      Nothing this story added persists anything that a half-finished flush
+      could leave wrong: `sync.lastSyncedAt` is written only after a round trip
+      has already returned successfully. So the unticked box is a missing
+      *proof*, not a suspected fault — and it is worth someone's time to build
+      that proof, because an argument is not an experiment.
 - [x] `run_trip` and the round-trip code are unchanged by this story.
       Checked directly: `git show 700b5d4 -- .../sync/round.rs` is the only
       change this story's commits made to `round.rs`, and it is a 3-line
