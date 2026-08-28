@@ -5,7 +5,7 @@
  * `SettingsContent` version previously relied on.
  */
 
-import type { SettingSection, SettingsRegistry } from "@thinkbrain/core";
+import type { SettingSection } from "@thinkbrain/core";
 
 /**
  * Recursively searches a section tree for a section matching `sectionId` and
@@ -35,31 +35,4 @@ export function findSectionLabelInSection(
     }
   }
   return undefined;
-}
-
-/**
- * Looks up the label for a section id by scanning all modules in a settings
- * registry.
- *
- * Section ids are globally unique by convention (e.g. "editor.display"), so
- * the first match wins. Returns the `sectionId` itself as a fallback when no
- * registered section matches — this preserves the previous `SettingsContent`
- * behavior so callers always receive a displayable string.
- *
- * Args:
- *   registry: The settings registry to search across all modules.
- *   sectionId: The section id to resolve.
- *
- * Returns:
- *   The resolved section label, or the `sectionId` if no match is found.
- */
-export function findSectionLabelAcrossModules(
-  registry: SettingsRegistry,
-  sectionId: string
-): string {
-  for (const module of registry.getAllModules()) {
-    const label = findSectionLabelInSection(module.sections, sectionId);
-    if (label) return label;
-  }
-  return sectionId;
 }

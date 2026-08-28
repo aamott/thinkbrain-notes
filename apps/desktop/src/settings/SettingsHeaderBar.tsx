@@ -18,6 +18,7 @@ import {
   type ImportResult
 } from "./settingsImportExport";
 import { findSectionLabelInSection } from "./sectionUtils";
+import { useEffectiveValue } from "./useEffectiveValue";
 import { useTransientStatus } from "./useTransientStatus";
 
 /**
@@ -86,9 +87,7 @@ export function SettingsHeaderBar() {
   const isDirty = useSettingsStore((s) => s.isDirty);
   const dirtyCount = useSettingsStore((s) => s.dirtyCount);
   const saveError = useSettingsStore((s) => s.saveError);
-  const autosave = useSettingsStore((s) =>
-    s.stagedChanges["settings.autosave"] ?? s.appValues["settings.autosave"] ?? false
-  );
+  const autosave = useEffectiveValue("settings.autosave");
   const [isSaving, setIsSaving] = useState(false);
   const status = useTransientStatus();
   const breadcrumbPath = buildBreadcrumbPath(activeSection);

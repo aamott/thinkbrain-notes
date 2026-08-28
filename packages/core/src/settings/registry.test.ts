@@ -583,18 +583,14 @@ describe("validateSettings", () => {
     expect(diagnostics[0]!.path).toBe("editor.fontSize");
   });
 
-  it("flags an invalid enum value", () => {
-    const registry = registryWithBuiltIns();
-    const diagnostics = validateSettings(registry, {
-      "appearance.theme": "neon"
-    });
+  it.each([
+    ["appearance.theme", "neon"],
+    ["appearance.shellMode", "tablet"]
+  ])("reports one diagnostic for invalid enum %s", (path, value) => {
+    const diagnostics = validateSettings(registryWithBuiltIns(), { [path]: value });
 
-    // The built-in enum check fires first; the module's belt-and-suspenders
-    // custom validator also fires, producing a second diagnostic.
-    expect(diagnostics).toHaveLength(2);
-    expect(diagnostics[0]!.code).toBe("settings.enum.invalid");
-    expect(diagnostics[0]!.path).toBe("appearance.theme");
-    expect(diagnostics[1]!.code).toBe("settings.validation.failed");
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]).toMatchObject({ code: "settings.enum.invalid", path });
   });
 
   it("flags a number out of range", () => {
