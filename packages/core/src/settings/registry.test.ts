@@ -318,7 +318,7 @@ describe("settings registry", () => {
     expect(appSync?.sections.map((section) => section.id)).toEqual([
       "sync.conflicts",
       "sync.history",
-      "sync.destination"
+      "sync.when"
     ]);
     expect(appSync?.sections[0]?.settings?.map((def) => def.key)).toEqual([
       "settleAutomatically"

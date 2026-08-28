@@ -18,7 +18,10 @@ import type { SettingsModule } from "../types";
 export const DEFAULT_SETTLE_AUTOMATICALLY = true;
 
 /**
- * Repeated in `apps/desktop/src-tauri/src/commands/sync/trigger.rs`. Changing one means changing the other.
+ * Repeated as the fallback in
+ * `apps/desktop/src-tauri/src/commands/sync/trigger.rs` rather than derived,
+ * because the native side answers this question before any window is
+ * listening. Changing one means changing the other.
  */
 export const DEFAULT_SYNC_TRIGGER = "auto";
 
@@ -167,17 +170,23 @@ export const syncModule: SettingsModule = {
           label: "Saved sign-in",
           description: "Which saved sign-in this folder uses. Shown with the git link.",
           portable: false
-        },
+        }
+      ]
+    },
+    {
+      id: "sync.when",
+      label: "When to sync",
+      settings: [
         {
           key: "trigger",
           type: "enum",
           default: DEFAULT_SYNC_TRIGGER,
           options: ["auto", "idle", "foreground", "manual"],
           scope: "app",
-          section: "sync.destination",
+          section: "sync.when",
           label: "When to sync",
           description:
-            "Automatic suits most people: this computer syncs when a folder has been still for a moment, and a phone syncs when you come back to it. When idle only syncs after you stop typing. When I return syncs when you open the app again, if it has been a few minutes. Only when I ask never syncs on its own — your notes stay on this device until you press Sync now."
+            "When this device starts a sync on its own. Auto picks for you: idle on a computer, foreground on a phone. Idle syncs once a folder has been still for a moment. Foreground syncs whenever you open a folder, again when you come back to the app if it has been more than a few minutes, and sends your changes when you leave. Manual never syncs on its own — your notes stay on this device until you press Sync now."
         }
       ]
     }
