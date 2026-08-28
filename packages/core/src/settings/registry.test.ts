@@ -490,6 +490,7 @@ describe("extractDefaults", () => {
       "editor.lineWrapping": true,
       "editor.livePreview": true,
       "settings.autosave": false,
+      "settings.showAdvanced": false,
       "sync.settleAutomatically": true,
       "sync.historyPolicy": "",
       "sync.trigger": "auto"

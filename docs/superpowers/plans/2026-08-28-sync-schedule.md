@@ -276,6 +276,11 @@ git commit -m "Hide advanced settings without hiding them from search"
 **Files:**
 - Modify: `packages/core/src/settings/modules/sync.ts`
 - Test: `packages/core/src/settings/modules/sync.test.ts:105-113`
+- Test: `packages/core/src/settings/registry.test.ts:485` — an exhaustive
+  snapshot of every built-in app default. Replace its `"sync.trigger": "auto"`
+  line with the five new keys and their defaults, in alphabetical order to
+  match the rest of the object. Task 1 hit this same snapshot; it is easy to
+  miss because it lives two directories away from the module you are editing.
 
 **Interfaces:**
 - Consumes: `advanced` from Task 1.
