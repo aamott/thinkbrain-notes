@@ -19,4 +19,7 @@ These are random issues or shortcomings users have noted. They may or may not be
 
 # Journal
 - [ ] Add direct link to metadata settings to add metadata
-- [ ] Journal popout takes longer to open depending on number of files in the workspace. Instant on empty workspace, slow on big one. Same amount of time even if you already opened it once. Explorer is slow on first open but faster after that. 
+- [ ] Journal popout takes longer to open depending on number of files in the workspace. Instant on empty workspace, slow on big one. Same amount of time even if you already opened it once. Explorer is slow on first open but faster after that.
+
+# Test suite
+- [ ] A Rust test fails roughly once in fifteen `pnpm test:rust` runs and we do not know which one. Seen once on 2026-08-28 on the `code-compaction` branch; 13 consecutive runs after it were clean, including 8 run back to back hunting it. The failing run's output was discarded before the test name was read, so the first job is catching it: when `pnpm qa` fails, capture the whole output, not the tail. Likeliest suspects are the timing-dependent ones — `tests::watcher_lifecycle::*` and `commands::sync::registry::tests::the_sweeper_records_a_settled_change`. Until it is identified, every "qa green" carries a small chance of being luck.
