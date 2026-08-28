@@ -62,7 +62,18 @@ Three points that are easy to read past:
   `idle` sees no behaviour change whatsoever from this work — minimising a
   window will not start a sync.
 
-Defaults: **desktop `idle`, mobile `foreground`.**
+Plus a fourth value, `auto`, which **is the default**: it resolves to `idle` on
+desktop and `foreground` on mobile.
+
+`auto` exists because the settings registry holds exactly one default per
+setting, while this design wants different defaults per platform. Without it,
+the settings screen on a phone would show `idle` selected while the app
+actually behaved as `foreground` — a settings screen that lies about what the
+app is doing is worse than one extra value.
+
+This also confines platform knowledge to a single line: resolving `auto`. That
+is the **only** place `cfg!(target_os = ...)` appears in the sync code. No
+branch anywhere else asks what platform it is on.
 
 The important consequence: **no `cfg(target_os)` appears in the sync code.**
 `maybe_sync` consults the policy; the platform only chooses a default. A
@@ -90,6 +101,13 @@ always a policy rather than a law.
 The webview receives `document.visibilitychange` when the Android activity
 pauses and resumes. That means **no JNI hook, no `MainActivity` change, no new
 native plumbing.**
+
+**The webview reports only the lifecycle event, never which vault to sync.** It
+calls one of two commands — foregrounded or backgrounded — and Rust decides
+what to do with them, because the registry already holds every open engine
+keyed by its root path. Threading workspace roots through React to make that
+decision in the frontend would put policy in two places and would quietly
+handle only whichever vault the current view happened to know about.
 
 That matters more than convenience. `MainActivity.onCreate` already carries a
 load-bearing ordering constraint — `ndk-context` must be published before
