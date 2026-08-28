@@ -377,7 +377,7 @@ fn handshake_failure(error: gix::protocol::handshake::Error) -> NativeError {
     match error {
         gix::protocol::handshake::Error::Credentials(_) => failed(
             "sync.credentials_unavailable",
-            "Could not read the saved sign-in from this computer's keychain.",
+            "Could not read your saved sign-in.",
             error,
         ),
         gix::protocol::handshake::Error::EmptyCredentials

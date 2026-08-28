@@ -266,8 +266,15 @@ resolution, so plain `pnpm test` died at startup without running anything.
       that desktop import of a repository the user cannot push to is *changed*,
       and deliberately: it used to delete the vault too
 - [x] Push still requires an identity — a sync's push failure is still an error
-- [ ] No user-visible copy tells a phone user to unlock a computer's keychain —
-      **still open**. `mod.rs:78` still says "this computer's keychain". Less
-      reachable now that imports succeed, but not gone, and the replacement
-      wording is a product decision rather than a mechanical edit
+- [x] No user-visible copy tells a phone user to unlock a computer's keychain —
+      done 2026-08-28, and it was a wider problem than a phone one. "Keychain"
+      is macOS vocabulary: Windows calls it Credential Manager and Linux a
+      keyring, so the copy read correctly on exactly one of four platforms.
+      Every user-facing string now names the thing the user cares about — their
+      saved sign-in — instead of the mechanism or the device. Seven strings
+      across `mod.rs`, `push.rs`, `credentials.rs`, `syncCopy.ts`,
+      `GitLinkControl.tsx`, `gitLinkImportCopy.ts` and `core/settings/modules/
+      sync.ts`. A separate family of "this computer" strings about disk space
+      has the same device-noun problem and is deliberately left for its own
+      story
 - [x] `pnpm qa` green — 414 Rust tests, full frontend suite

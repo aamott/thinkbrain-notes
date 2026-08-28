@@ -148,7 +148,7 @@ export const syncModule: SettingsModule = {
           section: "sync.destination",
           label: "Git link",
           description:
-            "An https:// link to GitHub, GitLab, or similar — or a folder path to a bare git repo on this computer or a NAS. Leave empty for this device only. Choose a saved sign-in below, or add a username and access token; the token is saved in this computer's keychain, never in this link.",
+            "An https:// link to GitHub, GitLab, or similar — or a folder path to a bare git repo on this computer or a NAS. Leave empty for this device only. Choose a saved sign-in below, or add a username and access token; the token is saved only to this device, never in this link.",
           control: "sync-git-link",
           portable: false,
           validation: validateSyncDestination

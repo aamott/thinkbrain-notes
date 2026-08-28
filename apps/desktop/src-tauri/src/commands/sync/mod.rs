@@ -77,7 +77,7 @@ pub(super) fn remote_failure<E: std::error::Error>(error: E) -> NativeError {
     {
         (
             "sync.credentials_unavailable",
-            "Could not read the saved sign-in from this computer's keychain.",
+            "Could not read your saved sign-in.",
         )
     } else if details.contains("HTTP status 401")
         || lowercase.contains("invalid credential")
@@ -194,10 +194,7 @@ mod tests {
         let error = remote_failure(TestError("Failed to obtain credentials".to_string()));
 
         assert_eq!(error.code, "sync.credentials_unavailable");
-        assert_eq!(
-            error.message,
-            "Could not read the saved sign-in from this computer's keychain."
-        );
+        assert_eq!(error.message, "Could not read your saved sign-in.");
     }
 
     #[test]

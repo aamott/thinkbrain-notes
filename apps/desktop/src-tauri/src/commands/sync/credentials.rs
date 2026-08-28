@@ -112,7 +112,7 @@ fn store_failure(error: keyring_core::Error) -> NativeError {
         ),
         other => failed(
             "sync.credentials_unavailable",
-            "Could not use this computer's keychain.",
+            "Could not reach where sign-ins are saved.",
             other,
         ),
     }
@@ -506,7 +506,7 @@ mod tests {
     fn a_store_that_is_present_but_failing_is_still_an_error() {
         let locked = NativeError::new(
             "sync.credentials_unavailable",
-            "Could not use this computer's keychain.",
+            "Could not reach where sign-ins are saved.",
         );
 
         let result = offer_or_anonymous(Err(locked));

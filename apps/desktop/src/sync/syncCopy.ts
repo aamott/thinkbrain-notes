@@ -77,7 +77,7 @@ export function recoveryFor(code: string): string {
     case "sync.credentials_forbidden":
       return "Give this token access to the repository, then save the sign-in again.";
     case "sync.credentials_unavailable":
-      return "Unlock this computer's keychain, then save the sign-in again.";
+      return "Your saved sign-ins are locked. Unlock them, then save the sign-in again.";
     case "sync.sign_in_missing":
     case "sync.sign_in_wrong_host":
       return "Choose another saved sign-in, or add a username and access token.";

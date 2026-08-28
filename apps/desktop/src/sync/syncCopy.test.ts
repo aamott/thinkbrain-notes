@@ -192,7 +192,7 @@ describe("the status footer", () => {
       "Give this token access to the repository, then save the sign-in again."
     );
     expect(recoveryFor("sync.credentials_unavailable")).toBe(
-      "Unlock this computer's keychain, then save the sign-in again."
+      "Your saved sign-ins are locked. Unlock them, then save the sign-in again."
     );
     expect(recoveryFor("sync.sign_in_missing")).toBe(
       "Choose another saved sign-in, or add a username and access token."

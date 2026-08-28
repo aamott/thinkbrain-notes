@@ -157,7 +157,7 @@ export function GitLinkControl({ definition, value, onChange, disabled }: Contro
 
   const forget = (): void => {
     if (!canForget || selectedId === "") return;
-    void run("forget", "Could not forget this sign-in. Unlock the keychain and try again.", async () => {
+    void run("forget", "Could not forget this sign-in. Unlock your saved sign-ins and try again.", async () => {
       await forgetSignIn(selectedId);
       stageChange(PROFILE_KEY, "");
       await saveSettings();

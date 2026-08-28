@@ -18,10 +18,12 @@ describe("describeSignInStatus", () => {
     const copy = describeSignInStatus({
       ...base,
       storage: "unavailable",
-      storageMessage: "Could not use this computer's keychain."
+      storageMessage: "Could not reach where sign-ins are saved."
     });
     expect(copy.role).toBe("alert");
-    expect(copy.text).toContain("keychain");
+    // The backend's own message is what reaches the user, whatever it says --
+    // asserting on a particular word pinned the copy rather than the behaviour.
+    expect(copy.text).toContain("Could not reach where sign-ins are saved.");
   });
 
   it("says when storage works and nothing is saved yet", () => {
