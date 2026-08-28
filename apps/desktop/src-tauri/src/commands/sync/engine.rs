@@ -615,8 +615,15 @@ impl Engine {
         // Outside the claim lock: `set_phase` takes another, and two locks
         // held in one order here and the other order elsewhere is how a
         // deadlock gets written.
-        self.syncing.store(false, Ordering::Relaxed);
+        //
+        // Phase first, then the flag, because `status::of` reads the two
+        // separately: it derives `State::Syncing` from the flag and copies
+        // `phase` beside it. Clearing the flag first makes "idle, pushing"
+        // briefly readable. This way the only reachable in-between state is
+        // "syncing, no phase yet", which is also what every round trip looks
+        // like for its first moments.
         self.set_phase(None);
+        self.syncing.store(false, Ordering::Relaxed);
         true
     }
 
