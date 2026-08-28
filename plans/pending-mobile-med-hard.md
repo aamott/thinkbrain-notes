@@ -103,14 +103,14 @@ must not convert `content://` URIs into guessed `/storage/...` paths.
   gated in CI. But the gate is `cargo check -p gix` on that one package, by
   design — CI's own comment says Tauri's mobile build "needs an SDK, a linker
   and a generated project, none of which this gate is asking about."
-- **Run on a device 2026-08-27** (`mobile/pending-device_git_clone_spike-high-easy.md`):
+- **Run on a device 2026-08-27** (`mobile/done-device_git_clone_spike-high-easy.md`):
   the full Android build links, the app runs, managed vaults open, and
   clone-first onboarding is wired — but **the clone fails**. Every TLS request
   panics at `rustls-platform-verifier-0.7.0/src/android.rs:90`, "Expect
   rustls-platform-verifier to be initialized", because the crate needs a Kotlin
   component and a JNI init that `gen/android/` does not have. Public and
   private repositories alike. This, not credentials, is the first blocker —
-  `mobile/pending-android_tls_platform_verifier-high-med.md`. Exactly the class
+  `mobile/done-android_tls_platform_verifier-high-med.md`. Exactly the class
   of failure `cargo check` cannot catch.
 - **Credentials do not persist.** On Android `credentials.rs` compiles to stubs
   that return `sync.auth_required` — "Sign-in is not available on this device
@@ -247,8 +247,8 @@ point tuning a layout for a workspace that cannot be opened.
   `docs/superpowers/specs/2026-08-27-android-git-access-design.md` and split
   once more 2026-08-28. **A public repository now clones and opens on a
   device.** Done: the device spike
-  (`mobile/pending-device_git_clone_spike-high-easy.md`), TLS initialisation
-  (`mobile/pending-android_tls_platform_verifier-high-med.md`), the desktop
+  (`mobile/done-device_git_clone_spike-high-easy.md`), TLS initialisation
+  (`mobile/done-android_tls_platform_verifier-high-med.md`), the desktop
   keyring v3→v4 migration
   (`auto-sync/pending-keyring_v4_migration-high-med.md`), and an import that no
   longer deletes a vault when only its push fails

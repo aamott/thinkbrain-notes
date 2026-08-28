@@ -3,7 +3,7 @@
 **Status:** 🟨 wip · **Urgency:** high · **Difficulty:** med
 
 > Found by running the clone on a device after the TLS fix landed, 2026-08-27
-> (`pending-android_tls_platform_verifier-high-med.md`). This is what now
+> (`done-android_tls_platform_verifier-high-med.md`). This is what now
 > stands between Android and a working public clone.
 
 ## What happens

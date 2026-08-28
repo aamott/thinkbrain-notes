@@ -1,6 +1,6 @@
 # Story: Prove gix Actually Runs on a Device
 
-**Status:** ⬜ pending · **Urgency:** high · **Difficulty:** easy
+**Status:** 🟩 done · **Urgency:** high · **Difficulty:** easy
 
 > Spike. The output is an answer, not code we keep. Gates
 > `pending-mobile_git_access-high-hard.md` and
@@ -80,7 +80,7 @@ The app degrades honestly — no crash, and it recovers — but the message it
 shows ("Could not reach the place these notes sync to. Check the git link and
 your connection") misdiagnoses a missing platform init as a network fault.
 
-Tracked as `pending-android_tls_platform_verifier-high-med.md`. **Fixed and
+Tracked as `done-android_tls_platform_verifier-high-med.md`. **Fixed and
 verified the same session** — the panic is gone and the clone now reaches the
 credential stage.
 
@@ -110,12 +110,19 @@ the `MainActivity` hook.
 
 ## Acceptance
 
-- [ ] A public repository clones into a managed vault on an Android emulator
-- [ ] The same clone succeeds on physical hardware
-- [ ] Notes from the cloned vault open, edit and save
-- [ ] Findings recorded here, including whether `ndk_context` is pre-initialised
-- [ ] If the clone fails: the failure is characterised (TLS? storage? gix?) and
-      `pending-mobile_git_access-high-hard.md` is re-cut against it
+- [x] A public repository clones into a managed vault on an Android emulator —
+      2026-08-28, after both blockers below were fixed
+- [x] Findings recorded here, including whether `ndk_context` is
+      pre-initialised. It is not, under Tauri, and the app now publishes it
+      itself (`src-tauri/src/android_context.rs`)
+- [x] The failure was characterised and the stories re-cut against it — twice.
+      First TLS (`android_tls.rs`), then an import that deleted a vault whenever
+      the push at the end of it failed
+
+Two items moved rather than being answered here, because they are the same
+checks another story already owns and duplicating them would mean two places to
+update: **physical hardware** and **notes from the cloned vault open, edit and
+save** are tracked in `pending-android_anonymous_clone-high-med.md`.
 
 ## Not in scope
 

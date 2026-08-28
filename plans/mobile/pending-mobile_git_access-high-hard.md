@@ -1,6 +1,6 @@
 # Story: Git Works on a Phone — Private Clones and Where the Token Lives
 
-**Status:** ⬜ pending · **Urgency:** high · **Difficulty:** hard
+**Status:** 🟨 wip · **Urgency:** high · **Difficulty:** hard
 
 > Cloning is the most likely way a vault ever arrives on a phone, because it is
 > the one way that needs no folder picker — see
@@ -10,7 +10,7 @@
 > Re-cut 2026-08-27 against
 > `docs/superpowers/specs/2026-08-27-android-git-access-design.md`. Two pieces
 > were split out: the device spike that gates this
-> (`pending-device_git_clone_spike-high-easy.md`) and the keyring migration it
+> (`done-device_git_clone_spike-high-easy.md`) and the keyring migration it
 > depends on (`../auto-sync/pending-keyring_v4_migration-high-med.md`).
 
 ## What is already true
@@ -37,7 +37,7 @@ More than the epic's status list suggests.
   `GitLinkImportDialog.tsx:376,381-383` hides the sign-in fields and shows
   `storageMessage` when storage is not available.
 - **gix has never been run on a device.** The CI gate is `cargo check -p gix`,
-  by design. See `pending-device_git_clone_spike-high-easy.md`.
+  by design. See `done-device_git_clone_spike-high-easy.md`.
 
 ## The blocker: credentials — decided
 
@@ -97,8 +97,8 @@ matters even if only public repositories ever sync.
 
 **All three are now done, so this story is unblocked.**
 
-1. `pending-device_git_clone_spike-high-easy.md` — ✅ run 2026-08-27.
-2. `pending-android_tls_platform_verifier-high-med.md` — ✅ fixed. The JNI shim
+1. `done-device_git_clone_spike-high-easy.md` — ✅ run 2026-08-27.
+2. `done-android_tls_platform_verifier-high-med.md` — ✅ fixed. The JNI shim
    in `src-tauri/src/android_tls.rs` is the pattern to copy for the credential
    store, since Tauri does not populate `ndk-context` either.
 3. `../auto-sync/pending-keyring_v4_migration-high-med.md` — ✅ v4 shipped and
@@ -113,8 +113,11 @@ it failed.
 
 ## Acceptance
 
-- [ ] `android-native-keyring-store` registered as the default store on Android
-      under a `cfg(target_os = "android")` dependency
+- [x] `android-native-keyring-store` registered as the default store on Android
+      under a `cfg(target_os = "android")` dependency — 2026-08-28. Needed
+      `ndk-context` published from `MainActivity` *before* `super.onCreate`,
+      because `run()` registers the store during it and `Store::new()` reads
+      the Context while constructing
 - [ ] A **private** repository is cloned on a real device
 - [ ] A round trip (fetch, merge, push) completes on a real device
 - [ ] Where the token lives is written down with its reasoning and serves the

@@ -132,7 +132,7 @@ through the JVM Trust Manager and needs a Kotlin component plus a JNI init that
 `gen/android/` does not have.
 
 That makes TLS initialisation the **first** blocker and credentials the second.
-A new story owns it: `plans/mobile/pending-android_tls_platform_verifier-high-med.md`.
+A new story owns it: `plans/mobile/done-android_tls_platform_verifier-high-med.md`.
 The credential design below is unchanged and still correct; it simply cannot be
 exercised until TLS works.
 

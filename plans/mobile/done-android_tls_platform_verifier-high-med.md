@@ -3,7 +3,7 @@
 **Status:** 🟩 done · **Urgency:** high · **Difficulty:** med
 
 > Found by running the app, 2026-08-27. See
-> `pending-device_git_clone_spike-high-easy.md` for the session that turned it
+> `done-device_git_clone_spike-high-easy.md` for the session that turned it
 > up. **This gates every network story on Android**, including
 > `pending-mobile_git_access-high-hard.md`.
 
@@ -136,9 +136,11 @@ by clearing logcat and re-running the same clone that produced the panic.
 - [x] `init_with_env` is called once on the Android entry path before any
       network use
 - [x] No `rustls-platform-verifier` panic on an emulator; TLS is reached
-- [ ] A public repository actually clones — blocked by
-      `pending-android_anonymous_clone-high-med.md`, not by TLS
-- [ ] The same clone succeeds on physical hardware
+- [x] A public repository actually clones — 2026-08-28, once the import stopped
+      deleting a vault whose push failed. TLS itself was never the blocker
+      after this landed
+- [ ] The same clone succeeds on physical hardware — tracked in
+      `pending-android_anonymous_clone-high-med.md`, which owns the device pass
 - [x] `pnpm qa` green; desktop builds and behaviour unchanged
 
 ## Also worth fixing here

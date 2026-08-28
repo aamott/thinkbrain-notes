@@ -3,7 +3,7 @@
 **Status:** ⬜ pending · **Urgency:** low · **Difficulty:** easy
 
 > Found in logcat while running the device clone spike, 2026-08-27
-> (`../mobile/pending-device_git_clone_spike-high-easy.md`). Unrelated to git;
+> (`../mobile/done-device_git_clone_spike-high-easy.md`). Unrelated to git;
 > recorded so it is not lost.
 
 ## What happens
