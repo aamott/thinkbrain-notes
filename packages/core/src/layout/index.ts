@@ -11,7 +11,15 @@ export type BuiltInTabKind =
   | "graph"
   | "browser"
   /** Two versions of one note, side by side, waiting on a decision. */
-  | "merge";
+  | "merge"
+  /** Code/text file editor (CodeMirror 6, non-Markdown). */
+  | "code-editor"
+  /** Read-only image viewer (png, jpg, gif, svg, webp). */
+  | "image-viewer"
+  /** Read-only audio player (mp3, ogg, wav, flac). */
+  | "audio-viewer"
+  /** Read-only video player (mp4, webm, mov). */
+  | "video-viewer";
 
 /** Allows extension-owned kinds while retaining first-party autocomplete. */
 export type TabKind = BuiltInTabKind | (string & {});
@@ -96,4 +104,37 @@ export function createTabRegistry(): TabRegistry {
       };
     }
   };
+}
+
+// ---------------------------------------------------------------------------
+// File extension → tab kind inference
+// ---------------------------------------------------------------------------
+
+/** Extension → tab kind mapping. Unknown extensions fall through to `code-editor`. */
+const EXTENSION_TAB_KINDS: ReadonlyArray<readonly [readonly string[], TabKind]> = [
+  [["md", "markdown", "mdx"], "editor"],
+  [["png", "jpg", "jpeg", "gif", "svg", "webp", "bmp", "ico", "avif"], "image-viewer"],
+  [["mp3", "ogg", "wav", "flac", "aac", "m4a", "opus"], "audio-viewer"],
+  [["mp4", "webm", "mov", "mkv", "avi"], "video-viewer"]
+];
+
+/**
+ * Infers the appropriate tab kind from a file's extension.
+ *
+ * Markdown files → `"editor"` (the rich Markdown editor). Image/audio/video
+ * files → their respective viewer kinds. Everything else (code, text, config)
+ * → `"code-editor"`. The fallback to `"code-editor"` means unknown extensions
+ * like `.xyz` open as plain text, which is the least-surprising behavior.
+ *
+ * The extension check is case-insensitive. Files with no extension also
+ * fall through to `"code-editor"`.
+ */
+export function inferTabKind(relativePath: string): TabKind {
+  const dot = relativePath.lastIndexOf(".");
+  if (dot < 0 || dot === relativePath.length - 1) return "code-editor";
+  const ext = relativePath.slice(dot + 1).toLowerCase();
+  for (const [extensions, kind] of EXTENSION_TAB_KINDS) {
+    if (extensions.includes(ext)) return kind;
+  }
+  return "code-editor";
 }

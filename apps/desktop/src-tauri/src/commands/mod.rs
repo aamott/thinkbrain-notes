@@ -26,6 +26,7 @@ pub mod markdown;
 pub mod search;
 pub mod settings;
 pub mod sync;
+pub mod text_files;
 pub mod themes;
 pub mod watcher;
 pub mod workspace;
@@ -55,6 +56,8 @@ macro_rules! app_command_handlers {
             $crate::commands::markdown::create_markdown_file,
             $crate::commands::markdown::rename_markdown_file,
             $crate::commands::markdown::delete_markdown_file,
+            $crate::commands::text_files::read_text_file,
+            $crate::commands::text_files::write_text_file,
             $crate::commands::workspace::create_workspace_file,
             $crate::commands::workspace::create_workspace_folder,
             $crate::commands::workspace::rename_workspace_entry,
@@ -124,6 +127,8 @@ pub const APP_COMMAND_PATHS: &[&str] = &[
     "markdown::create_markdown_file",
     "markdown::rename_markdown_file",
     "markdown::delete_markdown_file",
+    "text_files::read_text_file",
+    "text_files::write_text_file",
     "workspace::create_workspace_file",
     "workspace::create_workspace_folder",
     "workspace::rename_workspace_entry",
@@ -245,7 +250,9 @@ mod tests {
             APP_COMMAND_PATHS.contains(&"sync::import::preview_managed_workspace_from_git_link")
         );
         assert!(APP_COMMAND_PATHS.contains(&"sync::import::import_workspace_from_git_link"));
-        assert!(APP_COMMAND_PATHS.contains(&"sync::import::import_managed_workspace_from_git_link"));
+        assert!(
+            APP_COMMAND_PATHS.contains(&"sync::import::import_managed_workspace_from_git_link")
+        );
 
         // Sanity: no duplicates and the count matches the macro entries.
         let mut sorted = APP_COMMAND_PATHS.to_vec();

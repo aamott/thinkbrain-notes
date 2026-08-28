@@ -132,6 +132,22 @@ export interface NativeCommandMap {
     };
     readonly result: null;
   };
+  readonly read_text_file: {
+    readonly args: {
+      readonly rootPath: string;
+      readonly relativePath: string;
+    };
+    readonly result: NativeTextFileContents;
+  };
+  readonly write_text_file: {
+    readonly args: {
+      readonly rootPath: string;
+      readonly relativePath: string;
+      readonly contents: string;
+      readonly expected?: string;
+    };
+    readonly result: NativeTextFileEntry;
+  };
   readonly create_workspace_file: {
     readonly args: {
       readonly rootPath: string;
@@ -481,6 +497,19 @@ export interface NativeKeptVersion {
 export interface NativeMarkdownFileContents {
   readonly relative_path: string;
   readonly contents: string;
+}
+
+export interface NativeTextFileContents {
+  readonly relative_path: string;
+  readonly contents: string;
+}
+
+export interface NativeTextFileEntry {
+  readonly relative_path: string;
+  readonly file_name: string;
+  readonly parent_path: string;
+  readonly byte_size: number;
+  readonly updated_at: string | null;
 }
 
 export interface NativeWorkspaceEntry {
