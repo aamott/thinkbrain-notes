@@ -1,4 +1,4 @@
-# Story: Git Works on a Phone — Cloning, and Where the Token Lives
+# Story: Git Works on a Phone — Private Clones and Where the Token Lives
 
 **Status:** ⬜ pending · **Urgency:** high · **Difficulty:** hard
 
@@ -6,77 +6,109 @@
 > the one way that needs no folder picker — see
 > `done-android_workspace_access-high-hard.md`. That makes this story part of
 > onboarding rather than an advanced feature.
+>
+> Re-cut 2026-08-27 against
+> `docs/superpowers/specs/2026-08-27-android-git-access-design.md`. Two pieces
+> were split out: the device spike that gates this
+> (`pending-device_git_clone_spike-high-easy.md`) and the keyring migration it
+> depends on (`../auto-sync/pending-keyring_v4_migration-high-med.md`).
 
 ## What is already true
 
-- **gix cross-compiles** for `aarch64-linux-android` and `aarch64-apple-ios`,
-  gated on every sync-layer change. That was the bet auto-sync made and it
-  holds.
-- **The gate is narrower than its name.** CI and `scripts/sync-cross-android.sh`
-  run `cargo check -p gix` — one package, no link step, no Tauri build. CI's
-  own comment says so plainly. gix has never been **run** on a device: not a
-  clone, not a fetch, not a merge.
-- **The desktop clone flow exists** and is well covered —
-  `auto-sync/done-workspace_from_git_link-med-hard.md` already does
-  bootstrap-plus-first-trip off the UI thread, with a `sync://import` event and
-  an opaque request id. Mobile should be able to reuse it rather than grow a
-  second one.
+More than the epic's status list suggests.
 
-## The blocker: credentials
+- **The Android scaffold is real and committed.** `gen/android/`, package
+  `com.thinkbrain.notes`, `minSdk 24` / `targetSdk 36`, all four ABIs, a custom
+  Gradle `RustPlugin` driving the per-ABI Rust build. `release.yml` can already
+  produce a signed AAB and APK behind `ANDROID_RELEASE_ENABLED`.
+- **The managed clone path already exists.**
+  `import_managed_workspace_from_git_link` (`sync/import.rs:239`) reuses the
+  desktop import worker — `prepare_import` → `bootstrap` → `round::run_trip` —
+  with the same `sync://import` event and opaque request id. **The "reuse
+  rather than duplicate" criterion is already met in code**; it has simply
+  never been exercised on a device.
+- **The sync core is platform-clean.**
+  `run_trip(repo, vault, destination, profile_id, on_phase)` (`round.rs:128`)
+  takes no engine and no OS assumptions. The whole Rust tree holds two `cfg`
+  sites: the mobile entry point and the updater gate. Credentials entangle at
+  exactly two places — `credentials::provide` (`network.rs:92`, `push.rs:261`)
+  and `credentials::with_profile` (`round.rs:160,214`).
+- **The import dialog already tells the truth.**
+  `GitLinkImportDialog.tsx:376,381-383` hides the sign-in fields and shows
+  `storageMessage` when storage is not available.
+- **gix has never been run on a device.** The CI gate is `cargo check -p gix`,
+  by design. See `pending-device_git_clone_spike-high-easy.md`.
+
+## The blocker: credentials — decided
 
 On Android `commands/sync/credentials.rs` compiles to its `unsupported!` stubs,
-which return `sync.auth_required` — *"Sign-in is not available on this device
-yet."* That is honest and it does not crash, but it means:
+returning `sync.auth_required`. Public repositories can be cloned; private ones
+cannot, and most people's notes are private.
 
-- a **public** repository can be cloned,
-- a **private** one cannot, and most people's notes are private.
+**Decision (drafted 2026-08-27, pending review): keyring v4 plus
+[`android-native-keyring-store`](https://crates.io/crates/android-native-keyring-store).**
 
-`keyring` has no Android backend, and it is gated out of the build entirely
-(`Cargo.toml:39`). So the question is not "make keyring work" but "what holds a
-token on this platform".
+It comes from `open-source-cooperative`, the same org that maintains the
+`keyring` crate already in this build, and stores credentials in SharedPreferences
+encrypted under a dedicated Android Keystore entry. It supports API 24+,
+matching our `minSdk` exactly. This is the story's original "encrypted app-data,
+with the key from Keystore" candidate with the custody question answered: we do
+not write or own the encryption.
 
-This is the same unmade decision `plans/pending-extensions-low-hard.md` records
-for extension secrets — *"native secret storage: an encrypted app-data fallback
-remains an explicit unmade security decision"*. Mobile is what forces it, and
-whatever is chosen should serve both.
+Rejected, and why:
 
-Candidates, none chosen:
+- **A bespoke Kotlin plugin over Keystore** — correct, but it means owning a
+  JNI surface and a second credential abstraction desktop does not share. More
+  than the problem costs, and still available later as a store swap.
+- **A hand-rolled encrypted file** — the extensions story forbids it in as many
+  words: "never invent plaintext or improvised encryption."
+- **`tauri-plugin-keystore`** — requires API 28 against our `minSdk 24`,
+  assumes enrolled biometrics with no preflight check, and keeps
+  `credentials.rs` split in two forever.
+- **No stored token, public repos only** — named so it is rejected
+  deliberately rather than by default. It is the least useful outcome.
 
-- **Android Keystore**, through a small Kotlin plugin. The platform's own
-  answer, hardware-backed on most devices. Costs a native plugin and a JNI
-  surface this project does not have yet.
-- **Encrypted file in app-data**, with the key from Keystore. Less native code,
-  and the same shape could serve desktop Linux where the secret service is
-  often absent.
-- **No stored token.** Clone public repositories only, and say so. Cheapest and
-  least useful; worth naming so it is rejected deliberately rather than by
-  default.
+This decision serves the extensions epic's secret storage too: one `Entry`-shaped
+boundary, one namespace convention, every platform included. See
+`../extensions/pending-extension_secret_storage-med-hard.md`.
 
 ## The other constraint: no background sync
 
-`auto-sync/done-mobile_cross_compile-med-easy.md` says a foreground-only
-constraint was "documented for the mobile epic". It was not, so it is recorded
-here and in the epic.
+Worse than absent — actively wrong on Android. `registry.rs` runs a sweeper
+thread on a 500ms tick (`TICK`), firing a round trip after 30s idle (`IDLE`),
+capped at once per 60s (`CAP`). Android freezes the process on background, so
+those timers do not merely fail to fire; they fire against a stale clock on
+resume, and a returning user gets a sync they did not ask for.
 
-Android does not let an app run the idle-triggered round trip the desktop
-sync assumes. Mobile needs its own answer to *when* a sync happens — on
-foreground, on explicit pull-to-sync, on close — and the triggers in
-`auto-sync/done-sync_trigger_debounce-low-med.md` were designed without this in
-mind.
+Mobile needs explicit triggers instead of idle inference: on workspace open, on
+foreground, on explicit user request, and a best-effort flush on background.
+`run_trip` already takes everything it needs as arguments, so this is a
+scheduling change rather than a sync-engine change — the sweeper stays
+desktop-only and mobile drives the same core from lifecycle events.
 
-## Acceptance (to be settled)
+Separable from credentials; split this out if it grows.
 
-- [ ] gix does a real clone on a real device — the first thing to try, because
-      everything here assumes it and nothing has proven it
-- [ ] A private repository can be cloned, or the app says clearly why it cannot
-- [ ] Where the token lives is decided, written down with its reasoning, and
-      serves the extensions epic's secret storage too
-- [ ] Mobile sync triggers are defined and do not silently rely on background
-      execution Android will not grant
-- [ ] The desktop import flow is reused rather than duplicated
+## Dependencies
 
-## First step
+1. `pending-device_git_clone_spike-high-easy.md` — proves the premise
+2. `../auto-sync/pending-keyring_v4_migration-high-med.md` — desktop groundwork
 
-Before any of the above: clone a small public repository on a device. It is
-cheap, it needs no decisions, and it either confirms the cross-compile bet in
-practice or turns this whole story into something else.
+## Acceptance
+
+- [ ] `android-native-keyring-store` registered as the default store on Android
+      under a `cfg(target_os = "android")` dependency
+- [ ] A **private** repository is cloned on a real device
+- [ ] A round trip (fetch, merge, push) completes on a real device
+- [ ] Mobile sync triggers are defined and implemented, and do not rely on
+      background execution Android will not grant
+- [ ] Where the token lives is written down with its reasoning and serves the
+      extensions epic's secret storage
+- [ ] The desktop import flow is reused rather than duplicated — already true
+      in code; confirmed on a device
+- [ ] `pnpm qa` green
+
+## Done here already
+
+- [x] `GitLinkControl` no longer offers an Update sign-in button that cannot
+      succeed on a device without a credential store (`canUpdate` now consults
+      `status.storage`, matching `GitLinkImportDialog.tsx:376`)

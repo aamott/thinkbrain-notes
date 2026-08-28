@@ -107,13 +107,21 @@ must not convert `content://` URIs into guessed `/storage/...` paths.
 - **Credentials do not persist.** On Android `credentials.rs` compiles to stubs
   that return `sync.auth_required` — "Sign-in is not available on this device
   yet." Public clones would work; private ones have nowhere to keep a token.
-  The alternative (an encrypted app-data fallback) is the same unmade decision
-  `plans/pending-extensions-low-hard.md` records for extension secrets, and
-  mobile is what forces it.
-- **Foreground-only.** `auto-sync/done-mobile_cross_compile-med-easy.md` says
-  this constraint was "documented for the mobile epic"; it was not, so it is
-  recorded here. Android does not let an app sync on idle the way the desktop
-  triggers assume, so mobile needs its own answer about when a round trip runs.
+  **Decided 2026-08-27 (pending review):** keyring v4 plus
+  `android-native-keyring-store` — the encrypted-app-data candidate, but with
+  the encryption owned by the keyring maintainers rather than by us. The
+  prerequisite is a desktop keyring v3→v4 migration
+  (`auto-sync/pending-keyring_v4_migration-high-med.md`). This also answers the
+  unmade decision `plans/pending-extensions-low-hard.md` records for extension
+  secrets.
+- **Foreground-only, and worse than absent.** `registry.rs` runs a sweeper on a
+  500ms tick, firing after 30s idle, capped at once per 60s. Android freezes the
+  process on background, so those timers do not merely fail to fire — they fire
+  against a stale clock on resume, and a returning user gets a sync they did not
+  ask for. Mobile needs explicit triggers (open, foreground, user request,
+  best-effort flush on background) rather than idle inference. `run_trip` takes
+  everything it needs as arguments, so this is a scheduling change, not a
+  sync-engine change.
 
 ### The UI is not usable on a phone yet
 
@@ -227,9 +235,14 @@ point tuning a layout for a workspace that cannot be opened.
   vaults beneath app data. Native managed-vault commands, capability-gated
   UI, clone-first onboarding, and one-time uninstall notice all shipped.
   `mobile/done-android_workspace_access-high-hard.md`
-- ⬜ Git clone as the mobile way in, followed by Android Keystore-backed shared
-  secret storage for private repositories —
-  `mobile/pending-mobile_git_access-high-hard.md`
+- ⬜ Git clone as the mobile way in, split three ways 2026-08-27 against
+  `docs/superpowers/specs/2026-08-27-android-git-access-design.md`:
+  prove gix runs on a device (`mobile/pending-device_git_clone_spike-high-easy.md`),
+  migrate keyring v3→v4 on desktop
+  (`auto-sync/pending-keyring_v4_migration-high-med.md`), then Android
+  credentials and mobile sync triggers
+  (`mobile/pending-mobile_git_access-high-hard.md`). Storage decision drafted:
+  keyring v4 plus `android-native-keyring-store`, not a bespoke Kotlin plugin.
 - 🟨 Phone shell chrome — headless shell state, form-factor gate, header,
   drawer, shortcut hub, tab-switcher and inspector sheets. Built and green
   under test; awaiting a pass on an Android device —
