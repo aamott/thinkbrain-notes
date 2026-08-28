@@ -402,7 +402,7 @@ fn spawn_sweeper() {
 /// enough since the last one. "Sync now" does not go through here, and the
 /// per-workspace lane still keeps two trips from interleaving.
 fn maybe_sync(key: &str, engine: &Arc<Engine>, now: Instant) {
-    if !engine.ready_to_sync(IDLE, CAP, now) {
+    if !engine.ready_to_sync(IDLE, CAP.as_secs(), now, super::schedule::now_epoch_secs()) {
         return;
     }
     // Asked after `ready_to_sync`, not before: resolving the policy reads and

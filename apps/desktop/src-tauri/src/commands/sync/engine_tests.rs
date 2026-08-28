@@ -391,26 +391,68 @@ fn a_vault_is_ready_to_sync_only_once_it_has_been_still_and_the_cap_has_passed()
     assert!(
         !f.engine.ready_to_sync(
             Duration::from_secs(30),
-            Duration::from_secs(60),
-            start + Duration::from_secs(5)
+            60,
+            start + Duration::from_secs(5),
+            1_005
         ),
         "a vault still being edited was ready"
     );
     assert!(
         f.engine.ready_to_sync(
             Duration::from_secs(30),
-            Duration::from_secs(60),
-            start + Duration::from_secs(30)
+            60,
+            start + Duration::from_secs(30),
+            1_030
         ),
         "a still vault was not ready before its first trip"
     );
-    f.engine.mark_synced();
+    f.engine.mark_attempt(1_030);
     assert!(
         !f.engine.ready_to_sync(
             Duration::from_secs(30),
-            Duration::from_secs(60),
-            start + Duration::from_secs(30)
+            60,
+            start + Duration::from_secs(30),
+            1_030
         ),
         "the frequency cap did not hold"
     );
+}
+
+/// The monotonic clock jumps an hour while the wall clock says four
+/// seconds passed — the shape of a freeze on a device whose clock the app
+/// cannot trust. The interval must believe the wall clock.
+#[test]
+fn a_frozen_process_does_not_manufacture_an_elapsed_interval() {
+    let f = fixture("frozen-interval");
+    let start = Instant::now();
+    f.engine.note_changes([PathBuf::from("a.md")], start);
+    f.engine.mark_attempt(1_000);
+
+    let long_after = start + Duration::from_secs(3_600);
+    assert!(
+        !f.engine
+            .ready_to_sync(Duration::from_secs(30), 60, long_after, 1_004)
+    );
+    assert!(
+        f.engine
+            .ready_to_sync(Duration::from_secs(30), 60, long_after, 1_070)
+    );
+}
+
+#[test]
+fn a_vault_that_has_never_been_attempted_is_due_once_it_is_quiet() {
+    let f = fixture("never-attempted");
+    let start = Instant::now();
+    f.engine.note_changes([PathBuf::from("a.md")], start);
+
+    assert!(
+        !f.engine
+            .ready_to_sync(Duration::from_secs(30), 60, start, 1_000)
+    );
+    assert!(f.engine.ready_to_sync(
+        Duration::from_secs(30),
+        60,
+        start + Duration::from_secs(31),
+        1_031
+    ));
 }

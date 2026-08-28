@@ -439,7 +439,7 @@ pub fn sync(
     let _clear = Clear(engine, key);
     // Count an attempted round, not only a successful one. Otherwise a bad
     // link or missing sign-in starts a new automatic attempt every sweep tick.
-    engine.mark_synced();
+    engine.mark_attempt(super::schedule::now_epoch_secs());
     let profile = profile_id.map(str::to_owned);
     let outcome = (|| {
         // Whatever is still sitting in the settle window belongs in this sync.

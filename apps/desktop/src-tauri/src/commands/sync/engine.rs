@@ -158,8 +158,16 @@ pub struct Engine {
     has_own_git: bool,
     /// Last time a note changed, for the idle debounce that fires a round trip.
     last_touched: Mutex<Instant>,
-    /// Last time a round trip finished, for the frequency cap.
-    last_synced: Mutex<Option<Instant>>,
+    /// When a round trip was last *started*, in seconds since the epoch.
+    ///
+    /// Wall clock, not `Instant`: Android freezes the process and a monotonic
+    /// clock keeps counting through the freeze, so a vault that synced moments
+    /// before going into a pocket looked an hour unsynced when it came out.
+    ///
+    /// Attempts, not successes. A vault with a bad link or a missing sign-in
+    /// never succeeds, and a gate driven by successes would let the sweeper
+    /// retry it on every tick.
+    last_attempt: Mutex<Option<u64>>,
 }
 
 impl Engine {
@@ -178,7 +186,7 @@ impl Engine {
             recording: Mutex::new(()),
             maintenance_problem: Mutex::new(None),
             last_touched: Mutex::new(Instant::now()),
-            last_synced: Mutex::new(None),
+            last_attempt: Mutex::new(None),
         }
     }
 
@@ -555,24 +563,35 @@ impl Engine {
         self.syncing.swap(on, Ordering::Relaxed) != on
     }
 
-    /// Marks a round trip as finished, for the frequency cap.
-    pub fn mark_synced(&self) {
-        *lock_or_recover(&self.last_synced) = Some(Instant::now());
+    /// Marks a round trip as started, for the frequency gate.
+    pub fn mark_attempt(&self, now_secs: u64) {
+        *lock_or_recover(&self.last_attempt) = Some(now_secs);
     }
 
     /// Whether this vault has been still long enough, and it has been long
     /// enough since the last round trip, to sync without a click.
-    pub fn ready_to_sync(&self, idle: Duration, cap: Duration, now: Instant) -> bool {
+    ///
+    /// Two clocks on purpose. Quiet is monotonic: it only ever measures
+    /// seconds between local edits inside one run, where a user changing their
+    /// clock must not count as typing. The interval is wall-clock, so a freeze
+    /// cannot fake it.
+    pub fn ready_to_sync(
+        &self,
+        quiet: Duration,
+        interval_secs: u64,
+        now: Instant,
+        now_secs: u64,
+    ) -> bool {
         if self.syncing() {
             return false;
         }
         let touched = *lock_or_recover(&self.last_touched);
-        if now.saturating_duration_since(touched) < idle {
+        if now.saturating_duration_since(touched) < quiet {
             return false;
         }
-        match *lock_or_recover(&self.last_synced) {
+        match *lock_or_recover(&self.last_attempt) {
             None => true,
-            Some(synced) => now.saturating_duration_since(synced) >= cap,
+            Some(last) => super::schedule::elapsed_at_least(last, now_secs, interval_secs),
         }
     }
 }
