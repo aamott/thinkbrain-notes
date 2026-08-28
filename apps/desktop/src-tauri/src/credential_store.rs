@@ -58,7 +58,12 @@ fn platform_store() -> Option<keyring_core::Result<std::sync::Arc<keyring_core::
     )
 }
 
-#[cfg(any(target_os = "macos", target_os = "ios"))]
+// macOS only, deliberately. iOS has no legacy keychain — `apple-native-keyring-store`
+// compiles the `keychain` module out there and hard-errors unless the
+// `protected` feature is on instead. Claiming iOS here would not give iOS a
+// credential store; it would fail the build with a confusing message. iOS falls
+// through to the `None` arm until someone actually ships it.
+#[cfg(target_os = "macos")]
 fn platform_store() -> Option<keyring_core::Result<std::sync::Arc<keyring_core::CredentialStore>>> {
     Some(
         apple_native_keyring_store::keychain::Store::new()
@@ -74,14 +79,9 @@ fn platform_store() -> Option<keyring_core::Result<std::sync::Arc<keyring_core::
     )
 }
 
-#[cfg(not(any(
-    target_os = "linux",
-    target_os = "macos",
-    target_os = "ios",
-    target_os = "windows"
-)))]
+#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
 fn platform_store() -> Option<keyring_core::Result<std::sync::Arc<keyring_core::CredentialStore>>> {
-    // Android reaches here. `android-native-keyring-store` is the intended
+    // Android and iOS reach here. `android-native-keyring-store` is the intended
     // backend and is tracked separately — it needs a JNI hook of the same shape
     // as `android_tls.rs`, because Tauri does not populate `ndk-context`.
     None

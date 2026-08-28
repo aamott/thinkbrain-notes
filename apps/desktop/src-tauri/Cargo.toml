@@ -86,7 +86,11 @@ version = "1"
 [target.'cfg(target_os = "linux")'.dependencies]
 dbus-secret-service-keyring-store = { version = "1", features = ["crypto-rust"] }
 
-[target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
+# macOS only: the `keychain` feature is the legacy file-based store, which is
+# exactly where keyring v3 put these secrets. iOS is excluded on purpose — it
+# has no legacy keychain and this crate hard-errors there unless `protected` is
+# used instead. See src/credential_store.rs.
+[target.'cfg(target_os = "macos")'.dependencies]
 apple-native-keyring-store = { version = "1", features = ["keychain"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]

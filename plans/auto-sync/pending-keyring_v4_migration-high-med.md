@@ -113,63 +113,95 @@ worth it.
 - [x] `storage_status` and `has_keychain` follow store registration, not `cfg!`
 - [x] A credential saved by the shipped v3 build is read back by the v4 build
       on **Linux** — verified with a two-crate probe against the real store
-- [ ] The same read-back on **macOS** and **Windows** — not verified, no machine
-      available. `apple-native-keyring-store` (feature `keychain`) and
-      `windows-native-keyring-store` are wired but unexercised. **Do not ship
-      to those platforms until someone runs the same probe there**, given what
-      the Linux investigation turned up.
+- [ ] The same read-back on **macOS** — predicted to pass from source, not run
+- [ ] The same read-back on **Windows** — predicted to pass from source, not run
+      Both are wired but unexercised. **Do not ship to either platform until
+      `tools/keyring-migration-probe` has printed PASS there**, given what the
+      Linux investigation turned up.
+- [x] The probe itself is trustworthy — reproduces the Linux PASS and produces
+      a FAIL against the known-wrong store
 - [ ] Sign-in, save-link, forget and a full round trip still work on desktop —
       unit-tested, not yet exercised through the running app
 - [x] `pnpm qa` green
 
-## The probe, to repeat on macOS and Windows
+## What the crate sources predict for macOS and Windows
 
-Two throwaway crates. Run the v3 one first (it writes), then the v4 one (it
-only reads). Deliberately not committed as a script: it cannot be tested from
-Linux, and an untested cross-platform script is worse than a recipe.
+Read before running anything, so a surprise is recognisable as a surprise.
+This is source reading, not evidence — the Linux lesson was that names
+mislead, so this time the *keying code* was read rather than the crate names.
 
-`v3probe/Cargo.toml` — the feature set the shipped v3 build used:
+**Windows.** v3 builds the Credential Manager `target_name` as
+`format!("{user}.{service}")` (`keyring-3.6.3/src/windows.rs:379`). v4 builds
+it as `format!("{}{user}{}{service}{}", delimiters[0], delimiters[1],
+delimiters[2])` (`windows-native-keyring-store-1.1.0/src/cred.rs:53`), and the
+documented defaults are an empty prefix, an empty suffix and `"."` as the
+delimiter. Those produce the identical string. **Predicted: reads back.** The
+prefix is configurable, so this is only true while we leave it unset — v4's
+docs advertise the prefix as a feature, and setting one later would orphan
+every existing credential.
 
-```toml
-[dependencies]
-keyring = { version = "3", features = [
-  "apple-native", "windows-native", "linux-native-sync-persistent", "crypto-rust",
-] }
+**macOS.** v3 uses the *legacy* file-based keychain API — `SecKeychain` and
+`find_generic_password` from `security_framework::os::macos` — storing the user
+in `account` and the service in `name`, in the User (login) keychain. v4's
+`apple-native-keyring-store` offers two modules, and the `keychain` feature we
+enabled is explicitly the legacy store, using `account` for the user and
+`service` for the service in the User keychain by default, with no prefix or
+concatenation. **Predicted: reads back.** The trap avoided here was the
+`protected` module, which is the modern data-protection store — a different
+place entirely.
+
+Neither prediction is worth shipping on by itself. Run the probe.
+
+### One macOS-specific caveat when interpreting the result
+
+The login keychain binds an ACL to the application that created an item, so a
+read from a *different* binary can prompt for the login password. The probe
+writes and reads from the same binary to avoid this, but if macOS prompts
+anyway, that is the ACL check and not a migration failure — allow it and judge
+the probe by the line it prints afterwards.
+
+## The probe
+
+Committed at `tools/keyring-migration-probe/`. One crate depending on **both**
+keyring generations at once — possible because v3 is the crate `keyring` and v4
+is `keyring-core` plus a store — so a single binary writes with v3 and reads
+with v4. Its platform stores mirror `credential_store.rs` exactly; if those
+ever diverge, the probe stops testing what we ship.
+
+```
+cd tools/keyring-migration-probe
+cargo run -- write     # v3 stores a credential
+cargo run -- verify    # v3 reads it back (control), then v4 reads it
+cargo run -- clean     # remove it again
 ```
 
-```rust
-fn main() {
-    let entry = keyring::Entry::new("ThinkBrain Notes", "profile:__migration_probe").unwrap();
-    if std::env::args().nth(1).as_deref() == Some("write") {
-        entry.set_password("probeuser\nprobesecret").unwrap();
-    }
-    println!("v3: {:?}", entry.get_password());
-}
-```
+Three separate processes on purpose: a single run could be answered from an
+in-process cache and prove nothing about what is persisted.
 
-`v4probe/Cargo.toml` — swap the store crate for the platform under test
-(`apple-native-keyring-store` with feature `keychain` on macOS,
-`windows-native-keyring-store` on Windows):
+It prints `PASS` or `FAIL` and says which. The control step exists because a
+bare v4 failure is ambiguous — it could mean v4 looks in the wrong place, or
+that nothing was ever stored — and it is what made the Linux result
+trustworthy.
 
-```toml
-[dependencies]
-keyring-core = "1"
-windows-native-keyring-store = "1"
-```
+**Verified as a harness on Linux, in both directions:** `PASS` against the
+shipped `dbus-secret-service-keyring-store`, and `FAIL — No matching credential
+found` when pointed at `linux-keyutils-keyring-store`, the wrong store from the
+investigation above. A probe that can only print `PASS` would be worse than no
+probe, so it was checked against a known failure before being handed over.
 
-```rust
-fn main() {
-    keyring_core::set_default_store(windows_native_keyring_store::Store::new().unwrap());
-    let entry = keyring_core::Entry::new("ThinkBrain Notes", "profile:__migration_probe").unwrap();
-    println!("v4: {:?}", entry.get_password());
-}
-```
+Delete the crate once macOS and Windows are both recorded below.
 
-Run `v3probe write`, then `v3probe` again in a fresh process as a control that
-the entry persists at all, then `v4probe`. The migration is safe on that
-platform only if the third command prints the secret.
+## Also fixed here: iOS was declared and could not have compiled
 
-On macOS the store is `apple_native_keyring_store::keychain::Store::new()`.
+`apple-native-keyring-store` was pulled in under `cfg(any(macos, ios))` with
+`features = ["keychain"]`. On iOS that crate compiles the `keychain` module out
+entirely and raises a `compile_error!` demanding `protected` instead, so the
+declaration would not have given iOS a credential store — it would have failed
+the build with a confusing message. Both the dependency and `platform_store`
+are now macOS-only, and iOS falls through to the `None` arm, which is the
+honest answer until someone actually ships it. Found by reading the crate for
+the prediction above; there is no iOS target in the repo, so nothing was broken
+in practice.
 
 ## Not in scope
 
