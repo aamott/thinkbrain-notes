@@ -438,7 +438,7 @@ function applyProgress(
 ): void {
   if (event.state === "ok") {
     setBusy(false);
-    if (event.notSent) announceOneWayImport(event.notSent);
+    if (event.notSent) announceOneWayImport(event.targetPath, event.notSent);
     onImported(event.targetPath);
     onClose();
     return;
@@ -461,10 +461,13 @@ function applyProgress(
  * the more expensive misunderstanding — it is only discovered later, by
  * finding out the hard way that they did not.
  */
-function announceOneWayImport(reason: string): void {
+function announceOneWayImport(targetPath: string, reason: string): void {
   useNotificationStore.getState().addNotification({
     source: "sync",
-    dedupKey: "sync:import-not-sent",
+    // Keyed by vault, not by kind. A single key would let a second read-only
+    // import quietly overwrite the first one's warning, leaving someone with
+    // two one-way vaults and one notice about it.
+    dedupKey: `sync:import-not-sent:${targetPath}`,
     title: "Brought in, but not linked both ways",
     message: "These notes came in, but changes made here could not be sent back.",
     recovery: "Sign in for this git link in Settings if you need to send changes.",

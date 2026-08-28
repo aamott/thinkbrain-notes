@@ -19,6 +19,16 @@
 /// Called once from `run()` before any command can ask for a credential.
 /// Registering twice is harmless but pointless; registering late is not, which
 /// is why this is not lazy.
+///
+/// This does connect to the OS store — on Linux that is a D-Bus connection to
+/// the Secret Service — so it is real work on the startup path, where keyring
+/// v3 paid the same cost lazily at first use. Measured at ~52ms on Linux, with
+/// the first read after it under 1ms. That is small enough to prefer a
+/// straightforward eager registration over a lazy wrapper that would have to
+/// re-implement `CredentialStore` just to defer a connection. If a platform
+/// ever turns out to be slow here, the fix is a lazy delegating store, not
+/// moving this off the startup path — a command arriving before registration
+/// finished would wrongly report that the device cannot keep a sign-in.
 pub fn register() {
     match platform_store() {
         Some(Ok(store)) => keyring_core::set_default_store(store),

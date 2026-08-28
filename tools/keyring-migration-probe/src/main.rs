@@ -111,6 +111,15 @@ fn main() {
             }
         }
 
+        "time" => {
+            let start = std::time::Instant::now();
+            register_v4_store();
+            println!("store registration took {:?}", start.elapsed());
+            let start = std::time::Instant::now();
+            let _ = keyring_core::Entry::new(SERVICE, ACCOUNT).and_then(|e| e.get_password());
+            println!("first read took {:?}", start.elapsed());
+        }
+
         "clean" => match v3().delete_credential() {
             Ok(()) => println!("Probe credential removed."),
             Err(error) => println!("Nothing to remove, or removal failed: {error}"),

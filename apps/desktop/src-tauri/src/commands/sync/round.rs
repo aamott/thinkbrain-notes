@@ -132,6 +132,16 @@ pub(super) enum PushPolicy {
     /// fetched and merged cleanly is worth keeping even when this device can
     /// never write to it — a public repository, a read-only mirror, or a phone
     /// with nowhere to store a token.
+    ///
+    /// Worth knowing before anyone tries to "optimise" this away: an import's
+    /// push never carries anything. Its target is a freshly created folder, so
+    /// `bootstrap` finds no notes to snapshot and leaves no local commit, and
+    /// `adopt` then points the branch straight at the remote's own tip. The
+    /// push is therefore a **write-access probe**, not a data transfer — and
+    /// that is exactly why it earns its network round trip. Its answer is what
+    /// lets the import say "brought in, but not linked both ways" at import
+    /// time, rather than letting someone discover it much later by losing an
+    /// edit they assumed had travelled.
     Optional,
 }
 
@@ -210,56 +220,49 @@ fn trip(
     };
     skipped.extend(apply::skipped_unsupported(repo, vault)?);
 
-    let Some(tip) = snapshot::head_commit(repo)? else {
+    // What the send did, as (objects, outcome). Kept as a value rather than
+    // three early returns so `Synced` is constructed in exactly one place — it
+    // has six fields and four of them were repeated verbatim at each exit,
+    // which is four chances to forget one when the struct next grows.
+    let (sent, landed) = match snapshot::head_commit(repo)? {
         // A vault nobody has typed in yet, syncing to a place nobody has
         // pushed to. Not a fault, and not something to write a commit about.
-        return Ok(Synced {
-            brought_down,
-            asked_about,
-            sent: 0,
-            landed: push::Landed::Moved,
-            conflict_copies: copies,
-            skipped,
-        });
-    };
-    on_phase(SyncPhase::Sending);
-    let sent = {
-        let repo = repo.clone();
-        let destination = destination.to_owned();
-        let cancel = Arc::clone(&cancel);
-        let profile = profile_id.clone();
-        bounded(network::NETWORK, cancel, move || {
-            super::credentials::with_profile(profile.as_deref(), || {
-                push::send(&repo, &destination, BRANCH, tip)
-            })
-        })
-    };
-    let sent = match sent {
-        Ok(sent) => sent,
-        // Everything before this point already landed on disk. Failing here
-        // would send the caller down a rollback path that deletes a fetch and
-        // a merge that both worked, so an import keeps them and records that
-        // nothing was sent.
-        Err(error) if push_policy == PushPolicy::Optional => {
-            return Ok(Synced {
-                brought_down,
-                asked_about,
-                sent: 0,
-                landed: push::Landed::NotSent {
-                    reason: error.message,
-                },
-                conflict_copies: copies,
-                skipped,
-            });
+        None => (0, push::Landed::Moved),
+        Some(tip) => {
+            on_phase(SyncPhase::Sending);
+            let attempt = {
+                let repo = repo.clone();
+                let destination = destination.to_owned();
+                let cancel = Arc::clone(&cancel);
+                let profile = profile_id.clone();
+                bounded(network::NETWORK, cancel, move || {
+                    super::credentials::with_profile(profile.as_deref(), || {
+                        push::send(&repo, &destination, BRANCH, tip)
+                    })
+                })
+            };
+            match attempt {
+                Ok(sent) => (sent.objects, sent.landed),
+                // Everything before this point already landed on disk. Failing
+                // here would send the caller down a rollback path that deletes
+                // a fetch and a merge that both worked, so an import keeps them
+                // and records that nothing was sent.
+                Err(error) if push_policy == PushPolicy::Optional => (
+                    0,
+                    push::Landed::NotSent {
+                        reason: error.message,
+                    },
+                ),
+                Err(error) => return Err(error),
+            }
         }
-        Err(error) => return Err(error),
     };
 
     Ok(Synced {
         brought_down,
         asked_about,
-        sent: sent.objects,
-        landed: sent.landed,
+        sent,
+        landed,
         conflict_copies: copies,
         skipped,
     })

@@ -41,11 +41,19 @@ More than the epic's status list suggests.
 
 ## The blocker: credentials — decided
 
-On Android `commands/sync/credentials.rs` compiles to its `unsupported!` stubs,
-returning `sync.auth_required`. Public repositories can be cloned; private ones
-cannot, and most people's notes are private.
+Android has no credential store registered, so `keyring_core::Entry::new`
+fails with `NoDefaultStore` and `credentials.rs` reports `sync.auth_required`.
+Public repositories can be cloned; private ones cannot, and most people's notes
+are private.
 
-**Decision (drafted 2026-08-27, pending review): keyring v4 plus
+(Until 2026-08-28 this happened through a `cfg`-gated `unsupported!` stub. The
+keyring v4 migration deleted that whole code path: there is now one body, and
+"can this device keep a sign-in" is a runtime question about what
+`credential_store::register()` managed to register. That is what makes the
+remaining work a single `cfg(target_os = "android")` dependency plus a JNI
+hook, rather than a second code path.)
+
+**Decision (drafted 2026-08-27, confirmed 2026-08-28): keyring v4 plus
 [`android-native-keyring-store`](https://crates.io/crates/android-native-keyring-store).**
 
 It comes from `open-source-cooperative`, the same org that maintains the
@@ -90,13 +98,21 @@ Separable from credentials; split this out if it grows.
 
 ## Dependencies
 
-1. `pending-device_git_clone_spike-high-easy.md` — proves the premise. **Run
-   2026-08-27: the build links and the app runs, but the clone fails.**
-2. `pending-android_tls_platform_verifier-high-med.md` — **the actual first
-   blocker.** Every TLS request from Rust panics on Android because
-   `rustls-platform-verifier` is never initialised, so public and private
-   clones fail alike. Credentials are the *second* blocker, not the first.
-3. `../auto-sync/pending-keyring_v4_migration-high-med.md` — desktop groundwork
+**All three are now done, so this story is unblocked.**
+
+1. `pending-device_git_clone_spike-high-easy.md` — ✅ run 2026-08-27.
+2. `pending-android_tls_platform_verifier-high-med.md` — ✅ fixed. The JNI shim
+   in `src-tauri/src/android_tls.rs` is the pattern to copy for the credential
+   store, since Tauri does not populate `ndk-context` either.
+3. `../auto-sync/pending-keyring_v4_migration-high-med.md` — ✅ v4 shipped and
+   read-back verified on Linux, macOS and Windows. One acceptance item is still
+   open there (a sign-in/forget round trip through the running desktop app) but
+   it does not block this.
+
+Also cleared on the way, and not originally foreseen:
+`pending-android_anonymous_clone-high-med.md` — a public repository now clones
+on a device. The import used to be rolled back whenever the push at the end of
+it failed.
 
 ## Acceptance
 

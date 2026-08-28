@@ -259,3 +259,37 @@ control should match it.
 - **The device clone may simply fail** — aws-lc-sys/rustls, app-private storage
   and `core.worktree`, or gix itself. This is the bet the cross-compile gate
   never actually tested, which is why story 1 exists and comes first.
+
+## Outcome (2026-08-28)
+
+Recorded here because the body above describes the code as it stood when the
+decision was taken, and three of its four risks have since been settled by
+experiment rather than by argument. The body is left as written — it is the
+record of a decision, not a description of the tree.
+
+**The design held. Every rejected option stayed rejected**, and nothing in the
+plan had to be re-cut once the device could actually be observed.
+
+- **keyring v4 landed, and its headline risk was real.** v3's
+  `linux-native-sync-persistent` is not the keyutils store its name suggests;
+  it is keyutils as a cache *plus* dbus-secret-service for durability. Shipping
+  on the name match would have signed out every Linux user. Read-back is now
+  verified by experiment on Linux, macOS and Windows.
+  `supported!`/`unsupported!` are deleted; the passages above describing them
+  are historical.
+- **`ndk_context` was not initialised**, as the risk anticipated, so the JNI
+  shim was needed — and it was needed a story earlier than expected, for
+  `rustls-platform-verifier` rather than for credentials. The same shape will
+  serve `android-native-keyring-store`.
+- **The device clone did fail**, vindicating story 1's existence, but for none
+  of the guessed reasons. First TLS, because the platform verifier is never
+  initialised under Tauri. Then, after that was fixed, an import that fetched
+  and merged perfectly was *deleted* because the push at the end of it failed —
+  which is what a public repository looks like. Neither was visible to
+  `cargo check`.
+- **`run_trip` has since gained a `push_policy` argument**, so the signature
+  quoted above is one parameter short of current.
+
+The credential half of the design — `android-native-keyring-store` registered
+through `credential_store.rs` — remains unstarted and unchanged. It is now
+unblocked: every dependency it named is done.
