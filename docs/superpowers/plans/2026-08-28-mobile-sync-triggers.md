@@ -908,8 +908,8 @@ describe("syncTriggerAdapter", () => {
     expect(invoke).toHaveBeenCalledWith("sync_app_backgrounded");
   });
 
-  /// A lifecycle event is not a user action; a failure here must never surface
-  /// as an error the user has to dismiss.
+  // A lifecycle event is not a user action; a failure here must never surface
+  // as an error the user has to dismiss.
   it("stays quiet when the native side fails", async () => {
     invoke.mockRejectedValue(new Error("no"));
     await expect(reportVisibility("visible")).resolves.toBeUndefined();
@@ -919,7 +919,7 @@ describe("syncTriggerAdapter", () => {
 
 - [ ] **Step 2: Run and watch it fail**
 
-Run: `pnpm --filter desktop exec vitest run src/sync/syncTriggerAdapter.test.ts`
+Run: `pnpm --filter @thinkbrain/desktop exec vitest run src/sync/syncTriggerAdapter.test.ts`
 Expected: FAIL — module not found.
 
 - [ ] **Step 3: Write the adapter**
@@ -961,10 +961,24 @@ export function useSyncTriggerAdapter(): void {
 
 - [ ] **Step 4: Add both commands to `NativeCommandMap`**
 
+Match the surrounding multi-line style — `unwatch_workspace`
+(`commands.ts:224`) is the shape to copy for a command that returns unit on
+the Rust side:
+
 ```ts
-  readonly sync_app_foregrounded: { readonly args: undefined; readonly result: null };
-  readonly sync_app_backgrounded: { readonly args: undefined; readonly result: null };
+  readonly sync_app_foregrounded: {
+    readonly args: undefined;
+    readonly result: null;
+  };
+  readonly sync_app_backgrounded: {
+    readonly args: undefined;
+    readonly result: null;
+  };
 ```
+
+`args: undefined` is what makes `invokeNativeCommand("sync_app_foregrounded")`
+callable with no second argument — the overload at `commands.ts:610-614` keys
+off exactly that.
 
 - [ ] **Step 5: Mount it in `App.tsx`**
 
@@ -978,7 +992,7 @@ export default function App() {
 
 - [ ] **Step 6: Run the tests and `pnpm qa`**
 
-Run: `pnpm --filter desktop exec vitest run src/sync/syncTriggerAdapter.test.ts` then `pnpm qa`
+Run: `pnpm --filter @thinkbrain/desktop exec vitest run src/sync/syncTriggerAdapter.test.ts` then `pnpm qa`
 Expected: PASS, then green.
 
 - [ ] **Step 7: Commit**
