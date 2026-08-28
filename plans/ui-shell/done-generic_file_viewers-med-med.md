@@ -32,19 +32,19 @@ This was chosen over alternatives after evaluating:
 
 ## Acceptance Criteria
 
-- [ ] `tabRegistry.ts` registers `code-editor`, `image-viewer`,
+- [x] `tabRegistry.ts` registers `code-editor`, `image-viewer`,
       `audio-viewer`, and `video-viewer` as available tab kinds.
-- [ ] `tabModel.ts` exposes a helper to determine tab kind from file extension.
-- [ ] `CodeEditor` component wraps CodeMirror 6 with language-appropriate
+- [x] `tabModel.ts` exposes a helper to determine tab kind from file extension.
+- [x] `CodeEditor` component wraps CodeMirror 6 with language-appropriate
       extensions (syntax highlighting for known languages, no Markdown-specific
       plugins). Supports read/write with the same save flow as `MarkdownEditor`.
-- [ ] `MediaViewers.tsx` exports `ImageViewer`, `AudioViewer`, and
+- [x] `MediaViewers.tsx` exports `ImageViewer`, `AudioViewer`, and
       `VideoViewer` components that use `convertFileSrc` from
       `@tauri-apps/api/core` to stream local files.
-- [ ] `TabContent` in `DesktopShell.tsx` routes to the correct viewer
+- [x] `TabContent` in `DesktopShell.tsx` routes to the correct viewer
       component based on the tab's kind.
-- [ ] Media viewer tabs show a read-only indicator and have no save button.
-- [ ] Image viewer supports basic zoom (scroll wheel) and fit-to-container.
+- [x] Media viewer tabs show a read-only indicator and have no save button.
+- [x] Image viewer supports basic zoom (scroll wheel) and fit-to-container.
 
 ## Architecture Notes
 
