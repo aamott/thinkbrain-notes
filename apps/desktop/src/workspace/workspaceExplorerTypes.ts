@@ -31,7 +31,7 @@ export interface WorkspaceExplorerActions {
   readonly submitCreate: (target: CreateState, name: string) => Promise<boolean>;
   readonly submitRename: (target: RenameState, name: string) => Promise<boolean>;
   readonly handleTreeKeyDown: (event: ReactKeyboardEvent<HTMLUListElement>) => void;
-  readonly handleMarkdownFileSelected: (relativePath: string) => void;
+  readonly handleFileSelected: (relativePath: string) => void;
   readonly showContextMenu: (event: ReactMouseEvent, target: ContextMenuTarget) => void;
   readonly closeContextMenu: () => void;
   readonly toggleFolder: (relativePath: string) => void;

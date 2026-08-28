@@ -28,7 +28,7 @@ export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
 }) {
   const {
     setActivePath,
-    handleMarkdownFileSelected,
+    handleFileSelected,
     showContextMenu,
     toggleFolder,
     collapseFolder,
@@ -38,7 +38,7 @@ export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
     setCreating
   } = actions;
   const isDirectory = node.entry.kind === "directory";
-  const isMarkdownFile = node.entry.kind === "file" && node.entry.is_markdown;
+  const isFile = node.entry.kind === "file";
   // Dot-prefixed entries (e.g. `.git`, `.obsidian`) are visually dimmed when
   // the user has chosen to reveal them, so they remain distinguishable from
   // regular workspace content.
@@ -90,12 +90,12 @@ export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
         event.stopPropagation();
         if (isDirectory) {
           toggleFolder(node.entry.relative_path);
-        } else if (isMarkdownFile) {
-          handleMarkdownFileSelected(node.entry.relative_path);
+        } else if (isFile) {
+          handleFileSelected(node.entry.relative_path);
         }
         break;
     }
-  }, [isDirectory, isExpanded, isMarkdownFile, node, toggleFolder, collapseFolder, setActivePath, handleMarkdownFileSelected]);
+  }, [isDirectory, isExpanded, isFile, node, toggleFolder, collapseFolder, setActivePath, handleFileSelected]);
 
   return (
     <li className="m-0 p-0" role="treeitem" aria-level={depth + 1} aria-expanded={isDirectory ? isExpanded : undefined}>
@@ -120,19 +120,19 @@ export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
           )}
           type="button"
           style={{ paddingLeft: `${0.75 + depth * 0.875}rem` }}
-          aria-disabled={!isDirectory && !isMarkdownFile ? true : undefined}
+          aria-disabled={!isDirectory && !isFile ? true : undefined}
           tabIndex={isFocusable ? 0 : -1}
           onKeyDown={handleKeyDown}
           onClick={() => {
             setActivePath(node.entry.relative_path);
             if (isDirectory) toggleFolder(node.entry.relative_path);
-            else if (isMarkdownFile) handleMarkdownFileSelected(node.entry.relative_path);
+            else if (isFile) handleFileSelected(node.entry.relative_path);
           }}
           onContextMenu={(event) => {
             setActivePath(node.entry.relative_path);
             showContextMenu(event, { kind: isDirectory ? "folder" : "file", entry: node.entry });
           }}
-          aria-label={isDirectory ? `${isExpanded ? "Collapse" : "Expand"} ${node.entry.name}` : isMarkdownFile ? `Open ${node.entry.name}` : undefined}
+          aria-label={isDirectory ? `${isExpanded ? "Collapse" : "Expand"} ${node.entry.name}` : isFile ? `Open ${node.entry.name}` : undefined}
         >
           <span className="w-2.5 flex-none text-muted-foreground text-center [&>svg]:w-[0.9rem] [&>svg]:h-[0.9rem] [&>svg]:stroke-current" aria-hidden="true">{isDirectory ? (isExpanded ? <FolderOpen /> : <Folder />) : <WorkspaceFileIcon name={node.entry.name} />}</span>
           <span className="min-w-0 truncate">{node.entry.name}</span>

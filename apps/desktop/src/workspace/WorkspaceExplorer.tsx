@@ -37,6 +37,8 @@ export interface WorkspaceExplorerProps {
   readonly onWorkspaceOpened?: (rootPath: string, snapshot: NativeWorkspaceSnapshot) => void;
   readonly onWorkspaceUnavailable?: (rootPath: string) => void;
   readonly onMarkdownFileSelected?: (rootPath: string, relativePath: string) => void;
+  /** Fired when any file (Markdown or not) is selected. Falls back to onMarkdownFileSelected. */
+  readonly onFileSelected?: (rootPath: string, relativePath: string) => void;
   /** Fired when a new Markdown file is created so the shell can open it. */
   readonly onMarkdownFileCreated?: (rootPath: string, relativePath: string) => void;
   /** Request that the explorer begin creating a note at the workspace root. */
@@ -59,6 +61,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
   onWorkspaceOpened,
   onWorkspaceUnavailable,
   onMarkdownFileSelected,
+  onFileSelected,
   onMarkdownFileCreated,
   newNoteFocusRequest = 0,
   onNewNoteFocusHandled,
@@ -100,14 +103,14 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
   const rootPathRef = useRef(workspaceRootPath);
   const apiRef = useRef(api);
   const showHiddenRef = useRef(showHidden);
-  const callbacksRef = useRef({ onMarkdownFileCreated, onMarkdownFileSelected, onWorkspaceLaunched });
+  const callbacksRef = useRef({ onMarkdownFileCreated, onMarkdownFileSelected, onFileSelected, onWorkspaceLaunched });
   // Refs are updated in an effect (not during render) per the react-hooks/refs
   // rule. Async helpers read `*.current` after each `await`.
   useEffect(() => {
     stateRef.current = state;
     apiRef.current = api;
     showHiddenRef.current = showHidden;
-    callbacksRef.current = { onMarkdownFileCreated, onMarkdownFileSelected, onWorkspaceLaunched };
+    callbacksRef.current = { onMarkdownFileCreated, onMarkdownFileSelected, onFileSelected, onWorkspaceLaunched };
   });
 
   // In-flight operation counter so overlapping CRUD calls do not clobber the
@@ -323,9 +326,13 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
     onNewNoteFocusHandled?.();
   }, [state.phase, onNewNoteFocusHandled, newNoteFocusRequest]);
 
-  const handleMarkdownFileSelected = useCallback((relativePath: string) => {
-    if (workspaceRootPath) onMarkdownFileSelected?.(workspaceRootPath, relativePath);
-  }, [onMarkdownFileSelected, workspaceRootPath]);
+  const handleFileSelected = useCallback((relativePath: string) => {
+    if (!workspaceRootPath) return;
+    // Prefer the general file handler (which infers tab kind); fall back to
+    // the Markdown-only handler for callers that haven't been updated yet.
+    if (onFileSelected) onFileSelected(workspaceRootPath, relativePath);
+    else onMarkdownFileSelected?.(workspaceRootPath, relativePath);
+  }, [onFileSelected, onMarkdownFileSelected, workspaceRootPath]);
 
   // ---- CRUD operations ----
 
@@ -352,7 +359,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
       dispatch({ type: "opened", snapshot, entries });
       if (options?.selectMarkdown) {
         callbacksRef.current.onMarkdownFileCreated?.(rootPath, options.selectMarkdown);
-        callbacksRef.current.onMarkdownFileSelected?.(rootPath, options.selectMarkdown);
+        callbacksRef.current.onFileSelected?.(rootPath, options.selectMarkdown);
       }
       return true;
     } catch (error) {
@@ -543,7 +550,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
       submitCreate,
       submitRename,
       handleTreeKeyDown,
-      handleMarkdownFileSelected,
+      handleFileSelected,
       showContextMenu,
       closeContextMenu,
       toggleFolder,
@@ -572,7 +579,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
       confirmDelete,
       createManagedWorkspace,
       dismissError,
-      handleMarkdownFileSelected,
+      handleFileSelected,
       handleTreeKeyDown,
       launchWorkspace,
       openWorkspace,
