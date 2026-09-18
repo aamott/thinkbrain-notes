@@ -1,10 +1,13 @@
+import { normalizeRoot } from "@thinkbrain/core";
 import { BottomSheet } from "@thinkbrain/ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { BottomPanel } from "../../panels/BottomPanel";
 import { LeftPopout } from "../../panels/LeftPopout";
 import { isSelectableLeftPanel, isSelectableRightPanel, type LeftPanel } from "../shellTypes";
+import { useSettingsStore } from "../../settings/settingsStore";
 import { TabCloseRequest } from "../TabCloseRequest";
+import { isNoteTitleEligible } from "../noteTitleEligibility";
 import { TabContent } from "../TabContent";
 import type { ShellState } from "../useShellState";
 import { MAX_HUB_ITEMS, pinPanel, removeItem } from "./hubEditing";
@@ -12,6 +15,7 @@ import type { HubItem } from "./hubModel";
 import { InspectorSheet } from "./InspectorSheet";
 import { PhoneDrawer } from "./PhoneDrawer";
 import { PhoneHeader } from "./PhoneHeader";
+import { NoteTitleRow } from "./NoteTitleRow";
 import { PhoneHub } from "./PhoneHub";
 import { TabSwitcherSheet } from "./TabSwitcherSheet";
 import { useHubItems } from "./useHubItems";
@@ -56,6 +60,16 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
   } = shell;
 
   const closeDrawer = useCallback(() => setDrawerOpen(false), []);
+
+  // The journal root path — used to hide the note title row on journal
+  // entries, which already show their own dateline via metadata-widget.
+  const journalRoot = useSettingsStore(
+    (s) => normalizeRoot(String(s.getEffectiveValue("extension-journal-calendar.root") ?? "journal"))
+  );
+  const activePath = activeTab?.resource?.relativePath ?? null;
+  const isMarkdownNote = activeTab?.kind === "editor"
+    && activePath?.toLowerCase().endsWith(".md") === true;
+  const showNoteTitle = isNoteTitleEligible(activeTab?.kind, activePath, journalRoot);
 
   // Long press is the whole v1 customization affordance: hold a drawer row to
   // pin it, hold a hub slot to remove it. Both helpers hand back the identical
@@ -170,7 +184,7 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
       aria-label="ThinkBrain mobile workspace"
     >
       <PhoneHeader
-        title={shell.activeTab?.title ?? shell.workspaceName ?? "ThinkBrain"}
+        title={isMarkdownNote ? (shell.workspaceName ?? "ThinkBrain") : (shell.activeTab?.title ?? shell.workspaceName ?? "ThinkBrain")}
         canGoBack={revealed !== null}
         tabCount={shell.tabState.tabs.length}
         syncStatus={shell.syncStatus}
@@ -190,6 +204,15 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
       <div className="relative flex min-h-0 flex-1 flex-col">
         {revealed === null ? (
           <div key="note" className="flex min-h-0 flex-1 flex-col">
+            {showNoteTitle && (
+              <NoteTitleRow
+                key={activePath}
+                relativePath={activePath}
+                onRename={shell.restoredWorkspacePath
+                  ? (newPath) => shell.renameDocument(shell.restoredWorkspacePath!, activePath!, newPath)
+                  : undefined}
+              />
+            )}
             <TabContent
               tab={shell.activeTab}
               document={shell.activeDocument}

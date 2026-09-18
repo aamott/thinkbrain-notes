@@ -17,6 +17,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch } from
 import { appEvents } from "../events/appEvents";
 import { releaseEditorStatesExcept } from "../tabs/editorStateCache";
 import { createEditorTab, createFileTab, isMediaViewerKind, type DesktopTab, type DesktopTabAction, type DesktopTabState } from "../tabs/tabModel";
+import { workspaceDesktopApi } from "../workspace/workspaceAdapter";
 import { workspaceDocumentApi } from "../workspace/workspaceDocumentAdapter";
 import { textFileApi } from "../workspace/textFileAdapter";
 import { loadWorkspaceDocument, loadTextFile, saveWorkspaceDocument, saveTextFile } from "../workspace/workspaceDocumentModel";
@@ -68,6 +69,8 @@ export interface DocumentViews {
   readonly markDocumentConflict: (tabId: string) => void;
   /** Stops asking about a note that went empty outside the app. */
   readonly dismissEmptied: (tabId: string) => void;
+  /** Renames a file on disk. The watcher retargets the tab automatically. */
+  readonly renameDocument: (rootPath: string, relativePath: string, newRelativePath: string) => Promise<void>;
 }
 
 export function useDocumentViews({ tabState, dispatchTabs }: DocumentViewsProps): DocumentViews {
@@ -334,6 +337,12 @@ export function useDocumentViews({ tabState, dispatchTabs }: DocumentViewsProps)
     setConflicts((current) => markConflict(current, tabId));
   }, []);
 
+  const renameDocument = useCallback(
+    (rootPath: string, relativePath: string, newRelativePath: string): Promise<void> =>
+      workspaceDesktopApi.renameWorkspaceEntry(rootPath, relativePath, newRelativePath).then(() => undefined),
+    []
+  );
+
   return {
     documents,
     conflicts,
@@ -347,6 +356,7 @@ export function useDocumentViews({ tabState, dispatchTabs }: DocumentViewsProps)
     loadDiskVersion,
     moveDocument,
     markDocumentConflict,
-    dismissEmptied
+    dismissEmptied,
+    renameDocument
   };
 }

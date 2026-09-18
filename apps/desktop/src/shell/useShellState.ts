@@ -87,6 +87,7 @@ export interface ShellState {
   readonly keepMyVersion: (tab: DesktopTab) => void;
   readonly loadDiskVersion: (tab: DesktopTab) => void;
   readonly dismissEmptied: (tabId: string) => void;
+  readonly renameDocument: (rootPath: string, relativePath: string, newRelativePath: string) => Promise<void>;
   readonly onOpenNote: (relativePath: string) => void;
 
   // panels
@@ -192,7 +193,8 @@ export function useShellState(): ShellState {
     loadDiskVersion,
     moveDocument,
     markDocumentConflict,
-    dismissEmptied
+    dismissEmptied,
+    renameDocument
   } = useDocumentViews({ tabState, dispatchTabs });
 
   const {
@@ -463,6 +465,7 @@ export function useShellState(): ShellState {
     keepMyVersion,
     loadDiskVersion,
     dismissEmptied,
+    renameDocument,
     onOpenNote,
 
     leftPanel,

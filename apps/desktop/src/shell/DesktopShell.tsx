@@ -7,6 +7,7 @@
  * one effect that publishes dock widths onto this component's own root element.
  */
 
+import { normalizeRoot } from "@thinkbrain/core";
 import { useEffect, useRef } from "react";
 import { CommandPalette, type WorkspaceFileResult } from "../commands/CommandPalette";
 import { BottomPanel as BottomPanelContent } from "../panels/BottomPanel";
@@ -17,6 +18,9 @@ import { ResizeHandle } from "./ResizeHandle";
 import { EmptiedNoteBanner } from "./EmptiedNoteBanner";
 import { StaleDocumentBanner } from "./StaleDocumentBanner";
 import { UpdateBanner } from "./UpdateBanner";
+import { isNoteTitleEligible } from "./noteTitleEligibility";
+import { NoteTitleRow } from "./phone/NoteTitleRow";
+import { useSettingsStore } from "../settings/settingsStore";
 import { StatusBar } from "./StatusBar";
 import { TabCloseRequest } from "./TabCloseRequest";
 import { TabContent } from "./TabContent";
@@ -31,6 +35,13 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
   const resource = activeTab?.resource;
   const rootPath = resource?.rootPath;
   const relativePath = resource?.relativePath;
+
+  // Journal entries render their own dateline, so the title row hides there —
+  // same rule as PhoneShell. Only ordinary Markdown editor tabs get a title.
+  const journalRoot = useSettingsStore(
+    (s) => normalizeRoot(String(s.getEffectiveValue("extension-journal-calendar.root") ?? "journal"))
+  );
+  const showNoteTitle = isNoteTitleEligible(activeTab?.kind, relativePath, journalRoot);
 
   // Dock widths are published as CSS custom properties so the popouts can size
   // themselves from tokens instead of inline styles. The left dock publishes 0
@@ -106,6 +117,15 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
                 onSave={() => {
                   if (activeTab) void shell.saveDocument(activeTab);
                 }}
+              />
+            )}
+            {showNoteTitle && (
+              <NoteTitleRow
+                key={relativePath}
+                relativePath={relativePath ?? null}
+                onRename={rootPath && relativePath
+                  ? (newPath) => shell.renameDocument(rootPath, relativePath, newPath)
+                  : undefined}
               />
             )}
             {activeTab && shell.conflicts.has(activeTab.id) && (
