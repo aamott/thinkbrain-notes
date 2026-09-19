@@ -15,7 +15,8 @@ Panel and command options continue to come from the contribution registries. The
 - Mobile cold launch and workspace change show Files even when tabs are restored; background/resume does not reset the route.
 - Opening files, wiki links, search results, extension-driven notes, or tabs adds visit history; Back revisits available entries and eventually reaches Files without closing tabs.
 - Renamed or closed historical tabs are reconciled without trapping navigation.
-- The header hamburger is removed. A note/content route shows Back; Files at history root leaves that slot empty.
+- The header hamburger is removed. Always-visible Back and Forward controls traverse content and overlay history and clearly disable at their boundaries.
+- The header location is a rounded breadcrumb pill that keeps the current file visible at the right edge, fades clipped ancestors on the left, and opens a compact outside-dismissible path bubble with native horizontal drag/scroll.
 - Android system Back and visible Back dismiss the topmost menu/drawer/sheet before navigating content history; at Files root normal platform behavior remains.
 - The bottom Menu opens the contribution-driven navigation drawer from the right.
 - Header `…` opens an anchored Action items menu. Outside tap/Escape closes it; selecting an available item opens its right panel from the right.

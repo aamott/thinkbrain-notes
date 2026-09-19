@@ -590,16 +590,22 @@ describe("PhoneShell", () => {
     host.querySelector<HTMLInputElement>('[aria-label="Note title"]');
   const noteTitleVisible = (host: HTMLDivElement): boolean =>
     noteTitle(host)?.closest('[aria-hidden="true"]') == null && noteTitle(host) != null;
-  const headerTitle = (host: HTMLDivElement): string | null | undefined =>
-    host.querySelector("header h1")?.textContent;
+  const locationPill = (host: HTMLDivElement): string | null | undefined =>
+    host.querySelector('header [aria-label="Current location"]')?.textContent;
+  const backButton = (host: HTMLDivElement): HTMLButtonElement | null =>
+    host.querySelector<HTMLButtonElement>('[aria-label="Back"]');
+  const forwardButton = (host: HTMLDivElement): HTMLButtonElement | null =>
+    host.querySelector<HTMLButtonElement>('[aria-label="Forward"]');
 
   it("starts on Files, not on the note, at cold launch", async () => {
     const host = await render();
 
-    expect(headerTitle(host)).toBe("Files");
+    expect(locationPill(host)).toContain("Files");
     expect(filesVisible(host)).toBe(true);
-    // The root of content history has no Back — the slot is an inert spacer.
-    expect(host.querySelector('[aria-label="Back"]')).toBeNull();
+    // The root of content history dims Back/Forward — always rendered, never
+    // hidden, like a browser.
+    expect(backButton(host)?.disabled).toBe(true);
+    expect(forwardButton(host)?.disabled).toBe(true);
     expect(host.querySelector('[aria-label="Open navigation"]')).toBeNull();
   });
 
@@ -629,9 +635,9 @@ describe("PhoneShell", () => {
 
     await act(async () => box.show?.());
 
-    expect(headerTitle(container)).toBe("Files");
+    expect(locationPill(container!)).toContain("Files");
     expect(filesVisible(container!)).toBe(true);
-    expect(container?.querySelector('[aria-label="Back"]')).toBeNull();
+    expect(backButton(container!)?.disabled).toBe(true);
     // The already-open tab is still open, just not the visible route.
     expect(box.current?.tabState.tabs).toHaveLength(1);
   });
@@ -667,6 +673,39 @@ describe("PhoneShell", () => {
     expect(shell().tabState.activeTabId).toBe(
       shell().tabState.tabs.find((tab) => tab.resource?.relativePath === "first.md")?.id
     );
+  });
+
+  it("Forward returns to the note after Back", async () => {
+    const { host, shell } = await renderWithShell();
+    await act(async () => shell().openMarkdownDocument("/vault", "note.md"));
+    expect(forwardButton(host)?.disabled).toBe(true);
+
+    await click(host, "Back");
+    expect(filesVisible(host)).toBe(true);
+    expect(forwardButton(host)?.disabled).toBe(false);
+
+    await click(host, "Forward");
+    expect(noteTitleVisible(host)).toBe(true);
+    expect(noteTitle(host)?.value).toBe("note");
+    expect(forwardButton(host)?.disabled).toBe(true);
+  });
+
+  it("breadcrumbs a nested note as workspace, folders, filename without .md", async () => {
+    const { host, shell } = await renderWithShell();
+    await act(async () => shell().openMarkdownDocument("/vault", "docs/deep/note.md"));
+
+    expect(locationPill(host)).toContain("docs");
+    expect(locationPill(host)).toContain("deep");
+    expect(locationPill(host)).toContain("note");
+    expect(locationPill(host)).not.toContain(".md");
+  });
+
+  it("keeps the extension on a non-Markdown file tab", async () => {
+    const { host, shell } = await renderWithShell();
+    await act(async () => shell().openFileDocument("/vault", "assets/diagram.png"));
+
+    expect(locationPill(host)).toContain("assets");
+    expect(locationPill(host)).toContain("diagram.png");
   });
 
   it("adds a history entry when a tab is chosen in the switcher", async () => {

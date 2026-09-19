@@ -129,7 +129,8 @@ describe("usePhoneNavigation", () => {
       root?.render(<Probe ws="/vault-a" />);
     });
     await act(async () => box.current?.push({ kind: "tab", tabId: "editor:a:b" }));
-    expect(box.current?.depth).toBe(1);
+    await act(async () => box.current?.back());
+    expect(box.current?.canGoForward).toBe(true);
 
     await act(async () => {
       root?.render(<Probe ws="/vault-b" />);
@@ -137,7 +138,39 @@ describe("usePhoneNavigation", () => {
 
     expect(box.current?.route).toEqual({ kind: "files" });
     expect(box.current?.depth).toBe(0);
+    // The old workspace's branch tip must not leak Forward into the new one.
+    expect(box.current?.canGoForward).toBe(false);
     expect((window.history.state as { workspace?: string }).workspace).toBe("/vault-b");
+  });
+
+  it("does not resurrect the previous workspace's route on A→B→A without navigating", async () => {
+    const box: { current: PhoneNavigation | null } = { current: null };
+    const Probe = ({ ws }: { readonly ws: string | null }) => {
+      box.current = usePhoneNavigation(ws);
+      return null;
+    };
+    container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
+    await act(async () => {
+      root?.render(<Probe ws="/vault-a" />);
+    });
+    await act(async () => box.current?.push({ kind: "tab", tabId: "editor:a:b" }));
+    expect(box.current?.depth).toBe(1);
+
+    // Round-trip the workspace without any navigation: A's last entry is
+    // history, not state to resurrect.
+    await act(async () => {
+      root?.render(<Probe ws="/vault-b" />);
+    });
+    await act(async () => {
+      root?.render(<Probe ws="/vault-a" />);
+    });
+
+    expect(box.current?.route).toEqual({ kind: "files" });
+    expect(box.current?.depth).toBe(0);
+    expect(box.current?.canGoBack).toBe(false);
+    expect(box.current?.canGoForward).toBe(false);
   });
 });
 
@@ -295,5 +328,51 @@ describe("usePhoneNavigation Android Back bridge", () => {
     expect(window.history.state).toBe(before);
     expect(nav().route).toEqual({ kind: "files" });
     expect(nav().depth).toBe(0);
+  });
+});
+
+describe("usePhoneNavigation forward", () => {
+  it("Back makes Forward available and Forward restores the route and overlay", async () => {
+    const nav = await renderNav("/vault");
+    await act(async () => nav().push({ kind: "tab", tabId: "editor:a:b" }));
+    await act(async () => nav().openOverlay({ kind: "tabs" }));
+    expect(nav().canGoForward).toBe(false);
+
+    await act(async () => nav().back());
+    expect(nav().overlay).toBeNull();
+    expect(nav().canGoForward).toBe(true);
+
+    await act(async () => nav().forward());
+    expect(nav().route).toEqual({ kind: "tab", tabId: "editor:a:b" });
+    expect(nav().overlay).toEqual({ kind: "tabs" });
+    expect(nav().canGoForward).toBe(false);
+  });
+
+  it("a push after Back truncates the forward branch", async () => {
+    const nav = await renderNav("/vault");
+    await act(async () => nav().push({ kind: "tab", tabId: "editor:a:first" }));
+    await act(async () => nav().back());
+    expect(nav().canGoForward).toBe(true);
+
+    await act(async () => nav().push({ kind: "tab", tabId: "editor:a:second" }));
+
+    // The branch we left behind is gone: Forward is both disabled and inert.
+    expect(nav().canGoForward).toBe(false);
+    await act(async () => nav().forward());
+    expect(nav().route).toEqual({ kind: "tab", tabId: "editor:a:second" });
+  });
+
+  it("a foreign popped state clears Forward", async () => {
+    const nav = await renderNav("/vault");
+    await act(async () => nav().push({ kind: "tab", tabId: "editor:a:b" }));
+    await act(async () => nav().back());
+    expect(nav().canGoForward).toBe(true);
+
+    await act(async () => {
+      window.dispatchEvent(new PopStateEvent("popstate", { state: null }));
+    });
+
+    expect(nav().route).toEqual({ kind: "files" });
+    expect(nav().canGoForward).toBe(false);
   });
 });

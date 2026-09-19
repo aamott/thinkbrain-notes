@@ -36,6 +36,7 @@ export interface PhoneNavigation {
   readonly overlay: PhoneOverlay | null;
   readonly depth: number;
   readonly canGoBack: boolean;
+  readonly canGoForward: boolean;
   /** Pushes `route` with no overlay. */
   readonly push: (route: PhoneRoute) => void;
   /** Replaces the current entry with `route` and no overlay. */
@@ -45,6 +46,7 @@ export interface PhoneNavigation {
   /** Pops the overlay; `wholeFlow` skips the actions entry under an inspector. */
   readonly dismissOverlay: (wholeFlow?: boolean) => void;
   readonly back: () => void;
+  readonly forward: () => void;
 }
 
 /** History-state envelope. The marker distinguishes our entries from anything
@@ -89,8 +91,9 @@ function navState(
  *
  * Routes and overlays share one stack: opening a drawer, sheet, menu or
  * inspector pushes a real `history.pushState` entry naming that overlay, so
- * the Android WebView system Back and the visible Back dismiss the topmost
- * surface before touching content history — no native code. `window.history`
+ * the Android WebView system Back (bridged through `MainActivity`) and the
+ * visible Back dismiss the topmost surface before touching content history.
+ * `window.history`
  * is shared, so only states carrying our marker *and* the current workspace
  * are trusted; anything else falls back to Files rather than trusting a
  * foreign shape.
@@ -113,13 +116,28 @@ export function usePhoneNavigation(workspaceRoot: string | null): PhoneNavigatio
   const overlay = current.overlay;
   const depth = current.depth;
   const entryRef = useRef(current);
+  // Branch tip: the deepest depth of the current history branch. A push past a
+  // Back'd-from entry truncates it, so the tip always tracks the last write;
+  // a workspace-mismatched entry reads as tip 0 like its derived Files route.
+  const [tip, setTip] = useState(0);
+  const tipRef = useRef(0);
+  const effectiveTip = entry.workspace === workspaceRoot ? tip : 0;
 
   // Cold mount and workspace change both start at Files. `replaceState` rather
   // than `pushState`: the root entry is not a visit, so it must not leave a
   // history entry Back could land on.
   useEffect(() => {
-    window.history.replaceState(navState(workspaceRoot, filesRoute, null, 0), "");
-    entryRef.current = navState(workspaceRoot, filesRoute, null, 0);
+    const reset = navState(workspaceRoot, filesRoute, null, 0);
+    window.history.replaceState(reset, "");
+    entryRef.current = reset;
+    tipRef.current = 0;
+    /* eslint-disable react-hooks/set-state-in-effect -- A workspace switch is a
+       genuine reset, not state derived from props: the derived-Files read above
+       only *masks* the old entry, and without writing the reset into `entry`/
+       `tip` a switch A→B→A resurrects A's stale route and Forward tip. */
+    setEntry(reset);
+    setTip(0);
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [workspaceRoot]);
 
   // Android hardware-Back bridge. `WryActivity`'s default handler only walks
@@ -144,10 +162,19 @@ export function usePhoneNavigation(workspaceRoot: string | null): PhoneNavigatio
   useEffect(() => {
     const onPop = (event: PopStateEvent) => {
       const s = event.state as Partial<PhoneNavState> | null;
-      const next =
-        s?.tnPhoneNav === true && s.workspace === workspaceRoot && s.route && typeof s.depth === "number"
-          ? navState(workspaceRoot, s.route, s.overlay ?? null, s.depth)
-          : navState(workspaceRoot, filesRoute, null, 0);
+      const marked: PhoneNavState | null =
+        s?.tnPhoneNav === true && s.workspace === workspaceRoot && s.route !== undefined && typeof s.depth === "number"
+          ? (s as PhoneNavState)
+          : null;
+      // A valid pop keeps the known branch tip (Forward can walk back up);
+      // a foreign state resets both route and tip to the Files root.
+      const next = marked
+        ? navState(workspaceRoot, marked.route, marked.overlay ?? null, marked.depth)
+        : navState(workspaceRoot, filesRoute, null, 0);
+      if (!marked) {
+        tipRef.current = 0;
+        setTip(0);
+      }
       entryRef.current = next;
       setEntry(next);
     };
@@ -163,6 +190,9 @@ export function usePhoneNavigation(workspaceRoot: string | null): PhoneNavigatio
       window.history.pushState(state, "");
       entryRef.current = state;
       setEntry(state);
+      // pushState truncates any forward entries: the new entry is the tip.
+      tipRef.current = nextDepth;
+      setTip(nextDepth);
     },
     [workspaceRoot]
   );
@@ -186,6 +216,8 @@ export function usePhoneNavigation(workspaceRoot: string | null): PhoneNavigatio
       window.history.pushState(state, "");
       entryRef.current = state;
       setEntry(state);
+      tipRef.current = nextDepth;
+      setTip(nextDepth);
     },
     [workspaceRoot]
   );
@@ -205,10 +237,26 @@ export function usePhoneNavigation(workspaceRoot: string | null): PhoneNavigatio
     if (entryRef.current.depth > 0) window.history.back();
   }, []);
 
+  const forward = useCallback(() => {
+    if (entryRef.current.depth < tipRef.current) window.history.forward();
+  }, []);
+
   // Memoized so consumers can depend on `navigation` in effects without
   // re-running on every unrelated render.
   return useMemo(
-    () => ({ route, overlay, depth, canGoBack: depth > 0, push, replace, openOverlay, dismissOverlay, back }),
-    [route, overlay, depth, push, replace, openOverlay, dismissOverlay, back]
+    () => ({
+      route,
+      overlay,
+      depth,
+      canGoBack: depth > 0,
+      canGoForward: depth < effectiveTip,
+      push,
+      replace,
+      openOverlay,
+      dismissOverlay,
+      back,
+      forward,
+    }),
+    [route, overlay, depth, effectiveTip, push, replace, openOverlay, dismissOverlay, back, forward]
   );
 }

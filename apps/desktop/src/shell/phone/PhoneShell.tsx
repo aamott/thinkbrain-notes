@@ -80,8 +80,6 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
     (s) => normalizeRoot(String(s.getEffectiveValue("extension-journal-calendar.root") ?? "journal"))
   );
   const activePath = activeTab?.resource?.relativePath ?? null;
-  const isMarkdownNote = activeTab?.kind === "editor"
-    && activePath?.toLowerCase().endsWith(".md") === true;
   const showNoteTitle = isNoteTitleEligible(activeTab?.kind, activePath, journalRoot);
 
   // Route → tab/panel synchronization. A tab route *activates* its tab through
@@ -288,10 +286,24 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
     route.kind === "tab" && activeDocument?.phase === "ready"
       ? activeDocument.contents
       : null;
-  const headerTitle =
-    route.kind === "files" ? "Files"
-    : route.kind === "panel" ? (getDesktopPanelOrUndefined(route.panel)?.label ?? shell.workspaceName ?? "ThinkBrain")
-    : isMarkdownNote ? (shell.workspaceName ?? "ThinkBrain") : (shell.activeTab?.title ?? shell.workspaceName ?? "ThinkBrain");
+  // Browser-style location pill: workspace, then the route's own crumb trail —
+  // real folders for file tabs (`.md` stripped only from note editors so
+  // code/media keep their extension), a label for chrome surfaces.
+  const workspaceLabel = shell.workspaceName ?? "ThinkBrain";
+  const breadcrumbs = (() => {
+    if (route.kind === "files") return [workspaceLabel, "Files"];
+    if (route.kind === "panel") {
+      return [workspaceLabel, getDesktopPanelOrUndefined(route.panel)?.label ?? route.panel];
+    }
+    const relativePath = activeTab?.resource?.relativePath;
+    if (!relativePath) return [workspaceLabel, activeTab?.title ?? workspaceLabel];
+    const segments = relativePath.split("/").filter(Boolean);
+    const last = segments.at(-1);
+    if (activeTab?.kind === "editor" && last?.toLowerCase().endsWith(".md")) {
+      segments[segments.length - 1] = last.slice(0, -".md".length);
+    }
+    return [workspaceLabel, ...segments];
+  })();
 
   return (
     <main
@@ -299,11 +311,13 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
       aria-label="ThinkBrain mobile workspace"
     >
       <PhoneHeader
-        title={headerTitle}
+        breadcrumbs={breadcrumbs}
         canGoBack={navigation.canGoBack}
+        canGoForward={navigation.canGoForward}
         tabCount={shell.tabState.tabs.length}
         syncStatus={shell.syncStatus}
         onBack={navigation.back}
+        onForward={navigation.forward}
         onOpenTabs={() => navigation.openOverlay({ kind: "tabs" })}
         onOpenInspector={() => navigation.openOverlay({ kind: "actions" })}
         onOpenSyncPanel={openSyncPanel}
