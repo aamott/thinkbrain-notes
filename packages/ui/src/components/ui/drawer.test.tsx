@@ -94,4 +94,43 @@ describe("Drawer", () => {
 
     expect(onDismiss).toHaveBeenCalledOnce();
   });
+
+  it("defaults to the left edge when no side is given", async () => {
+    const host = await render(
+      <Drawer open={false} onDismiss={() => undefined} label="Navigation">
+        <button type="button">Files</button>
+      </Drawer>
+    );
+
+    const panel = panelOf(host);
+    expect(panel.classList.contains("left-0")).toBe(true);
+    expect(panel.classList.contains("-translate-x-full")).toBe(true);
+  });
+
+  it("anchors and slides from the right edge when side=right", async () => {
+    const host = await render(
+      <Drawer open={false} onDismiss={() => undefined} label="Navigation" side="right">
+        <button type="button">Files</button>
+      </Drawer>
+    );
+
+    const panel = panelOf(host);
+    expect(panel.classList.contains("right-0")).toBe(true);
+    // Closed off-screen to the right: positive, not negative, translation.
+    expect(panel.classList.contains("translate-x-full")).toBe(true);
+    expect(panel.classList.contains("-translate-x-full")).toBe(false);
+    expect(panel.classList.contains("left-0")).toBe(false);
+  });
+
+  it("slides in to translate-x-0 from the right when opened", async () => {
+    const host = await render(
+      <Drawer open onDismiss={() => undefined} label="Navigation" side="right">
+        <button type="button">Files</button>
+      </Drawer>
+    );
+
+    const panel = panelOf(host);
+    expect(panel.classList.contains("right-0")).toBe(true);
+    expect(panel.classList.contains("translate-x-0")).toBe(true);
+  });
 });

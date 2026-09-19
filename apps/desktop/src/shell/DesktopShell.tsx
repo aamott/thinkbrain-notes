@@ -172,6 +172,7 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
               documentContents={activeDocument?.phase === "ready"
                 ? activeDocument.contents
                 : null}
+              onBack={() => shell.setRightPanel(null)}
             />
           </>
         )}

@@ -1,17 +1,21 @@
 import { normalizeRoot } from "@thinkbrain/core";
 import { BottomSheet } from "@thinkbrain/ui";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import { BottomPanel } from "../../panels/BottomPanel";
 import { LeftPopout } from "../../panels/LeftPopout";
-import { isSelectableLeftPanel, isSelectableRightPanel, type LeftPanel } from "../shellTypes";
+import { getDesktopPanelOrUndefined } from "../../panels/panelRegistryModel";
+import { editorTabId, fileTabId } from "../../tabs/tabModel";
+import { isSelectableLeftPanel, isSelectableRightPanel } from "../shellTypes";
 import { useSettingsStore } from "../../settings/settingsStore";
 import { TabCloseRequest } from "../TabCloseRequest";
 import { isNoteTitleEligible } from "../noteTitleEligibility";
 import { TabContent } from "../TabContent";
 import type { ShellState } from "../useShellState";
+import { usePhoneNavigation, type PhoneRoute } from "./usePhoneNavigation";
 import { MAX_HUB_ITEMS, pinPanel, removeItem } from "./hubEditing";
 import type { HubItem } from "./hubModel";
+import { ActionItemsMenu } from "./ActionItemsMenu";
 import { InspectorSheet } from "./InspectorSheet";
 import { PhoneDrawer } from "./PhoneDrawer";
 import { PhoneHeader } from "./PhoneHeader";
@@ -25,7 +29,8 @@ import { useHubItems } from "./useHubItems";
  *
  * Layout only: every piece of state here is `shell`, and every panel rendered is
  * the same component the desktop renders. What differs is the arrangement —
- * drawer instead of rail, hub instead of status bar, sheets instead of docks.
+ * right-edge drawer instead of rail, hub instead of status bar, and a bounded
+ * inspector drawer + anchored action-items menu instead of right-side docks.
  *
  * The root is `relative` and fills its box on purpose: `Drawer`, `BottomSheet`
  * and `Scrim` all position with `absolute`, so this element is the containing
@@ -36,14 +41,20 @@ import { useHubItems } from "./useHubItems";
  * one; phone chrome does not, so the reserved strip would be 3rem of nothing.
  */
 export function PhoneShell({ shell }: { readonly shell: ShellState }) {
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  // The panel filling the screen, or null for the note. Typed rather than a
-  // bare string so the content branch can render *this* panel instead of
-  // guessing at the last one the shell selected.
-  const [revealed, setRevealed] = useState<LeftPanel | null>(null);
-  const [tabsOpen, setTabsOpen] = useState(false);
-  const [inspectorOpen, setInspectorOpen] = useState(false);
   const { items, setItems } = useHubItems();
+
+  // Browser-history-backed navigation: Files is the root content route, and
+  // every transient surface — navigation drawer, tab switcher, action-items
+  // menu, inspector drawer — is an overlay entry on the same stack, so the
+  // header Back and Android system Back both dismiss the topmost surface
+  // before touching content history.
+  const navigation = usePhoneNavigation(shell.restoredWorkspacePath);
+  const route = navigation.route;
+  const overlay = navigation.overlay;
+  const drawerOpen = overlay?.kind === "navigation";
+  const tabsOpen = overlay?.kind === "tabs";
+  const actionsOpen = overlay?.kind === "actions";
+  const inspectorPanel = overlay?.kind === "inspector" ? overlay.panel : null;
 
   // Callbacks and effects must take these as values, never `shell` itself:
   // useShellState returns a new object every render.
@@ -51,15 +62,17 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
     activeTab,
     activeDocument,
     saveDocument,
-    selectLeftPanel,
+    dispatchTabs,
     setLeftPanel,
     setRightPanel,
+    openMarkdownDocument,
+    openFileDocument,
     paletteCommands,
     runCommand: runPaletteCommand,
     clearVersions
   } = shell;
 
-  const closeDrawer = useCallback(() => setDrawerOpen(false), []);
+  const closeDrawer = useCallback(() => navigation.dismissOverlay(), [navigation]);
 
   // The journal root path — used to hide the note title row on journal
   // entries, which already show their own dateline via metadata-widget.
@@ -70,6 +83,101 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
   const isMarkdownNote = activeTab?.kind === "editor"
     && activePath?.toLowerCase().endsWith(".md") === true;
   const showNoteTitle = isNoteTitleEligible(activeTab?.kind, activePath, journalRoot);
+
+  // Route → tab/panel synchronization. A tab route *activates* its tab through
+  // the shared reducer rather than carrying document state of its own; a stale
+  // route (tab closed or renamed since the entry was pushed) is rewritten to
+  // Files in place, so Back can never strand the user on a ghost entry.
+  //
+  // Keyed on `route` alone: the route is the authority here, and re-running on
+  // tab changes would fight the observer below — when a new tab opens under a
+  // tab route, activating the old route's tab and pushing the new active tab
+  // ping-pong forever. Reconciliation on tab close/rename is the observer's
+  // job, and it sees `openTabIds` through a ref.
+  // Ref mirrors of the values the two effects below read between renders;
+  // declared first so this sync runs before either consumer each commit.
+  const routeRef = useRef<PhoneRoute>(route);
+  const openTabIdsRef = useRef<ReadonlySet<string>>(new Set());
+  const activeTabIdRef = useRef(shell.tabState.activeTabId);
+  useEffect(() => {
+    routeRef.current = route;
+    openTabIdsRef.current = new Set(shell.tabState.tabs.map((tab) => tab.id));
+    activeTabIdRef.current = shell.tabState.activeTabId;
+  });
+
+  useEffect(() => {
+    if (route.kind === "tab") {
+      if (openTabIdsRef.current.has(route.tabId)) {
+        // `activate` returns a fresh state even for the already-active tab, so
+        // dispatch only on a real change — otherwise this effect loops.
+        if (activeTabIdRef.current !== route.tabId) {
+          dispatchTabs({ type: "activate", tabId: route.tabId });
+        }
+        setLeftPanel(null);
+      } else {
+        navigation.replace({ kind: "files" });
+      }
+    } else {
+      setLeftPanel(route.kind === "panel" ? route.panel : "explorer");
+    }
+  }, [route, dispatchTabs, setLeftPanel, navigation]);
+
+  // Captures opens that bypass the phone wrappers — extension commands, the
+  // workspace bridge, a conflict review — so every externally driven active-tab
+  // change still lands on the Back stack. Restored tabs are seeded, not pushed:
+  // a cold start with a restored session belongs at Files, not mid-stack.
+  const observedTabIdRef = useRef<string | null>(null);
+  const seededTabRef = useRef(false);
+  const activeTabId = shell.tabState.activeTabId;
+  const stateRestored = shell.stateRestored;
+  useEffect(() => {
+    if (!stateRestored) return;
+    if (!seededTabRef.current) {
+      seededTabRef.current = true;
+      observedTabIdRef.current = activeTabId;
+      return;
+    }
+    if (activeTabId === observedTabIdRef.current) return;
+    observedTabIdRef.current = activeTabId;
+    const current = routeRef.current;
+    if (current.kind === "tab" && current.tabId === activeTabId) return;
+    if (current.kind === "tab" && !openTabIdsRef.current.has(current.tabId)) {
+      navigation.replace(activeTabId ? { kind: "tab", tabId: activeTabId } : { kind: "files" });
+    } else if (activeTabId) {
+      navigation.push({ kind: "tab", tabId: activeTabId });
+    }
+  }, [activeTabId, stateRestored, navigation]);
+
+  // Opens that *do* pass through the phone chrome push explicitly, so the note
+  // they land on is one history entry — not two. The observer above skips the
+  // resulting active-tab change because the route already names the same tab.
+  const openMarkdown = useCallback(
+    (rootPath: string, relativePath: string) => {
+      openMarkdownDocument(rootPath, relativePath);
+      navigation.push({ kind: "tab", tabId: editorTabId({ rootPath, relativePath }) });
+    },
+    [openMarkdownDocument, navigation]
+  );
+  const openFile = useCallback(
+    (rootPath: string, relativePath: string) => {
+      openFileDocument(rootPath, relativePath);
+      navigation.push({ kind: "tab", tabId: fileTabId({ rootPath, relativePath }) });
+    },
+    [openFileDocument, navigation]
+  );
+  const openNote = useCallback(
+    (relativePath: string) => {
+      if (shell.restoredWorkspacePath) openMarkdown(shell.restoredWorkspacePath, relativePath);
+    },
+    [shell.restoredWorkspacePath, openMarkdown]
+  );
+
+  // Same bag the desktop dock gets, minus the two open callbacks: file taps
+  // must route through the history stack instead of only activating a tab.
+  const explorerProps = useMemo(
+    () => ({ ...shell.explorerProps, onMarkdownFileSelected: openMarkdown, onFileSelected: openFile }),
+    [shell.explorerProps, openMarkdown, openFile]
+  );
 
   // Long press is the whole v1 customization affordance: hold a drawer row to
   // pin it, hold a hub slot to remove it. Both helpers hand back the identical
@@ -88,59 +196,56 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
     [items]
   );
 
-  // `revealed` and `shell.leftPanel` must stay in step: the drawer highlights
-  // from `leftPanel`, the screen fills from `revealed`. Clearing only one
-  // leaves a lit row for a panel that is not on screen (or the reverse).
-  const dismissRevealed = useCallback(() => {
-    setRevealed(null);
-    setLeftPanel(null);
-  }, [setLeftPanel]);
-
   const revealPanel = useCallback(
     (panelId: string) => {
-      setDrawerOpen(false);
       // Asks the registry, not a literal list of the six first-party ids: an
-      // extension's left panel is listed in the drawer, so tapping it has to
-      // do something.
+      // extension's left panel is listed in the hub, so tapping it has to do
+      // something.
       if (isSelectableLeftPanel(panelId)) {
-        // Toggle: tapping the hub slot you are already on returns you to the
-        // note. A left panel takes over the screen, so any open sheet goes.
-        setInspectorOpen(false);
-        setRevealed((current) => (current === panelId ? null : panelId));
-        selectLeftPanel(panelId);
+        // A left panel takes over the screen — a content route, so any open
+        // overlay is left behind (push clears it from the entry). Files is a
+        // real destination, never a toggle that reveals the last note.
+        navigation.push(panelId === "explorer" ? { kind: "files" } : { kind: "panel", panel: panelId });
       } else if (isSelectableRightPanel(panelId)) {
-        // A right-side target is an inspector, not a screen: it opens over the
-        // note rather than replacing it. Revealing it would have shown the
-        // *left* popout instead, since that is all the content branch renders.
+        // A right-side target is an inspector over the content, not a screen.
+        // Opened directly from the hub it parents to content: Back returns to
+        // the note, not to a menu.
         setRightPanel(panelId);
-        setInspectorOpen(true);
+        navigation.openOverlay({ kind: "inspector", panel: panelId, parent: "content" });
       }
     },
-    [selectLeftPanel, setRightPanel]
+    [navigation, setRightPanel]
+  );
+
+  // A panel row tapped *inside the navigation drawer* replaces the drawer's
+  // history entry with the content route instead of pushing over it — Back
+  // then returns to the prior content, not to a dead drawer entry.
+  const selectDrawerPanel = useCallback(
+    (panelId: string) => {
+      if (!isSelectableLeftPanel(panelId)) return;
+      navigation.replace(panelId === "explorer" ? { kind: "files" } : { kind: "panel", panel: panelId });
+    },
+    [navigation]
   );
 
   const runCommand = useCallback(
     (commandId: string) => {
       const command = paletteCommands.find((candidate) => candidate.id === commandId);
       if (command) runPaletteCommand(command);
-      setDrawerOpen(false);
-      dismissRevealed();
+      navigation.dismissOverlay();
     },
-    [dismissRevealed, paletteCommands, runPaletteCommand]
+    [paletteCommands, runPaletteCommand, navigation]
   );
 
-  // Not `revealPanel` and not `shell.openSyncPanel`: both toggle, and the
-  // pill always means "show me this". History still drops the version filter
-  // so the panel is the whole workspace, not the last note asked.
+  // Not `revealPanel` and not `shell.openSyncPanel`: the pill always means
+  // "show me this". History still drops the version filter so the panel is the
+  // whole workspace, not the last note asked.
   const openSyncPanel = useCallback(
     (panel: "conflicts" | "history") => {
       if (panel === "history") clearVersions();
-      setLeftPanel(panel);
-      setInspectorOpen(false);
-      setTabsOpen(false);
-      setRevealed(panel);
+      navigation.push({ kind: "panel", panel });
     },
-    [clearVersions, setLeftPanel]
+    [clearVersions, navigation]
   );
 
   // Mobile autosave: the phone shell has no Save button, so the document is
@@ -173,10 +278,20 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
     };
   }, [activeTab, activeTabDirty, activeDocContents, saveDocument]);
 
-  // When the note returns after a panel is dismissed, it slides in from the
-  // right — reading as the panel being pushed out to the left. The `key`
-  // changes between "note" and the panel id, so React remounts the content
-  // branch and the CSS animation fires on mount.
+  // The panel LeftPopout renders: the route's panel, or explorer underneath
+  // every tab route so Files is the base surface, not a blank space.
+  const popoutPanel = route.kind === "panel" ? route.panel : "explorer";
+  // Document-facing surfaces (action-items availability, inspector contents)
+  // see the note only while a tab is the visible route — on Files or a panel
+  // a restored document must not leak into Outline/Properties context.
+  const visibleDocumentContents =
+    route.kind === "tab" && activeDocument?.phase === "ready"
+      ? activeDocument.contents
+      : null;
+  const headerTitle =
+    route.kind === "files" ? "Files"
+    : route.kind === "panel" ? (getDesktopPanelOrUndefined(route.panel)?.label ?? shell.workspaceName ?? "ThinkBrain")
+    : isMarkdownNote ? (shell.workspaceName ?? "ThinkBrain") : (shell.activeTab?.title ?? shell.workspaceName ?? "ThinkBrain");
 
   return (
     <main
@@ -184,82 +299,74 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
       aria-label="ThinkBrain mobile workspace"
     >
       <PhoneHeader
-        title={isMarkdownNote ? (shell.workspaceName ?? "ThinkBrain") : (shell.activeTab?.title ?? shell.workspaceName ?? "ThinkBrain")}
-        canGoBack={revealed !== null}
+        title={headerTitle}
+        canGoBack={navigation.canGoBack}
         tabCount={shell.tabState.tabs.length}
         syncStatus={shell.syncStatus}
-        onBack={dismissRevealed}
-        onOpenNavigation={() => setDrawerOpen(true)}
-        onOpenTabs={() => {
-          setInspectorOpen(false);
-          setTabsOpen(true);
-        }}
-        onOpenInspector={() => {
-          setTabsOpen(false);
-          setInspectorOpen(true);
-        }}
+        onBack={navigation.back}
+        onOpenTabs={() => navigation.openOverlay({ kind: "tabs" })}
+        onOpenInspector={() => navigation.openOverlay({ kind: "actions" })}
         onOpenSyncPanel={openSyncPanel}
       />
 
       <div className="relative flex min-h-0 flex-1 flex-col">
-        {revealed === null ? (
-          <div key="note" className="flex min-h-0 flex-1 flex-col">
-            {showNoteTitle && (
-              <NoteTitleRow
-                key={activePath}
-                relativePath={activePath}
-                onRename={shell.restoredWorkspacePath
-                  ? (newPath) => shell.renameDocument(shell.restoredWorkspacePath!, activePath!, newPath)
-                  : undefined}
-              />
-            )}
-            <TabContent
-              tab={shell.activeTab}
-              document={shell.activeDocument}
-              onChange={shell.updateDocument}
-              onSave={shell.saveDocument}
-              noteIndex={shell.noteIndex}
-              onOpenNote={shell.onOpenNote}
-              onReopenNote={shell.loadDocumentIntoView}
-              unsavedNoteContents={shell.unsavedNoteContents}
+        {/* Both branches stay mounted and trade `hidden`/`aria-hidden` instead
+            of unmounting: Explorer's expanded folders, selection and scroll —
+            and every other keepMounted panel — survive a trip into a note and
+            back, and the editor keeps its own state under a panel the same
+            way. The classes, not the `hidden` attribute alone, carry the
+            hiding because `display:flex` would override it. */}
+        <div
+          className={`min-h-0 flex-1 flex-col tn-slide-in-left ${route.kind === "tab" ? "hidden" : "flex"}`}
+          aria-hidden={route.kind === "tab"}
+        >
+          <LeftPopout
+            panel={popoutPanel}
+            rootPath={shell.restoredWorkspacePath}
+            explorerProps={explorerProps}
+            onReviewConflict={shell.reviewConflict}
+            versionsOf={shell.versionsOf}
+            onShowEverything={clearVersions}
+            onOpenSearchResult={openNote}
+          />
+        </div>
+        <div
+          className={`min-h-0 flex-1 flex-col ${route.kind === "tab" ? "flex" : "hidden"}`}
+          aria-hidden={route.kind !== "tab"}
+        >
+          {showNoteTitle && (
+            <NoteTitleRow
+              key={activePath}
+              relativePath={activePath}
+              onRename={shell.restoredWorkspacePath
+                ? (newPath) => shell.renameDocument(shell.restoredWorkspacePath!, activePath!, newPath)
+                : undefined}
             />
-          </div>
-        ) : (
-          // Content takes over: full width between header and hub, unlike the
-          // drawer, which peeks at 86%. Slides in from the left so the reveal
-          // reads as a panel pushing the note aside, not a pop.
-          <div
-            key={revealed}
-            className="flex min-h-0 flex-1 flex-col tn-slide-in-left"
-          >
-            <LeftPopout
-              panel={revealed}
-              rootPath={shell.restoredWorkspacePath}
-              explorerProps={shell.explorerProps}
-              onReviewConflict={shell.reviewConflict}
-              versionsOf={shell.versionsOf}
-              onShowEverything={clearVersions}
-              onOpenSearchResult={(relativePath) => {
-                if (shell.restoredWorkspacePath) {
-                  shell.openMarkdownDocument(shell.restoredWorkspacePath, relativePath);
-                  dismissRevealed();
-                }
-              }}
-            />
-          </div>
-        )}
+          )}
+          <TabContent
+            tab={shell.activeTab}
+            document={shell.activeDocument}
+            onChange={shell.updateDocument}
+            onSave={shell.saveDocument}
+            noteIndex={shell.noteIndex}
+            onOpenNote={openNote}
+            onReopenNote={shell.loadDocumentIntoView}
+            unsavedNoteContents={shell.unsavedNoteContents}
+          />
+        </div>
       </div>
 
       <PhoneHub
         items={items}
-        activeLeftPanel={revealed}
-        // Only truthful while the sheet is up: `rightPanel` outlives it, and a
-        // hub slot left lit over a dismissed sheet claims a surface is open.
-        activeRightPanel={inspectorOpen ? shell.rightPanel : null}
+        activeLeftPanel={route.kind === "tab" ? null : popoutPanel}
+        // Only truthful while the inspector drawer is up: `rightPanel`
+        // outlives it, and a hub slot left lit over a dismissed inspector
+        // claims a surface is open.
+        activeRightPanel={inspectorPanel}
         badges={shell.conflictBadges}
         onSelectPanel={revealPanel}
         onRunCommand={runCommand}
-        onOpenMenu={() => setDrawerOpen(true)}
+        onOpenMenu={() => navigation.openOverlay({ kind: "navigation" })}
         onLongPress={(target) => editHub(removeItem(items, target))}
       />
 
@@ -288,27 +395,40 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
         tabs={shell.tabState.tabs}
         activeTabId={shell.tabState.activeTabId}
         documents={shell.documents}
-        onDismiss={() => setTabsOpen(false)}
+        onDismiss={() => navigation.dismissOverlay()}
         onSelect={(tabId) => {
-          shell.dispatchTabs({ type: "activate", tabId });
-          // A tab is the note, not a panel: choosing one leaves whatever panel
-          // was revealed and puts the editor back on screen.
-          dismissRevealed();
+          // Replacing the switcher's entry with the tab route dismisses the
+          // sheet and lands Back on the prior content in one step.
+          navigation.replace({ kind: "tab", tabId });
         }}
         onClose={(tabId) => shell.dispatchTabs({ type: "requestClose", tabId })}
       />
 
-      {/* Inspectors read live shell state, so a tab switched underneath an open
-          sheet re-renders it rather than stranding it on the previous note. */}
-      <InspectorSheet
-        open={inspectorOpen}
-        panel={shell.rightPanel ?? "outline"}
+      {/* The header `…` menu: every right-panel contribution in registry
+          order. Choosing one opens its inspector as a child of this menu, so
+          the inspector's Back returns here instead of to content. */}
+      <ActionItemsMenu
+        open={actionsOpen}
         rootPath={shell.restoredWorkspacePath}
-        documentContents={
-          shell.activeDocument?.phase === "ready" ? shell.activeDocument.contents : null
-        }
-        onDismiss={() => setInspectorOpen(false)}
-        onSelectPanel={setRightPanel}
+        documentContents={visibleDocumentContents}
+        onDismiss={() => navigation.dismissOverlay()}
+        onSelect={(panel) => {
+          setRightPanel(panel);
+          navigation.openOverlay({ kind: "inspector", panel, parent: "actions" });
+        }}
+      />
+
+      {/* Inspectors read live shell state, so a tab switched underneath an open
+          drawer re-renders it rather than stranding it on the previous note. */}
+      <InspectorSheet
+        open={inspectorPanel !== null}
+        panel={inspectorPanel ?? shell.rightPanel ?? "outline"}
+        rootPath={shell.restoredWorkspacePath}
+        documentContents={visibleDocumentContents}
+        // Scrim tap closes the whole flow — under the actions menu that skips
+        // the menu entry too; only the header Back steps one level.
+        onDismiss={() => navigation.dismissOverlay(true)}
+        onBack={navigation.back}
       />
 
       {/* Closing a dirty tab parks a request and waits for an answer. Without
@@ -322,14 +442,13 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
         badges={shell.conflictBadges}
         workspaceName={shell.workspaceName}
         onDismiss={closeDrawer}
-        onSelectPanel={revealPanel}
+        onSelectPanel={selectDrawerPanel}
         onLongPressPanel={(panelId) => editHub(pinPanel(items, panelId))}
         hubPanelIds={hubPanelIds}
         hubFull={items.length >= MAX_HUB_ITEMS}
         onOpenSettings={() => {
           shell.openSettingsTab();
-          setDrawerOpen(false);
-          dismissRevealed();
+          navigation.replace({ kind: "tab", tabId: "settings" });
         }}
       />
     </main>

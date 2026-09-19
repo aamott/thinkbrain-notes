@@ -1,4 +1,4 @@
-import { ArrowLeft, Menu as MenuIcon, MoreHorizontal } from "lucide-react";
+import { ArrowLeft, MoreHorizontal } from "lucide-react";
 
 import type { SyncStatus } from "../../sync/historyTypes";
 import { SyncPill } from "../../sync/SyncPill";
@@ -7,8 +7,9 @@ import { SyncPill } from "../../sync/SyncPill";
  * Universal phone header.
  *
  * The two right-hand controls open different surfaces: the count opens the tab
- * switcher, `⋯` opens the inspector sheet. Only the left slot and the hub's Menu
- * slot open the navigation drawer.
+ * switcher, `⋯` opens the action-items menu. The left slot is Back when content
+ * history exists, and an inert spacer at the root so the title stays centered;
+ * the hub's Menu slot is the only launcher for the navigation drawer.
  *
  * It also carries the sync pill, because `StatusBar` does not render in phone
  * chrome and this is the only place someone learns their notes stopped being
@@ -22,7 +23,6 @@ export function PhoneHeader({
   tabCount,
   syncStatus,
   onBack,
-  onOpenNavigation,
   onOpenTabs,
   onOpenInspector,
   onOpenSyncPanel
@@ -32,7 +32,6 @@ export function PhoneHeader({
   readonly tabCount: number;
   readonly syncStatus: SyncStatus;
   readonly onBack: () => void;
-  readonly onOpenNavigation: () => void;
   readonly onOpenTabs: () => void;
   readonly onOpenInspector: () => void;
   readonly onOpenSyncPanel: (panel: "conflicts" | "history") => void;
@@ -50,14 +49,9 @@ export function PhoneHeader({
           <ArrowLeft aria-hidden="true" className="size-5" />
         </button>
       ) : (
-        <button
-          type="button"
-          aria-label="Open navigation"
-          className={button}
-          onClick={onOpenNavigation}
-        >
-          <MenuIcon aria-hidden="true" className="size-5" />
-        </button>
+        // No Back at the history root: an inert slot keeps the title centered
+        // without offering a control that does nothing.
+        <span aria-hidden="true" className="size-11 shrink-0" />
       )}
 
       <h1 className="min-w-0 flex-1 truncate text-center text-sm font-semibold">{title}</h1>

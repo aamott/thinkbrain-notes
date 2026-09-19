@@ -22,12 +22,15 @@ export function Drawer({
   onDismiss,
   label,
   className,
+  side = "left",
   children
 }: {
   readonly open: boolean;
   readonly onDismiss: () => void;
   readonly label: string;
   readonly className?: string;
+  /** Edge the drawer anchors and slides from. */
+  readonly side?: "left" | "right";
   readonly children: ReactNode;
 }) {
   const { containerRef } = useDismissable({ open, onDismiss });
@@ -45,8 +48,13 @@ export function Drawer({
           // status bar / notch. No-op on desktop (inset is 0 there). Mirrors
           // the same inset `PhoneHeader` applies; without it the drawer's
           // workspace name and long-press hint sit behind the time display.
-          "absolute inset-y-0 left-0 z-50 flex w-[86%] max-w-75 flex-col overflow-y-auto bg-sidebar pt-[env(safe-area-inset-top)] text-sidebar-foreground shadow-panel tn-slide",
-          open ? "visible translate-x-0" : "invisible -translate-x-full",
+          "absolute inset-y-0 z-50 flex w-[86%] max-w-75 flex-col overflow-y-auto bg-sidebar pt-[env(safe-area-inset-top)] text-sidebar-foreground shadow-panel tn-slide",
+          side === "left" ? "left-0" : "right-0",
+          open
+            ? "visible translate-x-0"
+            : side === "left"
+              ? "invisible -translate-x-full"
+              : "invisible translate-x-full",
           className
         )}
       >

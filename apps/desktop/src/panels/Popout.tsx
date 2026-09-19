@@ -51,12 +51,15 @@ export function Popout<Ctx extends LeftPanelContext | RightPanelContext>({
   side,
   panel,
   context,
-  contributions
+  contributions,
+  onBack
 }: {
   readonly side: Side;
   readonly panel: string;
   readonly context: Ctx;
   readonly contributions: readonly SideContribution<Ctx>[];
+  /** Optional leading Back control in the panel header. */
+  readonly onBack?: () => void;
 }): ReactNode {
   // The registry owns panel metadata, while the caller owns which panel
   // contributions are rendered; the two sources are intentionally separate.
@@ -77,7 +80,7 @@ export function Popout<Ctx extends LeftPanelContext | RightPanelContext>({
   return (
     <aside className={className} aria-label={`${contribution.label} panel`}>
       <div className={`flex flex-col flex-1 min-h-0 max-[760px]:w-full ${INNER_WIDTH[side]}`}>
-        <PanelTitle title={contribution.label} actions={contribution.actions} />
+        <PanelTitle title={contribution.label} actions={contribution.actions} onBack={onBack} />
         {contributions.map((panelContribution) => {
           const isActive = panelContribution.id === panel;
           if (!isActive && !panelContribution.keepMounted) return null;

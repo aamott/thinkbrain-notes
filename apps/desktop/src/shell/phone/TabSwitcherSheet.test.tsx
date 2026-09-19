@@ -135,7 +135,11 @@ describe("TabSwitcherSheet", () => {
     ).toBeNull();
   });
 
-  it("selects a tab and dismisses itself", async () => {
+  // Selection is a pure navigation: PhoneShell's onSelect replaces this
+  // sheet's history entry with the chosen tab route, which is what closes
+  // the sheet. Calling onDismiss here would take an extra step back through
+  // content history, so the card no longer fires it.
+  it("selects a tab without firing onDismiss", async () => {
     const onSelect = vi.fn();
     const onDismiss = vi.fn();
     const host = await render(sheet({ onSelect, onDismiss }));
@@ -145,7 +149,7 @@ describe("TabSwitcherSheet", () => {
     });
 
     expect(onSelect).toHaveBeenCalledWith("b");
-    expect(onDismiss).toHaveBeenCalledOnce();
+    expect(onDismiss).not.toHaveBeenCalled();
   });
 
   // The ✕ is a sibling of the select button, never a child of it: a nested

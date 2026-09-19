@@ -58,7 +58,7 @@ export function PhoneDrawer({
   );
 
   return (
-    <Drawer open={open} onDismiss={onDismiss} label="Navigation">
+    <Drawer open={open} onDismiss={onDismiss} label="Navigation" side="right">
       <div className="border-b border-border px-4 py-3">
         <p className="truncate text-sm font-bold">{workspaceName ?? "No workspace open"}</p>
       </div>

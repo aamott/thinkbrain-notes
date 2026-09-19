@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act } from "react";
+import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 
@@ -58,7 +58,21 @@ const extensionPanel = desktopPanelRegistry.register({
   factory: () => <p>hello notebook</p>
 });
 
-afterAll(() => extensionPanel.dispose());
+// A right-side extension panel gated on document context, so the action-items
+// menu has a real "needs an open note" entry to disable on Files.
+const docGatedPanel = desktopPanelRegistry.register({
+  id: "hello-notes.doc-panel",
+  label: "Doc panel",
+  icon: "outline",
+  side: "right",
+  availability: (context) => context.documentContents != null,
+  factory: () => <p>doc panel</p>
+});
+
+afterAll(() => {
+  extensionPanel.dispose();
+  docGatedPanel.dispose();
+});
 
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
@@ -201,16 +215,7 @@ describe("PhoneShell", () => {
     }
   });
 
-  it("opens the drawer from the header menu button", async () => {
-    const host = await render();
-    expect(visibleDialog(host, "Navigation")).toBeNull();
-
-    await click(host, "Open navigation");
-
-    expect(visibleDialog(host, "Navigation")).not.toBeNull();
-  });
-
-  it("opens the same drawer from the hub Menu slot", async () => {
+  it("opens the drawer from the hub Menu slot", async () => {
     const host = await render();
 
     await click(host, "Menu");
@@ -221,7 +226,7 @@ describe("PhoneShell", () => {
   it("lists every registered left panel in the drawer with a visible label", async () => {
     const host = await render();
 
-    await click(host, "Open navigation");
+    await click(host, "Menu");
 
     const drawer = visibleDialog(host, "Navigation");
     expect(drawer?.textContent).toContain("Files");
@@ -231,7 +236,7 @@ describe("PhoneShell", () => {
 
   it("closes the drawer after choosing a panel and reveals it full width", async () => {
     const host = await render();
-    await click(host, "Open navigation");
+    await click(host, "Menu");
     const drawer = visibleDialog(host, "Navigation");
     expect(drawer).not.toBeNull();
 
@@ -269,26 +274,76 @@ describe("PhoneShell", () => {
     expect(host.querySelector('[aria-label="Primary navigation"]')).not.toBeNull();
   });
 
-  // Both the header's `⋯` button and the sheet it opens are labelled
-  // "Document tools", so every assertion here matches on the dialog role too —
-  // an unscoped query would match the button, which is always present, and pass
-  // whether or not the sheet ever opened.
+  // The header's `⋯` button is labelled "Document tools", the menu it opens is
+  // "Action items" (role="menu"), and the inspector it drills into is the
+  // "Inspector" dialog — three distinct surfaces, matched by their own labels.
   const inspector = (host: HTMLDivElement): Element | null =>
-    visibleDialog(host, "Document tools");
+    visibleDialog(host, "Inspector");
+  const actionsMenu = (host: HTMLDivElement): Element | null =>
+    host.querySelector('[role="menu"][aria-label="Action items"][aria-hidden="false"]')
+    ?? host.querySelector('[role="menu"][aria-label="Action items"]:not([aria-hidden="true"])');
 
-  it("opens the inspector sheet from the header's document tools button", async () => {
+  it("opens the action items menu — not an inspector — from the header's document tools button", async () => {
     const host = await render();
     expect(inspector(host)).toBeNull();
 
     await click(host, "Document tools");
 
+    const menu = actionsMenu(host);
+    expect(menu).not.toBeNull();
+    expect(menu?.querySelector('[role="menuitem"][aria-label="Outline"]')).not.toBeNull();
+    // The menu alone does not open an inspector.
+    expect(inspector(host)).toBeNull();
+  });
+
+  it("drills actions → inspector, and the inspector's Back returns to the menu", async () => {
+    const host = await render();
+    await click(host, "Document tools");
+
+    const menu = actionsMenu(host);
+    await act(async () => {
+      menu?.querySelector<HTMLButtonElement>('[role="menuitem"][aria-label="Outline"]')?.click();
+    });
+
     expect(inspector(host)).not.toBeNull();
+    expect(inspector(host)?.querySelector('[aria-label="Outline panel"]')).not.toBeNull();
+
+    // The inspector's header Back steps one level — back to the menu it came
+    // from, not straight to content.
+    await act(async () => {
+      inspector(host)?.querySelector<HTMLButtonElement>('[aria-label="Back from Outline"]')?.click();
+    });
+
+    expect(inspector(host)).toBeNull();
+    expect(actionsMenu(host)).not.toBeNull();
+  });
+
+  it("closes the whole actions → inspector flow on an outside tap", async () => {
+    const host = await render();
+    await click(host, "Document tools");
+    const menu = actionsMenu(host);
+    await act(async () => {
+      menu?.querySelector<HTMLButtonElement>('[role="menuitem"][aria-label="Outline"]')?.click();
+    });
+    expect(inspector(host)).not.toBeNull();
+
+    // Every always-mounted overlay renders a scrim, so this must target the
+    // inspector's own — the only one marked visible while it is open.
+    await act(async () => {
+      host.querySelector("[data-tn-scrim].visible")?.dispatchEvent(
+        new PointerEvent("pointerdown", { bubbles: true })
+      );
+    });
+
+    // Both entries close as one flow — no stranded actions menu underneath.
+    expect(inspector(host)).toBeNull();
+    expect(actionsMenu(host)).toBeNull();
   });
 
   // `revealPanel` used to set `revealed` for any panel id while the content
   // branch only ever renders a *left* popout, so the default Assistant hub slot
   // full-screened the Files panel instead of opening an inspector.
-  it("opens the inspector sheet from the assistant hub shortcut", async () => {
+  it("opens the inspector from the assistant hub shortcut, parented to content", async () => {
     const host = await render();
 
     const hub = host.querySelector('[aria-label="Primary navigation"]');
@@ -298,8 +353,44 @@ describe("PhoneShell", () => {
 
     expect(inspector(host)).not.toBeNull();
     expect(inspector(host)?.querySelector('[aria-label="Assistant panel"]')).not.toBeNull();
-    // The note stays on screen behind the sheet: no left panel takes over.
-    expect(host.querySelector('[aria-label="Files panel"]')).toBeNull();
+    // The drawer opens over the current route — Files at cold start — without
+    // navigating: the Files surface stays mounted underneath.
+    expect(host.querySelector('[aria-label="Files panel"]')).not.toBeNull();
+  });
+
+  it("returns straight to content on Back from a hub-opened inspector", async () => {
+    const host = await render();
+    const hub = host.querySelector('[aria-label="Primary navigation"]');
+    await act(async () => {
+      hub?.querySelector<HTMLButtonElement>('[aria-label="Assistant"]')?.click();
+    });
+    expect(inspector(host)).not.toBeNull();
+
+    await act(async () => {
+      inspector(host)?.querySelector<HTMLButtonElement>('[aria-label="Back from Assistant"]')?.click();
+    });
+
+    // Content-parented: Back lands on content, not on an action-items menu.
+    expect(inspector(host)).toBeNull();
+    expect(actionsMenu(host)).toBeNull();
+  });
+
+  it("dismisses the tab switcher on Back before touching content history", async () => {
+    const { host, shell } = await renderWithShell();
+    await act(async () => shell().openMarkdownDocument("/vault", "note.md"));
+    expect(noteTitleVisible(host)).toBe(true);
+
+    await click(host, "Open tabs (1)");
+    expect(visibleDialog(host, "Open tabs")).not.toBeNull();
+
+    // Topmost overlay goes first: Back closes the switcher but stays on the note.
+    await click(host, "Back");
+    expect(visibleDialog(host, "Open tabs")).toBeNull();
+    expect(noteTitleVisible(host)).toBe(true);
+
+    // And the next Back walks content history — back to Files.
+    await click(host, "Back");
+    expect(filesVisible(host)).toBe(true);
   });
 
   it("prompts before closing a tab that has unsaved work", async () => {
@@ -393,7 +484,7 @@ describe("PhoneShell", () => {
     storeHub([{ kind: "panel", id: "explorer" }, { kind: "menu" }]);
     const host = await render();
     expect(hubOf(host)?.textContent).not.toContain("Saved versions");
-    await click(host, "Open navigation");
+    await click(host, "Menu");
 
     // On touch, press-and-hold fires `contextmenu`, which is what the drawer
     // rows listen for — no second long-press timer of their own.
@@ -416,7 +507,7 @@ describe("PhoneShell", () => {
   // of the box, so the first hold a new user tries is a refused one.
   it("refuses a sixth shortcut and says why in the drawer", async () => {
     const host = await render();
-    await click(host, "Open navigation");
+    await click(host, "Menu");
     expect(drawerOf(host)?.textContent).toContain("The bottom bar is full");
 
     await act(async () => {
@@ -451,7 +542,7 @@ describe("PhoneShell", () => {
 
   it("reveals an extension's left panel from the drawer", async () => {
     const host = await render();
-    await click(host, "Open navigation");
+    await click(host, "Menu");
 
     // Scoped to the drawer: the hub renders its own slots with the same labels.
     const drawer = visibleDialog(host, "Navigation");
@@ -482,10 +573,142 @@ describe("PhoneShell", () => {
 
     await click(host, "Back");
 
+    // Back lands on the Files route, so the shell's left panel follows it to
+    // explorer rather than being left lit on the panel that just closed.
     expect(host.querySelector('[aria-label="Search panel"]')).toBeNull();
-    expect(shell().leftPanel).toBeNull();
+    expect(shell().leftPanel).toBe("explorer");
     expect(hubOf(host)?.querySelector('[aria-label="Search"]')?.getAttribute("aria-current")).toBeNull();
     expect(drawerOf(host)?.querySelector('[aria-label="Search"]')?.getAttribute("aria-current")).toBeNull();
+  });
+
+  /** The explorer surface, visible only while its wrapper is not aria-hidden. */
+  const filesPanel = (host: HTMLDivElement): Element | null =>
+    host.querySelector('[aria-label="Files panel"]');
+  const filesVisible = (host: HTMLDivElement): boolean =>
+    filesPanel(host)?.closest('[aria-hidden="true"]') == null && filesPanel(host) != null;
+  const noteTitle = (host: HTMLDivElement): HTMLInputElement | null =>
+    host.querySelector<HTMLInputElement>('[aria-label="Note title"]');
+  const noteTitleVisible = (host: HTMLDivElement): boolean =>
+    noteTitle(host)?.closest('[aria-hidden="true"]') == null && noteTitle(host) != null;
+  const headerTitle = (host: HTMLDivElement): string | null | undefined =>
+    host.querySelector("header h1")?.textContent;
+
+  it("starts on Files, not on the note, at cold launch", async () => {
+    const host = await render();
+
+    expect(headerTitle(host)).toBe("Files");
+    expect(filesVisible(host)).toBe(true);
+    // The root of content history has no Back — the slot is an inert spacer.
+    expect(host.querySelector('[aria-label="Back"]')).toBeNull();
+    expect(host.querySelector('[aria-label="Open navigation"]')).toBeNull();
+  });
+
+  it("starts on Files even when a tab was already active before the shell mounted", async () => {
+    // Simulates session restore: the tab exists and is active before
+    // PhoneShell's navigation seeds, so it must be observed, not pushed.
+    const box: { current: ShellState | null; show?: () => void } = { current: null };
+    const Host = () => {
+      const shell = useShellState();
+      box.current = shell;
+      const [show, setShow] = useState(false);
+      box.show = () => setShow(true);
+      return show ? <PhoneShell shell={shell} /> : null;
+    };
+    container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
+    await act(async () => {
+      root?.render(
+        <ThemeProvider>
+          <Host />
+        </ThemeProvider>
+      );
+    });
+    await act(async () => box.current?.openMarkdownDocument("/vault", "note.md"));
+    expect(box.current?.tabState.activeTabId).not.toBeNull();
+
+    await act(async () => box.show?.());
+
+    expect(headerTitle(container)).toBe("Files");
+    expect(filesVisible(container!)).toBe(true);
+    expect(container?.querySelector('[aria-label="Back"]')).toBeNull();
+    // The already-open tab is still open, just not the visible route.
+    expect(box.current?.tabState.tabs).toHaveLength(1);
+  });
+
+  it("opens a note over Files and Back returns to Files without closing the tab", async () => {
+    const { host, shell } = await renderWithShell();
+    expect(filesVisible(host)).toBe(true);
+
+    // An open that bypasses the phone wrappers (extension command, workspace
+    // bridge) is still captured as a history entry.
+    await act(async () => shell().openMarkdownDocument("/vault", "note.md"));
+
+    expect(noteTitleVisible(host)).toBe(true);
+    expect(filesVisible(host)).toBe(false);
+
+    await click(host, "Back");
+
+    expect(filesVisible(host)).toBe(true);
+    expect(noteTitleVisible(host)).toBe(false);
+    expect(shell().tabState.tabs).toHaveLength(1);
+  });
+
+  it("walks note history backwards: A then B, Back returns to A", async () => {
+    const { host, shell } = await renderWithShell();
+    await act(async () => shell().openMarkdownDocument("/vault", "first.md"));
+    await act(async () => shell().openMarkdownDocument("/vault", "second.md"));
+    expect(noteTitle(host)?.value).toBe("second");
+
+    await click(host, "Back");
+
+    expect(noteTitleVisible(host)).toBe(true);
+    expect(noteTitle(host)?.value).toBe("first");
+    expect(shell().tabState.activeTabId).toBe(
+      shell().tabState.tabs.find((tab) => tab.resource?.relativePath === "first.md")?.id
+    );
+  });
+
+  it("adds a history entry when a tab is chosen in the switcher", async () => {
+    const { host, shell } = await renderWithShell();
+    await act(async () => shell().openMarkdownDocument("/vault", "first.md"));
+    await act(async () => shell().openMarkdownDocument("/vault", "second.md"));
+
+    await click(host, "Open tabs (2)");
+    const sheet = visibleDialog(host, "Open tabs");
+    await act(async () => {
+      sheet?.querySelector<HTMLButtonElement>('[aria-label="first.md"]')?.click();
+    });
+
+    expect(noteTitle(host)?.value).toBe("first");
+
+    // The switch was a navigation: Back revisits the tab we came from.
+    await click(host, "Back");
+    expect(noteTitle(host)?.value).toBe("second");
+  });
+
+  it("reconciles a closed routed tab to the new active tab", async () => {
+    const { host, shell } = await renderWithShell();
+    await act(async () => shell().openMarkdownDocument("/vault", "first.md"));
+    await act(async () => shell().openMarkdownDocument("/vault", "second.md"));
+    const secondId = shell().tabState.activeTabId!;
+
+    await act(async () => shell().dispatchTabs({ type: "requestClose", tabId: secondId }));
+
+    // The stale entry is rewritten in place to the tab focus fell back to.
+    expect(noteTitle(host)?.value).toBe("first");
+    expect(filesVisible(host)).toBe(false);
+  });
+
+  it("keeps Explorer mounted — hidden — while a note is on screen", async () => {
+    const { host, shell } = await renderWithShell();
+    await act(async () => shell().openMarkdownDocument("/vault", "note.md"));
+    expect(noteTitleVisible(host)).toBe(true);
+
+    // Present in the DOM but inert: expansion, selection and scroll survive.
+    const panel = filesPanel(host);
+    expect(panel).not.toBeNull();
+    expect(panel?.closest('[aria-hidden="true"]')).not.toBeNull();
   });
 
   /**
@@ -592,5 +815,31 @@ describe("PhoneShell", () => {
     await vi.advanceTimersByTimeAsync(2000);
 
     expect(writeMock()).not.toHaveBeenCalled();
+  });
+
+  // The action-items context is the *visible* route's document: on Files a
+  // still-open note must not leak through, or document-gated panels would
+  // stay clickable over the wrong content.
+  it("disables document-gated options on Files even with a restored note active", async () => {
+    const { host, shell } = await renderWithShell();
+    await openReadyNote(shell);
+    expect(noteTitleVisible(host)).toBe(true);
+
+    // On the note route the gated option is live…
+    await click(host, "Document tools");
+    const docItem = () =>
+      actionsMenu(host)?.querySelector<HTMLButtonElement>('[role="menuitem"][aria-label="Doc panel"]');
+    expect(docItem()?.disabled).toBe(false);
+
+    // Back dismisses the menu first, then content history reaches Files.
+    await click(host, "Back");
+    expect(actionsMenu(host)).toBeNull();
+    await click(host, "Back");
+    expect(filesVisible(host)).toBe(true);
+
+    // The same menu now shows the option disabled — the Files route carries
+    // no document contents even though the note is still open.
+    await click(host, "Document tools");
+    expect(docItem()?.disabled).toBe(true);
   });
 });

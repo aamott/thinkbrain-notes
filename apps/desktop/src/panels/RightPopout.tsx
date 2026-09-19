@@ -10,17 +10,19 @@ type RightPopoutProps = {
   readonly rootPath: string | null;
   /** Markdown contents of the active editor tab, when its document is ready. */
   readonly documentContents: string | null;
+  /** Optional leading Back control: closes the dock on desktop, steps the mobile inspector flow back. */
+  readonly onBack?: () => void;
 };
 
 /**
  * Right dock popout for the desktop shell. Layout and contribution rendering
  * live in the shared `Popout`; only the right-side context is constructed here.
  */
-export function RightPopout({ panel, rootPath, documentContents }: RightPopoutProps) {
+export function RightPopout({ panel, rootPath, documentContents, onBack }: RightPopoutProps) {
   const rightPanels = useRightPanelContributions();
   const context: RightPanelContext = useMemo(
     () => ({ rootPath, documentContents }),
     [rootPath, documentContents]
   );
-  return <Popout side="right" panel={panel} context={context} contributions={rightPanels} />;
+  return <Popout side="right" panel={panel} context={context} contributions={rightPanels} onBack={onBack} />;
 }
