@@ -1060,4 +1060,75 @@ describe("PhoneShell", () => {
     expect(shell().versionsOf).toBeNull();
     expect(host.querySelector('[aria-label="Saved versions panel"]')).not.toBeNull();
   });
+
+  it("bounds the drawer panel and scrim above the hub", async () => {
+    const host = await render();
+
+    await act(async () => {
+      hubOf(host)?.querySelector<HTMLButtonElement>('[aria-label="Menu"]')?.click();
+    });
+    const drawer = visibleDialog(host, "Navigation");
+    // Several scrims stay mounted (drawer, inspector, sheets) — the drawer's
+    // own is the element immediately preceding its panel.
+    const scrim = drawer?.previousElementSibling;
+    expect(scrim?.getAttribute("data-tn-scrim")).not.toBeNull();
+
+    const bound = "bottom-[calc(3.5rem+env(safe-area-inset-bottom))]";
+    expect(drawer?.className).toContain(bound);
+    expect(scrim?.className).toContain(bound);
+
+    // The Menu slot stays tappable underneath: a second tap closes the drawer.
+    await act(async () => {
+      hubOf(host)?.querySelector<HTMLButtonElement>('[aria-label="Menu"]')?.click();
+    });
+    expect(visibleDialog(host, "Navigation")).toBeNull();
+  });
+
+  it("clipped, not scrollable: the shell root cannot be focus-scrolled", async () => {
+    const host = await render();
+    const main = host.querySelector('[aria-label="ThinkBrain mobile workspace"]');
+
+    // Offscreen-translated sheets enlarge scrollable overflow; `clip` refuses
+    // programmatic scroll where `hidden` would let WebView shift the shell.
+    expect(main?.className).toContain("overflow-clip");
+    expect(main?.className).not.toContain("overflow-hidden");
+  });
+
+  it("offers the previous distinct note while viewing a note, toggling A/B", async () => {
+    const { host, shell } = await renderWithShell();
+    await act(async () => shell().openMarkdownDocument("/vault", "a.md"));
+    await act(async () => shell().openMarkdownDocument("/vault", "b.md"));
+    expect(noteTitle(host)?.value).toBe("b");
+
+    const recentRow = () =>
+      newNoteMenu(host)?.querySelector<HTMLButtonElement>(
+        '[role="menuitem"][aria-label="Open most recent note"]'
+      );
+
+    await click(host, "New note");
+    expect(recentRow()?.textContent).toContain("a.md");
+    await act(async () => recentRow()?.click());
+
+    expect(noteTitle(host)?.value).toBe("a");
+    expect(shell().tabState.tabs).toHaveLength(2);
+
+    // Selecting A refreshed the MRU: reopening on A now offers B.
+    await click(host, "New note");
+    expect(recentRow()?.textContent).toContain("b.md");
+    await act(async () => recentRow()?.click());
+
+    expect(noteTitle(host)?.value).toBe("b");
+    expect(shell().tabState.tabs).toHaveLength(2);
+  });
+
+  it("disables Open most recent note while viewing the only note", async () => {
+    const { host, shell } = await renderWithShell();
+    await act(async () => shell().openMarkdownDocument("/vault", "only.md"));
+
+    await click(host, "New note");
+    const recent = newNoteMenu(host)?.querySelector<HTMLButtonElement>(
+      '[role="menuitem"][aria-label="Open most recent note"]'
+    );
+    expect(recent?.disabled).toBe(true);
+  });
 });

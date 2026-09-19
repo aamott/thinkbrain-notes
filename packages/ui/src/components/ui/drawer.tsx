@@ -22,6 +22,7 @@ export function Drawer({
   onDismiss,
   label,
   className,
+  scrimClassName,
   side = "left",
   children
 }: {
@@ -29,6 +30,8 @@ export function Drawer({
   readonly onDismiss: () => void;
   readonly label: string;
   readonly className?: string;
+  /** Extra classes for the scrim only (e.g. the same bounds as the panel). */
+  readonly scrimClassName?: string;
   /** Edge the drawer anchors and slides from. */
   readonly side?: "left" | "right";
   readonly children: ReactNode;
@@ -36,7 +39,7 @@ export function Drawer({
   const { containerRef } = useDismissable({ open, onDismiss });
   return (
     <>
-      <Scrim open={open} onDismiss={onDismiss} />
+      <Scrim open={open} onDismiss={onDismiss} className={scrimClassName} />
       <div
         ref={containerRef}
         role={open ? "dialog" : undefined}

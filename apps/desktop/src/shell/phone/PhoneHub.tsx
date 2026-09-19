@@ -69,30 +69,30 @@ export function PhoneHub({
   const navItems = useMemo<readonly BottomNavItem[]>(
     () =>
       resolved.map((entry) => ({
-      key: entry.key,
-      label: entry.label,
-      icon: <PanelIcon name={entry.icon} className="size-5" />,
-      // Panel actives come from the resolver; menu and command slots light up
-      // while their overlay is the topmost surface.
-      active:
-        entry.target.kind === "menu"
-          ? menuOpen
-          : entry.target.kind === "command"
-            ? entry.target.id === activeCommandId
-            : entry.active,
-      badge: entry.badge,
-      // Commands are actions (New Note), not destinations — they get the
-      // primary chip so they read as "do this" rather than "go here."
-      variant: entry.target.kind === "command" ? "primary" : "default",
-      onSelect: () => {
-        if (entry.target.kind === "menu") onOpenMenu();
-        else if (entry.target.kind === "panel") onSelectPanel(entry.target.id);
-        else onRunCommand(entry.target.id);
-      },
-      onLongPress:
-        onLongPress && entry.target.kind !== "menu"
-          ? () => onLongPress(entry.target)
-          : undefined
+        key: entry.key,
+        label: entry.label,
+        icon: <PanelIcon name={entry.icon} className="size-5" />,
+        // Panel actives come from the resolver; menu and command slots light
+        // up while their overlay is the topmost surface.
+        active:
+          entry.target.kind === "menu"
+            ? menuOpen
+            : entry.target.kind === "command"
+              ? entry.target.id === activeCommandId
+              : entry.active,
+        badge: entry.badge,
+        // Commands are actions (New Note), not destinations — they get the
+        // primary chip so they read as "do this" rather than "go here."
+        variant: entry.target.kind === "command" ? "primary" : "default",
+        onSelect: () => {
+          if (entry.target.kind === "menu") onOpenMenu();
+          else if (entry.target.kind === "panel") onSelectPanel(entry.target.id);
+          else onRunCommand(entry.target.id);
+        },
+        onLongPress:
+          onLongPress && entry.target.kind !== "menu"
+            ? () => onLongPress(entry.target)
+            : undefined
       })),
     [resolved, menuOpen, activeCommandId, onSelectPanel, onRunCommand, onOpenMenu, onLongPress]
   );

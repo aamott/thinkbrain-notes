@@ -8,6 +8,10 @@ import type { LeftPanel } from "../shellTypes";
 
 const LONG_PRESS_DELAY_MS = 500;
 
+// Panel and scrim stop above the hub so the bottom-right Menu slot stays
+// directly tappable to close the drawer — same bottom bound the menus use.
+const BOUNDS = "bottom-[calc(3.5rem+env(safe-area-inset-bottom))]";
+
 // 48px already clears the touch minimum, so no `pointer-coarse:` bump is
 // needed — the same reasoning `BottomNav` records for its 56px slots.
 const row =
@@ -58,7 +62,14 @@ export function PhoneDrawer({
   );
 
   return (
-    <Drawer open={open} onDismiss={onDismiss} label="Navigation" side="right">
+    <Drawer
+      open={open}
+      onDismiss={onDismiss}
+      label="Navigation"
+      side="right"
+      className={BOUNDS}
+      scrimClassName={BOUNDS}
+    >
       <div className="border-b border-border px-4 py-3">
         <p className="truncate text-sm font-bold">{workspaceName ?? "No workspace open"}</p>
       </div>

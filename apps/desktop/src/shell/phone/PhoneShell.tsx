@@ -1,11 +1,11 @@
 import { normalizeRoot } from "@thinkbrain/core";
 import { BottomSheet } from "@thinkbrain/ui";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { BottomPanel } from "../../panels/BottomPanel";
 import { LeftPopout } from "../../panels/LeftPopout";
 import { getDesktopPanelOrUndefined } from "../../panels/panelRegistryModel";
-import { editorTabId, fileTabId } from "../../tabs/tabModel";
+import { editorTabId, fileTabId, type DesktopTab } from "../../tabs/tabModel";
 import { isSelectableLeftPanel, isSelectableRightPanel } from "../shellTypes";
 import { useSettingsStore } from "../../settings/settingsStore";
 import { TabCloseRequest } from "../TabCloseRequest";
@@ -23,6 +23,11 @@ import { NoteTitleRow } from "./NoteTitleRow";
 import { PhoneHub } from "./PhoneHub";
 import { TabSwitcherSheet } from "./TabSwitcherSheet";
 import { useHubItems } from "./useHubItems";
+
+/** Only Markdown editor tabs count as notes — code/media/settings don't. */
+const isNoteTab = (tab: DesktopTab | null | undefined): tab is DesktopTab =>
+  tab?.kind === "editor" &&
+  tab.resource?.relativePath?.toLowerCase().endsWith(".md") === true;
 
 /**
  * Phone chrome over the shared shell state.
@@ -281,16 +286,35 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
     if (command) runPaletteCommand(command);
   }, [navigation, paletteCommands, runPaletteCommand]);
 
-  // The most recent note is the active editor `.md`, else the last one in tab
-  // order — "last open", not a filesystem timestamp.
+  // "Open most recent note" tracks a two-entry MRU of distinct Markdown tabs.
+  // While a note is on screen it answers the *previous* note — A→B offers A,
+  // and reopening on A offers B — while Files or a panel still gets the note
+  // currently open underneath. Stale ids never reopen a closed tab.
+  const activeNoteId = isNoteTab(activeTab) ? activeTab.id : null;
+  const [noteHistory, setNoteHistory] = useState<readonly string[]>([]);
+  // Adjust-during-render: the MRU derives from `activeNoteId` alone, so
+  // updating it here (React re-renders before commit) keeps it render-safe
+  // where a ref read or an effect setState would not be.
+  if (activeNoteId !== null && noteHistory[0] !== activeNoteId) {
+    setNoteHistory(
+      [activeNoteId, ...noteHistory.filter((id) => id !== activeNoteId)].slice(0, 2)
+    );
+  }
+
   const recentNote = useMemo(() => {
-    const isNoteTab = (tab: typeof activeTab): tab is NonNullable<typeof activeTab> =>
-      tab?.kind === "editor" &&
-      tab.resource?.relativePath?.toLowerCase().endsWith(".md") === true;
     const tabs = shell.tabState.tabs;
-    const candidate = isNoteTab(activeTab) ? activeTab : [...tabs].reverse().find(isNoteTab);
+    const findTab = (id: string | undefined): DesktopTab | undefined =>
+      id !== undefined ? tabs.find((tab) => tab.id === id) : undefined;
+    const viewingNoteId =
+      route.kind === "tab" && isNoteTab(activeTab) && route.tabId === activeTab.id
+        ? activeTab.id
+        : null;
+    const candidate =
+      viewingNoteId !== null
+        ? findTab(noteHistory.find((id) => id !== viewingNoteId))
+        : (isNoteTab(activeTab) ? activeTab : findTab(noteHistory[0]));
     return candidate ? { id: candidate.id, title: candidate.title } : null;
-  }, [activeTab, shell.tabState.tabs]);
+  }, [activeTab, route, shell.tabState.tabs, noteHistory]);
 
   const openRecentNote = useCallback(() => {
     if (recentNote) navigation.replace({ kind: "tab", tabId: recentNote.id });
@@ -364,8 +388,13 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
   })();
 
   return (
+    // `overflow-clip`, not `overflow-hidden`: closed always-mounted sheets
+    // translated below the shell still enlarge this box's scrollable overflow,
+    // and `hidden` leaves it programmatically scrollable — Android/WebView
+    // focus-scroll can shift the whole shell and strand it (header off-screen,
+    // black gap below). `clip` clips identically but cannot scroll.
     <main
-      className="relative flex h-full min-w-0 flex-col overflow-hidden bg-background text-foreground [--tn-shell-popout-left:0px]"
+      className="relative flex h-full min-w-0 flex-col overflow-clip bg-background text-foreground [--tn-shell-popout-left:0px]"
       aria-label="ThinkBrain mobile workspace"
     >
       <PhoneHeader

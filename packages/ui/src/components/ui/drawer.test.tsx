@@ -133,4 +133,25 @@ describe("Drawer", () => {
     expect(panel.classList.contains("right-0")).toBe(true);
     expect(panel.classList.contains("translate-x-0")).toBe(true);
   });
+
+  it("applies className to the panel and scrimClassName to the scrim", async () => {
+    const host = await render(
+      <Drawer
+        open
+        onDismiss={() => undefined}
+        label="Navigation"
+        className="panel-bound"
+        scrimClassName="scrim-bound"
+      >
+        <button type="button">Files</button>
+      </Drawer>
+    );
+
+    const panel = panelOf(host);
+    const scrim = host.querySelector("[data-tn-scrim]");
+    expect(panel.classList.contains("panel-bound")).toBe(true);
+    expect(panel.classList.contains("scrim-bound")).toBe(false);
+    expect(scrim?.classList.contains("scrim-bound")).toBe(true);
+    expect(scrim?.classList.contains("panel-bound")).toBe(false);
+  });
 });

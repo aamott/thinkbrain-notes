@@ -3,7 +3,7 @@
 - **Difficulty:** low
 - **Urgency:** low
 - **File:** `apps/desktop/src/shell/phone/PhoneShell.test.tsx`
-- **Lines:** 1-1063
+- **Lines:** 1-1134
 
 ## Description
 
@@ -15,4 +15,4 @@ Split the suite by product concern and centralize its shared shell render harnes
 
 ## Verification
 
-The current file has 1,063 lines. Repository guidance says files must never exceed 800 lines.
+The current file has 1,134 lines. Repository guidance says files must never exceed 800 lines.
