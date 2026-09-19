@@ -54,6 +54,7 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
   const drawerOpen = overlay?.kind === "navigation";
   const tabsOpen = overlay?.kind === "tabs";
   const actionsOpen = overlay?.kind === "actions";
+  const newNoteOpen = overlay?.kind === "new-note";
   const inspectorPanel = overlay?.kind === "inspector" ? overlay.panel : null;
 
   // Callbacks and effects must take these as values, never `shell` itself:
@@ -200,19 +201,42 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
       // extension's left panel is listed in the hub, so tapping it has to do
       // something.
       if (isSelectableLeftPanel(panelId)) {
-        // A left panel takes over the screen — a content route, so any open
-        // overlay is left behind (push clears it from the entry). Files is a
-        // real destination, never a toggle that reveals the last note.
-        navigation.push(panelId === "explorer" ? { kind: "files" } : { kind: "panel", panel: panelId });
+        // A left panel takes over the screen — a content route. With an
+        // overlay open it *replaces* the overlay's entry so switching New
+        // note/Menu/inspector → Files/Search does not strand the old surface
+        // under Back; over bare content it pushes. Tapping the slot for the
+        // panel already on screen toggles back to the prior content; at the
+        // Files root that Back is a safe no-op.
+        const alreadyVisible =
+          overlay === null &&
+          (panelId === "explorer"
+            ? route.kind === "files"
+            : route.kind === "panel" && route.panel === panelId);
+        const target: PhoneRoute =
+          panelId === "explorer" ? { kind: "files" } : { kind: "panel", panel: panelId };
+        if (alreadyVisible) {
+          navigation.back();
+        } else if (overlay !== null) {
+          navigation.replace(target);
+        } else {
+          navigation.push(target);
+        }
       } else if (isSelectableRightPanel(panelId)) {
         // A right-side target is an inspector over the content, not a screen.
-        // Opened directly from the hub it parents to content: Back returns to
-        // the note, not to a menu.
-        setRightPanel(panelId);
-        navigation.openOverlay({ kind: "inspector", panel: panelId, parent: "content" });
+        // Tapping the slot for the inspector already open closes it; opened
+        // directly from the hub it parents to content: Back returns to the
+        // note, not to a menu. `showOverlay` swaps any open peer surface in
+        // place rather than stacking it.
+        if (inspectorPanel === panelId) {
+          setRightPanel(null);
+          navigation.dismissOverlay(true);
+        } else {
+          setRightPanel(panelId);
+          navigation.showOverlay({ kind: "inspector", panel: panelId, parent: "content" });
+        }
       }
     },
-    [navigation, setRightPanel]
+    [navigation, setRightPanel, overlay, route, inspectorPanel]
   );
 
   // A panel row tapped *inside the navigation drawer* replaces the drawer's
@@ -221,30 +245,64 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
   const selectDrawerPanel = useCallback(
     (panelId: string) => {
       if (!isSelectableLeftPanel(panelId)) return;
+      // Saved versions always opens the whole-workspace view — matching the
+      // Action items entry point — never a stale note-specific filter.
+      if (panelId === "history") clearVersions();
       navigation.replace(panelId === "explorer" ? { kind: "files" } : { kind: "panel", panel: panelId });
     },
-    [navigation]
+    [navigation, clearVersions]
   );
 
   const runCommand = useCallback(
     (commandId: string) => {
+      // New note is a toggle, not a fire-and-forget action: the slot opens a
+      // popup offering create-or-reopen, and a second tap dismisses it.
+      if (commandId === "new-note") {
+        if (newNoteOpen) navigation.dismissOverlay();
+        else navigation.showOverlay({ kind: "new-note" });
+        return;
+      }
       const command = paletteCommands.find((candidate) => candidate.id === commandId);
       if (command) runPaletteCommand(command);
-      navigation.dismissOverlay();
+      // Dismiss only a real overlay — with none open, dismissOverlay would
+      // still Back-navigate the content route out from under the command.
+      if (overlay !== null) navigation.dismissOverlay();
     },
-    [paletteCommands, runPaletteCommand, navigation]
+    [paletteCommands, runPaletteCommand, navigation, newNoteOpen, overlay]
   );
 
-  // Not `revealPanel` and not `shell.openSyncPanel`: the pill always means
-  // "show me this". History still drops the version filter so the panel is the
-  // whole workspace, not the last note asked.
-  const openSyncPanel = useCallback(
-    (panel: "conflicts" | "history") => {
-      if (panel === "history") clearVersions();
-      navigation.push({ kind: "panel", panel });
-    },
-    [clearVersions, navigation]
-  );
+  // The popup's create path runs the canonical command — the existing
+  // Explorer focus/create flow — after landing on Files, so the inline file
+  // name field is where the user is already looking. The popup's history
+  // entry is replaced rather than pushed over, keeping Back honest.
+  const createNewNote = useCallback(() => {
+    navigation.replace({ kind: "files" });
+    const command = paletteCommands.find((candidate) => candidate.id === "new-note");
+    if (command) runPaletteCommand(command);
+  }, [navigation, paletteCommands, runPaletteCommand]);
+
+  // The most recent note is the active editor `.md`, else the last one in tab
+  // order — "last open", not a filesystem timestamp.
+  const recentNote = useMemo(() => {
+    const isNoteTab = (tab: typeof activeTab): tab is NonNullable<typeof activeTab> =>
+      tab?.kind === "editor" &&
+      tab.resource?.relativePath?.toLowerCase().endsWith(".md") === true;
+    const tabs = shell.tabState.tabs;
+    const candidate = isNoteTab(activeTab) ? activeTab : [...tabs].reverse().find(isNoteTab);
+    return candidate ? { id: candidate.id, title: candidate.title } : null;
+  }, [activeTab, shell.tabState.tabs]);
+
+  const openRecentNote = useCallback(() => {
+    if (recentNote) navigation.replace({ kind: "tab", tabId: recentNote.id });
+  }, [navigation, recentNote]);
+
+  // Saved versions is the history panel with the version filter dropped so it
+  // shows the whole workspace, not the last note asked. Replacing the menu's
+  // entry means Back returns to prior content, never to a dead menu entry.
+  const openSavedVersions = useCallback(() => {
+    clearVersions();
+    navigation.replace({ kind: "panel", panel: "history" });
+  }, [clearVersions, navigation]);
 
   // Mobile autosave: the phone shell has no Save button, so the document is
   // saved automatically after the user stops typing for 1.5s. The effect
@@ -315,12 +373,10 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
         canGoBack={navigation.canGoBack}
         canGoForward={navigation.canGoForward}
         tabCount={shell.tabState.tabs.length}
-        syncStatus={shell.syncStatus}
         onBack={navigation.back}
         onForward={navigation.forward}
-        onOpenTabs={() => navigation.openOverlay({ kind: "tabs" })}
-        onOpenInspector={() => navigation.openOverlay({ kind: "actions" })}
-        onOpenSyncPanel={openSyncPanel}
+        onOpenTabs={() => navigation.showOverlay({ kind: "tabs" })}
+        onOpenInspector={() => navigation.showOverlay({ kind: "actions" })}
       />
 
       <div className="relative flex min-h-0 flex-1 flex-col">
@@ -378,9 +434,20 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
         // claims a surface is open.
         activeRightPanel={inspectorPanel}
         badges={shell.conflictBadges}
+        menuOpen={drawerOpen}
+        activeCommandId={newNoteOpen ? "new-note" : null}
+        newNoteMenu={{
+          open: newNoteOpen,
+          recentNote,
+          onCreate: createNewNote,
+          onOpenRecent: openRecentNote,
+          onDismiss: () => navigation.dismissOverlay()
+        }}
         onSelectPanel={revealPanel}
         onRunCommand={runCommand}
-        onOpenMenu={() => navigation.openOverlay({ kind: "navigation" })}
+        onOpenMenu={() =>
+          drawerOpen ? navigation.dismissOverlay() : navigation.showOverlay({ kind: "navigation" })
+        }
         onLongPress={(target) => editHub(removeItem(items, target))}
       />
 
@@ -425,6 +492,7 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
         open={actionsOpen}
         rootPath={shell.restoredWorkspacePath}
         documentContents={visibleDocumentContents}
+        onOpenSavedVersions={openSavedVersions}
         onDismiss={() => navigation.dismissOverlay()}
         onSelect={(panel) => {
           setRightPanel(panel);

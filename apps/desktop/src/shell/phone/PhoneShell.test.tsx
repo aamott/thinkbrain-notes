@@ -414,32 +414,6 @@ describe("PhoneShell", () => {
     expect(shell().tabState.tabs).toHaveLength(1);
   });
 
-  // `StatusBar` does not render in phone chrome, so the header is the only
-  // place sync trouble is visible at all. Scoped to the header's own button —
-  // the pill is the one control there carrying a `title`.
-  const pill = (host: HTMLDivElement): HTMLButtonElement | null =>
-    host.querySelector<HTMLButtonElement>("header button[title]");
-
-  it("reports sync state in the header", async () => {
-    const host = await render();
-
-    // The pill renders symbol-only in the phone header (compact mode); the
-    // full sentence lives in the tooltip / accessible name, not the text.
-    const syncButton = pill(host);
-    expect(syncButton).not.toBeNull();
-    expect(syncButton?.getAttribute("title")).toContain("not being saved");
-    expect(syncButton?.textContent).toContain("—");
-  });
-
-  it("reveals the panel behind the sync pill instead of opening a desktop dock", async () => {
-    const host = await render();
-
-    await act(async () => pill(host)?.click());
-
-    // "off" sends you to the history, which on a phone is a revealed panel.
-    expect(host.querySelector('[aria-label="Saved versions panel"]')).not.toBeNull();
-  });
-
   // The section inside the sheet carries the same accessible name, so this
   // matches the dialog explicitly — an unscoped query would pass on the
   // section alone and prove nothing about the sheet.
@@ -593,9 +567,9 @@ describe("PhoneShell", () => {
   const locationPill = (host: HTMLDivElement): string | null | undefined =>
     host.querySelector('header [aria-label="Current location"]')?.textContent;
   const backButton = (host: HTMLDivElement): HTMLButtonElement | null =>
-    host.querySelector<HTMLButtonElement>('[aria-label="Back"]');
+    host.querySelector<HTMLButtonElement>('header [aria-label="Back"]');
   const forwardButton = (host: HTMLDivElement): HTMLButtonElement | null =>
-    host.querySelector<HTMLButtonElement>('[aria-label="Forward"]');
+    host.querySelector<HTMLButtonElement>('header [aria-label="Forward"]');
 
   it("starts on Files, not on the note, at cold launch", async () => {
     const host = await render();
@@ -880,5 +854,210 @@ describe("PhoneShell", () => {
     // no document contents even though the note is still open.
     await click(host, "Document tools");
     expect(docItem()?.disabled).toBe(true);
+  });
+
+  const newNoteMenu = (host: HTMLDivElement): Element | null =>
+    host.querySelector('[role="menu"][aria-label="New note actions"]');
+
+  it("offers Saved versions only inside the action-items menu", async () => {
+    const host = await render();
+
+    // The phone header carries no sync/version control at all.
+    expect(host.querySelector('header [aria-label="Saved versions"]')).toBeNull();
+
+    await click(host, "Document tools");
+    const row = actionsMenu(host)?.querySelector<HTMLButtonElement>(
+      '[role="menuitem"][aria-label="Saved versions"]'
+    );
+    expect(row).not.toBeNull();
+
+    await act(async () => row?.click());
+
+    // Replacing the menu's entry lands straight on the panel — the menu is
+    // closed, not buried one Back step deep.
+    expect(host.querySelector('[aria-label="Saved versions panel"]')).not.toBeNull();
+    expect(actionsMenu(host)).toBeNull();
+  });
+
+  it("toggles the Files hub slot: note → Files → prior note", async () => {
+    const { host, shell } = await renderWithShell();
+    await act(async () => shell().openMarkdownDocument("/vault", "note.md"));
+    expect(noteTitleVisible(host)).toBe(true);
+
+    await click(host, "Files");
+    expect(filesVisible(host)).toBe(true);
+    expect(noteTitleVisible(host)).toBe(false);
+
+    await click(host, "Files");
+    expect(noteTitleVisible(host)).toBe(true);
+    expect(noteTitle(host)?.value).toBe("note");
+  });
+
+  it("toggles the Search hub slot: open, then back to prior content", async () => {
+    const { host, shell } = await renderWithShell();
+    await act(async () => shell().openMarkdownDocument("/vault", "note.md"));
+
+    await click(host, "Search");
+    expect(host.querySelector('[aria-label="Search panel"]')).not.toBeNull();
+
+    await click(host, "Search");
+    expect(host.querySelector('[aria-label="Search panel"]')).toBeNull();
+    expect(noteTitleVisible(host)).toBe(true);
+  });
+
+  it("toggles the Assistant hub slot: inspector opens, then closes", async () => {
+    const host = await render();
+    const hub = hubOf(host);
+
+    await act(async () => {
+      hub?.querySelector<HTMLButtonElement>('[aria-label="Assistant"]')?.click();
+    });
+    expect(inspector(host)).not.toBeNull();
+
+    await act(async () => {
+      hub?.querySelector<HTMLButtonElement>('[aria-label="Assistant"]')?.click();
+    });
+    expect(inspector(host)).toBeNull();
+  });
+
+  it("toggles the Menu hub slot: drawer opens, then closes", async () => {
+    const host = await render();
+    const hub = hubOf(host);
+
+    await act(async () => {
+      hub?.querySelector<HTMLButtonElement>('[aria-label="Menu"]')?.click();
+    });
+    expect(visibleDialog(host, "Navigation")).not.toBeNull();
+
+    await act(async () => {
+      hub?.querySelector<HTMLButtonElement>('[aria-label="Menu"]')?.click();
+    });
+    expect(visibleDialog(host, "Navigation")).toBeNull();
+  });
+
+  it("toggles the New note hub slot and Create new note lands Files via the canonical command", async () => {
+    const { host, shell } = await renderWithShell();
+    const hub = hubOf(host);
+
+    await act(async () => {
+      hub?.querySelector<HTMLButtonElement>('[aria-label="New note"]')?.click();
+    });
+    expect(newNoteMenu(host)).not.toBeNull();
+
+    // Second tap on the same slot dismisses — it is a toggle, not a launcher.
+    await act(async () => {
+      hub?.querySelector<HTMLButtonElement>('[aria-label="New note"]')?.click();
+    });
+    expect(newNoteMenu(host)).toBeNull();
+
+    // Create runs the canonical command — Explorer's inline create flow over a
+    // Files route. This fixture has no restored workspace (isTauri is mocked
+    // false), so the tree never reaches `phase === "ready"` and the inline
+    // "New file name" field cannot render here; the observable dispatch is
+    // the focus-request counter the command hands Explorer.
+    const focusRequests = () => shell().explorerProps.newNoteFocusRequest;
+    await act(async () => {
+      hub?.querySelector<HTMLButtonElement>('[aria-label="New note"]')?.click();
+    });
+    await act(async () => {
+      newNoteMenu(host)
+        ?.querySelector<HTMLButtonElement>('[role="menuitem"][aria-label="Create new note"]')
+        ?.click();
+    });
+
+    expect(newNoteMenu(host)).toBeNull();
+    expect(filesVisible(host)).toBe(true);
+    expect(focusRequests()).toBeGreaterThan(0);
+  });
+
+  it("Open most recent note restores the last open note's own tab", async () => {
+    const { host, shell } = await renderWithShell();
+    await act(async () => shell().openMarkdownDocument("/vault", "note.md"));
+    expect(noteTitleVisible(host)).toBe(true);
+
+    await click(host, "Back");
+    expect(filesVisible(host)).toBe(true);
+
+    await click(host, "New note");
+    const recent = newNoteMenu(host)?.querySelector<HTMLButtonElement>(
+      '[role="menuitem"][aria-label="Open most recent note"]'
+    );
+    expect(recent?.disabled).toBe(false);
+    expect(recent?.textContent).toContain("note.md");
+
+    await act(async () => recent?.click());
+
+    expect(newNoteMenu(host)).toBeNull();
+    expect(noteTitleVisible(host)).toBe(true);
+    expect(noteTitle(host)?.value).toBe("note");
+    // Reopened the same tab — it was never duplicated.
+    expect(shell().tabState.tabs).toHaveLength(1);
+  });
+
+  it("swaps peer surfaces in place: New note → Assistant, Back lands on content", async () => {
+    const { host, shell } = await renderWithShell();
+    await act(async () => shell().openMarkdownDocument("/vault", "note.md"));
+    const hub = hubOf(host);
+
+    await act(async () => {
+      hub?.querySelector<HTMLButtonElement>('[aria-label="New note"]')?.click();
+    });
+    expect(newNoteMenu(host)).not.toBeNull();
+
+    // Assistant is a peer surface: it replaces the popup's history entry
+    // rather than stacking over it.
+    await act(async () => {
+      hub?.querySelector<HTMLButtonElement>('[aria-label="Assistant"]')?.click();
+    });
+    expect(newNoteMenu(host)).toBeNull();
+    expect(inspector(host)).not.toBeNull();
+
+    await click(host, "Back");
+    // One step: straight to the note — the stale popup must not resurrect.
+    expect(inspector(host)).toBeNull();
+    expect(newNoteMenu(host)).toBeNull();
+    expect(noteTitleVisible(host)).toBe(true);
+  });
+
+  it("a hub left panel replaces an open overlay instead of stranding it", async () => {
+    const { host, shell } = await renderWithShell();
+    await act(async () => shell().openMarkdownDocument("/vault", "note.md"));
+    const hub = hubOf(host);
+
+    await act(async () => {
+      hub?.querySelector<HTMLButtonElement>('[aria-label="New note"]')?.click();
+    });
+    expect(newNoteMenu(host)).not.toBeNull();
+
+    await act(async () => {
+      hub?.querySelector<HTMLButtonElement>('[aria-label="Files"]')?.click();
+    });
+    expect(newNoteMenu(host)).toBeNull();
+    expect(filesVisible(host)).toBe(true);
+
+    // The popup's entry became the Files route, so Back returns to the note —
+    // not to a resurrected popup.
+    await click(host, "Back");
+    expect(noteTitleVisible(host)).toBe(true);
+    expect(newNoteMenu(host)).toBeNull();
+  });
+
+  it("clears a note-specific version filter when the drawer opens Saved versions", async () => {
+    const { host, shell } = await renderWithShell();
+    await act(async () => shell().openMarkdownDocument("/vault", "note.md"));
+    await act(async () => shell().showVersionsOf("/vault", "note.md"));
+    expect(shell().versionsOf).toBe("note.md");
+
+    await act(async () => {
+      hubOf(host)?.querySelector<HTMLButtonElement>('[aria-label="Menu"]')?.click();
+    });
+    const drawer = visibleDialog(host, "Navigation");
+    await act(async () => {
+      drawer?.querySelector<HTMLButtonElement>('[aria-label="Saved versions"]')?.click();
+    });
+
+    // Both Saved versions entry points now agree: whole workspace, no filter.
+    expect(shell().versionsOf).toBeNull();
+    expect(host.querySelector('[aria-label="Saved versions panel"]')).not.toBeNull();
   });
 });

@@ -93,7 +93,15 @@ describe("PhoneBreadcrumb", () => {
     scrollWidth.mockRestore();
   });
 
-  it("fades clipped ancestors only when the pill overflows", async () => {
+  it("centers the crumb row while the whole path fits", async () => {
+    await render();
+
+    const row = pill().querySelector<HTMLElement>(".w-max")!;
+    expect(row.className).toContain("left-1/2");
+    expect(row.className).toContain("-translate-x-1/2");
+  });
+
+  it("right-anchors and fades clipped ancestors only when the pill overflows", async () => {
     // Force the deterministic window-resize fallback path.
     vi.stubGlobal("ResizeObserver", undefined);
     await render();
@@ -108,7 +116,10 @@ describe("PhoneBreadcrumb", () => {
       window.dispatchEvent(new Event("resize"));
     });
 
+    expect(row.className).toContain("left-full");
+    expect(row.className).toContain("-translate-x-full");
     expect(fade()).not.toBeNull();
+    expect(fade()?.className).toContain("w-4");
     vi.unstubAllGlobals();
   });
 });

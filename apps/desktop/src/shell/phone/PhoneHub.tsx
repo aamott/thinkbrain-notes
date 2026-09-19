@@ -8,6 +8,7 @@ import {
 } from "../../panels/panelRegistryModel";
 import { PanelIcon } from "../panelIcons";
 import { resolveHubItems, type HubItem } from "./hubModel";
+import { NewNoteMenu } from "./NewNoteMenu";
 import { useKeyboardInset } from "./useKeyboardInset";
 
 /**
@@ -22,6 +23,9 @@ export function PhoneHub({
   activeLeftPanel,
   activeRightPanel,
   badges,
+  menuOpen,
+  activeCommandId,
+  newNoteMenu,
   onSelectPanel,
   onRunCommand,
   onOpenMenu,
@@ -31,6 +35,15 @@ export function PhoneHub({
   readonly activeLeftPanel: string | null;
   readonly activeRightPanel: string | null;
   readonly badges: Readonly<Record<string, number>>;
+  readonly menuOpen: boolean;
+  readonly activeCommandId: string | null;
+  readonly newNoteMenu: {
+    readonly open: boolean;
+    readonly recentNote: { readonly title: string } | null;
+    readonly onCreate: () => void;
+    readonly onOpenRecent: () => void;
+    readonly onDismiss: () => void;
+  };
   readonly onSelectPanel: (panelId: string) => void;
   readonly onRunCommand: (commandId: string) => void;
   readonly onOpenMenu: () => void;
@@ -41,19 +54,32 @@ export function PhoneHub({
   const rightPanels = useRightPanelContributions();
   const commands = useDesktopCommands();
 
-  const navItems = useMemo<readonly BottomNavItem[]>(() => {
-    const resolved = resolveHubItems(items, {
-      panels: [...leftPanels, ...rightPanels],
-      commands,
-      activeLeftPanel,
-      activeRightPanel,
-      badges
-    });
-    return resolved.map((entry) => ({
+  const resolved = useMemo(
+    () =>
+      resolveHubItems(items, {
+        panels: [...leftPanels, ...rightPanels],
+        commands,
+        activeLeftPanel,
+        activeRightPanel,
+        badges
+      }),
+    [items, leftPanels, rightPanels, commands, activeLeftPanel, activeRightPanel, badges]
+  );
+
+  const navItems = useMemo<readonly BottomNavItem[]>(
+    () =>
+      resolved.map((entry) => ({
       key: entry.key,
       label: entry.label,
       icon: <PanelIcon name={entry.icon} className="size-5" />,
-      active: entry.active,
+      // Panel actives come from the resolver; menu and command slots light up
+      // while their overlay is the topmost surface.
+      active:
+        entry.target.kind === "menu"
+          ? menuOpen
+          : entry.target.kind === "command"
+            ? entry.target.id === activeCommandId
+            : entry.active,
       badge: entry.badge,
       // Commands are actions (New Note), not destinations — they get the
       // primary chip so they read as "do this" rather than "go here."
@@ -67,20 +93,19 @@ export function PhoneHub({
         onLongPress && entry.target.kind !== "menu"
           ? () => onLongPress(entry.target)
           : undefined
-    }));
-  }, [
-    items,
-    leftPanels,
-    rightPanels,
-    commands,
-    activeLeftPanel,
-    activeRightPanel,
-    badges,
-    onSelectPanel,
-    onRunCommand,
-    onOpenMenu,
-    onLongPress
-  ]);
+      })),
+    [resolved, menuOpen, activeCommandId, onSelectPanel, onRunCommand, onOpenMenu, onLongPress]
+  );
+
+  // The popup anchors to the New note slot's rendered position, so it stays
+  // over its button even after hub customization or an invalid pinned target.
+  const newNoteIndex = resolved.findIndex(
+    (entry) => entry.target.kind === "command" && entry.target.id === "new-note"
+  );
+  const anchorPercent =
+    newNoteIndex >= 0 && resolved.length > 0
+      ? ((newNoteIndex + 0.5) / resolved.length) * 100
+      : 50;
 
   // A five-slot bar wedged between the keyboard and the line being typed is
   // worse than no bar: it eats the last rows of the note and none of its
@@ -88,5 +113,17 @@ export function PhoneHub({
   // pushed up, so the editor keeps the space.
   if (keyboardInset > 0) return null;
 
-  return <BottomNav label="Primary navigation" items={navItems} />;
+  return (
+    <div className="relative shrink-0">
+      <NewNoteMenu
+        open={newNoteMenu.open}
+        anchorPercent={anchorPercent}
+        recentNote={newNoteMenu.recentNote}
+        onCreate={newNoteMenu.onCreate}
+        onOpenRecent={newNoteMenu.onOpenRecent}
+        onDismiss={newNoteMenu.onDismiss}
+      />
+      <BottomNav label="Primary navigation" items={navItems} />
+    </div>
+  );
 }

@@ -276,6 +276,45 @@ describe("usePhoneNavigation overlays", () => {
     expect(nav().depth).toBe(1);
   });
 
+  it("showOverlay swaps an open overlay in place instead of stacking it", async () => {
+    const nav = await renderNav("/vault");
+    await act(async () => nav().push({ kind: "tab", tabId: "editor:a:b" }));
+    await act(async () => nav().showOverlay({ kind: "navigation" }));
+
+    await act(async () => nav().showOverlay({ kind: "new-note" }));
+
+    // The navigation entry was replaced, not pushed over: depth is unchanged
+    // and one Back lands on the tab, never on the stale overlay.
+    expect(nav().overlay).toEqual({ kind: "new-note" });
+    expect(nav().depth).toBe(2);
+    await act(async () => nav().back());
+    expect(nav().overlay).toBeNull();
+    expect(nav().route).toEqual({ kind: "tab", tabId: "editor:a:b" });
+  });
+
+  it("showOverlay pushes normally when no overlay is open", async () => {
+    const nav = await renderNav("/vault");
+    await act(async () => nav().push({ kind: "tab", tabId: "editor:a:b" }));
+
+    await act(async () => nav().showOverlay({ kind: "tabs" }));
+
+    expect(nav().overlay).toEqual({ kind: "tabs" });
+    expect(nav().depth).toBe(2);
+    await act(async () => nav().back());
+    expect(nav().overlay).toBeNull();
+    expect(nav().route).toEqual({ kind: "tab", tabId: "editor:a:b" });
+  });
+
+  it("showOverlay no-ops on the identical overlay", async () => {
+    const nav = await renderNav("/vault");
+    await act(async () => nav().showOverlay({ kind: "tabs" }));
+    const before = window.history.state;
+    await act(async () => nav().showOverlay({ kind: "tabs" }));
+
+    expect(nav().depth).toBe(1);
+    expect(window.history.state).toBe(before);
+  });
+
   it("falls back to Files with no overlay on a foreign popped state", async () => {
     const nav = await renderNav("/vault");
     await act(async () => nav().openOverlay({ kind: "tabs" }));

@@ -15,11 +15,14 @@ Panel and command options continue to come from the contribution registries. The
 - Mobile cold launch and workspace change show Files even when tabs are restored; background/resume does not reset the route.
 - Opening files, wiki links, search results, extension-driven notes, or tabs adds visit history; Back revisits available entries and eventually reaches Files without closing tabs.
 - Renamed or closed historical tabs are reconciled without trapping navigation.
-- The header hamburger is removed. Always-visible Back and Forward controls traverse content and overlay history and clearly disable at their boundaries.
-- The header location is a rounded breadcrumb pill that keeps the current file visible at the right edge, fades clipped ancestors on the left, and opens a compact outside-dismissible path bubble with native horizontal drag/scroll.
+- The header hamburger is removed. The header owns always-visible Back and Forward controls that traverse content and overlay history and clearly disable at their boundaries; `PhoneHeader`/`ActionItemsMenu` also support an alternate menu presentation behind optional props (not enabled — a history-backed menu overlay would truncate Forward).
+- The header location is a rounded breadcrumb pill that centers while the path fits, right-anchors once clipped ancestors overflow (fading them at the left), and opens a compact outside-dismissible path bubble with native horizontal drag/scroll.
 - Android system Back and visible Back dismiss the topmost menu/drawer/sheet before navigating content history; at Files root normal platform behavior remains.
 - The bottom Menu opens the contribution-driven navigation drawer from the right.
-- Header `…` opens an anchored Action items menu. Outside tap/Escape closes it; selecting an available item opens its right panel from the right.
+- Header `…` opens an anchored Action items menu listing Saved versions plus the right-panel contributions. Outside tap/Escape closes it; selecting an available item opens its right panel from the right. Menus support arrow/Home/End keyboard navigation, and both Saved versions entry points clear any note-specific filter.
+- Peer surfaces never stack when launched directly: a direct launcher for the drawer, tab switcher, action menu, New note popup, or a content-parented inspector replaces the current overlay in place, so Back lands on content rather than resurrecting a stale surface. Switching away from an actions-parented inspector does not collapse its two-entry drill-in; the actions → inspector drill-in is the explicit exception and pushes a second entry.
+- Hub slots toggle their surface: a visible left panel returns to prior content, an open right-panel inspector closes, and Menu/New note close their drawer or popup.
+- The New note hub slot opens a compact anchored popup offering Create new note (the canonical Explorer create flow over Files) and Open most recent note (the last open editor `.md`, reopening its existing tab rather than duplicating).
 - The inspector drawer starts below the phone header, ends above the bottom navigation/safe area, and outside tap closes the complete inspector flow. Its Back control returns to the Action items menu.
 - Selecting a right-panel shortcut directly from the bottom navigation opens the same inspector and Back returns to the prior content route.
 - Files folder expansion, selection, and scroll state survive opening a document and returning.

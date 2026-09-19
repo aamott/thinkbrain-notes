@@ -7,11 +7,12 @@ import { cn } from "../../lib/utils";
 /**
  * Browser-style location pill for the phone header.
  *
- * The pill's crumb row is right-aligned (`w-max` inside `justify-end`) so the
- * current file is always the visible end and clipped ancestors fall off the
- * left — where a gradient fade signals there is more. Tapping opens a compact
- * bubble with the same path in a natively scrollable row (touch drag, no
- * pointer physics), opened scrolled right so the file shows first.
+ * The pill's crumb row centers while the whole path fits; once measured
+ * overflow kicks in it right-anchors instead, so the current file stays the
+ * visible end and clipped ancestors fall off the left — where a gradient fade
+ * signals there is more. Tapping opens a compact bubble with the same path in
+ * a natively scrollable row (touch drag, no pointer physics), opened scrolled
+ * right so the file shows first.
  */
 export function PhoneBreadcrumb({ segments }: { readonly segments: readonly string[] }) {
   const [open, setOpen] = useState(false);
@@ -91,13 +92,19 @@ export function PhoneBreadcrumb({ segments }: { readonly segments: readonly stri
         onClick={() => setOpen((v) => !v)}
       >
         <div ref={viewportRef} className="relative min-w-0 flex-1 overflow-hidden">
-          <div ref={rowRef} className="flex w-max min-w-full items-center justify-end">
+          <div
+            ref={rowRef}
+            className={cn(
+              "relative flex w-max items-center",
+              overflowed ? "left-full -translate-x-full" : "left-1/2 -translate-x-1/2"
+            )}
+          >
             {crumbs.map(crumb)}
           </div>
           {overflowed && (
             <span
               aria-hidden="true"
-              className="pointer-events-none absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-surface to-transparent"
+              className="pointer-events-none absolute inset-y-0 left-0 w-4 bg-gradient-to-r from-surface to-transparent"
             />
           )}
         </div>

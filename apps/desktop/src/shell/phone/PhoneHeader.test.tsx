@@ -3,7 +3,6 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { NOT_RECORDING } from "../../sync/historyTypes";
 import { PhoneHeader } from "./PhoneHeader";
 
 let root: Root | null = null;
@@ -19,12 +18,10 @@ afterEach(async () => {
 const base = {
   breadcrumbs: ["Vault", "Files"],
   tabCount: 0,
-  syncStatus: NOT_RECORDING,
   onBack: () => {},
   onForward: () => {},
   onOpenTabs: () => {},
-  onOpenInspector: () => {},
-  onOpenSyncPanel: () => {}
+  onOpenInspector: () => {}
 };
 
 const render = async (props: Partial<Parameters<typeof PhoneHeader>[0]> = {}) => {
@@ -73,6 +70,14 @@ describe("PhoneHeader", () => {
 
     expect(onBack).toHaveBeenCalledOnce();
     expect(onForward).toHaveBeenCalledOnce();
+  });
+
+  it("omits both history buttons under showHistoryControls={false} but keeps the pill", async () => {
+    await render({ showHistoryControls: false });
+
+    expect(button("Back")).toBeNull();
+    expect(button("Forward")).toBeNull();
+    expect(container?.querySelector('[aria-label="Current location"]')).not.toBeNull();
   });
 
   it("feeds the location pill its breadcrumb segments", async () => {

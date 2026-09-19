@@ -29,6 +29,7 @@ export type PhoneOverlay =
   | { readonly kind: "navigation" }
   | { readonly kind: "tabs" }
   | { readonly kind: "actions" }
+  | { readonly kind: "new-note" }
   | { readonly kind: "inspector"; readonly panel: RightPanel; readonly parent: "actions" | "content" };
 
 export interface PhoneNavigation {
@@ -43,6 +44,8 @@ export interface PhoneNavigation {
   readonly replace: (route: PhoneRoute) => void;
   /** Pushes the same route with `overlay` on top. */
   readonly openOverlay: (overlay: PhoneOverlay) => void;
+  /** Opens over content, or swaps the currently open overlay in place. */
+  readonly showOverlay: (overlay: PhoneOverlay) => void;
   /** Pops the overlay; `wholeFlow` skips the actions entry under an inspector. */
   readonly dismissOverlay: (wholeFlow?: boolean) => void;
   readonly back: () => void;
@@ -222,6 +225,31 @@ export function usePhoneNavigation(workspaceRoot: string | null): PhoneNavigatio
     [workspaceRoot]
   );
 
+  // Peer surfaces (menu, drawer, tabs, new-note, content-parented inspector)
+  // never stack: switching replaces the open overlay's entry in place so Back
+  // returns straight to content instead of resurrecting the stale surface.
+  const showOverlay = useCallback(
+    (next: PhoneOverlay) => {
+      const base = entryRef.current;
+      if (sameOverlay(base.overlay, next)) return;
+      if (base.overlay === null) {
+        const nextDepth = base.depth + 1;
+        const state = navState(workspaceRoot, base.route, next, nextDepth);
+        window.history.pushState(state, "");
+        entryRef.current = state;
+        setEntry(state);
+        tipRef.current = nextDepth;
+        setTip(nextDepth);
+        return;
+      }
+      const state = navState(workspaceRoot, base.route, next, base.depth);
+      window.history.replaceState(state, "");
+      entryRef.current = state;
+      setEntry(state);
+    },
+    [workspaceRoot]
+  );
+
   const dismissOverlay = useCallback((wholeFlow = false) => {
     const current = entryRef.current;
     // An inspector drilled out of the actions menu sits two entries deep:
@@ -253,10 +281,11 @@ export function usePhoneNavigation(workspaceRoot: string | null): PhoneNavigatio
       push,
       replace,
       openOverlay,
+      showOverlay,
       dismissOverlay,
       back,
       forward,
     }),
-    [route, overlay, depth, effectiveTip, push, replace, openOverlay, dismissOverlay, back, forward]
+    [route, overlay, depth, effectiveTip, push, replace, openOverlay, showOverlay, dismissOverlay, back, forward]
   );
 }

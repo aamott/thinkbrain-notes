@@ -1,3 +1,5 @@
+import { ArrowLeft, ArrowRight } from "lucide-react";
+
 import { useDismissable } from "@thinkbrain/ui";
 
 import type { RightPanel } from "../shellTypes";
@@ -6,6 +8,8 @@ import {
   type RightPanelContext
 } from "../../panels/panelRegistryModel";
 import { PanelIcon } from "../panelIcons";
+import { PhoneMenuRow } from "./PhoneMenuRow";
+import { handlePhoneMenuKeyDown } from "./phoneMenuKeyboard";
 import { cn } from "../../lib/utils";
 
 // The outside-dismiss layer and the menu are bounded between the phone header
@@ -16,9 +20,10 @@ const BOUNDS =
 
 /**
  * The phone's action-items menu — the compact dropdown the header `…` opens,
- * listing every right-panel contribution (outline, properties, backlinks,
- * extension panels) in registry order. This is the drill-in surface for the
- * right-side inspector drawer: choosing an entry opens that panel's inspector.
+ * listing Saved versions plus every right-panel contribution (outline,
+ * properties, backlinks, extension panels) in registry order. This is the
+ * drill-in surface for the right-side inspector drawer: choosing an entry
+ * opens that panel's inspector.
  *
  * It is intentionally a small anchored menu, not a drawer or bottom sheet:
  * a menu is a quick pick that closes on choice, which is exactly the shape
@@ -33,6 +38,8 @@ export function ActionItemsMenu({
   open,
   rootPath,
   documentContents,
+  historyControls,
+  onOpenSavedVersions,
   onDismiss,
   onSelect
 }: {
@@ -40,6 +47,14 @@ export function ActionItemsMenu({
   readonly rootPath: string | null;
   /** Markdown contents of the active editor tab, when its document is ready. */
   readonly documentContents: string | null;
+  /** Optional Back/Forward rows; header placement keeps them out of the menu. */
+  readonly historyControls?: {
+    readonly canGoBack: boolean;
+    readonly canGoForward: boolean;
+    readonly onBack: () => void;
+    readonly onForward: () => void;
+  };
+  readonly onOpenSavedVersions: () => void;
   /** Outside tap or Escape. */
   readonly onDismiss: () => void;
   readonly onSelect: (panel: RightPanel) => void;
@@ -67,32 +82,42 @@ export function ActionItemsMenu({
         ref={containerRef}
         role={open ? "menu" : undefined}
         aria-label="Action items"
+        onKeyDown={handlePhoneMenuKeyDown}
         className={cn(
           "absolute top-0 right-2 max-h-full w-60 overflow-y-auto rounded-medium border border-border bg-surface py-1 text-foreground shadow-panel"
         )}
       >
+        {historyControls && (
+          <>
+            <PhoneMenuRow
+              icon={<ArrowLeft aria-hidden="true" className="size-4" />}
+              label="Back"
+              disabled={!historyControls.canGoBack}
+              onSelect={historyControls.onBack}
+            />
+            <PhoneMenuRow
+              icon={<ArrowRight aria-hidden="true" className="size-4" />}
+              label="Forward"
+              disabled={!historyControls.canGoForward}
+              onSelect={historyControls.onForward}
+            />
+          </>
+        )}
+        <PhoneMenuRow
+          icon={<PanelIcon name="history" />}
+          label="Saved versions"
+          onSelect={onOpenSavedVersions}
+        />
         {panels.map((entry) => {
           const available = entry.availability?.(context) ?? true;
           return (
-            <button
+            <PhoneMenuRow
               key={entry.id}
-              type="button"
-              role="menuitem"
+              icon={<PanelIcon name={entry.icon} />}
+              label={entry.label}
               disabled={!available}
-              aria-label={entry.label}
-              className={cn(
-                "flex min-h-11 w-full items-center gap-3 bg-transparent border-0 px-4 py-2 text-left text-sm cursor-pointer tn-focus-ring",
-                available
-                  ? "text-foreground hover:bg-muted"
-                  : "cursor-not-allowed text-muted-foreground opacity-60"
-              )}
-              onClick={() => onSelect(entry.id)}
-            >
-              <span className="inline-flex shrink-0 [&>svg]:size-4">
-                <PanelIcon name={entry.icon} />
-              </span>
-              <span className="min-w-0 flex-1 truncate">{entry.label}</span>
-            </button>
+              onSelect={() => onSelect(entry.id)}
+            />
           );
         })}
       </div>
