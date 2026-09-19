@@ -185,11 +185,10 @@ export function usePhoneNavigation(workspaceRoot: string | null): PhoneNavigatio
     return () => window.removeEventListener("popstate", onPop);
   }, [workspaceRoot]);
 
-  const push = useCallback(
-    (next: PhoneRoute) => {
-      if (sameRoute(entryRef.current.route, next) && entryRef.current.overlay === null) return;
+  const pushEntry = useCallback(
+    (nextRoute: PhoneRoute, nextOverlay: PhoneOverlay | null) => {
       const nextDepth = entryRef.current.depth + 1;
-      const state = navState(workspaceRoot, next, null, nextDepth);
+      const state = navState(workspaceRoot, nextRoute, nextOverlay, nextDepth);
       window.history.pushState(state, "");
       entryRef.current = state;
       setEntry(state);
@@ -198,6 +197,14 @@ export function usePhoneNavigation(workspaceRoot: string | null): PhoneNavigatio
       setTip(nextDepth);
     },
     [workspaceRoot]
+  );
+
+  const push = useCallback(
+    (next: PhoneRoute) => {
+      if (sameRoute(entryRef.current.route, next) && entryRef.current.overlay === null) return;
+      pushEntry(next, null);
+    },
+    [pushEntry]
   );
 
   const replace = useCallback(
@@ -214,15 +221,9 @@ export function usePhoneNavigation(workspaceRoot: string | null): PhoneNavigatio
     (next: PhoneOverlay) => {
       const base = entryRef.current;
       if (sameOverlay(base.overlay, next)) return;
-      const nextDepth = base.depth + 1;
-      const state = navState(workspaceRoot, base.route, next, nextDepth);
-      window.history.pushState(state, "");
-      entryRef.current = state;
-      setEntry(state);
-      tipRef.current = nextDepth;
-      setTip(nextDepth);
+      pushEntry(base.route, next);
     },
-    [workspaceRoot]
+    [pushEntry]
   );
 
   // Peer surfaces (menu, drawer, tabs, new-note, content-parented inspector)
@@ -233,13 +234,7 @@ export function usePhoneNavigation(workspaceRoot: string | null): PhoneNavigatio
       const base = entryRef.current;
       if (sameOverlay(base.overlay, next)) return;
       if (base.overlay === null) {
-        const nextDepth = base.depth + 1;
-        const state = navState(workspaceRoot, base.route, next, nextDepth);
-        window.history.pushState(state, "");
-        entryRef.current = state;
-        setEntry(state);
-        tipRef.current = nextDepth;
-        setTip(nextDepth);
+        pushEntry(base.route, next);
         return;
       }
       const state = navState(workspaceRoot, base.route, next, base.depth);
@@ -247,7 +242,7 @@ export function usePhoneNavigation(workspaceRoot: string | null): PhoneNavigatio
       entryRef.current = state;
       setEntry(state);
     },
-    [workspaceRoot]
+    [pushEntry, workspaceRoot]
   );
 
   const dismissOverlay = useCallback((wholeFlow = false) => {

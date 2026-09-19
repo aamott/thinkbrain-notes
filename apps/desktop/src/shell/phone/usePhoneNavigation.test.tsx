@@ -401,6 +401,23 @@ describe("usePhoneNavigation forward", () => {
     expect(nav().route).toEqual({ kind: "tab", tabId: "editor:a:second" });
   });
 
+  it.each(["openOverlay", "showOverlay"] as const)(
+    "%s after Back truncates the forward branch",
+    async (method) => {
+      const nav = await renderNav("/vault");
+      await act(async () => nav().push({ kind: "tab", tabId: "editor:a:first" }));
+      await act(async () => nav().back());
+      expect(nav().canGoForward).toBe(true);
+
+      await act(async () => nav()[method]({ kind: "tabs" }));
+
+      expect(nav().overlay).toEqual({ kind: "tabs" });
+      expect(nav().canGoForward).toBe(false);
+      await act(async () => nav().forward());
+      expect(nav().overlay).toEqual({ kind: "tabs" });
+    }
+  );
+
   it("a foreign popped state clears Forward", async () => {
     const nav = await renderNav("/vault");
     await act(async () => nav().push({ kind: "tab", tabId: "editor:a:b" }));
