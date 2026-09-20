@@ -243,29 +243,22 @@ point tuning a layout for a workspace that cannot be opened.
   vaults beneath app data. Native managed-vault commands, capability-gated
   UI, clone-first onboarding, and one-time uninstall notice all shipped.
   `mobile/done-android_workspace_access-high-hard.md`
-- 🟨 Git clone as the mobile way in, split 2026-08-27 against
-  `docs/superpowers/specs/2026-08-27-android-git-access-design.md` and split
-  once more 2026-08-28. **A public repository now clones and opens on a
-  device.** Done: the device spike
-  (`mobile/done-device_git_clone_spike-high-easy.md`), TLS initialisation
-  (`mobile/done-android_tls_platform_verifier-high-med.md`), the desktop
-  keyring v3→v4 migration
-  (`auto-sync/pending-keyring_v4_migration-high-med.md`), and an import that no
-  longer deletes a vault when only its push fails
-  (`mobile/pending-android_anonymous_clone-high-med.md`). Remaining, and now
-  unblocked: Android credentials for **private** repositories
-  (`mobile/pending-mobile_git_access-high-hard.md`) and, separately, when a
-  sync runs at all (`mobile/pending-mobile_sync_triggers-high-med.md`) —
-  Android's process freezing makes the desktop sweeper's idle timers actively
-  wrong, not merely absent. Storage decision confirmed: keyring v4 plus
-  `android-native-keyring-store`, not a bespoke Kotlin plugin.
+- ✅ Git clone as the mobile way in — public and private managed imports run the
+  shared desktop worker on Android. TLS initialisation, keyring v4, the
+  Android-native credential store, non-destructive one-way imports, and mobile
+  sync triggers are shipped. A private clone and required fetch/merge/push were
+  verified end to end on Android on 2026-09-20, including editor autosave,
+  process-restart credential read-back, and credential deletion. Token custody
+  and the exact run are recorded in
+  `docs/superpowers/specs/2026-08-27-android-git-access-design.md`.
 - 🟨 Phone shell chrome — headless shell state, form-factor gate, header,
   drawer, shortcut hub, tab-switcher and inspector sheets. Built and green
   under test; awaiting a pass on an Android device —
   `mobile/wip-phone_shell_chrome-med-hard.md`
-- 🟨 Files-first navigation — Files is the mobile home; browser-backed Back
-  history, right-edge navigation, an Action items menu, bounded inspectors, and
-  a shared right-panel close control — `mobile/wip-files_first_navigation-high-hard.md`
+- ✅ Files-first navigation — Files is the mobile home; browser-backed Back and
+  Forward history, right-edge navigation, Action items and New note menus,
+  bounded inspectors, and shared right-panel close controls shipped and were
+  verified on Android.
 - 🟨 Phone surface fixes — popout width, bottom-edge contention, keyboard
   inset, `pointer-coarse:` sizing. Built and green under test; the keyboard
   inset is the part no emulator check can settle —

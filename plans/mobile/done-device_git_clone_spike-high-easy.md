@@ -2,10 +2,9 @@
 
 **Status:** 🟩 done · **Urgency:** high · **Difficulty:** easy
 
-> Spike. The output is an answer, not code we keep. Gates
-> `pending-mobile_git_access-high-hard.md` and
-> `../auto-sync/pending-keyring_v4_migration-high-med.md`.
-> Design: `docs/superpowers/specs/2026-08-27-android-git-access-design.md`.
+> Spike. The output is an answer, not code we keep. It gated the keyring
+> migration and private Android Git verification recorded in
+> `docs/superpowers/specs/2026-08-27-android-git-access-design.md`.
 
 ## Why this comes first
 

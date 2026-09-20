@@ -2,9 +2,8 @@
 
 **Status:** 🟨 wip · **Urgency:** high · **Difficulty:** med
 
-> Desktop-only groundwork, pulled out of
-> `../mobile/pending-mobile_git_access-high-hard.md` so that a keychain
-> migration failure and an Android device failure stay distinguishable.
+> Desktop-only groundwork, pulled out of the Android Git access design so that a
+> keychain migration failure and an Android device failure stay distinguishable.
 > Design: `docs/superpowers/specs/2026-08-27-android-git-access-design.md`.
 
 ## Why
@@ -219,6 +218,6 @@ in practice.
 
 ## Not in scope
 
-Android. No `cfg(target_os = "android")` dependency is added here — that is
-`../mobile/pending-mobile_git_access-high-hard.md`, and it should be a small
-change once this lands.
+Android. No `cfg(target_os = "android")` dependency was added here; the Android
+store and its device verification landed separately and are recorded in
+`docs/superpowers/specs/2026-08-27-android-git-access-design.md`.

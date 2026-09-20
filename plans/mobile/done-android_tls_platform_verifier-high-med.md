@@ -4,8 +4,8 @@
 
 > Found by running the app, 2026-08-27. See
 > `done-device_git_clone_spike-high-easy.md` for the session that turned it
-> up. **This gates every network story on Android**, including
-> `pending-mobile_git_access-high-hard.md`.
+> up. **This gated every network story on Android**, including the private Git
+> verification recorded in `docs/superpowers/specs/2026-08-27-android-git-access-design.md`.
 
 ## What happens
 
