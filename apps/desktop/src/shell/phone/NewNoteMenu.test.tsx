@@ -29,8 +29,10 @@ const menu = (overrides: Record<string, unknown> = {}): React.ReactElement => (
     open
     anchorPercent={50}
     recentNote={{ title: "Shopping" }}
+    actions={[]}
     onCreate={() => undefined}
     onOpenRecent={() => undefined}
+    onSelectAction={() => undefined}
     onDismiss={() => undefined}
     {...overrides}
   />
@@ -127,6 +129,79 @@ describe("NewNoteMenu", () => {
     expect(document.activeElement).toBe(row(host, "Open most recent note"));
   });
 
+  it("renders contributed actions between Create and Open most recent, in order", async () => {
+    const host = await render(
+      menu({
+        actions: [
+          { id: "journal-calendar.today", label: "Today's journal", icon: "notebook-pen", disabled: false },
+          { id: "sample.extra", label: "Extra", icon: "plus", disabled: false }
+        ]
+      })
+    );
+
+    const labels = [...(menuOf(host)?.querySelectorAll('[role="menuitem"]') ?? [])].map((el) =>
+      el.getAttribute("aria-label")
+    );
+    expect(labels).toEqual([
+      "Create new note",
+      "Today's journal",
+      "Extra",
+      "Open most recent note"
+    ]);
+  });
+
+  it("fires onSelectAction with the action id, and disabled rows cannot execute", async () => {
+    const onSelectAction = vi.fn();
+    const host = await render(
+      menu({
+        onSelectAction,
+        actions: [
+          { id: "a.enabled", label: "Enabled", icon: "plus", disabled: false },
+          { id: "a.blocked", label: "Blocked", icon: "plus", disabled: true }
+        ]
+      })
+    );
+
+    await act(async () => row(host, "Enabled")?.click());
+    expect(onSelectAction).toHaveBeenCalledWith("a.enabled");
+
+    const blocked = row(host, "Blocked");
+    expect(blocked?.disabled).toBe(true);
+    await act(async () => blocked?.click());
+    expect(onSelectAction).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips a disabled contributed row during arrow, Home, and End navigation", async () => {
+    const host = await render(
+      menu({
+        actions: [{ id: "a.blocked", label: "Blocked", icon: "plus", disabled: true }]
+      })
+    );
+    const menuEl = menuOf(host)!;
+    await act(async () => (document.activeElement as HTMLElement | null)?.blur());
+
+    // Enabled order is Create → Open most recent: Down twice lands on recent,
+    // stepping over the disabled contributed row.
+    await act(async () =>
+      menuEl.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }))
+    );
+    expect(document.activeElement).toBe(row(host, "Create new note"));
+    await act(async () =>
+      menuEl.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }))
+    );
+    expect(document.activeElement).toBe(row(host, "Open most recent note"));
+
+    // Home/End land on the enabled ends — the disabled row is never a stop.
+    await act(async () =>
+      menuEl.dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true }))
+    );
+    expect(document.activeElement).toBe(row(host, "Create new note"));
+    await act(async () =>
+      menuEl.dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true }))
+    );
+    expect(document.activeElement).toBe(row(host, "Open most recent note"));
+  });
+
   it("anchors the popup to the hub slot's rendered position", async () => {
     const host = await render(menu({ anchorPercent: 30 }));
     const el = menuOf(host) as HTMLElement;
@@ -138,8 +213,10 @@ describe("NewNoteMenu", () => {
         open
         anchorPercent={30}
         recentNote={null}
+        actions={[]}
         onCreate={() => undefined}
         onOpenRecent={() => undefined}
+        onSelectAction={() => undefined}
         onDismiss={() => undefined}
       />
     );

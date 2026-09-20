@@ -62,6 +62,21 @@ export const journalManifest: ExtensionManifest = {
   }
 };
 
+/**
+ * The journal's New-note popup contribution: a single row that runs the
+ * canonical `today` command. Descriptor data only — the command keeps owning
+ * the behavior, including its lazy activation.
+ */
+export const journalMobileNewNoteActions = [
+  {
+    id: "today",
+    commandId: "today",
+    label: "Today's journal",
+    icon: "notebook-pen",
+    requiresWorkspace: true
+  }
+] as const;
+
 /** Default matches D64's `root`; used until the setting is read. */
 const DEFAULT_ROOT = "journal";
 

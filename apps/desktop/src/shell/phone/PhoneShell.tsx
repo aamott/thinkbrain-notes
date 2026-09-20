@@ -477,6 +477,7 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
           newNoteMenu={{
             open: newNoteOpen,
             recentNote,
+            workspaceAvailable: shell.restoredWorkspacePath !== null,
             onCreate: createNewNote,
             onOpenRecent: openRecentNote,
             onDismiss: () => navigation.dismissOverlay()

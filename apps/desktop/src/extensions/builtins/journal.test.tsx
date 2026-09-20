@@ -12,11 +12,13 @@ vi.mock("../../native/commands", () => ({
 import {
   activateJournal,
   journalManifest,
+  journalMobileNewNoteActions,
   JOURNAL_SEARCH_LIMIT,
   searchJournalEntries,
   journalFacetValues,
   journalMetadataMatches
 } from "./journal";
+import { builtInExtensions } from "./index";
 import { createDesktopExtensionHost } from "../desktopExtensionHost";
 import { createDesktopTabRegistry } from "../../tabs/tabRegistry";
 import { desktopCommandRegistry } from "../../commands/commandRegistry";
@@ -86,6 +88,24 @@ describe("journal built-in", () => {
       "onCommand:today",
       "onCommand:open-calendar"
     ]);
+  });
+
+  it("declares exactly one New-note action, pointing at the today command", () => {
+    expect(journalMobileNewNoteActions).toHaveLength(1);
+    expect(journalMobileNewNoteActions[0]).toEqual({
+      id: "today",
+      commandId: "today",
+      label: "Today's journal",
+      icon: "notebook-pen",
+      requiresWorkspace: true
+    });
+  });
+
+  it("wires the actions onto the journal descriptor bootstrap consumes", () => {
+    // The constant alone is dead code unless builtInExtensions carries it —
+    // bootstrap reads the descriptor, not this module.
+    const descriptor = builtInExtensions.find((ext) => ext.manifest.id === "journal-calendar");
+    expect(descriptor?.mobileNewNoteActions).toBe(journalMobileNewNoteActions);
   });
 
   it("registers the popout on the left, under a prefixed id", async () => {
