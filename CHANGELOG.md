@@ -3,7 +3,7 @@
 Newest first. Versions follow [semver](https://semver.org), except that before
 1.0 a minor bump may still change behaviour.
 
-## 0.3.0-beta.1 — 2026-09-20
+## 0.3.0-1 — 2026-09-20
 
 Prerelease for the mobile navigation, file viewer, and sync work merged since
 0.2.0.
