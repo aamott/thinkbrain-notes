@@ -11,9 +11,8 @@ import { expect, test } from "@playwright/test";
  * pass against it.
  *
  * Locators are pinned by role rather than by label alone. Several accessible
- * names are prefixes or substrings of others — "Navigation" is inside "Open
- * navigation" and "Primary navigation", "Document tools" names both the header
- * button and the sheet it opens — and `getByLabel` matches substrings.
+ * names overlap — "Navigation" also appears in "Primary navigation" — and
+ * `getByLabel` matches substrings.
  */
 
 test.describe("phone shell", () => {
@@ -27,19 +26,15 @@ test.describe("phone shell", () => {
     await expect(page.getByRole("navigation", { name: "Primary navigation" })).toBeVisible();
   });
 
-  test("opens the same drawer from the header and the hub", async ({ page }) => {
+  test("opens and dismisses the navigation drawer from the hub", async ({ page }) => {
     await page.goto("/");
 
     const drawer = page.getByRole("dialog", { name: "Navigation" });
-
-    await page.getByRole("button", { name: "Open navigation" }).tap();
+    await page.getByRole("button", { name: "Menu", exact: true }).tap();
     await expect(drawer).toBeVisible();
 
     await page.keyboard.press("Escape");
     await expect(drawer).toHaveCount(0);
-
-    await page.getByRole("button", { name: "Menu", exact: true }).tap();
-    await expect(drawer).toBeVisible();
   });
 
   test("reaches the inspectors that the desktop hides on narrow screens", async ({ page }) => {
@@ -47,10 +42,13 @@ test.describe("phone shell", () => {
 
     await page.getByRole("button", { name: "Document tools" }).tap();
 
-    const sheet = page.getByRole("dialog", { name: "Document tools" });
-    await expect(sheet).toBeVisible();
-    await expect(sheet.getByRole("tab", { name: "Outline" })).toBeVisible();
-    await expect(sheet.getByRole("tab", { name: "Properties" })).toBeVisible();
+    const menu = page.getByRole("menu", { name: "Action items" });
+    await expect(menu.getByRole("menuitem", { name: "Properties" })).toBeVisible();
+    await menu.getByRole("menuitem", { name: "Outline" }).tap();
+
+    const inspector = page.getByRole("dialog", { name: "Inspector" });
+    await expect(inspector).toBeVisible();
+    await expect(inspector.getByRole("heading", { name: "Outline" })).toBeVisible();
   });
 
   test("switches tabs from the header count", async ({ page }) => {
