@@ -23,6 +23,7 @@ import { NoteTitleRow } from "./NoteTitleRow";
 import { PhoneHub } from "./PhoneHub";
 import { TabSwitcherSheet } from "./TabSwitcherSheet";
 import { useHubItems } from "./useHubItems";
+import { WorkspaceSelectorProvider } from "../../workspace/WorkspaceSelectorPortal";
 
 /** Only Markdown editor tabs count as notes — code/media/settings don't. */
 const isNoteTab = (tab: DesktopTab | null | undefined): tab is DesktopTab =>
@@ -393,175 +394,176 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
     // and `hidden` leaves it programmatically scrollable — Android/WebView
     // focus-scroll can shift the whole shell and strand it (header off-screen,
     // black gap below). `clip` clips identically but cannot scroll.
-    <main
-      className="relative flex h-full min-w-0 flex-col overflow-clip bg-background text-foreground [--tn-shell-popout-left:0px]"
-      aria-label="ThinkBrain mobile workspace"
-    >
-      <PhoneHeader
-        breadcrumbs={breadcrumbs}
-        canGoBack={navigation.canGoBack}
-        canGoForward={navigation.canGoForward}
-        tabCount={shell.tabState.tabs.length}
-        onBack={navigation.back}
-        onForward={navigation.forward}
-        onOpenTabs={() => navigation.showOverlay({ kind: "tabs" })}
-        onOpenInspector={() => navigation.showOverlay({ kind: "actions" })}
-      />
-
-      <div className="relative flex min-h-0 flex-1 flex-col">
-        {/* Both branches stay mounted and trade `hidden`/`aria-hidden` instead
-            of unmounting: Explorer's expanded folders, selection and scroll —
-            and every other keepMounted panel — survive a trip into a note and
-            back, and the editor keeps its own state under a panel the same
-            way. The classes, not the `hidden` attribute alone, carry the
-            hiding because `display:flex` would override it. */}
-        <div
-          className={`min-h-0 flex-1 flex-col tn-slide-in-left ${route.kind === "tab" ? "hidden" : "flex"}`}
-          aria-hidden={route.kind === "tab"}
-        >
-          <LeftPopout
-            panel={popoutPanel}
-            rootPath={shell.restoredWorkspacePath}
-            explorerProps={explorerProps}
-            onReviewConflict={shell.reviewConflict}
-            versionsOf={shell.versionsOf}
-            onShowEverything={clearVersions}
-            onOpenSearchResult={openNote}
-          />
-        </div>
-        <div
-          className={`min-h-0 flex-1 flex-col ${route.kind === "tab" ? "flex" : "hidden"}`}
-          aria-hidden={route.kind !== "tab"}
-        >
-          {showNoteTitle && (
-            <NoteTitleRow
-              key={activePath}
-              relativePath={activePath}
-              onRename={shell.restoredWorkspacePath
-                ? (newPath) => shell.renameDocument(shell.restoredWorkspacePath!, activePath!, newPath)
-                : undefined}
-            />
-          )}
-          <TabContent
-            tab={shell.activeTab}
-            document={shell.activeDocument}
-            onChange={shell.updateDocument}
-            onSave={shell.saveDocument}
-            noteIndex={shell.noteIndex}
-            onOpenNote={openNote}
-            onReopenNote={shell.loadDocumentIntoView}
-            unsavedNoteContents={shell.unsavedNoteContents}
-          />
-        </div>
-      </div>
-
-      <PhoneHub
-        items={items}
-        activeLeftPanel={route.kind === "tab" ? null : popoutPanel}
-        // Only truthful while the inspector drawer is up: `rightPanel`
-        // outlives it, and a hub slot left lit over a dismissed inspector
-        // claims a surface is open.
-        activeRightPanel={inspectorPanel}
-        badges={shell.conflictBadges}
-        menuOpen={drawerOpen}
-        activeCommandId={newNoteOpen ? "new-note" : null}
-        newNoteMenu={{
-          open: newNoteOpen,
-          recentNote,
-          onCreate: createNewNote,
-          onOpenRecent: openRecentNote,
-          onDismiss: () => navigation.dismissOverlay()
-        }}
-        onSelectPanel={revealPanel}
-        onRunCommand={runCommand}
-        onOpenMenu={() =>
-          drawerOpen ? navigation.dismissOverlay() : navigation.showOverlay({ kind: "navigation" })
-        }
-        onLongPress={(target) => editHub(removeItem(items, target))}
-      />
-
-      {/* Three bottom chromes do not fit on a phone and the hub owns that edge,
-          so the bottom dock arrives as a sheet instead of a third band. */}
-      <BottomSheet
-        open={shell.bottomPanel !== null}
-        onDismiss={() => shell.updateBottomPanel(null)}
-        // Named for what it is rather than what it holds: the sheet wraps
-        // BottomPanel's own region, which already carries "Bottom panel", and
-        // a dialog echoing its only child's name reads twice to a screen reader.
-        label="Tools"
+    <WorkspaceSelectorProvider>
+      <main
+        className="relative flex h-full min-w-0 flex-col overflow-clip bg-background text-foreground [--tn-shell-popout-left:0px]"
+        aria-label="ThinkBrain mobile workspace"
       >
-        {/* Always mounted, matching InspectorSheet: `open` drives the slide,
-            so unmounting on dismiss would empty the sheet mid-animation.
-            Only `terminal` exists today; keep the last id if more arrive. */}
-        <BottomPanel
-          active={shell.bottomPanel ?? "terminal"}
-          onChange={shell.updateBottomPanel}
-          onClose={() => shell.updateBottomPanel(null)}
+        <PhoneHeader
+          breadcrumbs={breadcrumbs}
+          canGoBack={navigation.canGoBack}
+          canGoForward={navigation.canGoForward}
+          tabCount={shell.tabState.tabs.length}
+          onBack={navigation.back}
+          onForward={navigation.forward}
+          onOpenTabs={() => navigation.showOverlay({ kind: "tabs" })}
+          onOpenInspector={() => navigation.showOverlay({ kind: "actions" })}
         />
-      </BottomSheet>
 
-      <TabSwitcherSheet
-        open={tabsOpen}
-        tabs={shell.tabState.tabs}
-        activeTabId={shell.tabState.activeTabId}
-        documents={shell.documents}
-        onDismiss={() => navigation.dismissOverlay()}
-        onSelect={(tabId) => {
-          // Replacing the switcher's entry with the tab route dismisses the
-          // sheet and lands Back on the prior content in one step.
-          navigation.replace({ kind: "tab", tabId });
-        }}
-        onClose={(tabId) => shell.dispatchTabs({ type: "requestClose", tabId })}
-      />
+        <div className="relative flex min-h-0 flex-1 flex-col">
+          {/* Both branches stay mounted and trade `hidden`/`aria-hidden` instead
+              of unmounting: Explorer's expanded folders, selection and scroll —
+              and every other keepMounted panel — survive a trip into a note and
+              back, and the editor keeps its own state under a panel the same
+              way. The classes, not the `hidden` attribute alone, carry the
+              hiding because `display:flex` would override it. */}
+          <div
+            className={`min-h-0 flex-1 flex-col tn-slide-in-left ${route.kind === "tab" ? "hidden" : "flex"}`}
+            aria-hidden={route.kind === "tab"}
+          >
+            <LeftPopout
+              panel={popoutPanel}
+              rootPath={shell.restoredWorkspacePath}
+              explorerProps={explorerProps}
+              onReviewConflict={shell.reviewConflict}
+              versionsOf={shell.versionsOf}
+              onShowEverything={clearVersions}
+              onOpenSearchResult={openNote}
+            />
+          </div>
+          <div
+            className={`min-h-0 flex-1 flex-col ${route.kind === "tab" ? "flex" : "hidden"}`}
+            aria-hidden={route.kind !== "tab"}
+          >
+            {showNoteTitle && (
+              <NoteTitleRow
+                key={activePath}
+                relativePath={activePath}
+                onRename={shell.restoredWorkspacePath
+                  ? (newPath) => shell.renameDocument(shell.restoredWorkspacePath!, activePath!, newPath)
+                  : undefined}
+              />
+            )}
+            <TabContent
+              tab={shell.activeTab}
+              document={shell.activeDocument}
+              onChange={shell.updateDocument}
+              onSave={shell.saveDocument}
+              noteIndex={shell.noteIndex}
+              onOpenNote={openNote}
+              onReopenNote={shell.loadDocumentIntoView}
+              unsavedNoteContents={shell.unsavedNoteContents}
+            />
+          </div>
+        </div>
 
-      {/* The header `…` menu: every right-panel contribution in registry
-          order. Choosing one opens its inspector as a child of this menu, so
-          the inspector's Back returns here instead of to content. */}
-      <ActionItemsMenu
-        open={actionsOpen}
-        rootPath={shell.restoredWorkspacePath}
-        documentContents={visibleDocumentContents}
-        onOpenSavedVersions={openSavedVersions}
-        onDismiss={() => navigation.dismissOverlay()}
-        onSelect={(panel) => {
-          setRightPanel(panel);
-          navigation.openOverlay({ kind: "inspector", panel, parent: "actions" });
-        }}
-      />
+        <PhoneHub
+          items={items}
+          activeLeftPanel={route.kind === "tab" ? null : popoutPanel}
+          // Only truthful while the inspector drawer is up: `rightPanel`
+          // outlives it, and a hub slot left lit over a dismissed inspector
+          // claims a surface is open.
+          activeRightPanel={inspectorPanel}
+          badges={shell.conflictBadges}
+          menuOpen={drawerOpen}
+          activeCommandId={newNoteOpen ? "new-note" : null}
+          newNoteMenu={{
+            open: newNoteOpen,
+            recentNote,
+            onCreate: createNewNote,
+            onOpenRecent: openRecentNote,
+            onDismiss: () => navigation.dismissOverlay()
+          }}
+          onSelectPanel={revealPanel}
+          onRunCommand={runCommand}
+          onOpenMenu={() =>
+            drawerOpen ? navigation.dismissOverlay() : navigation.showOverlay({ kind: "navigation" })
+          }
+          onLongPress={(target) => editHub(removeItem(items, target))}
+        />
 
-      {/* Inspectors read live shell state, so a tab switched underneath an open
-          drawer re-renders it rather than stranding it on the previous note. */}
-      <InspectorSheet
-        open={inspectorPanel !== null}
-        panel={inspectorPanel ?? shell.rightPanel ?? "outline"}
-        rootPath={shell.restoredWorkspacePath}
-        documentContents={visibleDocumentContents}
-        // Scrim tap closes the whole flow — under the actions menu that skips
-        // the menu entry too; only the header Back steps one level.
-        onDismiss={() => navigation.dismissOverlay(true)}
-        onBack={navigation.back}
-      />
+        {/* Three bottom chromes do not fit on a phone and the hub owns that edge,
+            so the bottom dock arrives as a sheet instead of a third band. */}
+        <BottomSheet
+          open={shell.bottomPanel !== null}
+          onDismiss={() => shell.updateBottomPanel(null)}
+          // Named for what it is rather than what it holds: the sheet wraps
+          // BottomPanel's own region, which already carries "Bottom panel", and
+          // a dialog echoing its only child's name reads twice to a screen reader.
+          label="Tools"
+        >
+          {/* Always mounted, matching InspectorSheet: `open` drives the slide,
+              so unmounting on dismiss would empty the sheet mid-animation.
+              Only `terminal` exists today; keep the last id if more arrive. */}
+          <BottomPanel
+            active={shell.bottomPanel ?? "terminal"}
+            onChange={shell.updateBottomPanel}
+            onClose={() => shell.updateBottomPanel(null)}
+          />
+        </BottomSheet>
 
-      {/* Closing a dirty tab parks a request and waits for an answer. Without
-          this the phone's ✕ would do nothing at all, and the parked request
-          would make every later attempt on that tab a no-op too. */}
-      <TabCloseRequest shell={shell} />
+        <TabSwitcherSheet
+          open={tabsOpen}
+          tabs={shell.tabState.tabs}
+          activeTabId={shell.tabState.activeTabId}
+          documents={shell.documents}
+          onDismiss={() => navigation.dismissOverlay()}
+          onSelect={(tabId) => {
+            // Replacing the switcher's entry with the tab route dismisses the
+            // sheet and lands Back on the prior content in one step.
+            navigation.replace({ kind: "tab", tabId });
+          }}
+          onClose={(tabId) => shell.dispatchTabs({ type: "requestClose", tabId })}
+        />
 
-      <PhoneDrawer
-        open={drawerOpen}
-        activePanel={shell.leftPanel}
-        badges={shell.conflictBadges}
-        workspaceName={shell.workspaceName}
-        onDismiss={closeDrawer}
-        onSelectPanel={selectDrawerPanel}
-        onLongPressPanel={(panelId) => editHub(pinPanel(items, panelId))}
-        hubPanelIds={hubPanelIds}
-        hubFull={items.length >= MAX_HUB_ITEMS}
-        onOpenSettings={() => {
-          shell.openSettingsTab();
-          navigation.replace({ kind: "tab", tabId: "settings" });
-        }}
-      />
-    </main>
+        {/* The header `…` menu: every right-panel contribution in registry
+            order. Choosing one opens its inspector as a child of this menu, so
+            the inspector's Back returns here instead of to content. */}
+        <ActionItemsMenu
+          open={actionsOpen}
+          rootPath={shell.restoredWorkspacePath}
+          documentContents={visibleDocumentContents}
+          onOpenSavedVersions={openSavedVersions}
+          onDismiss={() => navigation.dismissOverlay()}
+          onSelect={(panel) => {
+            setRightPanel(panel);
+            navigation.openOverlay({ kind: "inspector", panel, parent: "actions" });
+          }}
+        />
+
+        {/* Inspectors read live shell state, so a tab switched underneath an open
+            drawer re-renders it rather than stranding it on the previous note. */}
+        <InspectorSheet
+          open={inspectorPanel !== null}
+          panel={inspectorPanel ?? shell.rightPanel ?? "outline"}
+          rootPath={shell.restoredWorkspacePath}
+          documentContents={visibleDocumentContents}
+          // Scrim tap closes the whole flow — under the actions menu that skips
+          // the menu entry too; only the header Back steps one level.
+          onDismiss={() => navigation.dismissOverlay(true)}
+          onBack={navigation.back}
+        />
+
+        {/* Closing a dirty tab parks a request and waits for an answer. Without
+            this the phone's ✕ would do nothing at all, and the parked request
+            would make every later attempt on that tab a no-op too. */}
+        <TabCloseRequest shell={shell} />
+
+        <PhoneDrawer
+          open={drawerOpen}
+          activePanel={shell.leftPanel}
+          badges={shell.conflictBadges}
+          onDismiss={closeDrawer}
+          onSelectPanel={selectDrawerPanel}
+          onLongPressPanel={(panelId) => editHub(pinPanel(items, panelId))}
+          hubPanelIds={hubPanelIds}
+          hubFull={items.length >= MAX_HUB_ITEMS}
+          onOpenSettings={() => {
+            shell.openSettingsTab();
+            navigation.replace({ kind: "tab", tabId: "settings" });
+          }}
+        />
+      </main>
+    </WorkspaceSelectorProvider>
   );
 }

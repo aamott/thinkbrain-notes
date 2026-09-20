@@ -6,6 +6,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { NativeWorkspaceAccessCapabilities, NativeWorkspaceSnapshot } from "../native/commands";
 import { WorkspaceExplorer, WorkspaceSelector } from "./WorkspaceExplorer";
+import { WorkspaceSelectorOutlet, WorkspaceSelectorProvider } from "./WorkspaceSelectorPortal";
 import { WorkspaceFileIcon } from "./WorkspaceFileIcon";
 import { workspaceDesktopApi, type WorkspaceDesktopApi } from "./workspaceAdapter";
 import { readWorkspaceSettings, type WorkspaceSettings } from "./workspaceSettings";
@@ -56,6 +57,7 @@ async function renderSelector(capabilities = desktopCapabilities) {
   await act(async () => {
     root?.render(
       <WorkspaceSelector
+        variant="panel"
         capabilities={capabilities}
         currentPath="/notes/current"
         paths={["/notes/previous", "/notes/current"]}
@@ -81,11 +83,14 @@ async function renderExplorer(
   const resolvedApi = { ...api, workspaceAccessCapabilities: async () => capabilities };
   await act(async () => {
     root?.render(
-      <WorkspaceExplorer
-        api={resolvedApi}
-        initialWorkspacePath={initialWorkspacePath}
-        recentWorkspacePaths={["/notes/previous"]}
-      />
+      <WorkspaceSelectorProvider>
+        <WorkspaceSelectorOutlet variant="panel" />
+        <WorkspaceExplorer
+          api={resolvedApi}
+          initialWorkspacePath={initialWorkspacePath}
+          recentWorkspacePaths={["/notes/previous"]}
+        />
+      </WorkspaceSelectorProvider>
     );
   });
 }
@@ -112,6 +117,15 @@ describe("WorkspaceExplorer presentation", () => {
     expect(markup[0]).toContain("lucide-file-text");
     expect(markup[4]).toContain("lucide-file");
     expect(new Set(markup).size).toBe(5);
+  });
+
+  it("portals the selector into the outlet instead of the explorer content", async () => {
+    await renderExplorer(workspaceDesktopApi);
+
+    const outlet = container?.querySelector('[data-workspace-selector-outlet="panel"]');
+    const explorer = container?.querySelector('section[aria-label="Workspace explorer"]');
+    expect(outlet?.querySelector('button[aria-haspopup="menu"]')).not.toBeNull();
+    expect(explorer?.querySelector('button[aria-haspopup="menu"]')).toBeNull();
   });
 
   it("uses a menu-shaped workspace selector that opens a new workspace without changing its source", async () => {
@@ -300,6 +314,7 @@ describe("WorkspaceExplorer presentation", () => {
     await act(async () => {
       root?.render(
         <WorkspaceSelector
+          variant="panel"
           capabilities={desktopCapabilities}
           currentPath="/notes/git-linked-vault"
           paths={["/notes/plain-notes", "/notes/git-linked-vault"]}
@@ -344,7 +359,12 @@ describe("WorkspaceExplorer presentation", () => {
       workspaceAccessCapabilities: () => Promise.reject(new Error("no such command"))
     };
     await act(async () => {
-      root?.render(<WorkspaceExplorer api={failing} recentWorkspacePaths={[]} />);
+      root?.render(
+        <WorkspaceSelectorProvider>
+          <WorkspaceSelectorOutlet variant="panel" />
+          <WorkspaceExplorer api={failing} recentWorkspacePaths={[]} />
+        </WorkspaceSelectorProvider>
+      );
     });
 
     const choose = container.querySelector<HTMLButtonElement>('[aria-label="Choose workspace"]');

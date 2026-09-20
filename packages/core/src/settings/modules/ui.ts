@@ -1,8 +1,8 @@
 /**
  * Built-in UI module.
  *
- * Scope is `"app"`: which shortcuts sit in the phone's bottom hub is a property
- * of the person, not of the vault they happen to have open.
+ * App-scoped interface preferences control desktop chrome and mobile navigation
+ * independently of whichever vault is open.
  */
 
 import type { SettingsModule } from "../types";
@@ -15,6 +15,22 @@ export const uiModule: SettingsModule = {
   label: "Interface",
   scope: "app",
   sections: [
+    {
+      id: "ui.desktop",
+      label: "Desktop",
+      settings: [
+        {
+          key: "workspaceSelectorPlacement",
+          type: "enum",
+          options: ["title bar", "panel headers"],
+          default: "title bar",
+          scope: "app",
+          section: "ui.desktop",
+          label: "Workspace selector location",
+          description: "Show the workspace selector in the title bar or above eligible left panels."
+        }
+      ]
+    },
     {
       id: "ui.mobile",
       label: "Mobile",

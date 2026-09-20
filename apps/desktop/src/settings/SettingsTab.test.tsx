@@ -94,7 +94,7 @@ describe("SettingsTab", () => {
     expect(el.textContent).toContain("Application");
     expect(el.textContent).toContain("Theme");
     expect(el.textContent).toContain("Display");
-    expect(el.textContent).not.toContain("Workspace");
+    expect(nav?.textContent).not.toContain("Workspace");
     expect(el.querySelector("main")).not.toBeNull();
     expect(el.querySelectorAll('[role="toolbar"][aria-label="Settings actions"]')).toHaveLength(1);
     expect(el.querySelector('[data-testid="settings-save-bar"]')).toBeNull();

@@ -7,6 +7,7 @@ import {
   actionsMenu,
   click,
   drawerOf,
+  filesPanel,
   filesVisible,
   hubLabels,
   hubOf,
@@ -65,6 +66,21 @@ describe("PhoneShell", () => {
     await click(host, "Menu");
 
     expect(visibleDialog(host, "Navigation")).not.toBeNull();
+  });
+
+  it("places the real workspace selector below Menu and above drawer actions", async () => {
+    const host = await render();
+
+    await click(host, "Menu");
+
+    const drawer = visibleDialog(host, "Navigation");
+    const title = [...(drawer?.querySelectorAll("h2") ?? [])].find((heading) => heading.textContent === "Menu");
+    const selector = drawer?.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]');
+    const files = drawer?.querySelector<HTMLButtonElement>('button[aria-label="Files"]');
+    if (!title || !selector || !files) throw new Error("Drawer workspace selector order was not rendered.");
+    expect(title.compareDocumentPosition(selector) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+    expect(selector.compareDocumentPosition(files) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+    expect(filesPanel(host)?.querySelector('button[aria-haspopup="menu"]')).toBeNull();
   });
 
   it("lists every registered left panel in the drawer with a visible label", async () => {

@@ -5,6 +5,17 @@ import { validateSettings } from "../validation";
 import { uiModule } from "./ui";
 
 describe("uiModule", () => {
+  it("registers the desktop workspace selector placement", () => {
+    const registry = createSettingsRegistry();
+    registry.register(uiModule);
+
+    const definition = registry.getDefinition("ui.workspaceSelectorPlacement");
+
+    expect(definition?.default).toBe("title bar");
+    expect(definition?.options).toEqual(["title bar", "panel headers"]);
+    expect(definition?.section).toBe("ui.desktop");
+  });
+
   it("registers the hub under the full key ui.mobileHub", () => {
     const registry = createSettingsRegistry();
     registry.register(uiModule);

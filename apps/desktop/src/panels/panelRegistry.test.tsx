@@ -117,6 +117,12 @@ describe("desktop panel registry", () => {
     ]);
   });
 
+  it("opts Files and Search into workspace selector headers but leaves Extensions unchanged", () => {
+    expect(desktopPanelRegistry.get("explorer")?.showWorkspaceSelector).toBe(true);
+    expect(desktopPanelRegistry.get("search")?.showWorkspaceSelector).toBe(true);
+    expect(desktopPanelRegistry.get("extensions")?.showWorkspaceSelector).toBeUndefined();
+  });
+
   it("looks up registered panels and reports missing ids", () => {
     expect(desktopPanelRegistry.get("outline")?.label).toBe("Outline");
     expect(desktopPanelRegistry.get("conflicts")?.label).toBe("Decisions needed");

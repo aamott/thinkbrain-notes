@@ -5,6 +5,7 @@ import { Drawer } from "@thinkbrain/ui";
 import { useLeftPanelContributions } from "../../panels/panelRegistryModel";
 import { PanelIcon } from "../panelIcons";
 import type { LeftPanel } from "../shellTypes";
+import { WorkspaceSelectorOutlet } from "../../workspace/WorkspaceSelectorPortal";
 
 const LONG_PRESS_DELAY_MS = 500;
 
@@ -29,7 +30,6 @@ export function PhoneDrawer({
   open,
   activePanel,
   badges,
-  workspaceName,
   onDismiss,
   onSelectPanel,
   onOpenSettings,
@@ -40,7 +40,6 @@ export function PhoneDrawer({
   readonly open: boolean;
   readonly activePanel: LeftPanel | null;
   readonly badges: Readonly<Record<string, number>>;
-  readonly workspaceName: string | null;
   readonly onDismiss: () => void;
   readonly onSelectPanel: (panel: LeftPanel) => void;
   readonly onOpenSettings: () => void;
@@ -70,9 +69,8 @@ export function PhoneDrawer({
       className={BOUNDS}
       scrimClassName={BOUNDS}
     >
-      <div className="border-b border-border px-4 py-3">
-        <p className="truncate text-sm font-bold">{workspaceName ?? "No workspace open"}</p>
-      </div>
+      <h2 className="px-4 pt-3 pb-2 text-sm font-bold">Menu</h2>
+      <WorkspaceSelectorOutlet variant="drawer" />
 
       {/* A long press is invisible: nothing on a phone announces that pressing
           and holding does anything at all. This line is the only place the

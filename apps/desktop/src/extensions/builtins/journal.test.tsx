@@ -94,6 +94,7 @@ describe("journal built-in", () => {
     const panel = desktopPanelRegistry.get("journal-calendar.journal");
     expect(panel?.side).toBe("left");
     expect(panel?.label).toBe("Journal");
+    expect(panel?.showWorkspaceSelector).toBe(true);
   });
 
   it("contributes no panel header actions, because D71 moved them into the panel", async () => {

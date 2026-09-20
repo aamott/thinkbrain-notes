@@ -4,14 +4,15 @@ import type { DesktopTab } from "../tabs/tabModel";
 import { useRightPanelContributions } from "../panels/panelRegistryModel";
 import { IconButton } from "./IconButton";
 import { type RightPanel } from "./shellTypes";
+import { WorkspaceSelectorOutlet } from "../workspace/WorkspaceSelectorPortal";
 
 /**
  * Props for the {@link TitleBar} component.
  *
  * The title bar is the top row of the desktop shell. It owns the app identity
- * label, the open-tab strip, and the right-side panel toggles (outline,
- * backlinks, properties, assistant). All state is
- * owned by the parent shell; this component is presentational and reports
+ * or workspace selector, command palette entry point, open-tab strip, and the
+ * right-side panel toggles (outline, backlinks, properties, assistant). All
+ * state is owned by the parent shell; this component is presentational and reports
  * user intent through the supplied callbacks.
  */
 type TitleBarProps = {
@@ -21,6 +22,7 @@ type TitleBarProps = {
   readonly activeTabId: string | null;
   /** Currently open right panel, or `null` when the right dock is collapsed. */
   readonly rightPanel: RightPanel | null;
+  readonly showWorkspaceSelector: boolean;
   /** Called when the user clicks a tab to activate it. */
   readonly onSelectTab: (tabId: string) => void;
   /** Called when the user clicks a tab's close affordance. */
@@ -35,7 +37,7 @@ type TitleBarProps = {
  * Top-of-window title bar for the desktop shell.
  *
  * Renders three sections in a single `<header>` row:
- *  1. App identity (icon + "ThinkBrain" label) and command palette button,
+ *  1. App identity or workspace selector, plus the command palette button,
  *     sized to track the activity bar plus the left sidebar width.
  *  2. The tab strip — a horizontally scrolling `<nav>` mapping each open
  *     {@link DesktopTab} to a tab chip with active styling, a dirty indicator,
@@ -51,6 +53,7 @@ export function TitleBar({
   tabs,
   activeTabId,
   rightPanel,
+  showWorkspaceSelector,
   onSelectTab,
   onRequestCloseTab,
   onToggleRightPanel,
@@ -99,15 +102,21 @@ export function TitleBar({
 
   return (
     <header className="flex items-end bg-titlebar border-b border-border min-w-0">
-      {/* App identity + command palette. */}
+      {/* App identity or workspace selector + command palette. */}
       <div
         className="flex items-center gap-2 h-full pl-3 pr-2 flex-[0_0_max(10rem,calc(var(--tn-size-activitybar-width)+var(--tn-shell-left-width)))] max-[760px]:flex-[0_0_3rem]"
-        aria-label="ThinkBrain"
+        aria-label={showWorkspaceSelector ? "Workspace and commands" : "ThinkBrain"}
       >
-        <span className="inline-flex items-center justify-center bg-primary text-primary-foreground rounded-small text-[0.625rem] font-extrabold h-4 w-4">
-          T
-        </span>
-        <span className="text-xs font-[650] max-[760px]:hidden">ThinkBrain</span>
+        {showWorkspaceSelector ? (
+          <WorkspaceSelectorOutlet variant="titlebar" />
+        ) : (
+          <>
+            <span className="inline-flex items-center justify-center bg-primary text-primary-foreground rounded-small text-[0.625rem] font-extrabold h-4 w-4">
+              T
+            </span>
+            <span className="text-xs font-[650] max-[760px]:hidden">ThinkBrain</span>
+          </>
+        )}
         <button
           type="button"
           className="flex items-center justify-center h-[1.6rem] w-[1.6rem] border-0 rounded-small bg-transparent text-titlebar-foreground text-[1.1rem] cursor-pointer hover:bg-[color-mix(in_srgb,var(--tn-color-accent)_60%,transparent)] hover:text-activitybar-active focus-visible:outline-2 focus-visible:outline-ring focus-visible:-outline-offset-1 max-[760px]:hidden"

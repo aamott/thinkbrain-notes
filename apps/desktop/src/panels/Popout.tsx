@@ -1,6 +1,7 @@
 import { type ReactNode } from "react";
 
 import { Unavailable } from "../shell/Unavailable";
+import { WorkspaceSelectorOutlet } from "../workspace/WorkspaceSelectorPortal";
 import { PanelTitle } from "./PanelTitle";
 import { MountedPanel } from "./panelRegistry";
 import {
@@ -52,7 +53,8 @@ export function Popout<Ctx extends LeftPanelContext | RightPanelContext>({
   panel,
   context,
   contributions,
-  onBack
+  onBack,
+  workspaceSelectorInPanel
 }: {
   readonly side: Side;
   readonly panel: string;
@@ -60,6 +62,7 @@ export function Popout<Ctx extends LeftPanelContext | RightPanelContext>({
   readonly contributions: readonly SideContribution<Ctx>[];
   /** Optional leading Back control in the panel header. */
   readonly onBack?: () => void;
+  readonly workspaceSelectorInPanel?: boolean;
 }): ReactNode {
   // The registry owns panel metadata, while the caller owns which panel
   // contributions are rendered; the two sources are intentionally separate.
@@ -81,6 +84,9 @@ export function Popout<Ctx extends LeftPanelContext | RightPanelContext>({
     <aside className={className} aria-label={`${contribution.label} panel`}>
       <div className={`flex flex-col flex-1 min-h-0 max-[760px]:w-full ${INNER_WIDTH[side]}`}>
         <PanelTitle title={contribution.label} actions={contribution.actions} onBack={onBack} />
+        {side === "left" && workspaceSelectorInPanel && contribution.showWorkspaceSelector && (
+          <WorkspaceSelectorOutlet variant="panel" />
+        )}
         {contributions.map((panelContribution) => {
           const isActive = panelContribution.id === panel;
           if (!isActive && !panelContribution.keepMounted) return null;

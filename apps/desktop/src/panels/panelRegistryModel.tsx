@@ -176,6 +176,8 @@ export type DesktopPanelContribution = PanelContribution<ReactNode, DesktopPanel
   readonly keepMounted?: boolean;
   /** Buttons rendered in the panel header, in declaration order. */
   readonly actions?: readonly PanelAction[];
+  /** Opts a left panel into the selector when shell placement is panel headers. */
+  readonly showWorkspaceSelector?: boolean;
 };
 
 /** Base for side-narrowed contribution types (omits side-specific id/factory/availability). */
@@ -222,6 +224,7 @@ export const builtInDesktopPanels: readonly (LeftPanelContribution | RightPanelC
     icon: "files",
     side: "left",
     keepMounted: true,
+    showWorkspaceSelector: true,
     factory: ({ explorerProps }) => <WorkspaceExplorer {...explorerProps} />
   },
   {
@@ -229,6 +232,7 @@ export const builtInDesktopPanels: readonly (LeftPanelContribution | RightPanelC
     label: "Search",
     icon: "search",
     side: "left",
+    showWorkspaceSelector: true,
     factory: ({ onOpenSearchResult, rootPath }) => (
       <SearchPanel rootPath={rootPath} onOpenFile={onOpenSearchResult} />
     )

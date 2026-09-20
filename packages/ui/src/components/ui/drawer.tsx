@@ -50,7 +50,7 @@ export function Drawer({
           // `pt-[env(safe-area-inset-top)]` pushes content below the phone's
           // status bar / notch. No-op on desktop (inset is 0 there). Mirrors
           // the same inset `PhoneHeader` applies; without it the drawer's
-          // workspace name and long-press hint sit behind the time display.
+          // drawer heading and long-press hint sit behind the time display.
           "absolute inset-y-0 z-50 flex w-[86%] max-w-75 flex-col overflow-y-auto bg-sidebar pt-[env(safe-area-inset-top)] text-sidebar-foreground shadow-panel tn-slide",
           side === "left" ? "left-0" : "right-0",
           open
