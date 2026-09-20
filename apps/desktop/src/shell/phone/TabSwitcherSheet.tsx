@@ -74,10 +74,11 @@ export function TabSwitcherSheet({
                     "flex h-44 w-full cursor-pointer flex-col items-stretch overflow-hidden rounded-medium border border-border bg-tab-active p-0 text-left text-tab-active-foreground tn-focus-ring",
                     isActive && "border-primary ring-2 ring-primary"
                   )}
-                  onClick={() => {
-                    onSelect(tab.id);
-                    onDismiss();
-                  }}
+                  // onSelect alone: in PhoneShell it replaces this sheet's
+                  // history entry with the chosen tab route, which is also
+                  // what closes the sheet — a separate onDismiss here would
+                  // take one extra step back through content history.
+                  onClick={() => onSelect(tab.id)}
                 >
                   <span className="flex h-9 shrink-0 items-center gap-1 border-b border-border bg-surface pr-9 pl-2 pointer-coarse:h-11 pointer-coarse:pr-11">
                     <span className="min-w-0 flex-1 truncate text-[0.7rem] font-medium">

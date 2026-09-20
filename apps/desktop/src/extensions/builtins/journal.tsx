@@ -350,6 +350,7 @@ export function activateJournal(context: DesktopExtensionContext): void {
     label: "Journal",
     icon: "notebook-pen",
     side: "left",
+    showWorkspaceSelector: true,
     // No PanelActions: D71 puts New entry, Today and Open calendar in the
     // panel's own action row, leaving the chrome row to the overflow alone.
     factory: () => <JournalPanelRoot />

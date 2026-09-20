@@ -106,4 +106,24 @@ describe("PanelTitle", () => {
 
     expect(reported).toHaveBeenCalled();
   });
+
+  it("renders a leading Back control when onBack is supplied", async () => {
+    const onBack = vi.fn();
+    const host = await render(<PanelTitle title="Outline" onBack={onBack} />);
+
+    const back = host.querySelector('[aria-label="Back from Outline"]');
+    expect(back).not.toBeNull();
+
+    await click(back);
+
+    expect(onBack).toHaveBeenCalledTimes(1);
+    // The title survives alongside the new control.
+    expect(host.querySelector("h2")?.textContent).toBe("Outline");
+  });
+
+  it("renders no Back control when onBack is absent", async () => {
+    const host = await render(<PanelTitle title="Outline" />);
+
+    expect(host.querySelector('[aria-label="Back from Outline"]')).toBeNull();
+  });
 });

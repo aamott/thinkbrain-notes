@@ -10,6 +10,7 @@ import { DeleteConfirmDialog, WorkspaceContextMenu } from "./WorkspaceExplorerMe
 import { GitLinkImportDialog } from "./GitLinkImportDialog";
 import { CREATE_MANAGED_WORKSPACE_LABEL, IMPORT_FROM_GIT_LABEL, OPEN_FOLDER_LABEL } from "./gitLinkImportCopy";
 import { isWorkspaceGitLinked } from "./workspaceSettings";
+import { WorkspaceSelectorPortal, type WorkspaceSelectorVariant } from "./WorkspaceSelectorPortal";
 import type { ContextMenuState, CreateState, RenameState, WorkspaceExplorerActions } from "./workspaceExplorerTypes";
 
 interface WorkspaceExplorerViewProps {
@@ -188,15 +189,20 @@ export function WorkspaceExplorerView({
       {managedStorageNoticeOpen && (
         <ManagedStorageNotice onDismiss={() => actions.setManagedStorageNoticeOpen(false)} />
       )}
-      <WorkspaceSelector
-        capabilities={accessCapabilities}
-        currentPath={workspaceRootPath}
-        paths={recentWorkspacePaths}
-        onAdd={actions.openWorkspace}
-        onCreateManaged={() => actions.setCreateManagedWorkspaceOpen(true)}
-        onImportFromGit={actions.openGitLinkImport}
-        onSelect={actions.launchWorkspace}
-      />
+      <WorkspaceSelectorPortal>
+        {(variant) => (
+          <WorkspaceSelector
+            variant={variant}
+            capabilities={accessCapabilities}
+            currentPath={workspaceRootPath}
+            paths={recentWorkspacePaths}
+            onAdd={actions.openWorkspace}
+            onCreateManaged={() => actions.setCreateManagedWorkspaceOpen(true)}
+            onImportFromGit={actions.openGitLinkImport}
+            onSelect={actions.launchWorkspace}
+          />
+        )}
+      </WorkspaceSelectorPortal>
       {createManagedWorkspaceOpen && (
         <CreateManagedWorkspaceDialog
           busy={busy}
@@ -303,7 +309,26 @@ function ErrorState({ message, onDismiss }: { readonly message: string; readonly
   );
 }
 
+const selectorRootClasses: Record<WorkspaceSelectorVariant, string> = {
+  drawer: "relative border-b border-border px-3 pb-3",
+  titlebar: "relative min-w-0 flex-1",
+  panel: "relative border-b border-border p-2"
+};
+
+const selectorTriggerClasses: Record<WorkspaceSelectorVariant, string> = {
+  drawer: "min-h-11 rounded-medium border border-border bg-background px-3 py-2 text-sm font-semibold text-sidebar-foreground shadow-sm",
+  titlebar: "h-7 rounded-small border border-border bg-background px-2 text-xs font-semibold text-titlebar-foreground",
+  panel: "min-h-9 rounded-small border border-border bg-background px-2.5 py-1.5 text-xs font-semibold text-sidebar-foreground"
+};
+
+const selectorMenuClasses: Record<WorkspaceSelectorVariant, string> = {
+  drawer: "absolute top-[calc(100%+0.35rem)] right-3 left-3 z-50",
+  titlebar: "absolute top-[calc(100%+0.35rem)] left-0 z-50 min-w-60",
+  panel: "absolute top-[calc(100%+0.35rem)] right-2 left-2 z-50"
+};
+
 export function WorkspaceSelector({
+  variant,
   capabilities,
   currentPath,
   paths,
@@ -312,6 +337,7 @@ export function WorkspaceSelector({
   onCreateManaged,
   onImportFromGit
 }: {
+  readonly variant: WorkspaceSelectorVariant;
   readonly capabilities: NativeWorkspaceAccessCapabilities | null;
   readonly currentPath?: string;
   readonly paths: readonly string[];
@@ -357,10 +383,13 @@ export function WorkspaceSelector({
   const currentFolderName = currentPath?.split(/[\\/]/).at(-1) ?? "Choose workspace";
 
   return (
-    <div className="relative mt-auto border-t border-border">
+    <div className={selectorRootClasses[variant]}>
       <button
         ref={triggerRef}
-        className="flex w-full min-w-0 items-center gap-[0.45rem] border-0 px-3 py-[0.65rem] text-left font-inherit text-xs text-sidebar-foreground cursor-pointer disabled:opacity-60 [&>svg]:size-[0.9rem] [&>svg]:stroke-current [&>svg:last-child]:ml-auto"
+        className={cn(
+          "flex w-full min-w-0 cursor-pointer items-center gap-[0.45rem] text-left font-inherit hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring focus-visible:-outline-offset-1 disabled:cursor-default disabled:opacity-60 [&>svg]:size-[0.9rem] [&>svg]:shrink-0 [&>svg]:stroke-current [&>svg:last-child]:ml-auto",
+          selectorTriggerClasses[variant]
+        )}
         type="button"
         aria-controls={menuId}
         aria-expanded={open}
@@ -377,7 +406,7 @@ export function WorkspaceSelector({
         <Menu
           id={menuId}
           label="Workspaces"
-          className="absolute right-2 bottom-[calc(100%+0.35rem)] left-2 z-20"
+          className={selectorMenuClasses[variant]}
           anchorRef={triggerRef}
           // Leaving by Escape puts focus back on the trigger; clicking
           // somewhere else has already decided where focus belongs.

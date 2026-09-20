@@ -55,6 +55,7 @@ const SEEDED_APP_VALUES: Record<string, unknown> = {
   "sync.onOpen": true,
   "sync.onLeave": true,
   "settings.showAdvanced": false,
+  "ui.workspaceSelectorPlacement": "title bar",
   "ui.mobileHub": ""
 };
 
@@ -143,7 +144,7 @@ describe("buildExportPayload", () => {
     expect(keys).toContain("settings.showAdvanced");
     expect(keys).not.toContain("sync.trigger");
     expect(keys).not.toContain("sync.destination");
-    expect(keys).toHaveLength(16);
+    expect(keys).toHaveLength(17);
   });
 });
 

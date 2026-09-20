@@ -1,23 +1,9 @@
 // @vitest-environment happy-dom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { desktopPanelRegistry } from "../../panels/panelRegistryModel";
 import { InspectorSheet } from "./InspectorSheet";
-
-// The registry is a module singleton, so an extension panel registered here is
-// live for every test in this file. Registering once (rather than per test)
-// keeps the registry's loud duplicate rejection happy.
-const extensionPanel = desktopPanelRegistry.register({
-  id: "hello-notes.inspector",
-  label: "Hello inspector",
-  icon: "outline",
-  side: "right",
-  factory: () => <p>hello</p>
-});
-
-afterAll(() => extensionPanel.dispose());
 
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
@@ -44,62 +30,55 @@ const sheet = (overrides: Record<string, unknown> = {}): React.ReactElement => (
     rootPath={null}
     documentContents={null}
     onDismiss={() => undefined}
-    onSelectPanel={() => undefined}
+    onBack={() => undefined}
     {...overrides}
   />
 );
 
-/**
- * Scoped to the segmented control on purpose: the panel body below it mounts
- * real inspectors, and an unscoped `[aria-label="Assistant"]` would happily
- * match something the assistant surface rendered instead of the tab.
- */
-const tabs = (host: HTMLDivElement): Element | null =>
-  host.querySelector('[role="tablist"][aria-label="Inspectors"]');
+const drawer = (host: HTMLDivElement): Element | null =>
+  host.querySelector('[role="dialog"][aria-label="Inspector"]')
+  ?? host.querySelector('[aria-label="Inspector"]');
 
-describe("InspectorSheet", () => {
-  it("offers every registered right panel", async () => {
+describe("InspectorSheet (right-edge drawer)", () => {
+  it("anchors to the right edge, bounded below the header", async () => {
     const host = await render(sheet());
+    const el = drawer(host);
 
-    const control = tabs(host);
-    expect(control?.querySelector('[aria-label="Outline"]')).not.toBeNull();
-    expect(control?.querySelector('[aria-label="Properties"]')).not.toBeNull();
-    expect(control?.querySelector('[aria-label="Backlinks"]')).not.toBeNull();
-    expect(control?.querySelector('[aria-label="Assistant"]')).not.toBeNull();
+    expect(el).not.toBeNull();
+    const cls = el?.className ?? "";
+    expect(cls).toContain("right-0");
+    expect(cls).toContain("top-[calc(3.5rem+env(safe-area-inset-top))]");
+    expect(cls).toContain("w-[90%]");
+    expect(cls).toContain("max-w-96");
+    expect(cls).toContain("translate-x-0");
   });
 
-  // The segmented control reads the live registry rather than a phone-specific
-  // list, so a right panel an extension registers is reachable with no mobile
-  // work. Without this the sheet could hardcode the four built-ins and pass
-  // every other test in this file.
-  it("offers right panels registered by an extension", async () => {
+  // The hub must stay reachable while an inspector is open — a drawer (or
+  // scrim) that ran to the screen bottom would cover it.
+  it("does not cover the bottom hub", async () => {
     const host = await render(sheet());
+    const cls = drawer(host)?.className ?? "";
 
-    expect(tabs(host)?.querySelector('[aria-label="Hello inspector"]')).not.toBeNull();
+    expect(cls).toContain("bottom-[calc(3.5rem+env(safe-area-inset-bottom))]");
+
+    const scrimCls = host.querySelector("[data-tn-scrim]")?.className ?? "";
+    expect(scrimCls).toContain("top-[calc(3.5rem+env(safe-area-inset-top))]");
+    expect(scrimCls).toContain("bottom-[calc(3.5rem+env(safe-area-inset-bottom))]");
+    // Horizontal bounds are explicit so `inset-0` cannot lose them when the
+    // top/bottom bounds merge over it.
+    expect(scrimCls).toContain("inset-x-0");
   });
 
-  it("marks the selected panel", async () => {
-    const host = await render(sheet({ panel: "properties" }));
+  it("slides in from the right when open and out when closed", async () => {
+    const openHost = await render(sheet());
+    expect(drawer(openHost)?.className).toContain("translate-x-0");
+    expect(drawer(openHost)?.getAttribute("aria-hidden")).toBe("false");
+    await act(async () => root?.unmount());
 
-    expect(
-      tabs(host)?.querySelector('[aria-label="Properties"]')?.getAttribute("aria-selected")
-    ).toBe("true");
-    expect(
-      tabs(host)?.querySelector('[aria-label="Outline"]')?.getAttribute("aria-selected")
-    ).toBe("false");
-  });
-
-  it("switches panels without dismissing the sheet", async () => {
-    const onSelectPanel = vi.fn();
-    const onDismiss = vi.fn();
-    const host = await render(sheet({ onSelectPanel, onDismiss }));
-
-    await act(async () => {
-      tabs(host)?.querySelector<HTMLButtonElement>('[aria-label="Properties"]')?.click();
-    });
-
-    expect(onSelectPanel).toHaveBeenCalledWith("properties");
-    expect(onDismiss).not.toHaveBeenCalled();
+    const closedHost = await render(sheet({ open: false }));
+    const cls = drawer(closedHost)?.className ?? "";
+    expect(cls).toContain("translate-x-full");
+    expect(drawer(closedHost)?.getAttribute("aria-hidden")).toBe("true");
   });
 
   it("renders the selected inspector's body", async () => {
@@ -110,12 +89,29 @@ describe("InspectorSheet", () => {
     );
   });
 
-  it("is hidden while closed", async () => {
-    const host = await render(sheet({ open: false }));
+  it("calls onBack from the panel header's Back control", async () => {
+    const onBack = vi.fn();
+    const onDismiss = vi.fn();
+    const host = await render(sheet({ onBack, onDismiss }));
 
-    // Always mounted for slide transitions — closed means aria-hidden, not absent.
-    const panel = host.querySelector('[aria-label="Document tools"]');
-    expect(panel).not.toBeNull();
-    expect(panel?.getAttribute("aria-hidden")).toBe("true");
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('[aria-label="Back from Outline"]')?.click();
+    });
+
+    expect(onBack).toHaveBeenCalledTimes(1);
+    expect(onDismiss).not.toHaveBeenCalled();
+  });
+
+  it("calls onDismiss on a scrim tap", async () => {
+    const onDismiss = vi.fn();
+    const host = await render(sheet({ onDismiss }));
+
+    const scrim = host.querySelector("[data-tn-scrim]");
+    expect(scrim).not.toBeNull();
+    await act(async () => {
+      scrim?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+    });
+
+    expect(onDismiss).toHaveBeenCalledTimes(1);
   });
 });

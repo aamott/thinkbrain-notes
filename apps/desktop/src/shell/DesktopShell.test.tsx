@@ -36,11 +36,11 @@ describe("DesktopShell composition", () => {
     expect(markup).toContain('aria-label="ThinkBrain desktop workspace"');
   });
 
-  it("renders the title bar with the app name and tab strip landmark", () => {
+  it("renders the title bar tab strip and command affordance in default selector mode", () => {
     const markup = shellMarkup();
 
-    expect(markup).toContain(">ThinkBrain</span>");
     expect(markup).toContain('aria-label="Open tabs"');
+    expect(markup).toContain('aria-label="Command palette (Ctrl/Cmd+P)"');
   });
 
   it("renders every activity bar action as a labelled icon button", () => {

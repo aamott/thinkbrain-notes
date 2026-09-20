@@ -263,6 +263,9 @@ point tuning a layout for a workspace that cannot be opened.
   drawer, shortcut hub, tab-switcher and inspector sheets. Built and green
   under test; awaiting a pass on an Android device —
   `mobile/wip-phone_shell_chrome-med-hard.md`
+- 🟨 Files-first navigation — Files is the mobile home; browser-backed Back
+  history, right-edge navigation, an Action items menu, bounded inspectors, and
+  a shared right-panel close control — `mobile/wip-files_first_navigation-high-hard.md`
 - 🟨 Phone surface fixes — popout width, bottom-edge contention, keyboard
   inset, `pointer-coarse:` sizing. Built and green under test; the keyboard
   inset is the part no emulator check can settle —

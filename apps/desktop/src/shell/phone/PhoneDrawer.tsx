@@ -5,8 +5,13 @@ import { Drawer } from "@thinkbrain/ui";
 import { useLeftPanelContributions } from "../../panels/panelRegistryModel";
 import { PanelIcon } from "../panelIcons";
 import type { LeftPanel } from "../shellTypes";
+import { WorkspaceSelectorOutlet } from "../../workspace/WorkspaceSelectorPortal";
 
 const LONG_PRESS_DELAY_MS = 500;
+
+// Panel and scrim stop above the hub so the bottom-right Menu slot stays
+// directly tappable to close the drawer — same bottom bound the menus use.
+const BOUNDS = "bottom-[calc(3.5rem+env(safe-area-inset-bottom))]";
 
 // 48px already clears the touch minimum, so no `pointer-coarse:` bump is
 // needed — the same reasoning `BottomNav` records for its 56px slots.
@@ -25,7 +30,6 @@ export function PhoneDrawer({
   open,
   activePanel,
   badges,
-  workspaceName,
   onDismiss,
   onSelectPanel,
   onOpenSettings,
@@ -36,7 +40,6 @@ export function PhoneDrawer({
   readonly open: boolean;
   readonly activePanel: LeftPanel | null;
   readonly badges: Readonly<Record<string, number>>;
-  readonly workspaceName: string | null;
   readonly onDismiss: () => void;
   readonly onSelectPanel: (panel: LeftPanel) => void;
   readonly onOpenSettings: () => void;
@@ -58,10 +61,16 @@ export function PhoneDrawer({
   );
 
   return (
-    <Drawer open={open} onDismiss={onDismiss} label="Navigation">
-      <div className="border-b border-border px-4 py-3">
-        <p className="truncate text-sm font-bold">{workspaceName ?? "No workspace open"}</p>
-      </div>
+    <Drawer
+      open={open}
+      onDismiss={onDismiss}
+      label="Navigation"
+      side="right"
+      className={BOUNDS}
+      scrimClassName={BOUNDS}
+    >
+      <h2 className="px-4 pt-3 pb-2 text-sm font-bold">Menu</h2>
+      <WorkspaceSelectorOutlet variant="drawer" />
 
       {/* A long press is invisible: nothing on a phone announces that pressing
           and holding does anything at all. This line is the only place the

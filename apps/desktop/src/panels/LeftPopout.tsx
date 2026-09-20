@@ -17,6 +17,7 @@ type LeftPopoutProps = {
   readonly versionsOf: string | null;
   /** Called when the history panel is asked to widen back to everything. */
   readonly onShowEverything: () => void;
+  readonly workspaceSelectorInPanel?: boolean;
 };
 
 /**
@@ -30,7 +31,8 @@ export function LeftPopout({
   onOpenSearchResult,
   onReviewConflict,
   versionsOf,
-  onShowEverything
+  onShowEverything,
+  workspaceSelectorInPanel
 }: LeftPopoutProps) {
   const context: LeftPanelContext = useMemo(
     () => ({
@@ -44,5 +46,13 @@ export function LeftPopout({
     [rootPath, explorerProps, onOpenSearchResult, onReviewConflict, versionsOf, onShowEverything]
   );
   const leftPanels = useLeftPanelContributions();
-  return <Popout side="left" panel={panel} context={context} contributions={leftPanels} />;
+  return (
+    <Popout
+      side="left"
+      panel={panel}
+      context={context}
+      contributions={leftPanels}
+      workspaceSelectorInPanel={workspaceSelectorInPanel}
+    />
+  );
 }

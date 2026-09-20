@@ -1,50 +1,23 @@
 // @vitest-environment happy-dom
 import { act } from "react";
-import { createRoot, type Root } from "react-dom/client";
-import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
 
 import { desktopPanelRegistry } from "../../panels/panelRegistryModel";
-import { useSettingsStore } from "../../settings/settingsStore";
-import { ThemeProvider } from "../../settings/ThemeProvider";
-import { workspaceDocumentApi } from "../../workspace/workspaceDocumentAdapter";
-import { useShellState, type ShellState } from "../useShellState";
-import { PhoneShell } from "./PhoneShell";
-
-// `useShellState` boots the workspace lifecycle and reaches for Tauri IPC when
-// it believes it is running under Tauri. Mock both so the restore path is a
-// no-op, matching `ShellRoot.test.tsx` and `useShellState.test.tsx`.
-vi.mock("@tauri-apps/api/core", () => ({
-  isTauri: vi.fn(() => false)
-}));
-
-// The load path dereferences what the adapter returns, and the native-command
-// mock resolves to null. Hand it a real document so opening a note works.
-vi.mock("../../workspace/workspaceDocumentAdapter", () => ({
-  workspaceDocumentApi: {
-    readMarkdownDocument: vi.fn(() =>
-      Promise.resolve({
-        rootPath: "/vault",
-        relativePath: "note.md",
-        contents: "# Note\n\nSome text.",
-        modifiedAtMs: 0
-      })
-    ),
-    writeMarkdownDocument: vi.fn(() =>
-      Promise.resolve({
-        relative_path: "note.md",
-        file_name: "note.md",
-        parent_path: "",
-        byte_size: 0,
-        updated_at: null
-      })
-    ),
-    createMarkdownDocument: vi.fn()
-  }
-}));
-
-vi.mock("../../native/commands", () => ({
-  invokeNativeCommand: vi.fn(() => Promise.resolve(null))
-}));
+import {
+  actionsMenu,
+  click,
+  drawerOf,
+  filesPanel,
+  filesVisible,
+  hubLabels,
+  hubOf,
+  inspector,
+  noteTitleVisible,
+  render,
+  renderWithShell,
+  storeHub,
+  visibleDialog
+} from "./PhoneShell.testHarness";
 
 // The registry is a module singleton, so this extension panel is live for the
 // whole file. It exists to prove the drawer's rows are actually reachable —
@@ -58,123 +31,9 @@ const extensionPanel = desktopPanelRegistry.register({
   factory: () => <p>hello notebook</p>
 });
 
-afterAll(() => extensionPanel.dispose());
-
-let root: Root | null = null;
-let container: HTMLDivElement | null = null;
-
-afterEach(async () => {
-  await act(async () => root?.unmount());
-  container?.remove();
-  vi.unstubAllGlobals();
-  vi.useRealTimers();
-  vi.mocked(workspaceDocumentApi.writeMarkdownDocument).mockClear();
-  clearStoredHub();
-  root = null;
-  container = null;
+afterAll(() => {
+  extensionPanel.dispose();
 });
-
-/**
- * The settings store is a module singleton and the hub edits below really do
- * persist: `invokeNativeCommand` is mocked to resolve, so a save "succeeds" and
- * lands in `appValues`. Left there, one test's pin would be the next test's
- * starting hub. Only the hub key is cleared — blanking the store wholesale
- * would take the theme and desktop state with it.
- */
-function clearStoredHub(): void {
-  const appValues = { ...useSettingsStore.getState().appValues };
-  delete appValues["ui.mobileHub"];
-  useSettingsStore.setState({ appValues, stagedChanges: {}, isDirty: false, dirtyCount: 0 });
-}
-
-/** Seeds the persisted hub before a mount, the way a returning user would find it. */
-function storeHub(items: readonly unknown[]): void {
-  useSettingsStore.getState().stageChange("ui.mobileHub", JSON.stringify(items));
-}
-
-const hubOf = (host: HTMLDivElement): Element | null =>
-  host.querySelector('[aria-label="Primary navigation"]');
-
-const drawerOf = (host: HTMLDivElement): Element | null =>
-  host.querySelector('[aria-label="Navigation"]');
-
-/** Hub slot labels, in bar order — the assertion pin/remove actually needs. */
-const hubLabels = (host: HTMLDivElement): readonly (string | null)[] =>
-  [...(hubOf(host)?.querySelectorAll("button") ?? [])].map((button) =>
-    button.getAttribute("aria-label")
-  );
-
-/**
- * Mounts `PhoneShell` over real shell state, as `ShellRoot` does.
- *
- * `ThemeProvider` is not decoration: `useShellState` reads `useTheme()` for the
- * theme-toggle command and throws outside the provider.
- */
-const render = async (): Promise<HTMLDivElement> => {
-  const Host = () => <PhoneShell shell={useShellState()} />;
-  container = document.createElement("div");
-  document.body.append(container);
-  root = createRoot(container);
-  await act(async () => {
-    root?.render(
-      <ThemeProvider>
-        <Host />
-      </ThemeProvider>
-    );
-  });
-  return container;
-};
-
-/**
- * Same mount, but hands the test the live shell so it can open and edit a note.
- * Reaching a dirty tab any other way would mean faking the reducer.
- */
-const renderWithShell = async (): Promise<{
-  host: HTMLDivElement;
-  shell: () => ShellState;
-}> => {
-  const box: { current: ShellState | null } = { current: null };
-  const Host = () => {
-    const shell = useShellState();
-    box.current = shell;
-    return <PhoneShell shell={shell} />;
-  };
-  container = document.createElement("div");
-  document.body.append(container);
-  root = createRoot(container);
-  await act(async () => {
-    root?.render(
-      <ThemeProvider>
-        <Host />
-      </ThemeProvider>
-    );
-  });
-  return {
-    host: container,
-    shell: () => {
-      if (!box.current) throw new Error("PhoneShell did not render");
-      return box.current;
-    }
-  };
-};
-
-const click = async (host: HTMLDivElement, label: string): Promise<void> => {
-  await act(async () => {
-    host.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`)?.click();
-  });
-};
-
-/** Finds a dialog by label that is actually visible (not `aria-hidden`).
- *  Drawer/BottomSheet are always mounted for slide transitions, so a closed
- *  dialog is still in the DOM — `toBeNull` on the selector alone can't tell
- *  open from closed. */
-const visibleDialog = (host: HTMLElement, label: string): Element | null => {
-  // `role="dialog"` is only set when open (closed overlays omit it to avoid
-  // contradicting `aria-hidden`), so query by `aria-label` alone and check
-  // `aria-hidden` to determine visibility.
-  const el = host.querySelector(`[aria-label="${label}"][aria-hidden]`);
-  return el?.getAttribute("aria-hidden") === "true" ? null : el;
-};
 
 describe("PhoneShell", () => {
   it("renders no activity rail", async () => {
@@ -201,16 +60,7 @@ describe("PhoneShell", () => {
     }
   });
 
-  it("opens the drawer from the header menu button", async () => {
-    const host = await render();
-    expect(visibleDialog(host, "Navigation")).toBeNull();
-
-    await click(host, "Open navigation");
-
-    expect(visibleDialog(host, "Navigation")).not.toBeNull();
-  });
-
-  it("opens the same drawer from the hub Menu slot", async () => {
+  it("opens the drawer from the hub Menu slot", async () => {
     const host = await render();
 
     await click(host, "Menu");
@@ -218,10 +68,25 @@ describe("PhoneShell", () => {
     expect(visibleDialog(host, "Navigation")).not.toBeNull();
   });
 
+  it("places the real workspace selector below Menu and above drawer actions", async () => {
+    const host = await render();
+
+    await click(host, "Menu");
+
+    const drawer = visibleDialog(host, "Navigation");
+    const title = [...(drawer?.querySelectorAll("h2") ?? [])].find((heading) => heading.textContent === "Menu");
+    const selector = drawer?.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]');
+    const files = drawer?.querySelector<HTMLButtonElement>('button[aria-label="Files"]');
+    if (!title || !selector || !files) throw new Error("Drawer workspace selector order was not rendered.");
+    expect(title.compareDocumentPosition(selector) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+    expect(selector.compareDocumentPosition(files) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+    expect(filesPanel(host)?.querySelector('button[aria-haspopup="menu"]')).toBeNull();
+  });
+
   it("lists every registered left panel in the drawer with a visible label", async () => {
     const host = await render();
 
-    await click(host, "Open navigation");
+    await click(host, "Menu");
 
     const drawer = visibleDialog(host, "Navigation");
     expect(drawer?.textContent).toContain("Files");
@@ -231,7 +96,7 @@ describe("PhoneShell", () => {
 
   it("closes the drawer after choosing a panel and reveals it full width", async () => {
     const host = await render();
-    await click(host, "Open navigation");
+    await click(host, "Menu");
     const drawer = visibleDialog(host, "Navigation");
     expect(drawer).not.toBeNull();
 
@@ -269,26 +134,67 @@ describe("PhoneShell", () => {
     expect(host.querySelector('[aria-label="Primary navigation"]')).not.toBeNull();
   });
 
-  // Both the header's `⋯` button and the sheet it opens are labelled
-  // "Document tools", so every assertion here matches on the dialog role too —
-  // an unscoped query would match the button, which is always present, and pass
-  // whether or not the sheet ever opened.
-  const inspector = (host: HTMLDivElement): Element | null =>
-    visibleDialog(host, "Document tools");
-
-  it("opens the inspector sheet from the header's document tools button", async () => {
+  it("opens the action items menu — not an inspector — from the header's document tools button", async () => {
     const host = await render();
     expect(inspector(host)).toBeNull();
 
     await click(host, "Document tools");
 
+    const menu = actionsMenu(host);
+    expect(menu).not.toBeNull();
+    expect(menu?.querySelector('[role="menuitem"][aria-label="Outline"]')).not.toBeNull();
+    // The menu alone does not open an inspector.
+    expect(inspector(host)).toBeNull();
+  });
+
+  it("drills actions → inspector, and the inspector's Back returns to the menu", async () => {
+    const host = await render();
+    await click(host, "Document tools");
+
+    const menu = actionsMenu(host);
+    await act(async () => {
+      menu?.querySelector<HTMLButtonElement>('[role="menuitem"][aria-label="Outline"]')?.click();
+    });
+
     expect(inspector(host)).not.toBeNull();
+    expect(inspector(host)?.querySelector('[aria-label="Outline panel"]')).not.toBeNull();
+
+    // The inspector's header Back steps one level — back to the menu it came
+    // from, not straight to content.
+    await act(async () => {
+      inspector(host)?.querySelector<HTMLButtonElement>('[aria-label="Back from Outline"]')?.click();
+    });
+
+    expect(inspector(host)).toBeNull();
+    expect(actionsMenu(host)).not.toBeNull();
+  });
+
+  it("closes the whole actions → inspector flow on an outside tap", async () => {
+    const host = await render();
+    await click(host, "Document tools");
+    const menu = actionsMenu(host);
+    await act(async () => {
+      menu?.querySelector<HTMLButtonElement>('[role="menuitem"][aria-label="Outline"]')?.click();
+    });
+    expect(inspector(host)).not.toBeNull();
+
+    // Every always-mounted overlay renders a scrim, so this must target the
+    // inspector's own — the only one marked visible while it is open.
+    await act(async () => {
+      host.querySelector("[data-tn-scrim].visible")?.dispatchEvent(
+        new PointerEvent("pointerdown", { bubbles: true })
+      );
+    });
+
+    // Both entries close as one flow — no stranded actions menu underneath.
+    expect(inspector(host)).toBeNull();
+    expect(actionsMenu(host)).toBeNull();
   });
 
   // `revealPanel` used to set `revealed` for any panel id while the content
   // branch only ever renders a *left* popout, so the default Assistant hub slot
   // full-screened the Files panel instead of opening an inspector.
-  it("opens the inspector sheet from the assistant hub shortcut", async () => {
+  it("opens the inspector from the assistant hub shortcut, parented to content", async () => {
     const host = await render();
 
     const hub = host.querySelector('[aria-label="Primary navigation"]');
@@ -298,8 +204,44 @@ describe("PhoneShell", () => {
 
     expect(inspector(host)).not.toBeNull();
     expect(inspector(host)?.querySelector('[aria-label="Assistant panel"]')).not.toBeNull();
-    // The note stays on screen behind the sheet: no left panel takes over.
-    expect(host.querySelector('[aria-label="Files panel"]')).toBeNull();
+    // The drawer opens over the current route — Files at cold start — without
+    // navigating: the Files surface stays mounted underneath.
+    expect(host.querySelector('[aria-label="Files panel"]')).not.toBeNull();
+  });
+
+  it("returns straight to content on Back from a hub-opened inspector", async () => {
+    const host = await render();
+    const hub = host.querySelector('[aria-label="Primary navigation"]');
+    await act(async () => {
+      hub?.querySelector<HTMLButtonElement>('[aria-label="Assistant"]')?.click();
+    });
+    expect(inspector(host)).not.toBeNull();
+
+    await act(async () => {
+      inspector(host)?.querySelector<HTMLButtonElement>('[aria-label="Back from Assistant"]')?.click();
+    });
+
+    // Content-parented: Back lands on content, not on an action-items menu.
+    expect(inspector(host)).toBeNull();
+    expect(actionsMenu(host)).toBeNull();
+  });
+
+  it("dismisses the tab switcher on Back before touching content history", async () => {
+    const { host, shell } = await renderWithShell();
+    await act(async () => shell().openMarkdownDocument("/vault", "note.md"));
+    expect(noteTitleVisible(host)).toBe(true);
+
+    await click(host, "Open tabs (1)");
+    expect(visibleDialog(host, "Open tabs")).not.toBeNull();
+
+    // Topmost overlay goes first: Back closes the switcher but stays on the note.
+    await click(host, "Back");
+    expect(visibleDialog(host, "Open tabs")).toBeNull();
+    expect(noteTitleVisible(host)).toBe(true);
+
+    // And the next Back walks content history — back to Files.
+    await click(host, "Back");
+    expect(filesVisible(host)).toBe(true);
   });
 
   it("prompts before closing a tab that has unsaved work", async () => {
@@ -321,32 +263,6 @@ describe("PhoneShell", () => {
 
     expect(document.querySelector('[role="dialog"][aria-label="Unsaved changes"]')).not.toBeNull();
     expect(shell().tabState.tabs).toHaveLength(1);
-  });
-
-  // `StatusBar` does not render in phone chrome, so the header is the only
-  // place sync trouble is visible at all. Scoped to the header's own button —
-  // the pill is the one control there carrying a `title`.
-  const pill = (host: HTMLDivElement): HTMLButtonElement | null =>
-    host.querySelector<HTMLButtonElement>("header button[title]");
-
-  it("reports sync state in the header", async () => {
-    const host = await render();
-
-    // The pill renders symbol-only in the phone header (compact mode); the
-    // full sentence lives in the tooltip / accessible name, not the text.
-    const syncButton = pill(host);
-    expect(syncButton).not.toBeNull();
-    expect(syncButton?.getAttribute("title")).toContain("not being saved");
-    expect(syncButton?.textContent).toContain("—");
-  });
-
-  it("reveals the panel behind the sync pill instead of opening a desktop dock", async () => {
-    const host = await render();
-
-    await act(async () => pill(host)?.click());
-
-    // "off" sends you to the history, which on a phone is a revealed panel.
-    expect(host.querySelector('[aria-label="Saved versions panel"]')).not.toBeNull();
   });
 
   // The section inside the sheet carries the same accessible name, so this
@@ -393,7 +309,7 @@ describe("PhoneShell", () => {
     storeHub([{ kind: "panel", id: "explorer" }, { kind: "menu" }]);
     const host = await render();
     expect(hubOf(host)?.textContent).not.toContain("Saved versions");
-    await click(host, "Open navigation");
+    await click(host, "Menu");
 
     // On touch, press-and-hold fires `contextmenu`, which is what the drawer
     // rows listen for — no second long-press timer of their own.
@@ -416,7 +332,7 @@ describe("PhoneShell", () => {
   // of the box, so the first hold a new user tries is a refused one.
   it("refuses a sixth shortcut and says why in the drawer", async () => {
     const host = await render();
-    await click(host, "Open navigation");
+    await click(host, "Menu");
     expect(drawerOf(host)?.textContent).toContain("The bottom bar is full");
 
     await act(async () => {
@@ -451,7 +367,7 @@ describe("PhoneShell", () => {
 
   it("reveals an extension's left panel from the drawer", async () => {
     const host = await render();
-    await click(host, "Open navigation");
+    await click(host, "Menu");
 
     // Scoped to the drawer: the hub renders its own slots with the same labels.
     const drawer = visibleDialog(host, "Navigation");
@@ -482,115 +398,83 @@ describe("PhoneShell", () => {
 
     await click(host, "Back");
 
+    // Back lands on the Files route, so the shell's left panel follows it to
+    // explorer rather than being left lit on the panel that just closed.
     expect(host.querySelector('[aria-label="Search panel"]')).toBeNull();
-    expect(shell().leftPanel).toBeNull();
+    expect(shell().leftPanel).toBe("explorer");
     expect(hubOf(host)?.querySelector('[aria-label="Search"]')?.getAttribute("aria-current")).toBeNull();
     expect(drawerOf(host)?.querySelector('[aria-label="Search"]')?.getAttribute("aria-current")).toBeNull();
   });
 
-  /**
-   * Waits until the note has actually loaded. Autosave writes through
-   * `saveDocument`, which refuses a tab still in `loading`.
-   */
-  const openReadyNote = async (
-    shell: () => ShellState,
-    relativePath: string = "note.md"
-  ): Promise<string> => {
-    await act(async () => shell().openMarkdownDocument("/vault", relativePath));
-    const tabId = shell().tabState.tabs.find((tab) => tab.resource?.relativePath === relativePath)?.id;
-    expect(tabId).toBeDefined();
-    // `openMarkdownDocument` loads in a fire-and-forget `.then`; drain
-    // microtasks until the mocked read lands so `saveDocument` sees a ready tab.
-    for (let i = 0; i < 10 && shell().documents[tabId!]?.phase !== "ready"; i++) {
-      await act(async () => {
-        await Promise.resolve();
-      });
-    }
-    expect(shell().documents[tabId!]?.phase).toBe("ready");
-    return tabId!;
-  };
+  it("offers Saved versions only inside the action-items menu", async () => {
+    const host = await render();
 
-  const writeMock = (): ReturnType<typeof vi.mocked<typeof workspaceDocumentApi.writeMarkdownDocument>> =>
-    vi.mocked(workspaceDocumentApi.writeMarkdownDocument);
+    // The phone header carries no sync/version control at all.
+    expect(host.querySelector('header [aria-label="Saved versions"]')).toBeNull();
 
-  it("autosaves a dirty document after 1.5s of inactivity", async () => {
-    const { shell } = await renderWithShell();
-    const tabId = await openReadyNote(shell);
-    vi.useFakeTimers();
+    await click(host, "Document tools");
+    const row = actionsMenu(host)?.querySelector<HTMLButtonElement>(
+      '[role="menuitem"][aria-label="Saved versions"]'
+    );
+    expect(row).not.toBeNull();
 
-    await act(async () => shell().updateDocument(tabId, "edited text"));
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1400);
-    });
-    expect(writeMock()).not.toHaveBeenCalled();
+    await act(async () => row?.click());
 
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(200);
-    });
-    expect(writeMock()).toHaveBeenCalledOnce();
+    // Replacing the menu's entry lands straight on the panel — the menu is
+    // closed, not buried one Back step deep.
+    expect(host.querySelector('[aria-label="Saved versions panel"]')).not.toBeNull();
+    expect(actionsMenu(host)).toBeNull();
   });
 
-  it("resets the autosave timer when typing continues", async () => {
-    const { shell } = await renderWithShell();
-    const tabId = await openReadyNote(shell);
-    vi.useFakeTimers();
-
-    await act(async () => shell().updateDocument(tabId, "first edit"));
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1400);
-    });
-    expect(writeMock()).not.toHaveBeenCalled();
-
-    await act(async () => shell().updateDocument(tabId, "second edit"));
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1400);
-    });
-    expect(writeMock()).not.toHaveBeenCalled();
+  it("clears a note-specific version filter when the drawer opens Saved versions", async () => {
+    const { host, shell } = await renderWithShell();
+    await act(async () => shell().openMarkdownDocument("/vault", "note.md"));
+    await act(async () => shell().showVersionsOf("/vault", "note.md"));
+    expect(shell().versionsOf).toBe("note.md");
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(200);
+      hubOf(host)?.querySelector<HTMLButtonElement>('[aria-label="Menu"]')?.click();
     });
-    expect(writeMock()).toHaveBeenCalledOnce();
+    const drawer = visibleDialog(host, "Navigation");
+    await act(async () => {
+      drawer?.querySelector<HTMLButtonElement>('[aria-label="Saved versions"]')?.click();
+    });
+
+    // Both Saved versions entry points now agree: whole workspace, no filter.
+    expect(shell().versionsOf).toBeNull();
+    expect(host.querySelector('[aria-label="Saved versions panel"]')).not.toBeNull();
   });
 
-  it("cancels a pending autosave when switching tabs", async () => {
-    const { shell } = await renderWithShell();
-    const firstId = await openReadyNote(shell, "note.md");
-    await openReadyNote(shell, "other.md");
-    await act(async () => shell().dispatchTabs({ type: "activate", tabId: firstId }));
-    vi.useFakeTimers();
-
-    await act(async () => shell().updateDocument(firstId, "edited, then left"));
-    await act(async () => shell().dispatchTabs({ type: "activate", tabId: shell().tabState.tabs[1]!.id }));
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(2000);
-    });
-
-    expect(writeMock()).not.toHaveBeenCalled();
-  });
-
-  it("does not autosave a document that is not dirty", async () => {
-    const { shell } = await renderWithShell();
-    await openReadyNote(shell);
-    vi.useFakeTimers();
+  it("bounds the drawer panel and scrim above the hub", async () => {
+    const host = await render();
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(2000);
+      hubOf(host)?.querySelector<HTMLButtonElement>('[aria-label="Menu"]')?.click();
     });
+    const drawer = visibleDialog(host, "Navigation");
+    // Several scrims stay mounted (drawer, inspector, sheets) — the drawer's
+    // own is the element immediately preceding its panel.
+    const scrim = drawer?.previousElementSibling;
+    expect(scrim?.getAttribute("data-tn-scrim")).not.toBeNull();
 
-    expect(writeMock()).not.toHaveBeenCalled();
+    const bound = "bottom-[calc(3.5rem+env(safe-area-inset-bottom))]";
+    expect(drawer?.className).toContain(bound);
+    expect(scrim?.className).toContain(bound);
+
+    // The Menu slot stays tappable underneath: a second tap closes the drawer.
+    await act(async () => {
+      hubOf(host)?.querySelector<HTMLButtonElement>('[aria-label="Menu"]')?.click();
+    });
+    expect(visibleDialog(host, "Navigation")).toBeNull();
   });
 
-  it("cancels a pending autosave on unmount", async () => {
-    const { shell } = await renderWithShell();
-    const tabId = await openReadyNote(shell);
-    vi.useFakeTimers();
+  it("clipped, not scrollable: the shell root cannot be focus-scrolled", async () => {
+    const host = await render();
+    const main = host.querySelector('[aria-label="ThinkBrain mobile workspace"]');
 
-    await act(async () => shell().updateDocument(tabId, "edited then left the shell"));
-    await act(async () => root?.unmount());
-    root = null;
-    await vi.advanceTimersByTimeAsync(2000);
-
-    expect(writeMock()).not.toHaveBeenCalled();
+    // Offscreen-translated sheets enlarge scrollable overflow; `clip` refuses
+    // programmatic scroll where `hidden` would let WebView shift the shell.
+    expect(main?.className).toContain("overflow-clip");
+    expect(main?.className).not.toContain("overflow-hidden");
   });
 });
