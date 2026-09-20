@@ -33,6 +33,7 @@ export function PhoneDrawer({
   onDismiss,
   onSelectPanel,
   onOpenSettings,
+  onWorkspaceAction,
   onLongPressPanel,
   hubPanelIds,
   hubFull = false
@@ -43,6 +44,8 @@ export function PhoneDrawer({
   readonly onDismiss: () => void;
   readonly onSelectPanel: (panel: LeftPanel) => void;
   readonly onOpenSettings: () => void;
+  /** Runs before any workspace-selector action so its UI lands on Files, not under the drawer. */
+  readonly onWorkspaceAction: () => void;
   readonly onLongPressPanel?: (panel: LeftPanel) => void;
   /** Panels that already hold a hub slot, so a row can say so before it is pressed. */
   readonly hubPanelIds?: readonly string[];
@@ -70,7 +73,7 @@ export function PhoneDrawer({
       scrimClassName={BOUNDS}
     >
       <h2 className="px-4 pt-3 pb-2 text-sm font-bold">Menu</h2>
-      <WorkspaceSelectorOutlet variant="drawer" />
+      <WorkspaceSelectorOutlet variant="drawer" onAction={onWorkspaceAction} />
 
       {/* A long press is invisible: nothing on a phone announces that pressing
           and holding does anything at all. This line is the only place the

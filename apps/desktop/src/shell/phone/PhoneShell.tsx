@@ -259,6 +259,13 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
     [navigation, clearVersions]
   );
 
+  // Explorer-owned selector actions (Create vault, Git import, …) render their
+  // dialogs inside the Files branch, so the drawer's entry is replaced with
+  // Files first — otherwise the dialog mounts under the drawer/hidden note.
+  const showFilesForWorkspaceAction = useCallback(() => {
+    navigation.replace({ kind: "files" });
+  }, [navigation]);
+
   const runCommand = useCallback(
     (commandId: string) => {
       // New note is a toggle, not a fire-and-forget action: the slot opens a
@@ -555,6 +562,7 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
           badges={shell.conflictBadges}
           onDismiss={closeDrawer}
           onSelectPanel={selectDrawerPanel}
+          onWorkspaceAction={showFilesForWorkspaceAction}
           onLongPressPanel={(panelId) => editHub(pinPanel(items, panelId))}
           hubPanelIds={hubPanelIds}
           hubFull={items.length >= MAX_HUB_ITEMS}

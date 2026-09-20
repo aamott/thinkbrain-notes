@@ -49,6 +49,7 @@ async function renderSelector(capabilities = desktopCapabilities) {
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
+  const onAction = vi.fn();
   const onSelect = vi.fn();
   const onAdd = vi.fn();
   const onCreateManaged = vi.fn();
@@ -61,6 +62,7 @@ async function renderSelector(capabilities = desktopCapabilities) {
         capabilities={capabilities}
         currentPath="/notes/current"
         paths={["/notes/previous", "/notes/current"]}
+        onAction={onAction}
         onSelect={onSelect}
         onAdd={onAdd}
         onCreateManaged={onCreateManaged}
@@ -69,7 +71,7 @@ async function renderSelector(capabilities = desktopCapabilities) {
     );
   });
 
-  return { onAdd, onCreateManaged, onImportFromGit, onSelect };
+  return { onAction, onAdd, onCreateManaged, onImportFromGit, onSelect };
 }
 
 async function renderExplorer(
@@ -129,7 +131,7 @@ describe("WorkspaceExplorer presentation", () => {
   });
 
   it("uses a menu-shaped workspace selector that opens a new workspace without changing its source", async () => {
-    const { onAdd, onSelect } = await renderSelector();
+    const { onAction, onAdd, onSelect } = await renderSelector();
     const trigger = container?.querySelector<HTMLButtonElement>("button");
     if (!trigger) throw new Error("Workspace selector trigger was not rendered.");
 
@@ -146,12 +148,16 @@ describe("WorkspaceExplorer presentation", () => {
     await click(previous);
 
     expect(onSelect).toHaveBeenCalledWith("/notes/previous");
+    // The outlet's pre-action hook runs first, so the phone can swap the
+    // drawer for Files before the owner opens anything.
+    expect(onAction).toHaveBeenCalledOnce();
+    expect(onAction.mock.invocationCallOrder[0]!).toBeLessThan(onSelect.mock.invocationCallOrder[0]!);
     expect(container?.querySelector("[role='menu']")).toBeNull();
     expect(onAdd).not.toHaveBeenCalled();
   });
 
   it("closes the selector menu with Escape and exposes Open folder and Bring in from Git link", async () => {
-    const { onAdd, onImportFromGit } = await renderSelector();
+    const { onAction, onAdd, onImportFromGit } = await renderSelector();
     const trigger = container?.querySelector<HTMLButtonElement>("button");
     if (!trigger) throw new Error("Workspace selector trigger was not rendered.");
     await click(trigger);
@@ -168,18 +174,25 @@ describe("WorkspaceExplorer presentation", () => {
     expect(actions.at(-1)?.textContent).toContain("Bring in from Git link");
     await click(actions.at(-2)!);
     expect(onAdd).toHaveBeenCalledOnce();
+    expect(onAction).toHaveBeenCalledOnce();
+    expect(onAction.mock.invocationCallOrder[0]!).toBeLessThan(onAdd.mock.invocationCallOrder[0]!);
     expect(onImportFromGit).not.toHaveBeenCalled();
 
     await click(trigger);
     const again = Array.from(container?.querySelectorAll<HTMLButtonElement>("[role='menuitem']") ?? []);
     await click(again.at(-1)!);
     expect(onImportFromGit).toHaveBeenCalledOnce();
+    expect(onAction).toHaveBeenCalledTimes(2);
+    expect(onAction.mock.invocationCallOrder[1]!).toBeLessThan(
+      onImportFromGit.mock.invocationCallOrder[0]!
+    );
     expect(container?.querySelector("[role='menu']")).toBeNull();
     expect(document.activeElement).toBe(trigger);
   });
 
   it("offers managed vault creation and Git import without Open folder on Android", async () => {
-    const { onAdd, onCreateManaged, onImportFromGit } = await renderSelector(managedCapabilities);
+    const { onAction, onAdd, onCreateManaged, onImportFromGit, onSelect } =
+      await renderSelector(managedCapabilities);
     const trigger = container?.querySelector<HTMLButtonElement>("button[aria-haspopup='menu']");
     if (!trigger) throw new Error("Workspace selector trigger was not rendered.");
     await click(trigger);
@@ -194,10 +207,25 @@ describe("WorkspaceExplorer presentation", () => {
     await click(create!);
     expect(onCreateManaged).toHaveBeenCalledOnce();
     expect(onAdd).not.toHaveBeenCalled();
+    // Every action — not just the dialog openers — runs the outlet's hook
+    // first so the phone lands on Files before the owner reacts.
+    expect(onAction.mock.invocationCallOrder[0]!).toBeLessThan(
+      onCreateManaged.mock.invocationCallOrder[0]!
+    );
     await click(trigger);
     await click(Array.from(container?.querySelectorAll<HTMLButtonElement>("[role='menuitem']") ?? [])
       .find((button) => button.textContent?.includes("Bring in from Git link"))!);
     expect(onImportFromGit).toHaveBeenCalledOnce();
+    expect(onAction.mock.invocationCallOrder[1]!).toBeLessThan(
+      onImportFromGit.mock.invocationCallOrder[0]!
+    );
+
+    await click(trigger);
+    await click(Array.from(container?.querySelectorAll<HTMLButtonElement>("[role='menuitem']") ?? [])
+      .find((button) => button.textContent?.includes("previous"))!);
+    expect(onSelect).toHaveBeenCalledWith("/notes/previous");
+    expect(onAction).toHaveBeenCalledTimes(3);
+    expect(onAction.mock.invocationCallOrder[2]!).toBeLessThan(onSelect.mock.invocationCallOrder[0]!);
   });
 
   it("focuses the current workspace and supports menu keyboard navigation", async () => {

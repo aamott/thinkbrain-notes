@@ -17,6 +17,7 @@ type WorkspaceSelectorOutletRegistration = {
   readonly id: string;
   readonly element: HTMLDivElement;
   readonly variant: WorkspaceSelectorVariant;
+  readonly onAction?: () => void;
 };
 
 type WorkspaceSelectorPortalContextValue = {
@@ -43,15 +44,21 @@ export function WorkspaceSelectorProvider({ children }: { readonly children: Rea
   );
 }
 
-export function WorkspaceSelectorOutlet({ variant }: { readonly variant: WorkspaceSelectorVariant }) {
+export function WorkspaceSelectorOutlet({
+  variant,
+  onAction
+}: {
+  readonly variant: WorkspaceSelectorVariant;
+  readonly onAction?: () => void;
+}) {
   const context = useContext(WorkspaceSelectorPortalContext);
   const id = useId();
   const elementRef = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
     if (!context || !elementRef.current) return;
-    return context.register({ id, element: elementRef.current, variant });
-  }, [context, id, variant]);
+    return context.register({ id, element: elementRef.current, variant, onAction });
+  }, [context, id, variant, onAction]);
 
   return (
     <div
@@ -65,9 +72,9 @@ export function WorkspaceSelectorOutlet({ variant }: { readonly variant: Workspa
 export function WorkspaceSelectorPortal({
   children
 }: {
-  readonly children: (variant: WorkspaceSelectorVariant) => ReactNode;
+  readonly children: (variant: WorkspaceSelectorVariant, onAction?: () => void) => ReactNode;
 }) {
   const outlet = useContext(WorkspaceSelectorOutletContext);
   // Explorer keeps the real selector so its workspace actions and dialogs share one controller.
-  return outlet ? createPortal(children(outlet.variant), outlet.element) : null;
+  return outlet ? createPortal(children(outlet.variant, outlet.onAction), outlet.element) : null;
 }

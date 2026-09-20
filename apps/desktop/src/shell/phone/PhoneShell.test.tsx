@@ -2,7 +2,11 @@
 import { act } from "react";
 import { afterAll, describe, expect, it, vi } from "vitest";
 
-import { desktopPanelRegistry } from "../../panels/panelRegistryModel";
+// The harness must be the first import: its `vi.mock("../../native/commands")`
+// registers when the harness module evaluates, and `panelRegistryModel`
+// transitively loads `workspaceAdapter` → `native/commands`. If the registry
+// loaded first, the adapter would keep the real (non-Tauri) commands and the
+// explorer's capability probe would silently fall back to desktop answers.
 import {
   actionsMenu,
   click,
@@ -12,12 +16,15 @@ import {
   hubLabels,
   hubOf,
   inspector,
+  mockManagedWorkspaceAccess,
   noteTitleVisible,
+  openReadyNote,
   render,
   renderWithShell,
   storeHub,
   visibleDialog
 } from "./PhoneShell.testHarness";
+import { desktopPanelRegistry } from "../../panels/panelRegistryModel";
 
 // The registry is a module singleton, so this extension panel is live for the
 // whole file. It exists to prove the drawer's rows are actually reachable —
@@ -81,6 +88,40 @@ describe("PhoneShell", () => {
     expect(title.compareDocumentPosition(selector) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
     expect(selector.compareDocumentPosition(files) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
     expect(filesPanel(host)?.querySelector('button[aria-haspopup="menu"]')).toBeNull();
+  });
+
+  // Both dialogs are owned and rendered by WorkspaceExplorer inside the Files
+  // branch, which is `aria-hidden` while a note route is up. The drawer's
+  // `onAction` hook must swap the drawer's entry for Files before the action
+  // opens its dialog, or the dialog mounts under the hidden ancestor.
+  it.each([
+    { action: "Create vault…", dialogTitle: "Create managed vault" },
+    { action: "Bring in from Git link…", dialogTitle: "Bring in workspace from Git link" }
+  ])("reveals Files for the drawer's %s action before its dialog opens", async ({
+    action,
+    dialogTitle
+  }) => {
+    mockManagedWorkspaceAccess();
+    const { host, shell } = await renderWithShell();
+    await openReadyNote(shell);
+    expect(noteTitleVisible(host)).toBe(true);
+
+    await click(host, "Menu");
+    const drawer = visibleDialog(host, "Navigation");
+    const trigger = drawer?.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]');
+    if (!trigger) throw new Error("Workspace selector trigger was not rendered.");
+    await act(async () => trigger.click());
+
+    const item = [...(drawer?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? [])]
+      .find((button) => button.textContent?.includes(action));
+    if (!item) throw new Error(`"${action}" was not rendered.`);
+    await act(async () => item.click());
+
+    expect(visibleDialog(host, "Navigation")).toBeNull();
+    expect(filesVisible(host)).toBe(true);
+    const heading = [...host.querySelectorAll("h2")].find((h) => h.textContent === dialogTitle);
+    expect(heading).toBeTruthy();
+    expect(heading?.closest('[aria-hidden="true"]')).toBeNull();
   });
 
   it("lists every registered left panel in the drawer with a visible label", async () => {

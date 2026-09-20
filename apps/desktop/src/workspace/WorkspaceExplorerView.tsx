@@ -190,9 +190,10 @@ export function WorkspaceExplorerView({
         <ManagedStorageNotice onDismiss={() => actions.setManagedStorageNoticeOpen(false)} />
       )}
       <WorkspaceSelectorPortal>
-        {(variant) => (
+        {(variant, onAction) => (
           <WorkspaceSelector
             variant={variant}
+            onAction={onAction}
             capabilities={accessCapabilities}
             currentPath={workspaceRootPath}
             paths={recentWorkspacePaths}
@@ -332,6 +333,7 @@ export function WorkspaceSelector({
   capabilities,
   currentPath,
   paths,
+  onAction,
   onSelect,
   onAdd,
   onCreateManaged,
@@ -341,6 +343,7 @@ export function WorkspaceSelector({
   readonly capabilities: NativeWorkspaceAccessCapabilities | null;
   readonly currentPath?: string;
   readonly paths: readonly string[];
+  readonly onAction?: () => void;
   readonly onSelect: (path: string) => void;
   readonly onAdd: () => void;
   readonly onCreateManaged: () => void;
@@ -425,6 +428,7 @@ export function WorkspaceSelector({
                 current={path === currentPath}
                 onClick={() => {
                   closeMenu(true);
+                  onAction?.();
                   onSelect(path);
                 }}
               />
@@ -436,6 +440,7 @@ export function WorkspaceSelector({
               label={OPEN_FOLDER_LABEL}
               onClick={() => {
                 closeMenu(true);
+                onAction?.();
                 onAdd();
               }}
             />
@@ -446,6 +451,7 @@ export function WorkspaceSelector({
               label={CREATE_MANAGED_WORKSPACE_LABEL}
               onClick={() => {
                 closeMenu(true);
+                onAction?.();
                 onCreateManaged();
               }}
             />
@@ -456,6 +462,7 @@ export function WorkspaceSelector({
               label={IMPORT_FROM_GIT_LABEL}
               onClick={() => {
                 closeMenu(true);
+                onAction?.();
                 onImportFromGit();
               }}
             />

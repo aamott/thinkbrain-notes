@@ -3,6 +3,7 @@ import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, expect, vi } from "vitest";
 
+import { invokeNativeCommand } from "../../native/commands";
 import { useSettingsStore } from "../../settings/settingsStore";
 import { ThemeProvider } from "../../settings/ThemeProvider";
 import { workspaceDocumentApi } from "../../workspace/workspaceDocumentAdapter";
@@ -45,6 +46,29 @@ vi.mock("../../native/commands", () => ({
   invokeNativeCommand: vi.fn(() => Promise.resolve(null))
 }));
 
+// The module mock above installs a bare `vi.fn`, so grab it back through the
+// (generic) real signature to give implementations room to answer per command.
+const nativeCommands = () =>
+  invokeNativeCommand as unknown as {
+    mockImplementation: (fn: (command: string) => Promise<unknown>) => void;
+    mockReset: () => void;
+  };
+
+/**
+ * Answers the two commands the Android managed-vault flow probes —
+ * capabilities and the managed list — while every other command keeps the
+ * harness's default null answer. Call before `render`/`renderWithShell`.
+ */
+export const mockManagedWorkspaceAccess = (): void => {
+  nativeCommands().mockImplementation(async (command: string) => {
+    if (command === "workspace_access_capabilities") {
+      return { canOpenFolder: false, canCreateManagedWorkspace: true, opensWorkspaceInNewWindow: false };
+    }
+    if (command === "list_managed_workspaces") return [];
+    return null;
+  });
+};
+
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
 
@@ -53,6 +77,8 @@ afterEach(async () => {
   container?.remove();
   vi.unstubAllGlobals();
   vi.useRealTimers();
+  nativeCommands().mockReset();
+  nativeCommands().mockImplementation(() => Promise.resolve(null));
   vi.mocked(workspaceDocumentApi.writeMarkdownDocument).mockClear();
   clearStoredHub();
   container = null;
