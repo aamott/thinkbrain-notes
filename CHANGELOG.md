@@ -3,6 +3,22 @@
 Newest first. Versions follow [semver](https://semver.org), except that before
 1.0 a minor bump may still change behaviour.
 
+## 0.3.0-beta.1 — 2026-09-20
+
+Prerelease for the mobile navigation, file viewer, and sync work merged since
+0.2.0.
+
+- **Phone navigation** — browser-style Back/Forward history, breadcrumbs,
+  action-items menu, New note popup, and hub-driven drawer and tab flows.
+- **Workspace selector** — moved into the Explorer panel and shared across
+  desktop and phone layouts.
+- **File viewing** — generic file tabs, CodeEditor syntax highlighting, and
+  filename titles where notes need them.
+- **Sync and settings** — scheduled sync hardening, lifecycle-aware mobile
+  triggers, advanced settings gating, and Android credential groundwork.
+- **Extensions and IPC** — generated command/path registration keeps the Tauri
+  contract in one place.
+
 ## 0.2.0 — 2026-08-27
 
 Phone shell, overlay accessibility, platform capability gating, and settings polish.
