@@ -6,6 +6,7 @@ import {
   addNote,
   buildWikiLinkIndex,
   buildNoteIndexEntry,
+  getBacklinkDetails,
   getBacklinks,
   getForwardLinks,
   getUnresolvedReferences,
@@ -14,8 +15,8 @@ import {
 } from "./wikiLinkIndex";
 
 /** Helper: parses markdown and pairs it with a relative path. */
-function note(relativePath: string, markdown: string): WikiLinkIndexInput {
-  return { relativePath, parsedNote: parseNote(markdown) };
+function note(relativePath: string, contents: string): WikiLinkIndexInput {
+  return { relativePath, contents, parsedNote: parseNote(contents) };
 }
 
 describe("buildNoteIndexEntry", () => {
@@ -61,6 +62,40 @@ describe("buildWikiLinkIndex", () => {
   it("deduplicates repeated targets in a single note", () => {
     const idx = buildWikiLinkIndex([note("X.md", "[[A]] [[A]] [[A]]")]);
     expect(getForwardLinks(idx, "X.md")).toEqual(["A"]);
+  });
+
+  it("stores the source path and full trimmed line for each backlink", () => {
+    const idx = buildWikiLinkIndex([
+      note("notes/source.md", "before\n  See [[Target|display text]] for details.  \nafter"),
+      note("Target.md", "body")
+    ]);
+    expect(getBacklinkDetails(idx, "Target.md")).toEqual([{
+      relativePath: "notes/source.md",
+      context: "See [[Target|display text]] for details."
+    }]);
+  });
+
+  it("uses exact-source offsets after frontmatter", () => {
+    const contents = "---\ntitle: Source\n---\nfirst body line\n  [[Target]] after metadata  ";
+    const idx = buildWikiLinkIndex([
+      note("Source.md", contents),
+      note("Target.md", "body")
+    ]);
+    expect(getBacklinkDetails(idx, "Target.md")).toEqual([{
+      relativePath: "Source.md",
+      context: "[[Target]] after metadata"
+    }]);
+  });
+
+  it("keeps only the first context for duplicate normalized targets", () => {
+    const idx = buildWikiLinkIndex([
+      note("Source.md", "first [[Target]]\nsecond [[target.md|label]]"),
+      note("Target.md", "body")
+    ]);
+    expect(getBacklinkDetails(idx, "Target.md")).toEqual([{
+      relativePath: "Source.md",
+      context: "first [[Target]]"
+    }]);
   });
 
   it("resolves targets using resolveWikiLinkTarget (filename, title, alias, path)", () => {
@@ -144,16 +179,25 @@ describe("addNote (incremental)", () => {
     expect(getUnresolvedReferences(next, "Old")).toEqual(["A.md"]);
   });
 
-  it("resolves a previously unresolved target when a matching note is added", () => {
+  it.each([
+    ["filename", "Target.md", "body"],
+    ["title", "Different.md", "---\ntitle: Target\n---\nbody"],
+    ["alias", "Different.md", "---\naliases: [Target]\n---\nbody"]
+  ])("moves unresolved details to backlinks after %s resolution", (_, path, contents) => {
     const index = buildWikiLinkIndex([
-      note("A.md", "[[Target]]")
+      note("A.md", "Context for [[Target|target note]]")
     ]);
-    expect(getUnresolvedReferences(index, "Target")).toEqual(["A.md"]);
+    expect(index.unresolved.get("Target")).toEqual([{
+      relativePath: "A.md",
+      context: "Context for [[Target|target note]]"
+    }]);
 
-    // Add a note whose filename matches the target.
-    const next = addNote(index, note("Target.md", "body"));
+    const next = addNote(index, note(path, contents));
     expect(getUnresolvedReferences(next, "Target")).toEqual([]);
-    expect(getBacklinks(next, "Target.md")).toEqual(["A.md"]);
+    expect(getBacklinkDetails(next, path)).toEqual([{
+      relativePath: "A.md",
+      context: "Context for [[Target|target note]]"
+    }]);
   });
 });
 

@@ -36,6 +36,10 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
   const resource = activeTab?.resource;
   const rootPath = resource?.rootPath;
   const relativePath = resource?.relativePath;
+  const markdownDocumentPath = activeTab?.kind === "editor"
+    && relativePath?.toLowerCase().endsWith(".md")
+    ? relativePath
+    : null;
 
   // Journal entries render their own dateline, so the title row hides there —
   // same rule as PhoneShell. Only ordinary Markdown editor tabs get a title.
@@ -184,6 +188,12 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
                 documentContents={activeDocument?.phase === "ready"
                   ? activeDocument.contents
                   : null}
+                documentPath={markdownDocumentPath}
+                onOpenNote={(relativePath) => {
+                  if (shell.restoredWorkspacePath) {
+                    shell.openMarkdownDocument(shell.restoredWorkspacePath, relativePath);
+                  }
+                }}
                 onBack={() => shell.setRightPanel(null)}
               />
             </>

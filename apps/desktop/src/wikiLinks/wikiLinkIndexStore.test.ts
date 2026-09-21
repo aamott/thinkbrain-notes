@@ -9,7 +9,10 @@ vi.mock("../native/commands", () => ({
 import { invokeNativeCommand, type NativeMarkdownFileContents } from "../native/commands";
 import { appEvents } from "../events/appEvents";
 import { useWikiLinkIndexStore } from "./wikiLinkIndexStore";
-import { getBacklinks as getBacklinksFromIndex } from "@thinkbrain/core";
+import {
+  getBacklinkDetails,
+  getBacklinks as getBacklinksFromIndex
+} from "@thinkbrain/core";
 
 /** Helper: builds a NativeMarkdownFileEntry for a relative path. */
 function fileEntry(relativePath: string) {
@@ -52,7 +55,8 @@ describe("useWikiLinkIndexStore", () => {
         noteIndex: []
       },
       noteIndex: [],
-      rootPath: null
+      rootPath: null,
+      status: "idle"
     });
     vi.mocked(invokeNativeCommand).mockReset();
   });
@@ -64,7 +68,28 @@ describe("useWikiLinkIndexStore", () => {
   it("starts with no workspace and an empty index", () => {
     const state = useWikiLinkIndexStore.getState();
     expect(state.rootPath).toBeNull();
+    expect(state.status).toBe("idle");
     expect(state.noteIndex).toEqual([]);
+  });
+
+  it("transitions idle to indexing to ready while a read is held", async () => {
+    let resolveRead!: (value: NativeMarkdownFileContents) => void;
+    vi.mocked(invokeNativeCommand).mockImplementationOnce(
+      () => new Promise((resolve) => (resolveRead = resolve))
+    );
+
+    const indexing = useWikiLinkIndexStore
+      .getState()
+      .indexWorkspace("/vault", [fileEntry("A.md")]);
+    expect(useWikiLinkIndexStore.getState()).toMatchObject({
+      rootPath: "/vault",
+      status: "indexing",
+      noteIndex: []
+    });
+
+    resolveRead({ relative_path: "A.md", contents: "body" });
+    await indexing;
+    expect(useWikiLinkIndexStore.getState().status).toBe("ready");
   });
 
   it("builds the index from all workspace files on indexWorkspace", async () => {
@@ -96,6 +121,7 @@ describe("useWikiLinkIndexStore", () => {
 
     const state = useWikiLinkIndexStore.getState();
     expect(state.rootPath).toBeNull();
+    expect(state.status).toBe("idle");
     expect(state.noteIndex).toEqual([]);
   });
 
@@ -128,6 +154,46 @@ describe("useWikiLinkIndexStore", () => {
     const state = useWikiLinkIndexStore.getState();
     expect(getBacklinksFromIndex(state.wikiLinkIndex, "C.md")).toEqual([]);
     expect(getBacklinksFromIndex(state.wikiLinkIndex, "B.md")).toEqual(["A.md"]);
+  });
+
+  it("updates backlink contexts across save, create, rename, and delete", async () => {
+    mockReadFile({
+      "A.md": "old context [[Target]]",
+      "Target.md": "body"
+    });
+    await useWikiLinkIndexStore
+      .getState()
+      .indexWorkspace("/vault", [fileEntry("A.md"), fileEntry("Target.md")]);
+    expect(getBacklinkDetails(
+      useWikiLinkIndexStore.getState().wikiLinkIndex,
+      "Target.md"
+    )).toEqual([{ relativePath: "A.md", context: "old context [[Target]]" }]);
+
+    mockReadFile({ "A.md": "saved context [[Target]]" });
+    await useWikiLinkIndexStore.getState().reindexDocument("/vault", "A.md");
+    mockReadFile({ "C.md": "created context [[Target]]" });
+    await useWikiLinkIndexStore.getState().reindexDocument("/vault", "C.md");
+    expect(getBacklinkDetails(
+      useWikiLinkIndexStore.getState().wikiLinkIndex,
+      "Target.md"
+    )).toEqual([
+      { relativePath: "A.md", context: "saved context [[Target]]" },
+      { relativePath: "C.md", context: "created context [[Target]]" }
+    ]);
+
+    mockReadFile({ "folder/C.md": "renamed context [[Target]]" });
+    await useWikiLinkIndexStore
+      .getState()
+      .reindexRenamedDocument("/vault", "C.md", "folder/C.md");
+    useWikiLinkIndexStore.getState().removeDocument("/vault", "A.md");
+    expect(getBacklinkDetails(
+      useWikiLinkIndexStore.getState().wikiLinkIndex,
+      "Target.md"
+    )).toEqual([{
+      relativePath: "folder/C.md",
+      context: "renamed context [[Target]]"
+    }]);
+    expect(useWikiLinkIndexStore.getState().status).toBe("ready");
   });
 
   it("removes a note on removeDocument (note.deleted)", async () => {
@@ -244,6 +310,55 @@ describe("useWikiLinkIndexStore", () => {
     expect(errorSpy).toHaveBeenCalled();
   });
 
+  it("clears stale workspace data immediately when switching roots", async () => {
+    mockReadFile({ "Old.md": "body" });
+    await useWikiLinkIndexStore
+      .getState()
+      .indexWorkspace("/old", [fileEntry("Old.md")]);
+
+    let resolveNew!: (value: NativeMarkdownFileContents) => void;
+    vi.mocked(invokeNativeCommand).mockImplementationOnce(
+      () => new Promise((resolve) => (resolveNew = resolve))
+    );
+    const switching = useWikiLinkIndexStore
+      .getState()
+      .indexWorkspace("/new", [fileEntry("New.md")]);
+
+    expect(useWikiLinkIndexStore.getState()).toMatchObject({
+      rootPath: "/new",
+      status: "indexing",
+      noteIndex: []
+    });
+    expect(useWikiLinkIndexStore.getState().wikiLinkIndex.backlinks.size).toBe(0);
+
+    resolveNew({ relative_path: "New.md", contents: "body" });
+    await switching;
+    expect(useWikiLinkIndexStore.getState().noteIndex.map((note) => note.relativePath))
+      .toEqual(["New.md"]);
+  });
+
+  it("sets error with an empty index after a current outer indexing failure", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const brokenFiles = new Proxy([fileEntry("A.md")], {
+      get(target, property, receiver) {
+        if (property === "slice") throw new Error("outer failure");
+        return Reflect.get(target, property, receiver);
+      }
+    }) as readonly ReturnType<typeof fileEntry>[];
+
+    await useWikiLinkIndexStore.getState().indexWorkspace("/vault", brokenFiles);
+
+    expect(useWikiLinkIndexStore.getState()).toMatchObject({
+      rootPath: "/vault",
+      status: "error",
+      noteIndex: []
+    });
+    expect(errorSpy).toHaveBeenCalledWith(
+      "[wikiLinkIndexStore] Indexing failed:",
+      expect.any(Error)
+    );
+  });
+
   it("aborts in-flight reads on workspace switch so stale results do not commit", async () => {
     // First workspace starts indexing with a delayed read.
     let resolveA!: (value: { relative_path: string; contents: string }) => void;
@@ -294,6 +409,7 @@ describe("useWikiLinkIndexStore", () => {
 
     const state = useWikiLinkIndexStore.getState();
     expect(state.rootPath).toBeNull();
+    expect(state.status).toBe("idle");
     expect(state.noteIndex).toEqual([]);
   });
 });

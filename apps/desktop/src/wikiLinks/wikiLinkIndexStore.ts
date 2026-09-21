@@ -9,7 +9,7 @@
  * watcher saw another program make it.
  *
  * The store is deliberately thin: parsing and native IPC (reading files) are
- * routed through `readAndParseNote` in `native/`.
+ * routed through `readAndParseNoteSource` in `native/`.
  * UI consumers (backlinks panel, graph view) read `noteIndex` and call
  * `getBacklinks` to compute edges without re-parsing every note on each query.
  */
@@ -21,13 +21,12 @@ import {
   EMPTY_WIKI_LINK_INDEX,
   removeNote,
   type NoteIndexEntry,
-  type ParsedNote,
   type WikiLinkIndex,
   type WikiLinkIndexInput
 } from "@thinkbrain/core";
 import { subscribeIndexToNoteEvents } from "../events/noteIndexSubscription";
 import { type NativeMarkdownFileEntry } from "../native/commands";
-import { readAndParseNote } from "../native/noteParsing";
+import { readAndParseNoteSource } from "../native/noteParsing";
 
 /** Default number of files read per batch during full indexing. */
 const DEFAULT_BATCH_SIZE = 50;
@@ -46,6 +45,9 @@ let currentSubscription: (() => void) | null = null;
  */
 let indexingAbortController: AbortController | null = null;
 
+/** Lifecycle state for the current workspace's in-memory link index. */
+export type WikiLinkIndexStatus = "idle" | "indexing" | "ready" | "error";
+
 /** State + actions exposed by the wiki-link index store. */
 export interface WikiLinkIndexStore {
   /** Current wiki-link index, or the empty index when no workspace is open. */
@@ -54,6 +56,8 @@ export interface WikiLinkIndexStore {
   readonly noteIndex: readonly NoteIndexEntry[];
   /** Workspace root the index covers, or `null` when no workspace is open. */
   readonly rootPath: string | null;
+  /** Lifecycle state of the current workspace's index build. */
+  readonly status: WikiLinkIndexStatus;
 
   /** Reads, parses, and indexes all markdown files in the workspace. */
   indexWorkspace(rootPath: string, files: readonly NativeMarkdownFileEntry[]): Promise<void>;
@@ -88,9 +92,14 @@ async function readAndParse(
   rootPath: string,
   relativePath: string,
   signal?: AbortSignal
-): Promise<{ relativePath: string; parsedNote: ParsedNote } | null> {
-  const parsedNote = await readAndParseNote(rootPath, relativePath, signal, "wikiLinkIndexStore");
-  return parsedNote === null ? null : { relativePath, parsedNote };
+): Promise<WikiLinkIndexInput | null> {
+  const source = await readAndParseNoteSource(
+    rootPath,
+    relativePath,
+    signal,
+    "wikiLinkIndexStore"
+  );
+  return source === null ? null : { relativePath, ...source };
 }
 
 /**
@@ -103,7 +112,7 @@ async function readAndParse(
 function upsertNote(
   set: (partial: Partial<WikiLinkIndexStore>) => void,
   index: WikiLinkIndex,
-  parsed: { relativePath: string; parsedNote: ParsedNote }
+  parsed: WikiLinkIndexInput
 ): void {
   const next = addNote(index, parsed);
   set({ wikiLinkIndex: next, noteIndex: next.noteIndex });
@@ -113,6 +122,7 @@ export const useWikiLinkIndexStore = create<WikiLinkIndexStore>((set, get) => ({
   wikiLinkIndex: EMPTY_WIKI_LINK_INDEX,
   noteIndex: [],
   rootPath: null,
+  status: "idle",
 
   async indexWorkspace(rootPath, files) {
     // Abort any in-flight indexing from a previous workspace before starting.
@@ -120,7 +130,14 @@ export const useWikiLinkIndexStore = create<WikiLinkIndexStore>((set, get) => ({
     const controller = new AbortController();
     indexingAbortController = controller;
 
-    set({ rootPath });
+    // Clear previous workspace data synchronously so consumers cannot observe
+    // stale backlinks while the replacement workspace is being read.
+    set({
+      rootPath,
+      status: "indexing",
+      wikiLinkIndex: EMPTY_WIKI_LINK_INDEX,
+      noteIndex: []
+    });
     try {
       // Batch reads (mirroring searchService) so large vaults do not saturate
       // the IPC channel with thousands of concurrent reads. Yield between
@@ -145,14 +162,23 @@ export const useWikiLinkIndexStore = create<WikiLinkIndexStore>((set, get) => ({
       // Guard against a superseding workspace switch overwriting stale results.
       // The abort check covers the case where `clearWorkspace` or a newer
       // `indexWorkspace` aborted this batch after its reads completed.
-      if (controller.signal.aborted || get().rootPath !== rootPath) return;
+      if (
+        controller.signal.aborted
+        || indexingAbortController !== controller
+        || get().rootPath !== rootPath
+      ) return;
 
       const index = buildWikiLinkIndex(inputs);
-      set({ wikiLinkIndex: index, noteIndex: index.noteIndex });
+      set({ wikiLinkIndex: index, noteIndex: index.noteIndex, status: "ready" });
     } catch (error) {
+      if (controller.signal.aborted || indexingAbortController !== controller) return;
       console.error("[wikiLinkIndexStore] Indexing failed:", error);
-      if (indexingAbortController === controller && get().rootPath === rootPath) {
-        set({ wikiLinkIndex: EMPTY_WIKI_LINK_INDEX, noteIndex: [] });
+      if (get().rootPath === rootPath) {
+        set({
+          wikiLinkIndex: EMPTY_WIKI_LINK_INDEX,
+          noteIndex: [],
+          status: "error"
+        });
       }
     } finally {
       if (indexingAbortController === controller) {
@@ -168,7 +194,8 @@ export const useWikiLinkIndexStore = create<WikiLinkIndexStore>((set, get) => ({
     set({
       wikiLinkIndex: EMPTY_WIKI_LINK_INDEX,
       noteIndex: [],
-      rootPath: null
+      rootPath: null,
+      status: "idle"
     });
   },
 

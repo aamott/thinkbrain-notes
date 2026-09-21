@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { buildWikiLinkIndex, parseNote } from "@thinkbrain/core";
 import { act, useState } from "react";
 import { afterAll, describe, expect, it, vi } from "vitest";
 
@@ -26,6 +27,7 @@ import { mobileNewNoteActionRegistry } from "../../commands/mobileNewNoteActionR
 import { desktopPanelRegistry } from "../../panels/panelRegistryModel";
 import { useShellState, type ShellState } from "../useShellState";
 import { PhoneShell } from "./PhoneShell";
+import { useWikiLinkIndexStore } from "../../wikiLinks/wikiLinkIndexStore";
 
 // A right-side extension panel gated on document context, so the action-items
 // menu has a real "needs an open note" entry to disable on Files.
@@ -211,6 +213,65 @@ describe("PhoneShell navigation", () => {
     // no document contents even though the note is still open.
     await click(host, "Document tools");
     expect(docItem()?.disabled).toBe(true);
+  });
+
+  it("opens a backlink through the inspector without duplicating its existing tab", async () => {
+    const index = buildWikiLinkIndex([
+      {
+        relativePath: "source.md",
+        contents: "Link to [[target]]",
+        parsedNote: parseNote("Link to [[target]]")
+      },
+      {
+        relativePath: "target.md",
+        contents: "Target",
+        parsedNote: parseNote("Target")
+      }
+    ]);
+    try {
+      const box: { current: ShellState | null } = { current: null };
+      const Host = () => {
+        const state = useShellState();
+        box.current = state;
+        return <PhoneShell shell={{ ...state, restoredWorkspacePath: "/vault" }} />;
+      };
+      const host = await mount(<Host />);
+      const shell = (): ShellState => {
+        if (!box.current) throw new Error("PhoneShell did not render");
+        return box.current;
+      };
+      await act(async () => shell().openMarkdownDocument("/vault", "source.md"));
+      await act(async () => shell().openMarkdownDocument("/vault", "target.md"));
+      await act(async () => useWikiLinkIndexStore.setState({
+        rootPath: "/vault",
+        status: "ready",
+        wikiLinkIndex: index,
+        noteIndex: index.noteIndex
+      }));
+      expect(noteTitle(host)?.value).toBe("target");
+      expect(shell().tabState.tabs).toHaveLength(2);
+
+      await click(host, "Document tools");
+      await act(async () => {
+        actionsMenu(host)
+          ?.querySelector<HTMLButtonElement>('[role="menuitem"][aria-label="Backlinks"]')
+          ?.click();
+      });
+      const backlink = inspector(host)?.querySelector<HTMLButtonElement>(
+        '[aria-label="Open backlink from source"]'
+      );
+      expect(backlink).not.toBeNull();
+      await act(async () => backlink?.click());
+
+      expect(noteTitle(host)?.value).toBe("source");
+      expect(inspector(host)).toBeNull();
+      expect(shell().tabState.tabs).toHaveLength(2);
+
+      await click(host, "Back");
+      expect(noteTitle(host)?.value).toBe("target");
+    } finally {
+      await act(async () => useWikiLinkIndexStore.getState().clearWorkspace());
+    }
   });
 
   it("toggles the Files hub slot: note → Files → prior note", async () => {

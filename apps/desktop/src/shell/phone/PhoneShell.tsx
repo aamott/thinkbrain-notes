@@ -531,6 +531,8 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
           open={actionsOpen}
           rootPath={shell.restoredWorkspacePath}
           documentContents={visibleDocumentContents}
+          documentPath={isNoteTab(activeTab) ? activePath : null}
+          onOpenNote={openNote}
           onOpenSavedVersions={openSavedVersions}
           onDismiss={() => navigation.dismissOverlay()}
           onSelect={(panel) => {
@@ -546,6 +548,8 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
           panel={inspectorPanel ?? shell.rightPanel ?? "outline"}
           rootPath={shell.restoredWorkspacePath}
           documentContents={visibleDocumentContents}
+          documentPath={isNoteTab(activeTab) ? activePath : null}
+          onOpenNote={openNote}
           // Scrim tap closes the whole flow — under the actions menu that skips
           // the menu entry too; only the header Back steps one level.
           onDismiss={() => navigation.dismissOverlay(true)}

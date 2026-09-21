@@ -31,6 +31,8 @@ const panelContext = (
   ({
     rootPath: "/vault",
     documentContents: null,
+    documentPath: null,
+    onOpenNote: () => undefined,
     explorerProps: {} as DesktopPanelContext["explorerProps"],
     onOpenSearchResult: () => undefined,
     ...overrides

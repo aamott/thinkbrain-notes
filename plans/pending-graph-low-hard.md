@@ -73,14 +73,13 @@ future epics; this epic uses only explicit wiki-link edges.
 
 ## Status
 
-Four stories shipped; see `plans/graph/done-summary.md` for what shipped and where.
+Five stories shipped; see `plans/graph/done-summary.md` for what shipped and where.
 
 - ✅ Link target resolution (aliases + path normalization)
 - ✅ Wiki-link index for backlinks — reverse index (target → linking notes)
 - ✅ Wiki-link autocomplete — `[[` triggers a note picker
 - ✅ Clickable wiki-link navigation — click `[[Target]]` to open the note
-- ⬜ Backlinks panel — list notes linking to the active note — see
-  `pending-backlinks_panel-med-med.md` (elevated to medium urgency)
+- ✅ Backlinks panel — shared desktop/mobile inspector with source context, live index updates, canonical note navigation, and phone history
 - ⬜ Automatic link update on rename — rewrite `[[old]]` → `[[new]]` across the vault — see
   `pending-automatic_link_update_on_rename-med-hard.md`
 - ⬜ Graph view — visual network of notes and wiki-link edges — see

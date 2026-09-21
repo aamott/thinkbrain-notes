@@ -32,6 +32,8 @@ export function InspectorSheet({
   panel,
   rootPath,
   documentContents,
+  documentPath,
+  onOpenNote,
   onDismiss,
   onBack
 }: {
@@ -40,6 +42,8 @@ export function InspectorSheet({
   readonly rootPath: string | null;
   /** Markdown contents of the active editor tab, when its document is ready. */
   readonly documentContents: string | null;
+  readonly documentPath: string | null;
+  readonly onOpenNote: (relativePath: string) => void;
   /** Scrim tap: dismisses the inspector (and any flow it belongs to). */
   readonly onDismiss: () => void;
   /** Header Back: steps the flow back to the surface that opened it. */
@@ -66,6 +70,8 @@ export function InspectorSheet({
             panel={panel}
             rootPath={rootPath}
             documentContents={documentContents}
+            documentPath={documentPath}
+            onOpenNote={onOpenNote}
             onBack={onBack}
           />
         </div>
