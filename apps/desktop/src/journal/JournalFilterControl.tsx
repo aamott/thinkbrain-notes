@@ -24,6 +24,7 @@ const UNAVAILABLE = "Filters need the search index, which isn't ready.";
 export interface JournalFilterControlProps {
   readonly facets: readonly JournalFacet[];
   readonly predicates: readonly JournalPredicate[];
+  readonly activeCount: number;
   /** False while the index cannot answer; the control says so rather than lying. */
   readonly available: boolean;
   readonly onToggle: (predicate: JournalPredicate) => void;
@@ -32,13 +33,14 @@ export interface JournalFilterControlProps {
 export function JournalFilterControl({
   facets,
   predicates,
+  activeCount,
   available,
   onToggle
 }: JournalFilterControlProps) {
   const [anchor, setAnchor] = useState<MenuPosition | null>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const active = new Set(predicates.map(predicateId));
-  const count = predicates.length;
+  const count = activeCount;
   // A field the index found no values for has nothing to offer, and an empty
   // heading reads as a bug.
   const shown = facets.filter((facet) => facet.values.length > 0);

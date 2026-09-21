@@ -1,8 +1,9 @@
 # Story: Journal Mobile Refinement
 
 **Status:** 🟨 in progress — M-2 metadata sheet (D78), M-1 touch density (D76) and the a11y
-checklist shipped 2026-08-08. Remaining: the manual VoiceOver/TalkBack pass on real devices,
-which is the checklist's whole point and cannot be run here.
+checklist shipped 2026-08-08. An Android 17 emulator structural/gesture pass on 2026-09-20
+fixed system-Back dismissal, modal isolation, active-filter naming, preview naming, and touch
+targets. Remaining: human-audited TalkBack on physical Android hardware and VoiceOver on iOS.
 
 **Urgency:** med · **Difficulty:** med
 
@@ -92,7 +93,7 @@ Do NOT create `apps/mobile/` or add a separate mobile screen tree.
 - [x] Collapsed dateline is readable at narrow widths; no overflow or truncation without accessible alternatives. — the dateline wraps; nothing is truncated.
 - [x] Existing wide-screen tests and shell behavior remain unchanged; QA passes. — 663 desktop tests, lint 0 errors, typecheck clean.
 - [x] No bespoke bottom nav, private return path, or `apps/mobile/` code is introduced.
-- [x] `mobile-a11y-checklist.md` covers VoiceOver/TalkBack labels, zoom/text scaling, and soft-keyboard/viewport interactions for journal-owned surfaces. — `apps/desktop/src/journal/mobile-a11y-checklist.md`; **unrun**, it needs real devices.
+- [x] `mobile-a11y-checklist.md` covers VoiceOver/TalkBack labels, zoom/text scaling, and soft-keyboard/viewport interactions for journal-owned surfaces. — `apps/desktop/src/journal/mobile-a11y-checklist.md`; Android emulator structure/gestures passed 2026-09-20 after four fixes, while human physical-device audio remains open.
 
 ## Validation
 

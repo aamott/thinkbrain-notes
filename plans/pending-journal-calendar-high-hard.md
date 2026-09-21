@@ -109,7 +109,7 @@ activation with stubs, and the disposable scope. Built-in ids are fixed by D47.
 | 5 | `journal-calendar/pending-journal_settings_and_accessibility-med-med.md` | 1, 2; D45 extension-settings prerequisite |
 | 6 | `journal-calendar/pending-journal_panel_ui-high-hard.md` | 1–3, 5; D41 index and D44 editor-header prerequisites |
 | 7 | `journal-calendar/pending-calendar_tab_ui-high-hard.md` | 1, 3, 4, 5; tab registration shipped; extension-facing open route pending in story 9 |
-| 8 | `journal-calendar/pending-journal_mobile_refinement-med-med.md` | 6, 7; approved mobile wireframe |
+| 8 | `journal-calendar/wip-journal_mobile_refinement-med-med.md` | 6, 7; approved mobile wireframe |
 | 9 | `journal-calendar/pending-journal_extension_host_integration-med-med.md` | 3, 5–7; D44/D45 platform APIs; D47 ids |
 
 Story 7 was renamed from `calendar_panel_ui` to `calendar_tab_ui` because D27 makes the

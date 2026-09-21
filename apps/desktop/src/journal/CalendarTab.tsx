@@ -62,7 +62,7 @@ export interface CalendarTabProps {
 }
 
 const STRIP_BUTTON =
-  "h-6 min-w-6 px-2 rounded-small border border-border text-muted-foreground text-xs cursor-pointer hover:text-foreground";
+  "h-6 min-w-6 pointer-coarse:min-h-11 pointer-coarse:min-w-11 px-2 rounded-small border border-border text-muted-foreground text-xs cursor-pointer hover:text-foreground";
 
 function DayCell({
   date,
@@ -212,7 +212,7 @@ export function CalendarTab({
               aria-label={option === "week" ? "Week" : "Month"}
               aria-checked={view === option}
               onClick={() => onViewChange(option)}
-              className={`px-2.5 py-0.5 text-xs capitalize cursor-pointer ${
+              className={`pointer-coarse:min-h-11 pointer-coarse:min-w-11 px-2.5 py-0.5 text-xs capitalize cursor-pointer ${
                 view === option
                   ? "bg-accent font-semibold text-accent-foreground"
                   : "text-muted-foreground"

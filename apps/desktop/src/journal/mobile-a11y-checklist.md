@@ -17,6 +17,29 @@ tab. Shell navigation — how the popout opens, the back affordance, the bottom 
 |---|---|---|---|
 | iOS + VoiceOver | | | |
 | Android + TalkBack | | | |
+| Android 17 emulator + TalkBack structural pass | sdk_gphone16k_x86_64 / API 37 | Devin (DOM, Chromium AX, geometry, gestures) | 2026-09-20 |
+
+### Emulator evidence — not release sign-off
+
+The Android emulator pass exercised TalkBack traversal gestures and verified the
+DOM/Chromium accessibility tree, focus, roles, names, states, touch geometry,
+keyboard viewport behavior, text scaling, 200% page zoom, scrim/swipe/Escape/system-Back
+dismissal, and focus restoration. It found and fixed four defects:
+
+- Android Back now dismisses the metadata sheet before phone history and restores
+  the Info Tracker opener; the app root is inert and absent from the AX tree while
+  the modal is open.
+- Filter announces the complete active count, including a selected calendar day.
+- Entry row names include their visible preview after date and time.
+- Audited panel, calendar, dateline, and metadata controls now meet 44×44 CSS px
+  under a coarse pointer.
+
+The rerun passed all four fixes. Calendar counts/current/selected state, group
+counts/expanded state, focus trapping, soft-keyboard clearance, zoom/reflow, and
+reachable empty-search state also passed. No journal content or metadata was changed.
+A human still has to hear TalkBack on physical Android hardware and VoiceOver on
+iOS; AX names are evidence of what should be spoken, not evidence that speech was
+heard or pronounced correctly.
 
 ## 1. Names and roles
 
@@ -84,6 +107,9 @@ Each state has to be reachable and readable, not only the happy path.
 
 ## Known gaps
 
+- Auditory wording/pronunciation, physical thumb accuracy, floating/split keyboards,
+  hardware-keyboard behavior, and rotation with the keyboard raised remain physical-device
+  checks. VoiceOver remains entirely unrun because no iOS device is available.
 - The formal touch-target audit is deferred per **D31**; this list checks the journal's own
   controls but is not that audit.
 - Metadata facets render in their unavailable state until the index carries frontmatter, so
