@@ -36,6 +36,13 @@ export interface WorkspaceExplorerActions {
   readonly closeContextMenu: () => void;
   readonly toggleFolder: (relativePath: string) => void;
   readonly collapseFolder: (relativePath: string) => void;
+  readonly expandFolder: (relativePath: string) => void;
+  /**
+   * Moves `source` into `destinationParentPath` ("" = workspace root) through
+   * the native rename path. Resolves `true` when the move happened or was a
+   * no-op; `false` when it was rejected or failed.
+   */
+  readonly moveEntry: (source: NativeWorkspaceEntry, destinationParentPath: string) => Promise<boolean>;
   readonly startRename: (entry: NativeWorkspaceEntry) => void;
   readonly requestDelete: (entry: NativeWorkspaceEntry) => void;
   /** Lists one file's earlier versions, in the history panel. */

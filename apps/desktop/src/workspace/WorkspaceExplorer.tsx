@@ -12,6 +12,13 @@ import { DEFAULT_WORKSPACE_SETTINGS, readWorkspaceSettings, writeWorkspaceSettin
 import { WorkspaceExplorerView } from "./WorkspaceExplorerView";
 export { WorkspaceSelector } from "./WorkspaceExplorerView";
 import {
+  isInvalidWorkspaceMove,
+  remapExpandedFolders,
+  remapMovedPath,
+  WORKSPACE_INVALID_MOVE_MESSAGE,
+  workspaceMoveDestination
+} from "./workspaceMove";
+import {
   joinPath,
   isMarkdownName,
   isNewNoteCreate,
@@ -466,6 +473,38 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
     return ok;
   }, [runWithRefresh]);
 
+  /**
+   * Moves an entry into another folder ("" = root) via the rename path, then
+   * re-points the lifted tree state — active row and expanded folders — so a
+   * moved folder keeps its expansion and the moved row stays the active one.
+   * A drop back on the current parent is a no-op that resolves true; a folder
+   * dropped into itself or a descendant is rejected before any native call.
+   */
+  const moveEntry = useCallback(async (source: NativeWorkspaceEntry, parentPath: string): Promise<boolean> => {
+    const rootPath = stateRef.current.snapshot?.workspace.root_path;
+    if (!rootPath) return false;
+    if (isInvalidWorkspaceMove(source, parentPath)) {
+      if (parentPath === source.parent_path) return true;
+      setActionError(WORKSPACE_INVALID_MOVE_MESSAGE);
+      return false;
+    }
+    const destination = workspaceMoveDestination(source, parentPath);
+    const ok = await runWithRefresh(async () => {
+      await apiRef.current.renameWorkspaceEntry(rootPath, source.relative_path, destination);
+    });
+    // A move that completed against a workspace the user has since left must
+    // not remap the current workspace's selection or expansion.
+    if (ok && rootPathRef.current === rootPath) {
+      setActivePath((current) =>
+        remapMovedPath(current ?? source.relative_path, source.relative_path, destination)
+      );
+      setExpandedFolders((current) =>
+        remapExpandedFolders(current, source.relative_path, destination)
+      );
+    }
+    return ok;
+  }, [runWithRefresh]);
+
   const confirmDelete = useCallback(async () => {
     const rootPath = stateRef.current.snapshot?.workspace.root_path;
     if (!rootPath || !pendingDelete) return;
@@ -660,6 +699,8 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
       closeContextMenu,
       toggleFolder,
       collapseFolder,
+      expandFolder,
+      moveEntry,
       startRename,
       requestDelete,
       showVersions,
@@ -684,6 +725,8 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
     [
       closeContextMenu,
       collapseFolder,
+      expandFolder,
+      moveEntry,
       confirmDelete,
       confirmExtensionCreate,
       createManagedWorkspace,

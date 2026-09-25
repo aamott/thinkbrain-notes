@@ -28,6 +28,8 @@ export interface AppEvents {
   readonly "note.created": { readonly rootPath: string; readonly relativePath: string; readonly origin?: NoteChangeOrigin };
   /** A note was renamed or moved. */
   readonly "note.renamed": { readonly rootPath: string; readonly oldRelativePath: string; readonly newRelativePath: string; readonly origin?: NoteChangeOrigin };
+  /** A non-Markdown file was renamed or moved. Kept off `note.*` so note indexes never see it. */
+  readonly "file.renamed": { readonly rootPath: string; readonly oldRelativePath: string; readonly newRelativePath: string; readonly origin?: NoteChangeOrigin };
   /** A note was deleted. */
   readonly "note.deleted": { readonly rootPath: string; readonly relativePath: string; readonly origin?: NoteChangeOrigin };
   /** A workspace was opened in this window. */

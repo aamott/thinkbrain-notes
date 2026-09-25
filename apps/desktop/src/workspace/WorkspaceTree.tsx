@@ -1,9 +1,15 @@
 import { memo, useCallback, useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
-import { Folder, FolderOpen } from "lucide-react";
+import { Folder, FolderOpen, GripVertical } from "lucide-react";
 import type { WorkspaceTreeNode } from "./workspaceExplorerModel";
 import { WorkspaceFileIcon } from "./WorkspaceFileIcon";
 import { cn } from "../lib/utils";
 import { isNewNoteCreate, type CreateState, type RenameState, type WorkspaceExplorerActions } from "./workspaceExplorerTypes";
+import {
+  WORKSPACE_DRAG_HANDLE_ATTR,
+  WORKSPACE_DROP_PARENT_ATTR,
+  WORKSPACE_TREE_ROW_ATTR,
+  type WorkspaceTreeDrag
+} from "./useWorkspaceTreeDrag";
 
 // ---- Tree item ----
 
@@ -15,7 +21,8 @@ export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
   renaming,
   creating,
   expandedFolders,
-  actions
+  actions,
+  drag
 }: {
   readonly node: WorkspaceTreeNode;
   readonly depth?: number;
@@ -25,6 +32,8 @@ export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
   readonly creating: CreateState | null;
   readonly expandedFolders: ReadonlySet<string>;
   readonly actions: WorkspaceExplorerActions;
+  /** Shared drag-and-drop controller from `WorkspaceExplorerView`. */
+  readonly drag: WorkspaceTreeDrag | null;
 }) {
   const {
     setActivePath,
@@ -51,6 +60,8 @@ export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
 
   const isActive = activePath === node.entry.relative_path;
   const isFocusable = isActive || (activePath === null && isFirst);
+  const isDragged = drag?.draggedPath === node.entry.relative_path;
+  const isDropTarget = drag?.dropTargetPath === node.entry.relative_path;
   const buttonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -112,31 +123,68 @@ export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
           onCancel={() => setRenaming(null)}
         />
       ) : (
-        <button
-          ref={buttonRef}
+        // The open/toggle button and the drag handle are siblings — a button
+        // can never nest inside a button — inside one flex row that carries
+        // the drop-target markers for the drag controller's elementFromPoint
+        // resolution.
+        <div
           className={cn(
-            "flex w-full min-w-0 items-center gap-1.5 py-[0.265rem] pr-3 border-0 text-sidebar-foreground font-inherit text-xs leading-tight text-left aria-disabled:cursor-default not-aria-disabled:cursor-pointer not-aria-disabled:hover:bg-[color-mix(in_srgb,var(--color-accent)_58%,transparent)] not-aria-disabled:focus-visible:bg-[color-mix(in_srgb,var(--color-accent)_58%,transparent)] focus-visible:outline-none pointer-coarse:min-h-11 pointer-coarse:py-1.5 pointer-coarse:text-sm",
-            isHiddenEntry && "opacity-60"
+            "group/row flex min-w-0 items-stretch",
+            isDragged && "opacity-60",
+            isDropTarget && (drag?.dropTargetValid
+              ? "bg-[color-mix(in_srgb,var(--color-accent)_58%,transparent)]"
+              : "bg-[color-mix(in_srgb,var(--color-destructive)_18%,transparent)]")
           )}
-          type="button"
-          style={{ paddingLeft: `${0.75 + depth * 0.875}rem` }}
-          aria-disabled={!isDirectory && !isFile ? true : undefined}
-          tabIndex={isFocusable ? 0 : -1}
-          onKeyDown={handleKeyDown}
-          onClick={() => {
-            setActivePath(node.entry.relative_path);
-            if (isDirectory) toggleFolder(node.entry.relative_path);
-            else if (isFile) handleFileSelected(node.entry.relative_path);
-          }}
-          onContextMenu={(event) => {
-            setActivePath(node.entry.relative_path);
-            showContextMenu(event, { kind: isDirectory ? "folder" : "file", entry: node.entry });
-          }}
-          aria-label={isDirectory ? `${isExpanded ? "Collapse" : "Expand"} ${node.entry.name}` : isFile ? `Open ${node.entry.name}` : undefined}
+          {...{ [WORKSPACE_TREE_ROW_ATTR]: node.entry.relative_path }}
+          {...(isDirectory ? { [WORKSPACE_DROP_PARENT_ATTR]: node.entry.relative_path } : {})}
         >
-          <span className="w-2.5 flex-none text-muted-foreground text-center [&>svg]:w-[0.9rem] [&>svg]:h-[0.9rem] [&>svg]:stroke-current" aria-hidden="true">{isDirectory ? (isExpanded ? <FolderOpen /> : <Folder />) : <WorkspaceFileIcon name={node.entry.name} />}</span>
-          <span className="min-w-0 truncate">{node.entry.name}</span>
-        </button>
+          <button
+            ref={buttonRef}
+            className={cn(
+              "flex min-w-0 flex-1 items-center gap-1.5 py-[0.265rem] pr-1 border-0 text-sidebar-foreground font-inherit text-xs leading-tight text-left aria-disabled:cursor-default not-aria-disabled:cursor-pointer not-aria-disabled:hover:bg-[color-mix(in_srgb,var(--color-accent)_58%,transparent)] not-aria-disabled:focus-visible:bg-[color-mix(in_srgb,var(--color-accent)_58%,transparent)] focus-visible:outline-none pointer-coarse:min-h-11 pointer-coarse:py-1.5 pointer-coarse:text-sm",
+              isHiddenEntry && "opacity-60"
+            )}
+            type="button"
+            style={{ paddingLeft: `${0.75 + depth * 0.875}rem` }}
+            aria-disabled={!isDirectory && !isFile ? true : undefined}
+            tabIndex={isFocusable ? 0 : -1}
+            onKeyDown={handleKeyDown}
+            onPointerDown={(event) => drag?.onRowPointerDown(event, node.entry)}
+            onClick={() => {
+              // A completed drag ends in a pointerup on the row, which would
+              // otherwise also fire this click and open/toggle the entry.
+              if (drag?.consumeSuppressedClick()) return;
+              setActivePath(node.entry.relative_path);
+              if (isDirectory) toggleFolder(node.entry.relative_path);
+              else if (isFile) handleFileSelected(node.entry.relative_path);
+            }}
+            onContextMenu={(event) => {
+              setActivePath(node.entry.relative_path);
+              showContextMenu(event, { kind: isDirectory ? "folder" : "file", entry: node.entry });
+            }}
+            aria-label={isDirectory ? `${isExpanded ? "Collapse" : "Expand"} ${node.entry.name}` : isFile ? `Open ${node.entry.name}` : undefined}
+          >
+            <span className="w-2.5 flex-none text-muted-foreground text-center [&>svg]:w-[0.9rem] [&>svg]:h-[0.9rem] [&>svg]:stroke-current" aria-hidden="true">{isDirectory ? (isExpanded ? <FolderOpen /> : <Folder />) : <WorkspaceFileIcon name={node.entry.name} />}</span>
+            <span className="min-w-0 truncate">{node.entry.name}</span>
+          </button>
+          {drag && (
+            <button
+              type="button"
+              {...{ [WORKSPACE_DRAG_HANDLE_ATTR]: node.entry.relative_path }}
+              // `touch-none` keeps this handle out of the browser's scroll
+              // gesture so a touch drag can start here while the rest of the
+              // row scrolls normally. Subtle on a pointer-fine desktop, it is
+              // always visible and >=44px on coarse pointers.
+              className="flex w-5 flex-none cursor-grab touch-none items-center justify-center self-stretch border-0 bg-transparent p-0 text-muted-foreground opacity-0 transition-opacity group-hover/row:opacity-70 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-ring focus-visible:-outline-offset-1 pointer-coarse:w-11 pointer-coarse:min-h-11 pointer-coarse:opacity-70 [&>svg]:size-[0.8rem] [&>svg]:stroke-current"
+              tabIndex={isFocusable ? 0 : -1}
+              aria-label={`Move ${node.entry.name}. Press Enter to pick it up, use the arrow keys to choose a folder, Enter to drop, Escape to cancel.`}
+              onPointerDown={(event) => drag.onHandlePointerDown(event, node.entry)}
+              onKeyDown={(event) => drag.onHandleKeyDown(event, node.entry)}
+            >
+              <GripVertical aria-hidden="true" />
+            </button>
+          )}
+        </div>
       )}
       {isDirectory && isExpanded && (
         <>
@@ -170,6 +218,7 @@ export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
                   creating={creating}
                   expandedFolders={expandedFolders}
                   actions={actions}
+                  drag={drag}
                 />
               ))}
             </ul>
