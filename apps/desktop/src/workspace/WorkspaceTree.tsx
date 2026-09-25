@@ -137,6 +137,13 @@ export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
           )}
           {...{ [WORKSPACE_TREE_ROW_ATTR]: node.entry.relative_path }}
           {...(isDirectory ? { [WORKSPACE_DROP_PARENT_ATTR]: node.entry.relative_path } : {})}
+          onContextMenu={(event) => {
+            // An armed touch hold owns the browser contextmenu event; it opens
+            // this same menu on release instead of stealing the drag gesture.
+            if (drag?.onRowContextMenu(event, node.entry)) return;
+            setActivePath(node.entry.relative_path);
+            showContextMenu(event, { kind: isDirectory ? "folder" : "file", entry: node.entry });
+          }}
         >
           <button
             ref={buttonRef}
@@ -150,6 +157,7 @@ export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
             tabIndex={isFocusable ? 0 : -1}
             onKeyDown={handleKeyDown}
             onPointerDown={(event) => drag?.onRowPointerDown(event, node.entry)}
+            onTouchStart={(event) => drag?.onRowTouchStart(event, node.entry)}
             onClick={() => {
               // A completed drag ends in a pointerup on the row, which would
               // otherwise also fire this click and open/toggle the entry.
@@ -157,10 +165,6 @@ export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
               setActivePath(node.entry.relative_path);
               if (isDirectory) toggleFolder(node.entry.relative_path);
               else if (isFile) handleFileSelected(node.entry.relative_path);
-            }}
-            onContextMenu={(event) => {
-              setActivePath(node.entry.relative_path);
-              showContextMenu(event, { kind: isDirectory ? "folder" : "file", entry: node.entry });
             }}
             aria-label={isDirectory ? `${isExpanded ? "Collapse" : "Expand"} ${node.entry.name}` : isFile ? `Open ${node.entry.name}` : undefined}
           >

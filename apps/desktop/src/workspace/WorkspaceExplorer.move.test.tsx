@@ -9,7 +9,9 @@ import { WorkspaceExplorer } from "./WorkspaceExplorer";
 import { workspaceDesktopApi, type WorkspaceDesktopApi } from "./workspaceAdapter";
 import {
   WORKSPACE_DRAG_HANDLE_ATTR,
+  WORKSPACE_DRAG_PREVIEW_ATTR,
   WORKSPACE_DROP_PARENT_ATTR,
+  WORKSPACE_TOUCH_DRAG_HOLD_MS,
   WORKSPACE_TREE_ROW_ATTR
 } from "./useWorkspaceTreeDrag";
 
@@ -51,6 +53,7 @@ afterEach(async () => {
   container = null;
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 interface Fixture {
@@ -101,6 +104,13 @@ async function key(element: Element, keyName: string) {
   });
 }
 
+function touch(type: string, x: number, y: number): Event {
+  const point = { identifier: 3, clientX: x, clientY: y };
+  const event = new Event(type, { bubbles: true, cancelable: true });
+  Object.assign(event, { touches: [point], changedTouches: [point] });
+  return event;
+}
+
 function liveText(): string {
   return container?.querySelector("[aria-live='polite']")?.textContent ?? "";
 }
@@ -123,6 +133,31 @@ describe("workspace explorer moves", () => {
     // One listing at open, one refresh for the move.
     expect(fixture.listWorkspaceEntries).toHaveBeenCalledTimes(2);
     expect(liveText()).toContain("Moved a.md to Folder/a.md");
+  });
+
+  it("moves a file after a whole-row touch hold and follows the finger", async () => {
+    vi.useFakeTimers();
+    const fixture = explorerApi(TREE_ENTRIES);
+    await renderExplorer(fixture);
+    const row = container!.querySelector<HTMLElement>(
+      `[${WORKSPACE_TREE_ROW_ATTR}="a.md"] > button`
+    )!;
+    vi.spyOn(document, "elementFromPoint").mockReturnValue(
+      container!.querySelector(`[${WORKSPACE_DROP_PARENT_ATTR}="Target"]`)!
+    );
+
+    await act(async () => {
+      row.dispatchEvent(touch("touchstart", 20, 20));
+      vi.advanceTimersByTime(WORKSPACE_TOUCH_DRAG_HOLD_MS);
+    });
+    expect(document.body.querySelector(`[${WORKSPACE_DRAG_PREVIEW_ATTR}]`)?.textContent).toContain("a.md");
+    await act(async () => {
+      row.dispatchEvent(touch("touchmove", 34, 42));
+      row.dispatchEvent(touch("touchend", 34, 42));
+    });
+
+    expect(fixture.renameWorkspaceEntry).toHaveBeenCalledWith("/vault", "a.md", "Target/a.md");
+    expect(liveText()).toContain("Moved a.md to Target/a.md");
   });
 
   it("remaps the active row and expanded folders when a folder moves", async () => {

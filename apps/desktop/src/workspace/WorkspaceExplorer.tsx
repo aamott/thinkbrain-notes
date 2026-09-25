@@ -620,11 +620,15 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
 
   // ---- Context menu ----
 
+  const showContextMenuAt = useCallback((x: number, y: number, target: ContextMenuTarget) => {
+    setContextMenu({ x, y, target });
+  }, []);
+
   const showContextMenu = useCallback((event: ReactMouseEvent, target: ContextMenuTarget) => {
     event.preventDefault();
     event.stopPropagation();
-    setContextMenu({ x: event.clientX, y: event.clientY, target });
-  }, []);
+    showContextMenuAt(event.clientX, event.clientY, target);
+  }, [showContextMenuAt]);
 
   const closeContextMenu = useCallback(() => {
     setContextMenu(null);
@@ -696,6 +700,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
       handleTreeKeyDown,
       handleFileSelected,
       showContextMenu,
+      showContextMenuAt,
       closeContextMenu,
       toggleFolder,
       collapseFolder,
@@ -741,6 +746,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
       requestDelete,
       setCreatingGuarded,
       showContextMenu,
+      showContextMenuAt,
       showVersions,
       startCreate,
       startRename,

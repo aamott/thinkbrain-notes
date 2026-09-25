@@ -33,6 +33,8 @@ export interface WorkspaceExplorerActions {
   readonly handleTreeKeyDown: (event: ReactKeyboardEvent<HTMLUListElement>) => void;
   readonly handleFileSelected: (relativePath: string) => void;
   readonly showContextMenu: (event: ReactMouseEvent, target: ContextMenuTarget) => void;
+  /** Opens the same menu at coordinates supplied by a completed touch hold. */
+  readonly showContextMenuAt: (x: number, y: number, target: ContextMenuTarget) => void;
   readonly closeContextMenu: () => void;
   readonly toggleFolder: (relativePath: string) => void;
   readonly collapseFolder: (relativePath: string) => void;

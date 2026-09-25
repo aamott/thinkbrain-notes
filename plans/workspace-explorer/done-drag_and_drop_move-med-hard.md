@@ -20,8 +20,11 @@ derived indexes when a whole folder changes path.
   tabs consume both event types and retarget without losing unsaved contents.
 - Add a focused pointer/keyboard drag controller rather than growing
   `WorkspaceExplorer.tsx` past 800 lines. Mouse/pen may begin from the row after
-  a movement threshold. Coarse pointers use a dedicated `touch-none` drag
-  handle so normal vertical tree scrolling remains available.
+  a movement threshold, and a floating preview follows the pointer.
+- Coarse-pointer rows use delayed Touch Events: an immediate swipe scrolls, a
+  hold followed by movement drags, and a stationary held release opens the
+  row context menu. The dedicated `touch-none` handle remains a direct touch
+  and keyboard affordance.
 - Valid destinations are existing folders and the workspace root. A file row
   is never an implicit destination. Hovering a collapsed folder expands it
   after a short delay; edge proximity auto-scrolls the tree.
@@ -35,7 +38,7 @@ derived indexes when a whole folder changes path.
 ## Acceptance criteria
 
 - A file or folder can move into an existing folder or back to workspace root
-  by pointer, coarse-pointer handle, and keyboard.
+  by whole-row pointer drag, coarse-pointer hold/handle drag, and keyboard.
 - Folder moves preserve all descendants and automatically expand a collapsed
   destination after hover.
 - The current drop target and invalid targets have clear token-based visual
