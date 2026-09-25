@@ -1,3 +1,4 @@
+import { dismissTopOverlay } from "@thinkbrain/ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { LeftPanel, RightPanel } from "../shellTypes";
@@ -150,6 +151,7 @@ export function usePhoneNavigation(workspaceRoot: string | null): PhoneNavigatio
   // declines and Android's normal Back behaviour (background/exit) applies.
   useEffect(() => {
     const handler = (): boolean => {
+      if (dismissTopOverlay()) return true;
       if (entryRef.current.depth <= 0) return false;
       window.history.back();
       return true;

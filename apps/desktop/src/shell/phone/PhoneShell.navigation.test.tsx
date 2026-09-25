@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
+import { buildWikiLinkIndex, parseNote } from "@thinkbrain/core";
 import { act, useState } from "react";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
 
 import {
   actionsMenu,
@@ -21,9 +22,12 @@ import {
   renderWithShell,
   visibleDialog
 } from "./PhoneShell.testHarness";
+import { desktopCommandRegistry } from "../../commands/commandRegistry";
+import { mobileNewNoteActionRegistry } from "../../commands/mobileNewNoteActionRegistry";
 import { desktopPanelRegistry } from "../../panels/panelRegistryModel";
 import { useShellState, type ShellState } from "../useShellState";
 import { PhoneShell } from "./PhoneShell";
+import { useWikiLinkIndexStore } from "../../wikiLinks/wikiLinkIndexStore";
 
 // A right-side extension panel gated on document context, so the action-items
 // menu has a real "needs an open note" entry to disable on Files.
@@ -211,6 +215,65 @@ describe("PhoneShell navigation", () => {
     expect(docItem()?.disabled).toBe(true);
   });
 
+  it("opens a backlink through the inspector without duplicating its existing tab", async () => {
+    const index = buildWikiLinkIndex([
+      {
+        relativePath: "source.md",
+        contents: "Link to [[target]]",
+        parsedNote: parseNote("Link to [[target]]")
+      },
+      {
+        relativePath: "target.md",
+        contents: "Target",
+        parsedNote: parseNote("Target")
+      }
+    ]);
+    try {
+      const box: { current: ShellState | null } = { current: null };
+      const Host = () => {
+        const state = useShellState();
+        box.current = state;
+        return <PhoneShell shell={{ ...state, restoredWorkspacePath: "/vault" }} />;
+      };
+      const host = await mount(<Host />);
+      const shell = (): ShellState => {
+        if (!box.current) throw new Error("PhoneShell did not render");
+        return box.current;
+      };
+      await act(async () => shell().openMarkdownDocument("/vault", "source.md"));
+      await act(async () => shell().openMarkdownDocument("/vault", "target.md"));
+      await act(async () => useWikiLinkIndexStore.setState({
+        rootPath: "/vault",
+        status: "ready",
+        wikiLinkIndex: index,
+        noteIndex: index.noteIndex
+      }));
+      expect(noteTitle(host)?.value).toBe("target");
+      expect(shell().tabState.tabs).toHaveLength(2);
+
+      await click(host, "Document tools");
+      await act(async () => {
+        actionsMenu(host)
+          ?.querySelector<HTMLButtonElement>('[role="menuitem"][aria-label="Backlinks"]')
+          ?.click();
+      });
+      const backlink = inspector(host)?.querySelector<HTMLButtonElement>(
+        '[aria-label="Open backlink from source"]'
+      );
+      expect(backlink).not.toBeNull();
+      await act(async () => backlink?.click());
+
+      expect(noteTitle(host)?.value).toBe("source");
+      expect(inspector(host)).toBeNull();
+      expect(shell().tabState.tabs).toHaveLength(2);
+
+      await click(host, "Back");
+      expect(noteTitle(host)?.value).toBe("target");
+    } finally {
+      await act(async () => useWikiLinkIndexStore.getState().clearWorkspace());
+    }
+  });
+
   it("toggles the Files hub slot: note → Files → prior note", async () => {
     const { host, shell } = await renderWithShell();
     await act(async () => shell().openMarkdownDocument("/vault", "note.md"));
@@ -285,8 +348,8 @@ describe("PhoneShell navigation", () => {
     // Create runs the canonical command — Explorer's inline create flow over a
     // Files route. This fixture has no restored workspace (isTauri is mocked
     // false), so the tree never reaches `phase === "ready"` and the inline
-    // "New file name" field cannot render here; the observable dispatch is
-    // the focus-request counter the command hands Explorer.
+    // field cannot render in this fixture. The Explorer integration suite proves
+    // that this canonical focus request renders the `.md` field when ready.
     const focusRequests = () => shell().explorerProps.newNoteFocusRequest;
     await act(async () => {
       hub?.querySelector<HTMLButtonElement>('[aria-label="New note"]')?.click();
@@ -410,5 +473,108 @@ describe("PhoneShell navigation", () => {
       '[role="menuitem"][aria-label="Open most recent note"]'
     );
     expect(recent?.disabled).toBe(true);
+  });
+
+  it("runs a contributed action through its canonical command and stays closed", async () => {
+    // Temporary singleton registrations prove the row resolves to and runs
+    // the real command — the same path every other hub command takes.
+    const handler = vi.fn();
+    const actionReg = mobileNewNoteActionRegistry.register({
+      id: "test.scratch",
+      commandId: "test-scratch",
+      label: "Scratch action",
+      icon: "plus"
+    });
+    const commandReg = desktopCommandRegistry.register({
+      id: "test-scratch",
+      title: "Scratch action",
+      availability: "available",
+      handler
+    });
+    try {
+      const host = await render();
+      const newNoteButton = hubOf(host)?.querySelector<HTMLButtonElement>(
+        '[aria-label="New note"]'
+      );
+      expect(newNoteButton).not.toBeNull();
+
+      await act(async () => newNoteButton?.focus());
+      await act(async () => newNoteButton?.click());
+      const row = newNoteMenu(host)?.querySelector<HTMLButtonElement>(
+        '[role="menuitem"][aria-label="Scratch action"]'
+      );
+      expect(row).not.toBeNull();
+      await act(async () => row?.click());
+
+      expect(handler).toHaveBeenCalledTimes(1);
+      expect(newNoteMenu(host)).toBeNull();
+      // Dismissed like every popup: focus returns to the hub slot that opened it.
+      expect(document.activeElement).toBe(newNoteButton);
+
+      // Back lands on prior content — the popup entry was dismissed, not
+      // buried one step deep, and nothing resurrects it.
+      await click(host, "Back");
+      expect(newNoteMenu(host)).toBeNull();
+      expect(filesVisible(host)).toBe(true);
+    } finally {
+      await act(async () => {
+        actionReg.dispose();
+        commandReg.dispose();
+      });
+    }
+  });
+
+  it("disables contributed rows for workspace gating and unavailable commands", async () => {
+    // This fixture has no restored workspace, so requiresWorkspace rows must
+    // render disabled rather than vanish. A command that reports itself
+    // "unavailable" (the canonical availability field) disables its row the
+    // same way — the row stays rendered either way.
+    const actionReg = mobileNewNoteActionRegistry.register({
+      id: "test.gated",
+      commandId: "test-gated",
+      label: "Gated action",
+      icon: "plus",
+      requiresWorkspace: true
+    });
+    const commandReg = desktopCommandRegistry.register({
+      id: "test-gated",
+      title: "Gated action",
+      availability: "available",
+      handler: () => undefined
+    });
+    const unavailableActionReg = mobileNewNoteActionRegistry.register({
+      id: "test.unavailable",
+      commandId: "test-unavailable",
+      label: "Unavailable action",
+      icon: "plus"
+    });
+    const unavailableCommandReg = desktopCommandRegistry.register({
+      id: "test-unavailable",
+      title: "Unavailable action",
+      availability: "unavailable",
+      handler: () => undefined
+    });
+    try {
+      const host = await render();
+
+      await click(host, "New note");
+      const row = newNoteMenu(host)?.querySelector<HTMLButtonElement>(
+        '[role="menuitem"][aria-label="Gated action"]'
+      );
+      expect(row).not.toBeNull();
+      expect(row?.disabled).toBe(true);
+      const unavailableRow = newNoteMenu(host)?.querySelector<HTMLButtonElement>(
+        '[role="menuitem"][aria-label="Unavailable action"]'
+      );
+      expect(unavailableRow).not.toBeNull();
+      expect(unavailableRow?.disabled).toBe(true);
+    } finally {
+      await act(async () => {
+        actionReg.dispose();
+        commandReg.dispose();
+        unavailableActionReg.dispose();
+        unavailableCommandReg.dispose();
+      });
+    }
   });
 });

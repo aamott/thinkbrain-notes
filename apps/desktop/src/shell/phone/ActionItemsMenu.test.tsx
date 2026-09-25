@@ -28,6 +28,8 @@ const menu = (overrides: Record<string, unknown> = {}): React.ReactElement => (
     open
     rootPath={null}
     documentContents={null}
+    documentPath={null}
+    onOpenNote={() => undefined}
     onOpenSavedVersions={() => undefined}
     onDismiss={() => undefined}
     onSelect={() => undefined}

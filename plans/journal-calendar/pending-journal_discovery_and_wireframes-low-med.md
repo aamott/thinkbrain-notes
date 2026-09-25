@@ -164,7 +164,7 @@ behavior when popout is closed at click time; date filter as dismissible chip
 All popouts treated uniformly on mobile (some in bottom nav, rest in a left hamburger
 menu). Journal registers an ordinary popout and inherits this — must NOT implement
 bespoke mobile navigation, a private bottom bar, or its own return path.
-`pending-journal_mobile_refinement-med-med.md` narrows to touch targets, collapsed
+`wip-journal_mobile_refinement-med-med.md` narrows to touch targets, collapsed
 widget, list density, calendar-tab-on-phone; navigation composition deferred to
 the mobile `phone_shell_chrome` story.
 

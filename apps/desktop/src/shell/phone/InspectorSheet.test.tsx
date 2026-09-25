@@ -29,6 +29,8 @@ const sheet = (overrides: Record<string, unknown> = {}): React.ReactElement => (
     panel="outline"
     rootPath={null}
     documentContents={null}
+    documentPath={null}
+    onOpenNote={() => undefined}
     onDismiss={() => undefined}
     onBack={() => undefined}
     {...overrides}

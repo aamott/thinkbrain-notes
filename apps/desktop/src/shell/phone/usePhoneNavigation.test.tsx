@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
-import { act } from "react";
+import { dismissTopOverlay, useDismissable } from "@thinkbrain/ui";
+import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -329,6 +330,37 @@ describe("usePhoneNavigation overlays", () => {
 });
 
 describe("usePhoneNavigation Android Back bridge", () => {
+  it("dismisses a registered transient overlay before browser history", async () => {
+    const box: { current: PhoneNavigation | null } = { current: null };
+    let panelOpen = false;
+    const Host = () => {
+      box.current = usePhoneNavigation("/vault");
+      const [open, setOpen] = useState(true);
+      panelOpen = open;
+      const { containerRef } = useDismissable({ open, onDismiss: () => setOpen(false) });
+      return open ? <div ref={containerRef}>Transient panel</div> : null;
+    };
+    container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
+    await act(async () => root?.render(<Host />));
+    await act(async () => box.current?.push({ kind: "tab", tabId: "editor:a:b" }));
+    const before = { route: box.current?.route, depth: box.current?.depth };
+
+    let consumed = false;
+    await act(async () => {
+      consumed = window.__thinkbrainHandleAndroidBack?.() === true;
+    });
+
+    expect(consumed).toBe(true);
+    expect(panelOpen).toBe(false);
+    expect({ route: box.current?.route, depth: box.current?.depth }).toEqual(before);
+
+    await act(async () => root?.unmount());
+    root = null;
+    expect(dismissTopOverlay()).toBe(false);
+  });
+
   it("installs __thinkbrainHandleAndroidBack while mounted and removes it on unmount", async () => {
     await renderNav("/vault");
     expect(typeof window.__thinkbrainHandleAndroidBack).toBe("function");

@@ -3,6 +3,7 @@ import type { ExtensionManifest } from "@thinkbrain/core";
 import { describe, expect, it, vi } from "vitest";
 
 import { createDesktopCommandRegistry, type DesktopCommandContext } from "../commands/commandRegistry";
+import { createMobileNewNoteActionRegistry } from "../commands/mobileNewNoteActionRegistry";
 import { createDesktopPanelRegistry } from "../panels/panelRegistryModel";
 import { bootstrapExtensions } from "./bootstrap";
 import type { BuiltInExtension } from "./builtins";
@@ -23,9 +24,16 @@ const manifest = (overrides: Partial<ExtensionManifest> = {}): ExtensionManifest
 const setup = (extension: BuiltInExtension) => {
   const commands = createDesktopCommandRegistry([]);
   const panels = createDesktopPanelRegistry([]);
+  const actions = createMobileNewNoteActionRegistry();
   const host = createDesktopExtensionHost({ commands, panels });
-  const boot = bootstrapExtensions({ host, commands, panels, extensions: [extension] });
-  return { commands, panels, host, boot };
+  const boot = bootstrapExtensions({
+    host,
+    commands,
+    panels,
+    mobileNewNoteActions: actions,
+    extensions: [extension]
+  });
+  return { commands, panels, actions, host, boot };
 };
 
 const commandContext = {} as DesktopCommandContext;
@@ -146,6 +154,111 @@ describe("bootstrapExtensions", () => {
   });
 });
 
+describe("mobile New-note actions", () => {
+  const withAction = (activate: BuiltInExtension["activate"]): BuiltInExtension => ({
+    manifest: manifest(),
+    activate,
+    mobileNewNoteActions: [
+      {
+        id: "brew",
+        commandId: "go",
+        label: "Brew a note",
+        icon: "coffee",
+        requiresWorkspace: true
+      }
+    ]
+  });
+
+  it("registers the action before activation, under fully qualified ids", () => {
+    const activate = vi.fn();
+    const { actions } = setup(withAction(activate));
+
+    expect(actions.get("sample.brew")).toMatchObject({
+      commandId: "sample.go",
+      label: "Brew a note",
+      icon: "coffee",
+      requiresWorkspace: true
+    });
+    expect(activate).not.toHaveBeenCalled();
+  });
+
+  it("survives successful lazy activation while the command stub swaps", async () => {
+    const activate = vi.fn((context: DesktopExtensionContext) => {
+      context.commands.register({
+        id: "go",
+        title: "Go",
+        availability: "available",
+        handler: () => undefined
+      });
+    });
+    const { actions, commands } = setup(withAction(activate));
+
+    await commands.get("sample.go")?.handler(commandContext);
+
+    expect(activate).toHaveBeenCalledTimes(1);
+    expect(actions.get("sample.brew")?.commandId).toBe("sample.go");
+  });
+
+  it("removes the action when activation fails", async () => {
+    const activate = vi.fn(() => {
+      throw new Error("boom");
+    });
+    const { actions, commands } = setup(withAction(activate));
+
+    await expect(commands.get("sample.go")!.handler(commandContext)).rejects.toThrow();
+
+    expect(actions.get("sample.brew")).toBeUndefined();
+  });
+
+  it("registers each descriptor action exactly once", () => {
+    const { actions } = setup(withAction(vi.fn()));
+
+    expect(actions.entries().map((entry) => entry.id)).toEqual(["sample.brew"]);
+  });
+
+  it("throws on duplicate action ids without leaking the first registration", () => {
+    // Registration is transactional: the duplicate's throw must not strand
+    // the earlier action in the injected registry.
+    const commands = createDesktopCommandRegistry([]);
+    const panels = createDesktopPanelRegistry([]);
+    const actions = createMobileNewNoteActionRegistry();
+    const host = createDesktopExtensionHost({ commands, panels });
+    const duplicated: BuiltInExtension = {
+      manifest: manifest(),
+      activate: vi.fn(),
+      mobileNewNoteActions: [
+        { id: "brew", commandId: "go", label: "Brew a note", icon: "coffee" },
+        { id: "brew", commandId: "go", label: "Brew again", icon: "coffee" }
+      ]
+    };
+
+    expect(() =>
+      bootstrapExtensions({
+        host,
+        commands,
+        panels,
+        mobileNewNoteActions: actions,
+        extensions: [duplicated]
+      })
+    ).toThrow();
+    expect(actions.entries()).toHaveLength(0);
+  });
+
+  it("disposes actions on bootstrap shutdown", async () => {
+    const { actions, boot } = setup(withAction(vi.fn()));
+    expect(actions.entries()).toHaveLength(1);
+
+    await boot.dispose();
+    expect(actions.entries()).toHaveLength(0);
+  });
+
+  it("registers nothing for a built-in that declares no actions", () => {
+    const { actions } = setup({ manifest: manifest(), activate: vi.fn() });
+
+    expect(actions.entries()).toHaveLength(0);
+  });
+});
+
 describe("locally loaded extensions", () => {
   const local = (activate = vi.fn(), overrides: Partial<ExtensionManifest> = {}) => ({
     directory: "/ext/sample",
@@ -157,9 +270,16 @@ describe("locally loaded extensions", () => {
   const empty = () => {
     const commands = createDesktopCommandRegistry([]);
     const panels = createDesktopPanelRegistry([]);
+    const actions = createMobileNewNoteActionRegistry();
     const host = createDesktopExtensionHost({ commands, panels });
-    const boot = bootstrapExtensions({ host, commands, panels, extensions: [] });
-    return { commands, panels, host, boot };
+    const boot = bootstrapExtensions({
+      host,
+      commands,
+      panels,
+      mobileNewNoteActions: actions,
+      extensions: []
+    });
+    return { commands, panels, actions, host, boot };
   };
 
   it("stubs a locally loaded extension's commands without activating it", () => {

@@ -91,9 +91,9 @@ CodeMirror and Git-access stories.
       `done-codemirror_mobile_testing-med-med.md` and device testing
 - [ ] The watcher is exercised on-device; if unreliable, opening still succeeds
       and explicit/foreground reconciliation keeps the workspace current
-- [ ] A public repository is cloned into the managed root through the reused
-      import worker; private clone remains owned by the Git-access story —
-      `pending-mobile_git_access-high-hard.md`
+- [x] Public and private repositories clone into the managed root through the
+      reused import worker; the private round trip is recorded in
+      `docs/superpowers/specs/2026-08-27-android-git-access-design.md`
 
 ## Notes
 

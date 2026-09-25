@@ -41,6 +41,8 @@ const explorerProps: DesktopPanelContext["explorerProps"] = {
 const context: DesktopPanelContext = {
   rootPath: null,
   documentContents: null,
+  documentPath: null,
+  onOpenNote: () => undefined,
   explorerProps,
   onOpenSearchResult: () => undefined,
   onReviewConflict: () => undefined,
@@ -61,7 +63,9 @@ const leftContext: LeftPanelContext = {
 /** Only the state a right-side factory may read. */
 const rightContext: RightPanelContext = {
   rootPath: "/notes",
-  documentContents: "# Hello"
+  documentContents: "# Hello",
+  documentPath: "Hello.md",
+  onOpenNote: () => undefined
 };
 
 /** Minimal spy contribution with a side and factory. */
@@ -140,6 +144,14 @@ describe("desktop panel registry", () => {
     expect(registry.isAvailable("explorer", { ...context, rootPath: "/notes" })).toBe(true);
   });
 
+  it("makes backlinks available only for an active Markdown document path", () => {
+    expect(desktopPanelRegistry.isAvailable("backlinks", context)).toBe(false);
+    expect(desktopPanelRegistry.isAvailable("backlinks", {
+      ...context,
+      documentPath: "note.md"
+    })).toBe(true);
+  });
+
   it("fails loudly when a panel id is registered twice", () => {
     const registry = createDesktopPanelRegistry([]);
     registry.register(contribution("tags"));
@@ -166,13 +178,19 @@ describe("desktop panel registry", () => {
       />
     );
     const rightMarkup = renderToStaticMarkup(
-      <RightPopout panel="backlinks" rootPath={null} documentContents={null} />
+      <RightPopout
+        panel="backlinks"
+        rootPath={null}
+        documentContents={null}
+        documentPath={null}
+        onOpenNote={() => undefined}
+      />
     );
 
     expect(leftMarkup).toContain("Tags");
     expect(leftMarkup).toContain("Tags will appear here once note indexing is available.");
-    expect(rightMarkup).toContain("Backlinks unavailable");
-    expect(rightMarkup).toContain("This inspector activates after the workspace link index is available.");
+    expect(rightMarkup).toContain("No note selected");
+    expect(rightMarkup).toContain("Open a Markdown note to see what links to it.");
   });
 
   it("returns undefined for an unknown id via the render-safe lookup", () => {

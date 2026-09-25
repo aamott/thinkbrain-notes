@@ -2,13 +2,14 @@ import { BottomNav, type BottomNavItem } from "@thinkbrain/ui";
 import { useMemo } from "react";
 
 import { useDesktopCommands } from "../../commands/commandRegistry";
+import { useMobileNewNoteActions } from "../../commands/mobileNewNoteActionRegistry";
 import {
   useLeftPanelContributions,
   useRightPanelContributions
 } from "../../panels/panelRegistryModel";
 import { PanelIcon } from "../panelIcons";
 import { resolveHubItems, type HubItem } from "./hubModel";
-import { NewNoteMenu } from "./NewNoteMenu";
+import { NewNoteMenu, type NewNoteMenuAction } from "./NewNoteMenu";
 import { useKeyboardInset } from "./useKeyboardInset";
 
 /**
@@ -40,6 +41,8 @@ export function PhoneHub({
   readonly newNoteMenu: {
     readonly open: boolean;
     readonly recentNote: { readonly title: string } | null;
+    /** Whether a workspace is loaded; gates `requiresWorkspace` actions. */
+    readonly workspaceAvailable: boolean;
     readonly onCreate: () => void;
     readonly onOpenRecent: () => void;
     readonly onDismiss: () => void;
@@ -53,6 +56,7 @@ export function PhoneHub({
   const leftPanels = useLeftPanelContributions();
   const rightPanels = useRightPanelContributions();
   const commands = useDesktopCommands();
+  const newNoteActions = useMobileNewNoteActions();
 
   const resolved = useMemo(
     () =>
@@ -107,6 +111,27 @@ export function PhoneHub({
       ? ((newNoteIndex + 0.5) / resolved.length) * 100
       : 50;
 
+  // Contributed rows stay listed even when their command is missing — a
+  // vanishing row is more confusing than a greyed one. Disabled when the
+  // command is absent, declared unavailable, or gated on a workspace that is
+  // not loaded.
+  const resolvedActions = useMemo<readonly NewNoteMenuAction[]>(
+    () =>
+      newNoteActions.map((action) => {
+        const command = commands.find((candidate) => candidate.id === action.commandId);
+        return {
+          id: action.id,
+          label: action.label,
+          icon: action.icon,
+          disabled:
+            !command ||
+            command.availability === "unavailable" ||
+            (action.requiresWorkspace === true && !newNoteMenu.workspaceAvailable)
+        };
+      }),
+    [newNoteActions, commands, newNoteMenu.workspaceAvailable]
+  );
+
   // A five-slot bar wedged between the keyboard and the line being typed is
   // worse than no bar: it eats the last rows of the note and none of its
   // targets are what the thumb is reaching for. Hidden entirely rather than
@@ -119,8 +144,15 @@ export function PhoneHub({
         open={newNoteMenu.open}
         anchorPercent={anchorPercent}
         recentNote={newNoteMenu.recentNote}
+        actions={resolvedActions}
         onCreate={newNoteMenu.onCreate}
         onOpenRecent={newNoteMenu.onOpenRecent}
+        onSelectAction={(id) => {
+          // Actions are pointers to canonical commands; run through the same
+          // path as every other hub command, never a bespoke execution.
+          const commandId = newNoteActions.find((action) => action.id === id)?.commandId;
+          if (commandId) onRunCommand(commandId);
+        }}
         onDismiss={newNoteMenu.onDismiss}
       />
       <BottomNav label="Primary navigation" items={navItems} />

@@ -2,10 +2,10 @@
 
 **Status:** ✅ done · **Urgency:** high · **Difficulty:** med
 
-> Split out of `pending-mobile_git_access-high-hard.md` on 2026-08-28. That
-> story carried two unrelated problems — where a token lives, and when a sync
-> runs. They share a file and nothing else, and keeping them together would
-> have meant "Android git works" could not be called done until a scheduling
+> Split out of the Android Git access design on 2026-08-28. That work carried
+> two unrelated problems — where a token lives, and when a sync runs. They share
+> a file and nothing else, and keeping them together would have meant "Android
+> git works" could not be called done until a scheduling
 > rewrite landed too.
 
 ## Why this is not "background sync is missing"
@@ -109,10 +109,10 @@ round-trip code, something has gone wrong in the design.
 
 ## Not in scope
 
-Credentials, and therefore private repositories — that is
-`pending-mobile_git_access-high-hard.md`. This story is worth doing even if
-only public repositories ever sync, and that story is worth finishing even if
-sync only ever runs when someone asks for it.
+Credentials and private repositories were separate work, later verified in
+`docs/superpowers/specs/2026-08-27-android-git-access-design.md`. This story was
+worth doing even when only public repositories could sync, and credential work
+was worthwhile even when sync only ran on explicit request.
 
 ## Verified on a device
 

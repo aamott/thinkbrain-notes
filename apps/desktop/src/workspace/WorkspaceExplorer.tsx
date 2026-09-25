@@ -14,12 +14,14 @@ export { WorkspaceSelector } from "./WorkspaceExplorerView";
 import {
   joinPath,
   isMarkdownName,
+  isNewNoteCreate,
   isValidFolderPath,
   isValidName,
   visibleWorkspacePaths,
   type ContextMenuState,
   type ContextMenuTarget,
   type CreateState,
+  type PendingExtensionConfirm,
   type RenameState,
   type WorkspaceExplorerActions
 } from "./workspaceExplorerTypes";
@@ -74,6 +76,9 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
   const [renaming, setRenaming] = useState<RenameState | null>(null);
   const [creating, setCreating] = useState<CreateState | null>(null);
   const [pendingDelete, setPendingDelete] = useState<NativeWorkspaceEntry | null>(null);
+  const [pendingExtensionConfirm, setPendingExtensionConfirm] = useState<PendingExtensionConfirm | null>(null);
+  const [inlineCreateError, setInlineCreateError] = useState<string | null>(null);
+  const [extensionConfirmError, setExtensionConfirmError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [expandedFolders, setExpandedFolders] = useState<ReadonlySet<string>>(new Set());
@@ -112,6 +117,15 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
     showHiddenRef.current = showHidden;
     callbacksRef.current = { onMarkdownFileCreated, onMarkdownFileSelected, onFileSelected, onWorkspaceLaunched };
   });
+
+  // While the non-Markdown confirmation is open the inline create input loses
+  // focus to the dialog; its blur-must-cancel rule must not fire or the draft
+  // it asks about would be unmounted mid-question.
+  const suppressInlineCancelRef = useRef(false);
+  const createFocusRequestRef = useRef(0);
+  // Identifies the confirmation currently creating. Object identity blocks a
+  // double tap without letting an older workspace operation block a new one.
+  const extensionCreateInFlightRef = useRef<PendingExtensionConfirm | null>(null);
 
   // In-flight operation counter so overlapping CRUD calls do not clobber the
   // `busy` flag or erase each other's errors prematurely.
@@ -164,6 +178,10 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
     setRenaming(null);
     setCreating(null);
     setPendingDelete(null);
+    setPendingExtensionConfirm(null);
+    setInlineCreateError(null);
+    setExtensionConfirmError(null);
+    suppressInlineCancelRef.current = false;
     setActionError(null);
     setExpandedFolders(new Set());
     setShowHidden(DEFAULT_WORKSPACE_SETTINGS.showHidden);
@@ -322,7 +340,9 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
     const request = pendingNewNoteRef.current;
     if (!request || state.phase !== "ready") return;
     pendingNewNoteRef.current = 0;
-    setCreating({ parentPath: "", kind: "file", focusRequest: request });
+    setInlineCreateError(null);
+    createFocusRequestRef.current += 1;
+    setCreating({ parentPath: "", kind: "file", source: "new-note", focusRequest: createFocusRequestRef.current });
     onNewNoteFocusHandled?.();
   }, [state.phase, onNewNoteFocusHandled, newNoteFocusRequest]);
 
@@ -363,7 +383,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
       }
       return true;
     } catch (error) {
-      setActionError(workspaceErrorMessage(error));
+      if (rootPathRef.current === rootPath) setActionError(workspaceErrorMessage(error));
       return false;
     } finally {
       endOperation();
@@ -374,10 +394,25 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
     const rootPath = stateRef.current.snapshot?.workspace.root_path;
     if (!rootPath) return false;
     const trimmed = name.trim();
+    const isNote = isNewNoteCreate(target);
+    // A New note never cancels silently: an empty or extension-only draft is a
+    // mistake worth naming inline rather than a dismissal.
+    if (isNote && !trimmed) {
+      setInlineCreateError("Give your note a name.");
+      return false;
+    }
+    if (isNote) {
+      const extensionOnly = /^\.(md|markdown)$/i.test(trimmed);
+      if (extensionOnly) {
+        setInlineCreateError(`Give your note a name before ${trimmed.toLowerCase()}.`);
+        return false;
+      }
+    }
     if (!trimmed) {
       setCreating(null);
       return true;
     }
+    setInlineCreateError(null);
     // Folders may use forward-slash-separated nested paths (e.g. `a/b/c`)
     // since the backend creates intermediate directories via `create_dir_all`.
     // Files still reject path separators so a single leaf entry is produced.
@@ -388,6 +423,13 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
       }
     } else if (!isValidName(trimmed)) {
       setActionError("Names cannot contain path separators (/ or \\).");
+      return false;
+    }
+    // Notes must end in `.md`/`.markdown`. Anything else is a deliberate file
+    // type choice, so it is confirmed — never created — before running.
+    if (isNote && !isMarkdownName(trimmed)) {
+      suppressInlineCancelRef.current = true;
+      setPendingExtensionConfirm({ target, name: trimmed });
       return false;
     }
     const relativePath = joinPath(target.parentPath, trimmed);
@@ -434,6 +476,53 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
     // Keep the confirmation dialog open on failure so the user can retry.
     if (ok) setPendingDelete(null);
   }, [pendingDelete, runWithRefresh]);
+
+  /**
+   * Every safe dismissal of the extension confirmation — Escape, scrim,
+   * Android Back, the Keep editing button — returns to the inline draft. The
+   * input was never unmounted, so nothing about the draft was lost.
+   */
+  const dismissExtensionConfirm = useCallback(() => {
+    if (pendingExtensionConfirm && extensionCreateInFlightRef.current === pendingExtensionConfirm) return;
+    suppressInlineCancelRef.current = false;
+    setPendingExtensionConfirm(null);
+    setExtensionConfirmError(null);
+  }, [pendingExtensionConfirm]);
+
+  /**
+   * Runs the saved, already-validated name through the same create/refresh
+   * path — exactly once per confirmation. A non-Markdown result is never
+   * selected as a note, and a failure keeps the dialog open for retry.
+   */
+  const confirmExtensionCreate = useCallback(async (): Promise<void> => {
+    const pending = pendingExtensionConfirm;
+    const rootPath = stateRef.current.snapshot?.workspace.root_path;
+    if (!pending || !rootPath || extensionCreateInFlightRef.current === pending) return;
+    extensionCreateInFlightRef.current = pending;
+    setExtensionConfirmError(null);
+    let message = "The file could not be created.";
+    try {
+      const relativePath = joinPath(pending.target.parentPath, pending.name);
+      const ok = await runWithRefresh(async () => {
+        try {
+          await apiRef.current.createWorkspaceFile(rootPath, relativePath);
+        } catch (error) {
+          message = workspaceErrorMessage(error);
+          throw error;
+        }
+      });
+      if (rootPathRef.current !== rootPath) return;
+      if (ok) {
+        suppressInlineCancelRef.current = false;
+        setPendingExtensionConfirm((current) => current === pending ? null : current);
+        setCreating((current) => current === pending.target ? null : current);
+      } else {
+        setExtensionConfirmError(message);
+      }
+    } finally {
+      if (extensionCreateInFlightRef.current === pending) extensionCreateInFlightRef.current = null;
+    }
+  }, [pendingExtensionConfirm, runWithRefresh]);
 
   // ---- Folder expansion ----
 
@@ -517,7 +606,14 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
     // Expand the target folder so the inline input is visible. Creating at the
     // workspace root (empty parentPath) needs no expansion.
     if (parentPath) expandFolder(parentPath);
-    setCreating({ parentPath, kind, focusRequest: Date.now() });
+    setInlineCreateError(null);
+    createFocusRequestRef.current += 1;
+    const focusRequest = createFocusRequestRef.current;
+    setCreating(
+      kind === "file"
+        ? { parentPath, kind, source: "new-file", focusRequest }
+        : { parentPath, kind, focusRequest }
+    );
   }, [closeContextMenu, expandFolder]);
 
   const startRename = useCallback((entry: NativeWorkspaceEntry) => {
@@ -537,6 +633,15 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
   }, [closeContextMenu]);
 
   const dismissError = useCallback(() => dispatch({ type: "dismiss" }), []);
+
+  // The blur-cancel path in InlineNameInput reaches the explorer through this
+  // setter. While the extension confirmation holds the draft open, a null
+  // write is the blur talking — not a real cancel.
+  const setCreatingGuarded = useCallback((value: CreateState | null) => {
+    if (value === null && suppressInlineCancelRef.current) return;
+    if (value === null) setInlineCreateError(null);
+    setCreating(value);
+  }, []);
 
   // Memoized, and every member is already a stable callback or state setter.
   // That is load-bearing rather than tidy: `WorkspaceTreeItem` is memoized, and
@@ -564,9 +669,12 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
       openGitLinkImport,
       launchWorkspace,
       confirmDelete,
+      setInlineCreateError,
+      dismissExtensionConfirm,
+      confirmExtensionCreate,
       setMoreMenuOpen,
       setRenaming,
-      setCreating,
+      setCreating: setCreatingGuarded,
       setPendingDelete,
       setCreateManagedWorkspaceOpen,
       setImportFromGitOpen,
@@ -577,8 +685,10 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
       closeContextMenu,
       collapseFolder,
       confirmDelete,
+      confirmExtensionCreate,
       createManagedWorkspace,
       dismissError,
+      dismissExtensionConfirm,
       handleFileSelected,
       handleTreeKeyDown,
       launchWorkspace,
@@ -586,6 +696,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
       openGitLinkImport,
       refreshEntries,
       requestDelete,
+      setCreatingGuarded,
       showContextMenu,
       showVersions,
       startCreate,
@@ -607,6 +718,9 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
       renaming={renaming}
       creating={creating}
       pendingDelete={pendingDelete}
+      pendingExtensionConfirm={pendingExtensionConfirm}
+      inlineCreateError={inlineCreateError}
+      extensionConfirmError={extensionConfirmError}
       actionError={actionError}
       busy={busy}
       showHidden={showHidden}

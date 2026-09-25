@@ -1,9 +1,9 @@
 # Android Git Access Design
 
-> Design spec for cloning and syncing private Git repositories on Android.
-> Drafted 2026-08-27, pending review. Supersedes the credential-storage
-> candidates recorded in `plans/mobile/pending-mobile_git_access-high-hard.md`
-> and answers the storage question left open by
+> Design and verification record for cloning and syncing private Git repositories
+> on Android. Drafted 2026-08-27; the chosen credential store and complete private
+> round trip were verified on Android on 2026-09-20. Supersedes the earlier
+> credential-storage candidates and answers the storage question left open by
 > `plans/extensions/pending-extension_secret_storage-med-hard.md`.
 
 ## Problem
@@ -87,6 +87,43 @@ already initialise what it needs.
 
 This is the story's "encrypted app-data, with the key from Keystore" candidate
 with the custody question answered: we do not write or own the encryption.
+
+## Shipped custody contract and Android verification
+
+The token is stored by `android-native-keyring-store` in Android SharedPreferences,
+encrypted under a dedicated Android Keystore key. ThinkBrain addresses it through
+`keyring-core` service `ThinkBrain Notes` and account `profile:{opaque-id}`; the
+app never writes the token to settings, logs, or the vault. The app-data catalog
+`sync/sign-in-profiles.json` contains only the opaque ID, label, host, and username,
+and each workspace setting stores only its selected opaque profile ID. Forgetting
+a profile deletes the store entry and its non-secret catalog row.
+
+Tauri does not initialise `ndk-context`, so `MainActivity` publishes the JavaVM
+and application context before `super.onCreate`; Rust startup can then construct
+and register the Android store before any command is reachable. This keeps the
+shared credential and sync paths platform-neutral rather than adding an Android
+credential implementation to the feature layer.
+
+Verified on Android emulator `emulator-5554` on 2026-09-20 with a disposable
+private GitHub repository:
+
+- saving a profile reported storage available and an immediate read-back found
+  the secret;
+- managed import emitted `saving → checking → combining → sending → ok` through
+  the shared `sync://import` worker;
+- the cloned Markdown note opened in the mobile editor, accepted Android WebView
+  input, and autosaved to app-private storage;
+- `sync_now` completed the required fetch/merge/push path with `landed: moved`,
+  and the edited contents were read back from the private remote;
+- after a process restart the workspace and profile were restored and the secret
+  remained readable; `forget_sync_sign_in` then removed the test secret, and a
+  final status read reported it absent.
+
+No plaintext token entered logs, project/test files, command output, or this
+record during the run. This verifies the Android store, JNI context publication, shared import
+worker, editor autosave, required push, restart persistence, and deletion path.
+Physical-hardware coverage remains useful platform validation, but no separate
+product code path depends on it.
 
 ### What it costs: a keyring v3 → v4 migration
 

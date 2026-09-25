@@ -7,11 +7,12 @@ import { cn } from "../lib/utils";
 import { Menu, MenuButton, MenuCheckbox } from "../shell/Menu";
 import { WorkspaceTreeItem, InlineNameInput } from "./WorkspaceTree";
 import { DeleteConfirmDialog, WorkspaceContextMenu } from "./WorkspaceExplorerMenus";
+import { CreateFileTypeConfirmDialog } from "./CreateFileTypeConfirmDialog";
 import { GitLinkImportDialog } from "./GitLinkImportDialog";
 import { CREATE_MANAGED_WORKSPACE_LABEL, IMPORT_FROM_GIT_LABEL, OPEN_FOLDER_LABEL } from "./gitLinkImportCopy";
 import { isWorkspaceGitLinked } from "./workspaceSettings";
 import { WorkspaceSelectorPortal, type WorkspaceSelectorVariant } from "./WorkspaceSelectorPortal";
-import type { ContextMenuState, CreateState, RenameState, WorkspaceExplorerActions } from "./workspaceExplorerTypes";
+import { isNewNoteCreate, type ContextMenuState, type CreateState, type PendingExtensionConfirm, type RenameState, type WorkspaceExplorerActions } from "./workspaceExplorerTypes";
 
 interface WorkspaceExplorerViewProps {
   readonly className?: string;
@@ -22,6 +23,9 @@ interface WorkspaceExplorerViewProps {
   readonly renaming: RenameState | null;
   readonly creating: CreateState | null;
   readonly pendingDelete: NativeWorkspaceEntry | null;
+  readonly pendingExtensionConfirm: PendingExtensionConfirm | null;
+  readonly inlineCreateError: string | null;
+  readonly extensionConfirmError: string | null;
   readonly actionError: string | null;
   readonly busy: boolean;
   readonly showHidden: boolean;
@@ -45,6 +49,9 @@ export function WorkspaceExplorerView({
   renaming,
   creating,
   pendingDelete,
+  pendingExtensionConfirm,
+  inlineCreateError,
+  extensionConfirmError,
   actionError,
   busy,
   showHidden,
@@ -147,13 +154,18 @@ export function WorkspaceExplorerView({
             >
               {creating && creating.parentPath === "" && (
                 <InlineNameInput
+                  key={creating.focusRequest}
                   depth={0}
                   icon={creating.kind === "folder" ? <Folder /> : <WorkspaceFileIcon name="" />}
+                  initialValue={isNewNoteCreate(creating) ? ".md" : ""}
+                  caretBeforeExtension={isNewNoteCreate(creating)}
                   placeholder={creating.kind === "folder" ? "New folder name…" : "New file name…"}
                   ariaLabel={creating.kind === "folder" ? "New folder name" : "New file name"}
                   focusRequest={creating.focusRequest}
                   wrapInListItem
                   disabled={busy}
+                  error={isNewNoteCreate(creating) ? inlineCreateError : null}
+                  onEdit={() => actions.setInlineCreateError(null)}
                   onSubmit={(name) => actions.submitCreate(creating, name)}
                   onCancel={() => actions.setCreating(null)}
                 />
@@ -184,6 +196,15 @@ export function WorkspaceExplorerView({
           entry={pendingDelete}
           onCancel={() => actions.setPendingDelete(null)}
           onConfirm={() => void actions.confirmDelete()}
+        />
+      )}
+      {pendingExtensionConfirm && (
+        <CreateFileTypeConfirmDialog
+          fileName={pendingExtensionConfirm.name}
+          busy={busy}
+          error={extensionConfirmError}
+          onKeepEditing={actions.dismissExtensionConfirm}
+          onCreateAnyway={() => void actions.confirmExtensionCreate()}
         />
       )}
       {managedStorageNoticeOpen && (

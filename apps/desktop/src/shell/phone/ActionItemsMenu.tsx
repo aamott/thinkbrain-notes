@@ -38,6 +38,8 @@ export function ActionItemsMenu({
   open,
   rootPath,
   documentContents,
+  documentPath,
+  onOpenNote,
   historyControls,
   onOpenSavedVersions,
   onDismiss,
@@ -47,6 +49,8 @@ export function ActionItemsMenu({
   readonly rootPath: string | null;
   /** Markdown contents of the active editor tab, when its document is ready. */
   readonly documentContents: string | null;
+  readonly documentPath: string | null;
+  readonly onOpenNote: (relativePath: string) => void;
   /** Optional Back/Forward rows; header placement keeps them out of the menu. */
   readonly historyControls?: {
     readonly canGoBack: boolean;
@@ -61,7 +65,12 @@ export function ActionItemsMenu({
 }) {
   const { containerRef } = useDismissable({ open, onDismiss });
   const panels = useRightPanelContributions();
-  const context: RightPanelContext = { rootPath, documentContents };
+  const context: RightPanelContext = {
+    rootPath,
+    documentContents,
+    documentPath,
+    onOpenNote
+  };
 
   return (
     // One bounded layer doubles as the undimmed outside-dismiss target; the

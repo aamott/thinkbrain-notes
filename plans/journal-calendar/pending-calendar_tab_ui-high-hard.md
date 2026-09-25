@@ -100,7 +100,7 @@ Do NOT touch `apps/desktop/src/shell/ActivityBar.tsx` for the calendar — no ac
 
 - No calendar activity-bar button or panel registration.
 - No hard-coded mood/activity taxonomy, colors, or icons.
-- No journal service rewrite, mobile refinement (owned by `pending-journal_mobile_refinement-med-med.md`), notifications, streaks, AI/sentiment inference, or extension-host registration.
+- No journal service rewrite, mobile refinement (owned by `wip-journal_mobile_refinement-med-med.md`), notifications, streaks, AI/sentiment inference, or extension-host registration.
 - High contrast is out of scope (themes own it).
 - Do not decide a final visualization or mood/activity palette in implementation.
 - Do not bypass D47 host prefixing or edit shell/core to add a built-in tab kind.

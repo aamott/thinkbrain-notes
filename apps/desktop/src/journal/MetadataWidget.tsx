@@ -12,6 +12,7 @@ import { useState } from "react";
 import { AddFieldRow } from "./AddFieldRow";
 import { MetadataBottomSheet } from "./MetadataBottomSheet";
 import { MetadataField } from "./MetadataField";
+import { TOUCH } from "./journalChrome";
 import { useCoarsePointer } from "./useCoarsePointer";
 
 /**
@@ -76,7 +77,7 @@ function formatValue(value: JournalFieldValue): string {
 }
 
 const AFFORDANCE_LINK =
-  "border-0 bg-transparent p-0 text-[0.68rem] text-muted-foreground underline underline-offset-2 cursor-pointer hover:text-foreground";
+  `inline-flex items-center border-0 bg-transparent p-0 ${TOUCH} text-[0.68rem] text-muted-foreground underline underline-offset-2 cursor-pointer hover:text-foreground`;
 
 /**
  * The "Add it" affordances under a field — promoting an unconfigured key, or
@@ -209,7 +210,7 @@ export function MetadataWidget({
         <button
           type="button"
           onClick={() => setExpanded(!expanded)}
-          className="ml-auto rounded-small border border-border px-1.5 text-[0.68rem] text-muted-foreground cursor-pointer hover:text-foreground"
+          className={`ml-auto rounded-small border border-border px-1.5 ${TOUCH} text-[0.68rem] text-muted-foreground cursor-pointer hover:text-foreground`}
         >
           {/* The sheet carries its own Done, so the opener keeps its label. */}
           {expanded && !touch ? "Done" : "Info Tracker"}

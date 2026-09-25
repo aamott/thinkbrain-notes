@@ -193,7 +193,7 @@ that can disagree.
 
 - Automated: `JournalPanel.test.tsx`, `JournalEntryList.test.tsx`, `MetadataWidget.test.tsx`, relevant panel-registry tests, and `pnpm lint`, `pnpm typecheck`, `pnpm test` (or `./scripts/qa.sh`); all panel/view-model/registry/widget tests must pass.
 - Desktop: validate all fourteen UI states; open/close via activity bar; create today/past note ("New entry" always new file); open an existing note with unsaved edits; collapse/expand year+month headers; test full-text search, chip/badge emphasis, metadata filters, calendar-tab launch, resizing, themes, keyboard-only navigation, screen-reader labels, malformed-frontmatter notice, error recovery, and filter emphasis. Verify real Markdown files use `journal/YYYY/MM/YYYY-MM-DD-HHmm.md` and remain readable outside the app.
-- With an editor already open, activate/deactivate and verify D44 adds/removes the widget without remounting. Mobile is owned by `pending-journal_mobile_refinement-med-med.md`; add no mobile-only markup.
+- With an editor already open, activate/deactivate and verify D44 adds/removes the widget without remounting. Mobile is owned by `wip-journal_mobile_refinement-med-med.md`; add no mobile-only markup.
 
 ## Non-goals
 

@@ -21,6 +21,7 @@ import { HistoryPanel } from "../sync/HistoryPanel";
 import { ExtensionsPanel } from "../extensions/ExtensionsPanel";
 import { Unavailable } from "../shell/Unavailable";
 import { AssistantPanelSurface } from "./AssistantPanelSurface";
+import { BacklinksPanel } from "./BacklinksPanel";
 import { OutlinePanel } from "./OutlinePanel";
 import { PropertiesPanel } from "./PropertiesPanel";
 import { WorkspaceExplorer, type WorkspaceExplorerProps } from "../workspace/WorkspaceExplorer";
@@ -51,6 +52,10 @@ export interface RightPanelContext {
   readonly rootPath: string | null;
   /** Ready contents of the active Markdown document, or `null`. */
   readonly documentContents: string | null;
+  /** Relative path of the active Markdown editor note, or `null`. */
+  readonly documentPath: string | null;
+  /** Requests shell-owned navigation to another note. */
+  readonly onOpenNote: (relativePath: string) => void;
 }
 
 /**
@@ -285,11 +290,12 @@ export const builtInDesktopPanels: readonly (LeftPanelContribution | RightPanelC
     label: "Backlinks",
     icon: "backlinks",
     side: "right",
-    availability: () => false,
-    factory: () => (
-      <Unavailable
-        title="Backlinks unavailable"
-        description="This inspector activates after the workspace link index is available."
+    availability: ({ documentPath }) => documentPath !== null,
+    factory: ({ rootPath, documentPath, onOpenNote }) => (
+      <BacklinksPanel
+        rootPath={rootPath}
+        relativePath={documentPath}
+        onOpenNote={onOpenNote}
       />
     )
   },

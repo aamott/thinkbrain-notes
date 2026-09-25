@@ -14,7 +14,7 @@
  * `pointer-coarse:` is what separates a thumb from a mouse. Rows keep the
  * two-line form either way; under a fingertip they clear 44px.
  */
-export const TOUCH = "pointer-coarse:min-h-11";
+export const TOUCH = "pointer-coarse:min-h-11 pointer-coarse:min-w-11";
 
 export const ACTION = `h-7 ${TOUCH} px-2 rounded-small border border-border bg-background text-foreground text-xs cursor-pointer hover:bg-secondary`;
 

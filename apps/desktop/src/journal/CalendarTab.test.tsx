@@ -157,6 +157,16 @@ describe("phone layout (D57)", () => {
     expect(labelled(host, "Today")).toBeDefined();
   });
 
+  it("keeps every strip control at the coarse-pointer minimum", async () => {
+    const host = await render();
+
+    for (const label of ["Week", "Month", "Previous", "Today", "Next"]) {
+      const classes = labelled(host, label).className.split(" ");
+      expect(classes).toContain("pointer-coarse:min-h-11");
+      expect(classes).toContain("pointer-coarse:min-w-11");
+    }
+  });
+
   it("keeps both views selectable when the strip is collapsed", async () => {
     const onViewChange = vi.fn();
     const host = await render({ onViewChange });
