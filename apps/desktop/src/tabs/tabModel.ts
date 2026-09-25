@@ -78,6 +78,16 @@ export function fileTabId(resource: TabResource): string {
 }
 
 /**
+ * The id an open document tab would have at `resource` — `editor:` when the
+ * extension infers a Markdown editor, `file:` otherwise. Retargeting after a
+ * rename must key by the DESTINATION's identity: renaming `note.md` to
+ * `note.txt` changes which tab kind owns it.
+ */
+export function documentTabId(resource: Required<TabResource>): string {
+  return inferTabKind(resource.relativePath) === "editor" ? editorTabId(resource) : fileTabId(resource);
+}
+
+/**
  * Builds a tab for any file, inferring the tab kind from the extension.
  * Uses `inferTabKind` so `.md` → editor, `.png` → image-viewer, `.ts` →
  * code-editor, etc. The tab kind determines which renderer `TabContent` selects.
@@ -191,12 +201,18 @@ function retargetTab(
   from: Required<TabResource>,
   to: Required<TabResource>
 ): DesktopTabState {
-  const oldId = editorTabId(from);
-  const existing = state.tabs.find((tab) => tab.id === oldId);
+  // The existing tab is found under whichever id scheme its old path used.
+  // The replacement is built from the DESTINATION's inferred kind: renaming
+  // `note.md` to `note.txt` must hand the tab to the text-file renderer, not
+  // keep it a Markdown editor showing a `.txt` file.
+  const editorId = editorTabId(from);
+  const fileId = fileTabId(from);
+  const existing = state.tabs.find((tab) => tab.id === editorId || tab.id === fileId);
   if (!existing) return state;
+  const oldId = existing.id;
 
   const moved: DesktopTab = {
-    ...createEditorTab(to),
+    ...(inferTabKind(to.relativePath) === "editor" ? createEditorTab(to) : createFileTab(to)),
     ...(existing.isDirty ? { isDirty: existing.isDirty } : {})
   };
 

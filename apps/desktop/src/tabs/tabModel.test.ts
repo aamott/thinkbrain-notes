@@ -100,6 +100,81 @@ describe("desktopTabReducer", () => {
     });
   });
 
+  /**
+   * Non-Markdown files open as `file:` tabs whose kind is inferred from the
+   * extension (text editor, image viewer, …). A move must carry the whole
+   * file-tab identity — not just the editor-tab scheme — and keep the tab's
+   * unsaved edits with it.
+   */
+  it("moves a non-Markdown file tab, preserving its kind and dirty edits", () => {
+    const textFile = createFileTab({ rootPath: "/notes", relativePath: "data.txt" });
+    const state = reduce(
+      { type: "open", tab: textFile },
+      { type: "setDirty", tabId: textFile.id, isDirty: true },
+      {
+        type: "retarget",
+        from: { rootPath: "/notes", relativePath: "data.txt" },
+        to: { rootPath: "/notes", relativePath: "docs/data.txt" }
+      }
+    );
+
+    const moved = createFileTab({ rootPath: "/notes", relativePath: "docs/data.txt" });
+    expect(state.tabs).toHaveLength(1);
+    expect(state.tabs[0]).toMatchObject({
+      id: moved.id,
+      kind: moved.kind,
+      resource: { rootPath: "/notes", relativePath: "docs/data.txt" },
+      isDirty: true
+    });
+    expect(state.activeTabId).toBe(moved.id);
+  });
+
+  it("converts an editor tab to a file tab when a rename loses the .md extension", () => {
+    const state = reduce(
+      { type: "open", tab: firstNote },
+      { type: "setDirty", tabId: firstNote.id, isDirty: true },
+      {
+        type: "retarget",
+        from: { rootPath: "/notes", relativePath: "Ideas/first.md" },
+        to: { rootPath: "/notes", relativePath: "Ideas/first.txt" }
+      }
+    );
+
+    const moved = createFileTab({ rootPath: "/notes", relativePath: "Ideas/first.txt" });
+    expect(state.tabs).toHaveLength(1);
+    expect(state.tabs[0]).toMatchObject({
+      id: moved.id,
+      kind: moved.kind,
+      resource: { rootPath: "/notes", relativePath: "Ideas/first.txt" },
+      isDirty: true
+    });
+    expect(state.tabs[0]?.id.startsWith("file:")).toBe(true);
+    expect(state.activeTabId).toBe(moved.id);
+  });
+
+  it("converts a file tab to an editor tab when a rename gains the .md extension", () => {
+    const textFile = createFileTab({ rootPath: "/notes", relativePath: "note.txt" });
+    const state = reduce(
+      { type: "open", tab: textFile },
+      { type: "setDirty", tabId: textFile.id, isDirty: true },
+      {
+        type: "retarget",
+        from: { rootPath: "/notes", relativePath: "note.txt" },
+        to: { rootPath: "/notes", relativePath: "note.md" }
+      }
+    );
+
+    const moved = createEditorTab({ rootPath: "/notes", relativePath: "note.md" });
+    expect(state.tabs).toHaveLength(1);
+    expect(state.tabs[0]).toMatchObject({
+      id: moved.id,
+      kind: "editor",
+      resource: { rootPath: "/notes", relativePath: "note.md" },
+      isDirty: true
+    });
+    expect(state.activeTabId).toBe(moved.id);
+  });
+
   it("keeps a moved tab selected", () => {
     const state = reduce(
       { type: "open", tab: firstNote },

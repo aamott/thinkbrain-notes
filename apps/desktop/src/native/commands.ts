@@ -154,7 +154,7 @@ export interface NativeCommandMap {
       readonly relativePath: string;
       readonly newRelativePath: string;
     };
-    readonly result: NativeWorkspaceEntry;
+    readonly result: NativeWorkspaceRenameResult;
   };
   readonly delete_workspace_entry: {
     readonly args: {
@@ -509,6 +509,22 @@ export interface NativeWorkspaceEntry {
   readonly is_markdown: boolean;
   readonly byte_size: number;
   readonly updated_at: number | null;
+}
+
+/** One file's path change caused by a rename/move; folders produce one per descendant file. */
+export interface NativeWorkspacePathMove {
+  readonly old_relative_path: string;
+  readonly new_relative_path: string;
+  /** Whether the OLD path is Markdown — drives stale search-index removal. */
+  readonly was_markdown: boolean;
+  /** Whether the NEW path is Markdown — drives which event the renderer emits. */
+  readonly is_markdown: boolean;
+}
+
+/** The renamed entry plus every file path it moved (empty for a no-op rename). */
+export interface NativeWorkspaceRenameResult {
+  readonly entry: NativeWorkspaceEntry;
+  readonly file_moves: readonly NativeWorkspacePathMove[];
 }
 
 export interface NativeWorkspaceSnapshot {
