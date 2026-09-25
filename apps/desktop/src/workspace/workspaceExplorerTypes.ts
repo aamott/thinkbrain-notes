@@ -46,6 +46,12 @@ export interface WorkspaceExplorerActions {
   readonly openGitLinkImport: () => void;
   readonly launchWorkspace: (rootPath: string) => Promise<void>;
   readonly confirmDelete: () => Promise<void>;
+  /** Clears the inline create-field error as the draft is edited. */
+  readonly setInlineCreateError: (value: string | null) => void;
+  /** Safe close for the non-Markdown confirmation: back to the inline draft. */
+  readonly dismissExtensionConfirm: () => void;
+  /** Runs the saved non-Markdown file create once, after confirmation. */
+  readonly confirmExtensionCreate: () => Promise<void>;
   readonly setMoreMenuOpen: Dispatch<SetStateAction<boolean>>;
   readonly setRenaming: (value: RenameState | null) => void;
   readonly setCreating: (value: CreateState | null) => void;
@@ -62,10 +68,45 @@ export interface RenameState {
   readonly focusRequest: number;
 }
 
-export interface CreateState {
+/**
+ * Inline-create state. File creation records whether it came from the
+ * canonical New note command or a generic New file action, because only the
+ * note flow pre-fills `.md` and warns before producing a non-Markdown file.
+ */
+export interface FolderCreateState {
   readonly parentPath: string;
-  readonly kind: "file" | "folder";
+  readonly kind: "folder";
   readonly focusRequest: number;
+}
+
+export interface NewFileCreateState {
+  readonly parentPath: string;
+  readonly kind: "file";
+  readonly source: "new-file";
+  readonly focusRequest: number;
+}
+
+export interface NewNoteCreateState {
+  readonly parentPath: string;
+  readonly kind: "file";
+  readonly source: "new-note";
+  readonly focusRequest: number;
+}
+
+export type CreateState = FolderCreateState | NewFileCreateState | NewNoteCreateState;
+
+export function isNewNoteCreate(target: CreateState): target is NewNoteCreateState {
+  return target.kind === "file" && target.source === "new-note";
+}
+
+/**
+ * A New note submission whose name is valid but lacks a Markdown ending. The
+ * draft is kept while the extension confirmation dialog decides whether the
+ * plain create path may run.
+ */
+export interface PendingExtensionConfirm {
+  readonly target: NewNoteCreateState;
+  readonly name: string;
 }
 
 /** Joins a parent path and a name into a workspace-relative path. */

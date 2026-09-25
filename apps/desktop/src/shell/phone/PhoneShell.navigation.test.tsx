@@ -348,8 +348,8 @@ describe("PhoneShell navigation", () => {
     // Create runs the canonical command — Explorer's inline create flow over a
     // Files route. This fixture has no restored workspace (isTauri is mocked
     // false), so the tree never reaches `phase === "ready"` and the inline
-    // "New file name" field cannot render here; the observable dispatch is
-    // the focus-request counter the command hands Explorer.
+    // field cannot render in this fixture. The Explorer integration suite proves
+    // that this canonical focus request renders the `.md` field when ready.
     const focusRequests = () => shell().explorerProps.newNoteFocusRequest;
     await act(async () => {
       hub?.querySelector<HTMLButtonElement>('[aria-label="New note"]')?.click();

@@ -1,9 +1,9 @@
-import { memo, useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { Folder, FolderOpen } from "lucide-react";
 import type { WorkspaceTreeNode } from "./workspaceExplorerModel";
 import { WorkspaceFileIcon } from "./WorkspaceFileIcon";
 import { cn } from "../lib/utils";
-import type { CreateState, RenameState, WorkspaceExplorerActions } from "./workspaceExplorerTypes";
+import { isNewNoteCreate, type CreateState, type RenameState, type WorkspaceExplorerActions } from "./workspaceExplorerTypes";
 
 // ---- Tree item ----
 
@@ -143,8 +143,11 @@ export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
           {isCreatingHere && (
             <ul role="group" className="m-0 pl-3.5 list-none">
               <InlineNameInput
+                key={creating!.focusRequest}
                 depth={depth + 1}
                 icon={creating!.kind === "folder" ? <Folder /> : <WorkspaceFileIcon name="" />}
+                initialValue={isNewNoteCreate(creating!) ? ".md" : ""}
+                caretBeforeExtension={isNewNoteCreate(creating!)}
                 placeholder={creating!.kind === "folder" ? "New folder name…" : "New file name…"}
                 ariaLabel={creating!.kind === "folder" ? "New folder name" : "New file name"}
                 focusRequest={creating!.focusRequest}
@@ -196,8 +199,11 @@ export function InlineNameInput({
   ariaLabel,
   focusRequest,
   selectOnFocus = false,
+  caretBeforeExtension = false,
   wrapInListItem = false,
   disabled = false,
+  error = null,
+  onEdit,
   onSubmit,
   onCancel
 }: {
@@ -208,14 +214,21 @@ export function InlineNameInput({
   readonly ariaLabel?: string;
   readonly focusRequest: number;
   readonly selectOnFocus?: boolean;
+  /** Places the caret before the final extension dot instead of at the end —
+   *  so typing into a `.md` prefilled note name prepends the actual name. */
+  readonly caretBeforeExtension?: boolean;
   readonly wrapInListItem?: boolean;
   readonly disabled?: boolean;
+  /** Inline validation message; rendered under the input and cleared on edit. */
+  readonly error?: string | null;
+  readonly onEdit?: () => void;
   readonly onSubmit: (value: string) => Promise<boolean>;
   readonly onCancel: () => void;
 }) {
   const [value, setValue] = useState(initialValue);
   const [submitting, setSubmitting] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const errorId = useId();
   // Track whether the user committed via Enter so the blur handler does not
   // also fire onCancel. Without this, Enter -> submit -> blur -> cancel would
   // double-fire.
@@ -225,7 +238,12 @@ export function InlineNameInput({
     const element = inputRef.current;
     element?.focus();
     if (selectOnFocus) element?.select();
-  }, [focusRequest, selectOnFocus]);
+    else if (caretBeforeExtension && element) {
+      const dot = element.value.lastIndexOf(".");
+      const caret = dot >= 0 ? dot : element.value.length;
+      element.setSelectionRange(caret, caret);
+    }
+  }, [focusRequest, selectOnFocus, caretBeforeExtension]);
 
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Escape") {
@@ -254,23 +272,35 @@ export function InlineNameInput({
       }}
     >
       <span className="w-2.5 flex-none text-muted-foreground text-center [&>svg]:w-[0.9rem] [&>svg]:h-[0.9rem] [&>svg]:stroke-current" aria-hidden="true">{icon}</span>
-      <input
-        ref={inputRef}
-        className="min-w-0 flex-1 border border-input rounded-small px-[0.3rem] py-0.5 text-foreground bg-background font-inherit text-xs focus-visible:outline-2 focus-visible:outline-ring focus-visible:-outline-offset-1"
-        value={value}
-        disabled={disabled || submitting}
-        placeholder={placeholder}
-        aria-label={ariaLabel}
-        onChange={(event) => setValue(event.target.value)}
-        onKeyDown={handleKeyDown}
-        // On blur without an explicit commit/cancel, treat as cancel so the
-        // input does not linger when the user clicks elsewhere or opens a menu.
-        onBlur={() => {
-          if (committedRef.current) return;
-          committedRef.current = true;
-          onCancel();
-        }}
-      />
+      <span className="min-w-0 flex-1">
+        <input
+          ref={inputRef}
+          className="w-full min-w-0 border border-input rounded-small px-[0.3rem] py-0.5 text-foreground bg-background font-inherit text-xs focus-visible:outline-2 focus-visible:outline-ring focus-visible:-outline-offset-1"
+          value={value}
+          disabled={disabled || submitting}
+          placeholder={placeholder}
+          aria-label={ariaLabel}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? errorId : undefined}
+          onChange={(event) => {
+            setValue(event.target.value);
+            onEdit?.();
+          }}
+          onKeyDown={handleKeyDown}
+          // On blur without an explicit commit/cancel, treat as cancel so the
+          // input does not linger when the user clicks elsewhere or opens a menu.
+          onBlur={() => {
+            if (committedRef.current) return;
+            committedRef.current = true;
+            onCancel();
+          }}
+        />
+        {error && (
+          <p id={errorId} role="alert" className="m-0 mt-1 text-danger text-[0.6875rem] leading-1.4">
+            {error}
+          </p>
+        )}
+      </span>
     </form>
   );
 
