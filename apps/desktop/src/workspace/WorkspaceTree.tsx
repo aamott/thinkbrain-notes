@@ -277,7 +277,12 @@ export function InlineNameInput({
           ref={inputRef}
           className="w-full min-w-0 border border-input rounded-small px-[0.3rem] py-0.5 text-foreground bg-background font-inherit text-xs focus-visible:outline-2 focus-visible:outline-ring focus-visible:-outline-offset-1"
           value={value}
-          disabled={disabled || submitting}
+          disabled={disabled}
+          // An in-flight submit must not disable the input: real engines blur a
+          // disabled field, which would strand focus on <body> before any
+          // confirm dialog can capture the element to restore focus to.
+          readOnly={submitting}
+          aria-busy={submitting || undefined}
           placeholder={placeholder}
           aria-label={ariaLabel}
           aria-invalid={error ? true : undefined}

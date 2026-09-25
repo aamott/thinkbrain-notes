@@ -8,6 +8,7 @@ import { dismissTopOverlay } from "@thinkbrain/ui";
 import type { NativeWorkspaceEntry, NativeWorkspaceSnapshot } from "../native/commands";
 import { desktopCommandRegistry, type DesktopCommandContext } from "../commands/commandRegistry";
 import { WorkspaceExplorer } from "./WorkspaceExplorer";
+import { InlineNameInput } from "./WorkspaceTree";
 import { workspaceDesktopApi, type WorkspaceDesktopApi } from "./workspaceAdapter";
 
 vi.mock("./workspaceSettings", () => ({
@@ -373,8 +374,12 @@ describe("Create a different file type? confirmation", () => {
       "The .md ending tells ThinkBrain to open a file as a Markdown note. Without it, this file may open as plain text or in another editor."
     );
     expect(fixture.createWorkspaceFile).not.toHaveBeenCalled();
-    // The draft stays mounted behind the dialog, untouched.
-    expect(inputOf("New file name")?.value).toBe("Shopping.txt");
+    // The draft stays mounted behind the dialog, untouched. Crucially it is
+    // never `disabled` mid-submit: a disabled field would be blurred by real
+    // engines, and the dialog would then restore focus to <body> on dismissal.
+    const draft = inputOf("New file name");
+    expect(draft?.value).toBe("Shopping.txt");
+    expect(draft?.disabled).toBe(false);
     // Keep editing is the focused safe default.
     const keep = Array.from(box?.querySelectorAll("button") ?? []).find((b) => b.textContent === "Keep editing");
     expect(keep).not.toBeNull();
@@ -559,6 +564,45 @@ describe("Create a different file type? confirmation", () => {
     await act(async () => undefined);
     expect(dialog()).toBeNull();
     expect(inputOf("New file name")).toBeNull();
+  });
+});
+
+describe("InlineNameInput pending submission", () => {
+  it("stays focusable and readOnly while the submit promise is in flight", async () => {
+    let resolveSubmit!: (ok: boolean) => void;
+    const onSubmit = vi.fn(() => new Promise<boolean>((resolve) => { resolveSubmit = resolve; }));
+    container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
+    await act(async () => {
+      root?.render(
+        <InlineNameInput
+          depth={0}
+          icon={null}
+          focusRequest={1}
+          onSubmit={onSubmit}
+          onCancel={() => undefined}
+        />
+      );
+    });
+    const input = container.querySelector<HTMLInputElement>("input")!;
+    await act(async () => input.focus());
+
+    const form = input.closest("form")!;
+    await act(async () => {
+      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+
+    // The duplicate-submit guard still holds, but the field stays focusable —
+    // that is what lets the extension-confirm dialog restore focus to it.
+    expect(input.disabled).toBe(false);
+    expect(input.readOnly).toBe(true);
+    expect(input.getAttribute("aria-busy")).toBe("true");
+    expect(document.activeElement).toBe(input);
+
+    await act(async () => resolveSubmit(false));
+    expect(input.readOnly).toBe(false);
+    expect(input.getAttribute("aria-busy")).toBeNull();
   });
 });
 
