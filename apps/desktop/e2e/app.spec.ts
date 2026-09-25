@@ -232,7 +232,11 @@ test("opens, saves, protects, and creates Markdown notes through the fresh shell
             writeDocuments(documents);
           }
           const isDir = !newKey.includes(".");
-          return { relative_path: newKey, name: newKey.split("/").at(-1), parent_path: newKey.split("/").slice(0, -1).join("/"), kind: isDir ? "directory" : "file", is_markdown: !isDir, byte_size: 0, updated_at: null };
+          const entry = { relative_path: newKey, name: newKey.split("/").at(-1), parent_path: newKey.split("/").slice(0, -1).join("/"), kind: isDir ? "directory" : "file", is_markdown: !isDir, byte_size: 0, updated_at: null };
+          return {
+            entry,
+            file_moves: [{ old_relative_path: oldKey, new_relative_path: newKey, was_markdown: !isDir, is_markdown: !isDir }]
+          };
         }
         if (command === "delete_workspace_entry") {
           const target = String(args.relativePath);
@@ -261,8 +265,9 @@ test("opens, saves, protects, and creates Markdown notes through the fresh shell
   await expect(page.getByLabel("Unsaved changes")).toBeVisible();
 
   await page.getByRole("button", { name: "Close welcome.md" }).click();
-  await expect(page.getByRole("dialog", { name: "Unsaved changes" })).toBeVisible();
-  await page.getByRole("button", { name: "Cancel" }).click();
+  const unsavedDialog = page.getByRole("dialog", { name: "Unsaved changes" });
+  await expect(unsavedDialog).toBeVisible();
+  await unsavedDialog.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(editor).toBeVisible();
   await page.getByRole("button", { name: "Save note" }).click();
   await expect(page.getByLabel("Unsaved changes")).not.toBeVisible();
@@ -438,7 +443,11 @@ test("the explorer context menu creates, renames, and deletes entries", async ({
             writeFolders(folders);
           }
           const isDir = !newKey.includes(".");
-          return entryFor(newKey, isDir ? "directory" : "file", !isDir);
+          const entry = entryFor(newKey, isDir ? "directory" : "file", !isDir);
+          return {
+            entry,
+            file_moves: [{ old_relative_path: oldKey, new_relative_path: newKey, was_markdown: !isDir, is_markdown: !isDir }]
+          };
         }
         if (command === "delete_workspace_entry") {
           const target = String(args.relativePath);
