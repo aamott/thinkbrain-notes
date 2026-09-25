@@ -94,5 +94,9 @@ three-way-merge go/no-go is answered with this vault's evidence.
 
 ## Status
 
-🟨 Pill, history, per-note versions, restore and the counter done. Remaining:
-the retry-policy decision above, and Windows.
+🟨 Pill, history, per-note versions, restore and the counter are implemented.
+The retry-policy reference in earlier drafts was superseded by the shared
+schedule in `docs/superpowers/specs/2026-08-28-sync-schedule-design.md`.
+Remaining: Windows verification. Restore still replaces unsaved editor content
+after first checkpointing the on-disk version; a confirmation prompt is not
+implemented.

@@ -79,7 +79,7 @@ The app degrades honestly — no crash, and it recovers — but the message it
 shows ("Could not reach the place these notes sync to. Check the git link and
 your connection") misdiagnoses a missing platform init as a network fault.
 
-Tracked as `done-android_tls_platform_verifier-high-med.md`. **Fixed and
+Tracked as `android_tls_platform_verifier`. **Fixed and
 verified the same session** — the panic is gone and the clone now reaches the
 credential stage.
 
@@ -87,7 +87,7 @@ credential stage.
 credential helper that returns nothing. A public clone fails with
 `sync.credentials_invalid` because anonymous access means *not configuring a
 helper*, not configuring one that declines. Tracked as
-`pending-android_anonymous_clone-high-med.md`, which now gates this spike's
+`android_anonymous_clone`, which now gates this spike's
 remaining acceptance.
 
 The emulator's network is fine (`ping github.com` succeeds), so nothing here is
@@ -121,7 +121,7 @@ the `MainActivity` hook.
 Two items moved rather than being answered here, because they are the same
 checks another story already owns and duplicating them would mean two places to
 update: **physical hardware** and **notes from the cloned vault open, edit and
-save** are tracked in `pending-android_anonymous_clone-high-med.md`.
+save** are tracked in `android_anonymous_clone`.
 
 ## Not in scope
 

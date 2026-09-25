@@ -85,7 +85,7 @@ ruling out by construction.
 - **~~Settling is not announced.~~** ✅ Fixed: `settleNotificationAdapter.ts`
   watches the conflict-rate `settled` counter and pushes a transient
   notification ("N duplicates were tidied away") into the notification store
-  when it increases. Unblocked by `done-notification_system-med-med.md`.
+  when it increases. Unblocked by `notification_system`.
 
 ## Status
 

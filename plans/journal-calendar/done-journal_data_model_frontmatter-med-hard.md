@@ -1,20 +1,21 @@
 # Story: Journal Data Model & Markdown Frontmatter Contract
 
-**Status:** 🟨 implemented in `packages/core/src/journal/` (filename parser, entry comparator,
-date resolution, field-definition validation, metadata reading) · **Urgency:** med ·
-**Difficulty:** hard
+**Status:** ✅ done · **Urgency:** med · **Difficulty:** hard
 
-Remaining: the unknown-field write round-trip, which needs the write path owned by
-`pending-journal_service_daily_notes-high-med.md`.
+Implemented in `packages/core/src/journal/` (filename parser, entry comparator,
+date resolution, field-definition validation, metadata reading). The last open
+item — the unknown-field write round-trip — shipped with the service story's
+write path: `apps/desktop/src/journal/frontmatterEdit.ts` edits a single key
+textually, leaving every other line (including unknown fields) byte for byte.
 
 ## Epic
 
-Part of [Journal & Calendar](../pending-journal-calendar-high-hard.md).
+Part of [Journal & Calendar](journal-calendar).
 
 ## Discovery constraints (approved 2026-08-07)
 
 The discovery gate is CLOSED; full rationale and D1-D47 live in
-`../pending-journal_discovery_and_wireframes-low-med.md`.
+`journal_discovery_and_wireframes`.
 
 - **D2/D3:** entries are ordinary Markdown; metadata is a human-readable frontmatter block with self-describing keys, not codes/IDs.
 - **D4:** fields are user-defined with only multi-select, single-select, number, and text inputs; no shipped mood/activity vocabulary.
@@ -24,7 +25,7 @@ The discovery gate is CLOSED; full rationale and D1-D47 live in
 - **D33/D38:** read leniently; filename date alone qualifies, malformed/absent frontmatter remains eligible and survives writes, and ambiguous dates are `UNDATED` without guessing.
 
 **STOP gate — CLOSED.** The discovery gate above is closed, and the field-contract items this
-story STOP-gated are now decided (`../pending-journal_discovery_and_wireframes-low-med.md`,
+story STOP-gated are now decided (`journal_discovery_and_wireframes`,
 "Approved 2026-08-08 (D48-D70)"):
 
 - **Frontmatter date key — closed by D48.** The key is `date`, a plain `YYYY-MM-DD` string with
@@ -38,7 +39,7 @@ story STOP-gated are now decided (`../pending-journal_discovery_and_wireframes-l
   non-blocking notice, and excluded from that field's facet values rather than coerced. Writes
   happen only on an explicit widget edit and touch only the changed keys; the current serializer
   may reflow YAML on such a write until
-  `plans/note-model/pending-comment_preserving_frontmatter_roundtrips-low-hard.md` lands.
+  `note-model/comment_preserving_frontmatter_roundtrips` lands.
 - **Compatibility promise — closed by D51.** The v1 stable contract is D42's filename table plus
   D48's `date` key. User-defined field keys are user-owned — never renamed, migrated, or
   garbage-collected. No schema-version marker is written into notes (D2). Reserving a further
@@ -67,7 +68,7 @@ Define platform-agnostic journal metadata and a stable, portable Markdown contra
   otherwise. Value shapes are fixed by type: `text` and `single-select` write a plain string,
   `number` a plain number, `multi-select` a flow list of strings. (Definitions themselves are
   stored as a single `string` setting with a custom control — owned by
-  `pending-journal_settings_and_accessibility-med-med.md`; this story only consumes the shape
+  `journal_settings_and_accessibility`; this story only consumes the shape
   for reading/validating values.)
 - Fixtures and unit tests covering every approved format, ambiguous inputs, counter suffixes, malformed YAML, absent frontmatter, and filename/frontmatter date mismatch.
 - A signed-off format table artifact at `plans/journal-calendar/assets/journal-frontmatter-examples.md`.
@@ -85,7 +86,7 @@ Define platform-agnostic journal metadata and a stable, portable Markdown contra
 
 - Discovery/wireframes story approved (gate closed for D2–D38 above).
 - Existing generic boundaries: `packages/core/src/frontmatter.ts`, `markdown.ts`, `note-model.ts`.
-- `plans/wip-note-model-low-hard.md` frontmatter mutation policy and comment-preserving follow-up remain binding.
+- `plans/note-model/` frontmatter mutation policy and comment-preserving follow-up remain binding.
 
 ## Acceptance criteria
 
@@ -96,9 +97,9 @@ Define platform-agnostic journal metadata and a stable, portable Markdown contra
 - [x] A new-entry write emits frontmatter with the date field only; no other fields are pre-seeded (D22).
 - [x] On read, filename date takes precedence over frontmatter date; the parser records the mismatch as a diagnostic but does NOT rewrite the file (D20).
 - [x] Malformed YAML frontmatter does not disqualify an entry; the entry is surfaced with a diagnostic, not hidden (D33).
-- [ ] Unknown frontmatter fields survive a round-trip through any journal write path (D33).
+- [x] Unknown frontmatter fields survive a round-trip through any journal write path (D33).
   *(No journal write path exists yet — `readJournalMetadata` keeps every unmatched key in
-  `unconfigured`, and `pending-journal_service_daily_notes-high-med.md` owns proving the
+  `unconfigured`, and `journal_service_daily_notes` owns proving the
   round-trip when it adds writes.)*
 - [x] Types carry no hard-coded mood vocabulary or activity taxonomy; user-defined field values are represented as opaque strings/numbers (D4).
 - [x] No template types or template application logic (D21).

@@ -12,9 +12,9 @@ Design decisions:
 
 Fixed along the way: renaming a note from the explorer left open tabs pointing at the old path; `retarget` now handles both in-app and external renames.
 
-Scope split: Part 1 (tree refresh, reload unmodified tabs, re-point renamed tabs) and Part 2 (`StaleDocumentBanner` for tabs with unsaved edits) both landed. Banner is non-modal, `role="status"`, one per affected tab. "Keep mine" only dismisses — overwriting takes the same deliberate save it always did. Side-by-side compare deferred to `git-integration/pending-inline_diff_viewer-high-med.md`.
+Scope split: Part 1 (tree refresh, reload unmodified tabs, re-point renamed tabs) and Part 2 (`StaleDocumentBanner` for tabs with unsaved edits) both landed. Banner is non-modal, `role="status"`, one per affected tab. "Keep mine" only dismisses — overwriting takes the same deliberate save it always did. Side-by-side compare deferred to `git-integration/inline_diff_viewer`.
 
-Out of scope, since closed: blind-overwrite on save — fixed by `indexing-search/done-conflict_safe_note_writes` (see that summary).
+Out of scope, since closed: blind-overwrite on save — fixed by `indexing-search/conflict_safe_note_writes` (see `plans/indexing-search/done-summary.md`).
 - `apps/desktop/src/workspace/WorkspaceExplorer.tsx` — tree refresh
 - `apps/desktop/src/events/` — `subscribeToNoteChanges`
 - `apps/desktop/src/lib/debounce.ts` — shared debounce

@@ -23,4 +23,4 @@ interface/refactor to a platform or architecture owner before implementation.
 - `plans/app-vision.md` — Technical Stack, Repository Structure sections
 - `apps/desktop/src/native/commands.ts` — current direct-Tauri bridge
 - `packages/core/src/index.ts` — where interfaces should live
-- `plans/pending-mobile-med-hard.md` — mobile reuses current adapters and is not blocked by this holding item
+- `plans/mobile/` — mobile reuses current adapters and is not blocked by this holding item

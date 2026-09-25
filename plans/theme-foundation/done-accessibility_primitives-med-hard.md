@@ -24,4 +24,4 @@ dialog/modal, and dropdown menu. Avoid adopting a heavy component framework.
 - `packages/ui/src/components/Button.tsx` — existing component pattern
 - `packages/ui/src/index.ts` — barrel export
 - `packages/ui/package.json` — dependencies (Radix packages to be added if chosen)
-- `plans/wip-theme-foundation-high-hard.md` — UI components and themes decision
+- `plans/theme-foundation/` — UI components and themes decision

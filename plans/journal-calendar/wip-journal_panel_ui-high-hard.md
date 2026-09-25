@@ -12,7 +12,7 @@ the open document — not the file — so the user's Save stays the only thing t
 
 Landed 2026-08-13: list virtualization (D13), first-line previews scoped to the visible rows,
 and collapse persistence (D53). Search is scoped to the journal folder natively — see
-`plans/wip-indexing-search-med-med.md`.
+`plans/indexing-search/`.
 
 Landed 2026-08-16: the metadata filter (D16/D41/D43) — `JournalFilterControl.tsx` right-aligned
 in the filter row (D73), values from the platform index, predicates ANDed within one entry, and
@@ -20,12 +20,12 @@ search running inside the resulting set. The arithmetic is `journalFacets.ts`, p
 
 ## Epic
 
-Part of [Journal & Calendar](../pending-journal-calendar-high-hard.md).
+Part of [Journal & Calendar](journal-calendar).
 
 ## Discovery constraints (approved 2026-08-07)
 
 The discovery gate is CLOSED; full rationale and D1-D47 live in
-`../pending-journal_discovery_and_wireframes-low-med.md`.
+`journal_discovery_and_wireframes`.
 
 - **D9/D13/D15:** navigator rows show date/time/first line and open normal editor tabs; use a virtualized grouped list, never a calendar widget.
 - **D16/D41:** reuse platform search/facets, never a journal cache/full scan; active filters require count badge, chip row, and `showing N of M` emphasis.
@@ -37,7 +37,7 @@ The discovery gate is CLOSED; full rationale and D1-D47 live in
 
 ## Questions first — STOP gate (CLOSED)
 
-Closed by D48-D70; full text in `../pending-journal_discovery_and_wireframes-low-med.md`.
+Closed by D48-D70; full text in `journal_discovery_and_wireframes`.
 
 - **Collapsed-header + search interaction — D52.** Matching headers auto-expand with a match count while a search/filter is active; never persisted.
 - **Collapse-state persistence — D53.** Persists per workspace in desktop state, restored on popout reopen.
@@ -132,7 +132,7 @@ tokens; no colour is hard-coded.
 - [x] List renders as a flat virtualized stream with collapsible year + month headers, non-indented (D37, D39); list handles thousands of entries without layout thrash (D13). The window arithmetic is `lib/listWindow.ts`, apart from React and the DOM so its edge cases are testable; the panel measures one row of each visual class and reports which entries are drawn.
 - [x] Rows render from filename-derived dates alone; first-line previews load lazily for
       visible rows only and never block first paint (see the listing strategy in
-      `pending-journal_service_daily_notes-high-med.md`).
+      `journal_service_daily_notes`).
 - [ ] Undated is a pinned collapsed category with a count and is absent when empty; non-Markdown files are silently excluded from the popout (D32/D36).
 - [x] Active filters show count badge + chip row + "showing N of M" string; a muted-only indicator is a defect (D16). The count is in the filter button's accessible name as well as its badge, and every predicate has its own dismissible chip.
 - [x] Metadata facet values and paths come from D41 queries; all active predicates match within one entry per D43, and D16 search runs inside that entry set. Index unavailable disables only facets with explicit status and never scans files.
@@ -193,7 +193,7 @@ that can disagree.
 
 - Automated: `JournalPanel.test.tsx`, `JournalEntryList.test.tsx`, `MetadataWidget.test.tsx`, relevant panel-registry tests, and `pnpm lint`, `pnpm typecheck`, `pnpm test` (or `./scripts/qa.sh`); all panel/view-model/registry/widget tests must pass.
 - Desktop: validate all fourteen UI states; open/close via activity bar; create today/past note ("New entry" always new file); open an existing note with unsaved edits; collapse/expand year+month headers; test full-text search, chip/badge emphasis, metadata filters, calendar-tab launch, resizing, themes, keyboard-only navigation, screen-reader labels, malformed-frontmatter notice, error recovery, and filter emphasis. Verify real Markdown files use `journal/YYYY/MM/YYYY-MM-DD-HHmm.md` and remain readable outside the app.
-- With an editor already open, activate/deactivate and verify D44 adds/removes the widget without remounting. Mobile is owned by `wip-journal_mobile_refinement-med-med.md`; add no mobile-only markup.
+- With an editor already open, activate/deactivate and verify D44 adds/removes the widget without remounting. Mobile is owned by `journal_mobile_refinement`; add no mobile-only markup.
 
 ## Non-goals
 

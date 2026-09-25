@@ -24,5 +24,5 @@ deferred.
 
 ## References
 
-- `plans/pending-marketplace-low-med.md`
-- Prerequisite: `plans/pending-extensions-low-hard.md` (manifest format, trusted local loading, compatibility gates)
+- `plans/marketplace/`
+- Prerequisite: `plans/extensions/` (manifest format, trusted local loading, compatibility gates)

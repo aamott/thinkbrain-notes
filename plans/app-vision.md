@@ -83,7 +83,7 @@ already runs — OneDrive, Google Drive, Syncthing — moves the files; the app'
 job is to notice the conflict copies those daemons leave behind and help
 resolve them. Git is the one transport the app drives itself, through a
 bundled gix rather than a `git` binary the user may not have. Both are one
-feature (`plans/pending-auto_sync-med-hard.md`), not two.
+feature (`plans/auto-sync/`), not two.
 
 ## MVP Scope
 

@@ -7,7 +7,7 @@ itself, its direct wiki-link targets (outgoing), and notes that link to it
 (incoming backlinks), optionally expanded one more hop. Useful for navigating
 context without rendering the entire vault.
 
-Depends on the graph view story (`pending-graph_view`) and link target
+Depends on the graph view story (`graph_view`) and link target
 resolution (shipped; see `plans/graph/done-summary.md`).
 
 ## Acceptance Criteria
@@ -27,6 +27,6 @@ resolution (shipped; see `plans/graph/done-summary.md`).
 
 - `packages/core/src/note-model.ts` — `WikiLink`, `NoteMetadata`
 - `packages/core/src/markdown.ts` — `extractWikiLinks`
-- `plans/pending-graph-low-hard.md` — this epic
-- `plans/graph/pending-graph_view-low-hard.md` — prerequisite
+- `plans/graph/` — this epic
+- `graph/graph_view` — prerequisite
 - `plans/graph/done-summary.md` — link target resolution, prerequisite (shipped)

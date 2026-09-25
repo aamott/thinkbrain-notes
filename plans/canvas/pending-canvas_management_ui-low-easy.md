@@ -26,4 +26,4 @@ handling.
 
 - `apps/desktop/src/` — file explorer, tab system
 - `packages/core/src/` — file operations, canvas persistence
-- `plans/wip-workspace-explorer-med-med.md` — explorer integration
+- `plans/workspace-explorer/` — explorer integration

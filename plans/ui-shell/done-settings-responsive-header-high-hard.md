@@ -14,7 +14,7 @@ classes with a responsive grid layout and ≥44px touch targets on phone. The sh
 
 ## Epic
 
-Part of [Modular Settings System](./pending-modular_settings_system-med-hard.md).
+Part of [Modular Settings System](./modular_settings_system).
 Read that first for the 14 binding design decisions and architecture overview.
 
 ## Context
@@ -77,7 +77,7 @@ changes (story 4 — the logic moves but the store interaction stays the same).
   single-column.
 - `apps/desktop/src/shell/WorkspaceHeaderBar.tsx` — header bar pattern.
 - `apps/desktop/src/settings/SettingsTab.test.tsx` — update.
-- `plans/pending-mobile-med-hard.md` — responsive breakpoint (760px).
+- `plans/mobile/` — responsive breakpoint (760px).
 - `plans/ui-shell/assets/settings-mockup.html` — visual reference.
 
 ## Implementation Notes
@@ -90,6 +90,6 @@ changes (story 4 — the logic moves but the store interaction stays the same).
   right of the search input.
 - Scrim: fixed/absolute overlay with `--tn-color-overlay`.
 - Use the same 760px breakpoint as the shell (per
-  `plans/pending-mobile-med-hard.md`).
+  `plans/mobile/`).
 - Keep the existing autosave logic from `SettingsSaveBar.tsx` — when autosave
   is enabled, Save/Reset hide and an "Autosave enabled" label shows.

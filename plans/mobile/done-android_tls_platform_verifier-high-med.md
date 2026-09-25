@@ -3,7 +3,7 @@
 **Status:** 🟩 done · **Urgency:** high · **Difficulty:** med
 
 > Found by running the app, 2026-08-27. See
-> `done-device_git_clone_spike-high-easy.md` for the session that turned it
+> `device_git_clone_spike` for the session that turned it
 > up. **This gated every network story on Android**, including the private Git
 > verification recorded in `docs/superpowers/specs/2026-08-27-android-git-access-design.md`.
 
@@ -140,7 +140,7 @@ by clearing logcat and re-running the same clone that produced the panic.
       deleting a vault whose push failed. TLS itself was never the blocker
       after this landed
 - [ ] The same clone succeeds on physical hardware — tracked in
-      `pending-android_anonymous_clone-high-med.md`, which owns the device pass
+      `android_anonymous_clone`, which owns the device pass
 - [x] `pnpm qa` green; desktop builds and behaviour unchanged
 
 ## Also worth fixing here

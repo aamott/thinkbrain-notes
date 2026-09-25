@@ -2,12 +2,12 @@
 
 ## Epic
 
-Part of [Journal & Calendar](../pending-journal-calendar-high-hard.md). Owns only contribution/lifecycle wiring; journal behavior, Markdown storage, and UI remain in the feature stories. Coordinates with `plans/extensions/pending-beta_builtin_extensions-med-med.md`.
+Part of [Journal & Calendar](journal-calendar). Owns only contribution/lifecycle wiring; journal behavior, Markdown storage, and UI remain in the feature stories. Coordinates with `extensions/beta_builtin_extensions`.
 
 ## Discovery constraints (approved 2026-08-07)
 
 The discovery gate is CLOSED; rationale and D1-D47 live in
-`../pending-journal_discovery_and_wireframes-low-med.md`.
+`journal_discovery_and_wireframes`.
 
 - **D16:** reuse the disposable/rebuildable platform FTS5 cache; it is never source of truth.
 - **D27:** exactly one activity-bar entry (`journal`); calendar is a canvas tab, not a panel/activity-bar entry.
@@ -34,7 +34,7 @@ chosen from feature availability/performance needs, not as a correctness workaro
 
 ## STOP gate — CLOSED
 
-Closed by D65-D70; full text in `../pending-journal_discovery_and_wireframes-low-med.md`.
+Closed by D65-D70; full text in `journal_discovery_and_wireframes`.
 
 - **Activation event — D65.** Lazy: `onView:journal` + the three commands; never `onStartup`.
 - **Beta contribution table — D66.** All contributions real at beta; popout uses `PanelAction`.
@@ -70,12 +70,12 @@ Deferred (do not implement here): URL install, signing, marketplace, strong isol
 
 ## Dependencies
 
-- D47 ids in `plans/extensions/pending-beta_builtin_extensions-med-med.md` are approved; remaining beta matrix decisions still gate affected registrations.
-- `pending-journal_panel_ui-high-hard.md` and `pending-calendar_tab_ui-high-hard.md` provide stable feature contracts.
-- D44 editor-header contribution (shipped 2026-08-08) and `pending-extension_settings-low-med.md` (D45).
+- D47 ids in `extensions/beta_builtin_extensions` are approved; remaining beta matrix decisions still gate affected registrations.
+- `journal_panel_ui` and `calendar_tab_ui` provide stable feature contracts.
+- D44 editor-header contribution (shipped 2026-08-08) and `extension_settings` (D45).
 - Existing command/panel/tab/settings/workspace APIs and registries plus D44 editor headers; preserve disposable lifecycle tests.
 - Indexing/search epic's FTS5 cache (D16) — do not build a parallel index.
-- Beta boundary: `pending-beta_builtin_extensions-med-med.md` (in `plans/extensions/`); internal
+- Beta boundary: `beta_builtin_extensions` (in `plans/extensions/`); internal
   contribution points and lifecycle/bootstrap integration have both shipped, their story files
   reviewed and deleted per the plan-review policy in `AGENTS.md`.
 

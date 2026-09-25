@@ -2,11 +2,11 @@
 
 **Status:** ✅ done · **Urgency:** medium · **Difficulty:** hard
 
-> Re-cut 2026-08-25 from `pending-mobile_navigation_menu`. That story and
-> `pending-responsive_layout` overlapped on the bottom bar and left the tab
+> Re-cut 2026-08-25 from `mobile_navigation_menu`. That story and
+> `responsive_layout` overlapped on the bottom bar and left the tab
 > strip and right panels unowned. The seam is now **navigation chrome** (this
 > story) versus **surfaces inside panels**
-> (`wip-phone_surface_fixes-med-med.md`).
+> (`phone_surface_fixes`).
 
 **Design:** `docs/superpowers/specs/2026-08-25-mobile-shell-design.md`
 **Plan:** `docs/superpowers/plans/2026-08-25-mobile-shell.md` — Tasks 1–12, 14
@@ -93,7 +93,7 @@ target's registration — so it reads "Files", or "Journal" if the user pins tha
 ## Not this story
 
 Popout width, keyboard inset, status-bar folding and the bottom panel —
-`wip-phone_surface_fixes-med-med.md`.
+`phone_surface_fixes`.
 
 ## What shipped
 

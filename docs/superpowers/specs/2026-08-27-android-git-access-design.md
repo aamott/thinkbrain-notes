@@ -4,13 +4,13 @@
 > on Android. Drafted 2026-08-27; the chosen credential store and complete private
 > round trip were verified on Android on 2026-09-20. Supersedes the earlier
 > credential-storage candidates and answers the storage question left open by
-> `plans/extensions/pending-extension_secret_storage-med-hard.md`.
+> `extensions/extension_secret_storage`.
 
 ## Problem
 
 A vault most plausibly arrives on a phone by being cloned, because cloning is
 the one way in that needs no folder picker — that is why
-`mobile/done-android_workspace_access-high-hard.md` chose clone-first
+`mobile/android_workspace_access` chose clone-first
 onboarding. But on Android `commands/sync/credentials.rs` compiles to its
 `unsupported!` stubs, which return `sync.auth_required`. A public repository
 can be cloned; a private one cannot, and most people's notes are private.
@@ -169,7 +169,7 @@ through the JVM Trust Manager and needs a Kotlin component plus a JNI init that
 `gen/android/` does not have.
 
 That makes TLS initialisation the **first** blocker and credentials the second.
-A new story owns it: `plans/mobile/done-android_tls_platform_verifier-high-med.md`.
+A new story owns it: `mobile/android_tls_platform_verifier`.
 The credential design below is unchanged and still correct; it simply cannot be
 exercised until TLS works.
 
@@ -220,38 +220,15 @@ silently signed out. This is an acceptance criterion, not an assumption:
 verified by storing a credential with the shipped v3 build and reading it back
 with the v4 build on each desktop OS.
 
-### 3. Android credentials and mobile sync triggers
+### 3. Android credentials and sync scheduling
 
-Depends on 1 and 2.
-
-- Add `android-native-keyring-store` under a `cfg(target_os = "android")`
-  dependency and register it as the default store on Android.
-- Clone and sync a **private** repository on a device.
-- Decide and implement mobile sync triggers (below).
-
-## Mobile sync triggers
-
-The story records "no background sync" as a constraint. It is worse than
-absent — it is actively wrong on Android.
-
-`registry.rs` runs a sweeper thread on a 500ms tick (`TICK`), firing a round
-trip once the vault has been untouched for 30s (`IDLE`) and at most once per
-60s (`CAP`). Android freezes the process on background, so those timers do not
-merely fail to fire; they fire against a stale clock on resume, and the first
-thing a returning user gets is a sync they did not ask for.
-
-Mobile therefore needs explicit triggers rather than idle inference:
-
-- on workspace open,
-- on app foreground,
-- on explicit user request (pull-to-sync or a sync action),
-- on app background, as a best-effort flush before the process is frozen.
-
-`run_trip` already takes everything it needs as arguments, so this is a
-scheduling change, not a sync-engine change. The sweeper stays desktop-only;
-mobile drives the same core from lifecycle events.
-
-This is separable from credentials and may be split out if story 3 grows.
+The Android credential store and private Git round trip shipped; see
+"Shipped custody contract and Android verification" above. The initial
+`sync.trigger` lifecycle design is historical and was superseded by
+`docs/superpowers/specs/2026-08-28-sync-schedule-design.md`. Current scheduling
+uses the shared quiet-time and wall-clock interval, interval-gated workspace
+open, and a best-effort leave flush. The sweeper remains active on every
+platform for local history and maintenance.
 
 ## Decision-free groundwork, available now
 

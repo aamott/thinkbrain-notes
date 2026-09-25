@@ -24,6 +24,6 @@ Control).
 
 ## References
 
-- `plans/pending-marketplace-low-med.md`
-- Prerequisite: `plans/pending-extensions-low-hard.md` (manifest, trusted local loading, lifecycle; remote install is deferred)
+- `plans/marketplace/`
+- Prerequisite: `plans/extensions/` (manifest, trusted local loading, lifecycle; remote install is deferred)
 - UI pattern: `apps/desktop/src/search/SearchPanel.tsx`, activity bar in `App.tsx`

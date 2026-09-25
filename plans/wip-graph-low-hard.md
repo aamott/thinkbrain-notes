@@ -2,7 +2,7 @@
 
 > Future epic (low urgency, stub). Backlinks and graph view built on top of the
 > wiki-link index. The backlinks panel is elevated to medium urgency; the rest
-> remains low. Read `plans/app-vision.md` and `plans/wip-note-model-low-hard.md` before
+> remains low. Read `plans/app-vision.md` and `plans/note-model/` before
 > starting any story here.
 
 ## Goal
@@ -55,8 +55,8 @@ Non-goals (out of scope for this epic):
 - `indexing-search` (MVP core done) — the wiki-link index that backlinks and
   graph edges are derived from. Structured frontmatter records/facet queries
   and the external-edit file watcher have both shipped (`plans/indexing-search/done-summary.md`,
-  `plans/wip-indexing-search-med-med.md`); the one remaining follow-up is managed SQLite
-  connection pooling (`plans/indexing-search/pending-connection_pooling-low-med.md`). None of
+  `plans/indexing-search/`); the one remaining follow-up is managed SQLite
+  connection pooling (`indexing-search/connection_pooling`). None of
   these block this epic.
 
 No other epic blocks this one. `semantic-search` and `ai` are independent
@@ -81,8 +81,8 @@ Five stories shipped; see `plans/graph/done-summary.md` for what shipped and whe
 - ✅ Clickable wiki-link navigation — click `[[Target]]` to open the note
 - ✅ Backlinks panel — shared desktop/mobile inspector with source context, live index updates, canonical note navigation, and phone history
 - ⬜ Automatic link update on rename — rewrite `[[old]]` → `[[new]]` across the vault — see
-  `pending-automatic_link_update_on_rename-med-hard.md`
+  `automatic_link_update_on_rename`
 - ⬜ Graph view — visual network of notes and wiki-link edges — see
-  `pending-graph_view-low-hard.md`
-- ⬜ Local graph around active note — see `pending-local_graph-low-hard.md`
-- ⬜ Graph filters (tag / path / status) — see `pending-graph_filters-low-med.md`
+  `graph_view`
+- ⬜ Local graph around active note — see `local_graph`
+- ⬜ Graph filters (tag / path / status) — see `graph_filters`

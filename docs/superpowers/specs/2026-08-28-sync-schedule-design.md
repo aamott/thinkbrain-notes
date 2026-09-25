@@ -8,9 +8,9 @@ shipped and works; this one removes the mechanism it introduced, having found
 the defect underneath it.
 
 **Closes:**
-`plans/auto-sync/pending-foreground_policy_on_desktop-med-med.md`,
-`plans/auto-sync/pending-sync_trigger_sharp_edges-low-easy.md` (all three
-edges), `plans/mobile/pending-frozen_sync_blocks_the_next_one-med-med.md`.
+`auto-sync/foreground_policy_on_desktop`,
+`auto-sync/sync_trigger_sharp_edges` (all three
+edges), `mobile/frozen_sync_blocks_the_next_one`.
 
 ## The problem
 
@@ -203,7 +203,7 @@ Two remain, both gated by `sync.automatically`:
   **The asymmetry is documented, not fixed.** A desktop rarely fires this, and
   that is fine: the sweeper is still running, so changes leave on the interval
   anyway. Listening for `blur` instead would push on every alt-tab, which is
-  the trap `pending-foreground_policy_on_desktop` warned about. The setting's
+  the trap `foreground_policy_on_desktop` warned about. The setting's
   description promises what `visibilitychange` delivers and no more.
 
 **`sync_app_foregrounded` is deleted.** The sweeper resumes with the process

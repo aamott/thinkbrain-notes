@@ -16,12 +16,12 @@ differs — the sheet standing in for the inline editor.
 
 ## Epic
 
-Part of [Journal & Calendar](../pending-journal-calendar-high-hard.md). Mobile is a responsive build of `apps/desktop`, not a separate app.
+Part of [Journal & Calendar](journal-calendar). Mobile is a responsive build of `apps/desktop`, not a separate app.
 
 ## Discovery constraints (approved 2026-08-07)
 
 The discovery gate is CLOSED; full rationale and D1-D47 live in
-`../pending-journal_discovery_and_wireframes-low-med.md`.
+`journal_discovery_and_wireframes`.
 
 - **D12/D26:** the popout is full screen; shell owns placement/return navigation. No bespoke journal navigation, bottom bar, or return path.
 - **D31:** keyboard and screen-reader support are required; high contrast is theme-owned; use `--tn-*` tokens; formal touch-target audit is deferred.
@@ -38,7 +38,7 @@ The discovery gate is CLOSED for the decisions above.
 
 ## Questions first — STOP gate — CLOSED 2026-08-08 (D57, D55)
 
-Closed by D48-D70; full text in `../pending-journal_discovery_and_wireframes-low-med.md`.
+Closed by D48-D70; full text in `journal_discovery_and_wireframes`.
 
 - **Calendar tab on a phone — D57.** Both views at phone widths; option strip collapses to one control; dots only, no `+N`, below 40px cells.
 - **Formal touch-target audit — still DEFERRED per D31.** Not closed by this batch; owed once undeferred.
@@ -81,7 +81,7 @@ Do NOT create `apps/mobile/` or add a separate mobile screen tree.
 ## Dependencies
 
 - Mobile `phone_shell_chrome` — owns popout placement and return path; `phone_surface_fixes` owns the popout's full-width treatment. This story must coordinate but not duplicate.
-- Completed `pending-journal_panel_ui-high-hard.md` (JournalPanel, MetadataWidget, compact-list state).
+- Completed `journal_panel_ui` (JournalPanel, MetadataWidget, compact-list state).
 - Same `apps/desktop` adapters and `packages/core` models; no Tauri direct calls — go through `apps/desktop/src/native/` adapters.
 
 ## Acceptance criteria
@@ -104,9 +104,9 @@ Do NOT create `apps/mobile/` or add a separate mobile screen tree.
 ## Non-goals
 
 - No bespoke mobile navigation, private bottom bar, custom return path, or `apps/mobile/` directory.
-- No calendar tab phone layout beyond D57; `pending-calendar_tab_ui-high-hard.md` implements it.
+- No calendar tab phone layout beyond D57; `calendar_tab_ui` implements it.
 - No separate mobile app, React Native layer, cloud sync, tablet-specific design, or app-store work.
-- No fix for unrelated CodeMirror/Tauri keyboard issues — link to `done-codemirror_mobile_testing-med-med.md`.
+- No fix for unrelated CodeMirror/Tauri keyboard issues — link to `codemirror_mobile_testing`.
 - High contrast is out of scope (themes own it).
 
 ## Handoff artifacts

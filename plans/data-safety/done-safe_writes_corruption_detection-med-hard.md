@@ -140,6 +140,6 @@ Guessed wrong at planning time, so recorded as built:
 
 ## References
 
-- `plans/pending-data_safety-med-hard.md` — epic
+- `plans/data-safety/` — epic
 - `plans/app-vision.md` — User data separation, Bring your own sync
-- `plans/wip-note-model-low-hard.md` — note model and save path
+- `plans/note-model/` — note model and save path

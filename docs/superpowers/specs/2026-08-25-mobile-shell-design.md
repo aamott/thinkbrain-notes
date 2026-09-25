@@ -2,7 +2,7 @@
 
 > Design spec for the phone presentation of the ThinkBrain shell. Approved
 > 2026-08-25. Supersedes the navigation/layout direction recorded in
-> `plans/pending-mobile-med-hard.md` and its two pending UI stories, which are
+> `plans/mobile/` and its two pending UI stories, which are
 > re-cut against this document (see **Plan corrections**).
 
 ## Problem
@@ -309,7 +309,7 @@ extension that is merely deactivated must not lose its pin.
 
 These are wrong or stale in the current plans and are corrected by this spec.
 
-1. **Bottom hub contents.** `pending-mobile_navigation_menu` says the hub is
+1. **Bottom hub contents.** `mobile_navigation_menu` says the hub is
    "Home, Search, New Note, Tabs and Menu"; the mockup's injected template is
    Home, Search, New, AI Agent, Menu. Neither is adopted. Tabs move to the
    header; the hub is a configurable target list with the defaults above.
@@ -331,7 +331,7 @@ These are wrong or stale in the current plans and are corrected by this spec.
 6. **Touch sizing is a pointer question,** not a width breakpoint. Both stories
    say "below 760px"; the codebase already chose `pointer-coarse:`.
 7. **The keyboard blocker is stale.** The epic still lists tauri#10631 as
-   gating mobile editing while `done-codemirror_mobile_testing` records
+   gating mobile editing while `codemirror_mobile_testing` records
    `adjustResize` shipped and editing verified. Update Known Limitations to
    the residual risk: emulator-only verification, and hub positioning under
    `visualViewport`.

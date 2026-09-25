@@ -95,7 +95,7 @@ evidence.
 - **A recovery UI for settings.** The notification names the file and the app
   starts on defaults; offering to parse and merge a broken settings document is
   a different problem from restoring a note, and nobody has asked for it.
-  `done-safe_writes_corruption_detection-med-hard.md` owns the note surface.
+  `safe_writes_corruption_detection` owns the note surface.
 - **What corrupts the file in the first place.** Writes are already atomic
   (temp + rename in the same directory), so the writer is not the suspect. One
   candidate remains unexamined: `useWorkspaceLifecycle.ts` guards its debounced

@@ -20,7 +20,7 @@ back to a previous version when an update breaks something. Builds on the
 
 ## References
 
-- `plans/pending-marketplace-low-med.md`
-- Prerequisite: `plans/pending-extensions-low-hard.md` (trusted local loading and lifecycle; remote updates are deferred)
-- Depends on: `pending-extension_registry-low-med.md`,
-  `pending-extension_metadata_signing-low-hard.md`
+- `plans/marketplace/`
+- Prerequisite: `plans/extensions/` (trusted local loading and lifecycle; remote updates are deferred)
+- Depends on: `extension_registry`,
+  `extension_metadata_signing`

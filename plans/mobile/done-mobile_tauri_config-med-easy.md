@@ -50,8 +50,8 @@ No `tauri.android.conf.json` / `tauri.ios.conf.json` needed: the single
 
 ## References
 
-- `plans/pending-mobile-med-hard.md` — capability gating decision
-- `plans/pending-extensions-low-hard.md` — platform-aware capabilities
+- `plans/mobile/` — capability gating decision
+- `plans/extensions/` — platform-aware capabilities
 - `apps/desktop/src-tauri/src/commands/workspace_managed.rs` — Rust command
 - `apps/desktop/src/native/platformCapabilities.ts` — frontend store
 - `apps/desktop/src/commands/commandRegistry.ts` — command gating

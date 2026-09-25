@@ -6,12 +6,12 @@ Remaining: workspace-scope persistence (D45 platform prerequisite), registration
 
 ## Epic
 
-Part of [Journal & Calendar](../pending-journal-calendar-high-hard.md).
+Part of [Journal & Calendar](journal-calendar).
 
 ## Discovery constraints (approved 2026-08-07)
 
 The discovery gate is CLOSED; full rationale and D1-D47 live in
-`../pending-journal_discovery_and_wireframes-low-med.md`.
+`journal_discovery_and_wireframes`.
 
 - **D4/D7/D21:** user-defined four input types; configurable journal root; no templates or template settings.
 - **D23/D45:** global/workspace definitions use same-id replacement with untouched globals retained; removed values remain visible/filterable as `unconfigured` and never rewrite notes.
@@ -21,7 +21,7 @@ The discovery gate is CLOSED; full rationale and D1-D47 live in
 
 ## STOP gate — CLOSED
 
-Closed by D48-D70; full text in `../pending-journal_discovery_and_wireframes-low-med.md`.
+Closed by D48-D70; full text in `journal_discovery_and_wireframes`.
 
 - **Setting list and defaults — D64.** Four settings registered; see table in Scope below.
 - **Field-definition setting shape — D49.** `fieldDefinitions` is a `string` setting rendered by
@@ -50,14 +50,14 @@ The scoped settings API is implemented in `apps/desktop/src/extensions/desktopEx
 
 ## DEPENDENCY: Extension settings are not yet visible in the settings UI
 
-Extension settings schema is registered in `appSettingsRegistry` (the Zustand-backed store in `apps/desktop/src/settings/settingsStore.ts`), but the UI rendering of extension-owned settings sections is **not yet implemented**. This is tracked in `pending-extension_settings-low-med.md` (the API is partially implemented; the UI is pending).
+Extension settings schema is registered in `appSettingsRegistry` (the Zustand-backed store in `apps/desktop/src/settings/settingsStore.ts`), but the UI rendering of extension-owned settings sections is **not yet implemented**. This is tracked in `extension_settings` (the API is partially implemented; the UI is pending).
 
-**Consequence for this story:** journal settings will not be user-visible in the settings tab on first activation. Acceptance criteria must not assume a visible settings UI. All functional criteria (schema registration, get/set/onDidChange, persistence, staged save) can be verified programmatically. The visible settings UI is a dependency that must be listed explicitly; do not ship user documentation implying settings are configurable through the UI until `pending-extension_settings-low-med.md` delivers the rendering layer.
+**Consequence for this story:** journal settings will not be user-visible in the settings tab on first activation. Acceptance criteria must not assume a visible settings UI. All functional criteria (schema registration, get/set/onDidChange, persistence, staged save) can be verified programmatically. The visible settings UI is a dependency that must be listed explicitly; do not ship user documentation implying settings are configurable through the UI until `extension_settings` delivers the rendering layer.
 
 ## PLATFORM PREREQUISITE — workspace-scoped extension settings
 
 Today's extension settings bridge is app-scoped only. D45 chooses to extend it rather than
-defer D23. `plans/extensions/pending-extension_settings-low-med.md` now owns the shared
+defer D23. `extensions/extension_settings` now owns the shared
 workspace-scoped API, persistence and UI rendering. This journal story consumes that path;
 it must not create journal-owned workspace settings or silently fall back to global scope.
 
@@ -93,15 +93,15 @@ Define and register the approved journal settings under `journal-calendar`, reso
 - `packages/core/src/settings/modules/journal.ts` — global/workspace schema under D47's `journal-calendar` namespace, implementing D64's four settings (`root`, `fieldDefinitions`, `calendarDefaultView`, `startOfWeek`) with `fieldDefinitions` using D49's custom-control shape.
 - `packages/core/src/settings/modules/index.ts` and `packages/core/src/settings/index.ts` — exports/registration.
 - `apps/desktop/src/settings/settingsStore.ts` — register module; preserve staged/save/reset semantics.
-- `apps/desktop/src/settings/SettingsContent.tsx`, `SettingsNav.tsx`, `controls/` — render approved controls only; blocked on `pending-extension_settings-low-med.md` for extension-section rendering.
+- `apps/desktop/src/settings/SettingsContent.tsx`, `SettingsNav.tsx`, `controls/` — render approved controls only; blocked on `extension_settings` for extension-section rendering.
 - `apps/desktop/src/journal/journalSettings.ts` — typed selector/validation adapter; UI should not import registry details directly.
 - `apps/desktop/src/journal/journalSettings.test.ts`, `packages/core/src/settings/modules/journal.test.ts` — new.
 - `apps/desktop/src/journal/accessibility.md` — implementation checklist and manual matrix (keyboard, screen-reader, token usage).
 
 ## Dependencies
 
-- Discovery approval, data-model story, and modular settings stories (`plans/ui-shell/pending-modular_settings_system-med-hard.md` and child stories).
-- **`plans/extensions/pending-extension_settings-low-med.md`** — D45 workspace scope plus extension-owned settings UI; explicit blocker for complete user-visible settings.
+- Discovery approval, data-model story, and modular settings stories (`ui-shell/modular_settings_system` and child stories).
+- **`extensions/extension_settings`** — D45 workspace scope plus extension-owned settings UI; explicit blocker for complete user-visible settings.
 - Existing `appSettingsRegistry`, `useSettingsStore`, extension-scoped settings bridge, and CSS `--tn-*` tokens.
 - Approved desktop/mobile wireframes for focus order and responsive behavior (per D34, these require per-artifact sign-off before controls are built).
 
@@ -121,14 +121,14 @@ Define and register the approved journal settings under `journal-calendar`, reso
 - [ ] Screen-reader: all controls have visible labels, errors are announced, status changes are live-region announced (D31).
 - [ ] No color-only meaning anywhere in journal/calendar controls (D31).
 - [ ] Tests cover schema/defaults/validation, app/workspace isolation, full same-id replacement, inherited globals, unconfigured values, persistence boundaries, staged behavior, keyboard semantics, and accessible names.
-- [ ] **Settings are not assumed to be user-visible in the UI.** Acceptance criteria for settings visibility are conditional on `pending-extension_settings-low-med.md` delivering the rendering layer. Until then, verifiable programmatically only.
+- [ ] **Settings are not assumed to be user-visible in the UI.** Acceptance criteria for settings visibility are conditional on `extension_settings` delivering the rendering layer. Until then, verifiable programmatically only.
 - [ ] `pnpm lint`, `pnpm typecheck`, `pnpm test` or `./scripts/qa.sh` all pass.
 
 ## Validation
 
 - Run core/desktop settings and accessibility tests, `pnpm lint`, `pnpm typecheck`, and `pnpm test` or `./scripts/qa.sh`.
 - Desktop: keyboard-only (Tab/Shift-Tab/Enter/Space/Escape), screen-reader labels/errors/live-region announcements, 200% zoom, and dark/light themes with `--tn-*` tokens only; verify settings stay outside the workspace, changes never rewrite notes, and no hard-coded colors leak. Mobile Android/iOS: check touch, TalkBack/VoiceOver, text scaling, keyboard, and persistence against approved mockups.
-- If `pending-extension_settings-low-med.md` has shipped, verify settings sections and staged save/reset end-to-end; otherwise verify programmatically via `context.settings.get` / `context.settings.set`. High contrast is not required; reduced-motion and touch-target audit remain deferred (D31).
+- If `extension_settings` has shipped, verify settings sections and staged save/reset end-to-end; otherwise verify programmatically via `context.settings.get` / `context.settings.set`. High contrast is not required; reduced-motion and touch-target audit remain deferred (D31).
 
 ## Non-goals
 

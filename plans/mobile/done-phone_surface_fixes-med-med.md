@@ -2,9 +2,9 @@
 
 **Status:** ✅ done · **Urgency:** medium · **Difficulty:** medium
 
-> Re-cut 2026-08-25 from `pending-responsive_layout`. The old story's acceptance
+> Re-cut 2026-08-25 from `responsive_layout`. The old story's acceptance
 > criteria duplicated the bottom bar (owned by
-> `wip-phone_shell_chrome-med-hard.md`) and named no surface it actually
+> `phone_shell_chrome`) and named no surface it actually
 > owned. This story is the surfaces *inside* the chrome.
 
 **Design:** `docs/superpowers/specs/2026-08-25-mobile-shell-design.md`
@@ -57,7 +57,7 @@ fixes.
 ## Not this story
 
 Header, drawer, hub, sheets and the hub model —
-`wip-phone_shell_chrome-med-hard.md`.
+`phone_shell_chrome`.
 
 ## What shipped
 

@@ -32,7 +32,7 @@ its own severity rules and pushes into the store.
 
 ## Stories (`plans/notifications/`)
 
-1. ✅ `done-notification_system-med-med.md` — store, types, sync adapter,
+1. ✅ `notification_system` — store, types, sync adapter,
    bell log UI, badge count, sticky toasts, StatusBar migration.
 
 ## Status

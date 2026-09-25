@@ -60,7 +60,7 @@ why.
 - **The Android scaffold is done.** `apps/desktop/src-tauri/gen/android/`
   holds 49 tracked files from `tauri android init` (commit `58dfd14`), and the
   device run confirmed installation, launch and initial UI rendering. See
-  `mobile/done-android_scaffold-med-easy.md`.
+  `mobile/android_scaffold`.
 - **Mobile capabilities are declared.** `src-tauri/capabilities/mobile.json`
   covers `android`/`iOS` for `main` and `workspace-*` windows.
 - **Desktop-only dependencies are already gated.** `tauri-plugin-updater` and
@@ -92,7 +92,7 @@ one-time uninstall-risk notice, but the app does not display a persistent
 "unprotected" warning or pretend it can detect external backups.
 
 Direct SAF linked folders are deferred to
-`mobile/pending-android_saf_linked_folders-low-hard.md`. That research-first
+`mobile/android_saf_linked_folders`. That research-first
 story will re-check current platform/plugin support and compare a persisted SAF
 tree plus local mirror/reconciliation against a full storage abstraction. It
 must not convert `content://` URIs into guessed `/storage/...` paths.
@@ -103,14 +103,14 @@ must not convert `content://` URIs into guessed `/storage/...` paths.
   gated in CI. But the gate is `cargo check -p gix` on that one package, by
   design — CI's own comment says Tauri's mobile build "needs an SDK, a linker
   and a generated project, none of which this gate is asking about."
-- **Run on a device 2026-08-27** (`mobile/done-device_git_clone_spike-high-easy.md`):
+- **Run on a device 2026-08-27** (`mobile/device_git_clone_spike`):
   the full Android build links, the app runs, managed vaults open, and
   clone-first onboarding is wired — but **the clone fails**. Every TLS request
   panics at `rustls-platform-verifier-0.7.0/src/android.rs:90`, "Expect
   rustls-platform-verifier to be initialized", because the crate needs a Kotlin
   component and a JNI init that `gen/android/` does not have. Public and
   private repositories alike. This, not credentials, is the first blocker —
-  `mobile/done-android_tls_platform_verifier-high-med.md`. Exactly the class
+  `mobile/android_tls_platform_verifier`. Exactly the class
   of failure `cargo check` cannot catch.
 - **Credentials do not persist.** On Android `credentials.rs` compiles to stubs
   that return `sync.auth_required` — "Sign-in is not available on this device
@@ -119,8 +119,8 @@ must not convert `content://` URIs into guessed `/storage/...` paths.
   `android-native-keyring-store` — the encrypted-app-data candidate, but with
   the encryption owned by the keyring maintainers rather than by us. The
   prerequisite is a desktop keyring v3→v4 migration
-  (`auto-sync/pending-keyring_v4_migration-high-med.md`). This also answers the
-  unmade decision `plans/pending-extensions-low-hard.md` records for extension
+  (`auto-sync/keyring_v4_migration`). This also answers the
+  unmade decision `plans/extensions/` records for extension
   secrets.
 - **Foreground-only, and worse than absent.** `registry.rs` runs a sweeper on a
   500ms tick, firing after 30s idle, capped at once per 60s. Android freezes the
@@ -197,7 +197,7 @@ boundary.
 
 - **Android keyboard / `visualViewport`** (tauri-apps/tauri#10631): mitigated,
   not open. `windowSoftInputMode="adjustResize"` shipped with
-  `mobile/done-codemirror_mobile_testing-med-med.md` and editing was verified on
+  `mobile/codemirror_mobile_testing` and editing was verified on
   an emulator. What remains is device verification and keeping bottom-anchored
   chrome out of the keyboard's way.
 - **CodeMirror 6 mobile quirks**: scrolling on Android, IME composition
@@ -242,7 +242,7 @@ point tuning a layout for a workspace that cannot be opened.
 - ✅ **Managed workspace access** — Android v1 creates or clones real-path
   vaults beneath app data. Native managed-vault commands, capability-gated
   UI, clone-first onboarding, and one-time uninstall notice all shipped.
-  `mobile/done-android_workspace_access-high-hard.md`
+  `mobile/android_workspace_access`
 - ✅ Git clone as the mobile way in — public and private managed imports run the
   shared desktop worker on Android. TLS initialisation, keyring v4, the
   Android-native credential store, non-destructive one-way imports, and mobile
@@ -251,34 +251,34 @@ point tuning a layout for a workspace that cannot be opened.
   process-restart credential read-back, and credential deletion. Token custody
   and the exact run are recorded in
   `docs/superpowers/specs/2026-08-27-android-git-access-design.md`.
-- 🟨 Phone shell chrome — headless shell state, form-factor gate, header,
-  drawer, shortcut hub, tab-switcher and inspector sheets. Built and green
-  under test; awaiting a pass on an Android device —
-  `mobile/wip-phone_shell_chrome-med-hard.md`
+- ✅ Phone shell chrome — headless shell state, form-factor gate, header,
+  drawer, shortcut hub, tab-switcher and inspector sheets; verified on an
+  Android device 2026-08-27 —
+  `mobile/phone_shell_chrome`
 - ✅ Files-first navigation — Files is the mobile home; browser-backed Back and
   Forward history, right-edge navigation, Action items and New note menus,
   bounded inspectors, and shared right-panel close controls shipped and were
   verified on Android.
-- 🟨 Phone surface fixes — popout width, bottom-edge contention, keyboard
-  inset, `pointer-coarse:` sizing. Built and green under test; the keyboard
-  inset is the part no emulator check can settle —
-  `mobile/wip-phone_surface_fixes-med-med.md`
+- ✅ Phone surface fixes — popout width, bottom-edge contention, keyboard
+  inset, `pointer-coarse:` sizing; verified on an Android device 2026-08-27
+  including keyboard-inset behavior —
+  `mobile/phone_surface_fixes`
 - ✅ `tauri android init` — the scaffold is committed under
   `src-tauri/gen/android/`, and the app builds, installs, launches and renders
-  on a device — `mobile/done-android_scaffold-med-easy.md`
-- 🟨 Mobile Tauri config — `capabilities/mobile.json` exists and the
-  desktop-only dependencies are gated; the soft "unavailable on mobile"
-  reporting for desktop-only commands is not built —
-  `mobile/pending-mobile_tauri_config-med-easy.md`
+  on a device — `mobile/android_scaffold`
+- ✅ Mobile Tauri config — `capabilities/mobile.json`, gated desktop-only
+  dependencies, and soft "unavailable on mobile" capability reporting for
+  desktop-only commands —
+  `mobile/mobile_tauri_config`
 - ✅ CodeMirror mobile testing — editing verified on Android emulator,
   `windowSoftInputMode="adjustResize"` added, tap-below-last-line fixed —
-  `mobile/done-codemirror_mobile_testing-med-med.md`
+  `mobile/codemirror_mobile_testing`
 - ⬜ Reuse current Tauri adapters; raise only proven cross-cutting adapter gaps through maintenance
 - ❓ Search index (`rusqlite`) and file watcher (`notify`) on a device —
   neither observed working nor failing
 - ⏸️ SAF linked folders — deferred research-first follow-up after managed
-  vaults are stable — `mobile/pending-android_saf_linked_folders-low-hard.md`
+  vaults are stable — `mobile/android_saf_linked_folders`
 
 **Phase 2 — iOS (low urgency, deferred until Android is stable):**
 
-- ⬜ `tauri ios init` — scaffold iOS target (requires macOS) — `mobile/pending-ios_scaffold-low-easy.md`
+- ⬜ `tauri ios init` — scaffold iOS target (requires macOS) — `mobile/ios_scaffold`

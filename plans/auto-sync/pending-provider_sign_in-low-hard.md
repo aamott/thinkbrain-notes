@@ -42,7 +42,7 @@ GitHub" is the path those users expect; this story is that path.
 
 - SSH sign-in. Tracked only as "later if demanded" in story 6.
 - Extension-scoped credential storage. That is
-  `plans/extensions/pending-extension_secret_storage-med-hard.md`; this story
+  `extensions/extension_secret_storage`; this story
   consumes the sync adapter as it stands.
 
 ## Open questions

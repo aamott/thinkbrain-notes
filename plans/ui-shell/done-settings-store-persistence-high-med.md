@@ -1,6 +1,6 @@
 # Story 2: Settings Store + Persistence — DONE
 
-Part of [Modular Settings System](./pending-modular_settings_system-med-hard.md).
+Part of [Modular Settings System](./modular_settings_system).
 
 ## What was built
 

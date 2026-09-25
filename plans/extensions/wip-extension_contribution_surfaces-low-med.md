@@ -4,7 +4,7 @@
 
 🟨 The panel mount contract and panel header actions are shipped; menus,
 context menus, themes, and additional editor actions are still pending. D44's React editor-header slot is
-isolated in `pending-editor_header_contribution-high-med.md`.
+isolated in `editor_header_contribution`.
 
 An extension loaded from disk now contributes panels on equal footing with a
 built-in: `context.panels.register({ side, mount })` takes a framework-neutral
@@ -36,7 +36,7 @@ Add only the approved typed contribution facades for views, menus, context menus
 ## Dependencies
 
 - Manifest parser, compatibility evaluator, lifecycle/bootstrap, and existing contribution registry.
-- `pending-extension_events_tasks-low-med.md` for shared disposable contracts.
+- `extension_events_tasks` for shared disposable contracts.
 - Existing panel/tab/menu registries; no feature epic behavior.
 
 ## Likely files
@@ -81,7 +81,7 @@ Deliver the approved contribution matrix, likely-file diff, typed contracts/test
   their story files were reviewed and deleted per the plan-review policy in
   `AGENTS.md`.
 
-## Resolved: the loader story's blocked-on note
+## Resolved: the loader story's on note
 
 A locally loaded extension could not contribute a panel, because
 `DesktopPanelContribution.factory` returns a `ReactNode` and a pre-bundled

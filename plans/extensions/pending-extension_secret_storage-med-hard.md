@@ -14,7 +14,7 @@ The store question this article left open has a drafted answer, because mobile
 forced it: **keyring v4 (`keyring-core`) plus per-platform store crates**, with
 `android-native-keyring-store` on Android. See
 `docs/superpowers/specs/2026-08-27-android-git-access-design.md` and
-`../auto-sync/pending-keyring_v4_migration-high-med.md`.
+`keyring_v4_migration`.
 
 That migration registers one default store per platform at startup, giving this
 story an `Entry`-shaped boundary that already covers desktop and Android. What
@@ -34,7 +34,7 @@ the choice of backend, and still not an encrypted fallback.
 ## Prerequisites
 
 - Canonical extension id/parser and native gateway conventions, once the AI epic
-  gets its planning pass (`plans/pending-ai-med-hard.md`).
+  gets its planning pass (`plans/ai/`).
 - Scoped settings/API boundary and ACP/provider consumer requirements.
 - Tauri capability conventions in `apps/desktop/src-tauri/capabilities/`.
 
@@ -81,5 +81,5 @@ No encrypted fallback, credentials UI, provider/ACP behavior, marketplace, insta
 
 ## References
 
-- `plans/pending-ai-med-hard.md`
-- `plans/extensions/pending-extension_settings-low-med.md`
+- `plans/ai/`
+- `extensions/extension_settings`

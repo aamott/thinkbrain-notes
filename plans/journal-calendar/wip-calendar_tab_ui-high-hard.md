@@ -8,12 +8,12 @@ tab registration, view-mode persistence (D56/D79/D80) and the D57 phone layout a
 
 ## Epic
 
-Part of [Journal & Calendar](../pending-journal-calendar-high-hard.md).
+Part of [Journal & Calendar](journal-calendar).
 
 ## Discovery constraints (approved 2026-08-07)
 
 The discovery gate is CLOSED; full rationale and D1-D47 live in
-`../pending-journal_discovery_and_wireframes-low-med.md`.
+`journal_discovery_and_wireframes`.
 
 - **D4/D5:** values are user-defined; no mood scale, activity taxonomy, sentiment/health implication, hard-coded colors, or icons.
 - **D14/D27:** calendar is a canvas tab opened from the journal popout, never a panel/activity-bar entry.
@@ -33,7 +33,7 @@ the popout still depends on story 9 because `context.workspace` has no `openTab`
 
 ## Questions first — STOP gate (CLOSED)
 
-Closed by D48-D70; full text in `../pending-journal_discovery_and_wireframes-low-med.md`.
+Closed by D48-D70; full text in `journal_discovery_and_wireframes`.
 
 - **Tab singleton, option persistence — D56, narrowed by D79.** `open-calendar` focuses the existing tab; the **view mode** persists per workspace and the tab always opens on today's month.
 - **Calendar on a phone — D57.** Both views available; option strip collapses to one control; cells show dots only below 40px width.
@@ -73,7 +73,7 @@ Do NOT touch `apps/desktop/src/shell/ActivityBar.tsx` for the calendar — no ac
 - Shipped tab registry/factory seam; story 9 must still provide an approved extension-facing tab-open route.
 - Approved discovery desktop wireframe; D34 per-artifact mockup sign-off still gates UI work.
 - Calendar data model implements D43 aggregation/filtering and D46 counts.
-- `pending-journal_panel_ui-high-hard.md` must export a stable filter-state contract (shared filter state per D25).
+- `journal_panel_ui` must export a stable filter-state contract (shared filter state per D25).
 - `--tn-*` design token set (no new tokens for this story).
 
 ## Acceptance criteria
@@ -100,7 +100,7 @@ Do NOT touch `apps/desktop/src/shell/ActivityBar.tsx` for the calendar — no ac
 
 - No calendar activity-bar button or panel registration.
 - No hard-coded mood/activity taxonomy, colors, or icons.
-- No journal service rewrite, mobile refinement (owned by `wip-journal_mobile_refinement-med-med.md`), notifications, streaks, AI/sentiment inference, or extension-host registration.
+- No journal service rewrite, mobile refinement (owned by `journal_mobile_refinement`), notifications, streaks, AI/sentiment inference, or extension-host registration.
 - High contrast is out of scope (themes own it).
 - Do not decide a final visualization or mood/activity palette in implementation.
 - Do not bypass D47 host prefixing or edit shell/core to add a built-in tab kind.

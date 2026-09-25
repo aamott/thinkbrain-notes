@@ -54,9 +54,9 @@ include Add Workspace / import-from-link (next phase).
 ## Known limitations
 
 - Importing a workspace from a git link is story 6e
-  (`auto-sync/done-workspace_from_git_link-med-hard.md`, shipped). Adding or updating a
+  (`auto-sync/workspace_from_git_link`, shipped). Adding or updating a
   sign-in from that dialog (Settings parity) is story 6f
-  (`auto-sync/done-import_sign_in_parity-med-med.md`, shipped).
+  (`auto-sync/import_sign_in_parity`, shipped).
 - Legacy URL entries are copied into a profile on Save link, not deleted.
 - Two workspaces can still point at the same profile ID on purpose; Forget
   then makes both missing, which is the explicit-selection rule.

@@ -1,6 +1,6 @@
 # gix Engine + Hidden Repo
 
-Story 1 of `pending-auto_sync-med-hard.md`. Foundation for everything else.
+Story 1 of `auto_sync`. Foundation for everything else.
 The `gix` dependency, and the hidden repo's separate-worktree layout, are proven
 in the gix build spike (completed) — start from `hidden_repo.rs`
 as it stands rather than from nothing.

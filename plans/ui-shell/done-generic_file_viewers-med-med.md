@@ -57,7 +57,7 @@ This was chosen over alternatives after evaluating:
 
 ## Dependencies
 
-- `workspace-explorer/pending-non_markdown_file_ops-med-med.md` owns the
+- `workspace-explorer/non_markdown_file_ops` owns the
   explorer click/routing changes that feed files into these viewers.
 
 ## Sequencing

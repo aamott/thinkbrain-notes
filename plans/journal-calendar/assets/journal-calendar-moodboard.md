@@ -2,7 +2,7 @@
 
 **Status:** APPROVED 2026-08-07 (see D35) · **Artifact 1 of 3** · Cadence per D34
 
-> Discovery artifact for [Journal Discovery, Moodboards & Wireframes](../pending-journal_discovery_and_wireframes-low-med.md).
+> Discovery artifact for [Journal Discovery, Moodboards & Wireframes](journal_discovery_and_wireframes).
 > This describes visual and tonal *direction* only. It selects no final palette,
 > type scale, icon set, or component. Nothing here is approved until the product
 > owner signs off on this file specifically.
@@ -15,7 +15,7 @@ developer-tool posture. A journal is where someone writes "rough one, didn't sle
 well." The direction has to reconcile those two facts without letting either win
 outright.
 
-The constraint that makes this tractable: per `plans/technical-decisions.md` the
+The constraint that makes this tractable: per `plans/app-vision.md` the
 journal has **no license to invent visual language**. It uses the existing `--tn-*`
 tokens and the established shell chrome. So this is not a palette
 exercise. It is a decision about *where the journal sits on the spectrum between

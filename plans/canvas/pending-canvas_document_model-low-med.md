@@ -23,5 +23,5 @@ that persistence and rendering build on.
 ## References
 
 - `packages/core/src/` — new canvas module (e.g. `canvas-model.ts`)
-- `plans/pending-canvas-low-hard.md` — architecture decisions
+- `plans/canvas/` — architecture decisions
 - `packages/core/src/note-model.ts` — note reference shape

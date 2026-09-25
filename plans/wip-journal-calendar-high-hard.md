@@ -1,11 +1,11 @@
 # Journal & Calendar
 
-> Dedicated feature epic for an optional, local-first journal and journaling calendar built on ordinary Markdown notes. Read `plans/app-vision.md`, `user-noted-todo.md`, the mobile epic, the UI-shell plans, and `plans/extensions/pending-beta_builtin_extensions-med-med.md` before starting any story.
+> Dedicated feature epic for an optional, local-first journal and journaling calendar built on ordinary Markdown notes. Read `plans/app-vision.md`, `user-noted-todo.md`, the mobile epic, the UI-shell plans, and `extensions/beta_builtin_extensions` before starting any story.
 
 ## Collaboration gate — SATISFIED 2026-08-07, extended 2026-08-08
 
 The product-owner answers are recorded as decisions D1-D79 in
-`journal-calendar/pending-journal_discovery_and_wireframes-low-med.md`, together with the
+`journal-calendar/journal_discovery_and_wireframes`, together with the
 approved moodboard, IA and mobile artifacts. **Downstream stories may now proceed within
 those decisions.** Superseding decisions are recorded as new D-numbers, never by editing
 earlier ones.
@@ -67,8 +67,8 @@ Non-goals:
 - Existing `apps/desktop/src/panels/panelRegistry.tsx`, `LeftPopout.tsx`, `ActivityBar.tsx`, and `DesktopShell.tsx` own rendering and shell composition. Journal/calendar contributions must enter through the registry rather than a parallel action array.
 - Existing `apps/desktop/src/extensions/desktopExtensionHost.ts` owns scoped command, panel, editor-hook, and settings registration. Built-in registration must use its disposable lifecycle.
 - Existing modular settings work (`apps/desktop/src/settings/settingsStore.ts`, `packages/core/src/settings/`) owns namespaced settings persistence outside the workspace.
-- Mobile is the same `apps/desktop` React/Tauri webview; coordinate with `plans/mobile/wip-phone_shell_chrome-med-hard.md`, `wip-phone_surface_fixes-med-med.md`, `pending-mobile_tauri_config-med-easy.md`, and `done-codemirror_mobile_testing-med-med.md`.
-- Coordinate registration only with `plans/extensions/pending-beta_builtin_extensions-med-med.md`; journal/calendar behavior and storage stay here.
+- Mobile is the same `apps/desktop` React/Tauri webview; coordinate with `mobile/phone_shell_chrome`, `phone_surface_fixes`, `mobile_tauri_config`, and `codemirror_mobile_testing`.
+- Coordinate registration only with `extensions/beta_builtin_extensions`; journal/calendar behavior and storage stay here.
 - **Indexing/search dependency (D16/D41).** Full-text search and metadata facets reuse the
   platform-owned disposable index; metadata facets shipped — see
   `plans/indexing-search/done-summary.md`. Browsing, dates, grouping and lazy previews never
@@ -81,7 +81,7 @@ Non-goals:
 
 The extension platform, contributed tab kinds, panel header actions, and live preview all
 shipped during discovery. Copy `apps/desktop/src/extensions/builtins/noteStats.tsx` as the
-reference built-in; `plans/pending-extensions-low-hard.md` lists the platform surface.
+reference built-in; `plans/extensions/` lists the platform surface.
 
 Prerequisites still to build, all decided:
 
@@ -102,15 +102,15 @@ activation with stubs, and the disposable scope. Built-in ids are fixed by D47.
 
 | # | Story | Depends on |
 |---|---|---|
-| 1 | `journal-calendar/pending-journal_discovery_and_wireframes-low-med.md` ✅ complete | — |
-| 2 | `journal-calendar/pending-journal_data_model_frontmatter-med-hard.md` | 1 approved contract |
-| 3 | `journal-calendar/pending-journal_service_daily_notes-high-med.md` | 1, 2 |
-| 4 | `journal-calendar/done-calendar_data_model-med-med.md` ✅ complete | 1, 2 |
-| 5 | `journal-calendar/pending-journal_settings_and_accessibility-med-med.md` | 1, 2; D45 extension-settings prerequisite |
-| 6 | `journal-calendar/pending-journal_panel_ui-high-hard.md` | 1–3, 5; D41 index and D44 editor-header prerequisites |
-| 7 | `journal-calendar/pending-calendar_tab_ui-high-hard.md` | 1, 3, 4, 5; tab registration shipped; extension-facing open route pending in story 9 |
-| 8 | `journal-calendar/wip-journal_mobile_refinement-med-med.md` | 6, 7; approved mobile wireframe |
-| 9 | `journal-calendar/pending-journal_extension_host_integration-med-med.md` | 3, 5–7; D44/D45 platform APIs; D47 ids |
+| 1 | `journal-calendar/journal_discovery_and_wireframes` ✅ complete | — |
+| 2 | `journal-calendar/journal_data_model_frontmatter` ✅ complete | 1 approved contract |
+| 3 | `journal-calendar/journal_service_daily_notes` ✅ complete | 1, 2 |
+| 4 | `calendar_data_model` ✅ complete — delivered in `packages/core/src/journal/calendar.ts`; no separate story file | 1, 2 |
+| 5 | `journal-calendar/journal_settings_and_accessibility` 🟨 wip | 1, 2; D45 extension-settings prerequisite |
+| 6 | `journal-calendar/journal_panel_ui` 🟨 wip | 1–3, 5; D41 index and D44 editor-header prerequisites |
+| 7 | `journal-calendar/calendar_tab_ui` 🟨 wip | 1, 3, 4, 5; tab registration shipped; extension-facing open route pending in story 9 |
+| 8 | `journal-calendar/journal_mobile_refinement` 🟨 wip | 6, 7; approved mobile wireframe |
+| 9 | `journal-calendar/journal_extension_host_integration` 🟨 wip | 3, 5–7; D44/D45 platform APIs; D47 ids |
 
 Story 7 was renamed from `calendar_panel_ui` to `calendar_tab_ui` because D27 makes the
 calendar a canvas tab rather than a panel; it registers no activity-bar entry and targets
@@ -132,10 +132,10 @@ recorded in the story. Stories may be split further if a subagent would exceed o
 ## Status
 
 - ✅ Every product decision closed (D1-D88)
-- 🟨 Story 2 journal data/frontmatter contract — implemented in `packages/core/src/journal/`;
-  the unknown-field write round-trip waits on story 3's write path
-- 🟨 Story 3 journal service — create (always new, D18), backfill (D61/D62), listing with
-  undated split (D36/D38), openToday, and D63 failure copy; previews and search wiring remain
+- ✅ Story 2 journal data/frontmatter contract — `packages/core/src/journal/`;
+  the unknown-field write round-trip landed with story 3's `frontmatterEdit` path
+- ✅ Story 3 journal service — create (always new, D18), backfill (D61/D62), listing with
+  undated split (D36/D38), openToday, D63 failure copy, and lazy previews all shipped
 - 🟨 Story 5 settings — D64's four settings implemented; the field-definition control is now
   D82's form rather than a JSON box, with D83/D84 open vocabulary; registration waits on story 9
 - ✅ Story 4 calendar model — D43 distinct values, D43 same-entry AND filters, D46 counts,

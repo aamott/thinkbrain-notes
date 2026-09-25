@@ -2,7 +2,7 @@
 
 ## Status
 
-⬜ Not implemented. No bootstrap currently registers journal/calendar, Git sync, or ACP Agent Chat through the extension host. Existing feature behavior remains in its owning epics.
+🟨 Partially implemented. `apps/desktop/src/extensions/builtins/` registers the journal/calendar and note-stats manifests through the extension host with D47 ids. Git sync and ACP Agent Chat registration-only modules are still behind the stop-and-ask gate below — their relative ids and activation events are not owner-approved. Existing feature behavior remains in its owning epics.
 
 ## Goal
 
@@ -35,7 +35,7 @@ their extension namespaces, not unapproved commands/views.
 
 - Lifecycle/bootstrap, compatibility, and API contribution contracts.
 - Existing internal registries and scoped settings bridge.
-- `plans/pending-auto_sync-med-hard.md`, `plans/pending-ai-med-hard.md` (awaiting its planning
+- `plans/auto-sync/`, `plans/ai/` (awaiting its planning
   pass), and journal/calendar plan if present.
 - Native secret story for ACP credential consumers.
 
@@ -84,9 +84,9 @@ No journal/calendar, Git sync/conflict, ACP host/chat/provider, secret-store, in
 
 ## References
 
-- `plans/pending-extensions-low-hard.md`
+- `plans/extensions/`
 - Lifecycle/bootstrap integration — shipped; its story file was reviewed and
   deleted per the plan-review policy in `AGENTS.md`.
-- `plans/extensions/pending-extension_secret_storage-med-hard.md`
-- `plans/pending-auto_sync-med-hard.md`
-- `plans/pending-ai-med-hard.md`
+- `extensions/extension_secret_storage`
+- `plans/auto-sync/`
+- `plans/ai/`

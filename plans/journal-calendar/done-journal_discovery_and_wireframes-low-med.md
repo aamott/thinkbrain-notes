@@ -4,7 +4,7 @@
 
 ## Epic
 
-Part of [Journal & Calendar](../pending-journal-calendar-high-hard.md). Discovery gate;
+Part of [Journal & Calendar](journal-calendar). Discovery gate;
 precedes irreversible data and UI work.
 
 **STOP gate — SATISFIED 2026-08-07, extended 2026-08-08.** D1-D79 answer the discovery questions and all
@@ -22,7 +22,7 @@ IAs without presenting either as final.
 
 ## Likely files
 
-- `plans/journal-calendar/pending-journal_discovery_and_wireframes-low-med.md` (this file).
+- `journal-calendar/journal_discovery_and_wireframes` (this file).
 - `plans/journal-calendar/assets/journal-calendar-moodboard.md` (approved D35).
 - `plans/journal-calendar/assets/journal-calendar-wireframes.md` (IA/mobile
   alternatives, state coverage, focus order; approved D37/D39/D40).
@@ -47,12 +47,12 @@ may record metadata (activity level, mood) alongside the prose.
 
 **D2.** A journal entry is an ordinary Markdown note, not a special file
 type/storage path/DB record. Markdown-as-source-of-truth constraints in
-`plans/app-vision.md` / `plans/technical-decisions.md` apply unchanged.
+`plans/app-vision.md` apply unchanged.
 
 **D3.** Metadata lives at the top of the file, human-legible in a plain text viewer —
 readable without parsing the whole file, understandable without the app. Prefer
 self-describing keys/plain values over codes; constrains the frontmatter contract in
-`pending-journal_data_model_frontmatter-med-hard.md`.
+`journal_data_model_frontmatter`.
 
 **D4.** Daily metadata fields are user-defined in settings, not a fixed vocabulary. No
 shipped mood scale/activity taxonomy. Input types: multi-select, single-select,
@@ -74,7 +74,7 @@ max. Default nesting/filename pattern: D17.
 *Provisional* (aggregation question remains open though grouping mechanism was later
 replaced by D37): where the calendar needs one value/day (e.g. mood swatch), last
 entry wins — a placeholder, not settled; real policy deferred to
-`pending-calendar_data_model-med-med.md`.
+`calendar_data_model`.
 
 **D9.** Journal activity-bar button opens left popout with journal menu; entries open
 in main editor. Popout: top menu/actions + body browsing entries, default **list
@@ -96,7 +96,7 @@ mobile not deferred.
 **D13.** Scale target: thousands of entries. Every list/group-by/filter/search/
 calendar interaction must stay usable at that volume — implies dependency on the
 indexing epic's SQLite FTS5 cache (disposable, rebuildable, never source of truth per
-`plans/technical-decisions.md`) and implies list virtualization is needed.
+`plans/app-vision.md`) and implies list virtualization is needed.
 
 **D14.** Calendar surfaces: grouped list in popout; full calendar in a canvas tab.
 (Superseded calendar half of D6; "own activity-bar entry?" residual closed by D27 —
@@ -131,11 +131,11 @@ configurable day-start offset in v1.
 **D20.** Both filename and frontmatter date are written; **filename wins on
 conflict**. Frontmatter date is a convenience copy, not source of truth. Reading must
 not rewrite a disagreeing frontmatter date (would violate the frontmatter mutation
-policy in `plans/technical-decisions.md`) — surfacing the mismatch is fine, silent
+policy in `plans/app-vision.md`) — surfacing the mismatch is fine, silent
 repair is not. Unparseable filename: D33/D38 (undated).
 
 **D21.** No templates in v1. Not rejected as a future idea, but nothing in v1 reads a
-template file/setting. `pending-journal_service_daily_notes-high-med.md` should drop
+template file/setting. `journal_service_daily_notes` should drop
 template application from its first increment.
 
 **D22.** A new entry's frontmatter contains the date only — no pre-seeded empty
@@ -144,7 +144,7 @@ D11 widget. With D21, a new entry has no body content either.
 
 **D23.** Metadata field definitions may be global or per-workspace. Both levels
 exist. Precedence/merge rules (replace/extend/shadow on collision) NOT settled here —
-owned by `pending-journal_settings_and_accessibility-med-med.md`. Open: behavior when
+owned by `journal_settings_and_accessibility`. Open: behavior when
 a workspace narrows a global select list already in use; extension settings currently
 have no workspace-scoped path at all (see Reconciliation).
 
@@ -164,14 +164,14 @@ behavior when popout is closed at click time; date filter as dismissible chip
 All popouts treated uniformly on mobile (some in bottom nav, rest in a left hamburger
 menu). Journal registers an ordinary popout and inherits this — must NOT implement
 bespoke mobile navigation, a private bottom bar, or its own return path.
-`wip-journal_mobile_refinement-med-med.md` narrows to touch targets, collapsed
+`journal_mobile_refinement` narrows to touch targets, collapsed
 widget, list density, calendar-tab-on-phone; navigation composition deferred to
 the mobile `phone_shell_chrome` story.
 
 **D27.** No calendar activity-bar button; journal button is the only activity-bar
 entry. (Fully supersedes D6; closes D14's residual question.) Activity bar is for
 popouts; calendar is a canvas tab, reached only via the calendar action in the
-journal popout. Consequence: `pending-calendar_panel_ui-high-hard.md` is misnamed —
+journal popout. Consequence: `calendar_panel_ui` is misnamed —
 calendar is a **tab view, not a panel**, must not register an activity-bar
 contribution; needs re-examination against panel/tab-kind registries.
 
@@ -245,7 +245,7 @@ IA-1, IA-2 (see table below). Open (closed by D39): which header levels exist.
 `01-02-2026` (day-first vs month-first both parse and disagree) is **not** an entry —
 goes to Undated (D36). Guessing rejected outright, including guess-with-a-flag: a
 wrong guess silently misfiles the entry, shown confidently in the wrong place.
-Consequence: `pending-journal_data_model_frontmatter-med-hard.md` must enumerate an
+Consequence: `journal_data_model_frontmatter` must enumerate an
 accepted format list where every format is unambiguous, with ambiguity-detection
 tests.
 

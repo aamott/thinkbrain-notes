@@ -62,20 +62,26 @@ shell surfaces without a heavy opinionated UI framework.
 ## Status
 
 - ✅ Theme selection setting persisted — `packages/core/src/settings/modules/appearance.ts`, `apps/desktop/src/settings/ThemeSectionControls.tsx`
-- ✅ CSS variable token system consolidated in `packages/ui` — defined in
-  `packages/ui/src/styles/tokens.css` and imported by `apps/desktop/src/main.tsx`.
+- 🟨 CSS variable token system in `packages/ui` — color tokens live in
+  `packages/ui/src/styles/tokens.css` and are imported by
+  `apps/desktop/src/main.tsx`; expanding the set to spacing, typography,
+  radius, shadow and z-index scales remains —
+  `theme-foundation/token_system_consolidation`.
 - ✅ Default light theme token set — implemented in `:root, :root[data-thinkbrain-theme="light"]`.
 - ✅ Default dark theme token set — implemented in `:root[data-thinkbrain-theme="dark"]`.
 - ✅ System theme resolution — `ThemeProvider.tsx` resolves `"system"` to
   `light`/`dark` via `matchMedia("(prefers-color-scheme: dark)")` and tracks
   OS theme changes live; the `data-thinkbrain-theme` attribute is always a
-  concrete base. See `done-system_theme_resolution-med-med.md`.
-- ✅ Reusable base components in `packages/ui` — `shadcn/ui` initialized and `Button` component added.
+  concrete base. See `system_theme_resolution`.
+- 🟨 Reusable base components in `packages/ui` — `shadcn/ui` initialized and
+  `Button` added; text input, select, checkbox, field wrapper and surface
+  primitives remain — `theme-foundation/reusable_base_components`.
 - ✅ Accessibility-focused primitives (Radix UI-style) — implemented via `shadcn/ui` (Radix UI under the hood).
-- ✅ Shell/editor/sidebar surfaces use shared `--tn-*` tokens — verified
-  across `apps/desktop/src/shell/` and `apps/desktop/src/tabs/`.
+- 🟨 Shell/editor/sidebar surfaces use shared `--tn-*` tokens — verified
+  across `apps/desktop/src/shell/` and `apps/desktop/src/tabs/`; the remaining
+  production-JSX migration is `theme-foundation/surface_styling_migration`.
 - ✅ Importable themes — parser/serialization/strict CSS color validation in
   `packages/core/src/theme.ts`, application in
   `apps/desktop/src/settings/ThemeProvider.tsx`, import/export in
   `apps/desktop/src/settings/themeImportExport.ts`. See
-  `done-importable_themes-med-hard.md`.
+  `importable_themes`.

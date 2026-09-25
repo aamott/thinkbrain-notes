@@ -21,5 +21,5 @@ in OS app-data.
 
 ## References
 
-- `plans/pending-marketplace-low-med.md`
-- Prerequisite: `plans/pending-extensions-low-hard.md` (manifest format and trusted local loading; remote discovery remains deferred)
+- `plans/marketplace/`
+- Prerequisite: `plans/extensions/` (manifest format and trusted local loading; remote discovery remains deferred)

@@ -11,7 +11,7 @@ that failed.
 
 Scope is journal-owned only: the popout, the dateline, the metadata sheet, and the calendar
 tab. Shell navigation — how the popout opens, the back affordance, the bottom nav — belongs to
-`plans/mobile/pending-responsive_layout-low-med.md` and is checked there.
+`mobile/responsive_layout` and is checked there.
 
 | | Device / OS | Tester | Date |
 |---|---|---|---|

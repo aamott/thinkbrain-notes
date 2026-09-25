@@ -1,6 +1,6 @@
 # Story 1: Settings Core Types + Registry + Built-in Modules — DONE
 
-Part of [Modular Settings System](./pending-modular_settings_system-med-hard.md).
+Part of [Modular Settings System](./modular_settings_system).
 
 ## What was built
 

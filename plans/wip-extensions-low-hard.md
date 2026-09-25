@@ -39,10 +39,10 @@ epics:
 - **Journal/calendar** — one journal panel/activity entry, calendar tab, D44 editor-header widget, and D45 app/workspace settings. Templates are out by D21; feature behavior and Markdown storage remain in its epic.
 - **Git sync** — built-in sync/background-task registration only. Git operations,
   file watching, conflict handling, and sync UX remain owned by
-  `plans/pending-auto_sync-med-hard.md` and its child stories.
+  `plans/auto-sync/` and its child stories.
 - **ACP Agent Chat** — built-in assistant contribution and scoped credential/API
   boundary. ACP host lifecycle, chat UI, permissions, and provider behavior
-  remain owned by `plans/pending-ai-med-hard.md`, once it has a planning pass and a
+  remain owned by `plans/ai/`, once it has a planning pass and a
   `plans/ai/` directory of its own.
 
 No beta built-in receives a third-party-install path or a separate privilege
@@ -188,7 +188,7 @@ nothing.
 This epic provides the extension boundary for:
 
 - `ai` — third-party providers/agents may later register through this API, while
-  built-in ACP Agent Chat remains owned and deliverable in `wip-ai`/`plans/ai/`.
+  built-in ACP Agent Chat remains owned and deliverable in `ai`/`plans/ai/`.
 - `marketplace` — future discovery and signing work may consume the manifest and
   packaging decisions, but marketplace and URL-install work are explicitly
   deferred from the beta.
@@ -208,34 +208,34 @@ Focused follow-up stories:
 - Manifest runtime, startup/command/view activation, desktop bootstrap, and
   shutdown (`onLanguage` remains unsupported) — shipped and reviewed; its story
   file was deleted per the plan-review policy.
-- `plans/extensions/pending-extension_contribution_surfaces-low-med.md` — typed
+- `extensions/extension_contribution_surfaces` — typed
   views, menus, context menus, editor actions, and themes.
 - D44 observable React slot above the editor body, distinct from CodeMirror
   hooks — shipped 2026-08-08; its story file was deleted per the plan-review
   policy.
-- `plans/extensions/pending-extension_events_tasks-low-med.md` — app/extension
+- `extensions/extension_events_tasks` — app/extension
   events and abortable background tasks.
-- `plans/extensions/pending-extension_data_storage-low-med.md` — extension-owned
+- `extensions/extension_data_storage` — extension-owned
   app-data storage and cleanup.
-- `plans/extensions/pending-extension_feature_hooks-low-med.md` — AI/Git hook
+- `extensions/extension_feature_hooks` — AI/Git hook
   seams only; feature behavior remains in owning epics.
-- `plans/extensions/pending-extension_settings-low-med.md` — D45 app/workspace scope,
+- `extensions/extension_settings` — D45 app/workspace scope,
   settings UI/persistence, and cleanup; app-scoped runtime is already partial and tested.
-- `plans/extensions/pending-extension_secret_storage-med-hard.md` — native OS
+- `extensions/extension_secret_storage` — native OS
   credential-store boundary; encrypted app-data fallback remains undecided.
-- `plans/extensions/pending-extension_packaging_format-low-easy.md` — directory
+- `extensions/extension_packaging_format` — directory
   and future archive contract, without installation.
-- `plans/extensions/pending-extension_file_installation-low-med.md` — later local
+- `extensions/extension_file_installation` — later local
   package installation with an app-privileges warning.
-- `plans/extensions/pending-beta_builtin_extensions-med-med.md` — registration
+- `extensions/beta_builtin_extensions` — registration
   boundaries for journal/calendar, Git sync, and ACP Agent Chat; behavior stays
   in the existing feature epics.
-- `plans/extensions/pending-extension_deferred_distribution-low-med.md` — explicit
+- `extensions/extension_deferred_distribution` — explicit
   URL/marketplace/signing deferral and reopen gate.
 
 The internal contribution implementation and lifecycle/scoped-settings work are
 usable prerequisites for these stories. Secret storage also depends on the
-native gateway boundaries the AI epic will define once `plans/pending-ai-med-hard.md`
+native gateway boundaries the AI epic will define once `plans/ai/`
 gets its planning pass; built-in registrations consume the existing feature
 epics rather than blocking their behavior work.
 
@@ -285,33 +285,37 @@ are not yet formalized, the first story here should establish them.
   `mount(element, panel)` and gets its own activity-bar (left) or title-bar
   (right) entry, identical to a built-in's, plus `actions` rendered as buttons
   in the panel header. Menus, context menus, and themes remain in
-  `plans/extensions/pending-extension_contribution_surfaces-low-med.md`.
+  `extensions/extension_contribution_surfaces`.
   `examples/extensions/hello-notes` is the worked example, pinned by an
   end-to-end test.
 - 🟨 App events — typed `context.events` subscriptions for `note.opened`,
   `note.saved`, `note.created`, and `workspace.opened`, scoped to the activation
   and isolated per listener. Custom extension-emitted events and background
-  tasks remain in `plans/extensions/pending-extension_events_tasks-low-med.md`.
+  tasks remain in `extensions/extension_events_tasks`.
 - ✅ Lifecycle/bootstrap integration — shipped; its story file was reviewed and
   deleted per the plan-review policy. Built-ins are registered from manifests
   at startup and activated lazily via contribution stubs; `note-stats` is the
   first built-in and exercises commands, panels, and namespaced settings.
-- ⬜ API/event/background-task/data surfaces — split across
-  `pending-extension_events_tasks-low-med.md`,
-  `pending-extension_data_storage-low-med.md`, and
-  `pending-extension_feature_hooks-low-med.md`.
+- 🟨 API/event/background-task/data surfaces — app-event subscriptions
+  shipped; custom extension events, background tasks, data storage, and
+  feature hooks remain, split across
+  `extension_events_tasks`,
+  `extension_data_storage`, and
+  `extension_feature_hooks`.
 - ✅ D44 React editor-header contribution — shipped 2026-08-08; its story file
   was reviewed and deleted per the plan-review policy.
-- ⬜ D45 app/workspace settings UI/persistence/uninstall —
-  `plans/extensions/pending-extension_settings-low-med.md`.
-- ⬜ Native secret storage — `plans/extensions/pending-extension_secret_storage-med-hard.md`;
+- 🟨 D45 app/workspace settings — scoped runtime persistence shipped and
+  tested; settings UI, cleanup, and uninstall remain —
+  `extensions/extension_settings`.
+- ⬜ Native secret storage — `extensions/extension_secret_storage`;
   encrypted app-data fallback remains an explicit unmade security decision.
-- ⬜ Packaging contract — `plans/extensions/pending-extension_packaging_format-low-easy.md`.
-- ⬜ File installation — `plans/extensions/pending-extension_file_installation-low-med.md`;
+- ⬜ Packaging contract — `extensions/extension_packaging_format`.
+- ⬜ File installation — `extensions/extension_file_installation`;
   later trusted-package path with an explicit app-privileges warning.
-- ⬜ Beta built-in registration boundaries —
-  `plans/extensions/pending-beta_builtin_extensions-med-med.md`; journal/calendar,
-  Git, and AI behavior remains in the owning epics.
+- 🟨 Beta built-in registration boundaries —
+  `extensions/beta_builtin_extensions`; `journal-calendar` and `note-stats`
+  ship as built-ins; Git and ACP Agent Chat registration boundaries remain
+  pending owner approval, and all behavior stays in the owning epics.
 - 🚫 URL/marketplace/signing/distribution — explicitly deferred; see
-  `plans/extensions/pending-extension_deferred_distribution-low-med.md`. Do not
+  `extensions/extension_deferred_distribution`. Do not
   implement in beta.

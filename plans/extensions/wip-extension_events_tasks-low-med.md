@@ -26,7 +26,7 @@ Provide extension-scoped app/extension event subscriptions and abortable backgro
 ## Dependencies
 
 - Lifecycle/bootstrap and typed core contribution conventions.
-- `pending-extension_contribution_surfaces-low-med.md` for shared scope/disposable types.
+- `extension_contribution_surfaces` for shared scope/disposable types.
 - Native adapters only if an approved event source requires them; no feature-specific sync or AI behavior.
 
 ## Likely files

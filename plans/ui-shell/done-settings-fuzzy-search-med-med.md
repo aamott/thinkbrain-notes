@@ -7,9 +7,9 @@ Done — settings search now uses ranked fuzzy matching, commits input after a
 
 ## Epic
 
-Part of [Modular Settings System](./pending-modular_settings_system-med-hard.md).
+Part of [Modular Settings System](./modular_settings_system).
 Read that first for the 14 binding design decisions and architecture overview.
-Also read [Story 3](./done-settings-responsive-header-high-hard.md).
+Also read [Story 3](./settings-responsive-header).
 
 ## Context
 

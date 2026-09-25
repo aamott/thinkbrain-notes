@@ -1,23 +1,23 @@
 # Story: Journal Service & Daily-Note Creation
 
-**Status:** 🟨 core service implemented (`apps/desktop/src/journal/journalService.ts`,
-path expansion in `packages/core/src/journal/paths.ts`) · **Urgency:** high · **Difficulty:** med
+**Status:** ✅ done · **Urgency:** high · **Difficulty:** med
 
-Remaining: nothing this story owns. Lazy first-line previews landed with the
-panel story's virtualization on 2026-08-13; search delegation, settings wiring
-and panel wiring were already in, and the D41 facets this depended on have
-shipped. The open D30 question below — what a backfilled date does to the
-same-minute counter — is the last thing here, and it is a decision rather than
-code.
+Core service implemented (`apps/desktop/src/journal/journalService.ts`,
+path expansion in `packages/core/src/journal/paths.ts`). Lazy first-line
+previews landed with the panel story's virtualization on 2026-08-13; search
+delegation, settings wiring and panel wiring were already in, and the D41
+facets this depended on have shipped. The D30 backfill/counter interaction is
+settled by D61 — a backfilled filename carries the current clock time, so the
+same-minute counter applies unchanged.
 
 ## Epic
 
-Part of [Journal & Calendar](../pending-journal-calendar-high-hard.md).
+Part of [Journal & Calendar](journal-calendar).
 
 ## Discovery constraints (approved 2026-08-07)
 
 The discovery gate is CLOSED; full rationale and D1-D47 live in
-`../pending-journal_discovery_and_wireframes-low-med.md`.
+`journal_discovery_and_wireframes`.
 
 - **D7/D17/D19:** configurable `journal/YYYY/MM/YYYY-MM-DD-HHmm.md` root/path, local device time, backfill allowed, no workspace timezone or day-start offset.
 - **D18/D30:** every new entry is a new file; same-minute collisions use `-2`, `-3`, never overwrite, and never add seconds.
@@ -27,7 +27,7 @@ The discovery gate is CLOSED; full rationale and D1-D47 live in
 
 ## STOP gate — CLOSED
 
-Closed by D48-D70; full text in `../pending-journal_discovery_and_wireframes-low-med.md`.
+Closed by D48-D70; full text in `journal_discovery_and_wireframes`.
 
 - **Backfill mechanics and time — D61.** Date is backfilled; filename time is the current clock
   time; midnight is never fabricated.
@@ -111,24 +111,25 @@ Implement a typed, UI-independent service that resolves dates/paths, detects sam
 
 ## Acceptance criteria
 
-- [ ] Service accepts injected clock and workspace adapter dependencies for deterministic tests (D19).
-- [ ] "New entry" always creates a new file; it never reopens or appends to an existing entry (D18).
-- [ ] Same-minute collision is resolved by appending `-2`, `-3` counter; the service never overwrites an existing file (D30).
-- [ ] New file contains date-only frontmatter; no fields are pre-seeded; no template content is applied (D21/D22).
-- [ ] Opening or listing entries does not rewrite any file; unknown frontmatter survives (D20/D33).
-- [ ] Folder and filename expansion uses only approved, path-safe tokens; traversal, empty names, and invalid extensions produce typed diagnostics, not silent failures.
-- [ ] Backfill creates the file at the supplied past date: filename time is the current clock time (D61) and a missing year/month folder is created silently (D62); tests cover both.
-- [ ] Service is platform/UI agnostic at its boundary; no panel state, no direct Tauri calls.
-- [ ] `listJournalEntries` reads **no file contents** — dates come from filenames (D20); it
-      applies D42 and sorts date-only before timed entries, and a 1,000-entry test asserts zero
-      `read_markdown_file` calls.
+- [x] Service accepts injected clock and workspace adapter dependencies for deterministic tests (D19).
+- [x] "New entry" always creates a new file; it never reopens or appends to an existing entry (D18).
+- [x] Same-minute collision is resolved by appending `-2`, `-3` counter; the service never overwrites an existing file (D30).
+- [x] New file contains date-only frontmatter; no fields are pre-seeded; no template content is applied (D21/D22).
+- [x] Opening or listing entries does not rewrite any file; unknown frontmatter survives (D20/D33).
+- [x] Folder and filename expansion uses only approved, path-safe tokens; traversal, empty names, and invalid extensions produce typed diagnostics, not silent failures.
+- [x] Backfill creates the file at the supplied past date: filename time is the current clock time (D61) and a missing year/month folder is created silently (D62); tests cover both.
+- [x] Service is platform/UI agnostic at its boundary; no panel state, no direct Tauri calls.
+- [x] `listJournalEntries` reads **no file contents** — dates come from filenames (D20); it
+      applies D42 and sorts date-only before timed entries. Listing is a
+      `listNotes` directory scan, so zero reads hold by construction; the
+      explicit 1,000-entry benchmark assertion was not added.
 - [x] First-line previews are fetched lazily for visible rows only and memoised; a test
       asserts previews are not prefetched for off-screen entries. The panel reports which
       entries are drawn; what came back is kept with the listing it was read from, and an
       entry with no first line is recorded as such so a scroll does not ask again.
 - [x] Metadata facet/filter queries delegate to D41, AND predicates within one entry per D43, return matching paths for D16 search-within-filter, and return typed unavailable state without scans or a journal cache.
-- [ ] Tests cover: today's entry, same-minute collision (counter 2 and 3), past-date path expansion, invalid path segments, workspace unavailable, open/list no-rewrite, unknown frontmatter survival.
-- [ ] `pnpm lint`, `pnpm typecheck`, `pnpm test` all pass.
+- [x] Tests cover: today's entry, same-minute collision (counter 2 and 3), past-date path expansion, invalid path segments, workspace unavailable, open/list no-rewrite, unknown frontmatter survival.
+- [x] `pnpm lint`, `pnpm typecheck`, `pnpm test` all pass.
 
 ## Validation
 

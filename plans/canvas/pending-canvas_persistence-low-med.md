@@ -31,4 +31,4 @@ debounced/batched and written atomically.
 
 - `packages/core/src/` — canvas persistence (e.g. `canvas-io.ts`)
 - `packages/core/src/note-model.ts` — note path resolution patterns
-- `plans/pending-canvas-low-hard.md` — persistence architecture decision
+- `plans/canvas/` — persistence architecture decision

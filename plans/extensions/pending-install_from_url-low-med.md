@@ -2,7 +2,7 @@
 
 ## Status
 
-🚫 Explicitly deferred. The canonical deferral/reopen plan is `pending-extension_deferred_distribution-low-med.md`; no URL/registry/network install is implemented or implied.
+🚫 Explicitly deferred. The canonical deferral/reopen plan is `extension_deferred_distribution`; no URL/registry/network install is implemented or implied.
 
 ## Goal
 
@@ -20,7 +20,7 @@ Stable manifest/package contracts and local file installation, plus a separate m
 
 ## Exact likely file areas
 
-Future-only areas are listed in `pending-extension_deferred_distribution-low-med.md`; no files should be added for this alias.
+Future-only areas are listed in `extension_deferred_distribution`; no files should be added for this alias.
 
 ## Implementation tasks
 
@@ -52,6 +52,6 @@ Deferred decision and canonical-story link.
 
 ## References
 
-- `plans/extensions/pending-extension_deferred_distribution-low-med.md`
+- `extensions/extension_deferred_distribution`
 - `plans/marketplace/`
-- `plans/pending-extensions-low-hard.md`
+- `plans/extensions/`

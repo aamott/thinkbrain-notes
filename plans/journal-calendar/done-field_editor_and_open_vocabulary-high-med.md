@@ -5,8 +5,8 @@
 
 ## Epic
 
-Part of [Journal & Calendar](../pending-journal-calendar-high-hard.md). Extends
-`pending-journal_settings_and_accessibility-med-med.md`, which owns the settings themselves.
+Part of [Journal & Calendar](journal-calendar). Extends
+`journal_settings_and_accessibility`, which owns the settings themselves.
 
 ## Why
 

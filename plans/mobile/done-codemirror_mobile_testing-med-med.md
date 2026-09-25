@@ -31,7 +31,7 @@ Verify and fix CodeMirror 6 text editing on Android.
 
 ## References
 
-- `plans/pending-mobile-med-hard.md` — epic, known limitations
+- `plans/mobile/` — epic, known limitations
 - tauri-apps/tauri#10631, #7868 — Android keyboard / visualViewport
 - codemirror/dev#1676 — EditContext scroll bugs
 - codemirror/dev#1504 — Samsung keyboard predictive text

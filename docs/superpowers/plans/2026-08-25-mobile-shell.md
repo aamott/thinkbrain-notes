@@ -3615,4 +3615,4 @@ git commit -m "test(e2e): cover the phone shell by form factor"
 - `pnpm qa` and `pnpm test:e2e` pass.
 - Desktop chrome is visually and behaviourally unchanged; no desktop test assertion was edited to accommodate the phone shell.
 - On a device: no icon rail, labelled drawer, hub with visible labels and working badges, right panels reachable, revealed panels full width, hub out of the keyboard's way.
-- `plans/mobile/pending-mobile_navigation_menu-med-med.md` and `plans/mobile/pending-responsive_layout-med-med.md` are renamed to `done-` in the same commit as the work that finishes them, per `AGENTS.md`.
+- `mobile/mobile_navigation_menu` and `mobile/responsive_layout` are renamed to `done-` in the same commit as the work that finishes them, per `AGENTS.md`.

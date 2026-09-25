@@ -75,7 +75,7 @@ in the `indexing-search` epic.
 - `indexing-search` (done) — FTS5 keyword search, the per-workspace SQLite
   cache in OS app-data, and the existing search UI surface are the foundation
   this epic extends.
-  - `plans/wip-indexing-search-med-med.md` — indexing/search architecture and
+  - `plans/indexing-search/` — indexing/search architecture and
     remaining frontend wiring
   - `apps/desktop/src-tauri/src/commands/search.rs` — shipped native FTS5 backend:
     document indexing, index search, clearing, removal, and cache management

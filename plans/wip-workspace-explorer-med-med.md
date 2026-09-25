@@ -30,7 +30,7 @@ default application.
   "for the editor/index flows that depend on them". Those flows moved to the
   generic commands, and on 2026-08-28 `rename_markdown_file` and
   `delete_markdown_file` were removed with no caller left anywhere — see
-  `plans/extensions/pending-ipc_surface_is_not_the_contract-med-easy.md` for
+  `extensions/ipc_surface_is_not_the_contract` for
   why an unused Tauri command is safe to delete. `create_markdown_file`
   remains and is still used.
 - **Move = rename across directories.** A drag-and-drop move is a rename to a
@@ -44,9 +44,11 @@ default application.
   workspace settings (already stored outside the vault via
   `read_workspace_settings` / `write_workspace_settings`), not in global app
   settings.
-- **Tree stays virtualized.** react-arborist is already in use; drag-and-drop
-  should use its built-in DnD (currently disabled via `disableDrag`/
-  `disableDrop`) rather than a separate DnD library.
+- **Tree stays virtualized.** Drag-and-drop shipped as a focused
+  pointer/keyboard controller (`useWorkspaceTreeDrag`) over the existing
+  virtualized tree — whole-row mouse/pen drag with a floating preview,
+  hold-to-drag on touch, and a keyboard drive from the row handle; no DnD
+  library was added. See `workspace-explorer/drag_and_drop_move`.
 - **Search/index ownership stays in indexing-search.** That epic owns the FTS5
   backend, index lifecycle, and index updates. Explorer stories only consume
   watcher/index events to refresh tree or editor UI; they do not add a second
@@ -60,16 +62,16 @@ default application.
   rebuilt against `list_workspace_entries` in the fresh shell
 - ✅ Dot-prefixed entries hidden by default — `lib.rs` `is_hidden_name`
 - ✅ Explorer icons, workspace selector, and multi-window workspace sessions
-- ⬜ Non-Markdown file operations (open / rename / delete) — see
-  `pending-non_markdown_file_ops-med-med.md`
-- ⬜ Drag-and-drop move in the file tree — see
-  `pending-drag_and_drop_move-med-hard.md`
+- 🟨 Non-Markdown file operations (open / rename / delete) — generic
+  open/rename/delete shipped; unsupported binary formats still lack the OS
+  fallback — see `non_markdown_file_ops`
+- ✅ Drag-and-drop move in the file tree — see
+  `drag_and_drop_move`
 - ✅ New-folder action
 - ✅ Show-hidden toggle for dot-prefixed entries
-- ⬜ Explorer tree/editor consumption of external file-change events — see
-  `pending-file_watcher-med-hard.md`; watcher lifecycle and index updates belong
-  to `plans/wip-indexing-search-med-med.md`.
-- FTS5 backend/index lifecycle is owned by indexing-search — see
-  `plans/wip-indexing-search-med-med.md`; retain
-  `pending-fts5_search_backend-low-hard.md` as the explorer/UI integration note
-  only.
+- ✅ Explorer tree/editor consumption of external file-change events — see
+  `plans/workspace-explorer/done-summary.md`; watcher lifecycle and index
+  updates belong to `plans/indexing-search/`.
+- ✅ FTS5 backend/index lifecycle integration — owned by
+  `plans/indexing-search/`; `fts5_search_backend` records the
+  explorer/UI integration.

@@ -2,7 +2,7 @@
 
 **Status:** ⬜ pending · **Urgency:** low · **Difficulty:** med
 
-> Split out of `done-sync_trigger_sharp_edges-low-easy.md` on 2026-08-28, where
+> Split out of `sync_trigger_sharp_edges` on 2026-08-28, where
 > it was the third of three edges. The other two were closed by the sync
 > schedule work; this one is a different question and was left alone
 > deliberately rather than by oversight.

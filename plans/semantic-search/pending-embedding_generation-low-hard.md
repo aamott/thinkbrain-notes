@@ -21,8 +21,8 @@ refactor later.
 
 ## References
 
-- `plans/wip-indexing-search-med-med.md` — indexing-search epic and indexed document shape
+- `plans/indexing-search/` — indexing-search epic and indexed document shape
 - `apps/desktop/src-tauri/src/commands/search.rs` — shipped native index backend and `DocumentRecord`
 - A future typed frontend bridge remains planned for native search/index commands; no bridge file is assigned yet.
-- `plans/pending-semantic-search-low-hard.md` — Architecture Decisions (provider abstraction)
+- `plans/semantic-search/` — Architecture Decisions (provider abstraction)
 - `plans/app-vision.md` — AI Native principle (local first, cloud optional)

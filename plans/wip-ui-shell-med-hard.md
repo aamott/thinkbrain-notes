@@ -91,7 +91,7 @@ the persisted app setting and `data-thinkbrain-theme`.
 - ✅ persisted Explorer visibility and workspace restoration
 - ✅ fresh shell rebuild
 - ⬜ shell token consolidation — production JSX uses shared `--tn-*` tokens; see
-  `plans/theme-foundation/pending-surface_styling_migration-med-med.md`
+  `theme-foundation/surface_styling_migration`
 - ✅ desktop shell composition (panel separation) — rebuilt after the earlier
   rollback
 - ✅ tab model, registry, and tab strip
@@ -101,12 +101,12 @@ the persisted app setting and `data-thinkbrain-theme`.
 - ✅ resizable layout and OS app-data persistence
 - ✅ theme control in the new shell
 - ✅ bottom panel framework and status integration
-- ⬜ generic file viewer tabs (code editor, image/audio/video viewers) — see
-  `plans/ui-shell/pending-generic_file_viewers-med-med.md`
+- ✅ generic file viewer tabs (code editor, image/audio/video viewers) — see
+  `ui-shell/generic_file_viewers`
 - ✅ semi-preview markdown editor (live preview with inline source on focus);
   implementation lives in `apps/desktop/src/tabs/livePreview/`; its design docs
   were reviewed and deleted per the plan-review policy in `AGENTS.md`.
-- ⬜ modular settings system (declarative, auto-populating settings tab) — see
-  `plans/ui-shell/pending-modular_settings_system-med-hard.md`
+- ✅ modular settings system (declarative, auto-populating settings tab) — see
+  `ui-shell/modular_settings_system`
 - ❌ prior movable-action/slot and layout-editing stories were superseded and
   removed.

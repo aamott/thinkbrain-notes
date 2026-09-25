@@ -1,7 +1,8 @@
 # Mobile Sync Triggers: A Policy, Not a Platform Branch
 
-**Date:** 2026-08-28 · **Story:**
-`plans/mobile/pending-mobile_sync_triggers-high-med.md`
+**Date:** 2026-08-28 · **Historical design:** superseded by
+`docs/superpowers/specs/2026-08-28-sync-schedule-design.md`. The implementation
+record is `mobile/mobile_sync_triggers`.
 
 ## The problem
 
@@ -80,7 +81,7 @@ The important consequence: **no `cfg(target_os)` appears in the sync code.**
 platform branch here would be a special case layered onto shared
 infrastructure, and this codebase has already been bitten once by that shape —
 see the import/push review in
-`plans/mobile/pending-android_anonymous_clone-high-med.md`.
+`mobile/android_anonymous_clone`.
 
 Rejected alternatives:
 

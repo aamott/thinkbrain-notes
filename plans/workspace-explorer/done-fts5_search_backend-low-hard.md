@@ -33,4 +33,4 @@ index lifecycle.
 - `apps/desktop/src-tauri/src/commands/mod.rs` — command registration
 - `apps/desktop/src/search/SearchPanel.tsx` — current unavailable UI placeholder
 - `apps/desktop/src/search/searchPanelModel.ts` — search panel state model
-- `plans/wip-indexing-search-med-med.md` — backend/index owner and open work
+- `plans/indexing-search/` — backend/index owner and open work

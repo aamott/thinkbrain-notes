@@ -10,7 +10,7 @@ are offered.
 ## Acceptance Criteria
 
 - [ ] Clicking a non-Markdown file in the tree opens it in the appropriate
-      in-app viewer (see `ui-shell/pending-generic_file_viewers-med-med.md`):
+      in-app viewer (see `ui-shell/generic_file_viewers`):
       - **Text/code files** (`.ts`, `.js`, `.json`, `.yaml`, `.css`, `.html`,
         `.py`, `.rs`, `.toml`, etc.) → CodeMirror tab (read/write).
       - **Images** (`.png`, `.jpg`, `.gif`, `.svg`, `.webp`) → image viewer tab.
@@ -50,7 +50,7 @@ are offered.
 
 ## Dependencies
 
-- `ui-shell/pending-generic_file_viewers-med-med.md` must ship the viewer
+- `ui-shell/generic_file_viewers` must ship the viewer
   components before files can be opened in-app. Only the `code-editor` piece is
   required for text/code editing; the media viewers (`image-viewer`,
   `audio-viewer`, `video-viewer`) are separable and can be deferred.

@@ -25,7 +25,7 @@ Deferred (later stories):
 - vault integrity scan (detect orphaned backups, stale temp files)
 - periodic snapshot/backup retention policy
 - repair flow for frontmatter/Markdown damage
-- integration with cloud-sync conflict detection (see `plans/git-integration/`)
+- integration with cloud-sync conflict detection (see `auto-sync/cloud_conflict_detection`)
 
 Non-goals:
 
@@ -52,13 +52,13 @@ Non-goals:
 
 - `workspace-explorer` / `note-model` — the document adapter and save path
   are the integration points for atomic writes.
-- Cloud-sync conflict work (`plans/git-integration/`) is a separate concern;
+- Cloud-sync conflict work (`plans/auto-sync/`) is a separate concern;
   this epic handles local corruption, that epic handles sync conflicts.
 
 ## Status
 
 - ✅ Focused first story: safe writes + corruption detection + recovery UI —
-  `data-safety/done-safe_writes_corruption_detection-med-hard.md`. Notes now
+  `data-safety/safe_writes_corruption_detection`. Notes now
   save through a temp file and a rename, the replaced version is kept per
   device in app-data, a note that cannot be decoded is named as damaged rather
   than merely unopenable, and both that case and a note emptied from outside
@@ -68,7 +68,7 @@ Non-goals:
   a damaged one, and the story records why the obvious emptiness test was built
   and then removed before it shipped.
 - ✅ Settings survive a downgrade, and corruption is recoverable —
-  `data-safety/done-settings_survive_a_downgrade-med-med.md`. Not notes, but the
+  `data-safety/settings_survive_a_downgrade`. Not notes, but the
   same failure: a document the app could not fully read was replaced instead of
   kept. A newer document is now read rather than discarded, an unparseable one
   is set aside rather than overwritten, and — closing the last item — the user

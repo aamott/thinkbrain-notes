@@ -6,7 +6,7 @@ Let users narrow the graph view (full and local) by tag, folder path, and
 note status so large vaults remain navigable. Filters apply to which nodes
 are included; edges to excluded nodes are dropped.
 
-Depends on the graph view story (`pending-graph_view`).
+Depends on the graph view story (`graph_view`).
 
 ## Acceptance Criteria
 
@@ -24,5 +24,5 @@ Depends on the graph view story (`pending-graph_view`).
 ## References
 
 - `packages/core/src/note-model.ts` — `NoteMetadata` (`tags`, `status`)
-- `plans/pending-graph-low-hard.md` — this epic
-- `plans/graph/pending-graph_view-low-hard.md` — prerequisite
+- `plans/graph/` — this epic
+- `graph/graph_view` — prerequisite

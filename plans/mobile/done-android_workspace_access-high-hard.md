@@ -52,7 +52,7 @@ truthfully detect.
 Direct Storage Access Framework support is deferred. Turning a `content://`
 tree URI into a guessed `/storage/...` path is not acceptable: it breaks scoped
 storage and non-local document providers. The follow-up is tracked in
-`pending-android_saf_linked_folders-low-hard.md` and starts with research into a
+`android_saf_linked_folders` and starts with research into a
 persisted SAF tree plus managed local mirror/reconciliation or explicit
 import/export, rather than assuming every Rust and gix operation can use a URI.
 
@@ -88,7 +88,7 @@ CodeMirror and Git-access stories.
       or storage information without becoming a persistent warning
 - [ ] CRUD, reopen, live-preview assets, backups and the SQLite search index are
       exercised successfully on a real device — tracked in
-      `done-codemirror_mobile_testing-med-med.md` and device testing
+      `codemirror_mobile_testing` and device testing
 - [ ] The watcher is exercised on-device; if unreliable, opening still succeeds
       and explicit/foreground reconciliation keeps the workspace current
 - [x] Public and private repositories clone into the managed root through the
@@ -101,4 +101,4 @@ CodeMirror and Git-access stories.
   permissions.
 - `notify` (watcher) and `rusqlite` (search index) have not been observed on
   a device. Managed vaults give both real paths; device testing is tracked in
-  `done-codemirror_mobile_testing-med-med.md`.
+  `codemirror_mobile_testing`.

@@ -78,8 +78,8 @@ No credentials/encryption fallback, installer, marketplace, URL install, feature
 
 ## References
 
-- `plans/pending-extensions-low-hard.md` — Settings and credentials integration
-- `plans/extensions/pending-extension_secret_storage-med-hard.md`
+- `plans/extensions/` — Settings and credentials integration
+- `extensions/extension_secret_storage`
 - `apps/desktop/src/settings/`
 
 ## Bug found and fixed (2026-08-08)

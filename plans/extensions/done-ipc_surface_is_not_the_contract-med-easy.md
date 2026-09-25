@@ -6,7 +6,7 @@
 > `docs/reviews/2026-08-28/rust-backend/redundant-markdown-rename-delete-ipc,med,low.md`,
 > which found two unused commands and correctly refused to delete them as
 > ordinary dead code, because Tauri command names are externally callable and
-> `wip-workspace-explorer-med-med.md` had said to keep them. That is a question
+> `workspace-explorer` had said to keep them. That is a question
 > about what we promise, not about whether the code runs — so it needed
 > answering before anything was removed.
 
@@ -43,9 +43,9 @@ because it happened to exist when an extension reached for it.
 
 ## Why sync becoming an extension does not change this
 
-`pending-auto_sync-med-hard.md:81` already settles it: "Direct app feature
+`auto_sync:81` already settles it: "Direct app feature
 first, extension later. […] **Migration is a refactor — native layer
-unchanged.**" And `extensions/pending-beta_builtin_extensions-med-med.md:52`
+unchanged.**" And `extensions/beta_builtin_extensions:52`
 makes the Git sync built-in a **registration-only** module that delegates
 behaviour to its epic, with step 5 asserting no feature implementation is
 imported. Built-ins are "trusted app code; there is no third-party install path
@@ -81,7 +81,7 @@ So calling them would buy a lock-free rename and a spurious error on a no-op.
 That is not compatibility worth preserving, it is a trap with a familiar
 name.
 
-`wip-workspace-explorer-med-med.md:25-28` said to keep them "for the
+`workspace-explorer:25-28` said to keep them "for the
 editor/index flows that depend on them". Those flows migrated to the generic
 commands; the instruction outlived its reason. That plan line is corrected as
 part of this story rather than left contradicting the code.
@@ -94,7 +94,7 @@ part of this story rather than left contradicting the code.
 - [x] `rename_markdown_file` and `delete_markdown_file` removed: Rust
       implementations, `NativeCommandMap` entries, registration, and the path
       mirror. 102 lines
-- [x] `wip-workspace-explorer-med-med.md`'s retention note corrected, so the
+- [x] `workspace-explorer`'s retention note corrected, so the
       next reader is not told to preserve something that no longer exists
 - [x] Markdown path validation and error contracts still covered for the
       commands that remain. `create_markdown_file` and the read/write commands
