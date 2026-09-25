@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("../native/commands", () => ({
+vi.mock("../native/commands", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../native/commands")>()),
   invokeNativeCommand: vi.fn(async () => ({
     workspace: { root_path: "/vault", name: "vault" },
     files: []
@@ -189,6 +190,26 @@ describe("note rename events", () => {
 
     expect(order).toEqual(["file.renamed:note.txt->note.md", "note.created:note.md"]);
     for (const sub of subs) sub.dispose();
+  });
+
+  it("rejects an old native rename result instead of iterating missing move metadata", async () => {
+    // Older Android builds returned the moved WorkspaceEntry directly. A
+    // hot-reloaded frontend can run against that shell during development.
+    vi.mocked(invokeNativeCommand).mockResolvedValueOnce({
+      relative_path: "new.md",
+      kind: "file"
+    } as never);
+    const renamed = vi.fn();
+    const subscription = appEvents.on("note.renamed", renamed);
+
+    await expect(
+      workspaceDesktopApi.renameWorkspaceEntry("/vault", "old.md", "new.md")
+    ).rejects.toMatchObject({
+      code: "workspace.native_contract_mismatch",
+      message: expect.stringContaining("Update or rebuild")
+    });
+    expect(renamed).not.toHaveBeenCalled();
+    subscription.dispose();
   });
 
   it("emits nothing when the native rename fails", async () => {

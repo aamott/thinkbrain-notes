@@ -94,6 +94,13 @@ export function WorkspaceExplorerView({
     isExpanded: (path) => expandedFolders.has(path),
     expandFolder: actions.expandFolder,
     moveEntry: actions.moveEntry,
+    openContextMenu: (entry, x, y) => {
+      actions.setActivePath(entry.relative_path);
+      actions.showContextMenuAt(x, y, {
+        kind: entry.kind === "directory" ? "folder" : "file",
+        entry
+      });
+    },
     containerRef: treeScrollRef
   });
 

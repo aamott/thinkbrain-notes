@@ -6,8 +6,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NativeWorkspaceEntry } from "../native/commands";
 import {
   useWorkspaceTreeDrag,
+  WORKSPACE_DRAG_PREVIEW_ATTR,
   WORKSPACE_DROP_PARENT_ATTR,
   WORKSPACE_DROP_ROOT_ATTR,
+  WORKSPACE_TOUCH_DRAG_HOLD_MS,
   WORKSPACE_TREE_ROW_ATTR,
   type WorkspaceTreeDrag
 } from "./useWorkspaceTreeDrag";
@@ -32,9 +34,13 @@ let root: Root | null = null;
 let container: HTMLDivElement | null = null;
 let latestDrag: WorkspaceTreeDrag | null = null;
 const openedPaths: string[] = [];
+const contextMenus: { path: string; x: number; y: number }[] = [];
 const expandedPaths = new Set<string>();
 const expandFolder = vi.fn((path: string) => expandedPaths.add(path));
 const moveEntry = vi.fn(async () => true);
+const openContextMenu = vi.fn((entry: NativeWorkspaceEntry, x: number, y: number) => {
+  contextMenus.push({ path: entry.relative_path, x, y });
+});
 
 function pointerEvent(type: string, init: Record<string, unknown> = {}): Event {
   const event = new Event(type, { bubbles: true, cancelable: true });
@@ -46,6 +52,17 @@ function pointerEvent(type: string, init: Record<string, unknown> = {}): Event {
     pointerType: "mouse",
     ...init
   });
+  return event;
+}
+
+function touchEvent(type: string, init: { clientX?: number; clientY?: number } = {}): Event {
+  const touch = {
+    identifier: 9,
+    clientX: init.clientX ?? 0,
+    clientY: init.clientY ?? 0
+  };
+  const event = new Event(type, { bubbles: true, cancelable: true });
+  Object.assign(event, { touches: [touch], changedTouches: [touch] });
   return event;
 }
 
@@ -83,6 +100,7 @@ function render() {
       isExpanded: (path) => expandedPaths.has(path),
       expandFolder,
       moveEntry,
+      openContextMenu,
       containerRef
     });
     latestDrag = drag;
@@ -94,11 +112,16 @@ function render() {
             <div
               {...{ [WORKSPACE_TREE_ROW_ATTR]: item.relative_path }}
               {...(item.kind === "directory" ? { [WORKSPACE_DROP_PARENT_ATTR]: item.relative_path } : {})}
+              onContextMenu={(event) => {
+                if (drag.onRowContextMenu(event, item)) return;
+                openContextMenu(item, event.clientX, event.clientY);
+              }}
             >
               <button
                 type="button"
                 aria-label={`Open ${item.name}`}
                 onPointerDown={(event) => drag.onRowPointerDown(event, item)}
+                onTouchStart={(event) => drag.onRowTouchStart(event, item)}
                 onClick={() => {
                   if (drag.consumeSuppressedClick()) return;
                   openedPaths.push(item.relative_path);
@@ -125,9 +148,11 @@ function render() {
 
 beforeEach(() => {
   openedPaths.length = 0;
+  contextMenus.length = 0;
   expandedPaths.clear();
   expandFolder.mockClear();
   moveEntry.mockClear();
+  openContextMenu.mockClear();
 });
 
 afterEach(async () => {
@@ -169,9 +194,13 @@ describe("pointer drags", () => {
     expect(latestDrag?.dropTargetPath).toBe("Target");
     expect(latestDrag?.dropTargetValid).toBe(true);
     expect(document.body.style.userSelect).toBe("none");
+    const preview = document.body.querySelector<HTMLElement>(`[${WORKSPACE_DRAG_PREVIEW_ATTR}]`);
+    expect(preview?.textContent).toContain("a.md");
+    expect(preview?.style.transform).toContain("22px");
     await act(async () => {
       row.dispatchEvent(pointerEvent("pointerup", { clientX: 10, clientY: 0 }));
     });
+    expect(document.body.querySelector(`[${WORKSPACE_DRAG_PREVIEW_ATTR}]`)).toBeNull();
     expect(moveEntry).toHaveBeenCalledWith(file("a.md"), "Target");
     expect(liveText()).toContain("Moved a.md to Target/a.md");
     expect(latestDrag?.draggedPath).toBeNull();
@@ -272,7 +301,7 @@ describe("pointer drags", () => {
     expect(openedPaths).toEqual([]);
   });
 
-  it("ignores a touch press on the row but drags from the handle", async () => {
+  it("ignores pointer events on the row but keeps the touch handle responsive", async () => {
     await render();
     vi.spyOn(document, "elementFromPoint").mockReturnValue(rowOf("Target"));
     const row = mainButtonOf("a.md");
@@ -291,6 +320,91 @@ describe("pointer drags", () => {
       handle.dispatchEvent(pointerEvent("pointerup", { pointerType: "touch", clientX: 40, clientY: 0 }));
     });
     expect(moveEntry).toHaveBeenCalledWith(file("a.md"), "Target");
+  });
+
+  it("lets movement before the touch hold remain a scroll gesture", async () => {
+    vi.useFakeTimers();
+    await render();
+    const row = mainButtonOf("a.md");
+    await act(async () => {
+      row.dispatchEvent(touchEvent("touchstart", { clientX: 10, clientY: 10 }));
+      row.dispatchEvent(touchEvent("touchmove", { clientX: 10, clientY: 40 }));
+      vi.advanceTimersByTime(WORKSPACE_TOUCH_DRAG_HOLD_MS);
+      row.dispatchEvent(touchEvent("touchend", { clientX: 10, clientY: 40 }));
+    });
+    expect(latestDrag?.draggedPath).toBeNull();
+    expect(moveEntry).not.toHaveBeenCalled();
+    expect(contextMenus).toEqual([]);
+    expect(document.body.querySelector(`[${WORKSPACE_DRAG_PREVIEW_ATTR}]`)).toBeNull();
+  });
+
+  it("starts a whole-row touch drag after the hold and follows the finger", async () => {
+    vi.useFakeTimers();
+    await render();
+    vi.spyOn(document, "elementFromPoint").mockReturnValue(rowOf("Target"));
+    const row = mainButtonOf("a.md");
+    await act(async () => {
+      row.dispatchEvent(touchEvent("touchstart", { clientX: 10, clientY: 10 }));
+      vi.advanceTimersByTime(WORKSPACE_TOUCH_DRAG_HOLD_MS);
+    });
+    expect(latestDrag?.draggedPath).toBe("a.md");
+    expect(document.body.style.userSelect).toBe("none");
+
+    await act(async () => {
+      row.dispatchEvent(touchEvent("touchmove", { clientX: 20, clientY: 30 }));
+    });
+    const preview = document.body.querySelector<HTMLElement>(`[${WORKSPACE_DRAG_PREVIEW_ATTR}]`);
+    expect(preview?.style.transform).toContain("32px");
+    expect(latestDrag?.dropTargetPath).toBe("Target");
+    expect(latestDrag?.dropTargetValid).toBe(true);
+
+    await act(async () => {
+      row.dispatchEvent(touchEvent("touchend", { clientX: 20, clientY: 30 }));
+      row.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+    expect(moveEntry).toHaveBeenCalledWith(file("a.md"), "Target");
+    expect(openedPaths).toEqual([]);
+    expect(contextMenus).toEqual([]);
+    expect(document.body.querySelector(`[${WORKSPACE_DRAG_PREVIEW_ATTR}]`)).toBeNull();
+    expect(document.body.style.userSelect).toBe("");
+  });
+
+  it("opens the context menu when a held touch releases without moving", async () => {
+    vi.useFakeTimers();
+    await render();
+    const row = mainButtonOf("a.md");
+    await act(async () => {
+      row.dispatchEvent(touchEvent("touchstart", { clientX: 10, clientY: 10 }));
+      vi.advanceTimersByTime(WORKSPACE_TOUCH_DRAG_HOLD_MS);
+      row.dispatchEvent(new MouseEvent("contextmenu", {
+        bubbles: true,
+        cancelable: true,
+        clientX: 10,
+        clientY: 10
+      }));
+      row.dispatchEvent(touchEvent("touchend", { clientX: 10, clientY: 10 }));
+      row.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+    expect(contextMenus).toEqual([{ path: "a.md", x: 10, y: 10 }]);
+    expect(moveEntry).not.toHaveBeenCalled();
+    expect(openedPaths).toEqual([]);
+    expect(document.body.querySelector(`[${WORKSPACE_DRAG_PREVIEW_ATTR}]`)).toBeNull();
+    expect(document.body.style.userSelect).toBe("");
+  });
+
+  it("keeps mouse context menus outside the touch gesture path", async () => {
+    await render();
+    const row = rowOf("a.md");
+    await act(async () => {
+      row.dispatchEvent(new MouseEvent("contextmenu", {
+        bubbles: true,
+        cancelable: true,
+        button: 2,
+        clientX: 44,
+        clientY: 8
+      }));
+    });
+    expect(contextMenus).toEqual([{ path: "a.md", x: 44, y: 8 }]);
   });
 
   it("auto-expands a collapsed folder target after the hover delay", async () => {
