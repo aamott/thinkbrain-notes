@@ -13,6 +13,7 @@ import { CREATE_MANAGED_WORKSPACE_LABEL, IMPORT_FROM_GIT_LABEL, OPEN_FOLDER_LABE
 import { isWorkspaceGitLinked } from "./workspaceSettings";
 import { WorkspaceSelectorPortal, type WorkspaceSelectorVariant } from "./WorkspaceSelectorPortal";
 import { isNewNoteCreate, type ContextMenuState, type CreateState, type PendingExtensionConfirm, type RenameState, type WorkspaceExplorerActions } from "./workspaceExplorerTypes";
+import { useWorkspaceTreeDrag, WORKSPACE_DROP_ROOT_ATTR } from "./useWorkspaceTreeDrag";
 
 interface WorkspaceExplorerViewProps {
   readonly className?: string;
@@ -70,8 +71,41 @@ export function WorkspaceExplorerView({
   // as an outside click first and it shuts and reopens in one gesture.
   const moreButtonRef = useRef<HTMLButtonElement>(null);
 
+  // Visible folders in tree order are the keyboard destination cycle; a folder
+  // is visible only when every ancestor is expanded.
+  const folderPaths = useMemo(() => {
+    const paths: string[] = [];
+    const visit = (nodes: readonly WorkspaceTreeNode[]) => {
+      for (const node of nodes) {
+        if (node.entry.kind !== "directory") continue;
+        paths.push(node.entry.relative_path);
+        if (expandedFolders.has(node.entry.relative_path)) visit(node.children);
+      }
+    };
+    visit(tree);
+    return paths;
+  }, [tree, expandedFolders]);
+
+  // One controller for the whole tree; rows receive it by prop so pointer and
+  // keyboard drags share the same session state.
+  const treeScrollRef = useRef<HTMLUListElement | null>(null);
+  const drag = useWorkspaceTreeDrag({
+    folderPaths,
+    isExpanded: (path) => expandedFolders.has(path),
+    expandFolder: actions.expandFolder,
+    moveEntry: actions.moveEntry,
+    containerRef: treeScrollRef
+  });
+
+  // Switching workspaces mid-drag must drop the gesture rather than land it
+  // on a destination in a different vault.
+  const cancelDrag = drag.cancel;
+  useEffect(() => cancelDrag, [workspaceRootPath, cancelDrag]);
+
   return (
     <section className={cn("flex min-h-0 flex-1 flex-col text-sidebar-foreground bg-sidebar font-sans", className)} aria-label="Workspace explorer" aria-busy={isBusy}>
+      {/* Keyboard and pointer drags announce progress here. */}
+      <p className="sr-only" aria-live="polite">{drag.announcement}</p>
       <header className="flex min-h-16 items-center justify-between gap-3 px-3 py-2.5 border-b border-border pointer-coarse:px-4 pointer-coarse:py-3">
         <div className="min-w-0">
           <p className="mb-0.5 text-muted-foreground text-[0.625rem] font-bold tracking-[0.08em] leading-none uppercase pointer-coarse:text-xs">Workspace</p>
@@ -133,8 +167,18 @@ export function WorkspaceExplorerView({
       {state.phase === "error" && <ErrorState message={state.error ?? "The workspace could not be opened."} onDismiss={actions.dismissError} />}
       {state.phase === "ready" && (
         <div
-          className="flex min-h-0 flex-1 flex-col"
+          className={cn(
+            "flex min-h-0 flex-1 flex-col",
+            drag.dropTargetPath === "" &&
+              (drag.dropTargetValid
+                ? "bg-[color-mix(in_srgb,var(--color-accent)_18%,transparent)]"
+                : "bg-[color-mix(in_srgb,var(--color-destructive)_12%,transparent)]")
+          )}
           aria-label={`${state.snapshot?.workspace.name} explorer`}
+          // Anywhere in this region — the path header, tree whitespace, the
+          // empty state — is a valid drop at the workspace root. File rows
+          // mark themselves so they do not fall back to it.
+          {...{ [WORKSPACE_DROP_ROOT_ATTR]: "" }}
           onContextMenu={(event) => actions.showContextMenu(event, { kind: "background" })}
         >
           <p className="m-0 overflow-hidden px-3 py-2 border-b border-border text-muted-foreground text-[0.6875rem] truncate" title={state.snapshot?.workspace.root_path}>
@@ -147,6 +191,7 @@ export function WorkspaceExplorerView({
             <StatusState message="This workspace is empty. Right-click to create a new file or folder." />
           ) : (
             <ul
+              ref={treeScrollRef}
               className="min-h-0 flex-1 m-0 overflow-auto py-1.5 list-none [scrollbar-color:var(--color-border)_transparent] scrollbar-thin"
               role="tree"
               aria-label={`${state.snapshot?.workspace.name} files`}
@@ -180,6 +225,7 @@ export function WorkspaceExplorerView({
                   creating={creating}
                   expandedFolders={expandedFolders}
                   actions={actions}
+                  drag={drag}
                 />
               ))}
             </ul>
