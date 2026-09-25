@@ -258,6 +258,8 @@ are not yet formalized, the first story here should establish them.
 
 ## Status
 
+Shipped stories are summarized in `plans/extensions/done-summary.md`.
+
 - ✅ Internal contribution points — core command, panel, editor-hook, and
   settings-schema contracts/bridges are implemented and tested; its story file
   was reviewed and deleted per the plan-review policy in `AGENTS.md`.

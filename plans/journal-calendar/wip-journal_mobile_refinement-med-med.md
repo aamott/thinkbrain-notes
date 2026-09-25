@@ -21,7 +21,7 @@ Part of [Journal & Calendar](journal-calendar). Mobile is a responsive build of 
 ## Discovery constraints (approved 2026-08-07)
 
 The discovery gate is CLOSED; full rationale and D1-D47 live in
-`journal_discovery_and_wireframes`.
+`assets/journal_discovery_and_wireframes`.
 
 - **D12/D26:** the popout is full screen; shell owns placement/return navigation. No bespoke journal navigation, bottom bar, or return path.
 - **D31:** keyboard and screen-reader support are required; high contrast is theme-owned; use `--tn-*` tokens; formal touch-target audit is deferred.
@@ -38,7 +38,7 @@ The discovery gate is CLOSED for the decisions above.
 
 ## Questions first — STOP gate — CLOSED 2026-08-08 (D57, D55)
 
-Closed by D48-D70; full text in `journal_discovery_and_wireframes`.
+Closed by D48-D70; full text in `assets/journal_discovery_and_wireframes`.
 
 - **Calendar tab on a phone — D57.** Both views at phone widths; option strip collapses to one control; dots only, no `+N`, below 40px cells.
 - **Formal touch-target audit — still DEFERRED per D31.** Not closed by this batch; owed once undeferred.

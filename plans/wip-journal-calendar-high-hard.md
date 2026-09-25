@@ -5,7 +5,7 @@
 ## Collaboration gate — SATISFIED 2026-08-07, extended 2026-08-08
 
 The product-owner answers are recorded as decisions D1-D79 in
-`journal-calendar/journal_discovery_and_wireframes`, together with the
+`journal-calendar/assets/journal_discovery_and_wireframes`, together with the
 approved moodboard, IA and mobile artifacts. **Downstream stories may now proceed within
 those decisions.** Superseding decisions are recorded as new D-numbers, never by editing
 earlier ones.
@@ -67,7 +67,7 @@ Non-goals:
 - Existing `apps/desktop/src/panels/panelRegistry.tsx`, `LeftPopout.tsx`, `ActivityBar.tsx`, and `DesktopShell.tsx` own rendering and shell composition. Journal/calendar contributions must enter through the registry rather than a parallel action array.
 - Existing `apps/desktop/src/extensions/desktopExtensionHost.ts` owns scoped command, panel, editor-hook, and settings registration. Built-in registration must use its disposable lifecycle.
 - Existing modular settings work (`apps/desktop/src/settings/settingsStore.ts`, `packages/core/src/settings/`) owns namespaced settings persistence outside the workspace.
-- Mobile is the same `apps/desktop` React/Tauri webview; coordinate with `mobile/phone_shell_chrome`, `phone_surface_fixes`, `mobile_tauri_config`, and `codemirror_mobile_testing`.
+- Mobile is the same `apps/desktop` React/Tauri webview; coordinate with the shipped phone shell (`plans/mobile/done-summary.md`).
 - Coordinate registration only with `extensions/beta_builtin_extensions`; journal/calendar behavior and storage stay here.
 - **Indexing/search dependency (D16/D41).** Full-text search and metadata facets reuse the
   platform-owned disposable index; metadata facets shipped — see
@@ -102,9 +102,9 @@ activation with stubs, and the disposable scope. Built-in ids are fixed by D47.
 
 | # | Story | Depends on |
 |---|---|---|
-| 1 | `journal-calendar/journal_discovery_and_wireframes` ✅ complete | — |
-| 2 | `journal-calendar/journal_data_model_frontmatter` ✅ complete | 1 approved contract |
-| 3 | `journal-calendar/journal_service_daily_notes` ✅ complete | 1, 2 |
+| 1 | `journal-calendar/assets/journal_discovery_and_wireframes` ✅ complete | — |
+| 2 | journal data model & frontmatter ✅ — `plans/journal-calendar/done-summary.md` | 1 approved contract |
+| 3 | journal service ✅ — `plans/journal-calendar/done-summary.md` | 1, 2 |
 | 4 | `calendar_data_model` ✅ complete — delivered in `packages/core/src/journal/calendar.ts`; no separate story file | 1, 2 |
 | 5 | `journal-calendar/journal_settings_and_accessibility` 🟨 wip | 1, 2; D45 extension-settings prerequisite |
 | 6 | `journal-calendar/journal_panel_ui` 🟨 wip | 1–3, 5; D41 index and D44 editor-header prerequisites |
@@ -130,6 +130,9 @@ recorded in the story. Stories may be split further if a subagent would exceed o
 - At each checkpoint, record the approved artifact version, rejected alternatives, and remaining non-goals in the owning story (D34); never infer a final UX decision from a placeholder.
 
 ## Status
+
+Shipped stories are summarized in `plans/journal-calendar/done-summary.md`;
+the D1-D88 decision register lives in `plans/journal-calendar/assets/`.
 
 - ✅ Every product decision closed (D1-D88)
 - ✅ Story 2 journal data/frontmatter contract — `packages/core/src/journal/`;

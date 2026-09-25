@@ -1,7 +1,7 @@
 # Auto Sync
 
 > Reviewed 2026-08-16; approved 2026-08-16, all decisions settled. Supersedes
-> `git-integration` + `plans/git-integration/` — that work is
+> `git-integration` — that work is
 > **removed, not migrated**. The plan docs were already gone; the code
 > (`gitService.ts`, `SourceControlPanel.tsx`, the Rust `commands/git` module,
 > panel registration) is already deleted. `app-vision.md` now says bundled gix;
@@ -110,9 +110,8 @@ conflicts · block-level Markdown merge · reconcile-text · cloud provider APIs
 5. `sync_status_history_restore` — status pill, friendly
    history, restore previous version
 6. `git_remote_sync` — push/pull, credential stores, plain-language
-   setup, triggers; 6e onboarding import is
-   `auto-sync/workspace_from_git_link`; 6f import
-   sign-in parity is `auto-sync/import_sign_in_parity`
+   setup, triggers; 6e onboarding import and 6f import sign-in parity shipped —
+   `plans/auto-sync/done-summary.md`
 7. `history_pruning` — retention/size policy, gc
 8. `mobile_cross_compile` — CI validation on
    Android/iOS targets; local Android NDK validation
@@ -122,6 +121,9 @@ conflicts · block-level Markdown merge · reconcile-text · cloud provider APIs
   — plain vs Git-linked cue in the workspace selector (icon Choice B)
 
 ## Status
+
+Shipped stories are summarized in `plans/auto-sync/done-summary.md`; their
+story files were reviewed and deleted per the plan-review policy in `AGENTS.md`.
 
 - ✅ Approved; `app-vision.md` reconciled; old git-integration code removed.
 - ✅ Story 0 (`gix` build spike, split off the front of story 1).

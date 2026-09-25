@@ -13,7 +13,7 @@ Part of [Journal & Calendar](journal-calendar).
 ## Discovery constraints (approved 2026-08-07)
 
 The discovery gate is CLOSED; full rationale and D1-D47 live in
-`journal_discovery_and_wireframes`.
+`assets/journal_discovery_and_wireframes`.
 
 - **D4/D5:** values are user-defined; no mood scale, activity taxonomy, sentiment/health implication, hard-coded colors, or icons.
 - **D14/D27:** calendar is a canvas tab opened from the journal popout, never a panel/activity-bar entry.
@@ -33,7 +33,7 @@ the popout still depends on story 9 because `context.workspace` has no `openTab`
 
 ## Questions first — STOP gate (CLOSED)
 
-Closed by D48-D70; full text in `journal_discovery_and_wireframes`.
+Closed by D48-D70; full text in `assets/journal_discovery_and_wireframes`.
 
 - **Tab singleton, option persistence — D56, narrowed by D79.** `open-calendar` focuses the existing tab; the **view mode** persists per workspace and the tab always opens on today's month.
 - **Calendar on a phone — D57.** Both views available; option strip collapses to one control; cells show dots only below 40px width.

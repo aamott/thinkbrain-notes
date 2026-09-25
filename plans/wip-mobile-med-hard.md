@@ -47,120 +47,39 @@ Non-goals (deferred or out of scope for this epic):
 - tablet-specific layouts (phone-first; tablet falls out of responsive design)
 - publishing to app stores (build/ship pipeline is a later concern)
 
-## Where it actually stands (observed on an Android device, 2026-08-23)
+## Where it stands
 
-The app **compiles, installs and launches on Android**. That is further than
-this epic's status list suggests, and further than a reading of the repo
-suggests — several items below were already built and never ticked. What
-follows is what a person found by running it, plus what the code says about
-why.
+Android v1 works end to end on device (verified 2026-08-27): scaffold, managed
+vaults, clone-first Git onboarding, phone chrome, editor input. What shipped is
+summarized in `plans/mobile/done-summary.md`; what remains is in Status below.
 
-### Already done, and this epic said otherwise
+The decisions that survive the early spike narrative:
 
-- **The Android scaffold is done.** `apps/desktop/src-tauri/gen/android/`
-  holds 49 tracked files from `tauri android init` (commit `58dfd14`), and the
-  device run confirmed installation, launch and initial UI rendering. See
-  `mobile/android_scaffold`.
-- **Mobile capabilities are declared.** `src-tauri/capabilities/mobile.json`
-  covers `android`/`iOS` for `main` and `workspace-*` windows.
-- **Desktop-only dependencies are already gated.** `tauri-plugin-updater` and
-  `keyring` sit behind
-  `cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))`
-  in `Cargo.toml`, and `credentials.rs` splits on the same condition with
-  `supported!`/`unsupported!` macros. Nothing has to be untangled for the build
-  to work — it already does.
-- **Some responsive work exists**: `max-[760px]:` breakpoints in
-  `DesktopShell`, `TitleBar`, `Popout` and `ResizeHandle`; `useCoarsePointer.ts`
-  (`matchMedia("(pointer: coarse)")`, because width alone cannot tell a phone
-  from a narrow panel); and `MetadataBottomSheet.tsx`, which tracks
-  `window.visualViewport` around the soft keyboard.
+- **Managed vaults + clone-first** (approved 2026-08-25): native code creates or
+  clones vaults under app data; Android never invokes the desktop folder picker
+  (SAF returns `content://` URIs the native layers can't use). Direct SAF
+  linked folders stay deferred to `mobile/android_saf_linked_folders` — research
+  first, never `content://` → guessed `/storage/...` paths.
+- **Credentials:** keyring v4 + `android-native-keyring-store` (decided
+  2026-08-27). The desktop v3→v4 migration is `auto-sync/keyring_v4_migration`;
+  this also settles the extension-secrets question `plans/extensions/` records.
+- **Sync triggers:** Android freezes the process on background, so idle timers
+  fire against a stale clock on resume. The shared wall-clock schedule replaced
+  `sync.trigger` (`docs/superpowers/specs/2026-08-28-sync-schedule-design.md`).
+- **Phone chrome design:** binding spec is
+  `docs/superpowers/specs/2026-08-25-mobile-shell-design.md`;
+  `plans/mobile/assets/phone-shell-mockup.html` is a look-and-feel reference
+  only — a mockup's token namespace cannot be copied into `--tn-*` utilities.
+- **CI caveat:** the gix cross-compile gate is `cargo check -p gix` — no link
+  step, no Tauri build. The TLS-verifier panic that broke the first device
+  clone is exactly what that gate cannot catch; test on a device for anything
+  native-adjacent.
 
-### The blocker: managed Android workspace access must be built
+### Not yet verified on a device
 
-On device, no workspace can currently be opened — with or without git. The
-cause is structural rather than a picker bug:
-`workspaceAdapter.pickWorkspaceDirectory` asks `tauri-plugin-dialog` for
-`open({ directory: true })`, which Android does not support, while SAF returns a
-`content://` tree URI and the native workspace, watcher, search and sync layers
-require canonical filesystem `Path`s.
-
-**Decision approved 2026-08-25:** Android v1 uses managed vaults plus clone-first
-onboarding. Native code creates or clones vaults beneath a dedicated app-data
-root; mobile offers Create vault and Clone from Git and does not invoke Open
-Folder. Desktop keeps its existing picker flows. Managed-vault creation shows a
-one-time uninstall-risk notice, but the app does not display a persistent
-"unprotected" warning or pretend it can detect external backups.
-
-Direct SAF linked folders are deferred to
-`mobile/android_saf_linked_folders`. That research-first
-story will re-check current platform/plugin support and compare a persisted SAF
-tree plus local mirror/reconciliation against a full storage abstraction. It
-must not convert `content://` URIs into guessed `/storage/...` paths.
-
-### Git specifically
-
-- **gix cross-compiles** for `aarch64-linux-android` and `aarch64-apple-ios`,
-  gated in CI. But the gate is `cargo check -p gix` on that one package, by
-  design — CI's own comment says Tauri's mobile build "needs an SDK, a linker
-  and a generated project, none of which this gate is asking about."
-- **Run on a device 2026-08-27** (`mobile/device_git_clone_spike`):
-  the full Android build links, the app runs, managed vaults open, and
-  clone-first onboarding is wired — but **the clone fails**. Every TLS request
-  panics at `rustls-platform-verifier-0.7.0/src/android.rs:90`, "Expect
-  rustls-platform-verifier to be initialized", because the crate needs a Kotlin
-  component and a JNI init that `gen/android/` does not have. Public and
-  private repositories alike. This, not credentials, is the first blocker —
-  `mobile/android_tls_platform_verifier`. Exactly the class
-  of failure `cargo check` cannot catch.
-- **Credentials do not persist.** On Android `credentials.rs` compiles to stubs
-  that return `sync.auth_required` — "Sign-in is not available on this device
-  yet." Public clones would work; private ones have nowhere to keep a token.
-  **Decided 2026-08-27 (pending review):** keyring v4 plus
-  `android-native-keyring-store` — the encrypted-app-data candidate, but with
-  the encryption owned by the keyring maintainers rather than by us. The
-  prerequisite is a desktop keyring v3→v4 migration
-  (`auto-sync/keyring_v4_migration`). This also answers the
-  unmade decision `plans/extensions/` records for extension
-  secrets.
-- **Foreground-only, and worse than absent.** `registry.rs` runs a sweeper on a
-  500ms tick, firing after 30s idle, capped at once per 60s. Android freezes the
-  process on background, so those timers do not merely fail to fire — they fire
-  against a stale clock on resume, and a returning user gets a sync they did not
-  ask for. Mobile needs explicit triggers (open, foreground, user request,
-  best-effort flush on background) rather than idle inference. `run_trip` takes
-  everything it needs as arguments, so this is a scheduling change, not a
-  sync-engine change.
-
-### The UI is not usable on a phone yet
-
-- **Very unoptimised generally.** The `max-[760px]:` work covers the shell
-  chrome, not the surfaces inside it. The binding design is
-  `docs/superpowers/specs/2026-08-25-mobile-shell-design.md`, implemented by
-  `docs/superpowers/plans/2026-08-25-mobile-shell.md`.
-  `plans/mobile/assets/phone-shell-mockup.html` is a **look-and-feel
-  reference**, not a source of truth: a mockup carries its own token namespace
-  and cannot be copied into the app's `--tn-*` utilities.
-- **The activity bar is wrong for touch.** `ActivityBar.tsx` is a 53-line rail
-  of icon-only buttons — the labels exist as `aria-label` only. On phone it is
-  replaced by a universal header, a bottom shortcut hub and an 86%-width
-  labeled drawer rendering the same `useLeftPanelContributions()` the rail
-  reads, so entries, active state and badges keep one definition.
-- **Right panels are unreachable on a phone.** `TitleBar.tsx:170` hides every
-  right-panel button below 760px, so outline, properties, backlinks and the
-  assistant have no mobile entry point at all. An inspector sheet behind the
-  header's `⋯` owns this.
-- **The soft keyboard.** `windowSoftInputMode="adjustResize"` shipped and
-  editing was verified on an emulator, so tauri-apps/tauri#10631 no longer
-  gates mobile editing. Residual risk: emulator-only verification, and a
-  bottom-anchored hub that must track `window.visualViewport` rather than
-  float over the keyboard.
-
-### Not yet known
-
-Nobody has tried the search index (`rusqlite`, bundled SQLite) or the file
-watcher (`notify`) on a device. Both are in the unconditional dependency block
-with no Android handling, and Android restricts inotify watches; neither has
-been observed working or failing.
+The search index (`rusqlite`, bundled SQLite) and the file watcher (`notify`)
+have never been observed working or failing on Android; `notify` sits under
+Android's inotify restrictions.
 
 ## Architecture Decisions
 
@@ -197,7 +116,7 @@ boundary.
 
 - **Android keyboard / `visualViewport`** (tauri-apps/tauri#10631): mitigated,
   not open. `windowSoftInputMode="adjustResize"` shipped with
-  `mobile/codemirror_mobile_testing` and editing was verified on
+  CodeMirror mobile testing and editing was verified on
   an emulator. What remains is device verification and keeping bottom-anchored
   chrome out of the keyboard's way.
 - **CodeMirror 6 mobile quirks**: scrolling on Android, IME composition
@@ -234,6 +153,9 @@ No other epic blocks this one. Resolve only adapter gaps actually proven by mobi
 
 ## Status
 
+Shipped stories are summarized in `plans/mobile/done-summary.md`; their story
+files were reviewed and deleted per the plan-review policy in `AGENTS.md`.
+
 **Phase 1 — Android (medium urgency):**
 
 Ordered by what blocks what. The first item gates every other one: there is no
@@ -242,7 +164,7 @@ point tuning a layout for a workspace that cannot be opened.
 - ✅ **Managed workspace access** — Android v1 creates or clones real-path
   vaults beneath app data. Native managed-vault commands, capability-gated
   UI, clone-first onboarding, and one-time uninstall notice all shipped.
-  `mobile/android_workspace_access`
+
 - ✅ Git clone as the mobile way in — public and private managed imports run the
   shared desktop worker on Android. TLS initialisation, keyring v4, the
   Android-native credential store, non-destructive one-way imports, and mobile
@@ -253,26 +175,22 @@ point tuning a layout for a workspace that cannot be opened.
   `docs/superpowers/specs/2026-08-27-android-git-access-design.md`.
 - ✅ Phone shell chrome — headless shell state, form-factor gate, header,
   drawer, shortcut hub, tab-switcher and inspector sheets; verified on an
-  Android device 2026-08-27 —
-  `mobile/phone_shell_chrome`
+  Android device 2026-08-27.
 - ✅ Files-first navigation — Files is the mobile home; browser-backed Back and
   Forward history, right-edge navigation, Action items and New note menus,
   bounded inspectors, and shared right-panel close controls shipped and were
   verified on Android.
 - ✅ Phone surface fixes — popout width, bottom-edge contention, keyboard
   inset, `pointer-coarse:` sizing; verified on an Android device 2026-08-27
-  including keyboard-inset behavior —
-  `mobile/phone_surface_fixes`
+  including keyboard-inset behavior.
 - ✅ `tauri android init` — the scaffold is committed under
   `src-tauri/gen/android/`, and the app builds, installs, launches and renders
-  on a device — `mobile/android_scaffold`
+  on a device.
 - ✅ Mobile Tauri config — `capabilities/mobile.json`, gated desktop-only
   dependencies, and soft "unavailable on mobile" capability reporting for
-  desktop-only commands —
-  `mobile/mobile_tauri_config`
+  desktop-only commands.
 - ✅ CodeMirror mobile testing — editing verified on Android emulator,
-  `windowSoftInputMode="adjustResize"` added, tap-below-last-line fixed —
-  `mobile/codemirror_mobile_testing`
+  `windowSoftInputMode="adjustResize"` added, tap-below-last-line fixed.
 - ⬜ Reuse current Tauri adapters; raise only proven cross-cutting adapter gaps through maintenance
 - ❓ Search index (`rusqlite`) and file watcher (`notify`) on a device —
   neither observed working nor failing

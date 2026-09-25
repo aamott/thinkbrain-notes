@@ -57,8 +57,10 @@ Non-goals:
 
 ## Status
 
+Shipped stories are summarized in `plans/data-safety/done-summary.md`.
+
 - ✅ Focused first story: safe writes + corruption detection + recovery UI —
-  `data-safety/safe_writes_corruption_detection`. Notes now
+  safe writes. Notes now
   save through a temp file and a rename, the replaced version is kept per
   device in app-data, a note that cannot be decoded is named as damaged rather
   than merely unopenable, and both that case and a note emptied from outside
@@ -68,7 +70,7 @@ Non-goals:
   a damaged one, and the story records why the obvious emptiness test was built
   and then removed before it shipped.
 - ✅ Settings survive a downgrade, and corruption is recoverable —
-  `data-safety/settings_survive_a_downgrade`. Not notes, but the
+  settings downgrade. Not notes, but the
   same failure: a document the app could not fully read was replaced instead of
   kept. A newer document is now read rather than discarded, an unparseable one
   is set aside rather than overwritten, and — closing the last item — the user

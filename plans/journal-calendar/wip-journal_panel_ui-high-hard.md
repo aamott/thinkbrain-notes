@@ -25,7 +25,7 @@ Part of [Journal & Calendar](journal-calendar).
 ## Discovery constraints (approved 2026-08-07)
 
 The discovery gate is CLOSED; full rationale and D1-D47 live in
-`journal_discovery_and_wireframes`.
+`assets/journal_discovery_and_wireframes`.
 
 - **D9/D13/D15:** navigator rows show date/time/first line and open normal editor tabs; use a virtualized grouped list, never a calendar widget.
 - **D16/D41:** reuse platform search/facets, never a journal cache/full scan; active filters require count badge, chip row, and `showing N of M` emphasis.
@@ -37,7 +37,7 @@ The discovery gate is CLOSED; full rationale and D1-D47 live in
 
 ## Questions first — STOP gate (CLOSED)
 
-Closed by D48-D70; full text in `journal_discovery_and_wireframes`.
+Closed by D48-D70; full text in `assets/journal_discovery_and_wireframes`.
 
 - **Collapsed-header + search interaction — D52.** Matching headers auto-expand with a match count while a search/filter is active; never persisted.
 - **Collapse-state persistence — D53.** Persists per workspace in desktop state, restored on popout reopen.

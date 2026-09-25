@@ -61,6 +61,8 @@ shell surfaces without a heavy opinionated UI framework.
 
 ## Status
 
+Shipped stories are summarized in `plans/theme-foundation/done-summary.md`.
+
 - ✅ Theme selection setting persisted — `packages/core/src/settings/modules/appearance.ts`, `apps/desktop/src/settings/ThemeSectionControls.tsx`
 - 🟨 CSS variable token system in `packages/ui` — color tokens live in
   `packages/ui/src/styles/tokens.css` and are imported by
@@ -72,16 +74,15 @@ shell surfaces without a heavy opinionated UI framework.
 - ✅ System theme resolution — `ThemeProvider.tsx` resolves `"system"` to
   `light`/`dark` via `matchMedia("(prefers-color-scheme: dark)")` and tracks
   OS theme changes live; the `data-thinkbrain-theme` attribute is always a
-  concrete base. See `system_theme_resolution`.
+  concrete base.
 - 🟨 Reusable base components in `packages/ui` — `shadcn/ui` initialized and
   `Button` added; text input, select, checkbox, field wrapper and surface
   primitives remain — `theme-foundation/reusable_base_components`.
 - ✅ Accessibility-focused primitives (Radix UI-style) — implemented via `shadcn/ui` (Radix UI under the hood).
 - 🟨 Shell/editor/sidebar surfaces use shared `--tn-*` tokens — verified
   across `apps/desktop/src/shell/` and `apps/desktop/src/tabs/`; the remaining
-  production-JSX migration is `theme-foundation/surface_styling_migration`.
+  production-JSX migration is `theme-foundation/token_system_consolidation`.
 - ✅ Importable themes — parser/serialization/strict CSS color validation in
   `packages/core/src/theme.ts`, application in
   `apps/desktop/src/settings/ThemeProvider.tsx`, import/export in
-  `apps/desktop/src/settings/themeImportExport.ts`. See
-  `importable_themes`.
+  `apps/desktop/src/settings/themeImportExport.ts`.

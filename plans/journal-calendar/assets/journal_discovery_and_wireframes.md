@@ -22,7 +22,7 @@ IAs without presenting either as final.
 
 ## Likely files
 
-- `journal-calendar/journal_discovery_and_wireframes` (this file).
+- `journal-calendar/assets/journal_discovery_and_wireframes` (this file).
 - `plans/journal-calendar/assets/journal-calendar-moodboard.md` (approved D35).
 - `plans/journal-calendar/assets/journal-calendar-wireframes.md` (IA/mobile
   alternatives, state coverage, focus order; approved D37/D39/D40).

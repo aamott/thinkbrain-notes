@@ -11,7 +11,7 @@ Part of [Journal & Calendar](journal-calendar).
 ## Discovery constraints (approved 2026-08-07)
 
 The discovery gate is CLOSED; full rationale and D1-D47 live in
-`journal_discovery_and_wireframes`.
+`assets/journal_discovery_and_wireframes`.
 
 - **D4/D7/D21:** user-defined four input types; configurable journal root; no templates or template settings.
 - **D23/D45:** global/workspace definitions use same-id replacement with untouched globals retained; removed values remain visible/filterable as `unconfigured` and never rewrite notes.
@@ -21,7 +21,7 @@ The discovery gate is CLOSED; full rationale and D1-D47 live in
 
 ## STOP gate — CLOSED
 
-Closed by D48-D70; full text in `journal_discovery_and_wireframes`.
+Closed by D48-D70; full text in `assets/journal_discovery_and_wireframes`.
 
 - **Setting list and defaults — D64.** Four settings registered; see table in Scope below.
 - **Field-definition setting shape — D49.** `fieldDefinitions` is a `string` setting rendered by
@@ -100,7 +100,7 @@ Define and register the approved journal settings under `journal-calendar`, reso
 
 ## Dependencies
 
-- Discovery approval, data-model story, and modular settings stories (`ui-shell/modular_settings_system` and child stories).
+- Discovery approval, data-model story, and modular settings stories (the modular settings system — `plans/ui-shell/done-summary.md`).
 - **`extensions/extension_settings`** — D45 workspace scope plus extension-owned settings UI; explicit blocker for complete user-visible settings.
 - Existing `appSettingsRegistry`, `useSettingsStore`, extension-scoped settings bridge, and CSS `--tn-*` tokens.
 - Approved desktop/mobile wireframes for focus order and responsive behavior (per D34, these require per-artifact sign-off before controls are built).

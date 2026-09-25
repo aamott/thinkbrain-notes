@@ -7,7 +7,7 @@ Part of [Journal & Calendar](journal-calendar). Owns only contribution/lifecycle
 ## Discovery constraints (approved 2026-08-07)
 
 The discovery gate is CLOSED; rationale and D1-D47 live in
-`journal_discovery_and_wireframes`.
+`assets/journal_discovery_and_wireframes`.
 
 - **D16:** reuse the disposable/rebuildable platform FTS5 cache; it is never source of truth.
 - **D27:** exactly one activity-bar entry (`journal`); calendar is a canvas tab, not a panel/activity-bar entry.
@@ -34,7 +34,7 @@ chosen from feature availability/performance needs, not as a correctness workaro
 
 ## STOP gate — CLOSED
 
-Closed by D65-D70; full text in `journal_discovery_and_wireframes`.
+Closed by D65-D70; full text in `assets/journal_discovery_and_wireframes`.
 
 - **Activation event — D65.** Lazy: `onView:journal` + the three commands; never `onStartup`.
 - **Beta contribution table — D66.** All contributions real at beta; popout uses `PanelAction`.
