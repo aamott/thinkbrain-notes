@@ -101,12 +101,15 @@ GitHub" is the path those users expect; this story is that path.
   `extensions/extension_secret_storage`; this story
   consumes the sync adapter as it stands.
 
-## Open questions
+## App registration
 
-- Choose the final public app name and description. The owner is `aamott`; use
-  the project repository URL as the homepage if it is public, otherwise the
-  `aamott` GitHub profile. No project-owned server or callback endpoint is
-  needed for device flow.
+- Owner: `aamott`.
+- Name: `ThinkBrain Notes`.
+- Description: "ThinkBrain Notes is a local-first Markdown workspace. GitHub
+  access is used to sync repositories you choose."
+- Homepage: the public project repository when available; otherwise the
+  `aamott` GitHub profile. This is a public information URL, not an app server;
+  device flow requires no callback endpoint.
 
 ## Acceptance
 
@@ -125,4 +128,5 @@ GitHub" is the path those users expect; this story is that path.
 
 ⬜ Pending. GitHub App device flow, `aamott` ownership, repository-scoped
 permissions, expiring credentials, and local-only sign-out are the direction;
-final app branding and an end-to-end private-repository smoke test remain.
+app registration details are set; an end-to-end private-repository smoke test
+remains.
