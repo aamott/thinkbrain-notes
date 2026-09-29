@@ -2,7 +2,7 @@ import { BottomSheet } from "@thinkbrain/ui";
 import { X } from "lucide-react";
 
 import { cn } from "../../lib/utils";
-import type { DesktopTab } from "../../tabs/tabModel";
+import { tabAccessibleName, type DesktopTab } from "../../tabs/tabModel";
 import type { DocumentViewState } from "../shellTypes";
 import { previewText } from "./tabPreview";
 
@@ -59,6 +59,9 @@ export function TabSwitcherSheet({
             const isActive = tab.id === activeTabId;
             const view = documents[tab.id];
             const excerpt = view ? previewText(view.contents) : "";
+            // Restore previews of one file share a title; the accessible
+            // name and tooltip carry the version's date to tell them apart.
+            const accessibleName = tabAccessibleName(tab);
             return (
               <li key={tab.id} className="relative m-0">
                 {/*
@@ -68,7 +71,8 @@ export function TabSwitcherSheet({
                  */}
                 <button
                   type="button"
-                  aria-label={tab.title}
+                  aria-label={accessibleName}
+                  title={accessibleName}
                   aria-current={isActive ? "page" : undefined}
                   className={cn(
                     "flex h-44 w-full cursor-pointer flex-col items-stretch overflow-hidden rounded-medium border border-border bg-tab-active p-0 text-left text-tab-active-foreground tn-focus-ring",
@@ -104,7 +108,7 @@ export function TabSwitcherSheet({
                 </button>
                 <button
                   type="button"
-                  aria-label={`Close ${tab.title}`}
+                  aria-label={`Close ${accessibleName}`}
                   className="absolute top-0 right-0 flex size-9 cursor-pointer items-center justify-center rounded-medium border-0 bg-transparent text-muted-foreground hover:text-foreground tn-focus-ring pointer-coarse:size-11"
                   onClick={() => onClose(tab.id)}
                 >

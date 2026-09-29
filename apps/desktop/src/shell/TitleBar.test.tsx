@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { desktopPanelRegistry } from "../panels/panelRegistryModel";
 import { TitleBar } from "./TitleBar";
 import type { RightPanel } from "./shellTypes";
-import type { DesktopTab } from "../tabs/tabModel";
+import { createVersionDiffTab, type DesktopTab } from "../tabs/tabModel";
 
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
@@ -136,6 +136,59 @@ describe("TitleBar", () => {
     expect(menu(host)).toBeNull();
     // The click owns where focus went; the trigger is not grabbed back.
     expect(document.activeElement).not.toBe(trigger(host));
+  });
+
+  it("keeps a restore tab's visible title short while tooltip and names carry the version", async () => {
+    // Two restores of one file: identical visible titles, distinguishable
+    // accessible names via the version's date.
+    const earlier = createVersionDiffTab(
+      { rootPath: "/vault", relativePath: "notes/hello.md" },
+      "chg-1",
+      Date.UTC(2026, 7, 18, 12, 0, 0)
+    );
+    const later = createVersionDiffTab(
+      { rootPath: "/vault", relativePath: "notes/hello.md" },
+      "chg-2",
+      Date.UTC(2026, 7, 19, 12, 0, 0)
+    );
+    const host = await render({ tabs: [earlier, later] });
+
+    const chips = [...host.querySelectorAll(`[data-tab-id]`)];
+    expect(chips).toHaveLength(2);
+    const names = chips.map((chip) => {
+      const activate = chip.querySelector<HTMLButtonElement>("[aria-current], button");
+      return {
+        text: chip.textContent,
+        label: activate?.getAttribute("aria-label"),
+        title: activate?.getAttribute("title"),
+        close: chip.querySelector<HTMLButtonElement>("button:last-child")?.getAttribute("aria-label")
+      };
+    });
+    for (const name of names) {
+      expect(name.text).toContain("Restore: hello.md");
+      expect(name.label).toContain("Restore: hello.md");
+      expect(name.label).toContain("version from");
+      expect(name.title).toBe(name.label);
+      expect(name.close).toBe(`Close ${name.label}`);
+    }
+    // The version date is what tells them apart — and it must actually differ.
+    expect(names[0]!.label).not.toBe(names[1]!.label);
+    expect(names[0]!.label).toContain("2026");
+  });
+
+  // An ordinary dirty tab has no explicit aria-label: the "Unsaved changes"
+  // descendant is part of its accessible name, and an explicit label would
+  // silently drop that status.
+  it("leaves an ordinary dirty tab's accessible name to its contents", async () => {
+    const host = await render({
+      tabs: [{ id: "settings", title: "Settings", kind: "settings", isDirty: true }]
+    });
+
+    const activate = host.querySelector<HTMLButtonElement>("[data-tab-id] > button");
+    expect(activate?.getAttribute("aria-label")).toBeNull();
+    expect(activate?.getAttribute("title")).toBe("Settings");
+    expect(activate?.querySelector('[aria-label="Unsaved changes"]')).not.toBeNull();
+    expect(host.textContent).not.toContain("version from");
   });
 
   it("closes the menu when the window widens past the breakpoint", async () => {

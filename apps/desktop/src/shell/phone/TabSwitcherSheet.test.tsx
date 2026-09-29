@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { DocumentViewState } from "../shellTypes";
-import type { DesktopTab } from "../../tabs/tabModel";
+import { createVersionDiffTab, type DesktopTab } from "../../tabs/tabModel";
 import { TabSwitcherSheet } from "./TabSwitcherSheet";
 
 let root: Root | null = null;
@@ -183,6 +183,40 @@ describe("TabSwitcherSheet", () => {
     expect(onClose).toHaveBeenCalledWith("a");
     expect(onSelect).not.toHaveBeenCalled();
     expect(onDismiss).not.toHaveBeenCalled();
+  });
+
+  // Two restores of the same file show the same visible title; the
+  // accessible name and tooltip carry the version date so they stay apart.
+  it("distinguishes restore tabs by version date in name, tooltip, and close label", async () => {
+    const earlier = createVersionDiffTab(
+      { rootPath: "/vault", relativePath: "notes/hello.md" },
+      "chg-1",
+      Date.UTC(2026, 7, 18, 12, 0, 0)
+    );
+    const later = createVersionDiffTab(
+      { rootPath: "/vault", relativePath: "notes/hello.md" },
+      "chg-2",
+      Date.UTC(2026, 7, 19, 12, 0, 0)
+    );
+    const host = await render(sheet({ tabs: [earlier, later], activeTabId: earlier.id }));
+
+    const cards = [...grid(host)!.querySelectorAll<HTMLButtonElement>("li > button")].filter(
+      (button) => !button.getAttribute("aria-label")?.startsWith("Close ")
+    );
+    const card = cards.find((button) => button.getAttribute("aria-label")?.includes("version from"));
+    expect(card).toBeDefined();
+    expect(card?.textContent).toContain("Restore: hello.md");
+    expect(card?.getAttribute("title")).toBe(card?.getAttribute("aria-label"));
+    expect(card?.getAttribute("aria-label")).toContain("Restore: hello.md");
+    expect(card?.getAttribute("aria-label")).toContain("2026");
+
+    const labels = cards.map((button) => button.getAttribute("aria-label"));
+    expect(labels[0]).not.toBe(labels[1]);
+
+    const close = grid(host)?.querySelector<HTMLButtonElement>(
+      `[aria-label="Close ${card?.getAttribute("aria-label")}"]`
+    );
+    expect(close).not.toBeNull();
   });
 
   // Closing the last tab leaves the sheet open over an empty workspace. An empty

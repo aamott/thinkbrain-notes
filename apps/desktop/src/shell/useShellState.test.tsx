@@ -189,18 +189,31 @@ describe("useShellState", () => {
     expect(state().rightPanel).toBe("history");
   });
 
-  it("opens a read-only version comparison as a normal tab", async () => {
+  it("opens a read-only version comparison as a restore-named tab", async () => {
+    const state = await renderShellState();
+    await openWorkspace(state);
+
+    const at = Date.UTC(2026, 7, 18, 12, 0, 0);
+    await act(async () => state().compareVersion("note.md", "chg-1", at));
+
+    const tab = state().tabState.tabs.find((candidate) => candidate.kind === "version-diff");
+    expect(tab).toMatchObject({
+      title: "Restore: note.md",
+      comparedNotePath: "note.md",
+      versionChangeId: "chg-1",
+      versionAt: at
+    });
+    expect(state().tabState.activeTabId).toBe(tab?.id);
+  });
+
+  it("opens a comparison without a timestamp as a plain restore tab", async () => {
     const state = await renderShellState();
     await openWorkspace(state);
 
     await act(async () => state().compareVersion("note.md", "chg-1"));
 
     const tab = state().tabState.tabs.find((candidate) => candidate.kind === "version-diff");
-    expect(tab).toMatchObject({
-      comparedNotePath: "note.md",
-      versionChangeId: "chg-1"
-    });
-    expect(state().tabState.activeTabId).toBe(tab?.id);
+    expect(tab).toMatchObject({ title: "Restore: note.md", versionAt: null });
   });
 
   it("closes the Version history inspector when a comparison opens", async () => {

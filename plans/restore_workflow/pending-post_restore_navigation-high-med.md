@@ -1,7 +1,5 @@
 # Complete The Restore Flow
 
-Depends on: `pending-restore_tab_identity-high-easy.md`
-
 ## Goal
 
 Return the user to the restored document after a successful preview restore.

@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Folder, FolderGit2 } from "lucide-react";
-import type { DesktopTab } from "../tabs/tabModel";
+import { restoreBreadcrumbSegments, type DesktopTab } from "../tabs/tabModel";
 import { isWorkspaceGitLinked } from "../workspace/workspaceSettings";
 import { cn } from "../lib/utils";
 
@@ -55,9 +55,14 @@ export function WorkspaceHeaderBar({
 
   const isLinked = Boolean(rootPath && isGitLinked);
 
-  const pathSegments = activeTab?.resource?.relativePath
-    ? activeTab.resource.relativePath.split("/").filter(Boolean)
-    : activeTab ? [activeTab.title] : [];
+  // A restore preview is an operation on the file, not the file itself:
+  // "Vault › Restore › folder › note.md" rather than masquerading as the path.
+  const restoreSegments = restoreBreadcrumbSegments(activeTab);
+  const pathSegments =
+    restoreSegments ??
+    (activeTab?.resource?.relativePath
+      ? activeTab.resource.relativePath.split("/").filter(Boolean)
+      : activeTab ? [activeTab.title] : []);
 
   return (
     <div

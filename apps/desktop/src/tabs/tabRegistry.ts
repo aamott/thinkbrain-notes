@@ -59,7 +59,7 @@ export const builtInDesktopTabViews: readonly DesktopTabView[] = [
   },
   {
     kind: "version-diff",
-    label: "Compare version",
+    label: "Restore version",
     isAvailable: true
   },
   {

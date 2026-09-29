@@ -15,6 +15,8 @@ export interface DesktopTab extends Tab {
   readonly comparedNotePath?: string;
   /** For a version-diff tab: the recorded change the comparison is against. */
   readonly versionChangeId?: string;
+  /** When the selected recorded version was created, in epoch milliseconds. */
+  readonly versionAt?: number | null;
 }
 
 /** Media viewer tab kinds — read-only, no document state, no save button. */
@@ -144,17 +146,49 @@ export function versionDiffTabId(resource: Required<TabResource>, changeId: stri
  */
 export function createVersionDiffTab(
   resource: Required<TabResource>,
-  changeId: string
+  changeId: string,
+  versionAt: number | null = null
 ): DesktopTab {
   const name = resource.relativePath.split("/").filter(Boolean).at(-1) ?? resource.relativePath;
   return {
     id: versionDiffTabId(resource, changeId),
-    title: `${name} — Compare version`,
+    title: `Restore: ${name}`,
     kind: "version-diff",
     resource,
     comparedNotePath: resource.relativePath,
-    versionChangeId: changeId
+    versionChangeId: changeId,
+    versionAt
   };
+}
+
+/**
+ * The name assistive tech and tooltips use for a tab.
+ *
+ * For a restore preview with a known timestamp it appends the version's date,
+ * so two restore tabs of one file are distinguishable. Everything else —
+ * and a restore tab whose change carried no timestamp — is just the title.
+ */
+export function tabAccessibleName(tab: DesktopTab): string {
+  if (tab.kind !== "version-diff" || tab.versionAt == null || !Number.isFinite(tab.versionAt)) {
+    return tab.title;
+  }
+  const formatted = new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short"
+  }).format(tab.versionAt);
+  return `${tab.title}, version from ${formatted}`;
+}
+
+/**
+ * The breadcrumb trail a restore preview shows after the workspace name —
+ * `Restore` then the file's path segments — or `null` for any other tab.
+ */
+export function restoreBreadcrumbSegments(
+  tab: DesktopTab | null | undefined
+): readonly string[] | null {
+  if (tab?.kind !== "version-diff") return null;
+  const path = tab.comparedNotePath ?? tab.resource?.relativePath;
+  return path ? ["Restore", ...path.split("/").filter(Boolean)] : ["Restore", tab.title];
 }
 
 export function createStaticTab(kind: Exclude<TabKind, "editor">, title: string): DesktopTab {

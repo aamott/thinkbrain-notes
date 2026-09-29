@@ -53,7 +53,7 @@ export function ActionItemsMenu({
   readonly documentPath: string | null;
   readonly onOpenNote: (relativePath: string) => void;
   /** Opens a read-only comparison of a file with one recorded version. */
-  readonly onCompareVersion: (notePath: string, changeId: string) => void;
+  readonly onCompareVersion: (notePath: string, changeId: string, versionAt?: number | null) => void;
   /** Puts a recorded version back, saving an open dirty file first. */
   readonly onRestoreVersion: (notePath: string, changeId: string) => Promise<void>;
   /** Optional Back/Forward rows; header placement keeps them out of the menu. */

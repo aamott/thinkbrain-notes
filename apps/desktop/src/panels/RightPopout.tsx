@@ -15,7 +15,7 @@ type RightPopoutProps = {
   /** Requests shell-owned navigation to another note. */
   readonly onOpenNote: (relativePath: string) => void;
   /** Opens a read-only comparison of a file with one recorded version. */
-  readonly onCompareVersion: (notePath: string, changeId: string) => void;
+  readonly onCompareVersion: (notePath: string, changeId: string, versionAt?: number | null) => void;
   /** Puts a recorded version back, saving an open dirty file first. */
   readonly onRestoreVersion: (notePath: string, changeId: string) => Promise<void>;
   /** Optional leading Back control: closes the dock on desktop, steps the mobile inspector flow back. */

@@ -225,12 +225,16 @@ describe("comparing and putting a version back", () => {
     return { host, onCompare };
   };
 
-  it("opens the comparison through the shell", async () => {
-    const { host, onCompare } = await renderForActions();
+  it("opens the comparison through the shell with the version's timestamp", async () => {
+    const onCompare = vi.fn();
+    const at = Date.UTC(2026, 7, 18, 12, 0, 0);
+    readHistory.mockResolvedValue([change({ at })]);
+    const host = await render({ onCompare });
 
     await act(async () => button(host, "Compare Diff").click());
 
-    expect(onCompare).toHaveBeenCalledWith("Roadmap.md", "abc123");
+    // The timestamp travels so the tab can name the version being restored.
+    expect(onCompare).toHaveBeenCalledWith("Roadmap.md", "abc123", at);
   });
 
   it("restores through the shell and says it worked", async () => {

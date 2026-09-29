@@ -25,9 +25,27 @@ import {
 import { desktopCommandRegistry } from "../../commands/commandRegistry";
 import { mobileNewNoteActionRegistry } from "../../commands/mobileNewNoteActionRegistry";
 import { desktopPanelRegistry } from "../../panels/panelRegistryModel";
+import { createVersionDiffTab } from "../../tabs/tabModel";
 import { useShellState, type ShellState } from "../useShellState";
 import { PhoneShell } from "./PhoneShell";
 import { useWikiLinkIndexStore } from "../../wikiLinks/wikiLinkIndexStore";
+
+// Opening a version-diff tab mounts VersionDiffTab, which reads the comparison
+// through the sync service — the bare harness mock resolves null and would
+// crash the surface. Answer with a real payload; the breadcrumb is under test,
+// not the diff.
+vi.mock("../../sync/syncService", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../sync/syncService")>();
+  return {
+    ...actual,
+    readVersionDiff: vi.fn(async () => ({
+      kind: "text",
+      change: "chg-1",
+      notePath: "docs/deep/note.md",
+      text: { current: "current\n", recorded: "recorded\n" }
+    }))
+  };
+});
 
 // A right-side extension panel gated on document context, so the action-items
 // menu has a real "needs an open note" entry to disable on Files.
@@ -145,6 +163,40 @@ describe("PhoneShell navigation", () => {
 
     expect(locationPill(host)).toContain("assets");
     expect(locationPill(host)).toContain("diagram.png");
+  });
+
+  it("breadcrumbs a restore preview as workspace, Restore, then the file path", async () => {
+    const box: { current: ShellState | null } = { current: null };
+    const Host = () => {
+      const state = useShellState();
+      box.current = state;
+      return <PhoneShell shell={{ ...state, restoredWorkspacePath: "/vault" }} />;
+    };
+    const host = await mount(<Host />);
+    // The timestamp-forwarding leg of compareVersion is covered in
+    // useShellState.test; here the dispatch itself stands in for it so the
+    // chrome's breadcrumb is what is under test.
+    await act(async () =>
+      box.current?.dispatchTabs({
+        type: "open",
+        tab: createVersionDiffTab(
+          { rootPath: "/vault", relativePath: "docs/deep/note.md" },
+          "chg-1",
+          Date.UTC(2026, 7, 18, 12, 0, 0)
+        )
+      })
+    );
+
+    // The operation owns the trail — unlike the note route, the filename
+    // keeps its `.md` extension.
+    const pill = locationPill(host);
+    // No workspace name in this fixture — the label falls back to the app name.
+    expect(pill).toContain("ThinkBrain");
+    expect(pill).toContain("Restore");
+    expect(pill).toContain("docs");
+    expect(pill).toContain("deep");
+    expect(pill).toContain("note.md");
+    expect(pill?.indexOf("Restore")).toBeLessThan(pill!.indexOf("docs"));
   });
 
   it("adds a history entry when a tab is chosen in the switcher", async () => {

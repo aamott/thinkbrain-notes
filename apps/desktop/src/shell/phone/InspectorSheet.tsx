@@ -46,7 +46,7 @@ export function InspectorSheet({
   readonly documentContents: string | null;
   readonly documentPath: string | null;
   /** Opens a read-only comparison of a file with one recorded version. */
-  readonly onCompareVersion: (notePath: string, changeId: string) => void;
+  readonly onCompareVersion: (notePath: string, changeId: string, versionAt?: number | null) => void;
   /** Puts a recorded version back, saving an open dirty file first. */
   readonly onRestoreVersion: (notePath: string, changeId: string) => Promise<void>;
   readonly onOpenNote: (relativePath: string) => void;

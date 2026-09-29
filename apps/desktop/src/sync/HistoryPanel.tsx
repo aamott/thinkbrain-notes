@@ -28,7 +28,7 @@ interface HistoryPanelProps {
    */
   readonly currentContents: string | null;
   /** Opens a read-only comparison of the file with one recorded version. */
-  readonly onCompare: (notePath: string, changeId: string) => void;
+  readonly onCompare: (notePath: string, changeId: string, versionAt?: number | null) => void;
   /**
    * Puts a recorded version back. Shell-owned: an open dirty file is saved
    * first, and a save that cannot happen aborts the restore loudly.
@@ -91,7 +91,7 @@ function HistorySession({
   readonly rootPath: string;
   readonly note: string;
   readonly currentContents: string | null;
-  readonly onCompare: (notePath: string, changeId: string) => void;
+  readonly onCompare: (notePath: string, changeId: string, versionAt?: number | null) => void;
   readonly onRestore: (notePath: string, changeId: string) => Promise<void>;
 }) {
   const [changes, setChanges] = useState<readonly RecordedChange[]>([]);
@@ -207,7 +207,7 @@ function HistorySession({
                 currentContents={currentContents}
                 cache={diffCache}
                 busy={busyId !== null}
-                onCompare={() => onCompare(note, change.id)}
+                onCompare={() => onCompare(note, change.id, change.at)}
                 onRestore={() => void putBack(change)}
               />
             ))}

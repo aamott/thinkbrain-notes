@@ -7,6 +7,8 @@ import {
   createVersionDiffTab,
   desktopTabReducer,
   initialDesktopTabState,
+  restoreBreadcrumbSegments,
+  tabAccessibleName,
   versionDiffTabId
 } from "./tabModel";
 
@@ -317,19 +319,30 @@ describe("createFileTab", () => {
 });
 
 describe("createVersionDiffTab", () => {
-  it("titles the tab after the file and keys it by file and change", () => {
+  it("titles the tab as a restore and keys it by file and change", () => {
     const tab = createVersionDiffTab(
       { rootPath: "/vault", relativePath: "notes/hello.md" },
       "chg-1"
     );
 
     expect(tab.kind).toBe("version-diff");
-    expect(tab.title).toBe("hello.md — Compare version");
+    expect(tab.title).toBe("Restore: hello.md");
     expect(tab.comparedNotePath).toBe("notes/hello.md");
     expect(tab.versionChangeId).toBe("chg-1");
+    expect(tab.versionAt).toBeNull();
     expect(tab.id).toBe(
       versionDiffTabId({ rootPath: "/vault", relativePath: "notes/hello.md" }, "chg-1")
     );
+  });
+
+  it("keeps the selected version's timestamp on the tab", () => {
+    const tab = createVersionDiffTab(
+      { rootPath: "/vault", relativePath: "notes/hello.md" },
+      "chg-1",
+      1755502200000
+    );
+
+    expect(tab.versionAt).toBe(1755502200000);
   });
 
   it("gives each recorded version its own tab", () => {
@@ -347,5 +360,72 @@ describe("createVersionDiffTab", () => {
     );
     expect(state.tabs.filter((tab) => tab.id === a.id)).toHaveLength(1);
     expect(state.activeTabId).toBe(a.id);
+  });
+});
+
+describe("tabAccessibleName", () => {
+  // 2026-08-18 midday UTC — a fixed instant whose year any locale will show.
+  const AT = Date.UTC(2026, 7, 18, 12, 0, 0);
+
+  it("names a restore tab by title and the version's date", () => {
+    const tab = createVersionDiffTab(
+      { rootPath: "/vault", relativePath: "notes/hello.md" },
+      "chg-1",
+      AT
+    );
+
+    const name = tabAccessibleName(tab);
+    expect(name).toContain("Restore: hello.md");
+    expect(name).toContain("version from");
+    expect(name).toContain("2026");
+  });
+
+  it("distinguishes two restore tabs of one file", () => {
+    const earlier = createVersionDiffTab(
+      { rootPath: "/vault", relativePath: "n.md" },
+      "chg-1",
+      AT
+    );
+    const later = createVersionDiffTab(
+      { rootPath: "/vault", relativePath: "n.md" },
+      "chg-2",
+      AT + 3_600_000
+    );
+
+    expect(tabAccessibleName(earlier)).not.toBe(tabAccessibleName(later));
+  });
+
+  it("falls back to the plain title when no timestamp is known", () => {
+    const tab = createVersionDiffTab(
+      { rootPath: "/vault", relativePath: "notes/hello.md" },
+      "chg-1"
+    );
+
+    expect(tabAccessibleName(tab)).toBe("Restore: hello.md");
+  });
+
+  it("leaves every other kind of tab alone", () => {
+    const tab = createFileTab({ rootPath: "/vault", relativePath: "notes/hello.md" });
+
+    expect(tabAccessibleName(tab)).toBe("hello.md");
+  });
+});
+
+describe("restoreBreadcrumbSegments", () => {
+  it("reads a restore tab as Restore followed by the file's path", () => {
+    const tab = createVersionDiffTab(
+      { rootPath: "/vault", relativePath: "notes/hello.md" },
+      "chg-1"
+    );
+
+    expect(restoreBreadcrumbSegments(tab)).toEqual(["Restore", "notes", "hello.md"]);
+  });
+
+  it("is null for any other tab or no tab", () => {
+    expect(restoreBreadcrumbSegments(
+      createFileTab({ rootPath: "/vault", relativePath: "notes/hello.md" })
+    )).toBeNull();
+    expect(restoreBreadcrumbSegments(null)).toBeNull();
+    expect(restoreBreadcrumbSegments(undefined)).toBeNull();
   });
 });

@@ -2,7 +2,7 @@
 import { createRoot, type Root } from "react-dom/client";
 import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createEditorTab, type DesktopTab } from "../tabs/tabModel";
+import { createEditorTab, createVersionDiffTab, type DesktopTab } from "../tabs/tabModel";
 import { WorkspaceHeaderBar, type WorkspaceHeaderBarProps } from "./WorkspaceHeaderBar";
 
 vi.mock("../workspace/workspaceSettings", () => ({
@@ -53,6 +53,24 @@ describe("WorkspaceHeaderBar", () => {
     expect(nonFileHost.textContent).toContain("Vault");
     expect(nonFileHost.textContent).toContain("Settings");
     expect(nonFileHost.querySelector("button")).toBeNull();
+  });
+
+  it("breadcrumbs a restore preview as workspace, Restore, then the file's path", async () => {
+    const restoreTab = createVersionDiffTab(
+      { rootPath: "/vault", relativePath: "notes/deep/plan.md" },
+      "chg-1",
+      Date.UTC(2026, 7, 18, 12, 0, 0)
+    );
+    const host = await mount({ workspaceName: "Vault", activeTab: restoreTab });
+
+    // The operation stays in the trail — it is a preview of a restore, not
+    // the file open for editing. The filename keeps its extension.
+    const text = host.textContent ?? "";
+    expect(text).toContain("Vault");
+    expect(text.indexOf("Vault")).toBeLessThan(text.indexOf("Restore"));
+    expect(text.indexOf("Restore")).toBeLessThan(text.indexOf("notes"));
+    expect(text.indexOf("notes")).toBeLessThan(text.indexOf("deep"));
+    expect(text).toContain("plan.md");
   });
 
   it("handles Save button states, tooltips, and click callbacks", async () => {

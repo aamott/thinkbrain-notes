@@ -1,7 +1,5 @@
 # Use Full-Screen Restore Chrome
 
-Depends on: `../restore_workflow/pending-restore_tab_identity-high-easy.md`
-
 ## Goal
 
 Make restore feel like a normal workspace tab rather than a card embedded above

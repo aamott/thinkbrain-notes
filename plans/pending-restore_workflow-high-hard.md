@@ -34,7 +34,7 @@ editor redesign; those belong to `selective_restore_editor`.
 
 ## Status
 
-- ⬜ pending — give restore tabs and breadcrumbs an operation-specific identity
+- ✅ complete — restore tabs and breadcrumbs have an operation-specific identity
 - ⬜ pending — close and redirect after successful preview restore
 - ⬜ pending — record restore provenance synchronously
 - ⬜ pending — render restored history entries distinctly

@@ -124,7 +124,7 @@ export interface ShellState {
    */
   readonly openSyncPanel: (panel: "conflicts" | "history") => void;
   /** Opens a read-only comparison of `notePath` against the recorded change. */
-  readonly compareVersion: (notePath: string, changeId: string) => void;
+  readonly compareVersion: (notePath: string, changeId: string, versionAt?: number | null) => void;
   /**
    * Puts a recorded version back.
    *
@@ -392,7 +392,7 @@ export function useShellState(): ShellState {
    * after the version was recorded.
    */
   const compareVersion = useCallback(
-    (notePath: string, changeId: string) => {
+    (notePath: string, changeId: string, versionAt?: number | null) => {
       if (!restoredWorkspacePath) return;
       // The comparison replaces the inspector that launched it — leaving
       // Version history open under the new tab only crowds a narrow window.
@@ -401,7 +401,8 @@ export function useShellState(): ShellState {
         type: "open",
         tab: createVersionDiffTab(
           { rootPath: restoredWorkspacePath, relativePath: notePath },
-          changeId
+          changeId,
+          versionAt ?? null
         )
       });
     },

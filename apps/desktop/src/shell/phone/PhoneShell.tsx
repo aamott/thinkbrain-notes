@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BottomPanel } from "../../panels/BottomPanel";
 import { LeftPopout } from "../../panels/LeftPopout";
 import { getDesktopPanelOrUndefined } from "../../panels/panelRegistryModel";
-import { editorTabId, fileTabId, type DesktopTab } from "../../tabs/tabModel";
+import { editorTabId, fileTabId, restoreBreadcrumbSegments, type DesktopTab } from "../../tabs/tabModel";
 import { isSelectableLeftPanel, isSelectableRightPanel } from "../shellTypes";
 import { useSettingsStore } from "../../settings/settingsStore";
 import { TabCloseRequest } from "../TabCloseRequest";
@@ -403,6 +403,11 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
     if (route.kind === "panel") {
       return [workspaceLabel, getDesktopPanelOrUndefined(route.panel)?.label ?? route.panel];
     }
+    // A restore preview keeps its operation in the trail: workspace, then
+    // "Restore", then the file's real path — extension kept, since the pill
+    // names the file being restored, not a note title.
+    const restoreSegments = restoreBreadcrumbSegments(activeTab);
+    if (restoreSegments) return [workspaceLabel, ...restoreSegments];
     const relativePath = activeTab?.resource?.relativePath;
     if (!relativePath) return [workspaceLabel, activeTab?.title ?? workspaceLabel];
     const segments = relativePath.split("/").filter(Boolean);

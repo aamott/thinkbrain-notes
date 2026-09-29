@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { MoreHorizontal } from "lucide-react";
 import { cn } from "../lib/utils";
-import type { DesktopTab } from "../tabs/tabModel";
+import { tabAccessibleName, type DesktopTab } from "../tabs/tabModel";
 import { useRightPanelContributions } from "../panels/panelRegistryModel";
 import { IconButton } from "./IconButton";
 import { Menu, MenuButton, type MenuCloseReason } from "./Menu";
@@ -158,6 +158,9 @@ export function TitleBar({
       <nav ref={tabStripRef} className="flex flex-1 items-end gap-0.5 h-full min-w-0 overflow-x-auto" aria-label="Open tabs">
         {tabs.map((tab) => {
           const isActive = tab.id === activeTabId;
+          // Restore previews of one file share a title; the accessible name
+          // and tooltip carry the version's date so they stay distinct.
+          const accessibleName = tabAccessibleName(tab);
           return (
             <div
               key={tab.id}
@@ -175,6 +178,11 @@ export function TitleBar({
                 type="button"
                 className="flex flex-1 items-center min-w-0 gap-[0.45rem] h-full border-0 py-0 pr-1 pl-[0.65rem] text-inherit bg-transparent cursor-pointer font-inherit text-left focus-visible:text-foreground focus-visible:outline-1 focus-visible:outline-primary focus-visible:-outline-offset-2"
                 onClick={() => onSelectTab(tab.id)}
+                // Only restore tabs get an explicit name: an explicit
+                // aria-label would override the dirty dot's "Unsaved changes"
+                // descendant on ordinary tabs.
+                aria-label={tab.kind === "version-diff" ? accessibleName : undefined}
+                title={accessibleName}
                 aria-current={isActive ? "page" : undefined}
               >
                 <span aria-hidden="true">{tab.kind === "browser" ? "◉" : tab.kind === "graph" ? "◌" : "▤"}</span>
@@ -184,7 +192,7 @@ export function TitleBar({
               <button
                 type="button"
                 className="border-0 py-0 pr-[0.55rem] pl-[0.2rem] text-inherit bg-transparent cursor-pointer text-base opacity-65 hover:text-foreground hover:opacity-100 focus-visible:text-foreground focus-visible:opacity-100 focus-visible:outline-1 focus-visible:outline-primary focus-visible:-outline-offset-2"
-                aria-label={`Close ${tab.title}`}
+                aria-label={`Close ${accessibleName}`}
                 onClick={() => onRequestCloseTab(tab.id)}
               >
                 ×

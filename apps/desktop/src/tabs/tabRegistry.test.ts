@@ -9,8 +9,8 @@ describe("desktop tab registry", () => {
     expect(registry.get("editor")).toMatchObject({ isAvailable: true });
     expect(registry.get("preview")).toMatchObject({ isAvailable: true });
     expect(registry.get("settings")).toMatchObject({ isAvailable: true });
-    expect(registry.get("merge")).toMatchObject({ isAvailable: true });
-    expect(registry.get("version-diff")).toMatchObject({ isAvailable: true });
+    expect(registry.get("merge")).toMatchObject({ isAvailable: true, label: "Compare versions" });
+    expect(registry.get("version-diff")).toMatchObject({ isAvailable: true, label: "Restore version" });
     expect(registry.get("code-editor")).toMatchObject({ isAvailable: true });
     expect(registry.get("image-viewer")).toMatchObject({ isAvailable: true });
     expect(registry.get("audio-viewer")).toMatchObject({ isAvailable: true });
