@@ -104,7 +104,7 @@ conflicts · block-level Markdown merge · reconcile-text · cloud provider APIs
 2. `cloud_conflict_detection` — pattern table, watcher
    integration, startup scan, cleanup protocol
 3. `merge_engine` — three-way (git) / two-way (cloud) →
-   structured chunks; buffer rule; workspace mutex
+   complete documents; buffer rule; workspace mutex
 4. `merge_ui` — cards + merge tab, per-type behavior,
    source-based labels
 5. `sync_status_history_restore` — status pill, friendly
@@ -119,6 +119,10 @@ conflicts · block-level Markdown merge · reconcile-text · cloud provider APIs
    the token form; same keychain path as story 6c
 - UX follow-up (after 6): `workspace_selector_git_badge`
   — plain vs Git-linked cue in the workspace selector (icon Choice B)
+- Follow-up epics: `git_history_adoption` makes established local/remote Git
+  history visible without touching user-owned repositories; `restore_workflow`
+  completes safe restore navigation and provenance; `selective_restore_editor`
+  adds the optional editable, per-change restore workspace.
 
 ## Status
 
