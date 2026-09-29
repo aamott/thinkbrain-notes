@@ -10,11 +10,33 @@ import { CodeMirrorDiff, type CodeMirrorDiffProps } from "./CodeMirrorDiff";
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
 
+// A ResizeObserver the test drives by hand: happy-dom has none, so the
+// component would otherwise take its one-shot window-width fallback.
+class FakeResizeObserver {
+  static instances: FakeResizeObserver[] = [];
+  readonly callback: ResizeObserverCallback;
+  constructor(callback: ResizeObserverCallback) {
+    this.callback = callback;
+    FakeResizeObserver.instances.push(this);
+  }
+  observe(): void {}
+  unobserve(): void {}
+  disconnect(): void {}
+  fire(width: number): void {
+    this.callback(
+      [{ contentRect: { width } } as unknown as ResizeObserverEntry],
+      this as unknown as ResizeObserver
+    );
+  }
+}
+
 afterEach(async () => {
   await act(async () => root?.unmount());
   container?.remove();
   root = null;
   container = null;
+  FakeResizeObserver.instances = [];
+  vi.unstubAllGlobals();
   // The theme tests write the real document attribute — never leak it.
   delete document.documentElement.dataset.thinkbrainTheme;
 });
@@ -39,6 +61,23 @@ const render = async (props: Partial<CodeMirrorDiffProps> = {}): Promise<HTMLDiv
   return container;
 };
 
+/** Sizes the container through the mocked observer, inside act. */
+const resizeTo = async (width: number): Promise<void> => {
+  await act(async () => {
+    // Instance 0 is the component's own observer — it is created before the
+    // editors mount, and the engines have ResizeObservers of their own.
+    FakeResizeObserver.instances[0]?.fire(width);
+  });
+};
+
+const button = (host: HTMLElement, text: string): HTMLButtonElement => {
+  const found = [...host.querySelectorAll("button")].find(
+    (candidate): candidate is HTMLButtonElement => candidate.textContent?.trim() === text
+  );
+  if (!found) throw new Error(`No button reading "${text}" among: ${host.textContent}`);
+  return found;
+};
+
 /** The real editor inside a merge pane's wrapper element. */
 const editorIn = (pane: Element): EditorView => {
   const view = EditorView.findFromDOM(
@@ -56,7 +95,16 @@ const panes = (host: HTMLElement): [EditorView, EditorView] => {
   return [views[0]!, views[1]!];
 };
 
-describe("CodeMirrorDiff", () => {
+/** The single editor the inline presentation mounts. */
+const inlineEditor = (host: HTMLElement): EditorView => {
+  const editors = host.querySelectorAll(".cm-editor");
+  if (editors.length !== 1) throw new Error(`Expected one editor, found ${editors.length}`);
+  const view = EditorView.findFromDOM(editors[0] as HTMLElement);
+  if (!view) throw new Error("No CodeMirror editor mounted");
+  return view;
+};
+
+describe("CodeMirrorDiff in the split presentation", () => {
   it("mounts a two-pane merge view with both versions and their names", async () => {
     const host = await render();
 
@@ -135,5 +183,124 @@ describe("CodeMirrorDiff", () => {
     root = null;
 
     expect(host.querySelector(".cm-mergeView")).toBeNull();
+  });
+});
+
+describe("the responsive layout default", () => {
+  it("shows the inline presentation below 720px of container width", async () => {
+    vi.stubGlobal("ResizeObserver", FakeResizeObserver);
+    const host = await render();
+    await resizeTo(719);
+
+    expect(host.querySelectorAll(".cm-editor")).toHaveLength(1);
+    expect(host.querySelector(".cm-mergeView")).toBeNull();
+    // unifiedMergeView's own decoration marks the changed lines.
+    expect(host.querySelector(".cm-changedLine")).not.toBeNull();
+    expect(host.textContent).toContain("This computer compared with OneDrive");
+    expect(inlineEditor(host).state.doc.toString()).toBe("shared\nlocal\n");
+  });
+
+  it("shows the split presentation at 720px of container width", async () => {
+    vi.stubGlobal("ResizeObserver", FakeResizeObserver);
+    const host = await render();
+    await resizeTo(720);
+
+    expect(host.querySelectorAll(".cm-mergeViewEditor")).toHaveLength(2);
+  });
+});
+
+describe("the layout switch", () => {
+  it("switches both directions and reflects the choice in aria-pressed", async () => {
+    vi.stubGlobal("ResizeObserver", FakeResizeObserver);
+    const host = await render();
+    await resizeTo(900);
+
+    expect(button(host, "Side by side").getAttribute("aria-pressed")).toBe("true");
+    expect(button(host, "Inline").getAttribute("aria-pressed")).toBe("false");
+    expect(host.querySelector('[role="group"][aria-label="Diff layout"]')).not.toBeNull();
+
+    await act(async () => button(host, "Inline").click());
+    expect(host.querySelectorAll(".cm-editor")).toHaveLength(1);
+    expect(button(host, "Inline").getAttribute("aria-pressed")).toBe("true");
+
+    await act(async () => button(host, "Side by side").click());
+    expect(host.querySelectorAll(".cm-mergeViewEditor")).toHaveLength(2);
+    expect(button(host, "Side by side").getAttribute("aria-pressed")).toBe("true");
+  });
+
+  /// The working document belongs to the user, not to whichever engine is
+  /// mounted — a layout change hands the live text across rather than
+  /// re-seeding from the prop.
+  it("keeps edits to the result across a switch", async () => {
+    const onAfterChange = vi.fn();
+    const host = await render({ onAfterChange });
+    const [, right] = panes(host);
+
+    await act(async () => {
+      right.dispatch({ changes: { from: 7, to: 12, insert: "typed by hand" } });
+    });
+    expect(onAfterChange).toHaveBeenCalledWith("shared\ntyped by hand\n");
+
+    await act(async () => button(host, "Inline").click());
+    expect(inlineEditor(host).state.doc.toString()).toBe("shared\ntyped by hand\n");
+
+    await act(async () => button(host, "Side by side").click());
+    expect(panes(host)[1].state.doc.toString()).toBe("shared\ntyped by hand\n");
+  });
+
+  it("follows the container until the user picks a layout, then not again", async () => {
+    vi.stubGlobal("ResizeObserver", FakeResizeObserver);
+    const host = await render();
+    await resizeTo(500);
+    expect(host.querySelectorAll(".cm-editor")).toHaveLength(1);
+
+    await act(async () => button(host, "Side by side").click());
+    await resizeTo(900);
+    expect(host.querySelectorAll(".cm-mergeViewEditor")).toHaveLength(2);
+  });
+});
+
+describe("the inline presentation's merge controls", () => {
+  const renderInline = async (props: Partial<CodeMirrorDiffProps> = {}): Promise<HTMLDivElement> => {
+    vi.stubGlobal("ResizeObserver", FakeResizeObserver);
+    const host = await render(props);
+    await resizeTo(500);
+    return host;
+  };
+
+  it("offers per-chunk actions named for what they do", async () => {
+    const host = await renderInline({ transferBeforeToAfter: true });
+
+    const controls = host.querySelector(".cm-chunkButtons");
+    expect(controls).not.toBeNull();
+    expect([...controls!.querySelectorAll("button")].map((b) => b.textContent)).toEqual([
+      "Keep current",
+      "Use incoming"
+    ]);
+  });
+
+  /// "Reject" is the package's word; on this surface it means putting the
+  /// incoming text back.
+  it("restores the incoming text through Use incoming and reports the result", async () => {
+    const onAfterChange = vi.fn();
+    const host = await renderInline({ transferBeforeToAfter: true, onAfterChange });
+
+    await act(async () => {
+      button(host.querySelector(".cm-chunkButtons") as HTMLElement, "Use incoming").dispatchEvent(
+        new MouseEvent("mousedown", { bubbles: true })
+      );
+    });
+
+    expect(inlineEditor(host).state.doc.toString()).toBe("shared\nincoming\n");
+    expect(onAfterChange).toHaveBeenCalledWith("shared\nincoming\n");
+  });
+
+  it("mounts no merge controls when the comparison is read-only", async () => {
+    const host = await renderInline({ editableAfter: false, transferBeforeToAfter: true });
+
+    expect(host.querySelector(".cm-chunkButtons")).toBeNull();
+    const view = inlineEditor(host);
+    expect(view.state.facet(EditorState.readOnly)).toBe(true);
+    expect(view.state.facet(EditorView.editable)).toBe(false);
   });
 });

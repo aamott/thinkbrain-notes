@@ -5,11 +5,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ConflictComparison } from "./conflictTypes";
 
-const readConflict = vi.fn<() => Promise<ConflictComparison>>();
+const readConflict = vi.fn<
+  (rootPath: string, copyPath: string, buffer?: string | null) => Promise<ConflictComparison>
+>();
 const resolveConflict = vi.fn<() => Promise<unknown>>();
 
 vi.mock("./conflictService", () => ({
-  readConflict: () => readConflict(),
+  readConflict,
   resolveConflict: (...args: unknown[]) => resolveConflict(...(args as []))
 }));
 
@@ -105,6 +107,13 @@ describe("comparing two versions", () => {
 
   // CodeMirror aligns the two versions; this surface owes it both complete
   // documents, rebuilt exactly from the comparison the native side sent.
+  it("asks the native side for this copy's comparison", async () => {
+    await render();
+
+    expect(readConflict).toHaveBeenCalledWith("/notes", COMPARISON.theirs.path, null);
+    expect(readConflict).toHaveBeenCalledTimes(1);
+  });
+
   it("hands the comparison both whole versions, incoming on the left", async () => {
     const host = await render();
 

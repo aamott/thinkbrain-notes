@@ -268,6 +268,59 @@ describe("comparing and putting a version back", () => {
 
     expect(host.querySelector('[role="alert"]')?.textContent).toContain("Save the current file");
   });
+
+  /// A different file is a different session, so a restore still in flight
+  /// for the old file resolves onto an unmounted component — neither its
+  /// re-read list nor its notice may land in the new file's timeline.
+  it("keeps a pending restore's results out of the next file", async () => {
+    let finishRestore: () => void = () => undefined;
+    let finishOtherRead: (changes: readonly RecordedChange[]) => void = () => undefined;
+    const onRestore = vi.fn<() => Promise<void>>().mockReturnValue(
+      new Promise((resolve) => {
+        finishRestore = resolve;
+      })
+    );
+    readHistory.mockImplementation(async (_rootPath, notePath) =>
+      notePath === "Other.md"
+        ? new Promise<readonly RecordedChange[]>((resolve) => {
+            finishOtherRead = resolve;
+          })
+        : [change()]
+    );
+    const host = document.createElement("div");
+    container = host;
+    document.body.append(host);
+    root = createRoot(host);
+    let note = "Roadmap.md";
+    const Panel = () => (
+      <HistoryPanel
+        rootPath="/notes"
+        note={note}
+        currentContents={null}
+        onCompare={() => undefined}
+        onRestore={onRestore}
+      />
+    );
+
+    await act(async () => root?.render(<Panel />));
+    await act(async () => button(host, "Restore").click());
+    expect(onRestore).toHaveBeenCalledWith("Roadmap.md", "abc123");
+
+    // Inspect another file while the restore is still in flight.
+    note = "Other.md";
+    await act(async () => root?.render(<Panel />));
+    expect(host.textContent).not.toContain("Synced from another device");
+
+    // The old restore now finishes, then the new file's own read lands.
+    await act(async () => finishRestore());
+    finishOtherRead([change({ id: "x1", message: "Other file's own record" })]);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(host.textContent).toContain("Other file's own record");
+    expect(host.querySelector('[role="status"]')).toBeNull();
+  });
 });
 
 describe("when there is nothing to inspect", () => {

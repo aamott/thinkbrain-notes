@@ -203,6 +203,18 @@ describe("useShellState", () => {
     expect(state().tabState.activeTabId).toBe(tab?.id);
   });
 
+  it("closes the Version history inspector when a comparison opens", async () => {
+    const state = await renderShellState();
+    await openWorkspace(state);
+    await act(async () => state().openSyncPanel("history"));
+    expect(state().rightPanel).toBe("history");
+
+    await act(async () => state().compareVersion("note.md", "chg-1"));
+
+    expect(state().rightPanel).toBeNull();
+    expect(state().tabState.tabs.some((tab) => tab.kind === "version-diff")).toBe(true);
+  });
+
   it("restores a version through the native command when nothing is dirty", async () => {
     const state = await renderShellState();
     await openWorkspace(state);

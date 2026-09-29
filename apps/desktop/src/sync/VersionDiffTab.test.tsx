@@ -5,10 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { VersionDiff } from "./historyTypes";
 
-const readVersionDiff = vi.fn<() => Promise<VersionDiff>>();
+const readVersionDiff = vi.fn<
+  (rootPath: string, notePath: string, change: string, buffer?: string | null) => Promise<VersionDiff>
+>();
 
 vi.mock("./syncService", () => ({
-  readVersionDiff: () => readVersionDiff()
+  readVersionDiff
 }));
 
 // The side-by-side surface is CodeMirror's, not this screen's behavior: what
@@ -97,6 +99,12 @@ describe("comparing a recorded version", () => {
   it("asks the native side for the comparison, including unsaved edits", async () => {
     await render({ currentBuffer: "# Q3 sync\nunsaved line\n" });
 
+    expect(readVersionDiff).toHaveBeenCalledWith(
+      "/notes",
+      "Meeting Notes.md",
+      "chg-42",
+      "# Q3 sync\nunsaved line\n"
+    );
     expect(readVersionDiff).toHaveBeenCalledTimes(1);
   });
 

@@ -53,8 +53,6 @@ export interface RightPanelContext {
   readonly documentContents: string | null;
   /** Relative path of the active file-backed tab, or `null`. */
   readonly documentPath: string | null;
-  /** Whether the active document holds unsaved edits. */
-  readonly documentDirty: boolean;
   /** Requests shell-owned navigation to another note. */
   readonly onOpenNote: (relativePath: string) => void;
   /** Opens a read-only comparison of a file with one recorded version. */

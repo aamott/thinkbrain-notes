@@ -13,6 +13,7 @@ import { CommandPalette, type WorkspaceFileResult } from "../commands/CommandPal
 import { BottomPanel as BottomPanelContent } from "../panels/BottomPanel";
 import { LeftPopout } from "../panels/LeftPopout";
 import { RightPopout } from "../panels/RightPopout";
+import { desktopPanelRegistry, type DesktopPanelContext } from "../panels/panelRegistryModel";
 import { ActivityBar } from "./ActivityBar";
 import { ResizeHandle } from "./ResizeHandle";
 import { EmptiedNoteBanner } from "./EmptiedNoteBanner";
@@ -58,16 +59,43 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
       ? "panel headers"
       : "title bar"
   );
+
+  const openDocumentFromPanel = (relativePath: string) => {
+    if (shell.restoredWorkspacePath) {
+      shell.openMarkdownDocument(shell.restoredWorkspacePath, relativePath);
+    }
+  };
+  // One context object for both docks: the same values the popouts render
+  // with are the values the right-panel availability gate reads, so the two
+  // can never disagree about what "the active document" is.
+  const panelContext: DesktopPanelContext = {
+    rootPath: shell.restoredWorkspacePath,
+    explorerProps: shell.explorerProps,
+    onOpenSearchResult: openDocumentFromPanel,
+    onReviewConflict: shell.reviewConflict,
+    onOpenSyncSettings: shell.openSyncSettings,
+    documentContents: activeDocument?.phase === "ready" ? activeDocument.contents : null,
+    documentPath,
+    onOpenNote: openDocumentFromPanel,
+    onCompareVersion: shell.compareVersion,
+    onRestoreVersion: shell.restoreVersionSafely
+  };
+  // A panel that is selected but unavailable for the active document stays
+  // selected (it comes back when a file is active again) — but nothing may
+  // claim it: no reserved width, no highlighted action, no dock.
+  const effectiveRightPanel =
+    rightPanel && desktopPanelRegistry.isAvailable(rightPanel, panelContext)
+      ? rightPanel
+      : null;
+
   const leftPopout = (
     <LeftPopout
       panel={leftPanel ?? "explorer"}
-      rootPath={shell.restoredWorkspacePath}
-      explorerProps={shell.explorerProps}
-      onReviewConflict={shell.reviewConflict}
-      onOpenSyncSettings={shell.openSyncSettings}
-      onOpenSearchResult={(relativePath) => {
-        if (shell.restoredWorkspacePath) shell.openMarkdownDocument(shell.restoredWorkspacePath, relativePath);
-      }}
+      rootPath={panelContext.rootPath}
+      explorerProps={panelContext.explorerProps}
+      onReviewConflict={panelContext.onReviewConflict}
+      onOpenSyncSettings={panelContext.onOpenSyncSettings}
+      onOpenSearchResult={panelContext.onOpenSearchResult}
       workspaceSelectorInPanel={workspaceSelectorPlacement === "panel headers"}
     />
   );
@@ -77,20 +105,20 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
   // when collapsed so the title bar releases the reserved space.
   useEffect(() => {
     rootRef.current?.style.setProperty("--tn-shell-left-width", leftPanel ? `${leftWidth}px` : "0px");
-    rootRef.current?.style.setProperty("--tn-shell-right-width", rightPanel ? `${rightWidth}px` : "0px");
-  }, [leftWidth, leftPanel, rightPanel, rightWidth]);
+    rootRef.current?.style.setProperty("--tn-shell-right-width", effectiveRightPanel ? `${rightWidth}px` : "0px");
+  }, [leftWidth, leftPanel, effectiveRightPanel, rightWidth]);
 
   return (
     <WorkspaceSelectorProvider>
       <main
-        className="grid grid-rows-[2.25rem_auto_minmax(0,1fr)_1.5rem] h-full min-w-184 max-[760px]:min-w-0 overflow-hidden bg-background text-foreground"
+        className="grid grid-rows-[2.25rem_auto_minmax(0,1fr)_1.5rem] grid-cols-[minmax(0,1fr)] w-full max-w-full h-full min-w-0 overflow-hidden bg-background text-foreground"
         ref={rootRef}
         aria-label="ThinkBrain desktop workspace"
       >
         <TitleBar
           tabs={tabState.tabs}
           activeTabId={tabState.activeTabId}
-          rightPanel={rightPanel}
+          rightPanel={effectiveRightPanel}
           showWorkspaceSelector={workspaceSelectorPlacement === "title bar"}
           onSelectTab={(tabId) => dispatchTabs({ type: "activate", tabId })}
           onRequestCloseTab={(tabId) => dispatchTabs({ type: "requestClose", tabId })}
@@ -104,8 +132,9 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
         <UpdateBanner state={shell.update.state} onInstall={shell.update.install} onDismiss={shell.update.dismiss} />
 
         {/* Positioning context for the overlaid docks: the right popout
-            anchors here at ≤900px, the left at ≤760px. */}
-        <div className="flex min-h-0 max-[900px]:relative">
+            anchors here at ≤900px, the left at ≤760px. `min-w-0` keeps a wide
+            tab's content from stretching the chrome off the window. */}
+        <div className="flex min-h-0 min-w-0 max-w-full overflow-hidden max-[900px]:relative">
           <ActivityBar
             leftPanel={leftPanel}
             onSelectLeftPanel={shell.selectLeftPanel}
@@ -126,8 +155,10 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
             />
           )}
 
-          <section className="flex flex-col flex-auto min-w-60" aria-label="Note workspace">
-            <article className="flex flex-1 flex-col min-h-0 overflow-auto bg-editor">
+          <section className="flex flex-col flex-auto min-w-0 max-w-full overflow-hidden" aria-label="Note workspace">
+            {/* Children own their scrolling — the article only clips, so a
+                tab wider than the window cannot push the shell off the edge. */}
+            <article className="flex flex-1 flex-col min-h-0 min-w-0 max-w-full overflow-hidden bg-editor">
               {/* Settings tabs render their own SettingsHeaderBar inside SettingsTab,
                   so hide the shared WorkspaceHeaderBar to avoid stacking two header bars. */}
               {activeTab?.kind !== "settings" && (
@@ -180,7 +211,7 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
             )}
           </section>
 
-          {rightPanel && (
+          {effectiveRightPanel && (
             <>
               {/* An overlaid panel is not dock-resizable, so the handle hides
                   at the same 900px breakpoint where the popout overlays. */}
@@ -193,20 +224,8 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
                 onKeyDown={shell.resize.resizeWithKeyboard("right")}
               />
               <RightPopout
-                panel={rightPanel}
-                rootPath={shell.restoredWorkspacePath}
-                documentContents={activeDocument?.phase === "ready"
-                  ? activeDocument.contents
-                  : null}
-                documentPath={documentPath}
-                documentDirty={documentPath !== null && Boolean(activeTab?.isDirty)}
-                onCompareVersion={shell.compareVersion}
-                onRestoreVersion={shell.restoreVersionSafely}
-                onOpenNote={(relativePath) => {
-                  if (shell.restoredWorkspacePath) {
-                    shell.openMarkdownDocument(shell.restoredWorkspacePath, relativePath);
-                  }
-                }}
+                {...panelContext}
+                panel={effectiveRightPanel}
                 onBack={() => shell.setRightPanel(null)}
               />
             </>

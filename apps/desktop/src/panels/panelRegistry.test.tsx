@@ -42,7 +42,6 @@ const context: DesktopPanelContext = {
   rootPath: null,
   documentContents: null,
   documentPath: null,
-  documentDirty: false,
   onOpenNote: () => undefined,
   onCompareVersion: () => undefined,
   onRestoreVersion: async () => undefined,
@@ -66,7 +65,6 @@ const rightContext: RightPanelContext = {
   rootPath: "/notes",
   documentContents: "# Hello",
   documentPath: "Hello.md",
-  documentDirty: false,
   onOpenNote: () => undefined,
   onCompareVersion: () => undefined,
   onRestoreVersion: async () => undefined
@@ -202,7 +200,6 @@ describe("desktop panel registry", () => {
         rootPath={null}
         documentContents={null}
         documentPath={null}
-        documentDirty={false}
         onCompareVersion={() => undefined}
         onRestoreVersion={async () => undefined}
         onOpenNote={() => undefined}

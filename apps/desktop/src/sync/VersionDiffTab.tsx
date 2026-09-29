@@ -172,7 +172,7 @@ function VersionDiffSurface({
 
   return (
     <section
-      className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4"
+      className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col gap-3 overflow-y-auto overflow-x-hidden p-4"
       aria-label={`Compare an earlier version of ${name}`}
     >
       <header className="rounded-small border border-border bg-card p-4">
@@ -193,9 +193,9 @@ function VersionDiffSurface({
       )}
 
       {comparable ? (
-        // A floor keeps both panes usable on a very short screen — the
+        // A floor keeps the diff usable on a very short screen — the
         // section scrolls instead of the comparison collapsing away.
-        <div className="flex min-h-56 flex-1 flex-col">
+        <div className="flex min-h-56 min-w-0 max-w-full flex-1 flex-col overflow-hidden">
           <CodeMirrorDiff
             before={beforeText}
             after={afterText}

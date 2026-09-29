@@ -394,7 +394,6 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
     activeTab?.kind !== "version-diff"
       ? activePath
       : null;
-  const visibleDocumentDirty = visibleDocumentPath !== null && Boolean(activeTab?.isDirty);
   // Browser-style location pill: workspace, then the route's own crumb trail —
   // real folders for file tabs (`.md` stripped only from note editors so
   // code/media keep their extension), a label for chrome surfaces.
@@ -551,7 +550,6 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
           rootPath={shell.restoredWorkspacePath}
           documentContents={visibleDocumentContents}
           documentPath={visibleDocumentPath}
-          documentDirty={visibleDocumentDirty}
           onOpenNote={openNote}
           onCompareVersion={shell.compareVersion}
           onRestoreVersion={shell.restoreVersionSafely}
@@ -570,7 +568,6 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
           rootPath={shell.restoredWorkspacePath}
           documentContents={visibleDocumentContents}
           documentPath={visibleDocumentPath}
-          documentDirty={visibleDocumentDirty}
           onCompareVersion={shell.compareVersion}
           onRestoreVersion={shell.restoreVersionSafely}
           onOpenNote={openNote}

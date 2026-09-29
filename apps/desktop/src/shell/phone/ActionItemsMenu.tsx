@@ -39,7 +39,6 @@ export function ActionItemsMenu({
   rootPath,
   documentContents,
   documentPath,
-  documentDirty,
   onOpenNote,
   onCompareVersion,
   onRestoreVersion,
@@ -52,8 +51,6 @@ export function ActionItemsMenu({
   /** Contents of the active file-backed tab, when its document is ready. */
   readonly documentContents: string | null;
   readonly documentPath: string | null;
-  /** Whether the active document holds unsaved edits. */
-  readonly documentDirty: boolean;
   readonly onOpenNote: (relativePath: string) => void;
   /** Opens a read-only comparison of a file with one recorded version. */
   readonly onCompareVersion: (notePath: string, changeId: string) => void;
@@ -76,7 +73,6 @@ export function ActionItemsMenu({
     rootPath,
     documentContents,
     documentPath,
-    documentDirty,
     onOpenNote,
     onCompareVersion,
     onRestoreVersion

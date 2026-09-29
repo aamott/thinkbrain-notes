@@ -33,7 +33,6 @@ export function InspectorSheet({
   rootPath,
   documentContents,
   documentPath,
-  documentDirty,
   onCompareVersion,
   onRestoreVersion,
   onOpenNote,
@@ -46,8 +45,6 @@ export function InspectorSheet({
   /** Contents of the active file-backed tab, when its document is ready. */
   readonly documentContents: string | null;
   readonly documentPath: string | null;
-  /** Whether the active document holds unsaved edits. */
-  readonly documentDirty: boolean;
   /** Opens a read-only comparison of a file with one recorded version. */
   readonly onCompareVersion: (notePath: string, changeId: string) => void;
   /** Puts a recorded version back, saving an open dirty file first. */
@@ -80,7 +77,6 @@ export function InspectorSheet({
             rootPath={rootPath}
             documentContents={documentContents}
             documentPath={documentPath}
-            documentDirty={documentDirty}
             onCompareVersion={onCompareVersion}
             onRestoreVersion={onRestoreVersion}
             onOpenNote={onOpenNote}

@@ -49,87 +49,6 @@ export function HistoryPanel({
   onCompare,
   onRestore
 }: HistoryPanelProps) {
-  const queryKey = `${rootPath ?? ""}\0${note ?? ""}`;
-  const [changes, setChanges] = useState<readonly RecordedChange[]>([]);
-  const [busyId, setBusyId] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loadedKey, setLoadedKey] = useState<string | null>(null);
-  const reloadId = useRef(0);
-  const loading = loadedKey !== queryKey;
-
-  // Per-revision comparison results, fetched lazily as cards scroll into
-  // view. A recorded version never changes, so the fetched "theirs" side
-  // stays right as the current file is edited — the badge recomputes its
-  // +/− against the live contents rather than refetching per keystroke. A new
-  // file (or workspace) gets a new map: nothing fetched for one may be handed
-  // to the other. `queryKey` names nothing inside the callback — it is there so
-  // a different file discards the stale map.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const diffCache = useMemo<Map<string, VersionDiff | null>>(() => new Map(), [queryKey]);
-
-  /** Reads the list, changing nothing. {@link apply} is the only writer. */
-  const read = useCallback(async (): Promise<Read | null> => {
-    if (!rootPath || !note) return null;
-    try {
-      return { changes: await readHistory(rootPath, note), error: null };
-    } catch (cause) {
-      return {
-        changes: null,
-        error: failureMessage(cause, "This file's earlier versions could not be read.", true)
-      };
-    }
-  }, [note, rootPath]);
-
-  const apply = useCallback(
-    (result: Read | null) => {
-      if (!result) return;
-      if (result.changes) setChanges(result.changes);
-      setError(result.error);
-      setLoadedKey(queryKey);
-    },
-    [queryKey]
-  );
-
-  const reload = useCallback(() => {
-    const id = ++reloadId.current;
-    void read().then((result) => {
-      if (id === reloadId.current) apply(result);
-    });
-  }, [apply, read]);
-  useEffect(
-    () => () => {
-      reloadId.current++;
-    },
-    [queryKey]
-  );
-
-  // Live status keeps the list fresh when a record lands (or a restore writes
-  // one); the alongside-git sentence is owed to anyone whose folder already
-  // keeps its own history.
-  const status = useSyncStatus(rootPath, undefined, reload);
-
-  const putBack = useCallback(
-    async (change: RecordedChange) => {
-      if (!note || busyId !== null) return;
-      setBusyId(change.id);
-      setNotice(null);
-      let failure: string | null = null;
-      try {
-        await onRestore(note, change.id);
-      } catch (cause) {
-        failure = restoreFailureMessage(cause);
-      }
-      // Always re-read, and the report last: a restore writes a new recorded
-      // change, and a failure the list overwrote would be one nobody saw.
-      apply(await read());
-      if (failure) setError(failure);
-      else setNotice(`"${noteName(note)}" is back to how it was ${describeMoment(change.at).toLowerCase()}.`);
-      setBusyId(null);
-    },
-    [apply, busyId, note, onRestore, read]
-  );
-
   if (!rootPath) {
     return (
       <Unavailable
@@ -146,6 +65,95 @@ export function HistoryPanel({
       />
     );
   }
+  // A different file is a different session: the key remounts rather than an
+  // effect resetting state, so a restore or read still in flight for the
+  // previous file resolves onto an unmounted component and can leak neither
+  // its list nor its notice into this file's timeline.
+  return (
+    <HistorySession
+      key={`${rootPath}\0${note}`}
+      rootPath={rootPath}
+      note={note}
+      currentContents={currentContents}
+      onCompare={onCompare}
+      onRestore={onRestore}
+    />
+  );
+}
+
+function HistorySession({
+  rootPath,
+  note,
+  currentContents,
+  onCompare,
+  onRestore
+}: {
+  readonly rootPath: string;
+  readonly note: string;
+  readonly currentContents: string | null;
+  readonly onCompare: (notePath: string, changeId: string) => void;
+  readonly onRestore: (notePath: string, changeId: string) => Promise<void>;
+}) {
+  const [changes, setChanges] = useState<readonly RecordedChange[]>([]);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
+
+  // Per-revision comparison results, fetched lazily as cards scroll into
+  // view. A recorded version never changes, so the fetched "theirs" side
+  // stays right as the current file is edited — the badge recomputes its
+  // +/− against the live contents rather than refetching per keystroke. The
+  // session's keyed remount is what keeps another file's reads out of it.
+  const diffCache = useMemo<DiffCache>(() => new Map(), []);
+
+  /** Reads the list, changing nothing. {@link apply} is the only writer. */
+  const read = useCallback(async (): Promise<Read> => {
+    try {
+      return { changes: await readHistory(rootPath, note), error: null };
+    } catch (cause) {
+      return {
+        changes: null,
+        error: failureMessage(cause, "This file's earlier versions could not be read.", true)
+      };
+    }
+  }, [note, rootPath]);
+
+  const apply = useCallback((result: Read) => {
+    if (result.changes) setChanges(result.changes);
+    setError(result.error);
+    setLoaded(true);
+  }, []);
+
+  const reload = useCallback(() => {
+    void read().then(apply);
+  }, [apply, read]);
+
+  // Live status keeps the list fresh when a record lands (or a restore writes
+  // one); the alongside-git sentence is owed to anyone whose folder already
+  // keeps its own history.
+  const status = useSyncStatus(rootPath, undefined, reload);
+
+  const putBack = useCallback(
+    async (change: RecordedChange) => {
+      if (busyId !== null) return;
+      setBusyId(change.id);
+      setNotice(null);
+      let failure: string | null = null;
+      try {
+        await onRestore(note, change.id);
+      } catch (cause) {
+        failure = restoreFailureMessage(cause);
+      }
+      // Always re-read, and the report last: a restore writes a new recorded
+      // change, and a failure the list overwrote would be a failure nobody saw.
+      apply(await read());
+      if (failure) setError(failure);
+      else setNotice(`"${noteName(note)}" is back to how it was ${describeMoment(change.at).toLowerCase()}.`);
+      setBusyId(null);
+    },
+    [apply, busyId, note, onRestore, read]
+  );
 
   return (
     <section
@@ -179,7 +187,7 @@ export function HistoryPanel({
         </p>
       )}
 
-      {loading ? null : changes.length === 0 && error === null ? (
+      {!loaded ? null : changes.length === 0 && error === null ? (
         <Unavailable
           title="No earlier versions yet"
           description="This file has only ever been saved once. Later versions will show up here as it changes."
@@ -192,7 +200,7 @@ export function HistoryPanel({
           <ol className="m-0 flex list-none flex-col gap-2 p-3">
             {changes.map((change) => (
               <RevisionCard
-                key={`${note}\0${change.id}`}
+                key={change.id}
                 rootPath={rootPath}
                 note={note}
                 change={change}

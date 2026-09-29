@@ -394,6 +394,9 @@ export function useShellState(): ShellState {
   const compareVersion = useCallback(
     (notePath: string, changeId: string) => {
       if (!restoredWorkspacePath) return;
+      // The comparison replaces the inspector that launched it — leaving
+      // Version history open under the new tab only crowds a narrow window.
+      setRightPanel(null);
       dispatchTabs({
         type: "open",
         tab: createVersionDiffTab(
