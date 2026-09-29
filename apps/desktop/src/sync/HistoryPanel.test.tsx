@@ -47,10 +47,7 @@ const TEXT_DIFF: VersionDiff = {
   kind: "text",
   change: "abc123",
   notePath: "Roadmap.md",
-  chunks: [
-    { kind: "common", text: "first\n" },
-    { kind: "choice", ours: "newer\nextra\n", theirs: "older\n" }
-  ]
+  text: { current: "first\nnewer\nextra\n", recorded: "first\nolder\n" }
 };
 
 beforeEach(() => {
@@ -190,8 +187,9 @@ describe("the difference each revision makes", () => {
     const host = await render();
 
     expect(readVersionDiff).toHaveBeenCalledWith("/notes", "Roadmap.md", "abc123", null);
-    // theirs "first\nolder\n" vs ours "first\nnewer\nextra\n": +2 -1
-    expect(host.textContent).toContain("+2 -1");
+    // Restore direction: current "first\nnewer\nextra\n" → recorded
+    // "first\nolder\n" adds one line and removes two: +1 -2
+    expect(host.textContent).toContain("+1 -2");
   });
 
   it("compares against the open document's live contents, not a save", async () => {
@@ -200,13 +198,14 @@ describe("the difference each revision makes", () => {
     const host = await render({ currentContents: "first\nolder\nsame\n" });
 
     expect(readVersionDiff).toHaveBeenCalledWith("/notes", "Roadmap.md", "abc123", "first\nolder\nsame\n");
-    // theirs "first\nolder\n" vs live "first\nolder\nsame\n": +1 -0
-    expect(host.textContent).toContain("+1 -0");
+    // live "first\nolder\nsame\n" → recorded "first\nolder\n": restoring
+    // removes the extra line: +0 -1
+    expect(host.textContent).toContain("+0 -1");
   });
 
   it("says so plainly for a file that is not text", async () => {
     readHistory.mockResolvedValue([change()]);
-    readVersionDiff.mockResolvedValue({ ...TEXT_DIFF, kind: "binary", chunks: [] });
+    readVersionDiff.mockResolvedValue({ ...TEXT_DIFF, kind: "binary", text: null });
 
     const host = await render();
 

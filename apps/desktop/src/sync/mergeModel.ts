@@ -1,35 +1,14 @@
 /**
- * Rebuilding one whole version out of a comparison's chunks, and counting how
- * far apart two versions are.
+ * Counting how far apart two complete versions of a file are.
  *
- * The native side hands over the two versions interleaved — stretches they
- * share, and where they disagree each side's text separately. CodeMirror's
- * merge view compares two complete documents, so this puts each one back
- * together, exactly, for it to diff. `lineDelta` uses the same differ the
- * view does, so the badge on a revision card and the comparison it opens
- * can never disagree about how much changed.
+ * The native side hands over the two documents whole and CodeMirror's merge
+ * view draws the comparison; `lineDelta` uses the same differ the view does,
+ * so the badge on a revision card and the comparison it opens can never
+ * disagree about how much changed.
  */
 
 import { Chunk } from "@codemirror/merge";
 import { Text } from "@codemirror/state";
-
-import type { ConflictChunk } from "./conflictTypes";
-
-/**
- * Every byte of one side of a comparison.
- *
- * A common stretch belongs to both versions; a choice chunk contributes only
- * the side asked for — including an empty half, which is how an insertion or
- * a deletion reads back exactly as it was written.
- */
-export function sideText(
-  chunks: readonly ConflictChunk[],
-  side: "ours" | "theirs"
-): string {
-  return chunks
-    .map((chunk) => (chunk.kind === "common" ? chunk.text : chunk[side]))
-    .join("");
-}
 
 /** Whole lines that differ between two texts, split by direction. */
 export interface LineDelta {

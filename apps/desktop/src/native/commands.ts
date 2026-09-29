@@ -262,8 +262,9 @@ export interface NativeCommandMap {
     readonly result: null;
   };
   /**
-   * Line-by-line diff between a note and the version recorded in `change`.
-   * `buffer` carries an open editor's unsaved text as the current side.
+   * Complete-text comparison between a note and the version recorded in
+   * `change`. `buffer` carries an open editor's unsaved text as the current
+   * side.
    */
   readonly read_version_diff: {
     readonly args: {

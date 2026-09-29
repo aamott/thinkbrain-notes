@@ -68,7 +68,7 @@ vi.mock("./syncService", () => ({
       kind: "text",
       change: "abc123",
       notePath: "Meeting Notes.md",
-      chunks: [{ kind: "common", text: "shared\n" }]
+      text: { current: "shared\n", recorded: "shared\n" }
     }),
   restoreVersion: () => Promise.resolve(),
   subscribeToSyncStatus: () => Promise.resolve(() => undefined),
@@ -154,10 +154,8 @@ describe("nothing in this feature speaks git to the user", () => {
   it("keeps the comparison plain", async () => {
     readConflict.mockResolvedValue({
       ...summary("Meeting Notes.md", "text"),
-      chunks: [
-        { kind: "common", text: "shared\n" },
-        { kind: "choice", ours: "one line\n", theirs: "another line\n" }
-      ]
+      kind: "text",
+      text: { incoming: "shared\nanother line\n", current: "shared\none line\n" }
     });
 
     audit(

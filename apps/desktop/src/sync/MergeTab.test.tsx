@@ -39,6 +39,9 @@ const { MergeTab } = await import("./MergeTab");
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
 
+const OURS_TEXT = "# Q3 sync\nattendees\nfollow up with design\nnext check-in Aug 18\n";
+const THEIRS_TEXT = "# Q3 sync\nattendees\nsync directly with design\nnext check-in Aug 18\n";
+
 const COMPARISON: ConflictComparison = {
   kind: "text",
   ours: {
@@ -55,15 +58,8 @@ const COMPARISON: ConflictComparison = {
     changedAt: null,
     fingerprint: "theirs"
   },
-  chunks: [
-    { kind: "common", text: "# Q3 sync\nattendees\n" },
-    { kind: "choice", ours: "follow up with design\n", theirs: "sync directly with design\n" },
-    { kind: "common", text: "next check-in Aug 18\n" }
-  ]
+  text: { incoming: THEIRS_TEXT, current: OURS_TEXT }
 };
-
-const OURS_TEXT = "# Q3 sync\nattendees\nfollow up with design\nnext check-in Aug 18\n";
-const THEIRS_TEXT = "# Q3 sync\nattendees\nsync directly with design\nnext check-in Aug 18\n";
 
 beforeEach(() => {
   lastDiff.props = null;
@@ -127,11 +123,31 @@ describe("comparing two versions", () => {
     expect(lastDiff.props?.transferBeforeToAfter).toBe(true);
   });
 
-  it("explains how to work the comparison", async () => {
+  it("forwards an open editor's unsaved buffer as this computer's side", async () => {
+    const dirty = "# Q3 sync\nstill typing\n";
+    container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
+    await act(async () =>
+      root?.render(
+        <MergeTab rootPath="/notes" copyPath={COMPARISON.theirs.path} buffer={dirty} />
+      )
+    );
+
+    expect(readConflict).toHaveBeenCalledWith("/notes", COMPARISON.theirs.path, dirty);
+  });
+
+  it("explains how to work the comparison, without restore preview copy", async () => {
     const host = await render();
 
     expect(host.textContent).toContain("arrows between the panes");
     expect(host.textContent).toContain("edit the result");
+    // The restore preview's own wording and legend belong to that screen —
+    // a conflict is not a restore, and they must not leak into this one.
+    expect(host.textContent).not.toContain("Preview restore");
+    expect(host.textContent).not.toContain("Added by restore");
+    expect(host.textContent).not.toContain("Removed by restore");
+    expect(host.querySelector('[aria-label="Restore preview legend"]')).toBeNull();
   });
 });
 
@@ -236,7 +252,7 @@ describe("while a decision is being written", () => {
 
 describe("a file that cannot be compared piece by piece", () => {
   it("keeps the whole-file choices but mounts no comparison", async () => {
-    readConflict.mockResolvedValue({ ...COMPARISON, kind: "binary", chunks: [] });
+    readConflict.mockResolvedValue({ ...COMPARISON, kind: "binary", text: null });
 
     const host = await render();
 

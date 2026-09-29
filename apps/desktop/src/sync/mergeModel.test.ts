@@ -1,63 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { lineDelta, sideText } from "./mergeModel";
-import type { ConflictChunk } from "./conflictTypes";
-
-const common = (text: string): ConflictChunk => ({ kind: "common", text });
-const choice = (ours: string, theirs: string): ConflictChunk => ({ kind: "choice", ours, theirs });
-
-describe("sideText", () => {
-  it("rebuilds each whole version, common stretches and choices alike", () => {
-    const chunks = [
-      common("# Note\n"),
-      choice("mine\n", "theirs\n"),
-      common("end\n")
-    ];
-
-    expect(sideText(chunks, "ours")).toBe("# Note\nmine\nend\n");
-    expect(sideText(chunks, "theirs")).toBe("# Note\ntheirs\nend\n");
-  });
-
-  // A choice chunk with an empty half is an insertion or a deletion — the
-  // empty side must contribute nothing rather than a stray newline.
-  it("rebuilds an insertion without inventing content for the other side", () => {
-    const chunks = [common("start\n"), choice("", "added\n"), common("done\n")];
-
-    expect(sideText(chunks, "ours")).toBe("start\ndone\n");
-    expect(sideText(chunks, "theirs")).toBe("start\nadded\ndone\n");
-  });
-
-  it("rebuilds a deletion without inventing content for the other side", () => {
-    const chunks = [common("start\n"), choice("removed\n", ""), common("done\n")];
-
-    expect(sideText(chunks, "ours")).toBe("start\nremoved\ndone\n");
-    expect(sideText(chunks, "theirs")).toBe("start\ndone\n");
-  });
-
-  // A file that never ended its last line has no trailing newline to find —
-  // joining the chunks must not grow one.
-  it("does not invent a trailing newline", () => {
-    const chunks = [common("one\n"), choice("two", "2")];
-
-    expect(sideText(chunks, "ours")).toBe("one\ntwo");
-    expect(sideText(chunks, "theirs")).toBe("one\n2");
-  });
-
-  it("rebuilds text beyond ASCII exactly", () => {
-    const chunks = [
-      common("# ノート\n"),
-      choice("café — façade\n", "emoji ☕️ and 中文\n")
-    ];
-
-    expect(sideText(chunks, "ours")).toBe("# ノート\ncafé — façade\n");
-    expect(sideText(chunks, "theirs")).toBe("# ノート\nemoji ☕️ and 中文\n");
-  });
-
-  it("rebuilds an empty comparison as empty", () => {
-    expect(sideText([], "ours")).toBe("");
-    expect(sideText([], "theirs")).toBe("");
-  });
-});
+import { lineDelta } from "./mergeModel";
 
 describe("lineDelta", () => {
   it("counts identical texts as no change", () => {

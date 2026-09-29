@@ -307,11 +307,6 @@ export function CodeMirrorDiff({
       {/* The layout switch is the same toolbar in both presentations; the
           responsive default only applies until the user picks one. */}
       <div className="flex min-w-0 items-center justify-end gap-2 border-b border-border bg-card px-2 py-1 text-xs">
-        {layout === "inline" && (
-          <p className="m-0 mr-auto min-w-0 truncate font-semibold text-card-foreground">
-            {afterLabel} compared with {beforeLabel}
-          </p>
-        )}
         <div role="group" aria-label="Diff layout" className="flex gap-0.5">
           <button
             type="button"

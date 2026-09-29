@@ -22,7 +22,7 @@ vi.mock("../native/commands", () => ({
         kind: "text",
         change: "chg-1",
         notePath: "note.md",
-        chunks: [{ kind: "common", text: "# Note\n" }]
+        text: { current: "# Note\n", recorded: "# Note\n" }
       };
     }
     return null;

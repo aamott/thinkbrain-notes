@@ -122,7 +122,7 @@ export function restoreVersion(
 }
 
 /**
- * Computes line-by-line diff chunks between the current note and an earlier version.
+ * Reads the complete-text comparison between the current note and an earlier version.
  */
 export function readVersionDiff(
   rootPath: string,

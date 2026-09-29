@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { noteName } from "../lib/utils";
 import { Unavailable } from "../shell/Unavailable";
 import type { RecordedChange, VersionDiff } from "./historyTypes";
-import { lineDelta, sideText } from "./mergeModel";
+import { lineDelta } from "./mergeModel";
 import { describeMoment, failureMessage, restoreFailureMessage } from "./syncCopy";
 import { readHistory, readVersionDiff } from "./syncService";
 import { useSyncStatus } from "./useSyncStatus";
@@ -301,8 +301,9 @@ const BADGE_LOADED = "bg-surface text-muted-foreground";
 const BADGE_PENDING = "bg-surface/50 text-muted-foreground/60";
 
 /**
- * How many lines a revision adds and removes relative to the file as it is
- * now — the same comparison `CodeMirrorDiff` draws, counted rather than drawn.
+ * How many lines restoring a revision would add and remove — the same
+ * comparison `CodeMirrorDiff` draws for "Preview restore", counted rather
+ * than drawn, so the badge and the preview can never disagree.
  *
  * The diff is fetched lazily, once, when the card scrolls into view (plain
  * environments fetch straight away): what changes afterwards is only the
@@ -334,8 +335,8 @@ function RevisionBadge({ rootPath, note, changeId, currentContents, cache }: Rev
   }, [visible]);
 
   // The buffer handed to the native diff is read once at fetch time: it only
-  // decides what "ours" reconstructs to, and the badge compares against the
-  // live contents below rather than that snapshot.
+  // decides what `text.current` comes back as, and the badge compares against
+  // the live contents below rather than that snapshot.
   const contentsAtFetch = useRef(currentContents);
 
   useEffect(() => {
@@ -357,11 +358,13 @@ function RevisionBadge({ rootPath, note, changeId, currentContents, cache }: Rev
     };
   }, [visible, rootPath, note, changeId, cacheKey, cache]);
 
+  // Restore direction: "added" is what putting the recorded version back
+  // would add, "removed" what it would take out — the recorded version is the
+  // destination, so it is the delta's `after`.
   const delta = useMemo(() => {
     if (!diff || diff.kind !== "text") return null;
-    const historical = sideText(diff.chunks, "theirs");
-    const current = currentContents ?? sideText(diff.chunks, "ours");
-    return lineDelta(historical, current);
+    const current = currentContents ?? diff.text.current;
+    return lineDelta(current, diff.text.recorded);
   }, [diff, currentContents]);
 
   return (

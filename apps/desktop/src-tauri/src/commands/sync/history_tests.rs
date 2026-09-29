@@ -381,8 +381,11 @@ fn the_counter_starts_at_nothing() {
     assert_eq!((rate.decisions, rate.recorded), (0, 0));
 }
 
+/// The comparison is the two complete documents: the file as it stands now,
+/// and the version recorded in the change — exactly, so a restore previews
+/// what it will actually write.
 #[test]
-fn diffing_against_an_earlier_version_produces_chunks() {
+fn diffing_against_an_earlier_version_returns_both_complete_texts() {
     let f = fixture("history-diff");
     write(&f.vault, "note.md", "line 1\nline 2\n");
     record(&f, "first save", &["note.md"]);
@@ -400,5 +403,54 @@ fn diffing_against_an_earlier_version_produces_chunks() {
         .expect("diff against earlier version succeeds");
 
     assert_eq!(diff.kind, super::super::merge::Kind::Text);
-    assert!(!diff.chunks.is_empty());
+    assert_eq!(
+        diff.text,
+        Some(VersionText {
+            current: "line 1\nline 2 modified\nline 3 added\n".into(),
+            recorded: "line 1\nline 2\n".into(),
+        })
+    );
+}
+
+/// "Current" is the open editor's buffer when there is one — comparing against
+/// the last save would preview a restore over text the user can see is stale.
+#[test]
+fn a_supplied_buffer_stands_in_for_the_current_file() {
+    let f = fixture("history-diff-buffer");
+    write(&f.vault, "note.md", "line 1\nline 2\n");
+    record(&f, "first save", &["note.md"]);
+    write(&f.vault, "note.md", "saved since\n");
+
+    let history = read(&f.repo, Some("note.md"), 10).expect("read history");
+    let first = &history[0].id;
+
+    let diff = diff_version(&f.engine, "note.md", first, Some("still typing\n"))
+        .expect("diff against earlier version succeeds");
+
+    assert_eq!(
+        diff.text,
+        Some(VersionText {
+            current: "still typing\n".into(),
+            recorded: "line 1\nline 2\n".into(),
+        })
+    );
+}
+
+/// Two binary versions have nothing to draw — the restore is still offered,
+/// but as a whole-file choice, not a comparison.
+#[test]
+fn a_binary_pair_carries_no_text() {
+    let f = fixture("history-diff-binary");
+    fs::write(f.vault.join("image.png"), [b'P', b'N', b'G', 0, 1]).expect("written");
+    record(&f, "first save", &["image.png"]);
+    fs::write(f.vault.join("image.png"), [b'P', b'N', b'G', 0, 2]).expect("written");
+
+    let history = read(&f.repo, Some("image.png"), 10).expect("read history");
+    let first = &history[0].id;
+
+    let diff = diff_version(&f.engine, "image.png", first, None)
+        .expect("diff against earlier version succeeds");
+
+    assert_eq!(diff.kind, super::super::merge::Kind::Binary);
+    assert_eq!(diff.text, None);
 }

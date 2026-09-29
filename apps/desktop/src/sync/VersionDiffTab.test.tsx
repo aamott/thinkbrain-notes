@@ -37,19 +37,15 @@ const { VersionDiffTab } = await import("./VersionDiffTab");
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
 
+const CURRENT_TEXT = "# Q3 sync\nattendees\nfollow up with design\nnext check-in Aug 18\n";
+const RECORDED_TEXT = "# Q3 sync\nattendees\nsync directly with design\nnext check-in Aug 18\n";
+
 const DIFF: VersionDiff = {
   kind: "text",
   change: "chg-42",
   notePath: "Meeting Notes.md",
-  chunks: [
-    { kind: "common", text: "# Q3 sync\nattendees\n" },
-    { kind: "choice", ours: "follow up with design\n", theirs: "sync directly with design\n" },
-    { kind: "common", text: "next check-in Aug 18\n" }
-  ]
+  text: { current: CURRENT_TEXT, recorded: RECORDED_TEXT }
 };
-
-const OURS_TEXT = "# Q3 sync\nattendees\nfollow up with design\nnext check-in Aug 18\n";
-const THEIRS_TEXT = "# Q3 sync\nattendees\nsync directly with design\nnext check-in Aug 18\n";
 
 beforeEach(() => {
   lastDiff.props = null;
@@ -108,24 +104,47 @@ describe("comparing a recorded version", () => {
     expect(readVersionDiff).toHaveBeenCalledTimes(1);
   });
 
-  it("names the file and says the comparison is read-only", async () => {
+  it("names the file and says exactly what restoring will do", async () => {
     const host = await render();
 
-    expect(host.textContent).toContain("Meeting Notes.md");
-    expect(host.textContent).toContain("read-only");
+    expect(host.textContent).toContain("Preview restore: Meeting Notes.md");
+    expect(host.textContent).toContain(
+      "This preview shows exactly how the file will change. Restoring replaces the current file with the selected earlier version."
+    );
+    // The restore direction is labelled in words, not left to the colors.
+    const legend = host.querySelector('[aria-label="Restore preview legend"]');
+    expect(legend?.textContent).toContain("+ Added by restore");
+    expect(legend?.textContent).toContain("− Removed by restore");
   });
 
-  it("hands the comparison both whole versions, recorded on the left", async () => {
+  it("hands the comparison both whole versions, current on the left", async () => {
     const host = await render();
 
+    // A/original is the file now; B/editor doc is the selected earlier
+    // version — so additions read "added by restore" and deletions "removed
+    // by restore". The order is the semantics, not a detail.
     expect(host.querySelector('[data-testid="codemirror-diff"]')).not.toBeNull();
-    expect(lastDiff.props?.before).toBe(THEIRS_TEXT);
-    expect(lastDiff.props?.after).toBe(OURS_TEXT);
-    expect(lastDiff.props?.beforeLabel).toBe("Earlier version");
-    expect(lastDiff.props?.afterLabel).toBe("Current version");
+    expect(lastDiff.props?.before).toBe(CURRENT_TEXT);
+    expect(lastDiff.props?.after).toBe(RECORDED_TEXT);
+    expect(lastDiff.props?.beforeLabel).toBe("Current file");
+    expect(lastDiff.props?.afterLabel).toBe("After restore");
     expect(lastDiff.props?.relativePath).toBe("Meeting Notes.md");
     expect(lastDiff.props?.editableAfter).toBe(false);
     expect(lastDiff.props?.transferBeforeToAfter).toBeUndefined();
+    expect(lastDiff.props?.ariaLabel).toBe(
+      "Current file versus after restore for Meeting Notes.md"
+    );
+  });
+
+  it("names its section from the preview heading, not a separate label", async () => {
+    const host = await render();
+
+    const section = host.querySelector("section");
+    const heading = host.querySelector("h2");
+    expect(heading?.textContent).toBe("Preview restore: Meeting Notes.md");
+    expect(section?.getAttribute("aria-labelledby")).toBe(heading?.id);
+    expect(section?.getAttribute("aria-label")).toBeNull();
+    expect(host.textContent).not.toContain("compared with");
   });
 });
 
@@ -175,13 +194,14 @@ describe("restoring the recorded version", () => {
 
 describe("a file that cannot be compared piece by piece", () => {
   it("mounts no comparison but still offers restore", async () => {
-    readVersionDiff.mockResolvedValue({ ...DIFF, kind: "binary", chunks: [] });
+    readVersionDiff.mockResolvedValue({ ...DIFF, kind: "binary", text: null });
     const onRestore = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
 
     const host = await render({ onRestore });
 
     expect(host.textContent).toContain("can't be compared");
     expect(host.querySelector('[data-testid="codemirror-diff"]')).toBeNull();
+    expect(host.querySelector('[aria-label="Restore preview legend"]')).toBeNull();
     expect(lastDiff.props).toBeNull();
 
     await act(async () => button(host, "Restore this version").click());

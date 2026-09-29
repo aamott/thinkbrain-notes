@@ -1,11 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Unavailable } from "../shell/Unavailable";
 import { CodeMirrorDiff } from "./CodeMirrorDiff";
 import { describeSize, describeWhen, noteName } from "./conflictCard";
 import { readConflict, resolveConflict } from "./conflictService";
 import type { ConflictComparison, ConflictResolution } from "./conflictTypes";
-import { sideText } from "./mergeModel";
 import { failureMessage } from "./syncCopy";
 
 /**
@@ -140,19 +139,14 @@ const SAVE_BUTTON =
   "rounded-small border border-primary bg-primary px-3 py-1.5 text-xs text-primary-foreground disabled:opacity-50";
 
 function MergeSurface({ conflict, resolving, onResolve }: MergeSurfaceProps) {
-  const { chunks, ours, theirs } = conflict;
+  const { ours, theirs } = conflict;
   const comparable = conflict.kind === "text";
   const note = noteName(ours.path);
 
-  // Each full version, rebuilt exactly from the comparison's chunks — left is
-  // the incoming version, right starts as this computer's and is what gets
-  // saved. Recomputed only when the comparison itself changes, never per edit.
-  const beforeText = useMemo(() => sideText(chunks, "theirs"), [chunks]);
-  const afterText = useMemo(() => sideText(chunks, "ours"), [chunks]);
-
   // Whatever the right pane currently holds — moved by the transfer arrows,
-  // typed, or untouched. Sent verbatim as the merged note on save.
-  const [result, setResult] = useState(afterText);
+  // typed, or untouched. Sent verbatim as the merged note on save. It seeds
+  // from this computer's complete version, exactly as the comparison sent it.
+  const [result, setResult] = useState(comparable ? conflict.text.current : "");
 
   return (
     <section
@@ -189,8 +183,8 @@ function MergeSurface({ conflict, resolving, onResolve }: MergeSurfaceProps) {
         // section scrolls instead of the comparison collapsing away.
         <div className="flex min-h-56 min-w-0 max-w-full flex-1 flex-col overflow-hidden">
           <CodeMirrorDiff
-            before={beforeText}
-            after={afterText}
+            before={conflict.text.incoming}
+            after={conflict.text.current}
             beforeLabel={theirs.label}
             afterLabel={`${ours.label} — what will be saved`}
             relativePath={ours.path}

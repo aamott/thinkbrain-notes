@@ -2,22 +2,13 @@
  * The shapes the native side sends when two versions of a note exist.
  *
  * Mirrors `src-tauri/src/commands/sync/{merge,resolve}.rs`. The native side
- * never sends a conflict marker or a diff — only chunks, which is what lets
- * this UI be a list of choices rather than a text editor with a syntax to
- * explain.
+ * never sends a conflict marker or a diff — only the two complete documents,
+ * which is what lets this UI compare them with its own differ rather than
+ * explain a serialisation format.
  */
 
 /** Whether the two versions can be compared line by line at all. */
 export type ConflictKind = "text" | "binary";
-
-/** One stretch of the comparison. */
-export type ConflictChunk =
-  | { readonly kind: "common"; readonly text: string }
-  /**
-   * The versions disagree here. Either side may be an empty string — that is
-   * something one side added, offered against the choice of leaving it out.
-   */
-  | { readonly kind: "choice"; readonly ours: string; readonly theirs: string };
 
 /** One side of a conflict, as a card or a column header shows it. */
 export interface ConflictVersion {
@@ -52,10 +43,28 @@ export interface ConflictSummary {
   readonly theirs: ConflictVersion;
 }
 
-/** A conflict with its comparison. Empty `chunks` when `kind` is binary. */
-export interface ConflictComparison extends ConflictSummary {
-  readonly chunks: readonly ConflictChunk[];
+/**
+ * A comparison's complete documents.
+ *
+ * `incoming` is the conflict copy — the other device's version, on the left.
+ * `current` is this computer's version as the user sees it: the open editor's
+ * buffer when there is one, else what is on disk.
+ */
+export interface ConflictText {
+  readonly incoming: string;
+  readonly current: string;
 }
+
+/**
+ * A conflict with its comparison. `text` is `null` when `kind` is binary:
+ * there is nothing to compare line by line, and the choice is between whole
+ * files.
+ */
+export type ConflictComparison = Omit<ConflictSummary, "kind"> &
+  (
+    | { readonly kind: "text"; readonly text: ConflictText }
+    | { readonly kind: "binary"; readonly text: null }
+  );
 
 /** What the user decided. */
 export type ConflictResolution =
@@ -63,7 +72,7 @@ export type ConflictResolution =
   | { readonly kind: "keepTheirs" }
   /** Keep both, renaming the copy after whoever made it. */
   | { readonly kind: "keepBoth" }
-  /** Assembled chunk by chunk in the merge view. */
+  /** Assembled by the merge view from the two versions it was shown. */
   | { readonly kind: "merged"; readonly contents: string }
   /** Keep the note; the other device had deleted it. */
   | { readonly kind: "keepNote" }

@@ -415,17 +415,33 @@ pub fn sync_conflict_rate(root_path: String) -> Result<Rate, NativeError> {
     conflict_rate(&engine.repository())
 }
 
-/// One diff comparison against a past version of a note.
+/// One comparison's complete documents: the file as it is now, and the
+/// version recorded in the selected change.
+///
+/// Whole texts, not a diff — the frontend's own differ draws the comparison,
+/// so the native side owes it the two ends exactly as they stand. `current` is
+/// the open editor's buffer when one was sent, because "the file" is what the
+/// user is looking at rather than the last save.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VersionText {
+    pub current: String,
+    pub recorded: String,
+}
+
+/// One comparison of the current file against a recorded version.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VersionDiff {
     pub kind: super::merge::Kind,
     pub change: String,
     pub note_path: String,
-    pub chunks: Vec<super::merge::Chunk>,
+    /// Both complete documents when the pair is text; `None` for binary, where
+    /// there is nothing to draw and the choice is between whole files.
+    pub text: Option<VersionText>,
 }
 
-/// Computes the diff between the current note and a historical version recorded in `change`.
+/// Computes the comparison between the current note and a historical version recorded in `change`.
 pub fn diff_version(
     engine: &Engine,
     note: &str,
@@ -439,7 +455,7 @@ pub fn diff_version(
     let relative = snapshot::vault_relative(&vault, Path::new(note))?;
     let absolute = vault.join(&relative);
 
-    let ours_bytes = match buffer {
+    let current_bytes = match buffer {
         Some(b) => b.as_bytes().to_vec(),
         None => std::fs::read(&absolute).map_err(|error| {
             failed(
@@ -450,14 +466,24 @@ pub fn diff_version(
         })?,
     };
 
-    let theirs_bytes = version_at(&repo, &relative, change)?;
-    let (kind, chunks) = super::merge::compare(&ours_bytes, &theirs_bytes);
+    let recorded_bytes = version_at(&repo, &relative, change)?;
+    let text =
+        super::merge::text_pair(&current_bytes, &recorded_bytes).map(|(current, recorded)| {
+            VersionText {
+                current: current.to_string(),
+                recorded: recorded.to_string(),
+            }
+        });
 
     Ok(VersionDiff {
-        kind,
+        kind: if text.is_some() {
+            super::merge::Kind::Text
+        } else {
+            super::merge::Kind::Binary
+        },
         change: change.to_string(),
         note_path: note.to_string(),
-        chunks,
+        text,
     })
 }
 

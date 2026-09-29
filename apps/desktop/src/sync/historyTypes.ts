@@ -6,8 +6,6 @@
  * nothing in the UI is entitled to read anything into them.
  */
 
-import type { ConflictChunk, ConflictKind } from "./conflictTypes";
-
 export type NoteChangeKind = "added" | "updated" | "removed";
 
 export interface ChangedNote {
@@ -16,13 +14,29 @@ export interface ChangedNote {
   readonly change: NoteChangeKind;
 }
 
-/** One diff comparison against an earlier version of a note. */
-export interface VersionDiff {
-  readonly kind: ConflictKind;
+/**
+ * A comparison's complete documents.
+ *
+ * `current` is the file as it stands now — the open editor's buffer when one
+ * was supplied. `recorded` is the version the selected change kept. Restoring
+ * replaces `current` with `recorded`, which is exactly what the preview draws.
+ */
+export interface VersionText {
+  readonly current: string;
+  readonly recorded: string;
+}
+
+interface VersionDiffBase {
   readonly change: string;
   readonly notePath: string;
-  readonly chunks: readonly ConflictChunk[];
 }
+
+/** One comparison of the current file against an earlier version of it. */
+export type VersionDiff = VersionDiffBase &
+  (
+    | { readonly kind: "text"; readonly text: VersionText }
+    | { readonly kind: "binary"; readonly text: null }
+  );
 
 /** One recorded change, as the history list shows it. */
 export interface RecordedChange {

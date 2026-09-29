@@ -1,10 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import { Unavailable } from "../shell/Unavailable";
 import { CodeMirrorDiff } from "./CodeMirrorDiff";
 import { noteName } from "./conflictCard";
 import type { VersionDiff } from "./historyTypes";
-import { sideText } from "./mergeModel";
 import { readVersionDiff } from "./syncService";
 import { failureMessage, restoreFailureMessage } from "./syncCopy";
 
@@ -27,7 +26,7 @@ interface VersionDiffTabProps {
   /**
    * Unsaved text from an editor open on this file, if there is one.
    *
-   * "Current version" has to be what the user is looking at — comparing
+   * "Current file" has to be what the user is looking at — comparing
    * against the last save would show them a file they can see is out of date.
    */
   readonly currentBuffer?: string | null;
@@ -163,25 +162,21 @@ function VersionDiffSurface({
   readonly onRestore: () => void;
 }) {
   const name = noteName(diff.notePath);
+  const headingId = useId();
   const comparable = diff.kind === "text";
-
-  // Each whole version, rebuilt exactly from the comparison's chunks — left
-  // is the recorded version, right is the file as it stands now.
-  const beforeText = useMemo(() => sideText(diff.chunks, "theirs"), [diff.chunks]);
-  const afterText = useMemo(() => sideText(diff.chunks, "ours"), [diff.chunks]);
 
   return (
     <section
       className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col gap-3 overflow-y-auto overflow-x-hidden p-4"
-      aria-label={`Compare an earlier version of ${name}`}
+      aria-labelledby={headingId}
     >
       <header className="rounded-small border border-border bg-card p-4">
-        <h2 className="m-0 text-base font-semibold text-card-foreground">
-          An earlier version of {name}
+        <h2 id={headingId} className="m-0 text-base font-semibold text-card-foreground">
+          Preview restore: {name}
         </h2>
         <p className="mb-0 mt-1.5 text-xs leading-relaxed text-muted-foreground">
           {comparable
-            ? "The recorded version is on the left and the file as it is now on the right. This comparison is read-only — nothing here edits the file. Putting the version back writes it over the file."
+            ? "This preview shows exactly how the file will change. Restoring replaces the current file with the selected earlier version."
             : "This file's contents can't be compared line by line — they aren't text. You can still put the recorded version back below."}
         </p>
       </header>
@@ -193,19 +188,32 @@ function VersionDiffSurface({
       )}
 
       {comparable ? (
-        // A floor keeps the diff usable on a very short screen — the
-        // section scrolls instead of the comparison collapsing away.
-        <div className="flex min-h-56 min-w-0 max-w-full flex-1 flex-col overflow-hidden">
-          <CodeMirrorDiff
-            before={beforeText}
-            after={afterText}
-            beforeLabel="Earlier version"
-            afterLabel="Current version"
-            relativePath={diff.notePath}
-            editableAfter={false}
-            ariaLabel={`Comparison of an earlier version of ${name} with the current file`}
-          />
-        </div>
+        <>
+          {/* What the two highlight colors mean, in words as well as color:
+              additions are what the restore puts in, removals what it takes
+              out — the diff is drawn current → recorded, so the colors follow
+              the restore, not the history. */}
+          <ul
+            aria-label="Restore preview legend"
+            className="m-0 flex list-none flex-wrap gap-x-4 gap-y-1 p-0 text-[0.7rem]"
+          >
+            <li className="text-success">+ Added by restore</li>
+            <li className="text-danger">− Removed by restore</li>
+          </ul>
+          {/* A floor keeps the diff usable on a very short screen — the
+              section scrolls instead of the comparison collapsing away. */}
+          <div className="flex min-h-56 min-w-0 max-w-full flex-1 flex-col overflow-hidden">
+            <CodeMirrorDiff
+              before={diff.text.current}
+              after={diff.text.recorded}
+              beforeLabel="Current file"
+              afterLabel="After restore"
+              relativePath={diff.notePath}
+              editableAfter={false}
+              ariaLabel={`Current file versus after restore for ${name}`}
+            />
+          </div>
+        </>
       ) : (
         <p className="m-0 rounded-small border border-border bg-card p-3 text-xs leading-relaxed text-muted-foreground">
           No visual comparison is available for this file.

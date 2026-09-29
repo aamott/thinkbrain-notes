@@ -196,7 +196,9 @@ describe("the responsive layout default", () => {
     expect(host.querySelector(".cm-mergeView")).toBeNull();
     // unifiedMergeView's own decoration marks the changed lines.
     expect(host.querySelector(".cm-changedLine")).not.toBeNull();
-    expect(host.textContent).toContain("This computer compared with OneDrive");
+    // The synthesized "X compared with Y" sentence is gone — callers name
+    // the comparison themselves through labels and aria.
+    expect(host.textContent).not.toContain("compared with");
     expect(inlineEditor(host).state.doc.toString()).toBe("shared\nlocal\n");
   });
 
@@ -293,6 +295,24 @@ describe("the inline presentation's merge controls", () => {
 
     expect(inlineEditor(host).state.doc.toString()).toBe("shared\nincoming\n");
     expect(onAfterChange).toHaveBeenCalledWith("shared\nincoming\n");
+  });
+
+  /// The caller decides which document is which; the engine must then show
+  /// a current-only stretch as deleted and a restore-only stretch as the
+  /// document's own text — this is the semantics the restore preview relies on.
+  it("shows text only in the original as deleted and keeps B's own text", async () => {
+    const host = await renderInline({
+      before: "shared\nCURRENT-ONLY\n",
+      after: "shared\nRECORDED-ONLY\n"
+    });
+
+    // allowInlineDiffs shows the A-only stretch inline as struck text.
+    expect(host.querySelector(".cm-deletedText")?.textContent).toContain("CURRENT");
+    const view = inlineEditor(host);
+    expect(view.state.doc.toString()).toBe("shared\nRECORDED-ONLY\n");
+    expect(
+      view.dom.querySelector(".cm-inlineChangedLine, .cm-changedLine")?.textContent
+    ).toContain("RECORDED-ONLY");
   });
 
   it("mounts no merge controls when the comparison is read-only", async () => {
