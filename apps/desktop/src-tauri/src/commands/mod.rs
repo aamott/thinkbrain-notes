@@ -95,6 +95,7 @@ macro_rules! app_command_list {
         sync::resolve::read_conflict,
         sync::resolve::resolve_conflict,
         sync::history::sync_history,
+        sync::history::read_version_diff,
         sync::history::restore_version,
         sync::history::sync_conflict_rate,
         sync::maintain::sync_history_usage,
@@ -181,7 +182,7 @@ mod tests {
         );
         assert_eq!(
             APP_COMMAND_PATHS.len(),
-            58,
+            59,
             "the number of registered commands changed; update this count if it was deliberate"
         );
     }

@@ -1,7 +1,7 @@
 ---
 name: routine
 description: Medium-low difficulty tier. Smaller routine feature implementation.
-model: gpt-5-6-luna-high
+model: swe-2-high
 max-nesting: 2
 ---
 

@@ -141,7 +141,7 @@ export const syncModule: SettingsModule = {
           section: "sync.conflicts",
           label: "Settle obvious conflicts without asking",
           description:
-            "If this folder is in OneDrive, Google Drive, or Syncthing, those apps sometimes leave an extra copy beside a note. When that copy is identical to yours, or holds a version yours has already been through, keep yours and tidy the copy away. It still shows up under Decisions needed until then. Earlier versions stay in Saved versions either way. Turn this off to be asked about every copy."
+            "If this folder is in OneDrive, Google Drive, or Syncthing, those apps sometimes leave an extra copy beside a note. When that copy is identical to yours, or holds a version yours has already been through, keep yours and tidy the copy away. It still shows up under Sync conflicts until then. Earlier versions stay in Version history either way. Turn this off to be asked about every copy."
         }
       ]
     },

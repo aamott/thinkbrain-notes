@@ -380,3 +380,25 @@ fn the_counter_starts_at_nothing() {
 
     assert_eq!((rate.decisions, rate.recorded), (0, 0));
 }
+
+#[test]
+fn diffing_against_an_earlier_version_produces_chunks() {
+    let f = fixture("history-diff");
+    write(&f.vault, "note.md", "line 1\nline 2\n");
+    record(&f, "first save", &["note.md"]);
+
+    write(
+        &f.vault,
+        "note.md",
+        "line 1\nline 2 modified\nline 3 added\n",
+    );
+
+    let history = read(&f.repo, Some("note.md"), 10).expect("read history");
+    let first = &history[0].id;
+
+    let diff = diff_version(&f.engine, "note.md", first, None)
+        .expect("diff against earlier version succeeds");
+
+    assert_eq!(diff.kind, super::super::merge::Kind::Text);
+    assert!(!diff.chunks.is_empty());
+}

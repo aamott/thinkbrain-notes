@@ -33,6 +33,9 @@ export function InspectorSheet({
   rootPath,
   documentContents,
   documentPath,
+  documentDirty,
+  onCompareVersion,
+  onRestoreVersion,
   onOpenNote,
   onDismiss,
   onBack
@@ -40,9 +43,15 @@ export function InspectorSheet({
   readonly open: boolean;
   readonly panel: RightPanel;
   readonly rootPath: string | null;
-  /** Markdown contents of the active editor tab, when its document is ready. */
+  /** Contents of the active file-backed tab, when its document is ready. */
   readonly documentContents: string | null;
   readonly documentPath: string | null;
+  /** Whether the active document holds unsaved edits. */
+  readonly documentDirty: boolean;
+  /** Opens a read-only comparison of a file with one recorded version. */
+  readonly onCompareVersion: (notePath: string, changeId: string) => void;
+  /** Puts a recorded version back, saving an open dirty file first. */
+  readonly onRestoreVersion: (notePath: string, changeId: string) => Promise<void>;
   readonly onOpenNote: (relativePath: string) => void;
   /** Scrim tap: dismisses the inspector (and any flow it belongs to). */
   readonly onDismiss: () => void;
@@ -71,6 +80,9 @@ export function InspectorSheet({
             rootPath={rootPath}
             documentContents={documentContents}
             documentPath={documentPath}
+            documentDirty={documentDirty}
+            onCompareVersion={onCompareVersion}
+            onRestoreVersion={onRestoreVersion}
             onOpenNote={onOpenNote}
             onBack={onBack}
           />

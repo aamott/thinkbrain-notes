@@ -1,8 +1,11 @@
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { MoreHorizontal } from "lucide-react";
 import { cn } from "../lib/utils";
 import type { DesktopTab } from "../tabs/tabModel";
 import { useRightPanelContributions } from "../panels/panelRegistryModel";
 import { IconButton } from "./IconButton";
+import { Menu, MenuButton, type MenuCloseReason } from "./Menu";
+import { PanelIcon } from "./panelIcons";
 import { type RightPanel } from "./shellTypes";
 import { WorkspaceSelectorOutlet } from "../workspace/WorkspaceSelectorPortal";
 
@@ -60,6 +63,29 @@ export function TitleBar({
   onOpenCommandPalette
 }: TitleBarProps) {
   const rightPanels = useRightPanelContributions();
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const actionsTriggerRef = useRef<HTMLButtonElement>(null);
+
+  // Below 900px the individual panel buttons are hidden behind the kebab
+  // menu. If the window widens while the menu is open, the trigger becomes
+  // display:none and an open menu on a hidden trigger is a focus trap —
+  // close it on the way out instead. matchMedia is the only place JS reads
+  // the breakpoint; which control renders is purely CSS.
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const wide = window.matchMedia("(min-width: 901px)");
+    const closeWhenWide = (event: MediaQueryListEvent) => {
+      if (event.matches) setActionsOpen(false);
+    };
+    wide.addEventListener("change", closeWhenWide);
+    return () => wide.removeEventListener("change", closeWhenWide);
+  }, []);
+
+  const closeActions = (reason: MenuCloseReason): void => {
+    setActionsOpen(false);
+    // Escape means "take me back"; an outside click already chose its focus.
+    if (reason === "escape") actionsTriggerRef.current?.focus();
+  };
 
   // Per-tab DOM nodes keyed by tab id, so the active tab can be scrolled into
   // view without querying the document.
@@ -168,18 +194,55 @@ export function TitleBar({
         })}
       </nav>
 
-      {/* Right action group — panel toggles. */}
-      <div className="flex items-center border-l border-border gap-1 h-full px-2">
-        {rightPanels.map((action) => (
-          <IconButton
-            key={action.id}
-            label={action.label}
-            symbol={action.icon}
-            active={rightPanel === action.id}
-            className="w-[1.6rem] h-[1.6rem] border-l-0 rounded-small text-titlebar-foreground max-[760px]:hidden"
-            onClick={() => onToggleRightPanel(action.id)}
-          />
-        ))}
+      {/* Right action group — panel toggles. Below 900px the row of buttons
+          collapses into a single menu so a narrow window keeps every action
+          reachable instead of clipping them off the edge. */}
+      <div className="relative flex shrink-0 items-center border-l border-border gap-1 h-full px-2">
+        <div className="flex items-center gap-1 max-[900px]:hidden">
+          {rightPanels.map((action) => (
+            <IconButton
+              key={action.id}
+              label={action.label}
+              symbol={action.icon}
+              active={rightPanel === action.id}
+              className="w-[1.6rem] h-[1.6rem] border-l-0 rounded-small text-titlebar-foreground"
+              onClick={() => onToggleRightPanel(action.id)}
+            />
+          ))}
+        </div>
+        <button
+          ref={actionsTriggerRef}
+          type="button"
+          className="hidden max-[900px]:inline-flex items-center justify-center w-[1.6rem] h-[1.6rem] border-0 rounded-small bg-transparent text-titlebar-foreground cursor-pointer hover:bg-[color-mix(in_srgb,var(--tn-color-accent)_60%,transparent)] hover:text-activitybar-active focus-visible:outline-2 focus-visible:outline-ring focus-visible:-outline-offset-1"
+          aria-label="Action items"
+          aria-expanded={actionsOpen}
+          aria-controls="desktop-action-items-menu"
+          title="Action items"
+          onClick={() => setActionsOpen((open) => !open)}
+        >
+          <MoreHorizontal aria-hidden="true" className="size-[0.95rem]" />
+        </button>
+        {actionsOpen && (
+          <Menu
+            id="desktop-action-items-menu"
+            anchorRef={actionsTriggerRef}
+            className="absolute right-2 top-[calc(100%+0.25rem)] z-50"
+            onClose={closeActions}
+          >
+            {rightPanels.map((action) => (
+              <MenuButton
+                key={action.id}
+                label={action.label}
+                icon={<PanelIcon name={action.icon} />}
+                current={rightPanel === action.id}
+                onClick={() => {
+                  setActionsOpen(false);
+                  onToggleRightPanel(action.id);
+                }}
+              />
+            ))}
+          </Menu>
+        )}
       </div>
     </header>
   );

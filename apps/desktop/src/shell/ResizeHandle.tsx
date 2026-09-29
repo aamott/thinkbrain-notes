@@ -1,5 +1,7 @@
 import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from "react";
 
+import { cn } from "../lib/utils";
+
 /**
  * Thin draggable divider between shell panels.
  *
@@ -12,18 +14,24 @@ export function ResizeHandle({
   onPointerDown,
   onPointerCancel,
   onDoubleClick,
-  onKeyDown
+  onKeyDown,
+  className
 }: {
   label: string;
   onPointerDown: (event: ReactPointerEvent<HTMLButtonElement>) => void;
   onPointerCancel?: (event: ReactPointerEvent<HTMLButtonElement>) => void;
   onDoubleClick: () => void;
   onKeyDown: (event: ReactKeyboardEvent<HTMLButtonElement>) => void;
+  /** Extra classes, e.g. a wider hide breakpoint for an overlaid dock. */
+  className?: string;
 }) {
   return (
     <button
       type="button"
-      className="relative flex-[0_0_1px] select-none touch-none p-0 border-0 bg-border cursor-col-resize hover:bg-primary focus-visible:bg-primary focus-visible:outline-none max-[760px]:hidden"
+      className={cn(
+        "relative flex-[0_0_1px] select-none touch-none p-0 border-0 bg-border cursor-col-resize hover:bg-primary focus-visible:bg-primary focus-visible:outline-none max-[760px]:hidden",
+        className
+      )}
       aria-label={`${label}. Use arrow keys to resize.`}
       onPointerDown={onPointerDown}
       onPointerCancel={onPointerCancel}

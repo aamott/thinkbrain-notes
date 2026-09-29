@@ -80,7 +80,7 @@ describe("sync module", () => {
     const git = syncModule.sections.find((section) => section.id === "sync.destination");
     expect(cloud?.label).toBe("Cloud copies");
     expect(git?.label).toBe("Git link");
-    expect(cloud?.settings?.[0]?.description).toMatch(/Decisions needed/i);
+    expect(cloud?.settings?.[0]?.description).toMatch(/Sync conflicts/i);
     expect(cloud?.settings?.[0]?.description).toMatch(/OneDrive/i);
   });
 

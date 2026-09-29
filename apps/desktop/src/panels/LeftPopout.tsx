@@ -13,10 +13,8 @@ type LeftPopoutProps = {
   readonly onOpenSearchResult: (relativePath: string) => void;
   /** Called when a conflict is opened for side-by-side review. */
   readonly onReviewConflict: (copyPath: string, notePath: string) => void;
-  /** The note whose earlier versions the history panel should show. */
-  readonly versionsOf: string | null;
-  /** Called when the history panel is asked to widen back to everything. */
-  readonly onShowEverything: () => void;
+  /** Called when the conflicts header menu asks for sync settings. */
+  readonly onOpenSyncSettings: () => void;
   readonly workspaceSelectorInPanel?: boolean;
 };
 
@@ -30,8 +28,7 @@ export function LeftPopout({
   explorerProps,
   onOpenSearchResult,
   onReviewConflict,
-  versionsOf,
-  onShowEverything,
+  onOpenSyncSettings,
   workspaceSelectorInPanel
 }: LeftPopoutProps) {
   const context: LeftPanelContext = useMemo(
@@ -40,10 +37,9 @@ export function LeftPopout({
       explorerProps,
       onOpenSearchResult,
       onReviewConflict,
-      versionsOf,
-      onShowEverything
+      onOpenSyncSettings
     }),
-    [rootPath, explorerProps, onOpenSearchResult, onReviewConflict, versionsOf, onShowEverything]
+    [rootPath, explorerProps, onOpenSearchResult, onReviewConflict, onOpenSyncSettings]
   );
   const leftPanels = useLeftPanelContributions();
   return (

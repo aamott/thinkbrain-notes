@@ -1,136 +1,93 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  countLines,
-  isSettled,
-  mergedText,
-  resultSegments,
-  undecidedCount,
-  type ChunkPick
-} from "./mergeModel";
+import { lineDelta, sideText } from "./mergeModel";
 import type { ConflictChunk } from "./conflictTypes";
 
 const common = (text: string): ConflictChunk => ({ kind: "common", text });
 const choice = (ours: string, theirs: string): ConflictChunk => ({ kind: "choice", ours, theirs });
 
-const NOTE: readonly ConflictChunk[] = [
-  common("# Note\n"),
-  choice("mine\n", "theirs\n"),
-  common("end\n")
-];
+describe("sideText", () => {
+  it("rebuilds each whole version, common stretches and choices alike", () => {
+    const chunks = [
+      common("# Note\n"),
+      choice("mine\n", "theirs\n"),
+      common("end\n")
+    ];
 
-const picks = (entries: Record<number, ChunkPick>): ReadonlyMap<number, ChunkPick> =>
-  new Map(Object.entries(entries).map(([index, pick]) => [Number(index), pick]));
-
-describe("mergedText", () => {
-  it("keeps this computer's side of a chunk", () => {
-    expect(mergedText(NOTE, picks({ 1: "ours" }))).toBe("# Note\nmine\nend\n");
+    expect(sideText(chunks, "ours")).toBe("# Note\nmine\nend\n");
+    expect(sideText(chunks, "theirs")).toBe("# Note\ntheirs\nend\n");
   });
 
-  it("keeps the other side of a chunk", () => {
-    expect(mergedText(NOTE, picks({ 1: "theirs" }))).toBe("# Note\ntheirs\nend\n");
+  // A choice chunk with an empty half is an insertion or a deletion — the
+  // empty side must contribute nothing rather than a stray newline.
+  it("rebuilds an insertion without inventing content for the other side", () => {
+    const chunks = [common("start\n"), choice("", "added\n"), common("done\n")];
+
+    expect(sideText(chunks, "ours")).toBe("start\ndone\n");
+    expect(sideText(chunks, "theirs")).toBe("start\nadded\ndone\n");
   });
 
-  it("keeps both sides in the order they are shown", () => {
-    expect(mergedText(NOTE, picks({ 1: "both" }))).toBe("# Note\nmine\ntheirs\nend\n");
+  it("rebuilds a deletion without inventing content for the other side", () => {
+    const chunks = [common("start\n"), choice("removed\n", ""), common("done\n")];
+
+    expect(sideText(chunks, "ours")).toBe("start\nremoved\ndone\n");
+    expect(sideText(chunks, "theirs")).toBe("start\ndone\n");
   });
 
-  // Without this the two versions run together into one corrupt line — the one
-  // case where "keep both" loses content rather than keeping it.
-  it("separates both sides when the first does not end a line", () => {
-    const ragged = [choice("mine", "theirs")];
+  // A file that never ended its last line has no trailing newline to find —
+  // joining the chunks must not grow one.
+  it("does not invent a trailing newline", () => {
+    const chunks = [common("one\n"), choice("two", "2")];
 
-    expect(mergedText(ragged, picks({ 0: "both" }))).toBe("mine\ntheirs");
+    expect(sideText(chunks, "ours")).toBe("one\ntwo");
+    expect(sideText(chunks, "theirs")).toBe("one\n2");
   });
 
-  it("does not invent a separator when a side is empty", () => {
-    expect(mergedText([choice("", "added\n")], picks({ 0: "both" }))).toBe("added\n");
-    expect(mergedText([choice("kept\n", "")], picks({ 0: "both" }))).toBe("kept\n");
+  it("rebuilds text beyond ASCII exactly", () => {
+    const chunks = [
+      common("# ノート\n"),
+      choice("café — façade\n", "emoji ☕️ and 中文\n")
+    ];
+
+    expect(sideText(chunks, "ours")).toBe("# ノート\ncafé — façade\n");
+    expect(sideText(chunks, "theirs")).toBe("# ノート\nemoji ☕️ and 中文\n");
   });
 
-  // An undecided chunk still has to render as a real document, or the preview
-  // is not a preview of anything.
-  it("shows this computer's side for a chunk nobody has decided", () => {
-    expect(mergedText(NOTE, picks({}))).toBe("# Note\nmine\nend\n");
-  });
-
-  it("is exactly the note again when there is nothing to choose", () => {
-    expect(mergedText([common("just text\n")], picks({}))).toBe("just text\n");
-  });
-});
-
-describe("undecidedCount", () => {
-  it("counts only the chunks still waiting on someone", () => {
-    const two = [choice("a\n", "A\n"), common("x\n"), choice("b\n", "B\n")];
-
-    expect(undecidedCount(two, picks({}))).toBe(2);
-    expect(undecidedCount(two, picks({ 0: "ours" }))).toBe(1);
-    expect(undecidedCount(two, picks({ 0: "ours", 2: "both" }))).toBe(0);
-  });
-
-  it("ignores a decision recorded against a common chunk", () => {
-    expect(undecidedCount(NOTE, picks({ 0: "ours", 2: "ours" }))).toBe(1);
+  it("rebuilds an empty comparison as empty", () => {
+    expect(sideText([], "ours")).toBe("");
+    expect(sideText([], "theirs")).toBe("");
   });
 });
 
-describe("isSettled", () => {
-  // Saving with an undecided chunk would accept a default the user never
-  // looked at, in the one feature where that means losing someone's writing.
-  it("is false until every choice has been made", () => {
-    expect(isSettled(NOTE, picks({}))).toBe(false);
-    expect(isSettled(NOTE, picks({ 1: "theirs" }))).toBe(true);
+describe("lineDelta", () => {
+  it("counts identical texts as no change", () => {
+    expect(lineDelta("same\nfile\n", "same\nfile\n")).toEqual({ added: 0, removed: 0 });
   });
 
-  it("is true for a comparison with nothing to choose", () => {
-    expect(isSettled([common("all agreed\n")], picks({}))).toBe(true);
-  });
-});
-
-describe("resultSegments", () => {
-  it("marks what came from a decision and what is still standing in", () => {
-    expect(resultSegments(NOTE, picks({}))).toEqual([
-      { text: "# Note\n", state: "common", index: 0 },
-      { text: "mine\n", state: "pending", index: 1 },
-      { text: "end\n", state: "common", index: 2 }
-    ]);
+  it("counts a pure insertion as added lines only", () => {
+    expect(lineDelta("start\ndone\n", "start\nadded\ndone\n")).toEqual({ added: 1, removed: 0 });
   });
 
-  it("marks a decided chunk as chosen", () => {
-    expect(resultSegments(NOTE, picks({ 1: "theirs" }))[1]).toEqual({
-      text: "theirs\n",
-      state: "chosen",
-      index: 1
-    });
+  it("counts a pure deletion as removed lines only", () => {
+    expect(lineDelta("start\nremoved\ndone\n", "start\ndone\n")).toEqual({ added: 0, removed: 1 });
   });
 
-  it("joins back into exactly the merged text", () => {
-    for (const pick of ["ours", "theirs", "both"] as const) {
-      const chosen = picks({ 1: pick });
-      const joined = resultSegments(NOTE, chosen)
-        .map((segment) => segment.text)
-        .join("");
-
-      expect(joined).toBe(mergedText(NOTE, chosen));
-    }
+  it("counts a replaced line once on each side", () => {
+    expect(lineDelta("one\ntwo\nthree\n", "one\n2\nthree\n")).toEqual({ added: 1, removed: 1 });
   });
 
-  // A chunk where one side is empty and that side wins contributes nothing;
-  // a blank row in the preview would read as a blank line in the note.
-  it("leaves out a segment with no text in it", () => {
-    expect(resultSegments([choice("", "added\n")], picks({ 0: "ours" }))).toEqual([]);
-  });
-});
-
-describe("countLines", () => {
-  it("counts the lines in a collapsed stretch", () => {
-    expect(countLines("one\ntwo\nthree\n")).toBe(3);
+  it("counts a block replacement spanning several lines", () => {
+    expect(lineDelta("a\nb\nx\nc\n", "a\nb\ny\nz\nc\n")).toEqual({ added: 2, removed: 1 });
   });
 
-  it("counts a last line that never ended", () => {
-    expect(countLines("one\ntwo")).toBe(2);
+  // The line the newline lands on is itself a changed line, so appending to a
+  // file that never ended its last line counts that line on both sides.
+  it("handles files that do not end in a newline", () => {
+    expect(lineDelta("one\ntwo", "one\ntwo\nthree")).toEqual({ added: 2, removed: 1 });
+    expect(lineDelta("one\ntwo\nthree", "one\ntwo")).toEqual({ added: 1, removed: 2 });
   });
 
-  it("counts nothing in nothing", () => {
-    expect(countLines("")).toBe(0);
+  it("counts an emptied file as every line removed", () => {
+    expect(lineDelta("a\nb\n", "")).toEqual({ added: 0, removed: 2 });
   });
 });

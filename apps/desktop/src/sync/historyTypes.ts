@@ -6,12 +6,22 @@
  * nothing in the UI is entitled to read anything into them.
  */
 
+import type { ConflictChunk, ConflictKind } from "./conflictTypes";
+
 export type NoteChangeKind = "added" | "updated" | "removed";
 
 export interface ChangedNote {
   /** Workspace-relative, forward slashes. */
   readonly path: string;
   readonly change: NoteChangeKind;
+}
+
+/** One diff comparison against an earlier version of a note. */
+export interface VersionDiff {
+  readonly kind: ConflictKind;
+  readonly change: string;
+  readonly notePath: string;
+  readonly chunks: readonly ConflictChunk[];
 }
 
 /** One recorded change, as the history list shows it. */

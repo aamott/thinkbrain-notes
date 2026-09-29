@@ -29,8 +29,10 @@ const menu = (overrides: Record<string, unknown> = {}): React.ReactElement => (
     rootPath={null}
     documentContents={null}
     documentPath={null}
+    documentDirty={false}
     onOpenNote={() => undefined}
-    onOpenSavedVersions={() => undefined}
+    onCompareVersion={() => undefined}
+    onRestoreVersion={async () => undefined}
     onDismiss={() => undefined}
     onSelect={() => undefined}
     {...overrides}
@@ -41,16 +43,32 @@ const menuOf = (host: HTMLDivElement): Element | null =>
   host.querySelector('[role="menu"][aria-label="Action items"]');
 
 describe("ActionItemsMenu", () => {
-  it("always offers Saved versions and calls onOpenSavedVersions", async () => {
-    const onOpenSavedVersions = vi.fn();
-    const host = await render(menu({ onOpenSavedVersions }));
-    const row = menuOf(host)?.querySelector<HTMLButtonElement>(
-      '[role="menuitem"][aria-label="Saved versions"]'
+  it("offers Version history once, disabled without a file open", async () => {
+    const onSelect = vi.fn();
+    const host = await render(menu({ onSelect }));
+    const rows = menuOf(host)?.querySelectorAll<HTMLButtonElement>(
+      '[role="menuitem"][aria-label="Version history"]'
     );
 
-    expect(row).not.toBeNull();
+    // It is an ordinary right-panel contribution — one row, greyed until a
+    // file is the visible content, never a bespoke extra entry.
+    expect(rows).toHaveLength(1);
+    expect(rows?.[0]?.disabled).toBe(true);
+    expect(menuOf(host)?.querySelector('[aria-label="Saved versions"]')).toBeNull();
+    await act(async () => rows?.[0]?.click());
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it("opens Version history for the file on screen", async () => {
+    const onSelect = vi.fn();
+    const host = await render(menu({ onSelect, documentPath: "note.md" }));
+    const row = menuOf(host)?.querySelector<HTMLButtonElement>(
+      '[role="menuitem"][aria-label="Version history"]'
+    );
+
+    expect(row?.disabled).toBe(false);
     await act(async () => row?.click());
-    expect(onOpenSavedVersions).toHaveBeenCalledOnce();
+    expect(onSelect).toHaveBeenCalledWith("history");
   });
 
   it("shows optional Back/Forward rows that disable and fire independently", async () => {
@@ -91,7 +109,7 @@ describe("ActionItemsMenu", () => {
     const el = menuOf(host);
 
     expect(el).not.toBeNull();
-    for (const label of ["Outline", "Properties", "Backlinks", "Assistant"]) {
+    for (const label of ["Version history", "Outline", "Properties", "Backlinks", "Assistant"]) {
       expect(el?.querySelector(`[role="menuitem"][aria-label="${label}"]`)).not.toBeNull();
     }
   });
@@ -174,10 +192,9 @@ describe("ActionItemsMenu", () => {
     menuOf(host)?.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
 
   it("moves focus with ArrowDown/ArrowUp, wrapping at the ends", async () => {
-    const host = await render(menu());
-    // Enabled rows in order: Saved versions, Outline, Properties, Assistant —
-    // Backlinks is registered but disabled and must be skipped over.
-    const order = ["Saved versions", "Outline", "Properties", "Assistant"] as const;
+    const host = await render(menu({ documentPath: "note.md" }));
+    // With a file open every right-panel row is enabled, in registry order.
+    const order = ["Version history", "Outline", "Backlinks", "Properties", "Assistant"] as const;
     // Start with focus outside the menu: Down then selects the first row.
     await act(async () => (document.activeElement as HTMLElement | null)?.blur());
 
@@ -190,16 +207,16 @@ describe("ActionItemsMenu", () => {
     await act(async () => press(host, "ArrowDown"));
     expect(document.activeElement).toBe(row(host, order[0]));
     await act(async () => press(host, "ArrowUp"));
-    expect(document.activeElement).toBe(row(host, order[3]));
+    expect(document.activeElement).toBe(row(host, "Assistant"));
   });
 
   it("jumps to the first/last row with Home/End", async () => {
-    const host = await render(menu());
+    const host = await render(menu({ documentPath: "note.md" }));
     await act(async () => (document.activeElement as HTMLElement | null)?.blur());
 
     await act(async () => press(host, "End"));
     expect(document.activeElement).toBe(row(host, "Assistant"));
     await act(async () => press(host, "Home"));
-    expect(document.activeElement).toBe(row(host, "Saved versions"));
+    expect(document.activeElement).toBe(row(host, "Version history"));
   });
 });

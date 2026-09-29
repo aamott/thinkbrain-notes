@@ -47,8 +47,8 @@ export interface DocumentViews {
   readonly documents: Record<string, DocumentViewState>;
   /** Tabs whose file changed on disk while they held unsaved edits. */
   readonly conflicts: ReadonlySet<string>;
-  /** Loads a document into a tab that already exists (or is about to). */
-  readonly loadDocumentIntoView: (tabId: string, rootPath: string, relativePath: string) => void;
+  /** Loads a document into a tab that already exists (or is about to). `kind` picks the loader — a code editor reads through the text-file API, not the Markdown one. */
+  readonly loadDocumentIntoView: (tabId: string, rootPath: string, relativePath: string, kind?: string) => void;
   /** Opens a note: makes the tab, announces it, loads it. */
   readonly openMarkdownDocument: (rootPath: string, relativePath: string) => void;
   /** Opens any file: infers tab kind from extension, loads via the right API. */

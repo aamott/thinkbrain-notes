@@ -415,6 +415,69 @@ pub fn sync_conflict_rate(root_path: String) -> Result<Rate, NativeError> {
     conflict_rate(&engine.repository())
 }
 
+/// One diff comparison against a past version of a note.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VersionDiff {
+    pub kind: super::merge::Kind,
+    pub change: String,
+    pub note_path: String,
+    pub chunks: Vec<super::merge::Chunk>,
+}
+
+/// Computes the diff between the current note and a historical version recorded in `change`.
+pub fn diff_version(
+    engine: &Engine,
+    note: &str,
+    change: &str,
+    buffer: Option<&str>,
+) -> Result<VersionDiff, NativeError> {
+    let repo = engine.repository();
+    let vault = repo.workdir().ok_or_else(|| {
+        NativeError::new("sync.no_worktree", "This sync history has no notes folder.")
+    })?;
+    let relative = snapshot::vault_relative(&vault, Path::new(note))?;
+    let absolute = vault.join(&relative);
+
+    let ours_bytes = match buffer {
+        Some(b) => b.as_bytes().to_vec(),
+        None => std::fs::read(&absolute).map_err(|error| {
+            failed(
+                "sync.note_read_failed",
+                "Could not read the current note.",
+                error,
+            )
+        })?,
+    };
+
+    let theirs_bytes = version_at(&repo, &relative, change)?;
+    let (kind, chunks) = super::merge::compare(&ours_bytes, &theirs_bytes);
+
+    Ok(VersionDiff {
+        kind,
+        change: change.to_string(),
+        note_path: note.to_string(),
+        chunks,
+    })
+}
+
+/// Tauri command computing the diff between the current note and a historical version.
+#[tauri::command]
+pub fn read_version_diff(
+    root_path: String,
+    note_path: String,
+    change: String,
+    buffer: Option<String>,
+) -> Result<VersionDiff, NativeError> {
+    let engine = engine_for(&root_path)?.ok_or_else(|| {
+        NativeError::new(
+            "sync.not_recorded",
+            "Auto Sync is not keeping history for this workspace.",
+        )
+    })?;
+    diff_version(&engine, &note_path, &change, buffer.as_deref())
+}
+
 #[cfg(test)]
 #[path = "history_tests.rs"]
 mod tests;

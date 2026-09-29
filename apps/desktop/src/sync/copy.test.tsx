@@ -17,7 +17,11 @@ import { cleanup, render } from "./syncTestHarness";
  * ordinary English — mail merge, merging lanes. It is the *nouns* of git that
  * mean nothing to someone who has never used it.
  *
- * "git" is allowed in Decisions needed and in settings — the link field is a git
+ * "diff" is absent for the same reason: the approved mockup names the compare
+ * button "Compare Diff", so the word is sanctioned user-facing copy here —
+ * not smuggled git jargon.
+ *
+ * "git" is allowed in Sync conflicts and in settings — the link field is a git
  * link, and a card should say when a copy came from git rather than a cloud app.
  */
 const JARGON = [
@@ -27,7 +31,6 @@ const JARGON = [
   "repo",
   "ours",
   "theirs",
-  "diff",
   "hunk",
   "chunk",
   "branch",
@@ -60,6 +63,13 @@ vi.mock("./syncService", () => ({
     Promise.resolve({ ...NOT_RECORDING, state: "idle", alongsideOwnGit: true }),
   readHistory: () => readHistory(),
   readConflictRate: () => Promise.resolve({ decisions: 2, settled: 47, recorded: 340 }),
+  readVersionDiff: () =>
+    Promise.resolve({
+      kind: "text",
+      change: "abc123",
+      notePath: "Meeting Notes.md",
+      chunks: [{ kind: "common", text: "shared\n" }]
+    }),
   restoreVersion: () => Promise.resolve(),
   subscribeToSyncStatus: () => Promise.resolve(() => undefined),
   readHistoryUsage: () => Promise.resolve({ bytes: 2048 }),
@@ -165,7 +175,7 @@ describe("nothing in this feature speaks git to the user", () => {
     );
   });
 
-  it("keeps the history plain, opened and closed", async () => {
+  it("keeps the history plain, with and without a file open", async () => {
     readHistory.mockResolvedValue([
       {
         id: "abc123",
@@ -180,9 +190,15 @@ describe("nothing in this feature speaks git to the user", () => {
 
     for (const note of [null, "Meeting Notes.md"]) {
       audit(
-        `the history for ${note ?? "everything"}`,
+        `the history for ${note ?? "no file"}`,
         await renderText(
-          <HistoryPanel rootPath="/notes" note={note} onShowEverything={() => undefined} />
+          <HistoryPanel
+            rootPath="/notes"
+            note={note}
+            currentContents={null}
+            onCompare={() => undefined}
+            onRestore={async () => undefined}
+          />
         )
       );
     }
@@ -193,7 +209,15 @@ describe("nothing in this feature speaks git to the user", () => {
 
     audit(
       "the empty history",
-      await renderText(<HistoryPanel rootPath="/notes" note={null} onShowEverything={() => undefined} />)
+      await renderText(
+        <HistoryPanel
+          rootPath="/notes"
+          note="Meeting Notes.md"
+          currentContents={null}
+          onCompare={() => undefined}
+          onRestore={async () => undefined}
+        />
+      )
     );
   });
 

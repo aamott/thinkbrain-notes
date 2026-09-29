@@ -30,7 +30,10 @@ const sheet = (overrides: Record<string, unknown> = {}): React.ReactElement => (
     rootPath={null}
     documentContents={null}
     documentPath={null}
+    documentDirty={false}
     onOpenNote={() => undefined}
+    onCompareVersion={() => undefined}
+    onRestoreVersion={async () => undefined}
     onDismiss={() => undefined}
     onBack={() => undefined}
     {...overrides}

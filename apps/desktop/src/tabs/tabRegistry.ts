@@ -58,6 +58,11 @@ export const builtInDesktopTabViews: readonly DesktopTabView[] = [
     isAvailable: true
   },
   {
+    kind: "version-diff",
+    label: "Compare version",
+    isAvailable: true
+  },
+  {
     kind: "code-editor",
     label: "Code editor",
     isAvailable: true

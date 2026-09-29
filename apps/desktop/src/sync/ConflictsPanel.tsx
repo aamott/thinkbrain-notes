@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
+import { MoreHorizontal, Settings } from "lucide-react";
 
+import { useDismissable } from "@thinkbrain/ui";
 import { Unavailable } from "../shell/Unavailable";
 import { describeSize, describeWhen, noteName, treatmentOf } from "./conflictCard";
 import { listConflicts, resolveConflict } from "./conflictService";
@@ -23,11 +25,18 @@ interface ConflictsPanelProps {
   readonly rootPath: string | null;
   /** Opens the side-by-side comparison, named by the copy and the note it is of. */
   readonly onReview: (copyPath: string, notePath: string) => void;
+  /** Opens sync settings. */
+  readonly onOpenSettings?: () => void;
 }
-export function ConflictsPanel({ rootPath, onReview }: ConflictsPanelProps) {
+export function ConflictsPanel({ rootPath, onReview, onOpenSettings }: ConflictsPanelProps) {
   const [conflicts, setConflicts] = useState<readonly ConflictSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const { containerRef: menuRef } = useDismissable({
+    open: menuOpen,
+    onDismiss: () => setMenuOpen(false)
+  });
 
   /**
    * Reads the list and writes both halves of the result into state.
@@ -80,23 +89,75 @@ export function ConflictsPanel({ rootPath, onReview }: ConflictsPanelProps) {
     return <Unavailable title="No workspace open" description="Open a workspace to see anything waiting for you." />;
   }
 
+  const renderHeader = () => (
+    <header className="border-b border-border px-3 py-3">
+      <div className="flex items-center justify-between">
+        <h3 className="m-0 text-sm font-semibold text-foreground">Sync conflicts</h3>
+        <div className="relative">
+          <button
+            type="button"
+            className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-secondary hover:text-foreground"
+            aria-label="Conflict options"
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((open) => !open)}
+          >
+            <MoreHorizontal className="size-4" />
+          </button>
+          {menuOpen && (
+            <div
+              ref={menuRef}
+              role="menu"
+              aria-label="Conflict options"
+              className="absolute right-0 top-full z-50 mt-1 w-48 rounded-medium border border-border bg-popover py-1 text-xs text-popover-foreground shadow-panel"
+            >
+              <button
+                type="button"
+                role="menuitem"
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-foreground hover:bg-accent"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onOpenSettings?.();
+                }}
+              >
+                <Settings className="size-3.5 text-muted-foreground" />
+                <span>Sync settings</span>
+              </button>
+              <div className="my-1 border-t border-border" />
+              <button
+                type="button"
+                role="menuitem"
+                disabled
+                className="flex w-full items-center justify-between px-3 py-1.5 text-left text-muted-foreground opacity-50 cursor-not-allowed"
+                title="Sign in with GitHub is coming in a future update"
+              >
+                <span>Sign in with GitHub</span>
+                <span className="rounded bg-secondary px-1 py-0.5 text-[0.625rem] text-muted-foreground">Soon</span>
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+      <p className="mb-0 mt-1 text-xs leading-relaxed text-muted-foreground">
+        Choose what to keep. Nothing is deleted until you decide.
+      </p>
+    </header>
+  );
+
   if (conflicts.length === 0 && stuck.length === 0 && !error) {
     return (
-      <Unavailable
-        title="Nothing waiting on a decision"
-        description="When git sync or a cloud folder leaves a note that needs a choice, it shows up here."
-      />
+      <section className="@container flex min-h-0 flex-1 flex-col overflow-y-auto" aria-label="Sync conflicts">
+        {renderHeader()}
+        <Unavailable
+          title="No sync conflicts"
+          description="When git sync or a cloud folder leaves a note that needs a choice, it shows up here."
+        />
+      </section>
     );
   }
 
   return (
-    <section className="@container flex min-h-0 flex-1 flex-col overflow-y-auto" aria-label="Decisions needed">
-      <header className="border-b border-border px-3 py-3">
-        <h3 className="m-0 text-sm font-semibold text-foreground">Decisions needed</h3>
-        <p className="mb-0 mt-1 text-xs leading-relaxed text-muted-foreground">
-          Choose what to keep. Nothing is deleted until you decide.
-        </p>
-      </header>
+    <section className="@container flex min-h-0 flex-1 flex-col overflow-y-auto" aria-label="Sync conflicts">
+      {renderHeader()}
 
       {error !== null && (
         <p role="alert" className="m-3 rounded-small border border-danger px-2 py-1.5 text-xs text-danger">

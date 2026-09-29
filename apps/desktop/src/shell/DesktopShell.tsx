@@ -36,10 +36,16 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
   const resource = activeTab?.resource;
   const rootPath = resource?.rootPath;
   const relativePath = resource?.relativePath;
-  const markdownDocumentPath = activeTab?.kind === "editor"
-    && relativePath?.toLowerCase().endsWith(".md")
-    ? relativePath
-    : null;
+  // The inspector's file: any tab showing a workspace file — Markdown editor,
+  // code editor, media viewer — but never a comparison tab, whose resource is
+  // the file the comparison is about rather than a document being viewed.
+  const documentPath =
+    activeTab !== null &&
+    activeTab.kind !== "merge" &&
+    activeTab.kind !== "version-diff" &&
+    relativePath !== undefined
+      ? relativePath
+      : null;
 
   // Journal entries render their own dateline, so the title row hides there —
   // same rule as PhoneShell. Only ordinary Markdown editor tabs get a title.
@@ -58,8 +64,7 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
       rootPath={shell.restoredWorkspacePath}
       explorerProps={shell.explorerProps}
       onReviewConflict={shell.reviewConflict}
-      versionsOf={shell.versionsOf}
-      onShowEverything={shell.clearVersions}
+      onOpenSyncSettings={shell.openSyncSettings}
       onOpenSearchResult={(relativePath) => {
         if (shell.restoredWorkspacePath) shell.openMarkdownDocument(shell.restoredWorkspacePath, relativePath);
       }}
@@ -98,7 +103,9 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
             the app, not about the note anyone happens to be reading. */}
         <UpdateBanner state={shell.update.state} onInstall={shell.update.install} onDismiss={shell.update.dismiss} />
 
-        <div className="flex min-h-0 max-[760px]:relative">
+        {/* Positioning context for the overlaid docks: the right popout
+            anchors here at ≤900px, the left at ≤760px. */}
+        <div className="flex min-h-0 max-[900px]:relative">
           <ActivityBar
             leftPanel={leftPanel}
             onSelectLeftPanel={shell.selectLeftPanel}
@@ -160,7 +167,7 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
                   onRestored={() => shell.loadDocumentIntoView(activeTab.id, rootPath, relativePath)}
                 />
               )}
-              <TabContent tab={activeTab} document={activeDocument} onChange={shell.updateDocument} onSave={shell.saveDocument} noteIndex={shell.noteIndex} onOpenNote={shell.onOpenNote} onReopenNote={shell.loadDocumentIntoView} unsavedNoteContents={shell.unsavedNoteContents} />
+              <TabContent tab={activeTab} document={activeDocument} onChange={shell.updateDocument} onSave={shell.saveDocument} noteIndex={shell.noteIndex} onOpenNote={shell.onOpenNote} onReopenNote={shell.loadDocumentIntoView} unsavedNoteContents={shell.unsavedNoteContents} onRestoreVersion={shell.restoreVersionSafely} />
             </article>
             {shell.bottomPanel && (
               <div className="shrink-0 tn-slide-in-bottom">
@@ -175,8 +182,11 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
 
           {rightPanel && (
             <>
+              {/* An overlaid panel is not dock-resizable, so the handle hides
+                  at the same 900px breakpoint where the popout overlays. */}
               <ResizeHandle
                 label="Resize right panel"
+                className="max-[900px]:hidden"
                 onPointerDown={shell.resize.beginResize("right")}
                 onPointerCancel={shell.resize.cancelResize}
                 onDoubleClick={() => shell.resetPanelWidth("right")}
@@ -188,7 +198,10 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
                 documentContents={activeDocument?.phase === "ready"
                   ? activeDocument.contents
                   : null}
-                documentPath={markdownDocumentPath}
+                documentPath={documentPath}
+                documentDirty={documentPath !== null && Boolean(activeTab?.isDirty)}
+                onCompareVersion={shell.compareVersion}
+                onRestoreVersion={shell.restoreVersionSafely}
                 onOpenNote={(relativePath) => {
                   if (shell.restoredWorkspacePath) {
                     shell.openMarkdownDocument(shell.restoredWorkspacePath, relativePath);

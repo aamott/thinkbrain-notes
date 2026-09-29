@@ -42,12 +42,14 @@ const context: DesktopPanelContext = {
   rootPath: null,
   documentContents: null,
   documentPath: null,
+  documentDirty: false,
   onOpenNote: () => undefined,
+  onCompareVersion: () => undefined,
+  onRestoreVersion: async () => undefined,
   explorerProps,
   onOpenSearchResult: () => undefined,
   onReviewConflict: () => undefined,
-      versionsOf: null,
-      onShowEverything: () => undefined
+  onOpenSyncSettings: () => undefined
 };
 
 /** Only the state a left-side factory may read. */
@@ -56,8 +58,7 @@ const leftContext: LeftPanelContext = {
   explorerProps,
   onOpenSearchResult: () => undefined,
   onReviewConflict: () => undefined,
-      versionsOf: null,
-      onShowEverything: () => undefined
+  onOpenSyncSettings: () => undefined
 };
 
 /** Only the state a right-side factory may read. */
@@ -65,7 +66,10 @@ const rightContext: RightPanelContext = {
   rootPath: "/notes",
   documentContents: "# Hello",
   documentPath: "Hello.md",
-  onOpenNote: () => undefined
+  documentDirty: false,
+  onOpenNote: () => undefined,
+  onCompareVersion: () => undefined,
+  onRestoreVersion: async () => undefined
 };
 
 /** Minimal spy contribution with a side and factory. */
@@ -97,9 +101,9 @@ describe("desktop panel registry", () => {
       "explorer",
       "search",
       "conflicts",
-      "history",
       "tags",
       "extensions",
+      "history",
       "outline",
       "backlinks",
       "properties",
@@ -109,11 +113,11 @@ describe("desktop panel registry", () => {
       "explorer",
       "search",
       "conflicts",
-      "history",
       "tags",
       "extensions"
     ]);
     expect(desktopPanelRegistry.entriesBySide("right").map((panel) => panel.id)).toEqual([
+      "history",
       "outline",
       "backlinks",
       "properties",
@@ -129,7 +133,9 @@ describe("desktop panel registry", () => {
 
   it("looks up registered panels and reports missing ids", () => {
     expect(desktopPanelRegistry.get("outline")?.label).toBe("Outline");
-    expect(desktopPanelRegistry.get("conflicts")?.label).toBe("Decisions needed");
+    expect(desktopPanelRegistry.get("conflicts")?.label).toBe("Sync conflicts");
+    expect(desktopPanelRegistry.get("history")?.label).toBe("Version history");
+    expect(desktopPanelRegistry.get("history")?.side).toBe("right");
     expect(desktopPanelRegistry.get("missing")).toBeUndefined();
     expect(desktopPanelRegistry.isAvailable("outline", context)).toBe(true);
     expect(desktopPanelRegistry.isAvailable("tags", context)).toBe(false);
@@ -142,6 +148,20 @@ describe("desktop panel registry", () => {
     ]);
     expect(registry.isAvailable("explorer", context)).toBe(false);
     expect(registry.isAvailable("explorer", { ...context, rootPath: "/notes" })).toBe(true);
+  });
+
+  it("makes Version history available only for an active file", () => {
+    expect(desktopPanelRegistry.isAvailable("history", context)).toBe(false);
+    expect(desktopPanelRegistry.isAvailable("history", {
+      ...context,
+      documentPath: "note.md"
+    })).toBe(true);
+    // A media tab carries a path but no text — history still applies.
+    expect(desktopPanelRegistry.isAvailable("history", {
+      ...context,
+      documentPath: "photo.png",
+      documentContents: null
+    })).toBe(true);
   });
 
   it("makes backlinks available only for an active Markdown document path", () => {
@@ -173,8 +193,7 @@ describe("desktop panel registry", () => {
         explorerProps={context.explorerProps}
         onOpenSearchResult={context.onOpenSearchResult}
         onReviewConflict={context.onReviewConflict}
-        versionsOf={null}
-        onShowEverything={() => undefined}
+        onOpenSyncSettings={context.onOpenSyncSettings}
       />
     );
     const rightMarkup = renderToStaticMarkup(
@@ -183,6 +202,9 @@ describe("desktop panel registry", () => {
         rootPath={null}
         documentContents={null}
         documentPath={null}
+        documentDirty={false}
+        onCompareVersion={() => undefined}
+        onRestoreVersion={async () => undefined}
         onOpenNote={() => undefined}
       />
     );
@@ -234,10 +256,11 @@ describe("desktop panel registry", () => {
   });
 
   it("narrows built-in left ids via the type guard", () => {
-    for (const id of ["explorer", "search", "conflicts", "history", "tags", "extensions"] as const) {
+    for (const id of ["explorer", "search", "conflicts", "tags", "extensions"] as const) {
       expect(isBuiltInLeftPanel(id)).toBe(true);
     }
     expect(isBuiltInLeftPanel("outline")).toBe(false);
+    expect(isBuiltInLeftPanel("history")).toBe(false);
   });
 
   // Type-level fixtures: misspelled built-in ids must be rejected by the

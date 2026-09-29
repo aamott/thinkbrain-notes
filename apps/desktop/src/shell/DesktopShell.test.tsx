@@ -54,9 +54,23 @@ describe("DesktopShell composition", () => {
       expect(markup).toContain(`aria-label="${action.label}"`);
       expect(markup).toContain(`title="${action.label}"`);
     }
-    expect(leftPanels).toHaveLength(6);
+    // Five, and history is not among them: it moved to the right inspector.
+    expect(leftPanels).toHaveLength(5);
+    expect(leftPanels.map((action) => action.id)).not.toContain("history");
     expect(markup).toContain('aria-label="Settings"');
     expect(markup).toContain('title="Settings"');
+  });
+
+  it("renders the narrow-width Action items trigger alongside the wide buttons", () => {
+    const markup = shellMarkup();
+
+    // Both controls always render; CSS breakpoints decide which is visible.
+    expect(markup).toContain('aria-label="Action items"');
+    expect(markup).toContain('aria-controls="desktop-action-items-menu"');
+    const rightPanels = desktopPanelRegistry.entriesBySide("right");
+    for (const action of rightPanels) {
+      expect(markup).toContain(`aria-label="${action.label}"`);
+    }
   });
 
   it("keeps the editor region and left dock landmark in the layout", () => {

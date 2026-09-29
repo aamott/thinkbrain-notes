@@ -4,14 +4,17 @@ import { inferTabKind } from "@thinkbrain/core";
 export interface DesktopTab extends Tab {
   readonly kind: TabKind;
   /**
-   * For a merge tab: the note both versions are of.
+   * For a comparison tab: the file both versions are of.
    *
    * A merge tab's `resource` names the conflict *copy*, because that is what
-   * identifies a conflict everywhere else. The note itself is still needed —
-   * to show its name, and to find an editor open on it whose unsaved text is
-   * the version the user is actually looking at.
+   * identifies a conflict everywhere else; a version-diff tab's `resource` is
+   * the file itself. The source path is still needed in both — to show its
+   * name, and to find an editor open on it whose unsaved text is the version
+   * the user is actually looking at.
    */
   readonly comparedNotePath?: string;
+  /** For a version-diff tab: the recorded change the comparison is against. */
+  readonly versionChangeId?: string;
 }
 
 /** Media viewer tab kinds — read-only, no document state, no save button. */
@@ -126,6 +129,31 @@ export function createConflictTab(resource: Required<TabResource>, notePath: str
     kind: "merge",
     resource,
     comparedNotePath: notePath
+  };
+}
+
+/** Stable identity for a file compared against one recorded version. */
+export function versionDiffTabId(resource: Required<TabResource>, changeId: string): string {
+  return `version-diff:${encodeURIComponent(resource.rootPath)}:${encodeURIComponent(resource.relativePath)}:${encodeURIComponent(changeId)}`;
+}
+
+/**
+ * Builds a read-only tab comparing a file's current contents with the version
+ * recorded as `changeId`. `resource` is the file itself — unlike a merge tab,
+ * there is no conflict copy involved.
+ */
+export function createVersionDiffTab(
+  resource: Required<TabResource>,
+  changeId: string
+): DesktopTab {
+  const name = resource.relativePath.split("/").filter(Boolean).at(-1) ?? resource.relativePath;
+  return {
+    id: versionDiffTabId(resource, changeId),
+    title: `${name} — Compare version`,
+    kind: "version-diff",
+    resource,
+    comparedNotePath: resource.relativePath,
+    versionChangeId: changeId
   };
 }
 

@@ -8,6 +8,7 @@ import { isMediaViewerKind, type DesktopTab } from "../tabs/tabModel";
 import type { DocumentViewState } from "./shellTypes";
 import { SettingsTab } from "../settings/SettingsTab";
 import { MergeTab } from "../sync/MergeTab";
+import { VersionDiffTab } from "../sync/VersionDiffTab";
 import { DamagedNote } from "./DamagedNote";
 import { Unavailable } from "./Unavailable";
 
@@ -51,12 +52,19 @@ type TabContentProps = {
    */
   readonly onReopenNote?: (tabId: string, rootPath: string, relativePath: string) => void;
   /**
-   * Unsaved text of an editor open on the note a merge tab is about.
+   * Unsaved text of an editor open on the file a comparison tab is about.
    *
-   * Only a merge tab reads it: "this computer's version" has to be what the
-   * user is looking at, and the last save may be several paragraphs behind.
+   * Only merge and version-diff tabs read it: "the current version" has to be
+   * what the user is looking at, and the last save may be several paragraphs
+   * behind.
    */
   readonly unsavedNoteContents?: string | null;
+  /**
+   * Puts a recorded version back over the file it was of — shell-owned so an
+   * open dirty file is saved before the restore runs. Only version-diff tabs
+   * call it.
+   */
+  readonly onRestoreVersion?: (notePath: string, changeId: string) => Promise<void>;
 };
 
 /** Lazy-loaded Markdown editor; only fetched when an editor tab is rendered. */
@@ -80,7 +88,8 @@ export function TabContent({
   noteIndex,
   onOpenNote,
   onReopenNote,
-  unsavedNoteContents
+  unsavedNoteContents,
+  onRestoreVersion
 }: TabContentProps) {
   // Hooks must run before any early return, so both are read up front even
   // though only the Markdown editor branch consumes them.
@@ -164,6 +173,24 @@ export function TabContent({
         rootPath={rootPath ?? null}
         copyPath={relativePath ?? null}
         buffer={unsavedNoteContents ?? null}
+      />
+    );
+  }
+
+  // A recorded version of a file against its current contents, read-only.
+  if (tab.kind === "version-diff") {
+    return (
+      <VersionDiffTab
+        rootPath={rootPath ?? null}
+        notePath={tab.comparedNotePath ?? relativePath ?? null}
+        changeId={tab.versionChangeId ?? null}
+        currentBuffer={unsavedNoteContents ?? null}
+        onRestore={
+          onRestoreVersion ??
+          (async () => {
+            throw new Error("Restoring a version is not available right now.");
+          })
+        }
       />
     );
   }

@@ -17,7 +17,8 @@ import type {
   SavedSignIn,
   SignInStatus,
   Synced,
-  SyncStatus
+  SyncStatus,
+  VersionDiff
 } from "./historyTypes";
 
 /** Fired when what the status footer would say about a workspace has changed. */
@@ -118,6 +119,23 @@ export function restoreVersion(
   change: string
 ): Promise<void> {
   return invokeNativeCommand("restore_version", { rootPath, notePath, change }).then(() => undefined);
+}
+
+/**
+ * Computes line-by-line diff chunks between the current note and an earlier version.
+ */
+export function readVersionDiff(
+  rootPath: string,
+  notePath: string,
+  change: string,
+  buffer?: string | null
+): Promise<VersionDiff> {
+  return invokeNativeCommand("read_version_diff", {
+    rootPath,
+    notePath,
+    change,
+    buffer: buffer ?? null
+  });
 }
 
 export function readConflictRate(rootPath: string): Promise<ConflictRate> {

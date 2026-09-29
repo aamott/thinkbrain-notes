@@ -132,6 +132,22 @@ export function failureMessage(
 }
 
 /**
+ * What a failed restore says, including the shell's own refusals.
+ *
+ * `failureMessage` treats a non-native error as unexpected and hides its
+ * text; a refused pre-restore save is the opposite — its message ("save the
+ * current file first") is exactly what the user needs, so it passes through.
+ */
+export function restoreFailureMessage(cause: unknown): string {
+  if (cause instanceof NativeCommandError) {
+    return `${cause.message} ${recoveryFor(cause.code)}`;
+  }
+  if (cause instanceof Error) return cause.message;
+  console.error("[sync] restore failed:", cause);
+  return "That version could not be put back. Nothing was changed.";
+}
+
+/**
  * How often this folder has needed something of its user, and how often it
  * did not.
  *
@@ -242,7 +258,7 @@ function pillFor(status: SyncStatus, now: Date): PillCopy {
       return {
         symbol: "⚠",
         text,
-        detail: `${text}. Open Decisions needed to choose what to keep.`,
+        detail: `${text}. Open Sync conflicts to choose what to keep.`,
         tone: "warn"
       };
     }

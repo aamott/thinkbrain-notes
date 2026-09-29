@@ -59,7 +59,7 @@ describe("the list of things waiting on you", () => {
   it("says so plainly when there is nothing", async () => {
     const { host } = await render(<ConflictsPanel rootPath="/notes" onReview={() => undefined} />);
 
-    expect(host.textContent).toContain("Nothing waiting on a decision");
+    expect(host.textContent).toContain("No sync conflicts");
   });
 
   it("names each note and who else has a version of it", async () => {
@@ -67,10 +67,32 @@ describe("the list of things waiting on you", () => {
 
     const { host } = await render(<ConflictsPanel rootPath="/notes" onReview={() => undefined} />);
 
-    expect(host.querySelector('section[aria-label="Decisions needed"]')).not.toBeNull();
-    expect(host.querySelector("h3")?.textContent).toBe("Decisions needed");
+    expect(host.querySelector('section[aria-label="Sync conflicts"]')).not.toBeNull();
+    expect(host.querySelector("h3")?.textContent).toBe("Sync conflicts");
     expect(host.textContent).toContain("Meeting Notes.md");
     expect(host.textContent).toContain("Syncthing");
+  });
+
+  it("offers sync settings and disabled github sign in from the header menu", async () => {
+    const onOpenSettings = vi.fn();
+    const { host } = await render(
+      <ConflictsPanel rootPath="/notes" onReview={() => undefined} onOpenSettings={onOpenSettings} />
+    );
+
+    const menuButton = host.querySelector('button[aria-label="Conflict options"]') as HTMLButtonElement | null;
+    expect(menuButton).not.toBeNull();
+    await act(async () => {
+      menuButton?.click();
+    });
+
+    expect(host.textContent).toContain("Sign in with GitHub");
+
+    const settingsOption = host.querySelector('button[role="menuitem"]') as HTMLButtonElement | null;
+    expect(settingsOption?.textContent).toContain("Sync settings");
+    await act(async () => {
+      settingsOption?.click();
+    });
+    expect(onOpenSettings).toHaveBeenCalledOnce();
   });
 
   it("keeps reading the rest of the list when one card cannot be built", async () => {

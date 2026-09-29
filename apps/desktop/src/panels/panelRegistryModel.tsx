@@ -36,26 +36,31 @@ export interface LeftPanelContext {
   readonly onOpenSearchResult: (relativePath: string) => void;
   /** Opens the side-by-side comparison for a conflict, named by its copy. */
   readonly onReviewConflict: (copyPath: string, notePath: string) => void;
-  /**
-   * The note whose earlier versions the history panel should show, or `null`
-   * for the whole workspace's history. Set by "Previous versions…" in the file
-   * tree, which is why it lives out here rather than inside the panel.
-   */
-  readonly versionsOf: string | null;
-  /** Leaves one note's versions for the whole workspace's history. */
-  readonly onShowEverything: () => void;
+  /** Opens Settings at the sync section, from the conflicts header menu. */
+  readonly onOpenSyncSettings: () => void;
 }
 
 /** State a right-side panel factory may read (inspector panels only). */
 export interface RightPanelContext {
   /** Current workspace root, or `null` before a workspace is opened. */
   readonly rootPath: string | null;
-  /** Ready contents of the active Markdown document, or `null`. */
+  /**
+   * Ready contents of the active file-backed document, or `null`.
+   *
+   * `null` both for a document still loading and for a file that has no text
+   * to show — image, audio, video — which Version history still lists.
+   */
   readonly documentContents: string | null;
-  /** Relative path of the active Markdown editor note, or `null`. */
+  /** Relative path of the active file-backed tab, or `null`. */
   readonly documentPath: string | null;
+  /** Whether the active document holds unsaved edits. */
+  readonly documentDirty: boolean;
   /** Requests shell-owned navigation to another note. */
   readonly onOpenNote: (relativePath: string) => void;
+  /** Opens a read-only comparison of a file with one recorded version. */
+  readonly onCompareVersion: (notePath: string, changeId: string) => void;
+  /** Puts a recorded version back, saving an open dirty file first. */
+  readonly onRestoreVersion: (notePath: string, changeId: string) => Promise<void>;
 }
 
 /**
@@ -90,7 +95,6 @@ export type BuiltInLeftPanel =
   | "explorer"
   | "search"
   | "conflicts"
-  | "history"
   | "tags"
   | "extensions";
 
@@ -103,6 +107,7 @@ export type BuiltInLeftPanel =
  * but are not selectable shell state until extension selection is implemented.
  */
 export type BuiltInRightPanel =
+  | "history"
   | "outline"
   | "backlinks"
   | "properties"
@@ -153,7 +158,6 @@ export function isBuiltInLeftPanel(id: string): id is BuiltInLeftPanel {
   return id === "explorer"
     || id === "search"
     || id === "conflicts"
-    || id === "history"
     || id === "tags"
     || id === "extensions";
 }
@@ -244,20 +248,11 @@ export const builtInDesktopPanels: readonly (LeftPanelContribution | RightPanelC
   },
   {
     id: "conflicts",
-    label: "Decisions needed",
+    label: "Sync conflicts",
     icon: "conflicts",
     side: "left",
-    factory: ({ onReviewConflict, rootPath }) => (
-      <ConflictsPanel rootPath={rootPath} onReview={onReviewConflict} />
-    )
-  },
-  {
-    id: "history",
-    label: "Saved versions",
-    icon: "history",
-    side: "left",
-    factory: ({ rootPath, versionsOf, onShowEverything }) => (
-      <HistoryPanel rootPath={rootPath} note={versionsOf} onShowEverything={onShowEverything} />
+    factory: ({ onReviewConflict, onOpenSyncSettings, rootPath }) => (
+      <ConflictsPanel rootPath={rootPath} onReview={onReviewConflict} onOpenSettings={onOpenSyncSettings} />
     )
   },
   {
@@ -276,6 +271,30 @@ export const builtInDesktopPanels: readonly (LeftPanelContribution | RightPanelC
     icon: "extensions",
     side: "left",
     factory: () => <ExtensionsPanel />
+  },
+  {
+    // History inspects the active file, so it belongs to the document
+    // inspector on the right — the first thing in it.
+    id: "history",
+    label: "Version history",
+    icon: "history",
+    side: "right",
+    availability: ({ documentPath }) => documentPath !== null,
+    factory: ({
+      rootPath,
+      documentPath,
+      documentContents,
+      onCompareVersion,
+      onRestoreVersion
+    }) => (
+      <HistoryPanel
+        rootPath={rootPath}
+        note={documentPath}
+        currentContents={documentContents}
+        onCompare={onCompareVersion}
+        onRestore={onRestoreVersion}
+      />
+    )
   },
   {
     id: "outline",

@@ -349,22 +349,22 @@ describe("PhoneShell", () => {
   it("pins a panel to the hub from a drawer long press", async () => {
     storeHub([{ kind: "panel", id: "explorer" }, { kind: "menu" }]);
     const host = await render();
-    expect(hubOf(host)?.textContent).not.toContain("Saved versions");
+    expect(hubOf(host)?.textContent).not.toContain("Sync conflicts");
     await click(host, "Menu");
 
     // On touch, press-and-hold fires `contextmenu`, which is what the drawer
     // rows listen for — no second long-press timer of their own.
     await act(async () => {
       drawerOf(host)
-        ?.querySelector('[aria-label="Saved versions"]')
+        ?.querySelector('[aria-label="Sync conflicts"]')
         ?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
     });
 
     // Pinned before the menu, which stays the last slot.
-    expect(hubLabels(host)).toEqual(["Files", "Saved versions", "Menu"]);
+    expect(hubLabels(host)).toEqual(["Files", "Sync conflicts", "Menu"]);
     // And the row now says so, so a second hold that changes nothing reads as
     // "already done" rather than as a broken gesture.
-    expect(drawerOf(host)?.querySelector('[aria-label="Saved versions"]')?.textContent).toContain(
+    expect(drawerOf(host)?.querySelector('[aria-label="Sync conflicts"]')?.textContent).toContain(
       "Pinned"
     );
   });
@@ -378,7 +378,7 @@ describe("PhoneShell", () => {
 
     await act(async () => {
       drawerOf(host)
-        ?.querySelector('[aria-label="Saved versions"]')
+        ?.querySelector('[aria-label="Sync conflicts"]')
         ?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
     });
 
@@ -447,43 +447,48 @@ describe("PhoneShell", () => {
     expect(drawerOf(host)?.querySelector('[aria-label="Search"]')?.getAttribute("aria-current")).toBeNull();
   });
 
-  it("offers Saved versions only inside the action-items menu", async () => {
-    const host = await render();
+  it("offers Version history inside the action-items menu, once, for the open file", async () => {
+    const { host, shell } = await renderWithShell();
+    await openReadyNote(shell);
 
-    // The phone header carries no sync/version control at all.
-    expect(host.querySelector('header [aria-label="Saved versions"]')).toBeNull();
+    // The phone header carries no sync/version control at all, and no bespoke
+    // Saved versions entry survives — the row is the registry's own.
+    expect(host.querySelector('header [aria-label="Version history"]')).toBeNull();
+    expect(host.querySelector('[aria-label="Saved versions"]')).toBeNull();
 
     await click(host, "Document tools");
-    const row = actionsMenu(host)?.querySelector<HTMLButtonElement>(
-      '[role="menuitem"][aria-label="Saved versions"]'
+    const menu = actionsMenu(host);
+    expect(menu?.querySelectorAll('[aria-label="Version history"]')).toHaveLength(1);
+    const row = menu?.querySelector<HTMLButtonElement>(
+      '[role="menuitem"][aria-label="Version history"]'
     );
-    expect(row).not.toBeNull();
+    expect(row?.disabled).toBe(false);
 
     await act(async () => row?.click());
 
-    // Replacing the menu's entry lands straight on the panel — the menu is
-    // closed, not buried one Back step deep.
-    expect(host.querySelector('[aria-label="Saved versions panel"]')).not.toBeNull();
+    // The same inspector the right dock renders on desktop — opened as the
+    // actions menu's child, not a replaced content route.
+    expect(inspector(host)).not.toBeNull();
+    expect(inspector(host)?.querySelector('[aria-label="Version history panel"]')).not.toBeNull();
     expect(actionsMenu(host)).toBeNull();
   });
 
-  it("clears a note-specific version filter when the drawer opens Saved versions", async () => {
-    const { host, shell } = await renderWithShell();
-    await act(async () => shell().openMarkdownDocument("/vault", "note.md"));
-    await act(async () => shell().showVersionsOf("/vault", "note.md"));
-    expect(shell().versionsOf).toBe("note.md");
+  it("resolves a persisted panel:history hub slot into the right inspector", async () => {
+    const { host, shell } = await (async () => {
+      storeHub([{ kind: "panel", id: "history" }, { kind: "menu" }]);
+      return renderWithShell();
+    })();
+    await openReadyNote(shell);
 
-    await act(async () => {
-      hubOf(host)?.querySelector<HTMLButtonElement>('[aria-label="Menu"]')?.click();
-    });
-    const drawer = visibleDialog(host, "Navigation");
-    await act(async () => {
-      drawer?.querySelector<HTMLButtonElement>('[aria-label="Saved versions"]')?.click();
-    });
+    const slot = hubOf(host)?.querySelector<HTMLButtonElement>('[aria-label="Version history"]');
+    expect(slot).not.toBeNull();
+    await act(async () => slot?.click());
 
-    // Both Saved versions entry points now agree: whole workspace, no filter.
-    expect(shell().versionsOf).toBeNull();
-    expect(host.querySelector('[aria-label="Saved versions panel"]')).not.toBeNull();
+    expect(inspector(host)).not.toBeNull();
+    expect(inspector(host)?.querySelector('[aria-label="Version history panel"]')).not.toBeNull();
+    // The pin resolved against the right-side contribution, not a stale
+    // left-panel id.
+    expect(shell().rightPanel).toBe("history");
   });
 
   it("bounds the drawer panel and scrim above the hub", async () => {

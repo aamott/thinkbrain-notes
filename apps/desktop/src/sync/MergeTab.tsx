@@ -1,29 +1,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Unavailable } from "../shell/Unavailable";
+import { CodeMirrorDiff } from "./CodeMirrorDiff";
 import { describeSize, describeWhen, noteName } from "./conflictCard";
 import { readConflict, resolveConflict } from "./conflictService";
-import type { ConflictChunk, ConflictComparison } from "./conflictTypes";
-import {
-  countLines,
-  isSettled,
-  mergedText,
-  resultSegments,
-  undecidedCount,
-  type ChunkPick,
-  type ChunkPicks
-} from "./mergeModel";
+import type { ConflictComparison, ConflictResolution } from "./conflictTypes";
+import { sideText } from "./mergeModel";
 import { failureMessage } from "./syncCopy";
 
 /**
- * Two versions of one note, and a decision for each place they differ.
+ * Two versions of one note, side by side — and a result that can be edited.
  *
- * The screen is built around one promise: what the Result pane shows is what
- * gets saved. Both come from the same function of the same state, so they
- * cannot drift — see `mergeModel.ts`.
- *
- * There is no conflict marker anywhere in here, and no way for one to appear:
- * the native side hands over chunks, and a chunk is a pair of strings.
+ * The left pane is the incoming version and is read-only. The right pane
+ * starts as this computer's version and is what "Save merged note" writes,
+ * whether it was changed by the arrows between the panes or edited directly.
+ * CodeMirror aligns and renders the two; the native side still owns the
+ * safety contract — fingerprints, checkpoints and the write itself — through
+ * `resolveConflict`, exactly as the whole-file actions use it.
  */
 
 interface MergeTabProps {
@@ -50,8 +43,8 @@ const COMPARE_FAILURE = "Something went wrong reading the two versions.";
 /**
  * Starts a fresh session per conflict.
  *
- * The key is what resets the decisions when the tab is pointed at a different
- * conflict, rather than an effect that clears them — and it is why the session
+ * The key is what resets the result when the tab is pointed at a different
+ * conflict, rather than an effect that clears it — and it is why the session
  * below never has to put itself back into a loading state.
  */
 export function MergeTab({ rootPath, copyPath, buffer }: MergeTabProps) {
@@ -71,13 +64,12 @@ interface MergeSessionProps {
 
 function MergeSession({ rootPath, copyPath, buffer }: MergeSessionProps) {
   const [phase, setPhase] = useState<Phase>({ at: "loading" });
-  const [picks, setPicks] = useState<ChunkPicks>(() => new Map());
-  const [saving, setSaving] = useState(false);
+  const [resolving, setResolving] = useState(false);
 
   // Taken once, when the comparison is opened. The editor's text changes with
-  // every keystroke, and re-reading on each one would throw away the decisions
-  // already made — "this computer's version" means the one on screen when the
-  // user came to compare, not a moving target.
+  // every keystroke, and re-reading on each one would throw away the result
+  // already edited — "this computer's version" means the one on screen when
+  // the user came to compare, not a moving target.
   const openedWith = useRef(buffer);
 
   useEffect(() => {
@@ -96,21 +88,17 @@ function MergeSession({ rootPath, copyPath, buffer }: MergeSessionProps) {
     };
   }, [copyPath, rootPath]);
 
-  const choose = useCallback((index: number, pick: ChunkPick) => {
-    setPicks((current) => new Map(current).set(index, pick));
-  }, []);
-
-  const save = useCallback(
-    async (contents: string) => {
+  const resolve = useCallback(
+    async (resolution: ConflictResolution) => {
       if (phase.at !== "ready") return;
-      setSaving(true);
+      setResolving(true);
       try {
-        const done = await resolveConflict(rootPath, phase.conflict, { kind: "merged", contents });
+        const done = await resolveConflict(rootPath, phase.conflict, resolution);
         setPhase({ at: "done", note: done.note, keptAs: done.keptAs });
       } catch (cause) {
         setPhase({ at: "failed", message: failureMessage(cause, COMPARE_FAILURE) });
       } finally {
-        setSaving(false);
+        setResolving(false);
       }
     },
     [phase, rootPath]
@@ -128,43 +116,47 @@ function MergeSession({ rootPath, copyPath, buffer }: MergeSessionProps) {
         title="Saved"
         description={
           phase.keptAs
-            ? `Both versions were kept — the other one is now "${phase.keptAs}". You can always undo: earlier versions are kept in Saved versions.`
-            : "You can always undo — the earlier versions of this note are kept in Saved versions."
+            ? `Both versions were kept — the other one is now "${phase.keptAs}". You can always undo: earlier versions are kept in Version history.`
+            : "You can always undo — the earlier versions of this note are kept in Version history."
         }
       />
     );
   }
 
   return (
-    <MergeSurface
-      conflict={phase.conflict}
-      picks={picks}
-      saving={saving}
-      onChoose={choose}
-      onSave={save}
-    />
+    <MergeSurface conflict={phase.conflict} resolving={resolving} onResolve={resolve} />
   );
 }
 
 interface MergeSurfaceProps {
   readonly conflict: ConflictComparison;
-  readonly picks: ChunkPicks;
-  readonly saving: boolean;
-  readonly onChoose: (index: number, pick: ChunkPick) => void;
-  readonly onSave: (contents: string) => void;
+  readonly resolving: boolean;
+  readonly onResolve: (resolution: ConflictResolution) => void;
 }
 
-function MergeSurface({ conflict, picks, saving, onChoose, onSave }: MergeSurfaceProps) {
+const ACTION_BUTTON =
+  "rounded-small border border-border bg-surface px-3 py-1.5 text-xs text-foreground disabled:opacity-50";
+const SAVE_BUTTON =
+  "rounded-small border border-primary bg-primary px-3 py-1.5 text-xs text-primary-foreground disabled:opacity-50";
+
+function MergeSurface({ conflict, resolving, onResolve }: MergeSurfaceProps) {
   const { chunks, ours, theirs } = conflict;
-  const contents = useMemo(() => mergedText(chunks, picks), [chunks, picks]);
-  const segments = useMemo(() => resultSegments(chunks, picks), [chunks, picks]);
-  const remaining = undecidedCount(chunks, picks);
-  const settled = isSettled(chunks, picks);
+  const comparable = conflict.kind === "text";
   const note = noteName(ours.path);
+
+  // Each full version, rebuilt exactly from the comparison's chunks — left is
+  // the incoming version, right starts as this computer's and is what gets
+  // saved. Recomputed only when the comparison itself changes, never per edit.
+  const beforeText = useMemo(() => sideText(chunks, "theirs"), [chunks]);
+  const afterText = useMemo(() => sideText(chunks, "ours"), [chunks]);
+
+  // Whatever the right pane currently holds — moved by the transfer arrows,
+  // typed, or untouched. Sent verbatim as the merged note on save.
+  const [result, setResult] = useState(afterText);
 
   return (
     <section
-      className="@container flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4"
+      className="@container flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4"
       aria-label={`Compare versions of ${note}`}
     >
       <header className="rounded-small border border-border bg-card p-4">
@@ -172,14 +164,17 @@ function MergeSurface({ conflict, picks, saving, onChoose, onSave }: MergeSurfac
           Two versions of this note exist
         </h2>
         <p className="mb-0 mt-1.5 text-xs leading-relaxed text-muted-foreground">
-          &ldquo;{note}&rdquo; was edited on another device before this one finished syncing. Go
-          through each highlighted section and choose what to keep — the rest is identical and
-          already collapsed.
+          &ldquo;{note}&rdquo; was edited on another device before this one finished syncing.
+          {comparable
+            ? ` The ${theirs.label} version is on the left and cannot be changed; the ${ours.label} version on the right is what will be saved. Use the arrows between the panes to bring parts across, edit the result however you need, then save it.`
+            : " This file can't be compared line by line, so choose which version to keep below."}
         </p>
       </header>
 
+      {/* In pane order: the incoming version on the left, this computer's —
+          the editable result — on the right. */}
       <div className="grid grid-cols-1 gap-3 @2xl:grid-cols-2">
-        {[ours, theirs].map((version) => (
+        {[theirs, ours].map((version) => (
           <div key={version.path} className="rounded-small border border-border bg-surface px-3 py-2">
             <p className="m-0 text-xs font-semibold text-foreground">{version.label}</p>
             <p className="m-0 text-[0.7rem] text-muted-foreground">
@@ -189,147 +184,70 @@ function MergeSurface({ conflict, picks, saving, onChoose, onSave }: MergeSurfac
         ))}
       </div>
 
-      {conflict.kind === "binary" ? (
-        <p className="m-0 rounded-small border border-border bg-card p-3 text-xs leading-relaxed text-muted-foreground">
-          This file can&apos;t be compared piece by piece. Close this tab and choose a whole version
-          from the list instead.
-        </p>
+      {comparable ? (
+        // A floor keeps both panes usable on a very short screen — the
+        // section scrolls instead of the comparison collapsing away.
+        <div className="flex min-h-56 flex-1 flex-col">
+          <CodeMirrorDiff
+            before={beforeText}
+            after={afterText}
+            beforeLabel={theirs.label}
+            afterLabel={`${ours.label} — what will be saved`}
+            relativePath={ours.path}
+            editableAfter
+            transferBeforeToAfter
+            onAfterChange={setResult}
+            ariaLabel={`Side-by-side comparison of the two versions of ${note}`}
+          />
+        </div>
       ) : (
-        <ol className="m-0 flex list-none flex-col gap-2 p-0">
-          {chunks.map((chunk, index) =>
-            chunk.kind === "common" ? (
-              <IdenticalRun key={index} text={chunk.text} />
-            ) : (
-              <ChoiceRow
-                key={index}
-                chunk={chunk}
-                ourLabel={ours.label}
-                theirLabel={theirs.label}
-                pick={picks.get(index)}
-                onChoose={(pick) => onChoose(index, pick)}
-              />
-            )
-          )}
-        </ol>
+        <p className="m-0 rounded-small border border-border bg-card p-3 text-xs leading-relaxed text-muted-foreground">
+          This file can&apos;t be compared piece by piece — its contents aren&apos;t text. Choose a
+          whole version below; the one you don&apos;t pick can still be kept as a separate file.
+        </p>
       )}
-
-      <section aria-label="Result" className="flex flex-col gap-1.5">
-        <h3 className="m-0 text-xs font-semibold text-foreground">
-          Result — this is what will be saved
-        </h3>
-        <pre className="m-0 overflow-x-auto whitespace-pre-wrap rounded-small border border-border bg-editor p-3 font-mono text-xs text-editor-foreground">
-          {segments.map((segment) => (
-            <span
-              key={segment.index}
-              className={
-                segment.state === "pending"
-                  ? "bg-warning/20 underline decoration-dotted"
-                  : segment.state === "chosen"
-                    ? "bg-success/15"
-                    : undefined
-              }
-            >
-              {segment.text}
-            </span>
-          ))}
-        </pre>
-      </section>
 
       <footer className="flex flex-col gap-2 @2xl:flex-row @2xl:items-center @2xl:justify-between">
         <p className="m-0 text-[0.7rem] text-muted-foreground">
-          You can always undo — previous versions are kept in Saved versions.
+          You can always undo — previous versions are kept in Version history.
         </p>
-        <button
-          type="button"
-          className="rounded-small border border-primary bg-primary px-3 py-1.5 text-xs text-primary-foreground disabled:opacity-50"
-          disabled={!settled || saving || conflict.kind === "binary"}
-          onClick={() => onSave(contents)}
-        >
-          {settled
-            ? "Done — save merged note"
-            : `${remaining} section${remaining === 1 ? "" : "s"} still to choose`}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className={ACTION_BUTTON}
+            disabled={resolving}
+            onClick={() => onResolve({ kind: "keepOurs" })}
+          >
+            Keep current
+          </button>
+          <button
+            type="button"
+            className={ACTION_BUTTON}
+            disabled={resolving}
+            onClick={() => onResolve({ kind: "keepTheirs" })}
+          >
+            Use incoming
+          </button>
+          <button
+            type="button"
+            className={ACTION_BUTTON}
+            disabled={resolving}
+            onClick={() => onResolve({ kind: "keepBoth" })}
+          >
+            Keep both files
+          </button>
+          {comparable && (
+            <button
+              type="button"
+              className={SAVE_BUTTON}
+              disabled={resolving}
+              onClick={() => onResolve({ kind: "merged", contents: result })}
+            >
+              Save merged note
+            </button>
+          )}
+        </div>
       </footer>
     </section>
-  );
-}
-
-/** A stretch both versions agree on, collapsed to one quiet line. */
-function IdenticalRun({ text }: { readonly text: string }) {
-  const lines = countLines(text);
-  return (
-    <li className="rounded-small border border-border/60 px-3 py-1.5 text-[0.7rem] text-muted-foreground">
-      {lines} identical line{lines === 1 ? "" : "s"}
-    </li>
-  );
-}
-
-interface ChoiceRowProps {
-  readonly chunk: Extract<ConflictChunk, { kind: "choice" }>;
-  readonly ourLabel: string;
-  readonly theirLabel: string;
-  readonly pick: ChunkPick | undefined;
-  readonly onChoose: (pick: ChunkPick) => void;
-}
-
-function ChoiceRow({ chunk, ourLabel, theirLabel, pick, onChoose }: ChoiceRowProps) {
-  const options: readonly { readonly pick: ChunkPick; readonly label: string }[] = [
-    { pick: "ours", label: `Keep ${ourLabel.toLowerCase()}'s` },
-    { pick: "theirs", label: `Keep ${theirLabel}'s` },
-    { pick: "both", label: "Keep both" }
-  ];
-
-  return (
-    <li className="rounded-small border border-border bg-card p-3">
-      <div className="grid grid-cols-1 gap-2 @2xl:grid-cols-2">
-        <Side label={ourLabel} text={chunk.ours} highlighted={pick === "ours" || pick === "both"} />
-        <Side
-          label={theirLabel}
-          text={chunk.theirs}
-          highlighted={pick === "theirs" || pick === "both"}
-        />
-      </div>
-      <fieldset className="m-0 mt-2 flex flex-wrap gap-1.5 border-0 p-0">
-        <legend className="sr-only">Which version of this section to keep</legend>
-        {options.map((option) => (
-          <button
-            key={option.pick}
-            type="button"
-            aria-pressed={pick === option.pick}
-            className={
-              pick === option.pick
-                ? "rounded-small border border-primary bg-primary px-2 py-1 text-[0.7rem] text-primary-foreground"
-                : "rounded-small border border-border bg-surface px-2 py-1 text-[0.7rem] text-foreground"
-            }
-            onClick={() => onChoose(option.pick)}
-          >
-            {option.label}
-          </button>
-        ))}
-      </fieldset>
-    </li>
-  );
-}
-
-function Side({
-  label,
-  text,
-  highlighted
-}: {
-  readonly label: string;
-  readonly text: string;
-  readonly highlighted: boolean;
-}) {
-  return (
-    <div>
-      <p className="m-0 mb-1 text-[0.68rem] font-semibold text-muted-foreground">{label}</p>
-      <pre
-        className={`m-0 overflow-x-auto whitespace-pre-wrap rounded-small border p-2 font-mono text-xs ${
-          highlighted ? "border-primary bg-primary/10" : "border-border bg-surface"
-        }`}
-      >
-        {text === "" ? <span className="italic text-muted-foreground">Nothing here</span> : text}
-      </pre>
-    </div>
   );
 }

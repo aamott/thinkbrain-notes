@@ -1,11 +1,10 @@
 import { Compartment, EditorState, StateEffect } from "@codemirror/state";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
-import { bracketMatching, foldGutter, indentOnInput, syntaxHighlighting, HighlightStyle } from "@codemirror/language";
-import { languages } from "@codemirror/language-data";
+import { bracketMatching, foldGutter, indentOnInput, syntaxHighlighting } from "@codemirror/language";
 import { EditorView, highlightActiveLine, highlightActiveLineGutter, highlightSpecialChars, keymap, lineNumbers } from "@codemirror/view";
-import { tags as t } from "@lezer/highlight";
 import { useEffect, useRef, useState } from "react";
 
+import { codeHighlightStyle, languageForPath } from "../lib/codemirror";
 import { recallEditorState, rememberEditorState } from "./editorStateCache";
 
 export interface CodeEditorProps {
@@ -17,37 +16,6 @@ export interface CodeEditorProps {
   readonly stateKey?: string;
   readonly onChange: (value: string) => void;
   readonly onSave: () => void;
-}
-
-/**
- * Syntax highlighting theme using the app's `--tn-syntax-*` CSS tokens, so
- * colors adapt to light/dark themes automatically and custom themes can
- * override syntax colors. Falls back to CodeMirror's defaultHighlightStyle
- * for any token tags not explicitly styled.
- */
-const codeHighlightStyle = HighlightStyle.define([
-  { tag: t.keyword, color: "var(--tn-color-syntax-keyword)" },
-  { tag: [t.name, t.deleted, t.character], color: "var(--tn-color-syntax-variable)" },
-  { tag: t.function(t.variableName), color: "var(--tn-color-syntax-function)" },
-  { tag: [t.color, t.constant(t.name), t.standard(t.name)], color: "var(--tn-color-syntax-keyword)" },
-  { tag: [t.definition(t.name), t.propertyName], color: "var(--tn-color-syntax-property)" },
-  { tag: [t.typeName, t.className, t.annotation, t.modifier, t.self, t.namespace], color: "var(--tn-color-syntax-type)" },
-  { tag: [t.number, t.changed], color: "var(--tn-color-syntax-number)" },
-  { tag: [t.operator, t.punctuation, t.separator], color: "var(--tn-color-syntax-operator)" },
-  { tag: [t.comment, t.quote], color: "var(--tn-color-syntax-comment)", fontStyle: "italic" },
-  { tag: [t.meta, t.documentMeta], color: "var(--tn-color-syntax-comment)" },
-  { tag: [t.string, t.special(t.string)], color: "var(--tn-color-syntax-string)" },
-  { tag: [t.regexp, t.escape], color: "var(--tn-color-syntax-keyword)" },
-  { tag: [t.url, t.link], color: "var(--tn-color-syntax-keyword)", textDecoration: "underline" },
-  { tag: t.invalid, color: "var(--tn-color-syntax-invalid)" }
-]);
-
-/** Maps a file extension to a CodeMirror language description for lazy loading. */
-function languageForPath(relativePath: string) {
-  const dot = relativePath.lastIndexOf(".");
-  if (dot < 0) return undefined;
-  const ext = relativePath.slice(dot + 1).toLowerCase();
-  return languages.find((lang) => lang.extensions?.includes(ext));
 }
 
 /** Minimal diff to avoid resetting cursor on external value updates. */

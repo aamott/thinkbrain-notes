@@ -12,6 +12,8 @@ export type BuiltInTabKind =
   | "browser"
   /** Two versions of one note, side by side, waiting on a decision. */
   | "merge"
+  /** Read-only comparison of the current file with one recorded version. */
+  | "version-diff"
   /** Code/text file editor (CodeMirror 6, non-Markdown). */
   | "code-editor"
   /** Read-only image viewer (png, jpg, gif, svg, webp). */

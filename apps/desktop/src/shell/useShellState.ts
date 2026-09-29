@@ -39,19 +39,21 @@ import { useSettingsQuarantineAdapter } from "../settings/settingsQuarantineAdap
 import { useSettingsStore } from "../settings/settingsStore";
 import { useTheme } from "../settings/ThemeProvider";
 import type { SyncStatus } from "../sync/historyTypes";
+import { restoreVersion } from "../sync/syncService";
 import { useSyncSurfaces } from "../sync/useSyncSurfaces";
 import {
   createConflictTab,
   createStaticTab,
+  createVersionDiffTab,
   desktopTabReducer,
-  editorTabId,
+  documentTabId,
   initialDesktopTabState,
   type DesktopTab,
   type DesktopTabAction,
   type DesktopTabState
 } from "../tabs/tabModel";
 import { useWikiLinkIndexStore } from "../wikiLinks/wikiLinkIndexStore";
-import type { NoteIndexEntry } from "@thinkbrain/core";
+import { inferTabKind, type NoteIndexEntry } from "@thinkbrain/core";
 import type { WorkspaceExplorerProps } from "../workspace/WorkspaceExplorer";
 import { checkForUpdate, relaunchApp } from "./appUpdater";
 import { useAppUpdate, type AppUpdate } from "./useAppUpdate";
@@ -81,7 +83,7 @@ export interface ShellState {
   readonly unsavedNoteContents: string | null;
   readonly saveDocument: (tab: DesktopTab) => Promise<boolean>;
   readonly updateDocument: (tabId: string, contents: string) => void;
-  readonly loadDocumentIntoView: (tabId: string, rootPath: string, relativePath: string) => void;
+  readonly loadDocumentIntoView: (tabId: string, rootPath: string, relativePath: string, kind?: string) => void;
   readonly openMarkdownDocument: (rootPath: string, relativePath: string) => void;
   readonly openFileDocument: (rootPath: string, relativePath: string) => void;
   readonly keepMyVersion: (tab: DesktopTab) => void;
@@ -111,11 +113,28 @@ export interface ShellState {
   readonly stateRestored: boolean;
   /** The explorer's whole prop bag, assembled once so both chromes agree. */
   readonly explorerProps: WorkspaceExplorerProps;
-  readonly versionsOf: string | null;
+  /**
+   * The explorer's "Previous versions…": opens the file — by its inferred
+   * kind, so media opens in a viewer — and reveals its Version history.
+   */
   readonly showVersionsOf: (rootPath: string, relativePath: string) => void;
-  /** Clears the history panel's note filter, so it shows the whole workspace. */
-  readonly clearVersions: () => void;
+  /**
+   * Sync surfaces live on opposite docks: conflicts are an attention list on
+   * the left, Version history inspects the active file on the right.
+   */
   readonly openSyncPanel: (panel: "conflicts" | "history") => void;
+  /** Opens a read-only comparison of `notePath` against the recorded change. */
+  readonly compareVersion: (notePath: string, changeId: string) => void;
+  /**
+   * Puts a recorded version back.
+   *
+   * An open dirty editor on that file holds edits a restore would overwrite,
+   * so it is saved first — and a refused or failed save aborts the restore
+   * rather than losing them. The native restore checkpoints what it replaces.
+   */
+  readonly restoreVersionSafely: (notePath: string, changeId: string) => Promise<void>;
+  /** Opens Settings scrolled to the workspace sync section. */
+  readonly openSyncSettings: () => void;
   readonly reviewConflict: (copyPath: string, notePath: string) => void;
 
   // chrome-agnostic services
@@ -336,25 +355,104 @@ export function useShellState(): ShellState {
 
   const activeTab = tabState.tabs.find((tab) => tab.id === tabState.activeTabId) ?? null;
 
-  // Which note the history panel is about. Set by "Previous versions…" in the
-  // file tree and cleared by the panel itself, so opening History from the
-  // footer is always the whole workspace rather than whatever was last asked.
-  const [versionsOf, setVersionsOf] = useState<string | null>(null);
+  /**
+   * "Previous versions…" opens the file itself — Markdown in an editor, other
+   * files by their inferred kind so media lands in a viewer — then reveals
+   * its Version history on the right.
+   */
   const showVersionsOf = useCallback(
-    (_rootPath: string, relativePath: string) => {
-      setVersionsOf(relativePath);
-      selectLeftPanel("history");
+    (rootPath: string, relativePath: string) => {
+      if (inferTabKind(relativePath) === "editor") {
+        openMarkdownDocument(rootPath, relativePath);
+      } else {
+        openFileDocument(rootPath, relativePath);
+      }
+      setRightPanel("history");
     },
-    [selectLeftPanel]
+    [openMarkdownDocument, openFileDocument]
   );
-  const clearVersions = useCallback(() => setVersionsOf(null), []);
+
+  // Conflicts are an attention list — they belong on the left with the other
+  // navigational surfaces. History inspects the active file, so it joins the
+  // document inspector on the right.
   const openSyncPanel = useCallback(
     (panel: "conflicts" | "history") => {
-      if (panel === "history") setVersionsOf(null);
-      selectLeftPanel(panel);
+      if (panel === "history") {
+        setRightPanel("history");
+      } else {
+        selectLeftPanel("conflicts");
+      }
     },
     [selectLeftPanel]
   );
+
+  /**
+   * Opens a read-only comparison of a file with one of its recorded versions.
+   * The tab carries the workspace root so it survives the file being renamed
+   * after the version was recorded.
+   */
+  const compareVersion = useCallback(
+    (notePath: string, changeId: string) => {
+      if (!restoredWorkspacePath) return;
+      dispatchTabs({
+        type: "open",
+        tab: createVersionDiffTab(
+          { rootPath: restoredWorkspacePath, relativePath: notePath },
+          changeId
+        )
+      });
+    },
+    [restoredWorkspacePath]
+  );
+
+  const restoreVersionSafely = useCallback(
+    async (notePath: string, changeId: string) => {
+      if (!restoredWorkspacePath) {
+        throw new Error("Open a workspace before restoring an earlier version.");
+      }
+      // A dirty editor open on this file is holding edits the restore would
+      // overwrite. Save it first; when the save cannot happen — refused
+      // because something else wrote the file, or failed outright — the
+      // restore does not run and the edits stay put.
+      const sourceId = documentTabId({ rootPath: restoredWorkspacePath, relativePath: notePath });
+      const sourceTab = tabStateRef.current.tabs.find((tab) => tab.id === sourceId);
+      if (sourceTab?.isDirty && !(await saveDocument(sourceTab))) {
+        throw new Error("Save the current file before restoring an earlier version.");
+      }
+      await restoreVersion(restoredWorkspacePath, notePath, changeId);
+      // Re-read what the restore wrote into the open tab, if there is one.
+      // A fresh load rather than the in-place path: the restore already saved
+      // any dirty edits above, and the loader must match the tab's kind —
+      // `loadDocumentIntoView` picks the text-file reader for code editors,
+      // where `reloadDocumentInPlace` would ask the Markdown reader for a
+      // `.ts` file. Media viewers hold no document state to refresh.
+      if (sourceTab?.kind === "editor" || sourceTab?.kind === "code-editor") {
+        loadDocumentIntoView(sourceId, restoredWorkspacePath, notePath, sourceTab.kind);
+      }
+    },
+    [restoredWorkspacePath, saveDocument, loadDocumentIntoView]
+  );
+
+  /**
+   * Conflict settings live under the workspace sync section, so "Sync
+   * settings" opens the settings tab already scrolled to it.
+   */
+  const openSyncSettings = useCallback(() => {
+    const sectionId = "workspace:sync.destination";
+    useSettingsStore.getState().setActiveSection(sectionId);
+    openSettingsTab();
+    // The settings tab may still be mounting when this dispatch lands, so the
+    // scroll happens on the next frames rather than assuming the section is
+    // already in the document.
+    const scrollToSection = () =>
+      document
+        .getElementById(`settings-section-${sectionId}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    requestAnimationFrame(() => {
+      scrollToSection();
+      requestAnimationFrame(scrollToSection);
+    });
+  }, [openSettingsTab]);
 
   useExternalDocumentSync({
     workspacePath: restoredWorkspacePath,
@@ -376,15 +474,19 @@ export function useShellState(): ShellState {
     onReview: openSyncPanel
   });
 
-  // The unsaved text of an editor open on the note a merge tab is comparing.
-  // "This computer's version" has to be what the user is looking at; offering
-  // them the last save would be offering a version they can see is out of date.
+  // The unsaved text of a document open on the file a comparison tab is
+  // about — a merge's "this computer's version", a version-diff's "current
+  // version". It has to be what the user is looking at; offering them the
+  // last save would be offering a version they can see is out of date.
   const unsavedNoteContents = useMemo(() => {
-    const notePath = activeTab?.kind === "merge" ? activeTab.comparedNotePath : undefined;
+    const notePath =
+      activeTab?.kind === "merge" || activeTab?.kind === "version-diff"
+        ? activeTab.comparedNotePath
+        : undefined;
     if (!notePath || !restoredWorkspacePath) return null;
-    const editorId = editorTabId({ rootPath: restoredWorkspacePath, relativePath: notePath });
-    const editorTab = tabState.tabs.find((tab) => tab.id === editorId);
-    return editorTab?.isDirty ? documents[editorId]?.contents ?? null : null;
+    const sourceId = documentTabId({ rootPath: restoredWorkspacePath, relativePath: notePath });
+    const sourceTab = tabState.tabs.find((tab) => tab.id === sourceId);
+    return sourceTab?.isDirty ? documents[sourceId]?.contents ?? null : null;
   }, [activeTab, documents, restoredWorkspacePath, tabState.tabs]);
 
   const activeDocument = activeTab ? documents[activeTab.id] : undefined;
@@ -484,10 +586,11 @@ export function useShellState(): ShellState {
     recentWorkspacePaths,
     stateRestored,
     explorerProps,
-    versionsOf,
     showVersionsOf,
-    clearVersions,
     openSyncPanel,
+    compareVersion,
+    restoreVersionSafely,
+    openSyncSettings,
     reviewConflict,
 
     paletteOpen,

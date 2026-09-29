@@ -1,4 +1,4 @@
-import { normalizeRoot } from "@thinkbrain/core";
+import { inferTabKind, normalizeRoot } from "@thinkbrain/core";
 import { BottomSheet } from "@thinkbrain/ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -75,8 +75,7 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
     openMarkdownDocument,
     openFileDocument,
     paletteCommands,
-    runCommand: runPaletteCommand,
-    clearVersions
+    runCommand: runPaletteCommand
   } = shell;
 
   const closeDrawer = useCallback(() => navigation.dismissOverlay(), [navigation]);
@@ -177,11 +176,32 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
     [shell.restoredWorkspacePath, openMarkdown]
   );
 
-  // Same bag the desktop dock gets, minus the two open callbacks: file taps
-  // must route through the history stack instead of only activating a tab.
+  // "Previous versions…" opens the file's inspector over the just-opened tab.
+  // The desktop's shell callback only sets `rightPanel`, which phone chrome
+  // does not read — inspectors exist here as navigation overlays. `push`
+  // updates the entry ref synchronously, so `showOverlay` lands the inspector
+  // on top of the new tab route rather than underneath it.
+  const showVersions = useCallback(
+    (rootPath: string, relativePath: string) => {
+      if (inferTabKind(relativePath) === "editor") openMarkdown(rootPath, relativePath);
+      else openFile(rootPath, relativePath);
+      setRightPanel("history");
+      navigation.showOverlay({ kind: "inspector", panel: "history", parent: "content" });
+    },
+    [openMarkdown, openFile, setRightPanel, navigation]
+  );
+
+  // Same bag the desktop dock gets, minus the two open callbacks and
+  // `onShowVersions`: file taps and "Previous versions…" must route through
+  // the history stack instead of only activating a tab.
   const explorerProps = useMemo(
-    () => ({ ...shell.explorerProps, onMarkdownFileSelected: openMarkdown, onFileSelected: openFile }),
-    [shell.explorerProps, openMarkdown, openFile]
+    () => ({
+      ...shell.explorerProps,
+      onMarkdownFileSelected: openMarkdown,
+      onFileSelected: openFile,
+      onShowVersions: showVersions
+    }),
+    [shell.explorerProps, openMarkdown, openFile, showVersions]
   );
 
   // Long press is the whole v1 customization affordance: hold a drawer row to
@@ -251,12 +271,9 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
   const selectDrawerPanel = useCallback(
     (panelId: string) => {
       if (!isSelectableLeftPanel(panelId)) return;
-      // Saved versions always opens the whole-workspace view — matching the
-      // Action items entry point — never a stale note-specific filter.
-      if (panelId === "history") clearVersions();
       navigation.replace(panelId === "explorer" ? { kind: "files" } : { kind: "panel", panel: panelId });
     },
-    [navigation, clearVersions]
+    [navigation]
   );
 
   // Explorer-owned selector actions (Create vault, Git import, …) render their
@@ -328,14 +345,6 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
     if (recentNote) navigation.replace({ kind: "tab", tabId: recentNote.id });
   }, [navigation, recentNote]);
 
-  // Saved versions is the history panel with the version filter dropped so it
-  // shows the whole workspace, not the last note asked. Replacing the menu's
-  // entry means Back returns to prior content, never to a dead menu entry.
-  const openSavedVersions = useCallback(() => {
-    clearVersions();
-    navigation.replace({ kind: "panel", panel: "history" });
-  }, [clearVersions, navigation]);
-
   // Mobile autosave: the phone shell has no Save button, so the document is
   // saved automatically after the user stops typing for 1.5s. The effect
   // watches the active document's contents and dirty flag — only a dirty
@@ -370,12 +379,22 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
   // every tab route so Files is the base surface, not a blank space.
   const popoutPanel = route.kind === "panel" ? route.panel : "explorer";
   // Document-facing surfaces (action-items availability, inspector contents)
-  // see the note only while a tab is the visible route — on Files or a panel
-  // a restored document must not leak into Outline/Properties context.
+  // see the file only while a tab is the visible route — on Files or a panel
+  // a restored document must not leak into Outline/Properties context. Any
+  // file-backed tab counts — editor, code editor, media viewer — but never a
+  // comparison tab, whose resource is what the comparison is about.
   const visibleDocumentContents =
     route.kind === "tab" && activeDocument?.phase === "ready"
       ? activeDocument.contents
       : null;
+  const visibleDocumentPath =
+    route.kind === "tab" &&
+    activePath !== null &&
+    activeTab?.kind !== "merge" &&
+    activeTab?.kind !== "version-diff"
+      ? activePath
+      : null;
+  const visibleDocumentDirty = visibleDocumentPath !== null && Boolean(activeTab?.isDirty);
   // Browser-style location pill: workspace, then the route's own crumb trail —
   // real folders for file tabs (`.md` stripped only from note editors so
   // code/media keep their extension), a label for chrome surfaces.
@@ -433,8 +452,7 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
               rootPath={shell.restoredWorkspacePath}
               explorerProps={explorerProps}
               onReviewConflict={shell.reviewConflict}
-              versionsOf={shell.versionsOf}
-              onShowEverything={clearVersions}
+              onOpenSyncSettings={shell.openSyncSettings}
               onOpenSearchResult={openNote}
             />
           </div>
@@ -460,6 +478,7 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
               onOpenNote={openNote}
               onReopenNote={shell.loadDocumentIntoView}
               unsavedNoteContents={shell.unsavedNoteContents}
+              onRestoreVersion={shell.restoreVersionSafely}
             />
           </div>
         </div>
@@ -531,9 +550,11 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
           open={actionsOpen}
           rootPath={shell.restoredWorkspacePath}
           documentContents={visibleDocumentContents}
-          documentPath={isNoteTab(activeTab) ? activePath : null}
+          documentPath={visibleDocumentPath}
+          documentDirty={visibleDocumentDirty}
           onOpenNote={openNote}
-          onOpenSavedVersions={openSavedVersions}
+          onCompareVersion={shell.compareVersion}
+          onRestoreVersion={shell.restoreVersionSafely}
           onDismiss={() => navigation.dismissOverlay()}
           onSelect={(panel) => {
             setRightPanel(panel);
@@ -548,7 +569,10 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
           panel={inspectorPanel ?? shell.rightPanel ?? "outline"}
           rootPath={shell.restoredWorkspacePath}
           documentContents={visibleDocumentContents}
-          documentPath={isNoteTab(activeTab) ? activePath : null}
+          documentPath={visibleDocumentPath}
+          documentDirty={visibleDocumentDirty}
+          onCompareVersion={shell.compareVersion}
+          onRestoreVersion={shell.restoreVersionSafely}
           onOpenNote={openNote}
           // Scrim tap closes the whole flow — under the actions menu that skips
           // the menu entry too; only the header Back steps one level.

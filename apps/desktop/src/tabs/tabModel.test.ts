@@ -4,8 +4,10 @@ import {
   createEditorTab,
   createFileTab,
   createStaticTab,
+  createVersionDiffTab,
   desktopTabReducer,
-  initialDesktopTabState
+  initialDesktopTabState,
+  versionDiffTabId
 } from "./tabModel";
 
 const welcome = createStaticTab("settings", "Settings");
@@ -311,5 +313,39 @@ describe("createFileTab", () => {
     const a = createFileTab({ rootPath: "/vault", relativePath: "a.ts" });
     const b = createFileTab({ rootPath: "/vault", relativePath: "b.ts" });
     expect(a.id).not.toBe(b.id);
+  });
+});
+
+describe("createVersionDiffTab", () => {
+  it("titles the tab after the file and keys it by file and change", () => {
+    const tab = createVersionDiffTab(
+      { rootPath: "/vault", relativePath: "notes/hello.md" },
+      "chg-1"
+    );
+
+    expect(tab.kind).toBe("version-diff");
+    expect(tab.title).toBe("hello.md — Compare version");
+    expect(tab.comparedNotePath).toBe("notes/hello.md");
+    expect(tab.versionChangeId).toBe("chg-1");
+    expect(tab.id).toBe(
+      versionDiffTabId({ rootPath: "/vault", relativePath: "notes/hello.md" }, "chg-1")
+    );
+  });
+
+  it("gives each recorded version its own tab", () => {
+    const a = createVersionDiffTab({ rootPath: "/vault", relativePath: "n.md" }, "chg-1");
+    const b = createVersionDiffTab({ rootPath: "/vault", relativePath: "n.md" }, "chg-2");
+    const other = createVersionDiffTab({ rootPath: "/vault", relativePath: "m.md" }, "chg-1");
+
+    expect(a.id).not.toBe(b.id);
+    expect(a.id).not.toBe(other.id);
+    // Reopening the same comparison raises the existing tab, not a duplicate.
+    const state = reduce(
+      { type: "open", tab: a },
+      { type: "open", tab: b },
+      { type: "open", tab: createVersionDiffTab({ rootPath: "/vault", relativePath: "n.md" }, "chg-1") }
+    );
+    expect(state.tabs.filter((tab) => tab.id === a.id)).toHaveLength(1);
+    expect(state.activeTabId).toBe(a.id);
   });
 });

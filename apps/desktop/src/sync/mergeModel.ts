@@ -1,114 +1,66 @@
 /**
- * Turning a set of per-chunk decisions into the note that will be saved.
+ * Rebuilding one whole version out of a comparison's chunks, and counting how
+ * far apart two versions are.
  *
- * Everything here is a pure function of the chunks and the picks, which is the
- * point: the Result pane in the merge view is not a summary of what will
- * happen, it is the same function the save uses. If the preview and the saved
- * file could ever disagree, the reassurance the whole screen is built on would
- * be a lie.
+ * The native side hands over the two versions interleaved — stretches they
+ * share, and where they disagree each side's text separately. CodeMirror's
+ * merge view compares two complete documents, so this puts each one back
+ * together, exactly, for it to diff. `lineDelta` uses the same differ the
+ * view does, so the badge on a revision card and the comparison it opens
+ * can never disagree about how much changed.
  */
+
+import { Chunk } from "@codemirror/merge";
+import { Text } from "@codemirror/state";
 
 import type { ConflictChunk } from "./conflictTypes";
 
-/** What the user chose for one differing stretch. */
-export type ChunkPick = "ours" | "theirs" | "both";
-
-/** Decisions so far, keyed by the chunk's position in the comparison. */
-export type ChunkPicks = ReadonlyMap<number, ChunkPick>;
-
-/** How a stretch of the result came to be there. */
-export type SegmentState =
-  | "common"
-  /** The user picked this. */
-  | "chosen"
-  /** Nobody has decided yet; this is what would be kept if they stopped now. */
-  | "pending";
-
-export interface ResultSegment {
-  readonly text: string;
-  readonly state: SegmentState;
-  /** Which chunk this came from, so the preview can point back at it. */
-  readonly index: number;
-}
-
 /**
- * The text of one chunk under a decision.
+ * Every byte of one side of a comparison.
  *
- * An undecided chunk answers with our side, so the preview is always a real
- * document rather than a form with holes in it. The Done button is what stops
- * that standing-in from being saved by accident — see {@link isSettled}.
+ * A common stretch belongs to both versions; a choice chunk contributes only
+ * the side asked for — including an empty half, which is how an insertion or
+ * a deletion reads back exactly as it was written.
  */
-function textOf(chunk: ConflictChunk, pick: ChunkPick | undefined): string {
-  if (chunk.kind === "common") return chunk.text;
-  switch (pick) {
-    case "theirs":
-      return chunk.theirs;
-    case "both":
-      return joinBoth(chunk.ours, chunk.theirs);
-    default:
-      return chunk.ours;
-  }
-}
-
-/**
- * Both versions, one after the other, without running them into one line.
- *
- * A chunk's text carries its own line endings, but a version whose last line
- * was never ended — the end of a file with no trailing newline — would
- * otherwise be glued to the first line of the other. That is the one way
- * "keep both" could lose a line instead of keeping two.
- */
-function joinBoth(ours: string, theirs: string): string {
-  if (!ours || !theirs) return `${ours}${theirs}`;
-  return ours.endsWith("\n") ? `${ours}${theirs}` : `${ours}\n${theirs}`;
-}
-
-/** The note as it would be saved right now. */
-export function mergedText(chunks: readonly ConflictChunk[], picks: ChunkPicks): string {
-  return chunks.map((chunk, index) => textOf(chunk, picks.get(index))).join("");
-}
-
-/**
- * The result broken into labelled stretches, for the live preview.
- *
- * Joining every `text` reproduces {@link mergedText} exactly — a test holds
- * that, because a preview that drifts from the save is worse than no preview.
- */
-export function resultSegments(
+export function sideText(
   chunks: readonly ConflictChunk[],
-  picks: ChunkPicks
-): readonly ResultSegment[] {
-  const segments: ResultSegment[] = [];
-  chunks.forEach((chunk, index) => {
-    const text = textOf(chunk, picks.get(index));
-    // A side that is empty and wins contributes nothing. Keeping it would draw
-    // a blank row that reads as a blank line in the note.
-    if (!text) return;
-    const state: SegmentState =
-      chunk.kind === "common" ? "common" : picks.has(index) ? "chosen" : "pending";
-    segments.push({ text, state, index });
-  });
-  return segments;
+  side: "ours" | "theirs"
+): string {
+  return chunks
+    .map((chunk) => (chunk.kind === "common" ? chunk.text : chunk[side]))
+    .join("");
 }
 
-/** How many differing stretches are still waiting on a decision. */
-export function undecidedCount(chunks: readonly ConflictChunk[], picks: ChunkPicks): number {
-  return chunks.filter((chunk, index) => chunk.kind === "choice" && !picks.has(index)).length;
+/** Whole lines that differ between two texts, split by direction. */
+export interface LineDelta {
+  /** Lines present in `after` but not in `before`. */
+  readonly added: number;
+  /** Lines present in `before` but not in `after`. */
+  readonly removed: number;
 }
 
 /**
- * Whether every choice has been made.
+ * The one-line summary of how two versions differ, counted by the same
+ * CodeMirror differ that aligns the side-by-side comparison.
  *
- * Saving before this is true would accept a side the user never looked at, in
- * the one screen where that means quietly discarding someone's writing.
+ * Chunks are line-aligned: a change covering a line counts that whole line on
+ * both sides, so a replaced line reads `+1 -1`, not a character edit. A chunk
+ * empty on one side (`toA === fromA`) is a pure insertion and removes nothing.
+ * `endA`/`endB` clamp back inside the document, which keeps the count right
+ * when a change runs to the end of a file that does not end in a newline.
  */
-export function isSettled(chunks: readonly ConflictChunk[], picks: ChunkPicks): boolean {
-  return undecidedCount(chunks, picks) === 0;
-}
-
-/** Lines in a stretch, for the "14 identical lines" summary. */
-export function countLines(text: string): number {
-  if (!text) return 0;
-  const ended = text.split("\n").length - 1;
-  return text.endsWith("\n") ? ended : ended + 1;
+export function lineDelta(before: string, after: string): LineDelta {
+  const a = Text.of(before.split("\n"));
+  const b = Text.of(after.split("\n"));
+  let added = 0;
+  let removed = 0;
+  for (const chunk of Chunk.build(a, b)) {
+    if (chunk.toA > chunk.fromA) {
+      removed += a.lineAt(chunk.endA).number - a.lineAt(chunk.fromA).number + 1;
+    }
+    if (chunk.toB > chunk.fromB) {
+      added += b.lineAt(chunk.endB).number - b.lineAt(chunk.fromB).number + 1;
+    }
+  }
+  return { added, removed };
 }

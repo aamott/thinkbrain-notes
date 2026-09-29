@@ -14,7 +14,8 @@ import type {
   SavedSignIn as NativeSavedSignIn,
   SignInStatus as NativeSignInStatus,
   Synced as NativeSynced,
-  SyncStatus as NativeSyncStatus
+  SyncStatus as NativeSyncStatus,
+  VersionDiff as NativeVersionDiff
 } from "../sync/historyTypes";
 
 export interface NativeCommandErrorShape {
@@ -259,6 +260,19 @@ export interface NativeCommandMap {
       readonly change: string;
     };
     readonly result: null;
+  };
+  /**
+   * Line-by-line diff between a note and the version recorded in `change`.
+   * `buffer` carries an open editor's unsaved text as the current side.
+   */
+  readonly read_version_diff: {
+    readonly args: {
+      readonly rootPath: string;
+      readonly notePath: string;
+      readonly change: string;
+      readonly buffer?: string | null;
+    };
+    readonly result: NativeVersionDiff;
   };
   readonly sync_conflict_rate: {
     readonly args: { readonly rootPath: string };

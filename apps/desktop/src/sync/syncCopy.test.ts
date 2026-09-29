@@ -131,7 +131,7 @@ describe("the status footer", () => {
       "1 note needs a decision"
     );
     expect(describePill(status({ state: "attention", attention: 1 }), NOW).detail).toBe(
-      "1 note needs a decision. Open Decisions needed to choose what to keep."
+      "1 note needs a decision. Open Sync conflicts to choose what to keep."
     );
   });
 
