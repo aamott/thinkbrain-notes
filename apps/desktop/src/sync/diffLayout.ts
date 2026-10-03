@@ -8,15 +8,14 @@ const INLINE_BELOW = 720;
 /**
  * The container-width-driven default layout, usable outside the diff itself
  * so a caller drawing its own toggle still gets the same responsive guess.
- * Returns null until the container has been measured.
+ * The first answer guesses from the window — better than mounting one engine
+ * and immediately replacing it once the observer reports the real width.
  */
 export function useResponsiveDiffLayout(
   containerRef: RefObject<HTMLElement | null>
-): DiffLayout | null {
-  const [layout, setLayout] = useState<DiffLayout | null>(() =>
-    typeof ResizeObserver === "function" || window.innerWidth >= INLINE_BELOW
-      ? null
-      : "inline"
+): DiffLayout {
+  const [layout, setLayout] = useState<DiffLayout>(() =>
+    window.innerWidth < INLINE_BELOW ? "inline" : "split"
   );
   useEffect(() => {
     const container = containerRef.current;

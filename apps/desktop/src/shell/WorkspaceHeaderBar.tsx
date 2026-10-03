@@ -24,6 +24,11 @@ export interface WorkspaceHeaderBarProps {
 
 const IS_APPLE = typeof navigator !== "undefined" && /Mac|iPhone|iPad|iPod/i.test(navigator.userAgent || navigator.platform || "");
 const SAVE_SHORTCUT = IS_APPLE ? "⌘S" : "Ctrl+S";
+const UNDO_SHORTCUT = IS_APPLE ? "⌘Z" : "Ctrl+Z";
+const REDO_SHORTCUT = IS_APPLE ? "⇧⌘Z" : "Ctrl+Y";
+
+const COMMAND_BUTTON =
+  "rounded-small border border-border/40 px-1.5 py-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer";
 
 /**
  * Consolidated header bar below editor tabs showing note folder path and actions.
@@ -60,6 +65,16 @@ export function WorkspaceHeaderBar({
 
   const isLinked = Boolean(rootPath && isGitLinked);
 
+  // A tab that registered its own Save (a merge tab's "Save merged note")
+  // takes the button over entirely — what it does and when it is enabled
+  // are the tab's business. Editor-kind tabs always show the ordinary save.
+  const customSave = commands?.save;
+  const showSave =
+    activeTab?.kind === "editor" ||
+    activeTab?.kind === "code-editor" ||
+    customSave !== undefined;
+  const saveEnabled = customSave ? (commands?.canSave?.() ?? true) : isDirty;
+
   // A restore preview is an operation on the file, not the file itself:
   // "Vault › Restore › folder › note.md" rather than masquerading as the path.
   const restoreSegments = restoreBreadcrumbSegments(activeTab);
@@ -93,54 +108,42 @@ export function WorkspaceHeaderBar({
 
       <div className="flex items-center gap-2">
         {children}
-        {commands && (
-          <>
+        {commands &&
+          ([
+            { act: commands.undo, can: commands.canUndo, icon: Undo2, label: "Undo", shortcut: UNDO_SHORTCUT },
+            { act: commands.redo, can: commands.canRedo, icon: Redo2, label: "Redo", shortcut: REDO_SHORTCUT }
+          ] as const).map(({ act, can, icon: Icon, label, shortcut }) => (
             <button
+              key={label}
               type="button"
-              disabled={!commands.canUndo()}
-              onClick={commands.undo}
-              title="Undo (Ctrl+Z)"
-              aria-label="Undo"
-              className="rounded-small border border-border/40 px-1.5 py-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
+              disabled={!can()}
+              onClick={act}
+              title={`${label} (${shortcut})`}
+              aria-label={label}
+              className={COMMAND_BUTTON}
             >
-              <Undo2 className="size-3.5" aria-hidden="true" />
+              <Icon className="size-3.5" aria-hidden="true" />
             </button>
-            <button
-              type="button"
-              disabled={!commands.canRedo()}
-              onClick={commands.redo}
-              title="Redo (Ctrl+Y)"
-              aria-label="Redo"
-              className="rounded-small border border-border/40 px-1.5 py-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
-            >
-              <Redo2 className="size-3.5" aria-hidden="true" />
-            </button>
-          </>
-        )}
-        {(activeTab?.kind === "editor" || activeTab?.kind === "code-editor" || commands?.save) && (
-          (() => {
-            const saveEnabled = commands?.save
-              ? (commands.canSave?.() ?? true)
-              : isDirty;
-            return (
-              <button
-                type="button"
-                disabled={!saveEnabled || isSaving}
-                onClick={commands?.save ?? onSave}
-                title={`Save (${SAVE_SHORTCUT})`}
-                aria-label={commands?.saveLabel ?? "Save note"}
-                className={cn(
-                  "rounded-small border px-2 py-0.5 text-xs font-medium transition-colors",
-                  saveEnabled
-                    ? "border-border bg-primary text-primary-foreground hover:bg-primary/90 cursor-pointer"
-                    : "border-border/40 bg-muted/40 text-muted-foreground/50 cursor-not-allowed opacity-50",
-                  isSaving && "cursor-wait opacity-70"
-                )}
-              >
-                {isSaving ? "Saving…" : (commands?.saveLabel ?? "Save")}
-              </button>
-            );
-          })()
+          ))}
+        {showSave && (
+          <button
+            type="button"
+            disabled={!saveEnabled || isSaving}
+            onClick={customSave ?? onSave}
+            // A custom save runs where the shell's Mod-S handler can't reach
+            // (a merge tab), so it advertises its label rather than a shortcut.
+            title={customSave ? (commands?.saveLabel ?? "Save") : `Save (${SAVE_SHORTCUT})`}
+            aria-label={commands?.saveLabel ?? "Save note"}
+            className={cn(
+              "rounded-small border px-2 py-0.5 text-xs font-medium transition-colors",
+              saveEnabled
+                ? "border-border bg-primary text-primary-foreground hover:bg-primary/90 cursor-pointer"
+                : "border-border/40 bg-muted/40 text-muted-foreground/50 cursor-not-allowed opacity-50",
+              isSaving && "cursor-wait opacity-70"
+            )}
+          >
+            {isSaving ? "Saving…" : (commands?.saveLabel ?? "Save")}
+          </button>
         )}
       </div>
     </div>

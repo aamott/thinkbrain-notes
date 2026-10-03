@@ -1,11 +1,10 @@
 import { Compartment, EditorState, StateEffect } from "@codemirror/state";
-import { redo, redoDepth, undo, undoDepth } from "@codemirror/commands";
 import { keymap, EditorView } from "@codemirror/view";
 import type { NoteIndexEntry } from "@thinkbrain/core";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { EditorHeaderSlot } from "./editorHeaderRegistry.tsx";
-import { notifyEditorCommands, registerEditorCommands } from "./editorCommands";
+import { cmHistoryCommands, notifyEditorCommands, registerEditorCommands } from "./editorCommands";
 import { recallEditorState, rememberEditorState } from "./editorStateCache";
 import { livePreview as livePreviewExtension } from "./livePreview";
 import {
@@ -169,16 +168,7 @@ export function MarkdownEditor({
     const unregisterCommands =
       stateKey === undefined
         ? undefined
-        : registerEditorCommands(stateKey, {
-            undo: () => {
-              if (undo(view)) view.focus();
-            },
-            redo: () => {
-              if (redo(view)) view.focus();
-            },
-            canUndo: () => undoDepth(view.state) > 0,
-            canRedo: () => redoDepth(view.state) > 0
-          });
+        : registerEditorCommands(stateKey, cmHistoryCommands(() => view));
 
     if (parked) {
       // The parked state carries the previous mount's extensions, and those

@@ -28,8 +28,16 @@ export class TabBoundary extends Component<
       return (
         <Unavailable
           title="This tab stopped working"
-          description="Something went wrong drawing it. Close the tab and open it again — the note itself is untouched."
-        />
+          description="Something went wrong drawing it. Try again, or close the tab and open it — the note itself is untouched."
+        >
+          <button
+            type="button"
+            className="mt-3 cursor-pointer rounded-small border border-border bg-surface px-3 py-1 text-xs text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+            onClick={() => this.setState({ failed: false })}
+          >
+            Try again
+          </button>
+        </Unavailable>
       );
     }
     return this.props.children;
