@@ -140,8 +140,8 @@ export function WorkspaceExplorerView({
       <p className="sr-only" aria-live="polite">{drag.announcement}</p>
       {/* One chrome row: the selector trigger when it lives in panel
           headers, otherwise the plain "Files" label — the root path survives
-          as its tooltip. Actions hover-reveal on fine pointers and stay
-          visible on coarse ones. */}
+          as its tooltip. Create icons hover-reveal on fine pointers; the ⋯
+          menu is always visible so the row never looks action-less. */}
       <header className="group/explorer-header flex min-h-9 items-center justify-between gap-2 border-b border-border px-3 pointer-coarse:min-h-12 pointer-coarse:px-4">
         <div className="flex min-w-0 flex-1 items-center">
           {showInlineSelector ? (
@@ -155,32 +155,34 @@ export function WorkspaceExplorerView({
             </h2>
           )}
         </div>
-        <div
-          className={cn(
-            "flex flex-none items-center gap-0.5 opacity-0 transition-opacity group-hover/explorer-header:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-100",
-            moreMenuOpen && "opacity-100"
-          )}
-        >
-          <button
-            type="button"
-            className={HEADER_ACTION_CLASSES}
-            aria-label="New note"
-            title="New note"
-            disabled={state.phase !== "ready"}
-            onClick={() => actions.startCreate("", "file", "new-note")}
+        <div className="flex flex-none items-center gap-0.5">
+          <div
+            className={cn(
+              "flex items-center gap-0.5 opacity-0 transition-opacity group-hover/explorer-header:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-100",
+              moreMenuOpen && "opacity-100"
+            )}
           >
-            <FilePlus aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            className={HEADER_ACTION_CLASSES}
-            aria-label="New folder"
-            title="New folder"
-            disabled={state.phase !== "ready"}
-            onClick={() => actions.startCreate("", "folder")}
-          >
-            <FolderPlus aria-hidden="true" />
-          </button>
+            <button
+              type="button"
+              className={HEADER_ACTION_CLASSES}
+              aria-label="New note"
+              title="New note"
+              disabled={state.phase !== "ready"}
+              onClick={() => actions.startCreate("", "file", "new-note")}
+            >
+              <FilePlus aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              className={HEADER_ACTION_CLASSES}
+              aria-label="New folder"
+              title="New folder"
+              disabled={state.phase !== "ready"}
+              onClick={() => actions.startCreate("", "folder")}
+            >
+              <FolderPlus aria-hidden="true" />
+            </button>
+          </div>
           <div className="relative">
             <button
               ref={moreButtonRef}
