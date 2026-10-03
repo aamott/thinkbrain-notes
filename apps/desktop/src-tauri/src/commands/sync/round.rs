@@ -31,6 +31,8 @@ use super::apply;
 use super::conflict;
 use super::engine::{StuckNote, SyncPhase};
 use super::failed;
+use super::history_ingest;
+use super::history_source;
 use super::network;
 use super::network::bounded;
 use super::push;
@@ -179,18 +181,125 @@ fn trip(
     mut on_phase: impl FnMut(SyncPhase),
 ) -> Result<Synced, NativeError> {
     on_phase(SyncPhase::Checking);
-    let theirs = {
+    let source_ref = history_ingest::remote_source_ref(destination);
+    // Whether the bound branch ever existed *on this destination*: the
+    // durable source ref, not a shared marker. A different destination that
+    // was never fetched starts empty rather than inheriting another remote's
+    // history as proof.
+    let previous_source_tip = snapshot::try_head_of(repo, &source_ref).map_err(|error| {
+        failed(
+            "sync.git_history_ingest_failed",
+            "Could not read the imported history this link already has.",
+            error,
+        )
+    })?;
+    // The remote branch this workspace syncs with is a persisted choice: an
+    // existing binding wins, a clone's checkout binds to its upstream (or the
+    // same-named remote branch when the upstream points elsewhere), and only
+    // a link with neither discovers the remote's symbolic HEAD -- once, then
+    // it is bound. A changed remote default can therefore never retarget us.
+    let bound_local = history_source::bound_local(repo, &source_ref)?;
+    // A detached or switched checkout blocks the sync before any network use.
+    // It never blocks recording or history, which keep their own copies.
+    history_source::require_checkout(vault, bound_local.as_deref())?;
+    let current_local = history_source::checkout_branch(vault)?;
+    let bound_remote = history_source::bound_remote(repo, &source_ref)?;
+
+    // A `.git` appearing after the binding is this clone only when its
+    // checkout agrees about which remote branch the link uses; anything else
+    // is a different checkout standing in our vault.
+    let mut bound_local = bound_local;
+    if bound_remote.is_some() && bound_local.is_none() && current_local.is_some() {
+        let clone_remote = history_source::remote_branch_for(vault, destination)?;
+        if clone_remote == bound_remote.clone().expect("checked above") {
+            bound_local = current_local.clone();
+        } else {
+            return Err(NativeError::new(
+                "sync.branch_changed",
+                "This workspace's Git repository is on a different branch than the one its sync link uses. Check out the bound branch or update the link.",
+            ));
+        }
+    }
+
+    let selected = match bound_remote {
+        Some(branch) => Some(branch),
+        None => match &current_local {
+            Some(_) => Some(history_source::remote_branch_for(vault, destination)?),
+            None => None,
+        },
+    };
+    let fetched = {
         let repo = repo.clone();
         let destination = destination.to_owned();
         let cancel = Arc::clone(&cancel);
         let profile = profile_id.clone();
+        let selected = selected.clone();
         bounded(network::NETWORK, Arc::clone(&cancel), move || {
             super::credentials::with_profile(profile.as_deref(), || {
-                network::fetch(&repo, &destination, &cancel)
+                network::fetch(&repo, &destination, &cancel, selected.as_deref())
             })
         })
     }?;
+    // An unrelated fetched tip is refused before anything remembers it: the
+    // objects are already local, so the ancestry check needs no refs, and a
+    // rejected graph must never become the source history reads.
     let ours = snapshot::head_commit(repo)?;
+    if let (Some(ours), Some(theirs)) = (ours, fetched.tip) {
+        refuse_unrelated(repo, ours, theirs)?;
+    }
+
+    // Publication happens here, not inside the bounded fetch: the fetch is
+    // source-only (it moves no ref), and nothing is remembered -- no binding,
+    // no markers -- until the fetched graph has been validated and retained
+    // as durable source history. A worker that dies mid-write can at most
+    // leave unreferenced objects, and a failed validation cannot bind this
+    // workspace to a branch it never verified. `activate` waits for the join
+    // below: the source ref is kept, but it only becomes the source the
+    // history reader walks once the fetched graph has actually joined.
+    if let Some(tip) = fetched.tip {
+        history_ingest::retain_fetched(repo, destination, tip)?;
+        repo.reference(
+            network::REMOTE_REF,
+            tip,
+            gix::refs::transaction::PreviousValue::Any,
+            "fetched the linked repository's branch",
+        )
+        .map_err(|error| {
+            failed(
+                "sync.git_history_ingest_failed",
+                "Could not copy Git history into ThinkBrain's private history.",
+                error,
+            )
+        })?;
+    }
+    // The binding persists even when the tip is absent (an unborn branch) so
+    // push sends to the same ref the choice was made for.
+    let bound_local = bound_local.or(current_local);
+    history_source::bind(repo, &source_ref, bound_local.clone(), &fetched.branch)?;
+    // The fetch may have taken minutes on a slow link; if the vault's own
+    // checkout moved meanwhile, applying the result would mix branches.
+    history_source::require_checkout(vault, bound_local.as_deref())?;
+    let theirs = fetched.tip;
+    if theirs.is_none() && previous_source_tip.is_some() {
+        // This destination advertised the bound branch before; an unborn
+        // answer now means it was deleted, not that it was always empty --
+        // refuse rather than let push recreate it.
+        return Err(NativeError::new(
+            "sync.branch_missing",
+            "The remote no longer has the branch this workspace syncs. Check the link or recreate the branch.",
+        ));
+    }
+    // With both tips present, ancestry decides which arm joins them. It is
+    // asked once, up front: the questions are `Result`s, so they cannot sit
+    // in match guards, and a traversal failure must surface rather than
+    // quietly degrade into the merge arm.
+    let (ours_in_theirs, theirs_in_ours) = match (ours, theirs) {
+        (Some(ours), Some(theirs)) if ours != theirs => (
+            tip_contains(repo, ours, theirs)?,
+            tip_contains(repo, theirs, ours)?,
+        ),
+        _ => (false, false),
+    };
 
     let (brought_down, asked_about, copies, mut skipped) = match (ours, theirs) {
         // Nothing to join: either they have nothing to give, or we have
@@ -204,20 +313,27 @@ fn trip(
         (Some(ours), Some(theirs)) if ours == theirs => (0, 0, Vec::new(), Vec::new()),
         // They moved; we did not. Advance to their tip instead of writing a
         // merge commit that would block their next push as "unseen history".
-        (Some(ours), Some(theirs)) if tip_contains(repo, ours, theirs) => {
+        (Some(ours), Some(theirs)) if ours_in_theirs => {
             on_phase(SyncPhase::Combining);
             let (brought_down, copies, skipped) = fast_forward(repo, vault, ours, theirs)?;
             (brought_down, copies.len(), copies, skipped)
         }
         // We moved; they did not. Send ours as-is.
-        (Some(ours), Some(theirs)) if tip_contains(repo, theirs, ours) => {
-            (0, 0, Vec::new(), Vec::new())
-        }
+        (Some(_), Some(_)) if theirs_in_ours => (0, 0, Vec::new(), Vec::new()),
         (Some(ours), Some(theirs)) => {
             on_phase(SyncPhase::Combining);
             merge(repo, vault, ours, theirs)?
         }
     };
+
+    // The join is what made this source canonical: only once the fetched
+    // graph was adopted, fast-forwarded, or merged does it become the source
+    // the history reader walks -- a round that failed before this point never
+    // displays history it could not integrate.
+    if fetched.tip.is_some() {
+        history_source::activate(repo, &source_ref)?;
+    }
+
     skipped.extend(apply::skipped_unsupported(repo, vault)?);
 
     // What the send did, as (objects, outcome). Kept as a value rather than
@@ -230,14 +346,18 @@ fn trip(
         None => (0, push::Landed::Moved),
         Some(tip) => {
             on_phase(SyncPhase::Sending);
+            // The checkout can have moved while the merge ran; pushing would
+            // upload one branch's history under another's name.
+            history_source::require_checkout(vault, bound_local.as_deref())?;
             let attempt = {
                 let repo = repo.clone();
                 let destination = destination.to_owned();
                 let cancel = Arc::clone(&cancel);
                 let profile = profile_id.clone();
+                let branch = fetched.branch.clone();
                 bounded(network::NETWORK, cancel, move || {
                     super::credentials::with_profile(profile.as_deref(), || {
-                        push::send(&repo, &destination, BRANCH, tip)
+                        push::send(&repo, &destination, &branch, tip)
                     })
                 })
             };
@@ -322,10 +442,58 @@ fn point_history(
     Ok(())
 }
 
+/// Refuses to merge two histories that share nothing when our own records
+/// already descend from imported external history.
+///
+/// Two app-only devices pointed at one destination are unrelated too, and
+/// joining them is the feature. But once our history contains an imported
+/// Git root, an unrelated fetched tip means the link moved to a different
+/// repository -- a rewrite or a swapped link -- and merging would splice two
+/// strangers' histories into one timeline. The fetched objects are already
+/// retained read-only by the time this runs; only the join is refused.
+/// Retained roots count as "ours shares ancestry with external history" so a
+/// source rewritten away from its old root is caught the same way.
+fn refuse_unrelated(
+    repo: &gix::Repository,
+    ours: gix::ObjectId,
+    theirs: gix::ObjectId,
+) -> Result<(), NativeError> {
+    if merge_base(repo, ours, theirs)?.is_some() {
+        return Ok(());
+    }
+    for root in history_ingest::source_tips(repo)? {
+        if merge_base(repo, ours, root)?.is_some() {
+            return Err(NativeError::new(
+                "sync.unrelated_history",
+                "The linked repository's history is unrelated to this workspace's. Check the link, or import it into a separate workspace.",
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// The merge base of `first` and `second`, or `None` only when they share
+/// no ancestor -- traversal failures are errors, not a quiet `false` that
+/// would read as "unrelated".
+fn merge_base(
+    repo: &gix::Repository,
+    first: gix::ObjectId,
+    second: gix::ObjectId,
+) -> Result<Option<gix::ObjectId>, NativeError> {
+    match repo.merge_base(first, second) {
+        Ok(base) => Ok(Some(base.detach())),
+        Err(gix::repository::merge_base::Error::NotFound { .. }) => Ok(None),
+        Err(error) => Err(cannot(error)),
+    }
+}
+
 /// Whether `tip` already contains every commit reachable from `ancestor`.
-fn tip_contains(repo: &gix::Repository, ancestor: gix::ObjectId, tip: gix::ObjectId) -> bool {
-    repo.merge_base(ancestor, tip)
-        .is_ok_and(|base| base.detach() == ancestor)
+fn tip_contains(
+    repo: &gix::Repository,
+    ancestor: gix::ObjectId,
+    tip: gix::ObjectId,
+) -> Result<bool, NativeError> {
+    Ok(merge_base(repo, ancestor, tip)? == Some(ancestor))
 }
 
 fn cannot(error: impl std::fmt::Display) -> NativeError {
@@ -576,3 +744,7 @@ mod tests;
 #[cfg(test)]
 #[path = "round_security_tests.rs"]
 mod security_tests;
+
+#[cfg(test)]
+#[path = "round_branch_tests.rs"]
+mod branch_tests;

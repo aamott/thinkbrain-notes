@@ -18,5 +18,7 @@ objects are deliberately left alone.
 - [ ] Decide whether packed-object compaction is worth the cost; current
       maintenance does not rewrite packs.
 
-Do not rewrite synced history or remove commits still needed for the merge
-base. The existing cleanup only rebuilds the private checkpoint chain.
+Do not rewrite synced history or remove imported roots or common ancestors
+needed by unresolved merges (`cloud_merge_base`). Clearing undo history must
+not clear those baselines. The existing cleanup only rebuilds the private
+checkpoint chain; baseline protection is part of the upcoming cloud work.

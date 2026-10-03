@@ -9,8 +9,8 @@ import type {
 import type {
   ConflictRate as NativeConflictRate,
   HistoryCleanup as NativeHistoryCleanup,
+  HistoryPage as NativeHistoryPage,
   HistoryUsage as NativeHistoryUsage,
-  RecordedChange as NativeRecordedChange,
   SavedSignIn as NativeSavedSignIn,
   SignInStatus as NativeSignInStatus,
   Synced as NativeSynced,
@@ -243,14 +243,19 @@ export interface NativeCommandMap {
     readonly args: { readonly rootPath: string };
     readonly result: NativeSyncStatus;
   };
-  /** `notePath` narrows the list to one note's restorable versions. */
+  /**
+   * `notePath` narrows the list to one note's restorable versions. `cursor`
+   * continues a first page into older history; an invalid or expired one is
+   * an actionable failure, not an empty page.
+   */
   readonly sync_history: {
     readonly args: {
       readonly rootPath: string;
       readonly notePath: string | null;
       readonly limit: number;
+      readonly cursor: string | null;
     };
-    readonly result: readonly NativeRecordedChange[];
+    readonly result: NativeHistoryPage;
   };
   /** Puts one note back to the version recorded in `change`. */
   readonly restore_version: {

@@ -7,7 +7,7 @@ use crate::tests::make_temp_test_dir;
 fn engine_for(name: &str) -> Arc<Engine> {
     let app_data = make_temp_test_dir(&format!("{name}-appdata"), "sync", true);
     let vault = make_temp_test_dir(&format!("{name}-vault"), "sync", true);
-    let managed = bootstrap(&app_data, &vault).expect("bootstrap succeeds");
+    let managed = bootstrap(&app_data, &vault, false).expect("bootstrap succeeds");
     Arc::new(Engine::new(managed.repo, managed.has_own_git))
 }
 
@@ -395,7 +395,7 @@ fn attaching_settles_the_obvious_copies_without_deadlocking() {
 fn syncable(name: &str) -> (String, Arc<Engine>) {
     let app_data = make_temp_test_dir(&format!("{name}-appdata"), "sync", true);
     let vault = make_temp_test_dir(&format!("{name}-vault"), "sync", true);
-    let managed = bootstrap(&app_data, &vault).expect("bootstrap succeeds");
+    let managed = bootstrap(&app_data, &vault, false).expect("bootstrap succeeds");
     let engine = Arc::new(Engine::new(managed.repo, managed.has_own_git));
 
     settle::remember_settings_home(&app_data);
@@ -632,4 +632,36 @@ fn the_sweeper_waits_out_the_interval_the_user_asked_for() {
         !engine.syncing(),
         "a round trip started before the interval had come round"
     );
+}
+
+/// Settings that cannot be read are not the same as "no link configured": an
+/// unreadable file fails closed toward the link being canonical, so a broken
+/// vault `.git` cannot take the whole attach down for an import the link
+/// would have superseded.
+#[test]
+fn an_unreadable_settings_file_does_not_fail_the_attach() {
+    let app_data = make_temp_test_dir("registry-unreadable-appdata", "sync", true);
+    let vault = make_temp_test_dir("registry-unreadable-vault", "sync", true);
+    // A `.git` that fails the workspace import if it runs.
+    std::fs::create_dir(vault.join(".git")).expect("the .git dir exists");
+    // A directory where the settings file belongs makes every read an I/O
+    // error on every platform.
+    let settings = crate::commands::settings::workspace_settings_path(&app_data, &vault);
+    std::fs::create_dir_all(&settings).expect("the settings path is a directory");
+
+    attach(&app_data, &vault, &vault.to_string_lossy(), "unreadable")
+        .expect("unreadable settings suppress the import rather than fail the attach");
+
+    // The contrast: the same broken `.git` with *no* settings still fails
+    // loudly -- only an unreadable file takes the fail-closed path.
+    let other_app = make_temp_test_dir("registry-unreadable-appdata2", "sync", true);
+    let other_vault = make_temp_test_dir("registry-unreadable-vault2", "sync", true);
+    std::fs::create_dir(other_vault.join(".git")).expect("the .git dir exists");
+    attach(
+        &other_app,
+        &other_vault,
+        &other_vault.to_string_lossy(),
+        "readable",
+    )
+    .expect_err("a workspace with no settings still fails the broken import loudly");
 }

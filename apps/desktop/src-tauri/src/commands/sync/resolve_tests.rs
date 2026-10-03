@@ -53,7 +53,7 @@ fn fixture(name: &str, ours: &[u8], theirs: &[u8]) -> Fixture {
     fs::write(vault.join("note.md"), ours).expect("the note is written");
     fs::write(vault.join(COPY), theirs).expect("the copy is written");
 
-    let workspace = bootstrap(&app_data, &vault).expect("bootstrap succeeds");
+    let workspace = bootstrap(&app_data, &vault, false).expect("bootstrap succeeds");
     Fixture {
         vault,
         engine: Engine::new(workspace.repo, workspace.has_own_git),

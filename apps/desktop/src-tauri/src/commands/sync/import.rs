@@ -186,7 +186,9 @@ pub fn complete_import(
     let _lane = lock_or_recover(&lane);
     let result = (|| {
         on_phase(SyncPhase::Saving);
-        let managed = bootstrap::bootstrap(app_data, &prepared.target)?;
+        // The link was persisted by `prepare_import`, so it is the canonical
+        // source — never the local `.git` even if one exists.
+        let managed = bootstrap::bootstrap(app_data, &prepared.target, true)?;
         // A push that cannot be made must not undo a fetch and merge that
         // worked: importing a repository this device may never write to is a
         // normal thing to do, and rolling it back deletes the notes it just

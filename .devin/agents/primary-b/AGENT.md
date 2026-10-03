@@ -1,7 +1,7 @@
 ---
 name: primary-b
-description: Primary difficulty tier (model B). Deep planning, complex problem solving, and code review of complex code or large problems. Prefer this for planning help. Powerful but expensive, so prefer for creating plans that cheaper agents can implement. 
-model: gpt-5-6-sol-high
+description: Primary difficulty tier (model B). Heavy UI planning and implementation. Expensive, but powerful for UI design and implementing complex UI features.
+model: claude-sonnet-5-5-medium
 max-nesting: 2
 ---
 

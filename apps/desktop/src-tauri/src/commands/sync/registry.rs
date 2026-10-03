@@ -148,7 +148,19 @@ pub fn attach(app_data_dir: &Path, root: &Path, key: &str, label: &str) -> Resul
     // A failure here is the one thing nobody could see: it was logged and the
     // window went on saying this folder keeps its own history, which is what a
     // deliberate choice looks like rather than a broken one.
-    let managed = bootstrap(app_data_dir, root).map_err(|error| remember_failure(key, error))?;
+    // A configured git link is the canonical history source: it suppresses
+    // the workspace-local `.git` import, whose objects instead arrive through
+    // the fetch on the first round trip. `destination` answers `None` for an
+    // unreadable settings file too, which is not the same as "no link": fail
+    // closed toward a link being configured so a broken vault `.git` cannot
+    // take the whole attach down when the link would have superseded it.
+    let settings_path = crate::commands::settings::workspace_settings_path(app_data_dir, root);
+    let git_link_configured = match round::destination(app_data_dir, root) {
+        Some(_) => true,
+        None => crate::commands::settings::read_settings_file(&settings_path).is_err(),
+    };
+    let managed = bootstrap(app_data_dir, root, git_link_configured)
+        .map_err(|error| remember_failure(key, error))?;
 
     let engine = Arc::new(Engine::new(managed.repo, managed.has_own_git));
     // Conflicts appear while the app is closed. Someone back from a week away

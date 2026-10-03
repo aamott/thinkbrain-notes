@@ -38,6 +38,17 @@ export type VersionDiff = VersionDiffBase &
     | { readonly kind: "binary"; readonly text: null }
   );
 
+/**
+ * Who a recorded change came from.
+ *
+ * `local` is this app's own record; `git` is a version imported from the
+ * workspace's git history — a configured link's selected remote branch or the
+ * folder's own repository — classified by ancestry rather than by anything
+ * the record says about itself. The panel only names the source when one
+ * timeline mixes the two.
+ */
+export type HistorySource = "local" | "git";
+
 /** One recorded change, as the history list shows it. */
 export interface RecordedChange {
   readonly id: string;
@@ -49,6 +60,20 @@ export interface RecordedChange {
    */
   readonly message: string;
   readonly notes: readonly ChangedNote[];
+  readonly source: HistorySource;
+}
+
+/**
+ * One page of recorded changes, newest first.
+ *
+ * `nextCursor` continues this read into older history. It is opaque and tied
+ * to what this first page was read from, so pages can only ever append within
+ * the one session it was issued for — a later page never stands alone.
+ */
+export interface HistoryPage {
+  readonly changes: readonly RecordedChange[];
+  /** Opaque continuation, or `null` when this page reaches the end. */
+  readonly nextCursor: string | null;
 }
 
 /** How often this vault has asked its user to choose between two versions. */

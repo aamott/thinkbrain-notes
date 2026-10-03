@@ -2,10 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { noteName } from "../lib/utils";
 import { Unavailable } from "../shell/Unavailable";
-import type { RecordedChange, VersionDiff } from "./historyTypes";
+import type { HistoryPage, RecordedChange, VersionDiff } from "./historyTypes";
 import { lineDelta } from "./mergeModel";
 import { describeMoment, failureMessage, restoreFailureMessage } from "./syncCopy";
-import { readHistory, readVersionDiff } from "./syncService";
+import { HISTORY_PAGE, readHistory, readVersionDiff } from "./syncService";
 import { useSyncStatus } from "./useSyncStatus";
 
 /**
@@ -36,9 +36,9 @@ interface HistoryPanelProps {
   readonly onRestore: (notePath: string, changeId: string) => Promise<void>;
 }
 
-/** One read of the panel: what it holds, or why it could not be read. */
+/** One first-page read: what it found, or why it could not be read. */
 interface Read {
-  readonly changes: readonly RecordedChange[] | null;
+  readonly page: HistoryPage | null;
   readonly error: string | null;
 }
 
@@ -95,10 +95,34 @@ function HistorySession({
   readonly onRestore: (notePath: string, changeId: string) => Promise<void>;
 }) {
   const [changes, setChanges] = useState<readonly RecordedChange[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Every first-page read bumps the generation. Any answer — a first page or
+  // an older page — that resolves with a stale number predates the latest
+  // refresh and is dropped: an older page may only ever append to the first
+  // page its cursor was cut from.
+  const generation = useRef(0);
+  // The ticket of a first-page read still out, or 0. While one is pending the
+  // cursor on screen still belongs to the previous list, so "load older" must
+  // refuse — including in the tick before `refreshing` has rendered.
+  const pendingFirstPage = useRef(0);
+  // Blocks a second "load older" click before the disabled state has even
+  // rendered — a ref because a rapid click still reads the stale closure.
+  const olderInFlight = useRef(false);
+  // Results that resolve after this session unmounted must not write.
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
 
   // Per-revision comparison results, fetched lazily as cards scroll into
   // view. A recorded version never changes, so the fetched "theirs" side
@@ -107,32 +131,78 @@ function HistorySession({
   // session's keyed remount is what keeps another file's reads out of it.
   const diffCache = useMemo<DiffCache>(() => new Map(), []);
 
-  /** Reads the list, changing nothing. {@link apply} is the only writer. */
+  /** Reads the first page, changing nothing. `refresh` is the only writer. */
   const read = useCallback(async (): Promise<Read> => {
     try {
-      return { changes: await readHistory(rootPath, note), error: null };
+      return { page: await readHistory(rootPath, note), error: null };
     } catch (cause) {
       return {
-        changes: null,
+        page: null,
         error: failureMessage(cause, "This file's earlier versions could not be read.", true)
       };
     }
   }, [note, rootPath]);
 
-  const apply = useCallback((result: Read) => {
-    if (result.changes) setChanges(result.changes);
+  /**
+   * A fresh first page. Status changes, the Refresh action, and the re-read
+   * a restore is owed all land here — and every one of them retires whatever
+   * was still in flight for the previous first page, so a late answer can
+   * never overwrite or append to the newer list.
+   */
+  const refresh = useCallback(async () => {
+    const ticket = ++generation.current;
+    pendingFirstPage.current = ticket;
+    setRefreshing(true);
+    const result = await read();
+    // A newer refresh owns the pending flag now: a stale answer leaves the
+    // list, the cursor and the flag itself untouched. A failed read likewise
+    // keeps the previously accepted rows and cursor so a retry still works.
+    if (!alive.current || ticket !== generation.current) return;
+    pendingFirstPage.current = 0;
+    setRefreshing(false);
+    if (result.page) {
+      setChanges(result.page.changes);
+      setNextCursor(result.page.nextCursor);
+    }
     setError(result.error);
     setLoaded(true);
-  }, []);
+  }, [read]);
 
   const reload = useCallback(() => {
-    void read().then(apply);
-  }, [apply, read]);
+    void refresh();
+  }, [refresh]);
 
   // Live status keeps the list fresh when a record lands (or a restore writes
   // one); the alongside-git sentence is owed to anyone whose folder already
   // keeps its own history.
   const status = useSyncStatus(rootPath, undefined, reload);
+
+  /**
+   * The next older page, asked for with the cursor the last accepted page
+   * left. Rows already shown are never touched by it: a failure leaves both
+   * the list and the cursor standing, so the same button retries the same
+   * cursor — and Refresh remains the way out of a cursor that has expired.
+   */
+  const loadOlder = useCallback(async () => {
+    const cursor = nextCursor;
+    if (cursor === null || olderInFlight.current || pendingFirstPage.current !== 0) return;
+    olderInFlight.current = true;
+    setLoadingOlder(true);
+    const ticket = generation.current;
+    try {
+      const page = await readHistory(rootPath, note, HISTORY_PAGE, cursor);
+      if (!alive.current || ticket !== generation.current) return;
+      setChanges((shown) => [...shown, ...page.changes]);
+      setNextCursor(page.nextCursor);
+      setError(null);
+    } catch (cause) {
+      if (!alive.current || ticket !== generation.current) return;
+      setError(failureMessage(cause, "Older versions of this file could not be read.", true));
+    } finally {
+      olderInFlight.current = false;
+      if (alive.current) setLoadingOlder(false);
+    }
+  }, [nextCursor, note, rootPath]);
 
   const putBack = useCallback(
     async (change: RecordedChange) => {
@@ -147,12 +217,22 @@ function HistorySession({
       }
       // Always re-read, and the report last: a restore writes a new recorded
       // change, and a failure the list overwrote would be a failure nobody saw.
-      apply(await read());
+      await refresh();
+      if (!alive.current) return;
       if (failure) setError(failure);
       else setNotice(`"${noteName(note)}" is back to how it was ${describeMoment(change.at).toLowerCase()}.`);
       setBusyId(null);
     },
-    [apply, busyId, note, onRestore, read]
+    [busyId, note, onRestore, refresh]
+  );
+
+  // A source label is only owed when one timeline mixes this app's records
+  // with versions imported from git — a configured link's or the folder's own.
+  const mixedSources = useMemo(
+    () =>
+      changes.some((change) => change.source === "local") &&
+      changes.some((change) => change.source === "git"),
+    [changes]
   );
 
   return (
@@ -170,16 +250,28 @@ function HistorySession({
         </p>
         {status.alongsideOwnGit && (
           <p className="mb-0 mt-2 text-[0.7rem] leading-relaxed text-muted-foreground">
-            This folder also keeps its own version history. That one is left exactly as it is —
-            what you see here is a second, separate record kept outside your notes.
+            This folder also has its own git history, which is left exactly as it is — versions
+            shown from it are copies kept outside your notes.
           </p>
         )}
       </header>
 
       {error !== null && (
-        <p role="alert" className="m-3 rounded-small border border-danger px-2 py-1.5 text-xs text-danger">
-          {error}
-        </p>
+        <div
+          role="alert"
+          className="m-3 flex items-start justify-between gap-2 rounded-small border border-danger px-2 py-1.5 text-xs text-danger"
+        >
+          <span>{error}</span>
+          {/* A fresh first page — also the way past a cursor that has expired,
+              since a retry of the failed page itself is one button below. */}
+          <button
+            type="button"
+            className="shrink-0 rounded-small border border-danger px-1.5 py-0.5"
+            onClick={() => void refresh()}
+          >
+            Refresh
+          </button>
+        </div>
       )}
       {notice !== null && (
         <p role="status" className="m-3 rounded-small border border-border px-2 py-1.5 text-xs text-muted-foreground">
@@ -187,15 +279,21 @@ function HistorySession({
         </p>
       )}
 
-      {!loaded ? null : changes.length === 0 && error === null ? (
-        <Unavailable
-          title="No earlier versions yet"
-          description="This file has only ever been saved once. Later versions will show up here as it changes."
-        />
+      {!loaded ? (
+        <p className="m-3 text-xs text-muted-foreground">Loading versions…</p>
+      ) : changes.length === 0 ? (
+        // The alert above is already the whole story when a read failed.
+        error === null ? (
+          <Unavailable
+            title="No versions available yet"
+            description="Versions recorded for this file will show up here as it changes."
+          />
+        ) : null
       ) : (
         <>
           <p className="m-0 px-3 pt-3 text-[0.7rem] text-muted-foreground">
-            {changes.length} {changes.length === 1 ? "revision" : "revisions"} recorded
+            {changes.length} {changes.length === 1 ? "version" : "versions"}{" "}
+            {nextCursor === null ? "recorded" : "loaded"}
           </p>
           <ol className="m-0 flex list-none flex-col gap-2 p-3">
             {changes.map((change) => (
@@ -207,11 +305,26 @@ function HistorySession({
                 currentContents={currentContents}
                 cache={diffCache}
                 busy={busyId !== null}
+                provenance={
+                  mixedSources ? (change.source === "git" ? "Git history" : "Recorded here") : null
+                }
                 onCompare={() => onCompare(note, change.id, change.at)}
                 onRestore={() => void putBack(change)}
               />
             ))}
           </ol>
+          {nextCursor !== null && (
+            <div className="px-3 pb-3">
+              <button
+                type="button"
+                className={ACTION_BUTTON + " w-full"}
+                disabled={loadingOlder || refreshing}
+                onClick={() => void loadOlder()}
+              >
+                {loadingOlder ? "Loading older versions…" : "Load older versions"}
+              </button>
+            </div>
+          )}
         </>
       )}
     </section>
@@ -232,6 +345,8 @@ interface RevisionCardProps {
   readonly currentContents: string | null;
   readonly cache: DiffCache;
   readonly busy: boolean;
+  /** "Recorded here" / "Git history" — `null` when the timeline has one source. */
+  readonly provenance: string | null;
   readonly onCompare: () => void;
   readonly onRestore: () => void;
 }
@@ -243,6 +358,7 @@ function RevisionCard({
   currentContents,
   cache,
   busy,
+  provenance,
   onCompare,
   onRestore
 }: RevisionCardProps) {
@@ -256,15 +372,18 @@ function RevisionCard({
         <p className="m-0 text-xs font-semibold text-card-foreground">
           {describeMoment(change.at)}
         </p>
-        {restorable && (
-          <RevisionBadge
-            rootPath={rootPath}
-            note={note}
-            changeId={change.id}
-            currentContents={currentContents}
-            cache={cache}
-          />
-        )}
+        <span className="flex shrink-0 items-center gap-1">
+          {provenance !== null && <span className={BADGE + " " + BADGE_LOADED}>{provenance}</span>}
+          {restorable && (
+            <RevisionBadge
+              rootPath={rootPath}
+              note={note}
+              changeId={change.id}
+              currentContents={currentContents}
+              cache={cache}
+            />
+          )}
+        </span>
       </div>
       <p className="mb-0 mt-1 text-[0.7rem] leading-relaxed text-muted-foreground">
         {change.message}

@@ -78,12 +78,18 @@ vault. Vault = Markdown files + attachments, plus user-owned `.canvas` JSON
 documents as an explicit vault-file exception. Canvas settings, cache, and
 viewport/session state live in OS `AppData`/config directories.
 
-**Bring your own sync**: No proprietary cloud backend, ever. Whatever the user
-already runs — OneDrive, Google Drive, Syncthing — moves the files; the app's
-job is to notice the conflict copies those daemons leave behind and help
-resolve them. Git is the one transport the app drives itself, through a
-bundled gix rather than a `git` binary the user may not have. Both are one
-feature (`plans/auto-sync/`), not two.
+**History and sync**: One feature, three ordinary workflows:
+
+- **One computer:** record note edits locally; compare and restore without setup.
+- **Git:** sync and show existing history from the checked-out branch of a clone,
+  or the remote default branch for an app import. No branch-switching UI.
+- **OneDrive/Syncthing:** let the daemon move files; keep history and the common
+  ancestor outside the synced folder for three-way conflict resolution. If a
+  baseline cannot be established, preserve both versions for manual review.
+
+The hidden history store lives in OS app-data, never in the vault. Git uses
+bundled gix; there is no proprietary cloud backend or separate history product
+per transport. See the `auto_sync` epic and the `sync-history` editing skill.
 
 ## MVP Scope
 

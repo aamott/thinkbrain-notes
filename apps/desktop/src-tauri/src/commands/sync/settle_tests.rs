@@ -13,7 +13,7 @@ struct Vault {
 fn vault(name: &str) -> Vault {
     let app_data = make_temp_test_dir(&format!("{name}-appdata"), "sync", true);
     let root = make_temp_test_dir(&format!("{name}-vault"), "sync", true);
-    let managed = bootstrap(&app_data, &root).expect("bootstrap succeeds");
+    let managed = bootstrap(&app_data, &root, false).expect("bootstrap succeeds");
     Vault {
         root,
         engine: Engine::new(managed.repo, managed.has_own_git),

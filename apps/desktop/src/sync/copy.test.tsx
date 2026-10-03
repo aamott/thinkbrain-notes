@@ -2,7 +2,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ConflictComparison, ConflictSummary } from "./conflictTypes";
-import { NOT_RECORDING, type RecordedChange, type SyncState, type SyncStatus } from "./historyTypes";
+import {
+  NOT_RECORDING,
+  type HistoryPage,
+  type RecordedChange,
+  type SyncState,
+  type SyncStatus
+} from "./historyTypes";
 import { cleanup, render } from "./syncTestHarness";
 
 /**
@@ -54,9 +60,10 @@ vi.mock("./conflictService", () => ({
   subscribeToConflictChanges: () => Promise.resolve(() => undefined)
 }));
 
-const readHistory = vi.fn<() => Promise<readonly RecordedChange[]>>();
+const readHistory = vi.fn<() => Promise<HistoryPage>>();
 
 vi.mock("./syncService", () => ({
+  HISTORY_PAGE: 60,
   // `alongsideOwnGit` on, so the sentence a folder under its own version
   // control gets is audited like everything else.
   readSyncStatus: () =>
@@ -174,17 +181,21 @@ describe("nothing in this feature speaks git to the user", () => {
   });
 
   it("keeps the history plain, with and without a file open", async () => {
-    readHistory.mockResolvedValue([
-      {
-        id: "abc123",
-        at: Date.now(),
-        message: "Sync 2026-08-17 09:31 — 2 notes changed",
-        notes: [
-          { path: "Meeting Notes.md", change: "updated" },
-          { path: "Gone.md", change: "removed" }
-        ]
-      }
-    ]);
+    readHistory.mockResolvedValue({
+      changes: [
+        {
+          id: "abc123",
+          at: Date.now(),
+          message: "Sync 2026-08-17 09:31 — 2 notes changed",
+          notes: [
+            { path: "Meeting Notes.md", change: "updated" },
+            { path: "Gone.md", change: "removed" }
+          ],
+          source: "local"
+        } satisfies RecordedChange
+      ],
+      nextCursor: null
+    });
 
     for (const note of [null, "Meeting Notes.md"]) {
       audit(
@@ -203,7 +214,7 @@ describe("nothing in this feature speaks git to the user", () => {
   });
 
   it("keeps the empty history plain", async () => {
-    readHistory.mockResolvedValue([]);
+    readHistory.mockResolvedValue({ changes: [], nextCursor: null });
 
     audit(
       "the empty history",

@@ -1,4 +1,4 @@
-use super::super::test_support::write;
+use super::super::test_support::{ref_value, write};
 use super::*;
 use crate::tests::make_temp_test_dir;
 use std::fs;
@@ -53,11 +53,15 @@ fn each_workspace_gets_its_own_hidden_repo() {
 fn a_vault_with_its_own_git_is_recorded_too_and_its_repository_left_alone() {
     let app_data = make_temp_test_dir("bootstrap-own-git-appdata", "sync", true);
     let vault = make_temp_test_dir("bootstrap-own-git-vault", "sync", true);
-    fs::create_dir(vault.join(".git")).expect("the vault has its own repository");
+    // A real repository, not a planted .git — bootstrap now imports it
+    // read-only, which makes "we never wrote in it" worth proving.
+    let source = gix::init(&vault).expect("the vault has its own repository");
     fs::write(vault.join(".git").join("HEAD"), "ref: refs/heads/main\n").expect("written");
     write(&vault, "note.md", "# A note\n");
+    let tip = commit_one(&source, "note.md", b"# A note\n", "theirs");
+    let git_before = dir_contents(&vault.join(".git"));
 
-    let workspace = bootstrap(&app_data, &vault).expect("bootstrap succeeds");
+    let workspace = bootstrap(&app_data, &vault, false).expect("bootstrap succeeds");
 
     assert!(
         workspace.has_own_git,
@@ -68,6 +72,79 @@ fn a_vault_with_its_own_git_is_recorded_too_and_its_repository_left_alone() {
         ["note.md"],
         "the note is recorded and nothing of their repository is"
     );
+    assert_eq!(
+        ref_value(&workspace.repo, history_ingest::WORKSPACE_SOURCE_REF),
+        Some(tip),
+        "their history was not imported"
+    );
+    assert_eq!(
+        dir_contents(&vault.join(".git")),
+        git_before,
+        "ingestion wrote into their repository"
+    );
+}
+
+/// One commit on `refs/heads/main` holding a single blob, for a fixture that
+/// needs a real user-owned repository.
+fn commit_one(repo: &gix::Repository, path: &str, contents: &[u8], message: &str) -> gix::ObjectId {
+    let mut editor = repo
+        .edit_tree(gix::ObjectId::empty_tree(repo.object_hash()))
+        .expect("the tree opens");
+    let blob = repo
+        .write_blob(contents)
+        .expect("the blob is stored")
+        .detach();
+    editor
+        .upsert(path, gix::object::tree::EntryKind::Blob, blob)
+        .expect("the path is recorded");
+    let tree = editor.write().expect("the tree is written").detach();
+    let who = gix::actor::Signature {
+        name: "Vault Owner".into(),
+        email: "owner@example.com".into(),
+        time: gix::date::Time::new(1_700_000_000, 0),
+    };
+    let tip = repo
+        .write_object(&gix::objs::Commit {
+            tree,
+            parents: Default::default(),
+            author: who.clone(),
+            committer: who,
+            encoding: None,
+            message: message.into(),
+            extra_headers: Vec::new(),
+        })
+        .expect("the commit is written")
+        .detach();
+    repo.reference(
+        "refs/heads/main",
+        tip,
+        gix::refs::transaction::PreviousValue::Any,
+        "test",
+    )
+    .expect("the branch moves");
+    tip
+}
+
+/// Every file under `root`, as (relative path, bytes) — the proof the user's
+/// repository was read but never written.
+fn dir_contents(root: &Path) -> Vec<(PathBuf, Vec<u8>)> {
+    let mut found = Vec::new();
+    let mut pending = vec![root.to_path_buf()];
+    while let Some(dir) = pending.pop() {
+        for entry in fs::read_dir(&dir).expect("the directory is readable") {
+            let path = entry.expect("the entry is readable").path();
+            if path.is_dir() {
+                pending.push(path);
+            } else if path.is_file() {
+                found.push((
+                    path.strip_prefix(root).unwrap().to_path_buf(),
+                    fs::read(&path).expect("the file is readable"),
+                ));
+            }
+        }
+    }
+    found.sort();
+    found
 }
 
 #[test]
@@ -75,7 +152,7 @@ fn an_empty_vault_bootstraps_without_a_commit() {
     let app_data = make_temp_test_dir("bootstrap-empty-appdata", "sync", true);
     let vault = make_temp_test_dir("bootstrap-empty-vault", "sync", true);
 
-    let workspace = bootstrap(&app_data, &vault).expect("bootstrap succeeds");
+    let workspace = bootstrap(&app_data, &vault, false).expect("bootstrap succeeds");
 
     assert_eq!(
         snapshot::head_commit(&workspace.repo).expect("the history is readable"),
@@ -94,7 +171,7 @@ fn a_vault_of_existing_notes_is_snapshotted_whole() {
     write(&vault, "one.md", "# One\n");
     write(&vault, "journal/2026/08-16.md", "# Today\n");
 
-    let workspace = bootstrap(&app_data, &vault).expect("bootstrap succeeds");
+    let workspace = bootstrap(&app_data, &vault, false).expect("bootstrap succeeds");
 
     assert_eq!(
         recorded_paths(&workspace.repo),
@@ -108,7 +185,7 @@ fn bootstrapping_again_does_not_snapshot_again() {
     let vault = make_temp_test_dir("bootstrap-twice-vault", "sync", true);
     write(&vault, "one.md", "# One\n");
 
-    let first = bootstrap(&app_data, &vault).expect("bootstrap succeeds");
+    let first = bootstrap(&app_data, &vault, false).expect("bootstrap succeeds");
     assert!(
         first.took_first_snapshot,
         "the first open did not record the vault"
@@ -116,7 +193,7 @@ fn bootstrapping_again_does_not_snapshot_again() {
     let first_head = snapshot::head_commit(&first.repo).expect("the history is readable");
     drop(first);
 
-    let second = bootstrap(&app_data, &vault).expect("bootstrap succeeds again");
+    let second = bootstrap(&app_data, &vault, false).expect("bootstrap succeeds again");
 
     assert!(
         !second.took_first_snapshot,
@@ -143,7 +220,7 @@ fn os_junk_and_half_written_files_are_not_recorded() {
     write(&vault, "~$note.md", "lock");
     write(&vault, ".~lock.note.md#", "lock");
 
-    let workspace = bootstrap(&app_data, &vault).expect("bootstrap succeeds");
+    let workspace = bootstrap(&app_data, &vault, false).expect("bootstrap succeeds");
 
     assert_eq!(recorded_paths(&workspace.repo), ["note.md"]);
 }
@@ -163,7 +240,7 @@ fn symlinks_are_not_followed_into_the_snapshot() {
     std::os::unix::fs::symlink(&outside, vault.join("linked-folder"))
         .expect("the vault holds a symlinked folder");
 
-    let workspace = bootstrap(&app_data, &vault).expect("bootstrap succeeds");
+    let workspace = bootstrap(&app_data, &vault, false).expect("bootstrap succeeds");
 
     assert_eq!(recorded_paths(&workspace.repo), ["note.md"]);
 }
@@ -189,7 +266,7 @@ fn conflict_copies_stay_out_of_history_without_being_ignored() {
         "# Theirs\n",
     );
 
-    let workspace = bootstrap(&app_data, &vault).expect("bootstrap succeeds");
+    let workspace = bootstrap(&app_data, &vault, false).expect("bootstrap succeeds");
 
     assert_eq!(recorded_paths(&workspace.repo), ["note.md"]);
 
@@ -210,7 +287,7 @@ fn the_ignore_rules_live_in_the_repository_not_the_vault() {
     let app_data = make_temp_test_dir("bootstrap-exclude-appdata", "sync", true);
     let vault = make_temp_test_dir("bootstrap-exclude-vault", "sync", true);
 
-    bootstrap(&app_data, &vault).expect("bootstrap succeeds");
+    bootstrap(&app_data, &vault, false).expect("bootstrap succeeds");
 
     assert!(
         !vault.join(".gitignore").exists(),
@@ -237,7 +314,7 @@ fn ignored_folders_are_pruned_but_non_markdown_files_are_kept() {
     write(&vault, "target/debug/app", "binary");
     write(&vault, "notes/.hidden.md", "secret");
 
-    let workspace = bootstrap(&app_data, &vault).expect("bootstrap succeeds");
+    let workspace = bootstrap(&app_data, &vault, false).expect("bootstrap succeeds");
 
     let paths = recorded_paths(&workspace.repo);
     assert!(
@@ -285,7 +362,7 @@ fn a_vault_nested_too_deeply_fails_with_depth_limit_error() {
     fs::create_dir_all(&path).expect("deeply nested folders are created");
     write(&path, "note.md", "# Deep note\n");
 
-    let result = bootstrap(&app_data, &vault);
+    let result = bootstrap(&app_data, &vault, false);
 
     match result {
         Err(error) => {
@@ -310,7 +387,7 @@ fn a_vault_with_too_many_entries_fails_with_entry_cap_error() {
         write(&vault, &format!("note{:05}.md", i), "# Note\n");
     }
 
-    let result = bootstrap(&app_data, &vault);
+    let result = bootstrap(&app_data, &vault, false);
 
     match result {
         Err(error) => {
@@ -353,7 +430,7 @@ fn measures_a_ten_thousand_note_vault() {
     }
 
     let cold_started = Instant::now();
-    let cold = bootstrap(&app_data, &vault).expect("cold bootstrap succeeds");
+    let cold = bootstrap(&app_data, &vault, false).expect("cold bootstrap succeeds");
     let cold_elapsed = cold_started.elapsed();
     assert!(
         cold.took_first_snapshot,
@@ -367,7 +444,7 @@ fn measures_a_ten_thousand_note_vault() {
     drop(cold);
 
     let reopen_started = Instant::now();
-    let reopened = bootstrap(&app_data, &vault).expect("reopen succeeds");
+    let reopened = bootstrap(&app_data, &vault, false).expect("reopen succeeds");
     let reopen_elapsed = reopen_started.elapsed();
     assert!(
         !reopened.took_first_snapshot,
@@ -406,5 +483,69 @@ fn measures_a_ten_thousand_note_vault() {
     assert!(
         incremental_ms * 2.0 < cold_ms,
         "one-file incremental should be materially cheaper than cold bootstrap (incremental {incremental_ms:.1} ms, cold {cold_ms:.1} ms)"
+    );
+}
+
+/// A clone detached between opens must not take history down with it: the
+/// import pauses (there is no branch name to fetch or push against), but the
+/// previously imported source stays readable and local recording works.
+#[test]
+fn a_detached_clone_keeps_imported_history_and_recording() {
+    let app_data = make_temp_test_dir("bootstrap-detached-appdata", "sync", true);
+    let vault = make_temp_test_dir("bootstrap-detached-vault", "sync", true);
+    let source = gix::init(&vault).expect("the vault has its own repository");
+    fs::write(vault.join(".git").join("HEAD"), "ref: refs/heads/main\n").expect("written");
+    write(&vault, "note.md", "# Old\n");
+    // Distinct from the bytes on disk so the imported version is its own row,
+    // not equal-content collapsed into the first snapshot.
+    let tip = commit_one(&source, "note.md", b"# Old imported\n", "imported");
+
+    let first = bootstrap(&app_data, &vault, false).expect("attached bootstrap");
+    assert!(
+        ref_value(&first.repo, "refs/thinkbrain/sources/workspace-git").is_some(),
+        "the clone's history was imported"
+    );
+
+    // Now the clone detaches; reopening must still succeed.
+    fs::write(vault.join(".git").join("HEAD"), format!("{tip}\n")).expect("detached");
+    let second = bootstrap(&app_data, &vault, false).expect("detached bootstrap still opens");
+
+    // Imported history is still there to read.
+    let versions =
+        super::super::history::read(&second.repo, Some("note.md"), 10).expect("history reads");
+    assert!(
+        versions
+            .iter()
+            .any(|v| v.source == super::super::history::Source::Git),
+        "the imported version survived detaching"
+    );
+
+    // And local recording is untouched.
+    write(&vault, "another.md", "# New\n");
+    snapshot::record(&second.repo, &[PathBuf::from("another.md")], "recorded")
+        .expect("recording works while detached");
+}
+
+/// A clone that is already detached at first open gets local recording but no
+/// import -- the import stays paused until a branch exists.
+#[test]
+fn a_fresh_detached_clone_records_without_importing() {
+    let app_data = make_temp_test_dir("bootstrap-fresh-detached-appdata", "sync", true);
+    let vault = make_temp_test_dir("bootstrap-fresh-detached-vault", "sync", true);
+    let source = gix::init(&vault).expect("the vault has its own repository");
+    let tip = commit_one(&source, "note.md", b"# Old\n", "imported");
+    fs::write(vault.join(".git").join("HEAD"), format!("{tip}\n")).expect("detached");
+    write(&vault, "note.md", "# Old\n");
+
+    let workspace = bootstrap(&app_data, &vault, false).expect("detached bootstrap opens");
+    assert!(
+        ref_value(&workspace.repo, "refs/thinkbrain/sources/workspace-git").is_none(),
+        "nothing was imported from a branchless checkout"
+    );
+    assert!(
+        snapshot::head_commit(&workspace.repo)
+            .expect("read")
+            .is_some(),
+        "local recording still happened"
     );
 }

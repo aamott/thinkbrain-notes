@@ -381,7 +381,7 @@ fn decode(payload: &str) -> Option<(String, String)> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     /// Registers keyring-core's in-memory store for the whole test binary.
@@ -391,7 +391,7 @@ mod tests {
     /// v4's pluggable store lets the tests exercise the real path and swap only
     /// the backend. The store is process-wide, exactly like the map it
     /// replaces, so tests keep using distinct accounts.
-    fn with_a_store() {
+    pub(crate) fn with_a_store() {
         static ONCE: std::sync::Once = std::sync::Once::new();
         ONCE.call_once(|| {
             keyring_core::set_default_store(

@@ -170,6 +170,7 @@ fn an_existing_child_folder_is_refused_and_left_alone() {
 
 #[test]
 fn settings_name_the_link_and_profile_without_a_token() {
+    crate::commands::sync::credentials::tests::with_a_store();
     let app_data = app_data("persist");
     let parent = parent("persist");
     let profile = upsert_profile(
@@ -234,6 +235,7 @@ fn a_missing_profile_is_not_replaced_with_another() {
 
 #[test]
 fn a_profile_saved_for_another_host_is_refused() {
+    crate::commands::sync::credentials::tests::with_a_store();
     let app_data = app_data("wrong-host");
     let parent = parent("wrong-host");
     let profile = upsert_profile(

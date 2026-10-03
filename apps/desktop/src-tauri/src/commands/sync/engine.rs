@@ -238,9 +238,9 @@ impl Engine {
 
     /// Whether this vault is also a git repository of the user's own.
     ///
-    /// Nothing acts on this — it exists so a window can say that two histories
-    /// are being kept here, rather than letting someone discover the second one
-    /// by accident.
+    /// The user's `.git` is only ever read — bootstrap may import its history
+    /// as a source — and never becomes the active sync repository. The flag
+    /// exists so a window can say two histories are being kept here.
     pub fn alongside_own_git(&self) -> bool {
         self.has_own_git
     }

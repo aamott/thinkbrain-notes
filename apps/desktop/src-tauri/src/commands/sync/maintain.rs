@@ -5,7 +5,9 @@
 //! device. Maintenance may rebuild that private chain — a new root at the
 //! 90-day boundary, historical files over 25 MB dropped from older restore
 //! points — then delete only loose objects that nothing protected still
-//! names. Missing parents are the intentional end of retained undo history.
+//! names. Imported source refs under `refs/thinkbrain/sources/` protect their
+//! whole reachable graph the same way. Missing parents are the intentional
+//! end of retained undo history.
 //!
 //! The 25 MB figure is a retention threshold for older private restore
 //! points, not a size cap: current notes and the newest restore point stay
@@ -360,6 +362,9 @@ fn protected_objects(repo: &gix::Repository) -> Result<BTreeSet<gix::ObjectId>, 
             stack.push(base.detach());
         }
     }
+    // Imported source roots — workspace-local `.git` history and retained
+    // fetches — are durable: their objects must survive every cleanup pass.
+    stack.extend(super::history_ingest::source_tips(repo)?);
     while let Some(id) = stack.pop() {
         if !seen.insert(id) {
             continue;

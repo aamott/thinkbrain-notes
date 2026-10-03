@@ -76,5 +76,7 @@ pnpm build
 4. Add or update the relevant epic story, implement with focused tests, and run
    the validation commands above. Do not suppress failures.
 
+For sync/history changes, read the [sync-history skill](.agents/skills/sync-history/SKILL.md).
+
 AI and ACP work is optional and remains behind explicit consent, provider, and
 permission boundaries. See [plans/ai.md](plans/ai.md) for the current plan.

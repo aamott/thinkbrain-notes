@@ -278,8 +278,9 @@ pub fn send(
     )
     .map_err(handshake_failure)?;
 
-    let dest_ref =
-        advertised_head(greeting.refs.as_deref()).unwrap_or_else(|| reference.to_string());
+    // The caller names the exact remote branch this workspace is bound to;
+    // push sends to it even when it is not the remote's advertised default.
+    let dest_ref = reference.to_string();
     let null = gix::ObjectId::null(repo.object_hash());
     let old = greeting
         .refs
@@ -342,22 +343,6 @@ pub fn send(
     Ok(Sent {
         landed: read_report(&mut report, &dest_ref)?,
         objects: objects.len(),
-    })
-}
-
-/// The branch HEAD names on the remote, so a nonstandard default is updated.
-fn advertised_head(refs: Option<&[gix::protocol::handshake::Ref]>) -> Option<String> {
-    refs?.iter().find_map(|known| match known {
-        gix::protocol::handshake::Ref::Symbolic {
-            full_ref_name,
-            target,
-            ..
-        }
-        | gix::protocol::handshake::Ref::Unborn {
-            full_ref_name,
-            target,
-        } if full_ref_name == "HEAD" => Some(target.to_string()),
-        _ => None,
     })
 }
 

@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ThinkBrain Sync & History UI Redesign</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      --background: #18181b;
+      --foreground: #f4f4f5;
+      --card: #202023;
+      --card-foreground: #f4f4f5;
+      --popover: #242428;
+      --popover-foreground: #f4f4f5;
+      --primary: #3b82f6;
+      --primary-foreground: #ffffff;
+      --secondary: #27272a;
+      --secondary-foreground: #a1a1aa;
+      --muted: #27272a;
+      --muted-foreground: #9ca3af;
+      --accent: #2e2e33;
+      --accent-foreground: #f4f4f5;
+      --destructive: #ef4444;
+      --border: #333338;
+      --ring: #3b82f6;
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --activitybar: #141416;
+      --titlebar: #18181b;
+      --statusbar: #121214;
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 3px;
+    }
+  </style>
+</head>
+<body class="bg-[var(--background)] text-[var(--foreground)] font-sans antialiased p-4 md:p-6 custom-scrollbar min-h-screen">
+  <div class="max-w-6xl mx-auto space-y-6">
+
+    <!-- Header & Mode Tabs -->
+    <header class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-[var(--border)]">
+      <div>
+        <div class="flex items-center gap-2.5">
+          <span class="inline-flex items-center justify-center bg-[var(--primary)] text-[var(--primary-foreground)] rounded-md text-xs font-bold w-6 h-6">T</span>
+          <h1 class="text-xl font-bold tracking-tight">Sync & History UI Redesign</h1>
+          <span class="bg-[var(--secondary)] text-[var(--secondary-foreground)] text-xs font-mono px-2 py-0.5 rounded border border-[var(--border)]">Interactive Mockup</span>
+        </div>
+        <p class="text-sm text-[var(--muted-foreground)] mt-1">Comparing UI approaches for single-document git diff history and the renamed "Sync conflicts" panel.</p>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <nav class="flex items-center gap-1.5 bg-[var(--card)] p-1 rounded-lg border border-[var(--border)] self-start md:self-auto overflow-x-auto max-w-full">
+        <button onclick="switchView('approaches')" id="tab-approaches" class="tab-btn px-3 py-1.5 text-xs font-medium rounded-md transition-colors bg-[var(--primary)] text-[var(--primary-foreground)]">
+          Approach Comparison
+        </button>
+        <button onclick="switchView('conflicts-panel')" id="tab-conflicts-panel" class="tab-btn px-3 py-1.5 text-xs font-medium rounded-md transition-colors text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
+          "Sync Conflicts" Panel
+        </button>
+        <button onclick="switchView('diff-view')" id="tab-diff-view" class="tab-btn px-3 py-1.5 text-xs font-medium rounded-md transition-colors text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
+          Document Diff View
+        </button>
+        <button onclick="switchView('mobile-preview')" id="tab-mobile-preview" class="tab-btn px-3 py-1.5 text-xs font-medium rounded-md transition-colors text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
+          Mobile Experience
+        </button>
+      </nav>
+    </header>
+
+    <!-- VIEW 1: APPROACH COMPARISON -->
+    <section id="view-approaches" class="space-y-6">
+      <!-- Problem Summary Banner -->
+      <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-4 md:p-5 relative overflow-hidden">
+        <div class="flex items-start gap-3">
+          <div class="p-2 rounded-lg bg-amber-500/10 text-amber-400 shrink-0 mt-0.5">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+            </svg>
+          </div>
+          <div>
+            <h2 class="text-sm font-semibold text-[var(--foreground)]">Core Problem Identified</h2>
+            <p class="text-xs text-[var(--muted-foreground)] mt-1 leading-relaxed">
+              The app currently renders <strong>two separate sync icons on the left Action rail</strong>: <em>Decisions needed</em> (conflicts) and <em>Saved versions</em> (repository-wide history). 
+              Nobody wants to roll back an entire notes vault to last Tuesday. Instead, users want <strong>single-document version history</strong> with a visual <strong>git diff</strong>, while keeping sync conflicts clean, accessible, and actionable.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3 Approaches Cards Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <!-- Approach 1 -->
+        <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-4 flex flex-col justify-between hover:border-[var(--primary)] transition-all">
+          <div class="space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="text-[0.68rem] font-bold uppercase tracking-wider text-[var(--primary)] bg-blue-500/10 px-2 py-0.5 rounded">Approach 1</span>
+              <span class="text-xs text-[var(--muted-foreground)]">Right Dock</span>
+            </div>
+            <h3 class="text-base font-semibold text-[var(--foreground)]">Action Items Inspector</h3>
+            <p class="text-xs text-[var(--muted-foreground)] leading-relaxed">
+              Place <strong>Version History</strong> in the right-side Action items menu (alongside Outline, Properties, Backlinks). Left Action bar is reduced to 1 sync item: <strong>Sync conflicts</strong>.
+            </p>
+            <div class="border-t border-[var(--border)] pt-3 space-y-1.5 text-xs">
+              <div class="flex items-center text-emerald-400 gap-1.5">
+                <span>✓</span> <span>Architecturally clean (Right side = Document scope)</span>
+              </div>
+              <div class="flex items-center text-emerald-400 gap-1.5">
+                <span>✓</span> <span>Maps directly to mobile ActionItemsMenu</span>
+              </div>
+              <div class="flex items-center text-amber-400 gap-1.5">
+                <span>⚠</span> <span>Right sidebar (320px) is tight for wide diffs</span>
+              </div>
+            </div>
+          </div>
+          <button onclick="previewApproach(1)" class="mt-4 w-full py-1.5 px-3 text-xs bg-[var(--secondary)] hover:bg-[var(--accent)] text-[var(--foreground)] font-medium rounded-lg border border-[var(--border)] transition-colors">
+            Preview Approach 1
+          </button>
+        </div>
+
+        <!-- Approach 2 -->
+        <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-4 flex flex-col justify-between hover:border-[var(--primary)] transition-all">
+          <div class="space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="text-[0.68rem] font-bold uppercase tracking-wider text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded">Approach 2</span>
+              <span class="text-xs text-[var(--muted-foreground)]">Editor Header</span>
+            </div>
+            <h3 class="text-base font-semibold text-[var(--foreground)]">Note Header & Diff Tab</h3>
+            <p class="text-xs text-[var(--muted-foreground)] leading-relaxed">
+              Attach a <code class="text-[0.7rem] bg-[var(--secondary)] px-1 rounded">...</code> menu directly to the active note tab / document header. Selecting "History" opens a dedicated full-width <strong>Diff Tab</strong>.
+            </p>
+            <div class="border-t border-[var(--border)] pt-3 space-y-1.5 text-xs">
+              <div class="flex items-center text-emerald-400 gap-1.5">
+                <span>✓</span> <span>Maximum space for side-by-side git diffs</span>
+              </div>
+              <div class="flex items-center text-emerald-400 gap-1.5">
+                <span>✓</span> <span>Zero clutter on both left and right rails</span>
+              </div>
+              <div class="flex items-center text-amber-400 gap-1.5">
+                <span>⚠</span> <span>Navigates away from the live markdown editor</span>
+              </div>
+            </div>
+          </div>
+          <button onclick="previewApproach(2)" class="mt-4 w-full py-1.5 px-3 text-xs bg-[var(--secondary)] hover:bg-[var(--accent)] text-[var(--foreground)] font-medium rounded-lg border border-[var(--border)] transition-colors">
+            Preview Approach 2
+          </button>
+        </div>
+
+        <!-- Approach 3 (Recommended) -->
+        <div class="bg-[var(--card)] border-2 border-[var(--primary)] rounded-xl p-4 flex flex-col justify-between shadow-lg shadow-blue-500/5 relative">
+          <div class="absolute -top-2.5 right-3 bg-[var(--primary)] text-[var(--primary-foreground)] text-[0.65rem] font-bold uppercase px-2 py-0.5 rounded-full shadow">
+            Recommended
+          </div>
+          <div class="space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="text-[0.68rem] font-bold uppercase tracking-wider text-[var(--primary)] bg-blue-500/10 px-2 py-0.5 rounded">Approach 3</span>
+              <span class="text-xs text-[var(--muted-foreground)]">Unified Hybrid</span>
+            </div>
+            <h3 class="text-base font-semibold text-[var(--foreground)]">Right Inspector + Quick Diff Tab</h3>
+            <p class="text-xs text-[var(--muted-foreground)] leading-relaxed">
+              Combines both: History timeline lives in the Right Inspector (accessible from top-right Action Items & mobile menu), with an instant "Compare Diff" button that opens our rich visual diff viewer.
+            </p>
+            <div class="border-t border-[var(--border)] pt-3 space-y-1.5 text-xs">
+              <div class="flex items-center text-emerald-400 gap-1.5">
+                <span>✓</span> <span>Quick revision scrubber without leaving note</span>
+              </div>
+              <div class="flex items-center text-emerald-400 gap-1.5">
+                <span>✓</span> <span>One click to open full-fidelity chunked diff</span>
+              </div>
+              <div class="flex items-center text-emerald-400 gap-1.5">
+                <span>✓</span> <span>Works identically on Desktop and Phone</span>
+              </div>
+            </div>
+          </div>
+          <button onclick="previewApproach(3)" class="mt-4 w-full py-1.5 px-3 text-xs bg-[var(--primary)] hover:bg-blue-600 text-white font-medium rounded-lg transition-colors">
+            Preview Recommended Hybrid
+          </button>
+        </div>
+      </div>
+
+      <!-- Live Mockup Shell Preview -->
+      <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl overflow-hidden shadow-2xl">
+        <div class="bg-[var(--titlebar)] px-4 py-2 border-b border-[var(--border)] flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <div class="flex gap-1.5">
+              <span class="w-3 h-3 rounded-full bg-red-500/80 inline-block"></span>
+              <span class="w-3 h-3 rounded-full bg-yellow-500/80 inline-block"></span>
+              <span class="w-3 h-3 rounded-full bg-green-500/80 inline-block"></span>
+            </div>
+            <span class="text-xs font-semibold text-[var(--muted-foreground)] ml-2" id="shell-preview-title">Live Shell Preview — Approach 3 (Hybrid)</span>
+          </div>
+          <span class="text-[0.65rem] bg-[var(--secondary)] px-2 py-0.5 rounded text-[var(--muted-foreground)]">Desktop 1280×800</span>
+        </div>
+
+        <!-- Simulated App Container -->
+        <div class="h-[460px] flex bg-[#121214] text-xs">
+          <!-- Activity Bar (Far Left) -->
+          <div class="w-12 bg-[#141416] border-r border-[var(--border)] flex flex-col justify-between py-3 items-center shrink-0">
+            <div class="flex flex-col gap-3 items-center w-full">
+              <!-- Files -->
+              <button class="w-8 h-8 rounded flex items-center justify-center text-[var(--muted-foreground)] hover:text-white" title="Files">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+              </button>
+              <!-- Search -->
+              <button class="w-8 h-8 rounded flex items-center justify-center text-[var(--muted-foreground)] hover:text-white" title="Search">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+              </button>
+
+              <!-- Sync Conflicts (Single Unified Icon) -->
+              <button id="nav-btn-conflicts" onclick="simulateSelectLeft('conflicts')" class="w-8 h-8 rounded flex items-center justify-center text-amber-400 bg-amber-500/15 relative transition-all" title="Sync conflicts (1 pending)">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <span class="absolute top-1 right-1 w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+              </button>
+
+              <!-- Old "Saved Versions" Icon (Hidden in Approaches 1 & 3) -->
+              <div id="nav-item-old-history" class="hidden flex-col items-center">
+                <button class="w-8 h-8 rounded flex items-center justify-center text-red-400/80 bg-red-500/10" title="Old whole-repo history (removed in new design)">
+                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                </button>
+                <span class="text-[0.55rem] text-red-400 text-center font-mono scale-90">OLD</span>
+              </div>
+
+              <!-- Extensions -->
+              <button class="w-8 h-8 rounded flex items-center justify-center text-[var(--muted-foreground)] hover:text-white" title="Extensions">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z"/></svg>
+              </button>
+            </div>
+
+            <!-- Settings at bottom -->
+            <button class="w-8 h-8 rounded flex items-center justify-center text-[var(--muted-foreground)] hover:text-white" title="Settings">
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+            </button>
+          </div>
+
+          <!-- Left Popout (Sync conflicts) -->
+          <div id="sim-left-panel" class="w-64 bg-[#18181b] border-r border-[var(--border)] flex flex-col shrink-0">
+            <!-- Header with Title and ... Menu -->
+            <div class="p-3 border-b border-[var(--border)] flex items-center justify-between relative">
+              <div>
+                <span class="text-[0.65rem] tracking-wider uppercase font-semibold text-[var(--muted-foreground)]">SYNC CONFLICTS</span>
+                <p class="text-[0.68rem] text-[var(--muted-foreground)] mt-0.5">1 conflict awaiting decision</p>
+              </div>
+
+              <!-- Header ... Button -->
+              <div class="relative">
+                <button onclick="toggleMockDropdown('conflicts-menu')" class="w-6 h-6 rounded hover:bg-[var(--secondary)] flex items-center justify-center text-[var(--muted-foreground)] hover:text-white">
+                  <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 12a2 2 0 11-4 0 2 2 0 014 0zm8 0a2 2 0 11-4 0 2 2 0 014 0zm8 0a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+                </button>
+
+                <!-- Popover Menu -->
+                <div id="conflicts-menu" class="hidden absolute right-0 top-7 w-48 bg-[var(--popover)] border border-[var(--border)] rounded-lg shadow-xl py-1 z-50">
+                  <button onclick="alert('Opening Sync Settings tab in real app...')" class="w-full text-left px-3 py-1.5 hover:bg-[var(--accent)] text-[var(--foreground)] flex items-center gap-2">
+                    <svg class="w-3.5 h-3.5 text-[var(--muted-foreground)]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/></svg>
+                    <span>Sync settings</span>
+                  </button>
+                  <div class="border-t border-[var(--border)] my-1"></div>
+                  <div class="px-3 py-1.5 flex items-center justify-between text-[var(--muted-foreground)] opacity-50 cursor-not-allowed" title="GitHub OAuth sign-in coming in next phase">
+                    <div class="flex items-center gap-2">
+                      <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
+                      <span>Sign in with GitHub</span>
+                    </div>
+                    <span class="text-[0.6rem] bg-[var(--secondary)] px-1 rounded">Soon</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Conflict Card -->
+            <div class="p-2 space-y-2 overflow-y-auto custom-scrollbar flex-1">
+              <div class="bg-[var(--card)] border border-[var(--border)] rounded p-2.5 space-y-2">
+                <div class="flex items-center justify-between">
+                  <span class="font-semibold text-white truncate max-w-[150px]">Architecture.md</span>
+                  <span class="text-[0.6rem] bg-amber-500/20 text-amber-300 px-1 rounded">OneDrive</span>
+                </div>
+                <p class="text-[0.68rem] text-[var(--muted-foreground)]">Edited 12m ago on Laptop vs 4m ago here.</p>
+                <div class="flex gap-1.5 pt-1">
+                  <button onclick="switchView('diff-view')" class="flex-1 py-1 bg-[var(--primary)] text-white text-[0.68rem] font-medium rounded hover:bg-blue-600">Review</button>
+                  <button class="py-1 px-2 bg-[var(--secondary)] text-[var(--muted-foreground)] text-[0.68rem] rounded hover:text-white">Keep Ours</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Main Center: Editor & Tabs -->
+          <div class="flex-1 flex flex-col min-w-0 bg-[#161618]">
+            <!-- Tab Strip + Action Items Menu Header -->
+            <div class="h-9 bg-[#18181b] border-b border-[var(--border)] flex items-center justify-between px-2 shrink-0">
+              <!-- Active Tabs -->
+              <div class="flex items-center gap-1 overflow-x-auto h-full">
+                <div class="h-7 px-3 bg-[#1e1e22] text-white border-t-2 border-[var(--primary)] rounded-t flex items-center gap-2 font-medium">
+                  <span>Architecture.md</span>
+                  <button class="text-[var(--muted-foreground)] hover:text-white">×</button>
+                </div>
+                <div class="h-7 px-3 text-[var(--muted-foreground)] hover:bg-[#1a1a1d] rounded-t flex items-center gap-2">
+                  <span>Weekly Notes.md</span>
+                  <button class="text-[var(--muted-foreground)] hover:text-white">×</button>
+                </div>
+              </div>
+
+              <!-- Top Right Action Items Menu (Inspector buttons) -->
+              <div class="flex items-center gap-1">
+                <!-- Version History Button in Header (New!) -->
+                <button onclick="toggleRightPanel('history')" id="hdr-btn-history" class="p-1 rounded text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 transition-colors flex items-center gap-1 px-1.5" title="Document Version History">
+                  <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                  <span class="text-[0.65rem] font-medium">History</span>
+                </button>
+                <!-- Outline -->
+                <button class="p-1 rounded text-[var(--muted-foreground)] hover:text-white hover:bg-[var(--secondary)]" title="Outline">
+                  <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h10M4 18h7"/></svg>
+                </button>
+                <!-- Backlinks -->
+                <button class="p-1 rounded text-[var(--muted-foreground)] hover:text-white hover:bg-[var(--secondary)]" title="Backlinks">
+                  <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
+                </button>
+                <!-- Assistant -->
+                <button class="p-1 rounded text-[var(--muted-foreground)] hover:text-white hover:bg-[var(--secondary)]" title="AI Assistant">
+                  <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
+                </button>
+              </div>
+            </div>
+
+            <!-- Editor Document Canvas -->
+            <div class="flex-1 p-6 overflow-y-auto custom-scrollbar font-mono text-[0.75rem] leading-relaxed text-[#d4d4d8] space-y-3">
+              <h1 class="text-base font-bold text-white font-sans"># Architecture Overview</h1>
+              <p class="text-[var(--muted-foreground)]">ThinkBrain uses a local-first architecture with git as the backing store...</p>
+              <pre class="bg-[#111113] p-3 rounded border border-[var(--border)] text-[#93c5fd]"><code>apps/desktop/src/
+  ├── native/     # Tauri IPC bridge
+  ├── sync/       # Conflict triage & diff merge
+  └── panels/     # Left & Right popouts</code></pre>
+              <p>Metadata is kept in a secondary shadow storage directory to avoid OneDrive conflict stampedes.</p>
+            </div>
+
+            <!-- Status Bar Footer -->
+            <div class="h-6 bg-[#121214] border-t border-[var(--border)] px-3 flex items-center justify-between text-[0.65rem] text-[var(--muted-foreground)]">
+              <div class="flex items-center gap-3">
+                <span>thinkbrain-notes</span>
+                <!-- Sync Pill -->
+                <button onclick="switchView('conflicts-panel')" class="text-amber-400 flex items-center gap-1 hover:underline">
+                  <span>⚠</span> <span>1 conflict needs decision</span>
+                </button>
+              </div>
+              <div class="flex items-center gap-2">
+                <span>UTF-8</span>
+                <span>Markdown</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right Popout (Document History Inspector) -->
+          <div id="sim-right-panel" class="w-64 bg-[#18181b] border-l border-[var(--border)] flex flex-col shrink-0">
+            <div class="p-3 border-b border-[var(--border)] flex items-center justify-between">
+              <div>
+                <span class="text-[0.65rem] tracking-wider uppercase font-semibold text-[var(--muted-foreground)]">DOCUMENT HISTORY</span>
+                <p class="text-[0.68rem] text-[var(--muted-foreground)] mt-0.5 truncate max-w-[160px]">Architecture.md</p>
+              </div>
+              <button onclick="toggleRightPanel('history')" class="text-[var(--muted-foreground)] hover:text-white text-xs">✕</button>
+            </div>
+
+            <!-- History List (Per-Document) -->
+            <div class="p-2 space-y-2 overflow-y-auto custom-scrollbar flex-1">
+              <div class="text-[0.65rem] text-[var(--muted-foreground)] px-1">4 revisions recorded</div>
+
+              <!-- Item 1 (Selected) -->
+              <div class="bg-[var(--card)] border border-[var(--primary)] rounded p-2.5 space-y-1.5 cursor-pointer">
+                <div class="flex items-center justify-between">
+                  <span class="font-semibold text-white">4 minutes ago</span>
+                  <span class="text-[0.6rem] bg-emerald-500/20 text-emerald-400 px-1 rounded">+12 -3</span>
+                </div>
+                <p class="text-[0.68rem] text-[var(--muted-foreground)]">Updated sync bridge and folder structure</p>
+                <div class="flex gap-1.5 pt-1">
+                  <button onclick="switchView('diff-view')" class="flex-1 py-0.5 bg-[var(--primary)] text-white text-[0.65rem] rounded hover:bg-blue-600">Compare Diff</button>
+                  <button class="py-0.5 px-2 bg-[var(--secondary)] text-[var(--muted-foreground)] text-[0.65rem] rounded hover:text-white">Restore</button>
+                </div>
+              </div>
+
+              <!-- Item 2 -->
+              <div class="bg-[var(--card)] border border-[var(--border)] rounded p-2.5 space-y-1.5 hover:border-[var(--muted-foreground)] cursor-pointer">
+                <div class="flex items-center justify-between">
+                  <span class="font-medium text-[var(--foreground)]">Yesterday 4:32 PM</span>
+                  <span class="text-[0.6rem] bg-[var(--secondary)] text-[var(--muted-foreground)] px-1 rounded">+45 -10</span>
+                </div>
+                <p class="text-[0.68rem] text-[var(--muted-foreground)]">Initial sync diagram draft</p>
+                <div class="flex gap-1.5 pt-1">
+                  <button onclick="switchView('diff-view')" class="flex-1 py-0.5 bg-[var(--secondary)] text-[var(--foreground)] text-[0.65rem] rounded hover:bg-[var(--accent)]">Compare Diff</button>
+                </div>
+              </div>
+
+              <!-- Item 3 -->
+              <div class="bg-[var(--card)] border border-[var(--border)] rounded p-2.5 space-y-1.5 hover:border-[var(--muted-foreground)] cursor-pointer">
+                <div class="flex items-center justify-between">
+                  <span class="font-medium text-[var(--foreground)]">Sep 25, 11:15 AM</span>
+                  <span class="text-[0.6rem] bg-[var(--secondary)] text-[var(--muted-foreground)] px-1 rounded">Initial</span>
+                </div>
+                <p class="text-[0.68rem] text-[var(--muted-foreground)]">Created document</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- VIEW 2: SYNC CONFLICTS PANEL SPEC & DEMO -->
+    <section id="view-conflicts-panel" class="hidden space-y-6">
+      <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-5 space-y-3">
+        <h2 class="text-base font-bold text-[var(--foreground)] flex items-center gap-2">
+          <span>Renaming "Decisions needed" → "Sync conflicts"</span>
+          <span class="text-xs font-normal text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">Approved User Request</span>
+        </h2>
+        <p class="text-xs text-[var(--muted-foreground)] leading-relaxed">
+          "Decisions needed" felt ambiguous and non-technical. Renaming to <strong>Sync conflicts</strong> communicates exactly what the system is tracking. We add a header <code class="text-[0.7rem] bg-[var(--secondary)] px-1 py-0.5 rounded">...</code> menu for quick access to <strong>Sync settings</strong> and a grayed-out <strong>Sign in with GitHub</strong> placeholder.
+        </p>
+      </div>
+
+      <!-- Live Interactive Panel Mockup -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- Interactive Panel Card -->
+        <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl overflow-hidden shadow-lg">
+          <!-- Panel Header -->
+          <div class="bg-[#1f1f23] p-4 border-b border-[var(--border)] flex items-center justify-between relative">
+            <div>
+              <div class="flex items-center gap-2">
+                <svg class="w-4 h-4 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                <h3 class="text-sm font-bold text-white">Sync conflicts</h3>
+              </div>
+              <p class="text-xs text-[var(--muted-foreground)] mt-0.5">Choose what to keep. Nothing is deleted until you decide.</p>
+            </div>
+
+            <!-- More Actions ... Button -->
+            <div class="relative">
+              <button onclick="toggleMockDropdown('conflicts-detail-menu')" class="p-1.5 rounded-lg hover:bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-white transition-colors" aria-label="More options">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M6 12a2 2 0 11-4 0 2 2 0 014 0zm8 0a2 2 0 11-4 0 2 2 0 014 0zm8 0a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+              </button>
+
+              <!-- Dropdown -->
+              <div id="conflicts-detail-menu" class="hidden absolute right-0 top-9 w-52 bg-[var(--popover)] border border-[var(--border)] rounded-xl shadow-2xl py-1.5 z-50 text-xs">
+                <button onclick="alert('Navigating to Settings tab → Sync section...')" class="w-full text-left px-3.5 py-2 hover:bg-[var(--accent)] text-[var(--foreground)] flex items-center gap-2.5 transition-colors">
+                  <svg class="w-4 h-4 text-[var(--muted-foreground)]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/></svg>
+                  <span class="font-medium">Sync settings</span>
+                </button>
+                <div class="border-t border-[var(--border)] my-1"></div>
+                <div class="px-3.5 py-2 flex items-center justify-between text-[var(--muted-foreground)] opacity-50 cursor-not-allowed">
+                  <div class="flex items-center gap-2.5">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
+                    <span>Sign in with GitHub</span>
+                  </div>
+                  <span class="text-[0.625rem] bg-[var(--secondary)] px-1.5 py-0.5 rounded text-[var(--muted-foreground)]">Disabled</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- List of Conflict Cards -->
+          <div class="p-4 space-y-3">
+            <div class="bg-[var(--card)] border border-[var(--border)] rounded-lg p-3 space-y-3">
+              <div class="flex items-start justify-between">
+                <div>
+                  <h4 class="text-xs font-semibold text-white">Project-Roadmap.md</h4>
+                  <p class="text-[0.7rem] text-[var(--muted-foreground)] mt-0.5">Edited on both Desktop & Phone (SyncThing)</p>
+                </div>
+                <span class="text-[0.65rem] bg-amber-500/15 text-amber-300 font-mono px-2 py-0.5 rounded">2 sections</span>
+              </div>
+
+              <!-- Timestamps -->
+              <div class="grid grid-cols-2 gap-2 text-[0.7rem] bg-[var(--secondary)] p-2 rounded">
+                <div>
+                  <span class="font-semibold text-white block">This computer</span>
+                  <span class="text-[var(--muted-foreground)]">Today, 9:45 AM (1.4 KB)</span>
+                </div>
+                <div>
+                  <span class="font-semibold text-white block">SyncThing</span>
+                  <span class="text-[var(--muted-foreground)]">Today, 9:43 AM (1.8 KB)</span>
+                </div>
+              </div>
+
+              <!-- Decision Buttons -->
+              <div class="flex flex-wrap gap-2 pt-1">
+                <button onclick="switchView('diff-view')" class="flex-1 py-1.5 px-3 bg-[var(--primary)] hover:bg-blue-600 text-white font-medium text-xs rounded transition-colors text-center">
+                  Review & Merge
+                </button>
+                <button class="py-1.5 px-3 bg-[var(--secondary)] hover:bg-[var(--accent)] text-[var(--foreground)] text-xs rounded transition-colors">
+                  Keep Ours
+                </button>
+                <button class="py-1.5 px-3 bg-[var(--secondary)] hover:bg-[var(--accent)] text-[var(--foreground)] text-xs rounded transition-colors">
+                  Keep Both
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Specifications & Design Rationale -->
+        <div class="space-y-4 text-xs text-[var(--muted-foreground)] leading-relaxed">
+          <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-4 space-y-2">
+            <h4 class="font-bold text-white text-sm">Design Specification</h4>
+            <ul class="list-disc pl-4 space-y-1.5">
+              <li><strong>Label:</strong> Changed from <code class="text-zinc-300">"Decisions needed"</code> to <code class="text-zinc-300">"Sync conflicts"</code> in <code class="text-zinc-300">builtInDesktopPanels</code>.</li>
+              <li><strong>Activity Bar Icon:</strong> Clear merge/conflict alert glyph with live badge indicator.</li>
+              <li><strong>Header Overflow Menu (<code class="text-zinc-300">...</code>):</strong>
+                <ul class="list-circle pl-4 mt-1 space-y-1">
+                  <li>Option 1: <strong>"Sync settings"</strong> — dispatches tab open for settings tab with hash or auto-scroll to sync destination/profile settings.</li>
+                  <li>Option 2: <strong>"Sign in with GitHub"</strong> — disabled / grayed out (<code class="text-zinc-300">opacity-50 cursor-not-allowed</code>) with <code class="text-zinc-300">"Coming soon"</code> badge.</li>
+                </ul>
+              </li>
+              <li><strong>Empty State:</strong> Reads <em>"No sync conflicts"</em> instead of <em>"Nothing waiting on a decision"</em>.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- VIEW 3: DOCUMENT GIT DIFF VIEW SPEC & DEMO -->
+    <section id="view-diff-view" class="hidden space-y-6">
+      <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-5 space-y-3">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-base font-bold text-[var(--foreground)]">Single-Document Version History & Git Diff</h2>
+            <p class="text-xs text-[var(--muted-foreground)] mt-0.5">
+              Compares the active note against a past saved version using the repo's chunked git diff engine.
+            </p>
+          </div>
+          <div class="flex gap-2">
+            <button onclick="alert('Simulated: Restoring version from 4 minutes ago... Note restored!')" class="px-3 py-1.5 bg-[var(--primary)] hover:bg-blue-600 text-white font-medium text-xs rounded-lg transition-colors">
+              Restore this version
+            </button>
+            <button onclick="switchView('approaches')" class="px-3 py-1.5 bg-[var(--secondary)] hover:bg-[var(--accent)] text-[var(--foreground)] text-xs rounded-lg transition-colors">
+              Back to Editor
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Diff Comparison Component Mockup -->
+      <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl overflow-hidden shadow-2xl">
+        <!-- Diff Header Toolbar -->
+        <div class="bg-[#1b1b1e] p-3 border-b border-[var(--border)] flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div class="flex items-center gap-3">
+            <div class="flex items-center gap-2">
+              <span class="font-bold text-white">Comparing:</span>
+              <span class="font-mono bg-[var(--secondary)] px-2 py-0.5 rounded text-white">Architecture.md</span>
+            </div>
+            <span class="text-[var(--muted-foreground)]">•</span>
+            <div class="flex items-center gap-2">
+              <span class="text-[var(--muted-foreground)]">Version:</span>
+              <select class="bg-[var(--secondary)] border border-[var(--border)] text-white text-xs rounded px-2 py-1 outline-none">
+                <option>Today, 9:45 AM (4 mins ago) — [Latest save]</option>
+                <option selected>Yesterday, 4:30 PM — [Draft architecture]</option>
+                <option>Sep 25, 2026, 11:00 AM — [Initial commit]</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-4 text-xs">
+            <span class="text-emerald-400 font-mono">+12 additions</span>
+            <span class="text-red-400 font-mono">-4 deletions</span>
+            <div class="flex items-center gap-1 bg-[var(--secondary)] p-0.5 rounded border border-[var(--border)]">
+              <button class="px-2 py-0.5 rounded bg-[var(--primary)] text-white text-[0.65rem]">Unified</button>
+              <button class="px-2 py-0.5 rounded text-[var(--muted-foreground)] hover:text-white text-[0.65rem]">Split</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Git Diff Chunks Container -->
+        <div class="p-4 space-y-4 font-mono text-xs overflow-x-auto custom-scrollbar bg-[#121214]">
+          <!-- Chunk 1: Unchanged Context -->
+          <div class="rounded border border-[var(--border)] bg-[#18181b] overflow-hidden">
+            <div class="px-3 py-1 bg-[#202025] text-[0.65rem] text-[var(--muted-foreground)] border-b border-[var(--border)] flex justify-between">
+              <span>@@ -1,5 +1,6 @@</span>
+              <span>Common Context</span>
+            </div>
+            <div class="p-2 space-y-1 text-[#a1a1aa]">
+              <div>&nbsp; # ThinkBrain Notes Architecture</div>
+              <div>&nbsp; Local-first knowledge workspace inspired by Obsidian & VS Code.</div>
+            </div>
+          </div>
+
+          <!-- Chunk 2: Modified Section with Diffs -->
+          <div class="rounded border border-[var(--border)] bg-[#18181b] overflow-hidden">
+            <div class="px-3 py-1 bg-[#202025] text-[0.65rem] text-[var(--muted-foreground)] border-b border-[var(--border)] flex justify-between">
+              <span>@@ -12,8 +13,10 @@</span>
+              <span class="text-amber-300">Diff detected in Section 2</span>
+            </div>
+            <div class="divide-y divide-[var(--border)]/30">
+              <!-- Removed Lines -->
+              <div class="bg-red-500/10 text-red-300 px-3 py-1 flex items-start gap-3">
+                <span class="select-none text-red-500/70 w-4 text-right">-</span>
+                <span>- Left rail holds two distinct panels for syncing & version history.</span>
+              </div>
+              <div class="bg-red-500/10 text-red-300 px-3 py-1 flex items-start gap-3">
+                <span class="select-none text-red-500/70 w-4 text-right">-</span>
+                <span>- Repository-wide restore points used for history recovery.</span>
+              </div>
+
+              <!-- Added Lines -->
+              <div class="bg-emerald-500/15 text-emerald-300 px-3 py-1 flex items-start gap-3">
+                <span class="select-none text-emerald-500/70 w-4 text-right">+</span>
+                <span>+ Single unified 'Sync conflicts' panel on left rail with settings overflow menu.</span>
+              </div>
+              <div class="bg-emerald-500/15 text-emerald-300 px-3 py-1 flex items-start gap-3">
+                <span class="select-none text-emerald-500/70 w-4 text-right">+</span>
+                <span>+ Document-level version history attached to current note via Right Action Items.</span>
+              </div>
+              <div class="bg-emerald-500/15 text-emerald-300 px-3 py-1 flex items-start gap-3">
+                <span class="select-none text-emerald-500/70 w-4 text-right">+</span>
+                <span>+ Interactive git diff view with chunk selection and instant restoration.</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Chunk 3: Another change -->
+          <div class="rounded border border-[var(--border)] bg-[#18181b] overflow-hidden">
+            <div class="px-3 py-1 bg-[#202025] text-[0.65rem] text-[var(--muted-foreground)] border-b border-[var(--border)] flex justify-between">
+              <span>@@ -25,3 +27,4 @@</span>
+              <span>Metadata & Storage</span>
+            </div>
+            <div class="p-2 space-y-1 text-[#a1a1aa]">
+              <div>&nbsp; Stores metadata outside the repo to prevent OneDrive & SyncThing loop conflicts.</div>
+              <div class="bg-emerald-500/15 text-emerald-300 px-1 py-0.5 rounded">+ Mobile-friendly UI tested on Android & iOS viewports.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Diff Bottom Bar -->
+        <div class="bg-[#1b1b1e] p-3 border-t border-[var(--border)] flex items-center justify-between">
+          <p class="text-[0.7rem] text-[var(--muted-foreground)]">
+            Restoring overwrites current buffer after taking a safe backup checkpoint. Undo is always available.
+          </p>
+          <div class="flex gap-2">
+            <button onclick="alert('Restoring this version... Done!')" class="py-1.5 px-4 bg-[var(--primary)] hover:bg-blue-600 text-white font-medium text-xs rounded transition-colors">
+              Restore this version
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- VIEW 4: MOBILE (PHONE) EXPERIENCE -->
+    <section id="view-mobile-preview" class="hidden space-y-6">
+      <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-5 space-y-2">
+        <h2 class="text-base font-bold text-[var(--foreground)]">Mobile & Phone UX Specification</h2>
+        <p class="text-xs text-[var(--muted-foreground)] leading-relaxed">
+          On mobile devices (<code class="text-zinc-300">&lt; 760px</code>), space is precious. Having two separate sync items was especially cramped. Here is how the new layout behaves on phones:
+        </p>
+      </div>
+
+      <div class="flex flex-col md:flex-row justify-center items-center gap-8 py-4">
+        <!-- Phone Frame Simulation -->
+        <div class="w-[340px] h-[640px] bg-[#121214] border-4 border-[#27272a] rounded-[36px] shadow-2xl overflow-hidden flex flex-col relative">
+          <!-- Phone Status Bar Notch -->
+          <div class="h-6 bg-[#18181b] flex items-center justify-between px-6 text-[0.65rem] text-zinc-400 select-none">
+            <span>9:41</span>
+            <div class="w-16 h-4 bg-[#27272a] rounded-full mx-auto"></div>
+            <span>100%</span>
+          </div>
+
+          <!-- Phone Header -->
+          <div class="h-12 bg-[#18181b] border-b border-[var(--border)] flex items-center justify-between px-3 select-none">
+            <button class="p-1 text-zinc-300">
+              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+            </button>
+            <span class="text-xs font-semibold text-white truncate max-w-[160px]">Architecture.md</span>
+            <!-- Mobile Action Items Menu Button (...) -->
+            <button onclick="toggleMobileMenu()" class="p-1.5 rounded-lg bg-[var(--secondary)] text-white">
+              <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M6 12a2 2 0 11-4 0 2 2 0 014 0zm8 0a2 2 0 11-4 0 2 2 0 014 0zm8 0a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+            </button>
+          </div>
+
+          <!-- Simulated ActionItemsMenu Dropdown on Phone -->
+          <div id="phone-action-menu" class="absolute top-16 right-3 w-56 bg-[var(--popover)] border border-[var(--border)] rounded-xl shadow-2xl py-1 z-50 text-xs">
+            <div class="px-3 py-1.5 text-[0.65rem] uppercase font-bold text-[var(--muted-foreground)] tracking-wider">Document Actions</div>
+            <!-- Version History Row (Note-scoped!) -->
+            <button onclick="openMobileDiffSheet()" class="w-full text-left px-3 py-2 hover:bg-[var(--accent)] text-blue-400 font-medium flex items-center gap-2.5">
+              <svg class="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              <span>Version history</span>
+            </button>
+            <button class="w-full text-left px-3 py-2 hover:bg-[var(--accent)] text-white flex items-center gap-2.5">
+              <svg class="w-4 h-4 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h10M4 18h7"/></svg>
+              <span>Outline</span>
+            </button>
+            <button class="w-full text-left px-3 py-2 hover:bg-[var(--accent)] text-white flex items-center gap-2.5">
+              <svg class="w-4 h-4 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
+              <span>Backlinks</span>
+            </button>
+          </div>
+
+          <!-- Phone Note Content -->
+          <div class="flex-1 p-4 overflow-y-auto text-xs space-y-3 font-sans text-zinc-300">
+            <h1 class="text-sm font-bold text-white"># Architecture Overview</h1>
+            <p class="text-[0.7rem] text-zinc-400">ThinkBrain notes is engineered for high portability across Android and desktop.</p>
+            <div class="p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-lg text-amber-300 text-[0.68rem] flex items-center justify-between">
+              <span>1 sync conflict on this note</span>
+              <button onclick="switchView('diff-view')" class="underline font-bold">Review</button>
+            </div>
+            <p class="text-[0.7rem] text-zinc-400">Tap the top-right <code class="bg-zinc-800 px-1 rounded">...</code> button to inspect document version history or conflicts.</p>
+          </div>
+
+          <!-- Mobile Diff Sheet Simulation (Slides up) -->
+          <div id="phone-diff-sheet" class="hidden absolute inset-x-0 bottom-12 top-20 bg-[var(--card)] border-t border-[var(--border)] rounded-t-2xl shadow-2xl flex flex-col z-40">
+            <div class="p-3 border-b border-[var(--border)] flex items-center justify-between">
+              <span class="text-xs font-bold text-white">History: Architecture.md</span>
+              <button onclick="closeMobileDiffSheet()" class="text-xs text-zinc-400 hover:text-white">Close</button>
+            </div>
+            <div class="flex-1 p-3 overflow-y-auto space-y-2 text-xs font-mono">
+              <div class="text-[0.65rem] text-zinc-400">Select version to diff:</div>
+              <div class="p-2 rounded bg-blue-500/10 border border-blue-500/30 text-white">
+                <div class="flex justify-between text-[0.7rem] font-bold">
+                  <span>4 mins ago</span>
+                  <span class="text-emerald-400">+12 -4</span>
+                </div>
+                <div class="text-[0.65rem] text-zinc-400 mt-1">Unified Diff:</div>
+                <div class="mt-1 p-1 bg-black/40 rounded text-[0.6rem] text-emerald-300">+ Added single-document history</div>
+              </div>
+            </div>
+            <div class="p-3 border-t border-[var(--border)] flex gap-2">
+              <button onclick="alert('Restored!')" class="flex-1 py-2 bg-[var(--primary)] text-white font-bold text-xs rounded-lg">Restore this version</button>
+            </div>
+          </div>
+
+          <!-- Phone Bottom Hub -->
+          <div class="h-12 bg-[#141416] border-t border-[var(--border)] flex items-center justify-around text-zinc-400 select-none">
+            <button class="flex flex-col items-center text-[0.6rem] text-white">
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+              <span>Files</span>
+            </button>
+            <button class="flex flex-col items-center text-[0.6rem]">
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+              <span>Search</span>
+            </button>
+            <button onclick="switchView('conflicts-panel')" class="flex flex-col items-center text-[0.6rem] text-amber-400">
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+              <span>Conflicts</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Mobile Design Summary -->
+        <div class="max-w-md space-y-3 text-xs text-[var(--muted-foreground)]">
+          <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-4 space-y-2">
+            <h4 class="font-bold text-white text-sm">Key Mobile Improvements</h4>
+            <ul class="list-disc pl-4 space-y-2 leading-relaxed">
+              <li><strong>Cleaner Bottom Hub:</strong> No more cluttering the phone navigation drawer with two duplicate sync tools. <em>"Conflicts"</em> replaces Decisions needed.</li>
+              <li><strong>Action Items Menu (<code class="text-zinc-300">...</code>):</strong> When browsing or editing a note, tapping <code class="text-zinc-300">...</code> offers <em>"Version history"</em> for <strong>that specific note</strong>.</li>
+              <li><strong>Mobile Diff Bottom Sheet:</strong> Tapping a version slides up a bottom drawer showing line additions/deletions and a single tap <em>"Restore this version"</em> button.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <script>
+    function switchView(viewId) {
+      const views = ['approaches', 'conflicts-panel', 'diff-view', 'mobile-preview'];
+      views.forEach(v => {
+        const el = document.getElementById('view-' + v);
+        const btn = document.getElementById('tab-' + v);
+        if (v === viewId) {
+          el.classList.remove('hidden');
+          btn.classList.add('bg-[var(--primary)]', 'text-[var(--primary-foreground)]');
+          btn.classList.remove('text-[var(--muted-foreground)]');
+        } else {
+          el.classList.add('hidden');
+          btn.classList.remove('bg-[var(--primary)]', 'text-[var(--primary-foreground)]');
+          btn.classList.add('text-[var(--muted-foreground)]');
+        }
+      });
+    }
+
+    function toggleMockDropdown(id) {
+      const el = document.getElementById(id);
+      el.classList.toggle('hidden');
+    }
+
+    function toggleRightPanel(panel) {
+      const panelEl = document.getElementById('sim-right-panel');
+      panelEl.classList.toggle('hidden');
+    }
+
+    function previewApproach(num) {
+      const title = document.getElementById('shell-preview-title');
+      const oldHistory = document.getElementById('nav-item-old-history');
+      const rightPanel = document.getElementById('sim-right-panel');
+      const hdrHistoryBtn = document.getElementById('hdr-btn-history');
+
+      if (num === 1) {
+        title.innerText = 'Live Shell Preview — Approach 1 (Action Items Inspector)';
+        oldHistory.classList.add('hidden');
+        rightPanel.classList.remove('hidden');
+        hdrHistoryBtn.classList.remove('hidden');
+      } else if (num === 2) {
+        title.innerText = 'Live Shell Preview — Approach 2 (Editor Context Menu & Diff Tab)';
+        oldHistory.classList.add('hidden');
+        rightPanel.classList.add('hidden');
+        hdrHistoryBtn.classList.add('hidden');
+      } else {
+        title.innerText = 'Live Shell Preview — Approach 3 (Hybrid: Right Inspector + One-Click Diff Tab)';
+        oldHistory.classList.add('hidden');
+        rightPanel.classList.remove('hidden');
+        hdrHistoryBtn.classList.remove('hidden');
+      }
+    }
+
+    function toggleMobileMenu() {
+      const menu = document.getElementById('phone-action-menu');
+      menu.classList.toggle('hidden');
+    }
+
+    function openMobileDiffSheet() {
+      toggleMobileMenu();
+      document.getElementById('phone-diff-sheet').classList.remove('hidden');
+    }
+
+    function closeMobileDiffSheet() {
+      document.getElementById('phone-diff-sheet').classList.add('hidden');
+    }
+  </script>
+</body>
+</html>

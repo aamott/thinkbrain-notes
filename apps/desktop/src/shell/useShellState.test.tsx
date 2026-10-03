@@ -58,7 +58,7 @@ const answerNativeCommands = (): void => {
     if (command === "sync_status") {
       return { ...NOT_RECORDING, state: "idle" };
     }
-    if (command === "sync_history") return [];
+    if (command === "sync_history") return { changes: [], nextCursor: null };
     if (command === "sync_conflict_rate") return { decisions: 0, settled: 0, recorded: 0 };
     if (command === "list_conflicts") return [];
     if (command === "quarantined_settings") return [];

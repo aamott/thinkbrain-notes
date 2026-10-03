@@ -30,8 +30,9 @@ leaves genuine overlaps as ` (from another device)` copies — never data loss.
 
 ## Conflict & merge
 
-- `merge_engine` — two-way segmentation, three-way merge, resolution write,
-  checkpoint order, CAS guard, cleanup, mutation lock.
+- `merge_engine` — two-version cloud conflict review, resolution write,
+  checkpoint order, CAS guard, cleanup, mutation lock. Git three-way merging
+  is part of `the_round_trip`; cloud three-way merging is not yet shipped.
 - `settle_obvious_conflicts` — both settle rules, the setting, separated
   counts.
 - `crash_conflict_copy_multiplication` — a crash mid-conflict no longer
@@ -41,6 +42,15 @@ leaves genuine overlaps as ` (from another device)` copies — never data loss.
 - `foreground_policy_on_desktop` — closed by superseding design: the shared
   schedule replaced `sync.trigger` (see
   `docs/superpowers/specs/2026-08-28-sync-schedule-design.md`).
+
+## File history
+
+- `git_history_adoption` — durable read-only ingestion, persisted current-branch
+  fetch/push, all-parent note history, stable pagination and provenance labels,
+  and existing checkpointed compare/restore. Real reverts remain visible;
+  unrelated external histories are not automatically joined.
+- Architecture: `docs/superpowers/specs/file-history-design.md`. Cloud merge-base
+  association and three-way cloud merging remain separate pending work.
 
 ## Triggers, feedback, robustness
 

@@ -12,8 +12,8 @@ import { subscribeToSyncEvent } from "./syncEvents";
 import type {
   ConflictRate,
   HistoryCleanup,
+  HistoryPage,
   HistoryUsage,
-  RecordedChange,
   SavedSignIn,
   SignInStatus,
   Synced,
@@ -31,8 +31,9 @@ const SYNC_SETUP_EVENT = "sync://setup";
  *
  * A page rather than everything: a vault years old has thousands of recorded
  * changes, and nobody scrolls past the first screen looking for last Tuesday.
+ * Exported so the history panel can ask for its next page at the same size.
  */
-const HISTORY_PAGE = 60;
+export const HISTORY_PAGE = 60;
 
 export function readSyncStatus(rootPath: string): Promise<SyncStatus> {
   return invokeNativeCommand("sync_status", { rootPath });
@@ -98,18 +99,24 @@ export function forgetSignIn(profileId: string): Promise<void> {
 }
 
 /**
- * The most recent recorded changes, newest first.
+ * One page of the most recent recorded changes, newest first.
  *
  * `notePath` narrows the list to the changes that left content for one note,
  * which is exactly that note's list of restorable versions — the same reader,
  * asked a narrower question, so the two lists cannot disagree.
+ *
+ * `cursor` continues a page already read into the older part of the same
+ * timeline. The native side ties it to the roots that first page saw, so an
+ * invalid or expired cursor comes back as an actionable failure rather than
+ * a silently shifted page — the recovery is a fresh first page.
  */
 export function readHistory(
   rootPath: string,
   notePath: string | null,
-  limit: number = HISTORY_PAGE
-): Promise<readonly RecordedChange[]> {
-  return invokeNativeCommand("sync_history", { rootPath, notePath, limit });
+  limit: number = HISTORY_PAGE,
+  cursor: string | null = null
+): Promise<HistoryPage> {
+  return invokeNativeCommand("sync_history", { rootPath, notePath, limit, cursor });
 }
 
 /** Puts the version of `notePath` recorded in `change` back into the vault. */
