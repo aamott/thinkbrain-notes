@@ -79,6 +79,13 @@ export function WorkspaceExplorerView({
   // stays mounted but hidden when e.g. Search is active).
   const outlet = useWorkspaceSelectorOutlet();
   const showInlineSelector = workspaceSelectorInPanel && outlet?.variant !== "panel";
+  // The row a context menu was opened on keeps a selection outline for as
+  // long as the menu is up — otherwise there is no visible link between the
+  // two once the pointer moves off the row.
+  const contextMenuPath =
+    contextMenu && contextMenu.target.kind !== "background"
+      ? contextMenu.target.entry.relative_path
+      : null;
 
   // Same controller props wherever the selector lands — inline, title bar, or
   // drawer — so switching and its dialogs behave identically per placement.
@@ -295,6 +302,7 @@ export function WorkspaceExplorerView({
                   node={node}
                   isFirst={index === 0}
                   activePath={activePath}
+                  contextMenuPath={contextMenuPath}
                   renaming={renaming}
                   creating={creating}
                   expandedFolders={expandedFolders}

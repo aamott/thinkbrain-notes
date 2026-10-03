@@ -22,6 +22,7 @@ export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
   depth = 0,
   isFirst = false,
   activePath,
+  contextMenuPath,
   renaming,
   creating,
   expandedFolders,
@@ -32,6 +33,8 @@ export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
   readonly depth?: number;
   readonly isFirst?: boolean;
   readonly activePath: string | null;
+  /** Path of the entry whose context menu is open, if any. */
+  readonly contextMenuPath: string | null;
   readonly renaming: RenameState | null;
   readonly creating: CreateState | null;
   readonly expandedFolders: ReadonlySet<string>;
@@ -137,7 +140,11 @@ export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
             isDragged && "opacity-60",
             isDropTarget && (drag?.dropTargetValid
               ? "bg-[color-mix(in_srgb,var(--color-accent)_58%,transparent)]"
-              : "bg-[color-mix(in_srgb,var(--color-destructive)_18%,transparent)]")
+              : "bg-[color-mix(in_srgb,var(--color-destructive)_18%,transparent)]"),
+            // The context-menu target stays outlined for as long as its menu
+            // is open, tying the menu to the row once the pointer has moved on.
+            contextMenuPath === node.entry.relative_path &&
+              "bg-[color-mix(in_srgb,var(--color-accent)_58%,transparent)] outline-1 -outline-offset-1 outline-ring"
           )}
           {...{ [WORKSPACE_TREE_ROW_ATTR]: node.entry.relative_path }}
           {...(isDirectory ? { [WORKSPACE_DROP_PARENT_ATTR]: node.entry.relative_path } : {})}
@@ -222,6 +229,7 @@ export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
                   depth={depth + 1}
                   isFirst={false}
                   activePath={activePath}
+                  contextMenuPath={contextMenuPath}
                   renaming={renaming}
                   creating={creating}
                   expandedFolders={expandedFolders}
