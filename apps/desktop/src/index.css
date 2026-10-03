@@ -176,6 +176,21 @@
   }
 }
 
+/* Vertical scrollbar on the left edge instead of the right. Overlay
+   scrollbars (WebKitGTK, Android WebView) composite above page content at
+   any z-index, so a right-edge scrollbar can paint over menus — keeping the
+   gutter on the left leaves that edge clean for them. `direction: rtl`
+   moves the scrollbar in both classic and overlay renderers; children
+   reset to ltr. Only safe where content cannot overflow horizontally —
+   in an RTL scroller, horizontal overflow would right-align and clip the
+   leading edge. */
+@utility tn-scrollbar-left {
+  direction: rtl;
+  & > * {
+    direction: ltr;
+  }
+}
+
 @layer base {
   :root {
     font-family: var(--tn-font-sans);
