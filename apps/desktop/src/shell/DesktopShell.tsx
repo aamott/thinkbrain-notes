@@ -23,6 +23,7 @@ import { isNoteTitleEligible } from "./noteTitleEligibility";
 import { NoteTitleRow } from "./phone/NoteTitleRow";
 import { useSettingsStore } from "../settings/settingsStore";
 import { StatusBar } from "./StatusBar";
+import { TabBoundary } from "./TabBoundary";
 import { TabCloseRequest } from "./TabCloseRequest";
 import { TabContent } from "./TabContent";
 import { TitleBar } from "./TitleBar";
@@ -198,7 +199,11 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
                   onRestored={() => shell.loadDocumentIntoView(activeTab.id, rootPath, relativePath)}
                 />
               )}
-              <TabContent tab={activeTab} document={activeDocument} onChange={shell.updateDocument} onSave={shell.saveDocument} noteIndex={shell.noteIndex} onOpenNote={shell.onOpenNote} onReopenNote={shell.loadDocumentIntoView} unsavedNoteContents={shell.unsavedNoteContents} onRestoreVersion={shell.restoreVersionSafely} />
+              {/* One boundary per tab: a crash shows the failed tab's state,
+                  not a white shell, and the next tab mounts a fresh boundary. */}
+              <TabBoundary key={activeTab?.id ?? "no-tab"}>
+                <TabContent tab={activeTab} document={activeDocument} onChange={shell.updateDocument} onSave={shell.saveDocument} noteIndex={shell.noteIndex} onOpenNote={shell.onOpenNote} onReopenNote={shell.loadDocumentIntoView} unsavedNoteContents={shell.unsavedNoteContents} onRestoreVersion={shell.restoreVersionSafely} />
+              </TabBoundary>
             </article>
             {shell.bottomPanel && (
               <div className="shrink-0 tn-slide-in-bottom">

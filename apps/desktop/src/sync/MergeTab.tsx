@@ -155,7 +155,10 @@ const LAYOUT_BUTTON =
 
 function MergeSurface({ conflict, resolving, onResolve, tabId }: MergeSurfaceProps) {
   const { ours, theirs } = conflict;
-  const comparable = conflict.kind === "text";
+  // `text` is checked, not just `kind`: the type promises they agree, but a
+  // stale native build once sent a shape that broke the promise — and the
+  // whole app paid for trusting it with a white screen.
+  const comparable = conflict.kind === "text" && conflict.text !== null;
   const note = noteName(ours.path);
 
   // Whatever the right pane currently holds — moved by the transfer arrows,
