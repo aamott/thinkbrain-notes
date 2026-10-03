@@ -13,6 +13,10 @@ import {
 
 // ---- Tree item ----
 
+/** Tree-row glyph styling — `tn-tree-icon` supplies the tinted color. */
+const TREE_ICON_CLASSES =
+  "tn-tree-icon [&>svg]:w-[0.9rem] [&>svg]:h-[0.9rem] [&>svg]:stroke-current";
+
 export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
   node,
   depth = 0,
@@ -168,7 +172,7 @@ export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
             }}
             aria-label={isDirectory ? `${isExpanded ? "Collapse" : "Expand"} ${node.entry.name}` : isFile ? `Open ${node.entry.name}` : undefined}
           >
-            <span className="w-2.5 flex-none text-muted-foreground text-center [&>svg]:w-[0.9rem] [&>svg]:h-[0.9rem] [&>svg]:stroke-current" aria-hidden="true">{isDirectory ? (isExpanded ? <FolderOpen /> : <Folder />) : <WorkspaceFileIcon name={node.entry.name} />}</span>
+            <span className={cn(TREE_ICON_CLASSES, "w-2.5 flex-none text-center")} aria-hidden="true">{isDirectory ? (isExpanded ? <FolderOpen /> : <Folder />) : <WorkspaceFileIcon name={node.entry.name} />}</span>
             <span className="min-w-0 truncate">{node.entry.name}</span>
           </button>
           {drag && (
@@ -324,7 +328,7 @@ export function InlineNameInput({
         handleSubmit();
       }}
     >
-      <span className="w-2.5 flex-none text-muted-foreground text-center [&>svg]:w-[0.9rem] [&>svg]:h-[0.9rem] [&>svg]:stroke-current" aria-hidden="true">{icon}</span>
+      <span className={cn(TREE_ICON_CLASSES, "w-2.5 flex-none text-center")} aria-hidden="true">{icon}</span>
       <span className="min-w-0 flex-1">
         <input
           ref={inputRef}

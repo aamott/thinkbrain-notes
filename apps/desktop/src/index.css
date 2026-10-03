@@ -157,6 +157,14 @@
   animation: tn-dock-slide-right var(--tn-duration-overlay) ease-out;
 }
 
+/* Tree-row glyph color: muted-foreground tinted toward the theme primary so
+   file/folder icons read as a distinct tone from the row's name text. A mix
+   rather than a token swap keeps the icon secondary while giving every theme
+   — including .tbtheme presets — a hue-consistent variation. */
+@utility tn-tree-icon {
+  color: color-mix(in srgb, var(--tn-color-primary) 40%, var(--tn-color-muted-foreground));
+}
+
 @layer base {
   :root {
     font-family: var(--tn-font-sans);
