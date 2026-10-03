@@ -92,9 +92,12 @@ describe("DesktopShell workspace selector placement", () => {
       useSettingsStore.getState().stageChange(PLACEMENT_KEY, "panel headers");
     });
 
+    // The explorer draws the selector inside its own chrome row — its title
+    // slot *is* the trigger, so the popout mounts no outlet for it.
     const filesPanel = host.querySelector('[aria-label="Files panel"]');
-    const panelOutlet = filesPanel?.querySelector('[data-workspace-selector-outlet="panel"]');
-    expect(panelOutlet?.querySelector('button[aria-haspopup="menu"]')).not.toBeNull();
+    const panelSelector = filesPanel?.querySelector('header button[aria-haspopup="menu"]');
+    expect(panelSelector).not.toBeNull();
+    expect(host.querySelector('[data-workspace-selector-outlet="panel"]')).toBeNull();
     expect(host.querySelectorAll('button[aria-haspopup="menu"]')).toHaveLength(1);
     expect(host.querySelector('[aria-label="ThinkBrain"]')?.textContent).toContain("ThinkBrain");
     expect(host.querySelector('[aria-label="Workspace and commands"]')).toBeNull();
@@ -103,8 +106,15 @@ describe("DesktopShell workspace selector placement", () => {
       host.querySelector<HTMLButtonElement>('[aria-label="Workspace sections"] [aria-label="Extensions"]')?.click();
     });
 
+    // Extensions is not an opted panel: no outlet anywhere, and every
+    // selector trigger in the tree sits inside a kept-mounted panel hidden
+    // by its neighbour — none is visible.
     expect(host.querySelector('[aria-label="Extensions panel"]')).not.toBeNull();
     expect(host.querySelector('[data-workspace-selector-outlet="panel"]')).toBeNull();
-    expect(host.querySelector('button[aria-haspopup="menu"]')).toBeNull();
+    const triggers = host.querySelectorAll('button[aria-haspopup="menu"]');
+    expect(triggers.length).toBeGreaterThan(0);
+    for (const trigger of triggers) {
+      expect(trigger.closest(".hidden")).not.toBeNull();
+    }
   });
 });

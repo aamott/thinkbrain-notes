@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ReactNode } from "react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { LeftPopout } from "./LeftPopout";
 import { RightPopout } from "./RightPopout";
 import {
@@ -127,6 +127,32 @@ describe("desktop panel registry", () => {
     expect(desktopPanelRegistry.get("explorer")?.showWorkspaceSelector).toBe(true);
     expect(desktopPanelRegistry.get("search")?.showWorkspaceSelector).toBe(true);
     expect(desktopPanelRegistry.get("extensions")?.showWorkspaceSelector).toBeUndefined();
+  });
+
+  it("lets the explorer own its chrome row", () => {
+    expect(desktopPanelRegistry.get("explorer")?.ownsChrome).toBe(true);
+    expect(desktopPanelRegistry.get("conflicts")?.ownsChrome).toBeUndefined();
+  });
+
+  it("contributes a Conflict options menu whose Sync settings item reaches the context callback", () => {
+    const onOpenSyncSettings = vi.fn();
+    const declared = desktopPanelRegistry.get("conflicts")?.actions;
+    expect(typeof declared).toBe("function");
+
+    const actions = typeof declared === "function"
+      ? declared({ ...context, onOpenSyncSettings })
+      : [];
+    const options = actions.find((action) => action.id === "conflict-options");
+    expect(options?.label).toBe("Conflict options");
+    expect(options?.menu?.map((item) => item.label)).toEqual([
+      "Sync settings",
+      "Sign in with GitHub"
+    ]);
+
+    options?.menu?.[0]?.run?.();
+    expect(onOpenSyncSettings).toHaveBeenCalledOnce();
+    // The GitHub sign-in stays a disabled placeholder until it ships.
+    expect(options?.menu?.[1]?.disabled).toBe(true);
   });
 
   it("looks up registered panels and reports missing ids", () => {

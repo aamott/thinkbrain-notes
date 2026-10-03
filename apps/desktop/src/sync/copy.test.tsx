@@ -167,7 +167,7 @@ describe("nothing in this feature speaks git to the user", () => {
 
     audit(
       "the comparison",
-      await renderText(<MergeTab rootPath="/notes" copyPath="Meeting Notes.md.copy" buffer={null} />)
+      await renderText(<MergeTab rootPath="/notes" copyPath="Meeting Notes.md.copy" tabId={null} buffer={null} />)
     );
   });
 
@@ -176,7 +176,7 @@ describe("nothing in this feature speaks git to the user", () => {
 
     audit(
       "the failure",
-      await renderText(<MergeTab rootPath="/notes" copyPath="Meeting Notes.md.copy" buffer={null} />)
+      await renderText(<MergeTab rootPath="/notes" copyPath="Meeting Notes.md.copy" tabId={null} buffer={null} />)
     );
   });
 

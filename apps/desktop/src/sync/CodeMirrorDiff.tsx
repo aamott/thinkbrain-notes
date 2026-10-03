@@ -23,6 +23,7 @@ import { EditorView, highlightSpecialChars, keymap, lineNumbers } from "@codemir
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { codeHighlightStyle, languageForPath } from "../lib/codemirror";
+import { DiffLayoutToggle } from "./DiffLayoutToggle";
 import { useResponsiveDiffLayout, type DiffLayout } from "./diffLayout";
 
 export interface CodeMirrorDiffProps {
@@ -70,9 +71,6 @@ const readOnly: Extension[] = [
 ];
 
 const isDark = () => document.documentElement.dataset.thinkbrainTheme === "dark";
-
-const LAYOUT_BUTTON =
-  "rounded-small border-0 bg-transparent px-2 py-0.5 text-xs text-muted-foreground cursor-pointer hover:bg-accent aria-pressed:bg-accent aria-pressed:text-foreground focus-visible:outline-2 focus-visible:outline-ring";
 
 const HOST_STYLES =
   "border-b border-border text-editor-foreground [&_.cm-editor]:bg-editor [&_.cm-editor]:font-mono [&_.cm-editor]:text-sm [&_.cm-editor]:leading-1.65 [&_.cm-focused]:outline-none";
@@ -131,9 +129,7 @@ export function CodeMirrorDiff({
   const workingAfterRef = useRef(after);
 
   const [layoutOverride, setLayoutOverride] = useState<DiffLayout | null>(null);
-  // With no ResizeObserver there is nothing to follow — window width is only
-  // ever read once, here, as the initial guess.
-  const responsiveLayout = useResponsiveDiffLayout(containerRef) ?? "split";
+  const responsiveLayout = useResponsiveDiffLayout(containerRef);
   const layout = controlledLayout ?? layoutOverride ?? responsiveLayout;
   const chooseLayout = (next: DiffLayout) => {
     if (controlledLayout !== undefined) onLayoutChange?.(next);
@@ -315,24 +311,7 @@ export function CodeMirrorDiff({
           that draw their own toggle hide this one. */}
       {showLayoutToggle && (
         <div className="flex min-w-0 items-center justify-end gap-2 border-b border-border bg-card px-2 py-1 text-xs">
-          <div role="group" aria-label="Diff layout" className="flex gap-0.5">
-            <button
-              type="button"
-              className={LAYOUT_BUTTON}
-              aria-pressed={layout === "inline"}
-              onClick={() => chooseLayout("inline")}
-            >
-              Inline
-            </button>
-            <button
-              type="button"
-              className={LAYOUT_BUTTON}
-              aria-pressed={layout === "split"}
-              onClick={() => chooseLayout("split")}
-            >
-              Side by side
-            </button>
-          </div>
+          <DiffLayoutToggle layout={layout} onLayoutChange={chooseLayout} />
         </div>
       )}
 

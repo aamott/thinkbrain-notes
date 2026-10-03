@@ -135,9 +135,10 @@ describe("panels contributed with a mount function", () => {
 
     await host.activate("calendar");
 
-    const action = panels.get("calendar.month")?.actions?.[0];
+    const declared = panels.get("calendar.month")?.actions;
+    const action = typeof declared === "function" ? undefined : declared?.[0];
     expect(action?.label).toBe("Go to today");
-    action?.run();
+    void action?.run?.();
     expect(run).toHaveBeenCalledTimes(1);
   });
 

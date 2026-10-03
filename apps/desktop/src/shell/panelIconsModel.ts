@@ -32,6 +32,7 @@ import {
   Link,
   List,
   Menu,
+  MoreHorizontal,
   Notebook,
   NotebookPen,
   Plus,
@@ -65,6 +66,7 @@ export const panelIcons: Readonly<Record<string, LucideIcon>> = {
   menu: Menu,
   // Panel header actions
   refresh: RefreshCw,
+  "more-horizontal": MoreHorizontal,
   // "Today" = a calendar with today's date checked. Visually distinct from
   // CalendarDays (the grid) used by the Open-calendar button beside it.
   "go-to-today": CalendarCheck2,

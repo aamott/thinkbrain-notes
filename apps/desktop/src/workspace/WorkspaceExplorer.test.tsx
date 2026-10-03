@@ -130,6 +130,66 @@ describe("WorkspaceExplorer presentation", () => {
     expect(explorer?.querySelector('button[aria-haspopup="menu"]')).toBeNull();
   });
 
+  it("renders the selector inside its own header row when it lives in panel headers", async () => {
+    // The popout mounts no outlet for the explorer — the selector trigger is
+    // the chrome row's title, drawn by the explorer itself.
+    container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
+    const api = { ...workspaceDesktopApi, workspaceAccessCapabilities: async () => desktopCapabilities };
+    await act(async () => {
+      root?.render(
+        <WorkspaceSelectorProvider>
+          <WorkspaceExplorer
+            api={api}
+            workspaceSelectorInPanel
+            recentWorkspacePaths={["/notes/previous"]}
+          />
+        </WorkspaceSelectorProvider>
+      );
+    });
+
+    const header = container.querySelector('section[aria-label="Workspace explorer"] header');
+    const trigger = header?.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]');
+    expect(trigger).not.toBeNull();
+    expect(trigger?.textContent).toContain("Choose workspace");
+    // Without an outlet the selector must not also appear through the portal.
+    expect(container.querySelector('[data-workspace-selector-outlet]')).toBeNull();
+  });
+
+  it("shows the Files label and create/overflow actions once a workspace is ready", async () => {
+    const snapshot: NativeWorkspaceSnapshot = {
+      workspace: { root_path: "/notes/current", name: "current" },
+      files: []
+    };
+    const api = {
+      ...workspaceDesktopApi,
+      openWorkspace: vi.fn(async () => snapshot),
+      listWorkspaceEntries: vi.fn(async () => [])
+    };
+    await renderExplorer(api, "/notes/current");
+    await act(async () => undefined);
+
+    const explorer = container?.querySelector('section[aria-label="Workspace explorer"]');
+    expect(explorer?.querySelector("header h2")?.textContent).toBe("Files");
+    expect(explorer?.querySelector('button[aria-label="New note"]')).not.toBeNull();
+    expect(explorer?.querySelector('button[aria-label="New folder"]')).not.toBeNull();
+
+    const more = explorer?.querySelector<HTMLButtonElement>('button[aria-label="More actions"]');
+    if (!more) throw new Error("More actions button missing");
+    await click(more);
+
+    const items = Array.from(explorer?.querySelectorAll("[role='menuitem'], [role='menuitemcheckbox']") ?? []);
+    const labels = items.map((item) => item.textContent);
+    expect(labels).toEqual([
+      "Show hidden files",
+      "New file",
+      "Refresh",
+      "Open workspace…"
+    ]);
+    expect(explorer?.querySelector('[role="menuitemcheckbox"]')?.getAttribute("aria-checked")).toBe("false");
+  });
+
   it("uses a menu-shaped workspace selector that opens a new workspace without changing its source", async () => {
     const { onAction, onAdd, onSelect } = await renderSelector();
     const trigger = container?.querySelector<HTMLButtonElement>("button");

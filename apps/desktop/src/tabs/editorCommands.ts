@@ -13,6 +13,8 @@
  * edits and undo/redo all change the document, which is enough).
  */
 
+import { redo, redoDepth, undo, undoDepth } from "@codemirror/commands";
+import type { EditorView } from "@codemirror/view";
 import { useSyncExternalStore } from "react";
 
 export interface EditorCommands {
@@ -39,9 +41,19 @@ const entries = new Map<string, RegisteredCommands>();
 // Subscriptions are registry-wide rather than per-entry: an entry can be
 // registered after a listener attached, and it would never hear about it.
 const listeners = new Set<() => void>();
+// Versions count up globally — a per-entry reset would make a re-register
+// invisible to subscribers whose snapshot had already seen that number.
+let versionSeq = 0;
 
 const announce = (): void => {
   for (const listener of listeners) listener();
+};
+
+const subscribe = (onStoreChange: () => void): (() => void) => {
+  listeners.add(onStoreChange);
+  return () => {
+    listeners.delete(onStoreChange);
+  };
 };
 
 /** Registers `commands` under `tabId`; the returned function unregisters. */
@@ -49,7 +61,7 @@ export function registerEditorCommands(
   tabId: string,
   commands: EditorCommands
 ): () => void {
-  entries.set(tabId, { commands, version: 0 });
+  entries.set(tabId, { commands, version: ++versionSeq });
   const registration = entries.get(tabId);
   announce();
   return () => {
@@ -66,7 +78,7 @@ export function registerEditorCommands(
 export function notifyEditorCommands(tabId: string): void {
   const entry = entries.get(tabId);
   if (!entry) return;
-  entry.version += 1;
+  entry.version = ++versionSeq;
   announce();
 }
 
@@ -75,17 +87,41 @@ export function getEditorCommands(tabId: string): EditorCommands | null {
   return entries.get(tabId)?.commands ?? null;
 }
 
+/**
+ * Undo/redo wired to a CodeMirror view — the base of what every editable
+ * surface registers. `getView` is a thunk so a surface whose view arrives
+ * late (the merge diff mounts it after registration) answers for the live
+ * editor, not the one that existed when it registered.
+ */
+export function cmHistoryCommands(
+  getView: () => EditorView | null
+): Pick<EditorCommands, "undo" | "redo" | "canUndo" | "canRedo"> {
+  return {
+    undo: () => {
+      const view = getView();
+      if (view && undo(view)) view.focus();
+    },
+    redo: () => {
+      const view = getView();
+      if (view && redo(view)) view.focus();
+    },
+    canUndo: () => {
+      const view = getView();
+      return view !== null && undoDepth(view.state) > 0;
+    },
+    canRedo: () => {
+      const view = getView();
+      return view !== null && redoDepth(view.state) > 0;
+    }
+  };
+}
+
 /** Subscribes to `tabId`'s commands, re-rendering on every notify. */
 export function useEditorCommands(
   tabId: string | null | undefined
 ): EditorCommands | null {
   const version = useSyncExternalStore(
-    (onStoreChange) => {
-      listeners.add(onStoreChange);
-      return () => {
-        listeners.delete(onStoreChange);
-      };
-    },
+    subscribe,
     () => (tabId ? (entries.get(tabId)?.version ?? -1) : -1),
     // The shell's tests render to string — server snapshot required, and the
     // client answer is the right one: nothing registers during SSR anyway.

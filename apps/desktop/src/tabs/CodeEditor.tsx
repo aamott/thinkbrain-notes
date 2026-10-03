@@ -1,11 +1,11 @@
 import { Compartment, EditorState, StateEffect } from "@codemirror/state";
-import { defaultKeymap, history, historyKeymap, indentWithTab, redo, redoDepth, undo, undoDepth } from "@codemirror/commands";
+import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { bracketMatching, foldGutter, indentOnInput, syntaxHighlighting } from "@codemirror/language";
 import { EditorView, highlightActiveLine, highlightActiveLineGutter, highlightSpecialChars, keymap, lineNumbers } from "@codemirror/view";
 import { useEffect, useRef, useState } from "react";
 
 import { codeHighlightStyle, languageForPath } from "../lib/codemirror";
-import { notifyEditorCommands, registerEditorCommands } from "./editorCommands";
+import { cmHistoryCommands, notifyEditorCommands, registerEditorCommands } from "./editorCommands";
 import { recallEditorState, rememberEditorState } from "./editorStateCache";
 
 export interface CodeEditorProps {
@@ -122,16 +122,7 @@ export function CodeEditor({
     const unregisterCommands =
       stateKey === undefined
         ? undefined
-        : registerEditorCommands(stateKey, {
-            undo: () => {
-              if (undo(view)) view.focus();
-            },
-            redo: () => {
-              if (redo(view)) view.focus();
-            },
-            canUndo: () => undoDepth(view.state) > 0,
-            canRedo: () => redoDepth(view.state) > 0
-          });
+        : registerEditorCommands(stateKey, cmHistoryCommands(() => view));
 
     if (parked) {
       view.dispatch({ effects: StateEffect.reconfigure.of([...baseExtensions, initialLanguage]) });

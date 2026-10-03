@@ -1,16 +1,17 @@
-import { redo, redoDepth, undo, undoDepth } from "@codemirror/commands";
 import type { EditorView } from "@codemirror/view";
 import { CircleHelp } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import { Unavailable } from "../shell/Unavailable";
 import {
+  cmHistoryCommands,
   notifyEditorCommands,
   registerEditorCommands
 } from "../tabs/editorCommands";
 import { CodeMirrorDiff } from "./CodeMirrorDiff";
+import { DiffLayoutToggle } from "./DiffLayoutToggle";
 import { useResponsiveDiffLayout, type DiffLayout } from "./diffLayout";
-import { noteName } from "./conflictCard";
+import { describeSize, describeWhen, noteName } from "./conflictCard";
 import { readConflict, resolveConflict } from "./conflictService";
 import type { ConflictComparison, ConflictResolution } from "./conflictTypes";
 import { failureMessage } from "./syncCopy";
@@ -32,9 +33,10 @@ interface MergeTabProps {
   readonly copyPath: string | null;
   /**
    * This tab's id — the key its undo/redo and Save commands register under
-   * so the header bar can reach the result pane. Omitted outside the shell.
+   * so the header bar can reach the result pane. `null` outside the shell;
+   * required so a caller cannot forget it and silently lose merge Save.
    */
-  readonly tabId?: string | null;
+  readonly tabId: string | null;
   /**
    * Unsaved text from an editor open on this note, if there is one.
    *
@@ -71,7 +73,7 @@ export function MergeTab({ rootPath, copyPath, tabId, buffer }: MergeTabProps) {
 interface MergeSessionProps {
   readonly rootPath: string;
   readonly copyPath: string;
-  readonly tabId?: string | null;
+  readonly tabId: string | null;
   readonly buffer?: string | null;
 }
 
@@ -145,13 +147,16 @@ interface MergeSurfaceProps {
   readonly conflict: ConflictComparison;
   readonly resolving: boolean;
   readonly onResolve: (resolution: ConflictResolution) => void;
-  readonly tabId?: string | null;
+  readonly tabId: string | null;
 }
 
 const ACTION_BUTTON =
   "cursor-pointer rounded-small border border-border bg-surface px-3 py-1 text-xs text-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-50";
-const LAYOUT_BUTTON =
-  "rounded-small border-0 bg-transparent px-2 py-0.5 text-xs text-muted-foreground cursor-pointer hover:bg-accent aria-pressed:bg-accent aria-pressed:text-foreground";
+const WHOLE_VERSION_CHOICES = [
+  { kind: "keepOurs", label: "Keep current" },
+  { kind: "keepTheirs", label: "Use incoming" },
+  { kind: "keepBoth", label: "Keep both files" }
+] as const;
 
 function MergeSurface({ conflict, resolving, onResolve, tabId }: MergeSurfaceProps) {
   const { ours, theirs } = conflict;
@@ -173,7 +178,7 @@ function MergeSurface({ conflict, resolving, onResolve, tabId }: MergeSurfacePro
   const sectionRef = useRef<HTMLElement>(null);
   const responsiveLayout = useResponsiveDiffLayout(sectionRef);
   const [layoutOverride, setLayoutOverride] = useState<DiffLayout | null>(null);
-  const layout = layoutOverride ?? responsiveLayout ?? "split";
+  const layout = layoutOverride ?? responsiveLayout;
 
   // The "why am I looking at this" sentence lives behind a click so it costs
   // no screen space — title-text would be invisible on touch, and a fixed
@@ -196,45 +201,33 @@ function MergeSurface({ conflict, resolving, onResolve, tabId }: MergeSurfacePro
     };
   }, [helpOpen]);
 
+  const helpId = useId();
+
   useEffect(() => {
     onResolveRef.current = onResolve;
-  }, [onResolve]);
-  useEffect(() => {
     resolvingRef.current = resolving;
     // The header's Save enabled-state follows `canSave`, which reads this —
     // let it know the answer changed.
     if (tabId) notifyEditorCommands(tabId);
-  }, [resolving, tabId]);
+  }, [onResolve, resolving, tabId]);
 
   // The result pane is the only editable surface here, so it is what the
   // header's undo/redo and Save act on — Save resolves the conflict with
-  // whatever the pane currently holds.
+  // whatever the pane currently holds. A non-text conflict has no pane and
+  // no merge to save, so it registers nothing.
   useEffect(() => {
-    if (!tabId) return;
+    if (!tabId || !comparable) return;
     return registerEditorCommands(tabId, {
-      undo: () => {
-        const view = workingViewRef.current;
-        if (view && undo(view)) view.focus();
+      // The diff mounts its working view after this registers — the thunk
+      // keeps the commands pointed at the live pane.
+      ...cmHistoryCommands(() => workingViewRef.current),
+      save: () => {
+        if (!resolvingRef.current) {
+          onResolveRef.current({ kind: "merged", contents: resultRef.current });
+        }
       },
-      redo: () => {
-        const view = workingViewRef.current;
-        if (view && redo(view)) view.focus();
-      },
-      canUndo: () =>
-        workingViewRef.current !== null && undoDepth(workingViewRef.current.state) > 0,
-      canRedo: () =>
-        workingViewRef.current !== null && redoDepth(workingViewRef.current.state) > 0,
-      ...(comparable
-        ? {
-            save: () => {
-              if (!resolvingRef.current) {
-                onResolveRef.current({ kind: "merged", contents: resultRef.current });
-              }
-            },
-            canSave: () => !resolvingRef.current,
-            saveLabel: "Save merged note"
-          }
-        : {})
+      canSave: () => !resolvingRef.current,
+      saveLabel: "Save merged note"
     });
   }, [tabId, comparable]);
 
@@ -248,50 +241,20 @@ function MergeSurface({ conflict, resolving, onResolve, tabId }: MergeSurfacePro
           above it: same background, height and padding. Whole-version choices
           left; the layout toggle and the why-you're-here help right. */}
       <div className="flex min-h-8 flex-none flex-wrap items-center gap-2 border-b border-border bg-editor px-[0.9rem] py-1">
-        <button
-          type="button"
-          className={ACTION_BUTTON}
-          disabled={resolving}
-          onClick={() => onResolve({ kind: "keepOurs" })}
-        >
-          Keep current
-        </button>
-        <button
-          type="button"
-          className={ACTION_BUTTON}
-          disabled={resolving}
-          onClick={() => onResolve({ kind: "keepTheirs" })}
-        >
-          Use incoming
-        </button>
-        <button
-          type="button"
-          className={ACTION_BUTTON}
-          disabled={resolving}
-          onClick={() => onResolve({ kind: "keepBoth" })}
-        >
-          Keep both files
-        </button>
+        {WHOLE_VERSION_CHOICES.map(({ kind, label }) => (
+          <button
+            key={kind}
+            type="button"
+            className={ACTION_BUTTON}
+            disabled={resolving}
+            onClick={() => onResolve({ kind })}
+          >
+            {label}
+          </button>
+        ))}
         <div className="ml-auto flex items-center gap-1">
           {comparable && (
-            <div role="group" aria-label="Diff layout" className="flex gap-0.5">
-              <button
-                type="button"
-                className={LAYOUT_BUTTON}
-                aria-pressed={layout === "inline"}
-                onClick={() => setLayoutOverride("inline")}
-              >
-                Inline
-              </button>
-              <button
-                type="button"
-                className={LAYOUT_BUTTON}
-                aria-pressed={layout === "split"}
-                onClick={() => setLayoutOverride("split")}
-              >
-                Side by side
-              </button>
-            </div>
+            <DiffLayoutToggle layout={layout} onLayoutChange={setLayoutOverride} />
           )}
           <div ref={helpRef} className="relative">
             <button
@@ -299,7 +262,7 @@ function MergeSurface({ conflict, resolving, onResolve, tabId }: MergeSurfacePro
               className="cursor-pointer rounded-small px-1 py-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               aria-label="About this comparison"
               aria-expanded={helpOpen}
-              aria-controls="merge-comparison-help"
+              aria-controls={helpId}
               title="About this comparison"
               onClick={() => setHelpOpen((open) => !open)}
             >
@@ -307,7 +270,7 @@ function MergeSurface({ conflict, resolving, onResolve, tabId }: MergeSurfacePro
             </button>
             {helpOpen && (
               <div
-                id="merge-comparison-help"
+                id={helpId}
                 role="note"
                 className="absolute right-0 top-full z-50 mt-1 w-72 rounded-small border border-border bg-popover p-3 text-xs leading-relaxed text-popover-foreground shadow-soft"
               >
@@ -317,6 +280,11 @@ function MergeSurface({ conflict, resolving, onResolve, tabId }: MergeSurfacePro
                   {comparable
                     ? " Use the arrows between the panes to bring parts across, edit the result however you need, then save it."
                     : " This file can't be compared line by line, so choose which version to keep."}
+                </p>
+                <p className="mb-0 mt-2 text-muted-foreground">
+                  {theirs.label} · {describeSize(theirs.byteSize)} · {describeWhen(theirs.changedAt)}
+                  <br />
+                  {ours.label} · {describeSize(ours.byteSize)} · {describeWhen(ours.changedAt)}
                 </p>
                 <p className="mb-0 mt-2 text-muted-foreground">
                   Whichever you choose, the earlier versions stay in Version history.

@@ -1,5 +1,4 @@
 import {
-  createContext,
   useCallback,
   useContext,
   useId,
@@ -11,21 +10,14 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 
-export type WorkspaceSelectorVariant = "drawer" | "titlebar" | "panel";
+import {
+  WorkspaceSelectorOutletContext,
+  WorkspaceSelectorPortalContext,
+  type WorkspaceSelectorOutletRegistration,
+  type WorkspaceSelectorVariant
+} from "./WorkspaceSelectorPortalModel";
 
-type WorkspaceSelectorOutletRegistration = {
-  readonly id: string;
-  readonly element: HTMLDivElement;
-  readonly variant: WorkspaceSelectorVariant;
-  readonly onAction?: () => void;
-};
-
-type WorkspaceSelectorPortalContextValue = {
-  readonly register: (outlet: WorkspaceSelectorOutletRegistration) => () => void;
-};
-
-const WorkspaceSelectorPortalContext = createContext<WorkspaceSelectorPortalContextValue | null>(null);
-const WorkspaceSelectorOutletContext = createContext<WorkspaceSelectorOutletRegistration | null>(null);
+export type { WorkspaceSelectorVariant };
 
 export function WorkspaceSelectorProvider({ children }: { readonly children: ReactNode }) {
   const [outlet, setOutlet] = useState<WorkspaceSelectorOutletRegistration | null>(null);
@@ -60,10 +52,13 @@ export function WorkspaceSelectorOutlet({
     return context.register({ id, element: elementRef.current, variant, onAction });
   }, [context, id, variant, onAction]);
 
+  // Titlebar and panel outlets fill their flex parent (the title-bar stretch,
+  // the popout title slot); the drawer outlet stacks in a column flow.
+  const fillsParent = variant === "titlebar" || variant === "panel";
   return (
     <div
       ref={elementRef}
-      className={variant === "titlebar" ? "min-w-0 flex-1" : undefined}
+      className={fillsParent ? "flex min-w-0 flex-1 items-center" : undefined}
       data-workspace-selector-outlet={variant}
     />
   );

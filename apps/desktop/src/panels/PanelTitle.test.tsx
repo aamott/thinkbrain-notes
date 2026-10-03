@@ -126,4 +126,56 @@ describe("PanelTitle", () => {
 
     expect(host.querySelector('[aria-label="Back from Outline"]')).toBeNull();
   });
+
+  it("renders a menu action as a dropdown with checkbox and button items", async () => {
+    const onSettings = vi.fn();
+    const onToggle = vi.fn();
+    const host = await render(
+      <PanelTitle
+        title="Sync conflicts"
+        actions={[
+          {
+            id: "options",
+            label: "Conflict options",
+            icon: "more-horizontal",
+            menu: [
+              { label: "Show hidden files", checked: true, run: onToggle },
+              { label: "Sync settings", icon: "settings", run: onSettings, separatorBefore: true },
+              { label: "Sign in with GitHub", disabled: true, note: "Soon" }
+            ]
+          }
+        ]}
+      />
+    );
+
+    const trigger = host.querySelector<HTMLButtonElement>('[aria-label="Conflict options"]');
+    expect(trigger?.getAttribute("aria-haspopup")).toBe("menu");
+    await click(trigger);
+
+    const checkbox = host.querySelector('[role="menuitemcheckbox"]');
+    expect(checkbox?.getAttribute("aria-checked")).toBe("true");
+    // Toggling keeps the menu open so the flipped state is visible.
+    await click(checkbox);
+    expect(onToggle).toHaveBeenCalledTimes(1);
+    expect(host.querySelector('[role="menu"]')).not.toBeNull();
+
+    const disabled = host.querySelector('[role="menuitem"][aria-disabled="true"]');
+    expect(disabled?.textContent).toContain("Sign in with GitHub");
+
+    const settings = Array.from(host.querySelectorAll('[role="menuitem"]'))
+      .find((item) => item.textContent?.includes("Sync settings"));
+    await click(settings ?? null);
+    expect(onSettings).toHaveBeenCalledTimes(1);
+    // A plain item closes the menu before running.
+    expect(host.querySelector('[role="menu"]')).toBeNull();
+  });
+
+  it("lets a node replace the eyebrow label via titleContent", async () => {
+    const host = await render(
+      <PanelTitle title="Files" titleContent={<button type="button">notes ▾</button>} />
+    );
+
+    expect(host.querySelector("h2")).toBeNull();
+    expect(host.textContent).toContain("notes ▾");
+  });
 });

@@ -62,6 +62,15 @@ afterAll(() => {
   docGatedPanel.dispose();
 });
 
+// The hub's New note slot, specifically — the Files panel has its own
+// New-note button now, so an unscoped `click(host, …)` hits the explorer
+// header first.
+const tapNewNoteSlot = async (host: HTMLDivElement): Promise<void> => {
+  await act(async () => {
+    hubOf(host)?.querySelector<HTMLButtonElement>('[aria-label="New note"]')?.click();
+  });
+};
+
 describe("PhoneShell navigation", () => {
   it("starts on Files, not on the note, at cold launch", async () => {
     const host = await render();
@@ -425,7 +434,7 @@ describe("PhoneShell navigation", () => {
     await click(host, "Back");
     expect(filesVisible(host)).toBe(true);
 
-    await click(host, "New note");
+    await tapNewNoteSlot(host);
     const recent = newNoteMenu(host)?.querySelector<HTMLButtonElement>(
       '[role="menuitem"][aria-label="Open most recent note"]'
     );
@@ -500,7 +509,7 @@ describe("PhoneShell navigation", () => {
         '[role="menuitem"][aria-label="Open most recent note"]'
       );
 
-    await click(host, "New note");
+    await tapNewNoteSlot(host);
     expect(recentRow()?.textContent).toContain("a.md");
     await act(async () => recentRow()?.click());
 
@@ -508,7 +517,7 @@ describe("PhoneShell navigation", () => {
     expect(shell().tabState.tabs).toHaveLength(2);
 
     // Selecting A refreshed the MRU: reopening on A now offers B.
-    await click(host, "New note");
+    await tapNewNoteSlot(host);
     expect(recentRow()?.textContent).toContain("b.md");
     await act(async () => recentRow()?.click());
 
@@ -520,7 +529,7 @@ describe("PhoneShell navigation", () => {
     const { host, shell } = await renderWithShell();
     await act(async () => shell().openMarkdownDocument("/vault", "only.md"));
 
-    await click(host, "New note");
+    await tapNewNoteSlot(host);
     const recent = newNoteMenu(host)?.querySelector<HTMLButtonElement>(
       '[role="menuitem"][aria-label="Open most recent note"]'
     );
@@ -609,7 +618,7 @@ describe("PhoneShell navigation", () => {
     try {
       const host = await render();
 
-      await click(host, "New note");
+      await tapNewNoteSlot(host);
       const row = newNoteMenu(host)?.querySelector<HTMLButtonElement>(
         '[role="menuitem"][aria-label="Gated action"]'
       );

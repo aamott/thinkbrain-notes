@@ -8,7 +8,7 @@
  */
 
 import { normalizeRoot } from "@thinkbrain/core";
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { CommandPalette, type WorkspaceFileResult } from "../commands/CommandPalette";
 import { BottomPanel as BottomPanelContent } from "../panels/BottomPanel";
 import { LeftPopout } from "../panels/LeftPopout";
@@ -61,6 +61,14 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
       : "title bar"
   );
 
+  const selectorInPanel = workspaceSelectorPlacement === "panel headers";
+  // The explorer renders its own chrome row; the flag tells it whether the
+  // selector trigger lives in that row or elsewhere (title bar / drawer).
+  // Memoized because WorkspaceExplorer itself is memoized.
+  const explorerProps = useMemo(
+    () => ({ ...shell.explorerProps, workspaceSelectorInPanel: selectorInPanel }),
+    [shell.explorerProps, selectorInPanel]
+  );
   const openDocumentFromPanel = (relativePath: string) => {
     if (shell.restoredWorkspacePath) {
       shell.openMarkdownDocument(shell.restoredWorkspacePath, relativePath);
@@ -71,7 +79,7 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
   // can never disagree about what "the active document" is.
   const panelContext: DesktopPanelContext = {
     rootPath: shell.restoredWorkspacePath,
-    explorerProps: shell.explorerProps,
+    explorerProps,
     onOpenSearchResult: openDocumentFromPanel,
     onReviewConflict: shell.reviewConflict,
     onOpenSyncSettings: shell.openSyncSettings,
@@ -97,7 +105,7 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
       onReviewConflict={panelContext.onReviewConflict}
       onOpenSyncSettings={panelContext.onOpenSyncSettings}
       onOpenSearchResult={panelContext.onOpenSearchResult}
-      workspaceSelectorInPanel={workspaceSelectorPlacement === "panel headers"}
+      workspaceSelectorInPanel={selectorInPanel}
     />
   );
 

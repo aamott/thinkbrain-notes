@@ -2,11 +2,13 @@ import { type ReactNode } from "react";
 
 import { Unavailable } from "../shell/Unavailable";
 import { WorkspaceSelectorOutlet } from "../workspace/WorkspaceSelectorPortal";
+import { PanelBoundary } from "./PanelBoundary";
 import { PanelTitle } from "./PanelTitle";
 import { MountedPanel } from "./panelRegistry";
 import {
   getDesktopPanelOrUndefined,
   type DesktopPanelContribution,
+  type DesktopPanelContext,
   type LeftPanelContext,
   type RightPanelContext
 } from "./panelRegistryModel";
@@ -88,28 +90,92 @@ export function Popout<Ctx extends LeftPanelContext | RightPanelContext>({
     );
   }
 
+  // `ownsChrome` panels render their own single header row (the explorer
+  // merges title, selector, and actions), so the popout mounts neither
+  // PanelTitle nor a selector outlet for them.
+  const ownsChrome = contribution.ownsChrome === true;
+  // One chrome row per popout: when the setting places the selector in panel
+  // headers, the trigger mounts inside the title slot — never its own row.
+  const selectorInTitle =
+    side === "left" &&
+    workspaceSelectorInPanel === true &&
+    contribution.showWorkspaceSelector === true;
+
   return (
     <aside className={className} aria-label={`${contribution.label} panel`}>
       <div className={`flex flex-col flex-1 min-h-0 ${INNER_WIDTH[side]}`}>
-        <PanelTitle title={contribution.label} actions={contribution.actions} onBack={onBack} />
-        {side === "left" && workspaceSelectorInPanel && contribution.showWorkspaceSelector && (
-          <WorkspaceSelectorOutlet variant="panel" />
+        {!ownsChrome && (
+          // A failing action factory or header control degrades to a bare
+          // label row — it may not take the whole popout down.
+          <PanelBoundary
+            label={contribution.label}
+            fallback={
+              <div className="flex h-9 items-center px-3 text-xs text-muted-foreground pointer-coarse:h-12">
+                {contribution.label}
+              </div>
+            }
+          >
+            <PanelChrome
+              contribution={contribution}
+              context={context}
+              selectorInTitle={selectorInTitle}
+              onBack={onBack}
+            />
+          </PanelBoundary>
         )}
         {contributions.map((panelContribution) => {
           const isActive = panelContribution.id === panel;
           if (!isActive && !panelContribution.keepMounted) return null;
-          const isAvailable = panelContribution.availability?.(context) ?? true;
+          // One boundary per panel: a crash shows in that panel's own slot
+          // while the shell, and every sibling panel, keep working.
           return (
-            <MountedPanel
-              key={panelContribution.id}
-              contribution={panelContribution}
-              context={context}
-              isActive={isActive}
-              isAvailable={isAvailable}
-            />
+            <PanelBoundary key={panelContribution.id} label={panelContribution.label}>
+              <MountedPanel
+                contribution={panelContribution}
+                context={context}
+                isActive={isActive}
+              />
+            </PanelBoundary>
           );
         })}
       </div>
     </aside>
+  );
+}
+
+/**
+ * The popout's chrome row — the eyebrow label (or the selector trigger when
+ * it lives in panel headers) plus the panel's actions.
+ *
+ * Action resolution lives here, inside the chrome's PanelBoundary, because
+ * a context-derived action factory is invoked during render: if it throws,
+ * only this row falls back.
+ */
+function PanelChrome<Ctx extends LeftPanelContext | RightPanelContext>({
+  contribution,
+  context,
+  selectorInTitle,
+  onBack
+}: {
+  readonly contribution: DesktopPanelContribution;
+  readonly context: Ctx;
+  readonly selectorInTitle: boolean;
+  readonly onBack?: () => void;
+}): ReactNode {
+  // A contribution may declare actions as a factory over its side-narrowed
+  // context — the only way an action can reach a shell callback like
+  // `onOpenSyncSettings`. The registry stores the function under the wide
+  // signature; each built-in reads only its own side's fields.
+  const actions =
+    typeof contribution.actions === "function"
+      ? contribution.actions(context as unknown as DesktopPanelContext)
+      : contribution.actions;
+  return (
+    <PanelTitle
+      title={contribution.label}
+      titleContent={selectorInTitle ? <WorkspaceSelectorOutlet variant="panel" /> : undefined}
+      actions={actions}
+      onBack={onBack}
+    />
   );
 }
