@@ -160,11 +160,28 @@ export function isBuiltInLeftPanel(id: string): id is BuiltInLeftPanel {
     || id === "extensions";
 }
 
+/** One item inside the dropdown a menu-shaped panel action opens. */
+export interface PanelMenuItem {
+  readonly label: string;
+  /** PanelIcon identifier (or a literal glyph, via PanelIcon's fallback). */
+  readonly icon?: string;
+  /** Renders as an on/off checkbox item when present. */
+  readonly checked?: boolean;
+  readonly danger?: boolean;
+  readonly disabled?: boolean;
+  /** Muted trailing annotation (e.g. "Soon"). */
+  readonly note?: string;
+  /** Draws a separator above the item. */
+  readonly separatorBefore?: boolean;
+  run?(): void | Promise<void>;
+}
+
 /**
  * A button a panel contributes to its own header.
  *
  * Data rather than markup, so an extension that mounted plain DOM contributes
- * one exactly as a first-party React panel does.
+ * one exactly as a first-party React panel does. Supply `menu` instead of
+ * `run` for a ⋯-style dropdown — plain buttons cannot express a checkbox item.
  */
 export interface PanelAction {
   /** Unique within the panel; used as the React key and in failure reports. */
@@ -173,8 +190,19 @@ export interface PanelAction {
   readonly label: string;
   /** Single glyph shown on the button. */
   readonly icon: string;
-  run(): void | Promise<void>;
+  /** Opens this item list as a dropdown anchored to the button. */
+  readonly menu?: readonly PanelMenuItem[];
+  run?(): void | Promise<void>;
 }
+
+/**
+ * Header actions: a static list, or a factory that reads the panel's context —
+ * the form an action takes when it needs a shell callback like
+ * `onOpenSyncSettings`, which a static literal cannot name.
+ */
+export type PanelActions<Ctx> =
+  | readonly PanelAction[]
+  | ((context: Ctx) => readonly PanelAction[]);
 
 /** A core panel contribution specialized to React render factories. */
 export type DesktopPanelContribution = PanelContribution<ReactNode, DesktopPanelContext> & {
@@ -182,15 +210,21 @@ export type DesktopPanelContribution = PanelContribution<ReactNode, DesktopPanel
   /** Keeps stateful content mounted while another panel on the same side is active. */
   readonly keepMounted?: boolean;
   /** Buttons rendered in the panel header, in declaration order. */
-  readonly actions?: readonly PanelAction[];
+  readonly actions?: PanelActions<DesktopPanelContext>;
   /** Opts a left panel into the selector when shell placement is panel headers. */
   readonly showWorkspaceSelector?: boolean;
+  /**
+   * The panel renders its own single chrome row (header + actions) and the
+   * popout omits PanelTitle and the selector outlet entirely — used by the
+   * explorer, whose compact header merges title, selector, and actions.
+   */
+  readonly ownsChrome?: boolean;
 };
 
-/** Base for side-narrowed contribution types (omits side-specific id/factory/availability). */
+/** Base for side-narrowed contribution types (omits side-specific id/factory/availability/actions). */
 type DesktopPanelContributionBase = Omit<
   DesktopPanelContribution,
-  "id" | "factory" | "availability" | "side"
+  "id" | "factory" | "availability" | "side" | "actions"
 >;
 
 /**
@@ -208,6 +242,7 @@ export type LeftPanelContribution = DesktopPanelContributionBase & {
   readonly side: "left";
   readonly factory: PanelFactory<ReactNode, LeftPanelContext>;
   readonly availability?: (context: LeftPanelContext) => boolean;
+  readonly actions?: PanelActions<LeftPanelContext>;
 };
 
 /** Right-side contribution with `id` and factory narrowed to {@link RightPanel} / {@link RightPanelContext}. See {@link LeftPanelContribution} for the rationale. */
@@ -216,6 +251,7 @@ export type RightPanelContribution = DesktopPanelContributionBase & {
   readonly side: "right";
   readonly factory: PanelFactory<ReactNode, RightPanelContext>;
   readonly availability?: (context: RightPanelContext) => boolean;
+  readonly actions?: PanelActions<RightPanelContext>;
 };
 
 /**
@@ -232,6 +268,7 @@ export const builtInDesktopPanels: readonly (LeftPanelContribution | RightPanelC
     side: "left",
     keepMounted: true,
     showWorkspaceSelector: true,
+    ownsChrome: true,
     factory: ({ explorerProps }) => <WorkspaceExplorer {...explorerProps} />
   },
   {
@@ -249,8 +286,21 @@ export const builtInDesktopPanels: readonly (LeftPanelContribution | RightPanelC
     label: "Sync conflicts",
     icon: "conflicts",
     side: "left",
-    factory: ({ onReviewConflict, onOpenSyncSettings, rootPath }) => (
-      <ConflictsPanel rootPath={rootPath} onReview={onReviewConflict} onOpenSettings={onOpenSyncSettings} />
+    // The ⋯ lives in the chrome row, not the body — the panel keeps only its
+    // explainer line and cards.
+    actions: ({ onOpenSyncSettings }) => [
+      {
+        id: "conflict-options",
+        label: "Conflict options",
+        icon: "more-horizontal",
+        menu: [
+          { label: "Sync settings", icon: "settings", run: () => onOpenSyncSettings() },
+          { label: "Sign in with GitHub", disabled: true, note: "Soon", separatorBefore: true }
+        ]
+      }
+    ],
+    factory: ({ onReviewConflict, rootPath }) => (
+      <ConflictsPanel rootPath={rootPath} onReview={onReviewConflict} />
     )
   },
   {

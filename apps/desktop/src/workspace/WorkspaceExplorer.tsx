@@ -57,6 +57,12 @@ export interface WorkspaceExplorerProps {
   readonly onWorkspaceLaunched?: (rootPath: string) => void;
   /** Asked for one file's earlier versions from the right-click menu. */
   readonly onShowVersions?: (rootPath: string, relativePath: string) => void;
+  /**
+   * Set when the shell places the workspace selector in panel headers: the
+   * explorer renders the selector inside its own chrome row instead of
+   * portaling it into a popout outlet.
+   */
+  readonly workspaceSelectorInPanel?: boolean;
 }
 
 /**
@@ -76,7 +82,8 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
   onNewNoteFocusHandled,
   recentWorkspacePaths = [],
   onWorkspaceLaunched,
-  onShowVersions
+  onShowVersions,
+  workspaceSelectorInPanel = false
 }: WorkspaceExplorerProps) {
   const [state, dispatch] = useReducer(workspaceExplorerReducer, initialWorkspaceExplorerState);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
@@ -644,7 +651,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
     return () => window.removeEventListener("resize", onResize);
   }, [contextMenu]);
 
-  const startCreate = useCallback((parentPath: string, kind: "file" | "folder") => {
+  const startCreate = useCallback((parentPath: string, kind: "file" | "folder", source: "new-file" | "new-note" = "new-file") => {
     closeContextMenu();
     // Expand the target folder so the inline input is visible. Creating at the
     // workspace root (empty parentPath) needs no expansion.
@@ -654,7 +661,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
     const focusRequest = createFocusRequestRef.current;
     setCreating(
       kind === "file"
-        ? { parentPath, kind, source: "new-file", focusRequest }
+        ? { parentPath, kind, source, focusRequest }
         : { parentPath, kind, focusRequest }
     );
   }, [closeContextMenu, expandFolder]);
@@ -782,6 +789,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
       createManagedWorkspaceOpen={createManagedWorkspaceOpen}
       managedStorageNoticeOpen={managedStorageNoticeOpen}
       importFromGitOpen={importFromGitOpen}
+      workspaceSelectorInPanel={workspaceSelectorInPanel}
     />
   );
 });

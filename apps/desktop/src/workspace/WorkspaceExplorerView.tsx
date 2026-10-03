@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
-import { ChevronDown, Folder, FolderGit2, FolderPlus, Link, MoreHorizontal } from "lucide-react";
+import { ChevronDown, File, FilePlus, Folder, FolderGit2, FolderOpen, FolderPlus, Link, MoreHorizontal, RefreshCw } from "lucide-react";
 import type { NativeWorkspaceAccessCapabilities, NativeWorkspaceEntry } from "../native/commands";
 import type { WorkspaceExplorerState, WorkspaceTreeNode } from "./workspaceExplorerModel";
 import { WorkspaceFileIcon } from "./WorkspaceFileIcon";
@@ -11,7 +11,8 @@ import { CreateFileTypeConfirmDialog } from "./CreateFileTypeConfirmDialog";
 import { GitLinkImportDialog } from "./GitLinkImportDialog";
 import { CREATE_MANAGED_WORKSPACE_LABEL, IMPORT_FROM_GIT_LABEL, OPEN_FOLDER_LABEL } from "./gitLinkImportCopy";
 import { isWorkspaceGitLinked } from "./workspaceSettings";
-import { WorkspaceSelectorPortal, type WorkspaceSelectorVariant } from "./WorkspaceSelectorPortal";
+import { WorkspaceSelectorPortal } from "./WorkspaceSelectorPortal";
+import { useWorkspaceSelectorOutlet, type WorkspaceSelectorVariant } from "./WorkspaceSelectorPortalModel";
 import { isNewNoteCreate, type ContextMenuState, type CreateState, type PendingExtensionConfirm, type RenameState, type WorkspaceExplorerActions } from "./workspaceExplorerTypes";
 import { useWorkspaceTreeDrag, WORKSPACE_DROP_ROOT_ATTR } from "./useWorkspaceTreeDrag";
 
@@ -39,6 +40,8 @@ interface WorkspaceExplorerViewProps {
   readonly createManagedWorkspaceOpen: boolean;
   readonly managedStorageNoticeOpen: boolean;
   readonly importFromGitOpen: boolean;
+  /** Renders the selector inside the header row when it lives in panel headers. */
+  readonly workspaceSelectorInPanel?: boolean;
 }
 
 export function WorkspaceExplorerView({
@@ -64,12 +67,34 @@ export function WorkspaceExplorerView({
   actions,
   createManagedWorkspaceOpen,
   managedStorageNoticeOpen,
-  importFromGitOpen
+  importFromGitOpen,
+  workspaceSelectorInPanel = false
 }: WorkspaceExplorerViewProps) {
   const isBusy = state.phase === "opening" || busy;
   // The menu has to know its own trigger, or the press that closes it counts
   // as an outside click first and it shuts and reopens in one gesture.
   const moreButtonRef = useRef<HTMLButtonElement>(null);
+  // With the selector placed in panel headers, the explorer draws it inline —
+  // except while another opted panel's title slot is hosting it (the explorer
+  // stays mounted but hidden when e.g. Search is active).
+  const outlet = useWorkspaceSelectorOutlet();
+  const showInlineSelector = workspaceSelectorInPanel && outlet?.variant !== "panel";
+
+  // Same controller props wherever the selector lands — inline, title bar, or
+  // drawer — so switching and its dialogs behave identically per placement.
+  const renderSelector = (variant: WorkspaceSelectorVariant, onAction?: () => void) => (
+    <WorkspaceSelector
+      variant={variant}
+      onAction={onAction}
+      capabilities={accessCapabilities}
+      currentPath={workspaceRootPath}
+      paths={recentWorkspacePaths}
+      onAdd={actions.openWorkspace}
+      onCreateManaged={() => actions.setCreateManagedWorkspaceOpen(true)}
+      onImportFromGit={actions.openGitLinkImport}
+      onSelect={actions.launchWorkspace}
+    />
+  );
 
   // Visible folders in tree order are the keyboard destination cycle; a folder
   // is visible only when every ancestor is expanded.
@@ -113,52 +138,95 @@ export function WorkspaceExplorerView({
     <section className={cn("flex min-h-0 flex-1 flex-col text-sidebar-foreground bg-sidebar font-sans", className)} aria-label="Workspace explorer" aria-busy={isBusy}>
       {/* Keyboard and pointer drags announce progress here. */}
       <p className="sr-only" aria-live="polite">{drag.announcement}</p>
-      <header className="flex min-h-16 items-center justify-between gap-3 px-3 py-2.5 border-b border-border pointer-coarse:px-4 pointer-coarse:py-3">
-        <div className="min-w-0">
-          <p className="mb-0.5 text-muted-foreground text-[0.625rem] font-bold tracking-[0.08em] leading-none uppercase pointer-coarse:text-xs">Workspace</p>
-          <h2 className="max-w-44 m-0 overflow-hidden text-[0.8125rem] font-[650] leading-tight truncate pointer-coarse:text-base pointer-coarse:max-w-60">{state.snapshot?.workspace.name ?? "No workspace open"}</h2>
-        </div>
-        <div className="relative">
-          <button
-            ref={moreButtonRef}
-            type="button"
-            className={cn(
-              "flex flex-none items-center justify-center w-[1.6rem] h-[1.6rem] border-0 rounded-small text-muted-foreground bg-transparent cursor-pointer font-inherit focus-visible:outline-2 focus-visible:outline-ring focus-visible:-outline-offset-1 [&>svg]:stroke-current",
-              "not-aria-disabled:hover:bg-[color-mix(in_srgb,var(--color-accent)_58%,transparent)]",
-              moreMenuOpen && "text-sidebar-foreground"
-            )}
-            aria-label="More actions"
-            aria-expanded={moreMenuOpen}
-            disabled={state.phase !== "ready"}
-            onClick={() => actions.setMoreMenuOpen((value) => !value)}
-          >
-            <MoreHorizontal aria-hidden="true" className="size-[0.95rem]" />
-          </button>
-          {moreMenuOpen && (
-            <Menu
-              label="More actions"
-              className="absolute right-0 top-full mt-1 z-50"
-              anchorRef={moreButtonRef}
-              onClose={() => actions.setMoreMenuOpen(false)}
+      {/* One chrome row: the selector trigger when it lives in panel
+          headers, otherwise the plain "Files" label — the root path survives
+          as its tooltip. Actions hover-reveal on fine pointers and stay
+          visible on coarse ones. */}
+      <header className="group/explorer-header flex min-h-9 items-center justify-between gap-2 border-b border-border px-3 pointer-coarse:min-h-12 pointer-coarse:px-4">
+        <div className="flex min-w-0 flex-1 items-center">
+          {showInlineSelector ? (
+            renderSelector("panel")
+          ) : (
+            <h2
+              className="m-0 truncate text-[0.68rem] tracking-[0.08em] uppercase font-semibold pointer-coarse:text-sm pointer-coarse:tracking-normal pointer-coarse:normal-case"
+              title={workspaceRootPath}
             >
-              {/* Stays open, so the user can watch the tick flip and the tree
-                  update underneath it. */}
-              <MenuCheckbox
-                label="Show hidden files"
-                checked={showHidden}
-                onClick={() => void actions.toggleShowHidden()}
-              />
-              <hr className="my-1 border-0 border-t border-border" />
-              <MenuButton
-                label="New folder"
-                onClick={() => { actions.setMoreMenuOpen(false); actions.startCreate("", "folder"); }}
-              />
-              <MenuButton
-                label="New file"
-                onClick={() => { actions.setMoreMenuOpen(false); actions.startCreate("", "file"); }}
-              />
-            </Menu>
+              Files
+            </h2>
           )}
+        </div>
+        <div
+          className={cn(
+            "flex flex-none items-center gap-0.5 opacity-0 transition-opacity group-hover/explorer-header:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-100",
+            moreMenuOpen && "opacity-100"
+          )}
+        >
+          <button
+            type="button"
+            className={HEADER_ACTION_CLASSES}
+            aria-label="New note"
+            title="New note"
+            disabled={state.phase !== "ready"}
+            onClick={() => actions.startCreate("", "file", "new-note")}
+          >
+            <FilePlus aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            className={HEADER_ACTION_CLASSES}
+            aria-label="New folder"
+            title="New folder"
+            disabled={state.phase !== "ready"}
+            onClick={() => actions.startCreate("", "folder")}
+          >
+            <FolderPlus aria-hidden="true" />
+          </button>
+          <div className="relative">
+            <button
+              ref={moreButtonRef}
+              type="button"
+              className={cn(HEADER_ACTION_CLASSES, moreMenuOpen && "text-sidebar-foreground")}
+              aria-label="More actions"
+              aria-expanded={moreMenuOpen}
+              onClick={() => actions.setMoreMenuOpen((value) => !value)}
+            >
+              <MoreHorizontal aria-hidden="true" />
+            </button>
+            {moreMenuOpen && (
+              <Menu
+                label="More actions"
+                className="absolute right-0 top-full mt-1 z-50"
+                anchorRef={moreButtonRef}
+                onClose={() => actions.setMoreMenuOpen(false)}
+              >
+                {/* Stays open, so the user can watch the tick flip and the tree
+                    update underneath it. */}
+                <MenuCheckbox
+                  label="Show hidden files"
+                  checked={showHidden}
+                  onClick={() => void actions.toggleShowHidden()}
+                />
+                <hr className="my-1 border-0 border-t border-border" />
+                {/* The generic, extension-free create; the header icon is the
+                    canonical New note flow with its .md conventions. */}
+                <MenuButton
+                  icon={<File />}
+                  label="New file"
+                  onClick={() => { actions.setMoreMenuOpen(false); actions.startCreate("", "file"); }}
+                />
+                <MenuButton
+                  icon={<RefreshCw />}
+                  label="Refresh"
+                  onClick={() => { actions.setMoreMenuOpen(false); void actions.refreshEntries(); }}
+                />
+                <MenuButton
+                  icon={<FolderOpen />}
+                  label="Open workspace…"
+                  onClick={() => { actions.setMoreMenuOpen(false); void actions.openWorkspace(); }}
+                />
+              </Menu>
+            )}
+          </div>
         </div>
       </header>
 
@@ -188,9 +256,6 @@ export function WorkspaceExplorerView({
           {...{ [WORKSPACE_DROP_ROOT_ATTR]: "" }}
           onContextMenu={(event) => actions.showContextMenu(event, { kind: "background" })}
         >
-          <p className="m-0 overflow-hidden px-3 py-2 border-b border-border text-muted-foreground text-[0.6875rem] truncate" title={state.snapshot?.workspace.root_path}>
-            {state.snapshot?.workspace.root_path}
-          </p>
           {actionError && (
             <p className="m-0 px-3 py-[0.4rem] border-b border-[color-mix(in_srgb,var(--color-destructive)_45%,var(--color-border))] text-danger bg-[color-mix(in_srgb,var(--color-destructive)_9%,transparent)] text-[0.6875rem] leading-1.4" role="alert">{actionError}</p>
           )}
@@ -263,21 +328,7 @@ export function WorkspaceExplorerView({
       {managedStorageNoticeOpen && (
         <ManagedStorageNotice onDismiss={() => actions.setManagedStorageNoticeOpen(false)} />
       )}
-      <WorkspaceSelectorPortal>
-        {(variant, onAction) => (
-          <WorkspaceSelector
-            variant={variant}
-            onAction={onAction}
-            capabilities={accessCapabilities}
-            currentPath={workspaceRootPath}
-            paths={recentWorkspacePaths}
-            onAdd={actions.openWorkspace}
-            onCreateManaged={() => actions.setCreateManagedWorkspaceOpen(true)}
-            onImportFromGit={actions.openGitLinkImport}
-            onSelect={actions.launchWorkspace}
-          />
-        )}
-      </WorkspaceSelectorPortal>
+      <WorkspaceSelectorPortal>{renderSelector}</WorkspaceSelectorPortal>
       {createManagedWorkspaceOpen && (
         <CreateManagedWorkspaceDialog
           busy={busy}
@@ -300,6 +351,16 @@ export function WorkspaceExplorerView({
 }
 
 // ---- Helpers and small presentational components ----
+
+// Shared chrome-row action button: 26px on fine pointers, grows to a
+// touch-friendly 36px on coarse ones.
+const HEADER_ACTION_CLASSES = cn(
+  "flex flex-none items-center justify-center size-[1.6rem] border-0 rounded-small text-muted-foreground bg-transparent cursor-pointer font-inherit",
+  "focus-visible:outline-2 focus-visible:outline-ring focus-visible:-outline-offset-1 [&>svg]:stroke-current [&>svg]:size-[0.95rem]",
+  "not-aria-disabled:hover:bg-[color-mix(in_srgb,var(--color-accent)_58%,transparent)]",
+  "disabled:cursor-default disabled:opacity-50",
+  "pointer-coarse:size-9"
+);
 
 function EmptyState({ managed }: { readonly managed: boolean }) {
   return (
@@ -387,19 +448,19 @@ function ErrorState({ message, onDismiss }: { readonly message: string; readonly
 const selectorRootClasses: Record<WorkspaceSelectorVariant, string> = {
   drawer: "relative border-b border-border px-3 pb-3",
   titlebar: "relative min-w-0 flex-1",
-  panel: "relative border-b border-border p-2"
+  panel: "relative min-w-0 flex-1"
 };
 
 const selectorTriggerClasses: Record<WorkspaceSelectorVariant, string> = {
   drawer: "min-h-11 rounded-medium border border-border bg-background px-3 py-2 text-sm font-semibold text-sidebar-foreground shadow-sm",
   titlebar: "h-7 rounded-small border border-border bg-background px-2 text-xs font-semibold text-titlebar-foreground",
-  panel: "min-h-9 rounded-small border border-border bg-background px-2.5 py-1.5 text-xs font-semibold text-sidebar-foreground"
+  panel: "h-7 rounded-small px-1.5 text-[0.8125rem] font-semibold text-sidebar-foreground"
 };
 
 const selectorMenuClasses: Record<WorkspaceSelectorVariant, string> = {
   drawer: "absolute top-[calc(100%+0.35rem)] right-3 left-3 z-50",
   titlebar: "absolute top-[calc(100%+0.35rem)] left-0 z-50 min-w-60",
-  panel: "absolute top-[calc(100%+0.35rem)] right-2 left-2 z-50"
+  panel: "absolute top-[calc(100%+0.35rem)] right-0 left-0 z-50"
 };
 
 export function WorkspaceSelector({
@@ -437,7 +498,28 @@ export function WorkspaceSelector({
   }, []);
 
   const optionsKey = options.join("\0");
+  // The current workspace's Git-linked badge shows on the closed trigger, so
+  // it is probed eagerly; the per-option icons inside the menu only matter
+  // once it opens, and each probe is a settings-file read.
   useEffect(() => {
+    if (!currentPath) return;
+    let cancelled = false;
+    isWorkspaceGitLinked(currentPath)
+      .then((linked) => {
+        if (!cancelled && linked) {
+          setGitLinkedPaths((previous) => new Set(previous).add(currentPath));
+        }
+      })
+      .catch(() => {
+        // Unreadable or absent settings fall back to a plain folder icon.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [currentPath]);
+
+  useEffect(() => {
+    if (!open) return;
     let cancelled = false;
     Promise.all(
       options.map(async (path) => {
@@ -454,7 +536,7 @@ export function WorkspaceSelector({
     return () => {
       cancelled = true;
     };
-  }, [optionsKey, options]);
+  }, [open, optionsKey, options]);
 
   const currentIsGitLinked = currentPath ? gitLinkedPaths.has(currentPath) : false;
   const currentFolderName = currentPath?.split(/[\\/]/).at(-1) ?? "Choose workspace";

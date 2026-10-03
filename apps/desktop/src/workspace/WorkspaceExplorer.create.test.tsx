@@ -318,13 +318,9 @@ describe("WorkspaceExplorer New note extension flow", () => {
     expect(fixture.createWorkspaceFile).not.toHaveBeenCalled();
     expect(container?.textContent).not.toContain("Give your note a name");
 
-    const more = container?.querySelector<HTMLButtonElement>('button[aria-label="More actions"]');
-    if (!more) throw new Error("More actions button missing");
-    await click(more);
-    const folderItem = Array.from(container?.querySelectorAll<HTMLButtonElement>("[role='menuitem']") ?? [])
-      .find((button) => button.textContent?.includes("New folder"));
-    if (!folderItem) throw new Error("New folder menu item missing");
-    await click(folderItem);
+    const newFolder = container?.querySelector<HTMLButtonElement>('button[aria-label="New folder"]');
+    if (!newFolder) throw new Error("New folder header button missing");
+    await click(newFolder);
     const folderInput = inputOf("New folder name");
     if (!folderInput) throw new Error("New folder input missing");
     await typeInto(folderInput, "docs");

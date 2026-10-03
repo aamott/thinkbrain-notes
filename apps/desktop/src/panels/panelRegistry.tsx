@@ -16,14 +16,18 @@ import type { LeftPanelContext, RightPanelContext } from "./panelRegistryModel";
 export function MountedPanel<Ctx extends LeftPanelContext | RightPanelContext>({
   contribution,
   context,
-  isActive,
-  isAvailable
+  isActive
 }: {
-  readonly contribution: { readonly factory: (ctx: Ctx) => ReactNode };
+  readonly contribution: {
+    readonly factory: (ctx: Ctx) => ReactNode;
+    readonly availability?: (context: Ctx) => boolean;
+  };
   readonly context: Ctx;
   readonly isActive: boolean;
-  readonly isAvailable: boolean;
 }) {
+  // Evaluated here — inside the popout's PanelBoundary — so an availability
+  // function that throws is contained like any other panel failure.
+  const isAvailable = contribution.availability?.(context) ?? true;
   return (
     <div
       className={isActive ? "flex min-h-0 flex-1 flex-col" : "hidden"}

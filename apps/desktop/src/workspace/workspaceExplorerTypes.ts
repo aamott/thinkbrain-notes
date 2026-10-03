@@ -27,7 +27,16 @@ export interface ContextMenuState {
 export interface WorkspaceExplorerActions {
   readonly setActivePath: (path: string) => void;
   readonly toggleShowHidden: () => Promise<void>;
-  readonly startCreate: (parentPath: string, kind: "file" | "folder") => void;
+  /**
+   * Opens the inline create input under `parentPath` ("" = root). `source`
+   * only matters for files: "new-note" pre-fills `.md` and warns before a
+   * non-Markdown name, while the default "new-file" stays generic.
+   */
+  readonly startCreate: (
+    parentPath: string,
+    kind: "file" | "folder",
+    source?: "new-file" | "new-note"
+  ) => void;
   readonly submitCreate: (target: CreateState, name: string) => Promise<boolean>;
   readonly submitRename: (target: RenameState, name: string) => Promise<boolean>;
   readonly handleTreeKeyDown: (event: ReactKeyboardEvent<HTMLUListElement>) => void;

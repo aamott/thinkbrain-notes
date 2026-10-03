@@ -68,31 +68,12 @@ describe("the list of things waiting on you", () => {
     const { host } = await render(<ConflictsPanel rootPath="/notes" onReview={() => undefined} />);
 
     expect(host.querySelector('section[aria-label="Sync conflicts"]')).not.toBeNull();
-    expect(host.querySelector("h3")?.textContent).toBe("Sync conflicts");
+    // The popout's PanelTitle names the panel and hosts its options menu —
+    // the body keeps only the explainer line and the cards.
+    expect(host.querySelector("h3")).toBeNull();
+    expect(host.textContent).toContain("Choose what to keep. Nothing is deleted until you decide.");
     expect(host.textContent).toContain("Meeting Notes.md");
     expect(host.textContent).toContain("Syncthing");
-  });
-
-  it("offers sync settings and disabled github sign in from the header menu", async () => {
-    const onOpenSettings = vi.fn();
-    const { host } = await render(
-      <ConflictsPanel rootPath="/notes" onReview={() => undefined} onOpenSettings={onOpenSettings} />
-    );
-
-    const menuButton = host.querySelector('button[aria-label="Conflict options"]') as HTMLButtonElement | null;
-    expect(menuButton).not.toBeNull();
-    await act(async () => {
-      menuButton?.click();
-    });
-
-    expect(host.textContent).toContain("Sign in with GitHub");
-
-    const settingsOption = host.querySelector('button[role="menuitem"]') as HTMLButtonElement | null;
-    expect(settingsOption?.textContent).toContain("Sync settings");
-    await act(async () => {
-      settingsOption?.click();
-    });
-    expect(onOpenSettings).toHaveBeenCalledOnce();
   });
 
   it("keeps reading the rest of the list when one card cannot be built", async () => {
