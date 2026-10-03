@@ -1,7 +1,6 @@
 import {
   useEffect,
   useRef,
-  useState,
   type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
@@ -62,7 +61,8 @@ export function Menu({
   readonly id?: string;
   /**
    * Where the pointer was, for a menu that belongs to a place rather than to a
-   * control. Clamped so a right-click near an edge still opens on screen.
+   * control. Rendered exactly there — no measuring, no second-pass
+   * repositioning, so the menu can never paint and then jump.
    */
   readonly at?: MenuPosition;
   /** Placement for a menu that hangs off a control. Ignored when `at` is set. */
@@ -80,17 +80,6 @@ export function Menu({
   readonly children: ReactNode;
 }) {
   const menuRef = useRef<HTMLDivElement>(null);
-
-  // Keep a pointer-placed menu inside the viewport.
-  const [position, setPosition] = useState<MenuPosition | null>(at ?? null);
-  useEffect(() => {
-    const element = menuRef.current;
-    if (!at || !element) return;
-    const rect = element.getBoundingClientRect();
-    const x = Math.min(at.x, window.innerWidth - rect.width - 8);
-    const y = Math.min(at.y, window.innerHeight - rect.height - 8);
-    setPosition({ x: Math.max(8, x), y: Math.max(8, y) });
-  }, [at]);
 
   // The item to land on: whichever one is already the answer, or the first.
   // Opening a list of workspaces on the one you are in is the difference
@@ -134,10 +123,7 @@ export function Menu({
   };
 
   const placement: { className: string; style?: CSSProperties } = at
-    ? {
-        className: "fixed z-50",
-        style: { left: `${(position ?? at).x}px`, top: `${(position ?? at).y}px` },
-      }
+    ? { className: "fixed z-50", style: { left: `${at.x}px`, top: `${at.y}px` } }
     : { className: className ?? "" };
 
   const surface = (

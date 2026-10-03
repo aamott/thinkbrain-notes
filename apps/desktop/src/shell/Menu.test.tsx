@@ -155,17 +155,18 @@ describe("how a menu closes", () => {
 });
 
 describe("a menu raised at the pointer", () => {
-  it("is pulled back on screen rather than opening off the edge of it", async () => {
+  it("opens exactly where the pointer was", async () => {
     await render(
-      <Menu label="At the pointer" at={{ x: 100_000, y: 100_000 }} onClose={() => undefined}>
+      <Menu label="At the pointer" at={{ x: 120, y: 240 }} onClose={() => undefined}>
         <MenuButton label="One" onClick={() => undefined} />
       </Menu>
     );
 
     // Pointer-placed menus portal to document.body so no ancestor's clip or
-    // stacking context can sit them under a scrollbar.
+    // stacking context can sit them under a scrollbar — and they are placed
+    // once, at the pointer, so they can never paint and then jump.
     const menu = document.querySelector<HTMLDivElement>("[role='menu']");
-    expect(Number.parseInt(menu?.style.left ?? "", 10)).toBeLessThanOrEqual(window.innerWidth);
-    expect(Number.parseInt(menu?.style.top ?? "", 10)).toBeLessThanOrEqual(window.innerHeight);
+    expect(menu?.style.left).toBe("120px");
+    expect(menu?.style.top).toBe("240px");
   });
 });
