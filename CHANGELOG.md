@@ -3,6 +3,23 @@
 Newest first. Versions follow [semver](https://semver.org), except that before
 1.0 a minor bump may still change behaviour.
 
+## 0.3.0-2 — 2026-10-03
+
+Prerelease for the conflict-merge UI, document version history, and file-history
+adoption work merged since 0.3.0-1.
+
+- **Merge and conflicts** — CodeMirror merge view with a slim two-bar chrome:
+  resolution actions (Keep current / Use incoming / Keep both files) and an
+  Inline / Side-by-side toggle on the merge bar, shared Undo / Redo / Save in
+  the header for every editor, a help popover replacing the persistent
+  explainer, and a tab error boundary so a tab crash no longer blanks the app.
+- **Version history** — document history view with inline compare, restore
+  previews, and adoption of an existing `.git` history into file history.
+- **Workspace** — explorer drag-and-drop, new notes default to Markdown,
+  shared backlinks inspector panel.
+- **Mobile** — Journal added to New-note actions, workspace actions fixed on
+  Android, journal accessibility gaps closed.
+
 ## 0.3.0-1 — 2026-09-20
 
 Prerelease for the mobile navigation, file viewer, and sync work merged since
