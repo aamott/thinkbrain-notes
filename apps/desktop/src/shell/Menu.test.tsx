@@ -156,13 +156,15 @@ describe("how a menu closes", () => {
 
 describe("a menu raised at the pointer", () => {
   it("is pulled back on screen rather than opening off the edge of it", async () => {
-    const host = await render(
+    await render(
       <Menu label="At the pointer" at={{ x: 100_000, y: 100_000 }} onClose={() => undefined}>
         <MenuButton label="One" onClick={() => undefined} />
       </Menu>
     );
 
-    const menu = host.querySelector<HTMLDivElement>("[role='menu']");
+    // Pointer-placed menus portal to document.body so no ancestor's clip or
+    // stacking context can sit them under a scrollbar.
+    const menu = document.querySelector<HTMLDivElement>("[role='menu']");
     expect(Number.parseInt(menu?.style.left ?? "", 10)).toBeLessThanOrEqual(window.innerWidth);
     expect(Number.parseInt(menu?.style.top ?? "", 10)).toBeLessThanOrEqual(window.innerHeight);
   });

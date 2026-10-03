@@ -8,6 +8,7 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
+import { createPortal } from "react-dom";
 
 import { cn } from "../lib/utils";
 import { handleMenuKeyDown } from "./menuKeyboard";
@@ -139,7 +140,7 @@ export function Menu({
       }
     : { className: className ?? "" };
 
-  return (
+  const surface = (
     <div
       ref={menuRef}
       id={id}
@@ -156,6 +157,10 @@ export function Menu({
       {children}
     </div>
   );
+  // A pointer-placed menu mounts at the root: a `fixed` element under a
+  // transformed, filtered, or scrolling ancestor is contained by it — which
+  // is how a dock's scrollbar ended up painted over a right-click menu.
+  return at ? createPortal(surface, document.body) : surface;
 }
 
 const ITEM =

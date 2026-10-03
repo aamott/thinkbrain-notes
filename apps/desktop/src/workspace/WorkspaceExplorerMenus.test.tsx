@@ -48,19 +48,21 @@ const render = async (target: ContextMenuTarget, showVersions = vi.fn()) => {
       <WorkspaceContextMenu menu={{ x: 10, y: 10, target }} actions={stubActions({ showVersions })} />
     )
   );
-  return { host: container, onShowVersions: showVersions };
+  return { onShowVersions: showVersions };
 };
 
-const item = (host: HTMLElement, text: string) =>
-  [...host.querySelectorAll<HTMLButtonElement>("[role='menuitem']")].find((button) =>
+// Pointer-placed menus portal to document.body, so items are found there
+// rather than inside the render host.
+const item = (text: string) =>
+  [...document.querySelectorAll<HTMLButtonElement>("[role='menuitem']")].find((button) =>
     button.textContent?.includes(text)
   );
 
 describe("asking a note for its earlier versions", () => {
   it("is offered on a file, and names the file it was asked about", async () => {
-    const { host, onShowVersions } = await render({ kind: "file", entry: entry("file") });
+    const { onShowVersions } = await render({ kind: "file", entry: entry("file") });
 
-    const button = item(host, "Previous versions");
+    const button = item("Previous versions");
     expect(button).toBeTruthy();
     await act(async () => button?.click());
 
@@ -70,14 +72,14 @@ describe("asking a note for its earlier versions", () => {
   /// A folder has no versions of its own — its notes each have their own, and
   /// offering the folder one would be offering to restore all of them at once.
   it("is not offered on a folder", async () => {
-    const { host } = await render({ kind: "folder", entry: entry("directory") });
+    await render({ kind: "folder", entry: entry("directory") });
 
-    expect(item(host, "Previous versions")).toBeUndefined();
+    expect(item("Previous versions")).toBeUndefined();
   });
 
   it("is not offered on empty space", async () => {
-    const { host } = await render({ kind: "background" });
+    await render({ kind: "background" });
 
-    expect(item(host, "Previous versions")).toBeUndefined();
+    expect(item("Previous versions")).toBeUndefined();
   });
 });
