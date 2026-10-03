@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Folder, FolderGit2 } from "lucide-react";
+import { Folder, FolderGit2, Redo2, Undo2 } from "lucide-react";
 import { restoreBreadcrumbSegments, type DesktopTab } from "../tabs/tabModel";
+import { useEditorCommands } from "../tabs/editorCommands";
 import { isWorkspaceGitLinked } from "../workspace/workspaceSettings";
 import { cn } from "../lib/utils";
 
@@ -37,6 +38,10 @@ export function WorkspaceHeaderBar({
   children
 }: WorkspaceHeaderBarProps) {
   const [isGitLinked, setIsGitLinked] = useState(false);
+  // Whatever the active tab's editable surface offers — undo/redo on its
+  // CodeMirror view for editors, and on merge tabs a Save that resolves the
+  // conflict rather than saving a document.
+  const commands = useEditorCommands(activeTab?.id);
 
   useEffect(() => {
     if (!rootPath) return;
@@ -88,23 +93,54 @@ export function WorkspaceHeaderBar({
 
       <div className="flex items-center gap-2">
         {children}
-        {activeTab?.kind === "editor" && (
-          <button
-            type="button"
-            disabled={!isDirty || isSaving}
-            onClick={onSave}
-            title={`Save (${SAVE_SHORTCUT})`}
-            aria-label="Save note"
-            className={cn(
-              "rounded-small border px-2 py-0.5 text-xs font-medium transition-colors",
-              isDirty
-                ? "border-border bg-primary text-primary-foreground hover:bg-primary/90 cursor-pointer"
-                : "border-border/40 bg-muted/40 text-muted-foreground/50 cursor-not-allowed opacity-50",
-              isSaving && "cursor-wait opacity-70"
-            )}
-          >
-            {isSaving ? "Saving…" : "Save"}
-          </button>
+        {commands && (
+          <>
+            <button
+              type="button"
+              disabled={!commands.canUndo()}
+              onClick={commands.undo}
+              title="Undo (Ctrl+Z)"
+              aria-label="Undo"
+              className="rounded-small border border-border/40 px-1.5 py-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
+            >
+              <Undo2 className="size-3.5" aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              disabled={!commands.canRedo()}
+              onClick={commands.redo}
+              title="Redo (Ctrl+Y)"
+              aria-label="Redo"
+              className="rounded-small border border-border/40 px-1.5 py-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
+            >
+              <Redo2 className="size-3.5" aria-hidden="true" />
+            </button>
+          </>
+        )}
+        {(activeTab?.kind === "editor" || activeTab?.kind === "code-editor" || commands?.save) && (
+          (() => {
+            const saveEnabled = commands?.save
+              ? (commands.canSave?.() ?? true)
+              : isDirty;
+            return (
+              <button
+                type="button"
+                disabled={!saveEnabled || isSaving}
+                onClick={commands?.save ?? onSave}
+                title={`Save (${SAVE_SHORTCUT})`}
+                aria-label={commands?.saveLabel ?? "Save note"}
+                className={cn(
+                  "rounded-small border px-2 py-0.5 text-xs font-medium transition-colors",
+                  saveEnabled
+                    ? "border-border bg-primary text-primary-foreground hover:bg-primary/90 cursor-pointer"
+                    : "border-border/40 bg-muted/40 text-muted-foreground/50 cursor-not-allowed opacity-50",
+                  isSaving && "cursor-wait opacity-70"
+                )}
+              >
+                {isSaving ? "Saving…" : (commands?.saveLabel ?? "Save")}
+              </button>
+            );
+          })()
         )}
       </div>
     </div>

@@ -2,7 +2,13 @@
 import { createRoot, type Root } from "react-dom/client";
 import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createEditorTab, createVersionDiffTab, type DesktopTab } from "../tabs/tabModel";
+import {
+  createConflictTab,
+  createEditorTab,
+  createVersionDiffTab,
+  type DesktopTab
+} from "../tabs/tabModel";
+import { registerEditorCommands } from "../tabs/editorCommands";
 import { WorkspaceHeaderBar, type WorkspaceHeaderBarProps } from "./WorkspaceHeaderBar";
 
 vi.mock("../workspace/workspaceSettings", () => ({
@@ -105,6 +111,59 @@ describe("WorkspaceHeaderBar", () => {
       children: <button type="button" data-testid="extra">Extra</button>
     });
     expect(host.querySelector('[data-testid="extra"]')).not.toBeNull();
+  });
+
+  it("renders undo/redo buttons that drive the active tab's commands", async () => {
+    const tab = editorTab("notes.md");
+    const undo = vi.fn();
+    let unregister = (): void => {};
+    await act(async () => {
+      unregister = registerEditorCommands(tab.id, {
+        undo,
+        redo: vi.fn(),
+        canUndo: () => true,
+        canRedo: () => false
+      });
+    });
+
+    const host = await mount({ activeTab: tab });
+    const undoButton = host.querySelector<HTMLButtonElement>('[aria-label="Undo"]');
+    const redoButton = host.querySelector<HTMLButtonElement>('[aria-label="Redo"]');
+    expect(undoButton?.disabled).toBe(false);
+    expect(redoButton?.disabled).toBe(true);
+
+    await act(async () => undoButton?.click());
+    expect(undo).toHaveBeenCalledOnce();
+    await act(async () => unregister());
+  });
+
+  it("lets a merge tab say what Save means there", async () => {
+    const mergeTab = createConflictTab(
+      { rootPath: "/vault", relativePath: "Meeting Notes.sync-conflict-1.md" },
+      "Meeting Notes.md"
+    );
+    const save = vi.fn();
+    let unregister = (): void => {};
+    await act(async () => {
+      unregister = registerEditorCommands(mergeTab.id, {
+        undo: vi.fn(),
+        redo: vi.fn(),
+        canUndo: () => false,
+        canRedo: () => false,
+        save,
+        canSave: () => true,
+        saveLabel: "Save merged note"
+      });
+    });
+
+    const host = await mount({ activeTab: mergeTab });
+    const saveButton = [...host.querySelectorAll("button")].find((candidate) =>
+      candidate.textContent?.includes("Save merged note")
+    );
+    expect(saveButton?.disabled).toBe(false);
+    await act(async () => saveButton?.click());
+    expect(save).toHaveBeenCalledOnce();
+    await act(async () => unregister());
   });
 
   it("renders folder icon for regular workspaces and git folder icon for git-linked workspaces", async () => {

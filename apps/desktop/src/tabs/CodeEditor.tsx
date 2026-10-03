@@ -1,10 +1,11 @@
 import { Compartment, EditorState, StateEffect } from "@codemirror/state";
-import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
+import { defaultKeymap, history, historyKeymap, indentWithTab, redo, redoDepth, undo, undoDepth } from "@codemirror/commands";
 import { bracketMatching, foldGutter, indentOnInput, syntaxHighlighting } from "@codemirror/language";
 import { EditorView, highlightActiveLine, highlightActiveLineGutter, highlightSpecialChars, keymap, lineNumbers } from "@codemirror/view";
 import { useEffect, useRef, useState } from "react";
 
 import { codeHighlightStyle, languageForPath } from "../lib/codemirror";
+import { notifyEditorCommands, registerEditorCommands } from "./editorCommands";
 import { recallEditorState, rememberEditorState } from "./editorStateCache";
 
 export interface CodeEditorProps {
@@ -88,6 +89,7 @@ export function CodeEditor({
       EditorView.updateListener.of((update) => {
         if (update.docChanged) {
           onChangeRef.current(update.state.doc.toString());
+          if (stateKey !== undefined) notifyEditorCommands(stateKey);
         }
       }),
       // Cmd/Ctrl+S triggers save instead of the browser default.
@@ -115,6 +117,22 @@ export function CodeEditor({
     });
     viewRef.current = view;
 
+    // Undo/redo buttons in the header act on this view, keyed by the tab id
+    // the shell passed as `stateKey`.
+    const unregisterCommands =
+      stateKey === undefined
+        ? undefined
+        : registerEditorCommands(stateKey, {
+            undo: () => {
+              if (undo(view)) view.focus();
+            },
+            redo: () => {
+              if (redo(view)) view.focus();
+            },
+            canUndo: () => undoDepth(view.state) > 0,
+            canRedo: () => redoDepth(view.state) > 0
+          });
+
     if (parked) {
       view.dispatch({ effects: StateEffect.reconfigure.of([...baseExtensions, initialLanguage]) });
       view.scrollDOM.scrollTop = parked.scrollTop;
@@ -133,6 +151,7 @@ export function CodeEditor({
     }
 
     return () => {
+      unregisterCommands?.();
       if (stateKey !== undefined) {
         rememberEditorState(stateKey, {
           state: view.state,

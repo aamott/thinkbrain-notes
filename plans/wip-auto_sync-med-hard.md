@@ -12,13 +12,20 @@ Use cases live in `plans/app-vision.md`; editing guidance lives in
 - Git uses bundled gix, not system Git. Existing clones use their checked-out
   branch; app imports start with the remote default. Fetch/push agree on the
   selected branch; a conflicting checkout needs attention, not an automatic switch.
-- Never modify the user's `.git`. Copy its reachable history read-only when
-  there is no Git link; a configured link is primary. Keep imported history
-  durable and unrelated roots separate.
-- Cloud daemons move files; ThinkBrain detects conflict copies and retains the
-  pre-divergence ancestor in hidden history. Use three-way text merging with an
-  identified base; if ancestry is missing or ambiguous, preserve both versions
-  for manual review. Do not guess from timestamps or the newest snapshot.
+- Git-sync authority is a per-workspace choice made once at onboarding:
+  app-data (default; the hidden repo pushes/pulls and the remote is
+  transport) or the vault's own `.git` (the app commits the whole vault on
+  the checked-out branch, never switches, refuses detached HEAD). One GitHub
+  link has one authority — a workspace `.git` sharing the configured remote
+  warns rather than dual-pushing. In app-data mode the user's `.git` is never
+  modified: copy its reachable history read-only when there is no Git link; a
+  configured link is primary. Keep imported history durable and unrelated
+  roots separate.
+- Cloud daemons move files; ThinkBrain detects conflict copies and selects a
+  validated ancestor from recorded history — scored by risky-hunk count, not
+  guessed from timestamps or the newest snapshot. Use three-way text merging
+  with that base; if ancestry is missing or ambiguous, preserve both versions
+  for manual review.
 - Every resolution is undoable: preserve both sides before writing, reject
   stale inputs, and remove a conflict copy only after success. Binaries offer
   whole-file choices. Ancestors needed by unresolved conflicts must not be pruned.
@@ -32,8 +39,13 @@ Use cases live in `plans/app-vision.md`; editing guidance lives in
 
 ## Remaining Work
 
-- `cloud_merge_base`: associate retained ancestors with cloud conflicts and
-  implement three-way merging; this is core work, not gated on conflict volume.
+- `cloud_merge_base`: validated base selection for daemon conflicts plus
+  exact bases carried on git conflict copies; this is core work, not gated on
+  conflict volume.
+- `three_way_merge`: `gix::merge::blob` text merge producing structured
+  per-chunk choices for the existing merge UI. Depends on `cloud_merge_base`.
+- `vault_git_sync`: onboarding choice of git-sync authority (app-data vs
+  vault `.git`) and the vault-mode commit/fetch/merge/push loop.
 - `cloud_conflict_detection`: real provider fixtures and Windows verification.
 - `merge_ui`: image thumbnails and close successful merge tabs.
 - `sync_status_history_restore`: Windows verification; existing counters are

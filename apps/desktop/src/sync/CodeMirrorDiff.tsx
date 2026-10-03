@@ -23,6 +23,7 @@ import { EditorView, highlightSpecialChars, keymap, lineNumbers } from "@codemir
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { codeHighlightStyle, languageForPath } from "../lib/codemirror";
+import { useResponsiveDiffLayout, type DiffLayout } from "./diffLayout";
 
 export interface CodeMirrorDiffProps {
   /** The reference version, never editable. On the left in split mode. */
@@ -39,14 +40,23 @@ export interface CodeMirrorDiffProps {
   readonly editableAfter?: boolean;
   /** Show the controls that copy a changed part of `before` into the result. */
   readonly transferBeforeToAfter?: boolean;
+  /**
+   * Controlled layout. When set, the caller owns the choice — pass
+   * `onLayoutChange` so the toggle stays live, and typically
+   * `showLayoutToggle={false}` since the caller draws its own.
+   */
+  readonly layout?: DiffLayout;
+  readonly onLayoutChange?: (layout: DiffLayout) => void;
+  /** Draw the built-in Inline / Side by side toolbar. Defaults to true. */
+  readonly showLayoutToggle?: boolean;
+  /**
+   * The working pane's editor view, or null on unmount — for callers that
+   * need to run commands (undo, redo) on the editable side.
+   */
+  readonly onWorkingView?: (view: EditorView | null) => void;
   readonly onAfterChange?: (contents: string) => void;
   readonly ariaLabel: string;
 }
-
-type DiffLayout = "inline" | "split";
-
-/** Below this container width the inline presentation is the default. */
-const INLINE_BELOW = 720;
 
 /** Reconfigurable slots each mounted editor owns — theme and grammar. */
 interface PaneChannels {
@@ -105,12 +115,17 @@ export function CodeMirrorDiff({
   relativePath,
   editableAfter = true,
   transferBeforeToAfter = false,
+  layout: controlledLayout,
+  onLayoutChange,
+  showLayoutToggle = true,
+  onWorkingView,
   onAfterChange,
   ariaLabel
 }: CodeMirrorDiffProps): ReactNode {
   const containerRef = useRef<HTMLElement>(null);
   const hostRef = useRef<HTMLDivElement>(null);
   const onAfterChangeRef = useRef(onAfterChange);
+  const onWorkingViewRef = useRef(onWorkingView);
   // The working document outlives any one engine: `after` only seeds it once,
   // and every mounted editor hands its live text back before it is destroyed.
   const workingAfterRef = useRef(after);
@@ -118,29 +133,17 @@ export function CodeMirrorDiff({
   const [layoutOverride, setLayoutOverride] = useState<DiffLayout | null>(null);
   // With no ResizeObserver there is nothing to follow — window width is only
   // ever read once, here, as the initial guess.
-  const [responsiveLayout, setResponsiveLayout] = useState<DiffLayout>(() =>
-    typeof ResizeObserver === "function" || window.innerWidth >= INLINE_BELOW
-      ? "split"
-      : "inline"
-  );
-  const layout = layoutOverride ?? responsiveLayout;
+  const responsiveLayout = useResponsiveDiffLayout(containerRef) ?? "split";
+  const layout = controlledLayout ?? layoutOverride ?? responsiveLayout;
+  const chooseLayout = (next: DiffLayout) => {
+    if (controlledLayout !== undefined) onLayoutChange?.(next);
+    else setLayoutOverride(next);
+  };
 
   useEffect(() => {
     onAfterChangeRef.current = onAfterChange;
-  }, [onAfterChange]);
-
-  // The responsive default tracks the container — narrow trays, phone sheets
-  // and thin windows get the inline presentation without the user's say-so.
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container || typeof ResizeObserver !== "function") return;
-    const observer = new ResizeObserver((entries) => {
-      const width = entries[0]?.contentRect.width ?? container.clientWidth;
-      setResponsiveLayout(width < INLINE_BELOW ? "inline" : "split");
-    });
-    observer.observe(container);
-    return () => observer.disconnect();
-  }, []);
+    onWorkingViewRef.current = onWorkingView;
+  }, [onAfterChange, onWorkingView]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -230,6 +233,7 @@ export function CodeMirrorDiff({
       );
       readResult = () => view.b.state.doc.toString();
       destroy = () => view.destroy();
+      onWorkingViewRef.current?.(view.b);
     } else {
       const view = new EditorView({
         parent: host,
@@ -252,6 +256,7 @@ export function CodeMirrorDiff({
       editors.push({ view, channels: channels.b });
       readResult = () => view.state.doc.toString();
       destroy = () => view.destroy();
+      onWorkingViewRef.current?.(view);
     }
 
     // The theme flag is only read again through a reconfigure, so an app
@@ -292,6 +297,7 @@ export function CodeMirrorDiff({
       // Capture the live result before the engine goes — the next layout
       // mounts from this, never from the `after` prop again.
       workingAfterRef.current = readResult();
+      onWorkingViewRef.current?.(null);
       destroy();
     };
     // `after` is deliberately absent: it only seeds workingAfterRef once.
@@ -305,27 +311,30 @@ export function CodeMirrorDiff({
       aria-label={ariaLabel}
     >
       {/* The layout switch is the same toolbar in both presentations; the
-          responsive default only applies until the user picks one. */}
-      <div className="flex min-w-0 items-center justify-end gap-2 border-b border-border bg-card px-2 py-1 text-xs">
-        <div role="group" aria-label="Diff layout" className="flex gap-0.5">
-          <button
-            type="button"
-            className={LAYOUT_BUTTON}
-            aria-pressed={layout === "inline"}
-            onClick={() => setLayoutOverride("inline")}
-          >
-            Inline
-          </button>
-          <button
-            type="button"
-            className={LAYOUT_BUTTON}
-            aria-pressed={layout === "split"}
-            onClick={() => setLayoutOverride("split")}
-          >
-            Side by side
-          </button>
+          responsive default only applies until the user picks one. Callers
+          that draw their own toggle hide this one. */}
+      {showLayoutToggle && (
+        <div className="flex min-w-0 items-center justify-end gap-2 border-b border-border bg-card px-2 py-1 text-xs">
+          <div role="group" aria-label="Diff layout" className="flex gap-0.5">
+            <button
+              type="button"
+              className={LAYOUT_BUTTON}
+              aria-pressed={layout === "inline"}
+              onClick={() => chooseLayout("inline")}
+            >
+              Inline
+            </button>
+            <button
+              type="button"
+              className={LAYOUT_BUTTON}
+              aria-pressed={layout === "split"}
+              onClick={() => chooseLayout("split")}
+            >
+              Side by side
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Two panes need real width: below the minimum the split comparison
           scrolls sideways inside its own port rather than pushing the page

@@ -1,9 +1,11 @@
 import { Compartment, EditorState, StateEffect } from "@codemirror/state";
+import { redo, redoDepth, undo, undoDepth } from "@codemirror/commands";
 import { keymap, EditorView } from "@codemirror/view";
 import type { NoteIndexEntry } from "@thinkbrain/core";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { EditorHeaderSlot } from "./editorHeaderRegistry.tsx";
+import { notifyEditorCommands, registerEditorCommands } from "./editorCommands";
 import { recallEditorState, rememberEditorState } from "./editorStateCache";
 import { livePreview as livePreviewExtension } from "./livePreview";
 import {
@@ -133,7 +135,17 @@ export function MarkdownEditor({
     };
     const extensions = markdownEditorHookRegistry.getExtensions(payload, undefined);
     const keybindings = markdownEditorHookRegistry.getKeybindings(payload, undefined);
-    const configuration = [...extensions, keymap.of(keybindings)];
+    const configuration = [
+      ...extensions,
+      keymap.of(keybindings),
+      // Document edits and undo/redo all change the document — every one of
+      // them can flip the header buttons' enabled state.
+      EditorView.updateListener.of((update) => {
+        if (update.docChanged && stateKey !== undefined) {
+          notifyEditorCommands(stateKey);
+        }
+      })
+    ];
     const parked = stateKey === undefined ? undefined : recallEditorState(stateKey);
 
     const view = new EditorView({
@@ -152,6 +164,22 @@ export function MarkdownEditor({
     });
     viewRef.current = view;
 
+    // Undo/redo buttons in the header act on this view, keyed by the tab id
+    // the shell passed as `stateKey`.
+    const unregisterCommands =
+      stateKey === undefined
+        ? undefined
+        : registerEditorCommands(stateKey, {
+            undo: () => {
+              if (undo(view)) view.focus();
+            },
+            redo: () => {
+              if (redo(view)) view.focus();
+            },
+            canUndo: () => undoDepth(view.state) > 0,
+            canRedo: () => redoDepth(view.state) > 0
+          });
+
     if (parked) {
       // The parked state carries the previous mount's extensions, and those
       // close over that mount's callbacks. Swapping the whole configuration
@@ -162,6 +190,7 @@ export function MarkdownEditor({
     }
 
     return () => {
+      unregisterCommands?.();
       if (stateKey !== undefined) {
         // Scroll position is DOM state rather than editor state, so it has to
         // be taken before the view goes.

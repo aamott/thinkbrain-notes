@@ -1,8 +1,16 @@
+import { redo, redoDepth, undo, undoDepth } from "@codemirror/commands";
+import type { EditorView } from "@codemirror/view";
+import { CircleHelp } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Unavailable } from "../shell/Unavailable";
+import {
+  notifyEditorCommands,
+  registerEditorCommands
+} from "../tabs/editorCommands";
 import { CodeMirrorDiff } from "./CodeMirrorDiff";
-import { describeSize, describeWhen, noteName } from "./conflictCard";
+import { useResponsiveDiffLayout, type DiffLayout } from "./diffLayout";
+import { noteName } from "./conflictCard";
 import { readConflict, resolveConflict } from "./conflictService";
 import type { ConflictComparison, ConflictResolution } from "./conflictTypes";
 import { failureMessage } from "./syncCopy";
@@ -22,6 +30,11 @@ interface MergeTabProps {
   readonly rootPath: string | null;
   /** The conflict copy this tab is about. */
   readonly copyPath: string | null;
+  /**
+   * This tab's id — the key its undo/redo and Save commands register under
+   * so the header bar can reach the result pane. Omitted outside the shell.
+   */
+  readonly tabId?: string | null;
   /**
    * Unsaved text from an editor open on this note, if there is one.
    *
@@ -46,22 +59,23 @@ const COMPARE_FAILURE = "Something went wrong reading the two versions.";
  * conflict, rather than an effect that clears it — and it is why the session
  * below never has to put itself back into a loading state.
  */
-export function MergeTab({ rootPath, copyPath, buffer }: MergeTabProps) {
+export function MergeTab({ rootPath, copyPath, tabId, buffer }: MergeTabProps) {
   if (!rootPath || !copyPath) {
     return <Unavailable title="Nothing to compare" description="This tab has lost track of which note it was about." />;
   }
   return (
-    <MergeSession key={`${rootPath}:${copyPath}`} rootPath={rootPath} copyPath={copyPath} buffer={buffer} />
+    <MergeSession key={`${rootPath}:${copyPath}`} rootPath={rootPath} copyPath={copyPath} tabId={tabId} buffer={buffer} />
   );
 }
 
 interface MergeSessionProps {
   readonly rootPath: string;
   readonly copyPath: string;
+  readonly tabId?: string | null;
   readonly buffer?: string | null;
 }
 
-function MergeSession({ rootPath, copyPath, buffer }: MergeSessionProps) {
+function MergeSession({ rootPath, copyPath, tabId, buffer }: MergeSessionProps) {
   const [phase, setPhase] = useState<Phase>({ at: "loading" });
   const [resolving, setResolving] = useState(false);
 
@@ -123,7 +137,7 @@ function MergeSession({ rootPath, copyPath, buffer }: MergeSessionProps) {
   }
 
   return (
-    <MergeSurface conflict={phase.conflict} resolving={resolving} onResolve={resolve} />
+    <MergeSurface conflict={phase.conflict} resolving={resolving} onResolve={resolve} tabId={tabId} />
   );
 }
 
@@ -131,51 +145,183 @@ interface MergeSurfaceProps {
   readonly conflict: ConflictComparison;
   readonly resolving: boolean;
   readonly onResolve: (resolution: ConflictResolution) => void;
+  readonly tabId?: string | null;
 }
 
 const ACTION_BUTTON =
-  "rounded-small border border-border bg-surface px-3 py-1.5 text-xs text-foreground disabled:opacity-50";
-const SAVE_BUTTON =
-  "rounded-small border border-primary bg-primary px-3 py-1.5 text-xs text-primary-foreground disabled:opacity-50";
+  "cursor-pointer rounded-small border border-border bg-surface px-3 py-1 text-xs text-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-50";
+const LAYOUT_BUTTON =
+  "rounded-small border-0 bg-transparent px-2 py-0.5 text-xs text-muted-foreground cursor-pointer hover:bg-accent aria-pressed:bg-accent aria-pressed:text-foreground";
 
-function MergeSurface({ conflict, resolving, onResolve }: MergeSurfaceProps) {
+function MergeSurface({ conflict, resolving, onResolve, tabId }: MergeSurfaceProps) {
   const { ours, theirs } = conflict;
   const comparable = conflict.kind === "text";
   const note = noteName(ours.path);
 
   // Whatever the right pane currently holds — moved by the transfer arrows,
   // typed, or untouched. Sent verbatim as the merged note on save. It seeds
-  // from this computer's complete version, exactly as the comparison sent it.
-  const [result, setResult] = useState(comparable ? conflict.text.current : "");
+  // from this computer's complete version, exactly as the comparison sent it,
+  // and lives in a ref so the registered save never reads stale text.
+  const resultRef = useRef(comparable ? conflict.text.current : "");
+  const resolvingRef = useRef(resolving);
+  const onResolveRef = useRef(onResolve);
+  const workingViewRef = useRef<EditorView | null>(null);
+
+  const sectionRef = useRef<HTMLElement>(null);
+  const responsiveLayout = useResponsiveDiffLayout(sectionRef);
+  const [layoutOverride, setLayoutOverride] = useState<DiffLayout | null>(null);
+  const layout = layoutOverride ?? responsiveLayout ?? "split";
+
+  // The "why am I looking at this" sentence lives behind a click so it costs
+  // no screen space — title-text would be invisible on touch, and a fixed
+  // line under the bar is room the panes could have.
+  const [helpOpen, setHelpOpen] = useState(false);
+  const helpRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!helpOpen) return;
+    const closeOutside = (event: PointerEvent) => {
+      if (!helpRef.current?.contains(event.target as Node)) setHelpOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setHelpOpen(false);
+    };
+    window.addEventListener("pointerdown", closeOutside);
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      window.removeEventListener("pointerdown", closeOutside);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [helpOpen]);
+
+  useEffect(() => {
+    onResolveRef.current = onResolve;
+  }, [onResolve]);
+  useEffect(() => {
+    resolvingRef.current = resolving;
+    // The header's Save enabled-state follows `canSave`, which reads this —
+    // let it know the answer changed.
+    if (tabId) notifyEditorCommands(tabId);
+  }, [resolving, tabId]);
+
+  // The result pane is the only editable surface here, so it is what the
+  // header's undo/redo and Save act on — Save resolves the conflict with
+  // whatever the pane currently holds.
+  useEffect(() => {
+    if (!tabId) return;
+    return registerEditorCommands(tabId, {
+      undo: () => {
+        const view = workingViewRef.current;
+        if (view && undo(view)) view.focus();
+      },
+      redo: () => {
+        const view = workingViewRef.current;
+        if (view && redo(view)) view.focus();
+      },
+      canUndo: () =>
+        workingViewRef.current !== null && undoDepth(workingViewRef.current.state) > 0,
+      canRedo: () =>
+        workingViewRef.current !== null && redoDepth(workingViewRef.current.state) > 0,
+      ...(comparable
+        ? {
+            save: () => {
+              if (!resolvingRef.current) {
+                onResolveRef.current({ kind: "merged", contents: resultRef.current });
+              }
+            },
+            canSave: () => !resolvingRef.current,
+            saveLabel: "Save merged note"
+          }
+        : {})
+    });
+  }, [tabId, comparable]);
 
   return (
     <section
-      className="@container flex min-h-0 min-w-0 max-w-full flex-1 flex-col gap-3 overflow-y-auto overflow-x-hidden p-4"
+      ref={sectionRef}
+      className="@container flex min-h-0 min-w-0 max-w-full flex-1 flex-col overflow-hidden"
       aria-label={`Compare versions of ${note}`}
     >
-      <header className="rounded-small border border-border bg-card p-4">
-        <h2 className="m-0 text-base font-semibold text-card-foreground">
-          Two versions of this note exist
-        </h2>
-        <p className="mb-0 mt-1.5 text-xs leading-relaxed text-muted-foreground">
-          &ldquo;{note}&rdquo; was edited on another device before this one finished syncing.
-          {comparable
-            ? ` The ${theirs.label} version is on the left and cannot be changed; the ${ours.label} version on the right is what will be saved. Use the arrows between the panes to bring parts across, edit the result however you need, then save it.`
-            : " This file can't be compared line by line, so choose which version to keep below."}
-        </p>
-      </header>
-
-      {/* In pane order: the incoming version on the left, this computer's —
-          the editable result — on the right. */}
-      <div className="grid grid-cols-1 gap-3 @2xl:grid-cols-2">
-        {[theirs, ours].map((version) => (
-          <div key={version.path} className="rounded-small border border-border bg-surface px-3 py-2">
-            <p className="m-0 text-xs font-semibold text-foreground">{version.label}</p>
-            <p className="m-0 text-[0.7rem] text-muted-foreground">
-              {describeWhen(version.changedAt)} · {describeSize(version.byteSize)}
-            </p>
+      {/* Second header bar, cut from the same cloth as the breadcrumb bar
+          above it: same background, height and padding. Whole-version choices
+          left; the layout toggle and the why-you're-here help right. */}
+      <div className="flex min-h-8 flex-none flex-wrap items-center gap-2 border-b border-border bg-editor px-[0.9rem] py-1">
+        <button
+          type="button"
+          className={ACTION_BUTTON}
+          disabled={resolving}
+          onClick={() => onResolve({ kind: "keepOurs" })}
+        >
+          Keep current
+        </button>
+        <button
+          type="button"
+          className={ACTION_BUTTON}
+          disabled={resolving}
+          onClick={() => onResolve({ kind: "keepTheirs" })}
+        >
+          Use incoming
+        </button>
+        <button
+          type="button"
+          className={ACTION_BUTTON}
+          disabled={resolving}
+          onClick={() => onResolve({ kind: "keepBoth" })}
+        >
+          Keep both files
+        </button>
+        <div className="ml-auto flex items-center gap-1">
+          {comparable && (
+            <div role="group" aria-label="Diff layout" className="flex gap-0.5">
+              <button
+                type="button"
+                className={LAYOUT_BUTTON}
+                aria-pressed={layout === "inline"}
+                onClick={() => setLayoutOverride("inline")}
+              >
+                Inline
+              </button>
+              <button
+                type="button"
+                className={LAYOUT_BUTTON}
+                aria-pressed={layout === "split"}
+                onClick={() => setLayoutOverride("split")}
+              >
+                Side by side
+              </button>
+            </div>
+          )}
+          <div ref={helpRef} className="relative">
+            <button
+              type="button"
+              className="cursor-pointer rounded-small px-1 py-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              aria-label="About this comparison"
+              aria-expanded={helpOpen}
+              aria-controls="merge-comparison-help"
+              title="About this comparison"
+              onClick={() => setHelpOpen((open) => !open)}
+            >
+              <CircleHelp className="size-3.5" aria-hidden="true" />
+            </button>
+            {helpOpen && (
+              <div
+                id="merge-comparison-help"
+                role="note"
+                className="absolute right-0 top-full z-50 mt-1 w-72 rounded-small border border-border bg-popover p-3 text-xs leading-relaxed text-popover-foreground shadow-soft"
+              >
+                <p className="m-0">
+                  Two versions of this note exist — &ldquo;{note}&rdquo; was edited on
+                  another device before this one finished syncing.
+                  {comparable
+                    ? " Use the arrows between the panes to bring parts across, edit the result however you need, then save it."
+                    : " This file can't be compared line by line, so choose which version to keep."}
+                </p>
+                <p className="mb-0 mt-2 text-muted-foreground">
+                  Whichever you choose, the earlier versions stay in Version history.
+                </p>
+              </div>
+            )}
           </div>
-        ))}
+        </div>
       </div>
 
       {comparable ? (
@@ -190,58 +336,26 @@ function MergeSurface({ conflict, resolving, onResolve }: MergeSurfaceProps) {
             relativePath={ours.path}
             editableAfter
             transferBeforeToAfter
-            onAfterChange={setResult}
+            layout={layout}
+            onLayoutChange={setLayoutOverride}
+            showLayoutToggle={false}
+            onWorkingView={(view) => {
+              workingViewRef.current = view;
+              if (tabId) notifyEditorCommands(tabId);
+            }}
+            onAfterChange={(contents) => {
+              resultRef.current = contents;
+              if (tabId) notifyEditorCommands(tabId);
+            }}
             ariaLabel={`Side-by-side comparison of the two versions of ${note}`}
           />
         </div>
       ) : (
-        <p className="m-0 rounded-small border border-border bg-card p-3 text-xs leading-relaxed text-muted-foreground">
+        <p className="m-0 flex-1 rounded-small border border-border bg-card p-3 text-xs leading-relaxed text-muted-foreground">
           This file can&apos;t be compared piece by piece — its contents aren&apos;t text. Choose a
-          whole version below; the one you don&apos;t pick can still be kept as a separate file.
+          whole version above; the one you don&apos;t pick can still be kept as a separate file.
         </p>
       )}
-
-      <footer className="flex flex-col gap-2 @2xl:flex-row @2xl:items-center @2xl:justify-between">
-        <p className="m-0 text-[0.7rem] text-muted-foreground">
-          You can always undo — previous versions are kept in Version history.
-        </p>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            className={ACTION_BUTTON}
-            disabled={resolving}
-            onClick={() => onResolve({ kind: "keepOurs" })}
-          >
-            Keep current
-          </button>
-          <button
-            type="button"
-            className={ACTION_BUTTON}
-            disabled={resolving}
-            onClick={() => onResolve({ kind: "keepTheirs" })}
-          >
-            Use incoming
-          </button>
-          <button
-            type="button"
-            className={ACTION_BUTTON}
-            disabled={resolving}
-            onClick={() => onResolve({ kind: "keepBoth" })}
-          >
-            Keep both files
-          </button>
-          {comparable && (
-            <button
-              type="button"
-              className={SAVE_BUTTON}
-              disabled={resolving}
-              onClick={() => onResolve({ kind: "merged", contents: result })}
-            >
-              Save merged note
-            </button>
-          )}
-        </div>
-      </footer>
     </section>
   );
 }

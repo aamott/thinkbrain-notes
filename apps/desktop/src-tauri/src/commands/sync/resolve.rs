@@ -534,6 +534,11 @@ fn put(path: &Path, bytes: &[u8]) -> Result<(), NativeError> {
 }
 
 fn discard(path: &Path) -> Result<(), NativeError> {
+    // The copy is gone from this device, but the other device may still hold
+    // it — and the daemon will happily deliver it back, re-raising the
+    // conflict the user just answered. Not yet handled: the likely fix is a
+    // short memory of recently answered pairings, with keep-both as the
+    // escape hatch. See plans/auto-sync/ for follow-up.
     std::fs::remove_file(path).map_err(|error| {
         failed(
             "sync.conflict_cleanup_failed",

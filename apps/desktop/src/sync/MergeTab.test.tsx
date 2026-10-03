@@ -4,6 +4,9 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ConflictComparison } from "./conflictTypes";
+import { getEditorCommands } from "../tabs/editorCommands";
+
+const TAB_ID = "merge-test-tab";
 
 const readConflict = vi.fn<
   (rootPath: string, copyPath: string, buffer?: string | null) => Promise<ConflictComparison>
@@ -79,7 +82,14 @@ const render = async (): Promise<HTMLDivElement> => {
   document.body.append(container);
   root = createRoot(container);
   await act(async () =>
-    root?.render(<MergeTab rootPath="/notes" copyPath={COMPARISON.theirs.path} buffer={null} />)
+    root?.render(
+      <MergeTab
+        rootPath="/notes"
+        copyPath={COMPARISON.theirs.path}
+        tabId={TAB_ID}
+        buffer={null}
+      />
+    )
   );
   return container;
 };
@@ -96,9 +106,23 @@ describe("comparing two versions", () => {
   it("opens with both sides named the way the user knows them", async () => {
     const host = await render();
 
-    expect(host.textContent).toContain("Two versions of this note exist");
     expect(host.textContent).toContain("This computer");
     expect(host.textContent).toContain("OneDrive");
+  });
+
+  it("tells the story of the conflict behind a help button, off the screen's space", async () => {
+    const host = await render();
+    // The explanation takes no vertical room until it is asked for — a fixed
+    // line under the bar is space the panes could have.
+    expect(host.textContent).not.toContain("Two versions of this note exist");
+
+    const help = host.querySelector<HTMLButtonElement>('[aria-label="About this comparison"]');
+    expect(help).not.toBeNull();
+    await act(async () => help?.click());
+
+    expect(host.textContent).toContain("Two versions of this note exist");
+    expect(host.textContent).toContain("arrows between the panes");
+    expect(host.textContent).toContain("Version history");
   });
 
   // CodeMirror aligns the two versions; this surface owes it both complete
@@ -130,7 +154,12 @@ describe("comparing two versions", () => {
     root = createRoot(container);
     await act(async () =>
       root?.render(
-        <MergeTab rootPath="/notes" copyPath={COMPARISON.theirs.path} buffer={dirty} />
+        <MergeTab
+          rootPath="/notes"
+          copyPath={COMPARISON.theirs.path}
+          tabId={TAB_ID}
+          buffer={dirty}
+        />
       )
     );
 
@@ -139,8 +168,9 @@ describe("comparing two versions", () => {
 
   it("explains how to work the comparison, without restore preview copy", async () => {
     const host = await render();
+    const help = host.querySelector<HTMLButtonElement>('[aria-label="About this comparison"]');
+    await act(async () => help?.click());
 
-    expect(host.textContent).toContain("arrows between the panes");
     expect(host.textContent).toContain("edit the result");
     // The restore preview's own wording and legend belong to that screen —
     // a conflict is not a restore, and they must not leak into this one.
@@ -152,13 +182,17 @@ describe("comparing two versions", () => {
 });
 
 describe("choosing what to keep", () => {
-  it("offers the whole-file choices and the merged save", async () => {
+  it("offers the whole-file choices; the merged save registers as a command", async () => {
     const host = await render();
 
     expect(() => button(host, "Keep current")).not.toThrow();
     expect(() => button(host, "Use incoming")).not.toThrow();
     expect(() => button(host, "Keep both files")).not.toThrow();
-    expect(() => button(host, "Save merged note")).not.toThrow();
+    // Save lives in the workspace header with every other tab's — the tab
+    // registers what it means here, labelled for the merge.
+    const commands = getEditorCommands(TAB_ID);
+    expect(commands?.saveLabel).toBe("Save merged note");
+    expect(commands?.save).toBeInstanceOf(Function);
   });
 
   it("keeps this computer's version", async () => {
@@ -187,9 +221,9 @@ describe("choosing what to keep", () => {
 
   // The promise the screen is built on: the right pane's text is the note.
   it("saves this computer's version when the result was left untouched", async () => {
-    const host = await render();
+    await render();
 
-    await act(async () => button(host, "Save merged note").click());
+    await act(async () => getEditorCommands(TAB_ID)?.save?.());
 
     expect(resolveConflict).toHaveBeenCalledWith("/notes", COMPARISON, {
       kind: "merged",
@@ -198,13 +232,13 @@ describe("choosing what to keep", () => {
   });
 
   it("saves the edited result, whatever made the edit", async () => {
-    const host = await render();
+    await render();
     const edited = "# Q3 sync\nattendees\nmerged by hand\nnext check-in Aug 18\n";
     await act(async () => {
       (lastDiff.props?.onAfterChange as (contents: string) => void)(edited);
     });
 
-    await act(async () => button(host, "Save merged note").click());
+    await act(async () => getEditorCommands(TAB_ID)?.save?.());
 
     expect(resolveConflict).toHaveBeenCalledWith("/notes", COMPARISON, {
       kind: "merged",
@@ -221,9 +255,12 @@ describe("while a decision is being written", () => {
 
     await act(async () => button(host, "Keep current").click());
 
-    for (const label of ["Keep current", "Use incoming", "Keep both files", "Save merged note"]) {
+    for (const label of ["Keep current", "Use incoming", "Keep both files"]) {
       expect(button(host, label).disabled).toBe(true);
     }
+    // The header's Save reads `canSave` — while the write is in flight it
+    // must not offer a second one.
+    expect(getEditorCommands(TAB_ID)?.canSave?.()).toBe(false);
 
     await act(async () => settle({ note: "Meeting Notes.md", keptAs: null, checkpoint: "a" }));
   });
@@ -262,6 +299,8 @@ describe("a file that cannot be compared piece by piece", () => {
     expect(() => button(host, "Keep current")).not.toThrow();
     expect(() => button(host, "Use incoming")).not.toThrow();
     expect(() => button(host, "Keep both files")).not.toThrow();
-    expect(host.querySelectorAll("button")).toHaveLength(3);
+    // The three choices, plus the always-there help button — no layout
+    // toggle, since there is nothing to lay out.
+    expect(host.querySelectorAll("button")).toHaveLength(4);
   });
 });

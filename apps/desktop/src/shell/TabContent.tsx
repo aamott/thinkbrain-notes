@@ -172,6 +172,7 @@ export function TabContent({
       <MergeTab
         rootPath={rootPath ?? null}
         copyPath={relativePath ?? null}
+        tabId={tab.id}
         buffer={unsavedNoteContents ?? null}
       />
     );
