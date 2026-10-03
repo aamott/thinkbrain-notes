@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { MoreHorizontal } from "lucide-react";
 import { cn } from "../lib/utils";
 import { tabAccessibleName, type DesktopTab } from "../tabs/tabModel";
@@ -126,6 +126,27 @@ export function TitleBar({
     strip.scrollTo({ left, behavior: "smooth" });
   }, [activeTabId]);
 
+  // Edge shadows tell the reader there are more tabs off-screen; each fades
+  // out as the strip reaches that end. Driven by scroll position rather than
+  // pointer state so they are correct without hovering.
+  const [scrollEdges, setScrollEdges] = useState({ left: false, right: false });
+  const measureScrollEdges = useCallback(() => {
+    const el = tabStripRef.current;
+    if (!el) return;
+    setScrollEdges({
+      left: el.scrollLeft > 1,
+      right: el.scrollLeft + el.clientWidth < el.scrollWidth - 1
+    });
+  }, []);
+  useLayoutEffect(() => {
+    measureScrollEdges();
+    const el = tabStripRef.current;
+    if (!el || typeof ResizeObserver !== "function") return;
+    const observer = new ResizeObserver(measureScrollEdges);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [tabs, measureScrollEdges]);
+
   return (
     <header className="flex items-end bg-titlebar border-b border-border min-w-0">
       {/* App identity or workspace selector + command palette. */}
@@ -154,8 +175,16 @@ export function TitleBar({
         </button>
       </div>
 
-      {/* Tab strip — maps over open tabs with active/dirty/close affordances. */}
-      <nav ref={tabStripRef} className="flex flex-1 items-end gap-0.5 h-full min-w-0 overflow-x-auto" aria-label="Open tabs">
+      {/* Tab strip — maps over open tabs with active/dirty/close affordances.
+          The wrapper carries the scroll-edge shadows so they overlay the
+          strip without taking part in its layout. */}
+      <div className="relative min-w-0 flex-1 self-stretch">
+        <nav
+          ref={tabStripRef}
+          className="tn-scrollbar-hairline flex items-end gap-0.5 h-full min-w-0 overflow-x-auto"
+          aria-label="Open tabs"
+          onScroll={measureScrollEdges}
+        >
         {tabs.map((tab) => {
           const isActive = tab.id === activeTabId;
           // Restore previews of one file share a title; the accessible name
@@ -200,7 +229,23 @@ export function TitleBar({
             </div>
           );
         })}
-      </nav>
+        </nav>
+        {/* The nav scrolls underneath; the fades sit over its ends. */}
+        <div
+          aria-hidden="true"
+          className={cn(
+            "pointer-events-none absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-titlebar to-transparent transition-opacity duration-150",
+            scrollEdges.left ? "opacity-100" : "opacity-0"
+          )}
+        />
+        <div
+          aria-hidden="true"
+          className={cn(
+            "pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-titlebar to-transparent transition-opacity duration-150",
+            scrollEdges.right ? "opacity-100" : "opacity-0"
+          )}
+        />
+      </div>
 
       {/* Right action group — panel toggles. Below 900px the row of buttons
           collapses into a single menu so a narrow window keeps every action

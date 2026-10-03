@@ -165,6 +165,17 @@
   color: color-mix(in srgb, var(--tn-color-primary) 40%, var(--tn-color-muted-foreground));
 }
 
+/* A scrollbar thinner than the app default for strips that scroll but are
+   never meant to be grabbed — the tab strip scrolls by wheel and
+   scroll-into-view, so its scrollbar is only a position hint. */
+@utility tn-scrollbar-hairline {
+  scrollbar-width: thin;
+  &::-webkit-scrollbar {
+    width: 2px;
+    height: 2px;
+  }
+}
+
 @layer base {
   :root {
     font-family: var(--tn-font-sans);
