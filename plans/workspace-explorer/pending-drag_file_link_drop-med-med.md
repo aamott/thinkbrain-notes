@@ -7,10 +7,12 @@ form for other types.
 
 ## Shape
 
-- The tree's existing drag session (`useWorkspaceTreeDrag`) already tracks a
-  dragged entry; the editor becomes a second drop target. Drop position maps
-  to a document offset, and the insert goes through the editor's normal
-  change path so undo/redo, dirty state, and live preview behave as usual.
+- The tree's native drag (`useWorkspaceFileDrag`, desktop) writes an
+  `application/x-thinkbrain-tree` dataTransfer entry carrying the
+  workspace-relative path; the editor reads it on `drop` and becomes a
+  second drop target. Drop position maps to a document offset, and the
+  insert goes through the editor's normal change path so undo/redo, dirty
+  state, and live preview behave as usual.
 - Link text: the file's display name (stem without `.md`); target: the
   workspace-relative path. Non-markdown files link by relative path as well.
 - Folders: link to the folder path (resolution of folder links is a separate
