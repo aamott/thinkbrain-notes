@@ -17,6 +17,10 @@ let container: HTMLDivElement | null = null;
 const render = async (props: {
   readonly rightPanel?: "outline" | null;
   readonly tabs?: readonly DesktopTab[];
+  readonly canGoBack?: boolean;
+  readonly canGoForward?: boolean;
+  readonly onBack?: () => void;
+  readonly onForward?: () => void;
   readonly onToggleRightPanel?: (panel: RightPanel) => void;
 } = {}): Promise<HTMLDivElement> => {
   container = document.createElement("div");
@@ -29,6 +33,10 @@ const render = async (props: {
         activeTabId={null}
         rightPanel={props.rightPanel ?? null}
         showWorkspaceSelector={false}
+        canGoBack={props.canGoBack ?? false}
+        canGoForward={props.canGoForward ?? false}
+        onBack={props.onBack ?? (() => undefined)}
+        onForward={props.onForward ?? (() => undefined)}
         onSelectTab={() => undefined}
         onRequestCloseTab={() => undefined}
         onToggleRightPanel={props.onToggleRightPanel ?? (() => undefined)}
@@ -206,6 +214,36 @@ describe("TitleBar", () => {
     expect(menu(host)).toBeNull();
     // The click owns where focus went; the trigger is not grabbed back.
     expect(document.activeElement).not.toBe(trigger(host));
+  });
+
+  it("renders Back dimmed at the bottom of the stack and hides Forward", async () => {
+    const host = await render();
+
+    const back = host.querySelector<HTMLButtonElement>('[aria-label="Back"]');
+    expect(back).not.toBeNull();
+    expect(back?.disabled).toBe(true);
+    expect(back?.className).toContain("disabled:opacity-40");
+    expect(host.querySelector('[aria-label="Forward"]')).toBeNull();
+  });
+
+  it("enables Back and reports the click once history has a previous tab", async () => {
+    const onBack = vi.fn();
+    const host = await render({ canGoBack: true, onBack });
+
+    const back = host.querySelector<HTMLButtonElement>('[aria-label="Back"]')!;
+    expect(back.disabled).toBe(false);
+    await act(async () => back.click());
+    expect(onBack).toHaveBeenCalledOnce();
+  });
+
+  it("shows Forward only while a forward visit exists, and reports the click", async () => {
+    const onForward = vi.fn();
+    const host = await render({ canGoBack: true, canGoForward: true, onForward });
+
+    const forward = host.querySelector<HTMLButtonElement>('[aria-label="Forward"]')!;
+    expect(forward).not.toBeNull();
+    await act(async () => forward.click());
+    expect(onForward).toHaveBeenCalledOnce();
   });
 
   it("keeps a restore tab's visible title short while tooltip and names carry the version", async () => {

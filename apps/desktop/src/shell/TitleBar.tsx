@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { MoreHorizontal, Pin } from "lucide-react";
+import { ArrowLeft, ArrowRight, MoreHorizontal, Pin } from "lucide-react";
 import { cn } from "../lib/utils";
 import { tabAccessibleName, type DesktopTab } from "../tabs/tabModel";
 import { useRightPanelContributions, type RightPanelContribution } from "../panels/panelRegistryModel";
@@ -15,6 +15,13 @@ import {
   serializePinnedActionItems
 } from "./actionItemsModel";
 import { WorkspaceSelectorOutlet } from "../workspace/WorkspaceSelectorPortal";
+
+/**
+ * Back/Forward chrome: the ⌘ command-palette button's sizing, with hover
+ * gated on `enabled` so a disabled button gives no affordance feedback.
+ */
+const NAV_BUTTON =
+  "flex items-center justify-center h-[1.6rem] w-[1.6rem] border-0 rounded-small bg-transparent text-titlebar-foreground cursor-pointer enabled:hover:bg-[color-mix(in_srgb,var(--tn-color-accent)_60%,transparent)] enabled:hover:text-activitybar-active focus-visible:outline-2 focus-visible:outline-ring focus-visible:-outline-offset-1 disabled:cursor-default disabled:opacity-40";
 
 /**
  * Props for the {@link TitleBar} component.
@@ -33,6 +40,14 @@ type TitleBarProps = {
   /** Currently open right panel, or `null` when the right dock is collapsed. */
   readonly rightPanel: RightPanel | null;
   readonly showWorkspaceSelector: boolean;
+  /** Whether tab-activation history has a previous tab Back can return to. */
+  readonly canGoBack: boolean;
+  /** Whether a Forward visit exists after Back moved the history cursor. */
+  readonly canGoForward: boolean;
+  /** Called when the user clicks Back. */
+  readonly onBack: () => void;
+  /** Called when the user clicks Forward. */
+  readonly onForward: () => void;
   /** Called when the user clicks a tab to activate it. */
   readonly onSelectTab: (tabId: string) => void;
   /** Called when the user clicks a tab's close affordance. */
@@ -64,6 +79,10 @@ export function TitleBar({
   activeTabId,
   rightPanel,
   showWorkspaceSelector,
+  canGoBack,
+  canGoForward,
+  onBack,
+  onForward,
   onSelectTab,
   onRequestCloseTab,
   onToggleRightPanel,
@@ -225,6 +244,35 @@ export function TitleBar({
         >
           <span aria-hidden="true">⌘</span>
         </button>
+      </div>
+
+      {/* Back/Forward over the tab-activation history. The convention is the
+          phone header's: Back stays rendered but dimmed at the bottom of the
+          stack; Forward appears only while there is somewhere forward to go.
+          Kept outside the fixed-width identity block so the buttons survive
+          the 760px collapse that squeezes it to 3rem. */}
+      <div className="flex items-center gap-0.5 self-center pr-1">
+        <button
+          type="button"
+          className={NAV_BUTTON}
+          aria-label="Back"
+          title="Back"
+          disabled={!canGoBack}
+          onClick={onBack}
+        >
+          <ArrowLeft aria-hidden="true" className="size-[0.95rem]" />
+        </button>
+        {canGoForward && (
+          <button
+            type="button"
+            className={NAV_BUTTON}
+            aria-label="Forward"
+            title="Forward"
+            onClick={onForward}
+          >
+            <ArrowRight aria-hidden="true" className="size-[0.95rem]" />
+          </button>
+        )}
       </div>
 
       {/* Tab strip — maps over open tabs with active/dirty/close affordances.

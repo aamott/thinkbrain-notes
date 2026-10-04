@@ -250,6 +250,14 @@ export function useShellState(): ShellState {
   // resize hook's own to clean up.
   useEffect(() => () => cancelDeferredPersistence(), [cancelDeferredPersistence]);
 
+  // Tab-activation history is per-workspace: a switch rebases it on the
+  // active tab so Back can never walk into the previous vault's visits.
+  // The reducer returns the state untouched while it is already reset, so
+  // the mount-time fire on a still-empty history costs nothing.
+  useEffect(() => {
+    dispatchTabs({ type: "resetHistory" });
+  }, [restoredWorkspacePath]);
+
   const openPalette = useCallback(() => {
     paletteRestoreFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setPaletteOpen(true);

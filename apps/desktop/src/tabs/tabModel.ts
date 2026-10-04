@@ -47,11 +47,27 @@ export interface CloseRequest {
   readonly tabId: string;
 }
 
+/**
+ * Tab-activation history for title-bar Back/Forward, in browser order.
+ *
+ * `entries[cursor]` is the visit the user is on — normally the active tab.
+ * Entries before the cursor are the Back stack, entries after it the Forward
+ * stack. A fresh activation truncates the forward tail, matching browser
+ * history. Entries name tab ids, so a retarget rewrites them in place and a
+ * close scrubs them — Back can never land on a tab that no longer exists.
+ */
+export interface DesktopTabHistory {
+  readonly entries: readonly string[];
+  /** Index of the current visit; `-1` while nothing has been activated. */
+  readonly cursor: number;
+}
+
 export interface DesktopTabState {
   readonly tabs: readonly DesktopTab[];
   readonly activeTabId: string | null;
   /** Present only when a dirty tab needs a save/discard/cancel decision. */
   readonly closeRequest: CloseRequest | null;
+  readonly history: DesktopTabHistory;
 }
 
 export type DesktopTabAction =
@@ -62,6 +78,10 @@ export type DesktopTabAction =
   | { readonly type: "discardClose"; readonly tabId: string }
   | { readonly type: "completeSaveAndClose"; readonly tabId: string }
   | { readonly type: "cancelClose"; readonly tabId: string }
+  | { readonly type: "goBack" }
+  | { readonly type: "goForward" }
+  /** A workspace switch rebases history onto the surviving active tab. */
+  | { readonly type: "resetHistory" }
   /** The file a tab is showing was renamed or moved, here or outside the app. */
   | {
       readonly type: "retarget";
@@ -72,7 +92,8 @@ export type DesktopTabAction =
 export const initialDesktopTabState: DesktopTabState = {
   tabs: [],
   activeTabId: null,
-  closeRequest: null
+  closeRequest: null,
+  history: { entries: [], cursor: -1 }
 };
 
 /** Creates a stable editor identity for a file within a workspace. */
@@ -223,18 +244,35 @@ export function desktopTabReducer(
     case "open": {
       const existing = state.tabs.find((tab) => tab.id === action.tab.id);
       if (existing) {
-        return state.activeTabId === existing.id ? state : { ...state, activeTabId: existing.id };
+        return state.activeTabId === existing.id
+          ? state
+          : {
+              ...state,
+              activeTabId: existing.id,
+              history: recordActivation(state.history, existing.id)
+            };
       }
       return {
         ...state,
         tabs: [...state.tabs, action.tab],
-        activeTabId: action.tab.id
+        activeTabId: action.tab.id,
+        history: recordActivation(state.history, action.tab.id)
       };
     }
     case "activate":
       return state.tabs.some((tab) => tab.id === action.tabId)
-        ? { ...state, activeTabId: action.tabId }
+        ? {
+            ...state,
+            activeTabId: action.tabId,
+            history: recordActivation(state.history, action.tabId)
+          }
         : state;
+    case "goBack":
+      return stepHistory(state, -1);
+    case "goForward":
+      return stepHistory(state, 1);
+    case "resetHistory":
+      return resetTabHistory(state);
     case "setDirty": {
       // Compare against the normalized target so dispatching `isDirty: false`
       // on a tab whose `isDirty` is already `undefined` is a no-op. Without
@@ -304,7 +342,13 @@ function retargetTab(
   return {
     tabs,
     activeTabId: state.activeTabId === oldId ? moved.id : state.activeTabId,
-    closeRequest: state.closeRequest?.tabId === oldId ? { tabId: moved.id } : state.closeRequest
+    closeRequest: state.closeRequest?.tabId === oldId ? { tabId: moved.id } : state.closeRequest,
+    // Visits ride along under the destination id — Back must land on the tab
+    // the file became, not on a name nothing answers to.
+    history: {
+      entries: state.history.entries.map((id) => (id === oldId ? moved.id : id)),
+      cursor: state.history.cursor
+    }
   };
 }
 
@@ -332,5 +376,89 @@ function removeTab(state: DesktopTabState, tabId: string): DesktopTabState {
     ? tabs[index]?.id ?? tabs[index - 1]?.id ?? null
     : state.activeTabId;
 
-  return { tabs, activeTabId, closeRequest: null };
+  // The closed tab's visits die with it; the cursor re-anchors on the last
+  // visit of the tab that stays active, so Back never lands on the tab that
+  // was just closed.
+  const entries = state.history.entries.filter((id) => id !== tabId);
+  let cursor = activeTabId === null ? -1 : entries.lastIndexOf(activeTabId);
+  // Every activated tab has an entry; if state arrived without one (a
+  // reducer-external tab list, say a test fixture), record it now.
+  if (cursor < 0 && activeTabId !== null) {
+    entries.push(activeTabId);
+    cursor = entries.length - 1;
+  }
+
+  return { tabs, activeTabId, closeRequest: null, history: { entries, cursor } };
+}
+
+/**
+ * Appends `tabId` as the current visit, truncating anything Forward could
+ * have revisited — browser-history semantics. Re-activating the tab already
+ * at the cursor is a no-op so repeated dispatches do not stack duplicates.
+ */
+function recordActivation(history: DesktopTabHistory, tabId: string): DesktopTabHistory {
+  if (history.entries[history.cursor] === tabId) return history;
+  const entries = [...history.entries.slice(0, history.cursor + 1), tabId];
+  return { entries, cursor: entries.length - 1 };
+}
+
+/**
+ * The index of the nearest visit past the cursor — before it for `direction`
+ * `-1`, after it for `1` — that still names an open tab. `-1` when there is
+ * nothing live to move to.
+ */
+function liveEntryIndex(state: DesktopTabState, direction: -1 | 1): number {
+  const { entries, cursor } = state.history;
+  for (let index = cursor + direction; index >= 0 && index < entries.length; index += direction) {
+    if (state.tabs.some((tab) => tab.id === entries[index])) return index;
+  }
+  return -1;
+}
+
+/** Whether the title bar's Back button has a previous tab to return to. */
+export function canGoBackInTabs(state: DesktopTabState): boolean {
+  return liveEntryIndex(state, -1) >= 0;
+}
+
+/** Whether the title bar's Forward button has a later visit to re-walk. */
+export function canGoForwardInTabs(state: DesktopTabState): boolean {
+  return liveEntryIndex(state, 1) >= 0;
+}
+
+/**
+ * Moves the history cursor and activates the tab it lands on, without
+ * recording: history navigation is a revisit, not a new visit — recording it
+ * would truncate the Forward tail it just walked out of.
+ */
+function stepHistory(state: DesktopTabState, direction: -1 | 1): DesktopTabState {
+  const index = liveEntryIndex(state, direction);
+  if (index < 0) return state;
+  const tabId = state.history.entries[index];
+  if (tabId === undefined) return state;
+  return {
+    ...state,
+    activeTabId: tabId,
+    history: { entries: state.history.entries, cursor: index }
+  };
+}
+
+/**
+ * Rebases history on the active tab for a workspace switch: Back must never
+ * resurrect a previous vault's visits. Already-rebased state is returned
+ * unchanged — this also fires on mount while the reducer's initial state is
+ * already empty.
+ */
+function resetTabHistory(state: DesktopTabState): DesktopTabState {
+  const active = state.activeTabId !== null && state.tabs.some((tab) => tab.id === state.activeTabId)
+    ? state.activeTabId
+    : null;
+  const entries = active === null ? [] : [active];
+  if (
+    state.history.cursor === entries.length - 1 &&
+    state.history.entries.length === entries.length &&
+    state.history.entries.every((id, index) => id === entries[index])
+  ) {
+    return state;
+  }
+  return { ...state, history: { entries, cursor: entries.length - 1 } };
 }

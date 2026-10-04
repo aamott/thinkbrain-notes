@@ -26,6 +26,7 @@ import { StatusBar } from "./StatusBar";
 import { TabBoundary } from "./TabBoundary";
 import { TabCloseRequest } from "./TabCloseRequest";
 import { TabContent } from "./TabContent";
+import { canGoBackInTabs, canGoForwardInTabs } from "../tabs/tabModel";
 import { TitleBar } from "./TitleBar";
 import { WorkspaceHeaderBar } from "./WorkspaceHeaderBar";
 import { WorkspaceSelectorProvider } from "../workspace/WorkspaceSelectorPortal";
@@ -129,6 +130,10 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
           activeTabId={tabState.activeTabId}
           rightPanel={effectiveRightPanel}
           showWorkspaceSelector={workspaceSelectorPlacement === "title bar"}
+          canGoBack={canGoBackInTabs(tabState)}
+          canGoForward={canGoForwardInTabs(tabState)}
+          onBack={() => dispatchTabs({ type: "goBack" })}
+          onForward={() => dispatchTabs({ type: "goForward" })}
           onSelectTab={(tabId) => dispatchTabs({ type: "activate", tabId })}
           onRequestCloseTab={(tabId) => dispatchTabs({ type: "requestClose", tabId })}
           onToggleRightPanel={shell.toggleRightPanel}

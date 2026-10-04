@@ -85,7 +85,8 @@ describe("file.renamed retargeting", () => {
     const { moveDocument, dispatchTabs } = await mount({
       tabs: [tab],
       activeTabId: tab.id,
-      closeRequest: null
+      closeRequest: null,
+      history: { entries: [tab.id], cursor: 0 }
     });
 
     await act(async () => {
@@ -107,7 +108,8 @@ describe("file.renamed retargeting", () => {
     const { moveDocument, dispatchTabs } = await mount({
       tabs: [tab],
       activeTabId: tab.id,
-      closeRequest: null
+      closeRequest: null,
+      history: { entries: [tab.id], cursor: 0 }
     });
 
     await act(async () => {
@@ -132,7 +134,8 @@ describe("file.renamed retargeting", () => {
     const { moveDocument, markDocumentConflict, reloadDocumentInPlace } = await mount({
       tabs: [tab],
       activeTabId: tab.id,
-      closeRequest: null
+      closeRequest: null,
+      history: { entries: [tab.id], cursor: 0 }
     });
 
     await act(async () => {
@@ -153,7 +156,8 @@ describe("file.renamed retargeting", () => {
     const { moveDocument, dispatchTabs, markDocumentConflict, reloadDocumentInPlace } = await mount({
       tabs: [tab],
       activeTabId: tab.id,
-      closeRequest: null
+      closeRequest: null,
+      history: { entries: [tab.id], cursor: 0 }
     });
 
     // An md→txt rename crosses the Markdown boundary: the adapter emits
@@ -183,7 +187,8 @@ describe("file.renamed retargeting", () => {
     const { moveDocument, dispatchTabs } = await mount({
       tabs: [tab],
       activeTabId: tab.id,
-      closeRequest: null
+      closeRequest: null,
+      history: { entries: [tab.id], cursor: 0 }
     });
 
     await act(async () => {
