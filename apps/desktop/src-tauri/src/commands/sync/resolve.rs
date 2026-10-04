@@ -150,8 +150,8 @@ pub struct Resolved {
 /// than failing the whole list — one unreadable pair must not hide the rest.
 #[tauri::command]
 pub fn list_conflicts(root_path: String) -> Result<Vec<ConflictSummary>, NativeError> {
-    let root = resolve_workspace_root(&root_path)?;
-    let Some(engine) = super::registry::engine(&root.to_string_lossy()) else {
+    let (root, engine) = super::registry::workspace_and_engine(&root_path)?;
+    let Some(engine) = engine else {
         return Ok(Vec::new());
     };
 
@@ -181,12 +181,12 @@ pub fn resolve_conflict(
     expected_ours: String,
     expected_theirs: String,
 ) -> Result<Resolved, NativeError> {
-    let root = resolve_workspace_root(&root_path)?;
+    let (root, engine) = super::registry::workspace_and_engine(&root_path)?;
     let key = root.to_string_lossy().to_string();
     // Without an engine there is no checkpoint, and without a checkpoint this
     // write would be the one thing Auto Sync promises never to be: a change to
     // the user's notes that cannot be undone.
-    let engine = super::registry::engine(&key).ok_or_else(|| {
+    let engine = engine.ok_or_else(|| {
         NativeError::new(
             "sync.not_recorded",
             "Auto Sync is not keeping history for this workspace, so a conflict cannot be resolved here.",
@@ -524,13 +524,12 @@ fn fingerprint(bytes: &[u8]) -> String {
 }
 
 fn put(path: &Path, bytes: &[u8]) -> Result<(), NativeError> {
-    std::fs::write(path, bytes).map_err(|error| {
-        failed(
-            "sync.resolution_write_failed",
-            "Could not write the resolved note.",
-            error,
-        )
-    })
+    super::write_atomically(
+        path,
+        bytes,
+        "sync.resolution_write_failed",
+        "Could not write the resolved note.",
+    )
 }
 
 fn discard(path: &Path) -> Result<(), NativeError> {

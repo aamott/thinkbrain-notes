@@ -19,6 +19,7 @@ use crate::commands::workspace::{acquire_workspace_mutation_lock, resolve_worksp
 
 use super::engine::Engine;
 use super::failed;
+use super::history_read_failed;
 use super::snapshot::{self, Reason};
 
 /// How far back the local-main diagnostic walks search before giving up.
@@ -113,10 +114,7 @@ pub struct Rate {
 /// `note` narrows the list to the changes that left content for one note —
 /// which is exactly the list of versions it can be restored to, and why the
 /// change that *deleted* it is left out.
-#[allow(
-    dead_code,
-    reason = "first-page convenience for internal readers and tests"
-)]
+#[cfg(test)]
 pub fn read(
     repo: &gix::Repository,
     note: Option<&str>,
@@ -157,13 +155,12 @@ pub fn restore(engine: &Engine, note: &str, change: &str) -> Result<Restored, Na
     let checkpoint = engine.checkpoint(std::slice::from_ref(&relative), Reason::VersionRestored)?;
 
     let absolute = vault.join(&relative);
-    crate::commands::workspace::write_file_atomically(&absolute, &wanted).map_err(|error| {
-        failed(
-            "sync.restore_failed",
-            "Could not write the restored note.",
-            error,
-        )
-    })?;
+    super::write_atomically(
+        &absolute,
+        &wanted,
+        "sync.restore_failed",
+        "Could not write the restored note.",
+    )?;
 
     Ok(Restored {
         note: note.to_string(),
@@ -197,7 +194,7 @@ pub fn last_recorded(repo: &gix::Repository) -> Result<Option<u64>, NativeError>
     };
     let commit = repo
         .find_commit(id)
-        .map_err(|error| unreadable("Could not read the sync history.", error))?;
+        .map_err(|error| history_read_failed("Could not read the sync history.", error))?;
     Ok(commit
         .time()
         .ok()
@@ -224,21 +221,15 @@ pub fn has_recorded(
     note: &Path,
     blob: gix::ObjectId,
 ) -> Result<bool, NativeError> {
-    let mut next = snapshot::head_commit(repo)?;
-
-    for _ in 0..SCAN {
-        let Some(id) = next else { break };
-        let commit = repo
-            .find_commit(id)
-            .map_err(|error| unreadable("Could not read the sync history.", error))?;
-        next = commit.parent_ids().next().map(|parent| parent.detach());
-
+    for commit in super::history_walk::first_parent_chain(repo, snapshot::head_commit(repo)?, SCAN)
+    {
+        let commit = commit?;
         let mut tree = commit
             .tree()
-            .map_err(|error| unreadable("Could not read the sync history.", error))?;
+            .map_err(|error| history_read_failed("Could not read the sync history.", error))?;
         let entry = tree
             .peel_to_entry_by_path(note)
-            .map_err(|error| unreadable("Could not read the sync history.", error))?;
+            .map_err(|error| history_read_failed("Could not read the sync history.", error))?;
         if entry.is_some_and(|entry| entry.object_id() == blob) {
             return Ok(true);
         }
@@ -265,17 +256,17 @@ fn version_at(
         .find_commit(id)
         .map_err(|_| missing())?
         .tree()
-        .map_err(|error| unreadable("Could not read the sync history.", error))?;
+        .map_err(|error| history_read_failed("Could not read the sync history.", error))?;
     let entry = tree
         .peel_to_entry_by_path(relative)
-        .map_err(|error| unreadable("Could not read the sync history.", error))?
+        .map_err(|error| history_read_failed("Could not read the sync history.", error))?
         .ok_or_else(missing)?;
     if !entry.mode().is_blob() {
         return Err(missing());
     }
     Ok(entry
         .object()
-        .map_err(|error| unreadable("Could not read that earlier version.", error))?
+        .map_err(|error| history_read_failed("Could not read that earlier version.", error))?
         .data
         .clone())
 }
@@ -288,22 +279,13 @@ fn count(
     message: Option<&str>,
 ) -> Result<usize, NativeError> {
     let mut counted = 0;
-    let mut next = head;
-    for _ in 0..SCAN {
-        let Some(id) = next else { break };
-        let commit = repo
-            .find_commit(id)
-            .map_err(|error| unreadable("Could not read the sync history.", error))?;
+    for commit in super::history_walk::first_parent_chain(repo, head, SCAN) {
+        let commit = commit?;
         if message.is_none_or(|wanted| commit.message_raw_sloppy() == wanted) {
             counted += 1;
         }
-        next = commit.parent_ids().next().map(|parent| parent.detach());
     }
     Ok(counted)
-}
-
-fn unreadable(message: &'static str, error: impl std::fmt::Display) -> NativeError {
-    failed("sync.history_read_failed", message, error)
 }
 
 // ---------------------------------------------------------------------------
@@ -316,13 +298,6 @@ fn unreadable(message: &'static str, error: impl std::fmt::Display) -> NativeErr
 /// `.git` no longer means that -- it records like any other and imports its
 /// history read-only. An empty list is the honest rendering of "Auto Sync is
 /// not looking after this", not an error.
-fn engine_for(
-    root_path: &str,
-) -> Result<Option<std::sync::Arc<super::engine::Engine>>, NativeError> {
-    let root = resolve_workspace_root(root_path)?;
-    Ok(super::registry::engine(&root.to_string_lossy()))
-}
-
 #[tauri::command]
 pub fn sync_history(
     root_path: String,
@@ -330,7 +305,7 @@ pub fn sync_history(
     limit: usize,
     cursor: Option<String>,
 ) -> Result<HistoryPage, NativeError> {
-    let Some(engine) = engine_for(&root_path)? else {
+    let Some(engine) = super::registry::engine_for(&root_path)? else {
         return Ok(HistoryPage {
             changes: Vec::new(),
             next_cursor: None,
@@ -366,7 +341,7 @@ pub fn restore_version(
     // Without an engine there is no restore point, and without one this write
     // would be the single thing Auto Sync promises never to be: a change to the
     // user's notes that cannot be undone.
-    let engine = engine_for(&root_path)?.ok_or_else(|| {
+    let engine = super::registry::engine_for(&root_path)?.ok_or_else(|| {
         NativeError::new(
             "sync.not_recorded",
             "Auto Sync is not keeping history for this workspace, so there is nothing to put back.",
@@ -377,7 +352,7 @@ pub fn restore_version(
 
 #[tauri::command]
 pub fn sync_conflict_rate(root_path: String) -> Result<Rate, NativeError> {
-    let Some(engine) = engine_for(&root_path)? else {
+    let Some(engine) = super::registry::engine_for(&root_path)? else {
         return Ok(Rate {
             decisions: 0,
             settled: 0,
@@ -467,7 +442,7 @@ pub fn read_version_diff(
     change: String,
     buffer: Option<String>,
 ) -> Result<VersionDiff, NativeError> {
-    let engine = engine_for(&root_path)?.ok_or_else(|| {
+    let engine = super::registry::engine_for(&root_path)?.ok_or_else(|| {
         NativeError::new(
             "sync.not_recorded",
             "Auto Sync is not keeping history for this workspace.",

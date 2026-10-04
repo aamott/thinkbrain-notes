@@ -7,6 +7,7 @@ use crate::NativeError;
 use super::conflict;
 use super::engine::{self, Engine, StuckNote};
 use super::failed;
+use super::history_read_failed;
 use super::snapshot;
 
 /// Writes the other side's version of each undecided note beside our own.
@@ -59,8 +60,7 @@ pub(super) fn leave_copies(
         let contents = repo
             .find_object(id)
             .map_err(|error| {
-                failed(
-                    "sync.history_unreadable",
+                history_read_failed(
                     "Could not read the other device's version of a note.",
                     error,
                 )
@@ -226,13 +226,7 @@ fn within(vault: &Path, path: &gix::bstr::BStr) -> Result<PathBuf, NativeError> 
 fn contents(repo: &gix::Repository, blob: gix::ObjectId) -> Result<Vec<u8>, NativeError> {
     Ok(repo
         .find_object(blob)
-        .map_err(|error| {
-            failed(
-                "sync.history_unreadable",
-                "Could not read a note that arrived.",
-                error,
-            )
-        })?
+        .map_err(|error| history_read_failed("Could not read a note that arrived.", error))?
         .data
         .clone())
 }
@@ -245,13 +239,12 @@ fn put(path: &Path, bytes: &[u8]) -> Result<(), NativeError> {
             }
         }
     }
-    crate::commands::workspace::write_file_atomically(path, bytes).map_err(|error| {
-        failed(
-            "sync.note_write_failed",
-            "Could not write a note that arrived.",
-            error,
-        )
-    })
+    super::write_atomically(
+        path,
+        bytes,
+        "sync.note_write_failed",
+        "Could not write a note that arrived.",
+    )
 }
 
 fn stuck(path: String, blob: Option<gix::ObjectId>, error: NativeError) -> StuckNote {
@@ -360,39 +353,8 @@ pub(super) fn skipped_unsupported(
     repo: &gix::Repository,
     vault: &Path,
 ) -> Result<Vec<StuckNote>, NativeError> {
-    let Some(commit) = snapshot::head_commit(repo)? else {
-        return Ok(Vec::new());
-    };
-    let tree = repo
-        .find_commit(commit)
-        .map_err(|error| {
-            failed(
-                "sync.history_unreadable",
-                "Could not read a recorded state.",
-                error,
-            )
-        })?
-        .tree()
-        .map_err(|error| {
-            failed(
-                "sync.history_unreadable",
-                "Could not read a recorded state.",
-                error,
-            )
-        })?;
-    let mut recorder = gix::traverse::tree::Recorder::default();
-    tree.traverse()
-        .breadthfirst(&mut recorder)
-        .map_err(|error| {
-            failed(
-                "sync.history_unreadable",
-                "Could not read a recorded state.",
-                error,
-            )
-        })?;
-
     let mut skipped = Vec::new();
-    for entry in recorder.records {
+    for entry in snapshot::recorded_entries(repo)? {
         let path = entry.filepath.to_string();
         if entry.mode.is_link() && !vault_is_symlink(vault, &path) {
             skipped.push(StuckNote::unsupported(

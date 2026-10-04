@@ -16,6 +16,7 @@ use std::time::{Duration, Instant};
 
 use crate::NativeError;
 use crate::commands::watcher::{WatchInterest, WorkspaceChange, WorkspaceChangeKind};
+use crate::commands::workspace::resolve_workspace_root;
 use crate::error::lock_or_recover;
 
 use super::bootstrap::bootstrap;
@@ -280,6 +281,25 @@ pub fn lane(key: &str) -> Arc<Mutex<()>> {
 pub fn engine(key: &str) -> Option<Arc<Engine>> {
     let guard = registry();
     guard.as_ref()?.engines.get(key).map(Arc::clone)
+}
+
+/// The canonical workspace `root_path` resolves to, and the engine recording
+/// it.
+///
+/// One resolution feeds both the key lookups and the vault path a caller
+/// joins against, so two spellings of one vault can never look up two
+/// engines.
+pub(super) fn workspace_and_engine(
+    root_path: &str,
+) -> Result<(PathBuf, Option<Arc<Engine>>), NativeError> {
+    let root = resolve_workspace_root(root_path)?;
+    let engine = engine(&root.to_string_lossy());
+    Ok((root, engine))
+}
+
+/// The engine recording the workspace `root_path` names, if there is one.
+pub(super) fn engine_for(root_path: &str) -> Result<Option<Arc<Engine>>, NativeError> {
+    Ok(workspace_and_engine(root_path)?.1)
 }
 
 /// Why `key` has no engine, when the reason was a failure rather than a choice.
