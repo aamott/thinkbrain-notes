@@ -215,6 +215,33 @@ export function TitleBar({
 
   return (
     <header className="flex items-end bg-titlebar border-b border-border min-w-0">
+      {/* Back/Forward over the tab-activation history. The convention is the
+          phone header's: Back stays rendered but dimmed at the bottom of the
+          stack; Forward appears only while there is somewhere forward to go. */}
+      <div className="flex items-center gap-0.5 self-center pl-3 pr-1">
+        <button
+          type="button"
+          className={NAV_BUTTON}
+          aria-label="Back"
+          title="Back"
+          disabled={!canGoBack}
+          onClick={onBack}
+        >
+          <ArrowLeft aria-hidden="true" className="size-[0.95rem]" />
+        </button>
+        {canGoForward && (
+          <button
+            type="button"
+            className={NAV_BUTTON}
+            aria-label="Forward"
+            title="Forward"
+            onClick={onForward}
+          >
+            <ArrowRight aria-hidden="true" className="size-[0.95rem]" />
+          </button>
+        )}
+      </div>
+
       {/* App identity or workspace selector + command palette. */}
       <div
         className="flex items-center gap-2 h-full pl-3 pr-2 flex-[0_0_max(10rem,calc(var(--tn-size-activitybar-width)+var(--tn-shell-left-width)))] max-[760px]:flex-[0_0_3rem]"
@@ -239,35 +266,6 @@ export function TitleBar({
         >
           <span aria-hidden="true">⌘</span>
         </button>
-      </div>
-
-      {/* Back/Forward over the tab-activation history. The convention is the
-          phone header's: Back stays rendered but dimmed at the bottom of the
-          stack; Forward appears only while there is somewhere forward to go.
-          Kept outside the fixed-width identity block so the buttons survive
-          the 760px collapse that squeezes it to 3rem. */}
-      <div className="flex items-center gap-0.5 self-center pr-1">
-        <button
-          type="button"
-          className={NAV_BUTTON}
-          aria-label="Back"
-          title="Back"
-          disabled={!canGoBack}
-          onClick={onBack}
-        >
-          <ArrowLeft aria-hidden="true" className="size-[0.95rem]" />
-        </button>
-        {canGoForward && (
-          <button
-            type="button"
-            className={NAV_BUTTON}
-            aria-label="Forward"
-            title="Forward"
-            onClick={onForward}
-          >
-            <ArrowRight aria-hidden="true" className="size-[0.95rem]" />
-          </button>
-        )}
       </div>
 
       {/* Tab strip — maps over open tabs with active/dirty/close affordances.
