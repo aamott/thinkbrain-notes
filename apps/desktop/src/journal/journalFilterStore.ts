@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { create } from "zustand";
 import { formatJournalDate, type JournalDate } from "@thinkbrain/core";
 
 /**
@@ -15,40 +15,35 @@ export interface JournalFilterState {
 
 const EMPTY: JournalFilterState = Object.freeze({ selectedDay: null });
 
-let state: JournalFilterState = EMPTY;
-const listeners = new Set<() => void>();
+const useJournalFilterStore = create<JournalFilterState>(() => EMPTY);
 
 export function getJournalFilter(): JournalFilterState {
-  return state;
+  return useJournalFilterStore.getState();
 }
 
 /** Selecting the day already selected clears it, so a click toggles (D60). */
 export function selectJournalDay(day: JournalDate | null): void {
+  const current = useJournalFilterStore.getState().selectedDay;
   const next =
     day !== null &&
-    state.selectedDay !== null &&
-    formatJournalDate(day) === formatJournalDate(state.selectedDay)
+    current !== null &&
+    formatJournalDate(day) === formatJournalDate(current)
       ? null
       : day;
 
-  if (next === state.selectedDay) return;
-  state = next === null ? EMPTY : Object.freeze({ selectedDay: next });
-  for (const listener of listeners) listener();
+  if (next === current) return;
+  useJournalFilterStore.setState(next === null ? EMPTY : { selectedDay: next });
 }
 
 export function subscribeJournalFilter(listener: () => void): () => void {
-  listeners.add(listener);
-  return () => {
-    listeners.delete(listener);
-  };
+  return useJournalFilterStore.subscribe(listener);
 }
 
 /** Test seam: no UI clears the whole filter set yet, but tests must. */
 export function resetJournalFilter(): void {
-  state = EMPTY;
-  for (const listener of listeners) listener();
+  useJournalFilterStore.setState(EMPTY);
 }
 
 export function useJournalFilter(): JournalFilterState {
-  return useSyncExternalStore(subscribeJournalFilter, getJournalFilter, getJournalFilter);
+  return useJournalFilterStore();
 }

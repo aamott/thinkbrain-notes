@@ -2,6 +2,7 @@ import type { EditorView } from "@codemirror/view";
 import { CircleHelp } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
+import { noteName } from "../lib/utils";
 import { Unavailable } from "../shell/Unavailable";
 import {
   cmHistoryCommands,
@@ -11,10 +12,11 @@ import {
 import { CodeMirrorDiff } from "./CodeMirrorDiff";
 import { DiffLayoutToggle } from "./DiffLayoutToggle";
 import { useResponsiveDiffLayout, type DiffLayout } from "./diffLayout";
-import { describeSize, describeWhen, noteName } from "./conflictCard";
+import { describeSize, describeWhen } from "./conflictCard";
 import { readConflict, resolveConflict } from "./conflictService";
 import type { ConflictComparison, ConflictResolution } from "./conflictTypes";
 import { failureMessage } from "./syncCopy";
+import { useComparisonPhase } from "./useComparisonPhase";
 
 /**
  * Two versions of one note, side by side — and a result that can be edited.
@@ -46,12 +48,6 @@ interface MergeTabProps {
    */
   readonly buffer?: string | null;
 }
-type Phase =
-  | { readonly at: "loading" }
-  | { readonly at: "ready"; readonly conflict: ConflictComparison }
-  | { readonly at: "done"; readonly note: string; readonly keptAs: string | null }
-  | { readonly at: "failed"; readonly message: string };
-
 const COMPARE_FAILURE = "Something went wrong reading the two versions.";
 
 /**
@@ -78,45 +74,38 @@ interface MergeSessionProps {
 }
 
 function MergeSession({ rootPath, copyPath, tabId, buffer }: MergeSessionProps) {
-  const [phase, setPhase] = useState<Phase>({ at: "loading" });
   const [resolving, setResolving] = useState(false);
+  // The saved-a-merge outcome lives apart from the fetch phase: reaching it
+  // leaves the comparison itself ready underneath.
+  const [done, setDone] = useState<{
+    readonly note: string;
+    readonly keptAs: string | null;
+  } | null>(null);
 
-  // Taken once, when the comparison is opened. The editor's text changes with
-  // every keystroke, and re-reading on each one would throw away the result
-  // already edited — "this computer's version" means the one on screen when
-  // the user came to compare, not a moving target.
-  const openedWith = useRef(buffer);
-
-  useEffect(() => {
-    let cancelled = false;
-    void readConflict(rootPath, copyPath, openedWith.current)
-      .then((conflict) => {
-        if (!cancelled) setPhase({ at: "ready", conflict });
-      })
-      .catch((cause: unknown) => {
-        if (!cancelled) {
-          setPhase({ at: "failed", message: failureMessage(cause, COMPARE_FAILURE) });
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [copyPath, rootPath]);
+  const readComparison = useCallback(
+    (openedWith: string | null | undefined) => readConflict(rootPath, copyPath, openedWith),
+    [rootPath, copyPath]
+  );
+  const { phase, setPhase } = useComparisonPhase<ConflictComparison>(
+    readComparison,
+    buffer,
+    COMPARE_FAILURE
+  );
 
   const resolve = useCallback(
     async (resolution: ConflictResolution) => {
       if (phase.at !== "ready") return;
       setResolving(true);
       try {
-        const done = await resolveConflict(rootPath, phase.conflict, resolution);
-        setPhase({ at: "done", note: done.note, keptAs: done.keptAs });
+        const resolved = await resolveConflict(rootPath, phase.result, resolution);
+        setDone({ note: resolved.note, keptAs: resolved.keptAs });
       } catch (cause) {
         setPhase({ at: "failed", message: failureMessage(cause, COMPARE_FAILURE) });
       } finally {
         setResolving(false);
       }
     },
-    [phase, rootPath]
+    [phase, rootPath, setPhase]
   );
 
   if (phase.at === "loading") {
@@ -125,13 +114,13 @@ function MergeSession({ rootPath, copyPath, tabId, buffer }: MergeSessionProps) 
   if (phase.at === "failed") {
     return <Unavailable title="Could not compare these versions" description={phase.message} />;
   }
-  if (phase.at === "done") {
+  if (done !== null) {
     return (
       <Unavailable
         title="Saved"
         description={
-          phase.keptAs
-            ? `Both versions were kept — the other one is now "${phase.keptAs}". You can always undo: earlier versions are kept in Version history.`
+          done.keptAs
+            ? `Both versions were kept — the other one is now "${done.keptAs}". You can always undo: earlier versions are kept in Version history.`
             : "You can always undo — the earlier versions of this note are kept in Version history."
         }
       />
@@ -139,7 +128,7 @@ function MergeSession({ rootPath, copyPath, tabId, buffer }: MergeSessionProps) 
   }
 
   return (
-    <MergeSurface conflict={phase.conflict} resolving={resolving} onResolve={resolve} tabId={tabId} />
+    <MergeSurface conflict={phase.result} resolving={resolving} onResolve={resolve} tabId={tabId} />
   );
 }
 
