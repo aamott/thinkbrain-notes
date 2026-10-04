@@ -38,20 +38,22 @@ const URI_ENCODE_SET: &AsciiSet = &CONTROLS
     .add(b'{')
     .add(b'}');
 
-/// `file://` URIs joined as `text/uri-list` wants them (CRLF-separated).
-fn uri_list(paths: &[String]) -> Vec<u8> {
+/// Each path percent-encoded to a `file://` URI.
+fn file_uris(paths: &[String]) -> Vec<String> {
     paths
         .iter()
         .map(|path| format!("file://{}", percent_encode(path.as_bytes(), URI_ENCODE_SET)))
-        .collect::<Vec<_>>()
-        .join("\r\n")
-        .into_bytes()
+        .collect()
+}
+
+/// `file://` URIs joined as `text/uri-list` wants them (CRLF-separated).
+fn uri_list(paths: &[String]) -> Vec<u8> {
+    file_uris(paths).join("\r\n").into_bytes()
 }
 
 /// The GTK copy verb plus newline-separated URIs, for gnome-copied-files.
 fn gnome_copied(paths: &[String]) -> Vec<u8> {
-    let uris = String::from_utf8_lossy(&uri_list(paths)).replace("\r\n", "\n");
-    format!("copy\n{uris}").into_bytes()
+    format!("copy\n{}", file_uris(paths).join("\n")).into_bytes()
 }
 
 /// Places `paths` on the system clipboard as a file copy.
@@ -91,16 +93,18 @@ mod wayland {
         let mut options = Options::new();
         options.clipboard(ClipboardType::Regular);
         options
-            .copy_multi(vec![
-                MimeSource {
-                    source: Source::Bytes(uri_list.to_vec().into_boxed_slice()),
-                    mime_type: MimeType::Specific(String::from("text/uri-list")),
-                },
-                MimeSource {
-                    source: Source::Bytes(gnome_copied.to_vec().into_boxed_slice()),
-                    mime_type: MimeType::Specific(String::from("x-special/gnome-copied-files")),
-                },
-            ])
+            .copy_multi(
+                [
+                    ("text/uri-list", uri_list),
+                    ("x-special/gnome-copied-files", gnome_copied),
+                ]
+                .into_iter()
+                .map(|(mime, bytes)| MimeSource {
+                    source: Source::Bytes(bytes.to_vec().into_boxed_slice()),
+                    mime_type: MimeType::Specific(mime.to_string()),
+                })
+                .collect(),
+            )
             .map_err(|error| failed("clipboard.set_failed", "Could not copy the file.", error))
     }
 }
@@ -183,28 +187,29 @@ mod x11 {
     }
 
     /// The serving loop: own CLIPBOARD, answer SelectionRequest events, and
-    /// re-assert ownership whenever a new payload arrives.
+    /// re-assert ownership whenever a new payload arrives. Fatal errors are
+    /// returned rather than logged so the single boundary in `run` reports
+    /// them with the connection's context.
     fn run(conn: RustConnection, screen_num: usize, rx: Receiver<FilePayloads>) {
-        let setup = conn.setup();
-        let root = setup.roots[screen_num].root;
-        let atoms = match Atoms::new(&conn)
+        if let Err(error) = serve(&conn, screen_num, rx) {
+            eprintln!("[clipboard] {error}");
+        }
+    }
+
+    fn serve(
+        conn: &RustConnection,
+        screen_num: usize,
+        rx: Receiver<FilePayloads>,
+    ) -> Result<(), String> {
+        let root = conn.setup().roots[screen_num].root;
+        let atoms = Atoms::new(conn)
             .map_err(ReplyError::from)
             .and_then(|cookie| cookie.reply())
-        {
-            Ok(atoms) => atoms,
-            Err(error) => {
-                eprintln!("[clipboard] could not intern X11 atoms: {error}");
-                return;
-            }
-        };
-        let win = match conn.generate_id() {
-            Ok(id) => id,
-            Err(error) => {
-                eprintln!("[clipboard] could not allocate an X11 window: {error}");
-                return;
-            }
-        };
-        if let Err(error) = conn.create_window(
+            .map_err(|error| format!("could not intern X11 atoms: {error}"))?;
+        let win = conn
+            .generate_id()
+            .map_err(|error| format!("could not allocate an X11 window: {error}"))?;
+        conn.create_window(
             COPY_DEPTH_FROM_PARENT,
             win,
             root,
@@ -216,10 +221,8 @@ mod x11 {
             WindowClass::INPUT_OUTPUT,
             COPY_FROM_PARENT,
             &CreateWindowAux::new(),
-        ) {
-            eprintln!("[clipboard] could not create the X11 clipboard window: {error}");
-            return;
-        }
+        )
+        .map_err(|error| format!("could not create the X11 clipboard window: {error}"))?;
 
         let mut formats: Vec<(Atom, Vec<u8>)> = Vec::new();
         let mut owned_time: Timestamp = CURRENT_TIME;
@@ -229,26 +232,19 @@ mod x11 {
             while let Ok((uri, gnome)) = rx.try_recv() {
                 formats = vec![(atoms.URI_LIST, uri), (atoms.GNOME_COPIED, gnome)];
                 owned_time = CURRENT_TIME;
-                if let Err(error) = conn.set_selection_owner(win, atoms.CLIPBOARD, owned_time) {
-                    eprintln!("[clipboard] could not claim the X11 selection: {error}");
-                    return;
-                }
+                conn.set_selection_owner(win, atoms.CLIPBOARD, owned_time)
+                    .map_err(|error| format!("could not claim the X11 selection: {error}"))?;
             }
-            if let Err(error) = conn.flush() {
-                eprintln!("[clipboard] X11 connection lost: {error}");
-                return;
-            }
+            conn.flush()
+                .map_err(|error| format!("X11 connection lost: {error}"))?;
             match conn.poll_for_event() {
                 Ok(Some(Event::SelectionRequest(event))) => {
-                    serve_request(&conn, &atoms, &formats, owned_time, event);
+                    serve_request(conn, &atoms, &formats, owned_time, event);
                 }
                 // Another owner took the selection (e.g. a text copy in some
                 // other app). The payloads stay — the next copy re-claims.
                 Ok(_) => {}
-                Err(error) => {
-                    eprintln!("[clipboard] X11 event error: {error}");
-                    return;
-                }
+                Err(error) => return Err(format!("X11 event error: {error}")),
             }
             // The channel has no wakeup, so poll: clipboard traffic is
             // rare enough that 25ms of latency is invisible.
@@ -330,14 +326,17 @@ mod x11 {
                 chunk[1] = u32::from(AtomEnum::NONE);
             }
         }
-        conn.change_property32(
+        if let Err(error) = conn.change_property32(
             PropMode::REPLACE,
             requestor,
             property,
             AtomEnum::ATOM,
             &values,
-        )
-        .is_ok()
+        ) {
+            eprintln!("[clipboard] could not answer a MULTIPLE request: {error}");
+            return false;
+        }
+        true
     }
 
     /// Answers one SelectionRequest event with a filled property or a refusal.
