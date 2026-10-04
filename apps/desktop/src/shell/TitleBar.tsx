@@ -215,38 +215,38 @@ export function TitleBar({
 
   return (
     <header className="flex items-end bg-titlebar border-b border-border min-w-0">
-      {/* Back/Forward over the tab-activation history. The convention is the
-          phone header's: Back stays rendered but dimmed at the bottom of the
-          stack; Forward appears only while there is somewhere forward to go. */}
-      <div className="flex items-center gap-0.5 self-center pl-3 pr-1">
-        <button
-          type="button"
-          className={NAV_BUTTON}
-          aria-label="Back"
-          title="Back"
-          disabled={!canGoBack}
-          onClick={onBack}
-        >
-          <ArrowLeft aria-hidden="true" className="size-[0.95rem]" />
-        </button>
-        {canGoForward && (
+      {/* App identity or workspace selector + command palette. Back/Forward
+          live inside this fixed-width block so the tab strip's left edge stays
+          aligned with the left popout no matter how many items join the row.
+          Both buttons always render — a toggling Forward would shift the
+          workspace selector. The row hides under the 760px collapse, where the
+          block shrinks to 3rem and can't fit it. */}
+      <div
+        className="flex items-center gap-2 h-full pl-3 pr-2 flex-[0_0_max(10rem,calc(var(--tn-size-activitybar-width)+var(--tn-shell-left-width)))] max-[760px]:flex-[0_0_3rem]"
+        aria-label={showWorkspaceSelector ? "Workspace and commands" : "ThinkBrain"}
+      >
+        <div className="flex items-center gap-0.5 max-[760px]:hidden">
+          <button
+            type="button"
+            className={NAV_BUTTON}
+            aria-label="Back"
+            title="Back"
+            disabled={!canGoBack}
+            onClick={onBack}
+          >
+            <ArrowLeft aria-hidden="true" className="size-[0.95rem]" />
+          </button>
           <button
             type="button"
             className={NAV_BUTTON}
             aria-label="Forward"
             title="Forward"
+            disabled={!canGoForward}
             onClick={onForward}
           >
             <ArrowRight aria-hidden="true" className="size-[0.95rem]" />
           </button>
-        )}
-      </div>
-
-      {/* App identity or workspace selector + command palette. */}
-      <div
-        className="flex items-center gap-2 h-full pl-3 pr-2 flex-[0_0_max(10rem,calc(var(--tn-size-activitybar-width)+var(--tn-shell-left-width)))] max-[760px]:flex-[0_0_3rem]"
-        aria-label={showWorkspaceSelector ? "Workspace and commands" : "ThinkBrain"}
-      >
+        </div>
         {showWorkspaceSelector ? (
           <WorkspaceSelectorOutlet variant="titlebar" />
         ) : (
