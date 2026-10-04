@@ -1,14 +1,10 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch } from "react";
-import { subscribeToNoteChanges } from "../events/noteChangeSubscription";
 import { setWorkspaceBridge } from "../extensions/workspaceBridge";
-import { createDebounced, type Debounced } from "../lib/debounce";
+import { createDebounced } from "../lib/debounce";
 import type { NativeMarkdownFileEntry, NativeWorkspaceSnapshot } from "../native/commands";
 import {
-  clampPanelWidth,
   DEFAULT_DESKTOP_STATE,
-  DEFAULT_LEFT_PANEL_WIDTH,
-  DEFAULT_RIGHT_PANEL_WIDTH,
   loadDesktopState,
   promoteRecentWorkspace,
   workspaceTabs,
@@ -19,7 +15,6 @@ import {
   readDesktopState,
   reportDesktopStateReadFailure
 } from "../settings/desktopStatePersistence";
-import { useSearchIndexStore } from "../search/searchIndexStore";
 import { useSettingsStore } from "../settings/settingsStore";
 import {
   createFileTab,
@@ -30,15 +25,12 @@ import {
   type DesktopTabState
 } from "../tabs/tabModel";
 import { desktopTabRegistry } from "../tabs/tabRegistry";
-import { useWikiLinkIndexStore } from "../wikiLinks/wikiLinkIndexStore";
 import { workspaceDesktopApi } from "../workspace/workspaceAdapter";
-import { watchWorkspace } from "../workspace/workspaceWatcher";
-import { addWorkspaceFile, removeWorkspaceFile } from "./workspaceFileList";
-import type { BottomPanel, LeftPanel, PanelSide } from "./shellTypes";
+import { usePanelLayout } from "./usePanelLayout";
+import { clearWorkspaceStores, indexWorkspaceStores, useWorkspaceIndexes } from "./useWorkspaceIndexes";
+import { addWorkspaceFile } from "./workspaceFileList";
 /** How long a burst of tab opens and closes settles before it is written down. */
 const TAB_PERSIST_DELAY_MS = 400;
-/** How long a drag settles before its final width is written down. */
-const PANEL_WIDTH_PERSIST_DELAY_MS = 300;
 interface UseWorkspaceLifecycleOptions {
   readonly tabState: DesktopTabState;
   readonly dispatchTabs: Dispatch<DesktopTabAction>;
@@ -53,12 +45,26 @@ export function useWorkspaceLifecycle({
   openMarkdownDocument,
   openFileDocument
 }: UseWorkspaceLifecycleOptions) {
-  const [leftPanel, setLeftPanel] = useState<LeftPanel | null>("explorer");
-  const [bottomPanel, setBottomPanel] = useState<BottomPanel | null>(null);
-  const [leftWidth, setLeftWidth] = useState(DEFAULT_LEFT_PANEL_WIDTH);
-  const [rightWidth, setRightWidth] = useState(DEFAULT_RIGHT_PANEL_WIDTH);
-  const leftWidthRef = useRef(leftWidth);
-  const rightWidthRef = useRef(rightWidth);
+  // Panel layout — which docks are open, how wide they are, and their
+  // debounced persistence — is its own hook; the lifecycle keeps the names
+  // its callers already use.
+  const {
+    bottomPanel,
+    cancelPanelWidthPersistence,
+    leftPanel,
+    leftWidth,
+    leftWidthRef,
+    resetPanelWidth,
+    restorePanels,
+    rightWidth,
+    rightWidthRef,
+    selectLeftPanel,
+    setLeftPanel,
+    showExplorer,
+    toggleBottomPanel,
+    updateBottomPanel,
+    updatePanelWidth
+  } = usePanelLayout();
   const [restoredWorkspacePath, setRestoredWorkspacePath] = useState<string | null>(null);
   const [workspaceName, setWorkspaceName] = useState<string | null>(null);
   const [workspaceFiles, setWorkspaceFiles] = useState<readonly NativeMarkdownFileEntry[]>([]);
@@ -93,12 +99,7 @@ export function useWorkspaceLifecycle({
       setRestoredWorkspacePath(windowRoot ?? desktopState.lastWorkspacePath);
       recentWorkspacePathsRef.current = recentPaths;
       setRecentWorkspacePaths(recentPaths);
-      setLeftPanel(desktopState.explorerOpen ? "explorer" : null);
-      leftWidthRef.current = desktopState.leftPanelWidth;
-      rightWidthRef.current = desktopState.rightPanelWidth;
-      setLeftWidth(desktopState.leftPanelWidth);
-      setRightWidth(desktopState.rightPanelWidth);
-      setBottomPanel(desktopState.bottomPanelOpen ? "terminal" : null);
+      restorePanels(desktopState);
 
       // Restore this workspace's tabs once. Guarded by a ref because StrictMode
       // double-mounts effects in dev — without this, tabs would open twice.
@@ -134,7 +135,7 @@ export function useWorkspaceLifecycle({
     return () => {
       active = false;
     };
-  }, [dispatchTabs, loadDocumentIntoView]);
+  }, [dispatchTabs, loadDocumentIntoView, restorePanels]);
 
   // Other windows can append to the recent workspace list, so refresh it
   // whenever this window regains focus.
@@ -186,66 +187,6 @@ export function useWorkspaceLifecycle({
     saveTabs({ tabs: tabState, workspacePath: restoredWorkspacePath });
   }, [saveTabs, stateRestored, tabState, restoredWorkspacePath]);
 
-  /**
-   * Coalesces rapid resize updates so a drag writes its final width once rather
-   * than rewriting the app-settings file for every pointer movement.
-   */
-  const savePanelWidth = useMemo(
-    (): Record<PanelSide, Debounced<number>> => ({
-      left: createDebounced<number>(
-        (width) => persistDesktopState({ leftPanelWidth: width }),
-        PANEL_WIDTH_PERSIST_DELAY_MS
-      ),
-      right: createDebounced<number>(
-        (width) => persistDesktopState({ rightPanelWidth: width }),
-        PANEL_WIDTH_PERSIST_DELAY_MS
-      )
-    }),
-    []
-  );
-  const schedulePanelWidthPersistence = useCallback(
-    (side: PanelSide, width: number) => savePanelWidth[side](width),
-    [savePanelWidth]
-  );
-
-  /** Applies and schedules persistence for a safe dock width. */
-  const updatePanelWidth = useCallback((side: PanelSide, requestedWidth: number) => {
-    const width = clampPanelWidth(requestedWidth);
-    if (side === "left") {
-      leftWidthRef.current = width;
-      setLeftWidth(width);
-    } else {
-      rightWidthRef.current = width;
-      setRightWidth(width);
-    }
-    schedulePanelWidthPersistence(side, width);
-  }, [schedulePanelWidthPersistence]);
-
-  /** Restores the side-specific dock width used by a double-clicked divider. */
-  const resetPanelWidth = useCallback((side: PanelSide) => {
-    updatePanelWidth(
-      side,
-      side === "left" ? DEFAULT_LEFT_PANEL_WIDTH : DEFAULT_RIGHT_PANEL_WIDTH
-    );
-  }, [updatePanelWidth]);
-
-  const updateBottomPanel = useCallback((panel: BottomPanel | null) => {
-    setBottomPanel(panel);
-    persistDesktopState({ bottomPanelOpen: panel !== null });
-  }, []);
-
-  const toggleBottomPanel = useCallback(() => {
-    updateBottomPanel(bottomPanel ? null : "terminal");
-  }, [bottomPanel, updateBottomPanel]);
-
-  const selectLeftPanel = useCallback((target: LeftPanel) => {
-    setLeftPanel((panel) => {
-      const next = panel === target ? null : target;
-      persistDesktopState({ explorerOpen: next === "explorer" });
-      return next;
-    });
-  }, []);
-
   const handleWorkspaceOpened = useCallback((rootPath: string, snapshot: NativeWorkspaceSnapshot) => {
     setRestoredWorkspacePath(rootPath);
     setWorkspaceName(snapshot.workspace.name);
@@ -271,11 +212,6 @@ export function useWorkspaceLifecycle({
     // takes precedence over this fallback on reload.
     persistDesktopState({ lastWorkspacePath: rootPath, recentWorkspacePaths: recentPaths });
   }, [updateRecentWorkspacePaths]);
-
-  const showExplorer = useCallback(() => {
-    setLeftPanel("explorer");
-    persistDesktopState({ explorerOpen: true });
-  }, []);
 
   const acknowledgeNewNoteFocus = useCallback(() => {
     setNewNoteFocusRequest(0);
@@ -323,133 +259,20 @@ export function useWorkspaceLifecycle({
     void useSettingsStore.getState().loadSettings(restoredWorkspacePath);
   }, [restoredWorkspacePath]);
 
-  // Subscribe both index caches to note mutation events for incremental
-  // updates. The stores' actions are workspace-scoped, so events from other
-  // windows are ignored.
-  useEffect(() => subscribeWorkspaceStores(), []);
-
-  // Index the restored workspace for search and wiki-links even when the
-  // explorer panel is closed. Without this, `indexWorkspace` is only called
-  // from `handleWorkspaceOpened`, which fires via the WorkspaceExplorer's mount
-  // effect — so closing the explorer before restart leaves both indexes empty.
-  // The store's `rootPath` guard prevents double-indexing when the explorer is
-  // also open and has already triggered `handleWorkspaceOpened`.
-  useEffect(() => {
-    if (!isTauri() || !restoredWorkspacePath) return;
-    const rootPath = restoredWorkspacePath;
-    const { rootPath: wikiRoot } = useWikiLinkIndexStore.getState();
-    if (wikiRoot === rootPath) return;
-    // Switching workspaces while this read is in flight must not index the old
-    // one over the new. `indexWorkspace` stamps its own root before checking
-    // anything, so its internal guards cannot reject a stale caller — the
-    // caller has to not call. Without this, a late listing for the previous
-    // vault leaves both indexes holding its notes under its root, and every
-    // later note event for the current vault is dropped by the root guards.
-    let cancelled = false;
-    void workspaceDesktopApi.openWorkspace(rootPath).then((snapshot) => {
-      if (cancelled) return;
-      // The explorer may have indexed this same workspace in the meantime.
-      if (useWikiLinkIndexStore.getState().rootPath === rootPath) return;
-      indexWorkspaceStores(rootPath, snapshot.files);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [restoredWorkspacePath]);
-
-  // Watch the open workspace for edits the app did not make. Both indexes and
-  // the calendar are caches of this folder, and until now only in-app writes
-  // refreshed them — a `git pull`, a sync client or another editor left them
-  // confidently wrong until the workspace was reopened. The watcher republishes
-  // outside changes as the same `note.*` events an in-app edit produces, so
-  // every consumer stays as it was.
-  useEffect(() => {
-    if (!isTauri() || !restoredWorkspacePath) return;
-    const rootPath = restoredWorkspacePath;
-    let cancelled = false;
-    let stop: (() => void) | null = null;
-
-    // A change the watcher cannot name path by path — a deleted folder takes
-    // its notes with it and the OS reports only the folder — so the caches are
-    // rebuilt from what is actually on disk.
-    const rebuildFromDisk = () => {
-      void workspaceDesktopApi.openWorkspace(rootPath).then((snapshot) => {
-        if (cancelled) return;
-        setWorkspaceFiles(snapshot.files);
-        indexWorkspaceStores(rootPath, snapshot.files);
-      });
-    };
-
-    void watchWorkspace(rootPath, rebuildFromDisk)
-      .then((dispose) => {
-        // The workspace can close while the watch is being set up.
-        if (cancelled) {
-          dispose();
-          return;
-        }
-        stop = dispose;
-      })
-      .catch((error: unknown) => {
-        // Watching is an enhancement over the previous behaviour, not a
-        // prerequisite for it. Failing to watch costs freshness, so say so
-        // rather than leaving the user to wonder why edits are not showing up.
-        console.warn(
-          "[watcher] Edits made outside the app will not be picked up automatically.",
-          error
-        );
-      });
-
-    return () => {
-      cancelled = true;
-      stop?.();
-    };
-  }, [restoredWorkspacePath]);
+  // Called after the bridge and settings effects so the index, watcher and
+  // file-list subscriptions inside it run in the order they had before the
+  // split.
+  useWorkspaceIndexes({ restoredWorkspacePath, setWorkspaceFiles });
 
   const handleMarkdownFileCreated = useCallback((rootPath: string, relativePath: string) => {
     if (rootPath !== restoredWorkspacePath) return;
     setWorkspaceFiles((files) => addWorkspaceFile(files, relativePath));
   }, [restoredWorkspacePath]);
 
-  // Keep the shell's file list level with the folder. The indexes hear about
-  // notes through their own subscriptions, but this list is separate state and
-  // backs the command palette — so without this an externally created note is
-  // searchable yet unopenable from the palette, and a deleted one stays listed.
-  // Both in-app and outside changes arrive here, since they are the same events.
-  useEffect(() => {
-    if (!restoredWorkspacePath) return;
-    const rootPath = restoredWorkspacePath;
-
-    return subscribeToNoteChanges(
-      () => rootPath,
-      (change) => {
-        switch (change.kind) {
-          case "created":
-            setWorkspaceFiles((files) => addWorkspaceFile(files, change.relativePath));
-            break;
-          case "deleted":
-            setWorkspaceFiles((files) => removeWorkspaceFile(files, change.relativePath));
-            break;
-          case "renamed":
-            setWorkspaceFiles((files) =>
-              addWorkspaceFile(
-                removeWorkspaceFile(files, change.oldRelativePath),
-                change.newRelativePath
-              )
-            );
-            break;
-          case "saved":
-            // The list holds names, and a save does not change one.
-            break;
-        }
-      }
-    );
-  }, [restoredWorkspacePath]);
-
   const cancelDeferredPersistence = useCallback(() => {
-    savePanelWidth.left.cancel();
-    savePanelWidth.right.cancel();
+    cancelPanelWidthPersistence();
     saveTabs.cancel();
-  }, [savePanelWidth, saveTabs]);
+  }, [cancelPanelWidthPersistence, saveTabs]);
 
   return {
     acknowledgeNewNoteFocus,
@@ -482,42 +305,13 @@ export function useWorkspaceLifecycle({
   };
 }
 
-/** Converts a runtime tab to the serializable shape persisted in desktop state. */
 /** What the debounced tab save needs: the tabs, and whose they are. */
 interface TabSave {
   readonly tabs: DesktopTabState;
   readonly workspacePath: string | null;
 }
 
-/**
- * The workspace's two index caches — the search index and the wiki-link
- * index — are always indexed, cleared and subscribed together, so the
- * pairing lives here rather than at every call site.
- */
-function indexWorkspaceStores(rootPath: string, files: readonly NativeMarkdownFileEntry[]): void {
-  void useSearchIndexStore.getState().indexWorkspace(rootPath, files);
-  void useWikiLinkIndexStore.getState().indexWorkspace(rootPath, files);
-}
-
-/** Clears both workspace index caches. See {@link indexWorkspaceStores}. */
-function clearWorkspaceStores(): void {
-  useSearchIndexStore.getState().clearWorkspace();
-  useWikiLinkIndexStore.getState().clearWorkspace();
-}
-
-/**
- * Subscribes both workspace index caches to note mutation events for
- * incremental updates; returns the combined unsubscribe.
- */
-function subscribeWorkspaceStores(): () => void {
-  const unsubscribeSearch = useSearchIndexStore.getState().subscribeToEvents();
-  const unsubscribeWikiLinks = useWikiLinkIndexStore.getState().subscribeToEvents();
-  return () => {
-    unsubscribeSearch();
-    unsubscribeWikiLinks();
-  };
-}
-
+/** Converts a runtime tab to the serializable shape persisted in desktop state. */
 function tabToPersisted(tab: DesktopTab): PersistedTab {
   return {
     id: tab.id,

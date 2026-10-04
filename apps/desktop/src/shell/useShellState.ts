@@ -23,148 +23,40 @@ import {
   useMemo,
   useReducer,
   useRef,
-  useState,
-  type Dispatch,
-  type SetStateAction
+  useState
 } from "react";
 
-import {
-  useDesktopCommands,
-  type DesktopCommand,
-  type DesktopCommandContext
-} from "../commands/commandRegistry";
-import type { NativeMarkdownFileEntry } from "../native/commands";
-import { isBuiltInLeftPanel } from "../panels/panelRegistryModel";
 import { useSettingsQuarantineAdapter } from "../settings/settingsQuarantineAdapter";
 import { useSettingsStore } from "../settings/settingsStore";
 import { useTheme } from "../settings/ThemeProvider";
-import type { SyncStatus } from "../sync/historyTypes";
-import { restoreVersion } from "../sync/syncService";
 import { useSyncSurfaces } from "../sync/useSyncSurfaces";
 import {
-  createConflictTab,
-  createStaticTab,
-  createVersionDiffTab,
   desktopTabReducer,
   documentTabId,
-  initialDesktopTabState,
-  type DesktopTab,
-  type DesktopTabAction,
-  type DesktopTabState
+  initialDesktopTabState
 } from "../tabs/tabModel";
 import { useWikiLinkIndexStore } from "../wikiLinks/wikiLinkIndexStore";
-import { inferTabKind, type NoteIndexEntry } from "@thinkbrain/core";
 import type { WorkspaceExplorerProps } from "../workspace/WorkspaceExplorer";
 import { checkForUpdate, relaunchApp } from "./appUpdater";
-import { useAppUpdate, type AppUpdate } from "./useAppUpdate";
+import type { ShellState } from "./shellStateTypes";
+import type { RightPanel } from "./shellTypes";
+import { useAppUpdate } from "./useAppUpdate";
 import { useDocumentViews } from "./useDocumentViews";
 import { useExternalDocumentSync } from "./useExternalDocumentSync";
-import { usePanelResize, type PanelResize } from "./usePanelResize";
+import { usePanelResize } from "./usePanelResize";
+import { useShellCommands } from "./useShellCommands";
 import { useShellShortcuts } from "./useShellShortcuts";
+import { useSyncActions } from "./useSyncActions";
 import { useWorkspaceLifecycle } from "./useWorkspaceLifecycle";
-import {
-  isSelectableRightPanel,
-  type BottomPanel,
-  type DocumentViewState,
-  type LeftPanel,
-  type PanelSide,
-  type RightPanel
-} from "./shellTypes";
 
-/** The shell's whole state, as both chromes consume it. */
-export interface ShellState {
-  // tabs & documents
-  readonly tabState: DesktopTabState;
-  readonly dispatchTabs: Dispatch<DesktopTabAction>;
-  readonly activeTab: DesktopTab | null;
-  readonly activeDocument: DocumentViewState | undefined;
-  readonly documents: Readonly<Record<string, DocumentViewState>>;
-  readonly conflicts: ReadonlySet<string>;
-  readonly unsavedNoteContents: string | null;
-  readonly saveDocument: (tab: DesktopTab) => Promise<boolean>;
-  readonly updateDocument: (tabId: string, contents: string) => void;
-  readonly loadDocumentIntoView: (tabId: string, rootPath: string, relativePath: string, kind?: string) => void;
-  readonly openMarkdownDocument: (rootPath: string, relativePath: string) => void;
-  readonly openFileDocument: (rootPath: string, relativePath: string) => void;
-  readonly keepMyVersion: (tab: DesktopTab) => void;
-  readonly loadDiskVersion: (tab: DesktopTab) => void;
-  readonly dismissEmptied: (tabId: string) => void;
-  readonly renameDocument: (rootPath: string, relativePath: string, newRelativePath: string) => Promise<void>;
-  readonly onOpenNote: (relativePath: string) => void;
-
-  // panels
-  readonly leftPanel: LeftPanel | null;
-  readonly rightPanel: RightPanel | null;
-  readonly setRightPanel: Dispatch<SetStateAction<RightPanel | null>>;
-  /** Sets the left panel without toggling. Prefer {@link selectLeftPanel} for user toggles. */
-  readonly setLeftPanel: Dispatch<SetStateAction<LeftPanel | null>>;
-  readonly selectLeftPanel: (panel: LeftPanel) => void;
-  /** Reveals a right panel, or closes it when it is already the open one. */
-  readonly toggleRightPanel: (panel: RightPanel) => void;
-  readonly bottomPanel: BottomPanel | null;
-  readonly updateBottomPanel: (panel: BottomPanel | null) => void;
-  readonly toggleBottomPanel: () => void;
-
-  // workspace
-  readonly workspaceName: string | null;
-  readonly restoredWorkspacePath: string | null;
-  readonly workspaceFiles: readonly NativeMarkdownFileEntry[];
-  readonly recentWorkspacePaths: readonly string[];
-  readonly stateRestored: boolean;
-  /** The explorer's whole prop bag, assembled once so both chromes agree. */
-  readonly explorerProps: WorkspaceExplorerProps;
-  /**
-   * The explorer's "Previous versions…": opens the file — by its inferred
-   * kind, so media opens in a viewer — and reveals its Version history.
-   */
-  readonly showVersionsOf: (rootPath: string, relativePath: string) => void;
-  /**
-   * Sync surfaces live on opposite docks: conflicts are an attention list on
-   * the left, Version history inspects the active file on the right.
-   */
-  readonly openSyncPanel: (panel: "conflicts" | "history") => void;
-  /** Opens a read-only comparison of `notePath` against the recorded change. */
-  readonly compareVersion: (notePath: string, changeId: string, versionAt?: number | null) => void;
-  /**
-   * Puts a recorded version back.
-   *
-   * An open dirty editor on that file holds edits a restore would overwrite,
-   * so it is saved first — and a refused or failed save aborts the restore
-   * rather than losing them. The native restore checkpoints what it replaces.
-   */
-  readonly restoreVersionSafely: (notePath: string, changeId: string) => Promise<void>;
-  /** Opens Settings scrolled to the workspace sync section. */
-  readonly openSyncSettings: () => void;
-  readonly reviewConflict: (copyPath: string, notePath: string) => void;
-
-  // chrome-agnostic services
-  readonly paletteOpen: boolean;
-  readonly openPalette: () => void;
-  readonly closePalette: (restoreFocus?: boolean) => void;
-  readonly paletteCommands: readonly DesktopCommand[];
-  readonly runCommand: (command: DesktopCommand) => void;
-  readonly openSettingsTab: () => void;
-  readonly syncStatus: SyncStatus;
-  readonly conflictBadges: Readonly<Record<string, number>>;
-  readonly noteIndex: readonly NoteIndexEntry[];
-  readonly update: AppUpdate;
-
-  // desktop-only, ignored by PhoneShell
-  readonly leftWidth: number;
-  readonly rightWidth: number;
-  readonly resize: PanelResize;
-  readonly resetPanelWidth: (side: PanelSide) => void;
-}
+export type { ShellState } from "./shellStateTypes";
 
 export function useShellState(): ShellState {
-  const paletteCommands = useDesktopCommands();
   const [tabState, dispatchTabs] = useReducer(desktopTabReducer, initialDesktopTabState);
   // Read by the outside-change subscription, which outlives any one set of
   // tabs and must not be rebuilt every time one opens or closes.
   const tabStateRef = useRef(tabState);
-  const paletteRestoreFocusRef = useRef<HTMLElement | null>(null);
   const [rightPanel, setRightPanel] = useState<RightPanel | null>(null);
-  const [paletteOpen, setPaletteOpen] = useState(false);
   const { theme, setTheme } = useTheme();
 
   // Looks once per window for a newer version. Silent when there is none,
@@ -228,7 +120,6 @@ export function useShellState(): ShellState {
     leftWidth,
     leftWidthRef,
     newNoteFocusRequest,
-    persistDesktopState,
     recentWorkspacePaths,
     resetPanelWidth,
     requestNewNoteFocus,
@@ -258,20 +149,6 @@ export function useShellState(): ShellState {
     dispatchTabs({ type: "resetHistory" });
   }, [restoredWorkspacePath]);
 
-  const openPalette = useCallback(() => {
-    paletteRestoreFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    setPaletteOpen(true);
-  }, []);
-
-  const closePalette = useCallback((restoreFocus = true) => {
-    setPaletteOpen(false);
-    if (restoreFocus) queueMicrotask(() => paletteRestoreFocusRef.current?.focus());
-  }, []);
-
-  const openSettingsTab = useCallback(() => {
-    dispatchTabs({ type: "open", tab: createStaticTab("settings", "Settings") });
-  }, []);
-
   /**
    * Reveals a right panel, or closes it when it is already showing.
    *
@@ -283,6 +160,28 @@ export function useShellState(): ShellState {
     setRightPanel((current) => (current === panel ? null : panel));
   }, []);
 
+  // The palette's open state, focus restore and command dispatch.
+  const {
+    closePalette,
+    openPalette,
+    openSettingsTab,
+    paletteCommands,
+    paletteOpen,
+    runCommand
+  } = useShellCommands({
+    dispatchTabs,
+    theme,
+    setTheme,
+    showExplorer,
+    requestNewNoteFocus,
+    selectLeftPanel,
+    setLeftPanel,
+    setRightPanel,
+    toggleRightPanel,
+    updateBottomPanel,
+    toggleBottomPanel
+  });
+
   // Opens a note by vault-relative path when a wiki link is clicked. Delegates
   // to `openMarkdownDocument` with the current workspace root.
   const onOpenNote = useCallback(
@@ -293,178 +192,28 @@ export function useShellState(): ShellState {
     [restoredWorkspacePath, openMarkdownDocument]
   );
 
-  // Opens the side-by-side comparison for a conflict. Named by the copy the
-  // sync daemon left behind, which is what identifies a conflict everywhere
-  // else; the note's own path rides along so the tab can be titled after it and
-  // can find an editor open on it.
-  const reviewConflict = useCallback(
-    (copyPath: string, notePath: string) => {
-      if (!restoredWorkspacePath) return;
-      dispatchTabs({
-        type: "open",
-        tab: createConflictTab({ rootPath: restoredWorkspacePath, relativePath: copyPath }, notePath)
-      });
-    },
-    [restoredWorkspacePath]
-  );
-
-  /**
-   * Flips `editor.livePreview` and persists it straight away.
-   *
-   * Read through the store's one-shot getter rather than a subscription: the
-   * shell only needs the value at the moment the command fires.
-   */
-  const toggleLivePreview = useCallback(() => {
-    const store = useSettingsStore.getState();
-    const current = store.getEffectiveValue("editor.livePreview") !== false;
-    void store.setSettingImmediately("editor.livePreview", !current);
-  }, []);
-
-  /** Executes a registered command with shell effects, keeping the registry canonical. */
-  const runCommand = useCallback((command: DesktopCommand) => {
-    const context: DesktopCommandContext = {
-      showExplorer,
-      focusNewNote: requestNewNoteFocus,
-      openSearch: () => {
-        setLeftPanel("search");
-        persistDesktopState({ explorerOpen: false });
-      },
-      toggleTheme: () => setTheme(theme === "dark" ? "light" : "dark"),
-      toggleExplorer: () => selectLeftPanel("explorer"),
-      toggleOutline: () => toggleRightPanel("outline"),
-      toggleAssistant: () => toggleRightPanel("assistant"),
-      toggleBottomPanel,
-      toggleLivePreview,
-      // `panelId` is an unconstrained string at this boundary (see
-      // `DesktopCommandContext`) so any extension can reveal a panel it
-      // registered; narrow it against the live registry before it reaches
-      // `RightPanel` shell state, so a typo or a stale id from a deactivated
-      // extension is dropped instead of persisting as an id nothing renders.
-      revealPanel: (panelId: string) => {
-        if (isSelectableRightPanel(panelId)) setRightPanel(panelId);
-      },
-      // Narrow the unconstrained string against the live left-panel registry
-      // before it reaches shell state, mirroring `revealPanel`'s guard for the
-      // right side. A typo or stale id from a deactivated extension is dropped
-      // instead of persisting as an id nothing renders.
-      revealLeftPanel: (panelId: string) => {
-        if (isBuiltInLeftPanel(panelId)) selectLeftPanel(panelId);
-      },
-      openSettings: openSettingsTab,
-      rebuildIndex: () => updateBottomPanel("terminal"),
-      closePalette
-    };
-    void Promise.resolve()
-      .then(() => command.handler(context))
-      .catch((error: unknown) => {
-        console.error(`[commandRegistry] Command "${command.id}" failed.`, error);
-      });
-  }, [closePalette, openSettingsTab, persistDesktopState, requestNewNoteFocus, selectLeftPanel, setLeftPanel, setTheme, showExplorer, theme, toggleBottomPanel, toggleLivePreview, toggleRightPanel, updateBottomPanel]);
+  // Conflict review and version-history actions for the sync surfaces.
+  const {
+    compareVersion,
+    openSyncPanel,
+    openSyncSettings,
+    restoreVersionSafely,
+    reviewConflict,
+    showVersionsOf
+  } = useSyncActions({
+    restoredWorkspacePath,
+    dispatchTabs,
+    tabStateRef,
+    setRightPanel,
+    selectLeftPanel,
+    openMarkdownDocument,
+    openFileDocument,
+    saveDocument,
+    loadDocumentIntoView,
+    openSettingsTab
+  });
 
   const activeTab = tabState.tabs.find((tab) => tab.id === tabState.activeTabId) ?? null;
-
-  /**
-   * "Previous versions…" opens the file itself — Markdown in an editor, other
-   * files by their inferred kind so media lands in a viewer — then reveals
-   * its Version history on the right.
-   */
-  const showVersionsOf = useCallback(
-    (rootPath: string, relativePath: string) => {
-      if (inferTabKind(relativePath) === "editor") {
-        openMarkdownDocument(rootPath, relativePath);
-      } else {
-        openFileDocument(rootPath, relativePath);
-      }
-      setRightPanel("history");
-    },
-    [openMarkdownDocument, openFileDocument]
-  );
-
-  // Conflicts are an attention list — they belong on the left with the other
-  // navigational surfaces. History inspects the active file, so it joins the
-  // document inspector on the right.
-  const openSyncPanel = useCallback(
-    (panel: "conflicts" | "history") => {
-      if (panel === "history") {
-        setRightPanel("history");
-      } else {
-        selectLeftPanel("conflicts");
-      }
-    },
-    [selectLeftPanel]
-  );
-
-  /**
-   * Opens a read-only comparison of a file with one of its recorded versions.
-   * The tab carries the workspace root so it survives the file being renamed
-   * after the version was recorded.
-   */
-  const compareVersion = useCallback(
-    (notePath: string, changeId: string, versionAt?: number | null) => {
-      if (!restoredWorkspacePath) return;
-      // The comparison replaces the inspector that launched it — leaving
-      // Version history open under the new tab only crowds a narrow window.
-      setRightPanel(null);
-      dispatchTabs({
-        type: "open",
-        tab: createVersionDiffTab(
-          { rootPath: restoredWorkspacePath, relativePath: notePath },
-          changeId,
-          versionAt ?? null
-        )
-      });
-    },
-    [restoredWorkspacePath]
-  );
-
-  const restoreVersionSafely = useCallback(
-    async (notePath: string, changeId: string) => {
-      if (!restoredWorkspacePath) {
-        throw new Error("Open a workspace before restoring an earlier version.");
-      }
-      // A dirty editor open on this file is holding edits the restore would
-      // overwrite. Save it first; when the save cannot happen — refused
-      // because something else wrote the file, or failed outright — the
-      // restore does not run and the edits stay put.
-      const sourceId = documentTabId({ rootPath: restoredWorkspacePath, relativePath: notePath });
-      const sourceTab = tabStateRef.current.tabs.find((tab) => tab.id === sourceId);
-      if (sourceTab?.isDirty && !(await saveDocument(sourceTab))) {
-        throw new Error("Save the current file before restoring an earlier version.");
-      }
-      await restoreVersion(restoredWorkspacePath, notePath, changeId);
-      // Re-read what the restore wrote into the open tab, if there is one.
-      // A fresh load rather than the in-place path: the restore already saved
-      // any dirty edits above, and the loader must match the tab's kind —
-      // `loadDocumentIntoView` picks the text-file reader for code editors,
-      // where `reloadDocumentInPlace` would ask the Markdown reader for a
-      // `.ts` file. Media viewers hold no document state to refresh.
-      if (sourceTab?.kind === "editor" || sourceTab?.kind === "code-editor") {
-        loadDocumentIntoView(sourceId, restoredWorkspacePath, notePath, sourceTab.kind);
-      }
-    },
-    [restoredWorkspacePath, saveDocument, loadDocumentIntoView]
-  );
-
-  /**
-   * Conflict settings live under the workspace sync section, so "Sync
-   * settings" opens the settings tab already scrolled to it.
-   */
-  const openSyncSettings = useCallback(() => {
-    const sectionId = "workspace:sync.destination";
-    useSettingsStore.getState().setActiveSection(sectionId);
-    openSettingsTab();
-    // The settings tab may still be mounting when this dispatch lands, so the
-    // scroll happens on the next frames rather than assuming the section is
-    // already in the document.
-    const scrollToSection = () =>
-      document
-        .getElementById(`settings-section-${sectionId}`)
-        ?.scrollIntoView({ behavior: "smooth", block: "start" });
-    requestAnimationFrame(() => {
-      scrollToSection();
-      requestAnimationFrame(scrollToSection);
-    });
-  }, [openSettingsTab]);
 
   useExternalDocumentSync({
     workspacePath: restoredWorkspacePath,
