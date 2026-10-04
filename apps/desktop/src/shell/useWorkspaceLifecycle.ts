@@ -167,17 +167,22 @@ export function useWorkspaceLifecycle({
   const saveTabs = useMemo(
     () =>
       createDebounced<TabSave>(({ tabs, workspacePath }) => {
-        const openTabs = tabs.tabs.map(tabToPersisted);
+        // New-tab pages are ephemeral — a restart opens files, not blanks.
+        const persistedTabs = tabs.tabs.filter((tab) => tab.kind !== "new-tab");
+        const openTabs = persistedTabs.map(tabToPersisted);
+        const activeTabId = persistedTabs.some((tab) => tab.id === tabs.activeTabId)
+          ? tabs.activeTabId
+          : null;
         persistDesktopState({
           // Targeted: this window says what *its* workspace has open and
           // touches no other, which is what keeps two windows from overwriting
           // each other. The flat pair below is the same list under the old
           // field, kept written so an older build still finds something.
           ...(workspacePath
-            ? { workspaceTabs: { workspacePath, openTabs, activeTabId: tabs.activeTabId } }
+            ? { workspaceTabs: { workspacePath, openTabs, activeTabId } }
             : {}),
           openTabs,
-          activeTabId: tabs.activeTabId
+          activeTabId
         });
       }, TAB_PERSIST_DELAY_MS),
     []

@@ -8,6 +8,7 @@
  */
 
 import { useEffect, useMemo, useRef } from "react";
+import { FilePlus2, FolderOpen, Search } from "lucide-react";
 import { CommandPalette, type WorkspaceFileResult } from "../commands/CommandPalette";
 import { BottomPanel as BottomPanelContent } from "../panels/BottomPanel";
 import { LeftPopout } from "../panels/LeftPopout";
@@ -82,6 +83,25 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
       ? rightPanel
       : null;
 
+  // The new-tab page's entry points, wired to the desktop's own surfaces:
+  // commands run through the palette's context, files through the palette's
+  // quick-open. The phone chrome supplies the same three routed its own way.
+  const { paletteCommands, runCommand, openPalette, workspaceName } = shell;
+  const newTab = useMemo(() => {
+    const runById = (id: string) => {
+      const command = paletteCommands.find((candidate) => candidate.id === id);
+      if (command) runCommand(command);
+    };
+    return {
+      workspaceName,
+      actions: [
+        { id: "new-note", label: "New note", icon: <FilePlus2 aria-hidden="true" className="size-4" />, onSelect: () => runById("new-note") },
+        { id: "open-file", label: "Open file", icon: <FolderOpen aria-hidden="true" className="size-4" />, onSelect: () => openPalette() },
+        { id: "search", label: "Search workspace", icon: <Search aria-hidden="true" className="size-4" />, onSelect: () => runById("search") }
+      ]
+    };
+  }, [paletteCommands, runCommand, openPalette, workspaceName]);
+
   const leftPopout = (
     <LeftPopout
       panel={leftPanel ?? "explorer"}
@@ -120,6 +140,8 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
           onForward={() => dispatchTabs({ type: "goForward" })}
           onSelectTab={(tabId) => dispatchTabs({ type: "activate", tabId })}
           onRequestCloseTab={(tabId) => dispatchTabs({ type: "requestClose", tabId })}
+          onKeepTab={(tabId) => dispatchTabs({ type: "keep", tabId })}
+          onNewTab={() => shell.openNewTab()}
           onToggleRightPanel={shell.toggleRightPanel}
           onOpenCommandPalette={shell.openPalette}
         />
@@ -199,7 +221,7 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
               {/* One boundary per tab: a crash shows the failed tab's state,
                   not a white shell, and the next tab mounts a fresh boundary. */}
               <TabBoundary key={activeTab?.id ?? "no-tab"}>
-                <TabContent tab={activeTab} document={activeDocument} onChange={shell.updateDocument} onSave={shell.saveDocument} noteIndex={shell.noteIndex} onOpenNote={shell.onOpenNote} onReopenNote={shell.loadDocumentIntoView} unsavedNoteContents={shell.unsavedNoteContents} onRestoreVersion={shell.restoreVersionSafely} />
+                <TabContent tab={activeTab} document={activeDocument} onChange={shell.updateDocument} onSave={shell.saveDocument} noteIndex={shell.noteIndex} onOpenNote={shell.onOpenNote} onReopenNote={shell.loadDocumentIntoView} unsavedNoteContents={shell.unsavedNoteContents} onRestoreVersion={shell.restoreVersionSafely} newTab={newTab} />
               </TabBoundary>
             </article>
             {shell.bottomPanel && (
@@ -249,7 +271,7 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
               .filter((file) => Boolean(file.rootPath))}
             onClose={shell.closePalette}
             onCommand={shell.runCommand}
-            onOpenFile={(file) => shell.openMarkdownDocument(file.rootPath, file.relativePath)}
+            onOpenFile={(file) => shell.openMarkdownDocument(file.rootPath, file.relativePath, "preview")}
           />
         )}
         <TabCloseRequest shell={shell} />

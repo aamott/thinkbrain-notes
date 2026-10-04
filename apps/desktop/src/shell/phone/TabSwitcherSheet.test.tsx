@@ -50,6 +50,7 @@ const sheet = (overrides: Record<string, unknown> = {}): React.ReactElement => (
     onDismiss={() => undefined}
     onSelect={() => undefined}
     onClose={() => undefined}
+    onNewTab={() => undefined}
     {...overrides}
   />
 );
@@ -78,7 +79,8 @@ describe("TabSwitcherSheet", () => {
 
     const list = grid(host)?.querySelector("ul");
     expect(list?.className).toContain("grid-cols-2");
-    expect(list?.querySelectorAll("li")).toHaveLength(3);
+    // Three tab cards plus the trailing new-tab card.
+    expect(list?.querySelectorAll("li")).toHaveLength(4);
   });
 
   it("previews a note's opening prose with frontmatter stripped", async () => {
@@ -219,12 +221,30 @@ describe("TabSwitcherSheet", () => {
     expect(close).not.toBeNull();
   });
 
-  // Closing the last tab leaves the sheet open over an empty workspace. An empty
-  // grid is a blank rectangle with no explanation, so the sheet says so instead.
-  it("explains itself when the last tab has been closed", async () => {
-    const host = await render(sheet({ tabs: [], activeTabId: null }));
+  // Closing the last tab leaves the sheet open over an empty workspace; the
+  // new-tab card is still the way forward, just like a browser's grid.
+  it("still offers a new tab when the last tab has been closed", async () => {
+    const onNewTab = vi.fn();
+    const host = await render(sheet({ tabs: [], activeTabId: null, onNewTab }));
 
-    expect(grid(host)?.querySelector("ul")).toBeNull();
-    expect(grid(host)?.textContent).toContain("No open tabs");
+    const card = grid(host)?.querySelector<HTMLButtonElement>('[aria-label="New tab"]');
+    expect(card).not.toBeNull();
+    await act(async () => card?.click());
+    expect(onNewTab).toHaveBeenCalledOnce();
+  });
+
+  it("opens a new tab from the trailing card without firing onDismiss", async () => {
+    const onNewTab = vi.fn();
+    const onDismiss = vi.fn();
+    const onSelect = vi.fn();
+    const host = await render(sheet({ onNewTab, onDismiss, onSelect }));
+
+    await act(async () => {
+      grid(host)?.querySelector<HTMLButtonElement>('[aria-label="New tab"]')?.click();
+    });
+
+    expect(onNewTab).toHaveBeenCalledOnce();
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(onDismiss).not.toHaveBeenCalled();
   });
 });

@@ -11,7 +11,7 @@ import type { Dispatch, SetStateAction } from "react";
 import type { DesktopCommand } from "../commands/commandRegistry";
 import type { NativeMarkdownFileEntry } from "../native/commands";
 import type { SyncStatus } from "../sync/historyTypes";
-import type { DesktopTab, DesktopTabAction, DesktopTabState } from "../tabs/tabModel";
+import type { DesktopTab, DesktopTabAction, DesktopTabState, TabOpenPlacement } from "../tabs/tabModel";
 import type { NoteIndexEntry } from "@thinkbrain/core";
 import type { WorkspaceExplorerProps } from "../workspace/WorkspaceExplorer";
 import type { AppUpdate } from "./useAppUpdate";
@@ -37,8 +37,10 @@ export interface ShellState {
   readonly saveDocument: (tab: DesktopTab) => Promise<boolean>;
   readonly updateDocument: (tabId: string, contents: string) => void;
   readonly loadDocumentIntoView: (tabId: string, rootPath: string, relativePath: string, kind?: string) => void;
-  readonly openMarkdownDocument: (rootPath: string, relativePath: string) => void;
-  readonly openFileDocument: (rootPath: string, relativePath: string) => void;
+  readonly openMarkdownDocument: (rootPath: string, relativePath: string, placement?: TabOpenPlacement) => void;
+  readonly openFileDocument: (rootPath: string, relativePath: string, placement?: TabOpenPlacement) => void;
+  /** Opens a blank landing tab; returns its id so the chrome can navigate to it. */
+  readonly openNewTab: () => string;
   readonly keepMyVersion: (tab: DesktopTab) => void;
   readonly loadDiskVersion: (tab: DesktopTab) => void;
   readonly dismissEmptied: (tabId: string) => void;

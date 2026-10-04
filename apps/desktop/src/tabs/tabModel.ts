@@ -17,6 +17,11 @@ export interface DesktopTab extends Tab {
   readonly versionChangeId?: string;
   /** When the selected recorded version was created, in epoch milliseconds. */
   readonly versionAt?: number | null;
+  /**
+   * Provisional tab: the next file open takes it over in place until an edit
+   * (or a double-click) makes it permanent. Transient — never persisted.
+   */
+  readonly preview?: boolean;
 }
 
 /** Media viewer tab kinds — read-only, no document state, no save button. */
@@ -70,8 +75,23 @@ export interface DesktopTabState {
   readonly history: DesktopTabHistory;
 }
 
+/**
+ * How an `open` action chooses where the file lands.
+ *
+ * - `"new"` — always a fresh tab (or activation of the one already open).
+ * - `"preview"` — provisional browsing: fill the standing preview tab, else
+ *   a blank new-tab page, else open a new preview tab. A permanent tab —
+ *   dirty or explicitly kept — is never displaced.
+ * - `"replace-active"` — the phone rule: fill the tab on screen when it can
+ *   give (replaceable and not dirty), otherwise append. The caller saves
+ *   pending edits first; a save that fails leaves the tab dirty, which is
+ *   exactly the case that must append rather than lose work.
+ */
+export type TabOpenPlacement = "new" | "preview" | "replace-active";
+
 export type DesktopTabAction =
-  | { readonly type: "open"; readonly tab: DesktopTab }
+  | { readonly type: "open"; readonly tab: DesktopTab; readonly placement?: TabOpenPlacement }
+  | { readonly type: "keep"; readonly tabId: string }
   | { readonly type: "activate"; readonly tabId: string }
   | { readonly type: "setDirty"; readonly tabId: string; readonly isDirty: boolean }
   | { readonly type: "requestClose"; readonly tabId: string }
@@ -246,6 +266,36 @@ export function createStaticTab(kind: Exclude<TabKind, "editor">, title: string)
   return { id: kind, title, kind };
 }
 
+let newTabCounter = 0;
+
+/**
+ * A blank landing tab — the browser's "New Tab" page.
+ *
+ * Unlike other static kinds, new tabs get unique ids so several can be open
+ * at once; they are skipped by persistence rather than restored.
+ */
+export function createNewTab(): DesktopTab {
+  newTabCounter += 1;
+  return { id: `new-tab:${newTabCounter}`, title: "New tab", kind: "new-tab" };
+}
+
+/**
+ * Kinds a file open may take over in place under `"replace-active"`.
+ *
+ * File-backed viewers and the blank new-tab page are interchangeable as
+ * "what is on screen"; chrome surfaces (settings, graph, extensions) and
+ * comparison tabs are not — displacing one would destroy a surface the user
+ * deliberately opened. Checked together with `isDirty` by the caller.
+ */
+const REPLACEABLE_KINDS: ReadonlySet<string> = new Set([
+  "editor",
+  "code-editor",
+  "image-viewer",
+  "audio-viewer",
+  "video-viewer",
+  "new-tab"
+]);
+
 /**
  * Pure tab-state transition function. It never performs persistence or saving:
  * the shell saves a requested dirty tab, then dispatches completeSaveAndClose.
@@ -266,13 +316,28 @@ export function desktopTabReducer(
               history: recordActivation(state.history, existing.id)
             };
       }
+      const placement = action.placement ?? "new";
+      const reuseId = placement === "new" ? null : reuseTargetId(state, placement);
+      if (reuseId !== null) {
+        const moved: DesktopTab = { ...action.tab, preview: placement === "preview" || undefined };
+        const swapped = replaceTabInPlace(state, reuseId, moved);
+        return {
+          ...swapped,
+          activeTabId: moved.id,
+          history: recordActivation(swapped.history, moved.id)
+        };
+      }
       return {
         ...state,
-        tabs: [...state.tabs, action.tab],
+        tabs: [...state.tabs, placement === "preview" ? { ...action.tab, preview: true } : action.tab],
         activeTabId: action.tab.id,
         history: recordActivation(state.history, action.tab.id)
       };
     }
+    case "keep":
+      return updateTab(state, action.tabId, (tab) =>
+        tab.preview ? { ...tab, preview: undefined } : tab
+      );
     case "activate":
       return state.tabs.some((tab) => tab.id === action.tabId)
         ? {
@@ -295,7 +360,11 @@ export function desktopTabReducer(
       // and a debounced desktop-state persistence write.
       const target = action.isDirty || undefined;
       return updateTab(state, action.tabId, (tab) =>
-        tab.isDirty === target ? tab : { ...tab, isDirty: target }
+        tab.isDirty === target
+          ? tab
+          // An edit is the moment a preview earns permanence — the next file
+          // open must leave this tab alone.
+          : { ...tab, isDirty: target, ...(action.isDirty ? { preview: undefined } : {}) }
       );
     }
     case "requestClose": {
@@ -343,13 +412,49 @@ function retargetTab(
 
   const moved: DesktopTab = {
     ...(inferTabKind(to.relativePath) === "editor" ? createEditorTab(to) : createFileTab(to)),
-    ...(existing.isDirty ? { isDirty: existing.isDirty } : {})
+    ...(existing.isDirty ? { isDirty: existing.isDirty } : {}),
+    ...(existing.preview ? { preview: existing.preview } : {})
   };
 
+  return replaceTabInPlace(state, oldId, moved);
+}
+
+/**
+ * The tab a file open may take over, or `null` to open a fresh one.
+ *
+ * `"preview"` prefers the standing preview tab — there is only ever one —
+ * then a blank new-tab page on screen, which exists precisely to be filled.
+ * `"replace-active"` may only take the tab on screen, and only when it is
+ * replaceable and holds no unsaved edits.
+ */
+function reuseTargetId(
+  state: DesktopTabState,
+  placement: Exclude<TabOpenPlacement, "new">
+): string | null {
+  const active = state.tabs.find((tab) => tab.id === state.activeTabId);
+  if (placement === "replace-active") {
+    return active && !active.isDirty && REPLACEABLE_KINDS.has(active.kind) ? active.id : null;
+  }
+  const preview = state.tabs.find((tab) => tab.preview);
+  if (preview) return preview.id;
+  return active?.kind === "new-tab" ? active.id : null;
+}
+
+/**
+ * Swaps the tab at `oldId` for `moved`, keeping its strip position and
+ * carrying everything keyed by the old id onto the new one: which tab is
+ * selected, any close decision waiting on it, and every history visit —
+ * Back must land on what the tab became, not on an id nothing answers to.
+ */
+function replaceTabInPlace(
+  state: DesktopTabState,
+  oldId: string,
+  moved: DesktopTab
+): DesktopTabState {
   const tabs = state.tabs
-    // Renaming one open note over another leaves one file, so it leaves one
-    // tab. Dropping the tab already there keeps ids unique — the shell keys a
-    // tab's loaded contents by them.
+    // Replacing over an id another tab already holds leaves two tabs
+    // claiming one identity. Dropping the displaced one keeps ids unique —
+    // the shell keys a tab's loaded contents by them.
     .filter((tab) => tab.id !== moved.id || tab.id === oldId)
     .map((tab) => (tab.id === oldId ? moved : tab));
 
@@ -357,8 +462,6 @@ function retargetTab(
     tabs,
     activeTabId: state.activeTabId === oldId ? moved.id : state.activeTabId,
     closeRequest: state.closeRequest?.tabId === oldId ? { tabId: moved.id } : state.closeRequest,
-    // Visits ride along under the destination id — Back must land on the tab
-    // the file became, not on a name nothing answers to.
     history: {
       entries: state.history.entries.map((id) => (id === oldId ? moved.id : id)),
       cursor: state.history.cursor

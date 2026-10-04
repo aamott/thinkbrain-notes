@@ -1,5 +1,6 @@
 import { inferTabKind } from "@thinkbrain/core";
 import { BottomSheet } from "@thinkbrain/ui";
+import { FilePlus2, FolderOpen, Search } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import { BottomPanel } from "../../panels/BottomPanel";
@@ -74,6 +75,7 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
     setRightPanel,
     openMarkdownDocument,
     openFileDocument,
+    openNewTab: openNewTabDocument,
     paletteCommands,
     runCommand: runPaletteCommand
   } = shell;
@@ -147,23 +149,45 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
     }
   }, [activeTabId, stateRestored, navigation]);
 
+  // The phone rule is one tab: a file tap fills the tab on screen. When that
+  // tab is dirty it is saved first — autosave fires on a 1.5s idle, and a tap
+  // inside that window would otherwise replace unsaved text. A failed save
+  // leaves the tab dirty, which is exactly when the reducer appends rather
+  // than displacing the edits.
+  const flushThen = useCallback(
+    (open: () => void) => {
+      if (activeTab?.isDirty) void saveDocument(activeTab).finally(open);
+      else open();
+    },
+    [activeTab, saveDocument]
+  );
+
   // Opens that *do* pass through the phone chrome push explicitly, so the note
   // they land on is one history entry — not two. The observer above skips the
   // resulting active-tab change because the route already names the same tab.
   const openMarkdown = useCallback(
     (rootPath: string, relativePath: string) => {
-      openMarkdownDocument(rootPath, relativePath);
-      navigation.push({ kind: "tab", tabId: editorTabId({ rootPath, relativePath }) });
+      flushThen(() => {
+        openMarkdownDocument(rootPath, relativePath, "replace-active");
+        navigation.push({ kind: "tab", tabId: editorTabId({ rootPath, relativePath }) });
+      });
     },
-    [openMarkdownDocument, navigation]
+    [openMarkdownDocument, navigation, flushThen]
   );
   const openFile = useCallback(
     (rootPath: string, relativePath: string) => {
-      openFileDocument(rootPath, relativePath);
-      navigation.push({ kind: "tab", tabId: fileTabId({ rootPath, relativePath }) });
+      flushThen(() => {
+        openFileDocument(rootPath, relativePath, "replace-active");
+        navigation.push({ kind: "tab", tabId: fileTabId({ rootPath, relativePath }) });
+      });
     },
-    [openFileDocument, navigation]
+    [openFileDocument, navigation, flushThen]
   );
+  const openNewTab = useCallback(() => {
+    // Same push pattern as the switcher's onSelect: creating the tab IS the
+    // navigation, so the ephemeral switcher overlay closes with it.
+    navigation.push({ kind: "tab", tabId: openNewTabDocument() });
+  }, [navigation, openNewTabDocument]);
   const openNote = useCallback(
     (relativePath: string) => {
       if (shell.restoredWorkspacePath) openMarkdown(shell.restoredWorkspacePath, relativePath);
@@ -308,6 +332,20 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
     const command = paletteCommands.find((candidate) => candidate.id === "new-note");
     if (command) runPaletteCommand(command);
   }, [navigation, paletteCommands, runPaletteCommand]);
+
+  // The new-tab page's entry points, routed through phone navigation the same
+  // way the hub and drawer reach those surfaces.
+  const newTab = useMemo(
+    () => ({
+      workspaceName: shell.workspaceName,
+      actions: [
+        { id: "new-note", label: "New note", icon: <FilePlus2 aria-hidden="true" className="size-4" />, onSelect: createNewNote },
+        { id: "files", label: "Browse files", icon: <FolderOpen aria-hidden="true" className="size-4" />, onSelect: () => navigation.push({ kind: "files" }) },
+        { id: "search", label: "Search", icon: <Search aria-hidden="true" className="size-4" />, onSelect: () => navigation.push({ kind: "panel", panel: "search" }) }
+      ]
+    }),
+    [shell.workspaceName, createNewNote, navigation]
+  );
 
   // "Open most recent note" reads a two-entry MRU of distinct Markdown tabs
   // out of the reducer's activation history: `entries` is already the visit
@@ -496,6 +534,7 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
               onReopenNote={shell.loadDocumentIntoView}
               unsavedNoteContents={shell.unsavedNoteContents}
               onRestoreVersion={shell.restoreVersionSafely}
+              newTab={newTab}
             />
           </div>
         </div>
@@ -559,6 +598,7 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
             navigation.push({ kind: "tab", tabId });
           }}
           onClose={(tabId) => shell.dispatchTabs({ type: "requestClose", tabId })}
+          onNewTab={openNewTab}
         />
 
         {/* The header `…` menu: every right-panel contribution in registry

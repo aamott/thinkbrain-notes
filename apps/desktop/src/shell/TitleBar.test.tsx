@@ -22,6 +22,8 @@ const render = async (props: {
   readonly onBack?: () => void;
   readonly onForward?: () => void;
   readonly onToggleRightPanel?: (panel: RightPanel) => void;
+  readonly onKeepTab?: (tabId: string) => void;
+  readonly onNewTab?: () => void;
 } = {}): Promise<HTMLDivElement> => {
   container = document.createElement("div");
   document.body.append(container);
@@ -39,6 +41,8 @@ const render = async (props: {
         onForward={props.onForward ?? (() => undefined)}
         onSelectTab={() => undefined}
         onRequestCloseTab={() => undefined}
+        onKeepTab={props.onKeepTab ?? (() => undefined)}
+        onNewTab={props.onNewTab ?? (() => undefined)}
         onToggleRightPanel={props.onToggleRightPanel ?? (() => undefined)}
         onOpenCommandPalette={() => undefined}
       />
@@ -400,5 +404,33 @@ describe("TitleBar", () => {
       useNotificationStore.getState().dismissNotification(item!.id);
     });
     expect(host.querySelector('[aria-label="Version history (1)"]')).toBeNull();
+  });
+
+  it("opens a new tab from the strip's trailing + button", async () => {
+    const onNewTab = vi.fn();
+    const host = await render({ onNewTab });
+
+    const button = host.querySelector<HTMLButtonElement>('nav [aria-label="New tab"]');
+    expect(button).not.toBeNull();
+    await act(async () => button!.click());
+
+    expect(onNewTab).toHaveBeenCalledOnce();
+  });
+
+  it("marks a preview tab's title italic and promotes it on double-click", async () => {
+    const onKeepTab = vi.fn();
+    const host = await render({
+      onKeepTab,
+      tabs: [{ id: "t1", title: "draft.md", kind: "editor", preview: true }]
+    });
+
+    const title = host.querySelector("[data-tab-id='t1'] .italic");
+    expect(title?.textContent).toContain("draft.md");
+
+    const activate = host.querySelector<HTMLButtonElement>("[data-tab-id='t1'] > button");
+    await act(async () => {
+      activate!.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    });
+    expect(onKeepTab).toHaveBeenCalledWith("t1");
   });
 });

@@ -21,7 +21,9 @@ export type BuiltInTabKind =
   /** Read-only audio player (mp3, ogg, wav, flac). */
   | "audio-viewer"
   /** Read-only video player (mp4, webm, mov). */
-  | "video-viewer";
+  | "video-viewer"
+  /** Blank landing tab with entry points (new note, open file, search). */
+  | "new-tab";
 
 /** Allows extension-owned kinds while retaining first-party autocomplete. */
 export type TabKind = BuiltInTabKind | (string & {});

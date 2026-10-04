@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, MoreHorizontal, Pin } from "lucide-react";
+import { ArrowLeft, ArrowRight, MoreHorizontal, Pin, Plus } from "lucide-react";
 import { cn } from "../lib/utils";
 import { tabAccessibleName, type DesktopTab } from "../tabs/tabModel";
 import { useRightPanelContributions, type RightPanelContribution } from "../panels/panelRegistryModel";
@@ -53,6 +53,10 @@ type TitleBarProps = {
   readonly onSelectTab: (tabId: string) => void;
   /** Called when the user clicks a tab's close affordance. */
   readonly onRequestCloseTab: (tabId: string) => void;
+  /** Called when the user double-clicks a tab, keeping a preview open. */
+  readonly onKeepTab: (tabId: string) => void;
+  /** Called when the user clicks the strip's "+" affordance. */
+  readonly onNewTab: () => void;
   /** Called when the user toggles a right-dock panel button. */
   readonly onToggleRightPanel: (panel: RightPanel) => void;
   /** Called when the user clicks the command palette entry point. */
@@ -86,6 +90,8 @@ export function TitleBar({
   onForward,
   onSelectTab,
   onRequestCloseTab,
+  onKeepTab,
+  onNewTab,
   onToggleRightPanel,
   onOpenCommandPalette
 }: TitleBarProps) {
@@ -300,6 +306,7 @@ export function TitleBar({
                 type="button"
                 className="flex flex-1 items-center min-w-0 gap-[0.45rem] h-full border-0 py-0 pr-1 pl-[0.65rem] text-inherit bg-transparent cursor-pointer font-inherit text-left focus-visible:text-foreground focus-visible:outline-1 focus-visible:outline-primary focus-visible:-outline-offset-2"
                 onClick={() => onSelectTab(tab.id)}
+                onDoubleClick={() => onKeepTab(tab.id)}
                 // Only restore tabs get an explicit name: an explicit
                 // aria-label would override the dirty dot's "Unsaved changes"
                 // descendant on ordinary tabs.
@@ -308,7 +315,9 @@ export function TitleBar({
                 aria-current={isActive ? "page" : undefined}
               >
                 <span aria-hidden="true">{tab.kind === "browser" ? "◉" : tab.kind === "graph" ? "◌" : "▤"}</span>
-                <span className="truncate">{tab.title}</span>
+                {/* Italic marks a provisional tab — the file the next click
+                    replaces until an edit keeps it. */}
+                <span className={cn("truncate", tab.preview && "italic")}>{tab.title}</span>
                 {tab.isDirty && <span className="bg-primary rounded-full h-[0.35rem] w-[0.35rem]" aria-label="Unsaved changes" />}
               </button>
               <button
@@ -322,6 +331,17 @@ export function TitleBar({
             </div>
           );
         })}
+        {/* Sits inside the strip so it scrolls with the tabs and stays where
+            the next tab would open, like a browser's "+" button. */}
+        <button
+          type="button"
+          aria-label="New tab"
+          title="New tab"
+          onClick={onNewTab}
+          className="flex h-[calc(100%-3px)] w-7 shrink-0 cursor-pointer items-center justify-center self-end rounded-t-small border-t-2 border-t-transparent bg-transparent text-titlebar-foreground hover:bg-secondary focus-visible:outline-2 focus-visible:outline-ring focus-visible:-outline-offset-1"
+        >
+          <Plus aria-hidden="true" className="size-[0.9rem]" />
+        </button>
         </nav>
         {/* The nav scrolls underneath; the fades sit over its ends. */}
         <div

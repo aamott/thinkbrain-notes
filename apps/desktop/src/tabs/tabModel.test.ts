@@ -5,6 +5,7 @@ import {
   canGoForwardInTabs,
   createEditorTab,
   createFileTab,
+  createNewTab,
   createStaticTab,
   createVersionDiffTab,
   desktopTabReducer,
@@ -434,6 +435,112 @@ describe("tab activation history", () => {
     expect(desktopTabReducer(opened, { type: "resetHistory" })).toBe(opened);
     expect(desktopTabReducer(initialDesktopTabState, { type: "resetHistory" }))
       .toBe(initialDesktopTabState);
+  });
+});
+
+describe("tab reuse placements", () => {
+  it("opens a file as a preview tab that the next preview open replaces in place", () => {
+    const state = reduce(
+      { type: "open", tab: firstNote, placement: "preview" },
+      { type: "open", tab: secondNote, placement: "preview" }
+    );
+
+    expect(state.tabs).toHaveLength(1);
+    expect(state.tabs[0]).toMatchObject({ id: secondNote.id, preview: true });
+    expect(state.activeTabId).toBe(secondNote.id);
+  });
+
+  it("does not displace a permanent clean tab — a preview opens beside it", () => {
+    const state = reduce(
+      { type: "open", tab: firstNote },
+      { type: "open", tab: welcome },
+      { type: "open", tab: secondNote, placement: "preview" }
+    );
+
+    expect(state.tabs.map((tab) => tab.id)).toEqual([firstNote.id, welcome.id, secondNote.id]);
+    expect(state.tabs[2]?.preview).toBe(true);
+    expect(state.activeTabId).toBe(secondNote.id);
+  });
+
+  it("an edit makes a preview permanent, so the next click opens a new one", () => {
+    const state = reduce(
+      { type: "open", tab: firstNote, placement: "preview" },
+      { type: "setDirty", tabId: firstNote.id, isDirty: true },
+      { type: "open", tab: secondNote, placement: "preview" }
+    );
+
+    expect(state.tabs.map((tab) => tab.id)).toEqual([firstNote.id, secondNote.id]);
+    expect(state.tabs[0]?.preview).toBeUndefined();
+    expect(state.tabs[1]?.preview).toBe(true);
+  });
+
+  it("a keep action makes a preview permanent", () => {
+    const state = reduce(
+      { type: "open", tab: firstNote, placement: "preview" },
+      { type: "keep", tabId: firstNote.id },
+      { type: "open", tab: secondNote, placement: "preview" }
+    );
+
+    expect(state.tabs).toHaveLength(2);
+    expect(state.tabs[0]?.preview).toBeUndefined();
+  });
+
+  it("fills an active new-tab page instead of opening beside it", () => {
+    const state = reduce(
+      { type: "open", tab: createNewTab() },
+      { type: "open", tab: firstNote, placement: "preview" }
+    );
+
+    expect(state.tabs).toHaveLength(1);
+    expect(state.tabs[0]).toMatchObject({ id: firstNote.id, preview: true });
+    expect(state.activeTabId).toBe(firstNote.id);
+  });
+
+  it("replace-active fills a clean tab on screen but appends past a dirty one", () => {
+    const clean = reduce(
+      { type: "open", tab: firstNote },
+      { type: "open", tab: secondNote, placement: "replace-active" }
+    );
+    expect(clean.tabs.map((tab) => tab.id)).toEqual([secondNote.id]);
+    // Replaced for good, not provisionally — the phone's tab is permanent.
+    expect(clean.tabs[0]?.preview).toBeUndefined();
+
+    const dirty = reduce(
+      { type: "open", tab: firstNote },
+      { type: "setDirty", tabId: firstNote.id, isDirty: true },
+      { type: "open", tab: secondNote, placement: "replace-active" }
+    );
+    expect(dirty.tabs.map((tab) => tab.id)).toEqual([firstNote.id, secondNote.id]);
+  });
+
+  it("replace-active never takes over a chrome surface", () => {
+    const state = reduce(
+      { type: "open", tab: welcome },
+      { type: "open", tab: firstNote, placement: "replace-active" }
+    );
+
+    expect(state.tabs.map((tab) => tab.id)).toEqual([welcome.id, firstNote.id]);
+  });
+
+  it("activates an already-open file instead of replacing or duplicating it", () => {
+    const state = reduce(
+      { type: "open", tab: firstNote, placement: "preview" },
+      { type: "open", tab: welcome },
+      { type: "open", tab: firstNote, placement: "preview" }
+    );
+
+    expect(state.tabs).toHaveLength(2);
+    expect(state.activeTabId).toBe(firstNote.id);
+  });
+
+  it("keeps Back working through a tab a file open replaced", () => {
+    const state = reduce(
+      { type: "open", tab: welcome },
+      { type: "open", tab: firstNote, placement: "preview" },
+      { type: "open", tab: secondNote, placement: "preview" }
+    );
+
+    expect(desktopTabReducer(state, { type: "goBack" }).activeTabId).toBe(welcome.id);
   });
 });
 

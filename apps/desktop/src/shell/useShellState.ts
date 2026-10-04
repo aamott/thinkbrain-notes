@@ -97,6 +97,7 @@ export function useShellState(): ShellState {
     loadDocumentIntoView,
     openMarkdownDocument,
     openFileDocument,
+    openNewTab,
     reloadDocumentInPlace,
     updateDocument,
     saveDocument,
@@ -187,7 +188,7 @@ export function useShellState(): ShellState {
   const onOpenNote = useCallback(
     (relativePath: string) => {
       if (!restoredWorkspacePath) return;
-      openMarkdownDocument(restoredWorkspacePath, relativePath);
+      openMarkdownDocument(restoredWorkspacePath, relativePath, "preview");
     },
     [restoredWorkspacePath, openMarkdownDocument]
   );
@@ -265,8 +266,13 @@ export function useShellState(): ShellState {
       initialWorkspacePath: stateRestored ? restoredWorkspacePath : null,
       onWorkspaceOpened: handleWorkspaceOpened,
       onWorkspaceUnavailable: handleWorkspaceUnavailable,
-      onMarkdownFileSelected: openMarkdownDocument,
-      onFileSelected: openFileDocument,
+      // Explorer clicks browse provisionally: each one takes over the
+      // preview tab until an edit makes it permanent. The phone chrome
+      // overrides these with its own always-replace wrappers.
+      onMarkdownFileSelected: (rootPath: string, relativePath: string) =>
+        openMarkdownDocument(rootPath, relativePath, "preview"),
+      onFileSelected: (rootPath: string, relativePath: string) =>
+        openFileDocument(rootPath, relativePath, "preview"),
       onMarkdownFileCreated: handleMarkdownFileCreated,
       onNewNoteFocusHandled: acknowledgeNewNoteFocus,
       newNoteFocusRequest,
@@ -315,6 +321,7 @@ export function useShellState(): ShellState {
     loadDocumentIntoView,
     openMarkdownDocument,
     openFileDocument,
+    openNewTab,
     keepMyVersion,
     loadDiskVersion,
     dismissEmptied,
