@@ -40,24 +40,23 @@ import {
 } from "react";
 import type { NativeWorkspaceEntry } from "../native/commands";
 import {
+  createAutoExpand,
+  destinationLabel,
+  edgeAutoScroll,
+  invalidMoveMessage,
   isInvalidWorkspaceMove,
-  WORKSPACE_INVALID_MOVE_MESSAGE,
+  runWorkspaceMove,
   workspaceMoveDestination
 } from "./workspaceMove";
 
 /** Distance in px a mouse/pen must travel before a press becomes a drag. */
-export const WORKSPACE_DRAG_THRESHOLD_PX = 6;
+const DRAG_THRESHOLD_PX = 6;
 /** Touch hold time before a row can be dragged instead of opened. */
 export const WORKSPACE_TOUCH_DRAG_HOLD_MS = 350;
 /** Movement before that hold means the gesture belongs to the scroller. */
-export const WORKSPACE_TOUCH_SCROLL_SLOP_PX = 12;
+const TOUCH_SCROLL_SLOP_PX = 12;
 /** Movement after the hold turns the lifted row into an active drag. */
-export const WORKSPACE_TOUCH_DRAG_SLOP_PX = 6;
-/** Hover time before a collapsed folder target expands. */
-export const WORKSPACE_DRAG_AUTO_EXPAND_MS = 600;
-/** Distance from the scroll container's edge that starts auto-scrolling. */
-export const WORKSPACE_DRAG_AUTOSCROLL_EDGE_PX = 28;
-const AUTOSCROLL_STEP_PX = 14;
+const TOUCH_DRAG_SLOP_PX = 6;
 
 /** DOM marker placed on every tree row wrapper. */
 export const WORKSPACE_TREE_ROW_ATTR = "data-workspace-tree-row";
@@ -138,9 +137,7 @@ interface DragSession {
   upListener: EventListener | null;
   cancelListener: EventListener | null;
   keyListener: ((event: KeyboardEvent) => void) | null;
-  expandTimer: ReturnType<typeof setTimeout> | null;
   holdTimer: ReturnType<typeof setTimeout> | null;
-  expandTarget: string | null;
   keyboardDestinations: readonly string[] | null;
   keyboardIndex: number;
   suppressClick: boolean;
@@ -148,11 +145,6 @@ interface DragSession {
   previewElement: HTMLElement | null;
   /** The page's prior `user-select`, restored exactly on teardown. */
   previousUserSelect: string;
-}
-
-function destinationLabel(parentPath: string): string {
-  if (!parentPath) return "workspace root";
-  return parentPath.split("/").at(-1) ?? parentPath;
 }
 
 /**
@@ -204,6 +196,38 @@ function ensureDragPreview(session: DragSession, x: number, y: number): void {
   session.previewElement.style.transform = `translate3d(${x + 12}px, ${y - 14}px, 0)`;
 }
 
+/**
+ * Builds a session with the shared defaults; each input kind overrides the
+ * coordinates/identity fields that differ.
+ */
+function newSession(entry: NativeWorkspaceEntry, over: Partial<DragSession>): DragSession {
+  return {
+    entry,
+    phase: "pending",
+    cancelled: false,
+    inputKind: "pointer",
+    pointerType: "",
+    pointerId: -1,
+    startX: 0,
+    startY: 0,
+    lastX: 0,
+    lastY: 0,
+    pointerTarget: null,
+    moveListener: null,
+    upListener: null,
+    cancelListener: null,
+    keyListener: null,
+    holdTimer: null,
+    keyboardDestinations: null,
+    keyboardIndex: 0,
+    suppressClick: false,
+    contextMenuOpened: false,
+    previewElement: null,
+    previousUserSelect: document.body.style.userSelect,
+    ...over
+  };
+}
+
 export function useWorkspaceTreeDrag({
   folderPaths,
   isExpanded,
@@ -211,7 +235,6 @@ export function useWorkspaceTreeDrag({
   moveEntry,
   openContextMenu,
   containerRef,
-  announce: announceFromHost,
   html5Active
 }: {
   /** Visible folder paths in tree order — the keyboard destination cycle. */
@@ -223,8 +246,6 @@ export function useWorkspaceTreeDrag({
   readonly openContextMenu?: (entry: NativeWorkspaceEntry, x: number, y: number) => void;
   /** The tree's scroll container, supplied by the host so auto-scroll can reach it. */
   readonly containerRef: RefObject<HTMLUListElement | null>;
-  /** Optional host announcement hook (defaults to internal state). */
-  readonly announce?: (message: string) => void;
   /**
    * When true, `useWorkspaceFileDrag` owns mouse/pen drags and pointer
    * sessions must not arm — a pending session racing a native dragstart
@@ -244,11 +265,9 @@ export function useWorkspaceTreeDrag({
   useEffect(() => {
     handlersRef.current = { folderPaths, isExpanded, expandFolder, moveEntry, openContextMenu, html5Active };
   });
+  const [autoExpand] = useState(createAutoExpand);
 
-  const announce = useCallback((message: string) => {
-    setAnnouncement(message);
-    announceFromHost?.(message);
-  }, [announceFromHost]);
+  const announce = setAnnouncement;
 
   const setTarget = useCallback((path: string | null, valid: boolean) => {
     setDropTargetPath(path);
@@ -277,11 +296,11 @@ export function useWorkspaceTreeDrag({
         // Already released by the browser.
       }
     }
-    if (session.expandTimer !== null) clearTimeout(session.expandTimer);
     if (session.holdTimer !== null) clearTimeout(session.holdTimer);
+    autoExpand.clear();
     session.previewElement?.remove();
     document.body.style.userSelect = session.previousUserSelect;
-  }, []);
+  }, [autoExpand]);
 
   const clearVisualState = useCallback(() => {
     setDraggedPath(null);
@@ -311,32 +330,13 @@ export function useWorkspaceTreeDrag({
     };
   }, [endDomSession]);
 
-  const updateAutoExpand = useCallback((session: DragSession, path: string | null, valid: boolean) => {
-    const target = valid && path ? path : null;
-    if (session.expandTarget === target) return;
-    session.expandTarget = target;
-    if (session.expandTimer !== null) {
-      clearTimeout(session.expandTimer);
-      session.expandTimer = null;
+  /** Escape cancels any live session; shared by the pointer and touch paths. */
+  const escapeCancel = useCallback((key: KeyboardEvent) => {
+    if (key.key === "Escape") {
+      key.preventDefault();
+      cancel();
     }
-    if (target && !handlersRef.current.isExpanded(target)) {
-      session.expandTimer = setTimeout(() => {
-        session.expandTimer = null;
-        handlersRef.current.expandFolder(target);
-      }, WORKSPACE_DRAG_AUTO_EXPAND_MS);
-    }
-  }, []);
-
-  const autoScroll = useCallback((clientY: number) => {
-    const container = containerRef.current;
-    if (!container) return;
-    const rect = container.getBoundingClientRect();
-    if (clientY < rect.top + WORKSPACE_DRAG_AUTOSCROLL_EDGE_PX) {
-      container.scrollTop -= AUTOSCROLL_STEP_PX;
-    } else if (clientY > rect.bottom - WORKSPACE_DRAG_AUTOSCROLL_EDGE_PX) {
-      container.scrollTop += AUTOSCROLL_STEP_PX;
-    }
-  }, [containerRef]);
+  }, [cancel]);
 
   const updateTargetAt = useCallback((session: DragSession, x: number, y: number) => {
     const resolved = resolveDropTarget(x, y);
@@ -344,9 +344,9 @@ export function useWorkspaceTreeDrag({
     const path = resolved.isFile ? null : resolved.path;
     const valid = path !== null && !isInvalidWorkspaceMove(session.entry, path);
     setTarget(path, valid);
-    updateAutoExpand(session, path, valid);
-    autoScroll(y);
-  }, [autoScroll, setTarget, updateAutoExpand]);
+    autoExpand.update(path, valid, handlersRef.current);
+    edgeAutoScroll(containerRef.current, y);
+  }, [autoExpand, containerRef, setTarget]);
 
   const finishDrop = useCallback(async (session: DragSession, parentPath: string) => {
     // A drop is one-shot: the first release/Enter latches `dropping` and any
@@ -354,30 +354,28 @@ export function useWorkspaceTreeDrag({
     if (session.phase === "dropping") return;
     session.phase = "dropping";
     const destination = workspaceMoveDestination(session.entry, parentPath);
-    announce(`Moving ${session.entry.name} to ${destinationLabel(parentPath)}.`);
-    const ok = await handlersRef.current.moveEntry(session.entry, parentPath);
+    const ok = await runWorkspaceMove(
+      session.entry,
+      parentPath,
+      handlersRef.current.moveEntry,
+      handlersRef.current.expandFolder,
+      announce
+    );
     // The session may have been cancelled while the move was in flight.
     if (sessionRef.current !== session) return;
     sessionRef.current = null;
     clearVisualState();
-    if (ok) {
-      announce(`Moved ${session.entry.name} to ${destination}.`);
-      // Expand a non-root destination so the moved row stays on screen, then
-      // land focus on its drag handle once the refresh has rendered it.
-      if (parentPath) handlersRef.current.expandFolder(parentPath);
-      requestAnimationFrame(() => {
-        if (session.cancelled) return;
-        const rows = document.querySelectorAll(`[${WORKSPACE_TREE_ROW_ATTR}]`);
-        for (const row of rows) {
-          if (row.getAttribute(WORKSPACE_TREE_ROW_ATTR) !== destination) continue;
-          const handle = row.querySelector<HTMLElement>(`[${WORKSPACE_DRAG_HANDLE_ATTR}]`);
-          handle?.focus();
-          break;
-        }
-      });
-    } else {
-      announce(`Could not move ${session.entry.name}.`);
-    }
+    if (!ok) return;
+    // Land focus on the moved row's drag handle once the refresh renders it.
+    requestAnimationFrame(() => {
+      if (session.cancelled) return;
+      const rows = document.querySelectorAll(`[${WORKSPACE_TREE_ROW_ATTR}]`);
+      for (const row of rows) {
+        if (row.getAttribute(WORKSPACE_TREE_ROW_ATTR) !== destination) continue;
+        row.querySelector<HTMLElement>(`[${WORKSPACE_DRAG_HANDLE_ATTR}]`)?.focus();
+        break;
+      }
+    });
   }, [announce, clearVisualState]);
 
   const suppressNextClick = useCallback(() => {
@@ -412,11 +410,8 @@ export function useWorkspaceTreeDrag({
     clearVisualState();
     if (path === null) {
       announce(`Move of ${session.entry.name} cancelled.`);
-    } else if (path === session.entry.parent_path) {
-      announce(`${session.entry.name} is already in ${destinationLabel(path)}.`);
     } else {
-      // The only other invalid target is the folder's own subtree.
-      announce(WORKSPACE_INVALID_MOVE_MESSAGE);
+      announce(invalidMoveMessage(session.entry, path));
     }
   }, [announce, clearVisualState, endDomSession, finishDrop, suppressNextClick]);
 
@@ -434,10 +429,7 @@ export function useWorkspaceTreeDrag({
     if (handlersRef.current.html5Active) return;
     if (event.button !== 0) return;
     const target = event.currentTarget as HTMLElement;
-    const session: DragSession = {
-      entry,
-      phase: "pending",
-      cancelled: false,
+    const session = newSession(entry, {
       inputKind: "pointer",
       pointerType: event.pointerType,
       pointerId: event.pointerId,
@@ -445,21 +437,8 @@ export function useWorkspaceTreeDrag({
       startY: event.clientY,
       lastX: event.clientX,
       lastY: event.clientY,
-      pointerTarget: target,
-      moveListener: null,
-      upListener: null,
-      cancelListener: null,
-      keyListener: null,
-      expandTimer: null,
-      holdTimer: null,
-      expandTarget: null,
-      keyboardDestinations: null,
-      keyboardIndex: 0,
-      suppressClick: false,
-      contextMenuOpened: false,
-      previewElement: null,
-      previousUserSelect: document.body.style.userSelect
-    };
+      pointerTarget: target
+    });
     sessionRef.current = session;
 
     try {
@@ -475,7 +454,7 @@ export function useWorkspaceTreeDrag({
       session.lastY = move.clientY;
       if (session.phase === "pending") {
         const distance = Math.hypot(move.clientX - session.startX, move.clientY - session.startY);
-        if (distance < WORKSPACE_DRAG_THRESHOLD_PX) return;
+        if (distance < DRAG_THRESHOLD_PX) return;
         activateDrag(session, move.clientX, move.clientY);
       }
       move.preventDefault();
@@ -494,17 +473,12 @@ export function useWorkspaceTreeDrag({
       completeDrop(session, up.clientX, up.clientY);
     };
     session.cancelListener = () => cancel();
-    session.keyListener = (key: KeyboardEvent) => {
-      if (key.key === "Escape") {
-        key.preventDefault();
-        cancel();
-      }
-    };
+    session.keyListener = escapeCancel;
     target.addEventListener("pointermove", session.moveListener);
     target.addEventListener("pointerup", session.upListener);
     target.addEventListener("pointercancel", session.cancelListener);
     window.addEventListener("keydown", session.keyListener, true);
-  }, [activateDrag, cancel, completeDrop, endDomSession, updateTargetAt]);
+  }, [activateDrag, cancel, completeDrop, endDomSession, escapeCancel, updateTargetAt]);
 
   /**
    * Row touches stay browser-owned until the hold proves intent. Early motion
@@ -516,10 +490,7 @@ export function useWorkspaceTreeDrag({
     const touch = event.changedTouches[0];
     if (!touch) return;
     const target = event.currentTarget as HTMLElement;
-    const session: DragSession = {
-      entry,
-      phase: "pending",
-      cancelled: false,
+    const session = newSession(entry, {
       inputKind: "touch",
       pointerType: "touch",
       pointerId: touch.identifier,
@@ -527,21 +498,8 @@ export function useWorkspaceTreeDrag({
       startY: touch.clientY,
       lastX: touch.clientX,
       lastY: touch.clientY,
-      pointerTarget: target,
-      moveListener: null,
-      upListener: null,
-      cancelListener: null,
-      keyListener: null,
-      expandTimer: null,
-      holdTimer: null,
-      expandTarget: null,
-      keyboardDestinations: null,
-      keyboardIndex: 0,
-      suppressClick: false,
-      contextMenuOpened: false,
-      previewElement: null,
-      previousUserSelect: document.body.style.userSelect
-    };
+      pointerTarget: target
+    });
     sessionRef.current = session;
 
     session.holdTimer = setTimeout(() => {
@@ -568,7 +526,7 @@ export function useWorkspaceTreeDrag({
 
       if (session.phase === "pending") {
         // Movement before the hold belongs to the browser's scroller.
-        if (distance > WORKSPACE_TOUCH_SCROLL_SLOP_PX) {
+        if (distance > TOUCH_SCROLL_SLOP_PX) {
           sessionRef.current = null;
           endDomSession(session);
         }
@@ -580,7 +538,7 @@ export function useWorkspaceTreeDrag({
       move.preventDefault();
       ensureDragPreview(session, current.clientX, current.clientY);
       if (session.phase === "touch-ready") {
-        if (distance < WORKSPACE_TOUCH_DRAG_SLOP_PX) return;
+        if (distance < TOUCH_DRAG_SLOP_PX) return;
         session.phase = "dragging";
         session.suppressClick = true;
         announce(`Dragging ${session.entry.name}.`);
@@ -632,17 +590,12 @@ export function useWorkspaceTreeDrag({
       }
       cancel();
     };
-    session.keyListener = (key: KeyboardEvent) => {
-      if (key.key === "Escape") {
-        key.preventDefault();
-        cancel();
-      }
-    };
+    session.keyListener = escapeCancel;
     target.addEventListener("touchmove", session.moveListener, { passive: false });
     target.addEventListener("touchend", session.upListener, { passive: false });
     target.addEventListener("touchcancel", session.cancelListener);
     window.addEventListener("keydown", session.keyListener, true);
-  }, [announce, cancel, clearVisualState, completeDrop, endDomSession, suppressNextClick, updateTargetAt]);
+  }, [announce, cancel, clearVisualState, completeDrop, endDomSession, escapeCancel, suppressNextClick, updateTargetAt]);
 
   const onRowPointerDown = useCallback(
     (event: ReactPointerEvent, entry: NativeWorkspaceEntry) => beginPendingPointer(event, entry, true),
@@ -684,32 +637,12 @@ export function useWorkspaceTreeDrag({
         announce(`No destination is available for ${entry.name}.`);
         return;
       }
-      const session: DragSession = {
-        entry,
+      const session = newSession(entry, {
         phase: "keyboard",
-        cancelled: false,
         inputKind: "keyboard",
         pointerType: "keyboard",
-        pointerId: -1,
-        startX: 0,
-        startY: 0,
-        lastX: 0,
-        lastY: 0,
-        pointerTarget: null,
-        moveListener: null,
-        upListener: null,
-        cancelListener: null,
-        keyListener: null,
-        expandTimer: null,
-        holdTimer: null,
-        expandTarget: null,
-        keyboardDestinations: destinations,
-        keyboardIndex: 0,
-        suppressClick: false,
-        contextMenuOpened: false,
-        previewElement: null,
-        previousUserSelect: document.body.style.userSelect
-      };
+        keyboardDestinations: destinations
+      });
       sessionRef.current = session;
       setDraggedPath(entry.relative_path);
       const first = destinations[0] ?? "";

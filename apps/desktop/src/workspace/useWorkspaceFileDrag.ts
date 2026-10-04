@@ -20,20 +20,25 @@
  *   workspace-relative path, so internal drops distinguish our drags from
  *   files dragged in from the OS (which the tree does not yet import).
  */
-import { useCallback, useRef, useState, type DragEvent as ReactDragEvent, type RefObject } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type DragEvent as ReactDragEvent,
+  type RefObject
+} from "react";
 import type { NativeWorkspaceEntry } from "../native/commands";
 import {
+  createAutoExpand,
+  edgeAutoScroll,
+  invalidMoveMessage,
   isInvalidWorkspaceMove,
-  WORKSPACE_INVALID_MOVE_MESSAGE,
-  workspaceMoveDestination
+  runWorkspaceMove
 } from "./workspaceMove";
 
 /** Internal dataTransfer type marking a workspace-tree drag. */
 export const WORKSPACE_TREE_DRAG_TYPE = "application/x-thinkbrain-tree";
-
-const AUTO_EXPAND_MS = 600;
-const AUTOSCROLL_EDGE_PX = 28;
-const AUTOSCROLL_STEP_PX = 14;
 
 /** HTML5 drag handlers + state the tree rows and root surface consume. */
 export interface WorkspaceFileDrag {
@@ -67,8 +72,7 @@ export function useWorkspaceFileDrag({
   isExpanded,
   expandFolder,
   moveEntry,
-  containerRef,
-  announce
+  containerRef
 }: {
   /** Workspace root — needed to hand absolute paths to the OS. */
   readonly rootPath: string | null;
@@ -76,7 +80,6 @@ export function useWorkspaceFileDrag({
   readonly expandFolder: (path: string) => void;
   readonly moveEntry: (source: NativeWorkspaceEntry, destinationParentPath: string) => Promise<boolean>;
   readonly containerRef: RefObject<HTMLElement | null>;
-  readonly announce?: (message: string) => void;
 }): WorkspaceFileDrag {
   const [enabled] = useState(isFinePointer);
   const [draggedPath, setDraggedPath] = useState<string | null>(null);
@@ -88,20 +91,13 @@ export function useWorkspaceFileDrag({
     path: null,
     valid: false
   });
-  const expandRef = useRef<{ target: string | null; timer: ReturnType<typeof setTimeout> | null }>({
-    target: null,
-    timer: null
+  // Latest callbacks for the expand timer, which outlives one render.
+  const handlersRef = useRef({ isExpanded, expandFolder, moveEntry });
+  useEffect(() => {
+    handlersRef.current = { isExpanded, expandFolder, moveEntry };
   });
-
-  const say = useCallback((message: string) => {
-    setAnnouncement(message);
-    announce?.(message);
-  }, [announce]);
-
-  const clearExpandTimer = useCallback(() => {
-    if (expandRef.current.timer !== null) clearTimeout(expandRef.current.timer);
-    expandRef.current = { target: null, timer: null };
-  }, []);
+  const [autoExpand] = useState(createAutoExpand);
+  const say = setAnnouncement;
 
   const clear = useCallback(() => {
     draggedEntryRef.current = null;
@@ -109,29 +105,8 @@ export function useWorkspaceFileDrag({
     setDraggedPath(null);
     setDropTargetPath(null);
     setDropTargetValid(false);
-    clearExpandTimer();
-  }, [clearExpandTimer]);
-
-  const autoScroll = useCallback((clientY: number) => {
-    const container = containerRef.current;
-    if (!container) return;
-    const rect = container.getBoundingClientRect();
-    if (clientY < rect.top + AUTOSCROLL_EDGE_PX) container.scrollTop -= AUTOSCROLL_STEP_PX;
-    else if (clientY > rect.bottom - AUTOSCROLL_EDGE_PX) container.scrollTop += AUTOSCROLL_STEP_PX;
-  }, [containerRef]);
-
-  const autoExpand = useCallback((target: string | null, valid: boolean) => {
-    const path = valid && target ? target : null;
-    if (expandRef.current.target === path) return;
-    clearExpandTimer();
-    if (path && !isExpanded(path)) {
-      expandRef.current.target = path;
-      expandRef.current.timer = setTimeout(() => {
-        expandRef.current = { target: null, timer: null };
-        expandFolder(path);
-      }, AUTO_EXPAND_MS);
-    }
-  }, [clearExpandTimer, expandFolder, isExpanded]);
+    autoExpand.clear();
+  }, [autoExpand]);
 
   /** Validates + tracks `target` (`""` is the workspace root). */
   const trackTarget = useCallback((
@@ -149,15 +124,11 @@ export function useWorkspaceFileDrag({
     // Invalid drops never reach a drop event — the not-allowed cursor is the
     // only feedback, so the rejection is announced while hovering instead.
     if (!valid && lastHoverRef.current.path !== target) {
-      say(
-        target === dragged.parent_path
-          ? `${dragged.name} is already in ${target ? target.split("/").at(-1) : "workspace root"}.`
-          : WORKSPACE_INVALID_MOVE_MESSAGE
-      );
+      say(invalidMoveMessage(dragged, target));
     }
     lastHoverRef.current = { path: target, valid };
-    autoExpand(target, valid);
-    autoScroll(event.clientY);
+    autoExpand.update(target, valid, handlersRef.current);
+    edgeAutoScroll(containerRef.current, event.clientY);
     if (valid) {
       // preventDefault is what makes a drop allowed on this element.
       event.preventDefault();
@@ -165,7 +136,7 @@ export function useWorkspaceFileDrag({
     } else {
       event.dataTransfer.dropEffect = "none";
     }
-  }, [autoExpand, autoScroll, say]);
+  }, [autoExpand, containerRef, say]);
 
   const onRowDragStart = useCallback((event: ReactDragEvent, entry: NativeWorkspaceEntry) => {
     draggedEntryRef.current = entry;
@@ -192,20 +163,20 @@ export function useWorkspaceFileDrag({
       // target clears rather than falling back to the workspace root.
       setDropTargetPath(null);
       setDropTargetValid(false);
-      clearExpandTimer();
+      autoExpand.clear();
       event.dataTransfer.dropEffect = "none";
       return;
     }
     trackTarget(event, entry.relative_path);
-  }, [clearExpandTimer, trackTarget]);
+  }, [autoExpand, trackTarget]);
 
   const onRowDragLeave = useCallback((_event: ReactDragEvent, entry: NativeWorkspaceEntry) => {
     if (dropTargetPath === entry.relative_path) {
       setDropTargetPath(null);
       setDropTargetValid(false);
-      clearExpandTimer();
+      autoExpand.clear();
     }
-  }, [clearExpandTimer, dropTargetPath]);
+  }, [autoExpand, dropTargetPath]);
 
   const finish = useCallback((target: string) => {
     const dragged = draggedEntryRef.current;
@@ -213,18 +184,15 @@ export function useWorkspaceFileDrag({
       clear();
       return;
     }
-    say(`Moving ${dragged.name} to ${target ? target.split("/").at(-1) : "workspace root"}.`);
-    const destination = workspaceMoveDestination(dragged, target);
-    void moveEntry(dragged, target).then((ok) => {
-      if (ok) {
-        say(`Moved ${dragged.name} to ${destination}.`);
-        if (target) expandFolder(target);
-      } else {
-        say(`Could not move ${dragged.name}.`);
-      }
-    });
+    void runWorkspaceMove(
+      dragged,
+      target,
+      handlersRef.current.moveEntry,
+      handlersRef.current.expandFolder,
+      say
+    );
     clear();
-  }, [clear, expandFolder, moveEntry, say]);
+  }, [clear, say]);
 
   const onRowDrop = useCallback((event: ReactDragEvent, entry: NativeWorkspaceEntry) => {
     if (entry.kind !== "directory") return;
