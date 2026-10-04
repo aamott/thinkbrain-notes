@@ -191,6 +191,54 @@
   }
 }
 
+/* The explorer header's create actions stay hidden until the header is
+   hovered, focused into, on a coarse pointer, or has its ⋯ menu open
+   (`data-open`). Kept as one named state machine rather than variant
+   classes: a `focus-within:opacity-100` + `opacity-0` pair is exactly what
+   this is, but class-list conflict checkers can't see the intent. */
+@utility tn-explorer-create-reveal {
+  opacity: 0;
+  transition-property: opacity;
+  transition-duration: 150ms;
+  .group\/explorer-header:hover &,
+  &:focus-within,
+  &[data-open="true"] {
+    opacity: 1;
+  }
+  @media (pointer: coarse) {
+    opacity: 1;
+  }
+}
+
+/* CodeMirror's internal elements take layout and skin from the host div.
+   Declared here rather than as `[&_.cm-*]` arbitrary variants so the host's
+   own classes (`min-h-0`, `overflow-auto`, `cursor-text`) don't collide
+   with same-property descendant rules in class-list conflict checks — the
+   checker can't tell they target different elements. */
+@utility tn-cm-editor {
+  .cm-editor {
+    min-height: 100%;
+    cursor: text;
+    background-color: var(--color-editor);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    line-height: 1.65;
+  }
+  .cm-scroller {
+    overflow: auto;
+    cursor: text;
+  }
+  .cm-content {
+    min-height: 100%;
+    padding-top: 1rem;
+    padding-inline: 1.25rem;
+    padding-bottom: 4rem;
+  }
+  .cm-focused {
+    outline: none;
+  }
+}
+
 @layer base {
   :root {
     font-family: var(--tn-font-sans);

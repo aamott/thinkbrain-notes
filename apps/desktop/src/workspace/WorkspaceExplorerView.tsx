@@ -164,10 +164,8 @@ export function WorkspaceExplorerView({
         </div>
         <div className="flex flex-none items-center gap-0.5">
           <div
-            className={cn(
-              "flex items-center gap-0.5 opacity-0 transition-opacity group-hover/explorer-header:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-100",
-              moreMenuOpen && "opacity-100"
-            )}
+            className="tn-explorer-create-reveal flex items-center gap-0.5"
+            data-open={moreMenuOpen || undefined}
           >
             <button
               type="button"
