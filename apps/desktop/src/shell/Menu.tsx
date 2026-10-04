@@ -157,7 +157,10 @@ export function Menu({
 export const MENU_ITEM =
   "flex w-full min-w-0 items-center gap-2 border-0 px-3 py-[0.4rem] bg-transparent cursor-pointer font-inherit text-xs text-left hover:bg-accent focus-visible:bg-accent focus-visible:outline-none";
 
-const ITEM = MENU_ITEM;
+/** The hairline between menu sections. */
+export function MenuSeparator() {
+  return <hr aria-hidden="true" className="my-1 border-0 border-t border-border" />;
+}
 
 /**
  * A single menu item rendered as a full-width button.
@@ -173,6 +176,7 @@ export function MenuButton({
   danger = false,
   current = false,
   title,
+  className,
   onClick,
 }: {
   readonly label: string;
@@ -183,12 +187,14 @@ export function MenuButton({
   readonly current?: boolean;
   /** The whole of what the label may have had to truncate. */
   readonly title?: string;
+  /** Extra classes — e.g. `flex-1` when the item shares a row with a second control. */
+  readonly className?: string;
   readonly onClick: (event: ReactMouseEvent) => void;
 }) {
   return (
     <button
       type="button"
-      className={cn(ITEM, danger ? "text-danger" : "text-foreground")}
+      className={cn(MENU_ITEM, danger ? "text-danger" : "text-foreground", className)}
       role="menuitem"
       aria-current={current ? "true" : undefined}
       aria-label={ariaLabel}
@@ -227,7 +233,7 @@ export function MenuCheckbox({
   return (
     <button
       type="button"
-      className={cn(ITEM, "text-foreground")}
+      className={cn(MENU_ITEM, "text-foreground")}
       role="menuitemcheckbox"
       aria-checked={checked}
       aria-label={label}

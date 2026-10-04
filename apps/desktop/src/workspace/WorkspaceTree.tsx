@@ -165,12 +165,11 @@ export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
           <button
             ref={buttonRef}
             className={cn(
-              "flex min-w-0 flex-1 items-center gap-1.5 py-[0.265rem] pr-1 border-0 text-sidebar-foreground font-inherit text-xs leading-tight text-left aria-disabled:cursor-default not-aria-disabled:cursor-pointer not-aria-disabled:hover:bg-[color-mix(in_srgb,var(--color-accent)_58%,transparent)] not-aria-disabled:focus-visible:bg-[color-mix(in_srgb,var(--color-accent)_58%,transparent)] focus-visible:outline-none pointer-coarse:min-h-11 pointer-coarse:py-1.5 pointer-coarse:text-sm",
+              "flex min-w-0 flex-1 items-center gap-1.5 py-[0.265rem] pr-1 border-0 text-sidebar-foreground font-inherit text-xs leading-tight text-left cursor-pointer hover:bg-[color-mix(in_srgb,var(--color-accent)_58%,transparent)] focus-visible:bg-[color-mix(in_srgb,var(--color-accent)_58%,transparent)] focus-visible:outline-none pointer-coarse:min-h-11 pointer-coarse:py-1.5 pointer-coarse:text-sm",
               isHiddenEntry && "opacity-60"
             )}
             type="button"
             style={{ paddingLeft: `${0.75 + depth * 0.875}rem` }}
-            aria-disabled={!isDirectory && !isFile ? true : undefined}
             tabIndex={isFocusable ? 0 : -1}
             onKeyDown={handleKeyDown}
             onPointerDown={(event) => drag?.onRowPointerDown(event, node.entry)}
@@ -183,7 +182,7 @@ export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
               if (isDirectory) toggleFolder(node.entry.relative_path);
               else if (isFile) handleFileSelected(node.entry.relative_path);
             }}
-            aria-label={isDirectory ? `${isExpanded ? "Collapse" : "Expand"} ${node.entry.name}` : isFile ? `Open ${node.entry.name}` : undefined}
+            aria-label={isDirectory ? `${isExpanded ? "Collapse" : "Expand"} ${node.entry.name}` : `Open ${node.entry.name}`}
           >
             <span className={cn(TREE_ICON_CLASSES, "w-2.5 flex-none text-center")} aria-hidden="true">{isDirectory ? (isExpanded ? <FolderOpen /> : <Folder />) : <WorkspaceFileIcon name={node.entry.name} />}</span>
             <span className="min-w-0 truncate">{node.entry.name}</span>

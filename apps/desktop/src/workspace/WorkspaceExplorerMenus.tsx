@@ -1,8 +1,8 @@
-import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
+import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { NativeWorkspaceEntry } from "../native/commands";
 import { copyFilesToClipboard } from "../native/clipboard";
 import { usePlatformCapabilities } from "../native/platformCapabilities";
-import { Menu, MenuButton } from "../shell/Menu";
+import { Menu, MenuButton, MenuSeparator } from "../shell/Menu";
 import type { ContextMenuState, WorkspaceExplorerActions } from "./workspaceExplorerTypes";
 
 // ---- Context menu ----
@@ -31,11 +31,6 @@ export function WorkspaceContextMenu({ menu, actions, rootPath }: {
     ? `${rootPath}/${target.entry.relative_path}`
     : null;
 
-  const handle = (action: () => void) => (event: ReactMouseEvent) => {
-    event.stopPropagation();
-    action();
-  };
-
   const copyText = (text: string) => {
     void navigator.clipboard?.writeText(text)?.catch((error) => {
       console.error("[explorer] Could not copy to the clipboard.", error);
@@ -48,28 +43,28 @@ export function WorkspaceContextMenu({ menu, actions, rootPath }: {
       {/* Creates lead every target — they describe where a new entry would
           land (the folder itself, the file's parent, or the root), not what
           happens to the right-clicked one. */}
-      <MenuButton label="New file" onClick={handle(() => startCreate(createParentPath, "file"))} />
-      <MenuButton label="New folder" onClick={handle(() => startCreate(createParentPath, "folder"))} />
-      <hr className="my-1 border-0 border-t border-border" />
+      <MenuButton label="New file" onClick={() => startCreate(createParentPath, "file")} />
+      <MenuButton label="New folder" onClick={() => startCreate(createParentPath, "folder")} />
+      <MenuSeparator />
       {target.kind !== "background" && (
         <>
-          <MenuButton label="Rename" onClick={handle(() => startRename(target.entry))} />
-          {target.kind === "file" && <MenuButton label="Previous versions…" onClick={handle(() => showVersions(target.entry))} />}
-          <MenuButton label="Copy name" onClick={handle(() => copyText(target.entry.name))} />
-          <MenuButton label="Copy relative path" onClick={handle(() => copyText(target.entry.relative_path))} />
-          {absolutePath && <MenuButton label="Copy absolute path" onClick={handle(() => copyText(absolutePath))} />}
+          <MenuButton label="Rename" onClick={() => startRename(target.entry)} />
+          {target.kind === "file" && <MenuButton label="Previous versions…" onClick={() => showVersions(target.entry)} />}
+          <MenuButton label="Copy name" onClick={() => copyText(target.entry.name)} />
+          <MenuButton label="Copy relative path" onClick={() => copyText(target.entry.relative_path)} />
+          {absolutePath && <MenuButton label="Copy absolute path" onClick={() => copyText(absolutePath)} />}
           {absolutePath && canCopyFiles && (
             <MenuButton
               label={target.kind === "folder" ? "Copy folder" : "Copy file"}
-              onClick={handle(() => { void copyFilesToClipboard([absolutePath]); closeContextMenu(); })}
+              onClick={() => { void copyFilesToClipboard([absolutePath]); closeContextMenu(); }}
             />
           )}
-          <MenuButton label="Delete" danger onClick={handle(() => requestDelete(target.entry))} />
-          <hr className="my-1 border-0 border-t border-border" />
+          <MenuButton label="Delete" danger onClick={() => requestDelete(target.entry)} />
+          <MenuSeparator />
         </>
       )}
-      <MenuButton label="Refresh" onClick={handle(() => { void refreshEntries(); closeContextMenu(); })} />
-      <MenuButton label="Open workspace…" onClick={handle(() => { void openWorkspace(); closeContextMenu(); })} />
+      <MenuButton label="Refresh" onClick={() => { void refreshEntries(); closeContextMenu(); }} />
+      <MenuButton label="Open workspace…" onClick={() => { void openWorkspace(); closeContextMenu(); }} />
     </Menu>
   );
 }

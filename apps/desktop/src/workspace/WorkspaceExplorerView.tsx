@@ -4,7 +4,7 @@ import type { NativeWorkspaceAccessCapabilities, NativeWorkspaceEntry } from "..
 import type { WorkspaceExplorerState, WorkspaceTreeNode } from "./workspaceExplorerModel";
 import { WorkspaceFileIcon } from "./WorkspaceFileIcon";
 import { cn } from "../lib/utils";
-import { Menu, MenuButton, MenuCheckbox } from "../shell/Menu";
+import { Menu, MenuButton, MenuCheckbox, MenuSeparator } from "../shell/Menu";
 import { WorkspaceTreeItem, InlineNameInput } from "./WorkspaceTree";
 import { DeleteConfirmDialog, WorkspaceContextMenu } from "./WorkspaceExplorerMenus";
 import { CreateFileTypeConfirmDialog } from "./CreateFileTypeConfirmDialog";
@@ -172,6 +172,12 @@ export function WorkspaceExplorerView({
   // on a destination in a different vault.
   useEffect(() => cancelDrag, [workspaceRootPath, cancelDrag]);
 
+  // The same banner under the header while opening, or atop the tree surface
+  // once ready — the two sites never render at once.
+  const errorBanner = actionError && (
+    <p className="m-0 px-3 py-[0.4rem] border-b border-[color-mix(in_srgb,var(--color-destructive)_45%,var(--color-border))] text-danger bg-[color-mix(in_srgb,var(--color-destructive)_9%,transparent)] text-[0.6875rem] leading-1.4" role="alert">{actionError}</p>
+  );
+
   return (
     <section className={cn("flex min-h-0 flex-1 flex-col text-sidebar-foreground bg-sidebar font-sans", className)} aria-label="Workspace explorer" aria-busy={isBusy}>
       {/* Keyboard and pointer drags announce progress here. */}
@@ -244,7 +250,7 @@ export function WorkspaceExplorerView({
                   checked={showHidden}
                   onClick={() => void actions.toggleShowHidden()}
                 />
-                <hr className="my-1 border-0 border-t border-border" />
+                <MenuSeparator />
                 {/* The generic, extension-free create; the header icon is the
                     canonical New note flow with its .md conventions. */}
                 <MenuButton
@@ -268,9 +274,7 @@ export function WorkspaceExplorerView({
         </div>
       </header>
 
-      {actionError && state.phase !== "ready" && (
-        <p className="m-0 px-3 py-[0.4rem] border-b border-[color-mix(in_srgb,var(--color-destructive)_45%,var(--color-border))] text-danger bg-[color-mix(in_srgb,var(--color-destructive)_9%,transparent)] text-[0.6875rem] leading-1.4" role="alert">{actionError}</p>
-      )}
+      {state.phase !== "ready" && errorBanner}
       {state.phase === "empty" && (
         accessCapabilities
           ? <EmptyState managed={accessCapabilities.canCreateManagedWorkspace} />
@@ -296,9 +300,7 @@ export function WorkspaceExplorerView({
           onDragOver={fileDrag.onRootDragOver}
           onDrop={fileDrag.onRootDrop}
         >
-          {actionError && (
-            <p className="m-0 px-3 py-[0.4rem] border-b border-[color-mix(in_srgb,var(--color-destructive)_45%,var(--color-border))] text-danger bg-[color-mix(in_srgb,var(--color-destructive)_9%,transparent)] text-[0.6875rem] leading-1.4" role="alert">{actionError}</p>
-          )}
+          {errorBanner}
           {tree.length === 0 && !creating ? (
             <StatusState message="This workspace is empty. Right-click to create a new file or folder." />
           ) : (
@@ -398,7 +400,7 @@ export function WorkspaceExplorerView({
 const HEADER_ACTION_CLASSES = cn(
   "flex flex-none items-center justify-center size-[1.6rem] border-0 rounded-small text-muted-foreground bg-transparent cursor-pointer font-inherit",
   "focus-visible:outline-2 focus-visible:outline-ring focus-visible:-outline-offset-1 [&>svg]:stroke-current [&>svg]:size-[0.95rem]",
-  "not-aria-disabled:hover:bg-[color-mix(in_srgb,var(--color-accent)_58%,transparent)]",
+  "hover:bg-[color-mix(in_srgb,var(--color-accent)_58%,transparent)]",
   "disabled:cursor-default disabled:opacity-50",
   "pointer-coarse:size-9"
 );

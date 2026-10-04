@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { useMediaQuery } from "../lib/useMediaQuery";
 
 /**
  * Whether the primary pointer is a fingertip (D76).
@@ -12,24 +12,6 @@ import { useSyncExternalStore } from "react";
  * leave the DOM alone; this hook is for the cases where the structure itself
  * differs, such as the metadata sheet standing in for the inline editor.
  */
-
-const QUERY = "(pointer: coarse)";
-
-const query = (): MediaQueryList | null =>
-  typeof window === "undefined" || typeof window.matchMedia !== "function"
-    ? null
-    : window.matchMedia(QUERY);
-
-const subscribe = (onChange: () => void): (() => void) => {
-  const list = query();
-  if (!list) return () => undefined;
-  list.addEventListener("change", onChange);
-  return () => list.removeEventListener("change", onChange);
-};
-
-/** Server-side and on runtimes without the API, assume a mouse. */
-const getSnapshot = (): boolean => query()?.matches ?? false;
-
 export function useCoarsePointer(): boolean {
-  return useSyncExternalStore(subscribe, getSnapshot, () => false);
+  return useMediaQuery("(pointer: coarse)");
 }

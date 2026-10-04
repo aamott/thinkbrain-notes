@@ -2,7 +2,7 @@ import { ArrowLeft } from "lucide-react";
 import { useRef, useState, type ReactNode } from "react";
 
 import type { PanelAction, PanelMenuItem } from "./panelRegistryModel";
-import { Menu, MenuButton, MenuCheckbox } from "../shell/Menu";
+import { Menu, MenuButton, MenuCheckbox, MenuSeparator } from "../shell/Menu";
 import { PanelIcon } from "../shell/panelIcons";
 
 const ACTION_BUTTON_CLASSES =
@@ -170,7 +170,7 @@ function PanelMenuEntry({
   readonly onRun: (close: boolean) => void;
 }) {
   const separator = item.separatorBefore && (
-    <hr className="my-1 border-0 border-t border-border" aria-hidden="true" />
+    <MenuSeparator />
   );
   if (item.disabled) {
     return (

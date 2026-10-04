@@ -77,7 +77,14 @@ const stubWidth = (wide: boolean) => {
     dispatchEvent: () => false
   };
   vi.stubGlobal("matchMedia", vi.fn(() => query));
-  return { setWide: (nowWide: boolean) => listener?.({ matches: nowWide }) };
+  return {
+    setWide: (nowWide: boolean) => {
+      // A real MQL updates `.matches` before firing `change` — mirror that so
+      // snapshot-based hooks re-read the new value.
+      query.matches = nowWide;
+      listener?.({ matches: nowWide });
+    }
+  };
 };
 
 // Captured before any test swaps it out — restored in afterEach.

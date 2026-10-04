@@ -5,8 +5,9 @@ import { tabAccessibleName, type DesktopTab } from "../tabs/tabModel";
 import { useRightPanelContributions, type RightPanelContribution } from "../panels/panelRegistryModel";
 import { useNotificationStore } from "../notifications/notificationStore";
 import { useSettingsStore } from "../settings/settingsStore";
+import { mediaQueryList, useMediaQuery } from "../lib/useMediaQuery";
 import { IconButton } from "./IconButton";
-import { Menu, MenuButton, MENU_ITEM, type MenuCloseReason, type MenuPosition } from "./Menu";
+import { Menu, MenuButton, MenuSeparator, MENU_ITEM, type MenuCloseReason, type MenuPosition } from "./Menu";
 import { PanelIcon } from "./panelIcons";
 import { type RightPanel } from "./shellTypes";
 import {
@@ -96,25 +97,19 @@ export function TitleBar({
 
   // The ⋯ menu shows every panel below 900px (the icon row is hidden there)
   // and only the unpinned remainder above it — the pinned icons are already
-  // on the bar. matchMedia is the only place JS reads the breakpoint; the
-  // initializer reads it once so the listener only carries *changes*.
-  const [narrow, setNarrow] = useState(
-    () =>
-      typeof window !== "undefined" &&
-      typeof window.matchMedia === "function" &&
-      !window.matchMedia("(min-width: 901px)").matches
-  );
+  // on the bar. This is the only place JS reads the breakpoint.
+  const narrow = !useMediaQuery("(min-width: 901px)");
+  // An open menu on a display:none trigger is a focus trap — close it when
+  // the bar widens past the breakpoint (the setState stays inside the media
+  // query's change callback, which is where external-system updates belong).
   useEffect(() => {
-    if (typeof window.matchMedia !== "function") return;
-    const wide = window.matchMedia("(min-width: 901px)");
-    const onWidthChange = (event: MediaQueryListEvent) => {
-      setNarrow(!event.matches);
-      // An open menu on a display:none trigger is a focus trap — close it on
-      // the way out.
+    const wide = mediaQueryList("(min-width: 901px)");
+    if (!wide) return;
+    const close = (event: MediaQueryListEvent) => {
       if (event.matches) setActionsOpen(false);
     };
-    wide.addEventListener("change", onWidthChange);
-    return () => wide.removeEventListener("change", onWidthChange);
+    wide.addEventListener("change", close);
+    return () => wide.removeEventListener("change", close);
   }, []);
 
   // Which panels keep a title-bar icon. Blank/corrupt settings fall back to
@@ -404,27 +399,20 @@ export function TitleBar({
           >
             {menuPanels.map((action) => {
               const isPinned = pinned.has(action.id);
+              const pinLabel = isPinned ? `Unpin ${action.label}` : `Pin ${action.label}`;
               return (
                 <div key={action.id} className="flex min-w-0 items-stretch">
-                  <button
-                    type="button"
-                    className={cn(MENU_ITEM, "flex-1 text-foreground")}
-                    role="menuitem"
-                    aria-current={rightPanel === action.id ? "true" : undefined}
+                  <MenuButton
+                    label={action.label}
+                    className="flex-1"
+                    icon={<PanelIcon name={action.icon} />}
+                    current={rightPanel === action.id}
                     title={action.label}
                     onClick={() => {
                       setActionsOpen(false);
                       onToggleRightPanel(action.id);
                     }}
-                  >
-                    <span
-                      aria-hidden="true"
-                      className="flex-none [&>svg]:w-[0.9rem] [&>svg]:h-[0.9rem] [&>svg]:stroke-current"
-                    >
-                      <PanelIcon name={action.icon} />
-                    </span>
-                    <span className="truncate">{action.label}</span>
-                  </button>
+                  />
                   {/* A toggle, not a navigation — the menu stays open so the
                       icon moving between sections is visible feedback. */}
                   <button
@@ -435,8 +423,8 @@ export function TitleBar({
                       isPinned ? "text-foreground" : "text-muted-foreground"
                     )}
                     role="menuitem"
-                    aria-label={isPinned ? `Unpin ${action.label}` : `Pin ${action.label}`}
-                    title={isPinned ? `Unpin ${action.label}` : `Pin ${action.label}`}
+                    aria-label={pinLabel}
+                    title={pinLabel}
                     onClick={() => togglePin(action.id)}
                   >
                     <Pin aria-hidden="true" className={cn("size-[0.85rem]", isPinned && "fill-current")} />
@@ -460,7 +448,7 @@ export function TitleBar({
                 onToggleRightPanel(pinMenu.panel.id);
               }}
             />
-            <hr className="my-1 border-0 border-t border-border" />
+            <MenuSeparator />
             <MenuButton
               label={pinned.has(pinMenu.panel.id) ? "Unpin from title bar" : "Pin to title bar"}
               icon={<Pin className={pinned.has(pinMenu.panel.id) ? "fill-current" : ""} />}
