@@ -72,6 +72,19 @@ pub fn run() {
     builder
         .manage(WorkspaceWindowRoots::default())
         .setup(|app| {
+            // The sign-in catalog and per-workspace sync settings live under
+            // the app data dir, which sync code reaches only through the
+            // remembered "settings home". Nothing remembers it until a
+            // workspace watcher attaches — and on a fresh install there is no
+            // workspace yet, so saving a sign-in during a first-run git-link
+            // import used to answer "no app data". Publish it once here;
+            // `remember_settings_home` ignores later repeats. A resolution
+            // failure leaves the previous behaviour, which is strictly better
+            // than failing setup over a path the commands would fail on too.
+            if let Ok(app_data_dir) = app.path().app_data_dir() {
+                crate::commands::sync::settle::remember_settings_home(&app_data_dir);
+            }
+
             // Windows opened later register this themselves, but the window
             // declared in tauri.conf.json exists before any command runs. A
             // destroyed window never runs the frontend teardown, so without
