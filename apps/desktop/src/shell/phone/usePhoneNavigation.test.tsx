@@ -41,6 +41,7 @@ describe("usePhoneNavigation", () => {
     expect(nav().route).toEqual({ kind: "files" });
     expect(nav().depth).toBe(0);
     expect(nav().canGoBack).toBe(false);
+    expect(nav().canGoForward).toBe(false);
     expect((window.history.state as { tnPhoneNav?: boolean }).tnPhoneNav).toBe(true);
   });
 
@@ -181,12 +182,41 @@ describe("usePhoneNavigation overlays", () => {
     await act(async () => nav().push({ kind: "tab", tabId: "editor:a:b" }));
 
     expect(nav().overlay).toBeNull();
-    await act(async () => nav().openOverlay({ kind: "navigation" }));
+    await act(async () => nav().openOverlay({ kind: "tabs" }));
 
-    expect(nav().overlay).toEqual({ kind: "navigation" });
+    expect(nav().overlay).toEqual({ kind: "tabs" });
     expect(nav().route).toEqual({ kind: "tab", tabId: "editor:a:b" });
     expect(nav().depth).toBe(2);
   });
+
+  it.each(["actions", "navigation"] as const)(
+    "opens and closes the %s menu without adding history",
+    async (kind) => {
+      const nav = await renderNav("/vault");
+      await act(async () => nav().push({ kind: "tab", tabId: "editor:a:b" }));
+      await act(async () => nav().back());
+      expect(nav().canGoForward).toBe(true);
+
+      await act(async () => nav().showOverlay({ kind }));
+
+      expect(nav().overlay).toEqual({ kind });
+      expect(nav().depth).toBe(0);
+      expect(nav().canGoBack).toBe(true);
+      expect(nav().canGoForward).toBe(true);
+
+      await act(async () => nav().dismissOverlay());
+
+      expect(nav().overlay).toBeNull();
+      expect(nav().depth).toBe(0);
+      expect(nav().canGoBack).toBe(false);
+      expect(nav().canGoForward).toBe(true);
+
+      await act(async () => nav().forward());
+      expect(nav().route).toEqual({ kind: "tab", tabId: "editor:a:b" });
+      expect(nav().overlay).toBeNull();
+      expect(nav().canGoForward).toBe(false);
+    }
+  );
 
   it("no-ops when the identical overlay is already current", async () => {
     const nav = await renderNav("/vault");
@@ -274,7 +304,7 @@ describe("usePhoneNavigation overlays", () => {
 
     expect(nav().overlay).toBeNull();
     expect(nav().route).toEqual({ kind: "panel", panel: "search" });
-    expect(nav().depth).toBe(1);
+    expect(nav().depth).toBe(0);
   });
 
   it("showOverlay swaps an open overlay in place instead of stacking it", async () => {

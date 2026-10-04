@@ -18,10 +18,11 @@ afterEach(async () => {
 const base = {
   breadcrumbs: ["Vault", "Files"],
   tabCount: 0,
+  actionItemsOpen: false,
   onBack: () => {},
   onForward: () => {},
   onOpenTabs: () => {},
-  onOpenInspector: () => {}
+  onToggleActionItems: () => {}
 };
 
 const render = async (props: Partial<Parameters<typeof PhoneHeader>[0]> = {}) => {
@@ -38,18 +39,18 @@ const button = (label: string): HTMLButtonElement | null =>
   container!.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`);
 
 describe("PhoneHeader", () => {
-  it("always renders Back and Forward — disabled at the stack boundary", async () => {
+  it("keeps Back visible but hides Forward at the history boundaries", async () => {
     await render();
 
     expect(button("Back")?.disabled).toBe(true);
-    expect(button("Forward")?.disabled).toBe(true);
+    expect(button("Forward")).toBeNull();
     expect(container?.querySelector('[aria-label="Open navigation"]')).toBeNull();
   });
 
-  it("enables Back and Forward independently", async () => {
+  it("enables Back independently and renders Forward only when available", async () => {
     await render({ canGoBack: true, canGoForward: false });
     expect(button("Back")?.disabled).toBe(false);
-    expect(button("Forward")?.disabled).toBe(true);
+    expect(button("Forward")).toBeNull();
 
     await act(async () => {
       root?.render(
@@ -70,6 +71,29 @@ describe("PhoneHeader", () => {
 
     expect(onBack).toHaveBeenCalledOnce();
     expect(onForward).toHaveBeenCalledOnce();
+  });
+
+  it("gives the document-tools trigger pressed and open feedback", async () => {
+    await render();
+    const trigger = button("Document tools");
+
+    expect(trigger?.getAttribute("aria-haspopup")).toBe("menu");
+    expect(trigger?.getAttribute("aria-expanded")).toBe("false");
+    expect(trigger?.className.split(" ")).toEqual(
+      expect.arrayContaining(["active:bg-accent", "aria-expanded:bg-accent"])
+    );
+
+    await act(async () => {
+      root?.render(
+        <PhoneHeader
+          {...base}
+          canGoBack={false}
+          canGoForward={false}
+          actionItemsOpen
+        />
+      );
+    });
+    expect(button("Document tools")?.getAttribute("aria-expanded")).toBe("true");
   });
 
   it("omits both history buttons under showHistoryControls={false} but keeps the pill", async () => {

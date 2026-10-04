@@ -33,17 +33,21 @@ export type PhoneOverlay =
   | { readonly kind: "new-note" }
   | { readonly kind: "inspector"; readonly panel: RightPanel; readonly parent: "actions" | "content" };
 
+type PhoneMenuOverlay = Extract<PhoneOverlay, { readonly kind: "navigation" | "actions" }>;
+
 export interface PhoneNavigation {
   readonly route: PhoneRoute;
   readonly overlay: PhoneOverlay | null;
   readonly depth: number;
+  /** Whether Back can dismiss ephemeral chrome or visit an earlier route. */
   readonly canGoBack: boolean;
+  /** Whether the current browser-history branch has a later route or overlay. */
   readonly canGoForward: boolean;
   /** Pushes `route` with no overlay. */
   readonly push: (route: PhoneRoute) => void;
   /** Replaces the current entry with `route` and no overlay. */
   readonly replace: (route: PhoneRoute) => void;
-  /** Pushes the same route with `overlay` on top. */
+  /** Opens `overlay`; menus stay ephemeral, while other overlays are pushed. */
   readonly openOverlay: (overlay: PhoneOverlay) => void;
   /** Opens over content, or swaps the currently open overlay in place. */
   readonly showOverlay: (overlay: PhoneOverlay) => void;
@@ -81,6 +85,11 @@ function sameOverlay(a: PhoneOverlay | null, b: PhoneOverlay | null): boolean {
   return a.kind !== "inspector";
 }
 
+/** Menus are chrome state, not destinations users should revisit with Forward. */
+function isEphemeralMenu(overlay: PhoneOverlay | null): overlay is PhoneMenuOverlay {
+  return overlay?.kind === "actions" || overlay?.kind === "navigation";
+}
+
 function navState(
   workspace: string | null,
   route: PhoneRoute,
@@ -93,10 +102,11 @@ function navState(
 /**
  * Browser-history-backed navigation for the phone chrome.
  *
- * Routes and overlays share one stack: opening a drawer, sheet, menu or
- * inspector pushes a real `history.pushState` entry naming that overlay, so
- * the Android WebView system Back (bridged through `MainActivity`) and the
- * visible Back dismiss the topmost surface before touching content history.
+ * Routes and destination-like overlays share one stack. Sheets and inspectors
+ * push `history.pushState` entries so Android system Back and visible Back
+ * dismiss them before content history. The navigation drawer and action-items
+ * menu are ephemeral React state and never touch history, so Back/Forward can
+ * never revisit them.
  * `window.history`
  * is shared, so only states carrying our marker *and* the current workspace
  * are trusted; anything else falls back to Files rather than trusting a
@@ -117,14 +127,17 @@ export function usePhoneNavigation(workspaceRoot: string | null): PhoneNavigatio
   // after a switch the chrome reads as Files until something pushes again.
   const current = entry.workspace === workspaceRoot ? entry : navState(workspaceRoot, filesRoute, null, 0);
   const route = current.route;
-  const overlay = current.overlay;
   const depth = current.depth;
   const entryRef = useRef(current);
+  const [ephemeralMenu, setEphemeralMenuState] = useState<PhoneMenuOverlay | null>(null);
+  const ephemeralMenuRef = useRef<PhoneMenuOverlay | null>(null);
+  const overlay = ephemeralMenu ?? current.overlay;
   // Branch tip: the deepest depth of the current history branch. A push past a
   // Back'd-from entry truncates it, so the tip always tracks the last write;
   // a workspace-mismatched entry reads as tip 0 like its derived Files route.
   const [tip, setTip] = useState(0);
   const tipRef = useRef(0);
+  const skipParentMenuOnPopRef = useRef(false);
   const effectiveTip = entry.workspace === workspaceRoot ? tip : 0;
 
   // Cold mount and workspace change both start at Files. `replaceState` rather
@@ -135,14 +148,33 @@ export function usePhoneNavigation(workspaceRoot: string | null): PhoneNavigatio
     window.history.replaceState(reset, "");
     entryRef.current = reset;
     tipRef.current = 0;
+    skipParentMenuOnPopRef.current = false;
+    ephemeralMenuRef.current = null;
     /* eslint-disable react-hooks/set-state-in-effect -- A workspace switch is a
        genuine reset, not state derived from props: the derived-Files read above
        only *masks* the old entry, and without writing the reset into `entry`/
        `tip` a switch A→B→A resurrects A's stale route and Forward tip. */
     setEntry(reset);
     setTip(0);
+    setEphemeralMenuState(null);
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [workspaceRoot]);
+
+  const replaceOverlay = useCallback(
+    (nextOverlay: PhoneOverlay | null) => {
+      const base = entryRef.current;
+      const state = navState(workspaceRoot, base.route, nextOverlay, base.depth);
+      window.history.replaceState(state, "");
+      entryRef.current = state;
+      setEntry(state);
+    },
+    [workspaceRoot]
+  );
+
+  const setEphemeralMenu = useCallback((nextMenu: PhoneMenuOverlay | null) => {
+    ephemeralMenuRef.current = nextMenu;
+    setEphemeralMenuState(nextMenu);
+  }, []);
 
   // Android hardware-Back bridge. `WryActivity`'s default handler only walks
   // the WebView's *native* session history, which ignores pushState entries —
@@ -152,6 +184,10 @@ export function usePhoneNavigation(workspaceRoot: string | null): PhoneNavigatio
   useEffect(() => {
     const handler = (): boolean => {
       if (dismissTopOverlay()) return true;
+      if (ephemeralMenuRef.current !== null) {
+        setEphemeralMenu(null);
+        return true;
+      }
       if (entryRef.current.depth <= 0) return false;
       window.history.back();
       return true;
@@ -162,10 +198,11 @@ export function usePhoneNavigation(workspaceRoot: string | null): PhoneNavigatio
         delete window.__thinkbrainHandleAndroidBack;
       }
     };
-  }, []);
+  }, [setEphemeralMenu]);
 
   useEffect(() => {
     const onPop = (event: PopStateEvent) => {
+      const previous = entryRef.current;
       const s = event.state as Partial<PhoneNavState> | null;
       const marked: PhoneNavState | null =
         s?.tnPhoneNav === true && s.workspace === workspaceRoot && s.route !== undefined && typeof s.depth === "number"
@@ -180,15 +217,24 @@ export function usePhoneNavigation(workspaceRoot: string | null): PhoneNavigatio
         tipRef.current = 0;
         setTip(0);
       }
+      // Back from a child inspector restores its ephemeral parent menu without
+      // putting that menu in history. Whole-flow dismissal suppresses it.
+      const restoreActionsMenu =
+        !skipParentMenuOnPopRef.current &&
+        previous.overlay?.kind === "inspector" &&
+        previous.overlay.parent === "actions";
+      skipParentMenuOnPopRef.current = false;
+      setEphemeralMenu(restoreActionsMenu ? { kind: "actions" } : null);
       entryRef.current = next;
       setEntry(next);
     };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
-  }, [workspaceRoot]);
+  }, [workspaceRoot, setEphemeralMenu]);
 
   const pushEntry = useCallback(
     (nextRoute: PhoneRoute, nextOverlay: PhoneOverlay | null) => {
+      setEphemeralMenu(null);
       const nextDepth = entryRef.current.depth + 1;
       const state = navState(workspaceRoot, nextRoute, nextOverlay, nextDepth);
       window.history.pushState(state, "");
@@ -198,12 +244,16 @@ export function usePhoneNavigation(workspaceRoot: string | null): PhoneNavigatio
       tipRef.current = nextDepth;
       setTip(nextDepth);
     },
-    [workspaceRoot]
+    [workspaceRoot, setEphemeralMenu]
   );
 
   const push = useCallback(
     (next: PhoneRoute) => {
-      if (sameRoute(entryRef.current.route, next) && entryRef.current.overlay === null) return;
+      if (
+        sameRoute(entryRef.current.route, next) &&
+        entryRef.current.overlay === null &&
+        ephemeralMenuRef.current === null
+      ) return;
       pushEntry(next, null);
     },
     [pushEntry]
@@ -211,60 +261,84 @@ export function usePhoneNavigation(workspaceRoot: string | null): PhoneNavigatio
 
   const replace = useCallback(
     (next: PhoneRoute) => {
+      setEphemeralMenu(null);
       const state = navState(workspaceRoot, next, null, entryRef.current.depth);
       window.history.replaceState(state, "");
       entryRef.current = state;
       setEntry(state);
     },
-    [workspaceRoot]
+    [workspaceRoot, setEphemeralMenu]
+  );
+
+  const openEphemeralMenu = useCallback(
+    (next: PhoneMenuOverlay) => {
+      // If a destination-like overlay was open, consume its slot just as a peer
+      // replacement would; the menu itself remains only in React state.
+      if (entryRef.current.overlay !== null) replaceOverlay(null);
+      setEphemeralMenu(next);
+    },
+    [replaceOverlay, setEphemeralMenu]
   );
 
   const openOverlay = useCallback(
     (next: PhoneOverlay) => {
       const base = entryRef.current;
-      if (sameOverlay(base.overlay, next)) return;
-      pushEntry(base.route, next);
+      if (sameOverlay(ephemeralMenuRef.current ?? base.overlay, next)) return;
+      if (isEphemeralMenu(next)) openEphemeralMenu(next);
+      else pushEntry(base.route, next);
     },
-    [pushEntry]
+    [pushEntry, openEphemeralMenu]
   );
 
-  // Peer surfaces (menu, drawer, tabs, new-note, content-parented inspector)
-  // never stack: switching replaces the open overlay's entry in place so Back
-  // returns straight to content instead of resurrecting the stale surface.
+  // Peer surfaces never stack. Menus stay in local chrome state; other
+  // overlays push over content, or replace an existing historical surface.
   const showOverlay = useCallback(
     (next: PhoneOverlay) => {
       const base = entryRef.current;
-      if (sameOverlay(base.overlay, next)) return;
+      if (sameOverlay(ephemeralMenuRef.current ?? base.overlay, next)) return;
+      if (isEphemeralMenu(next)) {
+        openEphemeralMenu(next);
+        return;
+      }
       if (base.overlay === null) {
         pushEntry(base.route, next);
         return;
       }
-      const state = navState(workspaceRoot, base.route, next, base.depth);
-      window.history.replaceState(state, "");
-      entryRef.current = state;
-      setEntry(state);
+      setEphemeralMenu(null);
+      replaceOverlay(next);
     },
-    [pushEntry, workspaceRoot]
+    [pushEntry, replaceOverlay, openEphemeralMenu, setEphemeralMenu]
   );
 
-  const dismissOverlay = useCallback((wholeFlow = false) => {
-    const current = entryRef.current;
-    // An inspector drilled out of the actions menu sits two entries deep:
-    // closing the flow skips the menu underneath it instead of reopening it.
-    if (wholeFlow && current.overlay?.kind === "inspector" && current.overlay.parent === "actions") {
-      window.history.go(-2);
-      return;
-    }
-    if (current.depth > 0) window.history.back();
-  }, []);
+  const dismissOverlay = useCallback(
+    (wholeFlow = false) => {
+      const current = entryRef.current;
+      if (ephemeralMenuRef.current !== null) {
+        setEphemeralMenu(null);
+        return;
+      }
+      if (wholeFlow && current.overlay?.kind === "inspector" && current.overlay.parent === "actions") {
+        skipParentMenuOnPopRef.current = true;
+      }
+      if (current.overlay !== null && current.depth > 0) window.history.back();
+    },
+    [setEphemeralMenu]
+  );
 
   const back = useCallback(() => {
+    if (ephemeralMenuRef.current !== null) {
+      setEphemeralMenu(null);
+      return;
+    }
     if (entryRef.current.depth > 0) window.history.back();
-  }, []);
+  }, [setEphemeralMenu]);
 
   const forward = useCallback(() => {
-    if (entryRef.current.depth < tipRef.current) window.history.forward();
-  }, []);
+    if (entryRef.current.depth < tipRef.current) {
+      setEphemeralMenu(null);
+      window.history.forward();
+    }
+  }, [setEphemeralMenu]);
 
   // Memoized so consumers can depend on `navigation` in effects without
   // re-running on every unrelated render.
@@ -273,7 +347,7 @@ export function usePhoneNavigation(workspaceRoot: string | null): PhoneNavigatio
       route,
       overlay,
       depth,
-      canGoBack: depth > 0,
+      canGoBack: depth > 0 || ephemeralMenu !== null,
       canGoForward: depth < effectiveTip,
       push,
       replace,
@@ -283,6 +357,19 @@ export function usePhoneNavigation(workspaceRoot: string | null): PhoneNavigatio
       back,
       forward,
     }),
-    [route, overlay, depth, effectiveTip, push, replace, openOverlay, showOverlay, dismissOverlay, back, forward]
+    [
+      route,
+      overlay,
+      depth,
+      ephemeralMenu,
+      effectiveTip,
+      push,
+      replace,
+      openOverlay,
+      showOverlay,
+      dismissOverlay,
+      back,
+      forward
+    ]
   );
 }

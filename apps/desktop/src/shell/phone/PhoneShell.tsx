@@ -434,10 +434,13 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
           canGoBack={navigation.canGoBack}
           canGoForward={navigation.canGoForward}
           tabCount={shell.tabState.tabs.length}
+          actionItemsOpen={actionsOpen}
           onBack={navigation.back}
           onForward={navigation.forward}
           onOpenTabs={() => navigation.showOverlay({ kind: "tabs" })}
-          onOpenInspector={() => navigation.showOverlay({ kind: "actions" })}
+          onToggleActionItems={() =>
+            actionsOpen ? navigation.dismissOverlay() : navigation.showOverlay({ kind: "actions" })
+          }
         />
 
         <div className="relative flex min-h-0 flex-1 flex-col">

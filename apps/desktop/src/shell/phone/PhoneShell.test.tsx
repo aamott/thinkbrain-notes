@@ -175,17 +175,25 @@ describe("PhoneShell", () => {
     expect(host.querySelector('[aria-label="Primary navigation"]')).not.toBeNull();
   });
 
-  it("opens the action items menu — not an inspector — from the header's document tools button", async () => {
+  it("toggles the action items menu from the header's document tools button", async () => {
     const host = await render();
+    const trigger = () => host.querySelector<HTMLButtonElement>('[aria-label="Document tools"]');
     expect(inspector(host)).toBeNull();
+    expect(trigger()?.getAttribute("aria-expanded")).toBe("false");
 
     await click(host, "Document tools");
 
     const menu = actionsMenu(host);
     expect(menu).not.toBeNull();
     expect(menu?.querySelector('[role="menuitem"][aria-label="Outline"]')).not.toBeNull();
+    expect(trigger()?.getAttribute("aria-expanded")).toBe("true");
     // The menu alone does not open an inspector.
     expect(inspector(host)).toBeNull();
+
+    await click(host, "Document tools");
+
+    expect(actionsMenu(host)).toBeNull();
+    expect(trigger()?.getAttribute("aria-expanded")).toBe("false");
   });
 
   it("drills actions → inspector, and the inspector's Back returns to the menu", async () => {

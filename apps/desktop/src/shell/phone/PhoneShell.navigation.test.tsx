@@ -77,10 +77,10 @@ describe("PhoneShell navigation", () => {
 
     expect(locationPill(host)).toContain("Files");
     expect(filesVisible(host)).toBe(true);
-    // The root of content history dims Back/Forward — always rendered, never
-    // hidden, like a browser.
+    // Back remains visible and dimmed at the root; Forward has no useful target
+    // and stays out of the header until a Back creates one.
     expect(backButton(host)?.disabled).toBe(true);
-    expect(forwardButton(host)?.disabled).toBe(true);
+    expect(forwardButton(host)).toBeNull();
     expect(host.querySelector('[aria-label="Open navigation"]')).toBeNull();
   });
 
@@ -144,7 +144,7 @@ describe("PhoneShell navigation", () => {
   it("Forward returns to the note after Back", async () => {
     const { host, shell } = await renderWithShell();
     await act(async () => shell().openMarkdownDocument("/vault", "note.md"));
-    expect(forwardButton(host)?.disabled).toBe(true);
+    expect(forwardButton(host)).toBeNull();
 
     await click(host, "Back");
     expect(filesVisible(host)).toBe(true);
@@ -153,7 +153,26 @@ describe("PhoneShell navigation", () => {
     await click(host, "Forward");
     expect(noteTitleVisible(host)).toBe(true);
     expect(noteTitle(host)?.value).toBe("note");
-    expect(forwardButton(host)?.disabled).toBe(true);
+    expect(forwardButton(host)).toBeNull();
+  });
+
+  it("opens and closes the action-items menu without adding it to history", async () => {
+    const { host, shell } = await renderWithShell();
+    await act(async () => shell().openMarkdownDocument("/vault", "note.md"));
+    await click(host, "Back");
+    expect(forwardButton(host)?.disabled).toBe(false);
+
+    await click(host, "Document tools");
+    expect(actionsMenu(host)).not.toBeNull();
+
+    await click(host, "Back");
+    expect(actionsMenu(host)).toBeNull();
+    expect(filesVisible(host)).toBe(true);
+    expect(forwardButton(host)?.disabled).toBe(false);
+
+    await click(host, "Forward");
+    expect(noteTitleVisible(host)).toBe(true);
+    expect(actionsMenu(host)).toBeNull();
   });
 
   it("breadcrumbs a nested note as workspace, folders, filename without .md", async () => {
@@ -376,9 +395,12 @@ describe("PhoneShell navigation", () => {
     expect(inspector(host)).toBeNull();
   });
 
-  it("toggles the Menu hub slot: drawer opens, then closes", async () => {
-    const host = await render();
+  it("toggles the Menu drawer without adding it to history", async () => {
+    const { host, shell } = await renderWithShell();
     const hub = hubOf(host);
+    await act(async () => shell().openMarkdownDocument("/vault", "note.md"));
+    await click(host, "Back");
+    expect(forwardButton(host)?.disabled).toBe(false);
 
     await act(async () => {
       hub?.querySelector<HTMLButtonElement>('[aria-label="Menu"]')?.click();
@@ -388,6 +410,11 @@ describe("PhoneShell navigation", () => {
     await act(async () => {
       hub?.querySelector<HTMLButtonElement>('[aria-label="Menu"]')?.click();
     });
+    expect(visibleDialog(host, "Navigation")).toBeNull();
+    expect(forwardButton(host)?.disabled).toBe(false);
+
+    await click(host, "Forward");
+    expect(noteTitleVisible(host)).toBe(true);
     expect(visibleDialog(host, "Navigation")).toBeNull();
   });
 
