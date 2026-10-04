@@ -3,6 +3,35 @@
 Newest first. Versions follow [semver](https://semver.org), except that before
 1.0 a minor bump may still change behaviour.
 
+## 0.3.0-3 — 2026-10-04
+
+Prerelease for preview-style file tabs, the audio/video playback fix, and a
+broad architecture consolidation of the shell, settings, and sync layers.
+
+- **Tabs** — clicking a file now reuses the clean preview tab instead of
+  stacking a tab per file (editing or double-clicking keeps it); on the
+  phone every file opens in the same tab. Both shells get an explicit "+"
+  new-tab button — the phone's sits as a card where the new tab would go,
+  browser-style — opening a landing page with new-note and open-file entry
+  points. New-tab pages are never restored after a restart.
+- **Media fix** — audio and video tabs play again: WebKitGTK/GStreamer and
+  Android's webview could not stream the `asset://` scheme, so media now
+  loads over IPC and plays from a `blob:` URL.
+- **Shell navigation** — tab-activation Back/Forward in the title bar,
+  menus and sheets kept out of phone navigation history.
+- **Explorer** — native HTML5 drags (drag files out to a file manager, drag
+  folders to move them), shared drag-session handling, edge-aware menus.
+- **Interface size** — a setting plus Ctrl+=/-/0 zoom on desktop and mobile.
+- **Under the hood** — a consolidation pass over the largest seams: the
+  shell state hook and workspace lifecycle are split by concern; Markdown
+  and code editors share one CodeMirror mount lifecycle; notes and text
+  files share one native read/write path; extensions, themes and media all
+  reuse the same workspace path containment; dead IPC commands, the legacy
+  settings layer, and four unused dependencies are gone.
+- **Sync** — credential-bearing URLs parse correctly when the password or
+  path contains `@`; synced settings writes take the same lock as the
+  renderer's.
+
 ## 0.3.0-2 — 2026-10-03
 
 Prerelease for the conflict-merge UI, document version history, and file-history
