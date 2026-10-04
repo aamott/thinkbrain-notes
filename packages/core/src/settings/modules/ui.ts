@@ -16,6 +16,31 @@ export const uiModule: SettingsModule = {
   scope: "app",
   sections: [
     {
+      id: "ui.general",
+      label: "Size",
+      settings: [
+        {
+          // Percentage applied to the root font size — rem-based chrome and
+          // text scale together while px hairlines stay fixed. The editor's
+          // own font size (editor.fontSize) stays independent on purpose.
+          key: "scale",
+          type: "number",
+          min: 50,
+          max: 200,
+          default: 100,
+          scope: "app",
+          section: "ui.general",
+          label: "Interface size",
+          description:
+            "Interface size in percent; 100 is standard. Ctrl+= zooms in, Ctrl+- zooms out, Ctrl+0 resets. Editor font size is separate.",
+          validation: (value): string | null =>
+            typeof value === "number" && Number.isInteger(value)
+              ? null
+              : "Interface size must be a whole number."
+        }
+      ]
+    },
+    {
       id: "ui.desktop",
       label: "Desktop",
       settings: [
