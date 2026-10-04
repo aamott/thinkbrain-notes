@@ -69,7 +69,7 @@ function Diagnostic({ details }: { readonly details?: string }) {
   return (
     <details className="mt-2 text-xs text-muted-foreground">
       <summary className="cursor-pointer">Technical details</summary>
-      <p className="mb-0 mt-1 break-words font-mono">{details}</p>
+      <p className="mb-0 mt-1 wrap-break-word font-mono">{details}</p>
     </details>
   );
 }

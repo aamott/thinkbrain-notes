@@ -60,7 +60,7 @@ export function PropertiesPanel({ contents }: PropertiesPanelProps) {
               <th scope="row" className="w-[38%] py-2 pr-3 align-top font-medium text-muted-foreground">
                 {row.label}
               </th>
-              <td className="break-words py-2 align-top text-foreground">{formatMetadataValue(row.value)}</td>
+              <td className="wrap-break-word py-2 align-top text-foreground">{formatMetadataValue(row.value)}</td>
             </tr>
           ))}
         </tbody>
