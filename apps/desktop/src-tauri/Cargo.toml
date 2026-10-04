@@ -57,8 +57,14 @@ ndk-context = "0.1.1"
 # Gating it here rather than in `[dependencies]` keeps the mobile build from
 # trying to compile a plugin that has no mobile implementation.
 [target.'cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))'.dependencies]
-arboard = { version = "3.5.2", features = ["wayland-data-control"] }
 tauri-plugin-updater = "2"
+
+# arboard's `file_list` maps to CF_HDROP / NSFilenamesPboardType, but on
+# Linux it only writes `text/uri-list` — the file clipboard on Linux lives
+# in `linux_clipboard.rs` (x11rb + wl-clipboard-rs) so GTK file managers get
+# the `x-special/gnome-copied-files` format they require for paste.
+[target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
+arboard = { version = "3.5.2", features = ["wayland-data-control"] }
 
 # keyring v4 split the API (`keyring-core`) from the backends (one crate per
 # platform) and moved store selection from a compile-time feature to an
@@ -98,6 +104,10 @@ apple-native-keyring-store = { version = "1", features = ["keychain"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-native-keyring-store = "1"
+
+[target.'cfg(all(unix, not(any(target_os = "macos", target_os = "ios", target_os = "android", target_os = "emscripten"))))'.dependencies]
+wl-clipboard-rs = "0.9.4"
+x11rb = "0.13.2"
 
 # ---------------------------------------------------------------------------
 # Build profiles

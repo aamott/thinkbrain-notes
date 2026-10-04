@@ -4,22 +4,23 @@
 //! putting a *file* on the clipboard — so a system file manager can paste a
 //! copy of it — is an OS clipboard format: `CF_HDROP` on Windows,
 //! `NSFilenamesPboardType` on macOS, and `text/uri-list` +
-//! `x-special/gnome-copied-files` on Linux. `arboard` covers all three.
+//! `x-special/gnome-copied-files` on Linux. `arboard` covers the first two;
+//! its `file_list` on Linux only writes `text/uri-list`, which GTK file
+//! managers ignore for paste — so Linux goes through
+//! [`crate::linux_clipboard`], which offers both formats.
 
-#[cfg(desktop)]
+#[cfg(any(target_os = "windows", target_os = "macos"))]
 use std::sync::{Mutex, OnceLock};
 
 use crate::NativeError;
-#[cfg(desktop)]
+#[cfg(any(target_os = "windows", target_os = "macos"))]
 use crate::error::{failed, lock_or_recover};
 
 /// A long-lived clipboard handle.
 ///
-/// On X11 and Wayland the *owning* process serves every paste request, so the
-/// `Clipboard` must outlive the call that set it — a per-invocation clipboard
-/// would carry the file list to the grave within milliseconds. `OnceLock` +
-/// `Mutex` keeps the first successful handle for the life of the app.
-#[cfg(desktop)]
+/// The `arboard` clipboard is kept for the life of the app so clipboard
+/// ownership survives past the end of the command that set it.
+#[cfg(any(target_os = "windows", target_os = "macos"))]
 static CLIPBOARD: OnceLock<Result<Mutex<arboard::Clipboard>, String>> = OnceLock::new();
 
 /// Places `paths` on the system clipboard as file references, so paste in a
@@ -29,7 +30,23 @@ static CLIPBOARD: OnceLock<Result<Mutex<arboard::Clipboard>, String>> = OnceLock
 /// stubs the command with `clipboard.unavailable` and the frontend hides the
 /// menu item via `PlatformCapabilities::can_copy_files_to_clipboard`.
 #[tauri::command]
-#[cfg(desktop)]
+#[cfg(all(
+    unix,
+    not(any(
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "android",
+        target_os = "emscripten"
+    ))
+))]
+pub fn copy_files_to_clipboard(paths: Vec<String>) -> Result<(), NativeError> {
+    crate::linux_clipboard::copy_files_to_clipboard(&paths)
+}
+
+/// Windows and macOS — `arboard::Set::file_list` writes `CF_HDROP` /
+/// `NSFilenamesPboardType` natively on both.
+#[tauri::command]
+#[cfg(any(target_os = "windows", target_os = "macos"))]
 pub fn copy_files_to_clipboard(paths: Vec<String>) -> Result<(), NativeError> {
     let clipboard = CLIPBOARD
         .get_or_init(|| {

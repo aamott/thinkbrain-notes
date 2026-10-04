@@ -10,6 +10,16 @@ mod android_tls;
 mod commands;
 mod credential_store;
 mod error;
+#[cfg(all(
+    unix,
+    not(any(
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "android",
+        target_os = "emscripten"
+    ))
+))]
+mod linux_clipboard;
 
 #[cfg(test)]
 mod tests;
