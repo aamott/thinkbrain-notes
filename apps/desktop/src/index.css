@@ -165,14 +165,18 @@
   color: color-mix(in srgb, var(--tn-color-primary) 40%, var(--tn-color-muted-foreground));
 }
 
-/* A scrollbar thinner than the app default for strips that scroll but are
-   never meant to be grabbed — the tab strip scrolls by wheel and
-   scroll-into-view, so its scrollbar is only a position hint. */
-@utility tn-scrollbar-hairline {
-  scrollbar-width: thin;
+/* No scrollbar at all on strips that scroll but are never meant to be
+   grabbed — the tab strip scrolls by wheel and scroll-into-view, and its
+   scroll-edge fades already communicate position. A hairline scrollbar was
+   tried first, but WebKitGTK/WebView overlay scrollbars ignore the declared
+   ::-webkit-scrollbar size: on pointer approach they expand a grab area that
+   composites above content at any z-index, covering the tab × buttons and
+   swallowing their clicks. No CSS can shrink that hit region, so the strip
+   gets none. */
+@utility tn-scrollbar-none {
+  scrollbar-width: none;
   &::-webkit-scrollbar {
-    width: 2px;
-    height: 2px;
+    display: none;
   }
 }
 

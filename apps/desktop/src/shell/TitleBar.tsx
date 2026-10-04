@@ -233,7 +233,7 @@ export function TitleBar({
       <div className="relative min-w-0 flex-1 self-stretch">
         <nav
           ref={tabStripRef}
-          className="tn-scrollbar-hairline flex items-end gap-0.5 h-full min-w-0 overflow-x-auto"
+          className="tn-scrollbar-none flex items-end gap-0.5 h-full min-w-0 overflow-x-auto"
           aria-label="Open tabs"
           onScroll={measureScrollEdges}
         >
