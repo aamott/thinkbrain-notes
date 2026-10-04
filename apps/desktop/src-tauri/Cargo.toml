@@ -57,6 +57,7 @@ ndk-context = "0.1.1"
 # Gating it here rather than in `[dependencies]` keeps the mobile build from
 # trying to compile a plugin that has no mobile implementation.
 [target.'cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))'.dependencies]
+arboard = { version = "3.5.2", features = ["wayland-data-control"] }
 tauri-plugin-updater = "2"
 
 # keyring v4 split the API (`keyring-core`) from the backends (one crate per

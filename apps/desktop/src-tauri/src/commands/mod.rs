@@ -29,6 +29,7 @@
 
 pub mod atomic_write;
 pub mod backup;
+pub mod clipboard;
 pub mod extensions;
 pub mod markdown;
 pub mod search;
@@ -112,6 +113,7 @@ macro_rules! app_command_list {
         sync::import::import_workspace_from_git_link,
         sync::import::import_managed_workspace_from_git_link,
         sync::registry::sync_app_backgrounded,
+        clipboard::copy_files_to_clipboard,
         }
     };
 }
@@ -182,7 +184,7 @@ mod tests {
         );
         assert_eq!(
             APP_COMMAND_PATHS.len(),
-            59,
+            60,
             "the number of registered commands changed; update this count if it was deliberate"
         );
     }

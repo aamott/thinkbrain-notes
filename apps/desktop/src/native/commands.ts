@@ -426,6 +426,13 @@ export interface NativeCommandMap {
     readonly args: { readonly directory: string; readonly relativePath: string };
     readonly result: string;
   };
+  // Places file paths on the system clipboard as file references (file-manager
+  // paste copies the files). Desktop-only; stubbed with `clipboard.unavailable`
+  // on mobile.
+  readonly copy_files_to_clipboard: {
+    readonly args: { readonly paths: readonly string[] };
+    readonly result: null;
+  };
 }
 
 export type NativeCommandName = keyof NativeCommandMap;
@@ -455,6 +462,8 @@ export interface NativePlatformCapabilities {
   readonly opensWorkspaceInNewWindow: boolean;
   /** Can spawn a child process (terminal, ACP agent host). Desktop-only. */
   readonly canSpawnProcess: boolean;
+  /** Can place files on the system clipboard for file-manager paste. Desktop-only. */
+  readonly canCopyFilesToClipboard: boolean;
   /** Can store credentials in the OS keychain. Android has no keyring backend. */
   readonly hasKeychain: boolean;
 }

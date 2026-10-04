@@ -20,6 +20,7 @@ const DESKTOP_DEFAULTS: NativePlatformCapabilities = {
   canCreateManagedWorkspace: false,
   opensWorkspaceInNewWindow: true,
   canSpawnProcess: true,
+  canCopyFilesToClipboard: true,
   hasKeychain: true
 };
 
