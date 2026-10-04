@@ -148,6 +148,12 @@ export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
           )}
           {...{ [WORKSPACE_TREE_ROW_ATTR]: node.entry.relative_path }}
           {...(isDirectory ? { [WORKSPACE_DROP_PARENT_ATTR]: node.entry.relative_path } : {})}
+          draggable={drag?.draggable}
+          onDragStart={(event) => drag?.onRowDragStart?.(event, node.entry)}
+          onDragEnd={(event) => drag?.onRowDragEnd?.(event)}
+          onDragOver={(event) => drag?.onRowDragOver?.(event, node.entry)}
+          onDragLeave={(event) => drag?.onRowDragLeave?.(event, node.entry)}
+          onDrop={(event) => drag?.onRowDrop?.(event, node.entry)}
           onContextMenu={(event) => {
             // An armed touch hold owns the browser contextmenu event; it opens
             // this same menu on release instead of stealing the drag gesture.

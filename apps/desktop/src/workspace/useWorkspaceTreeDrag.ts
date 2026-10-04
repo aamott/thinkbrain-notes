@@ -31,6 +31,7 @@ import {
   useEffect,
   useRef,
   useState,
+  type DragEvent as ReactDragEvent,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
@@ -99,6 +100,19 @@ export interface WorkspaceTreeDrag {
   readonly consumeSuppressedClick: () => boolean;
   /** Cancels any pending/dragging/keyboard session. */
   readonly cancel: () => void;
+  // --- HTML5 drag surface (useWorkspaceFileDrag) ---
+  //
+  // On fine-pointer desktops the view merges the HTML5 drag controller into
+  // this object so rows read one set of state + handlers. Mouse/pen drags are
+  // native then — they can leave the window into a system file manager — so
+  // pointer sessions only arm for touch in that mode.
+  /** Whether rows render `draggable` and arm native drags. */
+  readonly draggable?: boolean;
+  readonly onRowDragStart?: (event: ReactDragEvent, entry: NativeWorkspaceEntry) => void;
+  readonly onRowDragOver?: (event: ReactDragEvent, entry: NativeWorkspaceEntry) => void;
+  readonly onRowDragLeave?: (event: ReactDragEvent, entry: NativeWorkspaceEntry) => void;
+  readonly onRowDrop?: (event: ReactDragEvent, entry: NativeWorkspaceEntry) => void;
+  readonly onRowDragEnd?: (event: ReactDragEvent) => void;
 }
 
 interface DragSession {
@@ -197,7 +211,8 @@ export function useWorkspaceTreeDrag({
   moveEntry,
   openContextMenu,
   containerRef,
-  announce: announceFromHost
+  announce: announceFromHost,
+  html5Active
 }: {
   /** Visible folder paths in tree order — the keyboard destination cycle. */
   readonly folderPaths: readonly string[];
@@ -210,6 +225,13 @@ export function useWorkspaceTreeDrag({
   readonly containerRef: RefObject<HTMLUListElement | null>;
   /** Optional host announcement hook (defaults to internal state). */
   readonly announce?: (message: string) => void;
+  /**
+   * When true, `useWorkspaceFileDrag` owns mouse/pen drags and pointer
+   * sessions must not arm — a pending session racing a native dragstart
+   * would show both the custom ghost and the browser's drag image. Touch
+   * sessions still arm; the HTML5 path is off for coarse pointers.
+   */
+  readonly html5Active?: boolean;
 }): WorkspaceTreeDrag {
   const [draggedPath, setDraggedPath] = useState<string | null>(null);
   const [dropTargetPath, setDropTargetPath] = useState<string | null>(null);
@@ -218,9 +240,9 @@ export function useWorkspaceTreeDrag({
   const sessionRef = useRef<DragSession | null>(null);
   const suppressedClickRef = useRef(false);
   // Latest callbacks for the session listeners, which outlive one render.
-  const handlersRef = useRef({ folderPaths, isExpanded, expandFolder, moveEntry, openContextMenu });
+  const handlersRef = useRef({ folderPaths, isExpanded, expandFolder, moveEntry, openContextMenu, html5Active });
   useEffect(() => {
-    handlersRef.current = { folderPaths, isExpanded, expandFolder, moveEntry, openContextMenu };
+    handlersRef.current = { folderPaths, isExpanded, expandFolder, moveEntry, openContextMenu, html5Active };
   });
 
   const announce = useCallback((message: string) => {
@@ -407,6 +429,9 @@ export function useWorkspaceTreeDrag({
     // Row touches use the delayed Touch Events path below; the handle keeps a
     // responsive pointer drag because it is outside the browser's scroll path.
     if (event.pointerType === "touch" && allowFromRow) return;
+    // With HTML5 dragging enabled, mouse/pen gestures belong to the native
+    // drag — arming a pending session here would race the dragstart.
+    if (handlersRef.current.html5Active) return;
     if (event.button !== 0) return;
     const target = event.currentTarget as HTMLElement;
     const session: DragSession = {

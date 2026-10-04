@@ -14,7 +14,8 @@ import { isWorkspaceGitLinked } from "./workspaceSettings";
 import { WorkspaceSelectorPortal } from "./WorkspaceSelectorPortal";
 import { useWorkspaceSelectorOutlet, type WorkspaceSelectorVariant } from "./WorkspaceSelectorPortalModel";
 import { isNewNoteCreate, type ContextMenuState, type CreateState, type PendingExtensionConfirm, type RenameState, type WorkspaceExplorerActions } from "./workspaceExplorerTypes";
-import { useWorkspaceTreeDrag, WORKSPACE_DROP_ROOT_ATTR } from "./useWorkspaceTreeDrag";
+import { useWorkspaceTreeDrag, WORKSPACE_DROP_ROOT_ATTR, type WorkspaceTreeDrag } from "./useWorkspaceTreeDrag";
+import { useWorkspaceFileDrag } from "./useWorkspaceFileDrag";
 
 interface WorkspaceExplorerViewProps {
   readonly className?: string;
@@ -118,10 +119,19 @@ export function WorkspaceExplorerView({
     return paths;
   }, [tree, expandedFolders]);
 
-  // One controller for the whole tree; rows receive it by prop so pointer and
-  // keyboard drags share the same session state.
+  // Two controllers, one facade: HTML5 drags (desktop — they can leave the
+  // window into a system file manager) and pointer/touch drags (mobile + the
+  // keyboard interface). `html5Active` disarms pointer arming for mouse/pen
+  // so the two never compete for one gesture.
   const treeScrollRef = useRef<HTMLUListElement | null>(null);
-  const drag = useWorkspaceTreeDrag({
+  const fileDrag = useWorkspaceFileDrag({
+    rootPath: workspaceRootPath ?? null,
+    isExpanded: (path) => expandedFolders.has(path),
+    expandFolder: actions.expandFolder,
+    moveEntry: actions.moveEntry,
+    containerRef: treeScrollRef
+  });
+  const pointerDrag = useWorkspaceTreeDrag({
     folderPaths,
     isExpanded: (path) => expandedFolders.has(path),
     expandFolder: actions.expandFolder,
@@ -133,12 +143,33 @@ export function WorkspaceExplorerView({
         entry
       });
     },
-    containerRef: treeScrollRef
+    containerRef: treeScrollRef,
+    html5Active: fileDrag.enabled
   });
+  const cancelPointerDrag = pointerDrag.cancel;
+  const cancelFileDrag = fileDrag.cancel;
+  const cancelDrag = useCallback(() => {
+    cancelPointerDrag();
+    cancelFileDrag();
+  }, [cancelPointerDrag, cancelFileDrag]);
+  const drag: WorkspaceTreeDrag = {
+    ...pointerDrag,
+    draggedPath: pointerDrag.draggedPath ?? fileDrag.draggedPath,
+    dropTargetPath: pointerDrag.dropTargetPath ?? fileDrag.dropTargetPath,
+    dropTargetValid:
+      pointerDrag.dropTargetPath !== null ? pointerDrag.dropTargetValid : fileDrag.dropTargetValid,
+    announcement: fileDrag.announcement || pointerDrag.announcement,
+    cancel: cancelDrag,
+    draggable: fileDrag.enabled,
+    onRowDragStart: fileDrag.onRowDragStart,
+    onRowDragOver: fileDrag.onRowDragOver,
+    onRowDragLeave: fileDrag.onRowDragLeave,
+    onRowDrop: fileDrag.onRowDrop,
+    onRowDragEnd: fileDrag.onDragEnd
+  };
 
   // Switching workspaces mid-drag must drop the gesture rather than land it
   // on a destination in a different vault.
-  const cancelDrag = drag.cancel;
   useEffect(() => cancelDrag, [workspaceRootPath, cancelDrag]);
 
   return (
@@ -262,6 +293,8 @@ export function WorkspaceExplorerView({
           // mark themselves so they do not fall back to it.
           {...{ [WORKSPACE_DROP_ROOT_ATTR]: "" }}
           onContextMenu={(event) => actions.showContextMenu(event, { kind: "background" })}
+          onDragOver={fileDrag.onRootDragOver}
+          onDrop={fileDrag.onRootDrop}
         >
           {actionError && (
             <p className="m-0 px-3 py-[0.4rem] border-b border-[color-mix(in_srgb,var(--color-destructive)_45%,var(--color-border))] text-danger bg-[color-mix(in_srgb,var(--color-destructive)_9%,transparent)] text-[0.6875rem] leading-1.4" role="alert">{actionError}</p>

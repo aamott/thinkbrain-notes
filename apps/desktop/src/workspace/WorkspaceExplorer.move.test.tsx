@@ -111,6 +111,22 @@ function touch(type: string, x: number, y: number): Event {
   return event;
 }
 
+/** A native (HTML5) drag event carrying a usable fake dataTransfer. */
+function nativeDrag(type: string, clientY = 0): Event {
+  const event = new Event(type, { bubbles: true, cancelable: true });
+  const data = new Map<string, string>();
+  Object.assign(event, {
+    dataTransfer: {
+      setData: (key: string, value: string) => data.set(key, value),
+      getData: (key: string) => data.get(key) ?? "",
+      effectAllowed: "",
+      dropEffect: ""
+    },
+    clientY
+  });
+  return event;
+}
+
 function liveText(): string {
   return container?.querySelector("[aria-live='polite']")?.textContent ?? "";
 }
@@ -252,23 +268,20 @@ describe("workspace explorer moves", () => {
     await renderExplorer(fixture);
 
     const rootRegion = container!.querySelector<HTMLElement>("[data-workspace-drop-root]")!;
-    vi.spyOn(document, "elementFromPoint").mockReturnValue(rootRegion);
+    // Native drags dispatch dragstart/dragover on the row's DOM node.
     const row = container!.querySelector<HTMLElement>(
-      `[${WORKSPACE_TREE_ROW_ATTR}="a.md"] > button`
+      `[${WORKSPACE_TREE_ROW_ATTR}="a.md"]`
     )!;
-    const pointer = (type: string, init: Record<string, unknown> = {}) => {
-      const event = new Event(type, { bubbles: true, cancelable: true });
-      Object.assign(event, { pointerId: 1, button: 0, pointerType: "mouse", clientX: 0, clientY: 0, ...init });
-      row.dispatchEvent(event);
-    };
     await act(async () => {
-      pointer("pointerdown");
-      pointer("pointermove", { clientX: 30 });
+      row.dispatchEvent(nativeDrag("dragstart"));
+      rootRegion.dispatchEvent(nativeDrag("dragover"));
     });
     // a.md already lives at the root: the region shows the invalid treatment.
     expect(rootRegion.className).toContain("destructive");
     expect(rootRegion.className).not.toContain("accent");
-    await act(async () => pointer("pointercancel", { clientX: 30 }));
+    await act(async () => {
+      row.dispatchEvent(nativeDrag("dragend"));
+    });
     expect(fixture.renameWorkspaceEntry).not.toHaveBeenCalled();
   });
 
@@ -288,25 +301,19 @@ describe("workspace explorer moves", () => {
       folderRow.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
     });
 
-    // Drag Folder's row over its own subfolder and release.
+    // Drag Folder's row over its own subfolder. An invalid target never
+    // reaches a drop event, so the rejection is announced while hovering.
     const row = container!.querySelector<HTMLElement>(
-      `[${WORKSPACE_TREE_ROW_ATTR}="Folder"] > button`
+      `[${WORKSPACE_TREE_ROW_ATTR}="Folder"]`
     )!;
     const subTarget = container!.querySelector<HTMLElement>(
       `[${WORKSPACE_DROP_PARENT_ATTR}="Folder/Sub"]`
     )!;
     expect(subTarget).not.toBeNull();
-    vi.spyOn(document, "elementFromPoint").mockReturnValue(subTarget);
-
-    const pointer = (type: string, init: Record<string, unknown> = {}) => {
-      const event = new Event(type, { bubbles: true, cancelable: true });
-      Object.assign(event, { pointerId: 1, button: 0, pointerType: "mouse", clientX: 0, clientY: 0, ...init });
-      row.dispatchEvent(event);
-    };
     await act(async () => {
-      pointer("pointerdown");
-      pointer("pointermove", { clientX: 30 });
-      pointer("pointerup", { clientX: 30 });
+      row.dispatchEvent(nativeDrag("dragstart"));
+      subTarget.dispatchEvent(nativeDrag("dragover"));
+      row.dispatchEvent(nativeDrag("dragend"));
     });
 
     expect(fixture.renameWorkspaceEntry).not.toHaveBeenCalled();
