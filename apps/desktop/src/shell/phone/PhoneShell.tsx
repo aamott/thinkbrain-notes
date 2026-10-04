@@ -50,10 +50,11 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
   const { items, setItems } = useHubItems();
 
   // Browser-history-backed navigation: Files is the root content route, and
-  // every transient surface — navigation drawer, tab switcher, action-items
-  // menu, inspector drawer — is an overlay entry on the same stack, so the
-  // header Back and Android system Back both dismiss the topmost surface
-  // before touching content history.
+  // the inspector drawer pushes onto the same stack so header Back and
+  // Android system Back dismiss it before content history. The navigation
+  // drawer, tab switcher, action-items menu and New-note popup are ephemeral
+  // chrome state — Back closes them, and neither Back nor Forward can
+  // resurrect them.
   const navigation = usePhoneNavigation(shell.restoredWorkspacePath);
   const route = navigation.route;
   const overlay = navigation.overlay;
@@ -77,8 +78,6 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
     paletteCommands,
     runCommand: runPaletteCommand
   } = shell;
-
-  const closeDrawer = useCallback(() => navigation.dismissOverlay(), [navigation]);
 
   // The journal root path — used to hide the note title row on journal
   // entries, which already show their own dateline via metadata-widget.
@@ -228,11 +227,12 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
       // something.
       if (isSelectableLeftPanel(panelId)) {
         // A left panel takes over the screen — a content route. With an
-        // overlay open it *replaces* the overlay's entry so switching New
-        // note/Menu/inspector → Files/Search does not strand the old surface
-        // under Back; over bare content it pushes. Tapping the slot for the
-        // panel already on screen toggles back to the prior content; at the
-        // Files root that Back is a safe no-op.
+        // inspector open it *replaces* the inspector's entry so switching
+        // inspector → Files/Search does not strand the old surface under
+        // Back; an ephemeral menu owns no entry, so the route pushes and the
+        // menu just closes. Tapping the slot for the panel already on screen
+        // toggles back to the prior content; at the Files root that Back is a
+        // safe no-op.
         const alreadyVisible =
           overlay === null &&
           (panelId === "explorer"
@@ -242,7 +242,7 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
           panelId === "explorer" ? { kind: "files" } : { kind: "panel", panel: panelId };
         if (alreadyVisible) {
           navigation.back();
-        } else if (overlay !== null) {
+        } else if (overlay?.kind === "inspector") {
           navigation.replace(target);
         } else {
           navigation.push(target);
@@ -265,9 +265,10 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
     [navigation, setRightPanel, overlay, route, inspectorPanel]
   );
 
-  // A panel row tapped *inside the navigation drawer* replaces the drawer's
-  // history entry with the content route instead of pushing over it — Back
-  // then returns to the prior content, not to a dead drawer entry.
+  // A panel row tapped *inside the navigation drawer* replaces the current
+  // entry with the content route instead of pushing over it — the drawer is
+  // ephemeral chrome with no entry of its own, and a deliberate screen switch
+  // from the menu should not leave Back a step into the surface it replaced.
   const selectDrawerPanel = useCallback(
     (panelId: string) => {
       if (!isSelectableLeftPanel(panelId)) return;
@@ -303,10 +304,11 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
 
   // The popup's create path runs the canonical command — the existing
   // Explorer focus/create flow — after landing on Files, so the inline file
-  // name field is where the user is already looking. The popup's history
-  // entry is replaced rather than pushed over, keeping Back honest.
+  // name field is where the user is already looking. The popup is ephemeral:
+  // pushing Files keeps Back honest (already on Files, the push just closes
+  // the popup).
   const createNewNote = useCallback(() => {
-    navigation.replace({ kind: "files" });
+    navigation.push({ kind: "files" });
     const command = paletteCommands.find((candidate) => candidate.id === "new-note");
     if (command) runPaletteCommand(command);
   }, [navigation, paletteCommands, runPaletteCommand]);
@@ -342,7 +344,7 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
   }, [activeTab, route, shell.tabState.tabs, noteHistory]);
 
   const openRecentNote = useCallback(() => {
-    if (recentNote) navigation.replace({ kind: "tab", tabId: recentNote.id });
+    if (recentNote) navigation.push({ kind: "tab", tabId: recentNote.id });
   }, [navigation, recentNote]);
 
   // Mobile autosave: the phone shell has no Save button, so the document is
@@ -437,7 +439,9 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
           actionItemsOpen={actionsOpen}
           onBack={navigation.back}
           onForward={navigation.forward}
-          onOpenTabs={() => navigation.showOverlay({ kind: "tabs" })}
+          onOpenTabs={() =>
+            tabsOpen ? navigation.dismissOverlay() : navigation.showOverlay({ kind: "tabs" })
+          }
           onToggleActionItems={() =>
             actionsOpen ? navigation.dismissOverlay() : navigation.showOverlay({ kind: "actions" })
           }
@@ -543,9 +547,10 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
           documents={shell.documents}
           onDismiss={() => navigation.dismissOverlay()}
           onSelect={(tabId) => {
-            // Replacing the switcher's entry with the tab route dismisses the
-            // sheet and lands Back on the prior content in one step.
-            navigation.replace({ kind: "tab", tabId });
+            // The switcher is ephemeral chrome, not a history entry: choosing
+            // a tab is the navigation, so push it — Back then revisits the
+            // tab switched from (reselecting the current tab just closes).
+            navigation.push({ kind: "tab", tabId });
           }}
           onClose={(tabId) => shell.dispatchTabs({ type: "requestClose", tabId })}
         />
@@ -594,7 +599,7 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
           open={drawerOpen}
           activePanel={shell.leftPanel}
           badges={shell.conflictBadges}
-          onDismiss={closeDrawer}
+          onDismiss={navigation.dismissOverlay}
           onSelectPanel={selectDrawerPanel}
           onWorkspaceAction={showFilesForWorkspaceAction}
           onLongPressPanel={(panelId) => editHub(pinPanel(items, panelId))}

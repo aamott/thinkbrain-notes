@@ -5,13 +5,8 @@ import { useDismissable } from "@thinkbrain/ui";
 import { PanelIcon } from "../panelIcons";
 import { PhoneMenuRow } from "./PhoneMenuRow";
 import { handlePhoneMenuKeyDown } from "./phoneMenuKeyboard";
+import { PHONE_OVERLAY_BOUNDS } from "./overlayBounds";
 import { cn } from "../../lib/utils";
-
-// The outside-dismiss layer is bounded between the phone header and the hub —
-// the same bounds Action items uses — so tapping the New note slot again
-// reaches the button and toggles the popup, and the header stays interactive.
-const LAYER_BOUNDS =
-  "top-[calc(3.5rem+env(safe-area-inset-top))] bottom-[calc(3.5rem+env(safe-area-inset-bottom))]";
 
 interface RecentNoteAction {
   readonly title: string;
@@ -63,7 +58,7 @@ export function NewNoteMenu({
     <>
       <div
         aria-hidden="true"
-        className={cn("fixed inset-x-0 z-30", LAYER_BOUNDS)}
+        className={cn("fixed inset-x-0 z-30", PHONE_OVERLAY_BOUNDS)}
         onPointerDown={(event) => {
           if (event.target === event.currentTarget) onDismiss();
         }}

@@ -96,14 +96,6 @@ describe("PhoneHeader", () => {
     expect(button("Document tools")?.getAttribute("aria-expanded")).toBe("true");
   });
 
-  it("omits both history buttons under showHistoryControls={false} but keeps the pill", async () => {
-    await render({ showHistoryControls: false });
-
-    expect(button("Back")).toBeNull();
-    expect(button("Forward")).toBeNull();
-    expect(container?.querySelector('[aria-label="Current location"]')).not.toBeNull();
-  });
-
   it("feeds the location pill its breadcrumb segments", async () => {
     await render({ breadcrumbs: ["Vault", "docs", "note"] });
 

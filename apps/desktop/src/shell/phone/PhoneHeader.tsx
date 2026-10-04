@@ -5,11 +5,9 @@ import { PhoneBreadcrumb } from "./PhoneBreadcrumb";
 /**
  * Universal phone header — browser chrome.
  *
- * Back renders in the header by default and stays dimmed at the stack root;
- * Forward appears only while the navigation history has a forward entry.
- * `showHistoryControls={false}` omits both controls for an alternate
- * presentation elsewhere. Between the navigation controls and the right-hand
- * controls sits the location pill: a breadcrumb that
+ * Back stays dimmed at the stack root; Forward appears only while the
+ * navigation history has a forward entry. Between the navigation controls
+ * and the right-hand controls sits the location pill: a breadcrumb that
  * keeps the current file visible and opens the full scrollable path on tap.
  *
  * The two right-hand controls open different surfaces: the count opens the tab
@@ -22,7 +20,6 @@ export function PhoneHeader({
   canGoForward,
   tabCount,
   actionItemsOpen,
-  showHistoryControls = true,
   onBack,
   onForward,
   onOpenTabs,
@@ -33,8 +30,6 @@ export function PhoneHeader({
   readonly canGoForward: boolean;
   readonly tabCount: number;
   readonly actionItemsOpen: boolean;
-  /** False omits Back/Forward for an alternate presentation elsewhere. */
-  readonly showHistoryControls?: boolean;
   readonly onBack: () => void;
   readonly onForward: () => void;
   readonly onOpenTabs: () => void;
@@ -48,29 +43,27 @@ export function PhoneHeader({
     // a fixed `h-14` includes the padding, so a 24px status-bar inset would
     // squeeze the buttons into 32px.
     <header className="flex min-h-14 shrink-0 items-center justify-between gap-1 border-b border-border bg-titlebar px-1 pt-[env(safe-area-inset-top)] text-titlebar-foreground">
-      {showHistoryControls && (
-        <div className="flex shrink-0 items-center">
+      <div className="flex shrink-0 items-center">
+        <button
+          type="button"
+          aria-label="Back"
+          disabled={!canGoBack}
+          className={button}
+          onClick={onBack}
+        >
+          <ArrowLeft aria-hidden="true" className="size-5" />
+        </button>
+        {canGoForward && (
           <button
             type="button"
-            aria-label="Back"
-            disabled={!canGoBack}
+            aria-label="Forward"
             className={button}
-            onClick={onBack}
+            onClick={onForward}
           >
-            <ArrowLeft aria-hidden="true" className="size-5" />
+            <ArrowRight aria-hidden="true" className="size-5" />
           </button>
-          {canGoForward && (
-            <button
-              type="button"
-              aria-label="Forward"
-              className={button}
-              onClick={onForward}
-            >
-              <ArrowRight aria-hidden="true" className="size-5" />
-            </button>
-          )}
-        </div>
-      )}
+        )}
+      </div>
 
       <PhoneBreadcrumb segments={breadcrumbs} />
 

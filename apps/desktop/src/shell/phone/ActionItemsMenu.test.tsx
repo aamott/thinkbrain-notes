@@ -70,39 +70,6 @@ describe("ActionItemsMenu", () => {
     expect(onSelect).toHaveBeenCalledWith("history");
   });
 
-  it("shows optional Back/Forward rows that disable and fire independently", async () => {
-    const onBack = vi.fn();
-    const onForward = vi.fn();
-    const host = await render(
-      menu({
-        historyControls: { canGoBack: true, canGoForward: false, onBack, onForward }
-      })
-    );
-    const back = menuOf(host)?.querySelector<HTMLButtonElement>(
-      '[role="menuitem"][aria-label="Back"]'
-    );
-    const forward = menuOf(host)?.querySelector<HTMLButtonElement>(
-      '[role="menuitem"][aria-label="Forward"]'
-    );
-
-    expect(back?.disabled).toBe(false);
-    expect(forward?.disabled).toBe(true);
-    await act(async () => back?.click());
-    expect(onBack).toHaveBeenCalledOnce();
-    expect(onForward).not.toHaveBeenCalled();
-  });
-
-  it("omits history rows when historyControls is not supplied", async () => {
-    const host = await render(menu());
-
-    expect(
-      menuOf(host)?.querySelector('[role="menuitem"][aria-label="Back"]')
-    ).toBeNull();
-    expect(
-      menuOf(host)?.querySelector('[role="menuitem"][aria-label="Forward"]')
-    ).toBeNull();
-  });
-
   it("lists every registered right-panel contribution as a menuitem", async () => {
     const host = await render(menu());
     const el = menuOf(host);

@@ -2,6 +2,7 @@ import { Scrim, useDismissable } from "@thinkbrain/ui";
 
 import type { RightPanel } from "../shellTypes";
 import { RightPopout } from "../../panels/RightPopout";
+import { PHONE_OVERLAY_BOUNDS } from "./overlayBounds";
 import { cn } from "../../lib/utils";
 
 /** Classes that make the dock-styled `RightPopout` behave as a plain flow
@@ -9,12 +10,6 @@ import { cn } from "../../lib/utils";
  *  border and shadow, and its inner dock-width wrapper goes full width. */
 const AS_FLOW_CHILD =
   "[&>aside]:static [&>aside]:min-h-0 [&>aside]:flex-1 [&>aside]:border-l-0 [&>aside]:shadow-none [&>aside>div]:w-full";
-
-// The drawer is bounded between the phone header and the bottom hub: the hub
-// stays visible and tappable while an inspector is open, matching how the
-// navigation drawer and sheets leave the surrounding chrome reachable.
-const BOUNDS =
-  "top-[calc(3.5rem+env(safe-area-inset-top))] bottom-[calc(3.5rem+env(safe-area-inset-bottom))]";
 
 /**
  * Right-edge inspector drawer for a right-panel contribution (outline,
@@ -58,7 +53,7 @@ export function InspectorSheet({
   const { containerRef } = useDismissable({ open, onDismiss });
   return (
     <>
-      <Scrim open={open} onDismiss={onDismiss} className={`inset-x-0 ${BOUNDS}`} />
+      <Scrim open={open} onDismiss={onDismiss} className={`inset-x-0 ${PHONE_OVERLAY_BOUNDS}`} />
       <div
         ref={containerRef}
         role={open ? "dialog" : undefined}
@@ -67,7 +62,7 @@ export function InspectorSheet({
         aria-hidden={!open}
         className={cn(
           "absolute right-0 z-50 flex w-[90%] max-w-96 flex-col bg-sidebar text-sidebar-foreground shadow-panel tn-slide",
-          BOUNDS,
+          PHONE_OVERLAY_BOUNDS,
           open ? "visible translate-x-0" : "invisible translate-x-full"
         )}
       >

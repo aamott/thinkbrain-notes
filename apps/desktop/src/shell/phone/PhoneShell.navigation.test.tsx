@@ -245,6 +245,26 @@ describe("PhoneShell navigation", () => {
     expect(noteTitle(host)?.value).toBe("second");
   });
 
+  it("keeps the tab switcher out of history: Back closes it and Forward cannot reopen it", async () => {
+    const { host, shell } = await renderWithShell();
+    await act(async () => shell().openMarkdownDocument("/vault", "note.md"));
+    expect(noteTitleVisible(host)).toBe(true);
+
+    await click(host, "Open tabs (1)");
+    expect(visibleDialog(host, "Open tabs")).not.toBeNull();
+
+    // The switcher is ephemeral chrome: Back dismisses it in place — no
+    // history entry was popped, so the note stays the branch tip.
+    await click(host, "Back");
+    expect(visibleDialog(host, "Open tabs")).toBeNull();
+    expect(noteTitleVisible(host)).toBe(true);
+    expect(forwardButton(host)).toBeNull();
+
+    // And the next Back still walks content history to Files.
+    await click(host, "Back");
+    expect(filesVisible(host)).toBe(true);
+  });
+
   it("reconciles a closed routed tab to the new active tab", async () => {
     const { host, shell } = await renderWithShell();
     await act(async () => shell().openMarkdownDocument("/vault", "first.md"));
@@ -487,8 +507,8 @@ describe("PhoneShell navigation", () => {
     });
     expect(newNoteMenu(host)).not.toBeNull();
 
-    // Assistant is a peer surface: it replaces the popup's history entry
-    // rather than stacking over it.
+    // Assistant is a peer surface: the ephemeral popup closes and the
+    // inspector pushes over the note rather than stacking over a menu entry.
     await act(async () => {
       hub?.querySelector<HTMLButtonElement>('[aria-label="Assistant"]')?.click();
     });
@@ -502,7 +522,7 @@ describe("PhoneShell navigation", () => {
     expect(noteTitleVisible(host)).toBe(true);
   });
 
-  it("a hub left panel replaces an open overlay instead of stranding it", async () => {
+  it("a hub left panel navigates over an open popup instead of stranding it", async () => {
     const { host, shell } = await renderWithShell();
     await act(async () => shell().openMarkdownDocument("/vault", "note.md"));
     const hub = hubOf(host);
@@ -518,8 +538,8 @@ describe("PhoneShell navigation", () => {
     expect(newNoteMenu(host)).toBeNull();
     expect(filesVisible(host)).toBe(true);
 
-    // The popup's entry became the Files route, so Back returns to the note —
-    // not to a resurrected popup.
+    // The popup owned no entry: Files pushed over the note, so Back returns
+    // to the note — not to a resurrected popup.
     await click(host, "Back");
     expect(noteTitleVisible(host)).toBe(true);
     expect(newNoteMenu(host)).toBeNull();
