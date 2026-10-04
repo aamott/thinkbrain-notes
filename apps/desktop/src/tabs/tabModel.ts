@@ -27,6 +27,22 @@ export function isMediaViewerKind(kind: string): boolean {
   return MEDIA_VIEWER_KINDS.has(kind);
 }
 
+/**
+ * Tab kinds whose content is a document the shell loads and keeps.
+ *
+ * Editor and code-editor tabs render text the shell reads into its document
+ * map, so restoring the tab means re-reading its file — skip that and the tab
+ * sits on "Loading" forever. Media viewers read their file through the asset
+ * protocol and comparison/static tabs carry their own state, so neither is
+ * document-backed.
+ */
+const DOCUMENT_BACKED_KINDS: ReadonlySet<string> = new Set(["editor", "code-editor"]);
+
+/** True for tab kinds that render a document the shell must load for them. */
+export function isDocumentBackedKind(kind: string): boolean {
+  return DOCUMENT_BACKED_KINDS.has(kind);
+}
+
 export interface CloseRequest {
   readonly tabId: string;
 }

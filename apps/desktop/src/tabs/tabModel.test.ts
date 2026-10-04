@@ -7,6 +7,7 @@ import {
   createVersionDiffTab,
   desktopTabReducer,
   initialDesktopTabState,
+  isDocumentBackedKind,
   restoreBreadcrumbSegments,
   tabAccessibleName,
   versionDiffTabId
@@ -315,6 +316,32 @@ describe("createFileTab", () => {
     const a = createFileTab({ rootPath: "/vault", relativePath: "a.ts" });
     const b = createFileTab({ rootPath: "/vault", relativePath: "b.ts" });
     expect(a.id).not.toBe(b.id);
+  });
+});
+
+describe("isDocumentBackedKind", () => {
+  it("covers both editor kinds — Markdown and code", () => {
+    expect(isDocumentBackedKind("editor")).toBe(true);
+    expect(isDocumentBackedKind("code-editor")).toBe(true);
+  });
+
+  it("excludes kinds that never read a shell document", () => {
+    // Viewers read their own file via the asset protocol; the rest carry
+    // their own state or render no file at all.
+    for (const kind of [
+      "image-viewer",
+      "audio-viewer",
+      "video-viewer",
+      "settings",
+      "merge",
+      "version-diff",
+      "preview",
+      "graph",
+      "browser",
+      "anything-an-extension-makes-up"
+    ]) {
+      expect(isDocumentBackedKind(kind)).toBe(false);
+    }
   });
 });
 

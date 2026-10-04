@@ -24,6 +24,7 @@ import { useSettingsStore } from "../settings/settingsStore";
 import {
   createFileTab,
   createStaticTab,
+  isDocumentBackedKind,
   type DesktopTab,
   type DesktopTabAction,
   type DesktopTabState
@@ -41,7 +42,7 @@ const PANEL_WIDTH_PERSIST_DELAY_MS = 300;
 interface UseWorkspaceLifecycleOptions {
   readonly tabState: DesktopTabState;
   readonly dispatchTabs: Dispatch<DesktopTabAction>;
-  readonly loadDocumentIntoView: (tabId: string, rootPath: string, relativePath: string) => void;
+  readonly loadDocumentIntoView: (tabId: string, rootPath: string, relativePath: string, kind?: string) => void;
   readonly openMarkdownDocument: (rootPath: string, relativePath: string) => void;
   readonly openFileDocument?: (rootPath: string, relativePath: string) => void;
 }
@@ -113,8 +114,12 @@ export function useWorkspaceLifecycle({
           const tab = restoreTab(persisted, rootPath);
           if (tab) {
             dispatchTabs({ type: "open", tab });
-            if (tab.kind === "editor" && tab.resource?.rootPath && tab.resource?.relativePath) {
-              loadDocumentIntoView(tab.id, tab.resource.rootPath, tab.resource.relativePath);
+            // Every document-backed kind needs its file re-read, not just
+            // Markdown editors — a restored code-editor tab never leaves
+            // "Loading" otherwise. The kind rides along so the loader picks
+            // the text-file API for code files rather than the Markdown one.
+            if (isDocumentBackedKind(tab.kind) && tab.resource?.rootPath && tab.resource?.relativePath) {
+              loadDocumentIntoView(tab.id, tab.resource.rootPath, tab.resource.relativePath, tab.kind);
             }
           }
         }
