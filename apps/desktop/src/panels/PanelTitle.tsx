@@ -8,6 +8,22 @@ import { PanelIcon } from "../shell/panelIcons";
 const ACTION_BUTTON_CLASSES =
   "bg-transparent border-0 cursor-pointer px-1 text-muted-foreground hover:text-foreground pointer-coarse:min-h-9 pointer-coarse:min-w-9 pointer-coarse:px-1.5 [&>svg]:w-[0.9rem] [&>svg]:h-[0.9rem] [&>svg]:stroke-current pointer-coarse:[&>svg]:w-4 pointer-coarse:[&>svg]:h-4";
 
+/** Runs a panel action or menu item, reporting `actionId` on failure. */
+function runPanelAction(actionId: string, run?: () => void | Promise<void>): void {
+  // A panel action is trusted code, but a throw here would otherwise escape
+  // through the click handler and unmount the shell.
+  try {
+    const result = run?.();
+    if (result instanceof Promise) {
+      void result.catch((error: unknown) => {
+        console.error(`[panels] Action "${actionId}" failed.`, error);
+      });
+    }
+  } catch (error: unknown) {
+    console.error(`[panels] Action "${actionId}" failed.`, error);
+  }
+}
+
 /**
  * Compact header bar for shell panels.
  *
@@ -46,21 +62,6 @@ export function PanelTitle({
    */
   readonly onBack?: () => void;
 }) {
-  const run = (action: PanelAction): void => {
-    // A panel action is trusted code, but a throw here would otherwise escape
-    // through the click handler and unmount the shell.
-    try {
-      const result = action.run?.();
-      if (result instanceof Promise) {
-        void result.catch((error: unknown) => {
-          console.error(`[panels] Action "${action.id}" failed.`, error);
-        });
-      }
-    } catch (error: unknown) {
-      console.error(`[panels] Action "${action.id}" failed.`, error);
-    }
-  };
-
   return (
     <div className="flex items-center justify-between h-9 px-3 pointer-coarse:h-12 pointer-coarse:px-4">
       <div className="flex min-w-0 flex-1 items-center gap-1">
@@ -92,7 +93,7 @@ export function PanelTitle({
               className={ACTION_BUTTON_CLASSES}
               aria-label={action.label}
               title={action.label}
-              onClick={() => run(action)}
+              onClick={() => runPanelAction(action.id, action.run)}
             >
               <PanelIcon name={action.icon} />
             </button>
@@ -107,19 +108,6 @@ export function PanelTitle({
 function PanelMenuAction({ action }: { readonly action: PanelAction }) {
   const [open, setOpen] = useState(false);
   const anchorRef = useRef<HTMLButtonElement>(null);
-
-  const runItem = (item: PanelMenuItem): void => {
-    try {
-      const result = item.run?.();
-      if (result instanceof Promise) {
-        void result.catch((error: unknown) => {
-          console.error(`[panels] Action "${action.id}" failed.`, error);
-        });
-      }
-    } catch (error: unknown) {
-      console.error(`[panels] Action "${action.id}" failed.`, error);
-    }
-  };
 
   return (
     <div className="relative">
@@ -148,7 +136,7 @@ function PanelMenuAction({ action }: { readonly action: PanelAction }) {
               item={item}
               onRun={(close) => {
                 if (close) setOpen(false);
-                runItem(item);
+                runPanelAction(action.id, item.run);
               }}
             />
           ))}

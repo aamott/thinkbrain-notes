@@ -4,7 +4,7 @@ import { useSettingsStore } from "../../settings/settingsStore";
 import { parseHubItems, serializeHubItems, type HubItem } from "./hubModel";
 
 /** Full settings key: module id `ui` plus relative key `mobileHub`. */
-export const MOBILE_HUB_KEY = "ui.mobileHub";
+const MOBILE_HUB_KEY = "ui.mobileHub";
 
 /** What `useHubItems` hands back: the current hub and a way to replace it. */
 export interface HubItemsHandle {

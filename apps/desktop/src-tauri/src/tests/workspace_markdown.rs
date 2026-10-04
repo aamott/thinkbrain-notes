@@ -1,4 +1,4 @@
-//! Workspace + Markdown tests: shell status, `NativeError` shape, relative-path
+//! Workspace + Markdown tests: `NativeError` shape, relative-path
 //! normalization, markdown/hidden-name detection, workspace entry CRUD (file,
 //! folder, rename, delete), path-security (escape + symlink escape), note
 //! backup/restore, and note-write preconditions (conflict detection, atomic
@@ -9,15 +9,6 @@ use crate::commands::{backup::*, markdown::*, workspace::*};
 use std::{fs, path::Path};
 
 use super::temp_test_dir;
-
-#[test]
-fn shell_status_reports_ready_desktop_shell() {
-    let status = desktop_shell_status().expect("shell status should succeed");
-
-    assert_eq!(status.app_name, "Thinkbrain Notes");
-    assert_eq!(status.shell_version, env!("CARGO_PKG_VERSION"));
-    assert!(status.ready);
-}
 
 #[test]
 fn native_error_shape_supports_optional_details() {

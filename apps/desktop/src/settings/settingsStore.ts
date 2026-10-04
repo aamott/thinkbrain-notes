@@ -30,6 +30,7 @@ import {
   type SettingsRegistry
 } from "@thinkbrain/core";
 import {
+  getErrorMessage,
   parseDynamicAppSettings,
   serializeDynamicAppSettings
 } from "@thinkbrain/core";
@@ -78,9 +79,9 @@ export interface SettingsStoreGateway {
   /**
    * Revises the app-settings document and returns what was written.
    *
-   * A document rather than a payload: `update_desktop_state` and
-   * `update_app_theme` write to the same file on every tab open, panel resize,
-   * or theme change, so this store has to serialize against the document as it
+   * A document rather than a payload: `update_desktop_state` writes to the
+   * same file on every tab open or panel resize, so this store has to
+   * serialize against the document as it
    * is at the moment of writing rather than the copy it read at load. `revise`
    * runs inside the document's own update chain (see `appSettingsFile.ts`).
    */
@@ -265,7 +266,7 @@ export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettin
         // Only record the error if we're still the latest load; a superseded
         // load's error is not representative of the current state.
         if (myGeneration !== loadGeneration) return;
-        const message = error instanceof Error ? error.message : String(error);
+        const message = getErrorMessage(error);
         console.error("[settingsStore] Failed to load settings:", error);
         set({ loadError: `Failed to load settings: ${message}`, loaded: true });
       }
@@ -433,7 +434,7 @@ export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettin
         // stagedChanges remain so the user can retry. The disk may be in a
         // partial state (e.g. app settings written but workspace not), but
         // that will be reconciled on the next successful save or reload.
-        const message = error instanceof Error ? error.message : String(error);
+        const message = getErrorMessage(error);
         console.error("[settingsStore] Failed to save settings:", error);
         set({ saveError: `Failed to save settings: ${message}` });
         return { success: false, diagnostics: [] };

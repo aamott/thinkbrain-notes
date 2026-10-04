@@ -30,13 +30,6 @@ pub struct MarkdownFileContents {
 }
 
 #[tauri::command]
-pub fn list_markdown_files(root_path: String) -> Result<Vec<MarkdownFileEntry>, NativeError> {
-    let root = resolve_workspace_root(&root_path)?;
-
-    list_markdown_file_entries(&root)
-}
-
-#[tauri::command]
 pub fn read_markdown_file(
     app: tauri::AppHandle,
     root_path: String,

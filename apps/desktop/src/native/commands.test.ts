@@ -56,13 +56,13 @@ describe("native command failure logging", () => {
       details: "HTTP status 401"
     });
 
-    await expect(invokeNativeCommand("desktop_shell_status")).rejects.toBeInstanceOf(
+    await expect(invokeNativeCommand("platform_capabilities")).rejects.toBeInstanceOf(
       NativeCommandError
     );
 
     expect(logged).toHaveBeenCalledTimes(1);
     const line = String(logged.mock.calls[0]?.[0]);
-    expect(line).toContain("desktop_shell_status");
+    expect(line).toContain("platform_capabilities");
     expect(line).toContain("sync.credentials_invalid");
     expect(line).toContain("The username or access token was not accepted.");
     expect(line).toContain("HTTP status 401");
@@ -77,7 +77,7 @@ describe("native command failure logging", () => {
     const logged = vi.spyOn(console, "error").mockImplementation(() => {});
     invoke.mockRejectedValueOnce({ code: "sync.remote_unreachable", message: "No connection." });
 
-    await expect(invokeNativeCommand("desktop_shell_status")).rejects.toBeInstanceOf(
+    await expect(invokeNativeCommand("platform_capabilities")).rejects.toBeInstanceOf(
       NativeCommandError
     );
 
@@ -89,7 +89,7 @@ describe("native command failure logging", () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     invoke.mockRejectedValueOnce({ code: "sync.remote_not_found", message: "Not found." });
 
-    await expect(invokeNativeCommand("desktop_shell_status")).rejects.toMatchObject({
+    await expect(invokeNativeCommand("platform_capabilities")).rejects.toMatchObject({
       code: "sync.remote_not_found",
       message: "Not found."
     });
@@ -97,9 +97,9 @@ describe("native command failure logging", () => {
 
   it("says nothing when a command succeeds", async () => {
     const logged = vi.spyOn(console, "error").mockImplementation(() => {});
-    invoke.mockResolvedValueOnce({ app_name: "ThinkBrain Notes", shell_version: "0", ready: true });
+    invoke.mockResolvedValueOnce({ canOpenFolder: true });
 
-    await invokeNativeCommand("desktop_shell_status");
+    await invokeNativeCommand("platform_capabilities");
 
     expect(logged).not.toHaveBeenCalled();
   });

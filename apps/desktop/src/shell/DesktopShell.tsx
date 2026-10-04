@@ -7,7 +7,6 @@
  * one effect that publishes dock widths onto this component's own root element.
  */
 
-import { normalizeRoot } from "@thinkbrain/core";
 import { useEffect, useMemo, useRef } from "react";
 import { CommandPalette, type WorkspaceFileResult } from "../commands/CommandPalette";
 import { BottomPanel as BottomPanelContent } from "../panels/BottomPanel";
@@ -19,14 +18,14 @@ import { ResizeHandle } from "./ResizeHandle";
 import { EmptiedNoteBanner } from "./EmptiedNoteBanner";
 import { StaleDocumentBanner } from "./StaleDocumentBanner";
 import { UpdateBanner } from "./UpdateBanner";
-import { isNoteTitleEligible } from "./noteTitleEligibility";
+import { useNoteTitle } from "./useNoteTitle";
 import { NoteTitleRow } from "./phone/NoteTitleRow";
 import { useSettingsStore } from "../settings/settingsStore";
 import { StatusBar } from "./StatusBar";
 import { TabBoundary } from "./TabBoundary";
 import { TabCloseRequest } from "./TabCloseRequest";
 import { TabContent } from "./TabContent";
-import { canGoBackInTabs, canGoForwardInTabs } from "../tabs/tabModel";
+import { canGoBackInTabs, canGoForwardInTabs, inspectableRelativePath } from "../tabs/tabModel";
 import { TitleBar } from "./TitleBar";
 import { WorkspaceHeaderBar } from "./WorkspaceHeaderBar";
 import { WorkspaceSelectorProvider } from "../workspace/WorkspaceSelectorPortal";
@@ -39,23 +38,13 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
   const resource = activeTab?.resource;
   const rootPath = resource?.rootPath;
   const relativePath = resource?.relativePath;
-  // The inspector's file: any tab showing a workspace file — Markdown editor,
-  // code editor, media viewer — but never a comparison tab, whose resource is
-  // the file the comparison is about rather than a document being viewed.
-  const documentPath =
-    activeTab !== null &&
-    activeTab.kind !== "merge" &&
-    activeTab.kind !== "version-diff" &&
-    relativePath !== undefined
-      ? relativePath
-      : null;
+  // The inspector's file: the tab's resource unless it is a comparison tab —
+  // see `inspectableRelativePath`.
+  const documentPath = inspectableRelativePath(activeTab);
 
   // Journal entries render their own dateline, so the title row hides there —
   // same rule as PhoneShell. Only ordinary Markdown editor tabs get a title.
-  const journalRoot = useSettingsStore(
-    (s) => normalizeRoot(String(s.getEffectiveValue("extension-journal-calendar.root") ?? "journal"))
-  );
-  const showNoteTitle = isNoteTitleEligible(activeTab?.kind, relativePath, journalRoot);
+  const showNoteTitle = useNoteTitle(activeTab);
   const workspaceSelectorPlacement = useSettingsStore((s) =>
     s.getEffectiveValue("ui.workspaceSelectorPlacement") === "panel headers"
       ? "panel headers"
@@ -70,23 +59,18 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
     () => ({ ...shell.explorerProps, workspaceSelectorInPanel: selectorInPanel }),
     [shell.explorerProps, selectorInPanel]
   );
-  const openDocumentFromPanel = (relativePath: string) => {
-    if (shell.restoredWorkspacePath) {
-      shell.openMarkdownDocument(shell.restoredWorkspacePath, relativePath);
-    }
-  };
   // One context object for both docks: the same values the popouts render
   // with are the values the right-panel availability gate reads, so the two
   // can never disagree about what "the active document" is.
   const panelContext: DesktopPanelContext = {
     rootPath: shell.restoredWorkspacePath,
     explorerProps,
-    onOpenSearchResult: openDocumentFromPanel,
+    onOpenSearchResult: shell.onOpenNote,
     onReviewConflict: shell.reviewConflict,
     onOpenSyncSettings: shell.openSyncSettings,
     documentContents: activeDocument?.phase === "ready" ? activeDocument.contents : null,
     documentPath,
-    onOpenNote: openDocumentFromPanel,
+    onOpenNote: shell.onOpenNote,
     onCompareVersion: shell.compareVersion,
     onRestoreVersion: shell.restoreVersionSafely
   };
@@ -242,8 +226,8 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
                 onKeyDown={shell.resize.resizeWithKeyboard("right")}
               />
               <RightPopout
-                {...panelContext}
                 panel={effectiveRightPanel}
+                context={panelContext}
                 onBack={() => shell.setRightPanel(null)}
               />
             </>

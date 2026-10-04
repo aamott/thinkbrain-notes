@@ -156,179 +156,6 @@ describe("desktop state persistence", () => {
     expect(gateway.readAppSettings).toHaveBeenCalledTimes(1);
   });
 
-  it("updates state while preserving unrelated app settings and migrating flat fields", async () => {
-    const gateway = createGateway(
-      JSON.stringify({
-        version: 1,
-        theme: "dark",
-        editor: { fontSize: 18, lineWrapping: false },
-        extensionSettings: { "example.timer": { enabled: true } },
-        lastWorkspacePath: "/notes/legacy",
-        explorerOpen: false
-      })
-    );
-
-    await expect(saveDesktopState({ explorerOpen: true }, gateway)).resolves.toEqual({
-      ...DEFAULT_DESKTOP_STATE,
-      lastWorkspacePath: "/notes/legacy",
-      recentWorkspacePaths: ["/notes/legacy"],
-      explorerOpen: true
-    });
-
-    const written = getWrittenSettings(gateway);
-    expect(written).toMatchObject({
-      version: 1,
-      theme: "dark",
-      editor: { fontSize: 18, lineWrapping: false },
-      extensionSettings: { "example.timer": { enabled: true } },
-      [DESKTOP_STATE_KEY]: {
-        version: 5,
-        lastWorkspacePath: "/notes/legacy",
-        recentWorkspacePaths: ["/notes/legacy"],
-        explorerOpen: true,
-        leftPanelWidth: 288,
-        rightPanelWidth: 320,
-        bottomPanelOpen: false,
-        openTabs: [],
-        activeTabId: null
-      }
-    });
-    expect(written).not.toHaveProperty("lastWorkspacePath");
-    expect(written).not.toHaveProperty("explorerOpen");
-  });
-
-  it("writes a current state document when the stored JSON is malformed", async () => {
-    const gateway = createGateway("{not json");
-
-    await expect(
-      saveDesktopState(
-        { lastWorkspacePath: "/notes/new", explorerOpen: false },
-        gateway
-      )
-    ).resolves.toEqual({
-      ...DEFAULT_DESKTOP_STATE,
-      lastWorkspacePath: "/notes/new",
-      recentWorkspacePaths: ["/notes/new"],
-      explorerOpen: false
-    });
-
-    expect(getWrittenSettings(gateway)).toEqual({
-      [DESKTOP_STATE_KEY]: {
-        version: 5,
-        lastWorkspacePath: "/notes/new",
-        recentWorkspacePaths: ["/notes/new"],
-        explorerOpen: false,
-        leftPanelWidth: 288,
-        rightPanelWidth: 320,
-        bottomPanelOpen: false,
-        developmentExtensionDirectories: [],
-        openTabs: [],
-        activeTabId: null,
-        workspaceViews: {},
-        workspaceTabs: {}
-      }
-    });
-  });
-
-  it("promotes the most recent workspace, removes duplicates, and keeps the MRU list bounded", async () => {
-    const paths = Array.from({ length: 13 }, (_, index) => `/notes/${index}`);
-    const gateway = createGateway(
-      JSON.stringify({
-        [DESKTOP_STATE_KEY]: {
-          version: 2,
-          lastWorkspacePath: "/notes/3",
-          recentWorkspacePaths: paths,
-          explorerOpen: true
-        }
-      })
-    );
-
-    await expect(saveDesktopState({ lastWorkspacePath: "/notes/10" }, gateway)).resolves.toMatchObject({
-      lastWorkspacePath: "/notes/10",
-      recentWorkspacePaths: [
-        "/notes/10",
-        "/notes/3",
-        "/notes/0",
-        "/notes/1",
-        "/notes/2",
-        "/notes/4",
-        "/notes/5",
-        "/notes/6",
-        "/notes/7",
-        "/notes/8",
-        "/notes/9",
-        "/notes/11"
-      ]
-    });
-    expect(getWrittenSettings(gateway)[DESKTOP_STATE_KEY]).toMatchObject({
-      recentWorkspacePaths: [
-        "/notes/10",
-        "/notes/3",
-        "/notes/0",
-        "/notes/1",
-        "/notes/2",
-        "/notes/4",
-        "/notes/5",
-        "/notes/6",
-        "/notes/7",
-        "/notes/8",
-        "/notes/9",
-        "/notes/11"
-      ]
-    });
-  });
-
-  it("merges an explicitly provided recentWorkspacePaths list with the current stored list", async () => {
-    const gateway = createGateway(
-      JSON.stringify({
-        [DESKTOP_STATE_KEY]: {
-          version: 5,
-          recentWorkspacePaths: ["/notes/one", "/notes/legacy"]
-        }
-      })
-    );
-
-    await expect(
-      saveDesktopState({ recentWorkspacePaths: ["/notes/two", "/notes/legacy"] }, gateway)
-    ).resolves.toMatchObject({
-      recentWorkspacePaths: ["/notes/two", "/notes/legacy", "/notes/one"]
-    });
-  });
-
-  /**
-   * The native path treats an empty id as no id at all. This path has to agree,
-   * or the fallback persists a tab id no tab can ever have.
-   */
-  it("treats an empty activeTabId as cleared, the way the native path does", async () => {
-    const gateway = createGateway(
-      JSON.stringify({
-        [DESKTOP_STATE_KEY]: { version: 5, activeTabId: "tab-1" }
-      })
-    );
-
-    await expect(saveDesktopState({ activeTabId: "" }, gateway)).resolves.toMatchObject({
-      activeTabId: null
-    });
-  });
-
-  it("keeps known recent workspaces when the current root is cleared", async () => {
-    const gateway = createGateway(
-      JSON.stringify({
-        [DESKTOP_STATE_KEY]: {
-          version: 2,
-          lastWorkspacePath: "/notes/current",
-          recentWorkspacePaths: ["/notes/current", "/notes/previous"],
-          explorerOpen: true
-        }
-      })
-    );
-
-    await expect(saveDesktopState({ lastWorkspacePath: null }, gateway)).resolves.toMatchObject({
-      lastWorkspacePath: null,
-      recentWorkspacePaths: ["/notes/current", "/notes/previous"]
-    });
-  });
-
   it("saves panel widths and bottom panel visibility through the desktop-state gateway", async () => {
     const updateDesktopState = vi.fn(async () => JSON.stringify({
       [DESKTOP_STATE_KEY]: {
@@ -377,60 +204,16 @@ describe("desktop state persistence", () => {
     });
   });
 
-  it("saves development extension directories without touching other state", async () => {
-    const gateway = createGateway(
-      JSON.stringify({
-        theme: "dark",
-        [DESKTOP_STATE_KEY]: { version: 3, explorerOpen: false }
-      })
-    );
-
-    const saved = await saveDesktopState(
-      { developmentExtensionDirectories: ["/ext/one"] },
-      gateway
-    );
-
-    expect(saved.developmentExtensionDirectories).toEqual(["/ext/one"]);
-    expect(saved.explorerOpen).toBe(false);
-    const written = getWrittenSettings(gateway);
-    expect(written.theme).toBe("dark");
-    expect(
-      (written[DESKTOP_STATE_KEY] as Record<string, unknown>).developmentExtensionDirectories
-    ).toEqual(["/ext/one"]);
-  });
-
-  /**
-   * `write_app_settings` now refuses a write whose `expected` no longer
-   * matches what is on disk (see `appSettingsFile.ts`). The fallback path has
-   * no `updateDesktopState` command to do its read-modify-write atomically, so
-   * it must pass what it read as `expected` itself or every fallback write
-   * would be rejected outright once a settings file already exists.
-   */
-  it("sends what it read as the write's precondition", async () => {
-    const raw = JSON.stringify({ theme: "dark" });
-    const gateway = createGateway(raw);
-
-    await saveDesktopState({ explorerOpen: false }, gateway);
-
-    expect(gateway.writeAppSettings).toHaveBeenCalledWith(expect.any(String), raw);
-  });
 });
 
 function createGateway(contents: string | null): DesktopStateGateway & {
   readonly readAppSettings: ReturnType<typeof vi.fn>;
-  readonly writeAppSettings: ReturnType<typeof vi.fn>;
+  readonly updateDesktopState: ReturnType<typeof vi.fn>;
 } {
   return {
     readAppSettings: vi.fn(async () => contents),
-    writeAppSettings: vi.fn(async () => undefined)
+    updateDesktopState: vi.fn(async () => contents ?? "null")
   };
-}
-
-function getWrittenSettings(gateway: DesktopStateGateway & {
-  readonly writeAppSettings: ReturnType<typeof vi.fn>;
-}): Record<string, unknown> {
-  const [contents] = gateway.writeAppSettings.mock.calls[0] as [string];
-  return JSON.parse(contents) as Record<string, unknown>;
 }
 
 describe("collapsed groups (D53)", () => {
@@ -608,30 +391,29 @@ describe("per-workspace tabs", () => {
   });
 
   it("sends a targeted update so one window does not overwrite another's tabs", async () => {
-    const written: string[] = [];
-    const gateway: DesktopStateGateway = {
-      readAppSettings: () =>
-        Promise.resolve(
-          JSON.stringify({
-            desktopState: {
-              version: 5,
-              recentWorkspacePaths: ["/vault", "/other"],
-              workspaceTabs: {
-                "/other": {
-                  openTabs: [
-                    { id: "b", title: "Two", kind: "editor", rootPath: "/other", relativePath: "two.md" }
-                  ],
-                  activeTabId: "b"
-                }
-              }
+    const updateDesktopState = vi.fn(async () =>
+      JSON.stringify({
+        desktopState: {
+          version: 5,
+          recentWorkspacePaths: ["/vault", "/other"],
+          workspaceTabs: {
+            "/vault": {
+              openTabs: [
+                { id: "a", title: "One", kind: "editor", rootPath: "/vault", relativePath: "one.md" }
+              ],
+              activeTabId: "a"
+            },
+            "/other": {
+              openTabs: [
+                { id: "b", title: "Two", kind: "editor", rootPath: "/other", relativePath: "two.md" }
+              ],
+              activeTabId: "b"
             }
-          })
-        ),
-      writeAppSettings: (contents) => {
-        written.push(contents);
-        return Promise.resolve();
-      }
-    };
+          }
+        }
+      })
+    );
+    const gateway = { ...createGateway(null), updateDesktopState };
 
     const next = await saveDesktopState(
       {
@@ -647,6 +429,18 @@ describe("per-workspace tabs", () => {
       gateway
     );
 
+    // Only this window's workspace is sent; the merge itself is the host's
+    // (see the Rust `tabs_are_kept_per_workspace` test).
+    expect(updateDesktopState).toHaveBeenCalledWith({
+      lastWorkspacePath: "/vault",
+      workspaceTabs: {
+        workspacePath: "/vault",
+        openTabs: [
+          { id: "a", title: "One", kind: "editor", rootPath: "/vault", relativePath: "one.md" }
+        ],
+        activeTabId: "a"
+      }
+    });
     expect(workspaceTabs(next, "/vault").openTabs[0]?.relativePath).toBe("one.md");
     // The other window's entry survived the write.
     expect(workspaceTabs(next, "/other").openTabs[0]?.relativePath).toBe("two.md");

@@ -251,8 +251,7 @@ export function useWorkspaceLifecycle({
     setWorkspaceName(snapshot.workspace.name);
     setWorkspaceFiles(snapshot.files);
     const recentPaths = updateRecentWorkspacePaths(rootPath);
-    void useSearchIndexStore.getState().indexWorkspace(rootPath, snapshot.files);
-    void useWikiLinkIndexStore.getState().indexWorkspace(rootPath, snapshot.files);
+    indexWorkspaceStores(rootPath, snapshot.files);
     persistDesktopState({ lastWorkspacePath: rootPath, recentWorkspacePaths: recentPaths });
   }, [updateRecentWorkspacePaths]);
 
@@ -260,8 +259,7 @@ export function useWorkspaceLifecycle({
     setRestoredWorkspacePath(null);
     setWorkspaceName(null);
     setWorkspaceFiles([]);
-    useSearchIndexStore.getState().clearWorkspace();
-    useWikiLinkIndexStore.getState().clearWorkspace();
+    clearWorkspaceStores();
     persistDesktopState({ lastWorkspacePath: null });
   }, []);
 
@@ -325,12 +323,10 @@ export function useWorkspaceLifecycle({
     void useSettingsStore.getState().loadSettings(restoredWorkspacePath);
   }, [restoredWorkspacePath]);
 
-  // Subscribe the search index to note mutation events for incremental updates.
-  // The store's actions are workspace-scoped, so events from other windows are ignored.
-  useEffect(() => useSearchIndexStore.getState().subscribeToEvents(), []);
-  // Subscribe the wiki-link index to note mutation events for incremental updates.
-  // The store's actions are workspace-scoped, so events from other windows are ignored.
-  useEffect(() => useWikiLinkIndexStore.getState().subscribeToEvents(), []);
+  // Subscribe both index caches to note mutation events for incremental
+  // updates. The stores' actions are workspace-scoped, so events from other
+  // windows are ignored.
+  useEffect(() => subscribeWorkspaceStores(), []);
 
   // Index the restored workspace for search and wiki-links even when the
   // explorer panel is closed. Without this, `indexWorkspace` is only called
@@ -354,8 +350,7 @@ export function useWorkspaceLifecycle({
       if (cancelled) return;
       // The explorer may have indexed this same workspace in the meantime.
       if (useWikiLinkIndexStore.getState().rootPath === rootPath) return;
-      void useSearchIndexStore.getState().indexWorkspace(rootPath, snapshot.files);
-      void useWikiLinkIndexStore.getState().indexWorkspace(rootPath, snapshot.files);
+      indexWorkspaceStores(rootPath, snapshot.files);
     });
     return () => {
       cancelled = true;
@@ -381,8 +376,7 @@ export function useWorkspaceLifecycle({
       void workspaceDesktopApi.openWorkspace(rootPath).then((snapshot) => {
         if (cancelled) return;
         setWorkspaceFiles(snapshot.files);
-        void useSearchIndexStore.getState().indexWorkspace(rootPath, snapshot.files);
-        void useWikiLinkIndexStore.getState().indexWorkspace(rootPath, snapshot.files);
+        indexWorkspaceStores(rootPath, snapshot.files);
       });
     };
 
@@ -493,6 +487,35 @@ export function useWorkspaceLifecycle({
 interface TabSave {
   readonly tabs: DesktopTabState;
   readonly workspacePath: string | null;
+}
+
+/**
+ * The workspace's two index caches — the search index and the wiki-link
+ * index — are always indexed, cleared and subscribed together, so the
+ * pairing lives here rather than at every call site.
+ */
+function indexWorkspaceStores(rootPath: string, files: readonly NativeMarkdownFileEntry[]): void {
+  void useSearchIndexStore.getState().indexWorkspace(rootPath, files);
+  void useWikiLinkIndexStore.getState().indexWorkspace(rootPath, files);
+}
+
+/** Clears both workspace index caches. See {@link indexWorkspaceStores}. */
+function clearWorkspaceStores(): void {
+  useSearchIndexStore.getState().clearWorkspace();
+  useWikiLinkIndexStore.getState().clearWorkspace();
+}
+
+/**
+ * Subscribes both workspace index caches to note mutation events for
+ * incremental updates; returns the combined unsubscribe.
+ */
+function subscribeWorkspaceStores(): () => void {
+  const unsubscribeSearch = useSearchIndexStore.getState().subscribeToEvents();
+  const unsubscribeWikiLinks = useWikiLinkIndexStore.getState().subscribeToEvents();
+  return () => {
+    unsubscribeSearch();
+    unsubscribeWikiLinks();
+  };
 }
 
 function tabToPersisted(tab: DesktopTab): PersistedTab {

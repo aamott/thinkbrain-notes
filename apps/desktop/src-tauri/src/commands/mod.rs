@@ -54,13 +54,11 @@ pub mod workspace;
 macro_rules! app_command_list {
     ($expand:ident) => {
         $crate::$expand! {
-        workspace::desktop_shell_status,
         workspace::workspace_access_capabilities,
         workspace::platform_capabilities,
         workspace::list_managed_workspaces,
         workspace::create_managed_workspace,
         workspace::open_workspace,
-        markdown::list_markdown_files,
         workspace::list_workspace_entries,
         markdown::read_markdown_file,
         markdown::write_markdown_file,
@@ -80,7 +78,6 @@ macro_rules! app_command_list {
         settings::read_app_settings,
         settings::write_app_settings,
         settings::update_desktop_state,
-        settings::update_app_theme,
         settings::read_workspace_settings,
         settings::write_workspace_settings,
         themes::list_themes,
@@ -184,7 +181,7 @@ mod tests {
         );
         assert_eq!(
             APP_COMMAND_PATHS.len(),
-            60,
+            57,
             "the number of registered commands changed; update this count if it was deliberate"
         );
     }
@@ -209,6 +206,6 @@ mod tests {
             );
         }
         assert!(APP_COMMAND_PATHS.contains(&"sync::round::sync_now"));
-        assert!(APP_COMMAND_PATHS.contains(&"workspace::desktop_shell_status"));
+        assert!(APP_COMMAND_PATHS.contains(&"workspace::platform_capabilities"));
     }
 }

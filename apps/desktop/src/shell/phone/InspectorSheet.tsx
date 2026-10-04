@@ -1,6 +1,7 @@
 import { Scrim, useDismissable } from "@thinkbrain/ui";
 
 import type { RightPanel } from "../shellTypes";
+import type { RightPanelContext } from "../../panels/panelRegistryModel";
 import { RightPopout } from "../../panels/RightPopout";
 import { PHONE_OVERLAY_BOUNDS } from "./overlayBounds";
 import { cn } from "../../lib/utils";
@@ -25,26 +26,14 @@ const AS_FLOW_CHILD =
 export function InspectorSheet({
   open,
   panel,
-  rootPath,
-  documentContents,
-  documentPath,
-  onCompareVersion,
-  onRestoreVersion,
-  onOpenNote,
+  context,
   onDismiss,
   onBack
 }: {
   readonly open: boolean;
   readonly panel: RightPanel;
-  readonly rootPath: string | null;
-  /** Contents of the active file-backed tab, when its document is ready. */
-  readonly documentContents: string | null;
-  readonly documentPath: string | null;
-  /** Opens a read-only comparison of a file with one recorded version. */
-  readonly onCompareVersion: (notePath: string, changeId: string, versionAt?: number | null) => void;
-  /** Puts a recorded version back, saving an open dirty file first. */
-  readonly onRestoreVersion: (notePath: string, changeId: string) => Promise<void>;
-  readonly onOpenNote: (relativePath: string) => void;
+  /** The right-side context the shell already built for this document. */
+  readonly context: RightPanelContext;
   /** Scrim tap: dismisses the inspector (and any flow it belongs to). */
   readonly onDismiss: () => void;
   /** Header Back: steps the flow back to the surface that opened it. */
@@ -69,12 +58,7 @@ export function InspectorSheet({
         <div className={cn("flex min-h-0 flex-1 flex-col", AS_FLOW_CHILD)}>
           <RightPopout
             panel={panel}
-            rootPath={rootPath}
-            documentContents={documentContents}
-            documentPath={documentPath}
-            onCompareVersion={onCompareVersion}
-            onRestoreVersion={onRestoreVersion}
-            onOpenNote={onOpenNote}
+            context={context}
             onBack={onBack}
           />
         </div>

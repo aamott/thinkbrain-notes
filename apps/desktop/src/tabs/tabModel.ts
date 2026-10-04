@@ -199,6 +199,20 @@ export function createVersionDiffTab(
 }
 
 /**
+ * The file a document inspector should treat as open for `tab`, or `null`.
+ *
+ * Any file-backed tab counts — Markdown editor, code editor, media viewer —
+ * but comparison tabs (`merge`, `version-diff`) are excluded: their
+ * `resource` names the file the comparison is about (or the conflict copy),
+ * not a document being viewed, so panels like Version history must not
+ * inspect it.
+ */
+export function inspectableRelativePath(tab: DesktopTab | null | undefined): string | null {
+  if (!tab || tab.kind === "merge" || tab.kind === "version-diff") return null;
+  return tab.resource?.relativePath ?? null;
+}
+
+/**
  * The name assistive tech and tooltips use for a tab.
  *
  * For a restore preview with a known timestamp it appends the version's date,

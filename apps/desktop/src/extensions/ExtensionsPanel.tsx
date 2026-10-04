@@ -1,4 +1,5 @@
 import { useCallback, useState, useSyncExternalStore } from "react";
+import { getErrorMessage } from "@thinkbrain/core";
 
 import { pickDirectoryPath } from "../native/dialogs";
 import { getExtensionBootstrap, type BootstrapEntry } from "./bootstrapRef";
@@ -74,7 +75,7 @@ export function ExtensionsPanel({ entries }: ExtensionsPanelProps) {
         if (outcome) report(outcome);
         else setErrors([]);
       } catch (error: unknown) {
-        setErrors([error instanceof Error ? error.message : String(error)]);
+        setErrors([getErrorMessage(error)]);
       } finally {
         setBusy(false);
       }

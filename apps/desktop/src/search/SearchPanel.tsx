@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Search } from "lucide-react";
+import { getErrorMessage } from "@thinkbrain/core";
 import { Unavailable } from "../shell/Unavailable";
 import { cn } from "../lib/utils";
 import { searchService, type SearchResult } from "./searchService";
@@ -75,7 +76,7 @@ export function SearchPanel({ rootPath, onOpenFile }: SearchPanelProps) {
         setResults(hits);
       } catch (error) {
         if (requestId !== requestIdRef.current) return;
-        const message = error instanceof Error ? error.message : String(error);
+        const message = getErrorMessage(error);
         setSearchError(message);
       } finally {
         if (requestId === requestIdRef.current) {

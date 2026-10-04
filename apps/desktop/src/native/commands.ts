@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 
+import type { DesktopStateUpdate } from "../settings/desktopState";
 import type {
   ConflictComparison as NativeConflictComparison,
   ConflictResolution as NativeConflictResolution,
@@ -36,18 +37,7 @@ export class NativeCommandError extends Error {
   }
 }
 
-/** Rust-shaped status returned by the `desktop_shell_status` IPC command. */
-interface NativeShellStatus {
-  readonly app_name: string;
-  readonly shell_version: string;
-  readonly ready: boolean;
-}
-
 export interface NativeCommandMap {
-  readonly desktop_shell_status: {
-    readonly args: undefined;
-    readonly result: NativeShellStatus;
-  };
   readonly workspace_access_capabilities: {
     readonly args: undefined;
     readonly result: NativeWorkspaceAccessCapabilities;
@@ -70,10 +60,6 @@ export interface NativeCommandMap {
   };
   readonly open_workspace_window: { readonly args: { readonly rootPath: string }; readonly result: null };
   readonly window_workspace_root: { readonly args: undefined; readonly result: string | null };
-  readonly list_markdown_files: {
-    readonly args: { readonly rootPath: string };
-    readonly result: readonly NativeMarkdownFileEntry[];
-  };
   readonly list_workspace_entries: {
     readonly args: { readonly rootPath: string; readonly includeHidden: boolean };
     readonly result: readonly NativeWorkspaceEntry[];
@@ -378,12 +364,7 @@ export interface NativeCommandMap {
     readonly result: null;
   };
   readonly update_desktop_state: {
-    readonly args: { readonly update: NativeDesktopStateUpdate };
-    readonly result: string;
-  };
-  // Resolves to the full serialized settings document written by the host.
-  readonly update_app_theme: {
-    readonly args: { readonly theme: string };
+    readonly args: { readonly update: DesktopStateUpdate };
     readonly result: string;
   };
   readonly read_workspace_settings: {
@@ -466,33 +447,6 @@ export interface NativePlatformCapabilities {
   readonly canCopyFilesToClipboard: boolean;
   /** Can store credentials in the OS keychain. Android has no keyring backend. */
   readonly hasKeychain: boolean;
-}
-
-export interface NativeDesktopStateUpdate {
-  readonly lastWorkspacePath?: string | null;
-  readonly recentWorkspacePaths?: readonly string[];
-  readonly explorerOpen?: boolean;
-  readonly leftPanelWidth?: number;
-  readonly rightPanelWidth?: number;
-  readonly bottomPanelOpen?: boolean;
-  readonly developmentExtensionDirectories?: readonly string[];
-  readonly openTabs?: readonly NativePersistedTab[];
-  readonly activeTabId?: string | null;
-  /** Mirrors `settings::CollapsedGroupsUpdate` on the Rust side (D53). */
-  readonly collapsedGroups?: {
-    readonly workspacePath: string;
-    readonly viewId: string;
-    readonly collapsed: readonly string[];
-  };
-}
-
-/** Mirrors `settings::PersistedTab` on the Rust side (settings.rs). */
-export interface NativePersistedTab {
-  readonly id: string;
-  readonly title: string;
-  readonly kind: string;
-  readonly rootPath?: string;
-  readonly relativePath?: string;
 }
 
 export interface NativeMarkdownFileEntry {

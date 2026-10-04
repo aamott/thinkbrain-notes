@@ -553,16 +553,6 @@ export function useShellState(): ShellState {
     saveDocument
   });
 
-  // Keep the width refs level with the width state. The refs are what a drag
-  // reads at pointer-down; the state is what a chrome renders from. This is
-  // bookkeeping, not layout, so it stays out of the chrome — only the CSS
-  // custom properties, which are written onto a chrome's own root element,
-  // remain there.
-  useEffect(() => {
-    leftWidthRef.current = leftWidth;
-    rightWidthRef.current = rightWidth;
-  }, [leftWidthRef, leftWidth, rightWidthRef, rightWidth]);
-
   return {
     tabState,
     dispatchTabs,

@@ -1,15 +1,14 @@
-import { inferTabKind, normalizeRoot } from "@thinkbrain/core";
+import { inferTabKind } from "@thinkbrain/core";
 import { BottomSheet } from "@thinkbrain/ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { BottomPanel } from "../../panels/BottomPanel";
 import { LeftPopout } from "../../panels/LeftPopout";
-import { getDesktopPanelOrUndefined } from "../../panels/panelRegistryModel";
-import { editorTabId, fileTabId, restoreBreadcrumbSegments, type DesktopTab } from "../../tabs/tabModel";
+import { getDesktopPanelOrUndefined, type RightPanelContext } from "../../panels/panelRegistryModel";
+import { editorTabId, fileTabId, inspectableRelativePath, restoreBreadcrumbSegments, type DesktopTab } from "../../tabs/tabModel";
 import { isSelectableLeftPanel, isSelectableRightPanel } from "../shellTypes";
-import { useSettingsStore } from "../../settings/settingsStore";
 import { TabCloseRequest } from "../TabCloseRequest";
-import { isNoteTitleEligible } from "../noteTitleEligibility";
+import { useNoteTitle } from "../useNoteTitle";
 import { TabContent } from "../TabContent";
 import type { ShellState } from "../useShellState";
 import { usePhoneNavigation, type PhoneRoute } from "./usePhoneNavigation";
@@ -79,13 +78,10 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
     runCommand: runPaletteCommand
   } = shell;
 
-  // The journal root path — used to hide the note title row on journal
-  // entries, which already show their own dateline via metadata-widget.
-  const journalRoot = useSettingsStore(
-    (s) => normalizeRoot(String(s.getEffectiveValue("extension-journal-calendar.root") ?? "journal"))
-  );
+  // Journal entries render their own dateline, so the title row hides there —
+  // same rule as DesktopShell. Only ordinary Markdown editor tabs get a title.
   const activePath = activeTab?.resource?.relativePath ?? null;
-  const showNoteTitle = isNoteTitleEligible(activeTab?.kind, activePath, journalRoot);
+  const showNoteTitle = useNoteTitle(activeTab);
 
   // Route → tab/panel synchronization. A tab route *activates* its tab through
   // the shared reducer rather than carrying document state of its own; a stale
@@ -384,18 +380,24 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
   // see the file only while a tab is the visible route — on Files or a panel
   // a restored document must not leak into Outline/Properties context. Any
   // file-backed tab counts — editor, code editor, media viewer — but never a
-  // comparison tab, whose resource is what the comparison is about.
+  // comparison tab, whose resource is what the comparison is about
+  // (`inspectableRelativePath` applies that rule).
   const visibleDocumentContents =
     route.kind === "tab" && activeDocument?.phase === "ready"
       ? activeDocument.contents
       : null;
   const visibleDocumentPath =
-    route.kind === "tab" &&
-    activePath !== null &&
-    activeTab?.kind !== "merge" &&
-    activeTab?.kind !== "version-diff"
-      ? activePath
-      : null;
+    route.kind === "tab" ? inspectableRelativePath(activeTab) : null;
+  // One context for both right-side surfaces: the action-items menu's
+  // availability gate reads the same values the inspector renders with.
+  const rightContext: RightPanelContext = {
+    rootPath: shell.restoredWorkspacePath,
+    documentContents: visibleDocumentContents,
+    documentPath: visibleDocumentPath,
+    onOpenNote: openNote,
+    onCompareVersion: shell.compareVersion,
+    onRestoreVersion: shell.restoreVersionSafely
+  };
   // Browser-style location pill: workspace, then the route's own crumb trail —
   // real folders for file tabs (`.md` stripped only from note editors so
   // code/media keep their extension), a label for chrome surfaces.
@@ -560,12 +562,7 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
             the inspector's Back returns here instead of to content. */}
         <ActionItemsMenu
           open={actionsOpen}
-          rootPath={shell.restoredWorkspacePath}
-          documentContents={visibleDocumentContents}
-          documentPath={visibleDocumentPath}
-          onOpenNote={openNote}
-          onCompareVersion={shell.compareVersion}
-          onRestoreVersion={shell.restoreVersionSafely}
+          context={rightContext}
           onDismiss={() => navigation.dismissOverlay()}
           onSelect={(panel) => {
             setRightPanel(panel);
@@ -578,12 +575,7 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
         <InspectorSheet
           open={inspectorPanel !== null}
           panel={inspectorPanel ?? shell.rightPanel ?? "outline"}
-          rootPath={shell.restoredWorkspacePath}
-          documentContents={visibleDocumentContents}
-          documentPath={visibleDocumentPath}
-          onCompareVersion={shell.compareVersion}
-          onRestoreVersion={shell.restoreVersionSafely}
-          onOpenNote={openNote}
+          context={rightContext}
           // Scrim tap closes the whole flow — under the actions menu that skips
           // the menu entry too; only the header Back steps one level.
           onDismiss={() => navigation.dismissOverlay(true)}

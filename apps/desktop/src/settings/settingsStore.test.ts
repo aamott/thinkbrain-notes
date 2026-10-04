@@ -19,8 +19,8 @@ function createMockGateway(
   writtenAppSettings: string[];
   writtenWorkspaceSettings: { rootPath: string; contents: string }[];
   /**
-   * Simulates another writer — `update_desktop_state`, `update_app_theme`, or
-   * another window's save — landing on the app-settings document outside this
+   * Simulates another writer — `update_desktop_state` or another window's
+   * save — landing on the app-settings document outside this
    * store's knowledge, the way a tab open or panel resize does in production.
    */
   setAppDocument(contents: string | null): void;

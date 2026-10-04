@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import type { RightPanelContext } from "../../panels/panelRegistryModel";
 import { InspectorSheet } from "./InspectorSheet";
 
 let root: Root | null = null;
@@ -23,16 +24,24 @@ const render = async (element: React.ReactElement): Promise<HTMLDivElement> => {
   return container;
 };
 
-const sheet = (overrides: Record<string, unknown> = {}): React.ReactElement => (
+const context = (overrides: Partial<RightPanelContext> = {}): RightPanelContext => ({
+  rootPath: null,
+  documentContents: null,
+  documentPath: null,
+  onOpenNote: () => undefined,
+  onCompareVersion: () => undefined,
+  onRestoreVersion: async () => undefined,
+  ...overrides
+});
+
+const sheet = (
+  overrides: Record<string, unknown> = {},
+  contextOverrides: Partial<RightPanelContext> = {}
+): React.ReactElement => (
   <InspectorSheet
     open
     panel="outline"
-    rootPath={null}
-    documentContents={null}
-    documentPath={null}
-    onOpenNote={() => undefined}
-    onCompareVersion={() => undefined}
-    onRestoreVersion={async () => undefined}
+    context={context(contextOverrides)}
     onDismiss={() => undefined}
     onBack={() => undefined}
     {...overrides}
@@ -86,7 +95,7 @@ describe("InspectorSheet (right-edge drawer)", () => {
   });
 
   it("renders the selected inspector's body", async () => {
-    const host = await render(sheet({ panel: "outline", documentContents: "# Heading one" }));
+    const host = await render(sheet({ panel: "outline" }, { documentContents: "# Heading one" }));
 
     expect(host.querySelector('[aria-label="Outline panel"]')?.textContent).toContain(
       "Heading one"

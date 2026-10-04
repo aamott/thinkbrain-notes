@@ -29,39 +29,20 @@ import { cn } from "../../lib/utils";
  */
 export function ActionItemsMenu({
   open,
-  rootPath,
-  documentContents,
-  documentPath,
-  onOpenNote,
-  onCompareVersion,
-  onRestoreVersion,
+  context,
   onDismiss,
   onSelect
 }: {
   readonly open: boolean;
-  readonly rootPath: string | null;
-  /** Contents of the active file-backed tab, when its document is ready. */
-  readonly documentContents: string | null;
-  readonly documentPath: string | null;
-  readonly onOpenNote: (relativePath: string) => void;
-  /** Opens a read-only comparison of a file with one recorded version. */
-  readonly onCompareVersion: (notePath: string, changeId: string, versionAt?: number | null) => void;
-  /** Puts a recorded version back, saving an open dirty file first. */
-  readonly onRestoreVersion: (notePath: string, changeId: string) => Promise<void>;
+  /** The right-side context the shell already built for this document — the
+   *  same object the inspector reads, so availability and contents agree. */
+  readonly context: RightPanelContext;
   /** Outside tap or Escape. */
   readonly onDismiss: () => void;
   readonly onSelect: (panel: RightPanel) => void;
 }) {
   const { containerRef } = useDismissable({ open, onDismiss });
   const panels = useRightPanelContributions();
-  const context: RightPanelContext = {
-    rootPath,
-    documentContents,
-    documentPath,
-    onOpenNote,
-    onCompareVersion,
-    onRestoreVersion
-  };
 
   return (
     // One bounded layer doubles as the undimmed outside-dismiss target; the
