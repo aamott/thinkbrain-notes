@@ -2,10 +2,9 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEven
 import { ChevronDown, File, FilePlus, Folder, FolderGit2, FolderOpen, FolderPlus, Link, MoreHorizontal, RefreshCw } from "lucide-react";
 import type { NativeWorkspaceAccessCapabilities, NativeWorkspaceEntry } from "../native/commands";
 import type { WorkspaceExplorerState, WorkspaceTreeNode } from "./workspaceExplorerModel";
-import { WorkspaceFileIcon } from "./WorkspaceFileIcon";
 import { cn } from "../lib/utils";
 import { Menu, MenuButton, MenuCheckbox, MenuSeparator } from "../shell/Menu";
-import { WorkspaceTreeItem, InlineNameInput } from "./WorkspaceTree";
+import { WorkspaceTreeItem, CreateNameInput } from "./WorkspaceTree";
 import { DeleteConfirmDialog, WorkspaceContextMenu } from "./WorkspaceExplorerMenus";
 import { CreateFileTypeConfirmDialog } from "./CreateFileTypeConfirmDialog";
 import { GitLinkImportDialog } from "./GitLinkImportDialog";
@@ -13,7 +12,7 @@ import { CREATE_MANAGED_WORKSPACE_LABEL, IMPORT_FROM_GIT_LABEL, OPEN_FOLDER_LABE
 import { isWorkspaceGitLinked } from "./workspaceSettings";
 import { WorkspaceSelectorPortal } from "./WorkspaceSelectorPortal";
 import { useWorkspaceSelectorOutlet, type WorkspaceSelectorVariant } from "./WorkspaceSelectorPortalModel";
-import { isNewNoteCreate, type ContextMenuState, type CreateState, type PendingExtensionConfirm, type RenameState, type WorkspaceExplorerActions } from "./workspaceExplorerTypes";
+import { type ContextMenuState, type CreateState, type PendingExtensionConfirm, type RenameState, type WorkspaceExplorerActions } from "./workspaceExplorerTypes";
 import { useWorkspaceTreeDrag, WORKSPACE_DROP_ROOT_ATTR, type WorkspaceTreeDrag } from "./useWorkspaceTreeDrag";
 import { useWorkspaceFileDrag } from "./useWorkspaceFileDrag";
 
@@ -312,18 +311,11 @@ export function WorkspaceExplorerView({
               onKeyDown={actions.handleTreeKeyDown}
             >
               {creating && creating.parentPath === "" && (
-                <InlineNameInput
-                  key={creating.focusRequest}
+                <CreateNameInput
+                  creating={creating}
                   depth={0}
-                  icon={creating.kind === "folder" ? <Folder /> : <WorkspaceFileIcon name="" />}
-                  initialValue={isNewNoteCreate(creating) ? ".md" : ""}
-                  caretBeforeExtension={isNewNoteCreate(creating)}
-                  placeholder={creating.kind === "folder" ? "New folder name…" : "New file name…"}
-                  ariaLabel={creating.kind === "folder" ? "New folder name" : "New file name"}
-                  focusRequest={creating.focusRequest}
-                  wrapInListItem
                   disabled={busy}
-                  error={isNewNoteCreate(creating) ? inlineCreateError : null}
+                  error={inlineCreateError}
                   onEdit={() => actions.setInlineCreateError(null)}
                   onSubmit={(name) => actions.submitCreate(creating, name)}
                   onCancel={() => actions.setCreating(null)}
@@ -341,6 +333,8 @@ export function WorkspaceExplorerView({
                   expandedFolders={expandedFolders}
                   actions={actions}
                   drag={drag}
+                  busy={busy}
+                  inlineCreateError={inlineCreateError}
                 />
               ))}
             </ul>

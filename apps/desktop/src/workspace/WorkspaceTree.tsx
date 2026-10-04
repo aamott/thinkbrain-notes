@@ -27,7 +27,9 @@ export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
   creating,
   expandedFolders,
   actions,
-  drag
+  drag,
+  busy,
+  inlineCreateError
 }: {
   readonly node: WorkspaceTreeNode;
   readonly depth?: number;
@@ -41,6 +43,8 @@ export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
   readonly actions: WorkspaceExplorerActions;
   /** Shared drag-and-drop controller from `WorkspaceExplorerView`. */
   readonly drag: WorkspaceTreeDrag | null;
+  readonly busy: boolean;
+  readonly inlineCreateError: string | null;
 }) {
   const {
     setActivePath,
@@ -51,7 +55,8 @@ export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
     submitRename,
     submitCreate,
     setRenaming,
-    setCreating
+    setCreating,
+    setInlineCreateError
   } = actions;
   const isDirectory = node.entry.kind === "directory";
   const isFile = node.entry.kind === "file";
@@ -210,16 +215,12 @@ export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
         <>
           {isCreatingHere && (
             <ul role="group" className="m-0 pl-3.5 list-none">
-              <InlineNameInput
-                key={creating!.focusRequest}
+              <CreateNameInput
+                creating={creating!}
                 depth={depth + 1}
-                icon={creating!.kind === "folder" ? <Folder /> : <WorkspaceFileIcon name="" />}
-                initialValue={isNewNoteCreate(creating!) ? ".md" : ""}
-                caretBeforeExtension={isNewNoteCreate(creating!)}
-                placeholder={creating!.kind === "folder" ? "New folder name…" : "New file name…"}
-                ariaLabel={creating!.kind === "folder" ? "New folder name" : "New file name"}
-                focusRequest={creating!.focusRequest}
-                wrapInListItem
+                disabled={busy}
+                error={inlineCreateError}
+                onEdit={() => setInlineCreateError(null)}
                 onSubmit={(name) => submitCreate(creating!, name)}
                 onCancel={() => setCreating(null)}
               />
@@ -240,6 +241,8 @@ export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
                   expandedFolders={expandedFolders}
                   actions={actions}
                   drag={drag}
+                  busy={busy}
+                  inlineCreateError={inlineCreateError}
                 />
               ))}
             </ul>
@@ -380,4 +383,49 @@ export function InlineNameInput({
   );
 
   return wrapInListItem ? <li className="m-0 p-0">{form}</li> : form;
+}
+
+/**
+ * The inline name field for a pending create. The root-level and in-folder
+ * sites derive identical props from `creating`; this owns that mapping so
+ * each call site only says where the input sits.
+ */
+export function CreateNameInput({
+  creating,
+  depth,
+  disabled = false,
+  error = null,
+  onEdit,
+  onSubmit,
+  onCancel
+}: {
+  readonly creating: CreateState;
+  readonly depth: number;
+  readonly disabled?: boolean;
+  readonly error?: string | null;
+  readonly onEdit?: () => void;
+  readonly onSubmit: (name: string) => Promise<boolean>;
+  readonly onCancel: () => void;
+}) {
+  const isFolder = creating.kind === "folder";
+  const isNote = isNewNoteCreate(creating);
+  return (
+    <InlineNameInput
+      key={creating.focusRequest}
+      depth={depth}
+      icon={isFolder ? <Folder /> : <WorkspaceFileIcon name="" />}
+      initialValue={isNote ? ".md" : ""}
+      caretBeforeExtension={isNote}
+      placeholder={isFolder ? "New folder name…" : "New file name…"}
+      ariaLabel={isFolder ? "New folder name" : "New file name"}
+      focusRequest={creating.focusRequest}
+      wrapInListItem
+      disabled={disabled}
+      // Name validation only applies to new notes; other kinds never set it.
+      error={isNote ? error : null}
+      onEdit={onEdit}
+      onSubmit={onSubmit}
+      onCancel={onCancel}
+    />
+  );
 }

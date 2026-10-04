@@ -29,6 +29,11 @@ export interface EditorCommands {
    */
   readonly save?: () => void;
   readonly canSave?: () => boolean;
+  /**
+   * True while a custom `save` is in flight, so the header can show its
+   * "Saving…" state — the shell's own `isSaving` only tracks document saves.
+   */
+  readonly pending?: () => boolean;
   readonly saveLabel?: string;
 }
 

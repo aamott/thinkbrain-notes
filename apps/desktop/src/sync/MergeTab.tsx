@@ -216,6 +216,7 @@ function MergeSurface({ conflict, resolving, onResolve, tabId }: MergeSurfacePro
         }
       },
       canSave: () => !resolvingRef.current,
+      pending: () => resolvingRef.current,
       saveLabel: "Save merged note"
     });
   }, [tabId, comparable]);

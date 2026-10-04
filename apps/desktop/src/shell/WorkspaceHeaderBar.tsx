@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Folder, FolderGit2, Redo2, Undo2 } from "lucide-react";
 import { restoreBreadcrumbSegments, type DesktopTab } from "../tabs/tabModel";
 import { useEditorCommands } from "../tabs/editorCommands";
+import { desktopTabRegistry } from "../tabs/tabRegistry";
 import { isWorkspaceGitLinked } from "../workspace/workspaceSettings";
 import { cn } from "../lib/utils";
 
@@ -67,13 +68,18 @@ export function WorkspaceHeaderBar({
 
   // A tab that registered its own Save (a merge tab's "Save merged note")
   // takes the button over entirely — what it does and when it is enabled
-  // are the tab's business. Editor-kind tabs always show the ordinary save.
+  // are the tab's business. Otherwise the kind's registration decides
+  // whether the ordinary document save is offered at all.
   const customSave = commands?.save;
   const showSave =
-    activeTab?.kind === "editor" ||
-    activeTab?.kind === "code-editor" ||
-    customSave !== undefined;
+    customSave !== undefined ||
+    (activeTab !== null &&
+      activeTab !== undefined &&
+      desktopTabRegistry.get(activeTab.kind)?.saveable === true);
   const saveEnabled = customSave ? (commands?.canSave?.() ?? true) : isDirty;
+  // For a custom save the shell's `isSaving` knows nothing — the surface
+  // reports its own in-flight state (a merge resolve can take seconds).
+  const saving = customSave ? (commands?.pending?.() ?? false) : isSaving;
 
   // A restore preview is an operation on the file, not the file itself:
   // "Vault › Restore › folder › note.md" rather than masquerading as the path.
@@ -128,7 +134,7 @@ export function WorkspaceHeaderBar({
         {showSave && (
           <button
             type="button"
-            disabled={!saveEnabled || isSaving}
+            disabled={!saveEnabled || saving}
             onClick={customSave ?? onSave}
             // A custom save runs where the shell's Mod-S handler can't reach
             // (a merge tab), so it advertises its label rather than a shortcut.
@@ -139,10 +145,10 @@ export function WorkspaceHeaderBar({
               saveEnabled
                 ? "border-border bg-primary text-primary-foreground hover:bg-primary/90 cursor-pointer"
                 : "border-border/40 bg-muted/40 text-muted-foreground/50 cursor-not-allowed opacity-50",
-              isSaving && "cursor-wait opacity-70"
+              saving && "cursor-wait opacity-70"
             )}
           >
-            {isSaving ? "Saving…" : (commands?.saveLabel ?? "Save")}
+            {saving ? "Saving…" : (commands?.saveLabel ?? "Save")}
           </button>
         )}
       </div>
