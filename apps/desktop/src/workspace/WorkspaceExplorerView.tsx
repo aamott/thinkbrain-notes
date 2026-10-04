@@ -316,7 +316,7 @@ export function WorkspaceExplorerView({
       )}
 
       {contextMenu && (
-        <WorkspaceContextMenu menu={contextMenu} actions={actions} />
+        <WorkspaceContextMenu menu={contextMenu} actions={actions} rootPath={workspaceRootPath ?? null} />
       )}
 
       {pendingDelete && (
