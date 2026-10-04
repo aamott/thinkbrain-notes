@@ -61,15 +61,20 @@ describe("DesktopShell composition", () => {
     expect(markup).toContain('title="Settings"');
   });
 
-  it("renders the narrow-width Action items trigger alongside the wide buttons", () => {
+  it("renders the Action items trigger alongside the pinned panel buttons", () => {
     const markup = shellMarkup();
 
     // Both controls always render; CSS breakpoints decide which is visible.
     expect(markup).toContain('aria-label="Action items"');
     expect(markup).toContain('aria-controls="desktop-action-items-menu"');
-    const rightPanels = desktopPanelRegistry.entriesBySide("right");
-    for (const action of rightPanels) {
-      expect(markup).toContain(`aria-label="${action.label}"`);
+    // Only the pinned panels get icon buttons — the default set is Outline
+    // alone; the rest live in the ⋯ menu until pinned or notified.
+    expect(markup).toContain('aria-label="Outline"');
+    const unpinned = desktopPanelRegistry
+      .entriesBySide("right")
+      .filter((action) => action.id !== "outline");
+    for (const action of unpinned) {
+      expect(markup).not.toContain(`aria-label="${action.label}"`);
     }
   });
 

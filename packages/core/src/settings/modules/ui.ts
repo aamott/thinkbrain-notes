@@ -28,6 +28,30 @@ export const uiModule: SettingsModule = {
           section: "ui.desktop",
           label: "Workspace selector location",
           description: "Show the workspace selector in the title bar or above eligible left panels."
+        },
+        {
+          key: "pinnedActionItems",
+          // Same string-carries-JSON shape as `mobileHub` — `SettingType` has
+          // no list member. Empty means "use the built-in defaults", which
+          // live in the desktop layer so panel ids stay out of core.
+          type: "string",
+          default: "",
+          scope: "app",
+          section: "ui.desktop",
+          label: "Pinned action items",
+          description:
+            "Action items pinned to the title bar; the rest sit in the ⋯ menu. Right-click an icon to change. Leave empty to use the defaults.",
+          validation: (value): string | null => {
+            if (typeof value !== "string") return "Pinned action items must be text.";
+            if (value.trim().length === 0) return null;
+            try {
+              return Array.isArray(JSON.parse(value))
+                ? null
+                : "Pinned action items must be a list.";
+            } catch {
+              return "Pinned action items must be a JSON list.";
+            }
+          }
         }
       ]
     },

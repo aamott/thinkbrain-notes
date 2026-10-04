@@ -149,8 +149,15 @@ export function Menu({
   return at ? createPortal(surface, document.body) : surface;
 }
 
-const ITEM =
+/**
+ * The shared menu-item styling, exported for compound rows — e.g. the action
+ * items ⋯ menu, where an open-button and a pin-toggle sit side by side as two
+ * `menuitem`s in one visual row.
+ */
+export const MENU_ITEM =
   "flex w-full min-w-0 items-center gap-2 border-0 px-3 py-[0.4rem] bg-transparent cursor-pointer font-inherit text-xs text-left hover:bg-accent focus-visible:bg-accent focus-visible:outline-none";
+
+const ITEM = MENU_ITEM;
 
 /**
  * A single menu item rendered as a full-width button.

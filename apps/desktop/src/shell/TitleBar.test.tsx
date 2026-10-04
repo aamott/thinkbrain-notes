@@ -4,6 +4,9 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { desktopPanelRegistry } from "../panels/panelRegistryModel";
+import { resetNotificationStore, useNotificationStore } from "../notifications/notificationStore";
+import { useSettingsStore } from "../settings/settingsStore";
+import { DEFAULT_PINNED_ACTION_ITEMS } from "./actionItemsModel";
 import { TitleBar } from "./TitleBar";
 import type { RightPanel } from "./shellTypes";
 import { createVersionDiffTab, type DesktopTab } from "../tabs/tabModel";
@@ -47,32 +50,75 @@ const trigger = (host: HTMLElement): HTMLButtonElement => {
 const menu = (host: HTMLElement): HTMLElement | null =>
   host.querySelector('#desktop-action-items-menu[role="menu"]');
 
+/**
+ * Forces the 900px breakpoint the component reads through matchMedia.
+ * `wide` = at/above 900px — icons visible, ⋯ lists only unpinned panels.
+ */
+const stubWidth = (wide: boolean) => {
+  let listener: ((event: { matches: boolean }) => void) | null = null;
+  const query = {
+    matches: wide,
+    media: "(min-width: 901px)",
+    onchange: null,
+    addEventListener: (_: string, cb: (event: { matches: boolean }) => void) => { listener = cb; },
+    removeEventListener: (_: string, cb: (event: { matches: boolean }) => void) => {
+      if (listener === cb) listener = null;
+    },
+    addListener: () => undefined,
+    removeListener: () => undefined,
+    dispatchEvent: () => false
+  };
+  vi.stubGlobal("matchMedia", vi.fn(() => query));
+  return { setWide: (nowWide: boolean) => listener?.({ matches: nowWide }) };
+};
+
+// Captured before any test swaps it out — restored in afterEach.
+const realSetSettingImmediately = useSettingsStore.getState().setSettingImmediately;
+
+const pin = async (labels: readonly string[]) => {
+  await act(async () => {
+    useSettingsStore.getState().stageChange("ui.pinnedActionItems", JSON.stringify(labels));
+  });
+};
+
 afterEach(async () => {
   await act(async () => root?.unmount());
   container?.remove();
   root = null;
   container = null;
+  resetNotificationStore();
+  useSettingsStore.setState({
+    stagedChanges: {},
+    setSettingImmediately: realSetSettingImmediately
+  });
   vi.unstubAllGlobals();
 });
 
 describe("TitleBar", () => {
-  it("renders every right-panel action as a labelled button plus the kebab trigger", async () => {
+  it("renders the pinned panels as labelled buttons plus the kebab trigger", async () => {
     const host = await render();
 
     for (const action of rightActions()) {
-      expect(host.querySelector(`[aria-label="${action.label}"]`)).not.toBeNull();
+      const button = host.querySelector(`[aria-label="${action.label}"]`);
+      if (DEFAULT_PINNED_ACTION_ITEMS.includes(action.id)) {
+        expect(button, action.id).not.toBeNull();
+      } else {
+        // Unpinned panels are ⋯-menu rows only — no stray icon in the bar.
+        expect(button, action.id).toBeNull();
+      }
     }
     const kebab = trigger(host);
     expect(kebab.getAttribute("aria-expanded")).toBe("false");
     expect(kebab.getAttribute("aria-controls")).toBe("desktop-action-items-menu");
     expect(kebab.getAttribute("title")).toBe("Action items");
-    // CSS, not JS, decides which control shows: the kebab only appears at
-    // narrow widths, the button row only at wide ones.
-    expect(kebab.className).toContain("max-[900px]:inline-flex");
+    // Unpinned panels exist, so the ⋯ is visible at every width; the icon
+    // row still collapses under 900px where the menu carries everything.
+    expect(kebab.className).toContain("inline-flex");
     expect(host.querySelector(".max-\\[900px\\]\\:hidden")).not.toBeNull();
   });
 
-  it("opens a menu listing every right contribution in registry order", async () => {
+  it("opens a narrow-width menu listing every right contribution, each with a pin toggle", async () => {
+    stubWidth(false);
     const host = await render();
 
     await act(async () => trigger(host).click());
@@ -80,13 +126,36 @@ describe("TitleBar", () => {
     const opened = menu(host);
     expect(opened).not.toBeNull();
     expect(trigger(host).getAttribute("aria-expanded")).toBe("true");
-    const items = [...opened!.querySelectorAll('[role="menuitem"]')];
-    expect(items.map((item) => item.textContent)).toEqual(
+    // Two menuitems per row: the open button, then the pin toggle.
+    const rows = [...opened!.querySelectorAll('[role="menuitem"]')]
+      .filter((item) => !item.hasAttribute("aria-label"));
+    expect(rows.map((item) => item.textContent)).toEqual(
       rightActions().map((action) => action.label)
+    );
+    for (const action of rightActions()) {
+      const pinned = DEFAULT_PINNED_ACTION_ITEMS.includes(action.id);
+      expect(opened!.querySelector(`[aria-label="${pinned ? "Unpin" : "Pin"} ${action.label}"]`)).not.toBeNull();
+    }
+  });
+
+  it("lists only unpinned contributions in the wide-width menu", async () => {
+    stubWidth(true);
+    const host = await render();
+
+    await act(async () => trigger(host).click());
+
+    // The pin toggles carry an aria-label; the open buttons do not.
+    const rows = [...menu(host)!.querySelectorAll('[role="menuitem"]')]
+      .filter((item) => !item.hasAttribute("aria-label"));
+    expect(rows.map((item) => item.textContent)).toEqual(
+      rightActions()
+        .filter((action) => !DEFAULT_PINNED_ACTION_ITEMS.includes(action.id))
+        .map((action) => action.label)
     );
   });
 
   it("marks the open panel as current inside the menu", async () => {
+    stubWidth(false);
     const host = await render({ rightPanel: "outline" });
 
     await act(async () => trigger(host).click());
@@ -96,6 +165,7 @@ describe("TitleBar", () => {
   });
 
   it("selecting a menu row toggles the panel and closes the menu", async () => {
+    stubWidth(false);
     const onToggleRightPanel = vi.fn();
     const host = await render({ onToggleRightPanel });
 
@@ -193,27 +263,96 @@ describe("TitleBar", () => {
 
   it("closes the menu when the window widens past the breakpoint", async () => {
     // Controlled matchMedia so the test can flip the breakpoint itself.
-    let wideListener: ((event: { matches: boolean }) => void) | null = null;
-    const query = {
-      matches: false,
-      media: "(min-width: 901px)",
-      onchange: null,
-      addEventListener: (_: string, cb: (event: { matches: boolean }) => void) => { wideListener = cb; },
-      removeEventListener: (_: string, cb: (event: { matches: boolean }) => void) => {
-        if (wideListener === cb) wideListener = null;
-      },
-      addListener: () => undefined,
-      removeListener: () => undefined,
-      dispatchEvent: () => false
-    };
-    vi.stubGlobal("matchMedia", vi.fn(() => query));
+    const { setWide } = stubWidth(false);
 
     const host = await render();
     await act(async () => trigger(host).click());
     expect(menu(host)).not.toBeNull();
 
-    await act(async () => wideListener?.({ matches: true }));
+    await act(async () => setWide(true));
 
     expect(menu(host)).toBeNull();
+  });
+
+  it("keeps the ⋯ trigger only under 900px when nothing is unpinned", async () => {
+    await pin(rightActions().map((action) => action.id));
+    stubWidth(true);
+    const host = await render();
+
+    const kebab = host.querySelector<HTMLButtonElement>('[aria-label="Action items"]');
+    expect(kebab?.className).toContain("hidden");
+    expect(kebab?.className).toContain("max-[900px]:inline-flex");
+    for (const action of rightActions()) {
+      expect(host.querySelector(`[aria-label="${action.label}"]`)).not.toBeNull();
+    }
+  });
+
+  it("pins a panel from its ⋯ row without closing the menu", async () => {
+    stubWidth(true);
+    const setSettingImmediately = vi.fn(async () => undefined);
+    useSettingsStore.setState({ setSettingImmediately });
+    const host = await render();
+
+    await act(async () => trigger(host).click());
+    const pinButton = menu(host)!.querySelector<HTMLButtonElement>('[aria-label="Pin Version history"]');
+    expect(pinButton).not.toBeNull();
+    await act(async () => pinButton!.click());
+
+    expect(setSettingImmediately).toHaveBeenCalledWith(
+      "ui.pinnedActionItems",
+      expect.stringContaining('"history"')
+    );
+    // Toggles stay put so the user can pin several rows in one visit.
+    expect(menu(host)).not.toBeNull();
+  });
+
+  it("right-clicking a bar icon opens a menu offering to unpin it", async () => {
+    const host = await render();
+    const outline = host.querySelector<HTMLButtonElement>('[aria-label="Outline"]');
+    expect(outline).not.toBeNull();
+
+    await act(async () => {
+      outline!.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: 12, clientY: 8 }));
+    });
+
+    // Pointer menus portal to document.body — the query goes there.
+    const pinMenu = [...document.querySelectorAll<HTMLElement>('[role="menu"]')]
+      .find((element) => element.getAttribute("aria-label") === "Outline options");
+    expect(pinMenu).not.toBeNull();
+    const labels = [...pinMenu!.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent);
+    expect(labels).toEqual(["Open Outline", "Unpin from title bar"]);
+  });
+
+  it("surfaces an unpinned panel's icon while a notification is waiting on it", async () => {
+    const host = await render();
+    // History is unpinned by default — no icon until its notification lands.
+    expect(host.querySelector('[aria-label="Version history"]')).toBeNull();
+
+    await act(async () => {
+      useNotificationStore.getState().addNotification({
+        source: "test",
+        title: "Sync needs attention",
+        message: "A round trip failed.",
+        severity: "sticky",
+        variant: "error",
+        panel: "history"
+      });
+    });
+
+    const icon = host.querySelector<HTMLButtonElement>('[aria-label="Version history (1)"]');
+    expect(icon).not.toBeNull();
+    // ...and still reachable from the ⋯ menu? No — it auto-showed, so it
+    // moved out of the overflow list.
+    await act(async () => trigger(host).click());
+    const openRows = [...menu(host)!.querySelectorAll('[role="menuitem"]')]
+      .filter((item) => !item.hasAttribute("aria-label"));
+    expect(openRows.map((item) => item.textContent)).not.toContain("Version history");
+
+    // Dismissing the entry pulls the icon back off the bar.
+    await act(async () => {
+      const item = useNotificationStore.getState().notifications[0];
+      useNotificationStore.getState().dismissNotification(item!.id);
+    });
+    expect(host.querySelector('[aria-label="Version history (1)"]')).toBeNull();
   });
 });

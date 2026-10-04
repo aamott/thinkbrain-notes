@@ -1,12 +1,19 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { MoreHorizontal } from "lucide-react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { MoreHorizontal, Pin } from "lucide-react";
 import { cn } from "../lib/utils";
 import { tabAccessibleName, type DesktopTab } from "../tabs/tabModel";
-import { useRightPanelContributions } from "../panels/panelRegistryModel";
+import { useRightPanelContributions, type RightPanelContribution } from "../panels/panelRegistryModel";
+import { useNotificationStore } from "../notifications/notificationStore";
+import { useSettingsStore } from "../settings/settingsStore";
 import { IconButton } from "./IconButton";
-import { Menu, MenuButton, type MenuCloseReason } from "./Menu";
+import { Menu, MenuButton, MENU_ITEM, type MenuCloseReason, type MenuPosition } from "./Menu";
 import { PanelIcon } from "./panelIcons";
 import { type RightPanel } from "./shellTypes";
+import {
+  parsePinnedActionItems,
+  resolveActionItems,
+  serializePinnedActionItems
+} from "./actionItemsModel";
 import { WorkspaceSelectorOutlet } from "../workspace/WorkspaceSelectorPortal";
 
 /**
@@ -65,21 +72,66 @@ export function TitleBar({
   const rightPanels = useRightPanelContributions();
   const [actionsOpen, setActionsOpen] = useState(false);
   const actionsTriggerRef = useRef<HTMLButtonElement>(null);
+  // Right-click on a bar icon raises this pointer-placed menu for pin control.
+  const [pinMenu, setPinMenu] = useState<(MenuPosition & { panel: RightPanelContribution }) | null>(null);
 
-  // Below 900px the individual panel buttons are hidden behind the kebab
-  // menu. If the window widens while the menu is open, the trigger becomes
-  // display:none and an open menu on a hidden trigger is a focus trap —
-  // close it on the way out instead. matchMedia is the only place JS reads
-  // the breakpoint; which control renders is purely CSS.
+  // The ⋯ menu shows every panel below 900px (the icon row is hidden there)
+  // and only the unpinned remainder above it — the pinned icons are already
+  // on the bar. matchMedia is the only place JS reads the breakpoint; the
+  // initializer reads it once so the listener only carries *changes*.
+  const [narrow, setNarrow] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      typeof window.matchMedia === "function" &&
+      !window.matchMedia("(min-width: 901px)").matches
+  );
   useEffect(() => {
     if (typeof window.matchMedia !== "function") return;
     const wide = window.matchMedia("(min-width: 901px)");
-    const closeWhenWide = (event: MediaQueryListEvent) => {
+    const onWidthChange = (event: MediaQueryListEvent) => {
+      setNarrow(!event.matches);
+      // An open menu on a display:none trigger is a focus trap — close it on
+      // the way out.
       if (event.matches) setActionsOpen(false);
     };
-    wide.addEventListener("change", closeWhenWide);
-    return () => wide.removeEventListener("change", closeWhenWide);
+    wide.addEventListener("change", onWidthChange);
+    return () => wide.removeEventListener("change", onWidthChange);
   }, []);
+
+  // Which panels keep a title-bar icon. Blank/corrupt settings fall back to
+  // the built-in default; an explicit empty list is honoured (everything goes
+  // to the ⋯ menu).
+  const pinnedRaw = useSettingsStore((state) => state.getEffectiveValue("ui.pinnedActionItems"));
+  const setSettingImmediately = useSettingsStore((state) => state.setSettingImmediately);
+  const pinned = useMemo(() => parsePinnedActionItems(pinnedRaw), [pinnedRaw]);
+  const togglePin = (id: string) => {
+    const next = new Set(pinned);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    void setSettingImmediately("ui.pinnedActionItems", serializePinnedActionItems(next));
+  };
+
+  // Undismissed notifications keyed by the panel they are about. A notified
+  // panel's icon surfaces even unpinned, wearing the count, and leaves again
+  // when the last entry for it is dismissed.
+  const notifications = useNotificationStore((state) => state.notifications);
+  const notified = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const item of notifications) {
+      if (item.panel && !item.dismissed) {
+        counts.set(item.panel, (counts.get(item.panel) ?? 0) + 1);
+      }
+    }
+    return counts;
+  }, [notifications]);
+
+  const { visible, overflow } = useMemo(
+    () => resolveActionItems(rightPanels, pinned, new Set(notified.keys())),
+    [rightPanels, pinned, notified]
+  );
+  // Below 900px the ⋯ menu lists every panel — the icons it would have
+  // duplicated are display:none.
+  const menuPanels = narrow ? rightPanels : overflow;
 
   const closeActions = (reason: MenuCloseReason): void => {
     setActionsOpen(false);
@@ -247,26 +299,38 @@ export function TitleBar({
         />
       </div>
 
-      {/* Right action group — panel toggles. Below 900px the row of buttons
-          collapses into a single menu so a narrow window keeps every action
-          reachable instead of clipping them off the edge. */}
+      {/* Right action group — pinned panel toggles plus a ⋯ menu for the
+          rest. Below 900px the icon row is hidden and the ⋯ menu lists every
+          panel, so a narrow window keeps every action reachable instead of
+          clipping them off the edge. A panel with a waiting notification
+          surfaces in the row unpinned, wearing the count. */}
       <div className="relative flex shrink-0 items-center border-l border-border gap-1 h-full px-2">
         <div className="flex items-center gap-1 max-[900px]:hidden">
-          {rightPanels.map((action) => (
+          {visible.map((action) => (
             <IconButton
               key={action.id}
               label={action.label}
               symbol={action.icon}
               active={rightPanel === action.id}
+              badge={notified.get(action.id)}
               className="w-[1.6rem] h-[1.6rem] border-l-0 rounded-small text-titlebar-foreground"
               onClick={() => onToggleRightPanel(action.id)}
+              onContextMenu={(event) => {
+                event.preventDefault();
+                setPinMenu({ x: event.clientX, y: event.clientY, panel: action });
+              }}
             />
           ))}
         </div>
         <button
           ref={actionsTriggerRef}
           type="button"
-          className="hidden max-[900px]:inline-flex items-center justify-center w-[1.6rem] h-[1.6rem] border-0 rounded-small bg-transparent text-titlebar-foreground cursor-pointer hover:bg-[color-mix(in_srgb,var(--tn-color-accent)_60%,transparent)] hover:text-activitybar-active focus-visible:outline-2 focus-visible:outline-ring focus-visible:-outline-offset-1"
+          className={cn(
+            "relative items-center justify-center w-[1.6rem] h-[1.6rem] border-0 rounded-small bg-transparent text-titlebar-foreground cursor-pointer hover:bg-[color-mix(in_srgb,var(--tn-color-accent)_60%,transparent)] hover:text-activitybar-active focus-visible:outline-2 focus-visible:outline-ring focus-visible:-outline-offset-1",
+            // At ≥900px the ⋯ earns its keep only when unpinned panels exist;
+            // under 900px it is always the only way in.
+            overflow.length > 0 ? "inline-flex" : "hidden max-[900px]:inline-flex"
+          )}
           aria-label="Action items"
           aria-expanded={actionsOpen}
           aria-controls="desktop-action-items-menu"
@@ -274,6 +338,14 @@ export function TitleBar({
           onClick={() => setActionsOpen((open) => !open)}
         >
           <MoreHorizontal aria-hidden="true" className="size-[0.95rem]" />
+          {notified.size > 0 && (
+            <span
+              aria-hidden="true"
+              className="absolute right-0 top-0 min-w-3.5 rounded-full bg-primary px-0.5 text-center text-[0.55rem] leading-3.5 text-primary-foreground"
+            >
+              {[...notified.values()].reduce((sum, count) => sum + count, 0)}
+            </span>
+          )}
         </button>
         {actionsOpen && (
           <Menu
@@ -282,18 +354,73 @@ export function TitleBar({
             className="absolute right-2 top-[calc(100%+0.25rem)] z-50"
             onClose={closeActions}
           >
-            {rightPanels.map((action) => (
-              <MenuButton
-                key={action.id}
-                label={action.label}
-                icon={<PanelIcon name={action.icon} />}
-                current={rightPanel === action.id}
-                onClick={() => {
-                  setActionsOpen(false);
-                  onToggleRightPanel(action.id);
-                }}
-              />
-            ))}
+            {menuPanels.map((action) => {
+              const isPinned = pinned.has(action.id);
+              return (
+                <div key={action.id} className="flex min-w-0 items-stretch">
+                  <button
+                    type="button"
+                    className={cn(MENU_ITEM, "flex-1 text-foreground")}
+                    role="menuitem"
+                    aria-current={rightPanel === action.id ? "true" : undefined}
+                    title={action.label}
+                    onClick={() => {
+                      setActionsOpen(false);
+                      onToggleRightPanel(action.id);
+                    }}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className="flex-none [&>svg]:w-[0.9rem] [&>svg]:h-[0.9rem] [&>svg]:stroke-current"
+                    >
+                      <PanelIcon name={action.icon} />
+                    </span>
+                    <span className="truncate">{action.label}</span>
+                  </button>
+                  {/* A toggle, not a navigation — the menu stays open so the
+                      icon moving between sections is visible feedback. */}
+                  <button
+                    type="button"
+                    className={cn(
+                      MENU_ITEM,
+                      "w-auto flex-none px-2",
+                      isPinned ? "text-foreground" : "text-muted-foreground"
+                    )}
+                    role="menuitem"
+                    aria-label={isPinned ? `Unpin ${action.label}` : `Pin ${action.label}`}
+                    title={isPinned ? `Unpin ${action.label}` : `Pin ${action.label}`}
+                    onClick={() => togglePin(action.id)}
+                  >
+                    <Pin aria-hidden="true" className={cn("size-[0.85rem]", isPinned && "fill-current")} />
+                  </button>
+                </div>
+              );
+            })}
+          </Menu>
+        )}
+        {pinMenu && (
+          <Menu
+            at={pinMenu}
+            label={`${pinMenu.panel.label} options`}
+            onClose={() => setPinMenu(null)}
+          >
+            <MenuButton
+              label={`Open ${pinMenu.panel.label}`}
+              icon={<PanelIcon name={pinMenu.panel.icon} />}
+              onClick={() => {
+                setPinMenu(null);
+                onToggleRightPanel(pinMenu.panel.id);
+              }}
+            />
+            <hr className="my-1 border-0 border-t border-border" />
+            <MenuButton
+              label={pinned.has(pinMenu.panel.id) ? "Unpin from title bar" : "Pin to title bar"}
+              icon={<Pin className={pinned.has(pinMenu.panel.id) ? "fill-current" : ""} />}
+              onClick={() => {
+                setPinMenu(null);
+                togglePin(pinMenu.panel.id);
+              }}
+            />
           </Menu>
         )}
       </div>
