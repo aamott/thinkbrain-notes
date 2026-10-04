@@ -6,6 +6,7 @@
  */
 
 import type { SettingsModule } from "../types";
+import { integerValidator, optionalJsonListValidator } from "../internal";
 
 /** Control key for the hub editor rendered by the desktop layer. */
 export const MOBILE_HUB_CONTROL = "mobile-hub-items";
@@ -33,10 +34,7 @@ export const uiModule: SettingsModule = {
           label: "Interface size",
           description:
             "Interface size in percent; 100 is standard. Ctrl+= zooms in, Ctrl+- zooms out, Ctrl+0 resets. Editor font size is separate.",
-          validation: (value): string | null =>
-            typeof value === "number" && Number.isInteger(value)
-              ? null
-              : "Interface size must be a whole number."
+          validation: integerValidator("Interface size", "a whole number")
         }
       ]
     },
@@ -66,17 +64,7 @@ export const uiModule: SettingsModule = {
           label: "Pinned action items",
           description:
             "Action items pinned to the title bar; the rest sit in the ⋯ menu. Right-click an icon to change. Leave empty to use the defaults.",
-          validation: (value): string | null => {
-            if (typeof value !== "string") return "Pinned action items must be text.";
-            if (value.trim().length === 0) return null;
-            try {
-              return Array.isArray(JSON.parse(value))
-                ? null
-                : "Pinned action items must be a list.";
-            } catch {
-              return "Pinned action items must be a JSON list.";
-            }
-          }
+          validation: optionalJsonListValidator("Pinned action items", "a JSON list")
         }
       ]
     },
@@ -99,17 +87,7 @@ export const uiModule: SettingsModule = {
           label: "Bottom bar shortcuts",
           description:
             "Shortcuts shown in the bottom bar on phones. Leave empty to use the defaults.",
-          validation: (value): string | null => {
-            if (typeof value !== "string") return "Bottom bar shortcuts must be text.";
-            if (value.trim().length === 0) return null;
-            try {
-              return Array.isArray(JSON.parse(value))
-                ? null
-                : "Bottom bar shortcuts must be a list.";
-            } catch {
-              return "Bottom bar shortcuts must be valid JSON.";
-            }
-          }
+          validation: optionalJsonListValidator("Bottom bar shortcuts", "valid JSON")
         }
       ]
     }

@@ -8,7 +8,6 @@
 
 import { useCallback, useState } from "react";
 import { Download, Upload } from "lucide-react";
-import type { SettingSection } from "@thinkbrain/core";
 import { cn } from "../lib/utils";
 import { appSettingsRegistry, useSettingsStore } from "./settingsStore";
 import {
@@ -17,37 +16,9 @@ import {
   writeExportFile,
   type ImportResult
 } from "./settingsImportExport";
-import { findSectionLabelInSection } from "./sectionUtils";
+import { findSectionLabelPath, parseQualifiedSectionId } from "./sectionUtils";
 import { useEffectiveValue } from "./useEffectiveValue";
 import { useTransientStatus } from "./useTransientStatus";
-
-/**
- * Finds the labels from a module's root section to its active descendant.
- *
- * Args:
- *   sections: Sections to search.
- *   sectionId: Active section id.
- *   ancestors: Labels accumulated from parent sections.
- *
- * Returns:
- *   The complete section label path, or `null` when the section is absent.
- */
-function findSectionPath(
-  sections: readonly SettingSection[],
-  sectionId: string,
-  ancestors: readonly string[] = []
-): string[] | null {
-  for (const section of sections) {
-    const path = [...ancestors, section.label];
-    if (section.id === sectionId) return path;
-
-    if (section.subsections) {
-      const descendantPath = findSectionPath(section.subsections, sectionId, path);
-      if (descendantPath) return descendantPath;
-    }
-  }
-  return null;
-}
 
 /**
  * Resolves the visible breadcrumb labels for the active settings section.
@@ -64,15 +35,10 @@ function buildBreadcrumbPath(activeSection: string | null): readonly string[] {
   // activeSection is scope-qualified (e.g. "app:editor.display") so the
   // scroll-spy can distinguish mixed-scope sections. Strip the scope prefix
   // for the breadcrumb lookup, which only needs the section id.
-  const sectionId = activeSection.includes(":")
-    ? activeSection.slice(activeSection.indexOf(":") + 1)
-    : activeSection;
+  const { sectionId } = parseQualifiedSectionId(activeSection);
 
   for (const module of appSettingsRegistry.getAllModules()) {
-    // Use the shared lookup to confirm this module owns the active section.
-    if (!findSectionLabelInSection(module.sections, sectionId)) continue;
-
-    const sectionPath = findSectionPath(module.sections, sectionId);
+    const sectionPath = findSectionLabelPath(module.sections, sectionId);
     if (sectionPath) return [module.label, ...sectionPath];
   }
 

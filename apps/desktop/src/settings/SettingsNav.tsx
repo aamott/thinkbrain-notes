@@ -11,7 +11,6 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useVirtualizer } from "@tanstack/react-virtual";
 import { ChevronDown, ChevronRight, Search, X } from "lucide-react";
 import type {
   SettingDefinition,
@@ -24,10 +23,9 @@ import { createDebounced } from "../lib/debounce";
 import { appSettingsRegistry, useSettingsStore } from "./settingsStore";
 import { fuzzySearch, type FuzzySearchField } from "./fuzzyMatch";
 import { requestSettingHighlight } from "./settingHighlight";
-import { findSectionLabelInSection } from "./sectionUtils";
+import { findSectionLabelPath, qualifiedSectionId, sectionAnchorId } from "./sectionUtils";
 
 const SEARCH_DEBOUNCE_MS = 150;
-const SEARCH_RESULT_ROW_HEIGHT = 52;
 const SEARCH_FIELDS: readonly FuzzySearchField<SettingDefinition>[] = [
   { value: (definition) => definition.label, weight: 3 },
   { value: (definition) => definition.description, weight: 2 },
@@ -41,7 +39,7 @@ export interface SettingsNavProps {
 
 /** Smoothly scrolls the single-page content to a registered section anchor. */
 function scrollToSection(sectionId: string): void {
-  document.getElementById(`settings-section-${sectionId}`)?.scrollIntoView({
+  document.getElementById(sectionAnchorId(sectionId))?.scrollIntoView({
     behavior: "smooth",
     block: "start"
   });
@@ -72,7 +70,7 @@ function SectionTreeItem({
   const [expanded, setExpanded] = useState(true);
   const hasSubsections = Boolean(section.subsections && section.subsections.length > 0);
   const hasSettings = Boolean(section.settings && section.settings.length > 0);
-  const qualifiedId = `${scope}:${section.id}`;
+  const qualifiedId = qualifiedSectionId(scope, section.id);
   const isActive = activeSection === qualifiedId;
   const Chevron = expanded ? ChevronDown : ChevronRight;
 
@@ -210,7 +208,7 @@ function buildSectionPath(definition: SettingDefinition): string {
   const module = appSettingsRegistry.getModule(moduleId);
   const moduleLabel = module?.label ?? moduleId;
   const sectionLabel = module
-    ? findSectionLabelInSection(module.sections, definition.section) ?? definition.section
+    ? (findSectionLabelPath(module.sections, definition.section)?.at(-1) ?? definition.section)
     : definition.section;
   return `${moduleLabel} > ${sectionLabel}`;
 }
@@ -222,7 +220,7 @@ function filterDefinitions(query: string): readonly SettingDefinition[] {
   );
 }
 
-/** Renders only the visible portion of the flat search results list. */
+/** Renders the flat search results list, scroll-reset on each new result set. */
 function SearchResults({
   results,
   onSelect
@@ -231,29 +229,14 @@ function SearchResults({
   readonly onSelect: (definition: SettingDefinition) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
-  // TanStack Virtual manages mutable measurements intentionally; this component
-  // remains outside React Compiler memoization so those measurements stay live.
-  // eslint-disable-next-line react-hooks/incompatible-library
-  const rowVirtualizer = useVirtualizer({
-    count: results.length,
-    getScrollElement: () => scrollRef.current,
-    estimateSize: () => SEARCH_RESULT_ROW_HEIGHT,
-    getItemKey: (index) => results[index]?.key ?? index,
-    overscan: 5,
-    // This initial measurement keeps server-like DOM environments useful until
-    // ResizeObserver supplies the real panel size in a browser.
-    initialRect: { width: 224, height: 400 }
-  });
 
   useEffect(() => {
-    rowVirtualizer.scrollToOffset(0);
-  }, [results, rowVirtualizer]);
+    scrollRef.current?.scrollTo(0, 0);
+  }, [results]);
 
   if (results.length === 0) {
     return <p className="px-2 py-4 text-center text-xs text-muted-foreground">No results</p>;
   }
-
-  const virtualRows = rowVirtualizer.getVirtualItems();
 
   return (
     <div
@@ -261,38 +244,23 @@ function SearchResults({
       className="min-h-0 flex-1 overflow-y-auto"
       data-testid="settings-search-results-viewport"
     >
-      <ul
-        role="list"
-        className="relative m-0 p-0"
-        style={{ height: rowVirtualizer.getTotalSize() }}
-      >
-        {virtualRows.map((virtualRow) => {
-          const definition = results[virtualRow.index]!;
-          return (
-            <li
-              key={definition.key}
-              role="none"
-              className="absolute inset-s-0 top-0 w-full list-none p-0.5"
-              style={{
-                height: virtualRow.size,
-                transform: `translateY(${virtualRow.start}px)`
-              }}
+      <ul role="list" className="m-0 p-0">
+        {results.map((definition) => (
+          <li key={definition.key} role="none" className="w-full list-none p-0.5">
+            <button
+              type="button"
+              onClick={() => onSelect(definition)}
+              className="flex w-full cursor-pointer flex-col justify-center gap-0.5 rounded-small px-2 py-1.5 text-left hover:bg-accent focus-visible:-outline-offset-2 focus-visible:outline-2 focus-visible:outline-ring max-[760px]:min-h-11"
             >
-              <button
-                type="button"
-                onClick={() => onSelect(definition)}
-                className="flex h-full w-full cursor-pointer flex-col justify-center gap-0.5 rounded-small px-2 text-left hover:bg-accent focus-visible:-outline-offset-2 focus-visible:outline-2 focus-visible:outline-ring max-[760px]:min-h-11"
-              >
-                <span className="truncate text-xs font-medium text-foreground">
-                  {definition.label}
-                </span>
-                <span className="truncate text-[0.625rem] text-muted-foreground">
-                  {buildSectionPath(definition)}
-                </span>
-              </button>
-            </li>
-          );
-        })}
+              <span className="truncate text-xs font-medium text-foreground">
+                {definition.label}
+              </span>
+              <span className="truncate text-[0.625rem] text-muted-foreground">
+                {buildSectionPath(definition)}
+              </span>
+            </button>
+          </li>
+        ))}
       </ul>
     </div>
   );
@@ -346,7 +314,7 @@ export function SettingsNav({ open, onClose }: SettingsNavProps) {
     debouncedSetSearchQuery.cancel();
     setInputValue("");
     setSearchQuery("");
-    scrollToSection(`${definition.scope}:${definition.section}`);
+    scrollToSection(qualifiedSectionId(definition.scope, definition.section));
     requestSettingHighlight(definition.key);
   }
 

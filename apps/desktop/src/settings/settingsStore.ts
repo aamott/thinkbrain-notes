@@ -32,13 +32,11 @@ import {
 import {
   getErrorMessage,
   parseDynamicAppSettings,
-  serializeDynamicAppSettings
+  parseDynamicWorkspaceSettings,
+  serializeDynamicAppSettings,
+  serializeDynamicWorkspaceSettings
 } from "@thinkbrain/core";
 import { scheduleAutosave } from "./autosaveScheduler";
-import {
-  parseDynamicWorkspaceSettings,
-  serializeDynamicWorkspaceSettings
-} from "./workspaceSettingsSerialization";
 import {
   computeDirty,
   effectiveSettingValue,
@@ -282,11 +280,9 @@ export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettin
       );
       set({ stagedChanges: staged, ...dirty, validationDiagnostics: remainingDiagnostics });
 
-      // Effective autosave flag: staged > appValues > default. The special-case
-      // for `settings.autosave` itself makes a just-staged enable toggle fire.
-      const autosaveEnabled = key === "settings.autosave"
-        ? value === true
-        : (get().stagedChanges["settings.autosave"] ?? get().appValues["settings.autosave"] ?? false);
+      // The just-staged `settings.autosave` edit is already in stagedChanges,
+      // so the effective value answers "is autosave on" without special-casing.
+      const autosaveEnabled = get().getEffectiveValue("settings.autosave") === true;
       if (autosaveEnabled && Object.keys(staged).length > 0) {
         scheduleAutosave(() => get().saveSettings());
       }

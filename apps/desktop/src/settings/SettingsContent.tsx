@@ -35,8 +35,8 @@ import { subscribeSettingHighlight } from "./settingHighlight";
 import { resolveEffectiveValue } from "./settingsHelpers";
 import { ThemePicker, ThemeToolbar } from "./ThemeSectionControls";
 import { useEffectiveValue } from "./useEffectiveValue";
+import { qualifiedSectionId, sectionAnchorId } from "./sectionUtils";
 
-const SECTION_ID_PREFIX = "settings-section-";
 const HIDDEN_SETTING_ROWS = new Set([
   "appearance.theme",
   "appearance.themeFile",
@@ -46,17 +46,6 @@ const HIDDEN_SETTING_ROWS = new Set([
 interface RenderedSection {
   readonly section: SettingSection;
   readonly scope: SettingScope;
-}
-
-/**
- * Builds a scope-qualified id for a rendered section.
- *
- * Mixed-scope modules (e.g. Journal) project the same section id into both
- * app and workspace scope groups. Qualifying with scope keeps DOM ids unique
- * and lets the scroll-spy distinguish which projection is on screen.
- */
-function scopeQualifiedId(scope: SettingScope, sectionId: string): string {
-  return `${scope}:${sectionId}`;
 }
 
 /** Flattens projected module trees while preserving module and section order. */
@@ -203,7 +192,7 @@ function SettingsSection({
   readonly setSectionRef: (sectionId: string, element: HTMLElement | null) => void;
 }) {
   const { section, scope } = renderedSection;
-  const qualifiedId = scopeQualifiedId(scope, section.id);
+  const qualifiedId = qualifiedSectionId(scope, section.id);
   const stageChange = useSettingsStore((state) => state.stageChange);
   const allDefinitions = appSettingsRegistry
     .getDefinitionsForSection(section.id)
@@ -241,14 +230,14 @@ function SettingsSection({
 
   return (
     <section
-      id={`${SECTION_ID_PREFIX}${qualifiedId}`}
+      id={sectionAnchorId(qualifiedId)}
       ref={(element) => setSectionRef(qualifiedId, element)}
       className="scroll-mt-4 py-4 first:pt-4"
-      aria-labelledby={`${SECTION_ID_PREFIX}${qualifiedId}-heading`}
+      aria-labelledby={`${sectionAnchorId(qualifiedId)}-heading`}
     >
       <div className="mb-2 flex items-center gap-2">
         <h2
-          id={`${SECTION_ID_PREFIX}${qualifiedId}-heading`}
+          id={`${sectionAnchorId(qualifiedId)}-heading`}
           className="text-base font-semibold text-foreground"
         >
           {section.label}
@@ -335,7 +324,7 @@ export function SettingsContent() {
           )
         ];
   const sectionIdsKey = renderedSections
-    .map(({ section, scope }) => `${scope}:${section.id}`)
+    .map(({ section, scope }) => qualifiedSectionId(scope, section.id))
     .join("|");
 
   /** Keeps the map used by both the observer and section-ref requirement current. */
@@ -412,7 +401,7 @@ export function SettingsContent() {
       <div className="mx-auto w-full max-w-160 px-6 max-[760px]:max-w-none max-[760px]:pr-4 max-[760px]:pb-8 max-[760px]:pl-15">
         {renderedSections.map((renderedSection) => (
           <SettingsSection
-            key={`${renderedSection.scope}:${renderedSection.section.id}`}
+            key={qualifiedSectionId(renderedSection.scope, renderedSection.section.id)}
             renderedSection={renderedSection}
             stagedChanges={stagedChanges}
             appValues={appValues}

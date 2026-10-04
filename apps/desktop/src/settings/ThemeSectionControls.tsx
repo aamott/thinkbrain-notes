@@ -204,7 +204,7 @@ export function ThemeToolbar() {
    */
   const handleExport = useCallback((): void => {
     void buildThemeExport()
-      .then(({ json }) => writeThemeExportFile(json))
+      .then((json) => writeThemeExportFile(json))
       .then((written) => {
         if (written) {
           status.show("Theme exported.");

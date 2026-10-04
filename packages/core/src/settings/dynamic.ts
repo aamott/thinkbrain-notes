@@ -120,16 +120,7 @@ export function parseDynamicAppSettings(
 
   // Extract only known app-scoped keys from the migrated record; unknown keys
   // are ignored so stale/misspelled entries don't leak into the settings model.
-  const values: Record<string, unknown> = { ...defaults };
-  for (const def of registry.getAllDefinitions()) {
-    // Scope is a property of the setting, not of the module it arrived in: an
-    // app-scoped module may hold a per-workspace setting, and that setting must
-    // not travel in the app file (D45).
-    if (def.scope !== "app") continue;
-    if (def.key in record) {
-      values[def.key] = record[def.key];
-    }
-  }
+  const values = extractScopedValues(record, defaults, registry, "app");
 
   // Validate the merged values against the registry so invalid persisted values
   // (e.g. out-of-range numbers, stale enum strings) surface as diagnostics
@@ -228,6 +219,72 @@ export function serializeDynamicAppSettings(
   existingRawJson: string | null
 ): string {
   return serializeDynamicSettings(values, registry, "app", existingRawJson);
+}
+
+/**
+ * Parses raw workspace settings JSON into a flat key-value map merged with
+ * registry defaults for the workspace scope.
+ *
+ * Deliberately unlike {@link parseDynamicAppSettings}: workspace documents run
+ * no migrations and emit no diagnostics — unknown or invalid values are simply
+ * ignored (parse failure or a non-object document yields defaults).
+ */
+export function parseDynamicWorkspaceSettings(
+  rawJson: string | null,
+  registry: SettingsRegistry
+): Record<string, unknown> {
+  const defaults = extractDefaults(registry, "workspace");
+
+  if (rawJson === null) return defaults;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawJson) as unknown;
+  } catch {
+    return defaults;
+  }
+
+  if (!isRecord(parsed)) return defaults;
+
+  return extractScopedValues(parsed, defaults, registry, "workspace");
+}
+
+/**
+ * Serializes workspace settings back to JSON, preserving non-setting keys from
+ * the existing raw document (e.g. `version`, extension keys).
+ *
+ * Thin wrapper over {@link serializeDynamicSettings} for the `"workspace"` scope.
+ */
+export function serializeDynamicWorkspaceSettings(
+  values: Record<string, unknown>,
+  registry: SettingsRegistry,
+  existingRawJson: string | null
+): string {
+  return serializeDynamicSettings(values, registry, "workspace", existingRawJson);
+}
+
+/**
+ * Extracts only the keys known to the registry as `scope` settings, merged over
+ * that scope's defaults. Unknown keys are ignored so stale/misspelled entries
+ * don't leak into the settings model.
+ */
+function extractScopedValues(
+  record: Record<string, unknown>,
+  defaults: Record<string, unknown>,
+  registry: SettingsRegistry,
+  scope: SettingScope
+): Record<string, unknown> {
+  const values: Record<string, unknown> = { ...defaults };
+  for (const def of registry.getAllDefinitions()) {
+    // Scope is a property of the setting, not of the module it arrived in: an
+    // app-scoped module may hold a per-workspace setting, and that setting must
+    // not travel in the app file (D45).
+    if (def.scope !== scope) continue;
+    if (def.key in record) {
+      values[def.key] = record[def.key];
+    }
+  }
+  return values;
 }
 
 /**

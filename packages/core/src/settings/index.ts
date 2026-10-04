@@ -21,4 +21,9 @@ export * from "./dynamic";
 // Re-export only the shared helpers from ./internal — NOT `CURRENT_SETTINGS_VERSION`,
 // which is already exported via `../settings` and would collide under `export *`
 // semantics at the package root (same pattern as `SettingsDiagnostic` above).
-export { isRecord, getErrorMessage } from "./internal";
+export {
+  isRecord,
+  getErrorMessage,
+  integerValidator,
+  optionalJsonListValidator
+} from "./internal";

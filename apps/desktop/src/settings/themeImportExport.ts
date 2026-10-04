@@ -108,12 +108,6 @@ export function readCurrentThemeBase(): ThemeBase {
 // Export.
 // ---------------------------------------------------------------------------
 
-/** Result of building the theme export payload. */
-export interface ThemeExportPayload {
-  /** Pretty-printed `.tbtheme.json` string ready to write to a file. */
-  readonly json: string;
-}
-
 /**
  * Builds a `.tbtheme.json` payload from the currently active theme state.
  *
@@ -127,9 +121,9 @@ export interface ThemeExportPayload {
  * export a useful "snapshot current state" action for customization.
  *
  * Returns:
- *   The {@link ThemeExportPayload} with the canonical JSON string.
+ *   The canonical, pretty-printed `.tbtheme.json` string.
  */
-export function buildThemeExportPayload(): ThemeExportPayload {
+export function buildThemeExportPayload(): string {
   const base = readCurrentThemeBase();
   const tokens = readCurrentTokenValues();
 
@@ -140,7 +134,7 @@ export function buildThemeExportPayload(): ThemeExportPayload {
     tokens
   };
 
-  return { json: serializeThemeFile(theme) };
+  return serializeThemeFile(theme);
 }
 
 /**
@@ -158,7 +152,7 @@ export function buildThemeExportPayload(): ThemeExportPayload {
  * a broken source is worth less than a working snapshot, and refusing to export
  * at all helps nobody.
  */
-export async function buildThemeExport(): Promise<ThemeExportPayload> {
+export async function buildThemeExport(): Promise<string> {
   const state = useSettingsStore.getState();
   // Resolve the effective themeFile path via the shared precedence rule
   // (staged > appValues > registry default of null). Avoids the inline-copy
@@ -174,7 +168,7 @@ export async function buildThemeExport(): Promise<ThemeExportPayload> {
   if (typeof configured === "string" && configured.length > 0) {
     const source = await readThemeFile(configured);
     if (source !== null && parseThemeFile(source).theme !== null) {
-      return { json: source };
+      return source;
     }
   }
 

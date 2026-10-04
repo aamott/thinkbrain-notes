@@ -35,12 +35,12 @@ export interface NoteIndexUpdater {
  */
 export function subscribeIndexToNoteEvents(updater: () => NoteIndexUpdater): () => void {
   const disposables: readonly Disposable[] = [
-    appEvents.on("note.saved", ({ rootPath, relativePath }) => {
-      void updater().reindexDocument(rootPath, relativePath);
-    }),
-    appEvents.on("note.created", ({ rootPath, relativePath }) => {
-      void updater().reindexDocument(rootPath, relativePath);
-    }),
+    // A save and a create mean the same thing to an index: reindex the path.
+    ...(["note.saved", "note.created"] as const).map((event) =>
+      appEvents.on(event, ({ rootPath, relativePath }) => {
+        void updater().reindexDocument(rootPath, relativePath);
+      })
+    ),
     appEvents.on("note.renamed", ({ rootPath, oldRelativePath, newRelativePath }) => {
       void updater().reindexRenamedDocument(rootPath, oldRelativePath, newRelativePath);
     }),
