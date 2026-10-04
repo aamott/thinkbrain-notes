@@ -25,8 +25,8 @@ mod record;
 /// history belongs to the app, most people syncing notes have no `user.email`
 /// set at all, and a commit that fails because of that would be a sync failure
 /// with a baffling explanation.
-const AUTHOR_NAME: &str = "ThinkBrain Notes";
-const AUTHOR_EMAIL: &str = "sync@thinkbrain.notes";
+pub(super) const AUTHOR_NAME: &str = "ThinkBrain Notes";
+pub(super) const AUTHOR_EMAIL: &str = "sync@thinkbrain.notes";
 
 /// The branch the hidden repository records vault history on.
 pub const HISTORY_REF: &str = "refs/heads/main";

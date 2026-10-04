@@ -106,8 +106,10 @@ test("activates the extension when its panel is opened", async ({ page }) => {
   await page.getByRole("button", { name: "Extensions", exact: true }).click();
   await expect(page.getByRole("list", { name: "Installed extensions" })).toContainText("Not started");
 
-  // The panel is contributed by the manifest, so it exists before activation.
-  await page.getByRole("button", { name: "Note Stats", exact: true }).click();
+  // The panel is contributed by the manifest, so it exists before activation;
+  // unpinned right-side panels live in the title bar's Action items menu.
+  await page.getByRole("button", { name: "Action items" }).click();
+  await page.getByRole("menuitem", { name: "Note Stats", exact: true }).click();
   await expect(page.getByText("Open a Markdown note to see its statistics.")).toBeVisible();
 
   // The Extensions panel stays open throughout: it subscribes to status

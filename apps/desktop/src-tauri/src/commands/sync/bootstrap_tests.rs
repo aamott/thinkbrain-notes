@@ -55,7 +55,8 @@ fn a_vault_with_its_own_git_is_recorded_too_and_its_repository_left_alone() {
     let vault = make_temp_test_dir("bootstrap-own-git-vault", "sync", true);
     // A real repository, not a planted .git — bootstrap now imports it
     // read-only, which makes "we never wrote in it" worth proving.
-    let source = gix::init(&vault).expect("the vault has its own repository");
+    let mut source = gix::init(&vault).expect("the vault has its own repository");
+    crate::tests::give_test_identity(&mut source);
     fs::write(vault.join(".git").join("HEAD"), "ref: refs/heads/main\n").expect("written");
     write(&vault, "note.md", "# A note\n");
     let tip = commit_one(&source, "note.md", b"# A note\n", "theirs");
@@ -493,7 +494,8 @@ fn measures_a_ten_thousand_note_vault() {
 fn a_detached_clone_keeps_imported_history_and_recording() {
     let app_data = make_temp_test_dir("bootstrap-detached-appdata", "sync", true);
     let vault = make_temp_test_dir("bootstrap-detached-vault", "sync", true);
-    let source = gix::init(&vault).expect("the vault has its own repository");
+    let mut source = gix::init(&vault).expect("the vault has its own repository");
+    crate::tests::give_test_identity(&mut source);
     fs::write(vault.join(".git").join("HEAD"), "ref: refs/heads/main\n").expect("written");
     write(&vault, "note.md", "# Old\n");
     // Distinct from the bytes on disk so the imported version is its own row,
@@ -532,7 +534,8 @@ fn a_detached_clone_keeps_imported_history_and_recording() {
 fn a_fresh_detached_clone_records_without_importing() {
     let app_data = make_temp_test_dir("bootstrap-fresh-detached-appdata", "sync", true);
     let vault = make_temp_test_dir("bootstrap-fresh-detached-vault", "sync", true);
-    let source = gix::init(&vault).expect("the vault has its own repository");
+    let mut source = gix::init(&vault).expect("the vault has its own repository");
+    crate::tests::give_test_identity(&mut source);
     let tip = commit_one(&source, "note.md", b"# Old\n", "imported");
     fs::write(vault.join(".git").join("HEAD"), format!("{tip}\n")).expect("detached");
     write(&vault, "note.md", "# Old\n");

@@ -27,7 +27,46 @@ pub fn open_or_create(git_dir: &Path, vault: &Path) -> Result<gix::Repository, N
     if !git_dir.join("HEAD").exists() {
         create(git_dir, vault)?;
     }
+    ensure_identity(git_dir)?;
     open(git_dir)
+}
+
+/// Gives the repository a local identity for the ref moves it performs.
+///
+/// Every commit the sync layer writes carries the app's signature inside the
+/// object, but a ref's reflog entry still needs a committer from git config.
+/// A user who never ran `git config user.email` would see history imports and
+/// checkpoint rebuilds fail with `MissingCommitter`, so the same app identity
+/// the commits use is written here — local to this repository, never the
+/// user's own `.gitconfig`. Repositories created before this existed get it
+/// on their next open. This must run before `open()`: gix caches the identity
+/// from config when the repository is instantiated.
+fn ensure_identity(git_dir: &Path) -> Result<(), NativeError> {
+    let config_failed = |error: String| {
+        failed(
+            "sync.repo_config_failed",
+            "Could not give this workspace's sync history an identity.",
+            error,
+        )
+    };
+    let config_path = git_dir.join("config");
+    let mut config =
+        gix::config::File::from_path_no_includes(config_path.clone(), gix::config::Source::Local)
+            .map_err(|error| config_failed(error.to_string()))?;
+    if config.string("user.name").is_some() && config.string("user.email").is_some() {
+        return Ok(());
+    }
+    config
+        .set_raw_value("user.name", super::snapshot::AUTHOR_NAME)
+        .map_err(|error| config_failed(error.to_string()))?;
+    config
+        .set_raw_value("user.email", super::snapshot::AUTHOR_EMAIL)
+        .map_err(|error| config_failed(error.to_string()))?;
+    let mut written = Vec::new();
+    config
+        .write_to(&mut written)
+        .map_err(|error| config_failed(error.to_string()))?;
+    fs::write(&config_path, &written).map_err(|error| config_failed(error.to_string()))
 }
 
 fn open(git_dir: &Path) -> Result<gix::Repository, NativeError> {
