@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { createSettingsStore, type SettingsStoreGateway } from "./settingsStore";
+import {
+  createSettingsStore,
+  selectDirtyCount,
+  selectIsDirty,
+  type SettingsStoreGateway
+} from "./settingsStore";
 import { appSettingsRegistry } from "./settingsStore";
 import { resolveEffectiveValue } from "./settingsHelpers";
 import { extractDefaults, type SettingDefinition } from "@thinkbrain/core";
@@ -96,7 +101,7 @@ describe("settingsStore", () => {
       expect(state.workspaceRootPath).toBeNull();
       // Staged changes cleared.
       expect(state.stagedChanges).toEqual({});
-      expect(state.isDirty).toBe(false);
+      expect(selectIsDirty(state)).toBe(false);
     });
 
     it("fills missing keys with registry defaults", async () => {
@@ -156,7 +161,7 @@ describe("settingsStore", () => {
   });
 
   describe("stageChange", () => {
-    it("updates stagedChanges, isDirty true, dirtyCount", async () => {
+    it("updates stagedChanges and the dirty flag", async () => {
       const gateway = createMockGateway(null);
       const store = createSettingsStore(gateway);
       await store.getState().loadSettings(null);
@@ -165,8 +170,8 @@ describe("settingsStore", () => {
 
       const state = store.getState();
       expect(state.stagedChanges["appearance.theme"]).toBe("dark");
-      expect(state.isDirty).toBe(true);
-      expect(state.dirtyCount).toBe(1);
+      expect(selectIsDirty(state)).toBe(true);
+      expect(selectDirtyCount(state)).toBe(1);
     });
 
     it("clears validation diagnostics for the changed key", async () => {
@@ -204,7 +209,7 @@ describe("settingsStore", () => {
       expect(state.appValues["appearance.theme"]).toBe("light");
       // Staged cleared.
       expect(state.stagedChanges).toEqual({});
-      expect(state.isDirty).toBe(false);
+      expect(selectIsDirty(state)).toBe(false);
       // Gateway write called.
       expect(gateway.writeAppSettings).toHaveBeenCalledTimes(1);
       // desktopState preserved in the written JSON.
@@ -339,7 +344,7 @@ describe("settingsStore", () => {
         await vi.advanceTimersByTimeAsync(300);
 
         expect(gateway.writeAppSettings).not.toHaveBeenCalled();
-        expect(store.getState().isDirty).toBe(true);
+        expect(selectIsDirty(store.getState())).toBe(true);
       } finally {
         vi.useRealTimers();
       }
@@ -415,8 +420,8 @@ describe("settingsStore", () => {
 
       const state = store.getState();
       expect(state.stagedChanges).toEqual({});
-      expect(state.isDirty).toBe(false);
-      expect(state.dirtyCount).toBe(0);
+      expect(selectIsDirty(state)).toBe(false);
+      expect(selectDirtyCount(state)).toBe(0);
       expect(state.validationDiagnostics).toEqual([]);
     });
   });
@@ -439,7 +444,7 @@ describe("settingsStore", () => {
       expect(state.stagedChanges["appearance.theme"]).toBe("dark");
       expect(state.stagedChanges["editor.fontSize"]).toBeUndefined();
       expect(state.stagedChanges["editor.lineWrapping"]).toBeUndefined();
-      expect(state.dirtyCount).toBe(1);
+      expect(selectDirtyCount(state)).toBe(1);
     });
   });
 
@@ -820,8 +825,8 @@ describe("saveSettings concurrency", () => {
     await saving;
 
     expect(store.getState().stagedChanges).toEqual({ "editor.lineWrapping": false });
-    expect(store.getState().isDirty).toBe(true);
-    expect(store.getState().dirtyCount).toBe(1);
+    expect(selectIsDirty(store.getState())).toBe(true);
+    expect(selectDirtyCount(store.getState())).toBe(1);
   });
 
   it("clears the staged keys that the save actually persisted", async () => {
@@ -833,7 +838,7 @@ describe("saveSettings concurrency", () => {
     await store.getState().saveSettings();
 
     expect(store.getState().stagedChanges).toEqual({});
-    expect(store.getState().isDirty).toBe(false);
+    expect(selectIsDirty(store.getState())).toBe(false);
   });
 });
 
@@ -956,7 +961,7 @@ describe("mixed-scope modules (D45)", () => {
 
     expect(gateway.writtenWorkspaceSettings).toHaveLength(0);
     expect(store.getState().stagedChanges[ROOT]).toBe("diary");
-    expect(store.getState().isDirty).toBe(true);
+    expect(selectIsDirty(store.getState())).toBe(true);
     expect(store.getState().getEffectiveValue(ROOT)).toBe("diary");
   });
 

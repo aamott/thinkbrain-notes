@@ -78,38 +78,33 @@ pub fn destination(app_data_dir: &Path, root: &Path) -> Option<String> {
     // and parse errors into `None`, misreporting a corrupt settings file as
     // "not set up to sync." We still return `None` so a bad file does not break
     // sync entirely, but the failure is now logged so it can be found.
-    let contents = match crate::commands::settings::read_settings_file(&path) {
-        Ok(contents) => contents,
-        Err(error) => {
+    let mut found = None;
+    match crate::commands::settings::update_settings_record(&path, |record| {
+        let Some(named) = record.get(SETTING).and_then(serde_json::Value::as_str) else {
+            return false;
+        };
+        let named = named.trim().to_string();
+        if named.is_empty() {
+            return false;
+        }
+        let redacted = super::credentials::take_from_url(&named);
+        found = Some(redacted.clone());
+        if redacted == named {
+            return false;
+        }
+        record.insert(SETTING.to_string(), serde_json::Value::String(redacted));
+        true
+    }) {
+        Ok(()) => found,
+        Err(crate::commands::settings::SettingsUpdateError::Read(error)) => {
             eprintln!("[sync] settings unreadable: {error:?}");
-            return None;
+            None
         }
-    };
-    let mut record = crate::commands::settings::parse_app_settings_record(contents.as_deref());
-    let named = record.get(SETTING)?.as_str()?.trim().to_string();
-    if named.is_empty() {
-        return None;
-    }
-    let redacted = super::credentials::take_from_url(&named);
-    if redacted != named {
-        record.insert(
-            SETTING.to_string(),
-            serde_json::Value::String(redacted.clone()),
-        );
-        match crate::commands::settings::serialize_app_settings_record(record) {
-            Ok(written) => {
-                if let Err(error) =
-                    crate::commands::workspace::write_file_atomically(&path, written)
-                {
-                    eprintln!("[sync] failed to redact secret from settings: {error:?}");
-                }
-            }
-            Err(_) => {
-                eprintln!("[sync] failed to serialize redacted settings, secret may remain on disk")
-            }
+        Err(crate::commands::settings::SettingsUpdateError::Write(error)) => {
+            eprintln!("[sync] failed to redact secret from settings: {error:?}");
+            found
         }
     }
-    Some(redacted)
 }
 
 /// One round trip: fetch, merge, send.

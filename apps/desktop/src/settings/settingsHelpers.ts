@@ -104,13 +104,4 @@ export function partitionByScope(
   return { app, workspace };
 }
 
-/**
- * Computes the dirty flag and count from the staged changes map.
- */
-export function computeDirty(staged: Record<string, unknown>): {
-  isDirty: boolean;
-  dirtyCount: number;
-} {
-  const keys = Object.keys(staged);
-  return { isDirty: keys.length > 0, dirtyCount: keys.length };
-}
+

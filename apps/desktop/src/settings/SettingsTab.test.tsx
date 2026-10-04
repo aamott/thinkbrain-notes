@@ -29,7 +29,7 @@ import { isTauri } from "@tauri-apps/api/core";
 import { workspaceDesktopApi } from "../workspace/workspaceAdapter";
 import { invokeNativeCommand } from "../native/commands";
 import { SettingsTab } from "./SettingsTab";
-import { useSettingsStore, appSettingsRegistry } from "./settingsStore";
+import { useSettingsStore, appSettingsRegistry, selectIsDirty } from "./settingsStore";
 import { setExtensionBootstrap } from "../extensions/bootstrapRef";
 import { setWorkspaceBridge } from "../extensions/workspaceBridge";
 import { registerControl, type ControlProps } from "./controlRegistry";
@@ -338,9 +338,7 @@ describe("SettingsTab", () => {
     // Stage an unsaved edit, then simulate switching away and back.
     useSettingsStore.setState({
       activeSection: "editor.display",
-      stagedChanges: { "editor.fontSize": 99 },
-      isDirty: true,
-      dirtyCount: 1
+      stagedChanges: { "editor.fontSize": 99 }
     });
     expect(useSettingsStore.getState().stagedChanges["editor.fontSize"]).toBe(99);
 
@@ -350,7 +348,7 @@ describe("SettingsTab", () => {
 
     const staged = useSettingsStore.getState().stagedChanges;
     expect(staged["editor.fontSize"]).toBe(99);
-    expect(useSettingsStore.getState().isDirty).toBe(true);
+    expect(selectIsDirty(useSettingsStore.getState())).toBe(true);
 
     // Remounting must not reread documents and clear staged changes.
     expect(settingsReadCallCount()).toBe(callsAfterFirstMount);

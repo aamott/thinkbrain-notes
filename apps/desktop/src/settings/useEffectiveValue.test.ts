@@ -28,8 +28,6 @@ beforeEach(() => {
     appValues: {},
     workspaceValues: null,
     stagedChanges: {},
-    isDirty: false,
-    dirtyCount: 0,
     loaded: false
   });
 });

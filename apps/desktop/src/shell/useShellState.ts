@@ -27,7 +27,7 @@ import {
 } from "react";
 
 import { useSettingsQuarantineAdapter } from "../settings/settingsQuarantineAdapter";
-import { useSettingsStore } from "../settings/settingsStore";
+import { selectIsDirty, useSettingsStore } from "../settings/settingsStore";
 import { useTheme } from "../settings/ThemeProvider";
 import { useSyncSurfaces } from "../sync/useSyncSurfaces";
 import {
@@ -66,7 +66,7 @@ export function useShellState(): ShellState {
   // Subscribe to the settings store's dirty flag so the settings tab shows the
   // dirty dot when staged changes exist. This re-renders the shell when
   // isDirty changes, which is acceptable (infrequent, boolean toggle).
-  const settingsIsDirty = useSettingsStore((s) => s.isDirty);
+  const settingsIsDirty = useSettingsStore(selectIsDirty);
 
   // Wiki-link note index for resolving `[[Target]]` links in the editor.
   const noteIndex = useWikiLinkIndexStore((s) => s.noteIndex);

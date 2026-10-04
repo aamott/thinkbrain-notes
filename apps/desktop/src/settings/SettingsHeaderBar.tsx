@@ -9,7 +9,7 @@
 import { useCallback, useState } from "react";
 import { Download, Upload } from "lucide-react";
 import { cn } from "../lib/utils";
-import { appSettingsRegistry, useSettingsStore } from "./settingsStore";
+import { appSettingsRegistry, selectDirtyCount, selectIsDirty, useSettingsStore } from "./settingsStore";
 import {
   buildExportPayload,
   importSettings,
@@ -50,8 +50,8 @@ function buildBreadcrumbPath(activeSection: string | null): readonly string[] {
  */
 export function SettingsHeaderBar() {
   const activeSection = useSettingsStore((s) => s.activeSection);
-  const isDirty = useSettingsStore((s) => s.isDirty);
-  const dirtyCount = useSettingsStore((s) => s.dirtyCount);
+  const isDirty = useSettingsStore(selectIsDirty);
+  const dirtyCount = useSettingsStore(selectDirtyCount);
   const saveError = useSettingsStore((s) => s.saveError);
   const autosave = useEffectiveValue("settings.autosave");
   const showAdvanced = useEffectiveValue("settings.showAdvanced") === true;

@@ -50,8 +50,6 @@ beforeEach(() => {
     workspaceValues: null,
     workspaceRootPath: null,
     stagedChanges: {},
-    isDirty: false,
-    dirtyCount: 0,
     activeSection: null,
     searchQuery: "",
     loadError: null,

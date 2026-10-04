@@ -46,9 +46,7 @@ beforeEach(() => {
     appValues: {},
     workspaceValues: null,
     workspaceRootPath: null,
-    stagedChanges: {},
-    isDirty: false,
-    dirtyCount: 0
+    stagedChanges: {}
   });
 });
 

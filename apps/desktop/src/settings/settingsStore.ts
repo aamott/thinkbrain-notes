@@ -38,7 +38,6 @@ import {
 } from "@thinkbrain/core";
 import { scheduleAutosave } from "./autosaveScheduler";
 import {
-  computeDirty,
   effectiveSettingValue,
   partitionByScope
 } from "./settingsHelpers";
@@ -131,10 +130,6 @@ export interface SettingsStoreState {
   // --- Staged changes ---
   /** Pending changes keyed by full setting key, not yet persisted. */
   stagedChanges: Record<string, unknown>;
-  /** True when there are any staged changes. */
-  isDirty: boolean;
-  /** Count of staged changes. */
-  dirtyCount: number;
 
   // --- UI state ---
   activeSection: string | null;
@@ -201,8 +196,6 @@ export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettin
 
     // --- Staged changes ---
     stagedChanges: {},
-    isDirty: false,
-    dirtyCount: 0,
 
     // --- UI state ---
     activeSection: null,
@@ -246,8 +239,6 @@ export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettin
           workspaceValues,
           workspaceRootPath: rootPath,
           stagedChanges: {},
-          isDirty: false,
-          dirtyCount: 0,
           loadError: null,
           validationDiagnostics: [],
           loaded: true
@@ -273,12 +264,11 @@ export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettin
      */
     stageChange(key: string, value: unknown): void {
       const staged = { ...get().stagedChanges, [key]: value };
-      const dirty = computeDirty(staged);
       // Clear any existing validation diagnostic for this key.
       const remainingDiagnostics = get().validationDiagnostics.filter(
         (d) => d.path !== key
       );
-      set({ stagedChanges: staged, ...dirty, validationDiagnostics: remainingDiagnostics });
+      set({ stagedChanges: staged, validationDiagnostics: remainingDiagnostics });
 
       // The just-staged `settings.autosave` edit is already in stagedChanges,
       // so the effective value answers "is autosave on" without special-casing.
@@ -387,12 +377,9 @@ export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettin
             delete remaining[key];
           }
         }
-        const remainingCount = Object.keys(remaining).length;
 
         const next: Partial<SettingsStoreState> = {
           stagedChanges: remaining,
-          isDirty: remainingCount > 0,
-          dirtyCount: remainingCount,
           validationDiagnostics: [],
           saveError: null
         };
@@ -431,7 +418,7 @@ export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettin
      * Reverts all staged changes to the last-saved values.
      */
     resetStaged(): void {
-      set({ stagedChanges: {}, isDirty: false, dirtyCount: 0, validationDiagnostics: [] });
+      set({ stagedChanges: {}, validationDiagnostics: [] });
     },
 
     /**
@@ -445,8 +432,7 @@ export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettin
       for (const key of sectionKeys) {
         delete staged[key];
       }
-      const dirty = computeDirty(staged);
-      set({ stagedChanges: staged, ...dirty });
+      set({ stagedChanges: staged });
     },
 
     /**
@@ -488,3 +474,11 @@ export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettin
  * store with a mock gateway.
  */
 export const useSettingsStore = createSettingsStore();
+
+/** True when there are any staged (unsaved) changes. */
+export const selectIsDirty = (state: SettingsStoreState): boolean =>
+  Object.keys(state.stagedChanges).length > 0;
+
+/** Count of staged (unsaved) changes. */
+export const selectDirtyCount = (state: SettingsStoreState): number =>
+  Object.keys(state.stagedChanges).length;

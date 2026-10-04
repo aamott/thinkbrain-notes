@@ -395,17 +395,17 @@ fn persist_link(
             )
         })?;
     }
-    let mut record = crate::commands::settings::parse_app_settings_record(None);
-    record.insert(
-        DEST_SETTING.to_string(),
-        serde_json::Value::String(destination.to_string()),
-    );
-    record.insert(
-        sign_in::PROFILE_SETTING.to_string(),
-        serde_json::Value::String(profile_id.unwrap_or("").to_string()),
-    );
-    let written = crate::commands::settings::serialize_app_settings_record(record)?;
-    crate::commands::settings::write_settings_file(&path, &written)
+    crate::commands::settings::replace_settings_record(&path, |record| {
+        record.insert(
+            DEST_SETTING.to_string(),
+            serde_json::Value::String(destination.to_string()),
+        );
+        record.insert(
+            sign_in::PROFILE_SETTING.to_string(),
+            serde_json::Value::String(profile_id.unwrap_or("").to_string()),
+        );
+    })?;
+    Ok(())
 }
 
 fn resolve_parent(parent_path: &str) -> Result<PathBuf, NativeError> {

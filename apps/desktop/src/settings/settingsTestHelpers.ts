@@ -50,8 +50,6 @@ export function seedSettingsStore(
     workspaceValues: null,
     workspaceRootPath: null,
     stagedChanges: {},
-    isDirty: false,
-    dirtyCount: 0,
     activeSection: null,
     searchQuery: "",
     loadError: null,
@@ -65,7 +63,7 @@ export function seedSettingsStore(
 
 /**
  * Installs a `stageChange` spy. When `replicateStoreUpdates` is true, the spy
- * mirrors the real action (updates `stagedChanges`/`isDirty`/`dirtyCount`).
+ * mirrors the real action (updates `stagedChanges`).
  * When false, it's a no-op spy for call-assertion-only tests.
  */
 export function installStageChangeSpy(
@@ -74,14 +72,9 @@ export function installStageChangeSpy(
   const spy = vi.fn();
   if (replicateStoreUpdates) {
     spy.mockImplementation((key: string, value: unknown) => {
-      useSettingsStore.setState((s) => {
-        const staged = { ...s.stagedChanges, [key]: value };
-        return {
-          stagedChanges: staged,
-          isDirty: true,
-          dirtyCount: Object.keys(staged).length
-        };
-      });
+      useSettingsStore.setState((s) => ({
+        stagedChanges: { ...s.stagedChanges, [key]: value }
+      }));
     });
   }
   useSettingsStore.setState({ stageChange: spy });

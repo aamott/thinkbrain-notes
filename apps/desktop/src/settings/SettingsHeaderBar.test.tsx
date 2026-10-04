@@ -60,7 +60,7 @@ describe("SettingsHeaderBar", () => {
   });
 
   it("enables Reset and Save when dirty and shows dirty count", async () => {
-    useSettingsStore.setState({ isDirty: true, dirtyCount: 3 });
+    useSettingsStore.setState({ stagedChanges: { k1: 1, k2: 2, k3: 3 } });
     const el = await harness.render(<SettingsHeaderBar />);
     const buttons = Array.from(el.querySelectorAll<HTMLButtonElement>("button"));
 
@@ -70,7 +70,7 @@ describe("SettingsHeaderBar", () => {
   });
 
   it("clicking Save calls saveSettings from the store", async () => {
-    useSettingsStore.setState({ isDirty: true, dirtyCount: 1 });
+    useSettingsStore.setState({ stagedChanges: { k: 1 } });
     const el = await harness.render(<SettingsHeaderBar />);
 
     await harness.click(el.querySelectorAll("button")[3]!);
@@ -79,7 +79,7 @@ describe("SettingsHeaderBar", () => {
   });
 
   it("clicking Reset calls resetStaged from the store", async () => {
-    useSettingsStore.setState({ isDirty: true, dirtyCount: 1 });
+    useSettingsStore.setState({ stagedChanges: { k: 1 } });
     const el = await harness.render(<SettingsHeaderBar />);
 
     await harness.click(el.querySelectorAll("button")[2]!);
@@ -89,8 +89,7 @@ describe("SettingsHeaderBar", () => {
 
   it("displays saveError in the header when set", async () => {
     useSettingsStore.setState({
-      isDirty: true,
-      dirtyCount: 1,
+      stagedChanges: { k: 1 },
       saveError: "Failed to save settings: disk full"
     });
     const el = await harness.render(<SettingsHeaderBar />);
@@ -121,8 +120,7 @@ describe("SettingsHeaderBar accessibility and autosave", () => {
   it("hides Save and Reset and shows Autosave enabled when autosave is on", async () => {
     seedSettingsStore({
       appValues: { "settings.autosave": true },
-      isDirty: true,
-      dirtyCount: 1
+      stagedChanges: { k: 1 }
     });
     const el = await harness.render(<SettingsHeaderBar />);
 
@@ -147,9 +145,7 @@ describe("SettingsHeaderBar accessibility and autosave", () => {
     // The rows it reveals read the same staged value, so a toggle that only
     // caught up after a save would disagree with the list underneath it.
     useSettingsStore.setState({
-      stagedChanges: { "settings.showAdvanced": true },
-      isDirty: true,
-      dirtyCount: 1
+      stagedChanges: { "settings.showAdvanced": true }
     });
     const el = await harness.render(<SettingsHeaderBar />);
 
@@ -160,9 +156,7 @@ describe("SettingsHeaderBar accessibility and autosave", () => {
 
   it("honors staged autosave over the app value", async () => {
     useSettingsStore.setState({
-      stagedChanges: { "settings.autosave": true },
-      isDirty: true,
-      dirtyCount: 1
+      stagedChanges: { "settings.autosave": true }
     });
     const el = await harness.render(<SettingsHeaderBar />);
 
@@ -197,7 +191,7 @@ describe("SettingsHeaderBar saving state", () => {
       resolveSave = resolve;
     });
     const saveSettings = vi.fn(() => savePromise);
-    useSettingsStore.setState({ isDirty: true, dirtyCount: 1, saveSettings });
+    useSettingsStore.setState({ stagedChanges: { k: 1 }, saveSettings });
     const el = await harness.render(<SettingsHeaderBar />);
     const saveButton = el.querySelectorAll<HTMLButtonElement>("button")[3]!;
 

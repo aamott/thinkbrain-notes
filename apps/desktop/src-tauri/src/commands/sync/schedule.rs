@@ -219,29 +219,25 @@ pub fn record_round_trip(app_data_dir: &Path, root: &Path, succeeded: bool) {
         return;
     }
     let path = crate::commands::settings::workspace_settings_path(app_data_dir, root);
-    let contents = match crate::commands::settings::read_settings_file(&path) {
-        Ok(contents) => contents,
-        Err(error) => {
+    if let Err(error) = crate::commands::settings::update_settings_record(&path, |record| {
+        record.insert(
+            LAST_SYNCED.to_string(),
+            serde_json::Value::from(now_epoch_secs()),
+        );
+        true
+    }) {
+        match error {
             // Never write on top of a file we could not read. `parse_app_settings_record`
             // would hand back an empty map, and the write would drop `sync.destination` —
             // unlinking the vault because it synced. Missing is `Ok(None)`, which is fine
             // and lands below; this arm is a real I/O failure.
-            eprintln!("[sync] could not read settings to record the last sync time: {error:?}");
-            return;
-        }
-    };
-    let mut record = crate::commands::settings::parse_app_settings_record(contents.as_deref());
-    record.insert(
-        LAST_SYNCED.to_string(),
-        serde_json::Value::from(now_epoch_secs()),
-    );
-    match crate::commands::settings::serialize_app_settings_record(record) {
-        Ok(written) => {
-            if let Err(error) = crate::commands::workspace::write_file_atomically(&path, written) {
+            crate::commands::settings::SettingsUpdateError::Read(error) => {
+                eprintln!("[sync] could not read settings to record the last sync time: {error:?}");
+            }
+            crate::commands::settings::SettingsUpdateError::Write(error) => {
                 eprintln!("[sync] could not record the last sync time: {error:?}");
             }
         }
-        Err(error) => eprintln!("[sync] could not serialize the last sync time: {error:?}"),
     }
 }
 

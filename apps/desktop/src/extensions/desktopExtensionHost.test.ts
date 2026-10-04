@@ -146,9 +146,7 @@ describe("desktop extension host", () => {
     useSettingsStore.setState({
       appValues: {},
       workspaceValues: null,
-      stagedChanges: {},
-      isDirty: false,
-      dirtyCount: 0
+      stagedChanges: {}
     });
     const host = createDesktopExtensionHost();
     let context: DesktopExtensionContext | undefined;

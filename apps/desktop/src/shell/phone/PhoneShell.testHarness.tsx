@@ -94,7 +94,7 @@ afterEach(async () => {
 function clearStoredHub(): void {
   const appValues = { ...useSettingsStore.getState().appValues };
   delete appValues["ui.mobileHub"];
-  useSettingsStore.setState({ appValues, stagedChanges: {}, isDirty: false, dirtyCount: 0 });
+  useSettingsStore.setState({ appValues, stagedChanges: {} });
 }
 
 /** Seeds the persisted hub before a mount, the way a returning user would find it. */

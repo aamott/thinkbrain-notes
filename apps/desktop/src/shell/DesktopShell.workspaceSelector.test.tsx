@@ -48,7 +48,7 @@ function clearPlacement(): void {
   const stagedChanges = { ...useSettingsStore.getState().stagedChanges };
   delete appValues[PLACEMENT_KEY];
   delete stagedChanges[PLACEMENT_KEY];
-  useSettingsStore.setState({ appValues, stagedChanges, isDirty: false, dirtyCount: 0 });
+  useSettingsStore.setState({ appValues, stagedChanges });
 }
 
 afterEach(async () => {

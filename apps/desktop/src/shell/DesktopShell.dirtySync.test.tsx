@@ -70,7 +70,7 @@ vi.mock("../tabs/tabModel", async () => {
 import { isTauri } from "@tauri-apps/api/core";
 import { desktopTabReducer } from "../tabs/tabModel";
 import { getWorkspaceBridge } from "../extensions/workspaceBridge";
-import { useSettingsStore } from "../settings/settingsStore";
+import { selectIsDirty, useSettingsStore } from "../settings/settingsStore";
 import { ThemeProvider } from "../settings/ThemeProvider";
 import { DesktopShell } from "./DesktopShell";
 import { useShellState } from "./useShellState";
@@ -82,11 +82,9 @@ beforeEach(() => {
   vi.mocked(isTauri).mockReturnValue(false);
   // Reset the singleton settings store to a clean, non-dirty state so tests
   // start from a known baseline (other describe blocks in the same file run
-  // would otherwise leak isDirty/stagedChanges).
+  // would otherwise leak stagedChanges).
   useSettingsStore.setState({
-    isDirty: false,
-    stagedChanges: {},
-    dirtyCount: 0
+    stagedChanges: {}
   });
 });
 
@@ -97,9 +95,7 @@ afterEach(async () => {
   container = null;
   vi.mocked(desktopTabReducer).mockClear();
   useSettingsStore.setState({
-    isDirty: false,
-    stagedChanges: {},
-    dirtyCount: 0
+    stagedChanges: {}
   });
 });
 
@@ -155,7 +151,7 @@ describe("DesktopShell settings dirty-sync", () => {
     // Flipping the settings dirty flag with no settings tab open must not
     // dispatch — the effect guards on settings-tab presence.
     await act(async () => {
-      useSettingsStore.setState({ isDirty: true, stagedChanges: { "x": 1 }, dirtyCount: 1 });
+      useSettingsStore.setState({ stagedChanges: { "x": 1 } });
     });
     expect(settingsDirtyDispatchCount()).toBe(0);
   });
@@ -172,14 +168,14 @@ describe("DesktopShell settings dirty-sync", () => {
 
     // Marking settings dirty flips settingsIsDirty false→true → one dispatch.
     await act(async () => {
-      useSettingsStore.setState({ isDirty: true, stagedChanges: { "x": 1 }, dirtyCount: 1 });
+      useSettingsStore.setState({ stagedChanges: { "x": 1 } });
     });
     expect(settingsDirtyDispatchCount()).toBe(2);
     expect(container!.querySelector('[aria-label="Unsaved changes"]')).not.toBeNull();
 
     // Clearing settings dirty flips settingsIsDirty true→false → one dispatch.
     await act(async () => {
-      useSettingsStore.setState({ isDirty: false, stagedChanges: {}, dirtyCount: 0 });
+      useSettingsStore.setState({ stagedChanges: {} });
     });
     expect(settingsDirtyDispatchCount()).toBe(3);
     expect(container!.querySelector('[aria-label="Unsaved changes"]')).toBeNull();
@@ -231,7 +227,7 @@ describe("DesktopShell settings dirty-sync", () => {
 
     // Now flip the dirty flag — no settings tab, so no dispatch.
     await act(async () => {
-      useSettingsStore.setState({ isDirty: true, stagedChanges: { "x": 1 }, dirtyCount: 1 });
+      useSettingsStore.setState({ stagedChanges: { "x": 1 } });
     });
     expect(settingsDirtyDispatchCount()).toBe(baseline);
   });
@@ -242,7 +238,7 @@ describe("DesktopShell settings dirty-sync", () => {
 
     await act(async () => bridge.openTab("settings", "Settings"));
     await act(async () => {
-      useSettingsStore.setState({ isDirty: true, stagedChanges: { "x": 1 }, dirtyCount: 1 });
+      useSettingsStore.setState({ stagedChanges: { "x": 1 } });
     });
     await click(container!.querySelector('[aria-label="Close Settings"]')!);
 
@@ -258,18 +254,16 @@ describe("DesktopShell settings dirty-sync", () => {
 
     expect(container!.querySelector('[role="dialog"][aria-label="Unsaved changes"]')).toBeNull();
     expect(container!.querySelector('[aria-label="Close Settings"]')).not.toBeNull();
-    expect(useSettingsStore.getState().isDirty).toBe(true);
+    expect(selectIsDirty(useSettingsStore.getState())).toBe(true);
   });
 
   it("discards dirty settings through resetStaged before closing", async () => {
     const resetStaged = vi.fn(() => {
-      useSettingsStore.setState({ stagedChanges: {}, isDirty: false, dirtyCount: 0 });
+      useSettingsStore.setState({ stagedChanges: {} });
     });
     useSettingsStore.setState({
       resetStaged,
-      isDirty: true,
-      stagedChanges: { "x": 1 },
-      dirtyCount: 1
+      stagedChanges: { "x": 1 }
     });
     await renderShell();
     const bridge = getWorkspaceBridge()!;
@@ -281,16 +275,14 @@ describe("DesktopShell settings dirty-sync", () => {
     expect(resetStaged).toHaveBeenCalledTimes(1);
     expect(container!.querySelector('[aria-label="Close Settings"]')).toBeNull();
     expect(container!.querySelector('[role="dialog"]')).toBeNull();
-    expect(useSettingsStore.getState().isDirty).toBe(false);
+    expect(selectIsDirty(useSettingsStore.getState())).toBe(false);
   });
 
   it("saves dirty settings before closing when Save and close is chosen", async () => {
     const saveSettings = vi.fn(async () => ({ success: true as const, diagnostics: [] }));
     useSettingsStore.setState({
       saveSettings,
-      isDirty: true,
-      stagedChanges: { "x": 1 },
-      dirtyCount: 1
+      stagedChanges: { "x": 1 }
     });
     await renderShell();
     const bridge = getWorkspaceBridge()!;
