@@ -14,6 +14,7 @@
 //! file is still selectable (and the frontend's parser will surface the error
 //! when the user picks it).
 
+use crate::commands::workspace::ContainedPathFailure;
 use crate::error::{NativeError, failed};
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -245,29 +246,23 @@ pub fn read_theme_file(app: tauri::AppHandle, path: String) -> Result<Option<Str
 
 /// Resolves an existing theme file and rejects paths outside the themes directory.
 fn resolve_theme_file_path(themes_dir: &Path, path: &Path) -> Result<PathBuf, NativeError> {
-    let canonical_themes_dir = themes_dir.canonicalize().map_err(|error| {
-        failed(
+    match super::workspace::resolve_contained_existing_path(themes_dir, path) {
+        Ok((_, canonical_path)) => Ok(canonical_path),
+        Err(ContainedPathFailure::Base(error)) => Err(failed(
             "themes.read_failed",
             "Failed to resolve the themes directory.",
             error,
-        )
-    })?;
-    let canonical_path = path.canonicalize().map_err(|error| {
-        failed(
+        )),
+        Err(ContainedPathFailure::Target(error)) => Err(failed(
             "themes.read_failed",
             "Failed to resolve the theme file.",
             error,
-        )
-    })?;
-
-    if !canonical_path.starts_with(&canonical_themes_dir) {
-        return Err(NativeError::new(
+        )),
+        Err(ContainedPathFailure::Outside) => Err(NativeError::new(
             "themes.path_outside_themes_dir",
             "Theme file path must stay inside the themes directory.",
-        ));
+        )),
     }
-
-    Ok(canonical_path)
 }
 
 /// Returns true if the path has the `.tbtheme.json` extension (case-sensitive).

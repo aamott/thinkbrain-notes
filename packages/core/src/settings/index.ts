@@ -3,7 +3,7 @@
  *
  * Re-exports the type system, registry, defaults, validation, and built-in
  * modules. `SettingsDiagnostic` is NOT re-exported from this barrel at all —
- * it is declared by the legacy persistence layer (`../settings`) and surfaced
+ * it is declared by `./internal` and surfaced through `../settings`,
  * to consumers only via `packages/core/src/index.ts` line 68
  * (`export * from "./settings"`). Keeping it out of this barrel avoids a
  * duplicate-export collision with `../settings` under TS `export *` semantics

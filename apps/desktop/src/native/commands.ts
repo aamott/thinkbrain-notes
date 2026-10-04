@@ -471,18 +471,10 @@ export interface NativeMarkdownFileContents {
   readonly contents: string;
 }
 
-export interface NativeTextFileContents {
-  readonly relative_path: string;
-  readonly contents: string;
-}
+/** The text-file commands share the markdown file shapes. */
+export type NativeTextFileContents = NativeMarkdownFileContents;
 
-export interface NativeTextFileEntry {
-  readonly relative_path: string;
-  readonly file_name: string;
-  readonly parent_path: string;
-  readonly byte_size: number;
-  readonly updated_at: string | null;
-}
+export type NativeTextFileEntry = NativeMarkdownFileEntry;
 
 export interface NativeWorkspaceEntry {
   readonly relative_path: string;
@@ -575,19 +567,18 @@ export interface NativeSearchHit {
 
 export type NativeMetadataValue = string | number;
 
+/** One metadata key and every value it holds — sent in as fields, returned as facets. */
 export interface NativeMetadataField {
   readonly key: string;
   readonly values: readonly NativeMetadataValue[];
 }
 
+/** The query-result name for `NativeMetadataField`; the shapes are identical. */
+export type NativeMetadataFacet = NativeMetadataField;
+
 export interface NativeMetadataPredicate {
   readonly key: string;
   readonly value: NativeMetadataValue;
-}
-
-export interface NativeMetadataFacet {
-  readonly key: string;
-  readonly values: readonly NativeMetadataValue[];
 }
 
 export interface NativeMetadataQueryResult {

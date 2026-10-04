@@ -549,7 +549,7 @@ fn markdown_commands_reject_symlink_escapes_from_the_workspace() {
     // workspace would read and overwrite files the workspace never covered.
     symlink(&secret, root.join("innocent.md")).expect("symlink is created");
 
-    let read_escape = read_note(&root.to_string_lossy(), "innocent.md", None);
+    let read_escape = read_note(&root.to_string_lossy(), "innocent.md");
     assert!(
         read_escape.is_err(),
         "reading through a symlink must be refused"
@@ -619,6 +619,46 @@ fn restoring_a_version_keeps_the_one_it_replaced() {
     fs::remove_dir_all(&app_data).ok();
 }
 
+/// `write_text_file` keeps backups too, so the restore picks its writer by
+/// the file's extension — assuming Markdown would bounce every non-note
+/// restore off the `.md` check.
+#[test]
+fn restoring_a_version_works_for_plain_text_files() {
+    let root = temp_test_dir("restore-text");
+    let app_data = temp_test_dir("restore-text-appdata");
+    let file = root.join("config.txt");
+
+    fs::write(&file, "the good version\n").expect("the file is written");
+    write_document(
+        &root.to_string_lossy(),
+        "config.txt",
+        "the damaged version\n".to_string(),
+        None,
+        Some(&app_data),
+        DocumentKind::Text,
+    )
+    .expect("the damaging save goes through");
+
+    let kept = list_note_backups(&app_data, &root, "config.txt");
+    assert_eq!(kept.len(), 1, "the good version was not kept");
+
+    restore_note_version(
+        &root.to_string_lossy(),
+        "config.txt",
+        &kept[0].to_string_lossy(),
+        &app_data,
+    )
+    .expect("the text restore succeeds");
+
+    assert_eq!(
+        fs::read_to_string(&file).expect("the file is readable"),
+        "the good version\n"
+    );
+
+    fs::remove_dir_all(&root).ok();
+    fs::remove_dir_all(&app_data).ok();
+}
+
 /// A restore may only read from this workspace's own backup folder.
 ///
 /// The path comes from the frontend, so it is not trusted: without this, a
@@ -663,8 +703,8 @@ fn a_note_that_cannot_be_decoded_is_reported_as_damaged() {
     // A lone 0xFF is not valid UTF-8 in any position.
     fs::write(root.join("note.md"), [b'#', b' ', 0xFF, b'\n']).expect("the note is written");
 
-    let failure = read_note(&root.to_string_lossy(), "note.md", None)
-        .expect_err("an undecodable note is refused");
+    let failure =
+        read_note(&root.to_string_lossy(), "note.md").expect_err("an undecodable note is refused");
 
     assert_eq!(failure.code, "workspace.note_unreadable");
     fs::remove_dir_all(&root).ok();
@@ -683,8 +723,8 @@ fn an_empty_note_with_nothing_kept_opens_normally() {
     let app_data = temp_test_dir("read-empty-new-appdata");
     fs::write(root.join("fresh.md"), "").expect("the note is written");
 
-    let read = read_note(&root.to_string_lossy(), "fresh.md", Some(&app_data))
-        .expect("a genuinely new empty note opens");
+    let read =
+        read_note(&root.to_string_lossy(), "fresh.md").expect("a genuinely new empty note opens");
 
     assert_eq!(read.contents, "");
     fs::remove_dir_all(&root).ok();

@@ -49,8 +49,6 @@ beforeEach(() => {
     appValues: {},
     workspaceValues: null,
     workspaceRootPath: null,
-    rawAppSettingsJson: null,
-    rawWorkspaceSettingsJson: null,
     stagedChanges: {},
     isDirty: false,
     dirtyCount: 0,

@@ -1,6 +1,6 @@
 import type { NoteDiagnostic } from "../note-model";
 import { compareJournalEntries, UNDATED, type JournalFilenameResult } from "./filename";
-import { formatJournalDate, sameDate } from "./frontmatter";
+import { formatJournalDate } from "./frontmatter";
 import type { JournalDate, JournalEntryRef, JournalFieldValue } from "./types";
 
 /**
@@ -136,35 +136,6 @@ function isDated(entry: CalendarEntry): entry is DatedEntry {
 
 function byChronology(left: DatedEntry, right: DatedEntry): number {
   return compareJournalEntries(left.ref, right.ref);
-}
-
-/** Entries on one day, chronological. Undated entries belong to no day (D38). */
-export function filterEntriesByDay(
-  entries: readonly CalendarEntry[],
-  day: JournalDate
-): readonly CalendarEntry[] {
-  return entries
-    .filter(isDated)
-    .filter((entry) => sameDate(entry.ref.date, day))
-    .sort(byChronology);
-}
-
-/**
- * Applies the shared filter state to a list of entries.
- *
- * The popout and the calendar run the same predicates over the same entries, so
- * a day's dot count and the list below it can never disagree (D25).
- */
-export function filterEntries(
-  entries: readonly CalendarEntry[],
-  filter: CalendarFilter
-): readonly CalendarEntry[] {
-  const day = filter.selectedDay;
-  return entries.filter(
-    (entry) =>
-      matchesPredicates(entry, filter.predicates) &&
-      (day === null || (isDated(entry) && sameDate(entry.ref.date, day)))
-  );
 }
 
 /** Collects every distinct value per field, in the order first seen (D43). */

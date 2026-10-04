@@ -227,12 +227,13 @@ describe("settingsStore", () => {
     });
 
     /**
-     * The bug this pins: `rawAppSettingsJson` is a load-time snapshot.
+     * The bug this pins: the raw JSON read at load is a snapshot.
      * `update_desktop_state` writes to the same document on every tab open,
      * panel resize, or workspace switch — all of which happen after load and
      * before the user presses Save. A save that serializes against the
      * snapshot instead of the document as it is right now reverts every one of
-     * those changes.
+     * those changes, so the store serializes inside the write callback against
+     * whatever the gateway currently holds.
      */
     it("does not revert desktopState written since the store loaded", async () => {
       const gateway = createMockGateway(APP_JSON_WITH_DESKTOP_STATE);
@@ -240,7 +241,7 @@ describe("settingsStore", () => {
       await store.getState().loadSettings(null);
 
       // A tab opened after load, via `update_desktop_state` — not through this
-      // store, so `rawAppSettingsJson` never saw it.
+      // store, so the snapshot read at load never saw it.
       gateway.setAppDocument(
         JSON.stringify({
           version: 1,

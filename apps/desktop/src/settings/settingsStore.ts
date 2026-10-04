@@ -129,10 +129,6 @@ export interface SettingsStoreState {
   workspaceValues: Record<string, unknown> | null;
   /** The root path of the currently loaded workspace, if any. */
   workspaceRootPath: string | null;
-  /** Raw app settings JSON from the last load (for serialize-preserving desktopState). */
-  rawAppSettingsJson: string | null;
-  /** Raw workspace settings JSON from the last load (for serialize-preserving keys). */
-  rawWorkspaceSettingsJson: string | null;
 
   // --- Staged changes ---
   /** Pending changes keyed by full setting key, not yet persisted. */
@@ -204,8 +200,6 @@ export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettin
     appValues: {},
     workspaceValues: null,
     workspaceRootPath: null,
-    rawAppSettingsJson: null,
-    rawWorkspaceSettingsJson: null,
 
     // --- Staged changes ---
     stagedChanges: {},
@@ -253,8 +247,6 @@ export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettin
           appValues: appResult.values,
           workspaceValues,
           workspaceRootPath: rootPath,
-          rawAppSettingsJson: rawAppJson,
-          rawWorkspaceSettingsJson: rawWorkspaceJson,
           stagedChanges: {},
           isDirty: false,
           dirtyCount: 0,
@@ -410,11 +402,9 @@ export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettin
         };
         if (appMerged !== null && appSerialized !== null) {
           next.appValues = appMerged;
-          next.rawAppSettingsJson = appSerialized;
         }
         if (workspaceMerged !== null && workspaceSerialized !== null) {
           next.workspaceValues = workspaceMerged;
-          next.rawWorkspaceSettingsJson = workspaceSerialized;
         }
         const stranded = Object.keys(workspaceStaged).filter((key) => !persisted.has(key));
         if (stranded.length > 0) {

@@ -38,19 +38,25 @@ export function assertNeverSettingType(def: never): never {
   );
 }
 
+export type SettingsDiagnosticSeverity = "error" | "warning";
+
+/**
+ * A non-throwing settings diagnostic: something in the document could not be
+ * used as written, and a fallback was taken instead.
+ */
+export interface SettingsDiagnostic {
+  readonly code: string;
+  readonly message: string;
+  readonly severity: SettingsDiagnosticSeverity;
+  readonly path?: string;
+}
+
 /**
  * Diagnostic shape returned by {@link readSettingsVersion}.
  *
- * Structurally compatible with `SettingsDiagnostic` (declared in `../settings`)
- * so callers can use the result without an explicit cast. Defined locally to
- * keep this leaf module free of imports from the settings persistence layer.
+ * The same shape as {@link SettingsDiagnostic}, named for the call site.
  */
-export interface SettingsVersionDiagnostic {
-  readonly code: string;
-  readonly message: string;
-  readonly severity: "error" | "warning";
-  readonly path?: string;
-}
+export type SettingsVersionDiagnostic = SettingsDiagnostic;
 
 /**
  * Reads and validates the `version` field from a raw settings record.

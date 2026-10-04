@@ -27,14 +27,21 @@ pub fn get_search_connection(
     app: &tauri::AppHandle,
     root_path: &str,
 ) -> Result<Arc<Mutex<Connection>>, NativeError> {
+    // The index file is named from the canonical root's hash, so the pool keys
+    // by that root too — otherwise two spellings of one vault would hold two
+    // connections to the same SQLite file.
+    let canonical_root = resolve_workspace_root(root_path)?
+        .to_string_lossy()
+        .to_string();
+
     let mut lock = lock_or_recover(&SEARCH_CONNECTIONS);
     let pool = lock.get_or_insert_with(HashMap::new);
-    if let Some(conn) = pool.get(root_path) {
+    if let Some(conn) = pool.get(&canonical_root) {
         return Ok(conn.clone());
     }
-    let conn = open_index_connection(app, root_path)?;
+    let conn = open_index_connection(app, &canonical_root)?;
     let arc = Arc::new(Mutex::new(conn));
-    pool.insert(root_path.to_string(), arc.clone());
+    pool.insert(canonical_root, arc.clone());
     Ok(arc)
 }
 

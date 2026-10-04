@@ -1,18 +1,15 @@
 /**
  * Dynamic settings persistence (registry-backed key-value model).
  *
- * These functions coexist with the legacy fixed-shape API in `../settings.ts`.
- * They operate on a flat `fullKey -> value` record driven by the registry,
- * while preserving the `desktopState` nested key and any other non-setting keys
- * in the same JSON document. The legacy `parseAppSettings` /
- * `serializeAppSettings` remain intact so `desktopState.ts` and existing tests
- * keep working.
+ * These functions operate on a flat `fullKey -> value` record driven by the
+ * registry, while preserving the `desktopState` nested key and any other
+ * non-setting keys in the same JSON document.
  */
 
 import type { SettingsRegistry } from "./registry";
 import { extractDefaults } from "./defaults";
 import { validateSettings } from "./validation";
-import type { SettingsDiagnostic } from "../settings";
+import type { SettingsDiagnostic } from "./internal";
 import type { SettingScope } from "./types";
 import {
   CURRENT_SETTINGS_VERSION,
@@ -154,8 +151,7 @@ export function parseDynamicAppSettings(
  * `CURRENT_SETTINGS_VERSION`, never lower than it already was), the flat setting
  * keys for the given scope, and any other non-setting keys (e.g. `desktopState`,
  * extension metadata) from `existingRawJson`. Pretty-printed with 2-space
- * indent and a trailing newline, matching the existing `serializeAppSettings`
- * style.
+ * indent and a trailing newline, matching the settings serialization style.
  *
  * Args:
  *   values: Flat `fullKey -> value` map of settings to write.
@@ -237,13 +233,12 @@ export function serializeDynamicAppSettings(
 /**
  * Runs registry migrations on a raw settings record in version order.
  *
- * Mirrors the version-tracking pattern from the legacy `migrateSettingsObject`
- * but operates on the flat key-value record using the registry's
+ * Operates on the flat key-value record using the registry's
  * `getMigrations()` list. Migrations are applied in ascending `fromVersion`
  * order; each step transforms the record and advances the version field. The
  * `desktopState` nested key and other non-setting keys pass through untouched.
  *
- * Unlike the legacy strict check, the dynamic system tolerates gaps in
+ * Rather than requiring an unbroken chain, the dynamic system tolerates gaps in
  * migration chains (e.g. from extensions): when a step's `fromVersion` does
  * not match the record's current version, the step is skipped and a warning
  * diagnostic is emitted rather than throwing. The caller decides whether to
