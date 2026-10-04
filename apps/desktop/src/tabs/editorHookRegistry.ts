@@ -60,25 +60,26 @@ export function createDesktopEditorHookRegistry<Payload = void, Context = unknow
       })
       .map(({ contribution }) => contribution);
 
-  const getExtensions = (payload: Payload, context: Context): readonly Extension[] => {
-    const extensions: Extension[] = [];
-    for (const contribution of orderedEntries()) {
-      if (contribution.extensions) {
-        extensions.push(...contribution.extensions(payload, context));
+  type Contribution = DesktopEditorHookContribution<Payload, Context>;
+  const collect = <T>(
+    pick: (
+      contribution: Contribution
+    ) => ((payload: Payload, context: Context) => readonly T[]) | undefined
+  ) => {
+    return (payload: Payload, context: Context): readonly T[] => {
+      const collected: T[] = [];
+      for (const contribution of orderedEntries()) {
+        const provide = pick(contribution);
+        if (provide) {
+          collected.push(...provide(payload, context));
+        }
       }
-    }
-    return extensions;
+      return collected;
+    };
   };
 
-  const getKeybindings = (payload: Payload, context: Context): readonly KeyBinding[] => {
-    const keybindings: KeyBinding[] = [];
-    for (const contribution of orderedEntries()) {
-      if (contribution.keybindings) {
-        keybindings.push(...contribution.keybindings(payload, context));
-      }
-    }
-    return keybindings;
-  };
+  const getExtensions = collect<Extension>((contribution) => contribution.extensions);
+  const getKeybindings = collect<KeyBinding>((contribution) => contribution.keybindings);
 
   return {
     register: coreRegistry.register,

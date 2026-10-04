@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import {
   recallEditorState,
-  releaseEditorState,
   releaseEditorStatesExcept,
   rememberEditorState
 } from "./editorStateCache";
@@ -36,7 +35,7 @@ describe("what the editor parks between tab switches", () => {
     park("tab-a", "alpha");
     park("tab-b", "beta");
 
-    releaseEditorState("tab-a");
+    releaseEditorStatesExcept(new Set(["tab-b"]));
 
     expect(recallEditorState("tab-a")).toBeUndefined();
     expect(parkedDoc("tab-b")).toBe("beta");

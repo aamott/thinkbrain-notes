@@ -1,6 +1,6 @@
-import { convertFileSrc } from "@tauri-apps/api/core";
-import { useRef, useState } from "react";
+import { useState } from "react";
 
+import { createVaultAssetResolver } from "../native/assets";
 import { Unavailable } from "../shell/Unavailable";
 
 export interface MediaViewerProps {
@@ -8,16 +8,15 @@ export interface MediaViewerProps {
   readonly relativePath: string | null;
 }
 
-/** Builds the `asset://` URL for a workspace file via Tauri's asset protocol. */
+/** Builds the `asset://` URL for a vault-relative file, refusing escapes. */
 function mediaUrl(rootPath: string | null, relativePath: string | null): string | null {
   if (!rootPath || !relativePath) return null;
-  return convertFileSrc(`${rootPath}/${relativePath}`);
+  return createVaultAssetResolver(rootPath, "")(relativePath);
 }
 
 /** Read-only image viewer with scroll-wheel zoom and fit-to-container. */
 export function ImageViewer({ rootPath, relativePath }: MediaViewerProps) {
   const url = mediaUrl(rootPath, relativePath);
-  const imgRef = useRef<HTMLImageElement>(null);
   const [zoom, setZoom] = useState(1);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState(false);
@@ -39,7 +38,6 @@ export function ImageViewer({ rootPath, relativePath }: MediaViewerProps) {
         <Unavailable title="Image" description="The image could not be loaded." />
       ) : (
         <img
-          ref={imgRef}
           src={url}
           alt={relativePath ?? "image"}
           className="max-h-full max-w-full select-none object-contain"
@@ -58,53 +56,52 @@ export function ImageViewer({ rootPath, relativePath }: MediaViewerProps) {
   );
 }
 
-/** Read-only audio player using the native `<audio>` element. */
-export function AudioViewer({ rootPath, relativePath }: MediaViewerProps) {
+interface MediaPlayerProps extends MediaViewerProps {
+  readonly element: "audio" | "video";
+  /** Display name used in unavailable/empty states ("Audio", "Video"). */
+  readonly label: string;
+}
+
+/** Read-only player for `<audio>`/`<video>` files. */
+function MediaPlayer({ element: Element, label, rootPath, relativePath }: MediaPlayerProps) {
   const url = mediaUrl(rootPath, relativePath);
   const [error, setError] = useState(false);
 
   if (!url) {
-    return <Unavailable title="Audio" description="No file path provided." />;
+    return <Unavailable title={label} description="No file path provided." />;
   }
 
   if (error) {
-    return <Unavailable title="Audio" description="The audio file could not be loaded." />;
+    return (
+      <Unavailable
+        title={label}
+        description={`The ${label.toLowerCase()} file could not be loaded.`}
+      />
+    );
   }
 
+  const isAudio = Element === "audio";
   return (
-    <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 bg-editor">
-      <span className="text-sm text-muted-foreground">{relativePath}</span>
-      <audio
+    <div
+      className={`flex min-h-0 flex-1 items-center justify-center bg-editor ${isAudio ? "flex-col gap-4" : ""}`}
+    >
+      {isAudio && <span className="text-sm text-muted-foreground">{relativePath}</span>}
+      <Element
         src={url}
         controls
-        className="w-full max-w-md"
+        className={isAudio ? "w-full max-w-md" : "max-h-full max-w-full"}
         onError={() => setError(true)}
       />
     </div>
   );
 }
 
+/** Read-only audio player using the native `<audio>` element. */
+export function AudioViewer(props: MediaViewerProps) {
+  return <MediaPlayer {...props} element="audio" label="Audio" />;
+}
+
 /** Read-only video player using the native `<video>` element. */
-export function VideoViewer({ rootPath, relativePath }: MediaViewerProps) {
-  const url = mediaUrl(rootPath, relativePath);
-  const [error, setError] = useState(false);
-
-  if (!url) {
-    return <Unavailable title="Video" description="No file path provided." />;
-  }
-
-  if (error) {
-    return <Unavailable title="Video" description="The video file could not be loaded." />;
-  }
-
-  return (
-    <div className="flex min-h-0 flex-1 items-center justify-center bg-editor">
-      <video
-        src={url}
-        controls
-        className="max-h-full max-w-full"
-        onError={() => setError(true)}
-      />
-    </div>
-  );
+export function VideoViewer(props: MediaViewerProps) {
+  return <MediaPlayer {...props} element="video" label="Video" />;
 }

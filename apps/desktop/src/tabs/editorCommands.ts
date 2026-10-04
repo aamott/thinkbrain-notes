@@ -82,10 +82,6 @@ export function notifyEditorCommands(tabId: string): void {
   announce();
 }
 
-/** The commands registered for `tabId`, or null when nothing offers any. */
-export function getEditorCommands(tabId: string): EditorCommands | null {
-  return entries.get(tabId)?.commands ?? null;
-}
 
 /**
  * Undo/redo wired to a CodeMirror view — the base of what every editable

@@ -6,7 +6,6 @@ import { PanelBoundary } from "./PanelBoundary";
 import { PanelTitle } from "./PanelTitle";
 import { MountedPanel } from "./panelRegistry";
 import {
-  getDesktopPanelOrUndefined,
   type DesktopPanelContribution,
   type DesktopPanelContext,
   type LeftPanelContext,
@@ -74,9 +73,7 @@ export function Popout<Ctx extends LeftPanelContext | RightPanelContext>({
   readonly onBack?: () => void;
   readonly workspaceSelectorInPanel?: boolean;
 }): ReactNode {
-  // The registry owns panel metadata, while the caller owns which panel
-  // contributions are rendered; the two sources are intentionally separate.
-  const contribution = getDesktopPanelOrUndefined(panel);
+  const contribution = contributions.find((candidate) => candidate.id === panel);
   const className = `${SHARED_CLASS} ${SIDE_CLASS[side]}`;
 
   if (!contribution) {

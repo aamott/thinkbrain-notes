@@ -148,7 +148,7 @@ export function createFileTab(resource: Required<TabResource>): DesktopTab {
 }
 
 /** Stable identity for the comparison of one conflict. */
-export function conflictTabId(resource: Required<TabResource>): string {
+function conflictTabId(resource: Required<TabResource>): string {
   return `merge:${encodeURIComponent(resource.rootPath)}:${encodeURIComponent(resource.relativePath)}`;
 }
 

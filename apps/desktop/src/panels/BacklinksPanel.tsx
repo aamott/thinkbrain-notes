@@ -1,6 +1,7 @@
 import { getBacklinkDetails } from "@thinkbrain/core";
 
 import { Unavailable } from "../shell/Unavailable";
+import { noteTitle } from "../lib/utils";
 import { useWikiLinkIndexStore } from "../wikiLinks/wikiLinkIndexStore";
 
 export interface BacklinksPanelProps {
@@ -73,9 +74,8 @@ export function BacklinksPanel({
           const entry = noteIndex.find(
             (candidate) => candidate.relativePath === detail.relativePath
           );
-          const metadataTitle = entry?.title?.trim();
           const fileName = detail.relativePath.split("/").pop() ?? detail.relativePath;
-          const title = metadataTitle || fileName.replace(/\.md$/i, "");
+          const title = noteTitle(entry?.title, fileName);
 
           return (
             <li key={detail.relativePath}>

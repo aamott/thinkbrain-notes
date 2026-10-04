@@ -1,6 +1,6 @@
 import { Decoration } from "@codemirror/view";
 
-import type { NodeHandler } from "../decorate";
+import { decorateLines, type NodeHandler } from "../decorate";
 import { selectionTouchesLine, selectionTouchesRange } from "../reveal";
 
 /**
@@ -21,19 +21,10 @@ const inlineCode: NodeHandler = (node, ctx) => {
 
 const fencedCode: NodeHandler = (node, ctx) => {
   const { doc } = ctx.state;
-  const firstLine = doc.lineAt(node.from).number;
-  const lastLine = doc.lineAt(node.to).number;
-
-  for (let lineNumber = firstLine; lineNumber <= lastLine; lineNumber++) {
-    const line = doc.line(lineNumber);
-    const edge =
-      lineNumber === firstLine
-        ? " cm-code-line-first"
-        : lineNumber === lastLine
-          ? " cm-code-line-last"
-          : "";
-    ctx.present(Decoration.line({ class: `cm-code-line${edge}` }), line.from, line.from);
-  }
+  decorateLines(ctx, node, "cm-code-line", {
+    first: " cm-code-line-first",
+    last: " cm-code-line-last"
+  });
 
   // Conceal each fence across its whole line so the info string (```js) goes
   // with it; `getChildren` yields the opening fence first.

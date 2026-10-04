@@ -12,7 +12,7 @@ import { EditorView } from "@codemirror/view";
 import { undo } from "@codemirror/commands";
 
 import { MarkdownEditor } from "./MarkdownEditor";
-import { releaseEditorState, releaseEditorStatesExcept } from "./editorStateCache";
+import { releaseEditorStatesExcept } from "./editorStateCache";
 
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
@@ -360,7 +360,7 @@ describe("switching tabs away and back", () => {
 
     await act(async () => root?.unmount());
     container?.remove();
-    releaseEditorState("tab-a");
+    releaseEditorStatesExcept(new Set());
     const reopened = await mount(
       <MarkdownEditor value={NOTE} stateKey="tab-a" onChange={() => {}} onSave={() => {}} />
     );

@@ -1,6 +1,6 @@
 import { Decoration } from "@codemirror/view";
 
-import type { NodeHandler } from "../decorate";
+import { decorateLines, type NodeHandler } from "../decorate";
 import { selectionTouchesLine } from "../reveal";
 
 /**
@@ -17,14 +17,7 @@ import { selectionTouchesLine } from "../reveal";
  */
 
 const table: NodeHandler = (node, ctx) => {
-  const { doc } = ctx.state;
-  const firstLine = doc.lineAt(node.from).number;
-  const lastLine = doc.lineAt(node.to).number;
-
-  for (let lineNumber = firstLine; lineNumber <= lastLine; lineNumber++) {
-    const line = doc.line(lineNumber);
-    ctx.present(Decoration.line({ class: "cm-table-line" }), line.from, line.from);
-  }
+  decorateLines(ctx, node, "cm-table-line");
 };
 
 const tableHeader: NodeHandler = (node, ctx) => {
