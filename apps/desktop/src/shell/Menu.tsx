@@ -1,6 +1,8 @@
 import {
   useEffect,
+  useLayoutEffect,
   useRef,
+  useState,
   type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
@@ -61,8 +63,9 @@ export function Menu({
   readonly id?: string;
   /**
    * Where the pointer was, for a menu that belongs to a place rather than to a
-   * control. Rendered exactly there — no measuring, no second-pass
-   * repositioning, so the menu can never paint and then jump.
+   * control. Rendered there — measured before paint and flipped onto the other
+   * side of the pointer only when it would otherwise run off the window, so it
+   * can never paint and then jump.
    */
   readonly at?: MenuPosition;
   /** Placement for a menu that hangs off a control. Ignored when `at` is set. */
@@ -80,6 +83,22 @@ export function Menu({
   readonly children: ReactNode;
 }) {
   const menuRef = useRef<HTMLDivElement>(null);
+
+  // Where the menu actually lands. It starts at the pointer; a layout effect —
+  // which runs before the browser paints — measures the mounted menu and flips
+  // it to open upward (bottom edge at the pointer) or leftward only when it
+  // would overflow the window, so the wrong position is never seen.
+  const [position, setPosition] = useState(at);
+  useLayoutEffect(() => {
+    if (!at) return;
+    const rect = menuRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const next: MenuPosition = {
+      x: at.x + rect.width > window.innerWidth ? Math.max(0, at.x - rect.width) : at.x,
+      y: at.y + rect.height > window.innerHeight ? Math.max(0, at.y - rect.height) : at.y,
+    };
+    setPosition((prev) => (prev?.x === next.x && prev?.y === next.y ? prev : next));
+  }, [at]);
 
   // The item to land on: whichever one is already the answer, or the first.
   // Opening a list of workspaces on the one you are in is the difference
@@ -123,7 +142,10 @@ export function Menu({
   };
 
   const placement: { className: string; style?: CSSProperties } = at
-    ? { className: "fixed z-50", style: { left: `${at.x}px`, top: `${at.y}px` } }
+    ? {
+        className: "fixed z-50",
+        style: { left: `${position?.x ?? at.x}px`, top: `${position?.y ?? at.y}px` },
+      }
     : { className: className ?? "" };
 
   const surface = (

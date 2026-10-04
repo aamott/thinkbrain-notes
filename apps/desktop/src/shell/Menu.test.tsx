@@ -22,6 +22,7 @@ afterEach(async () => {
   container?.remove();
   root = null;
   container = null;
+  vi.restoreAllMocks();
 });
 
 const render = async (element: React.ReactElement): Promise<HTMLDivElement> => {
@@ -155,6 +156,13 @@ describe("how a menu closes", () => {
 });
 
 describe("a menu raised at the pointer", () => {
+  // happy-dom measures every element as a zero rect; the flip logic needs a
+  // real size, so the menu's is stubbed.
+  const stubMenuRect = (width: number, height: number) =>
+    vi
+      .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+      .mockReturnValue({ width, height, top: 0, left: 0, right: width, bottom: height, x: 0, y: 0 } as DOMRect);
+
   it("opens exactly where the pointer was", async () => {
     await render(
       <Menu label="At the pointer" at={{ x: 120, y: 240 }} onClose={() => undefined}>
@@ -168,5 +176,55 @@ describe("a menu raised at the pointer", () => {
     const menu = document.querySelector<HTMLDivElement>("[role='menu']");
     expect(menu?.style.left).toBe("120px");
     expect(menu?.style.top).toBe("240px");
+  });
+
+  it("keeps its top at the pointer while there is still room below", async () => {
+    stubMenuRect(160, 120);
+    await render(
+      <Menu label="At the pointer" at={{ x: 120, y: 240 }} onClose={() => undefined}>
+        <MenuButton label="One" onClick={() => undefined} />
+      </Menu>
+    );
+
+    const menu = document.querySelector<HTMLDivElement>("[role='menu']");
+    expect(menu?.style.top).toBe("240px");
+  });
+
+  it("anchors its bottom edge at the pointer when it would run off the window's", async () => {
+    stubMenuRect(160, 120);
+    const y = window.innerHeight - 20; // 100px short of fitting below
+    await render(
+      <Menu label="At the pointer" at={{ x: 120, y }} onClose={() => undefined}>
+        <MenuButton label="One" onClick={() => undefined} />
+      </Menu>
+    );
+
+    const menu = document.querySelector<HTMLDivElement>("[role='menu']");
+    expect(menu?.style.top).toBe(`${y - 120}px`);
+  });
+
+  it("anchors its right edge at the pointer when it would run off the window's", async () => {
+    stubMenuRect(160, 120);
+    const x = window.innerWidth - 20; // 140px short of fitting rightward
+    await render(
+      <Menu label="At the pointer" at={{ x, y: 240 }} onClose={() => undefined}>
+        <MenuButton label="One" onClick={() => undefined} />
+      </Menu>
+    );
+
+    const menu = document.querySelector<HTMLDivElement>("[role='menu']");
+    expect(menu?.style.left).toBe(`${x - 160}px`);
+  });
+
+  it("clamps to the window's top when the menu is taller than the space above the pointer", async () => {
+    stubMenuRect(160, window.innerHeight + 50); // taller than the window itself
+    await render(
+      <Menu label="At the pointer" at={{ x: 120, y: window.innerHeight - 20 }} onClose={() => undefined}>
+        <MenuButton label="One" onClick={() => undefined} />
+      </Menu>
+    );
+
+    const menu = document.querySelector<HTMLDivElement>("[role='menu']");
+    expect(menu?.style.top).toBe("0px");
   });
 });
