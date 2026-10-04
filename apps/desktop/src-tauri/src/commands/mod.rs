@@ -32,6 +32,7 @@ pub mod backup;
 pub mod clipboard;
 pub mod extensions;
 pub mod markdown;
+pub mod media;
 pub mod search;
 pub mod settings;
 pub mod sync;
@@ -65,6 +66,7 @@ macro_rules! app_command_list {
         markdown::create_markdown_file,
         text_files::read_text_file,
         text_files::write_text_file,
+        media::read_media_file,
         workspace::create_workspace_file,
         workspace::create_workspace_folder,
         workspace::rename_workspace_entry,
@@ -181,7 +183,7 @@ mod tests {
         );
         assert_eq!(
             APP_COMMAND_PATHS.len(),
-            57,
+            58,
             "the number of registered commands changed; update this count if it was deliberate"
         );
     }

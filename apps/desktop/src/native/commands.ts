@@ -120,6 +120,20 @@ export interface NativeCommandMap {
     };
     readonly result: NativeTextFileEntry;
   };
+  /**
+   * Reads a media file's raw bytes for the audio/video viewers. WebKitGTK's
+   * GStreamer backend cannot stream from the `asset://` scheme and Android's
+   * webview mishandles range requests on it, so the player pulls the bytes
+   * over IPC and plays from a `blob:` URL instead — one path on all platforms.
+   * The raw `tauri::ipc::Response` arrives here as an `ArrayBuffer`.
+   */
+  readonly read_media_file: {
+    readonly args: {
+      readonly rootPath: string;
+      readonly relativePath: string;
+    };
+    readonly result: ArrayBuffer;
+  };
   readonly create_workspace_file: {
     readonly args: {
       readonly rootPath: string;
