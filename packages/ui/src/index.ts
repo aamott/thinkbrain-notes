@@ -3,6 +3,8 @@ export { buttonVariants } from "./components/ui/button-variants";
 export type { ButtonProps } from "./components/ui/button";
 export { cn } from "./lib/utils";
 export { dismissTopOverlay, useDismissable } from "./components/ui/use-dismissable";
+export { LONG_PRESS_MS, useLongPress } from "./components/ui/use-long-press";
+export type { LongPress } from "./components/ui/use-long-press";
 export { Scrim } from "./components/ui/scrim";
 export { Drawer } from "./components/ui/drawer";
 export { BottomSheet } from "./components/ui/bottom-sheet";

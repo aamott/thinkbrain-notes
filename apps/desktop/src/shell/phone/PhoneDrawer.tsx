@@ -1,13 +1,9 @@
-import { useEffect, useRef } from "react";
-
-import { Drawer } from "@thinkbrain/ui";
+import { Drawer, useLongPress } from "@thinkbrain/ui";
 
 import { useLeftPanelContributions } from "../../panels/panelRegistryModel";
 import { PanelIcon } from "../panelIcons";
 import type { LeftPanel } from "../shellTypes";
 import { WorkspaceSelectorOutlet } from "../../workspace/WorkspaceSelectorPortal";
-
-const LONG_PRESS_DELAY_MS = 500;
 
 // Panel and scrim stop above the hub so the bottom-right Menu slot stays
 // directly tappable to close the drawer — same bottom bound the menus use.
@@ -53,15 +49,7 @@ export function PhoneDrawer({
   readonly hubFull?: boolean;
 }) {
   const panels = useLeftPanelContributions();
-  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const longPressTriggeredRef = useRef(false);
-
-  useEffect(
-    () => () => {
-      if (longPressTimerRef.current !== null) clearTimeout(longPressTimerRef.current);
-    },
-    []
-  );
+  const longPress = useLongPress();
 
   return (
     <Drawer
@@ -98,43 +86,25 @@ export function PhoneDrawer({
               aria-label={`${panel.label}${badge !== undefined && badge > 0 ? `, ${badge} conflicts` : ""}`}
               aria-current={activePanel === panel.id ? "page" : undefined}
               className={row}
-              onClick={() => onSelectPanel(panel.id)}
-              onTouchStart={(event) => {
-                if (!onLongPressPanel) return;
-                if (longPressTimerRef.current !== null) clearTimeout(longPressTimerRef.current);
-                longPressTriggeredRef.current = false;
-                longPressTimerRef.current = setTimeout(() => {
-                  longPressTimerRef.current = null;
-                  longPressTriggeredRef.current = true;
-                  event.preventDefault();
-                  onLongPressPanel(panel.id);
-                }, LONG_PRESS_DELAY_MS);
+              onClick={() => {
+                // A completed long press already acted; don't also run the tap.
+                if (longPress.consumeClick()) return;
+                onSelectPanel(panel.id);
               }}
-              onTouchEnd={(event) => {
-                if (longPressTimerRef.current !== null) {
-                  clearTimeout(longPressTimerRef.current);
-                  longPressTimerRef.current = null;
-                }
-                if (longPressTriggeredRef.current) event.preventDefault();
-              }}
-              onTouchMove={() => {
-                if (longPressTimerRef.current !== null) {
-                  clearTimeout(longPressTimerRef.current);
-                  longPressTimerRef.current = null;
-                }
-                longPressTriggeredRef.current = false;
-              }}
-              onTouchCancel={() => {
-                if (longPressTimerRef.current !== null) {
-                  clearTimeout(longPressTimerRef.current);
-                  longPressTimerRef.current = null;
-                }
-                longPressTriggeredRef.current = false;
-              }}
+              onPointerDown={() =>
+                longPress.begin(
+                  onLongPressPanel ? () => onLongPressPanel(panel.id) : undefined
+                )
+              }
+              onPointerUp={longPress.cancel}
+              // A slide or scroll is a cancelled hold, not a long press.
+              onPointerMove={longPress.cancel}
+              onPointerLeave={longPress.cancel}
+              onPointerCancel={longPress.cancel}
               onContextMenu={(event) => {
                 if (!onLongPressPanel) return;
                 event.preventDefault();
-                if (longPressTriggeredRef.current) return;
+                if (longPress.hasFired()) return;
                 onLongPressPanel(panel.id);
               }}
             >

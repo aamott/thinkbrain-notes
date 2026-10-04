@@ -1,6 +1,6 @@
 import { inferTabKind } from "@thinkbrain/core";
 import { BottomSheet } from "@thinkbrain/ui";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import { BottomPanel } from "../../panels/BottomPanel";
 import { LeftPopout } from "../../panels/LeftPopout";
@@ -309,35 +309,39 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
     if (command) runPaletteCommand(command);
   }, [navigation, paletteCommands, runPaletteCommand]);
 
-  // "Open most recent note" tracks a two-entry MRU of distinct Markdown tabs.
-  // While a note is on screen it answers the *previous* note — A→B offers A,
-  // and reopening on A offers B — while Files or a panel still gets the note
-  // currently open underneath. Stale ids never reopen a closed tab.
-  const activeNoteId = isNoteTab(activeTab) ? activeTab.id : null;
-  const [noteHistory, setNoteHistory] = useState<readonly string[]>([]);
-  // Adjust-during-render: the MRU derives from `activeNoteId` alone, so
-  // updating it here (React re-renders before commit) keeps it render-safe
-  // where a ref read or an effect setState would not be.
-  if (activeNoteId !== null && noteHistory[0] !== activeNoteId) {
-    setNoteHistory(
-      [activeNoteId, ...noteHistory.filter((id) => id !== activeNoteId)].slice(0, 2)
-    );
-  }
-
+  // "Open most recent note" reads a two-entry MRU of distinct Markdown tabs
+  // out of the reducer's activation history: `entries` is already the visit
+  // order, `removeTab` scrubs closed ids and `retarget` follows renames, so
+  // a second list here could only drift. While a note is on screen it
+  // answers the *previous* note — A→B offers A, and reopening on A offers B
+  // — while Files or a panel still gets the note currently open underneath.
+  // Stale ids never reopen a closed tab.
   const recentNote = useMemo(() => {
     const tabs = shell.tabState.tabs;
     const findTab = (id: string | undefined): DesktopTab | undefined =>
       id !== undefined ? tabs.find((tab) => tab.id === id) : undefined;
+    // Distinct note ids, most recently activated first.
+    const noteIds: string[] = [];
+    for (
+      let index = shell.tabState.history.cursor;
+      index >= 0 && noteIds.length < 2;
+      index -= 1
+    ) {
+      const id = shell.tabState.history.entries[index];
+      if (id !== undefined && !noteIds.includes(id) && isNoteTab(findTab(id))) {
+        noteIds.push(id);
+      }
+    }
     const viewingNoteId =
       route.kind === "tab" && isNoteTab(activeTab) && route.tabId === activeTab.id
         ? activeTab.id
         : null;
     const candidate =
       viewingNoteId !== null
-        ? findTab(noteHistory.find((id) => id !== viewingNoteId))
-        : (isNoteTab(activeTab) ? activeTab : findTab(noteHistory[0]));
+        ? findTab(noteIds.find((id) => id !== viewingNoteId))
+        : (isNoteTab(activeTab) ? activeTab : findTab(noteIds[0]));
     return candidate ? { id: candidate.id, title: candidate.title } : null;
-  }, [activeTab, route, shell.tabState.tabs, noteHistory]);
+  }, [activeTab, route, shell.tabState]);
 
   const openRecentNote = useCallback(() => {
     if (recentNote) navigation.push({ kind: "tab", tabId: recentNote.id });
