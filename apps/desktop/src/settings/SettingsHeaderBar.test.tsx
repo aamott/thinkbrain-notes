@@ -51,12 +51,15 @@ describe("SettingsHeaderBar", () => {
     const el = await harness.render(<SettingsHeaderBar />);
     const buttons = Array.from(el.querySelectorAll<HTMLButtonElement>("button"));
 
-    expect(buttons).toHaveLength(4);
+    // Fifth button is the ⋯ menu — CSS-hidden above the phone breakpoint but
+    // still in the DOM.
+    expect(buttons).toHaveLength(5);
     expect(buttons[0]!.disabled).toBe(false);
     expect(buttons[1]!.disabled).toBe(false);
     expect(buttons[2]!.disabled).toBe(true);
     expect(buttons[3]!.disabled).toBe(true);
     expect(buttons[3]!.textContent).toBe("Save");
+    expect(buttons[4]!.getAttribute("aria-label")).toBe("More settings actions");
   });
 
   it("enables Reset and Save when dirty and shows dirty count", async () => {
@@ -162,6 +165,71 @@ describe("SettingsHeaderBar accessibility and autosave", () => {
 
     expect(el.textContent).toContain("Autosave enabled");
     expect(el.querySelector('[aria-label="Reset all unsaved settings"]')).toBeNull();
+  });
+});
+
+describe("SettingsHeaderBar overflow menu", () => {
+  const openMenu = async (host: HTMLElement): Promise<HTMLElement> => {
+    await harness.click(
+      host.querySelector<HTMLButtonElement>('[aria-label="More settings actions"]')!
+    );
+    const menu = host.querySelector<HTMLElement>('[role="menu"]');
+    expect(menu).not.toBeNull();
+    return menu!;
+  };
+
+  const menuItem = (menu: HTMLElement, label: string): HTMLButtonElement | null =>
+    Array.from(menu.querySelectorAll<HTMLButtonElement>('button[role^="menuitem"]')).find(
+      (item) => item.textContent?.includes(label)
+    ) ?? null;
+
+  it("opens on the kebab and lists the secondary actions", async () => {
+    const el = await harness.render(<SettingsHeaderBar />);
+    const menu = await openMenu(el);
+
+    expect(menuItem(menu, "Show advanced settings")).not.toBeNull();
+    expect(menuItem(menu, "Export settings")).not.toBeNull();
+    expect(menuItem(menu, "Import settings")).not.toBeNull();
+    expect(menuItem(menu, "Reset unsaved changes")).not.toBeNull();
+  });
+
+  it("checks the Advanced item when advanced settings are shown", async () => {
+    useSettingsStore.setState({
+      stagedChanges: { "settings.showAdvanced": true }
+    });
+    const el = await harness.render(<SettingsHeaderBar />);
+    const menu = await openMenu(el);
+
+    expect(menuItem(menu, "Show advanced settings")?.getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("resets unsaved settings from the menu", async () => {
+    useSettingsStore.setState({ stagedChanges: { k: 1 } });
+    const el = await harness.render(<SettingsHeaderBar />);
+    const menu = await openMenu(el);
+
+    await harness.click(menuItem(menu, "Reset unsaved changes")!);
+
+    expect(useSettingsStore.getState().resetStaged).toHaveBeenCalledTimes(1);
+    expect(el.querySelector('[role="menu"]')).toBeNull();
+  });
+
+  it("disables Reset in the menu when nothing is dirty", async () => {
+    const el = await harness.render(<SettingsHeaderBar />);
+    const menu = await openMenu(el);
+
+    expect(menuItem(menu, "Reset unsaved changes")!.disabled).toBe(true);
+  });
+
+  it("omits Reset from the menu when autosave is on", async () => {
+    seedSettingsStore({
+      appValues: { "settings.autosave": true },
+      stagedChanges: { k: 1 }
+    });
+    const el = await harness.render(<SettingsHeaderBar />);
+    const menu = await openMenu(el);
+
+    expect(menuItem(menu, "Reset unsaved changes")).toBeNull();
   });
 });
 

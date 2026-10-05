@@ -197,6 +197,7 @@ export function MenuButton({
   icon,
   danger = false,
   current = false,
+  disabled = false,
   title,
   className,
   onClick,
@@ -207,6 +208,7 @@ export function MenuButton({
   readonly icon?: ReactNode;
   readonly danger?: boolean;
   readonly current?: boolean;
+  readonly disabled?: boolean;
   /** The whole of what the label may have had to truncate. */
   readonly title?: string;
   /** Extra classes — e.g. `flex-1` when the item shares a row with a second control. */
@@ -216,11 +218,17 @@ export function MenuButton({
   return (
     <button
       type="button"
-      className={cn(MENU_ITEM, danger ? "text-danger" : "text-foreground", className)}
+      className={cn(
+        MENU_ITEM,
+        danger ? "text-danger" : "text-foreground",
+        "disabled:cursor-not-allowed disabled:opacity-50",
+        className
+      )}
       role="menuitem"
       aria-current={current ? "true" : undefined}
       aria-label={ariaLabel}
       title={title}
+      disabled={disabled}
       onClick={onClick}
     >
       {icon && (
@@ -246,16 +254,18 @@ export function MenuButton({
 export function MenuCheckbox({
   label,
   checked,
+  className,
   onClick,
 }: {
   readonly label: string;
   readonly checked: boolean;
+  readonly className?: string;
   readonly onClick: (event: ReactMouseEvent) => void;
 }) {
   return (
     <button
       type="button"
-      className={cn(MENU_ITEM, "text-foreground")}
+      className={cn(MENU_ITEM, "text-foreground", className)}
       role="menuitemcheckbox"
       aria-checked={checked}
       aria-label={label}

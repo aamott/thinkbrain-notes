@@ -19,7 +19,9 @@ export function handleMenuKeyDown(
     // Prefix-matched so a checkable item (`menuitemcheckbox`) is navigable on
     // the same terms as a plain one; a menu that skipped them would leave the
     // arrow keys stepping over half its contents.
-    menuRef.current?.querySelectorAll<HTMLButtonElement>("button[role^='menuitem']") ?? []
+    menuRef.current?.querySelectorAll<HTMLButtonElement>(
+      "button[role^='menuitem']:not(:disabled)"
+    ) ?? []
   );
   if (!items.length) return;
   const index = items.indexOf(document.activeElement as HTMLButtonElement);
