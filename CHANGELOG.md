@@ -3,6 +3,18 @@
 Newest first. Versions follow [semver](https://semver.org), except that before
 1.0 a minor bump may still change behaviour.
 
+## 0.3.0-4 — 2026-10-04
+
+Prerelease fixing Android release builds, which could not reach any git link
+over HTTPS.
+
+- **Android** — release APKs failed every clone and sync with "Could not reach
+  the place these notes sync to": minification stripped the certificate
+  verifier the Rust side loads by name over JNI. A ProGuard keep rule retains
+  it.
+- **Sync** — version history no longer needs a git identity configured on the
+  device; the hidden repository carries the app's own.
+
 ## 0.3.0-3 — 2026-10-04
 
 Prerelease for preview-style file tabs, the audio/video playback fix, and a
