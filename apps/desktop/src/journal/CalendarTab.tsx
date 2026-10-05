@@ -249,7 +249,7 @@ export function CalendarTab({
           of empty cells claims the days are empty, and "Showing 0 entries"
           repeats the claim in words. */}
       {trouble ? (
-        <div className="min-h-0 flex-1 overflow-auto">
+        <div data-phone-scroll-clearance className="min-h-0 flex-1 overflow-auto">
           <JournalTrouble
             status={trouble}
             onRetry={onRetry ?? (() => undefined)}
@@ -259,7 +259,7 @@ export function CalendarTab({
         </div>
       ) : (
         <>
-          <div role="grid" aria-label={grid.title} className="min-h-0 flex-1 overflow-auto">
+          <div role="grid" aria-label={grid.title} data-phone-scroll-clearance className="min-h-0 flex-1 overflow-auto">
             <div role="row" className="grid grid-cols-7 border-b border-border">
               {weekdayOrder.map((weekday) => (
                 <span

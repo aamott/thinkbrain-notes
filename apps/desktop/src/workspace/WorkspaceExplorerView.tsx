@@ -305,6 +305,7 @@ export function WorkspaceExplorerView({
           ) : (
             <ul
               ref={treeScrollRef}
+              data-phone-scroll-clearance
               className="tn-scrollbar-left min-h-0 flex-1 m-0 overflow-auto py-1.5 list-none [scrollbar-color:var(--color-border)_transparent] scrollbar-thin"
               role="tree"
               aria-label={`${state.snapshot?.workspace.name} files`}

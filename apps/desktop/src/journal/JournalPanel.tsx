@@ -357,6 +357,7 @@ export function JournalPanel({
             ref={listRef}
             role="tree"
             aria-label="Journal entries"
+            data-phone-scroll-clearance
             className="min-h-0 flex-1 overflow-auto"
             onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
             onKeyDown={(event) => {

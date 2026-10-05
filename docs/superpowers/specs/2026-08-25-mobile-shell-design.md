@@ -1,5 +1,7 @@
 # Mobile Shell Design
 
+> **Superseded 2026-10-04:** the bottom hub was replaced by floating bubbles — see the `plans/mobile` floating_bubbles story.
+
 > Design spec for the phone presentation of the ThinkBrain shell. Approved
 > 2026-08-25. Supersedes the navigation/layout direction recorded in
 > `plans/mobile/` and its two pending UI stories, which are

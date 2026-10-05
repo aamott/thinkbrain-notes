@@ -241,6 +241,7 @@ function SearchResults({
   return (
     <div
       ref={scrollRef}
+      data-phone-scroll-clearance
       className="min-h-0 flex-1 overflow-y-auto"
       data-testid="settings-search-results-viewport"
     >
@@ -367,7 +368,7 @@ export function SettingsNav({ open, onClose }: SettingsNavProps) {
       {isSearching ? (
         <SearchResults results={results} onSelect={handleResultSelect} />
       ) : (
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        <div data-phone-scroll-clearance className="min-h-0 flex-1 overflow-y-auto">
           <ul role="tree" className="m-0 flex flex-col gap-1 p-0">
             <ScopeGroup
               label="Application"

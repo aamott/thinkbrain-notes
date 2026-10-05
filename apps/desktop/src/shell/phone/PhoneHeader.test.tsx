@@ -18,11 +18,11 @@ afterEach(async () => {
 const base = {
   breadcrumbs: ["Vault", "Files"],
   tabCount: 0,
-  actionItemsOpen: false,
+  mainMenuOpen: false,
   onBack: () => {},
   onForward: () => {},
   onOpenTabs: () => {},
-  onToggleActionItems: () => {}
+  onToggleMainMenu: () => {}
 };
 
 const render = async (props: Partial<Parameters<typeof PhoneHeader>[0]> = {}) => {
@@ -73,11 +73,11 @@ describe("PhoneHeader", () => {
     expect(onForward).toHaveBeenCalledOnce();
   });
 
-  it("gives the document-tools trigger pressed and open feedback", async () => {
+  it("gives the main-menu trigger pressed and open feedback", async () => {
     await render();
-    const trigger = button("Document tools");
+    const trigger = button("Main menu");
 
-    expect(trigger?.getAttribute("aria-haspopup")).toBe("menu");
+    expect(trigger?.getAttribute("aria-haspopup")).toBe("dialog");
     expect(trigger?.getAttribute("aria-expanded")).toBe("false");
     expect(trigger?.className.split(" ")).toEqual(
       expect.arrayContaining(["active:bg-accent", "aria-expanded:bg-accent"])
@@ -89,11 +89,32 @@ describe("PhoneHeader", () => {
           {...base}
           canGoBack={false}
           canGoForward={false}
-          actionItemsOpen
+          mainMenuOpen
         />
       );
     });
-    expect(button("Document tools")?.getAttribute("aria-expanded")).toBe("true");
+    expect(button("Main menu")?.getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("shows the badge count on the menu button only above zero", async () => {
+    await render({ badge: 2 });
+    expect(button("Main menu, 2 conflicts")?.textContent).toContain("2");
+
+    await act(async () => {
+      root?.render(
+        <PhoneHeader {...base} canGoBack={false} canGoForward={false} badge={0} />
+      );
+    });
+    expect(button("Main menu")?.textContent).not.toContain("0");
+  });
+
+  it("announces the conflict count in the menu button's accessible name", async () => {
+    await render({ badge: 3 });
+    expect(button("Main menu, 3 conflicts")).not.toBeNull();
+    // The visible chip stays aria-hidden — the count is only in the name.
+    const chip = button("Main menu, 3 conflicts")?.querySelector("span:last-child");
+    expect(chip?.getAttribute("aria-hidden")).toBe("true");
+    expect(chip?.textContent).toBe("3");
   });
 
   it("feeds the location pill its breadcrumb segments", async () => {

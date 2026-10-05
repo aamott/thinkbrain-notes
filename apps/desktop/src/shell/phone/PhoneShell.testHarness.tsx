@@ -84,39 +84,33 @@ afterEach(async () => {
   nativeCommands().mockReset();
   nativeCommands().mockImplementation(() => Promise.resolve(null));
   vi.mocked(workspaceDocumentApi.writeMarkdownDocument).mockClear();
-  clearStoredHub();
+  clearStagedPhoneSettings();
   container = null;
 });
 
 /**
- * The settings store is a module singleton and the hub edits below really do
- * persist: `invokeNativeCommand` is mocked to resolve, so a save "succeeds" and
- * lands in `appValues`. Left there, one test's pin would be the next test's
- * starting hub. Only the hub key is cleared — blanking the store wholesale
- * would take the theme and desktop state with it.
+ * The settings store is a module singleton and the label toggle below is a
+ * staged change that would otherwise leak into the next test's render. Only
+ * the phone's own key is cleared — blanking the store wholesale would take
+ * the theme and desktop state with it.
  */
-function clearStoredHub(): void {
+function clearStagedPhoneSettings(): void {
   const appValues = { ...useSettingsStore.getState().appValues };
-  delete appValues["ui.mobileHub"];
+  delete appValues["ui.mobileBubbleLabels"];
   useSettingsStore.setState({ appValues, stagedChanges: {} });
 }
 
-/** Seeds the persisted hub before a mount, the way a returning user would find it. */
-export function storeHub(items: readonly unknown[]): void {
-  useSettingsStore.getState().stageChange("ui.mobileHub", JSON.stringify(items));
+/** Turns on `ui.mobileBubbleLabels` before a mount, the way a user who enabled it would find it. */
+export function storeBubbleLabels(enabled: boolean): void {
+  useSettingsStore.getState().stageChange("ui.mobileBubbleLabels", enabled);
 }
 
-export const hubOf = (host: HTMLDivElement): Element | null =>
-  host.querySelector('[aria-label="Primary navigation"]');
+/** The floating-bubble group, when it is rendered. */
+export const bubbleBar = (host: HTMLDivElement): Element | null =>
+  host.querySelector('[role="group"][aria-label="Quick actions"]');
 
 export const drawerOf = (host: HTMLDivElement): Element | null =>
   host.querySelector('[aria-label="Navigation"]');
-
-/** Hub slot labels, in bar order — the assertion pin/remove actually needs. */
-export const hubLabels = (host: HTMLDivElement): readonly (string | null)[] =>
-  [...(hubOf(host)?.querySelectorAll("button") ?? [])].map((button) =>
-    button.getAttribute("aria-label")
-  );
 
 export const mount = async (node: ReactNode): Promise<HTMLDivElement> => {
   container = document.createElement("div");

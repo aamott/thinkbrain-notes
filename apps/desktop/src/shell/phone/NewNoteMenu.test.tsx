@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
 import { act } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -27,7 +26,6 @@ const render = async (element: React.ReactElement): Promise<HTMLDivElement> => {
 const menu = (overrides: Record<string, unknown> = {}): React.ReactElement => (
   <NewNoteMenu
     open
-    anchorPercent={50}
     recentNote={{ title: "Shopping" }}
     actions={[]}
     onCreate={() => undefined}
@@ -76,7 +74,7 @@ describe("NewNoteMenu", () => {
   it("dismisses on an outside tap", async () => {
     const onDismiss = vi.fn();
     const host = await render(menu({ onDismiss }));
-    const layer = host.querySelector(".fixed.inset-x-0");
+    const layer = host.querySelector(".absolute.inset-0");
 
     await act(async () => {
       layer?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
@@ -96,12 +94,14 @@ describe("NewNoteMenu", () => {
     expect(onDismiss).toHaveBeenCalledTimes(1);
   });
 
-  it("bounds the outside layer between the header and the hub", async () => {
+  it("covers the whole shell — bubbles included — with its outside layer", async () => {
     const host = await render(menu());
-    const layer = host.querySelector(".fixed.inset-x-0");
+    const layer = host.querySelector(".absolute.inset-0");
 
-    expect(layer?.className).toContain("top-[calc(3.5rem+env(safe-area-inset-top))]");
-    expect(layer?.className).toContain("bottom-[calc(3.5rem+env(safe-area-inset-bottom))]");
+    // The bubbles live at z-20; the layer must sit above them so a tap on the
+    // trigger bubble dismisses instead of retriggering.
+    expect(layer?.className).toContain("z-30");
+    expect(layer?.className).not.toContain("bottom-[calc");
   });
 
   it("skips disabled rows in arrow navigation", async () => {
@@ -202,28 +202,13 @@ describe("NewNoteMenu", () => {
     expect(document.activeElement).toBe(row(host, "Open most recent note"));
   });
 
-  it("anchors the popup to the hub slot's rendered position", async () => {
-    const host = await render(menu({ anchorPercent: 30 }));
+  it("hangs above the left bubble group", async () => {
+    const host = await render(menu());
     const el = menuOf(host) as HTMLElement;
 
-    // happy-dom's CSSOM drops clamp() values from `style`, so the inline
-    // anchor is asserted on the serialized markup instead of the DOM node.
-    const markup = renderToStaticMarkup(
-      <NewNoteMenu
-        open
-        anchorPercent={30}
-        recentNote={null}
-        actions={[]}
-        onCreate={() => undefined}
-        onOpenRecent={() => undefined}
-        onSelectAction={() => undefined}
-        onDismiss={() => undefined}
-      />
-    );
-    expect(markup).toContain("clamp(7rem, 30%");
-    expect(markup).toContain("calc(100% - 7rem)");
-    expect(el.className).toContain("bottom-[calc(100%+0.5rem)]");
-    expect(el.className).toContain("-translate-x-1/2");
+    expect(el.className).toContain("left-3");
+    expect(el.className).toContain("bottom-[calc(4.5rem+env(safe-area-inset-bottom))]");
+    expect(el.className).toContain("z-40");
     expect(el.className).toContain("w-56");
   });
 

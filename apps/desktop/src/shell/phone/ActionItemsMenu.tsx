@@ -8,11 +8,11 @@ import {
 import { PanelIcon } from "../panelIcons";
 import { PhoneMenuRow } from "./PhoneMenuRow";
 import { handlePhoneMenuKeyDown } from "./phoneMenuKeyboard";
-import { PHONE_OVERLAY_BOUNDS } from "./overlayBounds";
+import { PHONE_BUBBLE_MENU_BOTTOM } from "./overlayBounds";
 import { cn } from "../../lib/utils";
 
 /**
- * The phone's action-items menu — the compact dropdown the header `…` opens,
+ * The phone's action-items menu — the compact dropdown the ⋮ bubble opens,
  * listing every right-panel contribution (version history, outline,
  * properties, backlinks, extension panels) in registry order. This is the
  * drill-in surface for the right-side inspector drawer: choosing an entry
@@ -45,16 +45,13 @@ export function ActionItemsMenu({
   const panels = useRightPanelContributions();
 
   return (
-    // One bounded layer doubles as the undimmed outside-dismiss target; the
-    // compact menu hangs inside it at the top-right and sizes to its content,
-    // so a short list does not stretch header-to-hub.
+    // One layer doubles as the undimmed outside-dismiss target and spans the
+    // whole shell — bubbles included — so a tap on the trigger bubble while
+    // the menu is open closes it rather than immediately reopening it. The
+    // compact menu hangs inside it at the bottom-right, above the ⋮ bubble.
     <div
       aria-hidden={!open}
-      className={cn(
-        "absolute inset-x-0 z-40",
-        PHONE_OVERLAY_BOUNDS,
-        open ? "visible" : "invisible"
-      )}
+      className={cn("absolute inset-0 z-30", open ? "visible" : "invisible")}
       onPointerDown={(event) => {
         if (event.target === event.currentTarget) onDismiss();
       }}
@@ -64,7 +61,13 @@ export function ActionItemsMenu({
         role={open ? "menu" : undefined}
         aria-label="Action items"
         onKeyDown={handlePhoneMenuKeyDown}
-        className="absolute top-0 right-2 max-h-full w-60 overflow-y-auto rounded-medium border border-border bg-surface py-1 text-foreground shadow-panel"
+        className={cn(
+          "absolute right-3 w-60 overflow-y-auto rounded-medium border border-border bg-surface py-1 text-foreground shadow-panel",
+          PHONE_BUBBLE_MENU_BOTTOM,
+          // Bottom-anchored and growing upward: cap the height so a long
+          // registry can never reach up over the header.
+          "max-h-[calc(100%-8rem)]"
+        )}
       >
         {panels.map((entry) => {
           const available = entry.availability?.(context) ?? true;

@@ -8,9 +8,6 @@
 import type { SettingsModule } from "../types";
 import { integerValidator, optionalJsonListValidator } from "../internal";
 
-/** Control key for the hub editor rendered by the desktop layer. */
-export const MOBILE_HUB_CONTROL = "mobile-hub-items";
-
 export const uiModule: SettingsModule = {
   id: "ui",
   label: "Interface",
@@ -54,7 +51,7 @@ export const uiModule: SettingsModule = {
         },
         {
           key: "pinnedActionItems",
-          // Same string-carries-JSON shape as `mobileHub` — `SettingType` has
+          // A string carrying JSON — `SettingType` has
           // no list member. Empty means "use the built-in defaults", which
           // live in the desktop layer so panel ids stay out of core.
           type: "string",
@@ -73,21 +70,14 @@ export const uiModule: SettingsModule = {
       label: "Mobile",
       settings: [
         {
-          key: "mobileHub",
-          // `SettingType` has no list or JSON member and this work does not add
-          // one — that would touch validation, import/export, the control
-          // registry and settings search. Same shape as journal.fieldDefinitions.
-          type: "string",
-          // Empty means "use the built-in defaults", which live in the desktop
-          // layer so panel and command ids stay out of platform-agnostic core.
-          default: "",
+          key: "mobileBubbleLabels",
+          type: "boolean",
+          default: false,
           scope: "app",
           section: "ui.mobile",
-          control: MOBILE_HUB_CONTROL,
-          label: "Bottom bar shortcuts",
+          label: "Show labels on floating buttons",
           description:
-            "Shortcuts shown in the bottom bar on phones. Leave empty to use the defaults.",
-          validation: optionalJsonListValidator("Bottom bar shortcuts", "valid JSON")
+            "Show text next to the Home, New note and Actions buttons on phones."
         }
       ]
     }

@@ -10,7 +10,7 @@ signing off a release that touched the journal. Record the date, the OS versions
 that failed.
 
 Scope is journal-owned only: the popout, the dateline, the metadata sheet, and the calendar
-tab. Shell navigation — how the popout opens, the back affordance, the bottom nav — belongs to
+tab. Shell navigation — how the popout opens, the back affordance, the floating bubbles — belongs to
 `mobile/responsive_layout` and is checked there.
 
 | | Device / OS | Tester | Date |

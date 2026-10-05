@@ -10,7 +10,7 @@ import {
   filesPanel,
   filesVisible,
   forwardButton,
-  hubOf,
+  bubbleBar,
   inspector,
   locationPill,
   mount,
@@ -62,12 +62,18 @@ afterAll(() => {
   docGatedPanel.dispose();
 });
 
-// The hub's New note slot, specifically — the Files panel has its own
-// New-note button now, so an unscoped `click(host, …)` hits the explorer
-// header first.
-const tapNewNoteSlot = async (host: HTMLDivElement): Promise<void> => {
+// The New-note bubble, specifically — the Files panel has its own New-note
+// button now, so an unscoped `click(host, …)` hits the explorer header first.
+const tapNewNoteBubble = async (host: HTMLDivElement): Promise<void> => {
   await act(async () => {
-    hubOf(host)?.querySelector<HTMLButtonElement>('[aria-label="New note"]')?.click();
+    bubbleBar(host)?.querySelector<HTMLButtonElement>('[aria-label="New note"]')?.click();
+  });
+};
+
+// The ⋮ bubble, likewise — "Actions" names both the trigger and its menu.
+const tapActionsBubble = async (host: HTMLDivElement): Promise<void> => {
+  await act(async () => {
+    bubbleBar(host)?.querySelector<HTMLButtonElement>('[aria-label="Actions"]')?.click();
   });
 };
 
@@ -162,7 +168,7 @@ describe("PhoneShell navigation", () => {
     await click(host, "Back");
     expect(forwardButton(host)?.disabled).toBe(false);
 
-    await click(host, "Document tools");
+    await tapActionsBubble(host);
     expect(actionsMenu(host)).not.toBeNull();
 
     await click(host, "Back");
@@ -298,7 +304,7 @@ describe("PhoneShell navigation", () => {
     expect(noteTitleVisible(host)).toBe(true);
 
     // On the note route the gated option is live…
-    await click(host, "Document tools");
+    await tapActionsBubble(host);
     const docItem = () =>
       actionsMenu(host)?.querySelector<HTMLButtonElement>('[role="menuitem"][aria-label="Doc panel"]');
     expect(docItem()?.disabled).toBe(false);
@@ -311,7 +317,7 @@ describe("PhoneShell navigation", () => {
 
     // The same menu now shows the option disabled — the Files route carries
     // no document contents even though the note is still open.
-    await click(host, "Document tools");
+    await tapActionsBubble(host);
     expect(docItem()?.disabled).toBe(true);
   });
 
@@ -351,7 +357,7 @@ describe("PhoneShell navigation", () => {
       expect(noteTitle(host)?.value).toBe("target");
       expect(shell().tabState.tabs).toHaveLength(2);
 
-      await click(host, "Document tools");
+      await tapActionsBubble(host);
       await act(async () => {
         actionsMenu(host)
           ?.querySelector<HTMLButtonElement>('[role="menuitem"][aria-label="Backlinks"]')
@@ -374,62 +380,63 @@ describe("PhoneShell navigation", () => {
     }
   });
 
-  it("toggles the Files hub slot: note → Files → prior note", async () => {
+  it("the Home bubble navigates note → Files, and Back returns to the note", async () => {
     const { host, shell } = await renderWithShell();
     await act(async () => shell().openMarkdownDocument("/vault", "note.md"));
     expect(noteTitleVisible(host)).toBe(true);
 
-    await click(host, "Files");
+    await act(async () => {
+      bubbleBar(host)?.querySelector<HTMLButtonElement>('[aria-label="Home"]')?.click();
+    });
     expect(filesVisible(host)).toBe(true);
     expect(noteTitleVisible(host)).toBe(false);
 
-    await click(host, "Files");
+    // Home pushes Files rather than toggling: Back revisits the note.
+    await click(host, "Back");
     expect(noteTitleVisible(host)).toBe(true);
     expect(noteTitle(host)?.value).toBe("note");
   });
 
-  it("toggles the Search hub slot: open, then back to prior content", async () => {
+  it("reaches a left panel through the drawer", async () => {
     const { host, shell } = await renderWithShell();
     await act(async () => shell().openMarkdownDocument("/vault", "note.md"));
 
-    await click(host, "Search");
+    await click(host, "Main menu");
+    await act(async () => {
+      visibleDialog(host, "Navigation")
+        ?.querySelector<HTMLButtonElement>('[aria-label="Search"]')
+        ?.click();
+    });
     expect(host.querySelector('[aria-label="Search panel"]')).not.toBeNull();
-
-    await click(host, "Search");
-    expect(host.querySelector('[aria-label="Search panel"]')).toBeNull();
-    expect(noteTitleVisible(host)).toBe(true);
   });
 
-  it("toggles the Assistant hub slot: inspector opens, then closes", async () => {
+  it("opens the Assistant inspector through the ⋮ menu and Back returns to it", async () => {
     const host = await render();
-    const hub = hubOf(host);
 
+    await tapActionsBubble(host);
     await act(async () => {
-      hub?.querySelector<HTMLButtonElement>('[aria-label="Assistant"]')?.click();
+      actionsMenu(host)
+        ?.querySelector<HTMLButtonElement>('[role="menuitem"][aria-label="Assistant"]')
+        ?.click();
     });
     expect(inspector(host)).not.toBeNull();
 
-    await act(async () => {
-      hub?.querySelector<HTMLButtonElement>('[aria-label="Assistant"]')?.click();
-    });
+    // The menu was the inspector's parent: one Back restores it.
+    await click(host, "Back");
     expect(inspector(host)).toBeNull();
+    expect(actionsMenu(host)).not.toBeNull();
   });
 
-  it("toggles the Menu drawer without adding it to history", async () => {
+  it("toggles the main-menu drawer without adding it to history", async () => {
     const { host, shell } = await renderWithShell();
-    const hub = hubOf(host);
     await act(async () => shell().openMarkdownDocument("/vault", "note.md"));
     await click(host, "Back");
     expect(forwardButton(host)?.disabled).toBe(false);
 
-    await act(async () => {
-      hub?.querySelector<HTMLButtonElement>('[aria-label="Menu"]')?.click();
-    });
+    await click(host, "Main menu");
     expect(visibleDialog(host, "Navigation")).not.toBeNull();
 
-    await act(async () => {
-      hub?.querySelector<HTMLButtonElement>('[aria-label="Menu"]')?.click();
-    });
+    await click(host, "Main menu");
     expect(visibleDialog(host, "Navigation")).toBeNull();
     expect(forwardButton(host)?.disabled).toBe(false);
 
@@ -438,19 +445,14 @@ describe("PhoneShell navigation", () => {
     expect(visibleDialog(host, "Navigation")).toBeNull();
   });
 
-  it("toggles the New note hub slot and Create new note lands Files via the canonical command", async () => {
+  it("toggles the New-note bubble and Create new note lands Files via the canonical command", async () => {
     const { host, shell } = await renderWithShell();
-    const hub = hubOf(host);
 
-    await act(async () => {
-      hub?.querySelector<HTMLButtonElement>('[aria-label="New note"]')?.click();
-    });
+    await tapNewNoteBubble(host);
     expect(newNoteMenu(host)).not.toBeNull();
 
-    // Second tap on the same slot dismisses — it is a toggle, not a launcher.
-    await act(async () => {
-      hub?.querySelector<HTMLButtonElement>('[aria-label="New note"]')?.click();
-    });
+    // Second tap on the same bubble dismisses — it is a toggle, not a launcher.
+    await tapNewNoteBubble(host);
     expect(newNoteMenu(host)).toBeNull();
 
     // Create runs the canonical command — Explorer's inline create flow over a
@@ -459,9 +461,7 @@ describe("PhoneShell navigation", () => {
     // field cannot render in this fixture. The Explorer integration suite proves
     // that this canonical focus request renders the `.md` field when ready.
     const focusRequests = () => shell().explorerProps.newNoteFocusRequest;
-    await act(async () => {
-      hub?.querySelector<HTMLButtonElement>('[aria-label="New note"]')?.click();
-    });
+    await tapNewNoteBubble(host);
     await act(async () => {
       newNoteMenu(host)
         ?.querySelector<HTMLButtonElement>('[role="menuitem"][aria-label="Create new note"]')
@@ -473,6 +473,23 @@ describe("PhoneShell navigation", () => {
     expect(focusRequests()).toBeGreaterThan(0);
   });
 
+  it("a tap on the New-note popup's own dismiss layer closes it without reopening", async () => {
+    const { host } = await renderWithShell();
+    await tapNewNoteBubble(host);
+    expect(newNoteMenu(host)).not.toBeNull();
+
+    // The popup's outside layer covers the bubbles (z-30 over z-20): the tap
+    // that lands where the trigger bubble sits hits the layer, so the menu
+    // closes and the same tap does not retrigger it.
+    await act(async () => {
+      host.querySelector(".absolute.inset-0.z-30")?.dispatchEvent(
+        new PointerEvent("pointerdown", { bubbles: true })
+      );
+    });
+
+    expect(newNoteMenu(host)).toBeNull();
+  });
+
   it("Open most recent note restores the last open note's own tab", async () => {
     const { host, shell } = await renderWithShell();
     await act(async () => shell().openMarkdownDocument("/vault", "note.md"));
@@ -481,7 +498,7 @@ describe("PhoneShell navigation", () => {
     await click(host, "Back");
     expect(filesVisible(host)).toBe(true);
 
-    await tapNewNoteSlot(host);
+    await tapNewNoteBubble(host);
     const recent = newNoteMenu(host)?.querySelector<HTMLButtonElement>(
       '[role="menuitem"][aria-label="Open most recent note"]'
     );
@@ -500,40 +517,50 @@ describe("PhoneShell navigation", () => {
   it("swaps peer surfaces in place: New note → Assistant, Back lands on content", async () => {
     const { host, shell } = await renderWithShell();
     await act(async () => shell().openMarkdownDocument("/vault", "note.md"));
-    const hub = hubOf(host);
 
-    await act(async () => {
-      hub?.querySelector<HTMLButtonElement>('[aria-label="New note"]')?.click();
-    });
+    await tapNewNoteBubble(host);
     expect(newNoteMenu(host)).not.toBeNull();
 
-    // Assistant is a peer surface: the ephemeral popup closes and the
-    // inspector pushes over the note rather than stacking over a menu entry.
+    // The ⋮ bubble is under the popup's dismiss layer: tapping its spot first
+    // closes the popup, and the second tap opens the actions menu.
     await act(async () => {
-      hub?.querySelector<HTMLButtonElement>('[aria-label="Assistant"]')?.click();
+      host.querySelector(".absolute.inset-0.z-30")?.dispatchEvent(
+        new PointerEvent("pointerdown", { bubbles: true })
+      );
     });
     expect(newNoteMenu(host)).toBeNull();
+
+    await tapActionsBubble(host);
+    await act(async () => {
+      actionsMenu(host)
+        ?.querySelector<HTMLButtonElement>('[role="menuitem"][aria-label="Assistant"]')
+        ?.click();
+    });
     expect(inspector(host)).not.toBeNull();
 
     await click(host, "Back");
-    // One step: straight to the note — the stale popup must not resurrect.
+    // One step back to the actions menu — the stale popup must not resurrect.
     expect(inspector(host)).toBeNull();
     expect(newNoteMenu(host)).toBeNull();
+    await click(host, "Back");
     expect(noteTitleVisible(host)).toBe(true);
   });
 
-  it("a hub left panel navigates over an open popup instead of stranding it", async () => {
+  it("the Home bubble navigates over an open popup instead of stranding it", async () => {
     const { host, shell } = await renderWithShell();
     await act(async () => shell().openMarkdownDocument("/vault", "note.md"));
-    const hub = hubOf(host);
 
-    await act(async () => {
-      hub?.querySelector<HTMLButtonElement>('[aria-label="New note"]')?.click();
-    });
+    await tapNewNoteBubble(host);
     expect(newNoteMenu(host)).not.toBeNull();
 
+    // Dismiss the popup first (its layer covers the bubbles), then Home.
     await act(async () => {
-      hub?.querySelector<HTMLButtonElement>('[aria-label="Files"]')?.click();
+      host.querySelector(".absolute.inset-0.z-30")?.dispatchEvent(
+        new PointerEvent("pointerdown", { bubbles: true })
+      );
+    });
+    await act(async () => {
+      bubbleBar(host)?.querySelector<HTMLButtonElement>('[aria-label="Home"]')?.click();
     });
     expect(newNoteMenu(host)).toBeNull();
     expect(filesVisible(host)).toBe(true);
@@ -556,7 +583,7 @@ describe("PhoneShell navigation", () => {
         '[role="menuitem"][aria-label="Open most recent note"]'
       );
 
-    await tapNewNoteSlot(host);
+    await tapNewNoteBubble(host);
     expect(recentRow()?.textContent).toContain("a.md");
     await act(async () => recentRow()?.click());
 
@@ -564,7 +591,7 @@ describe("PhoneShell navigation", () => {
     expect(shell().tabState.tabs).toHaveLength(2);
 
     // Selecting A refreshed the MRU: reopening on A now offers B.
-    await tapNewNoteSlot(host);
+    await tapNewNoteBubble(host);
     expect(recentRow()?.textContent).toContain("b.md");
     await act(async () => recentRow()?.click());
 
@@ -576,7 +603,7 @@ describe("PhoneShell navigation", () => {
     const { host, shell } = await renderWithShell();
     await act(async () => shell().openMarkdownDocument("/vault", "only.md"));
 
-    await tapNewNoteSlot(host);
+    await tapNewNoteBubble(host);
     const recent = newNoteMenu(host)?.querySelector<HTMLButtonElement>(
       '[role="menuitem"][aria-label="Open most recent note"]'
     );
@@ -585,7 +612,7 @@ describe("PhoneShell navigation", () => {
 
   it("runs a contributed action through its canonical command and stays closed", async () => {
     // Temporary singleton registrations prove the row resolves to and runs
-    // the real command — the same path every other hub command takes.
+    // the real command — the same path every other command takes.
     const handler = vi.fn();
     const actionReg = mobileNewNoteActionRegistry.register({
       id: "test.scratch",
@@ -601,7 +628,7 @@ describe("PhoneShell navigation", () => {
     });
     try {
       const host = await render();
-      const newNoteButton = hubOf(host)?.querySelector<HTMLButtonElement>(
+      const newNoteButton = bubbleBar(host)?.querySelector<HTMLButtonElement>(
         '[aria-label="New note"]'
       );
       expect(newNoteButton).not.toBeNull();
@@ -616,7 +643,7 @@ describe("PhoneShell navigation", () => {
 
       expect(handler).toHaveBeenCalledTimes(1);
       expect(newNoteMenu(host)).toBeNull();
-      // Dismissed like every popup: focus returns to the hub slot that opened it.
+      // Dismissed like every popup: focus returns to the bubble that opened it.
       expect(document.activeElement).toBe(newNoteButton);
 
       // Back lands on prior content — the popup entry was dismissed, not
@@ -629,6 +656,38 @@ describe("PhoneShell navigation", () => {
         actionReg.dispose();
         commandReg.dispose();
       });
+    }
+  });
+
+  it("a contributed row pointing at the new-note command creates instead of toggling the popup", async () => {
+    const { host, shell } = await renderWithShell();
+    // A contribution may alias the canonical command — the row must create a
+    // note, not bounce the popup the bubble itself toggles.
+    const actionReg = mobileNewNoteActionRegistry.register({
+      id: "test.aliased-new-note",
+      commandId: "new-note",
+      label: "Aliased create",
+      icon: "plus"
+    });
+    try {
+      const focusRequests = () => shell().explorerProps.newNoteFocusRequest;
+      const before = focusRequests() ?? 0;
+      await tapNewNoteBubble(host);
+      expect(newNoteMenu(host)).not.toBeNull();
+
+      await act(async () => {
+        newNoteMenu(host)
+          ?.querySelector<HTMLButtonElement>('[role="menuitem"][aria-label="Aliased create"]')
+          ?.click();
+      });
+
+      // Created like the built-in row — not the bubble's open/close toggle,
+      // which would have left Files untouched and simply shut the popup.
+      expect(newNoteMenu(host)).toBeNull();
+      expect(filesVisible(host)).toBe(true);
+      expect(focusRequests()).toBeGreaterThan(before);
+    } finally {
+      await act(async () => actionReg.dispose());
     }
   });
 
@@ -665,7 +724,7 @@ describe("PhoneShell navigation", () => {
     try {
       const host = await render();
 
-      await tapNewNoteSlot(host);
+      await tapNewNoteBubble(host);
       const row = newNoteMenu(host)?.querySelector<HTMLButtonElement>(
         '[role="menuitem"][aria-label="Gated action"]'
       );

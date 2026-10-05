@@ -30,7 +30,7 @@ export function PropertiesPanel({ contents }: PropertiesPanelProps) {
 
   if (result.frontmatter === null) {
     return (
-      <section className="flex min-h-0 flex-1 flex-col overflow-y-auto p-3" aria-label="Note properties">
+      <section data-phone-scroll-clearance className="flex min-h-0 flex-1 flex-col overflow-y-auto p-3" aria-label="Note properties">
         <h3 className="m-0 text-sm font-semibold text-foreground">Invalid frontmatter</h3>
         <p className="mb-3 mt-1 text-xs leading-relaxed text-muted-foreground">
           Fix the frontmatter diagnostics before its properties can be displayed.
@@ -50,7 +50,7 @@ export function PropertiesPanel({ contents }: PropertiesPanelProps) {
   ];
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col overflow-y-auto p-3" aria-label="Note properties">
+    <section data-phone-scroll-clearance className="flex min-h-0 flex-1 flex-col overflow-y-auto p-3" aria-label="Note properties">
       {result.diagnostics.length > 0 && <FrontmatterDiagnostics result={result} />}
       <table className="w-full border-collapse text-left text-xs">
         <caption className="sr-only">Read-only note frontmatter properties</caption>

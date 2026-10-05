@@ -14,7 +14,7 @@
    so the shared components in packages/ui are never scanned and their classes
    are never emitted. Nothing caught this before because the desktop imported
    only the token stylesheet from that package, never a component. The phone
-   shell renders Drawer, BottomSheet and BottomNav from there, so the directory
+   shell renders Drawer, BottomSheet and FloatingBubbles from there, so the directory
    has to be declared. */
 @source "../../../packages/ui/src";
 
@@ -302,6 +302,23 @@
   ::-webkit-scrollbar-thumb:hover {
     background: var(--tn-color-muted-foreground);
   }
+}
+
+/* Phone floating bubbles hover over the bottom of the content: scrollable
+   surfaces get bottom clearance (published as --tn-phone-bubble-clearance on
+   the shell root) so their last lines can scroll above the bubbles. Scoped
+   under the phone shell's data attribute so the desktop chrome — which has
+   no bubbles — is untouched. */
+/* `.cm-content` is the pad, not `.cm-scroller`: the editor's outer host div is
+   the element that scrolls, so scroller scroll-padding would never apply. */
+[data-phone-shell] .cm-content {
+  padding-bottom: var(--tn-phone-bubble-clearance);
+}
+/* Panel bodies (explorer tree, search results, outline, …) mark their real
+   scroller with `data-phone-scroll-clearance` — the attribute is inert on
+   desktop and only picks up padding inside the phone shell. */
+[data-phone-shell] [data-phone-scroll-clearance] {
+  padding-bottom: var(--tn-phone-bubble-clearance);
 }
 
 /* CodeMirror cursor: override the default black border so the cursor tracks

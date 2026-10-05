@@ -16,28 +16,26 @@ describe("uiModule", () => {
     expect(definition?.section).toBe("ui.desktop");
   });
 
-  it("registers the hub under the full key ui.mobileHub", () => {
+  it("registers the floating-bubble labels toggle under ui.mobileBubbleLabels", () => {
     const registry = createSettingsRegistry();
     registry.register(uiModule);
 
-    const definition = registry.getDefinition("ui.mobileHub");
+    const definition = registry.getDefinition("ui.mobileBubbleLabels");
 
-    expect(definition?.type).toBe("string");
-    // Empty means "use the built-in defaults", which live in the desktop layer
-    // so that panel ids stay out of platform-agnostic core.
-    expect(definition?.default).toBe("");
+    expect(definition?.type).toBe("boolean");
+    expect(definition?.default).toBe(false);
+    expect(definition?.section).toBe("ui.mobile");
   });
 
-  it("accepts the empty sentinel and a JSON list, and rejects other shapes", () => {
+  it("accepts booleans and rejects other shapes", () => {
     const registry = createSettingsRegistry();
     registry.register(uiModule);
 
     const errorsFor = (value: unknown): readonly unknown[] =>
-      validateSettings(registry, { "ui.mobileHub": value });
+      validateSettings(registry, { "ui.mobileBubbleLabels": value });
 
-    expect(errorsFor("")).toHaveLength(0);
-    expect(errorsFor('[{"kind":"menu"}]')).toHaveLength(0);
-    expect(errorsFor("{}")).toHaveLength(1);
-    expect(errorsFor("not json")).toHaveLength(1);
+    expect(errorsFor(false)).toHaveLength(0);
+    expect(errorsFor(true)).toHaveLength(0);
+    expect(errorsFor("yes")).toHaveLength(1);
   });
 });

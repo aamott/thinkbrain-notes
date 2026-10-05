@@ -154,7 +154,7 @@ export function useShellState(): ShellState {
    * Reveals a right panel, or closes it when it is already showing.
    *
    * Both chromes need this — the desktop title bar's inspector buttons and the
-   * phone's hub shortcuts — so it lives here rather than as an inline setter
+   * phone's floating bubbles — so it lives here rather than as an inline setter
    * in one of them.
    */
   const toggleRightPanel = useCallback((panel: RightPanel) => {

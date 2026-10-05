@@ -148,7 +148,10 @@ describe("popout inset below 760px", () => {
   it("spans the phone shell edge to edge", async () => {
     const host = await mount("phone");
     await act(async () => {
-      host.querySelector<HTMLButtonElement>('[aria-label="Primary navigation"] [aria-label="Search"]')?.click();
+      host.querySelector<HTMLButtonElement>('[aria-label="Main menu"]')?.click();
+    });
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('[aria-label="Navigation"] [aria-label="Search"]')?.click();
     });
     const panel = host.querySelector('[aria-label="Search panel"]');
     expect(panel).not.toBeNull();

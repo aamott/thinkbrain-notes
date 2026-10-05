@@ -17,8 +17,8 @@ const AS_FLOW_CHILD =
  * backlinks, properties, extensions). It slides in over part of the note
  * rather than covering it whole, so the content it describes stays partly
  * visible. Selection of
- * *which* panel to show lives upstream (the action-items menu or a hub
- * shortcut); this component only hosts the panel.
+ * *which* panel to show lives upstream (the action-items menu or the ⋮
+ * bubble); this component only hosts the panel.
  *
  * Always mounted so it can slide in/out via a CSS `transform` transition; when
  * closed it is translated fully off-screen, invisible, and aria-hidden.

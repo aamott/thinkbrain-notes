@@ -57,7 +57,7 @@ const SEEDED_APP_VALUES: Record<string, unknown> = {
   "settings.showAdvanced": false,
   "ui.workspaceSelectorPlacement": "title bar",
   "ui.pinnedActionItems": "",
-  "ui.mobileHub": "",
+  "ui.mobileBubbleLabels": false,
   "ui.scale": 100
 };
 

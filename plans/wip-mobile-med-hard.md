@@ -27,9 +27,9 @@ In scope:
   targets
 - Responsive layout breakpoints using shared `--tn-*` tokens so the desktop
   shell adapts to phone screens
-- Touch-friendly navigation: a bottom shortcut hub whose slots point at
-  registered panels and commands, plus touch-sized hit targets keyed off
-  `pointer: coarse` rather than viewport width
+- Touch-friendly navigation: contextual floating bubbles (Home, New note,
+  Actions) per `mobile/floating_bubbles`, plus touch-sized hit targets keyed
+  off `pointer: coarse` rather than viewport width
 - Mobile capability compatibility — desktop-only Tauri commands (terminal,
   process-spawn) are reported as unavailable on mobile via platform-aware
   declarations; this is soft compatibility behavior, not security enforcement
@@ -97,7 +97,7 @@ use.
 
 Mobile switches between desktop and mobile layouts with shared `--tn-*` tokens
 within the same shell.
-Phone-first on small screens (single panel, bottom shortcut hub), multi-panel on
+Phone-first on small screens (single panel, floating bubbles), multi-panel on
 large screens (current desktop layout). There is no separate screen tree or
 navigation stack: `useShellState` holds the state and two thin layout components
 arrange it, chosen on `coarse pointer && width < 760`. Panels, tabs, documents
@@ -174,7 +174,7 @@ point tuning a layout for a workspace that cannot be opened.
   and the exact run are recorded in
   `docs/superpowers/specs/2026-08-27-android-git-access-design.md`.
 - ✅ Phone shell chrome — headless shell state, form-factor gate, header,
-  drawer, shortcut hub, tab-switcher and inspector sheets; verified on an
+  drawer, shortcut hub (since replaced by floating bubbles), tab-switcher and inspector sheets; verified on an
   Android device 2026-08-27.
 - ✅ Files-first navigation — Files is the mobile home; browser-backed Back and
   Forward history, right-edge navigation, Action items and New note menus,

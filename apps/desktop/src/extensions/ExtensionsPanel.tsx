@@ -156,7 +156,7 @@ export function ExtensionsPanel({ entries }: ExtensionsPanelProps) {
           <p className="m-0 text-muted-foreground text-xs">No extensions are installed.</p>
         </div>
       ) : (
-        <ul className="m-0 list-none overflow-y-auto p-2" aria-label="Installed extensions">
+        <ul data-phone-scroll-clearance className="m-0 list-none overflow-y-auto p-2" aria-label="Installed extensions">
           {resolved.map((entry) => (
             <li key={entry.id} className="rounded-small px-2 py-2">
               <div className="flex items-baseline justify-between gap-2">

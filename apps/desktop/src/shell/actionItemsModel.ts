@@ -3,8 +3,8 @@
  *
  * Each registered right panel gets a row in the ⋯ menu; the *pinned* ones
  * also keep a dedicated icon in the bar. Pinning is persisted as a JSON list
- * in `ui.pinnedActionItems` (a `string` setting, same shape as
- * `ui.mobileHub`): an empty string means "use the defaults", an empty list
+ * in `ui.pinnedActionItems` (a `string` setting carrying JSON): an empty
+ * string means "use the defaults", an empty list
  * is a real choice — the user unpinned everything.
  *
  * A panel with an undismissed notification is shown regardless of pinning —

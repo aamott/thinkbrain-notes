@@ -85,7 +85,7 @@ export function ConflictsPanel({ rootPath, onReview }: ConflictsPanelProps) {
   // the only header content that belongs here is the explainer line.
   if (conflicts.length === 0 && stuck.length === 0 && !error) {
     return (
-      <section className="@container flex min-h-0 flex-1 flex-col overflow-y-auto" aria-label="Sync conflicts">
+      <section data-phone-scroll-clearance className="@container flex min-h-0 flex-1 flex-col overflow-y-auto" aria-label="Sync conflicts">
         <Unavailable
           title="No sync conflicts"
           description="When git sync or a cloud folder leaves a note that needs a choice, it shows up here."
@@ -95,7 +95,7 @@ export function ConflictsPanel({ rootPath, onReview }: ConflictsPanelProps) {
   }
 
   return (
-    <section className="@container flex min-h-0 flex-1 flex-col overflow-y-auto" aria-label="Sync conflicts">
+    <section data-phone-scroll-clearance className="@container flex min-h-0 flex-1 flex-col overflow-y-auto" aria-label="Sync conflicts">
       <p className="m-0 px-3 pt-3 text-xs leading-relaxed text-muted-foreground">
         Choose what to keep. Nothing is deleted until you decide.
       </p>

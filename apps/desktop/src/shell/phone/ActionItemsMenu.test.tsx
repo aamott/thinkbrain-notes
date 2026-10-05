@@ -140,20 +140,19 @@ describe("ActionItemsMenu", () => {
     expect(onDismiss).toHaveBeenCalledTimes(1);
   });
 
-  // The *layer* spans header→hub so outside taps anywhere dismiss, but the
-  // menu itself is compact: auto height at the top-right, capped by the layer.
-  it("keeps the menu compact inside a layer bounded between header and hub", async () => {
+  // The *layer* spans the whole shell — bubbles included — so a tap on the
+  // trigger bubble also dismisses; the menu itself hangs above the ⋮ bubble.
+  it("spans the whole shell and hangs the menu above the ⋮ bubble", async () => {
     const host = await render(menu());
     const menuEl = menuOf(host);
     const menuCls = menuEl?.className ?? "";
     const layerCls = menuEl?.parentElement?.className ?? "";
 
-    expect(menuCls).toContain("top-0");
-    expect(menuCls).toContain("right-2");
-    expect(menuCls).toContain("max-h-full");
-    expect(menuCls).not.toContain("bottom-[calc(3.5rem+env(safe-area-inset-bottom))]");
-    expect(layerCls).toContain("top-[calc(3.5rem+env(safe-area-inset-top))]");
-    expect(layerCls).toContain("bottom-[calc(3.5rem+env(safe-area-inset-bottom))]");
+    expect(menuCls).toContain("right-3");
+    expect(menuCls).toContain("bottom-[calc(4.5rem+env(safe-area-inset-bottom))]");
+    expect(layerCls).toContain("inset-0");
+    // Above the bubbles' z-20 so their taps reach the layer, not the bubble.
+    expect(layerCls).toContain("z-30");
   });
 
   // Roving focus shared by both phone menus: arrows move between enabled

@@ -90,7 +90,7 @@ describe("desktop command registry", () => {
     expect(() => registry.register(first)).toThrow("already registered");
   });
 
-  it("gives the new-note command an icon the hub can render", () => {
+  it("gives the new-note command an icon the bubbles can render", () => {
     const newNote = builtInDesktopCommands.find((command) => command.id === "new-note");
 
     expect(newNote?.icon).toBe("plus");

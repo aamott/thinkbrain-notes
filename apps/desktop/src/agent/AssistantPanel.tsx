@@ -171,7 +171,7 @@ export function AssistantPanel() {
       aria-label="AI assistant"
     >
       {/* Thread viewport. */}
-      <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto px-3 py-3.5">
+      <div data-phone-scroll-clearance className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto px-3 py-3.5">
         {INITIAL_MESSAGES.map((message, index) => (
           <div
             key={index}

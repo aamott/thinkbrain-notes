@@ -67,6 +67,7 @@ export function BacklinksPanel({
   return (
     <nav
       aria-label="Backlinks to current note"
+      data-phone-scroll-clearance
       className="flex min-h-0 flex-1 flex-col overflow-y-auto p-2"
     >
       <ul className="m-0 list-none space-y-1 p-0">

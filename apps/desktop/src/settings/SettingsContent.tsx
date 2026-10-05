@@ -395,6 +395,7 @@ export function SettingsContent() {
   return (
     <div
       ref={containerRef}
+      data-phone-scroll-clearance
       className="flex min-h-0 grow flex-col overflow-y-auto"
       data-testid="settings-content-scroll"
     >

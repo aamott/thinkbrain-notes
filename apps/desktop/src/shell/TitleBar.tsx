@@ -3,7 +3,7 @@ import { ArrowLeft, ArrowRight, MoreHorizontal, Pin, Plus } from "lucide-react";
 import { cn } from "../lib/utils";
 import { tabAccessibleName, type DesktopTab } from "../tabs/tabModel";
 import { useRightPanelContributions, type RightPanelContribution } from "../panels/panelRegistryModel";
-import { useNotificationStore } from "../notifications/notificationStore";
+import { usePanelNotificationCounts } from "../notifications/usePanelNotificationCounts";
 import { useSettingsStore } from "../settings/settingsStore";
 import { mediaQueryList, useMediaQuery } from "../lib/useMediaQuery";
 import { IconButton } from "./IconButton";
@@ -134,16 +134,7 @@ export function TitleBar({
   // Undismissed notifications keyed by the panel they are about. A notified
   // panel's icon surfaces even unpinned, wearing the count, and leaves again
   // when the last entry for it is dismissed.
-  const notifications = useNotificationStore((state) => state.notifications);
-  const notified = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const item of notifications) {
-      if (item.panel && !item.dismissed) {
-        counts.set(item.panel, (counts.get(item.panel) ?? 0) + 1);
-      }
-    }
-    return counts;
-  }, [notifications]);
+  const notified = usePanelNotificationCounts();
 
   const { visible, overflow } = useMemo(
     () => resolveActionItems(rightPanels, pinned, new Set(notified.keys())),

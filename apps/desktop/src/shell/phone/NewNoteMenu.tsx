@@ -5,7 +5,7 @@ import { useDismissable } from "@thinkbrain/ui";
 import { PanelIcon } from "../panelIcons";
 import { PhoneMenuRow } from "./PhoneMenuRow";
 import { handlePhoneMenuKeyDown } from "./phoneMenuKeyboard";
-import { PHONE_OVERLAY_BOUNDS } from "./overlayBounds";
+import { PHONE_BUBBLE_MENU_BOTTOM } from "./overlayBounds";
 import { cn } from "../../lib/utils";
 
 interface RecentNoteAction {
@@ -21,18 +21,18 @@ export interface NewNoteMenuAction {
 }
 
 /**
- * Compact popup the hub's New note slot opens: create, extension-contributed
+ * Compact popup the New-note bubble opens: create, extension-contributed
  * actions, or jump back to the most recent note. It is an anchored menu — not
  * a sheet — because a short pick list wants the lightest surface that can
  * carry a history entry.
  *
- * Rendered inside `PhoneHub`'s relative wrapper, it hangs directly above the
- * bar and follows the slot's rendered position via `anchorPercent`, clamped so
- * an edge slot cannot push the menu off-screen.
+ * Rendered at the PhoneShell level, it hangs just above the left bubble
+ * group. Its outside-dismiss layer spans the whole shell — bubbles included —
+ * so tapping the trigger bubble while the menu is open counts as outside:
+ * the menu closes and the same tap does not reopen it.
  */
 export function NewNoteMenu({
   open,
-  anchorPercent,
   recentNote,
   actions,
   onCreate,
@@ -41,8 +41,6 @@ export function NewNoteMenu({
   onDismiss
 }: {
   readonly open: boolean;
-  /** Percentage of the bar width where the New note slot's center sits. */
-  readonly anchorPercent: number;
   readonly recentNote: RecentNoteAction | null;
   /** Extension-contributed rows, rendered in registry order. */
   readonly actions: readonly NewNoteMenuAction[];
@@ -56,9 +54,12 @@ export function NewNoteMenu({
 
   return (
     <>
+      {/* Whole shell including the bubbles: the layer sits above them (z-30
+          over z-20) so a tap on the trigger bubble dismisses instead of
+          retriggering. */}
       <div
         aria-hidden="true"
-        className={cn("fixed inset-x-0 z-30", PHONE_OVERLAY_BOUNDS)}
+        className="absolute inset-0 z-30"
         onPointerDown={(event) => {
           if (event.target === event.currentTarget) onDismiss();
         }}
@@ -68,10 +69,10 @@ export function NewNoteMenu({
         role="menu"
         aria-label="New note actions"
         onKeyDown={handlePhoneMenuKeyDown}
-        style={{
-          left: `clamp(7rem, ${anchorPercent}%, calc(100% - 7rem))`
-        }}
-        className="absolute bottom-[calc(100%+0.5rem)] z-50 w-56 -translate-x-1/2 rounded-medium border border-border bg-surface p-1 text-foreground shadow-panel"
+        className={cn(
+          "absolute left-3 z-40 w-56 rounded-medium border border-border bg-surface p-1 text-foreground shadow-panel",
+          PHONE_BUBBLE_MENU_BOTTOM
+        )}
       >
         <PhoneMenuRow
           icon={<Plus aria-hidden="true" />}

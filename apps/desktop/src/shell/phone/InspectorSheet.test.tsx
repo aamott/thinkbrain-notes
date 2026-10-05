@@ -66,17 +66,18 @@ describe("InspectorSheet (right-edge drawer)", () => {
     expect(cls).toContain("translate-x-0");
   });
 
-  // The hub must stay reachable while an inspector is open — a drawer (or
-  // scrim) that ran to the screen bottom would cover it.
-  it("does not cover the bottom hub", async () => {
+  // The inspector runs header-to-bottom edge; the bubbles are hidden while it
+  // is open, so nothing needs to stay reachable underneath it.
+  it("bounds itself below the header and down to the bottom edge", async () => {
     const host = await render(sheet());
     const cls = drawer(host)?.className ?? "";
 
-    expect(cls).toContain("bottom-[calc(3.5rem+env(safe-area-inset-bottom))]");
+    expect(cls).toContain("top-[calc(3.5rem+env(safe-area-inset-top))]");
+    expect(cls).toContain("bottom-0");
 
     const scrimCls = host.querySelector("[data-tn-scrim]")?.className ?? "";
     expect(scrimCls).toContain("top-[calc(3.5rem+env(safe-area-inset-top))]");
-    expect(scrimCls).toContain("bottom-[calc(3.5rem+env(safe-area-inset-bottom))]");
+    expect(scrimCls).toContain("bottom-0");
     // Horizontal bounds are explicit so `inset-0` cannot lose them when the
     // top/bottom bounds merge over it.
     expect(scrimCls).toContain("inset-x-0");

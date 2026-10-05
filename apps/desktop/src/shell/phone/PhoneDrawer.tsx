@@ -1,16 +1,12 @@
-import { Drawer, useLongPress } from "@thinkbrain/ui";
+import { Drawer } from "@thinkbrain/ui";
 
 import { useLeftPanelContributions } from "../../panels/panelRegistryModel";
 import { PanelIcon } from "../panelIcons";
 import type { LeftPanel } from "../shellTypes";
 import { WorkspaceSelectorOutlet } from "../../workspace/WorkspaceSelectorPortal";
 
-// Panel and scrim stop above the hub so the bottom-right Menu slot stays
-// directly tappable to close the drawer — same bottom bound the menus use.
-const BOUNDS = "bottom-[calc(3.5rem+env(safe-area-inset-bottom))]";
-
 // 48px already clears the touch minimum, so no `pointer-coarse:` bump is
-// needed — the same reasoning `BottomNav` records for its 56px slots.
+// needed — the same reasoning the floating bubbles record for their 48px size.
 const row =
   "flex min-h-12 w-full cursor-pointer items-center gap-3 rounded-small border-0 bg-transparent px-3 text-left text-sm text-sidebar-foreground hover:bg-accent tn-focus-ring";
 
@@ -21,6 +17,10 @@ const row =
  * — so entries, active state and badges have one definition, not two. The labels
  * the rail keeps in `aria-label` become visible text here, because a phone has
  * no hover to teach an unlabelled glyph.
+ *
+ * Full height — panel and scrim run to the bottom edge and cover the header:
+ * the bubbles it sits over are hidden while it is open, and dismissing is a
+ * scrim tap, Escape, or system Back.
  */
 export function PhoneDrawer({
   open,
@@ -29,10 +29,7 @@ export function PhoneDrawer({
   onDismiss,
   onSelectPanel,
   onOpenSettings,
-  onWorkspaceAction,
-  onLongPressPanel,
-  hubPanelIds,
-  hubFull = false
+  onWorkspaceAction
 }: {
   readonly open: boolean;
   readonly activePanel: LeftPanel | null;
@@ -42,14 +39,8 @@ export function PhoneDrawer({
   readonly onOpenSettings: () => void;
   /** Runs before any workspace-selector action so its UI lands on Files, not under the drawer. */
   readonly onWorkspaceAction: () => void;
-  readonly onLongPressPanel?: (panel: LeftPanel) => void;
-  /** Panels that already hold a hub slot, so a row can say so before it is pressed. */
-  readonly hubPanelIds?: readonly string[];
-  /** Whether the hub is at `MAX_HUB_ITEMS`, which makes a pin a no-op. */
-  readonly hubFull?: boolean;
 }) {
   const panels = useLeftPanelContributions();
-  const longPress = useLongPress();
 
   return (
     <Drawer
@@ -57,28 +48,13 @@ export function PhoneDrawer({
       onDismiss={onDismiss}
       label="Navigation"
       side="right"
-      className={BOUNDS}
-      scrimClassName={BOUNDS}
     >
       <h2 className="px-4 pt-3 pb-2 text-sm font-bold">Menu</h2>
       <WorkspaceSelectorOutlet variant="drawer" onAction={onWorkspaceAction} />
 
-      {/* A long press is invisible: nothing on a phone announces that pressing
-          and holding does anything at all. This line is the only place the
-          affordance is stated, and it also answers the two silent refusals —
-          a full hub, and a row that is already pinned (marked below). */}
-      {onLongPressPanel && (
-        <p className="px-4 pt-3 text-xs leading-snug text-sidebar-foreground opacity-70">
-          {hubFull
-            ? "The bottom bar is full. Press and hold one of its shortcuts to remove it, then press and hold a section here to pin it."
-            : "Press and hold a section to pin it to the bottom bar. Press and hold a bottom bar shortcut to remove it."}
-        </p>
-      )}
-
       <div className="flex flex-1 flex-col gap-0.5 p-2">
         {panels.map((panel) => {
           const badge = badges[panel.id];
-          const pinned = hubPanelIds?.includes(panel.id) ?? false;
           return (
             <button
               key={panel.id}
@@ -86,37 +62,10 @@ export function PhoneDrawer({
               aria-label={`${panel.label}${badge !== undefined && badge > 0 ? `, ${badge} conflicts` : ""}`}
               aria-current={activePanel === panel.id ? "page" : undefined}
               className={row}
-              onClick={() => {
-                // A completed long press already acted; don't also run the tap.
-                if (longPress.consumeClick()) return;
-                onSelectPanel(panel.id);
-              }}
-              onPointerDown={() =>
-                longPress.begin(
-                  onLongPressPanel ? () => onLongPressPanel(panel.id) : undefined
-                )
-              }
-              onPointerUp={longPress.cancel}
-              // A slide or scroll is a cancelled hold, not a long press.
-              onPointerMove={longPress.cancel}
-              onPointerLeave={longPress.cancel}
-              onPointerCancel={longPress.cancel}
-              onContextMenu={(event) => {
-                if (!onLongPressPanel) return;
-                event.preventDefault();
-                if (longPress.hasFired()) return;
-                onLongPressPanel(panel.id);
-              }}
+              onClick={() => onSelectPanel(panel.id)}
             >
               <PanelIcon name={panel.icon} />
               <span className="flex-1 truncate">{panel.label}</span>
-              {/* Visible, but deliberately not part of the accessible name:
-                  announcing the pin state is a follow-up. */}
-              {pinned && (
-                <span className="shrink-0 text-[0.6rem] font-bold tracking-wide uppercase opacity-60">
-                  Pinned
-                </span>
-              )}
               {badge !== undefined && badge > 0 && (
                 <span className="rounded-full bg-danger px-1.5 text-[0.65rem] font-bold text-danger-foreground">
                   {badge}

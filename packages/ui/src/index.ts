@@ -1,9 +1,7 @@
 export { cn } from "./lib/utils";
 export { dismissTopOverlay, useDismissable } from "./components/ui/use-dismissable";
-export { LONG_PRESS_MS, useLongPress } from "./components/ui/use-long-press";
-export type { LongPress } from "./components/ui/use-long-press";
 export { Scrim } from "./components/ui/scrim";
 export { Drawer } from "./components/ui/drawer";
 export { BottomSheet } from "./components/ui/bottom-sheet";
-export { BottomNav } from "./components/ui/bottom-nav";
-export type { BottomNavItem } from "./components/ui/bottom-nav";
+export { FloatingBubbles } from "./components/ui/floating-bubbles";
+export type { FloatingBubbleItem } from "./components/ui/floating-bubbles";

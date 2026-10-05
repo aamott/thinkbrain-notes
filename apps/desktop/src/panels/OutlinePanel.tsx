@@ -31,7 +31,7 @@ export function OutlinePanel({ contents }: OutlinePanelProps) {
   }
 
   return (
-    <nav className="flex min-h-0 flex-1 flex-col overflow-y-auto p-2" aria-label="Note outline">
+    <nav data-phone-scroll-clearance className="flex min-h-0 flex-1 flex-col overflow-y-auto p-2" aria-label="Note outline">
       <OutlineList nodes={buildOutlineTree(headings)} />
     </nav>
   );

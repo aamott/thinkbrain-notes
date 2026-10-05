@@ -237,6 +237,7 @@ function HistorySession({
 
   return (
     <section
+      data-phone-scroll-clearance
       className="@container flex min-h-0 flex-1 flex-col overflow-y-auto"
       aria-label="Version history"
     >

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
  * Pixels the soft keyboard covers at the bottom of the layout viewport.
  *
  * `windowSoftInputMode="adjustResize"` shipped with the CodeMirror mobile work,
- * so the webview does resize — but a bottom-anchored hub still needs the number
+ * so the webview does resize — but the floating bubbles still need the number
  * to decide whether it is in the way. Same `visualViewport` approach
  * `MetadataBottomSheet` already uses, lifted out so there is one of it.
  */

@@ -141,7 +141,7 @@ export function SearchPanel({ rootPath, onOpenFile }: SearchPanelProps) {
         </p>
       )}
 
-      <div className="flex-1 overflow-y-auto px-3 pb-2">
+      <div data-phone-scroll-clearance className="flex-1 overflow-y-auto px-3 pb-2">
         {results.length === 0 ? (
           <p className="text-muted-foreground text-xs py-4 text-center">
             {query

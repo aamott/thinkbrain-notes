@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, MoreHorizontal } from "lucide-react";
+import { ArrowLeft, ArrowRight, Menu } from "lucide-react";
 
 import { PhoneBreadcrumb } from "./PhoneBreadcrumb";
 
@@ -11,29 +11,32 @@ import { PhoneBreadcrumb } from "./PhoneBreadcrumb";
  * keeps the current file visible and opens the full scrollable path on tap.
  *
  * The two right-hand controls open different surfaces: the count opens the tab
- * switcher, `⋯` opens the action-items menu; the hub's Menu slot is the only
- * launcher for the navigation drawer.
+ * switcher, `☰` opens the navigation drawer; the floating bubbles carry the
+ * document-level actions (New note, action items).
  */
 export function PhoneHeader({
   breadcrumbs,
   canGoBack,
   canGoForward,
   tabCount,
-  actionItemsOpen,
+  mainMenuOpen,
+  badge = 0,
   onBack,
   onForward,
   onOpenTabs,
-  onToggleActionItems
+  onToggleMainMenu
 }: {
   readonly breadcrumbs: readonly string[];
   readonly canGoBack: boolean;
   readonly canGoForward: boolean;
   readonly tabCount: number;
-  readonly actionItemsOpen: boolean;
+  readonly mainMenuOpen: boolean;
+  /** Undismissed-conflict count shown on the menu button, hidden at zero. */
+  readonly badge?: number;
   readonly onBack: () => void;
   readonly onForward: () => void;
   readonly onOpenTabs: () => void;
-  readonly onToggleActionItems: () => void;
+  readonly onToggleMainMenu: () => void;
 }) {
   const button =
     "flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-small border-0 bg-transparent text-titlebar-foreground tn-focus-ring active:bg-accent disabled:cursor-default disabled:opacity-40";
@@ -83,13 +86,23 @@ export function PhoneHeader({
         </button>
         <button
           type="button"
-          aria-label="Document tools"
-          aria-haspopup="menu"
-          aria-expanded={actionItemsOpen}
-          className={`${button} aria-expanded:bg-accent`}
-          onClick={onToggleActionItems}
+          // The badge chip is aria-hidden, so the conflict count rides the
+          // accessible name — otherwise a counted badge reads as a bare menu.
+          aria-label={badge > 0 ? `Main menu, ${badge} conflicts` : "Main menu"}
+          aria-haspopup="dialog"
+          aria-expanded={mainMenuOpen}
+          className={`relative ${button} aria-expanded:bg-accent`}
+          onClick={onToggleMainMenu}
         >
-          <MoreHorizontal aria-hidden="true" className="size-5" />
+          <Menu aria-hidden="true" className="size-5" />
+          {badge > 0 && (
+            <span
+              aria-hidden="true"
+              className="absolute top-1 right-1 rounded-full bg-danger px-1 text-[0.6rem] font-bold leading-3.5 text-danger-foreground"
+            >
+              {badge}
+            </span>
+          )}
         </button>
       </div>
     </header>

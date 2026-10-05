@@ -1,5 +1,7 @@
 # Mobile Shell Implementation Plan
 
+> **Superseded 2026-10-04:** the bottom hub was replaced by floating bubbles — see the `plans/mobile` floating_bubbles story.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Give the app a phone presentation — header, drawer, configurable bottom hub, sheets — without creating a second UI to maintain.
