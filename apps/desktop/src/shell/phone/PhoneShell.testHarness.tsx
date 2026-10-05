@@ -42,7 +42,11 @@ vi.mock("../../workspace/workspaceDocumentAdapter", () => ({
   }
 }));
 
-vi.mock("../../native/commands", () => ({
+// Partial mock: only the IPC boundary is stubbed. Error helpers like
+// `normalizeNativeError` and `NativeCommandError` must stay real — a save
+// failure a test drives on purpose goes straight through them.
+vi.mock("../../native/commands", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../native/commands")>()),
   invokeNativeCommand: vi.fn(() => Promise.resolve(null))
 }));
 
@@ -94,7 +98,7 @@ afterEach(async () => {
 function clearStoredHub(): void {
   const appValues = { ...useSettingsStore.getState().appValues };
   delete appValues["ui.mobileHub"];
-  useSettingsStore.setState({ appValues, stagedChanges: {}, isDirty: false, dirtyCount: 0 });
+  useSettingsStore.setState({ appValues, stagedChanges: {} });
 }
 
 /** Seeds the persisted hub before a mount, the way a returning user would find it. */

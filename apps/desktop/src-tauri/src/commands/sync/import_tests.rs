@@ -34,6 +34,9 @@ fn record_note(fixture: &test_support::RepoFixture, relative: &str, contents: &s
 fn bare_remote(name: &str) -> PathBuf {
     let path = make_temp_test_dir(name, "import", true);
     gix::init_bare(&path).expect("bare remote");
+    // HEAD names `main` rather than the platform's configured default branch:
+    // sync discovery binds the destination's advertised default.
+    fs::write(path.join("HEAD"), "ref: refs/heads/main\n").expect("HEAD names main");
     path
 }
 
@@ -297,6 +300,7 @@ fn an_empty_remote_creates_an_empty_linked_workspace_without_git_in_the_vault() 
     let parent = parent("empty");
     let remote = make_temp_test_dir("empty-remote", "import", true);
     gix::init_bare(&remote).expect("bare remote");
+    fs::write(remote.join("HEAD"), "ref: refs/heads/main\n").expect("HEAD names main");
 
     let prepared = prepare_import(
         &app_data,

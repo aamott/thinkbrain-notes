@@ -9,11 +9,11 @@ import {
 } from "@thinkbrain/core";
 import { useState } from "react";
 
+import { useMediaQuery } from "../lib/useMediaQuery";
 import { AddFieldRow } from "./AddFieldRow";
 import { MetadataBottomSheet } from "./MetadataBottomSheet";
 import { MetadataField } from "./MetadataField";
 import { TOUCH } from "./journalChrome";
-import { useCoarsePointer } from "./useCoarsePointer";
 
 /**
  * The entry's metadata, set as the page's dateline (D35).
@@ -162,7 +162,7 @@ export function MetadataWidget({
   // D76: touch decides. Under a fingertip the fields move into a sheet (M-2),
   // because the dateline's compact controls are half the touch minimum and sit
   // where the soft keyboard would cover them.
-  const touch = useCoarsePointer();
+  const touch = useMediaQuery("(pointer: coarse)");
   // `added` fields are local state — they exist only until a value is typed and
   // the key reaches the frontmatter. Once it does, the container re-parses the
   // file and the field arrives via `unconfigured` (or `definitions` if it was a

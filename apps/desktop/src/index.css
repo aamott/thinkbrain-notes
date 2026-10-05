@@ -157,6 +157,92 @@
   animation: tn-dock-slide-right var(--tn-duration-overlay) ease-out;
 }
 
+/* Tree-row glyph color: muted-foreground tinted toward the theme primary so
+   file/folder icons read as a distinct tone from the row's name text. A mix
+   rather than a token swap keeps the icon secondary while giving every theme
+   — including .tbtheme presets — a hue-consistent variation. */
+@utility tn-tree-icon {
+  color: color-mix(in srgb, var(--tn-color-primary) 40%, var(--tn-color-muted-foreground));
+}
+
+/* No scrollbar at all on strips that scroll but are never meant to be
+   grabbed — the tab strip scrolls by wheel and scroll-into-view, and its
+   scroll-edge fades already communicate position. A hairline scrollbar was
+   tried first, but WebKitGTK/WebView overlay scrollbars ignore the declared
+   ::-webkit-scrollbar size: on pointer approach they expand a grab area that
+   composites above content at any z-index, covering the tab × buttons and
+   swallowing their clicks. No CSS can shrink that hit region, so the strip
+   gets none. */
+@utility tn-scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Vertical scrollbar on the left edge instead of the right. Overlay
+   scrollbars (WebKitGTK, Android WebView) composite above page content at
+   any z-index, so a right-edge scrollbar can paint over menus — keeping the
+   gutter on the left leaves that edge clean for them. `direction: rtl`
+   moves the scrollbar in both classic and overlay renderers; children
+   reset to ltr. Only safe where content cannot overflow horizontally —
+   in an RTL scroller, horizontal overflow would right-align and clip the
+   leading edge. */
+@utility tn-scrollbar-left {
+  direction: rtl;
+  & > * {
+    direction: ltr;
+  }
+}
+
+/* The explorer header's create actions stay hidden until the header is
+   hovered, focused into, on a coarse pointer, or has its ⋯ menu open
+   (`data-open`). Kept as one named state machine rather than variant
+   classes: a `focus-within:opacity-100` + `opacity-0` pair is exactly what
+   this is, but class-list conflict checkers can't see the intent. */
+@utility tn-explorer-create-reveal {
+  opacity: 0;
+  transition-property: opacity;
+  transition-duration: 150ms;
+  .group\/explorer-header:hover &,
+  &:focus-within,
+  &[data-open="true"] {
+    opacity: 1;
+  }
+  @media (pointer: coarse) {
+    opacity: 1;
+  }
+}
+
+/* CodeMirror's internal elements take layout and skin from the host div.
+   Declared here rather than as `[&_.cm-*]` arbitrary variants so the host's
+   own classes (`min-h-0`, `overflow-auto`, `cursor-text`) don't collide
+   with same-property descendant rules in class-list conflict checks — the
+   checker can't tell they target different elements. */
+@utility tn-cm-editor {
+  .cm-editor {
+    min-height: 100%;
+    cursor: text;
+    background-color: var(--color-editor);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    line-height: 1.65;
+  }
+  .cm-scroller {
+    overflow: auto;
+    cursor: text;
+  }
+  .cm-content {
+    min-height: 100%;
+    padding-top: 1rem;
+    padding-inline: 1.25rem;
+    padding-bottom: 4rem;
+  }
+  .cm-focused {
+    outline: none;
+  }
+}
+
 @layer base {
   :root {
     font-family: var(--tn-font-sans);

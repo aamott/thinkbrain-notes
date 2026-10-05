@@ -282,9 +282,9 @@ pub fn rename_workspace_entry_for_test(
 /// Deletes any workspace file or folder. Folders are removed recursively so
 /// the explorer can delete a populated folder in one action. The path is
 /// normalized and verified to stay inside the workspace root for literal
-/// traversal (`..`, absolute paths); symlinked components inside the workspace
-/// are not separately resolved, so this is safe for trusted local workspaces
-/// but should not be exposed to untrusted remote roots.
+/// traversal (`..`, absolute paths), and `resolve_workspace_entry_path`
+/// canonicalizes existing targets, so symlinked components cannot redirect
+/// the delete outside the workspace.
 #[tauri::command]
 pub fn delete_workspace_entry(
     app: tauri::AppHandle,

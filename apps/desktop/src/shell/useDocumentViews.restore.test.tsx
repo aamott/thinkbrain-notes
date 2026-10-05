@@ -39,7 +39,8 @@ const TABS: DesktopTabState = {
     }
   ],
   activeTabId: TAB_ID,
-  closeRequest: null
+  closeRequest: null,
+  history: { entries: [TAB_ID], cursor: 0 }
 } as DesktopTabState;
 
 let root: Root | null = null;

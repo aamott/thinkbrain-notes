@@ -16,7 +16,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch } from
 
 import { appEvents } from "../events/appEvents";
 import { releaseEditorStatesExcept } from "../tabs/editorStateCache";
-import { createEditorTab, createFileTab, isMediaViewerKind, type DesktopTab, type DesktopTabAction, type DesktopTabState } from "../tabs/tabModel";
+import { createEditorTab, createFileTab, createNewTab, isMediaViewerKind, type DesktopTab, type DesktopTabAction, type DesktopTabState, type TabOpenPlacement } from "../tabs/tabModel";
 import { workspaceDesktopApi } from "../workspace/workspaceAdapter";
 import { workspaceDocumentApi } from "../workspace/workspaceDocumentAdapter";
 import { textFileApi } from "../workspace/textFileAdapter";
@@ -49,10 +49,12 @@ export interface DocumentViews {
   readonly conflicts: ReadonlySet<string>;
   /** Loads a document into a tab that already exists (or is about to). `kind` picks the loader — a code editor reads through the text-file API, not the Markdown one. */
   readonly loadDocumentIntoView: (tabId: string, rootPath: string, relativePath: string, kind?: string) => void;
-  /** Opens a note: makes the tab, announces it, loads it. */
-  readonly openMarkdownDocument: (rootPath: string, relativePath: string) => void;
+  /** Opens a note: makes the tab, announces it, loads it. `placement` decides whether it may take over the tab on screen — see {@link TabOpenPlacement}. */
+  readonly openMarkdownDocument: (rootPath: string, relativePath: string, placement?: TabOpenPlacement) => void;
   /** Opens any file: infers tab kind from extension, loads via the right API. */
-  readonly openFileDocument: (rootPath: string, relativePath: string) => void;
+  readonly openFileDocument: (rootPath: string, relativePath: string, placement?: TabOpenPlacement) => void;
+  /** Opens a blank landing tab; returns its id so a chrome can navigate to it. */
+  readonly openNewTab: () => string;
   /** Re-reads a changed file into the tab already showing it. */
   readonly reloadDocumentInPlace: (tabId: string, rootPath: string, relativePath: string) => void;
   /** Records an edit and marks the tab dirty. */
@@ -157,9 +159,9 @@ export function useDocumentViews({ tabState, dispatchTabs }: DocumentViewsProps)
   );
 
   const openMarkdownDocument = useCallback(
-    (rootPath: string, relativePath: string) => {
+    (rootPath: string, relativePath: string, placement?: TabOpenPlacement) => {
       const tab = createEditorTab({ rootPath, relativePath });
-      dispatchTabs({ type: "open", tab });
+      dispatchTabs({ type: "open", tab, placement });
       appEvents.emit("note.opened", { rootPath, relativePath });
 
       // Already open: raising the tab is the whole action, and re-reading would
@@ -176,9 +178,9 @@ export function useDocumentViews({ tabState, dispatchTabs }: DocumentViewsProps)
    * (image/audio/video) open as read-only viewer tabs with no document state.
    */
   const openFileDocument = useCallback(
-    (rootPath: string, relativePath: string) => {
+    (rootPath: string, relativePath: string, placement?: TabOpenPlacement) => {
       const tab = createFileTab({ rootPath, relativePath });
-      dispatchTabs({ type: "open", tab });
+      dispatchTabs({ type: "open", tab, placement });
       appEvents.emit("note.opened", { rootPath, relativePath });
 
       // Media viewer tabs have no document state — they load directly from disk
@@ -191,6 +193,12 @@ export function useDocumentViews({ tabState, dispatchTabs }: DocumentViewsProps)
     },
     [dispatchTabs, loadDocumentIntoView]
   );
+
+  const openNewTab = useCallback((): string => {
+    const tab = createNewTab();
+    dispatchTabs({ type: "open", tab });
+    return tab.id;
+  }, [dispatchTabs]);
 
   /**
    * Re-reads a note that changed on disk into the tab already showing it.
@@ -349,6 +357,7 @@ export function useDocumentViews({ tabState, dispatchTabs }: DocumentViewsProps)
     loadDocumentIntoView,
     openMarkdownDocument,
     openFileDocument,
+    openNewTab,
     reloadDocumentInPlace,
     updateDocument,
     saveDocument,

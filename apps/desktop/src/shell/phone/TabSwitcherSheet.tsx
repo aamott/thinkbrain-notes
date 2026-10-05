@@ -1,5 +1,5 @@
 import { BottomSheet } from "@thinkbrain/ui";
-import { X } from "lucide-react";
+import { Plus, X } from "lucide-react";
 
 import { cn } from "../../lib/utils";
 import { tabAccessibleName, type DesktopTab } from "../../tabs/tabModel";
@@ -17,7 +17,8 @@ import { previewText } from "./tabPreview";
 function placeholderFor(tab: DesktopTab, view: DocumentViewState | undefined): string {
   if (view?.phase === "loading") return "Loading…";
   if (view?.phase === "error") return "Unavailable";
-  return tab.kind;
+  // A kind string reads as jargon on chrome surfaces that have a title.
+  return tab.kind === "new-tab" ? tab.title : tab.kind;
 }
 
 /**
@@ -35,7 +36,8 @@ export function TabSwitcherSheet({
   documents,
   onDismiss,
   onSelect,
-  onClose
+  onClose,
+  onNewTab
 }: {
   readonly open: boolean;
   readonly tabs: readonly DesktopTab[];
@@ -44,16 +46,11 @@ export function TabSwitcherSheet({
   readonly onDismiss: () => void;
   readonly onSelect: (tabId: string) => void;
   readonly onClose: (tabId: string) => void;
+  /** Called when the user taps the trailing new-tab card. */
+  readonly onNewTab: () => void;
 }) {
   return (
     <BottomSheet open={open} onDismiss={onDismiss} label="Open tabs">
-      {tabs.length === 0 ? (
-        // Closing the last tab leaves this sheet open over an empty workspace.
-        // An empty grid is a blank rectangle that explains nothing.
-        <p role="status" className="m-0 p-6 text-center text-xs text-muted-foreground">
-          No open tabs. Choose a note from Files to start one.
-        </p>
-      ) : (
         <ul className="m-0 grid list-none grid-cols-2 gap-3 p-3">
           {tabs.map((tab) => {
             const isActive = tab.id === activeTabId;
@@ -117,8 +114,22 @@ export function TabSwitcherSheet({
               </li>
             );
           })}
+          {/* The mobile-browser new-tab affordance: a card in the slot the
+              next tab would occupy, not a button floating over the grid. It
+              is also the whole answer when the last tab was just closed. */}
+          <li className="relative m-0">
+            <button
+              type="button"
+              aria-label="New tab"
+              title="New tab"
+              className="flex h-44 w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-medium border border-dashed border-border bg-transparent p-0 text-muted-foreground hover:text-foreground tn-focus-ring"
+              onClick={onNewTab}
+            >
+              <Plus aria-hidden="true" className="size-6" />
+              <span className="text-[0.7rem] font-medium">New tab</span>
+            </button>
+          </li>
         </ul>
-      )}
     </BottomSheet>
   );
 }

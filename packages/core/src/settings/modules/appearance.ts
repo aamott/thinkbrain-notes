@@ -6,8 +6,11 @@
 
 import type { SettingsModule } from "../types";
 
-/** Allowed theme values; mirrored from the legacy `AppThemeSetting`. */
+/** Allowed theme values. */
 const THEME_OPTIONS = ["system", "light", "dark"] as const;
+
+/** Application color theme, declared beside the options that define it. */
+export type AppThemeSetting = (typeof THEME_OPTIONS)[number];
 
 /** Allowed shell mode values for the appearance setting. */
 const SHELL_MODE_OPTIONS = ["auto", "phone", "desktop"] as const;

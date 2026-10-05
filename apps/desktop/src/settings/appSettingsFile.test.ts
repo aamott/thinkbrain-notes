@@ -70,8 +70,8 @@ describe("the app settings document", () => {
   });
 
   /**
-   * Another writer — `update_desktop_state`, `update_app_theme`, or another
-   * window's save — can land between this write's read and its own write. The
+   * Another writer — `update_desktop_state` or another window's save — can
+   * land between this write's read and its own write. The
    * host rejects the stale write rather than letting it through, so the
    * revision has to be recomputed against what is actually there now.
    */

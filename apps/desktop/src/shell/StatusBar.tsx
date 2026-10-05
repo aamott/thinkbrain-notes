@@ -19,8 +19,9 @@
  */
 
 import { useEffect, useState } from "react";
-import { Bell, Copy, Check } from "lucide-react";
+import { Bell } from "lucide-react";
 import { cn } from "../lib/utils";
+import { NotificationCard } from "./NotificationCard";
 import { SyncPill } from "../sync/SyncPill";
 import { useSyncNotificationAdapter } from "../sync/syncNotificationAdapter";
 import { NOT_RECORDING, type SyncStatus } from "../sync/historyTypes";
@@ -30,7 +31,7 @@ import {
   useUnreadCount
 } from "../notifications/useNotifications";
 import { useNotificationStore } from "../notifications/notificationStore";
-import type { NotificationItem, NotificationVariant } from "../notifications/notificationTypes";
+import type { NotificationVariant } from "../notifications/notificationTypes";
 
 /** Props for the {@link StatusBar} component. */
 type StatusBarProps = {
@@ -138,42 +139,12 @@ export function StatusBar({
           onMouseEnter={() => setHovering(true)}
           onMouseLeave={() => setHovering(false)}
         >
-          <p className="m-0 text-sm font-semibold">{toast.title}</p>
-          <p className="mb-0 mt-1 text-xs leading-relaxed">{toast.message}</p>
-          {toast.recovery && (
-            <p className="mb-0 mt-1 text-xs leading-relaxed text-muted-foreground">{toast.recovery}</p>
-          )}
-          <Diagnostic details={toast.details} />
-          <div className="mt-2 flex gap-2">
-            {toast.action && (
-              <button
-                type="button"
-                className="rounded-small border border-border bg-surface px-2 py-1 text-xs"
-                onClick={() => toast.action?.onClick()}
-              >
-                {toast.action.label}
-              </button>
-            )}
-            <button
-              type="button"
-              className="rounded-small px-2 py-1 text-xs text-muted-foreground"
-              onClick={() => dismissNotification(toast.id)}
-            >
-              Dismiss
-            </button>
-            <button
-              type="button"
-              className="ml-auto flex items-center gap-1 rounded-small px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
-              aria-label={copied ? "Copied" : "Copy message"}
-              onClick={() => {
-                void navigator.clipboard.writeText(notificationText(toast));
-                setCopied(true);
-              }}
-            >
-              {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-              {copied ? "Copied" : "Copy"}
-            </button>
-          </div>
+          <NotificationCard
+            item={toast}
+            copied={copied}
+            onCopied={() => setCopied(true)}
+            onDismiss={() => dismissNotification(toast.id)}
+          />
         </aside>
       )}
       <footer className="flex items-center gap-[0.8rem] px-2 bg-statusbar text-statusbar-foreground text-[0.68rem] overflow-hidden whitespace-nowrap">
@@ -241,13 +212,14 @@ export function StatusBar({
                 {logEntries.length > 0 ? (
                   <ul className="m-0 flex flex-col gap-2 list-none p-0">
                     {logEntries.map((entry) => (
-                      <NotificationRow
-                        key={entry.id}
-                        entry={entry}
-                        copied={copied}
-                        onCopied={() => setCopied(true)}
-                        onDismiss={() => dismissNotification(entry.id)}
-                      />
+                      <li key={entry.id} className="flex flex-col text-xs">
+                        <NotificationCard
+                          item={entry}
+                          copied={copied}
+                          onCopied={() => setCopied(true)}
+                          onDismiss={() => dismissNotification(entry.id)}
+                        />
+                      </li>
                     ))}
                   </ul>
                 ) : (
@@ -260,80 +232,6 @@ export function StatusBar({
       </footer>
     </>
   );
-}
-
-/** One row in the bell log. */
-function NotificationRow({
-  entry,
-  copied,
-  onCopied,
-  onDismiss
-}: {
-  readonly entry: NotificationItem;
-  readonly copied: boolean;
-  readonly onCopied: () => void;
-  readonly onDismiss: () => void;
-}) {
-  return (
-    <li className="flex flex-col gap-1 text-xs">
-      <span className="font-semibold">{entry.title}</span>
-      <span>{entry.message}</span>
-      {entry.recovery && <span className="text-muted-foreground">{entry.recovery}</span>}
-      <Diagnostic details={entry.details} />
-      <div className="mt-1 flex items-center gap-2">
-        {entry.action && (
-          <button
-            type="button"
-            className="rounded-small border border-border bg-surface px-2 py-1 text-xs"
-            onClick={() => entry.action?.onClick()}
-          >
-            {entry.action.label}
-          </button>
-        )}
-        <button
-          type="button"
-          className="rounded-small px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
-          onClick={onDismiss}
-        >
-          Dismiss
-        </button>
-        <button
-          type="button"
-          className="ml-auto flex items-center gap-1 rounded-small px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
-          aria-label={copied ? "Copied" : "Copy message"}
-          onClick={() => {
-            void navigator.clipboard.writeText(notificationText(entry));
-            onCopied();
-          }}
-        >
-          {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-          {copied ? "Copied" : "Copy"}
-        </button>
-      </div>
-    </li>
-  );
-}
-
-function Diagnostic({ details }: { readonly details?: string }) {
-  if (!details) return null;
-  return (
-    <details className="mt-2 text-xs text-muted-foreground">
-      <summary className="cursor-pointer">Technical details</summary>
-      <p className="mb-0 mt-1 break-words font-mono">{details}</p>
-    </details>
-  );
-}
-
-/**
- * Composes the full notification text for copying — title, message, recovery,
- * and any technical details — so a user can paste a complete report in one
- * click. Source-agnostic: works for any notification, not just sync.
- */
-function notificationText(item: NotificationItem): string {
-  const lines = [item.title, item.message];
-  if (item.recovery) lines.push(item.recovery);
-  if (item.details) lines.push(`Technical details: ${item.details}`);
-  return lines.filter(Boolean).join("\n");
 }
 
 function noop(): void {

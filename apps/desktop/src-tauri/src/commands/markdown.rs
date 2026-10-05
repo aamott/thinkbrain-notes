@@ -30,20 +30,172 @@ pub struct MarkdownFileContents {
 }
 
 #[tauri::command]
-pub fn list_markdown_files(root_path: String) -> Result<Vec<MarkdownFileEntry>, NativeError> {
-    let root = resolve_workspace_root(&root_path)?;
-
-    list_markdown_file_entries(&root)
-}
-
-#[tauri::command]
 pub fn read_markdown_file(
-    app: tauri::AppHandle,
     root_path: String,
     relative_path: String,
 ) -> Result<MarkdownFileContents, NativeError> {
-    let app_data = app.path().app_data_dir().ok();
-    read_note(&root_path, &relative_path, app_data.as_deref())
+    read_note(&root_path, &relative_path)
+}
+
+/// Which kind of UTF-8 document the shared read/write core is serving.
+///
+/// Notes and generic text files share every mechanic — path containment, the
+/// write precondition, the best-effort backup, the atomic write — and differ
+/// only in whether the path must be Markdown and in the words of the errors.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DocumentKind {
+    Note,
+    Text,
+}
+
+impl DocumentKind {
+    /// Resolves the workspace-relative path with this kind's own rule:
+    /// a note must carry a Markdown extension; a text file accepts any.
+    fn resolve_file_path(&self, root: &Path, relative_path: &str) -> Result<PathBuf, NativeError> {
+        match self {
+            Self::Note => resolve_markdown_file_path(root, relative_path),
+            Self::Text => resolve_workspace_entry_path(root, relative_path),
+        }
+    }
+
+    fn missing_file_message(&self) -> &'static str {
+        match self {
+            Self::Note => "Cannot write a Markdown file that does not exist.",
+            Self::Text => "Cannot write a file that does not exist.",
+        }
+    }
+
+    fn read_message(&self) -> &'static str {
+        match self {
+            Self::Note => "Failed to read the Markdown file.",
+            Self::Text => "Failed to read the file.",
+        }
+    }
+
+    fn write_message(&self) -> &'static str {
+        match self {
+            Self::Note => "Failed to write the Markdown file.",
+            Self::Text => "Failed to write the file.",
+        }
+    }
+
+    /// An undecodable note reads as damage; a text file may just be binary.
+    fn not_utf8_error(&self, error: std::string::FromUtf8Error) -> NativeError {
+        match self {
+            Self::Note => NativeError::with_details(
+                "workspace.note_unreadable",
+                "This note is not readable as text. It may have been damaged.",
+                error,
+            ),
+            Self::Text => NativeError::with_details(
+                "workspace.file_not_text",
+                "This file is not readable as text. It may be a binary file.",
+                error,
+            ),
+        }
+    }
+
+    fn conflict_error(&self) -> NativeError {
+        match self {
+            Self::Note => NativeError::new(
+                "workspace.note_conflict",
+                "The note changed on disk while it was being edited.",
+            ),
+            Self::Text => NativeError::new(
+                "workspace.file_conflict",
+                "The file changed on disk while it was being edited.",
+            ),
+        }
+    }
+}
+
+/// The read/write core shared by `markdown.rs` and `text_files.rs` commands.
+///
+/// `backups_to` is the app-data directory to keep the replaced version under,
+/// or `None` to keep none — which is what callers with nothing to protect
+/// (tests, and any path where app-data cannot be resolved) pass.
+pub fn read_document(
+    root_path: &str,
+    relative_path: &str,
+    kind: DocumentKind,
+) -> Result<MarkdownFileContents, NativeError> {
+    let root = resolve_workspace_root(root_path)?;
+    let file_path = kind.resolve_file_path(&root, relative_path)?;
+    let bytes = fs::read(&file_path)
+        .map_err(|error| failed("workspace.read_failed", kind.read_message(), error))?;
+
+    let contents = String::from_utf8(bytes).map_err(|error| kind.not_utf8_error(error))?;
+
+    Ok(MarkdownFileContents {
+        relative_path: normalize_relative_path(relative_path)?,
+        contents,
+    })
+}
+
+pub fn write_document(
+    root_path: &str,
+    relative_path: &str,
+    contents: String,
+    expected: Option<&str>,
+    backups_to: Option<&Path>,
+    kind: DocumentKind,
+) -> Result<MarkdownFileEntry, NativeError> {
+    let root = resolve_workspace_root(root_path)?;
+    let file_path = kind.resolve_file_path(&root, relative_path)?;
+
+    // Held across the read, the check and the write. A check that another
+    // in-process writer could land inside would only narrow the window it was
+    // added to close; this is the lock the entry mutations already take, so a
+    // rename or delete cannot slip in either.
+    let _mutation_lock = acquire_workspace_mutation_lock();
+
+    if !file_path.is_file() {
+        return Err(NativeError::new(
+            "workspace.file_missing",
+            kind.missing_file_message(),
+        ));
+    }
+
+    if let Some(expected) = expected {
+        check_document_write_precondition(&file_path, expected, kind)?;
+    }
+
+    // Keep what is about to be replaced. Best-effort on purpose: the user
+    // pressed save, and failing the write because a *copy* of the old version
+    // could not be made would turn the safety net into a way to lose work.
+    if let Some(app_data) = backups_to {
+        super::backup::keep_previous_version_best_effort(
+            app_data,
+            &root,
+            relative_path,
+            &file_path,
+        );
+    }
+
+    record_self_write(&file_path);
+    // Temp-then-rename rather than `fs::write`, which truncates first: a crash
+    // between emptying the note and refilling it would leave nothing at all.
+    write_file_atomically(&file_path, &contents)
+        .map_err(|error| failed("workspace.write_failed", kind.write_message(), error))?;
+
+    markdown_file_entry(&root, &file_path)
+}
+
+/// Refuses a write computed from text the file no longer holds.
+///
+/// An unreadable file counts as a mismatch rather than an error of its own: the
+/// caller's answer is the same either way — do not overwrite — and reporting it
+/// as a read failure would send them down a path that cannot help.
+fn check_document_write_precondition(
+    file_path: &Path,
+    expected: &str,
+    kind: DocumentKind,
+) -> Result<(), NativeError> {
+    if fs::read_to_string(file_path).ok().as_deref() == Some(expected) {
+        return Ok(());
+    }
+
+    Err(kind.conflict_error())
 }
 
 /// Reads a note, telling damage apart from absence.
@@ -69,30 +221,8 @@ pub fn read_markdown_file(
 pub fn read_note(
     root_path: &str,
     relative_path: &str,
-    _backups_in: Option<&Path>,
 ) -> Result<MarkdownFileContents, NativeError> {
-    let root = resolve_workspace_root(root_path)?;
-    let file_path = resolve_markdown_file_path(&root, relative_path)?;
-    let bytes = fs::read(&file_path).map_err(|error| {
-        failed(
-            "workspace.read_failed",
-            "Failed to read the Markdown file.",
-            error,
-        )
-    })?;
-
-    let contents = String::from_utf8(bytes).map_err(|error| {
-        NativeError::with_details(
-            "workspace.note_unreadable",
-            "This note is not readable as text. It may have been damaged.",
-            error,
-        )
-    })?;
-
-    Ok(MarkdownFileContents {
-        relative_path: normalize_relative_path(relative_path)?,
-        contents,
-    })
+    read_document(root_path, relative_path, DocumentKind::Note)
 }
 
 #[tauri::command]
@@ -143,69 +273,14 @@ pub fn write_markdown_document(
     expected: Option<&str>,
     backups_to: Option<&Path>,
 ) -> Result<MarkdownFileEntry, NativeError> {
-    let root = resolve_workspace_root(root_path)?;
-    let file_path = resolve_markdown_file_path(&root, relative_path)?;
-
-    // Held across the read, the check and the write. A check that another
-    // in-process writer could land inside would only narrow the window it was
-    // added to close; this is the lock the entry mutations already take, so a
-    // rename or delete cannot slip in either.
-    let _mutation_lock = acquire_workspace_mutation_lock();
-
-    if !file_path.is_file() {
-        return Err(NativeError::new(
-            "workspace.file_missing",
-            "Cannot write a Markdown file that does not exist.",
-        ));
-    }
-
-    if let Some(expected) = expected {
-        check_note_write_precondition(&file_path, expected)?;
-    }
-
-    // Keep what is about to be replaced. Best-effort on purpose: the user
-    // pressed save, and failing the write because a *copy* of the old version
-    // could not be made would turn the safety net into a way to lose work.
-    if let Some(app_data) = backups_to {
-        if let Ok(previous) = fs::read(&file_path) {
-            if let Err(error) =
-                super::backup::keep_previous_version(app_data, &root, relative_path, &previous)
-            {
-                eprintln!(
-                    "[backup] could not keep the previous version of {relative_path}: {error}"
-                );
-            }
-        }
-    }
-
-    record_self_write(&file_path);
-    // Temp-then-rename rather than `fs::write`, which truncates first: a crash
-    // between emptying the note and refilling it would leave nothing at all.
-    write_file_atomically(&file_path, contents).map_err(|error| {
-        failed(
-            "workspace.write_failed",
-            "Failed to write the Markdown file.",
-            error,
-        )
-    })?;
-
-    markdown_file_entry(&root, &file_path)
-}
-
-/// Refuses a write computed from text the file no longer holds.
-///
-/// An unreadable file counts as a mismatch rather than an error of its own: the
-/// caller's answer is the same either way — do not overwrite — and reporting it
-/// as a read failure would send them down a path that cannot help.
-fn check_note_write_precondition(file_path: &Path, expected: &str) -> Result<(), NativeError> {
-    if fs::read_to_string(file_path).ok().as_deref() == Some(expected) {
-        return Ok(());
-    }
-
-    Err(NativeError::new(
-        "workspace.note_conflict",
-        "The note changed on disk while it was being edited.",
-    ))
+    write_document(
+        root_path,
+        relative_path,
+        contents,
+        expected,
+        backups_to,
+        DocumentKind::Note,
+    )
 }
 
 #[tauri::command]
@@ -244,21 +319,18 @@ pub fn resolve_markdown_file_path(
     root: &Path,
     relative_path: &str,
 ) -> Result<PathBuf, NativeError> {
-    let normalized = normalize_relative_path(relative_path)?;
-    let path = root.join(normalized);
-
-    if !is_markdown_path(&path) {
+    // The extension check runs on the input: the entry resolver normalizes
+    // separators itself, so checking again here would only repeat its work.
+    if !is_markdown_path(Path::new(relative_path)) {
         return Err(NativeError::new(
             "workspace.not_markdown",
             "Only Markdown files can be managed by this command.",
         ));
     }
 
-    // `normalize_relative_path` rejects `..`, but it cannot see symlinks: a
-    // link inside the vault still resolves outside it, which would let these
-    // commands read, overwrite or delete arbitrary files. Defer to the entry
-    // resolver, which canonicalizes and verifies containment for both existing
-    // targets and not-yet-created ones.
+    // `resolve_workspace_entry_path` rejects `..`, and it cannot see symlinks
+    // from the string alone, so it canonicalizes and verifies containment for
+    // both existing targets and not-yet-created ones.
     resolve_workspace_entry_path(root, relative_path)
 }
 

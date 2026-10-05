@@ -8,7 +8,7 @@
 
 import { NativeCommandError } from "../native/commands";
 import { describeWhen } from "./conflictCard";
-import type { ChangedNote, ConflictRate, Synced, SyncPhase, SyncStatus } from "./historyTypes";
+import type { SyncPhase, SyncStatus } from "./historyTypes";
 
 /** How loudly the footer should say it. */
 export type PillTone = "quiet" | "busy" | "warn";
@@ -20,11 +20,6 @@ export interface PillCopy {
   /** The whole of it, for the tooltip and for screen readers. */
   readonly detail: string;
   readonly tone: PillTone;
-}
-
-/** `${n} ${n === 1 ? singular : plural}`, with plural defaulting to singular + "s". */
-function plural(n: number, singular: string, pluralForm: string = `${singular}s`): string {
-  return `${n} ${n === 1 ? singular : pluralForm}`;
 }
 
 function clockOf(at: number): string {
@@ -50,14 +45,6 @@ export function describeMoment(at: number | null, now: Date = new Date()): strin
   yesterday.setDate(yesterday.getDate() - 1);
   if (at >= startOfDay(yesterday)) return `Yesterday ${clockOf(at)}`;
   return describeWhen(at);
-}
-
-/** How much one recorded change touched. */
-export function describeWhatChanged(notes: readonly ChangedNote[]): string {
-  const kind = new Set(notes.map((note) => note.change));
-  const description =
-    kind.size !== 1 ? "changed" : kind.has("removed") ? "deleted" : kind.has("added") ? "added" : "updated";
-  return `${plural(notes.length, "note")} ${description}`;
 }
 
 /**
@@ -145,28 +132,6 @@ export function restoreFailureMessage(cause: unknown): string {
   if (cause instanceof Error) return cause.message;
   console.error("[sync] restore failed:", cause);
   return "That version could not be put back. Nothing was changed.";
-}
-
-/**
- * How often this folder has needed something of its user, and how often it
- * did not.
- *
- * The second number is the point: someone who sees "47 tidied away, none for
- * you" learns that the app is absorbing the noise, which is the whole promise
- * of settling the obvious ones.
- */
-export function describeConflictRate(rate: ConflictRate): string {
-  const versions = plural(rate.recorded, "saved version");
-  const tidied =
-    rate.settled === 0
-      ? ""
-      : ` ${rate.settled} duplicate cop${rate.settled === 1 ? "y was" : "ies were"} tidied away without asking.`;
-
-  if (rate.decisions === 0) {
-    return `${versions}, and you have never had to choose what to keep.${tidied}`;
-  }
-  const asked = `${rate.decisions} of them needed you to decide what to keep.`;
-  return `${versions}. ${asked}${tidied}`;
 }
 
 /**
@@ -308,30 +273,4 @@ function pillFor(status: SyncStatus, now: Date): PillCopy {
   }
 }
 
-/**
- * What one round trip did, in a sentence someone can act on.
- *
- * A refusal is not a failure to report as one: it means another device got
- * there first, and the only thing to do is wait a moment. Saying "rejected"
- * would send someone looking for a problem that is not theirs.
- */
-export function describeSync(done: Synced): string {
-  if (done.landed.state === "refused") {
-    // The reason is carried across IPC for diagnostics; the UI gives a stable
-    // message, but leave a trail so a refusal can be traced if it persists.
-    console.debug("[sync] refused:", done.landed.reason);
-    return "Another device was sending its own changes at the same time. Try again in a moment.";
-  }
 
-  const arrived =
-    done.broughtDown > 0
-      ? `${plural(done.broughtDown, "note")} arrived from another device.`
-      : null;
-  const toChoose =
-    done.askedAbout > 0
-      ? `${plural(done.askedAbout, "note needs", "notes need")} you to decide what to keep.`
-      : null;
-
-  if (!arrived && !toChoose) return "Everything here is already in step with your other devices.";
-  return [arrived, toChoose].filter(Boolean).join(" ");
-}

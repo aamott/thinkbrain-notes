@@ -428,22 +428,45 @@ impl Engine {
             .duration_since(UNIX_EPOCH)
             .map(|elapsed| elapsed.as_secs() as i64)
             .unwrap_or(0);
-        match super::maintain::cleanup(&repo, seconds, &super::maintain::Policy::default()) {
+        let result = super::maintain::cleanup(&repo, seconds, &super::maintain::Policy::default());
+        self.finish_maintenance(
+            &repo,
+            now,
+            result,
+            |done| {
+                (done.reclaimed > 0)
+                    .then(|| format!("history maintenance reclaimed {} bytes", done.reclaimed))
+            },
+            "history maintenance failed",
+        )
+    }
+
+    /// The tail every tidy shares: the maintenance problem mirrors the
+    /// outcome, the run is stamped done, and what it did is logged.
+    ///
+    /// `succeeded` renders the log line for a pass that worked (`None` stays
+    /// quiet); `failure_label` names the attempt for the one that did not.
+    fn finish_maintenance(
+        &self,
+        repo: &gix::Repository,
+        now: SystemTime,
+        result: Result<super::maintain::Cleanup, NativeError>,
+        succeeded: impl FnOnce(&super::maintain::Cleanup) -> Option<String>,
+        failure_label: &'static str,
+    ) -> Result<super::maintain::Cleanup, NativeError> {
+        match result {
             Ok(done) => {
-                if let Err(error) = super::maintain::mark_done(&repo, now) {
+                if let Err(error) = super::maintain::mark_done(repo, now) {
                     eprintln!("[sync] could not remember history maintenance: {error:?}");
                 }
                 self.set_maintenance_problem(None);
-                if done.reclaimed > 0 {
-                    eprintln!(
-                        "[sync] history maintenance reclaimed {} bytes",
-                        done.reclaimed
-                    );
+                if let Some(line) = succeeded(&done) {
+                    eprintln!("[sync] {line}");
                 }
                 Ok(done)
             }
             Err(error) => {
-                eprintln!("[sync] history maintenance failed: {error:?}");
+                eprintln!("[sync] {failure_label}: {error:?}");
                 self.set_maintenance_problem(Some(error.clone()));
                 Err(error)
             }
@@ -454,24 +477,18 @@ impl Engine {
     pub fn clear_undo(&self) -> Result<super::maintain::Cleanup, NativeError> {
         let _recording = lock_or_recover(&self.recording);
         let repo = self.repository();
-        match super::maintain::clear_undo(&repo) {
-            Ok(done) => {
-                self.set_maintenance_problem(None);
-                if let Err(error) = super::maintain::mark_done(&repo, SystemTime::now()) {
-                    eprintln!("[sync] could not remember history maintenance: {error:?}");
-                }
-                eprintln!(
-                    "[sync] cleared private undo history, reclaimed {} bytes",
+        self.finish_maintenance(
+            &repo,
+            SystemTime::now(),
+            super::maintain::clear_undo(&repo),
+            |done| {
+                Some(format!(
+                    "cleared private undo history, reclaimed {} bytes",
                     done.reclaimed
-                );
-                Ok(done)
-            }
-            Err(error) => {
-                eprintln!("[sync] could not clear undo history: {error:?}");
-                self.set_maintenance_problem(Some(error.clone()));
-                Err(error)
-            }
-        }
+                ))
+            },
+            "could not clear undo history",
+        )
     }
 
     /// How many changes are waiting to be recorded.

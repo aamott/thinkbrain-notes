@@ -19,12 +19,17 @@ pub enum MetadataValue {
     Number(Number),
 }
 
-#[derive(Debug, Clone, Deserialize)]
+/// One metadata key and every value it holds — the shape callers send fields
+/// in with and the shape facets come back in.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MetadataField {
     pub key: String,
     pub values: Vec<MetadataValue>,
 }
+
+/// The query-result name for `MetadataField`; the shapes are identical.
+pub type MetadataFacet = MetadataField;
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -38,12 +43,6 @@ pub struct MetadataQuery {
     pub path_prefix: String,
     pub facet_keys: Vec<String>,
     pub predicates: Vec<MetadataPredicate>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize)]
-pub struct MetadataFacet {
-    pub key: String,
-    pub values: Vec<MetadataValue>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]

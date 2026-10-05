@@ -45,6 +45,32 @@ export interface DecorateContext {
 /** Decorates one syntax-tree node. Handlers are registered by node name. */
 export type NodeHandler = (node: SyntaxNodeRef, ctx: DecorateContext) => void;
 
+/**
+ * Presents `base` on every line `node` spans. With `edges`, the first and
+ * last lines each get an extra class.
+ */
+export function decorateLines(
+  ctx: DecorateContext,
+  node: SyntaxNodeRef,
+  base: string,
+  edges?: { readonly first: string; readonly last: string }
+): void {
+  const { doc } = ctx.state;
+  const firstLine = doc.lineAt(node.from).number;
+  const lastLine = doc.lineAt(node.to).number;
+  for (let lineNumber = firstLine; lineNumber <= lastLine; lineNumber++) {
+    const line = doc.line(lineNumber);
+    const edge = edges
+      ? lineNumber === firstLine
+        ? edges.first
+        : lineNumber === lastLine
+          ? edges.last
+          : ""
+      : "";
+    ctx.present(Decoration.line({ class: `${base}${edge}` }), line.from, line.from);
+  }
+}
+
 const SYNTAX_MARK = Decoration.mark({ class: "cm-syntax-mark" });
 const CONCEALED = Decoration.replace({});
 

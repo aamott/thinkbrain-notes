@@ -81,11 +81,7 @@ pub fn settings_home() -> Option<PathBuf> {
 /// only caller has already found a conflict to settle — which is rare, and the
 /// moment at which a stale answer would be most annoying.
 fn enabled() -> bool {
-    let home = {
-        let home = lock_or_recover(&SETTINGS_HOME);
-        home.clone()
-    };
-    enabled_in(home.as_deref())
+    enabled_in(settings_home().as_deref())
 }
 
 /// The same answer, read from a settings directory named outright.

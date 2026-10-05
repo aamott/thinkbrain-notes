@@ -1,10 +1,10 @@
 // @vitest-environment happy-dom
-import { act } from "react";
+import { act, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ConflictComparison } from "./conflictTypes";
-import { getEditorCommands } from "../tabs/editorCommands";
+import { useEditorCommands, type EditorCommands } from "../tabs/editorCommands";
 
 const TAB_ID = "merge-test-tab";
 
@@ -77,18 +77,33 @@ afterEach(async () => {
   container = null;
 });
 
+// Reads the merge tab's registered commands through the same hook the header
+// bar uses, so the tests exercise the public subscription.
+const captured: { commands: EditorCommands | null } = { commands: null };
+const CommandsProbe = () => {
+  const commands = useEditorCommands(TAB_ID);
+  useEffect(() => {
+    captured.commands = commands;
+  }, [commands]);
+  return null;
+};
+const editorCommands = () => captured.commands;
+
 const render = async (): Promise<HTMLDivElement> => {
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
   await act(async () =>
     root?.render(
-      <MergeTab
-        rootPath="/notes"
-        copyPath={COMPARISON.theirs.path}
-        tabId={TAB_ID}
-        buffer={null}
-      />
+      <>
+        <CommandsProbe />
+        <MergeTab
+          rootPath="/notes"
+          copyPath={COMPARISON.theirs.path}
+          tabId={TAB_ID}
+          buffer={null}
+        />
+      </>
     )
   );
   return container;
@@ -190,7 +205,7 @@ describe("choosing what to keep", () => {
     expect(() => button(host, "Keep both files")).not.toThrow();
     // Save lives in the workspace header with every other tab's — the tab
     // registers what it means here, labelled for the merge.
-    const commands = getEditorCommands(TAB_ID);
+    const commands = editorCommands();
     expect(commands?.saveLabel).toBe("Save merged note");
     expect(commands?.save).toBeInstanceOf(Function);
   });
@@ -223,7 +238,7 @@ describe("choosing what to keep", () => {
   it("saves this computer's version when the result was left untouched", async () => {
     await render();
 
-    await act(async () => getEditorCommands(TAB_ID)?.save?.());
+    await act(async () => editorCommands()?.save?.());
 
     expect(resolveConflict).toHaveBeenCalledWith("/notes", COMPARISON, {
       kind: "merged",
@@ -238,7 +253,7 @@ describe("choosing what to keep", () => {
       (lastDiff.props?.onAfterChange as (contents: string) => void)(edited);
     });
 
-    await act(async () => getEditorCommands(TAB_ID)?.save?.());
+    await act(async () => editorCommands()?.save?.());
 
     expect(resolveConflict).toHaveBeenCalledWith("/notes", COMPARISON, {
       kind: "merged",
@@ -260,7 +275,7 @@ describe("while a decision is being written", () => {
     }
     // The header's Save reads `canSave` — while the write is in flight it
     // must not offer a second one.
-    expect(getEditorCommands(TAB_ID)?.canSave?.()).toBe(false);
+    expect(editorCommands()?.canSave?.()).toBe(false);
 
     await act(async () => settle({ note: "Meeting Notes.md", keptAs: null, checkpoint: "a" }));
   });

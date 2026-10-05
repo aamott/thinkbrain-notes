@@ -25,8 +25,8 @@ mod record;
 /// history belongs to the app, most people syncing notes have no `user.email`
 /// set at all, and a commit that fails because of that would be a sync failure
 /// with a baffling explanation.
-const AUTHOR_NAME: &str = "ThinkBrain Notes";
-const AUTHOR_EMAIL: &str = "sync@thinkbrain.notes";
+pub(super) const AUTHOR_NAME: &str = "ThinkBrain Notes";
+pub(super) const AUTHOR_EMAIL: &str = "sync@thinkbrain.notes";
 
 /// The branch the hidden repository records vault history on.
 pub const HISTORY_REF: &str = "refs/heads/main";
@@ -65,11 +65,7 @@ impl Reason {
 }
 
 fn history_read_failed(error: impl std::fmt::Display) -> NativeError {
-    failed(
-        "sync.history_read_failed",
-        "Could not read the sync history.",
-        error,
-    )
+    super::history_read_failed("Could not read the sync history.", error)
 }
 
 /// What recording one batch actually put in history.
@@ -334,13 +330,7 @@ pub fn changes_between(
         &repo.objects,
         &mut recorder,
     )
-    .map_err(|error| {
-        failed(
-            "sync.history_read_failed",
-            "Could not read what a change touched.",
-            error,
-        )
-    })?;
+    .map_err(|error| super::history_read_failed("Could not read what a change touched.", error))?;
 
     Ok(recorder.records)
 }
@@ -351,13 +341,8 @@ fn tree_at(repo: &gix::Repository, tree: gix::ObjectId) -> Result<gix::Tree<'_>,
     if tree == gix::ObjectId::empty_tree(repo.object_hash()) {
         return Ok(repo.empty_tree());
     }
-    repo.find_tree(tree).map_err(|error| {
-        failed(
-            "sync.history_read_failed",
-            "Could not read a recorded state.",
-            error,
-        )
-    })
+    repo.find_tree(tree)
+        .map_err(|error| super::history_read_failed("Could not read a recorded state.", error))
 }
 
 /// The latest commit on the vault's history branch, if there is one.
@@ -365,9 +350,12 @@ pub fn head_commit(repo: &gix::Repository) -> Result<Option<gix::ObjectId>, Nati
     head_of(repo, HISTORY_REF)
 }
 
-/// Every blob the current history commit holds, so a rescan can name the
-/// notes that vanished as well as the ones still on disk.
-pub(super) fn recorded_blob_paths(repo: &gix::Repository) -> Result<Vec<PathBuf>, NativeError> {
+/// Every entry in the tree the current history commit records, so readers
+/// can each ask their own question of the same walk — the rescan asks which
+/// notes it holds; the sync asks which entries this device cannot create.
+pub(super) fn recorded_entries(
+    repo: &gix::Repository,
+) -> Result<Vec<gix::traverse::tree::recorder::Entry>, NativeError> {
     let Some(commit) = head_commit(repo)? else {
         return Ok(Vec::new());
     };
@@ -380,8 +368,13 @@ pub(super) fn recorded_blob_paths(repo: &gix::Repository) -> Result<Vec<PathBuf>
     tree.traverse()
         .breadthfirst(&mut recorder)
         .map_err(history_read_failed)?;
-    Ok(recorder
-        .records
+    Ok(recorder.records)
+}
+
+/// Every blob the current history commit holds, so a rescan can name the
+/// notes that vanished as well as the ones still on disk.
+pub(super) fn recorded_blob_paths(repo: &gix::Repository) -> Result<Vec<PathBuf>, NativeError> {
+    Ok(recorded_entries(repo)?
         .into_iter()
         .filter(|entry| entry.mode.is_blob())
         .map(|entry| PathBuf::from(entry.filepath.to_string()))

@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import type { RightPanelContext } from "../../panels/panelRegistryModel";
 import { ActionItemsMenu } from "./ActionItemsMenu";
 
 let root: Root | null = null;
@@ -23,15 +24,23 @@ const render = async (element: React.ReactElement): Promise<HTMLDivElement> => {
   return container;
 };
 
-const menu = (overrides: Record<string, unknown> = {}): React.ReactElement => (
+const context = (overrides: Partial<RightPanelContext> = {}): RightPanelContext => ({
+  rootPath: null,
+  documentContents: null,
+  documentPath: null,
+  onOpenNote: () => undefined,
+  onCompareVersion: () => undefined,
+  onRestoreVersion: async () => undefined,
+  ...overrides
+});
+
+const menu = (
+  overrides: Record<string, unknown> = {},
+  contextOverrides: Partial<RightPanelContext> = {}
+): React.ReactElement => (
   <ActionItemsMenu
     open
-    rootPath={null}
-    documentContents={null}
-    documentPath={null}
-    onOpenNote={() => undefined}
-    onCompareVersion={() => undefined}
-    onRestoreVersion={async () => undefined}
+    context={context(contextOverrides)}
     onDismiss={() => undefined}
     onSelect={() => undefined}
     {...overrides}
@@ -60,7 +69,7 @@ describe("ActionItemsMenu", () => {
 
   it("opens Version history for the file on screen", async () => {
     const onSelect = vi.fn();
-    const host = await render(menu({ onSelect, documentPath: "note.md" }));
+    const host = await render(menu({ onSelect }, { documentPath: "note.md" }));
     const row = menuOf(host)?.querySelector<HTMLButtonElement>(
       '[role="menuitem"][aria-label="Version history"]'
     );
@@ -68,39 +77,6 @@ describe("ActionItemsMenu", () => {
     expect(row?.disabled).toBe(false);
     await act(async () => row?.click());
     expect(onSelect).toHaveBeenCalledWith("history");
-  });
-
-  it("shows optional Back/Forward rows that disable and fire independently", async () => {
-    const onBack = vi.fn();
-    const onForward = vi.fn();
-    const host = await render(
-      menu({
-        historyControls: { canGoBack: true, canGoForward: false, onBack, onForward }
-      })
-    );
-    const back = menuOf(host)?.querySelector<HTMLButtonElement>(
-      '[role="menuitem"][aria-label="Back"]'
-    );
-    const forward = menuOf(host)?.querySelector<HTMLButtonElement>(
-      '[role="menuitem"][aria-label="Forward"]'
-    );
-
-    expect(back?.disabled).toBe(false);
-    expect(forward?.disabled).toBe(true);
-    await act(async () => back?.click());
-    expect(onBack).toHaveBeenCalledOnce();
-    expect(onForward).not.toHaveBeenCalled();
-  });
-
-  it("omits history rows when historyControls is not supplied", async () => {
-    const host = await render(menu());
-
-    expect(
-      menuOf(host)?.querySelector('[role="menuitem"][aria-label="Back"]')
-    ).toBeNull();
-    expect(
-      menuOf(host)?.querySelector('[role="menuitem"][aria-label="Forward"]')
-    ).toBeNull();
   });
 
   it("lists every registered right-panel contribution as a menuitem", async () => {
@@ -191,7 +167,7 @@ describe("ActionItemsMenu", () => {
     menuOf(host)?.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
 
   it("moves focus with ArrowDown/ArrowUp, wrapping at the ends", async () => {
-    const host = await render(menu({ documentPath: "note.md" }));
+    const host = await render(menu({}, { documentPath: "note.md" }));
     // With a file open every right-panel row is enabled, in registry order.
     const order = ["Version history", "Outline", "Backlinks", "Properties", "Assistant"] as const;
     // Start with focus outside the menu: Down then selects the first row.
@@ -210,7 +186,7 @@ describe("ActionItemsMenu", () => {
   });
 
   it("jumps to the first/last row with Home/End", async () => {
-    const host = await render(menu({ documentPath: "note.md" }));
+    const host = await render(menu({}, { documentPath: "note.md" }));
     await act(async () => (document.activeElement as HTMLElement | null)?.blur());
 
     await act(async () => press(host, "End"));

@@ -87,10 +87,13 @@ fn a_matching_upstream_with_a_different_name_is_followed() {
 
     let (vault, _clone) = clone_on("main");
     let destination = remote_path.to_string_lossy().to_string();
+    // A Windows path's backslashes are git-config escapes; double them so the
+    // stored url reads back as the path verbatim, like `git clone` writes it.
+    let url = destination.replace('\\', "\\\\");
     fs::write(
         vault.join(".git").join("config"),
         format!(
-            "[branch \"main\"]\n\tremote = origin\n\tmerge = refs/heads/upstream\n[remote \"origin\"]\n\turl = {destination}\n"
+            "[branch \"main\"]\n\tremote = origin\n\tmerge = refs/heads/upstream\n[remote \"origin\"]\n\turl = {url}\n"
         ),
     )
     .unwrap();

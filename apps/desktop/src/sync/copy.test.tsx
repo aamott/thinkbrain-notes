@@ -88,7 +88,6 @@ const { ConflictsPanel } = await import("./ConflictsPanel");
 const { MergeTab } = await import("./MergeTab");
 const { HistoryPanel } = await import("./HistoryPanel");
 const { SyncPill } = await import("./SyncPill");
-const { describeSync } = await import("./syncCopy");
 const { HistoryPolicyControl } = await import("../settings/controls/HistoryPolicyControl");
 const { resetNotificationStore, useNotificationStore } = await import(
   "../notifications/notificationStore"
@@ -316,29 +315,9 @@ describe("nothing in this feature speaks git to the user", () => {
     );
   });
 
-  // `describeSync` is not rendered by any panel above, so its sentences are
-  // audited directly — both the refusal path and the ordinary "moved" path,
-  // since each says something different.
-  it("keeps describeSync plain for a refusal and a moved landing", () => {
-    audit(
-      "describeSync on refusal",
-      describeSync({
-        broughtDown: 0,
-        askedAbout: 0,
-        sent: 0,
-        landed: { state: "refused", reason: "the other end holds changes this device has not seen" }
-      })
-    );
-    audit(
-      "describeSync on moved",
-      describeSync({ broughtDown: 2, askedAbout: 1, sent: 3, landed: { state: "moved" } })
-    );
-  });
-
   // The conflict toast reaches the screen through the notification store rather
-  // than through any panel here, so — like `describeSync` above — its sentences
-  // are audited from what the producer put in the store, which is what the
-  // status bar renders verbatim.
+  // than through any panel here, so its sentences are audited from what the
+  // producer put in the store, which is what the status bar renders verbatim.
   it("keeps the new-conflict announcement plain", async () => {
     resetNotificationStore();
     listConflicts.mockResolvedValue([summary("note.md", "text")]);

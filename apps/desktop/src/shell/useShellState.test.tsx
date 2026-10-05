@@ -109,13 +109,13 @@ async function renderShellState(): Promise<() => ShellState> {
   };
 }
 
-/** Pretends the explorer just opened /vault — the only supported way a root path lands in shell state. */
-const openWorkspace = async (state: () => ShellState): Promise<void> => {
+/** Pretends the explorer just opened `rootPath` — the only supported way a root path lands in shell state. */
+const openWorkspace = async (state: () => ShellState, rootPath = "/vault"): Promise<void> => {
   const onWorkspaceOpened = state().explorerProps.onWorkspaceOpened;
   if (!onWorkspaceOpened) throw new Error("explorerProps.onWorkspaceOpened is not wired");
   await act(async () =>
-    onWorkspaceOpened("/vault", {
-      workspace: { root_path: "/vault", name: "vault" },
+    onWorkspaceOpened(rootPath, {
+      workspace: { root_path: rootPath, name: rootPath.split("/").at(-1) ?? rootPath },
       files: []
     })
   );
@@ -295,6 +295,26 @@ describe("useShellState", () => {
 
     expect(invokeMock).not.toHaveBeenCalledWith("restore_version", expect.anything());
     expect(state().tabState.tabs.find((candidate) => candidate.id === tab.id)?.isDirty).toBe(true);
+  });
+
+  it("walks Back and Forward over tab activations, rebased on workspace switch", async () => {
+    const state = await renderShellState();
+    await openWorkspace(state);
+
+    await act(async () => state().openMarkdownDocument("/vault", "a.md"));
+    await act(async () => state().openMarkdownDocument("/vault", "b.md"));
+    const first = state().tabState.history.entries[0]!;
+
+    await act(async () => state().dispatchTabs({ type: "goBack" }));
+    expect(state().tabState.activeTabId).toBe(first);
+
+    await act(async () => state().dispatchTabs({ type: "goForward" }));
+    expect(state().tabState.activeTabId).not.toBe(first);
+
+    // Switching vaults drops the old workspace's visits: Back has nowhere
+    // to go afterwards.
+    await openWorkspace(state, "/other");
+    expect(state().tabState.history.cursor).toBe(0);
   });
 
   it("opens settings at the sync section from the conflicts menu", async () => {

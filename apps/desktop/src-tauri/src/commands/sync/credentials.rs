@@ -47,7 +47,7 @@ pub fn get(destination: &str) -> Result<Option<(String, String)>, NativeError> {
 }
 
 /// The currently bound profile ID, if a round trip named one.
-pub fn bound_profile() -> Option<String> {
+fn bound_profile() -> Option<String> {
     BOUND_PROFILE.with(|slot| slot.borrow().clone())
 }
 
@@ -305,8 +305,14 @@ fn split_userinfo(destination: &str) -> Option<(String, String, String)> {
         return None;
     }
     let rest = &trimmed[scheme + 3..];
-    let at = rest.find('@')?;
-    let userinfo = &rest[..at];
+    // Userinfo lives only in the authority. Searching the whole tail would
+    // split on an `@` in the path (`https://host/repo@x`), and searching from
+    // the left would let an `@` inside the password (`user:p@ss@host`) leak
+    // part of the secret into the stored destination — so bound the span,
+    // then take the last `@` in it.
+    let authority = &rest[..super::authority_end(rest)];
+    let at = authority.rfind('@')?;
+    let userinfo = &authority[..at];
     if userinfo.is_empty() {
         return None;
     }
@@ -444,6 +450,37 @@ pub(crate) mod tests {
         );
         assert_eq!(
             get("https://clean.example.test/notes.git").expect("readable"),
+            None
+        );
+    }
+
+    /// An `@` inside the password is legal userinfo (`user:p@ss@host`). The
+    /// separator is the *last* `@` in the authority, so the whole secret is
+    /// stored and none of it bleeds into the destination kept on disk.
+    #[test]
+    fn a_password_containing_an_at_sign_is_stored_whole() {
+        with_a_store();
+        let destination = take_from_url("https://user:p@ss@at-secret.test/notes.git");
+
+        assert_eq!(destination, "https://at-secret.test/notes.git");
+        assert!(!destination.contains("p@ss"));
+        let (user, secret) = get(&destination).expect("readable").expect("stored");
+        assert_eq!(user, "user");
+        assert_eq!(secret, "p@ss");
+    }
+
+    /// An `@` past the authority is part of the path, not a credential:
+    /// `https://host/repo@x` must come back untouched rather than being
+    /// split on the `@` inside `repo@x`.
+    #[test]
+    fn an_at_sign_in_the_path_is_not_a_credential() {
+        with_a_store();
+        assert_eq!(
+            take_from_url("https://path-only.test/repo@x/notes.git"),
+            "https://path-only.test/repo@x/notes.git"
+        );
+        assert_eq!(
+            get("https://path-only.test/repo@x/notes.git").expect("readable"),
             None
         );
     }

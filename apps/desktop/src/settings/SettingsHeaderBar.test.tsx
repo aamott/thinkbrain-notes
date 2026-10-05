@@ -51,16 +51,19 @@ describe("SettingsHeaderBar", () => {
     const el = await harness.render(<SettingsHeaderBar />);
     const buttons = Array.from(el.querySelectorAll<HTMLButtonElement>("button"));
 
-    expect(buttons).toHaveLength(4);
+    // Fifth button is the ⋯ menu — CSS-hidden above the phone breakpoint but
+    // still in the DOM.
+    expect(buttons).toHaveLength(5);
     expect(buttons[0]!.disabled).toBe(false);
     expect(buttons[1]!.disabled).toBe(false);
     expect(buttons[2]!.disabled).toBe(true);
     expect(buttons[3]!.disabled).toBe(true);
     expect(buttons[3]!.textContent).toBe("Save");
+    expect(buttons[4]!.getAttribute("aria-label")).toBe("More settings actions");
   });
 
   it("enables Reset and Save when dirty and shows dirty count", async () => {
-    useSettingsStore.setState({ isDirty: true, dirtyCount: 3 });
+    useSettingsStore.setState({ stagedChanges: { k1: 1, k2: 2, k3: 3 } });
     const el = await harness.render(<SettingsHeaderBar />);
     const buttons = Array.from(el.querySelectorAll<HTMLButtonElement>("button"));
 
@@ -70,7 +73,7 @@ describe("SettingsHeaderBar", () => {
   });
 
   it("clicking Save calls saveSettings from the store", async () => {
-    useSettingsStore.setState({ isDirty: true, dirtyCount: 1 });
+    useSettingsStore.setState({ stagedChanges: { k: 1 } });
     const el = await harness.render(<SettingsHeaderBar />);
 
     await harness.click(el.querySelectorAll("button")[3]!);
@@ -79,7 +82,7 @@ describe("SettingsHeaderBar", () => {
   });
 
   it("clicking Reset calls resetStaged from the store", async () => {
-    useSettingsStore.setState({ isDirty: true, dirtyCount: 1 });
+    useSettingsStore.setState({ stagedChanges: { k: 1 } });
     const el = await harness.render(<SettingsHeaderBar />);
 
     await harness.click(el.querySelectorAll("button")[2]!);
@@ -89,8 +92,7 @@ describe("SettingsHeaderBar", () => {
 
   it("displays saveError in the header when set", async () => {
     useSettingsStore.setState({
-      isDirty: true,
-      dirtyCount: 1,
+      stagedChanges: { k: 1 },
       saveError: "Failed to save settings: disk full"
     });
     const el = await harness.render(<SettingsHeaderBar />);
@@ -121,8 +123,7 @@ describe("SettingsHeaderBar accessibility and autosave", () => {
   it("hides Save and Reset and shows Autosave enabled when autosave is on", async () => {
     seedSettingsStore({
       appValues: { "settings.autosave": true },
-      isDirty: true,
-      dirtyCount: 1
+      stagedChanges: { k: 1 }
     });
     const el = await harness.render(<SettingsHeaderBar />);
 
@@ -147,9 +148,7 @@ describe("SettingsHeaderBar accessibility and autosave", () => {
     // The rows it reveals read the same staged value, so a toggle that only
     // caught up after a save would disagree with the list underneath it.
     useSettingsStore.setState({
-      stagedChanges: { "settings.showAdvanced": true },
-      isDirty: true,
-      dirtyCount: 1
+      stagedChanges: { "settings.showAdvanced": true }
     });
     const el = await harness.render(<SettingsHeaderBar />);
 
@@ -160,14 +159,77 @@ describe("SettingsHeaderBar accessibility and autosave", () => {
 
   it("honors staged autosave over the app value", async () => {
     useSettingsStore.setState({
-      stagedChanges: { "settings.autosave": true },
-      isDirty: true,
-      dirtyCount: 1
+      stagedChanges: { "settings.autosave": true }
     });
     const el = await harness.render(<SettingsHeaderBar />);
 
     expect(el.textContent).toContain("Autosave enabled");
     expect(el.querySelector('[aria-label="Reset all unsaved settings"]')).toBeNull();
+  });
+});
+
+describe("SettingsHeaderBar overflow menu", () => {
+  const openMenu = async (host: HTMLElement): Promise<HTMLElement> => {
+    await harness.click(
+      host.querySelector<HTMLButtonElement>('[aria-label="More settings actions"]')!
+    );
+    const menu = host.querySelector<HTMLElement>('[role="menu"]');
+    expect(menu).not.toBeNull();
+    return menu!;
+  };
+
+  const menuItem = (menu: HTMLElement, label: string): HTMLButtonElement | null =>
+    Array.from(menu.querySelectorAll<HTMLButtonElement>('button[role^="menuitem"]')).find(
+      (item) => item.textContent?.includes(label)
+    ) ?? null;
+
+  it("opens on the kebab and lists the secondary actions", async () => {
+    const el = await harness.render(<SettingsHeaderBar />);
+    const menu = await openMenu(el);
+
+    expect(menuItem(menu, "Show advanced settings")).not.toBeNull();
+    expect(menuItem(menu, "Export settings")).not.toBeNull();
+    expect(menuItem(menu, "Import settings")).not.toBeNull();
+    expect(menuItem(menu, "Reset unsaved changes")).not.toBeNull();
+  });
+
+  it("checks the Advanced item when advanced settings are shown", async () => {
+    useSettingsStore.setState({
+      stagedChanges: { "settings.showAdvanced": true }
+    });
+    const el = await harness.render(<SettingsHeaderBar />);
+    const menu = await openMenu(el);
+
+    expect(menuItem(menu, "Show advanced settings")?.getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("resets unsaved settings from the menu", async () => {
+    useSettingsStore.setState({ stagedChanges: { k: 1 } });
+    const el = await harness.render(<SettingsHeaderBar />);
+    const menu = await openMenu(el);
+
+    await harness.click(menuItem(menu, "Reset unsaved changes")!);
+
+    expect(useSettingsStore.getState().resetStaged).toHaveBeenCalledTimes(1);
+    expect(el.querySelector('[role="menu"]')).toBeNull();
+  });
+
+  it("disables Reset in the menu when nothing is dirty", async () => {
+    const el = await harness.render(<SettingsHeaderBar />);
+    const menu = await openMenu(el);
+
+    expect(menuItem(menu, "Reset unsaved changes")!.disabled).toBe(true);
+  });
+
+  it("omits Reset from the menu when autosave is on", async () => {
+    seedSettingsStore({
+      appValues: { "settings.autosave": true },
+      stagedChanges: { k: 1 }
+    });
+    const el = await harness.render(<SettingsHeaderBar />);
+    const menu = await openMenu(el);
+
+    expect(menuItem(menu, "Reset unsaved changes")).toBeNull();
   });
 });
 
@@ -197,7 +259,7 @@ describe("SettingsHeaderBar saving state", () => {
       resolveSave = resolve;
     });
     const saveSettings = vi.fn(() => savePromise);
-    useSettingsStore.setState({ isDirty: true, dirtyCount: 1, saveSettings });
+    useSettingsStore.setState({ stagedChanges: { k: 1 }, saveSettings });
     const el = await harness.render(<SettingsHeaderBar />);
     const saveButton = el.querySelectorAll<HTMLButtonElement>("button")[3]!;
 

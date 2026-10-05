@@ -21,8 +21,6 @@ fn acquire_app_settings_lock() -> std::sync::MutexGuard<'static, ()> {
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
-const APP_THEME_KEY: &str = "theme";
-const SUPPORTED_APP_THEMES: [&str; 3] = ["system", "light", "dark"];
 const DESKTOP_STATE_KEY: &str = "desktopState";
 const DESKTOP_STATE_VERSION: u64 = 5;
 const MAX_RECENT_WORKSPACES: usize = 12;
@@ -230,28 +228,6 @@ pub fn update_desktop_state(
     Ok(contents)
 }
 
-/// Persists the application theme without rewriting unrelated settings.
-///
-/// The read-modify-write runs under `APP_SETTINGS_MUTATION_LOCK` so concurrent
-/// windows cannot clobber each other's `desktopState` or editor preferences.
-///
-/// Args:
-///   app: Tauri handle used to resolve the OS app-data settings path.
-///   theme: Requested theme; must be one of `system`, `light`, or `dark`.
-///
-/// Returns:
-///   The full serialized settings document that was written to disk.
-#[tauri::command]
-pub fn update_app_theme(app: tauri::AppHandle, theme: String) -> Result<String, NativeError> {
-    let _settings_lock = acquire_app_settings_lock();
-    let settings_path = resolve_app_settings_path(&app)?;
-    let contents = read_settings_file(&settings_path)?;
-    let updated = update_app_theme_contents(contents.as_deref(), &theme)?;
-
-    write_settings_file(&settings_path, &updated)?;
-    Ok(updated)
-}
-
 #[tauri::command]
 pub fn read_workspace_settings(
     app: tauri::AppHandle,
@@ -340,35 +316,6 @@ pub fn update_desktop_state_contents(
     let next = apply_desktop_state_update(current, update);
 
     app_settings.insert(DESKTOP_STATE_KEY.to_string(), serialize_desktop_state(next));
-
-    serialize_app_settings_record(app_settings)
-}
-
-/// Replaces only the top-level `theme` field of an app-settings document.
-///
-/// Unknown and unrelated keys (`editor`, `desktopState`, extension settings) are
-/// carried through untouched so a theme toggle never drops other preferences.
-///
-/// Args:
-///   contents: Existing settings JSON, or `None` when the file does not exist.
-///   theme: Requested theme; must be one of `system`, `light`, or `dark`.
-///
-/// Returns:
-///   The updated settings document, or `NativeError` when `theme` is unsupported.
-pub fn update_app_theme_contents(
-    contents: Option<&str>,
-    theme: &str,
-) -> Result<String, NativeError> {
-    if !SUPPORTED_APP_THEMES.contains(&theme) {
-        return Err(NativeError::with_details(
-            "settings.invalid_theme",
-            "Theme must be one of system, light, or dark.",
-            format!("Received unsupported theme \"{theme}\"."),
-        ));
-    }
-
-    let mut app_settings = parse_app_settings_record(contents);
-    app_settings.insert(APP_THEME_KEY.to_string(), Value::String(theme.to_string()));
 
     serialize_app_settings_record(app_settings)
 }
@@ -552,19 +499,8 @@ pub fn create_desktop_state(state: &Map<String, Value>) -> DesktopState {
         .get("lastWorkspacePath")
         .and_then(Value::as_str)
         .and_then(nonempty_workspace_path);
-    let recent_workspace_paths = state
-        .get("recentWorkspacePaths")
-        .and_then(Value::as_array)
-        .map(|paths| {
-            normalize_workspace_paths(
-                paths
-                    .iter()
-                    .filter_map(Value::as_str)
-                    .map(str::to_owned)
-                    .collect(),
-                last_workspace_path.as_deref(),
-            )
-        })
+    let recent_workspace_paths = string_list(state.get("recentWorkspacePaths"))
+        .map(|paths| normalize_workspace_paths(paths, last_workspace_path.as_deref()))
         .unwrap_or_else(|| promote_recent_workspace(Vec::new(), last_workspace_path.as_deref()));
 
     DesktopState {
@@ -592,25 +528,13 @@ pub fn create_desktop_state(state: &Map<String, Value>) -> DesktopState {
             .get("bottomPanelOpen")
             .and_then(Value::as_bool)
             .unwrap_or(false),
-        development_extension_directories: state
-            .get("developmentExtensionDirectories")
-            .and_then(Value::as_array)
-            .map(|directories| {
-                normalize_extension_directories(
-                    directories
-                        .iter()
-                        .filter_map(Value::as_str)
-                        .map(str::to_owned)
-                        .collect(),
-                )
-            })
-            .unwrap_or_default(),
+        development_extension_directories: string_list(
+            state.get("developmentExtensionDirectories"),
+        )
+        .map(normalize_extension_directories)
+        .unwrap_or_default(),
         open_tabs: read_persisted_tabs(state.get("openTabs")),
-        active_tab_id: state
-            .get("activeTabId")
-            .and_then(Value::as_str)
-            .filter(|id| !id.is_empty())
-            .map(str::to_owned),
+        active_tab_id: nonempty_string(state.get("activeTabId")),
         workspace_views: read_workspace_views(state.get("workspaceViews")),
         workspace_tabs: read_workspace_tabs(state.get("workspaceTabs")),
         unknown_fields: state
@@ -638,11 +562,7 @@ fn read_workspace_tabs(value: Option<&Value>) -> WorkspaceTabs {
                 workspace_path.clone(),
                 WorkspaceTabState {
                     open_tabs: read_persisted_tabs(stored.get("openTabs")),
-                    active_tab_id: stored
-                        .get("activeTabId")
-                        .and_then(Value::as_str)
-                        .filter(|id| !id.is_empty())
-                        .map(str::to_owned),
+                    active_tab_id: nonempty_string(stored.get("activeTabId")),
                 },
             ))
         })
@@ -667,15 +587,7 @@ fn read_workspace_views(value: Option<&Value>) -> WorkspaceViews {
                 views
                     .iter()
                     .filter_map(|(view_id, collapsed)| {
-                        Some((
-                            view_id.clone(),
-                            collapsed
-                                .as_array()?
-                                .iter()
-                                .filter_map(Value::as_str)
-                                .map(str::to_owned)
-                                .collect(),
-                        ))
+                        Some((view_id.clone(), string_list(Some(collapsed))?))
                     })
                     .collect(),
             ))
@@ -773,6 +685,25 @@ pub fn promote_recent_workspace(paths: Vec<String>, path: Option<&str>) -> Vec<S
 pub fn serialize_desktop_state(state: DesktopState) -> Value {
     serde_json::to_value(&state)
         .expect("desktop state fields are serializable (primitives, strings, BTreeMap, Vec)")
+}
+
+/// The string members of a JSON list, ignoring anything that is not a string.
+fn string_list(value: Option<&Value>) -> Option<Vec<String>> {
+    value.and_then(Value::as_array).map(|items| {
+        items
+            .iter()
+            .filter_map(Value::as_str)
+            .map(str::to_owned)
+            .collect()
+    })
+}
+
+/// A non-empty JSON string.
+fn nonempty_string(value: Option<&Value>) -> Option<String> {
+    value
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty())
+        .map(str::to_owned)
 }
 
 fn read_persisted_tabs(value: Option<&Value>) -> Vec<PersistedTab> {
@@ -880,4 +811,64 @@ pub fn write_settings_file(path: &Path, contents: &str) -> Result<(), NativeErro
             error,
         )
     })
+}
+
+/// Which step of a settings-record update failed, so a caller that treats a
+/// failed read differently from a failed write can tell them apart.
+#[derive(Debug)]
+pub enum SettingsUpdateError {
+    Read(NativeError),
+    Write(NativeError),
+}
+
+impl From<SettingsUpdateError> for NativeError {
+    fn from(error: SettingsUpdateError) -> Self {
+        match error {
+            SettingsUpdateError::Read(inner) | SettingsUpdateError::Write(inner) => inner,
+        }
+    }
+}
+
+/// Rewrites the settings document at `path` under the workspace settings
+/// lock: read, let `revise` edit the record, serialize, write.
+///
+/// `revise` reports whether it changed the record; a no-op revision skips the
+/// write entirely. A failed read surfaces as `SettingsUpdateError::Read` and
+/// nothing is written — a record parsed from nothing must never be serialized
+/// over a file that failed to load.
+pub fn update_settings_record(
+    path: &Path,
+    revise: impl FnOnce(&mut Map<String, Value>) -> bool,
+) -> Result<(), SettingsUpdateError> {
+    let _settings_lock = WORKSPACE_SETTINGS_MUTATION_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let contents = read_settings_file(path).map_err(SettingsUpdateError::Read)?;
+    let mut record = parse_app_settings_record(contents.as_deref());
+    if !revise(&mut record) {
+        return Ok(());
+    }
+    write_settings_record(path, record)
+}
+
+/// Like [`update_settings_record`] but starts from an empty record: for
+/// writing a document that intentionally replaces whatever was at `path`.
+pub fn replace_settings_record(
+    path: &Path,
+    revise: impl FnOnce(&mut Map<String, Value>),
+) -> Result<(), SettingsUpdateError> {
+    let _settings_lock = WORKSPACE_SETTINGS_MUTATION_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let mut record = parse_app_settings_record(None);
+    revise(&mut record);
+    write_settings_record(path, record)
+}
+
+fn write_settings_record(
+    path: &Path,
+    record: Map<String, Value>,
+) -> Result<(), SettingsUpdateError> {
+    let written = serialize_app_settings_record(record).map_err(SettingsUpdateError::Write)?;
+    write_settings_file(path, &written).map_err(SettingsUpdateError::Write)
 }

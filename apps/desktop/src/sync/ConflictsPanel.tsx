@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 
+import { noteName } from "../lib/utils";
 import { Unavailable } from "../shell/Unavailable";
-import { describeSize, describeWhen, noteName, treatmentOf } from "./conflictCard";
+import { describeSize, describeWhen, treatmentOf } from "./conflictCard";
 import { listConflicts, resolveConflict } from "./conflictService";
 import type { ConflictResolution, ConflictSummary } from "./conflictTypes";
 import { failureMessage, recoveryFor } from "./syncCopy";

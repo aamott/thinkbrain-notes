@@ -44,25 +44,9 @@ pub fn unregister_workspace_window_root(roots: &WorkspaceWindowRoots, label: &st
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct ShellStatus {
-    pub app_name: String,
-    pub shell_version: String,
-    pub ready: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct WorkspaceSnapshot {
     pub workspace: WorkspaceDescriptor,
     pub files: Vec<MarkdownFileEntry>,
-}
-
-#[tauri::command]
-pub fn desktop_shell_status() -> Result<ShellStatus, NativeError> {
-    Ok(ShellStatus {
-        app_name: "Thinkbrain Notes".to_string(),
-        shell_version: env!("CARGO_PKG_VERSION").to_string(),
-        ready: true,
-    })
 }
 
 #[tauri::command]

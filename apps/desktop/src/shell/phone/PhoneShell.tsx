@@ -1,15 +1,15 @@
-import { inferTabKind, normalizeRoot } from "@thinkbrain/core";
+import { inferTabKind } from "@thinkbrain/core";
 import { BottomSheet } from "@thinkbrain/ui";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FilePlus2, FolderOpen, Search } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import { BottomPanel } from "../../panels/BottomPanel";
 import { LeftPopout } from "../../panels/LeftPopout";
-import { getDesktopPanelOrUndefined } from "../../panels/panelRegistryModel";
-import { editorTabId, fileTabId, restoreBreadcrumbSegments, type DesktopTab } from "../../tabs/tabModel";
+import { getDesktopPanelOrUndefined, type RightPanelContext } from "../../panels/panelRegistryModel";
+import { editorTabId, fileTabId, inspectableRelativePath, restoreBreadcrumbSegments, type DesktopTab } from "../../tabs/tabModel";
 import { isSelectableLeftPanel, isSelectableRightPanel } from "../shellTypes";
-import { useSettingsStore } from "../../settings/settingsStore";
 import { TabCloseRequest } from "../TabCloseRequest";
-import { isNoteTitleEligible } from "../noteTitleEligibility";
+import { useNoteTitle } from "../useNoteTitle";
 import { TabContent } from "../TabContent";
 import type { ShellState } from "../useShellState";
 import { usePhoneNavigation, type PhoneRoute } from "./usePhoneNavigation";
@@ -50,10 +50,11 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
   const { items, setItems } = useHubItems();
 
   // Browser-history-backed navigation: Files is the root content route, and
-  // every transient surface — navigation drawer, tab switcher, action-items
-  // menu, inspector drawer — is an overlay entry on the same stack, so the
-  // header Back and Android system Back both dismiss the topmost surface
-  // before touching content history.
+  // the inspector drawer pushes onto the same stack so header Back and
+  // Android system Back dismiss it before content history. The navigation
+  // drawer, tab switcher, action-items menu and New-note popup are ephemeral
+  // chrome state — Back closes them, and neither Back nor Forward can
+  // resurrect them.
   const navigation = usePhoneNavigation(shell.restoredWorkspacePath);
   const route = navigation.route;
   const overlay = navigation.overlay;
@@ -74,19 +75,15 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
     setRightPanel,
     openMarkdownDocument,
     openFileDocument,
+    openNewTab: openNewTabDocument,
     paletteCommands,
     runCommand: runPaletteCommand
   } = shell;
 
-  const closeDrawer = useCallback(() => navigation.dismissOverlay(), [navigation]);
-
-  // The journal root path — used to hide the note title row on journal
-  // entries, which already show their own dateline via metadata-widget.
-  const journalRoot = useSettingsStore(
-    (s) => normalizeRoot(String(s.getEffectiveValue("extension-journal-calendar.root") ?? "journal"))
-  );
+  // Journal entries render their own dateline, so the title row hides there —
+  // same rule as DesktopShell. Only ordinary Markdown editor tabs get a title.
   const activePath = activeTab?.resource?.relativePath ?? null;
-  const showNoteTitle = isNoteTitleEligible(activeTab?.kind, activePath, journalRoot);
+  const showNoteTitle = useNoteTitle(activeTab);
 
   // Route → tab/panel synchronization. A tab route *activates* its tab through
   // the shared reducer rather than carrying document state of its own; a stale
@@ -152,23 +149,45 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
     }
   }, [activeTabId, stateRestored, navigation]);
 
+  // The phone rule is one tab: a file tap fills the tab on screen. When that
+  // tab is dirty it is saved first — autosave fires on a 1.5s idle, and a tap
+  // inside that window would otherwise replace unsaved text. A failed save
+  // leaves the tab dirty, which is exactly when the reducer appends rather
+  // than displacing the edits.
+  const flushThen = useCallback(
+    (open: () => void) => {
+      if (activeTab?.isDirty) void saveDocument(activeTab).finally(open);
+      else open();
+    },
+    [activeTab, saveDocument]
+  );
+
   // Opens that *do* pass through the phone chrome push explicitly, so the note
   // they land on is one history entry — not two. The observer above skips the
   // resulting active-tab change because the route already names the same tab.
   const openMarkdown = useCallback(
     (rootPath: string, relativePath: string) => {
-      openMarkdownDocument(rootPath, relativePath);
-      navigation.push({ kind: "tab", tabId: editorTabId({ rootPath, relativePath }) });
+      flushThen(() => {
+        openMarkdownDocument(rootPath, relativePath, "replace-active");
+        navigation.push({ kind: "tab", tabId: editorTabId({ rootPath, relativePath }) });
+      });
     },
-    [openMarkdownDocument, navigation]
+    [openMarkdownDocument, navigation, flushThen]
   );
   const openFile = useCallback(
     (rootPath: string, relativePath: string) => {
-      openFileDocument(rootPath, relativePath);
-      navigation.push({ kind: "tab", tabId: fileTabId({ rootPath, relativePath }) });
+      flushThen(() => {
+        openFileDocument(rootPath, relativePath, "replace-active");
+        navigation.push({ kind: "tab", tabId: fileTabId({ rootPath, relativePath }) });
+      });
     },
-    [openFileDocument, navigation]
+    [openFileDocument, navigation, flushThen]
   );
+  const openNewTab = useCallback(() => {
+    // Same push pattern as the switcher's onSelect: creating the tab IS the
+    // navigation, so the ephemeral switcher overlay closes with it.
+    navigation.push({ kind: "tab", tabId: openNewTabDocument() });
+  }, [navigation, openNewTabDocument]);
   const openNote = useCallback(
     (relativePath: string) => {
       if (shell.restoredWorkspacePath) openMarkdown(shell.restoredWorkspacePath, relativePath);
@@ -228,11 +247,12 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
       // something.
       if (isSelectableLeftPanel(panelId)) {
         // A left panel takes over the screen — a content route. With an
-        // overlay open it *replaces* the overlay's entry so switching New
-        // note/Menu/inspector → Files/Search does not strand the old surface
-        // under Back; over bare content it pushes. Tapping the slot for the
-        // panel already on screen toggles back to the prior content; at the
-        // Files root that Back is a safe no-op.
+        // inspector open it *replaces* the inspector's entry so switching
+        // inspector → Files/Search does not strand the old surface under
+        // Back; an ephemeral menu owns no entry, so the route pushes and the
+        // menu just closes. Tapping the slot for the panel already on screen
+        // toggles back to the prior content; at the Files root that Back is a
+        // safe no-op.
         const alreadyVisible =
           overlay === null &&
           (panelId === "explorer"
@@ -242,7 +262,7 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
           panelId === "explorer" ? { kind: "files" } : { kind: "panel", panel: panelId };
         if (alreadyVisible) {
           navigation.back();
-        } else if (overlay !== null) {
+        } else if (overlay?.kind === "inspector") {
           navigation.replace(target);
         } else {
           navigation.push(target);
@@ -265,9 +285,10 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
     [navigation, setRightPanel, overlay, route, inspectorPanel]
   );
 
-  // A panel row tapped *inside the navigation drawer* replaces the drawer's
-  // history entry with the content route instead of pushing over it — Back
-  // then returns to the prior content, not to a dead drawer entry.
+  // A panel row tapped *inside the navigation drawer* replaces the current
+  // entry with the content route instead of pushing over it — the drawer is
+  // ephemeral chrome with no entry of its own, and a deliberate screen switch
+  // from the menu should not leave Back a step into the surface it replaced.
   const selectDrawerPanel = useCallback(
     (panelId: string) => {
       if (!isSelectableLeftPanel(panelId)) return;
@@ -303,46 +324,65 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
 
   // The popup's create path runs the canonical command — the existing
   // Explorer focus/create flow — after landing on Files, so the inline file
-  // name field is where the user is already looking. The popup's history
-  // entry is replaced rather than pushed over, keeping Back honest.
+  // name field is where the user is already looking. The popup is ephemeral:
+  // pushing Files keeps Back honest (already on Files, the push just closes
+  // the popup).
   const createNewNote = useCallback(() => {
-    navigation.replace({ kind: "files" });
+    navigation.push({ kind: "files" });
     const command = paletteCommands.find((candidate) => candidate.id === "new-note");
     if (command) runPaletteCommand(command);
   }, [navigation, paletteCommands, runPaletteCommand]);
 
-  // "Open most recent note" tracks a two-entry MRU of distinct Markdown tabs.
-  // While a note is on screen it answers the *previous* note — A→B offers A,
-  // and reopening on A offers B — while Files or a panel still gets the note
-  // currently open underneath. Stale ids never reopen a closed tab.
-  const activeNoteId = isNoteTab(activeTab) ? activeTab.id : null;
-  const [noteHistory, setNoteHistory] = useState<readonly string[]>([]);
-  // Adjust-during-render: the MRU derives from `activeNoteId` alone, so
-  // updating it here (React re-renders before commit) keeps it render-safe
-  // where a ref read or an effect setState would not be.
-  if (activeNoteId !== null && noteHistory[0] !== activeNoteId) {
-    setNoteHistory(
-      [activeNoteId, ...noteHistory.filter((id) => id !== activeNoteId)].slice(0, 2)
-    );
-  }
+  // The new-tab page's entry points, routed through phone navigation the same
+  // way the hub and drawer reach those surfaces.
+  const newTab = useMemo(
+    () => ({
+      workspaceName: shell.workspaceName,
+      actions: [
+        { id: "new-note", label: "New note", icon: <FilePlus2 aria-hidden="true" className="size-4" />, onSelect: createNewNote },
+        { id: "files", label: "Browse files", icon: <FolderOpen aria-hidden="true" className="size-4" />, onSelect: () => navigation.push({ kind: "files" }) },
+        { id: "search", label: "Search", icon: <Search aria-hidden="true" className="size-4" />, onSelect: () => navigation.push({ kind: "panel", panel: "search" }) }
+      ]
+    }),
+    [shell.workspaceName, createNewNote, navigation]
+  );
 
+  // "Open most recent note" reads a two-entry MRU of distinct Markdown tabs
+  // out of the reducer's activation history: `entries` is already the visit
+  // order, `removeTab` scrubs closed ids and `retarget` follows renames, so
+  // a second list here could only drift. While a note is on screen it
+  // answers the *previous* note — A→B offers A, and reopening on A offers B
+  // — while Files or a panel still gets the note currently open underneath.
+  // Stale ids never reopen a closed tab.
   const recentNote = useMemo(() => {
     const tabs = shell.tabState.tabs;
     const findTab = (id: string | undefined): DesktopTab | undefined =>
       id !== undefined ? tabs.find((tab) => tab.id === id) : undefined;
+    // Distinct note ids, most recently activated first.
+    const noteIds: string[] = [];
+    for (
+      let index = shell.tabState.history.cursor;
+      index >= 0 && noteIds.length < 2;
+      index -= 1
+    ) {
+      const id = shell.tabState.history.entries[index];
+      if (id !== undefined && !noteIds.includes(id) && isNoteTab(findTab(id))) {
+        noteIds.push(id);
+      }
+    }
     const viewingNoteId =
       route.kind === "tab" && isNoteTab(activeTab) && route.tabId === activeTab.id
         ? activeTab.id
         : null;
     const candidate =
       viewingNoteId !== null
-        ? findTab(noteHistory.find((id) => id !== viewingNoteId))
-        : (isNoteTab(activeTab) ? activeTab : findTab(noteHistory[0]));
+        ? findTab(noteIds.find((id) => id !== viewingNoteId))
+        : (isNoteTab(activeTab) ? activeTab : findTab(noteIds[0]));
     return candidate ? { id: candidate.id, title: candidate.title } : null;
-  }, [activeTab, route, shell.tabState.tabs, noteHistory]);
+  }, [activeTab, route, shell.tabState]);
 
   const openRecentNote = useCallback(() => {
-    if (recentNote) navigation.replace({ kind: "tab", tabId: recentNote.id });
+    if (recentNote) navigation.push({ kind: "tab", tabId: recentNote.id });
   }, [navigation, recentNote]);
 
   // Mobile autosave: the phone shell has no Save button, so the document is
@@ -382,18 +422,24 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
   // see the file only while a tab is the visible route — on Files or a panel
   // a restored document must not leak into Outline/Properties context. Any
   // file-backed tab counts — editor, code editor, media viewer — but never a
-  // comparison tab, whose resource is what the comparison is about.
+  // comparison tab, whose resource is what the comparison is about
+  // (`inspectableRelativePath` applies that rule).
   const visibleDocumentContents =
     route.kind === "tab" && activeDocument?.phase === "ready"
       ? activeDocument.contents
       : null;
   const visibleDocumentPath =
-    route.kind === "tab" &&
-    activePath !== null &&
-    activeTab?.kind !== "merge" &&
-    activeTab?.kind !== "version-diff"
-      ? activePath
-      : null;
+    route.kind === "tab" ? inspectableRelativePath(activeTab) : null;
+  // One context for both right-side surfaces: the action-items menu's
+  // availability gate reads the same values the inspector renders with.
+  const rightContext: RightPanelContext = {
+    rootPath: shell.restoredWorkspacePath,
+    documentContents: visibleDocumentContents,
+    documentPath: visibleDocumentPath,
+    onOpenNote: openNote,
+    onCompareVersion: shell.compareVersion,
+    onRestoreVersion: shell.restoreVersionSafely
+  };
   // Browser-style location pill: workspace, then the route's own crumb trail —
   // real folders for file tabs (`.md` stripped only from note editors so
   // code/media keep their extension), a label for chrome surfaces.
@@ -434,10 +480,15 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
           canGoBack={navigation.canGoBack}
           canGoForward={navigation.canGoForward}
           tabCount={shell.tabState.tabs.length}
+          actionItemsOpen={actionsOpen}
           onBack={navigation.back}
           onForward={navigation.forward}
-          onOpenTabs={() => navigation.showOverlay({ kind: "tabs" })}
-          onOpenInspector={() => navigation.showOverlay({ kind: "actions" })}
+          onOpenTabs={() =>
+            tabsOpen ? navigation.dismissOverlay() : navigation.showOverlay({ kind: "tabs" })
+          }
+          onToggleActionItems={() =>
+            actionsOpen ? navigation.dismissOverlay() : navigation.showOverlay({ kind: "actions" })
+          }
         />
 
         <div className="relative flex min-h-0 flex-1 flex-col">
@@ -483,6 +534,7 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
               onReopenNote={shell.loadDocumentIntoView}
               unsavedNoteContents={shell.unsavedNoteContents}
               onRestoreVersion={shell.restoreVersionSafely}
+              newTab={newTab}
             />
           </div>
         </div>
@@ -540,11 +592,13 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
           documents={shell.documents}
           onDismiss={() => navigation.dismissOverlay()}
           onSelect={(tabId) => {
-            // Replacing the switcher's entry with the tab route dismisses the
-            // sheet and lands Back on the prior content in one step.
-            navigation.replace({ kind: "tab", tabId });
+            // The switcher is ephemeral chrome, not a history entry: choosing
+            // a tab is the navigation, so push it — Back then revisits the
+            // tab switched from (reselecting the current tab just closes).
+            navigation.push({ kind: "tab", tabId });
           }}
           onClose={(tabId) => shell.dispatchTabs({ type: "requestClose", tabId })}
+          onNewTab={openNewTab}
         />
 
         {/* The header `…` menu: every right-panel contribution in registry
@@ -552,12 +606,7 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
             the inspector's Back returns here instead of to content. */}
         <ActionItemsMenu
           open={actionsOpen}
-          rootPath={shell.restoredWorkspacePath}
-          documentContents={visibleDocumentContents}
-          documentPath={visibleDocumentPath}
-          onOpenNote={openNote}
-          onCompareVersion={shell.compareVersion}
-          onRestoreVersion={shell.restoreVersionSafely}
+          context={rightContext}
           onDismiss={() => navigation.dismissOverlay()}
           onSelect={(panel) => {
             setRightPanel(panel);
@@ -570,12 +619,7 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
         <InspectorSheet
           open={inspectorPanel !== null}
           panel={inspectorPanel ?? shell.rightPanel ?? "outline"}
-          rootPath={shell.restoredWorkspacePath}
-          documentContents={visibleDocumentContents}
-          documentPath={visibleDocumentPath}
-          onCompareVersion={shell.compareVersion}
-          onRestoreVersion={shell.restoreVersionSafely}
-          onOpenNote={openNote}
+          context={rightContext}
           // Scrim tap closes the whole flow — under the actions menu that skips
           // the menu entry too; only the header Back steps one level.
           onDismiss={() => navigation.dismissOverlay(true)}
@@ -591,7 +635,7 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
           open={drawerOpen}
           activePanel={shell.leftPanel}
           badges={shell.conflictBadges}
-          onDismiss={closeDrawer}
+          onDismiss={navigation.dismissOverlay}
           onSelectPanel={selectDrawerPanel}
           onWorkspaceAction={showFilesForWorkspaceAction}
           onLongPressPanel={(panelId) => editHub(pinPanel(items, panelId))}

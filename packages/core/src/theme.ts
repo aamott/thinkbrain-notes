@@ -568,7 +568,7 @@ function readTokens(value: unknown): {
  * Serializes a theme document as stable, pretty-printed JSON.
  *
  * The output uses 2-space indentation and a trailing newline, matching the
- * style of `serializeAppSettings`. Key order is `name`, `base`, `version`,
+ * settings serialization style. Key order is `name`, `base`, `version`,
  * `tokens` for deterministic diffs.
  *
  * Args:

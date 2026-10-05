@@ -134,11 +134,8 @@ export function getControlForDefinition(
 // Pre-register standard controls so they're available immediately on import.
 // ---------------------------------------------------------------------------
 
-registerControl("toggle", ToggleControl);
-registerControl("text", TextControl);
-registerControl("number", NumberControl);
-registerControl("select", SelectControl);
-registerControl("path", PathControl);
+// Standard types resolve through `getStandardControlForType`, so only custom
+// keys a definition can name are registered here.
 registerControl("sync-git-link", GitLinkControl);
 registerControl("sync-history-policy", HistoryPolicyControl);
 // `ui.mobileHub` names this key; without it the registry logs a miss and hands

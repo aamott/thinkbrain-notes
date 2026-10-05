@@ -6,8 +6,7 @@
 //! so opening the new window cannot interleave a second merge.
 
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::sync::atomic::AtomicU64;
 
 use serde::Serialize;
 use tauri::Emitter;
@@ -246,7 +245,7 @@ pub fn preview_managed_workspace_from_git_link(
     app: tauri::AppHandle,
     destination: String,
 ) -> Result<GitLinkPreview, NativeError> {
-    let app_data = resolve_app_data(&app)?;
+    let app_data = super::app_data_dir(&app)?;
     let parent = crate::commands::workspace::managed_vaults_root(&app_data)?;
     preview_from_git_link(&destination, &parent.to_string_lossy())
 }
@@ -258,7 +257,7 @@ pub fn import_workspace_from_git_link(
     parent_path: String,
     profile_id: Option<String>,
 ) -> Result<ImportStarted, NativeError> {
-    let app_data = resolve_app_data(&app)?;
+    let app_data = super::app_data_dir(&app)?;
     start_import(app, app_data, destination, parent_path, profile_id, true)
 }
 
@@ -269,7 +268,7 @@ pub fn import_managed_workspace_from_git_link(
     destination: String,
     profile_id: Option<String>,
 ) -> Result<ImportStarted, NativeError> {
-    let app_data = resolve_app_data(&app)?;
+    let app_data = super::app_data_dir(&app)?;
     let parent = crate::commands::workspace::managed_vaults_root(&app_data)?;
     start_import(
         app,
@@ -279,18 +278,6 @@ pub fn import_managed_workspace_from_git_link(
         profile_id,
         false,
     )
-}
-
-fn resolve_app_data(app: &tauri::AppHandle) -> Result<PathBuf, NativeError> {
-    use tauri::Manager as _;
-
-    app.path().app_data_dir().map_err(|error| {
-        failed(
-            "sync.no_app_data",
-            "Could not find where this app keeps its files.",
-            error,
-        )
-    })
 }
 
 fn start_import(
@@ -408,17 +395,17 @@ fn persist_link(
             )
         })?;
     }
-    let mut record = crate::commands::settings::parse_app_settings_record(None);
-    record.insert(
-        DEST_SETTING.to_string(),
-        serde_json::Value::String(destination.to_string()),
-    );
-    record.insert(
-        sign_in::PROFILE_SETTING.to_string(),
-        serde_json::Value::String(profile_id.unwrap_or("").to_string()),
-    );
-    let written = crate::commands::settings::serialize_app_settings_record(record)?;
-    crate::commands::settings::write_settings_file(&path, &written)
+    crate::commands::settings::replace_settings_record(&path, |record| {
+        record.insert(
+            DEST_SETTING.to_string(),
+            serde_json::Value::String(destination.to_string()),
+        );
+        record.insert(
+            sign_in::PROFILE_SETTING.to_string(),
+            serde_json::Value::String(profile_id.unwrap_or("").to_string()),
+        );
+    })?;
+    Ok(())
 }
 
 fn resolve_parent(parent_path: &str) -> Result<PathBuf, NativeError> {
@@ -475,12 +462,7 @@ fn is_reserved(name: &str) -> bool {
 }
 
 fn new_request_id() -> String {
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|elapsed| elapsed.as_nanos() as u64)
-        .unwrap_or(0);
-    let n = NEXT_REQUEST.fetch_add(1, Ordering::Relaxed);
-    format!("imp{now:016x}{n:08x}")
+    super::unique_id("imp", &NEXT_REQUEST)
 }
 
 #[cfg(test)]

@@ -11,7 +11,6 @@ describe("findFrontmatterRange", () => {
     expect(findFrontmatterRange(doc(source))).toEqual({
       from: 0,
       to: 32,
-      firstLine: 1,
       lastLine: 4
     });
   });

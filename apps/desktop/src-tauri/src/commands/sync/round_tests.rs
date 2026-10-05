@@ -26,6 +26,10 @@ pub(super) fn device(name: &str) -> Device {
 pub(super) fn shared(name: &str) -> String {
     let path = make_temp_test_dir(&format!("{name}-remote"), "round", true);
     gix::init_bare(&path).expect("the destination is created");
+    // HEAD names `main` rather than the platform's configured default branch
+    // (master on a stock Windows gitconfig): sync discovery binds whatever the
+    // destination's HEAD advertises, and every test here pushes to main.
+    fs::write(path.join("HEAD"), "ref: refs/heads/main\n").expect("HEAD names main");
     path.to_string_lossy().into_owned()
 }
 

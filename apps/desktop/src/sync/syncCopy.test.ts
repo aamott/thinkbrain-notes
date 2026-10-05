@@ -1,13 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  describeConflictRate,
-  describeMoment,
-  describePill,
-  describeSync,
-  describeWhatChanged,
-  recoveryFor
-} from "./syncCopy";
+import { describeMoment, describePill, recoveryFor } from "./syncCopy";
 import { NOT_RECORDING, type SyncStatus } from "./historyTypes";
 
 const AT = new Date("2026-08-17T09:31:00").getTime();
@@ -36,25 +29,6 @@ describe("when something happened", () => {
 
   it("does not invent a time it was not given", () => {
     expect(describeMoment(null, NOW)).toBe("Unknown");
-  });
-});
-
-describe("what one recorded change touched", () => {
-  it("counts the notes rather than listing them", () => {
-    expect(
-      describeWhatChanged([
-        { path: "one.md", change: "updated" },
-        { path: "two.md", change: "added" }
-      ])
-    ).toBe("2 notes changed");
-  });
-
-  it("keeps the singular singular", () => {
-    expect(describeWhatChanged([{ path: "one.md", change: "updated" }])).toBe("1 note updated");
-  });
-
-  it("calls a removed note deleted", () => {
-    expect(describeWhatChanged([{ path: "one.md", change: "removed" }])).toBe("1 note deleted");
   });
 });
 
@@ -226,76 +200,5 @@ describe("the status footer", () => {
     expect(recoveryFor("sync.history_cleanup_failed")).toBe(
       "Check this computer has space left, then try Free space now in Settings."
     );
-  });
-});
-
-describe("how often this folder has needed something of you", () => {
-  it("says plainly when it never has", () => {
-    const text = describeConflictRate({ decisions: 0, settled: 0, recorded: 340 });
-
-    expect(text).toContain("340 saved versions");
-    expect(text).toContain("never");
-  });
-
-  // The number that makes the feature visible: someone should be able to see
-  // that the noise is being absorbed rather than simply not happening.
-  it("reports what was tidied away separately from what was asked", () => {
-    const text = describeConflictRate({ decisions: 2, settled: 47, recorded: 340 });
-
-    expect(text).toContain("2 of them needed you");
-    expect(text).toContain("47 duplicate copies were tidied away");
-  });
-
-  it("says nothing needed you even when copies were tidied", () => {
-    const text = describeConflictRate({ decisions: 0, settled: 5, recorded: 340 });
-
-    expect(text).toContain("never");
-    expect(text).toContain("5 duplicate copies");
-  });
-
-  it("keeps the singulars singular", () => {
-    const text = describeConflictRate({ decisions: 1, settled: 1, recorded: 1 });
-
-    expect(text).toContain("1 saved version.");
-    expect(text).toContain("1 duplicate copy was");
-  });
-});
-
-describe("describeSync", () => {
-  const moved = { state: "moved" } as const;
-
-  it("says so when there was nothing to bring down", () => {
-    const text = describeSync({ broughtDown: 0, askedAbout: 0, sent: 0, landed: moved });
-
-    expect(text).toContain("already in step");
-  });
-
-  it("counts what arrived", () => {
-    const text = describeSync({ broughtDown: 3, askedAbout: 0, sent: 4, landed: moved });
-
-    expect(text).toContain("3 notes arrived");
-    expect(text).not.toContain("choose");
-  });
-
-  it("keeps the singulars singular", () => {
-    const text = describeSync({ broughtDown: 1, askedAbout: 1, sent: 2, landed: moved });
-
-    expect(text).toContain("1 note arrived");
-    expect(text).toContain("1 note needs you to decide");
-  });
-
-  // A refusal is someone else's timing, not this person's problem, and the
-  // only useful instruction is to wait.
-  it("turns a refusal into something to do rather than a fault", () => {
-    const text = describeSync({
-      broughtDown: 0,
-      askedAbout: 0,
-      sent: 0,
-      landed: { state: "refused", reason: "the other end holds changes this device has not seen" }
-    });
-
-    expect(text).toContain("Try again in a moment");
-    expect(text.toLowerCase()).not.toContain("refus");
-    expect(text.toLowerCase()).not.toContain("reject");
   });
 });

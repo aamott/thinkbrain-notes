@@ -1,3 +1,5 @@
+import type { MouseEvent as ReactMouseEvent } from "react";
+
 import { cn } from "../lib/utils";
 import { PanelIcon } from "./panelIcons";
 
@@ -23,7 +25,8 @@ export function IconButton({
   active,
   badge,
   className,
-  onClick
+  onClick,
+  onContextMenu
 }: {
   label: string;
   symbol: string;
@@ -37,6 +40,8 @@ export function IconButton({
   badge?: number;
   className?: string;
   onClick: () => void;
+  /** Secondary actions for the icon — e.g. the action-items pin menu. */
+  onContextMenu?: (event: ReactMouseEvent<HTMLButtonElement>) => void;
 }) {
   const named = badge ? `${label} (${badge})` : label;
   return (
@@ -48,6 +53,7 @@ export function IconButton({
         className
       )}
       onClick={onClick}
+      onContextMenu={onContextMenu}
       aria-label={named}
       aria-current={active ? "true" : undefined}
       title={named}

@@ -10,7 +10,7 @@ const availableCommand: DesktopCommand = {
   id: "open-settings",
   title: "Open settings",
   availability: "available",
-  shortcut: "⌘,",
+  keybinding: "⌘,",
   handler: () => undefined
 };
 

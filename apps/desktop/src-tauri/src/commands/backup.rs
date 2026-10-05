@@ -125,6 +125,26 @@ pub fn keep_previous_version(
     Ok(())
 }
 
+/// Keeps the file about to be replaced, best-effort.
+///
+/// A backup that cannot be read or written must not stop a save: the user
+/// pressed save, the document is what matters, and refusing to write it
+/// because a *copy* failed would turn a safety net into a way to lose work.
+/// This is the caller that logs and carries on.
+pub fn keep_previous_version_best_effort(
+    app_data_dir: &Path,
+    canonical_root: &Path,
+    relative_path: &str,
+    file_path: &Path,
+) {
+    if let Ok(previous) = fs::read(file_path)
+        && let Err(error) =
+            keep_previous_version(app_data_dir, canonical_root, relative_path, &previous)
+    {
+        eprintln!("[backup] could not keep the previous version of {relative_path}: {error}");
+    }
+}
+
 /// Drops all but the `keep` newest versions.
 ///
 /// Failures are swallowed: an undeletable old backup is untidy, never unsafe,
@@ -245,12 +265,20 @@ pub fn restore_note_version(
         )
     })?;
 
-    super::markdown::write_markdown_document(
+    // `write_text_file` keeps backups too, so the writer is picked by the
+    // file's own extension rather than assumed Markdown.
+    let kind = if super::markdown::is_markdown_path(Path::new(relative_path)) {
+        super::markdown::DocumentKind::Note
+    } else {
+        super::markdown::DocumentKind::Text
+    };
+    super::markdown::write_document(
         root_path,
         relative_path,
         contents,
         None,
         Some(app_data_dir),
+        kind,
     )?;
     Ok(())
 }

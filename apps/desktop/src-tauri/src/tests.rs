@@ -64,3 +64,15 @@ pub(crate) fn make_temp_test_dir(name: &str, prefix: &str, canonicalize: bool) -
 fn temp_test_dir(name: &str) -> PathBuf {
     make_temp_test_dir(name, "notes", true)
 }
+
+/// Gives `repo` an in-memory committer so tests can move refs.
+///
+/// A ref's reflog entry needs a committer from git config, and CI runners
+/// have no `~/.gitconfig` — without this every `repo.reference()` in a test
+/// fails `MissingCommitter` while passing on a developer's machine. gix
+/// resolves identities once at instantiation, so this must use the in-memory
+/// fallback, not a config-file write the repository would never re-read.
+pub(crate) fn give_test_identity(repo: &mut gix::Repository) {
+    repo.committer_or_set_generic_fallback()
+        .expect("a committer fallback is always installable");
+}

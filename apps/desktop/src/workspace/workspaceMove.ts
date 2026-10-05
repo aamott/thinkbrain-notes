@@ -14,6 +14,27 @@ import type { NativeWorkspaceEntry } from "../native/commands";
 export const WORKSPACE_INVALID_MOVE_MESSAGE =
   "A folder cannot be moved into itself or one of its subfolders.";
 
+/** Display name for a drop target's parent — `""` is the workspace root. */
+export function destinationLabel(parentPath: string): string {
+  if (!parentPath) return "workspace root";
+  return parentPath.split("/").at(-1) ?? parentPath;
+}
+
+/**
+ * The message for a refused drop on `parentPath`, for announcing while
+ * hovering or on release. Only meaningful when `isInvalidWorkspaceMove` is
+ * already true: same-parent drops read "already in" and anything else is the
+ * own-subtree rule.
+ */
+export function invalidMoveMessage(
+  source: Pick<NativeWorkspaceEntry, "name" | "parent_path">,
+  parentPath: string
+): string {
+  return parentPath === source.parent_path
+    ? `${source.name} is already in ${destinationLabel(parentPath)}.`
+    : WORKSPACE_INVALID_MOVE_MESSAGE;
+}
+
 /**
  * The relative path an entry would have inside `parentPath` ("" = workspace
  * root). Only the name moves; the entry keeps its leaf name.
@@ -74,4 +95,86 @@ export function remapExpandedFolders(
     next.add(remapMovedPath(path, oldPrefix, newPrefix) ?? path);
   }
   return next;
+}
+
+// ---- Drag-session effects shared by the pointer and HTML5 controllers ----
+
+/** Hover time before a collapsed folder target expands. */
+export const DRAG_AUTO_EXPAND_MS = 600;
+const AUTOSCROLL_EDGE_PX = 28;
+const AUTOSCROLL_STEP_PX = 14;
+
+/** Scrolls `container` while the pointer sits within the edge band. */
+export function edgeAutoScroll(container: HTMLElement | null, clientY: number): void {
+  if (!container) return;
+  const rect = container.getBoundingClientRect();
+  if (clientY < rect.top + AUTOSCROLL_EDGE_PX) container.scrollTop -= AUTOSCROLL_STEP_PX;
+  else if (clientY > rect.bottom - AUTOSCROLL_EDGE_PX) container.scrollTop += AUTOSCROLL_STEP_PX;
+}
+
+/**
+ * Hover-expand bookkeeping for a drag controller: `update` arms the expand
+ * timer when a valid collapsed folder is hovered; `clear` disarms it. Only
+ * one drag session is live per hook, so the handle can live at hook level
+ * rather than inside session state. The caller supplies the current handlers
+ * on each update, so an armed timer never fires a stale prop.
+ */
+export function createAutoExpand(): {
+  update: (
+    path: string | null,
+    valid: boolean,
+    handlers: { isExpanded: (path: string) => boolean; expandFolder: (path: string) => void }
+  ) => void;
+  clear: () => void;
+} {
+  let target: string | null = null;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const clear = () => {
+    if (timer !== null) clearTimeout(timer);
+    target = null;
+    timer = null;
+  };
+  const update = (
+    path: string | null,
+    valid: boolean,
+    handlers: { isExpanded: (path: string) => boolean; expandFolder: (path: string) => void }
+  ) => {
+    const next = valid && path ? path : null;
+    if (next === target) return;
+    clear();
+    if (next && !handlers.isExpanded(next)) {
+      target = next;
+      timer = setTimeout(() => {
+        target = null;
+        timer = null;
+        handlers.expandFolder(next);
+      }, DRAG_AUTO_EXPAND_MS);
+    }
+  };
+  return { update, clear };
+}
+
+/**
+ * The shared spine of a drag-and-drop move: announce, perform, announce the
+ * outcome, and expand a non-root destination so the moved row stays visible.
+ * Controllers add their own latching/focus work around this. Returns whether
+ * the move succeeded.
+ */
+export async function runWorkspaceMove(
+  source: NativeWorkspaceEntry,
+  parentPath: string,
+  moveEntry: (source: NativeWorkspaceEntry, parentPath: string) => Promise<boolean>,
+  expandFolder: (path: string) => void,
+  announce: (message: string) => void
+): Promise<boolean> {
+  const destination = workspaceMoveDestination(source, parentPath);
+  announce(`Moving ${source.name} to ${destinationLabel(parentPath)}.`);
+  const ok = await moveEntry(source, parentPath);
+  if (!ok) {
+    announce(`Could not move ${source.name}.`);
+    return false;
+  }
+  announce(`Moved ${source.name} to ${destination}.`);
+  if (parentPath) expandFolder(parentPath);
+  return true;
 }

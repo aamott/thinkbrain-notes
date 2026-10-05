@@ -22,7 +22,6 @@ use std::path::Path;
 
 use crate::NativeError;
 
-use super::failed;
 use super::history::ChangedNote;
 use super::history::NoteChange;
 use super::history::Recorded;
@@ -30,11 +29,36 @@ use super::history::Source;
 use super::snapshot;
 
 fn unreadable(error: impl std::fmt::Display) -> NativeError {
-    failed(
-        "sync.history_read_failed",
-        "Could not read the sync history.",
-        error,
-    )
+    super::history_read_failed("Could not read the sync history.", error)
+}
+
+/// The first-parent chain of commits from `head`, newest first, capped at
+/// `limit` entries.
+///
+/// One walk for the "how far back" questions — the conflict counters, the
+/// has-this-content check, the checkpoint tidy — so they all agree on what
+/// first-parent means and where the walk stops. A commit that fails to read
+/// yields its error once and ends the chain: whatever lay past it was
+/// unreachable anyway.
+pub(super) fn first_parent_chain<'a>(
+    repo: &'a gix::Repository,
+    head: Option<gix::ObjectId>,
+    limit: usize,
+) -> impl Iterator<Item = Result<gix::Commit<'a>, NativeError>> + 'a {
+    let mut next = head;
+    let mut left = limit;
+    std::iter::from_fn(move || {
+        let id = next?;
+        left = left.checked_sub(1)?;
+        next = None;
+        match repo.find_commit(id) {
+            Ok(commit) => {
+                next = commit.parent_ids().next().map(|parent| parent.detach());
+                Some(Ok(commit))
+            }
+            Err(error) => Some(Err(unreadable(error))),
+        }
+    })
 }
 
 /// Original committer seconds rendered as the app's milliseconds, or `None`

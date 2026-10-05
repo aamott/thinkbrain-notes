@@ -4,14 +4,13 @@ import { createRoot, type Root } from "react-dom/client";
 import { createElement } from "react";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { useCoarsePointer } from "./useCoarsePointer";
+import { useMediaQuery } from "./useMediaQuery";
 
 /**
- * D76: touch decides, not width.
- *
- * A full-screen popout on a phone and a wide desktop panel can be the same
- * number of pixels across, so a width query cannot tell a fingertip from a
- * mouse. Only the pointer can.
+ * Exercised through a pointer query because that is the hook's most
+ * consequential consumer (D76: touch decides, not width — a full-screen
+ * popout on a phone and a wide desktop panel can be the same number of
+ * pixels across, so a width query cannot tell a fingertip from a mouse).
  */
 
 interface FakeQuery {
@@ -58,26 +57,27 @@ const render = async (): Promise<HTMLDivElement> => {
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
-  const Probe = () => createElement("span", null, useCoarsePointer() ? "touch" : "pointer");
+  const Probe = () =>
+    createElement("span", null, useMediaQuery("(pointer: coarse)") ? "touch" : "pointer");
   await act(async () => root?.render(createElement(Probe)));
   return container;
 };
 
-describe("useCoarsePointer", () => {
-  it("reports touch when the primary pointer is coarse", async () => {
+describe("useMediaQuery", () => {
+  it("reports a match when the query matches", async () => {
     install(true);
 
     expect((await render()).textContent).toBe("touch");
   });
 
-  it("reports a fine pointer otherwise", async () => {
+  it("reports no match otherwise", async () => {
     install(false);
 
     expect((await render()).textContent).toBe("pointer");
   });
 
   // A tablet with a keyboard folded on and off changes this mid-session.
-  it("follows the pointer changing under a mounted component", async () => {
+  it("follows the query changing under a mounted component", async () => {
     const query = install(false);
     const host = await render();
 
@@ -86,7 +86,7 @@ describe("useCoarsePointer", () => {
     expect(host.textContent).toBe("touch");
   });
 
-  it("assumes a fine pointer where the query is unavailable", async () => {
+  it("reports no match where the API is unavailable", async () => {
     // @ts-expect-error — deliberately removing the API the way an old runtime would.
     window.matchMedia = undefined;
 

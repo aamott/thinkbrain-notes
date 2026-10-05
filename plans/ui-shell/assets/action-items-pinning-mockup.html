@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Action Items — Pinning Mockup</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      --background: #18181b;
+      --foreground: #f4f4f5;
+      --card: #202023;
+      --popover: #242428;
+      --primary: #3b82f6;
+      --primary-foreground: #ffffff;
+      --secondary: #27272a;
+      --secondary-foreground: #a1a1aa;
+      --muted-foreground: #9ca3af;
+      --accent: #2e2e33;
+      --destructive: #ef4444;
+      --border: #333338;
+      --ring: #3b82f6;
+      --activitybar: #141416;
+      --titlebar: #18181b;
+    }
+    .icon-btn { display:inline-flex; align-items:center; justify-content:center; width:1.6rem; height:1.6rem; border-radius:4px; color:var(--muted-foreground); font-size:0.95rem; }
+    .icon-btn:hover { background: color-mix(in srgb, var(--accent) 60%, transparent); color: var(--foreground); }
+    .icon-btn.active { background: color-mix(in srgb, var(--accent) 60%, transparent); color: var(--primary); }
+    .menu { position:absolute; background:var(--popover); border:1px solid var(--border); border-radius:6px; box-shadow:0 8px 24px rgb(0 0 0 / 0.4); padding:4px 0; font-size:12px; min-width:11rem; }
+    .menu-item { display:flex; align-items:center; gap:8px; padding:6px 12px; color:var(--foreground); }
+    .menu-item:hover { background:var(--accent); }
+    .menu-item .grow { flex:1; min-width:0; }
+    .menu-sep { border-top:1px solid var(--border); margin:4px 0; }
+    .menu-note { margin-left:auto; color:var(--muted-foreground); font-size:10px; }
+    .pin-btn { opacity:0.55; padding:2px; border-radius:3px; }
+    .menu-item:hover .pin-btn { opacity:1; }
+    .pin-btn:hover { color:var(--primary); }
+    .badge-dot { position:absolute; right:-3px; top:-2px; min-width:14px; height:14px; border-radius:999px; background:var(--primary); color:var(--primary-foreground); font-size:9px; line-height:14px; text-align:center; padding:0 3px; }
+    .check { width:12px; color:var(--primary); }
+    .frame { background:var(--titlebar); border:1px solid var(--border); border-radius:8px; position:relative; }
+    .label-chip { font-size:10px; text-transform:uppercase; letter-spacing:0.08em; color:var(--muted-foreground); }
+  </style>
+</head>
+<body class="bg-[var(--background)] text-[var(--foreground)] font-sans antialiased p-6 min-h-screen">
+  <div class="max-w-5xl mx-auto space-y-8">
+
+    <header>
+      <div class="flex items-center gap-2.5">
+        <span class="inline-flex items-center justify-center bg-[var(--primary)] text-[var(--primary-foreground)] rounded-md text-xs font-bold w-6 h-6">T</span>
+        <h1 class="text-xl font-bold tracking-tight">Action items — pinning</h1>
+        <span class="bg-[var(--secondary)] text-[var(--secondary-foreground)] text-xs font-mono px-2 py-0.5 rounded border border-[var(--border)]">Mockup</span>
+      </div>
+      <p class="text-sm text-[var(--muted-foreground)] mt-1">
+        Right-side title-bar toggles (history · outline · backlinks · properties · assistant + extension panels).
+        Pinned items show as icons; the rest live in the ⋯ menu. A notification on an unpinned item
+        surfaces it into the bar automatically (shown last).
+      </p>
+    </header>
+
+    <!-- Baseline -->
+    <section class="space-y-2">
+      <div class="label-chip">Today — everything pinned implicitly</div>
+      <div class="frame flex items-center justify-end h-10 px-2">
+        <div class="flex items-center gap-1 border-l border-[var(--border)] pl-2">
+          <span class="icon-btn" title="Version history">◷</span>
+          <span class="icon-btn" title="Outline">≡</span>
+          <span class="icon-btn" title="Backlinks">⤺</span>
+          <span class="icon-btn" title="Properties">⌗</span>
+          <span class="icon-btn" title="Assistant">✦</span>
+        </div>
+      </div>
+      <p class="text-xs text-[var(--muted-foreground)]">Every registered panel is an icon. Extension panels make this row grow without bound.</p>
+    </section>
+
+    <!-- Option A -->
+    <section class="space-y-2">
+      <div class="label-chip">Option A — ⋯ lists the unpinned; a pin glyph on each row pins it</div>
+      <div class="frame flex items-center justify-end h-10 px-2">
+        <div class="flex items-center gap-1 border-l border-[var(--border)] pl-2 relative">
+          <span class="icon-btn active" title="Assistant (pinned)">✦</span>
+          <span class="icon-btn" title="Outline (pinned)">≡</span>
+          <span class="icon-btn" title="Action items">⋯</span>
+          <div class="menu" style="right:0; top:calc(100% + 4px);">
+            <div class="menu-item"><span>⤺</span><span class="grow">Backlinks</span><span class="pin-btn" title="Pin to bar">📌</span></div>
+            <div class="menu-item"><span>⌗</span><span class="grow">Properties</span><span class="pin-btn" title="Pin to bar">📌</span></div>
+            <div class="menu-item"><span>◷</span><span class="grow">Version history</span><span class="pin-btn" title="Pin to bar">📌</span></div>
+          </div>
+        </div>
+      </div>
+      <p class="text-xs text-[var(--muted-foreground)]">
+        Clicking a ⋯ row opens the panel; the trailing 📌 pins it. Right-click a pinned icon →
+        <em>Open / Unpin from bar</em>. Pinning stays reachable for unpinned items without right-click (touch-friendly).
+        Needs MenuButton rows to grow an optional trailing control.
+      </p>
+    </section>
+
+    <!-- Option B -->
+    <section class="space-y-2">
+      <div class="label-chip">Option B — VS Code checklist: right-click the bar toggles pins; ⋯ only opens</div>
+      <div class="frame flex items-center justify-end h-10 px-2">
+        <div class="flex items-center gap-1 border-l border-[var(--border)] pl-2 relative">
+          <span class="icon-btn active" title="Assistant (pinned)">✦</span>
+          <span class="icon-btn" title="Outline (pinned)">≡</span>
+          <span class="icon-btn" title="Action items">⋯</span>
+          <div class="menu" style="right:28px; top:calc(100% + 4px);">
+            <div class="menu-item"><span class="check">✓</span><span>✦</span><span class="grow">Assistant</span></div>
+            <div class="menu-item"><span class="check">✓</span><span>≡</span><span class="grow">Outline</span></div>
+            <div class="menu-item"><span class="check"></span><span>⤺</span><span class="grow">Backlinks</span></div>
+            <div class="menu-item"><span class="check"></span><span>⌗</span><span class="grow">Properties</span></div>
+            <div class="menu-item"><span class="check"></span><span>◷</span><span class="grow">Version history</span></div>
+          </div>
+        </div>
+      </div>
+      <p class="text-xs text-[var(--muted-foreground)]">
+        Right-click any icon (or the ⋯) → the full list as checkboxes; checked = pinned to the bar.
+        The ⋯ menu stays a plain open-menu of the unpinned panels — no new row control needed
+        (checkbox items already exist via MenuCheckbox). Right-click also on unpinned ⋯ rows is not
+        possible, but the checklist covers everything.
+      </p>
+    </section>
+
+    <!-- Option C -->
+    <section class="space-y-2">
+      <div class="label-chip">Option C — ⋯ holds everything: open items + a pin section at the bottom</div>
+      <div class="frame flex items-center justify-end h-10 px-2">
+        <div class="flex items-center gap-1 border-l border-[var(--border)] pl-2 relative">
+          <span class="icon-btn active" title="Assistant (pinned)">✦</span>
+          <span class="icon-btn" title="Outline (pinned)">≡</span>
+          <span class="icon-btn" title="Action items">⋯</span>
+          <div class="menu" style="right:0; top:calc(100% + 4px);">
+            <div class="menu-item"><span>⤺</span><span class="grow">Backlinks</span></div>
+            <div class="menu-item"><span>⌗</span><span class="grow">Properties</span></div>
+            <div class="menu-item"><span>◷</span><span class="grow">Version history</span></div>
+            <div class="menu-sep"></div>
+            <div class="menu-item"><span class="check">✓</span><span class="grow">Assistant — pinned</span></div>
+            <div class="menu-item"><span class="check">✓</span><span class="grow">Outline — pinned</span></div>
+            <div class="menu-item"><span class="check"></span><span class="grow">Backlinks — pin</span></div>
+            <div class="menu-item"><span class="check"></span><span class="grow">Properties — pin</span></div>
+            <div class="menu-item"><span class="check"></span><span class="grow">Version history — pin</span></div>
+          </div>
+        </div>
+      </div>
+      <p class="text-xs text-[var(--muted-foreground)]">
+        One menu carries both duties — unpinned panels open from the top section, the bottom section
+        is the pin checklist. More items to scan, but zero new control types and no right-click
+        needed for pinning at all (fully touch-compatible).
+      </p>
+    </section>
+
+    <!-- Notification auto-surface -->
+    <section class="space-y-2">
+      <div class="label-chip">Shared behavior — notification surfaces an unpinned item</div>
+      <div class="frame flex items-center justify-end h-10 px-2">
+        <div class="flex items-center gap-1 border-l border-[var(--border)] pl-2">
+          <span class="icon-btn" title="Outline (pinned)">≡</span>
+          <span class="icon-btn relative" title="Assistant — 1 notification">
+            ✦<span class="badge-dot">1</span>
+          </span>
+          <span class="icon-btn" title="Action items">⋯</span>
+        </div>
+      </div>
+      <p class="text-xs text-[var(--muted-foreground)]">
+        Assistant is unpinned here, but an undismissed notification that names it pulls it into the
+        bar with a badge. It drops back into ⋯ once the notification clears. Same rule in every option.
+      </p>
+    </section>
+
+    <!-- Explorer context menu -->
+    <section class="space-y-2">
+      <div class="label-chip">File context menu — after (sections, copy items)</div>
+      <div class="frame inline-block p-3">
+        <div class="menu" style="position:static;">
+          <div class="menu-item"><span class="grow">New file</span></div>
+          <div class="menu-item"><span class="grow">New folder</span></div>
+          <div class="menu-sep"></div>
+          <div class="menu-item"><span class="grow">Rename</span></div>
+          <div class="menu-item"><span class="grow">Previous versions…</span></div>
+          <div class="menu-item"><span class="grow">Copy name</span></div>
+          <div class="menu-item"><span class="grow">Copy relative path</span></div>
+          <div class="menu-item"><span class="grow">Copy absolute path</span></div>
+          <div class="menu-item"><span class="grow">Copy file</span><span class="menu-note">desktop</span></div>
+          <div class="menu-item" style="color:var(--destructive)"><span class="grow">Delete</span></div>
+          <div class="menu-sep"></div>
+          <div class="menu-item"><span class="grow">Refresh</span></div>
+          <div class="menu-item"><span class="grow">Open workspace…</span></div>
+        </div>
+      </div>
+      <p class="text-xs text-[var(--muted-foreground)]">
+        Creates move up top (a file's siblings — they land in the file's folder), file actions in the
+        middle, copy items with them, and the workspace-level actions close the menu — the same
+        grouping the background menu already uses.
+      </p>
+    </section>
+
+  </div>
+</body>
+</html>

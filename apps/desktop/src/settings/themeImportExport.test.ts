@@ -156,7 +156,7 @@ describe("readCurrentTokenValues", () => {
 
 describe("buildThemeExportPayload", () => {
   it("produces valid JSON with name, base, version, and tokens", () => {
-    const { json } = buildThemeExportPayload();
+    const json = buildThemeExportPayload();
     const parsed = JSON.parse(json) as {
       name: string;
       base: string;
@@ -173,7 +173,7 @@ describe("buildThemeExportPayload", () => {
   it("uses the base from the data-thinkbrain-theme attribute", () => {
     document.documentElement.dataset.thinkbrainTheme = "dark";
 
-    const { json } = buildThemeExportPayload();
+    const json = buildThemeExportPayload();
     const parsed = JSON.parse(json) as { base: string };
 
     expect(parsed.base).toBe("dark");
@@ -183,14 +183,14 @@ describe("buildThemeExportPayload", () => {
     const customTokens = { "--tn-color-background": "#000000" };
     stubGetComputedStyle(customTokens);
 
-    const { json } = buildThemeExportPayload();
+    const json = buildThemeExportPayload();
     const parsed = JSON.parse(json) as { tokens: Record<string, string> };
 
     expect(parsed.tokens).toEqual(customTokens);
   });
 
   it("produces pretty-printed JSON with a trailing newline", () => {
-    const { json } = buildThemeExportPayload();
+    const json = buildThemeExportPayload();
     // Pretty-printed JSON has a newline + 2-space indentation on the first key.
     expect(json).toContain('\n  "name"');
     expect(json.endsWith("\n")).toBe(true);
@@ -387,7 +387,7 @@ describe("exporting while a theme file is active", () => {
     vi.mocked(readThemeFile).mockResolvedValue(THEME_SOURCE);
     seedSettingsStore({ appValues: { "appearance.themeFile": "/tmp/hand.tbtheme.json" } });
 
-    const { json } = await buildThemeExport();
+    const json = await buildThemeExport();
 
     expect(json).toBe(THEME_SOURCE);
     expect(json).toContain("var(--tn-color-accent)");
@@ -396,7 +396,7 @@ describe("exporting while a theme file is active", () => {
   it("snapshots the document when no theme file is active", async () => {
     seedSettingsStore({ appValues: { "appearance.themeFile": null } });
 
-    const { json } = await buildThemeExport();
+    const json = await buildThemeExport();
 
     expect(JSON.parse(json)).toMatchObject({ name: "Exported Theme" });
   });
@@ -406,7 +406,7 @@ describe("exporting while a theme file is active", () => {
     vi.mocked(readThemeFile).mockResolvedValue(null);
     seedSettingsStore({ appValues: { "appearance.themeFile": "/tmp/gone.tbtheme.json" } });
 
-    const { json } = await buildThemeExport();
+    const json = await buildThemeExport();
 
     expect(JSON.parse(json)).toMatchObject({ name: "Exported Theme" });
   });
@@ -416,7 +416,7 @@ describe("exporting while a theme file is active", () => {
     vi.mocked(readThemeFile).mockResolvedValue("not json {{{");
     seedSettingsStore({ appValues: { "appearance.themeFile": "/tmp/broken.tbtheme.json" } });
 
-    const { json } = await buildThemeExport();
+    const json = await buildThemeExport();
 
     expect(JSON.parse(json)).toMatchObject({ name: "Exported Theme" });
   });

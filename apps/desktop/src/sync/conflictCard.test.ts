@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { describeSize, describeWhen, noteName, treatmentOf } from "./conflictCard";
+import { noteName } from "../lib/utils";
+import { describeSize, describeWhen, treatmentOf } from "./conflictCard";
 import type { ConflictKind, ConflictSummary } from "./conflictTypes";
 
 const summary = (path: string, kind: ConflictKind): ConflictSummary => ({

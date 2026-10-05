@@ -81,6 +81,9 @@ export function useSettleNotificationAdapter({
                 ? "1 duplicate file was merged."
                 : `${newlySettled} duplicate files were merged.`,
             recovery: "Nothing is lost — each one is restorable from the saved versions.",
+            // Saved versions live in History — surface its action item while
+            // the announcement stands.
+            panel: "history",
             severity: "transient",
             variant: "info"
           });

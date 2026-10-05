@@ -25,7 +25,7 @@ use std::sync::atomic::AtomicBool;
 use gix::merge::tree::{FileFavor, TreatAsUnresolved, TreeFavor};
 use serde::Serialize;
 
-use crate::error::NativeError;
+use crate::error::{NativeError, lock_or_recover};
 
 use super::apply;
 use super::conflict;
@@ -78,38 +78,33 @@ pub fn destination(app_data_dir: &Path, root: &Path) -> Option<String> {
     // and parse errors into `None`, misreporting a corrupt settings file as
     // "not set up to sync." We still return `None` so a bad file does not break
     // sync entirely, but the failure is now logged so it can be found.
-    let contents = match crate::commands::settings::read_settings_file(&path) {
-        Ok(contents) => contents,
-        Err(error) => {
+    let mut found = None;
+    match crate::commands::settings::update_settings_record(&path, |record| {
+        let Some(named) = record.get(SETTING).and_then(serde_json::Value::as_str) else {
+            return false;
+        };
+        let named = named.trim().to_string();
+        if named.is_empty() {
+            return false;
+        }
+        let redacted = super::credentials::take_from_url(&named);
+        found = Some(redacted.clone());
+        if redacted == named {
+            return false;
+        }
+        record.insert(SETTING.to_string(), serde_json::Value::String(redacted));
+        true
+    }) {
+        Ok(()) => found,
+        Err(crate::commands::settings::SettingsUpdateError::Read(error)) => {
             eprintln!("[sync] settings unreadable: {error:?}");
-            return None;
+            None
         }
-    };
-    let mut record = crate::commands::settings::parse_app_settings_record(contents.as_deref());
-    let named = record.get(SETTING)?.as_str()?.trim().to_string();
-    if named.is_empty() {
-        return None;
-    }
-    let redacted = super::credentials::take_from_url(&named);
-    if redacted != named {
-        record.insert(
-            SETTING.to_string(),
-            serde_json::Value::String(redacted.clone()),
-        );
-        match crate::commands::settings::serialize_app_settings_record(record) {
-            Ok(written) => {
-                if let Err(error) =
-                    crate::commands::workspace::write_file_atomically(&path, written)
-                {
-                    eprintln!("[sync] failed to redact secret from settings: {error:?}");
-                }
-            }
-            Err(_) => {
-                eprintln!("[sync] failed to serialize redacted settings, secret may remain on disk")
-            }
+        Err(crate::commands::settings::SettingsUpdateError::Write(error)) => {
+            eprintln!("[sync] failed to redact secret from settings: {error:?}");
+            found
         }
     }
-    Some(redacted)
 }
 
 /// One round trip: fetch, merge, send.
@@ -198,17 +193,15 @@ fn trip(
     // same-named remote branch when the upstream points elsewhere), and only
     // a link with neither discovers the remote's symbolic HEAD -- once, then
     // it is bound. A changed remote default can therefore never retarget us.
-    let bound_local = history_source::bound_local(repo, &source_ref)?;
+    let (mut bound_local, bound_remote) = history_source::binding(repo, &source_ref)?;
     // A detached or switched checkout blocks the sync before any network use.
     // It never blocks recording or history, which keep their own copies.
     history_source::require_checkout(vault, bound_local.as_deref())?;
     let current_local = history_source::checkout_branch(vault)?;
-    let bound_remote = history_source::bound_remote(repo, &source_ref)?;
 
     // A `.git` appearing after the binding is this clone only when its
     // checkout agrees about which remote branch the link uses; anything else
     // is a different checkout standing in our vault.
-    let mut bound_local = bound_local;
     if bound_remote.is_some() && bound_local.is_none() && current_local.is_some() {
         let clone_remote = history_source::remote_branch_for(vault, destination)?;
         if clone_remote == bound_remote.clone().expect("checked above") {
@@ -590,10 +583,7 @@ pub fn sync(
     profile_id: Option<&str>,
 ) -> Result<Synced, NativeError> {
     let lane = super::registry::lane(key);
-    let _lane = lane.lock().unwrap_or_else(|error| {
-        eprintln!("[sync] sync lane mutex was poisoned, recovering: {error}");
-        error.into_inner()
-    });
+    let _lane = lock_or_recover(&lane);
 
     let generation = engine.begin_sync(super::schedule::now_epoch_secs());
     crate::commands::watcher::announce_sync_status(key);
@@ -706,24 +696,16 @@ pub(super) fn finish(
 /// Syncs this workspace once, now, because someone asked.
 #[tauri::command]
 pub fn sync_now(app: tauri::AppHandle, root_path: String) -> Result<Synced, NativeError> {
-    use tauri::Manager as _;
-
-    let root = crate::commands::workspace::resolve_workspace_root(&root_path)?;
+    let (root, engine) = super::registry::workspace_and_engine(&root_path)?;
     let key = root.to_string_lossy().to_string();
-    let app_data_dir = app.path().app_data_dir().map_err(|error| {
-        failed(
-            "sync.no_app_data",
-            "Could not find where this app keeps its files.",
-            error,
-        )
-    })?;
+    let app_data_dir = super::app_data_dir(&app)?;
     let destination = destination(&app_data_dir, &root).ok_or_else(|| {
         NativeError::new(
             "sync.no_destination",
             "This folder is not set up to sync anywhere yet.",
         )
     })?;
-    let engine = super::registry::engine(&key).ok_or_else(|| {
+    let engine = engine.ok_or_else(|| {
         super::registry::failure(&key).unwrap_or_else(|| {
             NativeError::new(
                 "sync.not_recording",

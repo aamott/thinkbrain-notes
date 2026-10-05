@@ -12,8 +12,17 @@ let coarse = false;
 
 // The gate's two inputs are stubbed so each form factor is a plain assignment;
 // driving them through matchMedia is `useNarrowViewport`'s own test's job.
+// Only the pointer query is intercepted — every other consumer (TitleBar
+// reads the same hook under the desktop chrome) keeps the real one.
 vi.mock("./useNarrowViewport", () => ({ useNarrowViewport: () => narrow }));
-vi.mock("../journal/useCoarsePointer", () => ({ useCoarsePointer: () => coarse }));
+vi.mock("../lib/useMediaQuery", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/useMediaQuery")>();
+  return {
+    ...actual,
+    useMediaQuery: (query: string) =>
+      query === "(pointer: coarse)" ? coarse : actual.useMediaQuery(query)
+  };
+});
 
 // `ShellRoot` mounts the real shell state, which boots the workspace lifecycle
 // and reaches for Tauri IPC when it believes it is running under Tauri. Mock

@@ -7,6 +7,7 @@ import {
   type JournalDate
 } from "@thinkbrain/core";
 
+import { noteName } from "../lib/utils";
 import type { JournalEntry, JournalListing } from "./journalService";
 
 /**
@@ -170,7 +171,7 @@ export function buildJournalView(input: JournalViewInput): JournalView {
           row({
             kind: "undated-entry",
             key: file.relativePath,
-            label: file.relativePath.slice(file.relativePath.lastIndexOf("/") + 1),
+            label: noteName(file.relativePath),
             preview: previews.get(file.relativePath) ?? null
           })
         );

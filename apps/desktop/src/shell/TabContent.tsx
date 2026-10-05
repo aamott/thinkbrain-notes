@@ -9,6 +9,7 @@ import type { DocumentViewState } from "./shellTypes";
 import { SettingsTab } from "../settings/SettingsTab";
 import { MergeTab } from "../sync/MergeTab";
 import { VersionDiffTab } from "../sync/VersionDiffTab";
+import { NewTabView, type NewTabAction } from "../tabs/NewTabView";
 import { DamagedNote } from "./DamagedNote";
 import { Unavailable } from "./Unavailable";
 
@@ -65,6 +66,11 @@ type TabContentProps = {
    * call it.
    */
   readonly onRestoreVersion?: (notePath: string, changeId: string) => Promise<void>;
+  /** What the new-tab page offers; each chrome wires its own navigation. */
+  readonly newTab?: {
+    readonly workspaceName: string | null;
+    readonly actions: readonly NewTabAction[];
+  };
 };
 
 /** Lazy-loaded Markdown editor; only fetched when an editor tab is rendered. */
@@ -89,7 +95,8 @@ export function TabContent({
   onOpenNote,
   onReopenNote,
   unsavedNoteContents,
-  onRestoreVersion
+  onRestoreVersion,
+  newTab
 }: TabContentProps) {
   // Hooks must run before any early return, so both are read up front even
   // though only the Markdown editor branch consumes them.
@@ -163,6 +170,15 @@ export function TabContent({
 
   if (tab.kind === "settings") {
     return <SettingsTab />;
+  }
+
+  if (tab.kind === "new-tab") {
+    return (
+      <NewTabView
+        workspaceName={newTab?.workspaceName ?? null}
+        actions={newTab?.actions ?? []}
+      />
+    );
   }
 
   // Named by the conflict copy, which is what identifies a conflict everywhere

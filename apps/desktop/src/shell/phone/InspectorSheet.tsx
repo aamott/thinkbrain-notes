@@ -1,7 +1,9 @@
 import { Scrim, useDismissable } from "@thinkbrain/ui";
 
 import type { RightPanel } from "../shellTypes";
+import type { RightPanelContext } from "../../panels/panelRegistryModel";
 import { RightPopout } from "../../panels/RightPopout";
+import { PHONE_OVERLAY_BOUNDS } from "./overlayBounds";
 import { cn } from "../../lib/utils";
 
 /** Classes that make the dock-styled `RightPopout` behave as a plain flow
@@ -9,12 +11,6 @@ import { cn } from "../../lib/utils";
  *  border and shadow, and its inner dock-width wrapper goes full width. */
 const AS_FLOW_CHILD =
   "[&>aside]:static [&>aside]:min-h-0 [&>aside]:flex-1 [&>aside]:border-l-0 [&>aside]:shadow-none [&>aside>div]:w-full";
-
-// The drawer is bounded between the phone header and the bottom hub: the hub
-// stays visible and tappable while an inspector is open, matching how the
-// navigation drawer and sheets leave the surrounding chrome reachable.
-const BOUNDS =
-  "top-[calc(3.5rem+env(safe-area-inset-top))] bottom-[calc(3.5rem+env(safe-area-inset-bottom))]";
 
 /**
  * Right-edge inspector drawer for a right-panel contribution (outline,
@@ -30,26 +26,14 @@ const BOUNDS =
 export function InspectorSheet({
   open,
   panel,
-  rootPath,
-  documentContents,
-  documentPath,
-  onCompareVersion,
-  onRestoreVersion,
-  onOpenNote,
+  context,
   onDismiss,
   onBack
 }: {
   readonly open: boolean;
   readonly panel: RightPanel;
-  readonly rootPath: string | null;
-  /** Contents of the active file-backed tab, when its document is ready. */
-  readonly documentContents: string | null;
-  readonly documentPath: string | null;
-  /** Opens a read-only comparison of a file with one recorded version. */
-  readonly onCompareVersion: (notePath: string, changeId: string, versionAt?: number | null) => void;
-  /** Puts a recorded version back, saving an open dirty file first. */
-  readonly onRestoreVersion: (notePath: string, changeId: string) => Promise<void>;
-  readonly onOpenNote: (relativePath: string) => void;
+  /** The right-side context the shell already built for this document. */
+  readonly context: RightPanelContext;
   /** Scrim tap: dismisses the inspector (and any flow it belongs to). */
   readonly onDismiss: () => void;
   /** Header Back: steps the flow back to the surface that opened it. */
@@ -58,7 +42,7 @@ export function InspectorSheet({
   const { containerRef } = useDismissable({ open, onDismiss });
   return (
     <>
-      <Scrim open={open} onDismiss={onDismiss} className={`inset-x-0 ${BOUNDS}`} />
+      <Scrim open={open} onDismiss={onDismiss} className={`inset-x-0 ${PHONE_OVERLAY_BOUNDS}`} />
       <div
         ref={containerRef}
         role={open ? "dialog" : undefined}
@@ -67,19 +51,14 @@ export function InspectorSheet({
         aria-hidden={!open}
         className={cn(
           "absolute right-0 z-50 flex w-[90%] max-w-96 flex-col bg-sidebar text-sidebar-foreground shadow-panel tn-slide",
-          BOUNDS,
+          PHONE_OVERLAY_BOUNDS,
           open ? "visible translate-x-0" : "invisible translate-x-full"
         )}
       >
         <div className={cn("flex min-h-0 flex-1 flex-col", AS_FLOW_CHILD)}>
           <RightPopout
             panel={panel}
-            rootPath={rootPath}
-            documentContents={documentContents}
-            documentPath={documentPath}
-            onCompareVersion={onCompareVersion}
-            onRestoreVersion={onRestoreVersion}
-            onOpenNote={onOpenNote}
+            context={context}
             onBack={onBack}
           />
         </div>

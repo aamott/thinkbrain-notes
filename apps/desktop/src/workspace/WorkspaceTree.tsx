@@ -13,27 +13,38 @@ import {
 
 // ---- Tree item ----
 
+/** Tree-row glyph styling — `tn-tree-icon` supplies the tinted color. */
+const TREE_ICON_CLASSES =
+  "tn-tree-icon [&>svg]:w-[0.9rem] [&>svg]:h-[0.9rem] [&>svg]:stroke-current";
+
 export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
   node,
   depth = 0,
   isFirst = false,
   activePath,
+  contextMenuPath,
   renaming,
   creating,
   expandedFolders,
   actions,
-  drag
+  drag,
+  busy,
+  inlineCreateError
 }: {
   readonly node: WorkspaceTreeNode;
   readonly depth?: number;
   readonly isFirst?: boolean;
   readonly activePath: string | null;
+  /** Path of the entry whose context menu is open, if any. */
+  readonly contextMenuPath: string | null;
   readonly renaming: RenameState | null;
   readonly creating: CreateState | null;
   readonly expandedFolders: ReadonlySet<string>;
   readonly actions: WorkspaceExplorerActions;
   /** Shared drag-and-drop controller from `WorkspaceExplorerView`. */
   readonly drag: WorkspaceTreeDrag | null;
+  readonly busy: boolean;
+  readonly inlineCreateError: string | null;
 }) {
   const {
     setActivePath,
@@ -44,7 +55,8 @@ export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
     submitRename,
     submitCreate,
     setRenaming,
-    setCreating
+    setCreating,
+    setInlineCreateError
   } = actions;
   const isDirectory = node.entry.kind === "directory";
   const isFile = node.entry.kind === "file";
@@ -133,10 +145,20 @@ export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
             isDragged && "opacity-60",
             isDropTarget && (drag?.dropTargetValid
               ? "bg-[color-mix(in_srgb,var(--color-accent)_58%,transparent)]"
-              : "bg-[color-mix(in_srgb,var(--color-destructive)_18%,transparent)]")
+              : "bg-[color-mix(in_srgb,var(--color-destructive)_18%,transparent)]"),
+            // The context-menu target stays outlined for as long as its menu
+            // is open, tying the menu to the row once the pointer has moved on.
+            contextMenuPath === node.entry.relative_path &&
+              "bg-[color-mix(in_srgb,var(--color-accent)_58%,transparent)] outline-1 -outline-offset-1 outline-ring"
           )}
           {...{ [WORKSPACE_TREE_ROW_ATTR]: node.entry.relative_path }}
           {...(isDirectory ? { [WORKSPACE_DROP_PARENT_ATTR]: node.entry.relative_path } : {})}
+          draggable={drag?.draggable}
+          onDragStart={(event) => drag?.onRowDragStart?.(event, node.entry)}
+          onDragEnd={(event) => drag?.onRowDragEnd?.(event)}
+          onDragOver={(event) => drag?.onRowDragOver?.(event, node.entry)}
+          onDragLeave={(event) => drag?.onRowDragLeave?.(event, node.entry)}
+          onDrop={(event) => drag?.onRowDrop?.(event, node.entry)}
           onContextMenu={(event) => {
             // An armed touch hold owns the browser contextmenu event; it opens
             // this same menu on release instead of stealing the drag gesture.
@@ -148,12 +170,11 @@ export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
           <button
             ref={buttonRef}
             className={cn(
-              "flex min-w-0 flex-1 items-center gap-1.5 py-[0.265rem] pr-1 border-0 text-sidebar-foreground font-inherit text-xs leading-tight text-left aria-disabled:cursor-default not-aria-disabled:cursor-pointer not-aria-disabled:hover:bg-[color-mix(in_srgb,var(--color-accent)_58%,transparent)] not-aria-disabled:focus-visible:bg-[color-mix(in_srgb,var(--color-accent)_58%,transparent)] focus-visible:outline-none pointer-coarse:min-h-11 pointer-coarse:py-1.5 pointer-coarse:text-sm",
+              "flex min-w-0 flex-1 items-center gap-1.5 py-[0.265rem] pr-1 border-0 text-sidebar-foreground font-inherit text-xs leading-tight text-left cursor-pointer hover:bg-[color-mix(in_srgb,var(--color-accent)_58%,transparent)] focus-visible:bg-[color-mix(in_srgb,var(--color-accent)_58%,transparent)] focus-visible:outline-none pointer-coarse:min-h-11 pointer-coarse:py-1.5 pointer-coarse:text-sm",
               isHiddenEntry && "opacity-60"
             )}
             type="button"
             style={{ paddingLeft: `${0.75 + depth * 0.875}rem` }}
-            aria-disabled={!isDirectory && !isFile ? true : undefined}
             tabIndex={isFocusable ? 0 : -1}
             onKeyDown={handleKeyDown}
             onPointerDown={(event) => drag?.onRowPointerDown(event, node.entry)}
@@ -166,9 +187,9 @@ export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
               if (isDirectory) toggleFolder(node.entry.relative_path);
               else if (isFile) handleFileSelected(node.entry.relative_path);
             }}
-            aria-label={isDirectory ? `${isExpanded ? "Collapse" : "Expand"} ${node.entry.name}` : isFile ? `Open ${node.entry.name}` : undefined}
+            aria-label={isDirectory ? `${isExpanded ? "Collapse" : "Expand"} ${node.entry.name}` : `Open ${node.entry.name}`}
           >
-            <span className="w-2.5 flex-none text-muted-foreground text-center [&>svg]:w-[0.9rem] [&>svg]:h-[0.9rem] [&>svg]:stroke-current" aria-hidden="true">{isDirectory ? (isExpanded ? <FolderOpen /> : <Folder />) : <WorkspaceFileIcon name={node.entry.name} />}</span>
+            <span className={cn(TREE_ICON_CLASSES, "w-2.5 flex-none text-center")} aria-hidden="true">{isDirectory ? (isExpanded ? <FolderOpen /> : <Folder />) : <WorkspaceFileIcon name={node.entry.name} />}</span>
             <span className="min-w-0 truncate">{node.entry.name}</span>
           </button>
           {drag && (
@@ -194,16 +215,12 @@ export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
         <>
           {isCreatingHere && (
             <ul role="group" className="m-0 pl-3.5 list-none">
-              <InlineNameInput
-                key={creating!.focusRequest}
+              <CreateNameInput
+                creating={creating!}
                 depth={depth + 1}
-                icon={creating!.kind === "folder" ? <Folder /> : <WorkspaceFileIcon name="" />}
-                initialValue={isNewNoteCreate(creating!) ? ".md" : ""}
-                caretBeforeExtension={isNewNoteCreate(creating!)}
-                placeholder={creating!.kind === "folder" ? "New folder name…" : "New file name…"}
-                ariaLabel={creating!.kind === "folder" ? "New folder name" : "New file name"}
-                focusRequest={creating!.focusRequest}
-                wrapInListItem
+                disabled={busy}
+                error={inlineCreateError}
+                onEdit={() => setInlineCreateError(null)}
                 onSubmit={(name) => submitCreate(creating!, name)}
                 onCancel={() => setCreating(null)}
               />
@@ -218,11 +235,14 @@ export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
                   depth={depth + 1}
                   isFirst={false}
                   activePath={activePath}
+                  contextMenuPath={contextMenuPath}
                   renaming={renaming}
                   creating={creating}
                   expandedFolders={expandedFolders}
                   actions={actions}
                   drag={drag}
+                  busy={busy}
+                  inlineCreateError={inlineCreateError}
                 />
               ))}
             </ul>
@@ -324,7 +344,7 @@ export function InlineNameInput({
         handleSubmit();
       }}
     >
-      <span className="w-2.5 flex-none text-muted-foreground text-center [&>svg]:w-[0.9rem] [&>svg]:h-[0.9rem] [&>svg]:stroke-current" aria-hidden="true">{icon}</span>
+      <span className={cn(TREE_ICON_CLASSES, "w-2.5 flex-none text-center")} aria-hidden="true">{icon}</span>
       <span className="min-w-0 flex-1">
         <input
           ref={inputRef}
@@ -363,4 +383,49 @@ export function InlineNameInput({
   );
 
   return wrapInListItem ? <li className="m-0 p-0">{form}</li> : form;
+}
+
+/**
+ * The inline name field for a pending create. The root-level and in-folder
+ * sites derive identical props from `creating`; this owns that mapping so
+ * each call site only says where the input sits.
+ */
+export function CreateNameInput({
+  creating,
+  depth,
+  disabled = false,
+  error = null,
+  onEdit,
+  onSubmit,
+  onCancel
+}: {
+  readonly creating: CreateState;
+  readonly depth: number;
+  readonly disabled?: boolean;
+  readonly error?: string | null;
+  readonly onEdit?: () => void;
+  readonly onSubmit: (name: string) => Promise<boolean>;
+  readonly onCancel: () => void;
+}) {
+  const isFolder = creating.kind === "folder";
+  const isNote = isNewNoteCreate(creating);
+  return (
+    <InlineNameInput
+      key={creating.focusRequest}
+      depth={depth}
+      icon={isFolder ? <Folder /> : <WorkspaceFileIcon name="" />}
+      initialValue={isNote ? ".md" : ""}
+      caretBeforeExtension={isNote}
+      placeholder={isFolder ? "New folder name…" : "New file name…"}
+      ariaLabel={isFolder ? "New folder name" : "New file name"}
+      focusRequest={creating.focusRequest}
+      wrapInListItem
+      disabled={disabled}
+      // Name validation only applies to new notes; other kinds never set it.
+      error={isNote ? error : null}
+      onEdit={onEdit}
+      onSubmit={onSubmit}
+      onCancel={onCancel}
+    />
+  );
 }

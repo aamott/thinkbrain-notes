@@ -36,7 +36,7 @@ struct Meta {
 }
 
 /// What one source syncs with.
-#[derive(Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct Binding {
     /// The checked-out local branch (full `refs/heads/*` name) for a clone.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -131,8 +131,12 @@ fn load(repo: &gix::Repository) -> Result<Meta, NativeError> {
 
 fn store(repo: &gix::Repository, meta: &Meta) -> Result<(), NativeError> {
     let contents = serde_json::to_vec_pretty(meta).map_err(unwritable)?;
-    crate::commands::workspace::write_file_atomically(repo.git_dir().join(FILE).as_path(), contents)
-        .map_err(unwritable)
+    super::write_atomically(
+        repo.git_dir().join(FILE).as_path(),
+        contents,
+        "sync.branch_source_failed",
+        "Could not remember which history this workspace syncs with.",
+    )
 }
 
 /// The tip of the imported source the history reader should walk, if any.
@@ -176,19 +180,28 @@ pub fn activate(repo: &gix::Repository, reference: &str) -> Result<(), NativeErr
 }
 
 /// The remote branch `source` is bound to, if one was selected already.
+#[cfg(test)]
 pub fn bound_remote(repo: &gix::Repository, source: &str) -> Result<Option<String>, NativeError> {
-    Ok(load(repo)?
-        .bindings
-        .get(source)
-        .and_then(|binding| binding.remote.clone()))
+    Ok(binding(repo, source)?.1)
 }
 
 /// The local branch `source` was bound to, if the workspace is a clone.
+#[cfg(test)]
 pub fn bound_local(repo: &gix::Repository, source: &str) -> Result<Option<String>, NativeError> {
-    Ok(load(repo)?
-        .bindings
-        .get(source)
-        .and_then(|binding| binding.local.clone()))
+    Ok(binding(repo, source)?.0)
+}
+
+/// Both halves of `source`'s binding — local checkout, remote branch — from
+/// one read of the file, so a caller needing both cannot see them change
+/// between two loads.
+pub fn binding(
+    repo: &gix::Repository,
+    source: &str,
+) -> Result<(Option<String>, Option<String>), NativeError> {
+    let Some(binding) = load(repo)?.bindings.get(source).cloned() else {
+        return Ok((None, None));
+    };
+    Ok((binding.local, binding.remote))
 }
 
 /// Persists `source`'s binding. The remote branch is what fetch and push use

@@ -63,7 +63,11 @@ pub(super) fn fetch(
         super::history_source::validate_branch(selected)?;
     }
     let hardened = repo_rejecting_shallow(repo)?;
-    match fetch_attempt(&hardened, destination, cancel, selected) {
+    // Source-only: no `:REMOTE_REF` colon target, so nothing local moves and
+    // no unadvertised fallback is fetched. The advertised OID and the remote's
+    // symbolic HEAD both come back in the ref map.
+    let spec = selected.unwrap_or("HEAD").to_string();
+    match receive(&hardened, destination, cancel, &spec, selected) {
         Ok(result) => Ok(result),
         Err(error) => {
             if cancel.load(Ordering::Relaxed)
@@ -72,10 +76,10 @@ pub(super) fn fetch(
             {
                 return Err(error);
             }
-            if let Some(v1_repo) = repo_with_protocol_v1(&hardened) {
-                if let Ok(result) = fetch_attempt(&v1_repo, destination, cancel, selected) {
-                    return Ok(result);
-                }
+            if let Some(v1_repo) = repo_with_protocol_v1(&hardened)
+                && let Ok(result) = receive(&v1_repo, destination, cancel, &spec, selected)
+            {
+                return Ok(result);
             }
             Err(error)
         }
@@ -111,19 +115,6 @@ fn repo_with_protocol_v1(repo: &gix::Repository) -> Option<gix::Repository> {
     config.set_raw_value("protocol.version", "1").ok()?;
     config.commit().ok()?;
     Some(cloned)
-}
-
-fn fetch_attempt(
-    repo: &gix::Repository,
-    destination: &str,
-    cancel: &Arc<AtomicBool>,
-    selected: Option<&str>,
-) -> Result<Fetched, NativeError> {
-    // Source-only: no `:REMOTE_REF` colon target, so nothing local moves and
-    // no unadvertised fallback is fetched. The advertised OID and the remote's
-    // symbolic HEAD both come back in the ref map.
-    let spec = selected.unwrap_or("HEAD").to_string();
-    receive(repo, destination, cancel, &spec, selected)
 }
 
 fn receive(

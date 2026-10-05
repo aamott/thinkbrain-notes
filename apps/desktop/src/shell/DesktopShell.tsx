@@ -7,8 +7,8 @@
  * one effect that publishes dock widths onto this component's own root element.
  */
 
-import { normalizeRoot } from "@thinkbrain/core";
 import { useEffect, useMemo, useRef } from "react";
+import { FilePlus2, FolderOpen, Search } from "lucide-react";
 import { CommandPalette, type WorkspaceFileResult } from "../commands/CommandPalette";
 import { BottomPanel as BottomPanelContent } from "../panels/BottomPanel";
 import { LeftPopout } from "../panels/LeftPopout";
@@ -19,13 +19,14 @@ import { ResizeHandle } from "./ResizeHandle";
 import { EmptiedNoteBanner } from "./EmptiedNoteBanner";
 import { StaleDocumentBanner } from "./StaleDocumentBanner";
 import { UpdateBanner } from "./UpdateBanner";
-import { isNoteTitleEligible } from "./noteTitleEligibility";
+import { useNoteTitle } from "./useNoteTitle";
 import { NoteTitleRow } from "./phone/NoteTitleRow";
 import { useSettingsStore } from "../settings/settingsStore";
 import { StatusBar } from "./StatusBar";
 import { TabBoundary } from "./TabBoundary";
 import { TabCloseRequest } from "./TabCloseRequest";
 import { TabContent } from "./TabContent";
+import { canGoBackInTabs, canGoForwardInTabs, inspectableRelativePath } from "../tabs/tabModel";
 import { TitleBar } from "./TitleBar";
 import { WorkspaceHeaderBar } from "./WorkspaceHeaderBar";
 import { WorkspaceSelectorProvider } from "../workspace/WorkspaceSelectorPortal";
@@ -38,23 +39,13 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
   const resource = activeTab?.resource;
   const rootPath = resource?.rootPath;
   const relativePath = resource?.relativePath;
-  // The inspector's file: any tab showing a workspace file — Markdown editor,
-  // code editor, media viewer — but never a comparison tab, whose resource is
-  // the file the comparison is about rather than a document being viewed.
-  const documentPath =
-    activeTab !== null &&
-    activeTab.kind !== "merge" &&
-    activeTab.kind !== "version-diff" &&
-    relativePath !== undefined
-      ? relativePath
-      : null;
+  // The inspector's file: the tab's resource unless it is a comparison tab —
+  // see `inspectableRelativePath`.
+  const documentPath = inspectableRelativePath(activeTab);
 
   // Journal entries render their own dateline, so the title row hides there —
   // same rule as PhoneShell. Only ordinary Markdown editor tabs get a title.
-  const journalRoot = useSettingsStore(
-    (s) => normalizeRoot(String(s.getEffectiveValue("extension-journal-calendar.root") ?? "journal"))
-  );
-  const showNoteTitle = isNoteTitleEligible(activeTab?.kind, relativePath, journalRoot);
+  const showNoteTitle = useNoteTitle(activeTab);
   const workspaceSelectorPlacement = useSettingsStore((s) =>
     s.getEffectiveValue("ui.workspaceSelectorPlacement") === "panel headers"
       ? "panel headers"
@@ -69,23 +60,18 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
     () => ({ ...shell.explorerProps, workspaceSelectorInPanel: selectorInPanel }),
     [shell.explorerProps, selectorInPanel]
   );
-  const openDocumentFromPanel = (relativePath: string) => {
-    if (shell.restoredWorkspacePath) {
-      shell.openMarkdownDocument(shell.restoredWorkspacePath, relativePath);
-    }
-  };
   // One context object for both docks: the same values the popouts render
   // with are the values the right-panel availability gate reads, so the two
   // can never disagree about what "the active document" is.
   const panelContext: DesktopPanelContext = {
     rootPath: shell.restoredWorkspacePath,
     explorerProps,
-    onOpenSearchResult: openDocumentFromPanel,
+    onOpenSearchResult: shell.onOpenNote,
     onReviewConflict: shell.reviewConflict,
     onOpenSyncSettings: shell.openSyncSettings,
     documentContents: activeDocument?.phase === "ready" ? activeDocument.contents : null,
     documentPath,
-    onOpenNote: openDocumentFromPanel,
+    onOpenNote: shell.onOpenNote,
     onCompareVersion: shell.compareVersion,
     onRestoreVersion: shell.restoreVersionSafely
   };
@@ -96,6 +82,25 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
     rightPanel && desktopPanelRegistry.isAvailable(rightPanel, panelContext)
       ? rightPanel
       : null;
+
+  // The new-tab page's entry points, wired to the desktop's own surfaces:
+  // commands run through the palette's context, files through the palette's
+  // quick-open. The phone chrome supplies the same three routed its own way.
+  const { paletteCommands, runCommand, openPalette, workspaceName } = shell;
+  const newTab = useMemo(() => {
+    const runById = (id: string) => {
+      const command = paletteCommands.find((candidate) => candidate.id === id);
+      if (command) runCommand(command);
+    };
+    return {
+      workspaceName,
+      actions: [
+        { id: "new-note", label: "New note", icon: <FilePlus2 aria-hidden="true" className="size-4" />, onSelect: () => runById("new-note") },
+        { id: "open-file", label: "Open file", icon: <FolderOpen aria-hidden="true" className="size-4" />, onSelect: () => openPalette() },
+        { id: "search", label: "Search workspace", icon: <Search aria-hidden="true" className="size-4" />, onSelect: () => runById("search") }
+      ]
+    };
+  }, [paletteCommands, runCommand, openPalette, workspaceName]);
 
   const leftPopout = (
     <LeftPopout
@@ -129,8 +134,14 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
           activeTabId={tabState.activeTabId}
           rightPanel={effectiveRightPanel}
           showWorkspaceSelector={workspaceSelectorPlacement === "title bar"}
+          canGoBack={canGoBackInTabs(tabState)}
+          canGoForward={canGoForwardInTabs(tabState)}
+          onBack={() => dispatchTabs({ type: "goBack" })}
+          onForward={() => dispatchTabs({ type: "goForward" })}
           onSelectTab={(tabId) => dispatchTabs({ type: "activate", tabId })}
           onRequestCloseTab={(tabId) => dispatchTabs({ type: "requestClose", tabId })}
+          onKeepTab={(tabId) => dispatchTabs({ type: "keep", tabId })}
+          onNewTab={() => shell.openNewTab()}
           onToggleRightPanel={shell.toggleRightPanel}
           onOpenCommandPalette={shell.openPalette}
         />
@@ -210,7 +221,7 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
               {/* One boundary per tab: a crash shows the failed tab's state,
                   not a white shell, and the next tab mounts a fresh boundary. */}
               <TabBoundary key={activeTab?.id ?? "no-tab"}>
-                <TabContent tab={activeTab} document={activeDocument} onChange={shell.updateDocument} onSave={shell.saveDocument} noteIndex={shell.noteIndex} onOpenNote={shell.onOpenNote} onReopenNote={shell.loadDocumentIntoView} unsavedNoteContents={shell.unsavedNoteContents} onRestoreVersion={shell.restoreVersionSafely} />
+                <TabContent tab={activeTab} document={activeDocument} onChange={shell.updateDocument} onSave={shell.saveDocument} noteIndex={shell.noteIndex} onOpenNote={shell.onOpenNote} onReopenNote={shell.loadDocumentIntoView} unsavedNoteContents={shell.unsavedNoteContents} onRestoreVersion={shell.restoreVersionSafely} newTab={newTab} />
               </TabBoundary>
             </article>
             {shell.bottomPanel && (
@@ -237,8 +248,8 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
                 onKeyDown={shell.resize.resizeWithKeyboard("right")}
               />
               <RightPopout
-                {...panelContext}
                 panel={effectiveRightPanel}
+                context={panelContext}
                 onBack={() => shell.setRightPanel(null)}
               />
             </>
@@ -260,7 +271,7 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
               .filter((file) => Boolean(file.rootPath))}
             onClose={shell.closePalette}
             onCommand={shell.runCommand}
-            onOpenFile={(file) => shell.openMarkdownDocument(file.rootPath, file.relativePath)}
+            onOpenFile={(file) => shell.openMarkdownDocument(file.rootPath, file.relativePath, "preview")}
           />
         )}
         <TabCloseRequest shell={shell} />

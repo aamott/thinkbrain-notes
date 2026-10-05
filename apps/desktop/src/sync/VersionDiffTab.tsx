@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useId, useState } from "react";
 
+import { noteName } from "../lib/utils";
 import { Unavailable } from "../shell/Unavailable";
 import { CodeMirrorDiff } from "./CodeMirrorDiff";
-import { noteName } from "./conflictCard";
 import type { VersionDiff } from "./historyTypes";
 import { readVersionDiff } from "./syncService";
-import { failureMessage, restoreFailureMessage } from "./syncCopy";
+import { restoreFailureMessage } from "./syncCopy";
+import { useComparisonPhase } from "./useComparisonPhase";
 
 /**
  * One recorded version of a file against what it looks like now.
@@ -36,12 +37,6 @@ interface VersionDiffTabProps {
    */
   readonly onRestore: (notePath: string, changeId: string) => Promise<void>;
 }
-
-type Phase =
-  | { readonly at: "loading" }
-  | { readonly at: "ready"; readonly diff: VersionDiff }
-  | { readonly at: "restored" }
-  | { readonly at: "failed"; readonly message: string };
 
 const READ_FAILURE = "Something went wrong reading that version.";
 
@@ -85,36 +80,23 @@ function VersionDiffSession({
   readonly currentBuffer?: string | null;
   readonly onRestore: (notePath: string, changeId: string) => Promise<void>;
 }) {
-  const [phase, setPhase] = useState<Phase>({ at: "loading" });
   const [restoring, setRestoring] = useState(false);
+  const [restored, setRestored] = useState(false);
   const [restoreError, setRestoreError] = useState<string | null>(null);
 
-  // Taken once, when the comparison is opened: "current" means the file as it
-  // was on screen when the user asked to compare, not a moving target.
-  const openedWith = useRef(currentBuffer);
-
-  useEffect(() => {
-    let cancelled = false;
-    void readVersionDiff(rootPath, notePath, changeId, openedWith.current)
-      .then((diff) => {
-        if (!cancelled) setPhase({ at: "ready", diff });
-      })
-      .catch((cause: unknown) => {
-        if (!cancelled) {
-          setPhase({ at: "failed", message: failureMessage(cause, READ_FAILURE) });
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [rootPath, notePath, changeId]);
+  const readComparison = useCallback(
+    (openedWith: string | null | undefined) =>
+      readVersionDiff(rootPath, notePath, changeId, openedWith),
+    [rootPath, notePath, changeId]
+  );
+  const { phase } = useComparisonPhase<VersionDiff>(readComparison, currentBuffer, READ_FAILURE);
 
   const restore = useCallback(async () => {
     setRestoring(true);
     setRestoreError(null);
     try {
       await onRestore(notePath, changeId);
-      setPhase({ at: "restored" });
+      setRestored(true);
     } catch (cause) {
       setRestoreError(restoreFailureMessage(cause));
     } finally {
@@ -128,7 +110,7 @@ function VersionDiffSession({
   if (phase.at === "failed") {
     return <Unavailable title="Could not open that version" description={phase.message} />;
   }
-  if (phase.at === "restored") {
+  if (restored) {
     return (
       <Unavailable
         title="Version restored"
@@ -139,7 +121,7 @@ function VersionDiffSession({
 
   return (
     <VersionDiffSurface
-      diff={phase.diff}
+      diff={phase.result}
       restoring={restoring}
       restoreError={restoreError}
       onRestore={() => void restore()}

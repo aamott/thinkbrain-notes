@@ -21,6 +21,7 @@ use transport::client::{MessageKind, WriteMode};
 use crate::error::NativeError;
 
 use super::failed;
+use super::history_read_failed;
 use super::remote_failure;
 use super::remote_unreachable;
 use super::snapshot;
@@ -80,15 +81,11 @@ pub struct Sent {
 /// `already` is a hint, not a promise. A remote can advertise a commit this
 /// repository has never seen — that is precisely what a diverged remote looks
 /// like — and there is nothing to exclude from a walk that cannot reach it.
-pub fn carried(
+pub(super) fn carried(
     repo: &gix::Repository,
     tip: gix::ObjectId,
     already: Option<gix::ObjectId>,
 ) -> Result<Vec<gix::ObjectId>, NativeError> {
-    fn history(message: &'static str, error: impl std::fmt::Display) -> NativeError {
-        failed("sync.history_unreadable", message, error)
-    }
-
     let known = already.filter(|id| repo.find_commit(*id).is_ok());
     let mut walk = repo.rev_walk(Some(tip));
     if let Some(known) = known {
@@ -96,7 +93,7 @@ pub fn carried(
     }
     let commits = walk
         .all()
-        .map_err(|error| history("Could not read this vault's history.", error))?;
+        .map_err(|error| history_read_failed("Could not read this vault's history.", error))?;
 
     let mut seen = BTreeSet::new();
     let mut carried = Vec::new();
@@ -104,14 +101,14 @@ pub fn carried(
 
     for commit in commits {
         let commit = commit
-            .map_err(|error| history("Could not read this vault's history.", error))?
+            .map_err(|error| history_read_failed("Could not read this vault's history.", error))?
             .id;
         let object = repo
             .find_commit(commit)
-            .map_err(|error| history("Could not read this vault's history.", error))?;
+            .map_err(|error| history_read_failed("Could not read this vault's history.", error))?;
         let tree = object
             .tree_id()
-            .map_err(|error| history("Could not read a recorded state.", error))?
+            .map_err(|error| history_read_failed("Could not read a recorded state.", error))?
             .detach();
         let parent = object.parent_ids().next().map(|id| id.detach());
 
@@ -172,7 +169,10 @@ fn newly_reachable(
 /// first push hold a pack of similar size in RAM. Streaming the pack to the
 /// transport, the way git does, is the hardening path if that ever becomes the
 /// target.
-pub fn pack(repo: &gix::Repository, objects: &[gix::ObjectId]) -> Result<Vec<u8>, NativeError> {
+pub(super) fn pack(
+    repo: &gix::Repository,
+    objects: &[gix::ObjectId],
+) -> Result<Vec<u8>, NativeError> {
     let count = u32::try_from(objects.len()).map_err(|error| {
         failed(
             "sync.pack_failed",

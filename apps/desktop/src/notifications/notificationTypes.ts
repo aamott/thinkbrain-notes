@@ -48,6 +48,12 @@ export interface NotificationItem {
   readonly details?: string;
   /** Optional action button (e.g., "Open saved versions"). */
   readonly action?: NotificationAction;
+  /**
+   * The dock panel this notification is about (e.g. "history"). While the
+   * entry is undismissed, that panel's action item surfaces in the title bar
+   * even when unpinned — the attention has to be visible to be acted on.
+   */
+  readonly panel?: string;
   readonly severity: NotificationSeverity;
   /** Visual tone. Defaults to `error` when omitted for backward compat. */
   readonly variant?: NotificationVariant;

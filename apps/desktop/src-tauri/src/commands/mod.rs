@@ -29,8 +29,10 @@
 
 pub mod atomic_write;
 pub mod backup;
+pub mod clipboard;
 pub mod extensions;
 pub mod markdown;
+pub mod media;
 pub mod search;
 pub mod settings;
 pub mod sync;
@@ -53,19 +55,18 @@ pub mod workspace;
 macro_rules! app_command_list {
     ($expand:ident) => {
         $crate::$expand! {
-        workspace::desktop_shell_status,
         workspace::workspace_access_capabilities,
         workspace::platform_capabilities,
         workspace::list_managed_workspaces,
         workspace::create_managed_workspace,
         workspace::open_workspace,
-        markdown::list_markdown_files,
         workspace::list_workspace_entries,
         markdown::read_markdown_file,
         markdown::write_markdown_file,
         markdown::create_markdown_file,
         text_files::read_text_file,
         text_files::write_text_file,
+        media::read_media_file,
         workspace::create_workspace_file,
         workspace::create_workspace_folder,
         workspace::rename_workspace_entry,
@@ -79,7 +80,6 @@ macro_rules! app_command_list {
         settings::read_app_settings,
         settings::write_app_settings,
         settings::update_desktop_state,
-        settings::update_app_theme,
         settings::read_workspace_settings,
         settings::write_workspace_settings,
         themes::list_themes,
@@ -112,6 +112,7 @@ macro_rules! app_command_list {
         sync::import::import_workspace_from_git_link,
         sync::import::import_managed_workspace_from_git_link,
         sync::registry::sync_app_backgrounded,
+        clipboard::copy_files_to_clipboard,
         }
     };
 }
@@ -182,7 +183,7 @@ mod tests {
         );
         assert_eq!(
             APP_COMMAND_PATHS.len(),
-            59,
+            58,
             "the number of registered commands changed; update this count if it was deliberate"
         );
     }
@@ -207,6 +208,6 @@ mod tests {
             );
         }
         assert!(APP_COMMAND_PATHS.contains(&"sync::round::sync_now"));
-        assert!(APP_COMMAND_PATHS.contains(&"workspace::desktop_shell_status"));
+        assert!(APP_COMMAND_PATHS.contains(&"workspace::platform_capabilities"));
     }
 }

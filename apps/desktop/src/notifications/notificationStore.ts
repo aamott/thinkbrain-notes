@@ -102,6 +102,7 @@ export const useNotificationStore = create<NotificationStoreState>((set, get) =>
         recovery: input.recovery,
         details: input.details,
         action: input.action,
+        panel: input.panel,
         variant: input.variant,
         severity: input.severity,
         createdAt,

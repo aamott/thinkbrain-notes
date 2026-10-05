@@ -29,7 +29,7 @@ import {
 // Mock the themeImportExport module so the toolbar never touches the DOM/native
 // bridges. Each test customizes the mock implementations as needed.
 vi.mock("./themeImportExport", () => ({
-  buildThemeExport: vi.fn<() => Promise<{ json: string }>>(),
+  buildThemeExport: vi.fn<() => Promise<string>>(),
   writeThemeExportFile: vi.fn<(json: string) => Promise<boolean>>(),
   importTheme: vi.fn<() => Promise<ImportThemeResult | null>>()
 }));
@@ -62,7 +62,7 @@ beforeEach(() => {
 
   // Sensible defaults so a test that forgets to set up the export payload still
   // gets a valid JSON string back from buildThemeExport.
-  vi.mocked(buildThemeExport).mockResolvedValue({ json: '{"name":"x"}' });
+  vi.mocked(buildThemeExport).mockResolvedValue('{"name":"x"}');
 
   // Default: no preset themes discovered (non-Tauri/test context). Tests that
   // need presets override this with mockResolvedValue([...]).

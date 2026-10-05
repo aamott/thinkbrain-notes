@@ -221,15 +221,7 @@ describe("desktop panel registry", () => {
       />
     );
     const rightMarkup = renderToStaticMarkup(
-      <RightPopout
-        panel="backlinks"
-        rootPath={null}
-        documentContents={null}
-        documentPath={null}
-        onCompareVersion={() => undefined}
-        onRestoreVersion={async () => undefined}
-        onOpenNote={() => undefined}
-      />
+      <RightPopout panel="backlinks" context={context} />
     );
 
     expect(leftMarkup).toContain("Tags");

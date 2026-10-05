@@ -4,9 +4,9 @@ import { createDocumentChain } from "../native/documentChain";
 /**
  * The one door to the app-settings document's store-driven writes.
  *
- * The document has three writers. `update_desktop_state` and `update_app_theme`
- * each read and write inside a single locked Rust command, so they stay atomic
- * on their own. The settings store is different: it reads the document at load
+ * The document has two kinds of writers. `update_desktop_state` reads and
+ * writes inside a single locked Rust command, so it stays atomic on its own.
+ * The settings store is different: it reads the document at load
  * and writes it back at save, two IPC round trips with the store's own work in
  * between. A `desktopState` update landing in that window used to be silently
  * reverted by the save, because the save serialized whatever `desktopState` was

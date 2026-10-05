@@ -1,18 +1,15 @@
 /**
  * Dynamic settings persistence (registry-backed key-value model).
  *
- * These functions coexist with the legacy fixed-shape API in `../settings.ts`.
- * They operate on a flat `fullKey -> value` record driven by the registry,
- * while preserving the `desktopState` nested key and any other non-setting keys
- * in the same JSON document. The legacy `parseAppSettings` /
- * `serializeAppSettings` remain intact so `desktopState.ts` and existing tests
- * keep working.
+ * These functions operate on a flat `fullKey -> value` record driven by the
+ * registry, while preserving the `desktopState` nested key and any other
+ * non-setting keys in the same JSON document.
  */
 
 import type { SettingsRegistry } from "./registry";
 import { extractDefaults } from "./defaults";
 import { validateSettings } from "./validation";
-import type { SettingsDiagnostic } from "../settings";
+import type { SettingsDiagnostic } from "./internal";
 import type { SettingScope } from "./types";
 import {
   CURRENT_SETTINGS_VERSION,
@@ -123,16 +120,7 @@ export function parseDynamicAppSettings(
 
   // Extract only known app-scoped keys from the migrated record; unknown keys
   // are ignored so stale/misspelled entries don't leak into the settings model.
-  const values: Record<string, unknown> = { ...defaults };
-  for (const def of registry.getAllDefinitions()) {
-    // Scope is a property of the setting, not of the module it arrived in: an
-    // app-scoped module may hold a per-workspace setting, and that setting must
-    // not travel in the app file (D45).
-    if (def.scope !== "app") continue;
-    if (def.key in record) {
-      values[def.key] = record[def.key];
-    }
-  }
+  const values = extractScopedValues(record, defaults, registry, "app");
 
   // Validate the merged values against the registry so invalid persisted values
   // (e.g. out-of-range numbers, stale enum strings) surface as diagnostics
@@ -154,8 +142,7 @@ export function parseDynamicAppSettings(
  * `CURRENT_SETTINGS_VERSION`, never lower than it already was), the flat setting
  * keys for the given scope, and any other non-setting keys (e.g. `desktopState`,
  * extension metadata) from `existingRawJson`. Pretty-printed with 2-space
- * indent and a trailing newline, matching the existing `serializeAppSettings`
- * style.
+ * indent and a trailing newline, matching the settings serialization style.
  *
  * Args:
  *   values: Flat `fullKey -> value` map of settings to write.
@@ -235,15 +222,80 @@ export function serializeDynamicAppSettings(
 }
 
 /**
+ * Parses raw workspace settings JSON into a flat key-value map merged with
+ * registry defaults for the workspace scope.
+ *
+ * Deliberately unlike {@link parseDynamicAppSettings}: workspace documents run
+ * no migrations and emit no diagnostics — unknown or invalid values are simply
+ * ignored (parse failure or a non-object document yields defaults).
+ */
+export function parseDynamicWorkspaceSettings(
+  rawJson: string | null,
+  registry: SettingsRegistry
+): Record<string, unknown> {
+  const defaults = extractDefaults(registry, "workspace");
+
+  if (rawJson === null) return defaults;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawJson) as unknown;
+  } catch {
+    return defaults;
+  }
+
+  if (!isRecord(parsed)) return defaults;
+
+  return extractScopedValues(parsed, defaults, registry, "workspace");
+}
+
+/**
+ * Serializes workspace settings back to JSON, preserving non-setting keys from
+ * the existing raw document (e.g. `version`, extension keys).
+ *
+ * Thin wrapper over {@link serializeDynamicSettings} for the `"workspace"` scope.
+ */
+export function serializeDynamicWorkspaceSettings(
+  values: Record<string, unknown>,
+  registry: SettingsRegistry,
+  existingRawJson: string | null
+): string {
+  return serializeDynamicSettings(values, registry, "workspace", existingRawJson);
+}
+
+/**
+ * Extracts only the keys known to the registry as `scope` settings, merged over
+ * that scope's defaults. Unknown keys are ignored so stale/misspelled entries
+ * don't leak into the settings model.
+ */
+function extractScopedValues(
+  record: Record<string, unknown>,
+  defaults: Record<string, unknown>,
+  registry: SettingsRegistry,
+  scope: SettingScope
+): Record<string, unknown> {
+  const values: Record<string, unknown> = { ...defaults };
+  for (const def of registry.getAllDefinitions()) {
+    // Scope is a property of the setting, not of the module it arrived in: an
+    // app-scoped module may hold a per-workspace setting, and that setting must
+    // not travel in the app file (D45).
+    if (def.scope !== scope) continue;
+    if (def.key in record) {
+      values[def.key] = record[def.key];
+    }
+  }
+  return values;
+}
+
+/**
  * Runs registry migrations on a raw settings record in version order.
  *
- * Mirrors the version-tracking pattern from the legacy `migrateSettingsObject`
- * but operates on the flat key-value record using the registry's
+ * Operates on the flat key-value record using the registry's
  * `getMigrations()` list. Migrations are applied in ascending `fromVersion`
  * order; each step transforms the record and advances the version field. The
  * `desktopState` nested key and other non-setting keys pass through untouched.
  *
- * Unlike the legacy strict check, the dynamic system tolerates gaps in
+ * Rather than requiring an unbroken chain, the dynamic system tolerates gaps in
  * migration chains (e.g. from extensions): when a step's `fromVersion` does
  * not match the record's current version, the step is skipped and a warning
  * diagnostic is emitted rather than throwing. The caller decides whether to

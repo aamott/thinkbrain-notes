@@ -1,6 +1,7 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import type { ReactNode } from "react";
 
 import { cn } from "../../lib/utils";
+import { useLongPress } from "./use-long-press";
 
 /** One hub slot. Resolution from panels and commands happens outside this component. */
 export interface BottomNavItem {
@@ -14,9 +15,6 @@ export interface BottomNavItem {
   readonly onSelect: () => void;
   readonly onLongPress?: () => void;
 }
-
-/** Press-and-hold threshold, in milliseconds, before a tap becomes a long press. */
-const LONG_PRESS_MS = 500;
 
 /**
  * Bottom navigation hub.
@@ -33,23 +31,7 @@ export function BottomNav({
   readonly label: string;
   readonly className?: string;
 }) {
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const firedRef = useRef(false);
-
-  const clear = (): void => {
-    if (timerRef.current !== null) clearTimeout(timerRef.current);
-    timerRef.current = null;
-  };
-
-  // A pending hold that outlives the component would call back into an
-  // unmounted tree, so the timer dies with the nav.
-  useEffect(
-    () => () => {
-      if (timerRef.current !== null) clearTimeout(timerRef.current);
-      timerRef.current = null;
-    },
-    []
-  );
+  const longPress = useLongPress();
 
   return (
     <nav
@@ -77,30 +59,13 @@ export function BottomNav({
             entry.variant === "primary" &&
               "my-1.5 rounded-medium bg-primary text-primary-foreground opacity-100"
           )}
-          onPointerDown={() => {
-            // Reset unconditionally, and before the long-press guard: a hold
-            // that completed but never produced a click — the finger slid off
-            // the button — would otherwise leave the flag set and swallow the
-            // next tap, on any item, including ones with no long press at all.
-            firedRef.current = false;
-            clear();
-            const longPress = entry.onLongPress;
-            if (!longPress) return;
-            timerRef.current = setTimeout(() => {
-              timerRef.current = null;
-              firedRef.current = true;
-              longPress();
-            }, LONG_PRESS_MS);
-          }}
-          onPointerUp={clear}
-          onPointerLeave={clear}
-          onPointerCancel={clear}
+          onPointerDown={() => longPress.begin(entry.onLongPress)}
+          onPointerUp={longPress.cancel}
+          onPointerLeave={longPress.cancel}
+          onPointerCancel={longPress.cancel}
           onClick={() => {
             // A completed long press already acted; don't also run the tap.
-            if (firedRef.current) {
-              firedRef.current = false;
-              return;
-            }
+            if (longPress.consumeClick()) return;
             entry.onSelect();
           }}
         >

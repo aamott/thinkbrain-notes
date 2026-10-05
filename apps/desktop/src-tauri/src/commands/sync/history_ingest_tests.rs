@@ -32,11 +32,12 @@ pub(crate) fn who() -> gix::actor::Signature {
 /// of the platform's configured default branch.
 pub(crate) fn git_repo(name: &str, bare: bool) -> (PathBuf, gix::Repository) {
     let path = make_temp_test_dir(name, NAMESPACE, true);
-    let repo = if bare {
+    let mut repo = if bare {
         gix::init_bare(&path).expect("the bare repository initializes")
     } else {
         gix::init(&path).expect("the repository initializes")
     };
+    crate::tests::give_test_identity(&mut repo);
     let head = if bare { &path } else { &path.join(".git") };
     fs::write(head.join("HEAD"), "ref: refs/heads/main\n").expect("HEAD names main");
     (path, repo)

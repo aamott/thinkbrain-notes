@@ -51,13 +51,9 @@ export interface DesktopCommand
   readonly id: DesktopCommandId;
   /** Extra searchable terms; these are never shown as renderer copy. */
   readonly keywords?: readonly string[];
-  /** Legacy palette display name; `keybinding` is the canonical field. */
-  readonly shortcut?: string;
   readonly availability: CommandAvailability;
   /** User-facing explanation for a command deliberately not yet wired. */
   readonly unavailableMessage?: string;
-  /** Capability that must exist before an unavailable command becomes usable. */
-  readonly prerequisite?: string;
   /**
    * Platform capability required for this command to be available. When the
    * capability is absent, the command is shown as unavailable with a
@@ -103,7 +99,6 @@ export const builtInDesktopCommands: readonly DesktopCommand[] = [
     title: "Open file",
     keywords: ["file", "note", "workspace"],
     keybinding: "Ctrl/Cmd+P",
-    prerequisite: "native file picker",
     unavailableMessage: "Open file is unavailable until the native file picker is connected.",
     handler: () => undefined
   }),
@@ -179,7 +174,6 @@ export const builtInDesktopCommands: readonly DesktopCommand[] = [
     id: "open-graph",
     title: "Open graph",
     keywords: ["connections", "links"],
-    prerequisite: "link indexing",
     unavailableMessage: "Graph is unavailable until link indexing is connected.",
     handler: () => undefined
   }),

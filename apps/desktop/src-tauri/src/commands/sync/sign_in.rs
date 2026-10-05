@@ -9,8 +9,7 @@ use std::path::Path;
 #[cfg(not(test))]
 use std::path::PathBuf;
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::sync::atomic::AtomicU64;
 
 use serde::{Deserialize, Serialize};
 
@@ -233,10 +232,7 @@ pub(super) fn upsert_profile(
         .filter(|id| !id.is_empty());
     let profile = if let Some(id) = existing_id {
         let Some(index) = catalog.iter().position(|profile| profile.id == id) else {
-            return Err(NativeError::new(
-                "sync.sign_in_missing",
-                "The selected sign-in is no longer saved on this computer.",
-            ));
+            return Err(sign_in_missing());
         };
         if catalog[index].host != host {
             return Err(wrong_host());
@@ -318,22 +314,21 @@ pub(super) fn require_saved_profile(
     let profile = catalog
         .into_iter()
         .find(|profile| profile.id == id)
-        .ok_or_else(|| {
-            NativeError::new(
-                "sync.sign_in_missing",
-                "The selected sign-in is no longer saved on this computer.",
-            )
-        })?;
+        .ok_or_else(sign_in_missing)?;
     if get_profile(id)?.is_none() {
-        return Err(NativeError::new(
-            "sync.sign_in_missing",
-            "The selected sign-in is no longer saved on this computer.",
-        ));
+        return Err(sign_in_missing());
     }
     if profile.host != host {
         return Err(wrong_host());
     }
     Ok(profile)
+}
+
+fn sign_in_missing() -> NativeError {
+    NativeError::new(
+        "sync.sign_in_missing",
+        "The selected sign-in is no longer saved on this computer.",
+    )
 }
 
 fn credentials_need_https() -> NativeError {
@@ -450,12 +445,7 @@ fn schedule_setup(
 }
 
 fn new_profile_id() -> String {
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|elapsed| elapsed.as_nanos() as u64)
-        .unwrap_or(0);
-    let n = NEXT_ID.fetch_add(1, Ordering::Relaxed);
-    format!("p{now:016x}{n:08x}")
+    super::unique_id("p", &NEXT_ID)
 }
 
 fn load_catalog() -> Result<Vec<SignInProfile>, NativeError> {
