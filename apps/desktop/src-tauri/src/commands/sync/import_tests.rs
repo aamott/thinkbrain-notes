@@ -506,7 +506,13 @@ fn an_import_keeps_the_vault_when_the_push_fails() {
     );
     assert!(
         matches!(target.landed, push::Landed::NotSent { .. }),
-        "the import should report that it sent nothing, got {:?}",
-        target.landed
+        // `NotSent.reason` carries an error string CodeQL taints as
+        // credential-derived, so the variant name is all the panic prints.
+        "the import should report that it sent nothing, got {}",
+        match &target.landed {
+            push::Landed::Moved => "Moved",
+            push::Landed::Refused { .. } => "Refused",
+            push::Landed::NotSent { .. } => "NotSent",
+        }
     );
 }

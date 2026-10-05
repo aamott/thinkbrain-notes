@@ -92,8 +92,10 @@ fn main() {
                 Ok(found) if found == SECRET => {
                     println!("[control] v3 read back its own credential. Good.");
                 }
-                Ok(other) => {
-                    println!("[control] v3 read something unexpected: {other:?}");
+                Ok(_) => {
+                    // The value itself never prints — whatever sits in the
+                    // store is a secret even when it is not ours.
+                    println!("[control] v3 read something unexpected.");
                     println!("Inconclusive - clean up and start again.");
                     return;
                 }
@@ -116,8 +118,8 @@ fn main() {
                     println!("\nPASS - v4 read the credential v3 wrote.");
                     println!("The migration preserves existing sign-ins on this platform.");
                 }
-                Ok(other) => {
-                    println!("\nFAIL - v4 found an entry but the value differs: {other:?}");
+                Ok(_) => {
+                    println!("\nFAIL - v4 found an entry but the value differs.");
                 }
                 Err(error) => {
                     println!("\nFAIL - v4 could not read the v3 credential: {error}");
@@ -155,8 +157,8 @@ fn main() {
             }
             match entry.get_password() {
                 Ok(found) if found == SECRET => println!("[save]   stored and read back."),
-                Ok(other) => {
-                    println!("FAIL - read back a different value: {other:?}");
+                Ok(_) => {
+                    println!("FAIL - read back a different value.");
                     return;
                 }
                 Err(error) => {
