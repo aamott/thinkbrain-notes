@@ -1,10 +1,4 @@
-import type { DesktopTab } from "../../tabs/tabModel";
 import type { PhoneRoute } from "./usePhoneNavigation";
-
-/** Only Markdown editor tabs count as notes — code/media/settings don't. */
-export const isNoteTab = (tab: DesktopTab | null | undefined): tab is DesktopTab =>
-  tab?.kind === "editor" &&
-  tab.resource?.relativePath?.toLowerCase().endsWith(".md") === true;
 
 /** The floating-bubble identifiers, in their stable within-group order. */
 export type BubbleId = "home" | "new-note" | "actions";

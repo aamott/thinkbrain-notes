@@ -20,6 +20,7 @@ import {
   openReadyNote,
   render,
   renderWithShell,
+  tapBubble,
   visibleDialog
 } from "./PhoneShell.testHarness";
 import { desktopCommandRegistry } from "../../commands/commandRegistry";
@@ -64,18 +65,12 @@ afterAll(() => {
 
 // The New-note bubble, specifically — the Files panel has its own New-note
 // button now, so an unscoped `click(host, …)` hits the explorer header first.
-const tapNewNoteBubble = async (host: HTMLDivElement): Promise<void> => {
-  await act(async () => {
-    bubbleBar(host)?.querySelector<HTMLButtonElement>('[aria-label="New note"]')?.click();
-  });
-};
+const tapNewNoteBubble = async (host: HTMLDivElement): Promise<void> =>
+  tapBubble(host, "new-note");
 
 // The ⋮ bubble, likewise — "Actions" names both the trigger and its menu.
-const tapActionsBubble = async (host: HTMLDivElement): Promise<void> => {
-  await act(async () => {
-    bubbleBar(host)?.querySelector<HTMLButtonElement>('[aria-label="Actions"]')?.click();
-  });
-};
+const tapActionsBubble = async (host: HTMLDivElement): Promise<void> =>
+  tapBubble(host, "actions");
 
 describe("PhoneShell navigation", () => {
   it("starts on Files, not on the note, at cold launch", async () => {
@@ -284,6 +279,34 @@ describe("PhoneShell navigation", () => {
     expect(filesVisible(host)).toBe(false);
   });
 
+  it("stays on Files when the background active tab is closed from the switcher", async () => {
+    const { host, shell } = await renderWithShell();
+    await act(async () => shell().openMarkdownDocument("/vault", "first.md"));
+    await act(async () => shell().openMarkdownDocument("/vault", "second.md"));
+    // second.md is the active tab; Home parks it in the background over Files.
+    await tapBubble(host, "home");
+    expect(filesVisible(host)).toBe(true);
+
+    await click(host, "Open tabs (2)");
+    const sheet = visibleDialog(host, "Open tabs");
+    expect(sheet).not.toBeNull();
+    await act(async () => {
+      sheet?.querySelector<HTMLButtonElement>('[aria-label="Close second.md"]')?.click();
+    });
+
+    // The reducer fell back to first.md, but that fallback is not a
+    // navigation: the route stays Files instead of pushing the survivor's
+    // tab route over it (and stranding Back on a ghost entry).
+    expect(filesVisible(host)).toBe(true);
+    expect(locationPill(host)).toContain("Files");
+    expect(shell().tabState.tabs).toHaveLength(1);
+    expect(shell().tabState.activeTabId).toBe(
+      shell().tabState.tabs.find((tab) => tab.resource?.relativePath === "first.md")?.id
+    );
+    // Closing a tab from the switcher does not dismiss the sheet itself.
+    expect(visibleDialog(host, "Open tabs")).not.toBeNull();
+  });
+
   it("keeps Explorer mounted — hidden — while a note is on screen", async () => {
     const { host, shell } = await renderWithShell();
     await act(async () => shell().openMarkdownDocument("/vault", "note.md"));
@@ -385,9 +408,7 @@ describe("PhoneShell navigation", () => {
     await act(async () => shell().openMarkdownDocument("/vault", "note.md"));
     expect(noteTitleVisible(host)).toBe(true);
 
-    await act(async () => {
-      bubbleBar(host)?.querySelector<HTMLButtonElement>('[aria-label="Home"]')?.click();
-    });
+    await tapBubble(host, "home");
     expect(filesVisible(host)).toBe(true);
     expect(noteTitleVisible(host)).toBe(false);
 
@@ -478,11 +499,11 @@ describe("PhoneShell navigation", () => {
     await tapNewNoteBubble(host);
     expect(newNoteMenu(host)).not.toBeNull();
 
-    // The popup's outside layer covers the bubbles (z-30 over z-20): the tap
+    // The popup's outside layer covers the bubbles (z-40 over z-20): the tap
     // that lands where the trigger bubble sits hits the layer, so the menu
     // closes and the same tap does not retrigger it.
     await act(async () => {
-      host.querySelector(".absolute.inset-0.z-30")?.dispatchEvent(
+      host.querySelector('[data-tn-dismiss-layer="new-note"]')?.dispatchEvent(
         new PointerEvent("pointerdown", { bubbles: true })
       );
     });
@@ -524,7 +545,7 @@ describe("PhoneShell navigation", () => {
     // The ⋮ bubble is under the popup's dismiss layer: tapping its spot first
     // closes the popup, and the second tap opens the actions menu.
     await act(async () => {
-      host.querySelector(".absolute.inset-0.z-30")?.dispatchEvent(
+      host.querySelector('[data-tn-dismiss-layer="new-note"]')?.dispatchEvent(
         new PointerEvent("pointerdown", { bubbles: true })
       );
     });
@@ -555,13 +576,11 @@ describe("PhoneShell navigation", () => {
 
     // Dismiss the popup first (its layer covers the bubbles), then Home.
     await act(async () => {
-      host.querySelector(".absolute.inset-0.z-30")?.dispatchEvent(
+      host.querySelector('[data-tn-dismiss-layer="new-note"]')?.dispatchEvent(
         new PointerEvent("pointerdown", { bubbles: true })
       );
     });
-    await act(async () => {
-      bubbleBar(host)?.querySelector<HTMLButtonElement>('[aria-label="Home"]')?.click();
-    });
+    await tapBubble(host, "home");
     expect(newNoteMenu(host)).toBeNull();
     expect(filesVisible(host)).toBe(true);
 
@@ -629,7 +648,7 @@ describe("PhoneShell navigation", () => {
     try {
       const host = await render();
       const newNoteButton = bubbleBar(host)?.querySelector<HTMLButtonElement>(
-        '[aria-label="New note"]'
+        '[data-bubble="new-note"]'
       );
       expect(newNoteButton).not.toBeNull();
 

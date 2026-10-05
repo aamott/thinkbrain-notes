@@ -232,6 +232,11 @@ export function inspectableRelativePath(tab: DesktopTab | null | undefined): str
   return tab.resource?.relativePath ?? null;
 }
 
+/** Only Markdown editor tabs count as notes — code/media/settings don't. */
+export const isNoteTab = (tab: DesktopTab | null | undefined): tab is DesktopTab =>
+  tab?.kind === "editor" &&
+  tab.resource?.relativePath?.toLowerCase().endsWith(".md") === true;
+
 /**
  * The name assistive tech and tooltips use for a tab.
  *

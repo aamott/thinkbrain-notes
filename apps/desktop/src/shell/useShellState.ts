@@ -8,7 +8,7 @@
  *
  * So the state lives here and the chromes are consumers. `DesktopShell` renders
  * the rail and the docks from this; `PhoneShell` renders a header, a drawer and
- * a hub from the same object. Anything that is a decision — which panel is
+ * floating bubbles from the same object. Anything that is a decision — which panel is
  * open, which tab is active, what a command does — belongs in this hook.
  * Anything that is a measurement of a rendered box belongs in the chrome.
  *

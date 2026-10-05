@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { cn } from "../../lib/utils";
+import { CountBadge } from "./count-badge";
 
 /** One floating bubble. Resolution from routes and registries happens outside this component. */
 export interface FloatingBubbleItem {
@@ -14,7 +15,8 @@ export interface FloatingBubbleItem {
   readonly active?: boolean;
   readonly badge?: number;
   /** Noun the badge counts ("conflicts", "notifications") for the accessible
-   *  name `${label}, ${badge} ${badgeLabel ?? "new"}`; the chip is aria-hidden. */
+   *  name `${label}, ${badge} ${badgeLabel ?? "new items"}`; the chip is
+   *  aria-hidden. */
   readonly badgeLabel?: string;
   /** Marks the bubble as a menu trigger (`aria-haspopup`/`aria-expanded`). */
   readonly hasPopup?: boolean;
@@ -25,8 +27,9 @@ export interface FloatingBubbleItem {
  *
  * Two groups hover over the bottom of the content: the left group for
  * navigation (Home, New note), the right group for the action-items trigger.
- * Only the bubbles themselves take pointer events — the strip between them is
- * transparent to touches so the content underneath stays scrollable.
+ * Only the bubbles themselves take pointer events — the strips between and
+ * around them are transparent to touches so the content underneath stays
+ * scrollable and tappable.
  *
  * Unlike the bottom hub they replace, labels are `aria-label` first and
  * visible text only when `showLabels` is set (the `ui.mobileBubbleLabels`
@@ -47,14 +50,20 @@ export function FloatingBubbles({
   readonly className?: string;
 }) {
   const group = (items: readonly FloatingBubbleItem[]) => (
-    <div className="pointer-events-auto flex gap-2">
+    // The gap strips must not swallow taps: pointer events live on each
+    // button, never on the group, or the space between bubbles would eat
+    // taps aimed at the content under it.
+    <div className="flex gap-2">
       {items.map((item) => (
         <button
           key={item.key}
           type="button"
+          // Stable per-bubble hook for tests and e2e — the accessible name
+          // changes once a badge lands, so it cannot double as the selector.
+          data-bubble={item.key}
           aria-label={
             item.badge !== undefined && item.badge > 0
-              ? `${item.label}, ${item.badge} ${item.badgeLabel ?? "new"}`
+              ? `${item.label}, ${item.badge} ${item.badgeLabel ?? "new items"}`
               : item.label
           }
           aria-haspopup={item.hasPopup === true ? "menu" : undefined}
@@ -62,7 +71,7 @@ export function FloatingBubbles({
           className={cn(
             // 48px clears the touch minimum. The circle is the resting shape;
             // with labels on, it grows into a pill carrying icon + text.
-            "relative flex cursor-pointer items-center justify-center gap-2 border border-border shadow-panel tn-focus-ring",
+            "pointer-events-auto relative flex cursor-pointer items-center justify-center gap-2 border border-border shadow-panel tn-focus-ring",
             showLabels ? "h-12 rounded-full px-4 text-sm font-medium" : "size-12 rounded-full",
             item.variant === "primary"
               ? "bg-primary text-primary-foreground"
@@ -79,9 +88,7 @@ export function FloatingBubbles({
           </span>
           {showLabels && <span className="truncate">{item.label}</span>}
           {item.badge !== undefined && item.badge > 0 && (
-            <span aria-hidden="true" className="absolute -top-1 -right-1 rounded-full bg-danger px-1.5 text-[0.6rem] font-bold text-danger-foreground">
-              {item.badge}
-            </span>
+            <CountBadge count={item.badge} className="absolute -top-1 -right-1" />
           )}
         </button>
       ))}

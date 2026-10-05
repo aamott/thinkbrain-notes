@@ -1,5 +1,7 @@
 import { ArrowLeft, ArrowRight, Menu } from "lucide-react";
 
+import { CountBadge } from "@thinkbrain/ui";
+
 import { PhoneBreadcrumb } from "./PhoneBreadcrumb";
 
 /**
@@ -96,12 +98,7 @@ export function PhoneHeader({
         >
           <Menu aria-hidden="true" className="size-5" />
           {badge > 0 && (
-            <span
-              aria-hidden="true"
-              className="absolute top-1 right-1 rounded-full bg-danger px-1 text-[0.6rem] font-bold leading-3.5 text-danger-foreground"
-            >
-              {badge}
-            </span>
+            <CountBadge count={badge} className="absolute top-1 right-1 leading-3.5" />
           )}
         </button>
       </div>

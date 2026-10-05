@@ -109,6 +109,22 @@ export function storeBubbleLabels(enabled: boolean): void {
 export const bubbleBar = (host: HTMLDivElement): Element | null =>
   host.querySelector('[role="group"][aria-label="Quick actions"]');
 
+/**
+ * Taps a floating bubble by its stable `data-bubble` id — the accessible name
+ * gains the badge count when one lands, so it cannot double as the selector.
+ *
+ * Throws when the bubble is not rendered: a tap that silently hit nothing
+ * would let a broken layout slide until a much later assertion tripped.
+ */
+export const tapBubble = async (
+  host: HTMLDivElement,
+  bubble: "home" | "new-note" | "actions"
+): Promise<void> => {
+  const button = bubbleBar(host)?.querySelector<HTMLButtonElement>(`[data-bubble="${bubble}"]`);
+  if (!button) throw new Error(`The "${bubble}" bubble is not rendered.`);
+  await act(async () => button.click());
+};
+
 export const drawerOf = (host: HTMLDivElement): Element | null =>
   host.querySelector('[aria-label="Navigation"]');
 
@@ -162,10 +178,16 @@ export const renderWithShell = async (): Promise<{
   };
 };
 
+/**
+ * Clicks the element with this exact `aria-label`.
+ *
+ * Throws when nothing matches rather than no-op'ing: a tap that silently
+ * hit nothing makes every later assertion fail somewhere unrelated.
+ */
 export const click = async (host: HTMLDivElement, label: string): Promise<void> => {
-  await act(async () => {
-    host.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`)?.click();
-  });
+  const target = host.querySelector<HTMLElement>(`[aria-label="${label}"]`);
+  if (!target) throw new Error(`Nothing in the shell is labelled "${label}".`);
+  await act(async () => target.click());
 };
 
 /** Finds a dialog by label that is actually visible (not `aria-hidden`).

@@ -1,4 +1,4 @@
-import { Drawer } from "@thinkbrain/ui";
+import { CountBadge, Drawer } from "@thinkbrain/ui";
 
 import { useLeftPanelContributions } from "../../panels/panelRegistryModel";
 import { PanelIcon } from "../panelIcons";
@@ -66,11 +66,7 @@ export function PhoneDrawer({
             >
               <PanelIcon name={panel.icon} />
               <span className="flex-1 truncate">{panel.label}</span>
-              {badge !== undefined && badge > 0 && (
-                <span className="rounded-full bg-danger px-1.5 text-[0.65rem] font-bold text-danger-foreground">
-                  {badge}
-                </span>
-              )}
+              {badge !== undefined && badge > 0 && <CountBadge count={badge} />}
             </button>
           );
         })}

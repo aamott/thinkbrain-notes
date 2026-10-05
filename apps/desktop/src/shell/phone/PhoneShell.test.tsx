@@ -16,14 +16,19 @@ import {
   filesVisible,
   inspector,
   mockManagedWorkspaceAccess,
+  mount,
   noteTitleVisible,
   openReadyNote,
   render,
   renderWithShell,
   storeBubbleLabels,
+  tapBubble,
   visibleDialog
 } from "./PhoneShell.testHarness";
+import { useNotificationStore } from "../../notifications/notificationStore";
 import { desktopPanelRegistry } from "../../panels/panelRegistryModel";
+import { useShellState, type ShellState } from "../useShellState";
+import { PhoneShell } from "./PhoneShell";
 
 // The registry is a module singleton, so this extension panel is live for the
 // whole file. It exists to prove the drawer's rows are actually reachable —
@@ -40,13 +45,6 @@ const extensionPanel = desktopPanelRegistry.register({
 afterAll(() => {
   extensionPanel.dispose();
 });
-
-/** Taps a bubble by its accessible name inside the floating-bubble group. */
-const tapBubble = async (host: HTMLDivElement, label: string): Promise<void> => {
-  await act(async () => {
-    bubbleBar(host)?.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`)?.click();
-  });
-};
 
 describe("PhoneShell", () => {
   it("renders no activity rail", async () => {
@@ -91,7 +89,7 @@ describe("PhoneShell", () => {
     await openReadyNote(shell);
     expect(noteTitleVisible(host)).toBe(true);
 
-    await tapBubble(host, "Home");
+    await tapBubble(host, "home");
     expect(filesVisible(host)).toBe(true);
     expect(noteTitleVisible(host)).toBe(false);
 
@@ -101,12 +99,26 @@ describe("PhoneShell", () => {
     expect(shell().tabState.tabs).toHaveLength(1);
   });
 
-  it("opens and closes the drawer from the header's main-menu button", async () => {
+  it("opens the drawer from the header's main-menu button and closes it on its scrim", async () => {
     const host = await render();
 
     await click(host, "Main menu");
     expect(visibleDialog(host, "Navigation")).not.toBeNull();
 
+    // The open drawer is full-height and covers ☰, so a real user cannot
+    // tap the button again — the dismiss path is the scrim (or Back). Only
+    // the drawer's own scrim is visible right now.
+    await act(async () => {
+      host.querySelector("[data-tn-scrim].visible")?.dispatchEvent(
+        new PointerEvent("pointerdown", { bubbles: true })
+      );
+    });
+    expect(visibleDialog(host, "Navigation")).toBeNull();
+
+    // The button's handler is still a toggle — exercised here through a DOM
+    // click, which unlike a real tap ignores that the drawer covers it.
+    await click(host, "Main menu");
+    expect(visibleDialog(host, "Navigation")).not.toBeNull();
     await click(host, "Main menu");
     expect(visibleDialog(host, "Navigation")).toBeNull();
   });
@@ -220,7 +232,7 @@ describe("PhoneShell", () => {
     expect(inspector(host)).toBeNull();
     expect(trigger()?.getAttribute("aria-expanded")).toBe("false");
 
-    await tapBubble(host, "Actions");
+    await tapBubble(host, "actions");
 
     const menu = actionsMenu(host);
     expect(menu).not.toBeNull();
@@ -229,7 +241,7 @@ describe("PhoneShell", () => {
     // The menu alone does not open an inspector.
     expect(inspector(host)).toBeNull();
 
-    await tapBubble(host, "Actions");
+    await tapBubble(host, "actions");
 
     expect(actionsMenu(host)).toBeNull();
     expect(trigger()?.getAttribute("aria-expanded")).toBe("false");
@@ -237,7 +249,7 @@ describe("PhoneShell", () => {
 
   it("drills actions → inspector, and the inspector's Back returns to the menu", async () => {
     const host = await render();
-    await tapBubble(host, "Actions");
+    await tapBubble(host, "actions");
 
     const menu = actionsMenu(host);
     await act(async () => {
@@ -259,7 +271,7 @@ describe("PhoneShell", () => {
 
   it("closes the whole actions → inspector flow on an outside tap", async () => {
     const host = await render();
-    await tapBubble(host, "Actions");
+    await tapBubble(host, "actions");
     const menu = actionsMenu(host);
     await act(async () => {
       menu?.querySelector<HTMLButtonElement>('[role="menuitem"][aria-label="Outline"]')?.click();
@@ -281,7 +293,7 @@ describe("PhoneShell", () => {
 
   it("dismisses the ⋮ menu on an outside tap that reaches its layer, not the bubble", async () => {
     const host = await render();
-    await tapBubble(host, "Actions");
+    await tapBubble(host, "actions");
     expect(actionsMenu(host)).not.toBeNull();
 
     // The menu's dismiss layer covers the whole shell above the bubbles:
@@ -298,7 +310,7 @@ describe("PhoneShell", () => {
 
   it("opens the inspector from the action-items menu, parented to it", async () => {
     const host = await render();
-    await tapBubble(host, "Actions");
+    await tapBubble(host, "actions");
     await act(async () => {
       actionsMenu(host)
         ?.querySelector<HTMLButtonElement>('[role="menuitem"][aria-label="Assistant"]')
@@ -364,6 +376,9 @@ describe("PhoneShell", () => {
     const sheet = visibleDialog(host, "Tools");
     expect(sheet).not.toBeNull();
     expect(sheet?.querySelector('[aria-label="Bottom panel tabs"]')).not.toBeNull();
+    // The sheet is aria-modal: bubbles mounted beneath it must leave the
+    // screen entirely rather than stay focusable under the scrim.
+    expect(bubbleBar(host)).toBeNull();
 
     // Dismissing the sheet must leave its content mounted so the slide-down
     // close animation has something to animate, matching InspectorSheet.
@@ -373,6 +388,8 @@ describe("PhoneShell", () => {
     const closed = host.querySelector('[aria-label="Tools"][aria-hidden]');
     expect(closed?.getAttribute("aria-hidden")).toBe("true");
     expect(closed?.querySelector('[aria-label="Bottom panel tabs"]')).not.toBeNull();
+    // And the bubbles come back once the modal surface is gone.
+    expect(bubbleBar(host)).not.toBeNull();
   });
 
   it("hides the bubbles while the soft keyboard covers the bottom of the viewport", async () => {
@@ -387,6 +404,54 @@ describe("PhoneShell", () => {
     const host = await render();
 
     expect(bubbleBar(host)).toBeNull();
+  });
+
+  it("carries conflict and notification counts in the bubbles' accessible names", async () => {
+    // `conflictBadges` is derived inside `useShellState`, so the badge input
+    // is overridden on the rendered shell — the same way the navigation
+    // suite overrides `restoredWorkspacePath`.
+    const box: { current: ShellState | null } = { current: null };
+    const Host = () => {
+      const state = useShellState();
+      box.current = state;
+      return <PhoneShell shell={{ ...state, conflictBadges: { conflicts: 3 } }} />;
+    };
+    const host = await mount(<Host />);
+    const shell = (): ShellState => {
+      if (!box.current) throw new Error("PhoneShell did not render");
+      return box.current;
+    };
+    try {
+      await openReadyNote(shell);
+      // Two undismissed notifications aimed at a registered right panel —
+      // "outline" is a real registry entry, so the store-to-bubble wiring is
+      // what is under test, not the gating.
+      await act(async () => {
+        for (const title of ["one", "two"]) {
+          useNotificationStore.getState().addNotification({
+            source: "test",
+            title,
+            message: "m",
+            severity: "silent",
+            panel: "outline"
+          });
+        }
+      });
+
+      const bar = bubbleBar(host);
+      expect(
+        bar?.querySelector('[data-bubble="home"]')?.getAttribute("aria-label")
+      ).toBe("Home, 3 conflicts");
+      expect(
+        bar?.querySelector('[data-bubble="actions"]')?.getAttribute("aria-label")
+      ).toBe("Actions, 2 notifications");
+      // The chips themselves render — the accessible name alone proves nothing
+      // about the visible badge.
+      expect(bar?.querySelector('[data-bubble="home"] .bg-danger')?.textContent).toBe("3");
+      expect(bar?.querySelector('[data-bubble="actions"] .bg-danger')?.textContent).toBe("2");
+    } finally {
+      await act(async () => useNotificationStore.getState().clearAll());
+    }
   });
 
   it("hides the bubbles under the drawer, the tab switcher and the inspector", async () => {
@@ -404,7 +469,7 @@ describe("PhoneShell", () => {
     await click(host, "Back");
     expect(bubbleBar(host)).not.toBeNull();
 
-    await tapBubble(host, "Actions");
+    await tapBubble(host, "actions");
     await act(async () => {
       actionsMenu(host)
         ?.querySelector<HTMLButtonElement>('[role="menuitem"][aria-label="Outline"]')
@@ -484,7 +549,7 @@ describe("PhoneShell", () => {
     expect(host.querySelector('header [aria-label="Version history"]')).toBeNull();
     expect(host.querySelector('[aria-label="Saved versions"]')).toBeNull();
 
-    await tapBubble(host, "Actions");
+    await tapBubble(host, "actions");
     const menu = actionsMenu(host);
     expect(menu?.querySelectorAll('[aria-label="Version history"]')).toHaveLength(1);
     const row = menu?.querySelector<HTMLButtonElement>(

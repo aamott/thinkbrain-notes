@@ -10,14 +10,14 @@ import {
 } from "../../panels/panelRegistryModel";
 import { usePanelNotificationCounts } from "../../notifications/usePanelNotificationCounts";
 import { useSettingsStore } from "../../settings/settingsStore";
-import { inspectableRelativePath } from "../../tabs/tabModel";
+import { inspectableRelativePath, isNoteTab } from "../../tabs/tabModel";
 import { isSelectableLeftPanel } from "../shellTypes";
 import { TabCloseRequest } from "../TabCloseRequest";
 import { useNoteTitle } from "../useNoteTitle";
 import { TabContent } from "../TabContent";
 import type { ShellState } from "../useShellState";
 import { usePhoneNavigation } from "./usePhoneNavigation";
-import { isNoteTab, resolveBubbles } from "./bubbleModel";
+import { resolveBubbles } from "./bubbleModel";
 import { ActionItemsMenu } from "./ActionItemsMenu";
 import { InspectorSheet } from "./InspectorSheet";
 import { PhoneDrawer } from "./PhoneDrawer";
@@ -25,7 +25,7 @@ import { PhoneHeader } from "./PhoneHeader";
 import { NewNoteMenu } from "./NewNoteMenu";
 import { NoteTitleRow } from "./NoteTitleRow";
 import { TabSwitcherSheet } from "./TabSwitcherSheet";
-import { useKeyboardInset } from "./useKeyboardInset";
+import { useSoftKeyboardOpen } from "./useSoftKeyboardOpen";
 import { useNewNoteMenuActions } from "./useNewNoteMenuActions";
 import { usePhoneAutosave } from "./usePhoneAutosave";
 import { phoneBreadcrumbs } from "./phoneBreadcrumbs";
@@ -206,7 +206,17 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
     onRestoreVersion: shell.restoreVersionSafely
   };
   const workspaceLabel = shell.workspaceName ?? "ThinkBrain";
-  const breadcrumbs = phoneBreadcrumbs(route, activeTab, workspaceLabel);
+  // The routed tab, not `activeTab`: activating a route's tab and applying the
+  // reducer's answer land in different commits, so for one render `activeTab`
+  // still names the tab being navigated *from*. Looking the routed id up in
+  // `tabState.tabs` reads the tab the route actually points at — the same
+  // guard `useRecentNote` applies — with `activeTab` as the fallback while a
+  // stale entry awaits reconciliation.
+  const routedTab =
+    route.kind === "tab"
+      ? (shell.tabState.tabs.find((tab) => tab.id === route.tabId) ?? activeTab)
+      : activeTab;
+  const breadcrumbs = phoneBreadcrumbs(route, routedTab, workspaceLabel);
 
   // Floating bubbles: contextual bottom-corner actions over the content. The
   // ⋮ bubble exists only while at least one right panel resolves available,
@@ -215,7 +225,7 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
   const availableActionCount = rightPanels.filter(
     (entry) => entry.availability?.(rightContext) ?? true
   ).length;
-  const viewingNote = route.kind === "tab" && isNoteTab(activeTab);
+  const viewingNote = route.kind === "tab" && isNoteTab(routedTab);
 
   // The Actions bubble wears the count of undismissed notifications aimed at
   // a registered right panel — the same rule the desktop title bar's ⋯ badge
@@ -245,14 +255,17 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
     useSettingsStore((state) => state.getEffectiveValue("ui.mobileBubbleLabels")) === true;
 
   const newNoteMenuActions = useNewNoteMenuActions(shell.restoredWorkspacePath !== null);
-  const keyboardInset = useKeyboardInset();
+  const softKeyboardOpen = useSoftKeyboardOpen();
 
   // Bubbles float over content but not over chrome surfaces: hidden under the
-  // drawer, the tab switcher and the inspector, and under the soft keyboard —
-  // a bubble wedged between the keyboard and the line being typed is worse
-  // than none. The two menus they trigger stay visible while open.
+  // drawer, the tab switcher, the inspector and the bottom-panel sheet — an
+  // aria-modal surface must not leave them focusable beneath it — and under
+  // the soft keyboard, where a bubble wedged between the keyboard and the
+  // line being typed is worse than none. The two menus they trigger stay
+  // visible while open.
   const bubblesVisible =
-    keyboardInset === 0 &&
+    !softKeyboardOpen &&
+    shell.bottomPanel === null &&
     (overlay === null || overlay.kind === "actions" || overlay.kind === "new-note");
 
   const bubbleItems = useMemo(() => {

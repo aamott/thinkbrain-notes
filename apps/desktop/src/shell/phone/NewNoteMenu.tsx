@@ -1,12 +1,8 @@
 import { FileClock, Plus } from "lucide-react";
 
-import { useDismissable } from "@thinkbrain/ui";
-
 import { PanelIcon } from "../panelIcons";
 import { PhoneMenuRow } from "./PhoneMenuRow";
-import { handlePhoneMenuKeyDown } from "./phoneMenuKeyboard";
-import { PHONE_BUBBLE_MENU_BOTTOM } from "./overlayBounds";
-import { cn } from "../../lib/utils";
+import { BubbleMenuShell } from "./BubbleMenuShell";
 
 interface RecentNoteAction {
   readonly title: string;
@@ -27,9 +23,8 @@ export interface NewNoteMenuAction {
  * carry a history entry.
  *
  * Rendered at the PhoneShell level, it hangs just above the left bubble
- * group. Its outside-dismiss layer spans the whole shell — bubbles included —
- * so tapping the trigger bubble while the menu is open counts as outside:
- * the menu closes and the same tap does not reopen it.
+ * group. `BubbleMenuShell` owns the dismiss layer, Escape and roving focus;
+ * this file is only the rows.
  */
 export function NewNoteMenu({
   open,
@@ -49,53 +44,35 @@ export function NewNoteMenu({
   readonly onSelectAction: (id: string) => void;
   readonly onDismiss: () => void;
 }) {
-  const { containerRef } = useDismissable({ open, onDismiss });
-  if (!open) return null;
-
   return (
-    <>
-      {/* Whole shell including the bubbles: the layer sits above them (z-30
-          over z-20) so a tap on the trigger bubble dismisses instead of
-          retriggering. */}
-      <div
-        aria-hidden="true"
-        className="absolute inset-0 z-30"
-        onPointerDown={(event) => {
-          if (event.target === event.currentTarget) onDismiss();
-        }}
+    <BubbleMenuShell
+      name="new-note"
+      label="New note actions"
+      open={open}
+      menuClassName="left-3 w-56 p-1"
+      onDismiss={onDismiss}
+    >
+      <PhoneMenuRow
+        icon={<Plus aria-hidden="true" />}
+        label="Create new note"
+        onSelect={onCreate}
       />
-      <div
-        ref={containerRef}
-        role="menu"
-        aria-label="New note actions"
-        onKeyDown={handlePhoneMenuKeyDown}
-        className={cn(
-          "absolute left-3 z-40 w-56 rounded-medium border border-border bg-surface p-1 text-foreground shadow-panel",
-          PHONE_BUBBLE_MENU_BOTTOM
-        )}
-      >
+      {actions.map((action) => (
         <PhoneMenuRow
-          icon={<Plus aria-hidden="true" />}
-          label="Create new note"
-          onSelect={onCreate}
+          key={action.id}
+          icon={<PanelIcon name={action.icon} />}
+          label={action.label}
+          disabled={action.disabled}
+          onSelect={() => onSelectAction(action.id)}
         />
-        {actions.map((action) => (
-          <PhoneMenuRow
-            key={action.id}
-            icon={<PanelIcon name={action.icon} />}
-            label={action.label}
-            disabled={action.disabled}
-            onSelect={() => onSelectAction(action.id)}
-          />
-        ))}
-        <PhoneMenuRow
-          icon={<FileClock aria-hidden="true" />}
-          label="Open most recent note"
-          detail={recentNote?.title}
-          disabled={recentNote === null}
-          onSelect={onOpenRecent}
-        />
-      </div>
-    </>
+      ))}
+      <PhoneMenuRow
+        icon={<FileClock aria-hidden="true" />}
+        label="Open most recent note"
+        detail={recentNote?.title}
+        disabled={recentNote === null}
+        onSelect={onOpenRecent}
+      />
+    </BubbleMenuShell>
   );
 }

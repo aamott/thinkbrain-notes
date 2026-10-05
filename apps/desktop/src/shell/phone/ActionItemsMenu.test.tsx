@@ -146,13 +146,16 @@ describe("ActionItemsMenu", () => {
     const host = await render(menu());
     const menuEl = menuOf(host);
     const menuCls = menuEl?.className ?? "";
-    const layerCls = menuEl?.parentElement?.className ?? "";
+    const layer = host.querySelector('[data-tn-dismiss-layer="actions"]');
+    const layerCls = layer?.className ?? "";
 
     expect(menuCls).toContain("right-3");
     expect(menuCls).toContain("bottom-[calc(4.5rem+env(safe-area-inset-bottom))]");
+    expect(menuCls).toContain("z-50");
     expect(layerCls).toContain("inset-0");
     // Above the bubbles' z-20 so their taps reach the layer, not the bubble.
-    expect(layerCls).toContain("z-30");
+    expect(layerCls).toContain("z-40");
+    expect(menuEl?.parentElement).toBe(layer);
   });
 
   // Roving focus shared by both phone menus: arrows move between enabled

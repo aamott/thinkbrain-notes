@@ -74,7 +74,7 @@ describe("NewNoteMenu", () => {
   it("dismisses on an outside tap", async () => {
     const onDismiss = vi.fn();
     const host = await render(menu({ onDismiss }));
-    const layer = host.querySelector(".absolute.inset-0");
+    const layer = host.querySelector('[data-tn-dismiss-layer="new-note"]');
 
     await act(async () => {
       layer?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
@@ -96,11 +96,11 @@ describe("NewNoteMenu", () => {
 
   it("covers the whole shell — bubbles included — with its outside layer", async () => {
     const host = await render(menu());
-    const layer = host.querySelector(".absolute.inset-0");
+    const layer = host.querySelector('[data-tn-dismiss-layer="new-note"]');
 
     // The bubbles live at z-20; the layer must sit above them so a tap on the
     // trigger bubble dismisses instead of retriggering.
-    expect(layer?.className).toContain("z-30");
+    expect(layer?.className).toContain("z-40");
     expect(layer?.className).not.toContain("bottom-[calc");
   });
 
@@ -208,13 +208,20 @@ describe("NewNoteMenu", () => {
 
     expect(el.className).toContain("left-3");
     expect(el.className).toContain("bottom-[calc(4.5rem+env(safe-area-inset-bottom))]");
-    expect(el.className).toContain("z-40");
+    expect(el.className).toContain("z-50");
     expect(el.className).toContain("w-56");
+    // Capped like every bubble menu: a long list can never reach the header.
+    expect(el.className).toContain("max-h-[calc(100%-8rem)]");
+    expect(el.className).toContain("overflow-y-auto");
   });
 
   it("renders nothing while closed", async () => {
     const host = await render(menu({ open: false }));
 
     expect(menuOf(host)).toBeNull();
+    // The shared shell stays mounted (like the sheets) but fully inert —
+    // no menu role, and the dismiss layer is out of hit-testing.
+    const layer = host.querySelector('[data-tn-dismiss-layer="new-note"]');
+    expect(layer?.className).toContain("invisible");
   });
 });

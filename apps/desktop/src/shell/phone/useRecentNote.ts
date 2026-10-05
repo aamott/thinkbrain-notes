@@ -1,7 +1,6 @@
 import { useCallback, useMemo } from "react";
 
-import type { DesktopTab, DesktopTabState } from "../../tabs/tabModel";
-import { isNoteTab } from "./bubbleModel";
+import { isNoteTab, type DesktopTab, type DesktopTabState } from "../../tabs/tabModel";
 import type { PhoneNavigation, PhoneRoute } from "./usePhoneNavigation";
 
 /** The shell values {@link useRecentNote} reads. */

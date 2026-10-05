@@ -10,9 +10,9 @@ export const PHONE_OVERLAY_BOUNDS =
   "top-[calc(3.5rem+env(safe-area-inset-top))] bottom-0";
 
 /**
- * Where bubble menus hang: the 3rem bubble plus its 0.75rem bottom padding,
- * plus the safe-area inset — the menu's bottom edge sits just above the
- * bubbles, not above the screen edge.
+ * Where bubble menus hang: the 3rem bubble plus its 0.75rem bottom padding
+ * plus a 0.75rem gap — 4.5rem in all — then the safe-area inset, so the
+ * menu's bottom edge sits just above the bubbles, not above the screen edge.
  */
 export const PHONE_BUBBLE_MENU_BOTTOM =
   "bottom-[calc(4.5rem+env(safe-area-inset-bottom))]";

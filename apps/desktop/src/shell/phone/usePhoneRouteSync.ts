@@ -81,12 +81,21 @@ export function usePhoneRouteSync({
       return;
     }
     if (activeTabId === observedTabIdRef.current) return;
+    const previousTabId = observedTabIdRef.current;
     observedTabIdRef.current = activeTabId;
     const current = routeRef.current;
     if (current.kind === "tab" && current.tabId === activeTabId) return;
     if (current.kind === "tab" && !openTabIdsRef.current.has(current.tabId)) {
       navigation.replace(activeTabId ? { kind: "tab", tabId: activeTabId } : { kind: "files" });
-    } else if (activeTabId) {
+    } else if (
+      activeTabId &&
+      // Push only when the previously observed tab is still open (or there
+      // was none): then the new active id is a genuine activation/open. When
+      // the previous tab is gone, the new active id is the reducer's
+      // close-fallback — pushing it would shove a tab route over whatever
+      // surface (e.g. Files) the user closed the tab from.
+      (previousTabId === null || openTabIdsRef.current.has(previousTabId))
+    ) {
       navigation.push({ kind: "tab", tabId: activeTabId });
     }
   }, [activeTabId, stateRestored, navigation]);
