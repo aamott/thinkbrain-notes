@@ -41,7 +41,9 @@ test.describe("phone shell", () => {
   test("reaches the inspectors that the desktop hides on narrow screens", async ({ page }) => {
     await page.goto("/");
 
-    await page.getByRole("button", { name: "Actions" }).tap();
+    // "Actions" substring-matches the desktop header's "More actions"
+    // button, so the bubble is pinned by its stable id, not its name.
+    await page.locator('[data-bubble="actions"]').tap();
 
     const menu = page.getByRole("menu", { name: "Action items" });
     await expect(menu.getByRole("menuitem", { name: "Properties" })).toBeVisible();
