@@ -245,7 +245,7 @@ export function SettingsHeaderBar() {
           aria-haspopup="menu"
           aria-expanded={menuOpen}
           onClick={() => setMenuOpen((open) => !open)}
-          className="hidden max-[760px]:flex size-11 cursor-pointer items-center justify-center rounded-small border-0 bg-surface text-muted-foreground tn-focus-ring active:bg-accent"
+          className="hidden max-[760px]:flex size-11 cursor-pointer items-center justify-center rounded-small border-0 bg-transparent text-muted-foreground tn-focus-ring active:bg-accent"
         >
           <MoreVertical size={16} aria-hidden="true" />
         </button>
