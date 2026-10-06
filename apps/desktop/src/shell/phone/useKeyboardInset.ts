@@ -4,9 +4,11 @@ import { useCallback, useEffect, useState } from "react";
  * Pixels the soft keyboard covers at the bottom of the layout viewport.
  *
  * `windowSoftInputMode="adjustResize"` shipped with the CodeMirror mobile work,
- * so the webview does resize — but a bottom-anchored hub still needs the number
- * to decide whether it is in the way. Same `visualViewport` approach
- * `MetadataBottomSheet` already uses, lifted out so there is one of it.
+ * so the webview does resize — but surfaces that sit on the bottom edge still
+ * need the number to clear the keyboard (`MetadataBottomSheet` insets its sheet
+ * by it). For the boolean "is the keyboard up" question — which this delta
+ * alone cannot answer under `adjustResize`, where it reads ~0 — see
+ * `useSoftKeyboardOpen`, which combines this measurement with editable focus.
  */
 export function useKeyboardInset(): number {
   const read = useCallback((): number => {

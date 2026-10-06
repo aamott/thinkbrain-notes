@@ -1,16 +1,19 @@
 import {
   normalizeNativeError,
   type NativeMarkdownFileContents,
-  type NativeMarkdownFileEntry
+  type NativeMarkdownFileEntry,
+  type NativeTextFileContents
 } from "../native/commands";
 import type {
   WorkspaceDocumentApi,
   WorkspaceMarkdownDocumentRef,
   WorkspaceMarkdownDocumentWrite
 } from "./workspaceDocumentAdapter";
+import type { TextFileApi, TextFileRef, TextFileWrite } from "./textFileAdapter";
 
-export type WorkspaceDocumentResult =
-  | { readonly ok: true; readonly document: NativeMarkdownFileContents }
+/** Shared result shape for both Markdown and text file load/save operations. */
+export type FileOperationResult =
+  | { readonly ok: true; readonly document: NativeMarkdownFileContents | NativeTextFileContents }
   /**
    * The code travels with the message because not every failure means the same
    * thing to the caller. A refused save is a question for the user; a failed one
@@ -18,15 +21,20 @@ export type WorkspaceDocumentResult =
    */
   | { readonly ok: false; readonly message: string; readonly code: string };
 
+/** @deprecated Use {@link FileOperationResult}. */
+export type WorkspaceDocumentResult = FileOperationResult;
+/** @deprecated Use {@link FileOperationResult}. */
+export type TextFileResult = FileOperationResult;
+
 /** Loads a Markdown document through an injected desktop boundary. */
 export async function loadWorkspaceDocument(
   api: WorkspaceDocumentApi,
   request: WorkspaceMarkdownDocumentRef
-): Promise<WorkspaceDocumentResult> {
+): Promise<FileOperationResult> {
   try {
     return { ok: true, document: await api.readMarkdownDocument(request) };
   } catch (error) {
-    return workspaceDocumentFailure(error);
+    return fileOperationFailure(error, "The Markdown document could not be updated.");
   }
 }
 
@@ -34,29 +42,54 @@ export async function loadWorkspaceDocument(
 export async function saveWorkspaceDocument(
   api: WorkspaceDocumentApi,
   request: WorkspaceMarkdownDocumentWrite
-): Promise<WorkspaceDocumentResult> {
+): Promise<FileOperationResult> {
   try {
     const entry = await api.writeMarkdownDocument(request);
     return { ok: true, document: documentFromEntry(entry, request.contents) };
   } catch (error) {
-    return workspaceDocumentFailure(error);
+    return fileOperationFailure(error, "The Markdown document could not be updated.");
   }
 }
 
 export function workspaceDocumentErrorMessage(error: unknown): string {
-  const normalized = normalizeNativeError(error);
-  return normalized.message.trim() || "The Markdown document could not be updated.";
+  return normalizeNativeError(error).message.trim() || "The Markdown document could not be updated.";
+}
+
+/** Loads a non-Markdown text file through the text file API. */
+export async function loadTextFile(
+  api: TextFileApi,
+  request: TextFileRef
+): Promise<FileOperationResult> {
+  try {
+    return { ok: true, document: await api.readTextFile(request) };
+  } catch (error) {
+    return fileOperationFailure(error, "The file could not be updated.");
+  }
+}
+
+/** Saves a non-Markdown text file and returns the canonical relative path. */
+export async function saveTextFile(
+  api: TextFileApi,
+  request: TextFileWrite
+): Promise<FileOperationResult> {
+  try {
+    const entry = await api.writeTextFile(request);
+    return { ok: true, document: { relative_path: entry.relative_path, contents: request.contents } };
+  } catch (error) {
+    return fileOperationFailure(error, "The file could not be updated.");
+  }
 }
 
 /**
  * The one place a failure result is built, so no path can carry a message
  * without the code that tells the caller what to do about it.
  */
-function workspaceDocumentFailure(error: unknown): WorkspaceDocumentResult {
+function fileOperationFailure(error: unknown, fallbackMessage: string): FileOperationResult {
+  const normalized = normalizeNativeError(error);
   return {
     ok: false,
-    message: workspaceDocumentErrorMessage(error),
-    code: normalizeNativeError(error).code
+    message: normalized.message.trim() || fallbackMessage,
+    code: normalized.code
   };
 }
 

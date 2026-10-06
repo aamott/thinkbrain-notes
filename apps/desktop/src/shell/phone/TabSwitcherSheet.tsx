@@ -1,8 +1,8 @@
 import { BottomSheet } from "@thinkbrain/ui";
-import { X } from "lucide-react";
+import { Plus, X } from "lucide-react";
 
 import { cn } from "../../lib/utils";
-import type { DesktopTab } from "../../tabs/tabModel";
+import { tabAccessibleName, type DesktopTab } from "../../tabs/tabModel";
 import type { DocumentViewState } from "../shellTypes";
 import { previewText } from "./tabPreview";
 
@@ -17,7 +17,8 @@ import { previewText } from "./tabPreview";
 function placeholderFor(tab: DesktopTab, view: DocumentViewState | undefined): string {
   if (view?.phase === "loading") return "Loading…";
   if (view?.phase === "error") return "Unavailable";
-  return tab.kind;
+  // A kind string reads as jargon on chrome surfaces that have a title.
+  return tab.kind === "new-tab" ? tab.title : tab.kind;
 }
 
 /**
@@ -35,7 +36,8 @@ export function TabSwitcherSheet({
   documents,
   onDismiss,
   onSelect,
-  onClose
+  onClose,
+  onNewTab
 }: {
   readonly open: boolean;
   readonly tabs: readonly DesktopTab[];
@@ -44,21 +46,19 @@ export function TabSwitcherSheet({
   readonly onDismiss: () => void;
   readonly onSelect: (tabId: string) => void;
   readonly onClose: (tabId: string) => void;
+  /** Called when the user taps the trailing new-tab card. */
+  readonly onNewTab: () => void;
 }) {
   return (
     <BottomSheet open={open} onDismiss={onDismiss} label="Open tabs">
-      {tabs.length === 0 ? (
-        // Closing the last tab leaves this sheet open over an empty workspace.
-        // An empty grid is a blank rectangle that explains nothing.
-        <p role="status" className="m-0 p-6 text-center text-xs text-muted-foreground">
-          No open tabs. Choose a note from Files to start one.
-        </p>
-      ) : (
         <ul className="m-0 grid list-none grid-cols-2 gap-3 p-3">
           {tabs.map((tab) => {
             const isActive = tab.id === activeTabId;
             const view = documents[tab.id];
             const excerpt = view ? previewText(view.contents) : "";
+            // Restore previews of one file share a title; the accessible
+            // name and tooltip carry the version's date to tell them apart.
+            const accessibleName = tabAccessibleName(tab);
             return (
               <li key={tab.id} className="relative m-0">
                 {/*
@@ -68,16 +68,18 @@ export function TabSwitcherSheet({
                  */}
                 <button
                   type="button"
-                  aria-label={tab.title}
+                  aria-label={accessibleName}
+                  title={accessibleName}
                   aria-current={isActive ? "page" : undefined}
                   className={cn(
                     "flex h-44 w-full cursor-pointer flex-col items-stretch overflow-hidden rounded-medium border border-border bg-tab-active p-0 text-left text-tab-active-foreground tn-focus-ring",
                     isActive && "border-primary ring-2 ring-primary"
                   )}
-                  onClick={() => {
-                    onSelect(tab.id);
-                    onDismiss();
-                  }}
+                  // onSelect alone: in PhoneShell it replaces this sheet's
+                  // history entry with the chosen tab route, which is also
+                  // what closes the sheet — a separate onDismiss here would
+                  // take one extra step back through content history.
+                  onClick={() => onSelect(tab.id)}
                 >
                   <span className="flex h-9 shrink-0 items-center gap-1 border-b border-border bg-surface pr-9 pl-2 pointer-coarse:h-11 pointer-coarse:pr-11">
                     <span className="min-w-0 flex-1 truncate text-[0.7rem] font-medium">
@@ -103,7 +105,7 @@ export function TabSwitcherSheet({
                 </button>
                 <button
                   type="button"
-                  aria-label={`Close ${tab.title}`}
+                  aria-label={`Close ${accessibleName}`}
                   className="absolute top-0 right-0 flex size-9 cursor-pointer items-center justify-center rounded-medium border-0 bg-transparent text-muted-foreground hover:text-foreground tn-focus-ring pointer-coarse:size-11"
                   onClick={() => onClose(tab.id)}
                 >
@@ -112,8 +114,22 @@ export function TabSwitcherSheet({
               </li>
             );
           })}
+          {/* The mobile-browser new-tab affordance: a card in the slot the
+              next tab would occupy, not a button floating over the grid. It
+              is also the whole answer when the last tab was just closed. */}
+          <li className="relative m-0">
+            <button
+              type="button"
+              aria-label="New tab"
+              title="New tab"
+              className="flex h-44 w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-medium border border-dashed border-border bg-transparent p-0 text-muted-foreground hover:text-foreground tn-focus-ring"
+              onClick={onNewTab}
+            >
+              <Plus aria-hidden="true" className="size-6" />
+              <span className="text-[0.7rem] font-medium">New tab</span>
+            </button>
+          </li>
         </ul>
-      )}
     </BottomSheet>
   );
 }

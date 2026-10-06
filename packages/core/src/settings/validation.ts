@@ -10,7 +10,7 @@
 
 import type { SettingsRegistry } from "./registry";
 import type { SettingDefinition } from "./types";
-import type { SettingsDiagnostic } from "../settings";
+import type { SettingsDiagnostic } from "./internal";
 import { assertNeverSettingType } from "./internal";
 
 /**

@@ -4,38 +4,21 @@
 //! pasted with a username and password is split on first use: the secret goes
 //! here, the destination keeps only the place.
 
-#[cfg(test)]
-use std::collections::HashMap;
 use std::sync::Mutex;
 
-use crate::error::lock_or_recover;
 use crate::NativeError;
+use crate::error::lock_or_recover;
 
-#[cfg(all(
-    not(test),
-    any(target_os = "linux", target_os = "macos", target_os = "windows")
-))]
 use super::failed;
 
-/// Keychain service name. Only referenced from the `supported!` (desktop-OS)
-/// keychain helpers, so gate it the same way to avoid dead-code warnings on
-/// Android, where the keychain is stubbed out.
-#[cfg(all(
-    not(test),
-    any(target_os = "linux", target_os = "macos", target_os = "windows")
-))]
+/// Keychain service name, shared by every entry this app writes.
 const SERVICE: &str = "ThinkBrain Notes";
 
 /// Keychain account used only to prove the backend answers. Never written.
-#[cfg(all(
-    not(test),
-    any(target_os = "linux", target_os = "macos", target_os = "windows")
-))]
 const STORAGE_PROBE: &str = "profile:__storage_probe";
 
-#[cfg(test)]
-static MEMORY: Mutex<Option<HashMap<String, (String, String)>>> = Mutex::new(None);
-#[cfg(not(test))]
+/// Serialises access to the store. Some backends are not re-entrant, and a
+/// round trip can read credentials from more than one thread.
 static KEYCHAIN: Mutex<()> = Mutex::new(());
 
 thread_local! {
@@ -44,7 +27,6 @@ thread_local! {
 
 /// Whether the OS keychain (or the in-memory test stand-in) can be asked.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)] // Unavailable/Unsupported are constructed only in non-test builds.
 pub enum StorageKind {
     Available,
     Unavailable,
@@ -65,7 +47,7 @@ pub fn get(destination: &str) -> Result<Option<(String, String)>, NativeError> {
 }
 
 /// The currently bound profile ID, if a round trip named one.
-pub fn bound_profile() -> Option<String> {
+fn bound_profile() -> Option<String> {
     BOUND_PROFILE.with(|slot| slot.borrow().clone())
 }
 
@@ -116,83 +98,79 @@ fn profile_account(id: &str) -> String {
     format!("profile:{id}")
 }
 
+/// Maps a store error onto the sync vocabulary.
+///
+/// `NoDefaultStore` is the interesting one: it means this platform has nowhere
+/// to keep a sign-in, which is a different thing from a keychain that is
+/// present and refusing. Callers act on that distinction — see
+/// `offer_or_anonymous`.
+fn store_failure(error: keyring_core::Error) -> NativeError {
+    match error {
+        keyring_core::Error::NoDefaultStore => NativeError::new(
+            "sync.auth_required",
+            "Sign-in is not available on this device yet.",
+        ),
+        other => failed(
+            "sync.credentials_unavailable",
+            "Could not reach where sign-ins are saved.",
+            other,
+        ),
+    }
+}
+
+/// One entry in the app's slice of the store. Assumes the lock is held.
+fn entry(key: &str) -> Result<keyring_core::Entry, NativeError> {
+    keyring_core::Entry::new(SERVICE, key).map_err(store_failure)
+}
+
+/// Reads without taking the lock, so lock-holding callers can reuse it.
+fn read_entry(key: &str) -> Result<Option<(String, String)>, NativeError> {
+    match entry(key)?.get_password() {
+        Ok(payload) => Ok(decode(&payload)),
+        Err(keyring_core::Error::NoEntry) => Ok(None),
+        Err(error) => Err(store_failure(error)),
+    }
+}
+
 fn read_account(key: &str) -> Result<Option<(String, String)>, NativeError> {
-    #[cfg(test)]
-    {
-        Ok(lock_or_recover(&MEMORY)
-            .get_or_insert_with(HashMap::new)
-            .get(key)
-            .cloned())
-    }
-    #[cfg(not(test))]
-    {
-        let _guard = lock_or_recover(&KEYCHAIN);
-        os_get(key)
-    }
+    let _guard = lock_or_recover(&KEYCHAIN);
+    read_entry(key)
 }
 
 fn write_account(key: &str, username: &str, secret: &str) -> Result<(), NativeError> {
-    #[cfg(test)]
-    {
-        lock_or_recover(&MEMORY)
-            .get_or_insert_with(HashMap::new)
-            .insert(key.to_string(), (username.to_string(), secret.to_string()));
-        Ok(())
-    }
-    #[cfg(not(test))]
-    {
-        let _guard = lock_or_recover(&KEYCHAIN);
-        os_store(key, username, secret)
-    }
+    let _guard = lock_or_recover(&KEYCHAIN);
+    entry(key)?
+        .set_password(&encode(username, secret))
+        .map_err(store_failure)
 }
 
 fn remove_account(key: &str) -> Result<(), NativeError> {
-    #[cfg(test)]
-    {
-        lock_or_recover(&MEMORY)
-            .get_or_insert_with(HashMap::new)
-            .remove(key);
-        Ok(())
-    }
-    #[cfg(not(test))]
-    {
-        let _guard = lock_or_recover(&KEYCHAIN);
-        os_delete(key)
+    let _guard = lock_or_recover(&KEYCHAIN);
+    match entry(key)?.delete_credential() {
+        Ok(()) | Err(keyring_core::Error::NoEntry) => Ok(()),
+        Err(error) => Err(store_failure(error)),
     }
 }
 
 /// Asks whether the keychain answers, without writing a secret.
+///
+/// Reports from what was actually registered at startup rather than from a
+/// `cfg!`, so a platform whose store failed to start is honestly reported as
+/// unavailable instead of being assumed present.
 pub fn storage_status() -> (StorageKind, String) {
-    #[cfg(test)]
-    {
-        return (
-            StorageKind::Available,
-            "This computer can keep a sign-in.".to_string(),
-        );
-    }
-    #[cfg(all(
-        not(test),
-        not(any(target_os = "linux", target_os = "macos", target_os = "windows"))
-    ))]
-    {
+    if !crate::credential_store::is_available() {
         return (
             StorageKind::Unsupported,
             "Sign-in is not available on this device yet.".to_string(),
         );
     }
-    #[cfg(all(
-        not(test),
-        any(target_os = "linux", target_os = "macos", target_os = "windows")
-    ))]
-    {
-        let _guard = lock_or_recover(&KEYCHAIN);
-        match os_get(STORAGE_PROBE) {
-            Ok(_) => (
-                StorageKind::Available,
-                "This computer can keep a sign-in.".to_string(),
-            ),
-            Err(error) => (StorageKind::Unavailable, error.message),
-        }
+    let _guard = lock_or_recover(&KEYCHAIN);
+    match read_entry(STORAGE_PROBE) {
+        Ok(_) => (
+            StorageKind::Available,
+            "This computer can keep a sign-in.".to_string(),
+        ),
+        Err(error) => (StorageKind::Unavailable, error.message),
     }
 }
 
@@ -225,6 +203,28 @@ pub fn take_from_url(destination: &str) -> String {
     redacted
 }
 
+/// Distinguishes "this platform has nowhere to keep a sign-in" from "the store
+/// is here and it failed".
+///
+/// A credential helper that has nothing to offer is supposed to say so and let
+/// the request proceed anonymously — that is how a public repository is cloned
+/// without a token. Android has no credential store at all, so probing it
+/// returns `sync.auth_required`; treating that as a hard error made *public*
+/// clones fail on a phone, which is not what anyone means by "sign-in is not
+/// available".
+///
+/// A locked or broken keychain is deliberately *not* included. There the user
+/// does have a saved sign-in, and quietly retrying anonymously would turn a
+/// fixable "unlock your keychain" into a confusing authentication failure.
+fn offer_or_anonymous(
+    result: Result<Option<(String, String)>, NativeError>,
+) -> Result<Option<(String, String)>, NativeError> {
+    match result {
+        Err(error) if error.code == "sync.auth_required" => Ok(None),
+        other => other,
+    }
+}
+
 /// What gix calls when a remote asks who we are.
 #[allow(clippy::result_large_err)]
 pub fn provide(
@@ -240,7 +240,7 @@ pub fn provide(
             else {
                 return Ok(None);
             };
-            let Some((username, password)) = get(url).map_err(|source| {
+            let Some((username, password)) = offer_or_anonymous(get(url)).map_err(|source| {
                 gix::protocol::credentials::protocol::Error::ConfigureCredentialHelpers {
                     source: Box::new(source),
                 }
@@ -305,8 +305,14 @@ fn split_userinfo(destination: &str) -> Option<(String, String, String)> {
         return None;
     }
     let rest = &trimmed[scheme + 3..];
-    let at = rest.find('@')?;
-    let userinfo = &rest[..at];
+    // Userinfo lives only in the authority. Searching the whole tail would
+    // split on an `@` in the path (`https://host/repo@x`), and searching from
+    // the left would let an `@` inside the password (`user:p@ss@host`) leak
+    // part of the secret into the stored destination — so bound the span,
+    // then take the last `@` in it.
+    let authority = &rest[..super::authority_end(rest)];
+    let at = authority.rfind('@')?;
+    let userinfo = &authority[..at];
     if userinfo.is_empty() {
         return None;
     }
@@ -334,9 +340,11 @@ fn split_userinfo(destination: &str) -> Option<(String, String, String)> {
             (username, String::new())
         }
     };
-    if secret.is_empty() {
-        return None;
-    }
+    // No `return None` for an empty secret. `https://TOKEN@host/repo.git` — the
+    // form GitHub's own documentation suggests for a personal access token —
+    // has no password half, and treating it as "not a credential" left the
+    // whole URL, token and all, to be written verbatim into `sync.destination`
+    // in a settings file on disk. A colon-less userinfo is still a secret.
     Some((format!("{}://{host}", &trimmed[..scheme]), username, secret))
 }
 
@@ -357,105 +365,11 @@ fn identity_from_payload(payload: &[u8]) -> Option<(String, String, String)> {
     Some((url?, username?, password?))
 }
 
-/// Wraps an item with the cfg gate for "real OS, not under test".
-///
-/// Centralises the `not(test)` + supported-OS predicate repeated across every
-/// keychain entry point, so a new platform is one line here rather than nine.
-macro_rules! supported {
-    ($item:item) => {
-        #[cfg(all(
-            not(test),
-            any(target_os = "linux", target_os = "macos", target_os = "windows")
-        ))]
-        $item
-    };
-}
-
-/// The same gate, negated: the no-keychain stubs for unsupported platforms.
-macro_rules! unsupported {
-    ($item:item) => {
-        #[cfg(all(
-            not(test),
-            not(any(target_os = "linux", target_os = "macos", target_os = "windows"))
-        ))]
-        $item
-    };
-}
-
-supported! {
-fn unavailable(error: impl std::fmt::Display) -> NativeError {
-    failed(
-        "sync.credentials_unavailable",
-        "Could not use this computer's keychain.",
-        error,
-    )
-}
-}
-
-supported! {
-fn os_get(account: &str) -> Result<Option<(String, String)>, NativeError> {
-    match os_entry(account)?.get_password() {
-        Ok(payload) => Ok(decode(&payload)),
-        Err(keyring::Error::NoEntry) => Ok(None),
-        Err(error) => Err(unavailable(error)),
-    }
-}
-}
-
-supported! {
-fn os_store(account: &str, username: &str, secret: &str) -> Result<(), NativeError> {
-    os_entry(account)?
-        .set_password(&encode(username, secret))
-        .map_err(unavailable)
-}
-}
-
-supported! {
-fn os_delete(account: &str) -> Result<(), NativeError> {
-    match os_entry(account)?.delete_credential() {
-        Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
-        Err(error) => Err(unavailable(error)),
-    }
-}
-}
-
-supported! {
-fn os_entry(account: &str) -> Result<keyring::Entry, NativeError> {
-    keyring::Entry::new(SERVICE, account).map_err(unavailable)
-}
-}
-
-unsupported! {
-fn os_get(_account: &str) -> Result<Option<(String, String)>, NativeError> {
-    Err(NativeError::new(
-        "sync.auth_required",
-        "Sign-in is not available on this device yet.",
-    ))
-}
-}
-
-unsupported! {
-fn os_store(_account: &str, _username: &str, _secret: &str) -> Result<(), NativeError> {
-    Err(NativeError::new(
-        "sync.auth_required",
-        "Sign-in is not available on this device yet.",
-    ))
-}
-}
-
-unsupported! {
-fn os_delete(_account: &str) -> Result<(), NativeError> {
-    Ok(())
-}
-}
-
-supported! {
+/// Packs a username and secret into one stored payload.
 fn encode(username: &str, secret: &str) -> String {
     format!("{username}\n{secret}")
 }
-}
 
-supported! {
 fn decode(payload: &str) -> Option<(String, String)> {
     // A malformed entry (no newline, or an empty secret) is indistinguishable
     // from "no credential" by the return value alone, so log it loudly. The
@@ -464,20 +378,60 @@ fn decode(payload: &str) -> Option<(String, String)> {
         eprintln!("[sync] malformed keychain entry detected");
         None
     })?;
-    if secret.is_empty() {
-        eprintln!("[sync] malformed keychain entry detected");
-        return None;
-    }
+    // An empty secret is well-formed, not malformed. Git sends a token-only
+    // URL as username-with-no-password, and reproducing that exactly is what
+    // lets the token move off disk without changing how the request looks to
+    // the far end. The missing-newline check above still catches a truly
+    // half-written entry, which is what that guard was for.
     Some((username.to_string(), secret.to_string()))
-}
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
+
+    /// Registers keyring-core's in-memory store for the whole test binary.
+    ///
+    /// Under keyring v3 this file carried its own `HashMap` behind
+    /// `#[cfg(test)]`, which meant the tested code was not the shipped code.
+    /// v4's pluggable store lets the tests exercise the real path and swap only
+    /// the backend. The store is process-wide, exactly like the map it
+    /// replaces, so tests keep using distinct accounts.
+    pub(crate) fn with_a_store() {
+        static ONCE: std::sync::Once = std::sync::Once::new();
+        ONCE.call_once(|| {
+            keyring_core::set_default_store(
+                keyring_core::mock::Store::new().expect("mock credential store"),
+            );
+        });
+    }
+
+    /// A token pasted as the whole userinfo — `https://TOKEN@host/repo.git` —
+    /// is how GitHub's own docs suggest cloning with a PAT, so it is a shape
+    /// real users arrive with. It has no colon, so there is no "password" half,
+    /// and it must still be treated as a secret: whatever this returns is what
+    /// gets written to `sync.destination` in a settings file on disk.
+    #[test]
+    fn a_url_whose_whole_userinfo_is_a_token_does_not_keep_the_token() {
+        with_a_store();
+        let destination = take_from_url("https://ghp_faketoken123@token-only.test/notes.git");
+
+        assert!(
+            !destination.contains("ghp_faketoken123"),
+            "the token survived into the stored destination: {destination}"
+        );
+        assert_eq!(destination, "https://token-only.test/notes.git");
+
+        // Stripping alone would be a silent sign-out. The token has to land in
+        // the store as git would send it: as the username, with no password.
+        let (user, secret) = get(&destination).expect("readable").expect("stored");
+        assert_eq!(user, "ghp_faketoken123");
+        assert_eq!(secret, "");
+    }
 
     #[test]
     fn a_url_with_a_token_is_split_and_the_token_is_not_in_the_result() {
+        with_a_store();
         let destination = take_from_url("https://x-access-token:s3cret@example.test/notes.git");
 
         assert_eq!(destination, "https://example.test/notes.git");
@@ -489,12 +443,44 @@ mod tests {
 
     #[test]
     fn a_url_without_a_token_is_left_alone() {
+        with_a_store();
         assert_eq!(
             take_from_url("https://clean.example.test/notes.git"),
             "https://clean.example.test/notes.git"
         );
         assert_eq!(
             get("https://clean.example.test/notes.git").expect("readable"),
+            None
+        );
+    }
+
+    /// An `@` inside the password is legal userinfo (`user:p@ss@host`). The
+    /// separator is the *last* `@` in the authority, so the whole secret is
+    /// stored and none of it bleeds into the destination kept on disk.
+    #[test]
+    fn a_password_containing_an_at_sign_is_stored_whole() {
+        with_a_store();
+        let destination = take_from_url("https://user:p@ss@at-secret.test/notes.git");
+
+        assert_eq!(destination, "https://at-secret.test/notes.git");
+        assert!(!destination.contains("p@ss"));
+        let (user, secret) = get(&destination).expect("readable").expect("stored");
+        assert_eq!(user, "user");
+        assert_eq!(secret, "p@ss");
+    }
+
+    /// An `@` past the authority is part of the path, not a credential:
+    /// `https://host/repo@x` must come back untouched rather than being
+    /// split on the `@` inside `repo@x`.
+    #[test]
+    fn an_at_sign_in_the_path_is_not_a_credential() {
+        with_a_store();
+        assert_eq!(
+            take_from_url("https://path-only.test/repo@x/notes.git"),
+            "https://path-only.test/repo@x/notes.git"
+        );
+        assert_eq!(
+            get("https://path-only.test/repo@x/notes.git").expect("readable"),
             None
         );
     }
@@ -506,6 +492,7 @@ mod tests {
 
     #[test]
     fn provide_returns_what_was_stored_and_does_not_echo_the_secret_on_miss() {
+        with_a_store();
         store("https://example.test/vault.git", "me", "tok").expect("stored");
         let action = gix::protocol::credentials::helper::Action::get_for_url(
             "https://example.test/vault.git",
@@ -523,6 +510,7 @@ mod tests {
 
     #[test]
     fn a_bound_profile_does_not_fall_back_to_a_url_entry() {
+        with_a_store();
         store(
             "https://fallback.example.test/notes.git",
             "url-user",
@@ -551,6 +539,7 @@ mod tests {
 
     #[test]
     fn two_profiles_for_the_same_host_and_user_stay_distinct() {
+        with_a_store();
         store_profile("p-one", "me", "token-one").expect("stored");
         store_profile("p-two", "me", "token-two").expect("stored");
 
@@ -565,7 +554,35 @@ mod tests {
     }
 
     #[test]
+    fn a_device_with_no_credential_store_offers_no_identity_rather_than_failing() {
+        let no_store = NativeError::new(
+            "sync.auth_required",
+            "Sign-in is not available on this device yet.",
+        );
+
+        let offered = offer_or_anonymous(Err(no_store)).expect("no store is not a failure");
+
+        assert_eq!(offered, None);
+    }
+
+    #[test]
+    fn a_store_that_is_present_but_failing_is_still_an_error() {
+        let locked = NativeError::new(
+            "sync.credentials_unavailable",
+            "Could not reach where sign-ins are saved.",
+        );
+
+        let result = offer_or_anonymous(Err(locked));
+
+        assert!(
+            result.is_err(),
+            "a locked keychain must not fall back to anonymous"
+        );
+    }
+
+    #[test]
     fn storage_status_treats_a_missing_probe_entry_as_available() {
+        with_a_store();
         let (kind, message) = storage_status();
         assert_eq!(kind, StorageKind::Available);
         assert!(message.contains("keep a sign-in"));

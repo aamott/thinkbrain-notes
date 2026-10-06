@@ -60,11 +60,14 @@ const mount = async (props: Partial<Parameters<typeof JournalPanelContainer>[0]>
   return container;
 };
 
+// Queries the whole document rather than the mount host: pointer-placed
+// menus (the filter popover) portal to document.body, so their items live
+// outside the container while their triggers stay inside it.
 const click = async (host: HTMLElement, name: string): Promise<void> => {
-  const found = [...host.querySelectorAll("button")].find(
+  const found = [...document.querySelectorAll("button")].find(
     (candidate) => candidate.getAttribute("aria-label") === name || candidate.textContent === name
   );
-  if (!found) throw new Error(`No control named "${name}"`);
+  if (!found) throw new Error(`No control named "${name}" in ${host.tagName} or portaled menus`);
   await act(async () => found.click());
 };
 
@@ -465,9 +468,11 @@ describe("metadata filters", () => {
 
     await click(host, "Filter entries");
 
-    expect(host.textContent).toContain("Mood");
+    // The filter popover portals to document.body — its contents are not
+    // under the mount host.
+    expect(document.body.textContent).toContain("Mood");
     expect(
-      [...host.querySelectorAll("button")].map((button) => button.getAttribute("aria-label"))
+      [...document.querySelectorAll("button")].map((button) => button.getAttribute("aria-label"))
     ).toContain("Mood good");
   });
 

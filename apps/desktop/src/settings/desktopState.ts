@@ -97,14 +97,7 @@ export interface DesktopStateUpdate {
 
 export interface DesktopStateGateway {
   readAppSettings(): Promise<string | null>;
-  /**
-   * `expected` is the document this write's `contents` were revised from —
-   * `null` when none existed. `write_app_settings` refuses the write if that
-   * is no longer what is on disk (see `appSettingsFile.ts`), so the fallback
-   * path below must send what it actually read rather than nothing.
-   */
-  writeAppSettings(contents: string, expected: string | null): Promise<void>;
-  updateDesktopState?(update: DesktopStateUpdate): Promise<string>;
+  updateDesktopState(update: DesktopStateUpdate): Promise<string>;
 }
 
 export const DEFAULT_DESKTOP_STATE: DesktopState = Object.freeze({
@@ -124,9 +117,6 @@ export const DEFAULT_DESKTOP_STATE: DesktopState = Object.freeze({
 
 const nativeDesktopStateGateway: DesktopStateGateway = {
   readAppSettings: () => invokeNativeCommand("read_app_settings"),
-  async writeAppSettings(contents, expected) {
-    await invokeNativeCommand("write_app_settings", { contents, expected });
-  },
   updateDesktopState(update) {
     return invokeNativeCommand("update_desktop_state", { update });
   }
@@ -142,8 +132,6 @@ export async function loadDesktopState(
   return parseDesktopState(await gateway.readAppSettings());
 }
 
-let fallbackUpdateQueue: Promise<unknown> = Promise.resolve();
-
 /**
  * Updates desktop-only state without rewriting theme, extension, or other app
  * settings. The write always uses the current desktop-state schema.
@@ -152,40 +140,7 @@ export async function saveDesktopState(
   update: DesktopStateUpdate,
   gateway: DesktopStateGateway = nativeDesktopStateGateway
 ): Promise<DesktopState> {
-  if (gateway.updateDesktopState) {
-    return parseDesktopState(await gateway.updateDesktopState(update));
-  }
-
-  console.warn(
-    "Using fallback desktop state update. " +
-    "This may cause race conditions if multiple windows modify settings concurrently."
-  );
-
-  // This does not go through `appSettingsFile.ts`'s retrying chain: that chain
-  // exists for the settings store, which is a real writer in the shipped app,
-  // races with `update_desktop_state` on every save, and is exercised by every
-  // build. This branch only runs for a caller-supplied gateway that omits
-  // `updateDesktopState` — never `nativeDesktopStateGateway`, which always
-  // defines it — so it has no writer to race against in practice. Sending
-  // `expected` keeps a theoretical race a loud failure instead of a silent
-  // overwrite; a retry loop here would be safety net for a path nothing takes.
-  const performUpdate = async () => {
-    const rawAppSettings = await gateway.readAppSettings();
-    const appSettings = parseAppSettingsRecord(rawAppSettings);
-    const current = readDesktopState(appSettings);
-    const next = applyDesktopStateUpdate(current, update);
-
-    appSettings[DESKTOP_STATE_KEY] = next;
-    delete appSettings.lastWorkspacePath;
-    delete appSettings.explorerOpen;
-
-    await gateway.writeAppSettings(serializeAppSettingsRecord(appSettings), rawAppSettings);
-    return next;
-  };
-
-  const result = fallbackUpdateQueue.then(performUpdate, performUpdate);
-  fallbackUpdateQueue = result.catch(() => {});
-  return result;
+  return parseDesktopState(await gateway.updateDesktopState(update));
 }
 
 /**
@@ -237,61 +192,6 @@ function readVersionedDesktopState(storedState: Readonly<Record<string, unknown>
   }
 
   return createDesktopState(storedState);
-}
-
-function applyDesktopStateUpdate(
-  state: DesktopState,
-  update: DesktopStateUpdate
-): DesktopState {
-  return createDesktopState({
-    lastWorkspacePath:
-      update.lastWorkspacePath === undefined
-        ? state.lastWorkspacePath
-        : update.lastWorkspacePath,
-    recentWorkspacePaths:
-      update.recentWorkspacePaths === undefined
-        ? promoteRecentWorkspace(state.recentWorkspacePaths, update.lastWorkspacePath)
-        : mergeRecentWorkspacePaths(
-            state.recentWorkspacePaths,
-            normalizeWorkspacePaths(update.recentWorkspacePaths)
-          ),
-    explorerOpen: update.explorerOpen === undefined ? state.explorerOpen : update.explorerOpen,
-    leftPanelWidth:
-      update.leftPanelWidth === undefined ? state.leftPanelWidth : update.leftPanelWidth,
-    rightPanelWidth:
-      update.rightPanelWidth === undefined ? state.rightPanelWidth : update.rightPanelWidth,
-    bottomPanelOpen:
-      update.bottomPanelOpen === undefined ? state.bottomPanelOpen : update.bottomPanelOpen,
-    developmentExtensionDirectories:
-      update.developmentExtensionDirectories === undefined
-        ? state.developmentExtensionDirectories
-        : update.developmentExtensionDirectories,
-    openTabs: update.openTabs === undefined ? state.openTabs : update.openTabs,
-    activeTabId: update.activeTabId === undefined ? state.activeTabId : update.activeTabId,
-    workspaceViews: applyCollapsedGroups(state.workspaceViews, update.collapsedGroups),
-    workspaceTabs: applyWorkspaceTabs(state.workspaceTabs, update.workspaceTabs)
-  });
-}
-
-/**
- * Records one view's collapsed groups.
- *
- * Unlike the native path this does not prune workspaces the app has forgotten:
- * this branch only runs for a caller-supplied gateway without
- * `updateDesktopState`, which the shipped app never takes.
- */
-function applyCollapsedGroups(
-  views: WorkspaceViews,
-  update: CollapsedGroupsUpdate | undefined
-): WorkspaceViews {
-  if (update === undefined) return views;
-  return {
-    ...views,
-    [update.workspacePath]: {
-      ...views[update.workspacePath],
-      [update.viewId]: update.collapsed
-    }
-  };
 }
 
 function createDesktopState(value: Readonly<Record<string, unknown>>): DesktopState {
@@ -357,21 +257,6 @@ export function workspaceTabs(
     return { openTabs: state.openTabs, activeTabId: state.activeTabId };
   }
   return { openTabs: [], activeTabId: null };
-}
-
-/** Records one workspace's tabs, leaving every other workspace's alone. */
-function applyWorkspaceTabs(
-  tabs: WorkspaceTabs,
-  update: WorkspaceTabsUpdate | undefined
-): WorkspaceTabs {
-  if (update === undefined) return tabs;
-  return {
-    ...tabs,
-    [update.workspacePath]: {
-      openTabs: update.openTabs,
-      activeTabId: update.activeTabId
-    }
-  };
 }
 
 /**
@@ -464,21 +349,4 @@ function normalizeWorkspacePaths(value: unknown, fallback?: string | null): read
 export function promoteRecentWorkspace(paths: readonly string[], path: string | null | undefined): readonly string[] {
   const unique = [...new Set(path ? [path, ...paths] : paths)];
   return unique.slice(0, MAX_RECENT_WORKSPACES);
-}
-
-/**
- * Merges an explicitly provided recent-workspace list with the stored one
- * instead of replacing it outright. A caller's list can be stale relative to
- * another window's concurrent write, so this preserves entries neither side
- * sent explicitly (mirrors Rust's `merge_recent_workspace_paths`).
- */
-function mergeRecentWorkspacePaths(
-  current: readonly string[],
-  incoming: readonly string[]
-): readonly string[] {
-  return promoteRecentWorkspace([...incoming, ...current], undefined);
-}
-
-function serializeAppSettingsRecord(appSettings: Readonly<Record<string, unknown>>): string {
-  return `${JSON.stringify(appSettings, null, 2)}\n`;
 }

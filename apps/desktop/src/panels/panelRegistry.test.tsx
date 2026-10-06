@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ReactNode } from "react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { LeftPopout } from "./LeftPopout";
 import { RightPopout } from "./RightPopout";
 import {
@@ -41,11 +41,14 @@ const explorerProps: DesktopPanelContext["explorerProps"] = {
 const context: DesktopPanelContext = {
   rootPath: null,
   documentContents: null,
+  documentPath: null,
+  onOpenNote: () => undefined,
+  onCompareVersion: () => undefined,
+  onRestoreVersion: async () => undefined,
   explorerProps,
   onOpenSearchResult: () => undefined,
   onReviewConflict: () => undefined,
-      versionsOf: null,
-      onShowEverything: () => undefined
+  onOpenSyncSettings: () => undefined
 };
 
 /** Only the state a left-side factory may read. */
@@ -54,14 +57,17 @@ const leftContext: LeftPanelContext = {
   explorerProps,
   onOpenSearchResult: () => undefined,
   onReviewConflict: () => undefined,
-      versionsOf: null,
-      onShowEverything: () => undefined
+  onOpenSyncSettings: () => undefined
 };
 
 /** Only the state a right-side factory may read. */
 const rightContext: RightPanelContext = {
   rootPath: "/notes",
-  documentContents: "# Hello"
+  documentContents: "# Hello",
+  documentPath: "Hello.md",
+  onOpenNote: () => undefined,
+  onCompareVersion: () => undefined,
+  onRestoreVersion: async () => undefined
 };
 
 /** Minimal spy contribution with a side and factory. */
@@ -93,9 +99,9 @@ describe("desktop panel registry", () => {
       "explorer",
       "search",
       "conflicts",
-      "history",
       "tags",
       "extensions",
+      "history",
       "outline",
       "backlinks",
       "properties",
@@ -105,11 +111,11 @@ describe("desktop panel registry", () => {
       "explorer",
       "search",
       "conflicts",
-      "history",
       "tags",
       "extensions"
     ]);
     expect(desktopPanelRegistry.entriesBySide("right").map((panel) => panel.id)).toEqual([
+      "history",
       "outline",
       "backlinks",
       "properties",
@@ -117,9 +123,43 @@ describe("desktop panel registry", () => {
     ]);
   });
 
+  it("opts Files and Search into workspace selector headers but leaves Extensions unchanged", () => {
+    expect(desktopPanelRegistry.get("explorer")?.showWorkspaceSelector).toBe(true);
+    expect(desktopPanelRegistry.get("search")?.showWorkspaceSelector).toBe(true);
+    expect(desktopPanelRegistry.get("extensions")?.showWorkspaceSelector).toBeUndefined();
+  });
+
+  it("lets the explorer own its chrome row", () => {
+    expect(desktopPanelRegistry.get("explorer")?.ownsChrome).toBe(true);
+    expect(desktopPanelRegistry.get("conflicts")?.ownsChrome).toBeUndefined();
+  });
+
+  it("contributes a Conflict options menu whose Sync settings item reaches the context callback", () => {
+    const onOpenSyncSettings = vi.fn();
+    const declared = desktopPanelRegistry.get("conflicts")?.actions;
+    expect(typeof declared).toBe("function");
+
+    const actions = typeof declared === "function"
+      ? declared({ ...context, onOpenSyncSettings })
+      : [];
+    const options = actions.find((action) => action.id === "conflict-options");
+    expect(options?.label).toBe("Conflict options");
+    expect(options?.menu?.map((item) => item.label)).toEqual([
+      "Sync settings",
+      "Sign in with GitHub"
+    ]);
+
+    options?.menu?.[0]?.run?.();
+    expect(onOpenSyncSettings).toHaveBeenCalledOnce();
+    // The GitHub sign-in stays a disabled placeholder until it ships.
+    expect(options?.menu?.[1]?.disabled).toBe(true);
+  });
+
   it("looks up registered panels and reports missing ids", () => {
     expect(desktopPanelRegistry.get("outline")?.label).toBe("Outline");
-    expect(desktopPanelRegistry.get("conflicts")?.label).toBe("Decisions needed");
+    expect(desktopPanelRegistry.get("conflicts")?.label).toBe("Sync conflicts");
+    expect(desktopPanelRegistry.get("history")?.label).toBe("Version history");
+    expect(desktopPanelRegistry.get("history")?.side).toBe("right");
     expect(desktopPanelRegistry.get("missing")).toBeUndefined();
     expect(desktopPanelRegistry.isAvailable("outline", context)).toBe(true);
     expect(desktopPanelRegistry.isAvailable("tags", context)).toBe(false);
@@ -132,6 +172,28 @@ describe("desktop panel registry", () => {
     ]);
     expect(registry.isAvailable("explorer", context)).toBe(false);
     expect(registry.isAvailable("explorer", { ...context, rootPath: "/notes" })).toBe(true);
+  });
+
+  it("makes Version history available only for an active file", () => {
+    expect(desktopPanelRegistry.isAvailable("history", context)).toBe(false);
+    expect(desktopPanelRegistry.isAvailable("history", {
+      ...context,
+      documentPath: "note.md"
+    })).toBe(true);
+    // A media tab carries a path but no text — history still applies.
+    expect(desktopPanelRegistry.isAvailable("history", {
+      ...context,
+      documentPath: "photo.png",
+      documentContents: null
+    })).toBe(true);
+  });
+
+  it("makes backlinks available only for an active Markdown document path", () => {
+    expect(desktopPanelRegistry.isAvailable("backlinks", context)).toBe(false);
+    expect(desktopPanelRegistry.isAvailable("backlinks", {
+      ...context,
+      documentPath: "note.md"
+    })).toBe(true);
   });
 
   it("fails loudly when a panel id is registered twice", () => {
@@ -155,18 +217,17 @@ describe("desktop panel registry", () => {
         explorerProps={context.explorerProps}
         onOpenSearchResult={context.onOpenSearchResult}
         onReviewConflict={context.onReviewConflict}
-        versionsOf={null}
-        onShowEverything={() => undefined}
+        onOpenSyncSettings={context.onOpenSyncSettings}
       />
     );
     const rightMarkup = renderToStaticMarkup(
-      <RightPopout panel="backlinks" rootPath={null} documentContents={null} />
+      <RightPopout panel="backlinks" context={context} />
     );
 
     expect(leftMarkup).toContain("Tags");
     expect(leftMarkup).toContain("Tags will appear here once note indexing is available.");
-    expect(rightMarkup).toContain("Backlinks unavailable");
-    expect(rightMarkup).toContain("This inspector activates after the workspace link index is available.");
+    expect(rightMarkup).toContain("No note selected");
+    expect(rightMarkup).toContain("Open a Markdown note to see what links to it.");
   });
 
   it("returns undefined for an unknown id via the render-safe lookup", () => {
@@ -210,10 +271,11 @@ describe("desktop panel registry", () => {
   });
 
   it("narrows built-in left ids via the type guard", () => {
-    for (const id of ["explorer", "search", "conflicts", "history", "tags", "extensions"] as const) {
+    for (const id of ["explorer", "search", "conflicts", "tags", "extensions"] as const) {
       expect(isBuiltInLeftPanel(id)).toBe(true);
     }
     expect(isBuiltInLeftPanel("outline")).toBe(false);
+    expect(isBuiltInLeftPanel("history")).toBe(false);
   });
 
   // Type-level fixtures: misspelled built-in ids must be rejected by the

@@ -20,8 +20,8 @@ Define minimal typed extension hooks for AI and Git metadata/background contribu
 
 - Extension lifecycle, contribution/event-task contracts, compatibility, and beta built-in registration.
 - AI contracts/consent and Git typed adapters/error stories as consumer-owned dependencies.
-- `plans/pending-ai-med-hard.md` (awaiting its planning pass) and
-  `plans/pending-auto_sync-med-hard.md` remain behavior owners.
+- `plans/ai/` (awaiting its planning pass) and
+  `plans/auto-sync/` remain behavior owners.
 
 ## Likely files
 
@@ -61,6 +61,6 @@ Deliver owner-approved hook matrix, typed seam/tests, capability/disposal report
 
 ## References
 
-- `plans/extensions/pending-beta_builtin_extensions-med-med.md`
-- `plans/pending-ai-med-hard.md`
-- `plans/pending-auto_sync-med-hard.md`
+- `extensions/beta_builtin_extensions`
+- `plans/ai/`
+- `plans/auto-sync/`

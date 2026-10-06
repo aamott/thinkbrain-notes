@@ -90,6 +90,16 @@ describe("journal panel header (D71/D75)", () => {
     ]);
   });
 
+  it("keeps Today and calendar controls at the coarse-pointer minimum", async () => {
+    const host = await render();
+
+    for (const name of ["Today", "Open journal calendar"]) {
+      const classes = button(host, name).className.split(" ");
+      expect(classes).toContain("pointer-coarse:min-h-11");
+      expect(classes).toContain("pointer-coarse:min-w-11");
+    }
+  });
+
   it("runs the actions it was given", async () => {
     const onNewEntry = vi.fn();
     const onToday = vi.fn();
@@ -123,12 +133,14 @@ describe("journal panel header (D71/D75)", () => {
     expect(host.textContent).toContain("1,431");
   });
 
-  it("states how many entries are showing when a filter is active", async () => {
+  it("uses the full view count when only a selected-day filter is active", async () => {
     const host = await render({
       view: { ...viewOf(["2026-08-07-1802.md"]), showing: 1, total: 1431, activeFilterCount: 1 },
-      chips: [{ id: "day", label: "August 7" }]
+      chips: [{ id: "day", label: "August 7" }],
+      predicates: []
     });
 
+    expect(button(host, "Filter entries, 1 filter active")).toBeDefined();
     expect(host.textContent).toContain("Showing 1");
     expect(host.textContent).toContain("1,431");
   });
@@ -200,6 +212,23 @@ describe("journal panel list", () => {
     button(host, "Fri 7, 6:02 PM").click();
 
     expect(onOpenEntry).toHaveBeenCalledWith("journal/2026-08-07-1802.md");
+  });
+
+  it("includes a visible preview in the entry's accessible name", async () => {
+    const base = viewOf(["2026-08-07-1802.md"]);
+    const view = {
+      ...base,
+      rows: base.rows.map((row) =>
+        row.kind === "entry" ? { ...row, preview: "Bread needed more salt." } : row
+      )
+    };
+    const host = await render({ view });
+    const entry = host.querySelector<HTMLElement>('[data-row-kind="entry"]');
+
+    expect(entry?.textContent).toContain("Bread needed more salt.");
+    expect(entry?.getAttribute("aria-label")).toBe(
+      "Fri 7, 6:02 PM, Bread needed more salt."
+    );
   });
 
   it("exposes collapsible headers with their state", async () => {

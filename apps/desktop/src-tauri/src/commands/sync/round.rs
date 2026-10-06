@@ -19,18 +19,20 @@
 //! them. See `plans/auto-sync/done-the_round_trip-high-hard.md`.
 
 use std::path::Path;
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 use gix::merge::tree::{FileFavor, TreatAsUnresolved, TreeFavor};
 use serde::Serialize;
 
-use crate::error::NativeError;
+use crate::error::{NativeError, lock_or_recover};
 
 use super::apply;
 use super::conflict;
 use super::engine::{StuckNote, SyncPhase};
 use super::failed;
+use super::history_ingest;
+use super::history_source;
 use super::network;
 use super::network::bounded;
 use super::push;
@@ -76,38 +78,33 @@ pub fn destination(app_data_dir: &Path, root: &Path) -> Option<String> {
     // and parse errors into `None`, misreporting a corrupt settings file as
     // "not set up to sync." We still return `None` so a bad file does not break
     // sync entirely, but the failure is now logged so it can be found.
-    let contents = match crate::commands::settings::read_settings_file(&path) {
-        Ok(contents) => contents,
-        Err(error) => {
+    let mut found = None;
+    match crate::commands::settings::update_settings_record(&path, |record| {
+        let Some(named) = record.get(SETTING).and_then(serde_json::Value::as_str) else {
+            return false;
+        };
+        let named = named.trim().to_string();
+        if named.is_empty() {
+            return false;
+        }
+        let redacted = super::credentials::take_from_url(&named);
+        found = Some(redacted.clone());
+        if redacted == named {
+            return false;
+        }
+        record.insert(SETTING.to_string(), serde_json::Value::String(redacted));
+        true
+    }) {
+        Ok(()) => found,
+        Err(crate::commands::settings::SettingsUpdateError::Read(error)) => {
             eprintln!("[sync] settings unreadable: {error:?}");
-            return None;
+            None
         }
-    };
-    let mut record = crate::commands::settings::parse_app_settings_record(contents.as_deref());
-    let named = record.get(SETTING)?.as_str()?.trim().to_string();
-    if named.is_empty() {
-        return None;
-    }
-    let redacted = super::credentials::take_from_url(&named);
-    if redacted != named {
-        record.insert(
-            SETTING.to_string(),
-            serde_json::Value::String(redacted.clone()),
-        );
-        match crate::commands::settings::serialize_app_settings_record(record) {
-            Ok(written) => {
-                if let Err(error) =
-                    crate::commands::workspace::write_file_atomically(&path, written)
-                {
-                    eprintln!("[sync] failed to redact secret from settings: {error:?}");
-                }
-            }
-            Err(_) => {
-                eprintln!("[sync] failed to serialize redacted settings, secret may remain on disk")
-            }
+        Err(crate::commands::settings::SettingsUpdateError::Write(error)) => {
+            eprintln!("[sync] failed to redact secret from settings: {error:?}");
+            found
         }
     }
-    Some(redacted)
 }
 
 /// One round trip: fetch, merge, send.
@@ -117,7 +114,32 @@ pub fn once(
     vault: &Path,
     destination: &str,
 ) -> Result<Synced, NativeError> {
-    run_trip(repo, vault, destination, None, |_| {})
+    run_trip(repo, vault, destination, None, PushPolicy::Required, |_| {})
+}
+
+/// Whether a round trip has to be able to send, or may stop after fetching.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum PushPolicy {
+    /// A failed push fails the whole round trip. What a sync does: the user
+    /// asked to send their notes, and quietly not sending them would be worse
+    /// than an error.
+    Required,
+    /// A failed push leaves the fetched and merged work in place and reports
+    /// [`push::Landed::NotSent`]. What an import does: a repository that
+    /// fetched and merged cleanly is worth keeping even when this device can
+    /// never write to it — a public repository, a read-only mirror, or a phone
+    /// with nowhere to store a token.
+    ///
+    /// Worth knowing before anyone tries to "optimise" this away: an import's
+    /// push never carries anything. Its target is a freshly created folder, so
+    /// `bootstrap` finds no notes to snapshot and leaves no local commit, and
+    /// `adopt` then points the branch straight at the remote's own tip. The
+    /// push is therefore a **write-access probe**, not a data transfer — and
+    /// that is exactly why it earns its network round trip. Its answer is what
+    /// lets the import say "brought in, but not linked both ways" at import
+    /// time, rather than letting someone discover it much later by losing an
+    /// edit they assumed had travelled.
+    Optional,
 }
 
 /// Fetch, merge, and send with an explicit profile and phase callback.
@@ -130,6 +152,7 @@ pub(super) fn run_trip(
     vault: &Path,
     destination: &str,
     profile_id: Option<&str>,
+    push_policy: PushPolicy,
     on_phase: impl FnMut(SyncPhase),
 ) -> Result<Synced, NativeError> {
     trip(
@@ -138,6 +161,7 @@ pub(super) fn run_trip(
         destination,
         Arc::new(AtomicBool::new(false)),
         profile_id.map(str::to_owned),
+        push_policy,
         on_phase,
     )
 }
@@ -148,21 +172,127 @@ fn trip(
     destination: &str,
     cancel: Arc<AtomicBool>,
     profile_id: Option<String>,
+    push_policy: PushPolicy,
     mut on_phase: impl FnMut(SyncPhase),
 ) -> Result<Synced, NativeError> {
     on_phase(SyncPhase::Checking);
-    let theirs = {
+    let source_ref = history_ingest::remote_source_ref(destination);
+    // Whether the bound branch ever existed *on this destination*: the
+    // durable source ref, not a shared marker. A different destination that
+    // was never fetched starts empty rather than inheriting another remote's
+    // history as proof.
+    let previous_source_tip = snapshot::try_head_of(repo, &source_ref).map_err(|error| {
+        failed(
+            "sync.git_history_ingest_failed",
+            "Could not read the imported history this link already has.",
+            error,
+        )
+    })?;
+    // The remote branch this workspace syncs with is a persisted choice: an
+    // existing binding wins, a clone's checkout binds to its upstream (or the
+    // same-named remote branch when the upstream points elsewhere), and only
+    // a link with neither discovers the remote's symbolic HEAD -- once, then
+    // it is bound. A changed remote default can therefore never retarget us.
+    let (mut bound_local, bound_remote) = history_source::binding(repo, &source_ref)?;
+    // A detached or switched checkout blocks the sync before any network use.
+    // It never blocks recording or history, which keep their own copies.
+    history_source::require_checkout(vault, bound_local.as_deref())?;
+    let current_local = history_source::checkout_branch(vault)?;
+
+    // A `.git` appearing after the binding is this clone only when its
+    // checkout agrees about which remote branch the link uses; anything else
+    // is a different checkout standing in our vault.
+    if bound_remote.is_some() && bound_local.is_none() && current_local.is_some() {
+        let clone_remote = history_source::remote_branch_for(vault, destination)?;
+        if clone_remote == bound_remote.clone().expect("checked above") {
+            bound_local = current_local.clone();
+        } else {
+            return Err(NativeError::new(
+                "sync.branch_changed",
+                "This workspace's Git repository is on a different branch than the one its sync link uses. Check out the bound branch or update the link.",
+            ));
+        }
+    }
+
+    let selected = match bound_remote {
+        Some(branch) => Some(branch),
+        None => match &current_local {
+            Some(_) => Some(history_source::remote_branch_for(vault, destination)?),
+            None => None,
+        },
+    };
+    let fetched = {
         let repo = repo.clone();
         let destination = destination.to_owned();
         let cancel = Arc::clone(&cancel);
         let profile = profile_id.clone();
+        let selected = selected.clone();
         bounded(network::NETWORK, Arc::clone(&cancel), move || {
             super::credentials::with_profile(profile.as_deref(), || {
-                network::fetch(&repo, &destination, &cancel)
+                network::fetch(&repo, &destination, &cancel, selected.as_deref())
             })
         })
     }?;
+    // An unrelated fetched tip is refused before anything remembers it: the
+    // objects are already local, so the ancestry check needs no refs, and a
+    // rejected graph must never become the source history reads.
     let ours = snapshot::head_commit(repo)?;
+    if let (Some(ours), Some(theirs)) = (ours, fetched.tip) {
+        refuse_unrelated(repo, ours, theirs)?;
+    }
+
+    // Publication happens here, not inside the bounded fetch: the fetch is
+    // source-only (it moves no ref), and nothing is remembered -- no binding,
+    // no markers -- until the fetched graph has been validated and retained
+    // as durable source history. A worker that dies mid-write can at most
+    // leave unreferenced objects, and a failed validation cannot bind this
+    // workspace to a branch it never verified. `activate` waits for the join
+    // below: the source ref is kept, but it only becomes the source the
+    // history reader walks once the fetched graph has actually joined.
+    if let Some(tip) = fetched.tip {
+        history_ingest::retain_fetched(repo, destination, tip)?;
+        repo.reference(
+            network::REMOTE_REF,
+            tip,
+            gix::refs::transaction::PreviousValue::Any,
+            "fetched the linked repository's branch",
+        )
+        .map_err(|error| {
+            failed(
+                "sync.git_history_ingest_failed",
+                "Could not copy Git history into ThinkBrain's private history.",
+                error,
+            )
+        })?;
+    }
+    // The binding persists even when the tip is absent (an unborn branch) so
+    // push sends to the same ref the choice was made for.
+    let bound_local = bound_local.or(current_local);
+    history_source::bind(repo, &source_ref, bound_local.clone(), &fetched.branch)?;
+    // The fetch may have taken minutes on a slow link; if the vault's own
+    // checkout moved meanwhile, applying the result would mix branches.
+    history_source::require_checkout(vault, bound_local.as_deref())?;
+    let theirs = fetched.tip;
+    if theirs.is_none() && previous_source_tip.is_some() {
+        // This destination advertised the bound branch before; an unborn
+        // answer now means it was deleted, not that it was always empty --
+        // refuse rather than let push recreate it.
+        return Err(NativeError::new(
+            "sync.branch_missing",
+            "The remote no longer has the branch this workspace syncs. Check the link or recreate the branch.",
+        ));
+    }
+    // With both tips present, ancestry decides which arm joins them. It is
+    // asked once, up front: the questions are `Result`s, so they cannot sit
+    // in match guards, and a traversal failure must surface rather than
+    // quietly degrade into the merge arm.
+    let (ours_in_theirs, theirs_in_ours) = match (ours, theirs) {
+        (Some(ours), Some(theirs)) if ours != theirs => (
+            tip_contains(repo, ours, theirs)?,
+            tip_contains(repo, theirs, ours)?,
+        ),
+        _ => (false, false),
+    };
 
     let (brought_down, asked_about, copies, mut skipped) = match (ours, theirs) {
         // Nothing to join: either they have nothing to give, or we have
@@ -176,52 +306,76 @@ fn trip(
         (Some(ours), Some(theirs)) if ours == theirs => (0, 0, Vec::new(), Vec::new()),
         // They moved; we did not. Advance to their tip instead of writing a
         // merge commit that would block their next push as "unseen history".
-        (Some(ours), Some(theirs)) if tip_contains(repo, ours, theirs) => {
+        (Some(ours), Some(theirs)) if ours_in_theirs => {
             on_phase(SyncPhase::Combining);
             let (brought_down, copies, skipped) = fast_forward(repo, vault, ours, theirs)?;
             (brought_down, copies.len(), copies, skipped)
         }
         // We moved; they did not. Send ours as-is.
-        (Some(ours), Some(theirs)) if tip_contains(repo, theirs, ours) => {
-            (0, 0, Vec::new(), Vec::new())
-        }
+        (Some(_), Some(_)) if theirs_in_ours => (0, 0, Vec::new(), Vec::new()),
         (Some(ours), Some(theirs)) => {
             on_phase(SyncPhase::Combining);
             merge(repo, vault, ours, theirs)?
         }
     };
+
+    // The join is what made this source canonical: only once the fetched
+    // graph was adopted, fast-forwarded, or merged does it become the source
+    // the history reader walks -- a round that failed before this point never
+    // displays history it could not integrate.
+    if fetched.tip.is_some() {
+        history_source::activate(repo, &source_ref)?;
+    }
+
     skipped.extend(apply::skipped_unsupported(repo, vault)?);
 
-    let Some(tip) = snapshot::head_commit(repo)? else {
+    // What the send did, as (objects, outcome). Kept as a value rather than
+    // three early returns so `Synced` is constructed in exactly one place — it
+    // has six fields and four of them were repeated verbatim at each exit,
+    // which is four chances to forget one when the struct next grows.
+    let (sent, landed) = match snapshot::head_commit(repo)? {
         // A vault nobody has typed in yet, syncing to a place nobody has
         // pushed to. Not a fault, and not something to write a commit about.
-        return Ok(Synced {
-            brought_down,
-            asked_about,
-            sent: 0,
-            landed: push::Landed::Moved,
-            conflict_copies: copies,
-            skipped,
-        });
+        None => (0, push::Landed::Moved),
+        Some(tip) => {
+            on_phase(SyncPhase::Sending);
+            // The checkout can have moved while the merge ran; pushing would
+            // upload one branch's history under another's name.
+            history_source::require_checkout(vault, bound_local.as_deref())?;
+            let attempt = {
+                let repo = repo.clone();
+                let destination = destination.to_owned();
+                let cancel = Arc::clone(&cancel);
+                let profile = profile_id.clone();
+                let branch = fetched.branch.clone();
+                bounded(network::NETWORK, cancel, move || {
+                    super::credentials::with_profile(profile.as_deref(), || {
+                        push::send(&repo, &destination, &branch, tip)
+                    })
+                })
+            };
+            match attempt {
+                Ok(sent) => (sent.objects, sent.landed),
+                // Everything before this point already landed on disk. Failing
+                // here would send the caller down a rollback path that deletes
+                // a fetch and a merge that both worked, so an import keeps them
+                // and records that nothing was sent.
+                Err(error) if push_policy == PushPolicy::Optional => (
+                    0,
+                    push::Landed::NotSent {
+                        reason: error.message,
+                    },
+                ),
+                Err(error) => return Err(error),
+            }
+        }
     };
-    on_phase(SyncPhase::Sending);
-    let sent = {
-        let repo = repo.clone();
-        let destination = destination.to_owned();
-        let cancel = Arc::clone(&cancel);
-        let profile = profile_id.clone();
-        bounded(network::NETWORK, cancel, move || {
-            super::credentials::with_profile(profile.as_deref(), || {
-                push::send(&repo, &destination, BRANCH, tip)
-            })
-        })
-    }?;
 
     Ok(Synced {
         brought_down,
         asked_about,
-        sent: sent.objects,
-        landed: sent.landed,
+        sent,
+        landed,
         conflict_copies: copies,
         skipped,
     })
@@ -281,10 +435,58 @@ fn point_history(
     Ok(())
 }
 
+/// Refuses to merge two histories that share nothing when our own records
+/// already descend from imported external history.
+///
+/// Two app-only devices pointed at one destination are unrelated too, and
+/// joining them is the feature. But once our history contains an imported
+/// Git root, an unrelated fetched tip means the link moved to a different
+/// repository -- a rewrite or a swapped link -- and merging would splice two
+/// strangers' histories into one timeline. The fetched objects are already
+/// retained read-only by the time this runs; only the join is refused.
+/// Retained roots count as "ours shares ancestry with external history" so a
+/// source rewritten away from its old root is caught the same way.
+fn refuse_unrelated(
+    repo: &gix::Repository,
+    ours: gix::ObjectId,
+    theirs: gix::ObjectId,
+) -> Result<(), NativeError> {
+    if merge_base(repo, ours, theirs)?.is_some() {
+        return Ok(());
+    }
+    for root in history_ingest::source_tips(repo)? {
+        if merge_base(repo, ours, root)?.is_some() {
+            return Err(NativeError::new(
+                "sync.unrelated_history",
+                "The linked repository's history is unrelated to this workspace's. Check the link, or import it into a separate workspace.",
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// The merge base of `first` and `second`, or `None` only when they share
+/// no ancestor -- traversal failures are errors, not a quiet `false` that
+/// would read as "unrelated".
+fn merge_base(
+    repo: &gix::Repository,
+    first: gix::ObjectId,
+    second: gix::ObjectId,
+) -> Result<Option<gix::ObjectId>, NativeError> {
+    match repo.merge_base(first, second) {
+        Ok(base) => Ok(Some(base.detach())),
+        Err(gix::repository::merge_base::Error::NotFound { .. }) => Ok(None),
+        Err(error) => Err(cannot(error)),
+    }
+}
+
 /// Whether `tip` already contains every commit reachable from `ancestor`.
-fn tip_contains(repo: &gix::Repository, ancestor: gix::ObjectId, tip: gix::ObjectId) -> bool {
-    repo.merge_base(ancestor, tip)
-        .is_ok_and(|base| base.detach() == ancestor)
+fn tip_contains(
+    repo: &gix::Repository,
+    ancestor: gix::ObjectId,
+    tip: gix::ObjectId,
+) -> Result<bool, NativeError> {
+    Ok(merge_base(repo, ancestor, tip)? == Some(ancestor))
 }
 
 fn cannot(error: impl std::fmt::Display) -> NativeError {
@@ -381,24 +583,22 @@ pub fn sync(
     profile_id: Option<&str>,
 ) -> Result<Synced, NativeError> {
     let lane = super::registry::lane(key);
-    let _lane = lane.lock().unwrap_or_else(|error| {
-        eprintln!("[sync] sync lane mutex was poisoned, recovering: {error}");
-        error.into_inner()
-    });
+    let _lane = lock_or_recover(&lane);
 
-    engine.set_syncing(true);
+    let generation = engine.begin_sync(super::schedule::now_epoch_secs());
     crate::commands::watcher::announce_sync_status(key);
-    struct Clear<'a>(&'a super::engine::Engine, &'a str);
+    struct Clear<'a>(&'a super::engine::Engine, &'a str, u64);
     impl Drop for Clear<'_> {
         fn drop(&mut self) {
-            self.0.set_syncing(false);
-            crate::commands::watcher::announce_sync_status(self.1);
+            if self.0.end_sync(self.2) {
+                crate::commands::watcher::announce_sync_status(self.1);
+            }
         }
     }
-    let _clear = Clear(engine, key);
+    let _clear = Clear(engine, key, generation);
     // Count an attempted round, not only a successful one. Otherwise a bad
     // link or missing sign-in starts a new automatic attempt every sweep tick.
-    engine.mark_synced();
+    engine.mark_attempt(super::schedule::now_epoch_secs());
     let profile = profile_id.map(str::to_owned);
     let outcome = (|| {
         // Whatever is still sitting in the settle window belongs in this sync.
@@ -414,6 +614,9 @@ pub fn sync(
             destination,
             Arc::clone(&cancel),
             profile.clone(),
+            // A sync is the user asking to send. If the push cannot be made,
+            // they need to hear about it rather than see a quiet success.
+            PushPolicy::Required,
             |phase| report_phase(engine, key, phase),
         )?;
         engine.forget_unsupported();
@@ -422,9 +625,15 @@ pub fn sync(
             return Ok(synced);
         }
 
-        let again = trip(&repo, root, destination, cancel, profile.clone(), |phase| {
-            report_phase(engine, key, phase)
-        })?;
+        let again = trip(
+            &repo,
+            root,
+            destination,
+            cancel,
+            profile.clone(),
+            PushPolicy::Required,
+            |phase| report_phase(engine, key, phase),
+        )?;
         engine.forget_unsupported();
         engine.note_stuck(again.skipped.clone());
 
@@ -445,6 +654,9 @@ pub fn sync(
         })
     })();
     engine.set_sync_problem(outcome.as_ref().err().cloned());
+    if let Some(home) = super::settle::settings_home() {
+        super::schedule::record_round_trip(&home, root, outcome.is_ok());
+    }
     if outcome.is_ok() {
         if let Err(error) = engine.maintain(false) {
             eprintln!("[sync] history maintenance after a round trip failed: {error:?}");
@@ -454,6 +666,7 @@ pub fn sync(
 }
 
 fn report_phase(engine: &super::engine::Engine, key: &str, phase: SyncPhase) {
+    engine.note_sync_progress(super::schedule::now_epoch_secs());
     engine.set_phase(Some(phase));
     crate::commands::watcher::announce_sync_status(key);
 }
@@ -483,24 +696,16 @@ pub(super) fn finish(
 /// Syncs this workspace once, now, because someone asked.
 #[tauri::command]
 pub fn sync_now(app: tauri::AppHandle, root_path: String) -> Result<Synced, NativeError> {
-    use tauri::Manager as _;
-
-    let root = crate::commands::workspace::resolve_workspace_root(&root_path)?;
+    let (root, engine) = super::registry::workspace_and_engine(&root_path)?;
     let key = root.to_string_lossy().to_string();
-    let app_data_dir = app.path().app_data_dir().map_err(|error| {
-        failed(
-            "sync.no_app_data",
-            "Could not find where this app keeps its files.",
-            error,
-        )
-    })?;
+    let app_data_dir = super::app_data_dir(&app)?;
     let destination = destination(&app_data_dir, &root).ok_or_else(|| {
         NativeError::new(
             "sync.no_destination",
             "This folder is not set up to sync anywhere yet.",
         )
     })?;
-    let engine = super::registry::engine(&key).ok_or_else(|| {
+    let engine = engine.ok_or_else(|| {
         super::registry::failure(&key).unwrap_or_else(|| {
             NativeError::new(
                 "sync.not_recording",
@@ -521,3 +726,7 @@ mod tests;
 #[cfg(test)]
 #[path = "round_security_tests.rs"]
 mod security_tests;
+
+#[cfg(test)]
+#[path = "round_branch_tests.rs"]
+mod branch_tests;

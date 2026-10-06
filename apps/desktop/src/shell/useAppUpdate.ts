@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { getErrorMessage } from "@thinkbrain/core";
 
 /**
  * An update the host has found and can install.
@@ -76,7 +77,7 @@ export function useAppUpdate(
         // how a working app becomes one that will not open.
         setState({
           kind: "failed",
-          message: error instanceof Error ? error.message : String(error)
+          message: getErrorMessage(error)
         });
       });
   }, [relaunch]);

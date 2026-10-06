@@ -30,16 +30,14 @@ import {
   type SettingsRegistry
 } from "@thinkbrain/core";
 import {
+  getErrorMessage,
   parseDynamicAppSettings,
-  serializeDynamicAppSettings
+  parseDynamicWorkspaceSettings,
+  serializeDynamicAppSettings,
+  serializeDynamicWorkspaceSettings
 } from "@thinkbrain/core";
 import { scheduleAutosave } from "./autosaveScheduler";
 import {
-  parseDynamicWorkspaceSettings,
-  serializeDynamicWorkspaceSettings
-} from "./workspaceSettingsSerialization";
-import {
-  computeDirty,
   effectiveSettingValue,
   partitionByScope
 } from "./settingsHelpers";
@@ -78,9 +76,9 @@ export interface SettingsStoreGateway {
   /**
    * Revises the app-settings document and returns what was written.
    *
-   * A document rather than a payload: `update_desktop_state` and
-   * `update_app_theme` write to the same file on every tab open, panel resize,
-   * or theme change, so this store has to serialize against the document as it
+   * A document rather than a payload: `update_desktop_state` writes to the
+   * same file on every tab open or panel resize, so this store has to
+   * serialize against the document as it
    * is at the moment of writing rather than the copy it read at load. `revise`
    * runs inside the document's own update chain (see `appSettingsFile.ts`).
    */
@@ -128,18 +126,10 @@ export interface SettingsStoreState {
   workspaceValues: Record<string, unknown> | null;
   /** The root path of the currently loaded workspace, if any. */
   workspaceRootPath: string | null;
-  /** Raw app settings JSON from the last load (for serialize-preserving desktopState). */
-  rawAppSettingsJson: string | null;
-  /** Raw workspace settings JSON from the last load (for serialize-preserving keys). */
-  rawWorkspaceSettingsJson: string | null;
 
   // --- Staged changes ---
   /** Pending changes keyed by full setting key, not yet persisted. */
   stagedChanges: Record<string, unknown>;
-  /** True when there are any staged changes. */
-  isDirty: boolean;
-  /** Count of staged changes. */
-  dirtyCount: number;
 
   // --- UI state ---
   activeSection: string | null;
@@ -203,13 +193,9 @@ export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettin
     appValues: {},
     workspaceValues: null,
     workspaceRootPath: null,
-    rawAppSettingsJson: null,
-    rawWorkspaceSettingsJson: null,
 
     // --- Staged changes ---
     stagedChanges: {},
-    isDirty: false,
-    dirtyCount: 0,
 
     // --- UI state ---
     activeSection: null,
@@ -252,11 +238,7 @@ export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettin
           appValues: appResult.values,
           workspaceValues,
           workspaceRootPath: rootPath,
-          rawAppSettingsJson: rawAppJson,
-          rawWorkspaceSettingsJson: rawWorkspaceJson,
           stagedChanges: {},
-          isDirty: false,
-          dirtyCount: 0,
           loadError: null,
           validationDiagnostics: [],
           loaded: true
@@ -265,7 +247,7 @@ export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettin
         // Only record the error if we're still the latest load; a superseded
         // load's error is not representative of the current state.
         if (myGeneration !== loadGeneration) return;
-        const message = error instanceof Error ? error.message : String(error);
+        const message = getErrorMessage(error);
         console.error("[settingsStore] Failed to load settings:", error);
         set({ loadError: `Failed to load settings: ${message}`, loaded: true });
       }
@@ -282,18 +264,15 @@ export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettin
      */
     stageChange(key: string, value: unknown): void {
       const staged = { ...get().stagedChanges, [key]: value };
-      const dirty = computeDirty(staged);
       // Clear any existing validation diagnostic for this key.
       const remainingDiagnostics = get().validationDiagnostics.filter(
         (d) => d.path !== key
       );
-      set({ stagedChanges: staged, ...dirty, validationDiagnostics: remainingDiagnostics });
+      set({ stagedChanges: staged, validationDiagnostics: remainingDiagnostics });
 
-      // Effective autosave flag: staged > appValues > default. The special-case
-      // for `settings.autosave` itself makes a just-staged enable toggle fire.
-      const autosaveEnabled = key === "settings.autosave"
-        ? value === true
-        : (get().stagedChanges["settings.autosave"] ?? get().appValues["settings.autosave"] ?? false);
+      // The just-staged `settings.autosave` edit is already in stagedChanges,
+      // so the effective value answers "is autosave on" without special-casing.
+      const autosaveEnabled = get().getEffectiveValue("settings.autosave") === true;
       if (autosaveEnabled && Object.keys(staged).length > 0) {
         scheduleAutosave(() => get().saveSettings());
       }
@@ -398,22 +377,17 @@ export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettin
             delete remaining[key];
           }
         }
-        const remainingCount = Object.keys(remaining).length;
 
         const next: Partial<SettingsStoreState> = {
           stagedChanges: remaining,
-          isDirty: remainingCount > 0,
-          dirtyCount: remainingCount,
           validationDiagnostics: [],
           saveError: null
         };
         if (appMerged !== null && appSerialized !== null) {
           next.appValues = appMerged;
-          next.rawAppSettingsJson = appSerialized;
         }
         if (workspaceMerged !== null && workspaceSerialized !== null) {
           next.workspaceValues = workspaceMerged;
-          next.rawWorkspaceSettingsJson = workspaceSerialized;
         }
         const stranded = Object.keys(workspaceStaged).filter((key) => !persisted.has(key));
         if (stranded.length > 0) {
@@ -433,7 +407,7 @@ export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettin
         // stagedChanges remain so the user can retry. The disk may be in a
         // partial state (e.g. app settings written but workspace not), but
         // that will be reconciled on the next successful save or reload.
-        const message = error instanceof Error ? error.message : String(error);
+        const message = getErrorMessage(error);
         console.error("[settingsStore] Failed to save settings:", error);
         set({ saveError: `Failed to save settings: ${message}` });
         return { success: false, diagnostics: [] };
@@ -444,7 +418,7 @@ export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettin
      * Reverts all staged changes to the last-saved values.
      */
     resetStaged(): void {
-      set({ stagedChanges: {}, isDirty: false, dirtyCount: 0, validationDiagnostics: [] });
+      set({ stagedChanges: {}, validationDiagnostics: [] });
     },
 
     /**
@@ -458,8 +432,7 @@ export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettin
       for (const key of sectionKeys) {
         delete staged[key];
       }
-      const dirty = computeDirty(staged);
-      set({ stagedChanges: staged, ...dirty });
+      set({ stagedChanges: staged });
     },
 
     /**
@@ -501,3 +474,11 @@ export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettin
  * store with a mock gateway.
  */
 export const useSettingsStore = createSettingsStore();
+
+/** True when there are any staged (unsaved) changes. */
+export const selectIsDirty = (state: SettingsStoreState): boolean =>
+  Object.keys(state.stagedChanges).length > 0;
+
+/** Count of staged (unsaved) changes. */
+export const selectDirtyCount = (state: SettingsStoreState): number =>
+  Object.keys(state.stagedChanges).length;

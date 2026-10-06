@@ -11,9 +11,12 @@
   "scripts": {
     "dev": "pnpm --filter @thinkbrain/desktop dev",
     "lint": "eslint .",
+    "lint:fix": "eslint --fix .",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "format:rust": "node scripts/with-rust-env.mjs cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml --check",
+    "format:rust:fix": "node scripts/with-rust-env.mjs cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml",
+    "format:fix": "eslint --fix . && node scripts/with-rust-env.mjs cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml",
     "test:rust": "node scripts/with-rust-env.mjs cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml",
     "test:e2e": "pnpm --filter @thinkbrain/desktop test:e2e",
     "build": "pnpm -r build",
@@ -48,6 +51,9 @@
   "lint-staged": {
     "*.{ts,tsx}": [
       "eslint --fix"
+    ],
+    "*.rs": [
+      "rustfmt --edition 2024"
     ]
   }
 }

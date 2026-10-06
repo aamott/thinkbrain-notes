@@ -7,17 +7,17 @@
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde::Serialize;
 
-use crate::error::lock_or_recover;
 use crate::NativeError;
+use crate::error::lock_or_recover;
 
 use super::conflict::ConflictCopy;
-use super::pending::{commit_message, PendingChanges};
+use super::pending::{PendingChanges, commit_message};
 use super::snapshot;
 
 /// How long a note must be still before it is recorded.
@@ -130,6 +130,12 @@ pub struct Engine {
     stuck: Mutex<BTreeMap<String, StuckNote>>,
     /// A round trip to another device is in flight.
     syncing: AtomicBool,
+    /// The round trip in flight: its generation, and when it started or last
+    /// reported progress, in seconds since the epoch.
+    sync_claim: Mutex<Option<(u64, u64)>>,
+    /// Hands out generations. A taken-over trip keeps its old one, so the
+    /// guard it holds can tell that it no longer owns the flag.
+    next_generation: AtomicU64,
     /// The named step of the in-flight round trip, if any.
     phase: Mutex<Option<SyncPhase>>,
     /// When a round trip last completed successfully, in milliseconds since the epoch.
@@ -158,8 +164,16 @@ pub struct Engine {
     has_own_git: bool,
     /// Last time a note changed, for the idle debounce that fires a round trip.
     last_touched: Mutex<Instant>,
-    /// Last time a round trip finished, for the frequency cap.
-    last_synced: Mutex<Option<Instant>>,
+    /// When a round trip was last *started*, in seconds since the epoch.
+    ///
+    /// Wall clock, not `Instant`: Android freezes the process and a monotonic
+    /// clock keeps counting through the freeze, so a vault that synced moments
+    /// before going into a pocket looked an hour unsynced when it came out.
+    ///
+    /// Attempts, not successes. A vault with a bad link or a missing sign-in
+    /// never succeeds, and a gate driven by successes would let the sweeper
+    /// retry it on every tick.
+    last_attempt: Mutex<Option<u64>>,
 }
 
 impl Engine {
@@ -171,6 +185,8 @@ impl Engine {
             conflicts: Mutex::new(BTreeMap::new()),
             stuck: Mutex::new(BTreeMap::new()),
             syncing: AtomicBool::new(false),
+            sync_claim: Mutex::new(None),
+            next_generation: AtomicU64::new(0),
             phase: Mutex::new(None),
             last_checked_at: Mutex::new(None),
             problem: Mutex::new(None),
@@ -178,7 +194,7 @@ impl Engine {
             recording: Mutex::new(()),
             maintenance_problem: Mutex::new(None),
             last_touched: Mutex::new(Instant::now()),
-            last_synced: Mutex::new(None),
+            last_attempt: Mutex::new(None),
         }
     }
 
@@ -222,9 +238,9 @@ impl Engine {
 
     /// Whether this vault is also a git repository of the user's own.
     ///
-    /// Nothing acts on this — it exists so a window can say that two histories
-    /// are being kept here, rather than letting someone discover the second one
-    /// by accident.
+    /// The user's `.git` is only ever read — bootstrap may import its history
+    /// as a source — and never becomes the active sync repository. The flag
+    /// exists so a window can say two histories are being kept here.
     pub fn alongside_own_git(&self) -> bool {
         self.has_own_git
     }
@@ -412,22 +428,45 @@ impl Engine {
             .duration_since(UNIX_EPOCH)
             .map(|elapsed| elapsed.as_secs() as i64)
             .unwrap_or(0);
-        match super::maintain::cleanup(&repo, seconds, &super::maintain::Policy::default()) {
+        let result = super::maintain::cleanup(&repo, seconds, &super::maintain::Policy::default());
+        self.finish_maintenance(
+            &repo,
+            now,
+            result,
+            |done| {
+                (done.reclaimed > 0)
+                    .then(|| format!("history maintenance reclaimed {} bytes", done.reclaimed))
+            },
+            "history maintenance failed",
+        )
+    }
+
+    /// The tail every tidy shares: the maintenance problem mirrors the
+    /// outcome, the run is stamped done, and what it did is logged.
+    ///
+    /// `succeeded` renders the log line for a pass that worked (`None` stays
+    /// quiet); `failure_label` names the attempt for the one that did not.
+    fn finish_maintenance(
+        &self,
+        repo: &gix::Repository,
+        now: SystemTime,
+        result: Result<super::maintain::Cleanup, NativeError>,
+        succeeded: impl FnOnce(&super::maintain::Cleanup) -> Option<String>,
+        failure_label: &'static str,
+    ) -> Result<super::maintain::Cleanup, NativeError> {
+        match result {
             Ok(done) => {
-                if let Err(error) = super::maintain::mark_done(&repo, now) {
+                if let Err(error) = super::maintain::mark_done(repo, now) {
                     eprintln!("[sync] could not remember history maintenance: {error:?}");
                 }
                 self.set_maintenance_problem(None);
-                if done.reclaimed > 0 {
-                    eprintln!(
-                        "[sync] history maintenance reclaimed {} bytes",
-                        done.reclaimed
-                    );
+                if let Some(line) = succeeded(&done) {
+                    eprintln!("[sync] {line}");
                 }
                 Ok(done)
             }
             Err(error) => {
-                eprintln!("[sync] history maintenance failed: {error:?}");
+                eprintln!("[sync] {failure_label}: {error:?}");
                 self.set_maintenance_problem(Some(error.clone()));
                 Err(error)
             }
@@ -438,24 +477,18 @@ impl Engine {
     pub fn clear_undo(&self) -> Result<super::maintain::Cleanup, NativeError> {
         let _recording = lock_or_recover(&self.recording);
         let repo = self.repository();
-        match super::maintain::clear_undo(&repo) {
-            Ok(done) => {
-                self.set_maintenance_problem(None);
-                if let Err(error) = super::maintain::mark_done(&repo, SystemTime::now()) {
-                    eprintln!("[sync] could not remember history maintenance: {error:?}");
-                }
-                eprintln!(
-                    "[sync] cleared private undo history, reclaimed {} bytes",
+        self.finish_maintenance(
+            &repo,
+            SystemTime::now(),
+            super::maintain::clear_undo(&repo),
+            |done| {
+                Some(format!(
+                    "cleared private undo history, reclaimed {} bytes",
                     done.reclaimed
-                );
-                Ok(done)
-            }
-            Err(error) => {
-                eprintln!("[sync] could not clear undo history: {error:?}");
-                self.set_maintenance_problem(Some(error.clone()));
-                Err(error)
-            }
-        }
+                ))
+            },
+            "could not clear undo history",
+        )
     }
 
     /// How many changes are waiting to be recorded.
@@ -544,35 +577,162 @@ impl Engine {
         self.syncing.load(Ordering::Relaxed)
     }
 
-    /// Marks a round trip as started or finished.
+    /// Whether a round trip is in flight *and* has shown signs of life within
+    /// `orphan_after` seconds.
     ///
-    /// Returns whether this call changed the flag, so the caller can announce
-    /// only when the footer would actually read differently.
-    pub fn set_syncing(&self, on: bool) -> bool {
-        if !on {
-            self.set_phase(None);
+    /// The distinction `syncing()` cannot draw. A frozen process keeps the
+    /// flag set for ever, so anything that treats the raw flag as "busy" stops
+    /// dead the first time Android freezes a trip mid-flight.
+    ///
+    /// The atomic load comes first so the common answer costs no lock: the
+    /// sweeper asks this of every open workspace twice a second, and almost
+    /// always the answer is "nothing is running".
+    pub fn claim_is_live(&self, now_secs: u64, orphan_after: u64) -> bool {
+        if !self.syncing() {
+            return false;
         }
-        self.syncing.swap(on, Ordering::Relaxed) != on
+        match *lock_or_recover(&self.sync_claim) {
+            Some((_, since)) => !super::schedule::elapsed_at_least(since, now_secs, orphan_after),
+            None => false,
+        }
     }
 
-    /// Marks a round trip as finished, for the frequency cap.
-    pub fn mark_synced(&self) {
-        *lock_or_recover(&self.last_synced) = Some(Instant::now());
+    /// Takes the claim, unconditionally. The caller holds the workspace lane,
+    /// so it already knows it is the only trip running.
+    pub fn begin_sync(&self, now_secs: u64) -> u64 {
+        let generation = {
+            let mut claim = lock_or_recover(&self.sync_claim);
+            self.take_claim(&mut claim, now_secs)
+        };
+        self.clear_superseded_phase();
+        generation
+    }
+
+    /// Takes the claim if it is free, or if the trip holding it has neither
+    /// finished nor reported progress for `orphan_after` seconds.
+    ///
+    /// Android freezes processes rather than killing them, so the `Drop` guard
+    /// that clears the flag does not run — it pauses, holding a claim that no
+    /// longer describes anything happening.
+    pub fn claim_sync(&self, now_secs: u64, orphan_after: u64) -> Option<u64> {
+        let generation = {
+            let mut claim = lock_or_recover(&self.sync_claim);
+            if let Some((_, since)) = *claim {
+                if !super::schedule::elapsed_at_least(since, now_secs, orphan_after) {
+                    return None;
+                }
+            }
+            self.take_claim(&mut claim, now_secs)
+        };
+        self.clear_superseded_phase();
+        Some(generation)
+    }
+
+    /// Drops the step name the previous trip left behind.
+    ///
+    /// A taken-over trip never runs its own `end_sync`, so without this its
+    /// last phase — "Sending", say — stays on screen under the new trip until
+    /// that one reports a step of its own. Always outside the claim lock; see
+    /// `end_sync` for why the phase lock is never nested inside it.
+    fn clear_superseded_phase(&self) {
+        self.set_phase(None);
+    }
+
+    fn take_claim(&self, claim: &mut Option<(u64, u64)>, now_secs: u64) -> u64 {
+        let generation = self.next_generation.fetch_add(1, Ordering::Relaxed) + 1;
+        *claim = Some((generation, now_secs));
+        self.syncing.store(true, Ordering::Relaxed);
+        generation
+    }
+
+    /// Says a trip is still alive, so a long one is not mistaken for a frozen
+    /// one. Called from every phase report.
+    pub fn note_sync_progress(&self, now_secs: u64) {
+        let mut claim = lock_or_recover(&self.sync_claim);
+        if let Some((generation, _)) = *claim {
+            *claim = Some((generation, now_secs));
+        }
+    }
+
+    /// Releases the claim, reporting whether the flag actually changed.
+    ///
+    /// A superseded generation belongs to a trip that was taken over: it has
+    /// finished, but another is running in its place, so clearing here would
+    /// tell the footer the vault is idle while it is not.
+    pub fn end_sync(&self, generation: u64) -> bool {
+        // Ownership first, and nothing cleared yet: a superseded generation
+        // belongs to a trip that was taken over, and it must leave both the
+        // flag and the phase to the trip running in its place.
+        {
+            let claim = lock_or_recover(&self.sync_claim);
+            match *claim {
+                Some((current, _)) if current == generation => {}
+                _ => return false,
+            }
+        }
+        // Phase before the flag, and outside the claim lock. Outside, because
+        // `set_phase` takes another lock and two locks held in one order here
+        // and the other order elsewhere is how a deadlock gets written.
+        // Before, because `status::of` reads the two separately — it derives
+        // `State::Syncing` from the flag and copies `phase` beside it — so
+        // clearing the flag first makes "idle, pushing" briefly readable. This
+        // way the only reachable in-between state is "syncing, no phase yet",
+        // which is what every round trip looks like for its first moments.
+        self.set_phase(None);
+        // Claim and flag together, under one lock. Clearing them separately
+        // leaves a window where the claim reads free while the flag still says
+        // busy, and a tick landing in it would take a claim this trip is about
+        // to clear out from under it.
+        let mut claim = lock_or_recover(&self.sync_claim);
+        match *claim {
+            Some((current, _)) if current == generation => {
+                *claim = None;
+                self.syncing.store(false, Ordering::Relaxed);
+                true
+            }
+            // Taken over between the two checks. Not ours to clear after all.
+            _ => false,
+        }
+    }
+
+    /// Marks a round trip as started, for the frequency gate.
+    pub fn mark_attempt(&self, now_secs: u64) {
+        *lock_or_recover(&self.last_attempt) = Some(now_secs);
     }
 
     /// Whether this vault has been still long enough, and it has been long
     /// enough since the last round trip, to sync without a click.
-    pub fn ready_to_sync(&self, idle: Duration, cap: Duration, now: Instant) -> bool {
-        if self.syncing() {
+    ///
+    /// Two clocks on purpose. Quiet is monotonic: it only ever measures
+    /// seconds between local edits inside one run, where a user changing their
+    /// clock must not count as typing. The interval is wall-clock, so a freeze
+    /// cannot fake it.
+    ///
+    /// The first gate asks whether a trip is *live*, not whether the flag is
+    /// set. Asking the raw flag would make the takeover in `claim_sync`
+    /// unreachable from here: a trip frozen mid-flight leaves the flag set for
+    /// ever, this would return `false` for ever, and the sweeper would never
+    /// get as far as offering to take the claim over. Since the timer is the
+    /// only thing that starts an automatic sync, that would leave the vault
+    /// stuck until the app restarted — the exact failure the claim stamp
+    /// exists to end.
+    pub fn ready_to_sync(
+        &self,
+        quiet: Duration,
+        interval_secs: u64,
+        now: Instant,
+        now_secs: u64,
+    ) -> bool {
+        if self.claim_is_live(now_secs, super::schedule::ORPHAN_AFTER_SECS) {
             return false;
         }
         let touched = *lock_or_recover(&self.last_touched);
-        if now.saturating_duration_since(touched) < idle {
+        if now.saturating_duration_since(touched) < quiet {
             return false;
         }
-        match *lock_or_recover(&self.last_synced) {
+        match *lock_or_recover(&self.last_attempt) {
             None => true,
-            Some(synced) => now.saturating_duration_since(synced) >= cap,
+            Some(last) => super::schedule::elapsed_at_least(last, now_secs, interval_secs),
         }
     }
 }

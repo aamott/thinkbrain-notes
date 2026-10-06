@@ -14,20 +14,20 @@ use std::path::Path;
 
 use serde::Serialize;
 
-use crate::commands::workspace::{acquire_workspace_mutation_lock, resolve_workspace_root};
 use crate::NativeError;
+use crate::commands::workspace::{acquire_workspace_mutation_lock, resolve_workspace_root};
 
 use super::engine::Engine;
 use super::failed;
+use super::history_read_failed;
 use super::snapshot::{self, Reason};
 
-/// How far back one note's own history is searched before giving up.
+/// How far back the local-main diagnostic walks search before giving up.
 ///
-/// A note edited once a year in a vault edited hourly would otherwise walk the
-/// whole history to find nothing, on a panel someone opened by accident. The
-/// cap is generous enough that a real note's versions are all found; when a
-/// longer history is truncated by it, the reader logs that it stopped rather
-/// than returning a list that quietly looks complete.
+/// These counters are status-surface diagnostics scoped to the workspace's
+/// own recorded history only. The version timeline itself has no cap:
+/// `history_walk` reads every reachable commit so a paginated list never
+/// silently stops early.
 const SCAN: usize = 5_000;
 
 /// What happened to one note in one recorded change.
@@ -47,6 +47,16 @@ pub struct ChangedNote {
     pub change: NoteChange,
 }
 
+/// Which history a recorded change belongs to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Source {
+    /// Recorded by this workspace's own snapshots.
+    Local,
+    /// Imported from the workspace's Git history.
+    Git,
+}
+
 /// One change, as the history list shows it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -54,11 +64,23 @@ pub struct Recorded {
     /// The handle to restore from. Opaque to the frontend by design.
     pub id: String,
     /// Milliseconds since the epoch, as the rest of the app reports times.
+    /// `None` when the original record's date cannot be represented.
     pub at: Option<u64>,
     /// Exactly as it was recorded — the escape hatch for anyone who would
     /// rather read the record than our rendering of it.
     pub message: String,
     pub notes: Vec<ChangedNote>,
+    pub source: Source,
+}
+
+/// One page of history plus the opaque handle that continues it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryPage {
+    pub changes: Vec<Recorded>,
+    /// Present exactly when more rows exist — never a promise the walk
+    /// stopped early, because it does not.
+    pub next_cursor: Option<String>,
 }
 
 /// Where a restored version came from and what was held before it landed.
@@ -72,9 +94,8 @@ pub struct Restored {
 
 /// How often someone has had to decide between two versions of a note.
 ///
-/// Local only, and never sent anywhere. It exists so the question "is a
-/// three-way merge worth building" is answered with this vault's evidence
-/// rather than with an opinion.
+/// Local only, and never sent anywhere: a diagnostic counter, not a gate --
+/// cloud merging is its own work, not something these numbers approve.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Rate {
@@ -87,66 +108,23 @@ pub struct Rate {
     pub recorded: usize,
 }
 
-/// The most recent changes, newest first.
+/// The most recent changes, newest first -- the first page for existing
+/// internal readers.
 ///
 /// `note` narrows the list to the changes that left content for one note —
 /// which is exactly the list of versions it can be restored to, and why the
 /// change that *deleted* it is left out.
+#[cfg(test)]
 pub fn read(
     repo: &gix::Repository,
     note: Option<&str>,
     limit: usize,
 ) -> Result<Vec<Recorded>, NativeError> {
-    let mut found = Vec::new();
-    let mut next = snapshot::head_commit(repo)?;
-    let mut state = gix::diff::tree::State::default();
-
-    for _ in 0..SCAN {
-        let Some(id) = next else { break };
-        if found.len() >= limit {
-            break;
-        }
-
-        let commit = repo
-            .find_commit(id)
-            .map_err(|error| unreadable("Could not read the sync history.", error))?;
-        let parent = commit.parent_ids().next().map(|parent| parent.detach());
-        let at = commit
-            .time()
-            .ok()
-            .and_then(|time| u64::try_from(time.seconds).ok())
-            .map(|seconds| seconds * 1_000);
-        let message = commit.message_raw_sloppy().to_string();
-        next = parent;
-
-        let mut notes = touched(repo, &mut state, parent, id)?;
-        if let Some(wanted) = note {
-            notes.retain(|note| note.path == wanted && note.change != NoteChange::Removed);
-        }
-        if notes.is_empty() {
-            continue;
-        }
-
-        found.push(Recorded {
-            id: id.to_string(),
-            at,
-            message,
-            notes,
-        });
-    }
-
-    // The cap was reached without running out of history: older versions may
-    // exist beyond it. Say so loudly rather than handing back a list that looks
-    // complete. The common case (a real note's versions all live within SCAN)
-    // never reaches here.
-    if next.is_some() && found.len() < limit {
-        eprintln!(
-            "[sync] history for {} stopped at the {SCAN}-commit scan cap; older versions may exist",
-            note.unwrap_or("the vault")
-        );
-    }
-
-    Ok(found)
+    let roots = super::history_page::current_roots(repo, note.is_some())?;
+    Ok(super::history_page::events(repo, &roots, note)?
+        .into_iter()
+        .take(limit)
+        .collect())
 }
 
 /// Puts the version of `note` recorded in `change` back into the vault.
@@ -177,13 +155,12 @@ pub fn restore(engine: &Engine, note: &str, change: &str) -> Result<Restored, Na
     let checkpoint = engine.checkpoint(std::slice::from_ref(&relative), Reason::VersionRestored)?;
 
     let absolute = vault.join(&relative);
-    crate::commands::workspace::write_file_atomically(&absolute, &wanted).map_err(|error| {
-        failed(
-            "sync.restore_failed",
-            "Could not write the restored note.",
-            error,
-        )
-    })?;
+    super::write_atomically(
+        &absolute,
+        &wanted,
+        "sync.restore_failed",
+        "Could not write the restored note.",
+    )?;
 
     Ok(Restored {
         note: note.to_string(),
@@ -208,10 +185,20 @@ pub fn conflict_rate(repo: &gix::Repository) -> Result<Rate, NativeError> {
 
 /// When the last change was recorded, if any has been.
 ///
-/// Read from the history rather than remembered in memory, so the status
-/// surface still says "all saved, 9:31" the moment the app is reopened.
+/// Deliberately scoped to this workspace's own history branch only: an
+/// imported Git root says when the *source* last moved, not when Auto Sync
+/// last recorded this vault, and the status line must not confuse the two.
 pub fn last_recorded(repo: &gix::Repository) -> Result<Option<u64>, NativeError> {
-    Ok(read(repo, None, 1)?.first().and_then(|change| change.at))
+    let Some(id) = snapshot::head_commit(repo)? else {
+        return Ok(None);
+    };
+    let commit = repo
+        .find_commit(id)
+        .map_err(|error| history_read_failed("Could not read the sync history.", error))?;
+    Ok(commit
+        .time()
+        .ok()
+        .and_then(|time| super::history_walk::millis(time.seconds)))
 }
 
 /// Whether `note` has ever been recorded with exactly this content.
@@ -234,21 +221,15 @@ pub fn has_recorded(
     note: &Path,
     blob: gix::ObjectId,
 ) -> Result<bool, NativeError> {
-    let mut next = snapshot::head_commit(repo)?;
-
-    for _ in 0..SCAN {
-        let Some(id) = next else { break };
-        let commit = repo
-            .find_commit(id)
-            .map_err(|error| unreadable("Could not read the sync history.", error))?;
-        next = commit.parent_ids().next().map(|parent| parent.detach());
-
+    for commit in super::history_walk::first_parent_chain(repo, snapshot::head_commit(repo)?, SCAN)
+    {
+        let commit = commit?;
         let mut tree = commit
             .tree()
-            .map_err(|error| unreadable("Could not read the sync history.", error))?;
+            .map_err(|error| history_read_failed("Could not read the sync history.", error))?;
         let entry = tree
             .peel_to_entry_by_path(note)
-            .map_err(|error| unreadable("Could not read the sync history.", error))?;
+            .map_err(|error| history_read_failed("Could not read the sync history.", error))?;
         if entry.is_some_and(|entry| entry.object_id() == blob) {
             return Ok(true);
         }
@@ -275,60 +256,19 @@ fn version_at(
         .find_commit(id)
         .map_err(|_| missing())?
         .tree()
-        .map_err(|error| unreadable("Could not read the sync history.", error))?;
+        .map_err(|error| history_read_failed("Could not read the sync history.", error))?;
     let entry = tree
         .peel_to_entry_by_path(relative)
-        .map_err(|error| unreadable("Could not read the sync history.", error))?
+        .map_err(|error| history_read_failed("Could not read the sync history.", error))?
         .ok_or_else(missing)?;
     if !entry.mode().is_blob() {
         return Err(missing());
     }
     Ok(entry
         .object()
-        .map_err(|error| unreadable("Could not read that earlier version.", error))?
+        .map_err(|error| history_read_failed("Could not read that earlier version.", error))?
         .data
         .clone())
-}
-
-/// The notes one change touched, in the vocabulary the list speaks.
-fn touched(
-    repo: &gix::Repository,
-    state: &mut gix::diff::tree::State,
-    parent: Option<gix::ObjectId>,
-    commit: gix::ObjectId,
-) -> Result<Vec<ChangedNote>, NativeError> {
-    let changes = snapshot::changes_between(
-        repo,
-        state,
-        snapshot::tree_of(repo, parent)?,
-        snapshot::tree_of(repo, Some(commit))?,
-    )?;
-
-    // Only files. A folder appearing or disappearing is the notes inside it
-    // arriving or leaving, and they are each listed in their own right.
-    let mut notes: Vec<ChangedNote> = changes
-        .into_iter()
-        .filter_map(|record| {
-            use gix::diff::tree::recorder::Change;
-            let (mode, path, change) = match record {
-                Change::Addition {
-                    entry_mode, path, ..
-                } => (entry_mode, path, NoteChange::Added),
-                Change::Deletion {
-                    entry_mode, path, ..
-                } => (entry_mode, path, NoteChange::Removed),
-                Change::Modification {
-                    entry_mode, path, ..
-                } => (entry_mode, path, NoteChange::Updated),
-            };
-            mode.is_blob().then(|| ChangedNote {
-                path: path.to_string(),
-                change,
-            })
-        })
-        .collect();
-    notes.sort_by(|left, right| left.path.cmp(&right.path));
-    Ok(notes)
 }
 
 /// Commits reachable from `head`, optionally only those recorded under
@@ -339,22 +279,13 @@ fn count(
     message: Option<&str>,
 ) -> Result<usize, NativeError> {
     let mut counted = 0;
-    let mut next = head;
-    for _ in 0..SCAN {
-        let Some(id) = next else { break };
-        let commit = repo
-            .find_commit(id)
-            .map_err(|error| unreadable("Could not read the sync history.", error))?;
+    for commit in super::history_walk::first_parent_chain(repo, head, SCAN) {
+        let commit = commit?;
         if message.is_none_or(|wanted| commit.message_raw_sloppy() == wanted) {
             counted += 1;
         }
-        next = commit.parent_ids().next().map(|parent| parent.detach());
     }
     Ok(counted)
-}
-
-fn unreadable(message: &'static str, error: impl std::fmt::Display) -> NativeError {
-    failed("sync.history_read_failed", message, error)
 }
 
 // ---------------------------------------------------------------------------
@@ -363,26 +294,42 @@ fn unreadable(message: &'static str, error: impl std::fmt::Display) -> NativeErr
 
 /// The engine keeping history for `root_path`, or nothing.
 ///
-/// A vault with its own git repository has no engine and therefore no history
-/// of ours. That is an empty list rather than an error: the panel showing
-/// nothing is the honest rendering of "Auto Sync is not looking after this".
-fn engine_for(
-    root_path: &str,
-) -> Result<Option<std::sync::Arc<super::engine::Engine>>, NativeError> {
-    let root = resolve_workspace_root(root_path)?;
-    Ok(super::registry::engine(&root.to_string_lossy()))
-}
-
+/// `None` means the workspace was never opened under Auto Sync; a vault's own
+/// `.git` no longer means that -- it records like any other and imports its
+/// history read-only. An empty list is the honest rendering of "Auto Sync is
+/// not looking after this", not an error.
 #[tauri::command]
 pub fn sync_history(
     root_path: String,
     note_path: Option<String>,
     limit: usize,
-) -> Result<Vec<Recorded>, NativeError> {
-    let Some(engine) = engine_for(&root_path)? else {
-        return Ok(Vec::new());
+    cursor: Option<String>,
+) -> Result<HistoryPage, NativeError> {
+    let Some(engine) = super::registry::engine_for(&root_path)? else {
+        return Ok(HistoryPage {
+            changes: Vec::new(),
+            next_cursor: None,
+        });
     };
-    read(&engine.repository(), note_path.as_deref(), limit)
+    let repo = engine.repository();
+    // The cursor pins the canonical workdir the engine actually opened, so a
+    // differently-spelled `root_path` cannot borrow another workspace's
+    // continuation. A repo without a workdir falls back to the resolved
+    // root -- never the raw caller string, which is the alias this is for.
+    let workspace = match repo.workdir() {
+        Some(workdir) => workdir.to_string_lossy().into_owned(),
+        None => resolve_workspace_root(&root_path)?
+            .to_string_lossy()
+            .into_owned(),
+    };
+    let limit = limit.clamp(1, 200);
+    super::history_page::page(
+        &repo,
+        &workspace,
+        note_path.as_deref(),
+        limit,
+        cursor.as_deref(),
+    )
 }
 
 #[tauri::command]
@@ -394,7 +341,7 @@ pub fn restore_version(
     // Without an engine there is no restore point, and without one this write
     // would be the single thing Auto Sync promises never to be: a change to the
     // user's notes that cannot be undone.
-    let engine = engine_for(&root_path)?.ok_or_else(|| {
+    let engine = super::registry::engine_for(&root_path)?.ok_or_else(|| {
         NativeError::new(
             "sync.not_recorded",
             "Auto Sync is not keeping history for this workspace, so there is nothing to put back.",
@@ -405,7 +352,7 @@ pub fn restore_version(
 
 #[tauri::command]
 pub fn sync_conflict_rate(root_path: String) -> Result<Rate, NativeError> {
-    let Some(engine) = engine_for(&root_path)? else {
+    let Some(engine) = super::registry::engine_for(&root_path)? else {
         return Ok(Rate {
             decisions: 0,
             settled: 0,
@@ -415,6 +362,99 @@ pub fn sync_conflict_rate(root_path: String) -> Result<Rate, NativeError> {
     conflict_rate(&engine.repository())
 }
 
+/// One comparison's complete documents: the file as it is now, and the
+/// version recorded in the selected change.
+///
+/// Whole texts, not a diff — the frontend's own differ draws the comparison,
+/// so the native side owes it the two ends exactly as they stand. `current` is
+/// the open editor's buffer when one was sent, because "the file" is what the
+/// user is looking at rather than the last save.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VersionText {
+    pub current: String,
+    pub recorded: String,
+}
+
+/// One comparison of the current file against a recorded version.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VersionDiff {
+    pub kind: super::merge::Kind,
+    pub change: String,
+    pub note_path: String,
+    /// Both complete documents when the pair is text; `None` for binary, where
+    /// there is nothing to draw and the choice is between whole files.
+    pub text: Option<VersionText>,
+}
+
+/// Computes the comparison between the current note and a historical version recorded in `change`.
+pub fn diff_version(
+    engine: &Engine,
+    note: &str,
+    change: &str,
+    buffer: Option<&str>,
+) -> Result<VersionDiff, NativeError> {
+    let repo = engine.repository();
+    let vault = repo.workdir().ok_or_else(|| {
+        NativeError::new("sync.no_worktree", "This sync history has no notes folder.")
+    })?;
+    let relative = snapshot::vault_relative(&vault, Path::new(note))?;
+    let absolute = vault.join(&relative);
+
+    let current_bytes = match buffer {
+        Some(b) => b.as_bytes().to_vec(),
+        None => std::fs::read(&absolute).map_err(|error| {
+            failed(
+                "sync.note_read_failed",
+                "Could not read the current note.",
+                error,
+            )
+        })?,
+    };
+
+    let recorded_bytes = version_at(&repo, &relative, change)?;
+    let text =
+        super::merge::text_pair(&current_bytes, &recorded_bytes).map(|(current, recorded)| {
+            VersionText {
+                current: current.to_string(),
+                recorded: recorded.to_string(),
+            }
+        });
+
+    Ok(VersionDiff {
+        kind: if text.is_some() {
+            super::merge::Kind::Text
+        } else {
+            super::merge::Kind::Binary
+        },
+        change: change.to_string(),
+        note_path: note.to_string(),
+        text,
+    })
+}
+
+/// Tauri command computing the diff between the current note and a historical version.
+#[tauri::command]
+pub fn read_version_diff(
+    root_path: String,
+    note_path: String,
+    change: String,
+    buffer: Option<String>,
+) -> Result<VersionDiff, NativeError> {
+    let engine = super::registry::engine_for(&root_path)?.ok_or_else(|| {
+        NativeError::new(
+            "sync.not_recorded",
+            "Auto Sync is not keeping history for this workspace.",
+        )
+    })?;
+    diff_version(&engine, &note_path, &change, buffer.as_deref())
+}
+
 #[cfg(test)]
 #[path = "history_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "history_page_tests.rs"]
+mod page_tests;

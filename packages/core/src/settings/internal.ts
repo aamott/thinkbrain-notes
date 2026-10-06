@@ -39,18 +39,59 @@ export function assertNeverSettingType(def: never): never {
 }
 
 /**
- * Diagnostic shape returned by {@link readSettingsVersion}.
- *
- * Structurally compatible with `SettingsDiagnostic` (declared in `../settings`)
- * so callers can use the result without an explicit cast. Defined locally to
- * keep this leaf module free of imports from the settings persistence layer.
+ * Builds a validator requiring a whole number. `requirement` is the
+ * descriptive tail ("an integer", "a whole number") so each setting keeps its
+ * own wording.
  */
-export interface SettingsVersionDiagnostic {
+export function integerValidator(
+  noun: string,
+  requirement: string
+): (value: unknown) => string | null {
+  return (value) =>
+    typeof value === "number" && Number.isInteger(value)
+      ? null
+      : `${noun} must be ${requirement}.`;
+}
+
+/**
+ * Builds a validator for a string that is either empty ("use the defaults") or
+ * a JSON array. `invalidJson` is the descriptive tail ("a JSON list",
+ * "valid JSON") so each setting keeps its own wording.
+ */
+export function optionalJsonListValidator(
+  noun: string,
+  invalidJson: string
+): (value: unknown) => string | null {
+  return (value) => {
+    if (typeof value !== "string") return `${noun} must be text.`;
+    if (value.trim().length === 0) return null;
+    try {
+      return Array.isArray(JSON.parse(value)) ? null : `${noun} must be a list.`;
+    } catch {
+      return `${noun} must be ${invalidJson}.`;
+    }
+  };
+}
+
+export type SettingsDiagnosticSeverity = "error" | "warning";
+
+/**
+ * A non-throwing settings diagnostic: something in the document could not be
+ * used as written, and a fallback was taken instead.
+ */
+export interface SettingsDiagnostic {
   readonly code: string;
   readonly message: string;
-  readonly severity: "error" | "warning";
+  readonly severity: SettingsDiagnosticSeverity;
   readonly path?: string;
 }
+
+/**
+ * Diagnostic shape returned by {@link readSettingsVersion}.
+ *
+ * The same shape as {@link SettingsDiagnostic}, named for the call site.
+ */
+export type SettingsVersionDiagnostic = SettingsDiagnostic;
 
 /**
  * Reads and validates the `version` field from a raw settings record.

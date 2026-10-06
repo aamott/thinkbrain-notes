@@ -14,9 +14,10 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use crate::commands::watcher::{WatchInterest, WorkspaceChange, WorkspaceChangeKind};
-use crate::error::lock_or_recover;
 use crate::NativeError;
+use crate::commands::watcher::{WatchInterest, WorkspaceChange, WorkspaceChangeKind};
+use crate::commands::workspace::resolve_workspace_root;
+use crate::error::lock_or_recover;
 
 use super::bootstrap::bootstrap;
 use super::conflict;
@@ -29,12 +30,6 @@ use super::settle;
 /// Well under the settle window, so a note is recorded promptly once it goes
 /// quiet rather than up to a full window late.
 const TICK: Duration = Duration::from_millis(500);
-
-/// How long a vault must be still before a round trip fires without a click.
-const IDLE: Duration = Duration::from_secs(30);
-
-/// Soonest a second automatic round trip will fire after the last one finished.
-const CAP: Duration = Duration::from_secs(60);
 
 #[derive(Default)]
 struct Registry {
@@ -154,7 +149,19 @@ pub fn attach(app_data_dir: &Path, root: &Path, key: &str, label: &str) -> Resul
     // A failure here is the one thing nobody could see: it was logged and the
     // window went on saying this folder keeps its own history, which is what a
     // deliberate choice looks like rather than a broken one.
-    let managed = bootstrap(app_data_dir, root).map_err(|error| remember_failure(key, error))?;
+    // A configured git link is the canonical history source: it suppresses
+    // the workspace-local `.git` import, whose objects instead arrive through
+    // the fetch on the first round trip. `destination` answers `None` for an
+    // unreadable settings file too, which is not the same as "no link": fail
+    // closed toward a link being configured so a broken vault `.git` cannot
+    // take the whole attach down when the link would have superseded it.
+    let settings_path = crate::commands::settings::workspace_settings_path(app_data_dir, root);
+    let git_link_configured = match round::destination(app_data_dir, root) {
+        Some(_) => true,
+        None => crate::commands::settings::read_settings_file(&settings_path).is_err(),
+    };
+    let managed = bootstrap(app_data_dir, root, git_link_configured)
+        .map_err(|error| remember_failure(key, error))?;
 
     let engine = Arc::new(Engine::new(managed.repo, managed.has_own_git));
     // Conflicts appear while the app is closed. Someone back from a week away
@@ -177,9 +184,33 @@ pub fn attach(app_data_dir: &Path, root: &Path, key: &str, label: &str) -> Resul
     }
     // A configured destination is checked when the workspace opens. This is
     // the first useful moment to report a bad link or sign-in, rather than
-    // making someone wait for the idle timer or discover a manual button.
-    if let Some(destination) = round::destination(app_data_dir, root) {
-        start_round(key, &engine, root.to_path_buf(), destination);
+    // making someone wait for the interval or discover a manual button.
+    //
+    // Gated on the interval rather than unconditional: on Android "open" is
+    // also what happens every time the system killed the app in someone's
+    // pocket, and a fetch on each of those is the battery drain this whole
+    // design exists to avoid. A vault whose link is broken never records a
+    // success, so it does still attempt on every open — which is where a
+    // broken link should surface.
+    //
+    // Seeding the frequency gate is part of the same decision. `last_attempt`
+    // starts empty in a fresh process, which reads as "never attempted" and so
+    // as due — and Android relaunches this process every time it kills the app
+    // in someone's pocket. Without this, declining to sync on open would buy
+    // nothing: the sweeper would fire a quiet window later anyway, and
+    // `sync.onOpen: false` would be defeated the same way.
+    let last_synced = super::schedule::last_synced_at(app_data_dir, root);
+    if let Some(last) = last_synced {
+        engine.mark_attempt(last);
+    }
+    if super::schedule::should_sync_on_open(
+        super::schedule::resolved(),
+        last_synced,
+        super::schedule::now_epoch_secs(),
+    ) {
+        if let Some(destination) = round::destination(app_data_dir, root) {
+            start_round(key, &engine, root.to_path_buf(), destination);
+        }
     }
     Ok(())
 }
@@ -250,6 +281,25 @@ pub fn lane(key: &str) -> Arc<Mutex<()>> {
 pub fn engine(key: &str) -> Option<Arc<Engine>> {
     let guard = registry();
     guard.as_ref()?.engines.get(key).map(Arc::clone)
+}
+
+/// The canonical workspace `root_path` resolves to, and the engine recording
+/// it.
+///
+/// One resolution feeds both the key lookups and the vault path a caller
+/// joins against, so two spellings of one vault can never look up two
+/// engines.
+pub(super) fn workspace_and_engine(
+    root_path: &str,
+) -> Result<(PathBuf, Option<Arc<Engine>>), NativeError> {
+    let root = resolve_workspace_root(root_path)?;
+    let engine = engine(&root.to_string_lossy());
+    Ok((root, engine))
+}
+
+/// The engine recording the workspace `root_path` names, if there is one.
+pub(super) fn engine_for(root_path: &str) -> Result<Option<Arc<Engine>>, NativeError> {
+    Ok(workspace_and_engine(root_path)?.1)
 }
 
 /// Why `key` has no engine, when the reason was a failure rather than a choice.
@@ -354,53 +404,79 @@ fn changed_paths(changes: &[WorkspaceChange]) -> Vec<PathBuf> {
 fn spawn_sweeper() {
     std::thread::Builder::new()
         .name("thinkbrain-sync".into())
-        .spawn(|| loop {
-            std::thread::sleep(TICK);
+        .spawn(|| {
+            loop {
+                std::thread::sleep(TICK);
 
-            let engines: Vec<(String, Arc<Engine>)> = {
-                let guard = registry();
-                let Some(state) = guard.as_ref() else {
+                let engines = open_engines();
+                if engines.is_empty() {
                     continue;
-                };
-                state
-                    .engines
-                    .iter()
-                    .map(|(key, engine)| (key.clone(), Arc::clone(engine)))
-                    .collect()
-            };
+                }
 
-            // Outside the lock: recording hashes and writes files, and holding
-            // the registry through that would block every window opening or
-            // closing a workspace.
-            let now = Instant::now();
-            for (key, engine) in engines {
-                let was_broken = engine.problem().is_some();
-                let was_stuck = engine.stuck().len();
-                let recorded = engine.record_settled(now);
-                if let Err(error) = &recorded {
-                    eprintln!("[sync] could not record changes for {key}: {error:?}");
+                // Outside the lock: recording hashes and writes files, and holding
+                // the registry through that would block every window opening or
+                // closing a workspace.
+                let now = Instant::now();
+                let now_secs = super::schedule::now_epoch_secs();
+                // Once per tick, not once per workspace: this is the hot path,
+                // and the schedule is the same answer for all of them.
+                let schedule = super::schedule::resolved();
+                for (key, engine) in engines {
+                    sweep_once(&key, &engine, schedule, now, now_secs);
                 }
-                // Only when the footer would read differently. This runs twice
-                // a second against every open workspace, and almost all of
-                // those ticks are the same answer as the one before.
-                if matches!(recorded, Ok(Some(_)))
-                    || engine.problem().is_some() != was_broken
-                    || engine.stuck().len() != was_stuck
-                {
-                    crate::commands::watcher::announce_sync_status(&key);
-                }
-                maybe_sync(&key, &engine, now);
-                maybe_maintain(&key, &engine);
             }
         })
         .expect("the sync sweeper thread starts");
 }
 
-/// Fires a round trip when the vault has been still and it has been long
-/// enough since the last one. "Sync now" does not go through here, and the
-/// per-workspace lane still keeps two trips from interleaving.
-fn maybe_sync(key: &str, engine: &Arc<Engine>, now: Instant) {
-    if !engine.ready_to_sync(IDLE, CAP, now) {
+/// One workspace's turn at one tick.
+///
+/// Split out of the loop so a test can hold the whole tick still. What it is
+/// worth pinning is the *shape*: recording and tidying sit outside the
+/// schedule's gate, and only the network call sits inside it. That is what
+/// makes "Sync automatically, off" mean "nothing leaves this device" rather
+/// than "stop keeping my history", which is what the setting's description
+/// promises.
+fn sweep_once(
+    key: &str,
+    engine: &Arc<Engine>,
+    schedule: super::schedule::Schedule,
+    now: Instant,
+    now_secs: u64,
+) {
+    let was_broken = engine.problem().is_some();
+    let was_stuck = engine.stuck().len();
+    let recorded = engine.record_settled(now);
+    if let Err(error) = &recorded {
+        eprintln!("[sync] could not record changes for {key}: {error:?}");
+    }
+    // Only when the footer would read differently. This runs twice a second
+    // against every open workspace, and almost all of those ticks are the same
+    // answer as the one before.
+    if matches!(recorded, Ok(Some(_)))
+        || engine.problem().is_some() != was_broken
+        || engine.stuck().len() != was_stuck
+    {
+        crate::commands::watcher::announce_sync_status(key);
+    }
+    maybe_sync(key, engine, schedule, now, now_secs);
+    maybe_maintain(key, engine, now_secs);
+}
+
+/// Fires a round trip when the vault has been still and the interval has come
+/// round. "Sync now" does not go through here, and the per-workspace lane
+/// still keeps two trips from interleaving.
+fn maybe_sync(
+    key: &str,
+    engine: &Arc<Engine>,
+    schedule: super::schedule::Schedule,
+    now: Instant,
+    now_secs: u64,
+) {
+    if !schedule.automatically {
+        return;
+    }
+    if !engine.ready_to_sync(schedule.quiet(), schedule.interval_secs, now, now_secs) {
         return;
     }
     let Some(home) = settle::settings_home() else {
@@ -418,13 +494,20 @@ fn maybe_sync(key: &str, engine: &Arc<Engine>, now: Instant) {
 /// Takes the workspace lane so a round trip cannot interleave, then the
 /// recording lock inside `maintain`. A failure is announced but does not
 /// stop the next edit from being recorded.
-fn maybe_maintain(key: &str, engine: &Arc<Engine>) {
-    if engine.syncing() || engine.waiting() > 0 || !engine.due_for_maintenance() {
+fn maybe_maintain(key: &str, engine: &Arc<Engine>, now_secs: u64) {
+    // A *live* trip, not a set flag: a freeze leaves the flag set for ever,
+    // and asking it here would stop this vault's history ever being tidied
+    // again. Syncing recovers from that through the claim takeover; tidying
+    // has no equivalent, so it asks the same question the sweeper does.
+    let busy = |engine: &Arc<Engine>| {
+        engine.claim_is_live(now_secs, super::schedule::ORPHAN_AFTER_SECS) || engine.waiting() > 0
+    };
+    if busy(engine) || !engine.due_for_maintenance() {
         return;
     }
     let lane = lane(key);
     let _lane = lock_or_recover(&lane);
-    if engine.syncing() || engine.waiting() > 0 {
+    if busy(engine) {
         return;
     }
     let had_problem = engine.maintenance_problem().is_some();
@@ -435,6 +518,61 @@ fn maybe_maintain(key: &str, engine: &Arc<Engine>) {
     if result.is_err() || had_problem != engine.maintenance_problem().is_some() {
         crate::commands::watcher::announce_sync_status(key);
     }
+}
+
+/// The app is going away. Record what is pending, then try to send it.
+#[tauri::command]
+pub fn sync_app_backgrounded() -> Result<(), NativeError> {
+    flush_on_leave(super::schedule::resolved(), Instant::now());
+    Ok(())
+}
+
+/// The leaving half of a tick, split out so a test can hold the schedule
+/// still. `sync_app_backgrounded` reads the schedule from the settings file,
+/// which is process-wide state a test cannot set without deciding it for every
+/// other test in the binary.
+fn flush_on_leave(schedule: super::schedule::Schedule, now: Instant) {
+    let engines = open_engines();
+    // Recording is not part of the sync gate, here as in `sweep_once`. This is
+    // the last code to run before Android freezes the process, so anything
+    // still inside the settle window is written whatever the schedule says.
+    // Putting it behind the gate would make "Sync automatically, off" mean
+    // "lose the last few seconds of typing every time you leave", which is the
+    // opposite of what the setting's description promises.
+    for (key, engine) in &engines {
+        if let Err(error) = engine.record_settled(now) {
+            eprintln!("[sync] could not record changes for {key}: {error:?}");
+        }
+    }
+    if !super::schedule::should_flush_on_leave(schedule) {
+        return;
+    }
+    let Some(home) = settle::settings_home() else {
+        return;
+    };
+    for (key, engine) in engines {
+        let root = PathBuf::from(&key);
+        let Some(destination) = round::destination(&home, &root) else {
+            continue;
+        };
+        start_round(&key, &engine, root, destination);
+    }
+}
+
+/// Every open engine with its key, copied out from under the lock.
+///
+/// The same shape the sweeper uses: recording and syncing must not happen with
+/// the registry held, or every window opening a workspace waits behind them.
+fn open_engines() -> Vec<(String, Arc<Engine>)> {
+    let guard = registry();
+    let Some(state) = guard.as_ref() else {
+        return Vec::new();
+    };
+    state
+        .engines
+        .iter()
+        .map(|(key, engine)| (key.clone(), Arc::clone(engine)))
+        .collect()
 }
 
 /// Starts one round trip, if one is not already underway.
@@ -468,9 +606,12 @@ fn start_round_inner(
     destination: String,
     profile_id: Option<String>,
 ) {
-    if !engine.set_syncing(true) {
+    let Some(generation) = engine.claim_sync(
+        super::schedule::now_epoch_secs(),
+        super::schedule::ORPHAN_AFTER_SECS,
+    ) else {
         return;
-    }
+    };
     crate::commands::watcher::announce_sync_status(key);
     let worker = Arc::clone(engine);
     let worker_key = key.to_string();
@@ -493,8 +634,9 @@ fn start_round_inner(
         })
         .is_err()
     {
-        engine.set_syncing(false);
-        crate::commands::watcher::announce_sync_status(key);
+        if engine.end_sync(generation) {
+            crate::commands::watcher::announce_sync_status(key);
+        }
     }
 }
 

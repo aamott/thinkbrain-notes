@@ -93,6 +93,8 @@ afterEach(async () => {
 
 /** A phone-sized window, so the `max-[760px]` block is the one that applies. */
 const PHONE_WIDTH = 400;
+/** Between the two breakpoints: right dock overlays, left still docks. */
+const NARROW_DESKTOP_WIDTH = 850;
 
 /**
  * happy-dom's own viewport control, which its media-query evaluation reads.
@@ -103,8 +105,11 @@ type HappyWindow = { happyDOM: { setViewport: (size: { width: number; height: nu
 
 let live: ShellState | null = null;
 
-const mount = async (chrome: "phone" | "desktop"): Promise<HTMLDivElement> => {
-  (window as unknown as HappyWindow).happyDOM.setViewport({ width: PHONE_WIDTH, height: 800 });
+const mount = async (
+  chrome: "phone" | "desktop",
+  width: number = PHONE_WIDTH
+): Promise<HTMLDivElement> => {
+  (window as unknown as HappyWindow).happyDOM.setViewport({ width, height: 800 });
   const Host = () => {
     const shell = useShellState();
     live = shell;
@@ -143,7 +148,10 @@ describe("popout inset below 760px", () => {
   it("spans the phone shell edge to edge", async () => {
     const host = await mount("phone");
     await act(async () => {
-      host.querySelector<HTMLButtonElement>('[aria-label="Primary navigation"] [aria-label="Search"]')?.click();
+      host.querySelector<HTMLButtonElement>('[aria-label="Main menu"]')?.click();
+    });
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('[aria-label="Navigation"] [aria-label="Search"]')?.click();
     });
     const panel = host.querySelector('[aria-label="Search panel"]');
     expect(panel).not.toBeNull();
@@ -168,9 +176,9 @@ describe("popout inset below 760px", () => {
     expect(boxOf(panel!)).toEqual({ position: "absolute", left: "48px", right: "0px" });
   });
 
-  // Same reasoning on the other side: the right dock overlays the editor at
-  // this width, but the rail it would otherwise cover is the only way back.
-  it("leaves the rail uncovered by the right dock too", async () => {
+  // On the other side the overlay is right-anchored and width-capped rather
+  // than stretched: the rail stays uncovered because the box never reaches it.
+  it("overlays the right dock from the right edge without covering the rail", async () => {
     const host = await mount("desktop");
     await act(async () => shell().setRightPanel("outline"));
     const panel = host.querySelector('[aria-label="Outline panel"]');
@@ -178,6 +186,25 @@ describe("popout inset below 760px", () => {
 
     await applyStyles(host);
 
-    expect(boxOf(panel!)).toEqual({ position: "absolute", left: "48px", right: "0px" });
+    // No left edge at all — an abspos box anchored only right is sized by its
+    // own width, so the rail is structurally unreachable, not just spared.
+    expect(boxOf(panel!)).toEqual({ position: "absolute", left: "", right: "0px" });
+  });
+
+  // At 850px the window is below the right dock's 900px breakpoint but above
+  // the left dock's 760px one: right overlays, left stays docked beside it.
+  it("overlays only the right dock in the 761-900px band", async () => {
+    const host = await mount("desktop", NARROW_DESKTOP_WIDTH);
+    await act(async () => shell().setRightPanel("outline"));
+    const right = host.querySelector('[aria-label="Outline panel"]');
+    const left = host.querySelector('[aria-label="Files panel"]');
+    expect(right).not.toBeNull();
+    expect(left).not.toBeNull();
+
+    await applyStyles(host);
+
+    expect(boxOf(right!)).toEqual({ position: "absolute", left: "", right: "0px" });
+    // happy-dom reports an unset position as "" — the docked default.
+    expect(boxOf(left!).position).toBe("");
   });
 });

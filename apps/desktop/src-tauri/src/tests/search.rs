@@ -189,16 +189,18 @@ fn malformed_and_empty_queries_do_not_panic_or_error() {
 
     // Empty / whitespace-only input yields no results without touching SQLite.
     assert!(build_fts_match_query("   ").is_none());
-    assert!(search_documents(
-        &connection,
-        &SearchQuery {
-            text: "",
-            path_prefix: "",
-            limit: 50
-        }
-    )
-    .expect("empty query is safe")
-    .is_empty());
+    assert!(
+        search_documents(
+            &connection,
+            &SearchQuery {
+                text: "",
+                path_prefix: "",
+                limit: 50
+            }
+        )
+        .expect("empty query is safe")
+        .is_empty()
+    );
 
     // FTS5 special syntax must be neutralized rather than raising an error.
     for malformed in ["\"", "*", "AND OR", "tag:", "(unbalanced", "a -b \"c"] {

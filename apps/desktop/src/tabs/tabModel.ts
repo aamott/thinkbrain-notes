@@ -1,20 +1,70 @@
 import type { Tab, TabKind, TabResource } from "@thinkbrain/core";
+import { inferTabKind } from "@thinkbrain/core";
 
 export interface DesktopTab extends Tab {
   readonly kind: TabKind;
   /**
-   * For a merge tab: the note both versions are of.
+   * For a comparison tab: the file both versions are of.
    *
    * A merge tab's `resource` names the conflict *copy*, because that is what
-   * identifies a conflict everywhere else. The note itself is still needed —
-   * to show its name, and to find an editor open on it whose unsaved text is
-   * the version the user is actually looking at.
+   * identifies a conflict everywhere else; a version-diff tab's `resource` is
+   * the file itself. The source path is still needed in both — to show its
+   * name, and to find an editor open on it whose unsaved text is the version
+   * the user is actually looking at.
    */
   readonly comparedNotePath?: string;
+  /** For a version-diff tab: the recorded change the comparison is against. */
+  readonly versionChangeId?: string;
+  /** When the selected recorded version was created, in epoch milliseconds. */
+  readonly versionAt?: number | null;
+  /**
+   * Provisional tab: the next file open takes it over in place until an edit
+   * (or a double-click) makes it permanent. Transient — never persisted.
+   */
+  readonly preview?: boolean;
+}
+
+/** Media viewer tab kinds — read-only, no document state, no save button. */
+const MEDIA_VIEWER_KINDS: ReadonlySet<string> = new Set(["image-viewer", "audio-viewer", "video-viewer"]);
+
+/** True for image/audio/video viewer tabs (read-only, no document state). */
+export function isMediaViewerKind(kind: string): boolean {
+  return MEDIA_VIEWER_KINDS.has(kind);
+}
+
+/**
+ * Tab kinds whose content is a document the shell loads and keeps.
+ *
+ * Editor and code-editor tabs render text the shell reads into its document
+ * map, so restoring the tab means re-reading its file — skip that and the tab
+ * sits on "Loading" forever. Media viewers read their file through the asset
+ * protocol and comparison/static tabs carry their own state, so neither is
+ * document-backed.
+ */
+const DOCUMENT_BACKED_KINDS: ReadonlySet<string> = new Set(["editor", "code-editor"]);
+
+/** True for tab kinds that render a document the shell must load for them. */
+export function isDocumentBackedKind(kind: string): boolean {
+  return DOCUMENT_BACKED_KINDS.has(kind);
 }
 
 export interface CloseRequest {
   readonly tabId: string;
+}
+
+/**
+ * Tab-activation history for title-bar Back/Forward, in browser order.
+ *
+ * `entries[cursor]` is the visit the user is on — normally the active tab.
+ * Entries before the cursor are the Back stack, entries after it the Forward
+ * stack. A fresh activation truncates the forward tail, matching browser
+ * history. Entries name tab ids, so a retarget rewrites them in place and a
+ * close scrubs them — Back can never land on a tab that no longer exists.
+ */
+export interface DesktopTabHistory {
+  readonly entries: readonly string[];
+  /** Index of the current visit; `-1` while nothing has been activated. */
+  readonly cursor: number;
 }
 
 export interface DesktopTabState {
@@ -22,16 +72,36 @@ export interface DesktopTabState {
   readonly activeTabId: string | null;
   /** Present only when a dirty tab needs a save/discard/cancel decision. */
   readonly closeRequest: CloseRequest | null;
+  readonly history: DesktopTabHistory;
 }
 
+/**
+ * How an `open` action chooses where the file lands.
+ *
+ * - `"new"` — always a fresh tab (or activation of the one already open).
+ * - `"preview"` — provisional browsing: fill the standing preview tab, else
+ *   a blank new-tab page, else open a new preview tab. A permanent tab —
+ *   dirty or explicitly kept — is never displaced.
+ * - `"replace-active"` — the phone rule: fill the tab on screen when it can
+ *   give (replaceable and not dirty), otherwise append. The caller saves
+ *   pending edits first; a save that fails leaves the tab dirty, which is
+ *   exactly the case that must append rather than lose work.
+ */
+export type TabOpenPlacement = "new" | "preview" | "replace-active";
+
 export type DesktopTabAction =
-  | { readonly type: "open"; readonly tab: DesktopTab }
+  | { readonly type: "open"; readonly tab: DesktopTab; readonly placement?: TabOpenPlacement }
+  | { readonly type: "keep"; readonly tabId: string }
   | { readonly type: "activate"; readonly tabId: string }
   | { readonly type: "setDirty"; readonly tabId: string; readonly isDirty: boolean }
   | { readonly type: "requestClose"; readonly tabId: string }
   | { readonly type: "discardClose"; readonly tabId: string }
   | { readonly type: "completeSaveAndClose"; readonly tabId: string }
   | { readonly type: "cancelClose"; readonly tabId: string }
+  | { readonly type: "goBack" }
+  | { readonly type: "goForward" }
+  /** A workspace switch rebases history onto the surviving active tab. */
+  | { readonly type: "resetHistory" }
   /** The file a tab is showing was renamed or moved, here or outside the app. */
   | {
       readonly type: "retarget";
@@ -42,7 +112,8 @@ export type DesktopTabAction =
 export const initialDesktopTabState: DesktopTabState = {
   tabs: [],
   activeTabId: null,
-  closeRequest: null
+  closeRequest: null,
+  history: { entries: [], cursor: -1 }
 };
 
 /** Creates a stable editor identity for a file within a workspace. */
@@ -63,8 +134,41 @@ export function createEditorTab(resource: Required<TabResource>): DesktopTab {
   };
 }
 
+/** Stable identity for a file tab of any kind. */
+export function fileTabId(resource: TabResource): string {
+  return `file:${encodeURIComponent(resource.rootPath ?? "")}:${encodeURIComponent(resource.relativePath ?? "")}`;
+}
+
+/**
+ * The id an open document tab would have at `resource` — `editor:` when the
+ * extension infers a Markdown editor, `file:` otherwise. Retargeting after a
+ * rename must key by the DESTINATION's identity: renaming `note.md` to
+ * `note.txt` changes which tab kind owns it.
+ */
+export function documentTabId(resource: Required<TabResource>): string {
+  return inferTabKind(resource.relativePath) === "editor" ? editorTabId(resource) : fileTabId(resource);
+}
+
+/**
+ * Builds a tab for any file, inferring the tab kind from the extension.
+ * Uses `inferTabKind` so `.md` → editor, `.png` → image-viewer, `.ts` →
+ * code-editor, etc. The tab kind determines which renderer `TabContent` selects.
+ */
+export function createFileTab(resource: Required<TabResource>): DesktopTab {
+  const relativePath = resource.relativePath;
+  const title = relativePath.split("/").filter(Boolean).at(-1) ?? relativePath;
+  const kind = inferTabKind(relativePath);
+
+  return {
+    id: fileTabId(resource),
+    title,
+    kind,
+    resource
+  };
+}
+
 /** Stable identity for the comparison of one conflict. */
-export function conflictTabId(resource: Required<TabResource>): string {
+function conflictTabId(resource: Required<TabResource>): string {
   return `merge:${encodeURIComponent(resource.rootPath)}:${encodeURIComponent(resource.relativePath)}`;
 }
 
@@ -87,9 +191,115 @@ export function createConflictTab(resource: Required<TabResource>, notePath: str
   };
 }
 
+/** Stable identity for a file compared against one recorded version. */
+export function versionDiffTabId(resource: Required<TabResource>, changeId: string): string {
+  return `version-diff:${encodeURIComponent(resource.rootPath)}:${encodeURIComponent(resource.relativePath)}:${encodeURIComponent(changeId)}`;
+}
+
+/**
+ * Builds a read-only tab comparing a file's current contents with the version
+ * recorded as `changeId`. `resource` is the file itself — unlike a merge tab,
+ * there is no conflict copy involved.
+ */
+export function createVersionDiffTab(
+  resource: Required<TabResource>,
+  changeId: string,
+  versionAt: number | null = null
+): DesktopTab {
+  const name = resource.relativePath.split("/").filter(Boolean).at(-1) ?? resource.relativePath;
+  return {
+    id: versionDiffTabId(resource, changeId),
+    title: `Restore: ${name}`,
+    kind: "version-diff",
+    resource,
+    comparedNotePath: resource.relativePath,
+    versionChangeId: changeId,
+    versionAt
+  };
+}
+
+/**
+ * The file a document inspector should treat as open for `tab`, or `null`.
+ *
+ * Any file-backed tab counts — Markdown editor, code editor, media viewer —
+ * but comparison tabs (`merge`, `version-diff`) are excluded: their
+ * `resource` names the file the comparison is about (or the conflict copy),
+ * not a document being viewed, so panels like Version history must not
+ * inspect it.
+ */
+export function inspectableRelativePath(tab: DesktopTab | null | undefined): string | null {
+  if (!tab || tab.kind === "merge" || tab.kind === "version-diff") return null;
+  return tab.resource?.relativePath ?? null;
+}
+
+/** Only Markdown editor tabs count as notes — code/media/settings don't. */
+export const isNoteTab = (tab: DesktopTab | null | undefined): tab is DesktopTab =>
+  tab?.kind === "editor" &&
+  tab.resource?.relativePath?.toLowerCase().endsWith(".md") === true;
+
+/**
+ * The name assistive tech and tooltips use for a tab.
+ *
+ * For a restore preview with a known timestamp it appends the version's date,
+ * so two restore tabs of one file are distinguishable. Everything else —
+ * and a restore tab whose change carried no timestamp — is just the title.
+ */
+export function tabAccessibleName(tab: DesktopTab): string {
+  if (tab.kind !== "version-diff" || tab.versionAt == null || !Number.isFinite(tab.versionAt)) {
+    return tab.title;
+  }
+  const formatted = new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short"
+  }).format(tab.versionAt);
+  return `${tab.title}, version from ${formatted}`;
+}
+
+/**
+ * The breadcrumb trail a restore preview shows after the workspace name —
+ * `Restore` then the file's path segments — or `null` for any other tab.
+ */
+export function restoreBreadcrumbSegments(
+  tab: DesktopTab | null | undefined
+): readonly string[] | null {
+  if (tab?.kind !== "version-diff") return null;
+  const path = tab.comparedNotePath ?? tab.resource?.relativePath;
+  return path ? ["Restore", ...path.split("/").filter(Boolean)] : ["Restore", tab.title];
+}
+
 export function createStaticTab(kind: Exclude<TabKind, "editor">, title: string): DesktopTab {
   return { id: kind, title, kind };
 }
+
+let newTabCounter = 0;
+
+/**
+ * A blank landing tab — the browser's "New Tab" page.
+ *
+ * Unlike other static kinds, new tabs get unique ids so several can be open
+ * at once; they are skipped by persistence rather than restored.
+ */
+export function createNewTab(): DesktopTab {
+  newTabCounter += 1;
+  return { id: `new-tab:${newTabCounter}`, title: "New tab", kind: "new-tab" };
+}
+
+/**
+ * Kinds a file open may take over in place under `"replace-active"`.
+ *
+ * File-backed viewers and the blank new-tab page are interchangeable as
+ * "what is on screen"; chrome surfaces (settings, graph, extensions) and
+ * comparison tabs are not — displacing one would destroy a surface the user
+ * deliberately opened. Checked together with `isDirty` by the caller.
+ */
+const REPLACEABLE_KINDS: ReadonlySet<string> = new Set([
+  "editor",
+  "code-editor",
+  "image-viewer",
+  "audio-viewer",
+  "video-viewer",
+  "new-tab"
+]);
 
 /**
  * Pure tab-state transition function. It never performs persistence or saving:
@@ -103,18 +313,50 @@ export function desktopTabReducer(
     case "open": {
       const existing = state.tabs.find((tab) => tab.id === action.tab.id);
       if (existing) {
-        return state.activeTabId === existing.id ? state : { ...state, activeTabId: existing.id };
+        return state.activeTabId === existing.id
+          ? state
+          : {
+              ...state,
+              activeTabId: existing.id,
+              history: recordActivation(state.history, existing.id)
+            };
+      }
+      const placement = action.placement ?? "new";
+      const reuseId = placement === "new" ? null : reuseTargetId(state, placement);
+      if (reuseId !== null) {
+        const moved: DesktopTab = { ...action.tab, preview: placement === "preview" || undefined };
+        const swapped = replaceTabInPlace(state, reuseId, moved);
+        return {
+          ...swapped,
+          activeTabId: moved.id,
+          history: recordActivation(swapped.history, moved.id)
+        };
       }
       return {
         ...state,
-        tabs: [...state.tabs, action.tab],
-        activeTabId: action.tab.id
+        tabs: [...state.tabs, placement === "preview" ? { ...action.tab, preview: true } : action.tab],
+        activeTabId: action.tab.id,
+        history: recordActivation(state.history, action.tab.id)
       };
     }
+    case "keep":
+      return updateTab(state, action.tabId, (tab) =>
+        tab.preview ? { ...tab, preview: undefined } : tab
+      );
     case "activate":
       return state.tabs.some((tab) => tab.id === action.tabId)
-        ? { ...state, activeTabId: action.tabId }
+        ? {
+            ...state,
+            activeTabId: action.tabId,
+            history: recordActivation(state.history, action.tabId)
+          }
         : state;
+    case "goBack":
+      return stepHistory(state, -1);
+    case "goForward":
+      return stepHistory(state, 1);
+    case "resetHistory":
+      return resetTabHistory(state);
     case "setDirty": {
       // Compare against the normalized target so dispatching `isDirty: false`
       // on a tab whose `isDirty` is already `undefined` is a no-op. Without
@@ -123,7 +365,11 @@ export function desktopTabReducer(
       // and a debounced desktop-state persistence write.
       const target = action.isDirty || undefined;
       return updateTab(state, action.tabId, (tab) =>
-        tab.isDirty === target ? tab : { ...tab, isDirty: target }
+        tab.isDirty === target
+          ? tab
+          // An edit is the moment a preview earns permanence — the next file
+          // open must leave this tab alone.
+          : { ...tab, isDirty: target, ...(action.isDirty ? { preview: undefined } : {}) }
       );
     }
     case "requestClose": {
@@ -159,26 +405,72 @@ function retargetTab(
   from: Required<TabResource>,
   to: Required<TabResource>
 ): DesktopTabState {
-  const oldId = editorTabId(from);
-  const existing = state.tabs.find((tab) => tab.id === oldId);
+  // The existing tab is found under whichever id scheme its old path used.
+  // The replacement is built from the DESTINATION's inferred kind: renaming
+  // `note.md` to `note.txt` must hand the tab to the text-file renderer, not
+  // keep it a Markdown editor showing a `.txt` file.
+  const editorId = editorTabId(from);
+  const fileId = fileTabId(from);
+  const existing = state.tabs.find((tab) => tab.id === editorId || tab.id === fileId);
   if (!existing) return state;
+  const oldId = existing.id;
 
   const moved: DesktopTab = {
-    ...createEditorTab(to),
-    ...(existing.isDirty ? { isDirty: existing.isDirty } : {})
+    ...(inferTabKind(to.relativePath) === "editor" ? createEditorTab(to) : createFileTab(to)),
+    ...(existing.isDirty ? { isDirty: existing.isDirty } : {}),
+    ...(existing.preview ? { preview: existing.preview } : {})
   };
 
+  return replaceTabInPlace(state, oldId, moved);
+}
+
+/**
+ * The tab a file open may take over, or `null` to open a fresh one.
+ *
+ * `"preview"` prefers the standing preview tab — there is only ever one —
+ * then a blank new-tab page on screen, which exists precisely to be filled.
+ * `"replace-active"` may only take the tab on screen, and only when it is
+ * replaceable and holds no unsaved edits.
+ */
+function reuseTargetId(
+  state: DesktopTabState,
+  placement: Exclude<TabOpenPlacement, "new">
+): string | null {
+  const active = state.tabs.find((tab) => tab.id === state.activeTabId);
+  if (placement === "replace-active") {
+    return active && !active.isDirty && REPLACEABLE_KINDS.has(active.kind) ? active.id : null;
+  }
+  const preview = state.tabs.find((tab) => tab.preview);
+  if (preview) return preview.id;
+  return active?.kind === "new-tab" ? active.id : null;
+}
+
+/**
+ * Swaps the tab at `oldId` for `moved`, keeping its strip position and
+ * carrying everything keyed by the old id onto the new one: which tab is
+ * selected, any close decision waiting on it, and every history visit —
+ * Back must land on what the tab became, not on an id nothing answers to.
+ */
+function replaceTabInPlace(
+  state: DesktopTabState,
+  oldId: string,
+  moved: DesktopTab
+): DesktopTabState {
   const tabs = state.tabs
-    // Renaming one open note over another leaves one file, so it leaves one
-    // tab. Dropping the tab already there keeps ids unique — the shell keys a
-    // tab's loaded contents by them.
+    // Replacing over an id another tab already holds leaves two tabs
+    // claiming one identity. Dropping the displaced one keeps ids unique —
+    // the shell keys a tab's loaded contents by them.
     .filter((tab) => tab.id !== moved.id || tab.id === oldId)
     .map((tab) => (tab.id === oldId ? moved : tab));
 
   return {
     tabs,
     activeTabId: state.activeTabId === oldId ? moved.id : state.activeTabId,
-    closeRequest: state.closeRequest?.tabId === oldId ? { tabId: moved.id } : state.closeRequest
+    closeRequest: state.closeRequest?.tabId === oldId ? { tabId: moved.id } : state.closeRequest,
+    history: {
+      entries: state.history.entries.map((id) => (id === oldId ? moved.id : id)),
+      cursor: state.history.cursor
+    }
   };
 }
 
@@ -206,5 +498,89 @@ function removeTab(state: DesktopTabState, tabId: string): DesktopTabState {
     ? tabs[index]?.id ?? tabs[index - 1]?.id ?? null
     : state.activeTabId;
 
-  return { tabs, activeTabId, closeRequest: null };
+  // The closed tab's visits die with it; the cursor re-anchors on the last
+  // visit of the tab that stays active, so Back never lands on the tab that
+  // was just closed.
+  const entries = state.history.entries.filter((id) => id !== tabId);
+  let cursor = activeTabId === null ? -1 : entries.lastIndexOf(activeTabId);
+  // Every activated tab has an entry; if state arrived without one (a
+  // reducer-external tab list, say a test fixture), record it now.
+  if (cursor < 0 && activeTabId !== null) {
+    entries.push(activeTabId);
+    cursor = entries.length - 1;
+  }
+
+  return { tabs, activeTabId, closeRequest: null, history: { entries, cursor } };
+}
+
+/**
+ * Appends `tabId` as the current visit, truncating anything Forward could
+ * have revisited — browser-history semantics. Re-activating the tab already
+ * at the cursor is a no-op so repeated dispatches do not stack duplicates.
+ */
+function recordActivation(history: DesktopTabHistory, tabId: string): DesktopTabHistory {
+  if (history.entries[history.cursor] === tabId) return history;
+  const entries = [...history.entries.slice(0, history.cursor + 1), tabId];
+  return { entries, cursor: entries.length - 1 };
+}
+
+/**
+ * The index of the nearest visit past the cursor — before it for `direction`
+ * `-1`, after it for `1` — that still names an open tab. `-1` when there is
+ * nothing live to move to.
+ */
+function liveEntryIndex(state: DesktopTabState, direction: -1 | 1): number {
+  const { entries, cursor } = state.history;
+  for (let index = cursor + direction; index >= 0 && index < entries.length; index += direction) {
+    if (state.tabs.some((tab) => tab.id === entries[index])) return index;
+  }
+  return -1;
+}
+
+/** Whether the title bar's Back button has a previous tab to return to. */
+export function canGoBackInTabs(state: DesktopTabState): boolean {
+  return liveEntryIndex(state, -1) >= 0;
+}
+
+/** Whether the title bar's Forward button has a later visit to re-walk. */
+export function canGoForwardInTabs(state: DesktopTabState): boolean {
+  return liveEntryIndex(state, 1) >= 0;
+}
+
+/**
+ * Moves the history cursor and activates the tab it lands on, without
+ * recording: history navigation is a revisit, not a new visit — recording it
+ * would truncate the Forward tail it just walked out of.
+ */
+function stepHistory(state: DesktopTabState, direction: -1 | 1): DesktopTabState {
+  const index = liveEntryIndex(state, direction);
+  if (index < 0) return state;
+  const tabId = state.history.entries[index];
+  if (tabId === undefined) return state;
+  return {
+    ...state,
+    activeTabId: tabId,
+    history: { entries: state.history.entries, cursor: index }
+  };
+}
+
+/**
+ * Rebases history on the active tab for a workspace switch: Back must never
+ * resurrect a previous vault's visits. Already-rebased state is returned
+ * unchanged — this also fires on mount while the reducer's initial state is
+ * already empty.
+ */
+function resetTabHistory(state: DesktopTabState): DesktopTabState {
+  const active = state.activeTabId !== null && state.tabs.some((tab) => tab.id === state.activeTabId)
+    ? state.activeTabId
+    : null;
+  const entries = active === null ? [] : [active];
+  if (
+    state.history.cursor === entries.length - 1 &&
+    state.history.entries.length === entries.length &&
+    state.history.entries.every((id, index) => id === entries[index])
+  ) {
+    return state;
+  }
+  return { ...state, history: { entries, cursor: entries.length - 1 } };
 }

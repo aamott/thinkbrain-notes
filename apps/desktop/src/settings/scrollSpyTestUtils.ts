@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { act } from "react";
 import { vi } from "vitest";
 
 /**
@@ -113,4 +114,18 @@ export function createScrollSpyHarness() {
       container?.dispatchEvent(new Event("scroll", { bubbles: false }));
     }
   };
+}
+
+/**
+ * Wraps {@link createScrollSpyHarness}'s `intersect` in `act` so callers don't
+ * have to remember the `act` boundary themselves. Mirrors the duplicated local
+ * helpers that previously lived in SettingsContent/SettingsTab tests.
+ */
+export async function intersectSection(
+  scrollSpy: ReturnType<typeof createScrollSpyHarness>,
+  section: Element
+): Promise<void> {
+  await act(async () => {
+    scrollSpy.intersect(section);
+  });
 }

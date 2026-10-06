@@ -1104,6 +1104,82 @@
     padding:6px 2px 0;
   }
 
+  /* ============ SECTIONS 6-8: three-way merge & repo location ============ */
+  .automerged-block{
+    display:flex;align-items:center;gap:10px;
+    background:var(--good-soft);
+    border:1px solid rgba(107,208,143,0.3);
+    border-radius:var(--radius-sm);
+    padding:9px 14px;margin:8px 0;
+    color:var(--good);font-size:12px;cursor:pointer;
+  }
+  .automerged-block svg{width:14px;height:14px;flex-shrink:0;}
+  .automerged-block .lines{
+    color:var(--text-dim);flex:1;min-width:0;
+    font-family:var(--font-mono);font-size:11.5px;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  .automerged-tag{
+    font-size:10.5px;font-weight:700;letter-spacing:0.04em;
+    color:var(--good);flex-shrink:0;
+  }
+  .choice-chip.original{color:var(--text-dim);border-style:dashed;}
+  .merge-banner.caution{
+    background:linear-gradient(135deg, rgba(232,184,95,0.12), rgba(234,128,128,0.05));
+    border-color:rgba(232,184,95,0.35);
+  }
+  .merge-banner.caution .icon-circle{background:var(--warn-soft);color:var(--warn);}
+  .conflict-card.resolved{border-color:rgba(107,208,143,0.35);}
+  .conflict-card.resolved .conflict-sub{color:var(--good);}
+  .conflict-card.resolved .row1{opacity:0.75;}
+  .chip.git{color:#c9a2f5;border-color:rgba(196,143,239,0.3);background:rgba(196,143,239,0.08);}
+
+  /* setup dialog + settings */
+  .setup-stage{display:flex;align-items:center;justify-content:center;background:var(--bg);padding:60px 20px;position:relative;min-height:430px;}
+  .setup-scrim{position:absolute;inset:0;background:rgba(6,7,12,0.6);}
+  .setup-dialog{
+    position:relative;width:460px;max-width:94%;
+    background:var(--panel);border:1px solid var(--border);
+    border-radius:var(--radius-lg);padding:26px 28px;
+    box-shadow:var(--shadow-window);
+  }
+  .setup-dialog h3{margin:0 0 6px;font-size:17px;font-weight:700;}
+  .setup-dialog .lede{font-size:12.5px;color:var(--text-dim);margin:0 0 18px;line-height:1.55;}
+  .setup-check{
+    display:flex;gap:12px;align-items:flex-start;
+    background:var(--panel-2);border:1px solid var(--border);
+    border-radius:var(--radius-md);padding:14px 16px;
+  }
+  .setup-check .box{
+    width:16px;height:16px;flex-shrink:0;margin-top:2px;
+    border:1.5px solid var(--text-faint);border-radius:4px;
+    display:flex;align-items:center;justify-content:center;color:transparent;
+  }
+  .setup-check.on .box{background:var(--accent);border-color:var(--accent);color:#0b0d14;}
+  .setup-check .t{font-size:13px;font-weight:600;}
+  .setup-check .d{font-size:11.5px;color:var(--text-dim);margin-top:3px;line-height:1.5;}
+  .setup-warn{
+    display:flex;gap:10px;align-items:flex-start;margin-top:12px;
+    font-size:11.5px;color:var(--warn);
+    background:var(--warn-soft);border:1px solid rgba(232,184,95,0.3);
+    border-radius:var(--radius-sm);padding:10px 12px;line-height:1.5;
+  }
+  .setup-warn svg{width:14px;height:14px;flex-shrink:0;margin-top:1px;}
+  .setup-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:20px;}
+  .settings-mock{width:540px;max-width:100%;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;}
+  .settings-row{display:flex;align-items:center;gap:14px;padding:16px 20px;border-bottom:1px solid var(--border-soft);}
+  .settings-row:last-child{border-bottom:none;}
+  .settings-row .grow{flex:1;min-width:0;}
+  .settings-row .t{font-size:13px;font-weight:600;}
+  .settings-row .d{font-size:11.5px;color:var(--text-dim);margin-top:2px;line-height:1.5;}
+  .fake-select{
+    font-size:12px;color:var(--text);flex-shrink:0;
+    background:var(--panel-2);border:1px solid var(--border);
+    border-radius:var(--radius-sm);padding:6px 10px;
+    display:flex;align-items:center;gap:8px;
+  }
+  .fake-select svg{width:11px;height:11px;color:var(--text-faint);}
+
   @media (max-width: 980px){
     .conflicts-body{flex-direction:column; height:auto;}
     .conflicts-sidebar{width:100%; border-right:none; border-bottom:1px solid var(--border);}
@@ -1319,6 +1395,31 @@
               <div class="card-actions">
                 <button class="btn btn-secondary btn-sm">Keep newest</button>
                 <button class="btn btn-primary btn-sm">Keep both</button>
+              </div>
+            </div>
+
+            <!-- Card D: auto-merged — a receipt, not a task. Does not count
+                 toward the attention badge. -->
+            <div class="conflict-card resolved">
+              <div class="row1">
+                <div class="file-icon md">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+                </div>
+                <div>
+                  <div class="conflict-name">Trip Ideas.md</div>
+                  <div class="conflict-sub">Merged itself — nothing left to decide</div>
+                </div>
+              </div>
+              <div style="display:flex; align-items:center; gap:8px; margin:10px 0 12px;">
+                <span class="chip git">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="6" r="2.4"/><circle cx="6" cy="18" r="2.4"/><circle cx="18" cy="8" r="2.4"/><path d="M6 8.4v7.2M18 10.4c0 3.6-3.4 5-6.6 5"/></svg>
+                  Shared repository
+                </span>
+                <span class="chip">2 versions</span>
+              </div>
+              <div class="card-actions">
+                <button class="btn btn-secondary btn-sm">See what it did</button>
+                <button class="btn btn-ghost btn-sm">Undo</button>
               </div>
             </div>
 
@@ -2001,7 +2102,267 @@ Marcus to <span class="add">sync directly</span> with the design team about the 
     </div>
   </div>
 
-  <footer class="end-note">ThinkBrain Notes — Sync &amp; Merge mockup · static HTML, no build step · for design review only</footer>
+  <!-- ================= SECTION 6 ================= -->
+  <div class="section-block">
+    <div class="section-label">
+      <span class="num">06</span>
+      <h2>Merge view — with a shared original</h2>
+      <span class="sub">Three-way merge: a recorded earlier version lets safe parts merge themselves</span>
+    </div>
+
+    <div class="window">
+      <div class="window-titlebar">
+        <div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div>
+        <div class="window-title">Meeting Notes.md — Merge</div>
+      </div>
+      <div class="merge-scroll">
+        <div class="merge-banner">
+          <div class="icon-circle">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M8 3v4a3 3 0 0 1-3 3H3M16 3v4a3 3 0 0 0 3 3h2M12 21V11a4 4 0 0 0-4-4M12 21V11a4 4 0 0 1 4-4"/></svg>
+          </div>
+          <div>
+            <h3>Most of this merged itself</h3>
+            <p>We found the earlier version both devices started from, so the parts only one of you changed are already in place — shown in green below. Only the highlighted parts, where both versions disagree, need your say.</p>
+          </div>
+        </div>
+
+        <div class="diff-frame">
+
+          <div class="identical-block">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>
+            <span class="lines"># Q3 Roadmap Sync — Aug 11 · Attendees: Adam, Priya, Marcus · Same on both versions</span>
+            <span class="chip" style="flex-shrink:0;">14 identical lines</span>
+          </div>
+
+          <!-- Auto-merged region: only one side changed it relative to the
+               original, so it is already in the result. Tappable to inspect —
+               nothing here was chosen silently without a way to see it. -->
+          <div class="automerged-block">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M8 3v4a3 3 0 0 1-3 3H3M16 3v4a3 3 0 0 0 3 3h2M12 21V11a4 4 0 0 0-4-4M12 21V11a4 4 0 0 1 4-4"/></svg>
+            <span class="automerged-tag">MERGED ITSELF</span>
+            <span class="lines">Marcus to sync directly with the design team about the new icon set before next Wednesday's review.</span>
+            <span class="chip" style="flex-shrink:0;">2 lines · tap to see</span>
+          </div>
+
+          <div class="automerged-block">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M8 3v4a3 3 0 0 1-3 3H3M16 3v4a3 3 0 0 0 3 3h2M12 21V11a4 4 0 0 0-4-4M12 21V11a4 4 0 0 1 4-4"/></svg>
+            <span class="automerged-tag">MERGED ITSELF</span>
+            <span class="lines">- Budget approved for Q4 tooling refresh (added on OneDrive's copy)</span>
+            <span class="chip" style="flex-shrink:0;">1 line · tap to see</span>
+          </div>
+
+          <!-- Genuine conflict: both sides changed the same part. A fourth
+               choice joins the row — put back what it said originally. -->
+          <div class="chunk-pair" style="position:relative;">
+            <span class="pending-tag">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+              Waiting on you
+            </span>
+            <div class="chunk-side highlight-left">
+              <div class="chunk-text">## Open questions
+
+- Do we need legal review before <span class="add">the partner announcement</span>?</div>
+              <div class="chunk-choice-row">
+                <span class="choice-chip">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+                  Keep this computer's
+                </span>
+                <span class="choice-chip">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>
+                  Keep OneDrive's
+                </span>
+                <span class="choice-chip">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="4" y="4" width="7" height="16" rx="1"/><rect x="13" y="4" width="7" height="16" rx="1"/></svg>
+                  Keep both
+                </span>
+                <span class="choice-chip original">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 12a9 9 0 1 0 3-6.7M3 4v5h5"/></svg>
+                  Original
+                </span>
+              </div>
+            </div>
+            <div class="chunk-side highlight-right">
+              <div class="chunk-text">## Open questions
+
+- Do we need legal review before <span class="add">going public</span>?</div>
+              <div class="chunk-choice-row">
+                <span class="choice-chip">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+                  Keep this computer's
+                </span>
+                <span class="choice-chip">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>
+                  Keep OneDrive's
+                </span>
+                <span class="choice-chip">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="4" y="4" width="7" height="16" rx="1"/><rect x="13" y="4" width="7" height="16" rx="1"/></svg>
+                  Keep both
+                </span>
+                <span class="choice-chip original">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 12a9 9 0 1 0 3-6.7M3 4v5h5"/></svg>
+                  Original
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div class="identical-block">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>
+            <span class="lines">Next check-in scheduled for Aug 18.</span>
+            <span class="chip" style="flex-shrink:0;">3 identical lines</span>
+          </div>
+
+        </div>
+
+        <div class="result-section-label">
+          <div class="live-dot"></div>
+          <h4>Result — this is what will be saved</h4>
+          <span>Updates automatically as you choose</span>
+        </div>
+
+        <div class="result-pane">
+          <h5>Q3 Roadmap Sync — Aug 11</h5>
+          <p>Attendees: Adam, Priya, Marcus.</p>
+          <p><b>Action items</b><br>Marcus to <span class="merged-mark">sync directly</span> with the design team about the new icon set before <span class="merged-mark">next Wednesday's review</span>.</p>
+          <p><b>Budget</b><br><span class="merged-mark">- Budget approved for Q4 tooling refresh</span></p>
+          <p><b>Open questions</b><br>- Do we need legal review before <span class="pending-mark">the partner announcement</span>? <span style="font-family:var(--font-ui); font-size:11px; color:var(--warn); font-weight:600;">← still deciding</span></p>
+        </div>
+
+        <div class="merge-footer">
+          <div class="reassure">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 3 6v6c0 5 4 8.5 9 10 5-1.5 9-5 9-10V6z"/></svg>
+            You can always undo — previous versions are kept in History.
+          </div>
+          <button class="btn btn-primary btn-done">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg>
+            Done — save merged note
+          </button>
+        </div>
+      </div>
+    </div>
+    <div class="caption">With a base, the view gains a third region kind: <b>auto-merged</b> blocks (green) sit between identical and needs-a-choice — already in the result, expandable to inspect. Conflicted chunks gain a fourth option, <b>Original</b>, which puts back what the note said before either device touched it.</div>
+  </div>
+
+  <!-- ================= SECTION 7 ================= -->
+  <div class="section-block">
+    <div class="section-label">
+      <span class="num">07</span>
+      <h2>When no original can be found</h2>
+      <span class="sub">Same screen, honest about uncertainty — nothing merges itself</span>
+    </div>
+
+    <div class="window">
+      <div class="window-titlebar">
+        <div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div>
+        <div class="window-title">Old Draft.md — Merge</div>
+      </div>
+      <div class="merge-scroll">
+        <div class="merge-banner caution">
+          <div class="icon-circle">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01M10.3 3.9 2.7 17a2 2 0 0 0 1.7 3h15.2a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>
+          </div>
+          <div>
+            <h3>Two versions — no earlier copy to compare them to</h3>
+            <p>We couldn't find the version these both started from, so nothing merges itself this time. Go through each highlighted section and choose what to keep — or keep both files.</p>
+          </div>
+        </div>
+
+        <div class="diff-frame">
+          <div class="identical-block">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>
+            <span class="lines"># Old Draft · Same on both versions</span>
+            <span class="chip" style="flex-shrink:0;">9 identical lines</span>
+          </div>
+
+          <div class="chunk-pair" style="position:relative;">
+            <span class="pending-tag">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+              Waiting on you
+            </span>
+            <div class="chunk-side highlight-left">
+              <div class="chunk-text">The launch happens <span class="add">in October</span>.</div>
+              <div class="chunk-choice-row">
+                <span class="choice-chip">Keep this computer's</span>
+                <span class="choice-chip">Keep OneDrive's</span>
+                <span class="choice-chip">Keep both</span>
+              </div>
+            </div>
+            <div class="chunk-side highlight-right">
+              <div class="chunk-text">The launch happens <span class="add">in November</span>.</div>
+              <div class="chunk-choice-row">
+                <span class="choice-chip">Keep this computer's</span>
+                <span class="choice-chip">Keep OneDrive's</span>
+                <span class="choice-chip">Keep both</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="caption">The fallback is the same screen with an honest banner and no green regions — and no <b>Original</b> chip, because there is no original to put back. This is also the exact UI for a low-confidence base: the difference between "we're sure" and "we're guessing" is a banner, not a different screen.</div>
+  </div>
+
+  <!-- ================= SECTION 8 ================= -->
+  <div class="section-block">
+    <div class="section-label">
+      <span class="num">08</span>
+      <h2>Setup — where sync history lives</h2>
+      <span class="sub">One checkbox during workspace setup, one setting afterwards</span>
+    </div>
+
+    <div class="window">
+      <div class="window-titlebar">
+        <div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div>
+        <div class="window-title">ThinkBrain Notes — New workspace</div>
+      </div>
+      <div class="setup-stage">
+        <div class="setup-scrim"></div>
+        <div class="setup-dialog">
+          <h3>Set up sync for this folder</h3>
+          <p class="lede">ThinkBrain keeps a private history of this folder so it can sync with other devices and undo mistakes. Where should that history live?</p>
+
+          <div class="setup-check">
+            <span class="box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg></span>
+            <span>
+              <span class="t">Keep the history inside this folder</span>
+              <div class="d">Off (recommended): history lives in ThinkBrain's private app storage — OneDrive, Syncthing and friends can't touch it.<br>On: a git repository is created inside the folder. You can browse the history yourself, but a sync service could interfere with it.</div>
+            </span>
+          </div>
+
+          <div class="setup-warn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01M10.3 3.9 2.7 17a2 2 0 0 0 1.7 3h15.2a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>
+            This folder is synced by OneDrive. A repository inside it can be damaged by sync conflicts — we strongly recommend app storage.
+          </div>
+
+          <div class="setup-actions">
+            <button class="btn btn-ghost btn-sm">Not now</button>
+            <button class="btn btn-primary btn-sm">Continue</button>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex; justify-content:center; padding:34px 28px; background:var(--panel-2); border-top:1px solid var(--border);">
+        <div class="settings-mock">
+          <div class="settings-row">
+            <div class="grow">
+              <div class="t">Sync history location</div>
+              <div class="d">Where this workspace's history and undo information are kept.</div>
+            </div>
+            <span class="fake-select">ThinkBrain app storage <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 9l6 6 6-6"/></svg></span>
+          </div>
+          <div class="settings-row">
+            <div class="grow">
+              <div class="t">Shared repository</div>
+              <div class="d">github.com/you/notes — last synced 9:41 AM</div>
+            </div>
+            <button class="btn btn-ghost btn-sm">Change…</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="caption">Setup is one checkbox — defaulting to app storage, where no sync daemon can reach it. The same choice appears when opening a cloned folder (the existing git dialog) and lives on in Settings as a plain dropdown. The warning row only appears when the folder sits inside a service like OneDrive or Syncthing.</div>
+  </div>
+
+  <footer class="end-note">ThinkBrain Notes — Sync &amp; Merge mockup · static HTML, no build step · for design review only · v2 adds three-way merge states and the repository-location choice</footer>
 
 </div>
 

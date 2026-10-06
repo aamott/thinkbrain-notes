@@ -1,6 +1,4 @@
 // @vitest-environment happy-dom
-import { act } from "react";
-import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { resetNotificationStore, useNotificationStore } from "../notifications/notificationStore";
@@ -8,6 +6,7 @@ import {
   SETTINGS_QUARANTINE_SOURCE,
   useSettingsQuarantineAdapter
 } from "./settingsQuarantineAdapter";
+import { createSettingsTestHarness } from "./settingsTestHelpers";
 
 const invokeNativeCommand = vi.fn<() => Promise<readonly string[]>>();
 
@@ -15,8 +14,7 @@ vi.mock("../native/commands", () => ({
   invokeNativeCommand: () => invokeNativeCommand()
 }));
 
-let root: Root | null = null;
-let host: HTMLDivElement | null = null;
+const harness = createSettingsTestHarness();
 
 beforeEach(() => {
   invokeNativeCommand.mockReset();
@@ -24,10 +22,7 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
-  await act(async () => root?.unmount());
-  host?.remove();
-  root = null;
-  host = null;
+  await harness.unmount();
 });
 
 async function mountAdapter(): Promise<void> {
@@ -35,12 +30,7 @@ async function mountAdapter(): Promise<void> {
     useSettingsQuarantineAdapter();
     return null;
   }
-  host = document.createElement("div");
-  document.body.append(host);
-  root = createRoot(host);
-  await act(async () => {
-    root?.render(<Host />);
-  });
+  await harness.render(<Host />);
 }
 
 describe("telling the user their settings were set aside", () => {

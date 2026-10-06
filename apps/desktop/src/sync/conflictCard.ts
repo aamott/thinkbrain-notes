@@ -10,8 +10,6 @@
 import type { ConflictSummary } from "./conflictTypes";
 import { noteName } from "../lib/utils";
 
-export { noteName } from "../lib/utils";
-
 /** How a card presents itself. */
 export type CardTreatment =
   /** Two versions, side by side, chunk by chunk. */

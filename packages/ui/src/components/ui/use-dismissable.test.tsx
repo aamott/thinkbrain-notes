@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { useDismissable } from "./use-dismissable";
+import { dismissTopOverlay, useDismissable } from "./use-dismissable";
 
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
@@ -42,6 +42,25 @@ const render = async (element: React.ReactElement): Promise<HTMLDivElement> => {
 };
 
 describe("useDismissable", () => {
+  it("reports that there is no top overlay when none is open", () => {
+    expect(dismissTopOverlay()).toBe(false);
+  });
+
+  it("dismisses only the top overlay through the shared bridge", async () => {
+    const dismissLower = vi.fn();
+    const dismissTop = vi.fn();
+    await render(
+      <>
+        <Panel open onDismiss={dismissLower} />
+        <Panel open onDismiss={dismissTop} />
+      </>
+    );
+
+    expect(dismissTopOverlay()).toBe(true);
+    expect(dismissTop).toHaveBeenCalledOnce();
+    expect(dismissLower).not.toHaveBeenCalled();
+  });
+
   it("dismisses on Escape while open", async () => {
     const onDismiss = vi.fn();
     await render(<Panel open onDismiss={onDismiss} />);

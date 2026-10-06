@@ -22,21 +22,6 @@ const harness = createSettingsTestHarness();
 let temporaryRegistrations: Array<{ dispose(): void }> = [];
 
 beforeEach(() => {
-  // happy-dom has no layout engine; give the virtualizer a deterministic
-  // viewport while retaining the real @tanstack/react-virtual implementation.
-  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
-    x: 0,
-    y: 0,
-    width: 224,
-    height: 400,
-    top: 0,
-    right: 224,
-    bottom: 400,
-    left: 0,
-    toJSON: () => ({})
-  });
-  vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(224);
-  vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(400);
   seedSettingsStore({ activeSection: "editor.display" });
 });
 
@@ -60,11 +45,6 @@ async function setSearchQuery(query: string): Promise<void> {
   await act(async () => {
     useSettingsStore.setState({ searchQuery: query });
   });
-}
-
-/** Clicks an element and flushes React updates. */
-async function click(element: Element): Promise<void> {
-  return harness.click(element);
 }
 
 /** Types into React's controlled search input and flushes the input event. */
@@ -164,7 +144,7 @@ describe("SettingsSearch", () => {
     }
   });
 
-  it("renders only the visible rows for 500+ matching settings", async () => {
+  it("renders every row for 500+ matching settings", async () => {
     const sectionId = "virtual-search.results";
     temporaryRegistrations.push(
       appSettingsRegistry.register({
@@ -182,7 +162,7 @@ describe("SettingsSearch", () => {
               scope: "app" as const,
               section: sectionId,
               label: `Virtual option ${index}`,
-              description: "Bulk virtualization test setting"
+              description: "Bulk test setting"
             }))
           }
         ]
@@ -191,12 +171,13 @@ describe("SettingsSearch", () => {
     await setSearchQuery("virtual option");
     const el = await renderSettingsTab();
 
+    // Other definitions can fuzzy-match the query too, so count the rows the
+    // bulk registration produced.
     const list = el.querySelector<HTMLElement>('[role="list"]')!;
-    const renderedRows = list.querySelectorAll("button");
-    const totalRows = Number.parseFloat(list.style.height) / 52;
-    expect(renderedRows.length).toBeGreaterThan(0);
-    expect(totalRows).toBeGreaterThanOrEqual(520);
-    expect(renderedRows.length).toBeLessThan(totalRows);
+    const bulkRows = Array.from(list.querySelectorAll("button")).filter((button) =>
+      button.textContent?.includes("Virtual option")
+    );
+    expect(bulkRows).toHaveLength(520);
   });
 
   it("shows the module/section path in results", async () => {
@@ -233,7 +214,7 @@ describe("SettingsSearch", () => {
       el.querySelectorAll<HTMLButtonElement>('[role="list"] button')
     ).find((b) => b.textContent?.includes("Font size"));
     expect(resultButton).toBeDefined();
-    await click(resultButton!);
+    await harness.click(resultButton!);
 
     // Query should be cleared.
     expect(useSettingsStore.getState().searchQuery).toBe("");

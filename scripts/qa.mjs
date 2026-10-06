@@ -3,22 +3,23 @@
 import { spawnSync } from "node:child_process";
 
 const steps = [
-  ["Lint", "lint"],
-  ["Typecheck", "typecheck"],
-  ["Format (Rust)", "format:rust"],
-  ["Test (TypeScript)", "test"],
-  ["Test (Rust)", "test:rust"]
+  ["Lint", "lint", [], false],
+  ["Typecheck", "typecheck", [], false],
+  ["Format (Rust)", "format:rust", [], false],
+  ["Test (TypeScript)", "test", [], true],
+  ["Test (Rust)", "test:rust", ["--quiet"], false]
 ];
 const isWindows = process.platform === "win32";
 const pnpmEntry = process.env.npm_execpath;
 
-for (const [label, script] of steps) {
+for (const [label, script, extraArgs, quiet] of steps) {
   console.log(`\n▸ ${label}`);
+  const env = { ...process.env, ...(quiet && { QA_QUIET: "1" }) };
   const result = isWindows && pnpmEntry
-    ? spawnSync(process.execPath, [pnpmEntry, script], { stdio: "inherit" })
+    ? spawnSync(process.execPath, [pnpmEntry, script, ...extraArgs], { stdio: "inherit", env })
     : isWindows
-      ? spawnSync(`pnpm ${script}`, { stdio: "inherit", shell: true })
-      : spawnSync("pnpm", [script], { stdio: "inherit" });
+      ? spawnSync(`pnpm ${script} ${extraArgs.join(" ")}`, { stdio: "inherit", shell: true, env })
+      : spawnSync("pnpm", [script, ...extraArgs], { stdio: "inherit", env });
   if (result.error) {
     console.error(`\n✗ ${label}: ${result.error.message}`);
     process.exit(1);

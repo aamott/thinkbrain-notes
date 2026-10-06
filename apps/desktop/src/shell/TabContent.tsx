@@ -4,12 +4,34 @@ import { cn } from "../lib/utils";
 import { createVaultAssetResolver } from "../native/assets";
 import { useSettingsStore } from "../settings/settingsStore";
 import { desktopTabRegistry } from "../tabs/tabRegistry";
-import type { DesktopTab } from "../tabs/tabModel";
+import { isMediaViewerKind, type DesktopTab } from "../tabs/tabModel";
 import type { DocumentViewState } from "./shellTypes";
 import { SettingsTab } from "../settings/SettingsTab";
 import { MergeTab } from "../sync/MergeTab";
+import { VersionDiffTab } from "../sync/VersionDiffTab";
+import { NewTabView, type NewTabAction } from "../tabs/NewTabView";
 import { DamagedNote } from "./DamagedNote";
 import { Unavailable } from "./Unavailable";
+
+/** Lazy-loaded CodeEditor; only fetched when a code-editor tab is rendered. */
+const CodeEditor = lazy(async () => {
+  const module = await import("../tabs/CodeEditor");
+  return { default: module.CodeEditor };
+});
+
+/** Lazy-loaded media viewers; only fetched when a media tab is rendered. */
+const ImageViewer = lazy(async () => {
+  const module = await import("../tabs/MediaViewers");
+  return { default: module.ImageViewer };
+});
+const AudioViewer = lazy(async () => {
+  const module = await import("../tabs/MediaViewers");
+  return { default: module.AudioViewer };
+});
+const VideoViewer = lazy(async () => {
+  const module = await import("../tabs/MediaViewers");
+  return { default: module.VideoViewer };
+});
 
 /**
  * Props for the active tab content surface.
@@ -31,12 +53,24 @@ type TabContentProps = {
    */
   readonly onReopenNote?: (tabId: string, rootPath: string, relativePath: string) => void;
   /**
-   * Unsaved text of an editor open on the note a merge tab is about.
+   * Unsaved text of an editor open on the file a comparison tab is about.
    *
-   * Only a merge tab reads it: "this computer's version" has to be what the
-   * user is looking at, and the last save may be several paragraphs behind.
+   * Only merge and version-diff tabs read it: "the current version" has to be
+   * what the user is looking at, and the last save may be several paragraphs
+   * behind.
    */
   readonly unsavedNoteContents?: string | null;
+  /**
+   * Puts a recorded version back over the file it was of — shell-owned so an
+   * open dirty file is saved before the restore runs. Only version-diff tabs
+   * call it.
+   */
+  readonly onRestoreVersion?: (notePath: string, changeId: string) => Promise<void>;
+  /** What the new-tab page offers; each chrome wires its own navigation. */
+  readonly newTab?: {
+    readonly workspaceName: string | null;
+    readonly actions: readonly NewTabAction[];
+  };
 };
 
 /** Lazy-loaded Markdown editor; only fetched when an editor tab is rendered. */
@@ -60,7 +94,9 @@ export function TabContent({
   noteIndex,
   onOpenNote,
   onReopenNote,
-  unsavedNoteContents
+  unsavedNoteContents,
+  onRestoreVersion,
+  newTab
 }: TabContentProps) {
   // Hooks must run before any early return, so both are read up front even
   // though only the Markdown editor branch consumes them.
@@ -136,6 +172,15 @@ export function TabContent({
     return <SettingsTab />;
   }
 
+  if (tab.kind === "new-tab") {
+    return (
+      <NewTabView
+        workspaceName={newTab?.workspaceName ?? null}
+        actions={newTab?.actions ?? []}
+      />
+    );
+  }
+
   // Named by the conflict copy, which is what identifies a conflict everywhere
   // else — one note can have a copy from each of two machines.
   if (tab.kind === "merge") {
@@ -143,8 +188,75 @@ export function TabContent({
       <MergeTab
         rootPath={rootPath ?? null}
         copyPath={relativePath ?? null}
+        tabId={tab.id}
         buffer={unsavedNoteContents ?? null}
       />
+    );
+  }
+
+  // A recorded version of a file against its current contents, read-only.
+  if (tab.kind === "version-diff") {
+    return (
+      <VersionDiffTab
+        rootPath={rootPath ?? null}
+        notePath={tab.comparedNotePath ?? relativePath ?? null}
+        changeId={tab.versionChangeId ?? null}
+        currentBuffer={unsavedNoteContents ?? null}
+        onRestore={
+          onRestoreVersion ??
+          (async () => {
+            throw new Error("Restoring a version is not available right now.");
+          })
+        }
+      />
+    );
+  }
+
+  // Code editor for non-Markdown text files.
+  if (tab.kind === "code-editor") {
+    if (!document || document.phase === "loading") {
+      return (
+        <Unavailable title="Loading file" description="Reading the file from the workspace…" />
+      );
+    }
+    if (document.phase === "error" && !document.contents) {
+      return (
+        <Unavailable
+          title="Could not open file"
+          description={document.error ?? "The file could not be read."}
+        />
+      );
+    }
+    return (
+      <Suspense
+        fallback={<Unavailable title="Loading editor" description="Preparing the code editor…" />}
+      >
+        <CodeEditor
+          key={tab.id}
+          value={document.contents}
+          isSaving={document.phase === "saving"}
+          error={document.error}
+          rootPath={rootPath ?? null}
+          relativePath={relativePath ?? null}
+          stateKey={tab.id}
+          onChange={(contents) => onChange(tab.id, contents)}
+          onSave={() => { void onSave(tab); }}
+        />
+      </Suspense>
+    );
+  }
+
+  // Media viewers (image, audio, video) — read-only, no save button.
+  if (isMediaViewerKind(tab.kind)) {
+    const viewerProps = { rootPath: rootPath ?? null, relativePath: relativePath ?? null };
+    return (
+      <Suspense
+        fallback={<Unavailable title="Loading viewer" description="Preparing the media viewer…" />}
+      >
+        {tab.kind === "image-viewer" && <ImageViewer {...viewerProps} />}
+        {tab.kind === "audio-viewer" && <AudioViewer {...viewerProps} />}
+        {tab.kind === "video-viewer" && <VideoViewer {...viewerProps} />}
+      </Suspense>
     );
   }
 

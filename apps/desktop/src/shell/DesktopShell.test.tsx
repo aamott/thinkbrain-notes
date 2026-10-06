@@ -36,11 +36,11 @@ describe("DesktopShell composition", () => {
     expect(markup).toContain('aria-label="ThinkBrain desktop workspace"');
   });
 
-  it("renders the title bar with the app name and tab strip landmark", () => {
+  it("renders the title bar tab strip and command affordance in default selector mode", () => {
     const markup = shellMarkup();
 
-    expect(markup).toContain(">ThinkBrain</span>");
     expect(markup).toContain('aria-label="Open tabs"');
+    expect(markup).toContain('aria-label="Command palette (Ctrl/Cmd+P)"');
   });
 
   it("renders every activity bar action as a labelled icon button", () => {
@@ -54,9 +54,28 @@ describe("DesktopShell composition", () => {
       expect(markup).toContain(`aria-label="${action.label}"`);
       expect(markup).toContain(`title="${action.label}"`);
     }
-    expect(leftPanels).toHaveLength(6);
+    // Five, and history is not among them: it moved to the right inspector.
+    expect(leftPanels).toHaveLength(5);
+    expect(leftPanels.map((action) => action.id)).not.toContain("history");
     expect(markup).toContain('aria-label="Settings"');
     expect(markup).toContain('title="Settings"');
+  });
+
+  it("renders the Action items trigger alongside the pinned panel buttons", () => {
+    const markup = shellMarkup();
+
+    // Both controls always render; CSS breakpoints decide which is visible.
+    expect(markup).toContain('aria-label="Action items"');
+    expect(markup).toContain('aria-controls="desktop-action-items-menu"');
+    // Only the pinned panels get icon buttons — the default set is Outline
+    // alone; the rest live in the ⋯ menu until pinned or notified.
+    expect(markup).toContain('aria-label="Outline"');
+    const unpinned = desktopPanelRegistry
+      .entriesBySide("right")
+      .filter((action) => action.id !== "outline");
+    for (const action of unpinned) {
+      expect(markup).not.toContain(`aria-label="${action.label}"`);
+    }
   });
 
   it("keeps the editor region and left dock landmark in the layout", () => {

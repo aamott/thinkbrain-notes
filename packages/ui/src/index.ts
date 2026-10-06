@@ -1,10 +1,8 @@
-export { Button } from "./components/ui/button";
-export { buttonVariants } from "./components/ui/button-variants";
-export type { ButtonProps } from "./components/ui/button";
 export { cn } from "./lib/utils";
-export { useDismissable } from "./components/ui/use-dismissable";
+export { dismissTopOverlay, useDismissable } from "./components/ui/use-dismissable";
 export { Scrim } from "./components/ui/scrim";
 export { Drawer } from "./components/ui/drawer";
 export { BottomSheet } from "./components/ui/bottom-sheet";
-export { BottomNav } from "./components/ui/bottom-nav";
-export type { BottomNavItem } from "./components/ui/bottom-nav";
+export { CountBadge } from "./components/ui/count-badge";
+export { FloatingBubbles } from "./components/ui/floating-bubbles";
+export type { FloatingBubbleItem } from "./components/ui/floating-bubbles";

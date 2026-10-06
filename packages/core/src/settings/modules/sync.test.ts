@@ -80,7 +80,7 @@ describe("sync module", () => {
     const git = syncModule.sections.find((section) => section.id === "sync.destination");
     expect(cloud?.label).toBe("Cloud copies");
     expect(git?.label).toBe("Git link");
-    expect(cloud?.settings?.[0]?.description).toMatch(/Decisions needed/i);
+    expect(cloud?.settings?.[0]?.description).toMatch(/Sync conflicts/i);
     expect(cloud?.settings?.[0]?.description).toMatch(/OneDrive/i);
   });
 
@@ -100,5 +100,46 @@ describe("sync module", () => {
     expect(history?.settings?.[0]?.description).toMatch(/retention threshold/);
     expect(history?.settings?.[0]?.description).not.toMatch(/size cap/i);
     expect(history?.settings?.[0]?.description).not.toMatch(/\bcheckpoint\b/i);
+  });
+
+  it("schedules sync with a plain toggle and an interval", () => {
+    const registry = createSettingsRegistry();
+    registry.register(syncModule);
+
+    expect(registry.getDefinition("sync.trigger")).toBeUndefined();
+    expect(registry.getDefinition("sync.automatically")?.default).toBe(true);
+    expect(registry.getDefinition("sync.intervalSeconds")?.default).toBe(60);
+    expect(registry.getDefinition("sync.quietSeconds")?.default).toBe(30);
+    expect(registry.getDefinition("sync.onOpen")?.default).toBe(true);
+    expect(registry.getDefinition("sync.onLeave")?.default).toBe(true);
+  });
+
+  it("keeps the everyday toggle out of advanced and the knobs in it", () => {
+    const registry = createSettingsRegistry();
+    registry.register(syncModule);
+
+    expect(registry.getDefinition("sync.automatically")?.advanced).toBeUndefined();
+    for (const key of ["sync.intervalSeconds", "sync.quietSeconds", "sync.onOpen", "sync.onLeave"]) {
+      expect(registry.getDefinition(key)?.advanced).toBe(true);
+    }
+  });
+
+  it("refuses an interval fast enough to get someone rate-limited", () => {
+    const registry = createSettingsRegistry();
+    registry.register(syncModule);
+
+    expect(validateSettings(registry, { "sync.intervalSeconds": 60 })).toEqual([]);
+    expect(validateSettings(registry, { "sync.intervalSeconds": 5 })).not.toEqual([]);
+    expect(validateSettings(registry, { "sync.intervalSeconds": 86400 })).not.toEqual([]);
+    expect(validateSettings(registry, { "sync.quietSeconds": 1 })).not.toEqual([]);
+  });
+
+  it("says that turning sync off does not stop saving local history", () => {
+    const registry = createSettingsRegistry();
+    registry.register(syncModule);
+
+    expect(registry.getDefinition("sync.automatically")?.description).toMatch(
+      /saved versions|version history|kept on this device/i
+    );
   });
 });

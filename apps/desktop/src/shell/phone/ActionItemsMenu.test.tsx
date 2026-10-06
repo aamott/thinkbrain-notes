@@ -1,0 +1,199 @@
+// @vitest-environment happy-dom
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import type { RightPanelContext } from "../../panels/panelRegistryModel";
+import { ActionItemsMenu } from "./ActionItemsMenu";
+
+let root: Root | null = null;
+let container: HTMLDivElement | null = null;
+
+afterEach(async () => {
+  await act(async () => root?.unmount());
+  container?.remove();
+  root = null;
+  container = null;
+});
+
+const render = async (element: React.ReactElement): Promise<HTMLDivElement> => {
+  container = document.createElement("div");
+  document.body.append(container);
+  root = createRoot(container);
+  await act(async () => root?.render(element));
+  return container;
+};
+
+const context = (overrides: Partial<RightPanelContext> = {}): RightPanelContext => ({
+  rootPath: null,
+  documentContents: null,
+  documentPath: null,
+  onOpenNote: () => undefined,
+  onCompareVersion: () => undefined,
+  onRestoreVersion: async () => undefined,
+  ...overrides
+});
+
+const menu = (
+  overrides: Record<string, unknown> = {},
+  contextOverrides: Partial<RightPanelContext> = {}
+): React.ReactElement => (
+  <ActionItemsMenu
+    open
+    context={context(contextOverrides)}
+    onDismiss={() => undefined}
+    onSelect={() => undefined}
+    {...overrides}
+  />
+);
+
+const menuOf = (host: HTMLDivElement): Element | null =>
+  host.querySelector('[role="menu"][aria-label="Action items"]');
+
+describe("ActionItemsMenu", () => {
+  it("offers Version history once, disabled without a file open", async () => {
+    const onSelect = vi.fn();
+    const host = await render(menu({ onSelect }));
+    const rows = menuOf(host)?.querySelectorAll<HTMLButtonElement>(
+      '[role="menuitem"][aria-label="Version history"]'
+    );
+
+    // It is an ordinary right-panel contribution — one row, greyed until a
+    // file is the visible content, never a bespoke extra entry.
+    expect(rows).toHaveLength(1);
+    expect(rows?.[0]?.disabled).toBe(true);
+    expect(menuOf(host)?.querySelector('[aria-label="Saved versions"]')).toBeNull();
+    await act(async () => rows?.[0]?.click());
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it("opens Version history for the file on screen", async () => {
+    const onSelect = vi.fn();
+    const host = await render(menu({ onSelect }, { documentPath: "note.md" }));
+    const row = menuOf(host)?.querySelector<HTMLButtonElement>(
+      '[role="menuitem"][aria-label="Version history"]'
+    );
+
+    expect(row?.disabled).toBe(false);
+    await act(async () => row?.click());
+    expect(onSelect).toHaveBeenCalledWith("history");
+  });
+
+  it("lists every registered right-panel contribution as a menuitem", async () => {
+    const host = await render(menu());
+    const el = menuOf(host);
+
+    expect(el).not.toBeNull();
+    for (const label of ["Version history", "Outline", "Properties", "Backlinks", "Assistant"]) {
+      expect(el?.querySelector(`[role="menuitem"][aria-label="${label}"]`)).not.toBeNull();
+    }
+  });
+
+  // Backlinks declares `availability: () => false` in the registry — the row
+  // stays visible but disabled rather than vanishing or pretending to work.
+  it("keeps unavailable entries visible but disabled", async () => {
+    const host = await render(menu());
+    const backlinks = menuOf(host)?.querySelector<HTMLButtonElement>(
+      '[role="menuitem"][aria-label="Backlinks"]'
+    );
+
+    expect(backlinks).not.toBeNull();
+    expect(backlinks?.disabled).toBe(true);
+  });
+
+  it("calls onSelect with the chosen panel", async () => {
+    const onSelect = vi.fn();
+    const host = await render(menu({ onSelect }));
+
+    await act(async () => {
+      menuOf(host)
+        ?.querySelector<HTMLButtonElement>('[role="menuitem"][aria-label="Outline"]')
+        ?.click();
+    });
+
+    expect(onSelect).toHaveBeenCalledWith("outline");
+  });
+
+  it("dismisses on an outside tap", async () => {
+    const onDismiss = vi.fn();
+    const host = await render(menu({ onDismiss }));
+
+    // The bounded layer wraps the menu — a direct hit on it (outside the
+    // menu surface) dismisses, while taps on the menu itself do not.
+    const layer = menuOf(host)?.parentElement;
+    expect(layer).not.toBeNull();
+    await act(async () => {
+      layer?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+    });
+
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it("dismisses on Escape", async () => {
+    const onDismiss = vi.fn();
+    await render(menu({ onDismiss }));
+
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  // The *layer* spans the whole shell — bubbles included — so a tap on the
+  // trigger bubble also dismisses; the menu itself hangs above the ⋮ bubble.
+  it("spans the whole shell and hangs the menu above the ⋮ bubble", async () => {
+    const host = await render(menu());
+    const menuEl = menuOf(host);
+    const menuCls = menuEl?.className ?? "";
+    const layer = host.querySelector('[data-tn-dismiss-layer="actions"]');
+    const layerCls = layer?.className ?? "";
+
+    expect(menuCls).toContain("right-3");
+    expect(menuCls).toContain("bottom-[calc(4.5rem+env(safe-area-inset-bottom))]");
+    expect(menuCls).toContain("z-50");
+    expect(layerCls).toContain("inset-0");
+    // Above the bubbles' z-20 so their taps reach the layer, not the bubble.
+    expect(layerCls).toContain("z-40");
+    expect(menuEl?.parentElement).toBe(layer);
+  });
+
+  // Roving focus shared by both phone menus: arrows move between enabled
+  // rows (wrapping at the ends), Home/End jump, and a disabled row is never
+  // a stop.
+  const row = (host: HTMLDivElement, label: string): HTMLButtonElement | null =>
+    menuOf(host)?.querySelector<HTMLButtonElement>(
+      `[role="menuitem"][aria-label="${label}"]`
+    ) ?? null;
+  const press = (host: HTMLDivElement, key: string) =>
+    menuOf(host)?.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
+
+  it("moves focus with ArrowDown/ArrowUp, wrapping at the ends", async () => {
+    const host = await render(menu({}, { documentPath: "note.md" }));
+    // With a file open every right-panel row is enabled, in registry order.
+    const order = ["Version history", "Outline", "Backlinks", "Properties", "Assistant"] as const;
+    // Start with focus outside the menu: Down then selects the first row.
+    await act(async () => (document.activeElement as HTMLElement | null)?.blur());
+
+    await act(async () => press(host, "ArrowDown"));
+    expect(document.activeElement).toBe(row(host, order[0]));
+    for (const label of order.slice(1)) {
+      await act(async () => press(host, "ArrowDown"));
+      expect(document.activeElement).toBe(row(host, label));
+    }
+    await act(async () => press(host, "ArrowDown"));
+    expect(document.activeElement).toBe(row(host, order[0]));
+    await act(async () => press(host, "ArrowUp"));
+    expect(document.activeElement).toBe(row(host, "Assistant"));
+  });
+
+  it("jumps to the first/last row with Home/End", async () => {
+    const host = await render(menu({}, { documentPath: "note.md" }));
+    await act(async () => (document.activeElement as HTMLElement | null)?.blur());
+
+    await act(async () => press(host, "End"));
+    expect(document.activeElement).toBe(row(host, "Assistant"));
+    await act(async () => press(host, "Home"));
+    expect(document.activeElement).toBe(row(host, "Version history"));
+  });
+});

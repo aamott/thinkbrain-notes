@@ -34,6 +34,9 @@ fn record_note(fixture: &test_support::RepoFixture, relative: &str, contents: &s
 fn bare_remote(name: &str) -> PathBuf {
     let path = make_temp_test_dir(name, "import", true);
     gix::init_bare(&path).expect("bare remote");
+    // HEAD names `main` rather than the platform's configured default branch:
+    // sync discovery binds the destination's advertised default.
+    fs::write(path.join("HEAD"), "ref: refs/heads/main\n").expect("HEAD names main");
     path
 }
 
@@ -170,6 +173,7 @@ fn an_existing_child_folder_is_refused_and_left_alone() {
 
 #[test]
 fn settings_name_the_link_and_profile_without_a_token() {
+    crate::commands::sync::credentials::tests::with_a_store();
     let app_data = app_data("persist");
     let parent = parent("persist");
     let profile = upsert_profile(
@@ -234,6 +238,7 @@ fn a_missing_profile_is_not_replaced_with_another() {
 
 #[test]
 fn a_profile_saved_for_another_host_is_refused() {
+    crate::commands::sync::credentials::tests::with_a_store();
     let app_data = app_data("wrong-host");
     let parent = parent("wrong-host");
     let profile = upsert_profile(
@@ -295,6 +300,7 @@ fn an_empty_remote_creates_an_empty_linked_workspace_without_git_in_the_vault() 
     let parent = parent("empty");
     let remote = make_temp_test_dir("empty-remote", "import", true);
     gix::init_bare(&remote).expect("bare remote");
+    fs::write(remote.join("HEAD"), "ref: refs/heads/main\n").expect("HEAD names main");
 
     let prepared = prepare_import(
         &app_data,
@@ -303,7 +309,9 @@ fn an_empty_remote_creates_an_empty_linked_workspace_without_git_in_the_vault() 
         None,
     )
     .expect("prepared");
-    let target = complete_import(&app_data, prepared, |_| {}).expect("empty remote is fine");
+    let target = complete_import(&app_data, prepared, |_| {})
+        .expect("empty remote is fine")
+        .path;
 
     assert!(target.is_dir());
     assert!(!target.join(".git").exists(), "vault grew a .git");
@@ -351,7 +359,9 @@ fn a_local_bare_remote_on_a_nonstandard_default_branch_is_adopted() {
         None,
     )
     .expect("prepared");
-    let target = complete_import(&app_data, prepared, |_| {}).expect("import");
+    let target = complete_import(&app_data, prepared, |_| {})
+        .expect("import")
+        .path;
 
     assert_eq!(
         fs::read_to_string(target.join("hello.md")).expect("adopted"),
@@ -377,7 +387,9 @@ fn a_second_check_after_import_does_not_interleave_or_rewrite_notes() {
         None,
     )
     .expect("prepared");
-    let target = complete_import(&app_data, prepared, |_| {}).expect("import");
+    let target = complete_import(&app_data, prepared, |_| {})
+        .expect("import")
+        .path;
     let hidden = hidden_repo_path(&app_data, &target.to_string_lossy());
     let repo = gix::open(&hidden).expect("hidden repo");
     let again = crate::commands::sync::round::once(&repo, &target, &there.to_string_lossy())
@@ -413,6 +425,7 @@ fn import_progress_never_carries_url_credentials() {
         phase: None,
         target_path: "/notes/notes".to_string(),
         error: Some(error),
+        not_sent: None,
     };
     let json = serde_json::to_string(&payload).expect("json");
     assert!(!json.contains("token"));
@@ -423,12 +436,83 @@ fn import_progress_never_carries_url_credentials() {
 #[test]
 fn import_commands_are_registered() {
     assert_eq!(IMPORT_EVENT, "sync://import");
-    assert!(crate::commands::APP_COMMAND_PATHS
-        .contains(&"sync::import::preview_workspace_from_git_link"));
-    assert!(crate::commands::APP_COMMAND_PATHS
-        .contains(&"sync::import::preview_managed_workspace_from_git_link"));
-    assert!(crate::commands::APP_COMMAND_PATHS
-        .contains(&"sync::import::import_workspace_from_git_link"));
-    assert!(crate::commands::APP_COMMAND_PATHS
-        .contains(&"sync::import::import_managed_workspace_from_git_link"));
+    assert!(
+        crate::commands::APP_COMMAND_PATHS
+            .contains(&"sync::import::preview_workspace_from_git_link")
+    );
+    assert!(
+        crate::commands::APP_COMMAND_PATHS
+            .contains(&"sync::import::preview_managed_workspace_from_git_link")
+    );
+    assert!(
+        crate::commands::APP_COMMAND_PATHS
+            .contains(&"sync::import::import_workspace_from_git_link")
+    );
+    assert!(
+        crate::commands::APP_COMMAND_PATHS
+            .contains(&"sync::import::import_managed_workspace_from_git_link")
+    );
+}
+
+/// An import fetches, merges, and then pushes. When that push cannot succeed —
+/// a public repository nobody has write access to, a read-only mirror, or a
+/// phone with nowhere to keep a token — the whole import used to be rolled
+/// back and the vault deleted, discarding a fetch and merge that had both
+/// worked.
+///
+/// The remote is taken away at the `Sending` phase, which fires after the
+/// fetch and merge and immediately before the push. That makes the push the
+/// only thing that fails, which is the situation under test; locking the
+/// remote up front does not work, because against a local remote there is
+/// nothing left to send and the push never has to reach it.
+#[test]
+fn an_import_keeps_the_vault_when_the_push_fails() {
+    let app_data = app_data("readonly");
+    let parent = parent("readonly");
+    let source = source_device("import-readonly-src");
+    record_note(&source, "hello.md", "fetched but not sendable\n");
+    let tip = snapshot::head_commit(&source.repo)
+        .expect("readable")
+        .expect("recorded");
+    let remote = bare_remote("readonly-remote");
+    push::send(
+        &source.repo,
+        &remote.to_string_lossy(),
+        "refs/heads/main",
+        tip,
+    )
+    .expect("seeded the remote");
+
+    let prepared = prepare_import(
+        &app_data,
+        &remote.to_string_lossy(),
+        &parent.to_string_lossy(),
+        None,
+    )
+    .expect("prepared");
+
+    let moved_aside = remote.with_extension("gone");
+    let target = complete_import(&app_data, prepared, |phase| {
+        if matches!(phase, SyncPhase::Sending) {
+            fs::rename(&remote, &moved_aside).expect("take the remote away before the push");
+        }
+    })
+    .expect("a repository we cannot push to still imports");
+
+    assert!(target.path.is_dir(), "the vault was rolled back");
+    assert_eq!(
+        fs::read_to_string(target.path.join("hello.md")).expect("the fetched note survived"),
+        "fetched but not sendable\n"
+    );
+    assert!(
+        matches!(target.landed, push::Landed::NotSent { .. }),
+        // `NotSent.reason` carries an error string CodeQL taints as
+        // credential-derived, so the variant name is all the panic prints.
+        "the import should report that it sent nothing, got {}",
+        match &target.landed {
+            push::Landed::Moved => "Moved",
+            push::Landed::Refused { .. } => "Refused",
+            push::Landed::NotSent { .. } => "NotSent",
+        }
+    );
 }

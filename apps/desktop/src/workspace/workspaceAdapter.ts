@@ -1,8 +1,10 @@
 import {
   invokeNativeCommand,
+  NativeCommandError,
   type NativeWorkspaceAccessCapabilities,
   type NativeWorkspaceDescriptor,
   type NativeWorkspaceEntry,
+  type NativeWorkspaceRenameResult,
   type NativeWorkspaceSnapshot
 } from "../native/commands";
 import { pickDirectoryPath } from "../native/dialogs";
@@ -74,9 +76,36 @@ export const workspaceDesktopApi: WorkspaceDesktopApi = {
     return invokeNativeCommand("create_workspace_folder", { rootPath, relativePath });
   },
   async renameWorkspaceEntry(rootPath, relativePath, newRelativePath) {
-    const entry = await invokeNativeCommand("rename_workspace_entry", { rootPath, relativePath, newRelativePath });
-    appEvents.emit("note.renamed", { rootPath, oldRelativePath: relativePath, newRelativePath });
-    return entry;
+    const result = await invokeNativeCommand("rename_workspace_entry", { rootPath, relativePath, newRelativePath });
+    if (!isWorkspaceRenameResult(result)) {
+      throw new NativeCommandError({
+        code: "workspace.native_contract_mismatch",
+        message: "The installed native app does not support workspace move metadata. Update or rebuild the app shell."
+      });
+    }
+    // One event sequence per moved file. `file.renamed` always fires first so
+    // an open tab follows the path; the note-* event after it updates the
+    // indexes. A rename that crosses the Markdown boundary is a delete+create
+    // to the note world — never a fake note rename.
+    for (const move of result.file_moves) {
+      const rename = {
+        rootPath,
+        oldRelativePath: move.old_relative_path,
+        newRelativePath: move.new_relative_path
+      };
+      if (move.was_markdown && move.is_markdown) {
+        appEvents.emit("note.renamed", rename);
+      } else if (move.was_markdown) {
+        appEvents.emit("file.renamed", rename);
+        appEvents.emit("note.deleted", { rootPath, relativePath: move.old_relative_path });
+      } else if (move.is_markdown) {
+        appEvents.emit("file.renamed", rename);
+        appEvents.emit("note.created", { rootPath, relativePath: move.new_relative_path });
+      } else {
+        appEvents.emit("file.renamed", rename);
+      }
+    }
+    return result.entry;
   },
   async deleteWorkspaceEntry(rootPath, relativePath) {
     const result = await invokeNativeCommand("delete_workspace_entry", { rootPath, relativePath });
@@ -84,3 +113,9 @@ export const workspaceDesktopApi: WorkspaceDesktopApi = {
     return result;
   }
 };
+
+function isWorkspaceRenameResult(result: unknown): result is NativeWorkspaceRenameResult {
+  if (!result || typeof result !== "object") return false;
+  const candidate = result as Partial<NativeWorkspaceRenameResult>;
+  return !!candidate.entry && Array.isArray(candidate.file_moves);
+}

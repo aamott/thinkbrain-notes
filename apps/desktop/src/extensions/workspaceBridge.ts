@@ -17,6 +17,8 @@ export interface WorkspaceBridge {
   readonly rootPath: string | null;
   /** Opens a workspace-relative Markdown note in an editor tab. */
   readonly openNote: (relativePath: string) => void;
+  /** Opens any workspace-relative file, inferring the tab kind from extension. */
+  readonly openFile?: (relativePath: string) => void;
   /** Opens a tab of a contributed kind. */
   readonly openTab: (kind: string, title: string) => void;
 }

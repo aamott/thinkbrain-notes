@@ -29,11 +29,11 @@ import { isTauri } from "@tauri-apps/api/core";
 import { workspaceDesktopApi } from "../workspace/workspaceAdapter";
 import { invokeNativeCommand } from "../native/commands";
 import { SettingsTab } from "./SettingsTab";
-import { useSettingsStore, appSettingsRegistry } from "./settingsStore";
+import { useSettingsStore, appSettingsRegistry, selectIsDirty } from "./settingsStore";
 import { setExtensionBootstrap } from "../extensions/bootstrapRef";
 import { setWorkspaceBridge } from "../extensions/workspaceBridge";
 import { registerControl, type ControlProps } from "./controlRegistry";
-import { createScrollSpyHarness } from "./scrollSpyTestUtils";
+import { createScrollSpyHarness, intersectSection } from "./scrollSpyTestUtils";
 import {
   createSettingsTestHarness,
   seedSettingsStore
@@ -72,11 +72,6 @@ async function renderSettingsTab(): Promise<HTMLDivElement> {
   return harness.render(<SettingsTab />);
 }
 
-/** Clicks an element and flushes React updates. */
-async function click(element: Element): Promise<void> {
-  return harness.click(element);
-}
-
 /** Counts only settings-document reads, excluding controls' native queries. */
 function settingsReadCallCount(): number {
   return vi
@@ -85,13 +80,6 @@ function settingsReadCallCount(): number {
       ([command]) =>
         command === "read_app_settings" || command === "read_workspace_settings"
     ).length;
-}
-
-/** Publishes one visible content section to the scroll-spy observer. */
-async function intersectSection(section: Element): Promise<void> {
-  await act(async () => {
-    scrollSpy.intersect(section);
-  });
 }
 
 describe("SettingsTab", () => {
@@ -106,7 +94,7 @@ describe("SettingsTab", () => {
     expect(el.textContent).toContain("Application");
     expect(el.textContent).toContain("Theme");
     expect(el.textContent).toContain("Display");
-    expect(el.textContent).not.toContain("Workspace");
+    expect(nav?.textContent).not.toContain("Workspace");
     expect(el.querySelector("main")).not.toBeNull();
     expect(el.querySelectorAll('[role="toolbar"][aria-label="Settings actions"]')).toHaveLength(1);
     expect(el.querySelector('[data-testid="settings-save-bar"]')).toBeNull();
@@ -129,7 +117,7 @@ describe("SettingsTab", () => {
       'button[aria-label="Open settings navigation"]'
     )!;
 
-    await click(hamburger);
+    await harness.click(hamburger);
 
     expect(hamburger.getAttribute("aria-expanded")).toBe("true");
     expect(el.querySelector("#settings-navigation")?.getAttribute("data-open")).toBe("true");
@@ -138,13 +126,13 @@ describe("SettingsTab", () => {
 
   it("closes the navigation from its close button", async () => {
     const el = await renderSettingsTab();
-    await click(el.querySelector('button[aria-label="Open settings navigation"]')!);
+    await harness.click(el.querySelector('button[aria-label="Open settings navigation"]')!);
     const nav = el.querySelector<HTMLElement>("#settings-navigation")!;
     const closeButton = nav.querySelector<HTMLButtonElement>(
       'button[aria-label="Close settings navigation"]'
     )!;
 
-    await click(closeButton);
+    await harness.click(closeButton);
 
     expect(nav.getAttribute("data-open")).toBe("false");
     expect(el.querySelector('[data-testid="settings-navigation-scrim"]')).toBeNull();
@@ -152,12 +140,12 @@ describe("SettingsTab", () => {
 
   it("closes the navigation from the scrim", async () => {
     const el = await renderSettingsTab();
-    await click(el.querySelector('button[aria-label="Open settings navigation"]')!);
+    await harness.click(el.querySelector('button[aria-label="Open settings navigation"]')!);
     const scrim = el.querySelector<HTMLButtonElement>(
       '[data-testid="settings-navigation-scrim"]'
     )!;
 
-    await click(scrim);
+    await harness.click(scrim);
 
     expect(el.querySelector("#settings-navigation")?.getAttribute("data-open")).toBe("false");
     expect(el.querySelector('[data-testid="settings-navigation-scrim"]')).toBeNull();
@@ -165,7 +153,7 @@ describe("SettingsTab", () => {
 
   it("closes the navigation when Escape is pressed", async () => {
     const el = await renderSettingsTab();
-    await click(el.querySelector('button[aria-label="Open settings navigation"]')!);
+    await harness.click(el.querySelector('button[aria-label="Open settings navigation"]')!);
 
     await act(async () => {
       window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
@@ -177,12 +165,12 @@ describe("SettingsTab", () => {
 
   it("scrolls to the selected section without closing the overlay", async () => {
     const el = await renderSettingsTab();
-    await click(el.querySelector('button[aria-label="Open settings navigation"]')!);
+    await harness.click(el.querySelector('button[aria-label="Open settings navigation"]')!);
     const displayButton = Array.from(el.querySelectorAll<HTMLButtonElement>("button")).find(
       (button) => button.textContent === "Display"
     )!;
 
-    await click(displayButton);
+    await harness.click(displayButton);
 
     expect(scrollSpy.scrollIntoView).toHaveBeenCalledWith({
       behavior: "smooth",
@@ -212,7 +200,7 @@ describe("SettingsTab", () => {
     // Before an intersection, no section has aria-current="true".
     expect(el.querySelector('[aria-current="true"]')).toBeNull();
 
-    await intersectSection(el.querySelector("#settings-section-app\\:editor\\.display")!);
+    await intersectSection(scrollSpy, el.querySelector("#settings-section-app\\:editor\\.display")!);
 
     // The observer drives both the store and navigation highlight.
     expect(useSettingsStore.getState().activeSection).toBe("app:editor.display");
@@ -264,7 +252,7 @@ describe("SettingsTab", () => {
 
     const toggle = el.querySelector<HTMLButtonElement>('[role="switch"]');
     expect(toggle).not.toBeNull();
-    await click(toggle!);
+    await harness.click(toggle!);
 
     // The store should now have a staged change for editor.lineWrapping.
     const staged = useSettingsStore.getState().stagedChanges;
@@ -350,9 +338,7 @@ describe("SettingsTab", () => {
     // Stage an unsaved edit, then simulate switching away and back.
     useSettingsStore.setState({
       activeSection: "editor.display",
-      stagedChanges: { "editor.fontSize": 99 },
-      isDirty: true,
-      dirtyCount: 1
+      stagedChanges: { "editor.fontSize": 99 }
     });
     expect(useSettingsStore.getState().stagedChanges["editor.fontSize"]).toBe(99);
 
@@ -362,7 +348,7 @@ describe("SettingsTab", () => {
 
     const staged = useSettingsStore.getState().stagedChanges;
     expect(staged["editor.fontSize"]).toBe(99);
-    expect(useSettingsStore.getState().isDirty).toBe(true);
+    expect(selectIsDirty(useSettingsStore.getState())).toBe(true);
 
     // Remounting must not reread documents and clear staged changes.
     expect(settingsReadCallCount()).toBe(callsAfterFirstMount);

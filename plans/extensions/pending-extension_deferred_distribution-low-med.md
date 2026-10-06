@@ -71,8 +71,8 @@ All remote discovery, URL install, marketplace UI/backend, signing, verification
 
 ## References
 
-- `plans/pending-marketplace-low-med.md`
-- `plans/marketplace/pending-extension_registry-low-med.md`
-- `plans/marketplace/pending-extension_metadata_signing-low-hard.md`
-- `plans/marketplace/pending-extension_update_flow-low-med.md`
-- `plans/extensions/pending-extension_file_installation-low-med.md`
+- `plans/marketplace/`
+- `marketplace/extension_registry`
+- `marketplace/extension_metadata_signing`
+- `marketplace/extension_update_flow`
+- `extensions/extension_file_installation`

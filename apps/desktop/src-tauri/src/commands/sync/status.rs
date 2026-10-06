@@ -12,7 +12,6 @@
 
 use serde::Serialize;
 
-use crate::commands::workspace::resolve_workspace_root;
 use crate::NativeError;
 
 use super::engine::{Engine, StuckNote, SyncHealth, SyncPhase};
@@ -142,9 +141,8 @@ pub fn of(recording: Recording<'_>) -> Result<SyncStatus, NativeError> {
 
 #[tauri::command]
 pub fn sync_status(root_path: String) -> Result<SyncStatus, NativeError> {
-    let root = resolve_workspace_root(&root_path)?;
+    let (root, engine) = super::registry::workspace_and_engine(&root_path)?;
     let key = root.to_string_lossy();
-    let engine = super::registry::engine(&key);
     of(match (&engine, super::registry::failure(&key)) {
         (Some(engine), _) => Recording::By(engine),
         (None, Some(problem)) => Recording::Failed(problem),

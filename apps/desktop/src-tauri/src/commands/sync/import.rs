@@ -6,18 +6,18 @@
 //! so opening the new window cannot interleave a second merge.
 
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::sync::atomic::AtomicU64;
 
 use serde::Serialize;
 use tauri::Emitter;
 
-use crate::error::{lock_or_recover, NativeError};
+use crate::error::{NativeError, lock_or_recover};
 
 use super::bootstrap::{self, hidden_repo_path};
 use super::credentials::take_from_url;
 use super::engine::SyncPhase;
 use super::failed;
+use super::push;
 use super::sign_in;
 
 /// Frontend event for one import dialog. Payload never includes the git URL.
@@ -59,6 +59,22 @@ pub struct ImportProgress {
     pub target_path: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<NativeError>,
+    /// Why nothing was sent back, when the import otherwise succeeded.
+    ///
+    /// An import fetches, merges and then pushes. The push can fail on its own
+    /// — a public repository, a read-only mirror, a device with nowhere to keep
+    /// a token — without any of the rest being in doubt. The vault is kept, and
+    /// this says the round trip was one-way so the caller can tell the user
+    /// rather than reporting a plain success.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub not_sent: Option<String>,
+}
+
+/// A finished import: where it landed, and whether it could send.
+#[derive(Debug)]
+pub struct Imported {
+    pub path: PathBuf,
+    pub landed: push::Landed,
 }
 
 /// Folder created for this operation, with the link already persisted.
@@ -162,22 +178,32 @@ pub fn complete_import(
     app_data: &Path,
     prepared: PreparedImport,
     mut on_phase: impl FnMut(SyncPhase),
-) -> Result<PathBuf, NativeError> {
+) -> Result<Imported, NativeError> {
     super::settle::remember_settings_home(app_data);
     let key = prepared.target.to_string_lossy().to_string();
     let lane = super::registry::lane(&key);
     let _lane = lock_or_recover(&lane);
     let result = (|| {
         on_phase(SyncPhase::Saving);
-        let managed = bootstrap::bootstrap(app_data, &prepared.target)?;
-        super::round::run_trip(
+        // The link was persisted by `prepare_import`, so it is the canonical
+        // source — never the local `.git` even if one exists.
+        let managed = bootstrap::bootstrap(app_data, &prepared.target, true)?;
+        // A push that cannot be made must not undo a fetch and merge that
+        // worked: importing a repository this device may never write to is a
+        // normal thing to do, and rolling it back deletes the notes it just
+        // brought down.
+        let synced = super::round::run_trip(
             &managed.repo,
             &prepared.target,
             &prepared.destination,
             prepared.profile_id.as_deref(),
+            super::round::PushPolicy::Optional,
             &mut on_phase,
         )?;
-        Ok(prepared.target.clone())
+        Ok(Imported {
+            path: prepared.target.clone(),
+            landed: synced.landed,
+        })
     })();
     if result.is_err() {
         cleanup_import(app_data, &prepared.target);
@@ -219,7 +245,7 @@ pub fn preview_managed_workspace_from_git_link(
     app: tauri::AppHandle,
     destination: String,
 ) -> Result<GitLinkPreview, NativeError> {
-    let app_data = resolve_app_data(&app)?;
+    let app_data = super::app_data_dir(&app)?;
     let parent = crate::commands::workspace::managed_vaults_root(&app_data)?;
     preview_from_git_link(&destination, &parent.to_string_lossy())
 }
@@ -231,7 +257,7 @@ pub fn import_workspace_from_git_link(
     parent_path: String,
     profile_id: Option<String>,
 ) -> Result<ImportStarted, NativeError> {
-    let app_data = resolve_app_data(&app)?;
+    let app_data = super::app_data_dir(&app)?;
     start_import(app, app_data, destination, parent_path, profile_id, true)
 }
 
@@ -242,7 +268,7 @@ pub fn import_managed_workspace_from_git_link(
     destination: String,
     profile_id: Option<String>,
 ) -> Result<ImportStarted, NativeError> {
-    let app_data = resolve_app_data(&app)?;
+    let app_data = super::app_data_dir(&app)?;
     let parent = crate::commands::workspace::managed_vaults_root(&app_data)?;
     start_import(
         app,
@@ -252,18 +278,6 @@ pub fn import_managed_workspace_from_git_link(
         profile_id,
         false,
     )
-}
-
-fn resolve_app_data(app: &tauri::AppHandle) -> Result<PathBuf, NativeError> {
-    use tauri::Manager as _;
-
-    app.path().app_data_dir().map_err(|error| {
-        failed(
-            "sync.no_app_data",
-            "Could not find where this app keeps its files.",
-            error,
-        )
-    })
 }
 
 fn start_import(
@@ -314,27 +328,32 @@ fn run_imported(
     prepared: PreparedImport,
     open_in_new_window: bool,
 ) {
-    let emit = |state: &str, phase: Option<SyncPhase>, error: Option<NativeError>| {
+    let emit = |state: &str,
+                phase: Option<SyncPhase>,
+                error: Option<NativeError>,
+                not_sent: Option<String>| {
         let payload = ImportProgress {
             request_id: request_id.clone(),
             state: state.to_string(),
             phase,
             target_path: target_path.clone(),
             error,
+            not_sent,
         };
         if let Err(error) = app.emit(IMPORT_EVENT, payload) {
             eprintln!("[sync] failed to deliver {IMPORT_EVENT}: {error}");
         }
     };
     match complete_import(&app_data, prepared, |phase| {
-        emit("running", Some(phase), None);
+        emit("running", Some(phase), None, None);
     }) {
-        Ok(path) if open_in_new_window => {
+        Ok(imported) if open_in_new_window => {
+            let not_sent = not_sent_reason(&imported.landed);
             match crate::commands::workspace::create_workspace_window_off_main_thread(
                 app.clone(),
-                path.to_string_lossy().into_owned(),
+                imported.path.to_string_lossy().into_owned(),
             ) {
-                Ok(()) => emit("ok", None, None),
+                Ok(()) => emit("ok", None, None, not_sent),
                 Err(error) => emit(
                     "failed",
                     None,
@@ -343,11 +362,20 @@ fn run_imported(
                         "The new workspace is ready, but its window could not open.",
                         error,
                     )),
+                    None,
                 ),
             }
         }
-        Ok(_) => emit("ok", None, None),
-        Err(error) => emit("failed", None, Some(error)),
+        Ok(imported) => emit("ok", None, None, not_sent_reason(&imported.landed)),
+        Err(error) => emit("failed", None, Some(error), None),
+    }
+}
+
+/// The reason an otherwise successful import sent nothing, if it sent nothing.
+fn not_sent_reason(landed: &push::Landed) -> Option<String> {
+    match landed {
+        push::Landed::NotSent { reason } => Some(reason.clone()),
+        _ => None,
     }
 }
 
@@ -367,17 +395,17 @@ fn persist_link(
             )
         })?;
     }
-    let mut record = crate::commands::settings::parse_app_settings_record(None);
-    record.insert(
-        DEST_SETTING.to_string(),
-        serde_json::Value::String(destination.to_string()),
-    );
-    record.insert(
-        sign_in::PROFILE_SETTING.to_string(),
-        serde_json::Value::String(profile_id.unwrap_or("").to_string()),
-    );
-    let written = crate::commands::settings::serialize_app_settings_record(record)?;
-    crate::commands::settings::write_settings_file(&path, &written)
+    crate::commands::settings::replace_settings_record(&path, |record| {
+        record.insert(
+            DEST_SETTING.to_string(),
+            serde_json::Value::String(destination.to_string()),
+        );
+        record.insert(
+            sign_in::PROFILE_SETTING.to_string(),
+            serde_json::Value::String(profile_id.unwrap_or("").to_string()),
+        );
+    })?;
+    Ok(())
 }
 
 fn resolve_parent(parent_path: &str) -> Result<PathBuf, NativeError> {
@@ -434,12 +462,7 @@ fn is_reserved(name: &str) -> bool {
 }
 
 fn new_request_id() -> String {
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|elapsed| elapsed.as_nanos() as u64)
-        .unwrap_or(0);
-    let n = NEXT_REQUEST.fetch_add(1, Ordering::Relaxed);
-    format!("imp{now:016x}{n:08x}")
+    super::unique_id("imp", &NEXT_REQUEST)
 }
 
 #[cfg(test)]

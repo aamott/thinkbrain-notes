@@ -5,6 +5,7 @@
  */
 
 import type { SettingsModule } from "../types";
+import { integerValidator } from "../internal";
 
 export const editorModule: SettingsModule = {
   id: "editor",
@@ -28,10 +29,7 @@ export const editorModule: SettingsModule = {
           // Range bounds (min/max) are enforced by `checkRange` in
           // validation.ts; the validator here only adds the integer constraint
           // so the bounds stay defined in one place (the definition itself).
-          validation: (value) =>
-            typeof value === "number" && Number.isInteger(value)
-              ? null
-              : "Font size must be an integer."
+          validation: integerValidator("Font size", "an integer")
         },
         {
           key: "lineWrapping",

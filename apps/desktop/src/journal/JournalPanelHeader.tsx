@@ -90,6 +90,7 @@ export function JournalPanelHeader({
         <JournalFilterControl
           facets={facets}
           predicates={predicates}
+          activeCount={view.activeFilterCount}
           available={filtersAvailable}
           onToggle={onToggleFilter}
         />

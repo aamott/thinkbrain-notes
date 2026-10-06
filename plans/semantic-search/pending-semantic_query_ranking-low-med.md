@@ -19,7 +19,7 @@ query path that hybrid search builds on.
 
 ## References
 
-- `plans/wip-indexing-search-med-med.md` — indexing-search epic and FTS5 query foundation
+- `plans/indexing-search/` — indexing-search epic and FTS5 query foundation
 - `apps/desktop/src-tauri/src/commands/search.rs` — shipped native search backend and `SearchHit`
 - A future typed frontend bridge remains planned for native search commands; no bridge file is assigned yet.
-- `plans/pending-semantic-search-low-hard.md` — Scope (semantic similarity query and ranking)
+- `plans/semantic-search/` — Scope (semantic similarity query and ranking)

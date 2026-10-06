@@ -9,10 +9,11 @@ import {
 } from "@thinkbrain/core";
 import { useState } from "react";
 
+import { useMediaQuery } from "../lib/useMediaQuery";
 import { AddFieldRow } from "./AddFieldRow";
 import { MetadataBottomSheet } from "./MetadataBottomSheet";
 import { MetadataField } from "./MetadataField";
-import { useCoarsePointer } from "./useCoarsePointer";
+import { TOUCH } from "./journalChrome";
 
 /**
  * The entry's metadata, set as the page's dateline (D35).
@@ -76,7 +77,7 @@ function formatValue(value: JournalFieldValue): string {
 }
 
 const AFFORDANCE_LINK =
-  "border-0 bg-transparent p-0 text-[0.68rem] text-muted-foreground underline underline-offset-2 cursor-pointer hover:text-foreground";
+  `inline-flex items-center border-0 bg-transparent p-0 ${TOUCH} text-[0.68rem] text-muted-foreground underline underline-offset-2 cursor-pointer hover:text-foreground`;
 
 /**
  * The "Add it" affordances under a field — promoting an unconfigured key, or
@@ -161,7 +162,7 @@ export function MetadataWidget({
   // D76: touch decides. Under a fingertip the fields move into a sheet (M-2),
   // because the dateline's compact controls are half the touch minimum and sit
   // where the soft keyboard would cover them.
-  const touch = useCoarsePointer();
+  const touch = useMediaQuery("(pointer: coarse)");
   // `added` fields are local state — they exist only until a value is typed and
   // the key reaches the frontmatter. Once it does, the container re-parses the
   // file and the field arrives via `unconfigured` (or `definitions` if it was a
@@ -209,7 +210,7 @@ export function MetadataWidget({
         <button
           type="button"
           onClick={() => setExpanded(!expanded)}
-          className="ml-auto rounded-small border border-border px-1.5 text-[0.68rem] text-muted-foreground cursor-pointer hover:text-foreground"
+          className={`ml-auto rounded-small border border-border px-1.5 ${TOUCH} text-[0.68rem] text-muted-foreground cursor-pointer hover:text-foreground`}
         >
           {/* The sheet carries its own Done, so the opener keeps its label. */}
           {expanded && !touch ? "Done" : "Info Tracker"}

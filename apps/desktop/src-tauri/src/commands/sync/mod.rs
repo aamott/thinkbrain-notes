@@ -5,8 +5,66 @@
 //! the repository git sync pushes from are all the same repo, and it lives in
 //! OS app-data rather than the vault so that no sync daemon ever sees it.
 
-pub(super) use crate::error::failed;
 use crate::NativeError;
+pub(super) use crate::error::failed;
+
+/// The one "history could not be read" failure, so every module answers the
+/// same code for the same problem.
+pub(super) fn history_read_failed(
+    message: &'static str,
+    error: impl std::fmt::Display,
+) -> NativeError {
+    failed("sync.history_read_failed", message, error)
+}
+
+/// Where a URL's authority ends — the first '/', '?', '#', whitespace, or the
+/// end of the string. The `@` separating userinfo from host must only ever be
+/// searched for within this span: an `@` later in the URL belongs to the
+/// path, and one inside the password must not split the secret early.
+pub(super) fn authority_end(after_scheme: &str) -> usize {
+    after_scheme
+        .find(['/', '?', '#', ' ', '\n', '\t'])
+        .unwrap_or(after_scheme.len())
+}
+
+/// A unique-enough identifier: nanoseconds plus a per-kind counter, so two
+/// minted in the same instant still differ.
+pub(super) fn unique_id(prefix: &str, counter: &std::sync::atomic::AtomicU64) -> String {
+    use std::sync::atomic::Ordering;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_nanos() as u64)
+        .unwrap_or(0);
+    let n = counter.fetch_add(1, Ordering::Relaxed);
+    format!("{prefix}{now:016x}{n:08x}")
+}
+
+/// The app's data directory, behind the error every sync command shares.
+pub(super) fn app_data_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, NativeError> {
+    use tauri::Manager as _;
+
+    app.path().app_data_dir().map_err(|error| {
+        failed(
+            "sync.no_app_data",
+            "Could not find where this app keeps its files.",
+            error,
+        )
+    })
+}
+
+/// Writes `bytes` to `path` atomically — a partial write must never be what a
+/// reader finds — under the code and message this write answers with.
+pub(super) fn write_atomically(
+    path: &std::path::Path,
+    bytes: impl AsRef<[u8]>,
+    code: &'static str,
+    message: &'static str,
+) -> Result<(), NativeError> {
+    crate::commands::workspace::write_file_atomically(path, bytes)
+        .map_err(|error| failed(code, message, error))
+}
 
 /// Strips the Windows verbatim-path prefix (`\\?\`) so a local path can be
 /// parsed as a git remote URL by `gix::url::parse`.
@@ -77,7 +135,7 @@ pub(super) fn remote_failure<E: std::error::Error>(error: E) -> NativeError {
     {
         (
             "sync.credentials_unavailable",
-            "Could not read the saved sign-in from this computer's keychain.",
+            "Could not read your saved sign-in.",
         )
     } else if details.contains("HTTP status 401")
         || lowercase.contains("invalid credential")
@@ -116,17 +174,14 @@ fn redact_remote_credentials(details: &str) -> String {
         let authority = scheme + 3;
         output.push_str(&rest[..authority]);
         let after_scheme = &rest[authority..];
-        let authority_end = after_scheme
-            .find(|character: char| matches!(character, '/' | '?' | '#' | ' ' | '\n' | '\t'))
-            .unwrap_or(after_scheme.len());
-        let authority_text = &after_scheme[..authority_end];
+        let authority_text = &after_scheme[..authority_end(after_scheme)];
         if let Some(at) = authority_text.rfind('@') {
             output.push_str("[redacted]@");
             output.push_str(&authority_text[at + 1..]);
         } else {
             output.push_str(authority_text);
         }
-        rest = &after_scheme[authority_end..];
+        rest = &after_scheme[authority_text.len()..];
     }
     output.push_str(rest);
     output
@@ -139,6 +194,10 @@ pub mod credentials;
 pub mod engine;
 pub mod hidden_repo;
 pub mod history;
+pub mod history_ingest;
+pub(super) mod history_page;
+pub mod history_source;
+mod history_walk;
 pub mod import;
 pub mod maintain;
 pub mod merge;
@@ -148,6 +207,7 @@ pub mod push;
 pub mod registry;
 pub mod resolve;
 pub mod round;
+pub mod schedule;
 pub mod settle;
 pub mod sign_in;
 pub mod snapshot;
@@ -194,10 +254,7 @@ mod tests {
         let error = remote_failure(TestError("Failed to obtain credentials".to_string()));
 
         assert_eq!(error.code, "sync.credentials_unavailable");
-        assert_eq!(
-            error.message,
-            "Could not read the saved sign-in from this computer's keychain."
-        );
+        assert_eq!(error.message, "Could not read your saved sign-in.");
     }
 
     #[test]

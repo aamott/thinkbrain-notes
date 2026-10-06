@@ -30,6 +30,7 @@ const render = async (
   const props: JournalFilterControlProps = {
     facets,
     predicates: [],
+    activeCount: 0,
     available: true,
     onToggle: () => undefined,
     ...overrides
@@ -61,9 +62,18 @@ const items = (): HTMLButtonElement[] =>
 
 describe("JournalFilterControl", () => {
   it("carries the active count in its accessible name, not only in the badge (D31)", async () => {
-    const host = await render({ predicates: [{ key: "mood", value: "good" }] });
+    const host = await render({
+      predicates: [{ key: "mood", value: "good" }],
+      activeCount: 1
+    });
     expect(trigger(host).getAttribute("aria-label")).toBe("Filter entries, 1 filter active");
     expect(host.textContent).toContain("1");
+  });
+
+  it("pluralizes the total active filter count", async () => {
+    const host = await render({ activeCount: 2 });
+    expect(trigger(host).getAttribute("aria-label")).toBe("Filter entries, 2 filters active");
+    expect(host.textContent).toContain("2");
   });
 
   it("names itself plainly when nothing is filtered", async () => {

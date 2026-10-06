@@ -27,7 +27,7 @@ Define the beta on-disk extension directory and later file-package contract with
 
 - Contract docs/fixtures under `plans/extensions/` or `packages/core/src/extensions/fixtures/`.
 - Pure directory validator in `packages/core/src/extensions/package.ts` only if useful.
-- Native archive extraction belongs to `pending-extension_file_installation-low-med.md`.
+- Native archive extraction belongs to `extension_file_installation`.
 
 ## Implementation tasks
 
@@ -65,5 +65,5 @@ No archive extraction, install/uninstall UI, signing, URL/marketplace, auto-upda
 
 - Manifest parser/schema — shipped; its story file was reviewed and deleted
   per the plan-review policy in `AGENTS.md`.
-- `plans/extensions/pending-extension_file_installation-low-med.md`
-- `plans/pending-extensions-low-hard.md` — Manifest-driven, packaging contract
+- `extensions/extension_file_installation`
+- `plans/extensions/` — Manifest-driven, packaging contract

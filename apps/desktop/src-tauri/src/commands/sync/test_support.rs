@@ -23,7 +23,7 @@ pub(super) struct RepoFixture {
 pub(super) fn engine_fixture(name: &str) -> EngineFixture {
     let app_data = make_temp_test_dir(&format!("{name}-appdata"), "sync", true);
     let vault = make_temp_test_dir(&format!("{name}-vault"), "sync", true);
-    let workspace = bootstrap(&app_data, &vault).expect("bootstrap succeeds");
+    let workspace = bootstrap(&app_data, &vault, false).expect("bootstrap succeeds");
     EngineFixture {
         vault,
         engine: Engine::new(workspace.repo, workspace.has_own_git),
@@ -45,4 +45,11 @@ pub(super) fn write(root: &Path, relative: &str, contents: &str) {
         fs::create_dir_all(parent).expect("the folder exists");
     }
     fs::write(path, contents).expect("the file is written");
+}
+
+/// The object `name` resolves to, or `None` when the ref does not exist.
+pub(super) fn ref_value(repo: &gix::Repository, name: &str) -> Option<gix::ObjectId> {
+    repo.try_find_reference(name)
+        .expect("the refs are readable")
+        .map(|mut found| found.peel_to_id().expect("the ref resolves").detach())
 }

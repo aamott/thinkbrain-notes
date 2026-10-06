@@ -3,7 +3,7 @@
 //! Rejects traversal and symlink escapes; owns the mutation lock, ignored-name
 //! policy, entry metadata, stable hash, and atomic-write re-export.
 
-use crate::error::{failed, NativeError};
+use crate::error::{NativeError, failed};
 use serde::Serialize;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
@@ -111,20 +111,20 @@ pub fn resolve_workspace_entry_path(
     // For existing entries, canonicalize the full path and verify it stays
     // inside the (already canonical) workspace root.
     if path.exists() {
-        let canonical = path.canonicalize().map_err(|error| {
-            failed(
-                "workspace.invalid_path",
-                "Failed to resolve the workspace entry.",
-                error,
-            )
-        })?;
-        if !canonical.starts_with(root) {
-            return Err(NativeError::new(
+        return match resolve_contained_existing_path(root, &path) {
+            Ok((_, canonical)) => Ok(canonical),
+            Err(ContainedPathFailure::Base(error) | ContainedPathFailure::Target(error)) => {
+                Err(failed(
+                    "workspace.invalid_path",
+                    "Failed to resolve the workspace entry.",
+                    error,
+                ))
+            }
+            Err(ContainedPathFailure::Outside) => Err(NativeError::new(
                 "workspace.invalid_path",
                 "File path must stay inside the workspace.",
-            ));
-        }
-        return Ok(canonical);
+            )),
+        };
     }
 
     // For not-yet-existing targets, canonicalize the deepest existing ancestor
@@ -163,17 +163,48 @@ pub fn resolve_workspace_entry_path(
 }
 
 pub fn normalize_relative_path(relative_path: &str) -> Result<String, NativeError> {
-    // Tauri receives paths from every supported desktop platform. Normalize
-    // separators before `Path::components` so Windows input is validated the
-    // same way on Unix hosts (including `..` escape attempts).
+    normalize_relative_path_parts(relative_path)
+        .map(|parts| parts.join("/"))
+        .map_err(|rejection| {
+            let message = match rejection {
+                RelativePathRejection::Absolute => "File path must be relative to the workspace.",
+                RelativePathRejection::EmptySegment => "File path contains an empty segment.",
+                RelativePathRejection::Escapes => "File path must stay inside the workspace.",
+                RelativePathRejection::Empty => "File path cannot be empty.",
+            };
+            NativeError::new("workspace.invalid_path", message)
+        })
+}
+
+/// Why a relative path was rejected.
+///
+/// The checks are the same everywhere a root-relative path arrives; the codes
+/// and messages are not. Each module maps this onto its own error so no
+/// module's wording leaks into another's.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RelativePathRejection {
+    /// The path is absolute rather than root-relative.
+    Absolute,
+    /// A segment is empty or only whitespace.
+    EmptySegment,
+    /// A `..`, prefix, or root component would leave the base directory.
+    Escapes,
+    /// Nothing names a file at all.
+    Empty,
+}
+
+/// The shared relative-path normalizer, returned as clean segments.
+///
+/// Separators are normalized before `Path::components` so Windows-style input
+/// (`..\\`, `dir\\file`) is validated the same way on Unix hosts.
+pub fn normalize_relative_path_parts(
+    relative_path: &str,
+) -> Result<Vec<String>, RelativePathRejection> {
     let normalized_input = relative_path.replace('\\', "/");
     let path = Path::new(&normalized_input);
 
     if path.is_absolute() {
-        return Err(NativeError::new(
-            "workspace.invalid_path",
-            "File path must be relative to the workspace.",
-        ));
+        return Err(RelativePathRejection::Absolute);
     }
 
     let mut parts = Vec::new();
@@ -183,31 +214,58 @@ pub fn normalize_relative_path(relative_path: &str) -> Result<String, NativeErro
             Component::Normal(part) => {
                 let part = part.to_string_lossy();
                 if part.trim().is_empty() {
-                    return Err(NativeError::new(
-                        "workspace.invalid_path",
-                        "File path contains an empty segment.",
-                    ));
+                    return Err(RelativePathRejection::EmptySegment);
                 }
                 parts.push(part.to_string());
             }
             Component::CurDir => {}
             Component::ParentDir | Component::Prefix(_) | Component::RootDir => {
-                return Err(NativeError::new(
-                    "workspace.invalid_path",
-                    "File path must stay inside the workspace.",
-                ));
+                return Err(RelativePathRejection::Escapes);
             }
         }
     }
 
     if parts.is_empty() {
-        return Err(NativeError::new(
-            "workspace.invalid_path",
-            "File path cannot be empty.",
-        ));
+        return Err(RelativePathRejection::Empty);
     }
 
-    Ok(parts.join("/"))
+    Ok(parts)
+}
+
+/// Which step of `resolve_contained_existing_path` failed, so each caller can
+/// answer it with its own error code and message.
+#[derive(Debug)]
+pub enum ContainedPathFailure {
+    /// The base directory could not be canonicalized.
+    Base(std::io::Error),
+    /// The target could not be canonicalized (absent, or a dangling symlink).
+    Target(std::io::Error),
+    /// The canonical target resolves outside the canonical base.
+    Outside,
+}
+
+/// Canonicalizes an existing `target` and requires it to stay inside `base`.
+///
+/// Both paths must exist — `canonicalize` refuses otherwise; callers with a
+/// not-yet-created target need the ancestor walk in
+/// `resolve_workspace_entry_path` instead. Both canonical paths are returned
+/// because some callers also inspect the base itself.
+pub fn resolve_contained_existing_path(
+    base: &Path,
+    target: &Path,
+) -> Result<(PathBuf, PathBuf), ContainedPathFailure> {
+    let canonical_base = base.canonicalize().map_err(ContainedPathFailure::Base)?;
+    let canonical_target = target
+        .canonicalize()
+        .map_err(ContainedPathFailure::Target)?;
+
+    // Canonicalization resolved any symlink, so this rejects a link that
+    // points outside the base directory.
+    if !canonical_target.starts_with(&canonical_base) {
+        return Err(ContainedPathFailure::Outside);
+    }
+
+    Ok((canonical_base, canonical_target))
 }
 
 pub fn describe_workspace(root: &Path) -> WorkspaceDescriptor {

@@ -158,7 +158,7 @@ export interface CommandContribution<Payload = void>
    * Mirrors `PanelContribution.icon`: core is platform-agnostic and extension
    * manifests are JSON, so an extension can never hand the host a component.
    * The desktop layer resolves this through `panelIcons`. Optional — a command
-   * without one is palette-only and cannot be pinned to the mobile hub.
+   * without one is palette-only and cannot be surfaced in the phone chrome.
    */
   readonly icon?: string;
   /** Optional platform-specific keybinding expression. Display + future global binding; not yet bound globally by the host. */

@@ -8,7 +8,7 @@ import {
 } from "react";
 
 import { listWindow, rowOffsets } from "../lib/listWindow";
-import { Menu, MenuButton, type MenuPosition } from "../shell/Menu";
+import { Menu, MenuButton, MenuSeparator, type MenuPosition } from "../shell/Menu";
 import { EmptyState, JournalTrouble } from "./journalChrome";
 import { Row } from "./JournalRow";
 import { JournalPanelHeader } from "./JournalPanelHeader";
@@ -357,6 +357,7 @@ export function JournalPanel({
             ref={listRef}
             role="tree"
             aria-label="Journal entries"
+            data-phone-scroll-clearance
             className="min-h-0 flex-1 overflow-auto"
             onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
             onKeyDown={(event) => {
@@ -448,7 +449,7 @@ export function JournalPanel({
           )}
           {onDeleteEntry && (
             <>
-              <hr className="my-1 border-0 border-t border-border" />
+              <MenuSeparator />
               <MenuButton label="Delete" danger onClick={() => {
                 setPendingDelete(contextMenu.entryPath);
                 setContextMenu(null);

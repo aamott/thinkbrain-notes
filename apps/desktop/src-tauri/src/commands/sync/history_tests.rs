@@ -1,5 +1,6 @@
 use super::super::engine::Engine;
 use super::super::hidden_repo;
+use super::super::test_support::write;
 use super::*;
 use crate::tests::make_temp_test_dir;
 use std::fs;
@@ -22,14 +23,6 @@ fn fixture(name: &str) -> Fixture {
         repo,
         engine,
     }
-}
-
-fn write(vault: &Path, relative: &str, contents: &str) {
-    let path = vault.join(relative);
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).expect("the note's folder exists");
-    }
-    fs::write(path, contents).expect("the note is written");
 }
 
 /// Records the current state of `paths` under a message of our choosing, so a
@@ -55,9 +48,11 @@ fn paths_in(entry: &Recorded) -> Vec<&str> {
 fn a_vault_that_has_never_been_recorded_has_no_history() {
     let f = fixture("history-empty");
 
-    assert!(read(&f.repo, None, 20)
-        .expect("the history is readable")
-        .is_empty());
+    assert!(
+        read(&f.repo, None, 20)
+            .expect("the history is readable")
+            .is_empty()
+    );
 }
 
 /// The list is the whole of what a nontechnical person sees of git, so an entry
@@ -77,10 +72,12 @@ fn each_recorded_change_names_the_notes_it_touched() {
 
     assert_eq!(history.len(), 1);
     assert_eq!(paths_in(&history[0]), ["journal/two.md", "one.md"]);
-    assert!(history[0]
-        .notes
-        .iter()
-        .all(|note| note.change == NoteChange::Added));
+    assert!(
+        history[0]
+            .notes
+            .iter()
+            .all(|note| note.change == NoteChange::Added)
+    );
 }
 
 /// The message is kept word for word: it is the escape hatch for anyone who
@@ -382,4 +379,78 @@ fn the_counter_starts_at_nothing() {
     let rate = conflict_rate(&f.repo).expect("the counter is readable");
 
     assert_eq!((rate.decisions, rate.recorded), (0, 0));
+}
+
+/// The comparison is the two complete documents: the file as it stands now,
+/// and the version recorded in the change — exactly, so a restore previews
+/// what it will actually write.
+#[test]
+fn diffing_against_an_earlier_version_returns_both_complete_texts() {
+    let f = fixture("history-diff");
+    write(&f.vault, "note.md", "line 1\nline 2\n");
+    record(&f, "first save", &["note.md"]);
+
+    write(
+        &f.vault,
+        "note.md",
+        "line 1\nline 2 modified\nline 3 added\n",
+    );
+
+    let history = read(&f.repo, Some("note.md"), 10).expect("read history");
+    let first = &history[0].id;
+
+    let diff = diff_version(&f.engine, "note.md", first, None)
+        .expect("diff against earlier version succeeds");
+
+    assert_eq!(diff.kind, super::super::merge::Kind::Text);
+    assert_eq!(
+        diff.text,
+        Some(VersionText {
+            current: "line 1\nline 2 modified\nline 3 added\n".into(),
+            recorded: "line 1\nline 2\n".into(),
+        })
+    );
+}
+
+/// "Current" is the open editor's buffer when there is one — comparing against
+/// the last save would preview a restore over text the user can see is stale.
+#[test]
+fn a_supplied_buffer_stands_in_for_the_current_file() {
+    let f = fixture("history-diff-buffer");
+    write(&f.vault, "note.md", "line 1\nline 2\n");
+    record(&f, "first save", &["note.md"]);
+    write(&f.vault, "note.md", "saved since\n");
+
+    let history = read(&f.repo, Some("note.md"), 10).expect("read history");
+    let first = &history[0].id;
+
+    let diff = diff_version(&f.engine, "note.md", first, Some("still typing\n"))
+        .expect("diff against earlier version succeeds");
+
+    assert_eq!(
+        diff.text,
+        Some(VersionText {
+            current: "still typing\n".into(),
+            recorded: "line 1\nline 2\n".into(),
+        })
+    );
+}
+
+/// Two binary versions have nothing to draw — the restore is still offered,
+/// but as a whole-file choice, not a comparison.
+#[test]
+fn a_binary_pair_carries_no_text() {
+    let f = fixture("history-diff-binary");
+    fs::write(f.vault.join("image.png"), [b'P', b'N', b'G', 0, 1]).expect("written");
+    record(&f, "first save", &["image.png"]);
+    fs::write(f.vault.join("image.png"), [b'P', b'N', b'G', 0, 2]).expect("written");
+
+    let history = read(&f.repo, Some("image.png"), 10).expect("read history");
+    let first = &history[0].id;
+
+    let diff = diff_version(&f.engine, "image.png", first, None)
+        .expect("diff against earlier version succeeds");
+
+    assert_eq!(diff.kind, super::super::merge::Kind::Binary);
+    assert_eq!(diff.text, None);
 }

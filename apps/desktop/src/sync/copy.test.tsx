@@ -2,7 +2,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ConflictComparison, ConflictSummary } from "./conflictTypes";
-import { NOT_RECORDING, type RecordedChange, type SyncState, type SyncStatus } from "./historyTypes";
+import {
+  NOT_RECORDING,
+  type HistoryPage,
+  type RecordedChange,
+  type SyncState,
+  type SyncStatus
+} from "./historyTypes";
 import { cleanup, render } from "./syncTestHarness";
 
 /**
@@ -17,7 +23,11 @@ import { cleanup, render } from "./syncTestHarness";
  * ordinary English — mail merge, merging lanes. It is the *nouns* of git that
  * mean nothing to someone who has never used it.
  *
- * "git" is allowed in Decisions needed and in settings — the link field is a git
+ * "diff" is absent for the same reason: the approved mockup names the compare
+ * button "Compare Diff", so the word is sanctioned user-facing copy here —
+ * not smuggled git jargon.
+ *
+ * "git" is allowed in Sync conflicts and in settings — the link field is a git
  * link, and a card should say when a copy came from git rather than a cloud app.
  */
 const JARGON = [
@@ -27,7 +37,6 @@ const JARGON = [
   "repo",
   "ours",
   "theirs",
-  "diff",
   "hunk",
   "chunk",
   "branch",
@@ -51,15 +60,23 @@ vi.mock("./conflictService", () => ({
   subscribeToConflictChanges: () => Promise.resolve(() => undefined)
 }));
 
-const readHistory = vi.fn<() => Promise<readonly RecordedChange[]>>();
+const readHistory = vi.fn<() => Promise<HistoryPage>>();
 
 vi.mock("./syncService", () => ({
+  HISTORY_PAGE: 60,
   // `alongsideOwnGit` on, so the sentence a folder under its own version
   // control gets is audited like everything else.
   readSyncStatus: () =>
     Promise.resolve({ ...NOT_RECORDING, state: "idle", alongsideOwnGit: true }),
   readHistory: () => readHistory(),
   readConflictRate: () => Promise.resolve({ decisions: 2, settled: 47, recorded: 340 }),
+  readVersionDiff: () =>
+    Promise.resolve({
+      kind: "text",
+      change: "abc123",
+      notePath: "Meeting Notes.md",
+      text: { current: "shared\n", recorded: "shared\n" }
+    }),
   restoreVersion: () => Promise.resolve(),
   subscribeToSyncStatus: () => Promise.resolve(() => undefined),
   readHistoryUsage: () => Promise.resolve({ bytes: 2048 }),
@@ -71,7 +88,6 @@ const { ConflictsPanel } = await import("./ConflictsPanel");
 const { MergeTab } = await import("./MergeTab");
 const { HistoryPanel } = await import("./HistoryPanel");
 const { SyncPill } = await import("./SyncPill");
-const { describeSync } = await import("./syncCopy");
 const { HistoryPolicyControl } = await import("../settings/controls/HistoryPolicyControl");
 const { resetNotificationStore, useNotificationStore } = await import(
   "../notifications/notificationStore"
@@ -144,15 +160,13 @@ describe("nothing in this feature speaks git to the user", () => {
   it("keeps the comparison plain", async () => {
     readConflict.mockResolvedValue({
       ...summary("Meeting Notes.md", "text"),
-      chunks: [
-        { kind: "common", text: "shared\n" },
-        { kind: "choice", ours: "one line\n", theirs: "another line\n" }
-      ]
+      kind: "text",
+      text: { incoming: "shared\nanother line\n", current: "shared\none line\n" }
     });
 
     audit(
       "the comparison",
-      await renderText(<MergeTab rootPath="/notes" copyPath="Meeting Notes.md.copy" buffer={null} />)
+      await renderText(<MergeTab rootPath="/notes" copyPath="Meeting Notes.md.copy" tabId={null} buffer={null} />)
     );
   });
 
@@ -161,39 +175,57 @@ describe("nothing in this feature speaks git to the user", () => {
 
     audit(
       "the failure",
-      await renderText(<MergeTab rootPath="/notes" copyPath="Meeting Notes.md.copy" buffer={null} />)
+      await renderText(<MergeTab rootPath="/notes" copyPath="Meeting Notes.md.copy" tabId={null} buffer={null} />)
     );
   });
 
-  it("keeps the history plain, opened and closed", async () => {
-    readHistory.mockResolvedValue([
-      {
-        id: "abc123",
-        at: Date.now(),
-        message: "Sync 2026-08-17 09:31 — 2 notes changed",
-        notes: [
-          { path: "Meeting Notes.md", change: "updated" },
-          { path: "Gone.md", change: "removed" }
-        ]
-      }
-    ]);
+  it("keeps the history plain, with and without a file open", async () => {
+    readHistory.mockResolvedValue({
+      changes: [
+        {
+          id: "abc123",
+          at: Date.now(),
+          message: "Sync 2026-08-17 09:31 — 2 notes changed",
+          notes: [
+            { path: "Meeting Notes.md", change: "updated" },
+            { path: "Gone.md", change: "removed" }
+          ],
+          source: "local"
+        } satisfies RecordedChange
+      ],
+      nextCursor: null
+    });
 
     for (const note of [null, "Meeting Notes.md"]) {
       audit(
-        `the history for ${note ?? "everything"}`,
+        `the history for ${note ?? "no file"}`,
         await renderText(
-          <HistoryPanel rootPath="/notes" note={note} onShowEverything={() => undefined} />
+          <HistoryPanel
+            rootPath="/notes"
+            note={note}
+            currentContents={null}
+            onCompare={() => undefined}
+            onRestore={async () => undefined}
+          />
         )
       );
     }
   });
 
   it("keeps the empty history plain", async () => {
-    readHistory.mockResolvedValue([]);
+    readHistory.mockResolvedValue({ changes: [], nextCursor: null });
 
     audit(
       "the empty history",
-      await renderText(<HistoryPanel rootPath="/notes" note={null} onShowEverything={() => undefined} />)
+      await renderText(
+        <HistoryPanel
+          rootPath="/notes"
+          note="Meeting Notes.md"
+          currentContents={null}
+          onCompare={() => undefined}
+          onRestore={async () => undefined}
+        />
+      )
     );
   });
 
@@ -283,29 +315,9 @@ describe("nothing in this feature speaks git to the user", () => {
     );
   });
 
-  // `describeSync` is not rendered by any panel above, so its sentences are
-  // audited directly — both the refusal path and the ordinary "moved" path,
-  // since each says something different.
-  it("keeps describeSync plain for a refusal and a moved landing", () => {
-    audit(
-      "describeSync on refusal",
-      describeSync({
-        broughtDown: 0,
-        askedAbout: 0,
-        sent: 0,
-        landed: { state: "refused", reason: "the other end holds changes this device has not seen" }
-      })
-    );
-    audit(
-      "describeSync on moved",
-      describeSync({ broughtDown: 2, askedAbout: 1, sent: 3, landed: { state: "moved" } })
-    );
-  });
-
   // The conflict toast reaches the screen through the notification store rather
-  // than through any panel here, so — like `describeSync` above — its sentences
-  // are audited from what the producer put in the store, which is what the
-  // status bar renders verbatim.
+  // than through any panel here, so its sentences are audited from what the
+  // producer put in the store, which is what the status bar renders verbatim.
   it("keeps the new-conflict announcement plain", async () => {
     resetNotificationStore();
     listConflicts.mockResolvedValue([summary("note.md", "text")]);

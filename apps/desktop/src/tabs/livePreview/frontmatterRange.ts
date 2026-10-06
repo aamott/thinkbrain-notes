@@ -14,8 +14,6 @@ import type { Text } from "@codemirror/state";
 export interface FrontmatterRange {
   readonly from: number;
   readonly to: number;
-  /** 1-based line number of the opening `---`. */
-  readonly firstLine: number;
   /** 1-based line number of the closing `---`. */
   readonly lastLine: number;
 }
@@ -39,7 +37,7 @@ export function findFrontmatterRange(doc: Text): FrontmatterRange | null {
     if (!FENCE.test(line.text)) continue;
     // `lineNumber === 2` means an empty block; leave it to the Markdown parser.
     if (lineNumber === 2) return null;
-    return { from: 0, to: line.to, firstLine: 1, lastLine: lineNumber };
+    return { from: 0, to: line.to, lastLine: lineNumber };
   }
 
   return null;

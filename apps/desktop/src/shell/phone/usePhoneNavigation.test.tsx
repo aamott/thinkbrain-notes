@@ -1,0 +1,603 @@
+// @vitest-environment happy-dom
+import { dismissTopOverlay, useDismissable } from "@thinkbrain/ui";
+import { act, useState } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, describe, expect, it } from "vitest";
+
+import { usePhoneNavigation, type PhoneNavigation } from "./usePhoneNavigation";
+
+let root: Root | null = null;
+let container: HTMLDivElement | null = null;
+
+afterEach(async () => {
+  await act(async () => root?.unmount());
+  container?.remove();
+  root = null;
+  container = null;
+});
+
+const renderNav = async (workspace: string | null): Promise<() => PhoneNavigation> => {
+  const box: { current: PhoneNavigation | null } = { current: null };
+  const Probe = ({ ws }: { readonly ws: string | null }) => {
+    box.current = usePhoneNavigation(ws);
+    return null;
+  };
+  container = document.createElement("div");
+  document.body.append(container);
+  root = createRoot(container);
+  await act(async () => {
+    root?.render(<Probe ws={workspace} />);
+  });
+  return () => {
+    if (!box.current) throw new Error("hook did not render");
+    return box.current;
+  };
+};
+
+describe("usePhoneNavigation", () => {
+  it("starts at Files, depth 0, with nothing to go back to", async () => {
+    const nav = await renderNav("/vault");
+
+    expect(nav().route).toEqual({ kind: "files" });
+    expect(nav().depth).toBe(0);
+    expect(nav().canGoBack).toBe(false);
+    expect(nav().canGoForward).toBe(false);
+    expect((window.history.state as { tnPhoneNav?: boolean }).tnPhoneNav).toBe(true);
+  });
+
+  it("pushes routes onto history and reports depth", async () => {
+    const nav = await renderNav("/vault");
+
+    await act(async () => nav().push({ kind: "panel", panel: "search" }));
+    await act(async () => nav().push({ kind: "tab", tabId: "editor:a:b" }));
+
+    expect(nav().route).toEqual({ kind: "tab", tabId: "editor:a:b" });
+    expect(nav().depth).toBe(2);
+    expect(nav().canGoBack).toBe(true);
+  });
+
+  it("ignores a push identical to the current route", async () => {
+    const nav = await renderNav("/vault");
+    await act(async () => nav().push({ kind: "panel", panel: "search" }));
+
+    await act(async () => nav().push({ kind: "panel", panel: "search" }));
+
+    expect(nav().depth).toBe(1);
+  });
+
+  it("restores the previous route when browser history pops", async () => {
+    const nav = await renderNav("/vault");
+    await act(async () => nav().push({ kind: "panel", panel: "search" }));
+    await act(async () => nav().push({ kind: "tab", tabId: "editor:a:b" }));
+
+    await act(async () => window.history.back());
+    expect(nav().route).toEqual({ kind: "panel", panel: "search" });
+    expect(nav().depth).toBe(1);
+
+    await act(async () => window.history.back());
+    expect(nav().route).toEqual({ kind: "files" });
+    expect(nav().depth).toBe(0);
+    expect(nav().canGoBack).toBe(false);
+  });
+
+  it("back() walks the same stack and stops at the root", async () => {
+    const nav = await renderNav("/vault");
+    await act(async () => nav().push({ kind: "panel", panel: "search" }));
+
+    await act(async () => nav().back());
+    expect(nav().route).toEqual({ kind: "files" });
+
+    // At the root, back() must not touch shared history.
+    const before = window.history.state;
+    await act(async () => nav().back());
+    expect(window.history.state).toBe(before);
+  });
+
+  it("falls back to Files when the popped state is not ours", async () => {
+    const nav = await renderNav("/vault");
+    await act(async () => nav().push({ kind: "tab", tabId: "editor:a:b" }));
+
+    await act(async () => {
+      window.dispatchEvent(new PopStateEvent("popstate", { state: null }));
+    });
+
+    expect(nav().route).toEqual({ kind: "files" });
+    expect(nav().depth).toBe(0);
+  });
+
+  it("replace keeps depth but rewrites the current entry", async () => {
+    const nav = await renderNav("/vault");
+    await act(async () => nav().push({ kind: "tab", tabId: "editor:a:old" }));
+
+    await act(async () => nav().replace({ kind: "tab", tabId: "editor:a:new" }));
+
+    expect(nav().route).toEqual({ kind: "tab", tabId: "editor:a:new" });
+    expect(nav().depth).toBe(1);
+    // Replaced, not pushed: one Back reaches the root.
+    await act(async () => nav().back());
+    expect(nav().route).toEqual({ kind: "files" });
+  });
+
+  it("resets to Files when the workspace changes", async () => {
+    const box: { current: PhoneNavigation | null } = { current: null };
+    const Probe = ({ ws }: { readonly ws: string | null }) => {
+      box.current = usePhoneNavigation(ws);
+      return null;
+    };
+    container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
+    await act(async () => {
+      root?.render(<Probe ws="/vault-a" />);
+    });
+    await act(async () => box.current?.push({ kind: "tab", tabId: "editor:a:b" }));
+    await act(async () => box.current?.back());
+    expect(box.current?.canGoForward).toBe(true);
+
+    await act(async () => {
+      root?.render(<Probe ws="/vault-b" />);
+    });
+
+    expect(box.current?.route).toEqual({ kind: "files" });
+    expect(box.current?.depth).toBe(0);
+    // The old workspace's branch tip must not leak Forward into the new one.
+    expect(box.current?.canGoForward).toBe(false);
+    expect((window.history.state as { workspace?: string }).workspace).toBe("/vault-b");
+  });
+
+  it("does not resurrect the previous workspace's route on A→B→A without navigating", async () => {
+    const box: { current: PhoneNavigation | null } = { current: null };
+    const Probe = ({ ws }: { readonly ws: string | null }) => {
+      box.current = usePhoneNavigation(ws);
+      return null;
+    };
+    container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
+    await act(async () => {
+      root?.render(<Probe ws="/vault-a" />);
+    });
+    await act(async () => box.current?.push({ kind: "tab", tabId: "editor:a:b" }));
+    expect(box.current?.depth).toBe(1);
+
+    // Round-trip the workspace without any navigation: A's last entry is
+    // history, not state to resurrect.
+    await act(async () => {
+      root?.render(<Probe ws="/vault-b" />);
+    });
+    await act(async () => {
+      root?.render(<Probe ws="/vault-a" />);
+    });
+
+    expect(box.current?.route).toEqual({ kind: "files" });
+    expect(box.current?.depth).toBe(0);
+    expect(box.current?.canGoBack).toBe(false);
+    expect(box.current?.canGoForward).toBe(false);
+  });
+});
+
+describe("usePhoneNavigation overlays", () => {
+  it("starts with no overlay and pushes one over the current route", async () => {
+    const nav = await renderNav("/vault");
+    await act(async () => nav().push({ kind: "tab", tabId: "editor:a:b" }));
+
+    expect(nav().overlay).toBeNull();
+    await act(async () =>
+      nav().openOverlay({ kind: "inspector", panel: "outline", parent: "content" })
+    );
+
+    expect(nav().overlay).toEqual({ kind: "inspector", panel: "outline", parent: "content" });
+    expect(nav().route).toEqual({ kind: "tab", tabId: "editor:a:b" });
+    expect(nav().depth).toBe(2);
+  });
+
+  it.each(["actions", "navigation", "tabs", "new-note"] as const)(
+    "opens and closes the %s menu without adding history",
+    async (kind) => {
+      const nav = await renderNav("/vault");
+      await act(async () => nav().push({ kind: "tab", tabId: "editor:a:b" }));
+      await act(async () => nav().back());
+      expect(nav().canGoForward).toBe(true);
+
+      await act(async () => nav().showOverlay({ kind }));
+
+      expect(nav().overlay).toEqual({ kind });
+      expect(nav().depth).toBe(0);
+      expect(nav().canGoBack).toBe(true);
+      expect(nav().canGoForward).toBe(true);
+
+      await act(async () => nav().dismissOverlay());
+
+      expect(nav().overlay).toBeNull();
+      expect(nav().depth).toBe(0);
+      expect(nav().canGoBack).toBe(false);
+      expect(nav().canGoForward).toBe(true);
+
+      await act(async () => nav().forward());
+      expect(nav().route).toEqual({ kind: "tab", tabId: "editor:a:b" });
+      expect(nav().overlay).toBeNull();
+      expect(nav().canGoForward).toBe(false);
+    }
+  );
+
+  it("no-ops when the identical overlay is already current", async () => {
+    const nav = await renderNav("/vault");
+    await act(async () => nav().openOverlay({ kind: "tabs" }));
+    await act(async () => nav().openOverlay({ kind: "tabs" }));
+
+    expect(nav().overlay).toEqual({ kind: "tabs" });
+    expect(nav().depth).toBe(0);
+  });
+
+  it("no-ops when the identical inspector is already current", async () => {
+    const nav = await renderNav("/vault");
+    await act(async () =>
+      nav().openOverlay({ kind: "inspector", panel: "outline", parent: "content" })
+    );
+    const before = window.history.state;
+    await act(async () =>
+      nav().openOverlay({ kind: "inspector", panel: "outline", parent: "content" })
+    );
+
+    expect(nav().depth).toBe(1);
+    expect(window.history.state).toBe(before);
+  });
+
+  it("restores route AND overlay on browser pop", async () => {
+    const nav = await renderNav("/vault");
+    await act(async () => nav().push({ kind: "tab", tabId: "editor:a:b" }));
+    await act(async () =>
+      nav().openOverlay({ kind: "inspector", panel: "outline", parent: "content" })
+    );
+
+    await act(async () => window.history.back());
+    expect(nav().overlay).toBeNull();
+    expect(nav().route).toEqual({ kind: "tab", tabId: "editor:a:b" });
+  });
+
+  it("actions → inspector → back() returns to the actions menu", async () => {
+    const nav = await renderNav("/vault");
+    await act(async () => nav().push({ kind: "tab", tabId: "editor:a:b" }));
+    await act(async () => nav().openOverlay({ kind: "actions" }));
+    await act(async () =>
+      nav().openOverlay({ kind: "inspector", panel: "outline", parent: "actions" })
+    );
+
+    await act(async () => nav().back());
+    expect(nav().overlay).toEqual({ kind: "actions" });
+    expect(nav().route).toEqual({ kind: "tab", tabId: "editor:a:b" });
+  });
+
+  it("dismissOverlay(wholeFlow) skips the actions entry under an actions-parent inspector", async () => {
+    const nav = await renderNav("/vault");
+    await act(async () => nav().push({ kind: "tab", tabId: "editor:a:b" }));
+    await act(async () => nav().openOverlay({ kind: "actions" }));
+    await act(async () =>
+      nav().openOverlay({ kind: "inspector", panel: "outline", parent: "actions" })
+    );
+
+    await act(async () => nav().dismissOverlay(true));
+    expect(nav().overlay).toBeNull();
+    expect(nav().route).toEqual({ kind: "tab", tabId: "editor:a:b" });
+  });
+
+  it("dismissOverlay(wholeFlow) is a single step for a content-parent inspector", async () => {
+    const nav = await renderNav("/vault");
+    await act(async () => nav().push({ kind: "tab", tabId: "editor:a:b" }));
+    await act(async () =>
+      nav().openOverlay({ kind: "inspector", panel: "outline", parent: "content" })
+    );
+
+    await act(async () => nav().dismissOverlay(true));
+    expect(nav().overlay).toBeNull();
+    expect(nav().route).toEqual({ kind: "tab", tabId: "editor:a:b" });
+  });
+
+  it("back() dismisses the overlay before touching content history", async () => {
+    const nav = await renderNav("/vault");
+    await act(async () => nav().push({ kind: "tab", tabId: "editor:a:b" }));
+    await act(async () => nav().openOverlay({ kind: "navigation" }));
+
+    await act(async () => nav().back());
+    expect(nav().overlay).toBeNull();
+    expect(nav().route).toEqual({ kind: "tab", tabId: "editor:a:b" });
+
+    await act(async () => nav().back());
+    expect(nav().route).toEqual({ kind: "files" });
+  });
+
+  it("push clears the overlay from the new entry", async () => {
+    const nav = await renderNav("/vault");
+    await act(async () => nav().openOverlay({ kind: "navigation" }));
+    await act(async () => nav().push({ kind: "panel", panel: "search" }));
+
+    expect(nav().overlay).toBeNull();
+    expect(nav().route).toEqual({ kind: "panel", panel: "search" });
+  });
+
+  it("replace clears the overlay in place", async () => {
+    const nav = await renderNav("/vault");
+    await act(async () => nav().openOverlay({ kind: "navigation" }));
+    await act(async () => nav().replace({ kind: "panel", panel: "search" }));
+
+    expect(nav().overlay).toBeNull();
+    expect(nav().route).toEqual({ kind: "panel", panel: "search" });
+    expect(nav().depth).toBe(0);
+  });
+
+  it("showOverlay swaps one ephemeral menu for another without touching history", async () => {
+    const nav = await renderNav("/vault");
+    await act(async () => nav().push({ kind: "tab", tabId: "editor:a:b" }));
+    await act(async () => nav().showOverlay({ kind: "navigation" }));
+
+    await act(async () => nav().showOverlay({ kind: "new-note" }));
+
+    // Menus share one React-state slot: no entry was pushed or replaced, and
+    // Back closes the popup, landing on the same tab — never on a stale menu.
+    expect(nav().overlay).toEqual({ kind: "new-note" });
+    expect(nav().depth).toBe(1);
+    await act(async () => nav().back());
+    expect(nav().overlay).toBeNull();
+    expect(nav().route).toEqual({ kind: "tab", tabId: "editor:a:b" });
+    expect(nav().depth).toBe(1);
+  });
+
+  it("showOverlay replaces an open inspector's entry instead of stacking it", async () => {
+    const nav = await renderNav("/vault");
+    await act(async () => nav().push({ kind: "tab", tabId: "editor:a:b" }));
+    await act(async () =>
+      nav().showOverlay({ kind: "inspector", panel: "outline", parent: "content" })
+    );
+    expect(nav().depth).toBe(2);
+
+    await act(async () =>
+      nav().showOverlay({ kind: "inspector", panel: "backlinks", parent: "content" })
+    );
+
+    // The outline entry was replaced, not pushed over: depth is unchanged and
+    // one Back lands on the tab, never on the stale inspector.
+    expect(nav().overlay).toEqual({ kind: "inspector", panel: "backlinks", parent: "content" });
+    expect(nav().depth).toBe(2);
+    await act(async () => nav().back());
+    expect(nav().overlay).toBeNull();
+    expect(nav().route).toEqual({ kind: "tab", tabId: "editor:a:b" });
+  });
+
+  it("showOverlay pushes an inspector over an open ephemeral menu", async () => {
+    const nav = await renderNav("/vault");
+    await act(async () => nav().push({ kind: "tab", tabId: "editor:a:b" }));
+    await act(async () => nav().showOverlay({ kind: "navigation" }));
+
+    await act(async () =>
+      nav().showOverlay({ kind: "inspector", panel: "outline", parent: "content" })
+    );
+
+    // The drawer's ephemeral slot is consumed and the inspector pushes over
+    // the tab: one Back closes the inspector without resurrecting the drawer.
+    expect(nav().overlay).toEqual({ kind: "inspector", panel: "outline", parent: "content" });
+    expect(nav().depth).toBe(2);
+    await act(async () => nav().back());
+    expect(nav().overlay).toBeNull();
+    expect(nav().route).toEqual({ kind: "tab", tabId: "editor:a:b" });
+  });
+
+  it("opening a menu over an inspector consumes the inspector's entry", async () => {
+    const nav = await renderNav("/vault");
+    await act(async () => nav().push({ kind: "tab", tabId: "editor:a:b" }));
+    await act(async () =>
+      nav().showOverlay({ kind: "inspector", panel: "outline", parent: "content" })
+    );
+
+    await act(async () => nav().showOverlay({ kind: "tabs" }));
+
+    // The inspector's history entry is replaced in place with overlay-less
+    // content and the switcher lives only in React state: Back lands on the
+    // tab, not on a resurrected inspector.
+    expect(nav().overlay).toEqual({ kind: "tabs" });
+    expect(nav().depth).toBe(2);
+    await act(async () => nav().back());
+    expect(nav().overlay).toBeNull();
+    expect(nav().route).toEqual({ kind: "tab", tabId: "editor:a:b" });
+  });
+
+  it("showOverlay no-ops on the identical overlay", async () => {
+    const nav = await renderNav("/vault");
+    await act(async () => nav().showOverlay({ kind: "tabs" }));
+    const before = window.history.state;
+    await act(async () => nav().showOverlay({ kind: "tabs" }));
+
+    expect(nav().depth).toBe(0);
+    expect(window.history.state).toBe(before);
+  });
+
+  it("falls back to Files with no overlay on a foreign popped state", async () => {
+    const nav = await renderNav("/vault");
+    await act(async () => nav().openOverlay({ kind: "tabs" }));
+
+    await act(async () => {
+      window.dispatchEvent(new PopStateEvent("popstate", { state: { foreign: true } }));
+    });
+
+    expect(nav().overlay).toBeNull();
+    expect(nav().route).toEqual({ kind: "files" });
+  });
+});
+
+describe("usePhoneNavigation Android Back bridge", () => {
+  it("dismisses a registered transient overlay before browser history", async () => {
+    const box: { current: PhoneNavigation | null } = { current: null };
+    let panelOpen = false;
+    const Host = () => {
+      box.current = usePhoneNavigation("/vault");
+      const [open, setOpen] = useState(true);
+      panelOpen = open;
+      const { containerRef } = useDismissable({ open, onDismiss: () => setOpen(false) });
+      return open ? <div ref={containerRef}>Transient panel</div> : null;
+    };
+    container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
+    await act(async () => root?.render(<Host />));
+    await act(async () => box.current?.push({ kind: "tab", tabId: "editor:a:b" }));
+    const before = { route: box.current?.route, depth: box.current?.depth };
+
+    let consumed = false;
+    await act(async () => {
+      consumed = window.__thinkbrainHandleAndroidBack?.() === true;
+    });
+
+    expect(consumed).toBe(true);
+    expect(panelOpen).toBe(false);
+    expect({ route: box.current?.route, depth: box.current?.depth }).toEqual(before);
+
+    await act(async () => root?.unmount());
+    root = null;
+    expect(dismissTopOverlay()).toBe(false);
+  });
+
+  it("installs __thinkbrainHandleAndroidBack while mounted and removes it on unmount", async () => {
+    await renderNav("/vault");
+    expect(typeof window.__thinkbrainHandleAndroidBack).toBe("function");
+
+    await act(async () => root?.unmount());
+    root = null;
+    expect(window.__thinkbrainHandleAndroidBack).toBeUndefined();
+  });
+
+  it("returns true and closes an ephemeral menu without touching history", async () => {
+    const nav = await renderNav("/vault");
+    await act(async () => nav().push({ kind: "tab", tabId: "editor:a:b" }));
+    await act(async () => nav().openOverlay({ kind: "tabs" }));
+    const before = window.history.state;
+
+    let consumed = false;
+    await act(async () => {
+      consumed = window.__thinkbrainHandleAndroidBack?.() === true;
+    });
+
+    // The menu was chrome state: hardware Back closed it in place.
+    expect(consumed).toBe(true);
+    expect(nav().overlay).toBeNull();
+    expect(nav().route).toEqual({ kind: "tab", tabId: "editor:a:b" });
+    expect(nav().depth).toBe(1);
+    expect(window.history.state).toBe(before);
+  });
+
+  it("returns true and pops the inspector's entry above the root", async () => {
+    const nav = await renderNav("/vault");
+    await act(async () => nav().push({ kind: "tab", tabId: "editor:a:b" }));
+    await act(async () =>
+      nav().openOverlay({ kind: "inspector", panel: "outline", parent: "content" })
+    );
+
+    let consumed = false;
+    await act(async () => {
+      consumed = window.__thinkbrainHandleAndroidBack?.() === true;
+    });
+
+    // The overlay entry went first, matching every other Back path.
+    expect(consumed).toBe(true);
+    expect(nav().overlay).toBeNull();
+    expect(nav().route).toEqual({ kind: "tab", tabId: "editor:a:b" });
+    expect(nav().depth).toBe(1);
+  });
+
+  it("returns false and changes nothing at the root", async () => {
+    const nav = await renderNav("/vault");
+    const before = window.history.state;
+
+    let consumed = true;
+    await act(async () => {
+      consumed = window.__thinkbrainHandleAndroidBack?.() === true;
+    });
+
+    expect(consumed).toBe(false);
+    expect(window.history.state).toBe(before);
+    expect(nav().route).toEqual({ kind: "files" });
+    expect(nav().depth).toBe(0);
+  });
+});
+
+describe("usePhoneNavigation forward", () => {
+  it("Back makes Forward available and Forward restores the route and overlay", async () => {
+    const nav = await renderNav("/vault");
+    await act(async () => nav().push({ kind: "tab", tabId: "editor:a:b" }));
+    await act(async () =>
+      nav().openOverlay({ kind: "inspector", panel: "outline", parent: "content" })
+    );
+    expect(nav().canGoForward).toBe(false);
+
+    await act(async () => nav().back());
+    expect(nav().overlay).toBeNull();
+    expect(nav().canGoForward).toBe(true);
+
+    await act(async () => nav().forward());
+    expect(nav().route).toEqual({ kind: "tab", tabId: "editor:a:b" });
+    expect(nav().overlay).toEqual({ kind: "inspector", panel: "outline", parent: "content" });
+    expect(nav().canGoForward).toBe(false);
+  });
+
+  it("a push after Back truncates the forward branch", async () => {
+    const nav = await renderNav("/vault");
+    await act(async () => nav().push({ kind: "tab", tabId: "editor:a:first" }));
+    await act(async () => nav().back());
+    expect(nav().canGoForward).toBe(true);
+
+    await act(async () => nav().push({ kind: "tab", tabId: "editor:a:second" }));
+
+    // The branch we left behind is gone: Forward is both disabled and inert.
+    expect(nav().canGoForward).toBe(false);
+    await act(async () => nav().forward());
+    expect(nav().route).toEqual({ kind: "tab", tabId: "editor:a:second" });
+  });
+
+  it.each(["openOverlay", "showOverlay"] as const)(
+    "%s of an inspector after Back truncates the forward branch",
+    async (method) => {
+      const nav = await renderNav("/vault");
+      await act(async () => nav().push({ kind: "tab", tabId: "editor:a:first" }));
+      await act(async () => nav().back());
+      expect(nav().canGoForward).toBe(true);
+
+      await act(async () =>
+        nav()[method]({ kind: "inspector", panel: "outline", parent: "content" })
+      );
+
+      expect(nav().overlay).toEqual({ kind: "inspector", panel: "outline", parent: "content" });
+      expect(nav().canGoForward).toBe(false);
+      await act(async () => nav().forward());
+      expect(nav().overlay).toEqual({ kind: "inspector", panel: "outline", parent: "content" });
+    }
+  );
+
+  it("Forward cannot resurrect a dismissed ephemeral menu", async () => {
+    const nav = await renderNav("/vault");
+    await act(async () => nav().push({ kind: "tab", tabId: "editor:a:b" }));
+    await act(async () => nav().openOverlay({ kind: "tabs" }));
+
+    // Back closes the menu in place — it was never a history entry, so no
+    // forward branch exists for Forward to walk.
+    await act(async () => nav().back());
+    expect(nav().overlay).toBeNull();
+    expect(nav().route).toEqual({ kind: "tab", tabId: "editor:a:b" });
+    expect(nav().canGoForward).toBe(false);
+
+    await act(async () => nav().forward());
+    expect(nav().overlay).toBeNull();
+    expect(nav().route).toEqual({ kind: "tab", tabId: "editor:a:b" });
+  });
+
+  it("a foreign popped state clears Forward", async () => {
+    const nav = await renderNav("/vault");
+    await act(async () => nav().push({ kind: "tab", tabId: "editor:a:b" }));
+    await act(async () => nav().back());
+    expect(nav().canGoForward).toBe(true);
+
+    await act(async () => {
+      window.dispatchEvent(new PopStateEvent("popstate", { state: null }));
+    });
+
+    expect(nav().route).toEqual({ kind: "files" });
+    expect(nav().canGoForward).toBe(false);
+  });
+});

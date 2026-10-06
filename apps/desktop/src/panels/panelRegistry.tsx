@@ -16,19 +16,17 @@ import type { LeftPanelContext, RightPanelContext } from "./panelRegistryModel";
 export function MountedPanel<Ctx extends LeftPanelContext | RightPanelContext>({
   contribution,
   context,
-  isActive,
-  isAvailable
+  isActive
 }: {
-  readonly contribution: { readonly factory: (ctx: Ctx) => ReactNode };
+  readonly contribution: {
+    readonly factory: (ctx: Ctx) => ReactNode;
+    readonly availability?: (context: Ctx) => boolean;
+  };
   readonly context: Ctx;
   readonly isActive: boolean;
-  readonly isAvailable: boolean;
 }) {
   return (
-    <div
-      className={isActive ? "flex min-h-0 flex-1 flex-col" : "hidden"}
-      data-panel-available={isAvailable}
-    >
+    <div className={isActive ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
       {contribution.factory(context)}
     </div>
   );

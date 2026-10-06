@@ -12,7 +12,7 @@ Key decisions:
 - "Keep mine" re-anchors by re-reading the file, so the next save isn't refused against the version the user just declined.
 - A tab that was never read cannot be saved (`saveablePrecondition` returns null).
 
-Non-goal: side-by-side merge — deferred to `git-integration/pending-inline_diff_viewer-high-med.md`.
+Non-goal: side-by-side merge — deferred to `git-integration/inline_diff_viewer`.
 - `apps/desktop/src-tauri/src/commands/markdown.rs` — `write_markdown_file` with `expected`
 - `apps/desktop/src/shell/DesktopShell.tsx` — `saveDocument`, `keepMyVersion`
 

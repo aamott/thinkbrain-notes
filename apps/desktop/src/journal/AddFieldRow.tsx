@@ -2,6 +2,7 @@ import { validateFieldDefinition, type JournalFieldDefinition } from "@thinkbrai
 import { useState } from "react";
 
 import { deriveFieldKey } from "./fieldKey";
+import { TOUCH } from "./journalChrome";
 
 /**
  * Recording something new without leaving the entry (D86).
@@ -26,7 +27,7 @@ export interface AddFieldRowProps {
 const MENU =
   "mt-1 w-60 overflow-hidden rounded-small border border-border bg-background shadow-lg";
 const OPTION =
-  "flex w-full items-baseline gap-2 px-2 py-1.5 text-left text-xs cursor-pointer hover:bg-secondary";
+  "flex w-full items-baseline gap-2 px-2 py-1.5 pointer-coarse:min-h-11 pointer-coarse:min-w-11 text-left text-xs cursor-pointer hover:bg-secondary";
 const HEAD =
   "bg-muted px-2 py-1 text-[0.62rem] uppercase tracking-[0.09em] text-muted-foreground";
 
@@ -78,7 +79,7 @@ export function AddFieldRow({ available, existingKeys, onAdd, readOnly = false }
         disabled={readOnly}
         aria-label="Add a field"
         onClick={() => setOpen(true)}
-        className="self-start rounded-small border border-dashed border-border px-2 py-0.5 text-[0.7rem] text-muted-foreground cursor-pointer hover:text-foreground disabled:opacity-50"
+        className={`self-start rounded-small border border-dashed border-border px-2 py-0.5 ${TOUCH} text-[0.7rem] text-muted-foreground cursor-pointer hover:text-foreground disabled:opacity-50`}
       >
         ＋ Add a field
       </button>
@@ -101,7 +102,7 @@ export function AddFieldRow({ available, existingKeys, onAdd, readOnly = false }
             close();
           }
         }}
-        className="h-7 w-60 rounded-small border border-input bg-background px-2 text-xs text-foreground"
+        className={`h-7 w-60 ${TOUCH} rounded-small border border-input bg-background px-2 text-xs text-foreground`}
       />
 
       <div className={MENU}>

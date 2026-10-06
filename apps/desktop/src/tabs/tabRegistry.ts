@@ -25,6 +25,13 @@ export interface DesktopTabContext {
 export interface DesktopTabView extends TabRegistration {
   readonly unavailableMessage?: string;
   readonly factory?: (context: DesktopTabContext) => ReactNode;
+  /**
+   * The tab edits a document the shell can save, so the header offers Save.
+   * Kinds with their own save (a merge tab resolves a conflict) register it
+   * through the editor-commands registry instead — this flag is for the
+   * ordinary document save only.
+   */
+  readonly saveable?: boolean;
 }
 
 export interface DesktopTabRegistry {
@@ -40,7 +47,8 @@ export const builtInDesktopTabViews: readonly DesktopTabView[] = [
   {
     kind: "editor",
     label: "Markdown editor",
-    isAvailable: true
+    isAvailable: true,
+    saveable: true
   },
   {
     kind: "preview",
@@ -55,6 +63,37 @@ export const builtInDesktopTabViews: readonly DesktopTabView[] = [
   {
     kind: "merge",
     label: "Compare versions",
+    isAvailable: true
+  },
+  {
+    kind: "version-diff",
+    label: "Restore version",
+    isAvailable: true
+  },
+  {
+    kind: "code-editor",
+    label: "Code editor",
+    isAvailable: true,
+    saveable: true
+  },
+  {
+    kind: "image-viewer",
+    label: "Image viewer",
+    isAvailable: true
+  },
+  {
+    kind: "audio-viewer",
+    label: "Audio player",
+    isAvailable: true
+  },
+  {
+    kind: "video-viewer",
+    label: "Video player",
+    isAvailable: true
+  },
+  {
+    kind: "new-tab",
+    label: "New tab",
     isAvailable: true
   },
   {

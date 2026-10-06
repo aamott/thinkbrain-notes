@@ -5,7 +5,9 @@
 //! device. Maintenance may rebuild that private chain — a new root at the
 //! 90-day boundary, historical files over 25 MB dropped from older restore
 //! points — then delete only loose objects that nothing protected still
-//! names. Missing parents are the intentional end of retained undo history.
+//! names. Imported source refs under `refs/thinkbrain/sources/` protect their
+//! whole reachable graph the same way. Missing parents are the intentional
+//! end of retained undo history.
 //!
 //! The 25 MB figure is a retention threshold for older private restore
 //! points, not a size cap: current notes and the newest restore point stay
@@ -20,9 +22,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde::Serialize;
 
-use crate::commands::workspace::resolve_workspace_root;
-use crate::error::lock_or_recover;
 use crate::NativeError;
+use crate::error::lock_or_recover;
 
 use super::failed;
 use super::network::REMOTE_REF;
@@ -118,8 +119,23 @@ pub fn cleanup(
     now_seconds: i64,
     policy: &Policy,
 ) -> Result<Cleanup, NativeError> {
+    measured(repo, |repo| truncate_checkpoints(repo, now_seconds, policy))
+}
+
+/// Drops the private restore-point ref only, then collects what that made
+/// unreachable. Notes and synced history stay.
+pub fn clear_undo(repo: &gix::Repository) -> Result<Cleanup, NativeError> {
+    measured(repo, drop_checkpoints)
+}
+
+/// The shape of every tidy pass: measure, do the work, collect what it freed,
+/// measure again.
+fn measured(
+    repo: &gix::Repository,
+    work: impl FnOnce(&gix::Repository) -> Result<(), NativeError>,
+) -> Result<Cleanup, NativeError> {
     let bytes_before = usage(repo)?;
-    truncate_checkpoints(repo, now_seconds, policy)?;
+    work(repo)?;
     collect_loose(repo)?;
     let bytes_after = usage(repo)?;
     Ok(Cleanup {
@@ -129,23 +145,14 @@ pub fn cleanup(
     })
 }
 
-/// Drops the private restore-point ref only, then collects what that made
-/// unreachable. Notes and synced history stay.
-pub fn clear_undo(repo: &gix::Repository) -> Result<Cleanup, NativeError> {
-    let bytes_before = usage(repo)?;
+fn drop_checkpoints(repo: &gix::Repository) -> Result<(), NativeError> {
     if let Some(found) = repo
         .try_find_reference(CHECKPOINT_REF)
         .map_err(cleanup_failed)?
     {
         found.delete().map_err(cleanup_failed)?;
     }
-    collect_loose(repo)?;
-    let bytes_after = usage(repo)?;
-    Ok(Cleanup {
-        bytes_before,
-        bytes_after,
-        reclaimed: bytes_before.saturating_sub(bytes_after),
-    })
+    Ok(())
 }
 
 struct Held {
@@ -218,23 +225,18 @@ fn truncate_checkpoints(
 
 fn checkpoint_chain(repo: &gix::Repository) -> Result<Vec<Held>, NativeError> {
     let mut chain = Vec::new();
-    let mut next = snapshot::checkpoint_head(repo)?;
-    while let Some(id) = next {
-        let Ok(commit) = repo.find_commit(id) else {
-            break;
-        };
-        let tree = commit.tree_id().map_err(cleanup_failed)?.detach();
-        let author: gix::actor::Signature = commit.author().map_err(cleanup_failed)?.into();
-        let committer: gix::actor::Signature = commit.committer().map_err(cleanup_failed)?.into();
-        let message = commit.message_raw_sloppy().to_owned();
-        let seconds = commit.time().ok().map(|time| time.seconds).unwrap_or(0);
-        next = commit.parent_ids().next().map(|parent| parent.detach());
+    for commit in
+        super::history_walk::first_parent_chain(repo, snapshot::checkpoint_head(repo)?, usize::MAX)
+    {
+        // A missing parent is the intentional end of retained undo history,
+        // not a read failure — the walk stops there.
+        let Ok(commit) = commit else { break };
         chain.push(Held {
-            tree,
-            author,
-            committer,
-            message,
-            seconds,
+            tree: commit.tree_id().map_err(cleanup_failed)?.detach(),
+            author: commit.author().map_err(cleanup_failed)?.into(),
+            committer: commit.committer().map_err(cleanup_failed)?.into(),
+            message: commit.message_raw_sloppy().to_owned(),
+            seconds: commit.time().ok().map(|time| time.seconds).unwrap_or(0),
         });
     }
     Ok(chain)
@@ -343,23 +345,21 @@ fn collect_loose(repo: &gix::Repository) -> Result<(), NativeError> {
 fn protected_objects(repo: &gix::Repository) -> Result<BTreeSet<gix::ObjectId>, NativeError> {
     let mut seen = BTreeSet::new();
     let mut stack = Vec::new();
-    if let Some(main) = snapshot::head_commit(repo)? {
-        stack.push(main);
-    }
-    if let Some(remote) = snapshot::try_head_of(repo, REMOTE_REF).map_err(cleanup_failed)? {
-        stack.push(remote);
-    }
+    let ours = snapshot::head_commit(repo)?;
+    let theirs = snapshot::try_head_of(repo, REMOTE_REF).map_err(cleanup_failed)?;
+    stack.extend(ours);
+    stack.extend(theirs);
     if let Some(checkpoints) = snapshot::checkpoint_head(repo)? {
         stack.push(checkpoints);
     }
-    if let (Some(ours), Some(theirs)) = (
-        snapshot::head_commit(repo)?,
-        snapshot::try_head_of(repo, REMOTE_REF).map_err(cleanup_failed)?,
-    ) {
-        if let Ok(base) = repo.merge_base(ours, theirs) {
-            stack.push(base.detach());
-        }
+    if let (Some(ours), Some(theirs)) = (ours, theirs)
+        && let Ok(base) = repo.merge_base(ours, theirs)
+    {
+        stack.push(base.detach());
     }
+    // Imported source roots — workspace-local `.git` history and retained
+    // fetches — are durable: their objects must survive every cleanup pass.
+    stack.extend(super::history_ingest::source_tips(repo)?);
     while let Some(id) = stack.pop() {
         if !seen.insert(id) {
             continue;
@@ -420,33 +420,25 @@ fn dir_size(path: &Path) -> io::Result<u64> {
     Ok(total)
 }
 
-fn engine_for(
-    root_path: &str,
-) -> Result<Option<std::sync::Arc<super::engine::Engine>>, NativeError> {
-    let root = resolve_workspace_root(root_path)?;
-    Ok(super::registry::engine(&root.to_string_lossy()))
-}
-
 fn with_locked_engine<T>(
     root_path: &str,
     work: impl FnOnce(&super::engine::Engine) -> Result<T, NativeError>,
 ) -> Result<T, NativeError> {
-    let root = resolve_workspace_root(root_path)?;
-    let key = root.to_string_lossy().to_string();
-    let engine = engine_for(root_path)?.ok_or_else(|| {
+    let (root, engine) = super::registry::workspace_and_engine(root_path)?;
+    let engine = engine.ok_or_else(|| {
         NativeError::new(
             "sync.not_recording",
             "Auto Sync is not keeping history for this workspace, so there is nothing to tidy.",
         )
     })?;
-    let lane = super::registry::lane(&key);
+    let lane = super::registry::lane(&root.to_string_lossy());
     let _lane = lock_or_recover(&lane);
     work(&engine)
 }
 
 #[tauri::command]
 pub fn sync_history_usage(root_path: String) -> Result<Usage, NativeError> {
-    let Some(engine) = engine_for(&root_path)? else {
+    let Some(engine) = super::registry::engine_for(&root_path)? else {
         return Ok(Usage { bytes: 0 });
     };
     Ok(Usage {

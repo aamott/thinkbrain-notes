@@ -57,7 +57,7 @@ fn replace_existing(source: &Path, destination: &Path) -> io::Result<()> {
 fn replace_existing(source: &Path, destination: &Path) -> io::Result<()> {
     use windows_sys::Win32::Foundation::GetLastError;
     use windows_sys::Win32::Storage::FileSystem::{
-        MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
+        MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH, MoveFileExW,
     };
 
     let source_w = to_wide_path(source);

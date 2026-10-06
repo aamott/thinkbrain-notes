@@ -5,7 +5,7 @@
  * behaviour with a long dependency list, and because keeping it inline made
  * the state hook read as a wall rather than as composition. It is behaviour,
  * not chrome, so it stays out of the shells: a shortcut works the same whether
- * the desktop rail or the phone hub is on screen.
+ * the desktop rail or the phone bubbles are on screen.
  */
 
 import { useEffect, type Dispatch } from "react";

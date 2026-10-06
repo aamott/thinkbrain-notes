@@ -20,7 +20,6 @@ import {
   loadDesktopState,
   saveDesktopState,
   type DesktopState,
-  type DesktopStateGateway,
   type DesktopStateUpdate
 } from "./desktopState";
 
@@ -38,12 +37,9 @@ const LOAD_FAILURE_DEDUP_KEY = `${DESKTOP_STATE_SOURCE}:load-failed`;
  * deduplicated so a burst of failed writes produces one entry, not many.
  * Non-Tauri sessions are a no-op.
  */
-export function persistDesktopState(
-  update: DesktopStateUpdate,
-  gateway?: DesktopStateGateway
-): void {
+export function persistDesktopState(update: DesktopStateUpdate): void {
   if (!isTauri()) return;
-  void saveDesktopState(update, gateway).catch(reportSaveFailure);
+  void saveDesktopState(update).catch(reportSaveFailure);
 }
 
 /**
@@ -56,24 +52,12 @@ export function persistDesktopState(
  * {@link loadDesktopState} directly and pass the error to
  * {@link reportDesktopStateReadFailure} in their own `.catch`.
  */
-export function readDesktopState(
-  gateway?: DesktopStateGateway
-): Promise<DesktopState> {
+export function readDesktopState(): Promise<DesktopState> {
   if (!isTauri()) return Promise.resolve(DEFAULT_DESKTOP_STATE);
-  return loadDesktopState(gateway).catch((error: unknown) => {
-    reportLoadFailure(error);
+  return loadDesktopState().catch((error: unknown) => {
+    reportDesktopStateReadFailure(error);
     return DEFAULT_DESKTOP_STATE;
   });
-}
-
-/**
- * Reports a desktop-state read failure without swallowing it.
- *
- * For callers that handle the fallback themselves but still want the failure to
- * be observable. Deduplicated so a recurring read problem is one entry.
- */
-export function reportDesktopStateReadFailure(error: unknown): void {
-  reportLoadFailure(error);
 }
 
 /** Logs and notifies a save failure (sticky — data-loss risk). */
@@ -93,8 +77,13 @@ function reportSaveFailure(error: unknown): void {
   });
 }
 
-/** Logs and notifies a read failure (transient — falls back to defaults). */
-function reportLoadFailure(error: unknown): void {
+/**
+ * Reports a desktop-state read failure without swallowing it.
+ *
+ * For callers that handle the fallback themselves but still want the failure to
+ * be observable. Deduplicated so a recurring read problem is one entry.
+ */
+export function reportDesktopStateReadFailure(error: unknown): void {
   console.warn("[desktop-state] load failed", error);
   useNotificationStore.getState().addNotification({
     source: DESKTOP_STATE_SOURCE,

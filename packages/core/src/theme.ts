@@ -5,19 +5,16 @@
  * and serializes them, following the same non-throwing diagnostic pattern used
  * in `./settings.ts`.
  *
- * This is a leaf module: it must NOT import React, DOM APIs, Node.js built-ins,
- * or Tauri APIs (per `packages/core/AGENTS.md`). Color-syntax validation is
- * performed here via a syntax-level check (`isValidCssColorValue`) that
- * verifies values match a recognized CSS color format (hex, named/system
- * colors, or a known color function with balanced parentheses). Function
- * arguments are not parsed — that requires a full CSS value parser and the
- * browser silently drops invalid declarations anyway. Additionally, token
- * values are interpolated verbatim into a CSS declaration by the desktop
- * layer's `themeInjection.ts` (`${token}: ${value};`), so a value carrying
- * `;`, `{`, `}`, `@`, or a CSS comment can break out of that declaration and
- * inject arbitrary rules. That string-safety check also lives here, where the
- * diagnostics channel already exists — the desktop layer has no diagnostics
- * channel of its own to report through; see `readTokens` below.
+ * Leaf module: no React, DOM, Node.js, or Tauri imports (per
+ * `packages/core/AGENTS.md`). Two validation concerns live here because the
+ * desktop layer has no diagnostics channel to report through:
+ * - **Color syntax** (`isValidCssColorValue`): verifies values match a
+ *   recognized CSS color format. Function arguments are not parsed — the
+ *   browser silently drops invalid declarations.
+ * - **CSS injection** (`UNSAFE_VALUE_PATTERN`): token values are interpolated
+ *   verbatim into `${token}: ${value};` by `themeInjection.ts`, so values
+ *   carrying `;`, `{`, `}`, `@`, or comment openers can break out of the
+ *   declaration.
  */
 
 import { getErrorMessage, isRecord } from "./settings/internal";
@@ -106,7 +103,20 @@ export const KNOWN_THEME_TOKENS: readonly string[] = [
   "--tn-color-tab-active",
   "--tn-color-tab-inactive",
   "--tn-color-tab-active-foreground",
-  "--tn-color-tab-inactive-foreground"
+  "--tn-color-tab-inactive-foreground",
+
+  // Syntax highlighting — code editor token colors.
+  "--tn-color-syntax-keyword",
+  "--tn-color-syntax-string",
+  "--tn-color-syntax-comment",
+  "--tn-color-syntax-number",
+  "--tn-color-syntax-type",
+  "--tn-color-syntax-function",
+  "--tn-color-syntax-variable",
+  "--tn-color-syntax-property",
+  "--tn-color-syntax-operator",
+  "--tn-color-syntax-punctuation",
+  "--tn-color-syntax-invalid"
 ];
 
 /** Set form of {@link KNOWN_THEME_TOKENS} for O(1) membership checks. */
@@ -139,12 +149,19 @@ const UNSAFE_VALUE_PATTERN = /[;{}@]|\/\*/;
 // ---------------------------------------------------------------------------
 
 /**
- * CSS named colors (level 4) plus `transparent` and `currentcolor`.
+ * All bare-keyword colors accepted in a token value: CSS named colors
+ * (level 4), system colors, and CSS-wide keywords. System colors let a
+ * theme auto-adapt to the OS light/dark preference without two variants
+ * (per theme-foundation design decision #4). CSS-wide keywords
+ * (`inherit`, `initial`, etc.) are valid on any property.
  *
- * Source: https://www.w3.org/TR/css-color-4/#named-colors — the 148 named
- * colors plus the two special keywords. Kept as a set for O(1) lookup.
+ * Sources:
+ * - https://www.w3.org/TR/css-color-4/#named-colors
+ * - https://www.w3.org/TR/css-color-4/#css-system-colors
+ * - https://www.w3.org/TR/css-cascade-5/#defaulting-keywords
  */
-const CSS_NAMED_COLORS: ReadonlySet<string> = new Set([
+const CSS_COLOR_KEYWORDS: ReadonlySet<string> = new Set([
+  // Named colors (level 4) + transparent + currentcolor.
   "aliceblue", "antiquewhite", "aqua", "aquamarine", "azure", "beige",
   "bisque", "black", "blanchedalmond", "blue", "blueviolet", "brown",
   "burlywood", "cadetblue", "chartreuse", "chocolate", "coral",
@@ -173,35 +190,25 @@ const CSS_NAMED_COLORS: ReadonlySet<string> = new Set([
   "silver", "skyblue", "slateblue", "slategray", "slategrey", "snow",
   "springgreen", "steelblue", "tan", "teal", "thistle", "tomato",
   "turquoise", "violet", "wheat", "white", "whitesmoke", "yellow",
-  "yellowgreen", "transparent", "currentcolor"
-]);
-
-/**
- * CSS system color keywords — colors that reference the OS/user-agent UI
- * palette. A theme using these auto-adapts to the OS light/dark preference
- * without the author writing two variants (per theme-foundation design
- * decision #4).
- *
- * Source: https://www.w3.org/TR/css-color-4/#css-system-colors
- */
-const CSS_SYSTEM_COLORS: ReadonlySet<string> = new Set([
+  "yellowgreen", "transparent", "currentcolor",
+  // System colors.
   "canvas", "canvastext", "linktext", "visitedtext", "activetext",
   "buttonface", "buttontext", "buttonborder", "field", "fieldtext",
   "highlight", "highlighttext", "selecteditem", "selecteditemtext",
   "mark", "marktext", "graytext", "accentcolor", "accentcolortext",
-  // Legacy names (CSS Color Module level 3) still accepted by browsers.
+  // Legacy system colors (CSS Color Module level 3).
   "activeborder", "activecaption", "appworkspace", "background", "buttonhighlight",
   "buttonshadow", "captiontext", "inactiveborder", "inactivecaption",
   "inactivecaptiontext", "infobackground", "infotext", "menu", "menutext",
   "scrollbar", "threeddarkshadow", "threedface", "threedhighlight",
-  "threedlightshadow", "threedshadow", "window", "windowframe", "windowtext"
+  "threedlightshadow", "threedshadow", "window", "windowframe", "windowtext",
+  // CSS-wide keywords.
+  "inherit", "initial", "unset", "revert", "revert-layer"
 ]);
 
 /**
- * CSS color function names that accept a single parenthesized argument list.
- * Each produces a color value. `var()` is included because a theme may
- * reference another token by name; the resolved value is expected to be a
- * color, but validating the reference chain is out of scope.
+ * CSS color function names. `var()` is included because a theme may reference
+ * another token by name; validating the reference chain is out of scope.
  */
 const CSS_COLOR_FUNCTIONS: ReadonlySet<string> = new Set([
   "rgb", "rgba", "hsl", "hsla", "hwb", "lab", "lch", "oklab", "oklch",
@@ -209,69 +216,52 @@ const CSS_COLOR_FUNCTIONS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Hex color: `#` followed by exactly 3, 4, 6, or 8 hex digits (with optional
- * alpha). Case-insensitive. The alternation ensures exact length matches —
- * `[0-9a-f]{3,4}` would incorrectly accept a 4-char string like `abc1` that
- * is not valid hex of any supported length.
+ * Hex color: `#` + exactly 3, 4, 6, or 8 hex digits. Case-insensitive.
+ * Alternation (not `{3,4}`) ensures exact length matches.
  */
 const HEX_COLOR_PATTERN = /^#(?:[0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
 
 /**
  * Validates that a string is a plausible CSS color value.
  *
- * This is a syntax-level check, not a full CSS parse — it verifies the value
- * matches one of the recognized color formats (hex, named color, system color,
- * or a known color function with balanced parentheses). It does NOT parse the
- * arguments inside functional notations (e.g. it won't catch `rgb(300, -5, 0)`
- * as out-of-range), because that requires a full CSS value parser and the
- * browser will silently ignore invalid declarations anyway. The check catches
- * typos and non-color values that would otherwise be silently dropped by the
- * CSS engine, giving the user actionable feedback at import time.
+ * Syntax-level check, not a full CSS parse: verifies the value matches a
+ * recognized color format (hex, keyword, or known color function with balanced
+ * parens). Does NOT parse function arguments (e.g. `rgb(300, -5, 0)` passes)
+ * — the browser silently drops invalid declarations, and a full CSS value
+ * parser is out of scope for a zero-dependency module. Catches typos and
+ * non-color values that would otherwise be silently dropped, giving the user
+ * actionable feedback at import time.
  *
- * Accepted formats (per theme-foundation design decision #4):
- * - Hex: `#rgb`, `#rgba`, `#rrggbb`, `#rrggbbaa`
- * - Named colors: `red`, `cornflowerblue`, `transparent`, `currentcolor`, …
- * - System colors: `Canvas`, `ButtonFace`, `Highlight`, `Field`, …
- * - Functions: `rgb()`, `rgba()`, `hsl()`, `hsla()`, `hwb()`, `lab()`,
- *   `lch()`, `oklab()`, `oklch()`, `color()`, `color-mix()`,
- *   `color-contrast()`, `var()`, `light-dark()`
- *
- * Args:
- *   value: The string to validate (already confirmed non-empty and safe).
- *
- * Returns:
- *   `true` if the value matches a recognized CSS color format.
+ * Accepted: hex (`#rgb`–`#rrggbbaa`), named/system colors, CSS-wide keywords,
+ * and functions (`rgb`, `hsl`, `oklch`, `color-mix`, `var`, `light-dark`, …).
  */
-function isValidCssColorValue(value: string): boolean {
+export function isValidCssColorValue(value: string): boolean {
   const trimmed = value.trim().toLowerCase();
 
-  // Hex colors.
   if (HEX_COLOR_PATTERN.test(trimmed)) return true;
+  if (CSS_COLOR_KEYWORDS.has(trimmed)) return true;
 
-  // Named colors and system colors (case-insensitive).
-  if (CSS_NAMED_COLORS.has(trimmed)) return true;
-  if (CSS_SYSTEM_COLORS.has(trimmed)) return true;
-
-  // Functional notations: check the function name is recognized, the value
-  // has content inside the parentheses, and parentheses are balanced. The
-  // content inside is not parsed — the browser will reject invalid arguments,
-  // and a full CSS value parser is out of scope for a platform-agnostic
-  // module. Empty parens like `rgb()` are rejected because no valid color
-  // function produces a color with zero arguments.
+  // Functional notations: recognized name + non-whitespace args + balanced
+  // parens with the first function closing exactly at the end (rejects
+  // concatenated functions like `rgb(0 0 0) hsl(0 0 0)`). The `s` flag lets
+  // `.+` span newlines, which CSS permits inside function arguments.
   const funcMatch = /^([a-z-]+)\s*\((.+)\)$/s.exec(trimmed);
   if (funcMatch !== null) {
     const funcName = funcMatch[1]!;
     if (CSS_COLOR_FUNCTIONS.has(funcName)) {
-      // Verify parentheses are balanced (the unsafe-char check already
-      // blocked `;{}@`, so we only need to count parens). The regex already
-      // ensured there's content between the outermost parens, but nested
-      // functions like `color-mix(in srgb, var(--x) 50%, blue)` need balanced
-      // counting.
+      if (funcMatch[2]!.trim().length === 0) return false;
+      // Depth reaches 0 exactly at the last `)` for a single top-level
+      // function. Reaching 0 earlier means trailing content (a second
+      // concatenated function). Nested functions like
+      // `color-mix(in srgb, var(--x) 50%, blue)` only reach 0 at the end.
       let depth = 0;
-      for (const ch of trimmed) {
+      for (let i = 0; i < trimmed.length; i++) {
+        const ch = trimmed[i]!;
         if (ch === "(") depth++;
-        else if (ch === ")") depth--;
-        if (depth < 0) return false;
+        else if (ch === ")") {
+          depth--;
+          if (depth < 0 || (depth === 0 && i < trimmed.length - 1)) return false;
+        }
       }
       return depth === 0;
     }
@@ -578,7 +568,7 @@ function readTokens(value: unknown): {
  * Serializes a theme document as stable, pretty-printed JSON.
  *
  * The output uses 2-space indentation and a trailing newline, matching the
- * style of `serializeAppSettings`. Key order is `name`, `base`, `version`,
+ * settings serialization style. Key order is `name`, `base`, `version`,
  * `tokens` for deterministic diffs.
  *
  * Args:

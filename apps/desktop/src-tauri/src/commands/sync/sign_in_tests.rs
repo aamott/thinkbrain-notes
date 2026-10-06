@@ -180,8 +180,10 @@ fn forgetting_a_profile_drops_its_secret_and_does_not_pick_another() {
         get_profile(&keep.id).expect("readable"),
         Some(("keep".to_string(), "keep-tok".to_string()))
     );
-    assert!(load_catalog()
-        .expect("catalog")
-        .iter()
-        .all(|profile| profile.id != drop.id));
+    assert!(
+        load_catalog()
+            .expect("catalog")
+            .iter()
+            .all(|profile| profile.id != drop.id)
+    );
 }

@@ -32,10 +32,11 @@ import { Unavailable } from "../shell/Unavailable";
 import { appSettingsRegistry, useSettingsStore } from "./settingsStore";
 import { getControlForDefinition } from "./controlRegistry";
 import { subscribeSettingHighlight } from "./settingHighlight";
+import { resolveEffectiveValue } from "./settingsHelpers";
 import { ThemePicker, ThemeToolbar } from "./ThemeSectionControls";
 import { useEffectiveValue } from "./useEffectiveValue";
+import { qualifiedSectionId, sectionAnchorId } from "./sectionUtils";
 
-const SECTION_ID_PREFIX = "settings-section-";
 const HIDDEN_SETTING_ROWS = new Set([
   "appearance.theme",
   "appearance.themeFile",
@@ -45,17 +46,6 @@ const HIDDEN_SETTING_ROWS = new Set([
 interface RenderedSection {
   readonly section: SettingSection;
   readonly scope: SettingScope;
-}
-
-/**
- * Builds a scope-qualified id for a rendered section.
- *
- * Mixed-scope modules (e.g. Journal) project the same section id into both
- * app and workspace scope groups. Qualifying with scope keeps DOM ids unique
- * and lets the scroll-spy distinguish which projection is on screen.
- */
-function scopeQualifiedId(scope: SettingScope, sectionId: string): string {
-  return `${scope}:${sectionId}`;
 }
 
 /** Flattens projected module trees while preserving module and section order. */
@@ -72,6 +62,29 @@ function flattenModuleSections(
   };
   for (const module of modules) visit(module.sections);
   return flattened;
+}
+
+/**
+ * Whether a setting holds anything other than its declared default.
+ *
+ * An advanced row the user has actually changed stays visible: hiding it
+ * would leave them with a behaviour they chose and no way to find where they
+ * chose it.
+ */
+function isChanged(
+  definition: SettingDefinition,
+  stagedChanges: Record<string, unknown>,
+  appValues: Record<string, unknown>,
+  workspaceValues: Record<string, unknown> | null
+): boolean {
+  const effective = resolveEffectiveValue(
+    definition.key,
+    stagedChanges,
+    appValues,
+    workspaceValues,
+    definition
+  );
+  return effective !== definition.default;
 }
 
 /**
@@ -160,18 +173,26 @@ function SettingRow({
 function SettingsSection({
   renderedSection,
   stagedChanges,
+  appValues,
+  workspaceValues,
   validationDiagnostics,
   highlightKey,
+  revealedKeys,
+  showAdvanced,
   setSectionRef
 }: {
   readonly renderedSection: RenderedSection;
   readonly stagedChanges: Readonly<Record<string, unknown>>;
+  readonly appValues: Readonly<Record<string, unknown>>;
+  readonly workspaceValues: Readonly<Record<string, unknown>> | null;
   readonly validationDiagnostics: readonly SettingsDiagnostic[];
   readonly highlightKey: string | null;
+  readonly revealedKeys: ReadonlySet<string>;
+  readonly showAdvanced: boolean;
   readonly setSectionRef: (sectionId: string, element: HTMLElement | null) => void;
 }) {
   const { section, scope } = renderedSection;
-  const qualifiedId = scopeQualifiedId(scope, section.id);
+  const qualifiedId = qualifiedSectionId(scope, section.id);
   const stageChange = useSettingsStore((state) => state.stageChange);
   const allDefinitions = appSettingsRegistry
     .getDefinitionsForSection(section.id)
@@ -182,7 +203,15 @@ function SettingsSection({
   // GitLinkControl. Those standalone generic rows are redundant — filter them
   // out so they don't render twice. The registry definitions stay so the
   // settings system still knows about them.
-  const definitions = allDefinitions.filter((d) => !HIDDEN_SETTING_ROWS.has(d.key));
+  const definitions = allDefinitions
+    .filter((d) => !HIDDEN_SETTING_ROWS.has(d.key))
+    .filter(
+      (d) =>
+        !d.advanced ||
+        showAdvanced ||
+        revealedKeys.has(d.key) ||
+        isChanged(d, stagedChanges, appValues, workspaceValues)
+    );
 
   // Determine whether any staged change belongs to this section so the
   // per-section reset button can be enabled/disabled. `resetSection` only
@@ -201,14 +230,14 @@ function SettingsSection({
 
   return (
     <section
-      id={`${SECTION_ID_PREFIX}${qualifiedId}`}
+      id={sectionAnchorId(qualifiedId)}
       ref={(element) => setSectionRef(qualifiedId, element)}
       className="scroll-mt-4 py-4 first:pt-4"
-      aria-labelledby={`${SECTION_ID_PREFIX}${qualifiedId}-heading`}
+      aria-labelledby={`${sectionAnchorId(qualifiedId)}-heading`}
     >
       <div className="mb-2 flex items-center gap-2">
         <h2
-          id={`${SECTION_ID_PREFIX}${qualifiedId}-heading`}
+          id={`${sectionAnchorId(qualifiedId)}-heading`}
           className="text-base font-semibold text-foreground"
         >
           {section.label}
@@ -263,11 +292,18 @@ function SettingsSection({
  */
 export function SettingsContent() {
   const workspaceValues = useSettingsStore((state) => state.workspaceValues);
+  const appValues = useSettingsStore((state) => state.appValues);
   const stagedChanges = useSettingsStore((state) => state.stagedChanges);
   // Subscribe so inline validation diagnostics render and clear reactively.
   const validationDiagnostics = useSettingsStore((state) => state.validationDiagnostics);
   const setActiveSection = useSettingsStore((state) => state.setActiveSection);
   const [highlightKey, setHighlightKey] = useState<string | null>(null);
+  // A highlight clears itself after ~1200ms. Reveal must not: a row that
+  // appears when search lands on it and then disappears mid-read is worse
+  // than one that never appeared, so revealed keys are latched for the life
+  // of this settings view.
+  const [revealedKeys, setRevealedKeys] = useState<ReadonlySet<string>>(new Set());
+  const showAdvanced = useEffectiveValue("settings.showAdvanced") === true;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const sectionRefs = useRef(new Map<string, HTMLElement>());
 
@@ -288,7 +324,7 @@ export function SettingsContent() {
           )
         ];
   const sectionIdsKey = renderedSections
-    .map(({ section, scope }) => `${scope}:${section.id}`)
+    .map(({ section, scope }) => qualifiedSectionId(scope, section.id))
     .join("|");
 
   /** Keeps the map used by both the observer and section-ref requirement current. */
@@ -297,7 +333,14 @@ export function SettingsContent() {
     else sectionRefs.current.delete(sectionId);
   };
 
-  useEffect(() => subscribeSettingHighlight(setHighlightKey), []);
+  useEffect(
+    () =>
+      subscribeSettingHighlight((key) => {
+        setHighlightKey(key);
+        if (key !== null) setRevealedKeys((current) => new Set(current).add(key));
+      }),
+    []
+  );
 
   // Search highlights target the containing section rather than a lone row so
   // its heading and context remain visible after navigation.
@@ -352,17 +395,22 @@ export function SettingsContent() {
   return (
     <div
       ref={containerRef}
+      data-phone-scroll-clearance
       className="flex min-h-0 grow flex-col overflow-y-auto"
       data-testid="settings-content-scroll"
     >
       <div className="mx-auto w-full max-w-160 px-6 max-[760px]:max-w-none max-[760px]:pr-4 max-[760px]:pb-8 max-[760px]:pl-15">
         {renderedSections.map((renderedSection) => (
           <SettingsSection
-            key={`${renderedSection.scope}:${renderedSection.section.id}`}
+            key={qualifiedSectionId(renderedSection.scope, renderedSection.section.id)}
             renderedSection={renderedSection}
             stagedChanges={stagedChanges}
+            appValues={appValues}
+            workspaceValues={workspaceValues}
             validationDiagnostics={validationDiagnostics}
             highlightKey={highlightKey}
+            revealedKeys={revealedKeys}
+            showAdvanced={showAdvanced}
             setSectionRef={setSectionRef}
           />
         ))}

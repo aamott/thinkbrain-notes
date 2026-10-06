@@ -14,10 +14,14 @@
 //! does once loaded: a loaded extension is trusted local code running with full
 //! application privileges.
 
-use crate::error::{failed, NativeError};
+use crate::commands::workspace::{
+    ContainedPathFailure, RelativePathRejection, normalize_relative_path_parts,
+    resolve_contained_existing_path,
+};
+use crate::error::{NativeError, failed};
 use std::fs;
 use std::io::Read;
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 
 /// Largest entry module accepted, guarding against reading a huge file into the
 /// webview by mistake.
@@ -25,48 +29,25 @@ const MAX_EXTENSION_FILE_BYTES: u64 = 8 * 1024 * 1024;
 
 /// Rejects a relative path that is absolute, empty, or leaves the directory.
 fn normalize_extension_relative_path(relative_path: &str) -> Result<PathBuf, NativeError> {
-    // Manifests are hand-authored and may use either separator; normalize before
-    // inspecting components so Windows-style input is validated on Unix hosts.
-    let normalized = relative_path.replace('\\', "/");
-    let path = Path::new(&normalized);
-
-    if path.is_absolute() {
-        return Err(NativeError::new(
-            "extensions.invalid_path",
-            "Extension file path must be relative to the extension directory.",
-        ));
-    }
-
-    let mut parts = PathBuf::new();
-    for component in path.components() {
-        match component {
-            Component::Normal(part) => {
-                if part.to_string_lossy().trim().is_empty() {
-                    return Err(NativeError::new(
-                        "extensions.invalid_path",
-                        "Extension file path contains an empty segment.",
-                    ));
+    // Manifests are hand-authored and may use either separator; the shared
+    // normalizer handles that. The errors stay `extensions.*` either way.
+    normalize_relative_path_parts(relative_path)
+        .map(|parts| parts.iter().collect())
+        .map_err(|rejection| {
+            let message = match rejection {
+                RelativePathRejection::Absolute => {
+                    "Extension file path must be relative to the extension directory."
                 }
-                parts.push(part);
-            }
-            Component::CurDir => {}
-            Component::ParentDir | Component::Prefix(_) | Component::RootDir => {
-                return Err(NativeError::new(
-                    "extensions.invalid_path",
-                    "Extension file path must stay inside the extension directory.",
-                ));
-            }
-        }
-    }
-
-    if parts.as_os_str().is_empty() {
-        return Err(NativeError::new(
-            "extensions.invalid_path",
-            "Extension file path must name a file.",
-        ));
-    }
-
-    Ok(parts)
+                RelativePathRejection::EmptySegment => {
+                    "Extension file path contains an empty segment."
+                }
+                RelativePathRejection::Escapes => {
+                    "Extension file path must stay inside the extension directory."
+                }
+                RelativePathRejection::Empty => "Extension file path must name a file.",
+            };
+            NativeError::new("extensions.invalid_path", message)
+        })
 }
 
 /// Resolves a directory-relative path to a real file inside that directory.
@@ -96,23 +77,32 @@ fn resolve_extension_file(directory: &str, relative_path: &str) -> Result<PathBu
         ));
     }
 
-    let candidate = canonical_root.join(&relative);
-    let canonical_file = candidate.canonicalize().map_err(|error| {
-        NativeError::with_details(
-            "extensions.file_unavailable",
-            format!("Extension file \"{relative_path}\" could not be read."),
-            error,
-        )
-    })?;
-
-    // Canonicalization resolved any symlink, so this rejects a link that points
-    // outside the extension directory.
-    if !canonical_file.starts_with(&canonical_root) {
-        return Err(NativeError::new(
-            "extensions.invalid_path",
-            "Extension file path must stay inside the extension directory.",
-        ));
-    }
+    // Canonicalization resolves any symlink, so the containment check rejects a
+    // link that points outside the extension directory.
+    let (_, canonical_file) =
+        match resolve_contained_existing_path(&canonical_root, &canonical_root.join(&relative)) {
+            Ok(paths) => paths,
+            Err(ContainedPathFailure::Base(error)) => {
+                return Err(failed(
+                    "extensions.directory_unavailable",
+                    "Extension directory could not be read.",
+                    error,
+                ));
+            }
+            Err(ContainedPathFailure::Target(error)) => {
+                return Err(NativeError::with_details(
+                    "extensions.file_unavailable",
+                    format!("Extension file \"{relative_path}\" could not be read."),
+                    error,
+                ));
+            }
+            Err(ContainedPathFailure::Outside) => {
+                return Err(NativeError::new(
+                    "extensions.invalid_path",
+                    "Extension file path must stay inside the extension directory.",
+                ));
+            }
+        };
 
     if !canonical_file.is_file() {
         return Err(NativeError::new(

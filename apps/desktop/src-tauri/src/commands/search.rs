@@ -1,6 +1,6 @@
 use crate::commands::workspace::{resolve_workspace_root, stable_workspace_hash};
-use crate::error::{failed, lock_or_recover, NativeError};
-use rusqlite::{params, Connection, Transaction};
+use crate::error::{NativeError, failed, lock_or_recover};
+use rusqlite::{Connection, Transaction, params};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -14,11 +14,11 @@ mod metadata;
 #[cfg(test)]
 mod metadata_tests;
 
+pub use metadata::{MetadataField, MetadataPredicate, MetadataQueryResult};
 use metadata::{
     clear_document_metadata, delete_document_metadata, init_metadata_schema, normalize_path_prefix,
     path_prefix_sql, replace_document_metadata,
 };
-pub use metadata::{MetadataField, MetadataPredicate, MetadataQueryResult};
 
 static SEARCH_CONNECTIONS: Mutex<Option<HashMap<String, Arc<Mutex<Connection>>>>> =
     Mutex::new(None);
@@ -27,14 +27,21 @@ pub fn get_search_connection(
     app: &tauri::AppHandle,
     root_path: &str,
 ) -> Result<Arc<Mutex<Connection>>, NativeError> {
+    // The index file is named from the canonical root's hash, so the pool keys
+    // by that root too — otherwise two spellings of one vault would hold two
+    // connections to the same SQLite file.
+    let canonical_root = resolve_workspace_root(root_path)?
+        .to_string_lossy()
+        .to_string();
+
     let mut lock = lock_or_recover(&SEARCH_CONNECTIONS);
     let pool = lock.get_or_insert_with(HashMap::new);
-    if let Some(conn) = pool.get(root_path) {
+    if let Some(conn) = pool.get(&canonical_root) {
         return Ok(conn.clone());
     }
-    let conn = open_index_connection(app, root_path)?;
+    let conn = open_index_connection(app, &canonical_root)?;
     let arc = Arc::new(Mutex::new(conn));
-    pool.insert(root_path.to_string(), arc.clone());
+    pool.insert(canonical_root, arc.clone());
     Ok(arc)
 }
 

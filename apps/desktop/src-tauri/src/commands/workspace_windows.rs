@@ -3,17 +3,17 @@
 //! Maps window labels to roots, creates windows off the main thread, grants
 //! vault asset scope, and cleans up roots/watchers on destroy.
 
-use crate::commands::markdown::{list_markdown_file_entries, MarkdownFileEntry};
-use crate::error::{failed, lock_or_recover, NativeError};
+use crate::commands::markdown::{MarkdownFileEntry, list_markdown_file_entries};
+use crate::error::{NativeError, failed, lock_or_recover};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::{
-    atomic::{AtomicU64, Ordering},
     Mutex,
+    atomic::{AtomicU64, Ordering},
 };
 use tauri::Manager;
 
-use super::workspace_paths::{describe_workspace, resolve_workspace_root, WorkspaceDescriptor};
+use super::workspace_paths::{WorkspaceDescriptor, describe_workspace, resolve_workspace_root};
 
 #[derive(Default)]
 pub struct WorkspaceWindowRoots(Mutex<HashMap<String, String>>);
@@ -44,25 +44,9 @@ pub fn unregister_workspace_window_root(roots: &WorkspaceWindowRoots, label: &st
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct ShellStatus {
-    pub app_name: String,
-    pub shell_version: String,
-    pub ready: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct WorkspaceSnapshot {
     pub workspace: WorkspaceDescriptor,
     pub files: Vec<MarkdownFileEntry>,
-}
-
-#[tauri::command]
-pub fn desktop_shell_status() -> Result<ShellStatus, NativeError> {
-    Ok(ShellStatus {
-        app_name: "Thinkbrain Notes".to_string(),
-        shell_version: env!("CARGO_PKG_VERSION").to_string(),
-        ready: true,
-    })
 }
 
 #[tauri::command]

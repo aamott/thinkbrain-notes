@@ -15,14 +15,17 @@ import { MetadataBottomSheet, type MetadataBottomSheetProps } from "./MetadataBo
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
 let opener: HTMLButtonElement | null = null;
+let background: HTMLDivElement | null = null;
 
 afterEach(async () => {
   await act(async () => root?.unmount());
   container?.remove();
   opener?.remove();
+  background?.remove();
   root = null;
   container = null;
   opener = null;
+  background = null;
 });
 
 const DEFINITIONS: readonly JournalFieldDefinition[] = [
@@ -35,7 +38,7 @@ const render = async (
 ): Promise<HTMLDivElement> => {
   // A real opener, so "returns focus to the control that opened it" is testable.
   opener = document.createElement("button");
-  document.body.append(opener);
+  (document.getElementById("root") ?? document.body).append(opener);
   opener.focus();
 
   container = document.createElement("div");
@@ -103,17 +106,24 @@ describe("focus (D78)", () => {
     expect(document.activeElement).toBe(focusable.at(-1));
   });
 
-  it("returns focus to the control that opened it", async () => {
+  it("makes the background inert and restores it before returning focus", async () => {
+    background = document.createElement("div");
+    background.id = "root";
+    document.body.append(background);
     await render();
 
-    await act(async () => root?.unmount());
+    expect(background.inert).toBe(true);
 
+    await act(async () => root?.unmount());
+    root = null;
+
+    expect(background.inert).toBe(false);
     expect(document.activeElement).toBe(opener);
   });
 });
 
 describe("dismissing (D78)", () => {
-  it("dismisses on the shell's back, which reaches the page as Escape", async () => {
+  it("dismisses on Escape", async () => {
     const onDismiss = vi.fn();
     await render({ onDismiss });
 

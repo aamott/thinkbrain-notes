@@ -38,13 +38,13 @@ describe("desktop command registry", () => {
     expect(registry.get("open-extensions")?.availability).toBe("available");
   });
 
-  it("makes feature-owned commands explicitly unavailable with their prerequisite", () => {
+  it("makes feature-owned commands explicitly unavailable with a message", () => {
     const unavailable = builtInDesktopCommands.filter((command) => command.availability === "unavailable");
 
     expect(unavailable).toHaveLength(2);
     expect(unavailable).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: "open-file", prerequisite: "native file picker" }),
-      expect.objectContaining({ id: "open-graph", prerequisite: "link indexing" })
+      expect.objectContaining({ id: "open-file" }),
+      expect.objectContaining({ id: "open-graph" })
     ]));
     expect(unavailable.every((command) => Boolean(command.unavailableMessage))).toBe(true);
   });
@@ -90,7 +90,7 @@ describe("desktop command registry", () => {
     expect(() => registry.register(first)).toThrow("already registered");
   });
 
-  it("gives the new-note command an icon the hub can render", () => {
+  it("gives the new-note command an icon the bubbles can render", () => {
     const newNote = builtInDesktopCommands.find((command) => command.id === "new-note");
 
     expect(newNote?.icon).toBe("plus");

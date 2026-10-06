@@ -104,6 +104,9 @@ export function useConflictNotificationAdapter({
               ? "1 note has two versions."
               : `${arrived} notes have two versions.`,
           recovery: "Choose which version to keep, or keep both.",
+          // Conflicts is a left panel, so this does not move an action item —
+          // it records which surface the Review action leads to.
+          panel: "conflicts",
           severity: "transient",
           variant: "warning",
           action: {

@@ -9,6 +9,10 @@ import {
 } from "@thinkbrain/core";
 
 import { desktopCommandRegistry, type DesktopCommandContext } from "../commands/commandRegistry";
+import {
+  mobileNewNoteActionRegistry,
+  type MobileNewNoteActionRegistry
+} from "../commands/mobileNewNoteActionRegistry";
 import { desktopPanelRegistry, type DesktopPanelContext } from "../panels/panelRegistryModel";
 import { builtInExtensions, type BuiltInExtension } from "./builtins";
 import {
@@ -61,6 +65,7 @@ export interface BootstrapOptions {
   readonly extensions?: readonly BuiltInExtension[];
   readonly commands?: typeof desktopCommandRegistry;
   readonly panels?: typeof desktopPanelRegistry;
+  readonly mobileNewNoteActions?: MobileNewNoteActionRegistry;
   readonly compatibilityHost?: CompatibilityHost;
 }
 
@@ -72,6 +77,12 @@ interface EntryState {
   reasons: readonly BootstrapReason[];
   /** Stub registrations, disposed immediately before activation. */
   stubs: Disposable[];
+  /**
+   * New-note action registrations. Unlike command stubs these persist through
+   * activation: the row survives while its command stub swaps to the real
+   * command, and is removed only on activation failure or disposal.
+   */
+  mobileNewNoteActionRegistrations: Disposable[];
   /** Host registration handle; disposing it also deactivates the extension. */
   registration: Disposable | null;
   activation: Promise<void> | undefined;
@@ -81,6 +92,7 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
   const host = options.host ?? desktopExtensionHost;
   const commands = options.commands ?? desktopCommandRegistry;
   const panels = options.panels ?? desktopPanelRegistry;
+  const newNoteActions = options.mobileNewNoteActions ?? mobileNewNoteActionRegistry;
   const compatibilityHost = options.compatibilityHost ?? HOST_COMPATIBILITY;
   const extensions = options.extensions ?? builtInExtensions;
 
@@ -92,6 +104,11 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
   const disposeStubs = (state: EntryState): void => {
     for (const stub of state.stubs) stub.dispose();
     state.stubs = [];
+  };
+
+  const disposeActionRegistrations = (state: EntryState): void => {
+    for (const registration of state.mobileNewNoteActionRegistrations) registration.dispose();
+    state.mobileNewNoteActionRegistrations = [];
   };
 
   /**
@@ -113,6 +130,8 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
       })
       .catch((error: unknown) => {
         state.status = "failed";
+        // A failed extension's New-note rows are dead ends; drop them.
+        disposeActionRegistrations(state);
         rebuildSnapshot();
         console.error(`[extensions] Failed to activate "${state.manifest.id}".`, error);
         throw error;
@@ -172,9 +191,31 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
   const registerAndStub = (
     state: EntryState,
     activate: DesktopExtensionActivation,
-    deactivate?: (context: DesktopExtensionContext) => void | Promise<void>
+    deactivate?: (context: DesktopExtensionContext) => void | Promise<void>,
+    newNoteActionsForEntry?: BuiltInExtension["mobileNewNoteActions"]
   ): void => {
-    state.registration = host.register({ id: state.manifest.id, activate, deactivate });
+    // Descriptor contributions, registered before any activation so the popup
+    // is complete from the first frame — like command stubs, but surviving
+    // activation because they only point at the command.
+    try {
+      for (const action of newNoteActionsForEntry ?? []) {
+        state.mobileNewNoteActionRegistrations.push(
+          newNoteActions.register({
+            id: `${state.manifest.id}.${action.id}`,
+            commandId: `${state.manifest.id}.${action.commandId}`,
+            label: action.label,
+            icon: action.icon,
+            requiresWorkspace: action.requiresWorkspace
+          })
+        );
+      }
+      state.registration = host.register({ id: state.manifest.id, activate, deactivate });
+    } catch (error) {
+      // Transactional: a duplicate or a failed host registration must not
+      // leave earlier action rows orphaned in the registry.
+      disposeActionRegistrations(state);
+      throw error;
+    }
     if (hasStartupActivation(state.manifest)) {
       void ensureActive(state).catch(() => undefined);
     } else {
@@ -185,6 +226,7 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
   /** Disposes everything one extension owns, in reverse of registration. */
   const disposeEntry = async (state: EntryState): Promise<void> => {
     disposeStubs(state);
+    disposeActionRegistrations(state);
     // The host's registration handle awaits any in-flight activation and
     // deactivates before unregistering, so the activation scope — and every
     // command, panel, and setting it owned — is gone when this resolves.
@@ -217,6 +259,7 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
       status: compatibility.compatible ? "registered" : "incompatible",
       reasons: compatibility.reasons,
       stubs: [],
+      mobileNewNoteActionRegistrations: [],
       registration: null,
       activation: undefined
     };
@@ -229,7 +272,7 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
       continue;
     }
 
-    registerAndStub(state, extension.activate);
+    registerAndStub(state, extension.activate, undefined, extension.mobileNewNoteActions);
   }
 
   // A cached snapshot keeps `entries()` referentially stable between changes,
@@ -283,6 +326,7 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
         // an author why, for example, a declared panel did not appear.
         reasons: toReasons(diagnostics),
         stubs: [],
+        mobileNewNoteActionRegistrations: [],
         registration: null,
         activation: undefined
       };
@@ -311,7 +355,9 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
 
   // Only the default (app-wide) bootstrap is published; an injected-registry
   // bootstrap in a test must not become the one the Extensions panel reads.
-  if (!options.commands && !options.panels && !options.host) setExtensionBootstrap(bootstrap);
+  if (!options.commands && !options.panels && !options.host && !options.mobileNewNoteActions) {
+    setExtensionBootstrap(bootstrap);
+  }
 
   return bootstrap;
 }

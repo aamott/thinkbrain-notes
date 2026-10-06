@@ -13,4 +13,4 @@ Verify the app builds and launches in the iOS simulator.
 
 ## References
 
-- `plans/pending-mobile-med-hard.md` — epic context, known limitations
+- `plans/mobile/` — epic context, known limitations

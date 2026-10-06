@@ -44,6 +44,7 @@ import {
 import { appSettingsRegistry, useSettingsStore } from "./settingsStore";
 import { resolveEffectiveValue } from "./settingsHelpers";
 import { readThemeFile } from "./themeAdapter";
+import { resolveThemeBase } from "./themeResolution";
 import { readPickedFile, writeJsonViaSaveDialog } from "./importExportFiles";
 
 // ---------------------------------------------------------------------------
@@ -81,14 +82,15 @@ export function readCurrentTokenValues(): Record<string, string> {
  * Reads the currently active base palette from the root element's
  * `data-thinkbrain-theme` attribute.
  *
- * The ThemeProvider sets this attribute to `"light"`, `"dark"`, or `"system"`.
- * Custom theme files force it to the file's base, so reading it here captures
- * the effective base even when a custom theme is active. A `.tbtheme.json`
- * `base` must be a concrete palette (per `ThemeBase`), so `"system"` cannot be
- * exported directly. Instead, `"system"` (and any missing/unexpected value) is
- * resolved against the OS color-scheme preference via `matchMedia` so the
- * exported base matches the palette the user actually sees. Without this, a
- * dark-OS user on "system" would export a file with dark token values but
+ * The ThemeProvider sets this attribute to a concrete `"light"` or `"dark"`
+ * (never `"system"` — the system setting is resolved in JS before the attribute
+ * is written). Custom theme files force it to the file's base, so reading it
+ * here captures the effective base even when a custom theme is active. A
+ * `.tbtheme.json` `base` must be a concrete palette (per `ThemeBase`), so a
+ * missing or unexpected attribute value is resolved against the OS
+ * color-scheme preference via the shared `resolveThemeBase` so the exported
+ * base matches the palette the user actually sees. Without this, a dark-OS
+ * user on "system" would export a file with dark token values but
  * `base: "light"` — a self-contradictory theme that fails to round-trip.
  *
  * Returns:
@@ -96,29 +98,15 @@ export function readCurrentTokenValues(): Record<string, string> {
  */
 export function readCurrentThemeBase(): ThemeBase {
   const raw = document.documentElement.dataset.thinkbrainTheme;
-  if (raw === "light") return "light";
-  if (raw === "dark") return "dark";
-  // "system", missing, or unexpected: resolve via the OS color-scheme
-  // preference so the exported base matches the palette the user actually
-  // sees. Without this, a dark-OS user on "system" would export a file with
-  // dark token values but base "light" — a self-contradictory theme.
-  if (typeof window !== "undefined" && window.matchMedia) {
-    return window.matchMedia("(prefers-color-scheme: dark)").matches
-      ? "dark"
-      : "light";
-  }
-  return "light";
+  // `resolveThemeBase` handles "light"/"dark" literally and resolves any
+  // missing/unexpected value via the OS color-scheme preference, matching the
+  // live resolution used by ThemeProvider.
+  return resolveThemeBase(raw ?? "");
 }
 
 // ---------------------------------------------------------------------------
 // Export.
 // ---------------------------------------------------------------------------
-
-/** Result of building the theme export payload. */
-export interface ThemeExportPayload {
-  /** Pretty-printed `.tbtheme.json` string ready to write to a file. */
-  readonly json: string;
-}
 
 /**
  * Builds a `.tbtheme.json` payload from the currently active theme state.
@@ -133,9 +121,9 @@ export interface ThemeExportPayload {
  * export a useful "snapshot current state" action for customization.
  *
  * Returns:
- *   The {@link ThemeExportPayload} with the canonical JSON string.
+ *   The canonical, pretty-printed `.tbtheme.json` string.
  */
-export function buildThemeExportPayload(): ThemeExportPayload {
+export function buildThemeExportPayload(): string {
   const base = readCurrentThemeBase();
   const tokens = readCurrentTokenValues();
 
@@ -146,7 +134,7 @@ export function buildThemeExportPayload(): ThemeExportPayload {
     tokens
   };
 
-  return { json: serializeThemeFile(theme) };
+  return serializeThemeFile(theme);
 }
 
 /**
@@ -164,7 +152,7 @@ export function buildThemeExportPayload(): ThemeExportPayload {
  * a broken source is worth less than a working snapshot, and refusing to export
  * at all helps nobody.
  */
-export async function buildThemeExport(): Promise<ThemeExportPayload> {
+export async function buildThemeExport(): Promise<string> {
   const state = useSettingsStore.getState();
   // Resolve the effective themeFile path via the shared precedence rule
   // (staged > appValues > registry default of null). Avoids the inline-copy
@@ -180,7 +168,7 @@ export async function buildThemeExport(): Promise<ThemeExportPayload> {
   if (typeof configured === "string" && configured.length > 0) {
     const source = await readThemeFile(configured);
     if (source !== null && parseThemeFile(source).theme !== null) {
-      return { json: source };
+      return source;
     }
   }
 

@@ -6,47 +6,20 @@
  * same so users receive identical file and status handling.
  */
 
-import { useCallback, useState } from "react";
-import { Download, Upload } from "lucide-react";
-import type { SettingSection } from "@thinkbrain/core";
+import { useCallback, useRef, useState } from "react";
+import { Download, MoreVertical, RotateCcw, Upload } from "lucide-react";
 import { cn } from "../lib/utils";
-import { appSettingsRegistry, useSettingsStore } from "./settingsStore";
+import { Menu, MenuButton, MenuCheckbox, MenuSeparator } from "../shell/Menu";
+import { appSettingsRegistry, selectDirtyCount, selectIsDirty, useSettingsStore } from "./settingsStore";
 import {
   buildExportPayload,
   importSettings,
   writeExportFile,
   type ImportResult
 } from "./settingsImportExport";
-import { findSectionLabelInSection } from "./sectionUtils";
+import { findSectionLabelPath, parseQualifiedSectionId } from "./sectionUtils";
+import { useEffectiveValue } from "./useEffectiveValue";
 import { useTransientStatus } from "./useTransientStatus";
-
-/**
- * Finds the labels from a module's root section to its active descendant.
- *
- * Args:
- *   sections: Sections to search.
- *   sectionId: Active section id.
- *   ancestors: Labels accumulated from parent sections.
- *
- * Returns:
- *   The complete section label path, or `null` when the section is absent.
- */
-function findSectionPath(
-  sections: readonly SettingSection[],
-  sectionId: string,
-  ancestors: readonly string[] = []
-): string[] | null {
-  for (const section of sections) {
-    const path = [...ancestors, section.label];
-    if (section.id === sectionId) return path;
-
-    if (section.subsections) {
-      const descendantPath = findSectionPath(section.subsections, sectionId, path);
-      if (descendantPath) return descendantPath;
-    }
-  }
-  return null;
-}
 
 /**
  * Resolves the visible breadcrumb labels for the active settings section.
@@ -63,15 +36,10 @@ function buildBreadcrumbPath(activeSection: string | null): readonly string[] {
   // activeSection is scope-qualified (e.g. "app:editor.display") so the
   // scroll-spy can distinguish mixed-scope sections. Strip the scope prefix
   // for the breadcrumb lookup, which only needs the section id.
-  const sectionId = activeSection.includes(":")
-    ? activeSection.slice(activeSection.indexOf(":") + 1)
-    : activeSection;
+  const { sectionId } = parseQualifiedSectionId(activeSection);
 
   for (const module of appSettingsRegistry.getAllModules()) {
-    // Use the shared lookup to confirm this module owns the active section.
-    if (!findSectionLabelInSection(module.sections, sectionId)) continue;
-
-    const sectionPath = findSectionPath(module.sections, sectionId);
+    const sectionPath = findSectionLabelPath(module.sections, sectionId);
     if (sectionPath) return [module.label, ...sectionPath];
   }
 
@@ -83,13 +51,15 @@ function buildBreadcrumbPath(activeSection: string | null): readonly string[] {
  */
 export function SettingsHeaderBar() {
   const activeSection = useSettingsStore((s) => s.activeSection);
-  const isDirty = useSettingsStore((s) => s.isDirty);
-  const dirtyCount = useSettingsStore((s) => s.dirtyCount);
+  const isDirty = useSettingsStore(selectIsDirty);
+  const dirtyCount = useSettingsStore(selectDirtyCount);
   const saveError = useSettingsStore((s) => s.saveError);
-  const autosave = useSettingsStore((s) =>
-    s.stagedChanges["settings.autosave"] ?? s.appValues["settings.autosave"] ?? false
-  );
+  const autosave = useEffectiveValue("settings.autosave");
+  const showAdvanced = useEffectiveValue("settings.showAdvanced") === true;
+  const stageChange = useSettingsStore((s) => s.stageChange);
   const [isSaving, setIsSaving] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuAnchorRef = useRef<HTMLButtonElement>(null);
   const status = useTransientStatus();
   const breadcrumbPath = buildBreadcrumbPath(activeSection);
 
@@ -188,24 +158,36 @@ export function SettingsHeaderBar() {
         ))}
       </nav>
 
-      <div className="flex items-center gap-2" role="toolbar" aria-label="Settings actions">
+      <div className="relative flex items-center gap-2" role="toolbar" aria-label="Settings actions">
         {status.message && (
-          <span className="text-xs text-muted-foreground" role="status" title={status.message}>
+          <span className="min-w-0 truncate text-xs text-muted-foreground" role="status" title={status.message}>
             {status.message}
           </span>
         )}
         {saveError && (
-          <span className="mr-auto text-destructive" role="alert" title={saveError}>
+          <span className="mr-auto min-w-0 truncate text-destructive" role="alert" title={saveError}>
             {saveError}
           </span>
         )}
+
+        {/* Secondary actions collapse into the ⋯ menu on phone-sized bars —
+            Save stays out because it is the action the bar exists for. */}
+        <label className="flex items-center gap-1 whitespace-nowrap text-xs text-muted-foreground max-[760px]:hidden">
+          <input
+            type="checkbox"
+            checked={showAdvanced}
+            onChange={(event) => stageChange("settings.showAdvanced", event.target.checked)}
+            aria-label="Show advanced settings"
+          />
+          <span>Advanced</span>
+        </label>
 
         <button
           type="button"
           onClick={handleExport}
           title="Export settings"
           aria-label="Export settings"
-          className="flex cursor-pointer items-center justify-center rounded-small border-0 bg-surface p-[0.35rem] text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground max-[760px]:size-11"
+          className="flex cursor-pointer items-center justify-center rounded-small border-0 bg-surface p-[0.35rem] text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground max-[760px]:hidden"
         >
           <Download size={14} aria-hidden="true" />
         </button>
@@ -214,7 +196,7 @@ export function SettingsHeaderBar() {
           onClick={handleImport}
           title="Import settings"
           aria-label="Import settings"
-          className="flex cursor-pointer items-center justify-center rounded-small border-0 bg-surface p-[0.35rem] text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground max-[760px]:size-11"
+          className="flex cursor-pointer items-center justify-center rounded-small border-0 bg-surface p-[0.35rem] text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground max-[760px]:hidden"
         >
           <Upload size={14} aria-hidden="true" />
         </button>
@@ -234,7 +216,7 @@ export function SettingsHeaderBar() {
               onClick={handleReset}
               aria-label="Reset all unsaved settings"
               className={cn(
-                "cursor-pointer rounded-small border border-border bg-surface px-[0.6rem] py-[0.4rem] font-inherit text-xs text-foreground max-[760px]:min-h-11 max-[760px]:min-w-11",
+                "cursor-pointer rounded-small border border-border bg-surface px-[0.6rem] py-[0.4rem] font-inherit text-xs text-foreground max-[760px]:hidden",
                 actionDisabled && "cursor-not-allowed opacity-50",
                 isSaving && "cursor-wait opacity-70"
               )}
@@ -246,7 +228,7 @@ export function SettingsHeaderBar() {
               disabled={actionDisabled}
               onClick={() => void handleSave()}
               className={cn(
-                "cursor-pointer rounded-small border border-border bg-primary px-[0.6rem] py-[0.4rem] font-inherit text-xs text-primary-foreground enabled:hover:opacity-90 max-[760px]:min-h-11 max-[760px]:min-w-11",
+                "cursor-pointer rounded-small border border-border bg-primary px-[0.6rem] py-[0.4rem] font-inherit text-xs text-primary-foreground enabled:hover:opacity-90 max-[760px]:min-h-11",
                 actionDisabled && "cursor-not-allowed opacity-50",
                 isSaving && "cursor-wait opacity-70"
               )}
@@ -254,6 +236,65 @@ export function SettingsHeaderBar() {
               {saveLabel}
             </button>
           </>
+        )}
+
+        <button
+          type="button"
+          ref={menuAnchorRef}
+          aria-label="More settings actions"
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          onClick={() => setMenuOpen((open) => !open)}
+          className="hidden max-[760px]:flex size-11 cursor-pointer items-center justify-center rounded-small border-0 text-muted-foreground tn-focus-ring active:bg-accent"
+        >
+          <MoreVertical size={16} aria-hidden="true" />
+        </button>
+        {menuOpen && (
+          <Menu
+            anchorRef={menuAnchorRef}
+            className="absolute right-0 top-full z-50 mt-1 w-52"
+            onClose={() => setMenuOpen(false)}
+          >
+            <MenuCheckbox
+              label="Show advanced settings"
+              checked={showAdvanced}
+              className="max-[760px]:min-h-11 max-[760px]:text-sm"
+              onClick={() => stageChange("settings.showAdvanced", !showAdvanced)}
+            />
+            <MenuButton
+              label="Export settings"
+              icon={<Download aria-hidden="true" />}
+              className="max-[760px]:min-h-11 max-[760px]:text-sm"
+              onClick={() => {
+                setMenuOpen(false);
+                handleExport();
+              }}
+            />
+            <MenuButton
+              label="Import settings"
+              icon={<Upload aria-hidden="true" />}
+              className="max-[760px]:min-h-11 max-[760px]:text-sm"
+              onClick={() => {
+                setMenuOpen(false);
+                handleImport();
+              }}
+            />
+            {!autosave && (
+              <>
+                <MenuSeparator />
+                <MenuButton
+                  label="Reset unsaved changes"
+                  icon={<RotateCcw aria-hidden="true" />}
+                  disabled={actionDisabled}
+                  className="max-[760px]:min-h-11 max-[760px]:text-sm"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    handleReset();
+                  }}
+                />
+              </>
+            )}
+          </Menu>
         )}
       </div>
     </header>

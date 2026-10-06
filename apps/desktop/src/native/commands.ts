@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 
+import type { DesktopStateUpdate } from "../settings/desktopState";
 import type {
   ConflictComparison as NativeConflictComparison,
   ConflictResolution as NativeConflictResolution,
@@ -9,12 +10,13 @@ import type {
 import type {
   ConflictRate as NativeConflictRate,
   HistoryCleanup as NativeHistoryCleanup,
+  HistoryPage as NativeHistoryPage,
   HistoryUsage as NativeHistoryUsage,
-  RecordedChange as NativeRecordedChange,
   SavedSignIn as NativeSavedSignIn,
   SignInStatus as NativeSignInStatus,
   Synced as NativeSynced,
-  SyncStatus as NativeSyncStatus
+  SyncStatus as NativeSyncStatus,
+  VersionDiff as NativeVersionDiff
 } from "../sync/historyTypes";
 
 export interface NativeCommandErrorShape {
@@ -35,18 +37,7 @@ export class NativeCommandError extends Error {
   }
 }
 
-/** Rust-shaped status returned by the `desktop_shell_status` IPC command. */
-interface NativeShellStatus {
-  readonly app_name: string;
-  readonly shell_version: string;
-  readonly ready: boolean;
-}
-
 export interface NativeCommandMap {
-  readonly desktop_shell_status: {
-    readonly args: undefined;
-    readonly result: NativeShellStatus;
-  };
   readonly workspace_access_capabilities: {
     readonly args: undefined;
     readonly result: NativeWorkspaceAccessCapabilities;
@@ -69,10 +60,6 @@ export interface NativeCommandMap {
   };
   readonly open_workspace_window: { readonly args: { readonly rootPath: string }; readonly result: null };
   readonly window_workspace_root: { readonly args: undefined; readonly result: string | null };
-  readonly list_markdown_files: {
-    readonly args: { readonly rootPath: string };
-    readonly result: readonly NativeMarkdownFileEntry[];
-  };
   readonly list_workspace_entries: {
     readonly args: { readonly rootPath: string; readonly includeHidden: boolean };
     readonly result: readonly NativeWorkspaceEntry[];
@@ -117,20 +104,35 @@ export interface NativeCommandMap {
     };
     readonly result: NativeMarkdownFileEntry;
   };
-  readonly rename_markdown_file: {
+  readonly read_text_file: {
     readonly args: {
       readonly rootPath: string;
       readonly relativePath: string;
-      readonly newRelativePath: string;
     };
-    readonly result: NativeMarkdownFileEntry;
+    readonly result: NativeTextFileContents;
   };
-  readonly delete_markdown_file: {
+  readonly write_text_file: {
+    readonly args: {
+      readonly rootPath: string;
+      readonly relativePath: string;
+      readonly contents: string;
+      readonly expected?: string;
+    };
+    readonly result: NativeTextFileEntry;
+  };
+  /**
+   * Reads a media file's raw bytes for the audio/video viewers. WebKitGTK's
+   * GStreamer backend cannot stream from the `asset://` scheme and Android's
+   * webview mishandles range requests on it, so the player pulls the bytes
+   * over IPC and plays from a `blob:` URL instead — one path on all platforms.
+   * The raw `tauri::ipc::Response` arrives here as an `ArrayBuffer`.
+   */
+  readonly read_media_file: {
     readonly args: {
       readonly rootPath: string;
       readonly relativePath: string;
     };
-    readonly result: null;
+    readonly result: ArrayBuffer;
   };
   readonly create_workspace_file: {
     readonly args: {
@@ -153,7 +155,7 @@ export interface NativeCommandMap {
       readonly relativePath: string;
       readonly newRelativePath: string;
     };
-    readonly result: NativeWorkspaceEntry;
+    readonly result: NativeWorkspaceRenameResult;
   };
   readonly delete_workspace_entry: {
     readonly args: {
@@ -241,14 +243,19 @@ export interface NativeCommandMap {
     readonly args: { readonly rootPath: string };
     readonly result: NativeSyncStatus;
   };
-  /** `notePath` narrows the list to one note's restorable versions. */
+  /**
+   * `notePath` narrows the list to one note's restorable versions. `cursor`
+   * continues a first page into older history; an invalid or expired one is
+   * an actionable failure, not an empty page.
+   */
   readonly sync_history: {
     readonly args: {
       readonly rootPath: string;
       readonly notePath: string | null;
       readonly limit: number;
+      readonly cursor: string | null;
     };
-    readonly result: readonly NativeRecordedChange[];
+    readonly result: NativeHistoryPage;
   };
   /** Puts one note back to the version recorded in `change`. */
   readonly restore_version: {
@@ -258,6 +265,20 @@ export interface NativeCommandMap {
       readonly change: string;
     };
     readonly result: null;
+  };
+  /**
+   * Complete-text comparison between a note and the version recorded in
+   * `change`. `buffer` carries an open editor's unsaved text as the current
+   * side.
+   */
+  readonly read_version_diff: {
+    readonly args: {
+      readonly rootPath: string;
+      readonly notePath: string;
+      readonly change: string;
+      readonly buffer?: string | null;
+    };
+    readonly result: NativeVersionDiff;
   };
   readonly sync_conflict_rate: {
     readonly args: { readonly rootPath: string };
@@ -335,6 +356,10 @@ export interface NativeCommandMap {
     readonly args: { readonly rootPath: string };
     readonly result: NativeHistoryCleanup;
   };
+  readonly sync_app_backgrounded: {
+    readonly args: undefined;
+    readonly result: null;
+  };
   readonly read_app_settings: {
     readonly args: undefined;
     readonly result: string | null;
@@ -353,12 +378,7 @@ export interface NativeCommandMap {
     readonly result: null;
   };
   readonly update_desktop_state: {
-    readonly args: { readonly update: NativeDesktopStateUpdate };
-    readonly result: string;
-  };
-  // Resolves to the full serialized settings document written by the host.
-  readonly update_app_theme: {
-    readonly args: { readonly theme: string };
+    readonly args: { readonly update: DesktopStateUpdate };
     readonly result: string;
   };
   readonly read_workspace_settings: {
@@ -401,6 +421,13 @@ export interface NativeCommandMap {
     readonly args: { readonly directory: string; readonly relativePath: string };
     readonly result: string;
   };
+  // Places file paths on the system clipboard as file references (file-manager
+  // paste copies the files). Desktop-only; stubbed with `clipboard.unavailable`
+  // on mobile.
+  readonly copy_files_to_clipboard: {
+    readonly args: { readonly paths: readonly string[] };
+    readonly result: null;
+  };
 }
 
 export type NativeCommandName = keyof NativeCommandMap;
@@ -430,35 +457,10 @@ export interface NativePlatformCapabilities {
   readonly opensWorkspaceInNewWindow: boolean;
   /** Can spawn a child process (terminal, ACP agent host). Desktop-only. */
   readonly canSpawnProcess: boolean;
+  /** Can place files on the system clipboard for file-manager paste. Desktop-only. */
+  readonly canCopyFilesToClipboard: boolean;
   /** Can store credentials in the OS keychain. Android has no keyring backend. */
   readonly hasKeychain: boolean;
-}
-
-export interface NativeDesktopStateUpdate {
-  readonly lastWorkspacePath?: string | null;
-  readonly recentWorkspacePaths?: readonly string[];
-  readonly explorerOpen?: boolean;
-  readonly leftPanelWidth?: number;
-  readonly rightPanelWidth?: number;
-  readonly bottomPanelOpen?: boolean;
-  readonly developmentExtensionDirectories?: readonly string[];
-  readonly openTabs?: readonly NativePersistedTab[];
-  readonly activeTabId?: string | null;
-  /** Mirrors `settings::CollapsedGroupsUpdate` on the Rust side (D53). */
-  readonly collapsedGroups?: {
-    readonly workspacePath: string;
-    readonly viewId: string;
-    readonly collapsed: readonly string[];
-  };
-}
-
-/** Mirrors `settings::PersistedTab` on the Rust side (settings.rs). */
-export interface NativePersistedTab {
-  readonly id: string;
-  readonly title: string;
-  readonly kind: string;
-  readonly rootPath?: string;
-  readonly relativePath?: string;
 }
 
 export interface NativeMarkdownFileEntry {
@@ -483,6 +485,11 @@ export interface NativeMarkdownFileContents {
   readonly contents: string;
 }
 
+/** The text-file commands share the markdown file shapes. */
+export type NativeTextFileContents = NativeMarkdownFileContents;
+
+export type NativeTextFileEntry = NativeMarkdownFileEntry;
+
 export interface NativeWorkspaceEntry {
   readonly relative_path: string;
   readonly name: string;
@@ -491,6 +498,22 @@ export interface NativeWorkspaceEntry {
   readonly is_markdown: boolean;
   readonly byte_size: number;
   readonly updated_at: number | null;
+}
+
+/** One file's path change caused by a rename/move; folders produce one per descendant file. */
+export interface NativeWorkspacePathMove {
+  readonly old_relative_path: string;
+  readonly new_relative_path: string;
+  /** Whether the OLD path is Markdown — drives stale search-index removal. */
+  readonly was_markdown: boolean;
+  /** Whether the NEW path is Markdown — drives which event the renderer emits. */
+  readonly is_markdown: boolean;
+}
+
+/** The renamed entry plus every file path it moved (empty for a no-op rename). */
+export interface NativeWorkspaceRenameResult {
+  readonly entry: NativeWorkspaceEntry;
+  readonly file_moves: readonly NativeWorkspacePathMove[];
 }
 
 export interface NativeWorkspaceSnapshot {
@@ -525,6 +548,15 @@ export interface NativeImportProgress {
   readonly phase?: NativeSyncStatus["phase"];
   readonly targetPath: string;
   readonly error?: NativeCommandErrorShape;
+  /**
+   * Why nothing was sent back, on an import that otherwise succeeded.
+   *
+   * An import fetches, merges and then pushes. That push can fail on its own —
+   * a public repository, a read-only mirror, a device with nowhere to keep a
+   * token — while everything before it worked. The vault is kept either way,
+   * so this is what separates a full round trip from a one-way one.
+   */
+  readonly notSent?: string;
 }
 
 // Sent to `index_documents`. Field names are camelCase here and mapped to the
@@ -549,19 +581,18 @@ export interface NativeSearchHit {
 
 export type NativeMetadataValue = string | number;
 
+/** One metadata key and every value it holds — sent in as fields, returned as facets. */
 export interface NativeMetadataField {
   readonly key: string;
   readonly values: readonly NativeMetadataValue[];
 }
 
+/** The query-result name for `NativeMetadataField`; the shapes are identical. */
+export type NativeMetadataFacet = NativeMetadataField;
+
 export interface NativeMetadataPredicate {
   readonly key: string;
   readonly value: NativeMetadataValue;
-}
-
-export interface NativeMetadataFacet {
-  readonly key: string;
-  readonly values: readonly NativeMetadataValue[];
 }
 
 export interface NativeMetadataQueryResult {
@@ -580,8 +611,30 @@ export async function invokeNativeCommand<TCommand extends NativeCommandName>(
       args as (NativeCommandMap[TCommand]["args"] & Record<string, unknown>) | undefined
     );
   } catch (error) {
-    throw normalizeNativeError(error);
+    const normalized = normalizeNativeError(error);
+    logCommandFailure(command, normalized);
+    throw normalized;
   }
+}
+
+/**
+ * Records a failed native command where a log reader can find it.
+ *
+ * This is the only place that knows both the command name and the error, which
+ * is why the log lives here rather than in the panels that render the message.
+ * The Rust side assembles a redacted `details` chain for exactly this purpose,
+ * but until now it only reached a collapsed "Technical details" element — fine
+ * on a desktop with devtools open, useless on a phone, where reading it means
+ * tapping a disclosure triangle you cannot see from `adb`.
+ *
+ * Emitted as one pre-formatted, ASCII-only string on purpose: Android's WebView
+ * forwards console output to logcat but renders object arguments as
+ * `[object Object]`, so passing the error itself would log nothing useful on
+ * the one platform this is most needed for.
+ */
+function logCommandFailure(command: string, error: NativeCommandError): void {
+  const details = error.details ? ` | ${error.details}` : "";
+  console.error(`[native] ${command} failed: [${error.code}] ${error.message}${details}`);
 }
 
 export function normalizeNativeError(error: unknown): NativeCommandError {

@@ -67,6 +67,10 @@ export function GitLinkControl({ definition, value, onChange, disabled }: Contro
     rootPath !== null &&
     validation === null &&
     isHttps &&
+    // No credential store (Android today), no point offering to save a token:
+    // `store_profile` would only return `sync.auth_required`. Mirrors the
+    // import dialog, which hides these fields outright.
+    status?.storage === "available" &&
     (selectValue === NEW_VALUE || selectValue === LEGACY_VALUE || selectedForHost) &&
     username.trim() !== "" &&
     token !== "";
@@ -153,7 +157,7 @@ export function GitLinkControl({ definition, value, onChange, disabled }: Contro
 
   const forget = (): void => {
     if (!canForget || selectedId === "") return;
-    void run("forget", "Could not forget this sign-in. Unlock the keychain and try again.", async () => {
+    void run("forget", "Could not forget this sign-in. Unlock your saved sign-ins and try again.", async () => {
       await forgetSignIn(selectedId);
       stageChange(PROFILE_KEY, "");
       await saveSettings();

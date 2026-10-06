@@ -9,7 +9,7 @@ use crate::commands::markdown::is_markdown_path;
 use crate::commands::sync::bootstrap::is_never_recorded;
 use crate::commands::workspace::is_ignored_entry_name;
 
-use super::{take_self_write, WorkspaceChange, WorkspaceChangeKind};
+use super::{WorkspaceChange, WorkspaceChangeKind, take_self_write};
 
 /// Expresses `path` relative to `root`, or `None` when it is not inside it.
 ///

@@ -158,6 +158,10 @@ export function problemToNotification(
     source: SYNC_SOURCE,
     dedupKey: `${SYNC_SOURCE}:${problem.code}`,
     title,
+    // A sync problem's recovery lives in History — surface its action item
+    // even when unpinned while the notification stands. Maintenance failures
+    // route to Settings, which has no action item to light up.
+    panel: isMaintenance ? undefined : "history",
     message: problem.message,
     recovery: recoveryFor(problem.code),
     details: problem.details,

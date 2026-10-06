@@ -1,10 +1,8 @@
 //! Settings tests: workspace hashing, settings path layout, read/write
 //! round-trips, atomic replacement, corrupt-document quarantine, write
-//! preconditions (optimistic concurrency), quarantine reporting, and app-theme
-//! updates.
+//! preconditions (optimistic concurrency), and quarantine reporting.
 
 use crate::commands::{settings::*, workspace::*};
-use serde_json::Value;
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -141,74 +139,88 @@ fn an_empty_settings_document_is_read_as_absent_rather_than_set_aside() {
 fn workspace_settings_write_is_refused_when_the_file_moved_underneath_it() {
     // Another window wrote between this window's read and its write, so the
     // document it revised is no longer the one on disk.
-    assert!(check_settings_precondition(
-        Some("{\"showHidden\":true}"),
-        Some("{\"fieldDefinitions\":[]}"),
-        "settings.workspace_conflict",
-        "The workspace settings changed while this one was being saved.",
-    )
-    .is_err());
+    assert!(
+        check_settings_precondition(
+            Some("{\"showHidden\":true}"),
+            Some("{\"fieldDefinitions\":[]}"),
+            "settings.workspace_conflict",
+            "The workspace settings changed while this one was being saved.",
+        )
+        .is_err()
+    );
 
     // Nobody interfered.
-    assert!(check_settings_precondition(
-        Some("{\"showHidden\":true}"),
-        Some("{\"showHidden\":true}"),
-        "settings.workspace_conflict",
-        "The workspace settings changed while this one was being saved.",
-    )
-    .is_ok());
+    assert!(
+        check_settings_precondition(
+            Some("{\"showHidden\":true}"),
+            Some("{\"showHidden\":true}"),
+            "settings.workspace_conflict",
+            "The workspace settings changed while this one was being saved.",
+        )
+        .is_ok()
+    );
 }
 
 #[test]
 fn workspace_settings_write_treats_an_absent_file_as_a_precondition_of_its_own() {
     // The first writer read nothing and expects to still find nothing.
-    assert!(check_settings_precondition(
-        None,
-        None,
-        "settings.workspace_conflict",
-        "The workspace settings changed while this one was being saved.",
-    )
-    .is_ok());
+    assert!(
+        check_settings_precondition(
+            None,
+            None,
+            "settings.workspace_conflict",
+            "The workspace settings changed while this one was being saved.",
+        )
+        .is_ok()
+    );
 
     // A file appeared where this writer saw none.
-    assert!(check_settings_precondition(
-        Some("{}"),
-        None,
-        "settings.workspace_conflict",
-        "The workspace settings changed while this one was being saved.",
-    )
-    .is_err());
+    assert!(
+        check_settings_precondition(
+            Some("{}"),
+            None,
+            "settings.workspace_conflict",
+            "The workspace settings changed while this one was being saved.",
+        )
+        .is_err()
+    );
 
     // The file this writer read has since been removed.
-    assert!(check_settings_precondition(
-        None,
-        Some("{}"),
-        "settings.workspace_conflict",
-        "The workspace settings changed while this one was being saved.",
-    )
-    .is_err());
+    assert!(
+        check_settings_precondition(
+            None,
+            Some("{}"),
+            "settings.workspace_conflict",
+            "The workspace settings changed while this one was being saved.",
+        )
+        .is_err()
+    );
 }
 
 #[test]
 fn app_settings_write_is_refused_when_desktop_state_changed_underneath_it() {
     // `update_desktop_state` landed (a tab opened) between the store's read and
     // its write, so the document the store revised is no longer the one on disk.
-    assert!(check_settings_precondition(
-        Some("{\"desktopState\":{\"openTabs\":[\"a\"]}}"),
-        Some("{\"desktopState\":{\"openTabs\":[]}}"),
-        "settings.app_conflict",
-        "The application settings changed while this one was being saved.",
-    )
-    .is_err());
+    assert!(
+        check_settings_precondition(
+            Some("{\"desktopState\":{\"openTabs\":[\"a\"]}}"),
+            Some("{\"desktopState\":{\"openTabs\":[]}}"),
+            "settings.app_conflict",
+            "The application settings changed while this one was being saved.",
+        )
+        .is_err()
+    );
 
     // Nobody interfered.
-    assert!(check_settings_precondition(
-        Some("{\"appearance.theme\":\"dark\"}"),
-        Some("{\"appearance.theme\":\"dark\"}"),
-        "settings.app_conflict",
-        "The application settings changed while this one was being saved.",
-    )
-    .is_ok());
+    assert!(
+        check_settings_precondition(
+            Some("{\"appearance.theme\":\"dark\"}"),
+            Some("{\"appearance.theme\":\"dark\"}"),
+            "settings.app_conflict",
+            "The application settings changed while this one was being saved.",
+        )
+        .is_ok()
+    );
 }
 
 #[test]
@@ -269,60 +281,4 @@ fn an_absent_settings_document_is_not_reported_as_quarantined() {
     );
 
     fs::remove_dir_all(&dir).ok();
-}
-
-#[test]
-fn app_theme_update_replaces_theme_and_preserves_other_settings() {
-    let existing = serde_json::json!({
-        "version": 1,
-        "theme": "system",
-        "editor": { "fontSize": 18, "lineWrapping": false },
-        "extensionSettings": { "timer": { "enabled": true } },
-        "desktopState": {
-            "version": 2,
-            "lastWorkspacePath": "/notes/vault",
-            "recentWorkspacePaths": ["/notes/vault"],
-            "explorerOpen": false
-        }
-    });
-
-    let updated = update_app_theme_contents(Some(&existing.to_string()), "dark")
-        .expect("theme update succeeds");
-
-    // The document keeps the canonical on-disk shape (pretty JSON + newline).
-    assert!(updated.ends_with("}\n"));
-
-    let settings: Value = serde_json::from_str(&updated).expect("serialized settings are valid");
-    assert_eq!(settings["theme"], serde_json::json!("dark"));
-    assert_eq!(settings["version"], serde_json::json!(1));
-    assert_eq!(
-        settings["editor"],
-        serde_json::json!({ "fontSize": 18, "lineWrapping": false })
-    );
-    assert_eq!(
-        settings["extensionSettings"]["timer"]["enabled"],
-        serde_json::json!(true)
-    );
-    assert_eq!(settings["desktopState"], existing["desktopState"]);
-
-    // A missing settings file still yields a valid document with only the theme.
-    let created = update_app_theme_contents(None, "light").expect("theme update seeds settings");
-    let created_settings: Value =
-        serde_json::from_str(&created).expect("seeded settings are valid");
-    assert_eq!(created_settings, serde_json::json!({ "theme": "light" }));
-
-    for theme in ["system", "light", "dark"] {
-        let round_trip =
-            update_app_theme_contents(Some(&updated), theme).expect("supported theme is accepted");
-        let round_trip_settings: Value =
-            serde_json::from_str(&round_trip).expect("serialized settings are valid");
-        assert_eq!(round_trip_settings["theme"], serde_json::json!(theme));
-    }
-
-    // Unsupported themes fail loudly instead of writing an unusable document.
-    for invalid in ["", "neon", "Dark", "high-contrast"] {
-        let error = update_app_theme_contents(Some(&updated), invalid)
-            .expect_err("unsupported theme is rejected");
-        assert_eq!(error.code, "settings.invalid_theme");
-    }
 }

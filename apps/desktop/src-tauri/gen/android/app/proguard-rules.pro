@@ -19,3 +19,10 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# rustls-platform-verifier calls org.rustls.platformverifier.CertificateVerifier
+# by name over JNI (see src-tauri/src/android_tls.rs), which R8 cannot see — on a
+# minified build the class is stripped as dead code and every HTTPS request from
+# Rust (git clone and sync) fails certificate verification. Required by the
+# crate's own README since the AAR ships no consumer ProGuard rules.
+-keep, includedescriptorclasses class org.rustls.platformverifier.** { *; }

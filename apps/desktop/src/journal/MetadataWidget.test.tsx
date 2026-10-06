@@ -85,6 +85,18 @@ describe("collapsed dateline", () => {
     expect(host.textContent).toContain("Friday, August 7, 2026");
   });
 
+  it("keeps the Info Tracker opener at the coarse-pointer minimum", async () => {
+    const host = await render();
+    const opener = [...host.querySelectorAll("button")].find(
+      (candidate) => candidate.textContent === "Info Tracker"
+    );
+    if (!opener) throw new Error("No Info Tracker opener");
+
+    const classes = opener.className.split(" ");
+    expect(classes).toContain("pointer-coarse:min-h-11");
+    expect(classes).toContain("pointer-coarse:min-w-11");
+  });
+
   it("shows only the date and an invitation when nothing is recorded (D54)", async () => {
     const host = await render();
 
@@ -279,7 +291,17 @@ describe("adding a field from the entry (D86)", () => {
 
     expect(host.querySelector('button[aria-label="Add a field"]')).toBeNull();
     await click(host, "Info Tracker");
-    expect(host.querySelector('button[aria-label="Add a field"]')).not.toBeNull();
+    const addField = host.querySelector<HTMLButtonElement>('button[aria-label="Add a field"]');
+    expect(addField).not.toBeNull();
+    expect(addField?.className.split(" ")).toEqual(
+      expect.arrayContaining(["pointer-coarse:min-h-11", "pointer-coarse:min-w-11"])
+    );
+
+    await click(host, "Add a field");
+    const input = host.querySelector<HTMLInputElement>('input[aria-label="New field name"]');
+    expect(input?.className.split(" ")).toEqual(
+      expect.arrayContaining(["pointer-coarse:min-h-11", "pointer-coarse:min-w-11"])
+    );
   });
 
   it("shows the new field, ready to fill in", async () => {

@@ -1,44 +1,65 @@
-import { memo, useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
-import { Folder, FolderOpen } from "lucide-react";
+import { memo, useCallback, useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
+import { Folder, FolderOpen, GripVertical } from "lucide-react";
 import type { WorkspaceTreeNode } from "./workspaceExplorerModel";
 import { WorkspaceFileIcon } from "./WorkspaceFileIcon";
 import { cn } from "../lib/utils";
-import type { CreateState, RenameState, WorkspaceExplorerActions } from "./workspaceExplorerTypes";
+import { isNewNoteCreate, type CreateState, type RenameState, type WorkspaceExplorerActions } from "./workspaceExplorerTypes";
+import {
+  WORKSPACE_DRAG_HANDLE_ATTR,
+  WORKSPACE_DROP_PARENT_ATTR,
+  WORKSPACE_TREE_ROW_ATTR,
+  type WorkspaceTreeDrag
+} from "./useWorkspaceTreeDrag";
 
 // ---- Tree item ----
+
+/** Tree-row glyph styling — `tn-tree-icon` supplies the tinted color. */
+const TREE_ICON_CLASSES =
+  "tn-tree-icon [&>svg]:w-[0.9rem] [&>svg]:h-[0.9rem] [&>svg]:stroke-current";
 
 export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
   node,
   depth = 0,
   isFirst = false,
   activePath,
+  contextMenuPath,
   renaming,
   creating,
   expandedFolders,
-  actions
+  actions,
+  drag,
+  busy,
+  inlineCreateError
 }: {
   readonly node: WorkspaceTreeNode;
   readonly depth?: number;
   readonly isFirst?: boolean;
   readonly activePath: string | null;
+  /** Path of the entry whose context menu is open, if any. */
+  readonly contextMenuPath: string | null;
   readonly renaming: RenameState | null;
   readonly creating: CreateState | null;
   readonly expandedFolders: ReadonlySet<string>;
   readonly actions: WorkspaceExplorerActions;
+  /** Shared drag-and-drop controller from `WorkspaceExplorerView`. */
+  readonly drag: WorkspaceTreeDrag | null;
+  readonly busy: boolean;
+  readonly inlineCreateError: string | null;
 }) {
   const {
     setActivePath,
-    handleMarkdownFileSelected,
+    handleFileSelected,
     showContextMenu,
     toggleFolder,
     collapseFolder,
     submitRename,
     submitCreate,
     setRenaming,
-    setCreating
+    setCreating,
+    setInlineCreateError
   } = actions;
   const isDirectory = node.entry.kind === "directory";
-  const isMarkdownFile = node.entry.kind === "file" && node.entry.is_markdown;
+  const isFile = node.entry.kind === "file";
   // Dot-prefixed entries (e.g. `.git`, `.obsidian`) are visually dimmed when
   // the user has chosen to reveal them, so they remain distinguishable from
   // regular workspace content.
@@ -51,6 +72,8 @@ export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
 
   const isActive = activePath === node.entry.relative_path;
   const isFocusable = isActive || (activePath === null && isFirst);
+  const isDragged = drag?.draggedPath === node.entry.relative_path;
+  const isDropTarget = drag?.dropTargetPath === node.entry.relative_path;
   const buttonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -90,12 +113,12 @@ export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
         event.stopPropagation();
         if (isDirectory) {
           toggleFolder(node.entry.relative_path);
-        } else if (isMarkdownFile) {
-          handleMarkdownFileSelected(node.entry.relative_path);
+        } else if (isFile) {
+          handleFileSelected(node.entry.relative_path);
         }
         break;
     }
-  }, [isDirectory, isExpanded, isMarkdownFile, node, toggleFolder, collapseFolder, setActivePath, handleMarkdownFileSelected]);
+  }, [isDirectory, isExpanded, isFile, node, toggleFolder, collapseFolder, setActivePath, handleFileSelected]);
 
   return (
     <li className="m-0 p-0" role="treeitem" aria-level={depth + 1} aria-expanded={isDirectory ? isExpanded : undefined}>
@@ -112,43 +135,92 @@ export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
           onCancel={() => setRenaming(null)}
         />
       ) : (
-        <button
-          ref={buttonRef}
+        // The open/toggle button and the drag handle are siblings — a button
+        // can never nest inside a button — inside one flex row that carries
+        // the drop-target markers for the drag controller's elementFromPoint
+        // resolution.
+        <div
           className={cn(
-            "flex w-full min-w-0 items-center gap-1.5 py-[0.265rem] pr-3 border-0 text-sidebar-foreground font-inherit text-xs leading-tight text-left aria-disabled:cursor-default not-aria-disabled:cursor-pointer not-aria-disabled:hover:bg-[color-mix(in_srgb,var(--color-accent)_58%,transparent)] not-aria-disabled:focus-visible:bg-[color-mix(in_srgb,var(--color-accent)_58%,transparent)] focus-visible:outline-none pointer-coarse:min-h-11 pointer-coarse:py-1.5 pointer-coarse:text-sm",
-            isHiddenEntry && "opacity-60"
+            "group/row flex min-w-0 items-stretch",
+            isDragged && "opacity-60",
+            isDropTarget && (drag?.dropTargetValid
+              ? "bg-[color-mix(in_srgb,var(--color-accent)_58%,transparent)]"
+              : "bg-[color-mix(in_srgb,var(--color-destructive)_18%,transparent)]"),
+            // The context-menu target stays outlined for as long as its menu
+            // is open, tying the menu to the row once the pointer has moved on.
+            contextMenuPath === node.entry.relative_path &&
+              "bg-[color-mix(in_srgb,var(--color-accent)_58%,transparent)] outline-1 -outline-offset-1 outline-ring"
           )}
-          type="button"
-          style={{ paddingLeft: `${0.75 + depth * 0.875}rem` }}
-          aria-disabled={!isDirectory && !isMarkdownFile ? true : undefined}
-          tabIndex={isFocusable ? 0 : -1}
-          onKeyDown={handleKeyDown}
-          onClick={() => {
-            setActivePath(node.entry.relative_path);
-            if (isDirectory) toggleFolder(node.entry.relative_path);
-            else if (isMarkdownFile) handleMarkdownFileSelected(node.entry.relative_path);
-          }}
+          {...{ [WORKSPACE_TREE_ROW_ATTR]: node.entry.relative_path }}
+          {...(isDirectory ? { [WORKSPACE_DROP_PARENT_ATTR]: node.entry.relative_path } : {})}
+          draggable={drag?.draggable}
+          onDragStart={(event) => drag?.onRowDragStart?.(event, node.entry)}
+          onDragEnd={(event) => drag?.onRowDragEnd?.(event)}
+          onDragOver={(event) => drag?.onRowDragOver?.(event, node.entry)}
+          onDragLeave={(event) => drag?.onRowDragLeave?.(event, node.entry)}
+          onDrop={(event) => drag?.onRowDrop?.(event, node.entry)}
           onContextMenu={(event) => {
+            // An armed touch hold owns the browser contextmenu event; it opens
+            // this same menu on release instead of stealing the drag gesture.
+            if (drag?.onRowContextMenu(event, node.entry)) return;
             setActivePath(node.entry.relative_path);
             showContextMenu(event, { kind: isDirectory ? "folder" : "file", entry: node.entry });
           }}
-          aria-label={isDirectory ? `${isExpanded ? "Collapse" : "Expand"} ${node.entry.name}` : isMarkdownFile ? `Open ${node.entry.name}` : undefined}
         >
-          <span className="w-2.5 flex-none text-muted-foreground text-center [&>svg]:w-[0.9rem] [&>svg]:h-[0.9rem] [&>svg]:stroke-current" aria-hidden="true">{isDirectory ? (isExpanded ? <FolderOpen /> : <Folder />) : <WorkspaceFileIcon name={node.entry.name} />}</span>
-          <span className="min-w-0 truncate">{node.entry.name}</span>
-        </button>
+          <button
+            ref={buttonRef}
+            className={cn(
+              "flex min-w-0 flex-1 items-center gap-1.5 py-[0.265rem] pr-1 border-0 text-sidebar-foreground font-inherit text-xs leading-tight text-left cursor-pointer hover:bg-[color-mix(in_srgb,var(--color-accent)_58%,transparent)] focus-visible:bg-[color-mix(in_srgb,var(--color-accent)_58%,transparent)] focus-visible:outline-none pointer-coarse:min-h-11 pointer-coarse:py-1.5 pointer-coarse:text-sm",
+              isHiddenEntry && "opacity-60"
+            )}
+            type="button"
+            style={{ paddingLeft: `${0.75 + depth * 0.875}rem` }}
+            tabIndex={isFocusable ? 0 : -1}
+            onKeyDown={handleKeyDown}
+            onPointerDown={(event) => drag?.onRowPointerDown(event, node.entry)}
+            onTouchStart={(event) => drag?.onRowTouchStart(event, node.entry)}
+            onClick={() => {
+              // A completed drag ends in a pointerup on the row, which would
+              // otherwise also fire this click and open/toggle the entry.
+              if (drag?.consumeSuppressedClick()) return;
+              setActivePath(node.entry.relative_path);
+              if (isDirectory) toggleFolder(node.entry.relative_path);
+              else if (isFile) handleFileSelected(node.entry.relative_path);
+            }}
+            aria-label={isDirectory ? `${isExpanded ? "Collapse" : "Expand"} ${node.entry.name}` : `Open ${node.entry.name}`}
+          >
+            <span className={cn(TREE_ICON_CLASSES, "w-2.5 flex-none text-center")} aria-hidden="true">{isDirectory ? (isExpanded ? <FolderOpen /> : <Folder />) : <WorkspaceFileIcon name={node.entry.name} />}</span>
+            <span className="min-w-0 truncate">{node.entry.name}</span>
+          </button>
+          {drag && (
+            <button
+              type="button"
+              {...{ [WORKSPACE_DRAG_HANDLE_ATTR]: node.entry.relative_path }}
+              // `touch-none` keeps this handle out of the browser's scroll
+              // gesture so a touch drag can start here while the rest of the
+              // row scrolls normally. Subtle on a pointer-fine desktop, it is
+              // always visible and >=44px on coarse pointers.
+              className="flex w-5 flex-none cursor-grab touch-none items-center justify-center self-stretch border-0 bg-transparent p-0 text-muted-foreground opacity-0 transition-opacity group-hover/row:opacity-70 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-ring focus-visible:-outline-offset-1 pointer-coarse:w-11 pointer-coarse:min-h-11 pointer-coarse:opacity-70 [&>svg]:size-[0.8rem] [&>svg]:stroke-current"
+              tabIndex={isFocusable ? 0 : -1}
+              aria-label={`Move ${node.entry.name}. Press Enter to pick it up, use the arrow keys to choose a folder, Enter to drop, Escape to cancel.`}
+              onPointerDown={(event) => drag.onHandlePointerDown(event, node.entry)}
+              onKeyDown={(event) => drag.onHandleKeyDown(event, node.entry)}
+            >
+              <GripVertical aria-hidden="true" />
+            </button>
+          )}
+        </div>
       )}
       {isDirectory && isExpanded && (
         <>
           {isCreatingHere && (
             <ul role="group" className="m-0 pl-3.5 list-none">
-              <InlineNameInput
+              <CreateNameInput
+                creating={creating!}
                 depth={depth + 1}
-                icon={creating!.kind === "folder" ? <Folder /> : <WorkspaceFileIcon name="" />}
-                placeholder={creating!.kind === "folder" ? "New folder name…" : "New file name…"}
-                ariaLabel={creating!.kind === "folder" ? "New folder name" : "New file name"}
-                focusRequest={creating!.focusRequest}
-                wrapInListItem
+                disabled={busy}
+                error={inlineCreateError}
+                onEdit={() => setInlineCreateError(null)}
                 onSubmit={(name) => submitCreate(creating!, name)}
                 onCancel={() => setCreating(null)}
               />
@@ -163,10 +235,14 @@ export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
                   depth={depth + 1}
                   isFirst={false}
                   activePath={activePath}
+                  contextMenuPath={contextMenuPath}
                   renaming={renaming}
                   creating={creating}
                   expandedFolders={expandedFolders}
                   actions={actions}
+                  drag={drag}
+                  busy={busy}
+                  inlineCreateError={inlineCreateError}
                 />
               ))}
             </ul>
@@ -196,8 +272,11 @@ export function InlineNameInput({
   ariaLabel,
   focusRequest,
   selectOnFocus = false,
+  caretBeforeExtension = false,
   wrapInListItem = false,
   disabled = false,
+  error = null,
+  onEdit,
   onSubmit,
   onCancel
 }: {
@@ -208,14 +287,21 @@ export function InlineNameInput({
   readonly ariaLabel?: string;
   readonly focusRequest: number;
   readonly selectOnFocus?: boolean;
+  /** Places the caret before the final extension dot instead of at the end —
+   *  so typing into a `.md` prefilled note name prepends the actual name. */
+  readonly caretBeforeExtension?: boolean;
   readonly wrapInListItem?: boolean;
   readonly disabled?: boolean;
+  /** Inline validation message; rendered under the input and cleared on edit. */
+  readonly error?: string | null;
+  readonly onEdit?: () => void;
   readonly onSubmit: (value: string) => Promise<boolean>;
   readonly onCancel: () => void;
 }) {
   const [value, setValue] = useState(initialValue);
   const [submitting, setSubmitting] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const errorId = useId();
   // Track whether the user committed via Enter so the blur handler does not
   // also fire onCancel. Without this, Enter -> submit -> blur -> cancel would
   // double-fire.
@@ -225,7 +311,12 @@ export function InlineNameInput({
     const element = inputRef.current;
     element?.focus();
     if (selectOnFocus) element?.select();
-  }, [focusRequest, selectOnFocus]);
+    else if (caretBeforeExtension && element) {
+      const dot = element.value.lastIndexOf(".");
+      const caret = dot >= 0 ? dot : element.value.length;
+      element.setSelectionRange(caret, caret);
+    }
+  }, [focusRequest, selectOnFocus, caretBeforeExtension]);
 
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Escape") {
@@ -253,26 +344,88 @@ export function InlineNameInput({
         handleSubmit();
       }}
     >
-      <span className="w-2.5 flex-none text-muted-foreground text-center [&>svg]:w-[0.9rem] [&>svg]:h-[0.9rem] [&>svg]:stroke-current" aria-hidden="true">{icon}</span>
-      <input
-        ref={inputRef}
-        className="min-w-0 flex-1 border border-input rounded-small px-[0.3rem] py-0.5 text-foreground bg-background font-inherit text-xs focus-visible:outline-2 focus-visible:outline-ring focus-visible:-outline-offset-1"
-        value={value}
-        disabled={disabled || submitting}
-        placeholder={placeholder}
-        aria-label={ariaLabel}
-        onChange={(event) => setValue(event.target.value)}
-        onKeyDown={handleKeyDown}
-        // On blur without an explicit commit/cancel, treat as cancel so the
-        // input does not linger when the user clicks elsewhere or opens a menu.
-        onBlur={() => {
-          if (committedRef.current) return;
-          committedRef.current = true;
-          onCancel();
-        }}
-      />
+      <span className={cn(TREE_ICON_CLASSES, "w-2.5 flex-none text-center")} aria-hidden="true">{icon}</span>
+      <span className="min-w-0 flex-1">
+        <input
+          ref={inputRef}
+          className="w-full min-w-0 border border-input rounded-small px-[0.3rem] py-0.5 text-foreground bg-background font-inherit text-xs focus-visible:outline-2 focus-visible:outline-ring focus-visible:-outline-offset-1"
+          value={value}
+          disabled={disabled}
+          // An in-flight submit must not disable the input: real engines blur a
+          // disabled field, which would strand focus on <body> before any
+          // confirm dialog can capture the element to restore focus to.
+          readOnly={submitting}
+          aria-busy={submitting || undefined}
+          placeholder={placeholder}
+          aria-label={ariaLabel}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? errorId : undefined}
+          onChange={(event) => {
+            setValue(event.target.value);
+            onEdit?.();
+          }}
+          onKeyDown={handleKeyDown}
+          // On blur without an explicit commit/cancel, treat as cancel so the
+          // input does not linger when the user clicks elsewhere or opens a menu.
+          onBlur={() => {
+            if (committedRef.current) return;
+            committedRef.current = true;
+            onCancel();
+          }}
+        />
+        {error && (
+          <p id={errorId} role="alert" className="m-0 mt-1 text-danger text-[0.6875rem] leading-1.4">
+            {error}
+          </p>
+        )}
+      </span>
     </form>
   );
 
   return wrapInListItem ? <li className="m-0 p-0">{form}</li> : form;
+}
+
+/**
+ * The inline name field for a pending create. The root-level and in-folder
+ * sites derive identical props from `creating`; this owns that mapping so
+ * each call site only says where the input sits.
+ */
+export function CreateNameInput({
+  creating,
+  depth,
+  disabled = false,
+  error = null,
+  onEdit,
+  onSubmit,
+  onCancel
+}: {
+  readonly creating: CreateState;
+  readonly depth: number;
+  readonly disabled?: boolean;
+  readonly error?: string | null;
+  readonly onEdit?: () => void;
+  readonly onSubmit: (name: string) => Promise<boolean>;
+  readonly onCancel: () => void;
+}) {
+  const isFolder = creating.kind === "folder";
+  const isNote = isNewNoteCreate(creating);
+  return (
+    <InlineNameInput
+      key={creating.focusRequest}
+      depth={depth}
+      icon={isFolder ? <Folder /> : <WorkspaceFileIcon name="" />}
+      initialValue={isNote ? ".md" : ""}
+      caretBeforeExtension={isNote}
+      placeholder={isFolder ? "New folder name…" : "New file name…"}
+      ariaLabel={isFolder ? "New folder name" : "New file name"}
+      focusRequest={creating.focusRequest}
+      wrapInListItem
+      disabled={disabled}
+      // Name validation only applies to new notes; other kinds never set it.
+      error={isNote ? error : null}
+      onEdit={onEdit}
+      onSubmit={onSubmit}
+      onCancel={onCancel}
+    />
+  );
 }

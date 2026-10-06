@@ -101,12 +101,14 @@ test("renderer persists and restores the last workspace across reload (no native
   await page.goto("/");
   await page.getByRole("button", { name: "Choose workspace" }).click();
   await page.getByRole("menuitem", { name: "Open folder…" }).click();
-  await expect(page.getByRole("heading", { name: "No workspace open" })).toBeVisible();
+  // Picking a folder only persists the choice — the workspace itself opens
+  // when the (real) new window or, here, the reload comes around.
+  await expect(page.locator("footer").getByText("No workspace open")).toBeVisible();
   await expect(page.getByRole("button", { name: "Choose workspace" })).toHaveText("Choose workspace");
   await expect.poll(() => page.evaluate(() => sessionStorage.getItem("thinkbrain-e2e-app-settings"))).toContain("demo-vault");
 
   await page.reload();
-  await expect(page.getByRole("heading", { name: "demo-vault" })).toBeVisible();
+  await expect(page.locator("footer").getByText("demo-vault")).toBeVisible();
   await expect(page.getByRole("treeitem", { name: /Notes/ })).toBeVisible();
 });
 
@@ -120,7 +122,7 @@ test("renderer prefers the native window root over the persisted last workspace 
   await page.goto("/");
   // The native window root takes precedence, so the window-root vault
   // opens even though no workspace was picked in this page session.
-  await expect(page.getByRole("heading", { name: "window-root-vault" })).toBeVisible();
+  await expect(page.locator("footer").getByText("window-root-vault")).toBeVisible();
 });
 
 test("command palette opens workspace files, runs commands, and restores focus", async ({ page }) => {
@@ -151,13 +153,13 @@ test("command palette opens workspace files, runs commands, and restores focus",
   });
 
   await page.goto("/");
-  const assistant = page.getByRole("button", { name: "Assistant", exact: true });
-  await assistant.focus();
+  const files = page.getByRole("button", { name: "Files", exact: true });
+  await files.focus();
   await page.keyboard.press("Control+p");
   const dialog = page.getByRole("dialog", { name: "Command palette" });
   await expect(dialog).toBeVisible();
   await page.keyboard.press("Escape");
-  await expect(assistant).toBeFocused();
+  await expect(files).toBeFocused();
 
   await page.keyboard.press("Control+p");
   const query = page.getByRole("combobox", { name: "Search commands" });
@@ -232,7 +234,11 @@ test("opens, saves, protects, and creates Markdown notes through the fresh shell
             writeDocuments(documents);
           }
           const isDir = !newKey.includes(".");
-          return { relative_path: newKey, name: newKey.split("/").at(-1), parent_path: newKey.split("/").slice(0, -1).join("/"), kind: isDir ? "directory" : "file", is_markdown: !isDir, byte_size: 0, updated_at: null };
+          const entry = { relative_path: newKey, name: newKey.split("/").at(-1), parent_path: newKey.split("/").slice(0, -1).join("/"), kind: isDir ? "directory" : "file", is_markdown: !isDir, byte_size: 0, updated_at: null };
+          return {
+            entry,
+            file_moves: [{ old_relative_path: oldKey, new_relative_path: newKey, was_markdown: !isDir, is_markdown: !isDir }]
+          };
         }
         if (command === "delete_workspace_entry") {
           const target = String(args.relativePath);
@@ -261,8 +267,9 @@ test("opens, saves, protects, and creates Markdown notes through the fresh shell
   await expect(page.getByLabel("Unsaved changes")).toBeVisible();
 
   await page.getByRole("button", { name: "Close welcome.md" }).click();
-  await expect(page.getByRole("dialog", { name: "Unsaved changes" })).toBeVisible();
-  await page.getByRole("button", { name: "Cancel" }).click();
+  const unsavedDialog = page.getByRole("dialog", { name: "Unsaved changes" });
+  await expect(unsavedDialog).toBeVisible();
+  await unsavedDialog.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(editor).toBeVisible();
   await page.getByRole("button", { name: "Save note" }).click();
   await expect(page.getByLabel("Unsaved changes")).not.toBeVisible();
@@ -290,9 +297,9 @@ test("shell exposes labelled landmarks and keyboard-accessible controls", async 
   await expect(page.getByRole("main", { name: "ThinkBrain desktop workspace" })).toBeVisible();
   await expect(page.locator("footer")).toBeVisible();
 
-  const assistant = page.getByRole("button", { name: "Assistant", exact: true });
-  await assistant.focus();
-  await expect(assistant).toBeFocused();
+  const files = page.getByRole("button", { name: "Files", exact: true });
+  await files.focus();
+  await expect(files).toBeFocused();
 
   await page.keyboard.press("Control+p");
   await expect(page.getByRole("dialog", { name: "Command palette" })).toBeVisible();
@@ -313,12 +320,15 @@ test("unavailable sections retain their owning panel", async ({ page }) => {
 test("assistant and bottom panel toggles preserve the editor", async ({ page }) => {
   await page.goto("/");
 
-  await page.getByRole("button", { name: "Assistant", exact: true }).click();
+  // Unpinned right-side panels live in the title bar's Action items menu.
+  await page.getByRole("button", { name: "Action items" }).click();
+  await page.getByRole("menuitem", { name: "Assistant", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Assistant" })).toBeVisible();
   await page.getByRole("button", { name: "Files", exact: true }).click();
   await expect(page.getByRole("complementary", { name: "Files panel" })).not.toBeVisible();
   await expect(page.getByRole("heading", { name: "Assistant" })).toBeVisible();
-  await page.getByRole("button", { name: "Assistant", exact: true }).click();
+  await page.getByRole("button", { name: "Action items" }).click();
+  await page.getByRole("menuitem", { name: "Assistant", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Assistant" })).not.toBeVisible();
 
   // The bottom panel is toggled via the Ctrl/Cmd+J shortcut (there is no
@@ -438,7 +448,11 @@ test("the explorer context menu creates, renames, and deletes entries", async ({
             writeFolders(folders);
           }
           const isDir = !newKey.includes(".");
-          return entryFor(newKey, isDir ? "directory" : "file", !isDir);
+          const entry = entryFor(newKey, isDir ? "directory" : "file", !isDir);
+          return {
+            entry,
+            file_moves: [{ old_relative_path: oldKey, new_relative_path: newKey, was_markdown: !isDir, is_markdown: !isDir }]
+          };
         }
         if (command === "delete_workspace_entry") {
           const target = String(args.relativePath);

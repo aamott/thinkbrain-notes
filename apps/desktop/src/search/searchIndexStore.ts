@@ -14,6 +14,7 @@
  */
 
 import { create } from "zustand";
+import { getErrorMessage } from "@thinkbrain/core";
 import { subscribeIndexToNoteEvents } from "../events/noteIndexSubscription";
 import type { NativeMarkdownFileEntry } from "../native/commands";
 import {
@@ -121,7 +122,7 @@ export const useSearchIndexStore = create<SearchIndexStore>((set, get) => ({
       // Abort is expected when a newer indexing operation superseded this one.
       if (error instanceof AbortError) return;
       if (indexingAbortController === controller && get().rootPath === rootPath) {
-        const message = error instanceof Error ? error.message : String(error);
+        const message = getErrorMessage(error);
         console.error("[searchIndexStore] Indexing failed:", error);
         set({ status: { kind: "error", message } });
       }
@@ -187,7 +188,7 @@ export const useSearchIndexStore = create<SearchIndexStore>((set, get) => ({
     } catch (error) {
       const currentAvailability = metadataQueryAvailability(get(), rootPath);
       if (currentAvailability) return currentAvailability;
-      const message = error instanceof Error ? error.message : String(error);
+      const message = getErrorMessage(error);
       console.error("[searchIndexStore] Metadata query failed:", error);
       return { kind: "failure", message };
     }

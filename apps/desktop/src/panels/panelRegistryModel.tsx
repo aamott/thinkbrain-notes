@@ -21,6 +21,7 @@ import { HistoryPanel } from "../sync/HistoryPanel";
 import { ExtensionsPanel } from "../extensions/ExtensionsPanel";
 import { Unavailable } from "../shell/Unavailable";
 import { AssistantPanelSurface } from "./AssistantPanelSurface";
+import { BacklinksPanel } from "./BacklinksPanel";
 import { OutlinePanel } from "./OutlinePanel";
 import { PropertiesPanel } from "./PropertiesPanel";
 import { WorkspaceExplorer, type WorkspaceExplorerProps } from "../workspace/WorkspaceExplorer";
@@ -35,22 +36,29 @@ export interface LeftPanelContext {
   readonly onOpenSearchResult: (relativePath: string) => void;
   /** Opens the side-by-side comparison for a conflict, named by its copy. */
   readonly onReviewConflict: (copyPath: string, notePath: string) => void;
-  /**
-   * The note whose earlier versions the history panel should show, or `null`
-   * for the whole workspace's history. Set by "Previous versions…" in the file
-   * tree, which is why it lives out here rather than inside the panel.
-   */
-  readonly versionsOf: string | null;
-  /** Leaves one note's versions for the whole workspace's history. */
-  readonly onShowEverything: () => void;
+  /** Opens Settings at the sync section, from the conflicts header menu. */
+  readonly onOpenSyncSettings: () => void;
 }
 
 /** State a right-side panel factory may read (inspector panels only). */
 export interface RightPanelContext {
   /** Current workspace root, or `null` before a workspace is opened. */
   readonly rootPath: string | null;
-  /** Ready contents of the active Markdown document, or `null`. */
+  /**
+   * Ready contents of the active file-backed document, or `null`.
+   *
+   * `null` both for a document still loading and for a file that has no text
+   * to show — image, audio, video — which Version history still lists.
+   */
   readonly documentContents: string | null;
+  /** Relative path of the active file-backed tab, or `null`. */
+  readonly documentPath: string | null;
+  /** Requests shell-owned navigation to another note. */
+  readonly onOpenNote: (relativePath: string) => void;
+  /** Opens a read-only comparison of a file with one recorded version. */
+  readonly onCompareVersion: (notePath: string, changeId: string, versionAt?: number | null) => void;
+  /** Puts a recorded version back, saving an open dirty file first. */
+  readonly onRestoreVersion: (notePath: string, changeId: string) => Promise<void>;
 }
 
 /**
@@ -85,7 +93,6 @@ export type BuiltInLeftPanel =
   | "explorer"
   | "search"
   | "conflicts"
-  | "history"
   | "tags"
   | "extensions";
 
@@ -98,6 +105,7 @@ export type BuiltInLeftPanel =
  * but are not selectable shell state until extension selection is implemented.
  */
 export type BuiltInRightPanel =
+  | "history"
   | "outline"
   | "backlinks"
   | "properties"
@@ -148,16 +156,32 @@ export function isBuiltInLeftPanel(id: string): id is BuiltInLeftPanel {
   return id === "explorer"
     || id === "search"
     || id === "conflicts"
-    || id === "history"
     || id === "tags"
     || id === "extensions";
+}
+
+/** One item inside the dropdown a menu-shaped panel action opens. */
+export interface PanelMenuItem {
+  readonly label: string;
+  /** PanelIcon identifier (or a literal glyph, via PanelIcon's fallback). */
+  readonly icon?: string;
+  /** Renders as an on/off checkbox item when present. */
+  readonly checked?: boolean;
+  readonly danger?: boolean;
+  readonly disabled?: boolean;
+  /** Muted trailing annotation (e.g. "Soon"). */
+  readonly note?: string;
+  /** Draws a separator above the item. */
+  readonly separatorBefore?: boolean;
+  run?(): void | Promise<void>;
 }
 
 /**
  * A button a panel contributes to its own header.
  *
  * Data rather than markup, so an extension that mounted plain DOM contributes
- * one exactly as a first-party React panel does.
+ * one exactly as a first-party React panel does. Supply `menu` instead of
+ * `run` for a ⋯-style dropdown — plain buttons cannot express a checkbox item.
  */
 export interface PanelAction {
   /** Unique within the panel; used as the React key and in failure reports. */
@@ -166,8 +190,19 @@ export interface PanelAction {
   readonly label: string;
   /** Single glyph shown on the button. */
   readonly icon: string;
-  run(): void | Promise<void>;
+  /** Opens this item list as a dropdown anchored to the button. */
+  readonly menu?: readonly PanelMenuItem[];
+  run?(): void | Promise<void>;
 }
+
+/**
+ * Header actions: a static list, or a factory that reads the panel's context —
+ * the form an action takes when it needs a shell callback like
+ * `onOpenSyncSettings`, which a static literal cannot name.
+ */
+export type PanelActions<Ctx> =
+  | readonly PanelAction[]
+  | ((context: Ctx) => readonly PanelAction[]);
 
 /** A core panel contribution specialized to React render factories. */
 export type DesktopPanelContribution = PanelContribution<ReactNode, DesktopPanelContext> & {
@@ -175,13 +210,21 @@ export type DesktopPanelContribution = PanelContribution<ReactNode, DesktopPanel
   /** Keeps stateful content mounted while another panel on the same side is active. */
   readonly keepMounted?: boolean;
   /** Buttons rendered in the panel header, in declaration order. */
-  readonly actions?: readonly PanelAction[];
+  readonly actions?: PanelActions<DesktopPanelContext>;
+  /** Opts a left panel into the selector when shell placement is panel headers. */
+  readonly showWorkspaceSelector?: boolean;
+  /**
+   * The panel renders its own single chrome row (header + actions) and the
+   * popout omits PanelTitle and the selector outlet entirely — used by the
+   * explorer, whose compact header merges title, selector, and actions.
+   */
+  readonly ownsChrome?: boolean;
 };
 
-/** Base for side-narrowed contribution types (omits side-specific id/factory/availability). */
+/** Base for side-narrowed contribution types (omits side-specific id/factory/availability/actions). */
 type DesktopPanelContributionBase = Omit<
   DesktopPanelContribution,
-  "id" | "factory" | "availability" | "side"
+  "id" | "factory" | "availability" | "side" | "actions"
 >;
 
 /**
@@ -199,6 +242,7 @@ export type LeftPanelContribution = DesktopPanelContributionBase & {
   readonly side: "left";
   readonly factory: PanelFactory<ReactNode, LeftPanelContext>;
   readonly availability?: (context: LeftPanelContext) => boolean;
+  readonly actions?: PanelActions<LeftPanelContext>;
 };
 
 /** Right-side contribution with `id` and factory narrowed to {@link RightPanel} / {@link RightPanelContext}. See {@link LeftPanelContribution} for the rationale. */
@@ -207,6 +251,7 @@ export type RightPanelContribution = DesktopPanelContributionBase & {
   readonly side: "right";
   readonly factory: PanelFactory<ReactNode, RightPanelContext>;
   readonly availability?: (context: RightPanelContext) => boolean;
+  readonly actions?: PanelActions<RightPanelContext>;
 };
 
 /**
@@ -222,7 +267,8 @@ export const builtInDesktopPanels: readonly (LeftPanelContribution | RightPanelC
     icon: "files",
     side: "left",
     keepMounted: true,
-    availability: () => true,
+    showWorkspaceSelector: true,
+    ownsChrome: true,
     factory: ({ explorerProps }) => <WorkspaceExplorer {...explorerProps} />
   },
   {
@@ -230,29 +276,31 @@ export const builtInDesktopPanels: readonly (LeftPanelContribution | RightPanelC
     label: "Search",
     icon: "search",
     side: "left",
-    availability: () => true,
+    showWorkspaceSelector: true,
     factory: ({ onOpenSearchResult, rootPath }) => (
       <SearchPanel rootPath={rootPath} onOpenFile={onOpenSearchResult} />
     )
   },
   {
     id: "conflicts",
-    label: "Decisions needed",
+    label: "Sync conflicts",
     icon: "conflicts",
     side: "left",
-    availability: () => true,
+    // The ⋯ lives in the chrome row, not the body — the panel keeps only its
+    // explainer line and cards.
+    actions: ({ onOpenSyncSettings }) => [
+      {
+        id: "conflict-options",
+        label: "Conflict options",
+        icon: "more-horizontal",
+        menu: [
+          { label: "Sync settings", icon: "settings", run: () => onOpenSyncSettings() },
+          { label: "Sign in with GitHub", disabled: true, note: "Soon", separatorBefore: true }
+        ]
+      }
+    ],
     factory: ({ onReviewConflict, rootPath }) => (
       <ConflictsPanel rootPath={rootPath} onReview={onReviewConflict} />
-    )
-  },
-  {
-    id: "history",
-    label: "Saved versions",
-    icon: "history",
-    side: "left",
-    availability: () => true,
-    factory: ({ rootPath, versionsOf, onShowEverything }) => (
-      <HistoryPanel rootPath={rootPath} note={versionsOf} onShowEverything={onShowEverything} />
     )
   },
   {
@@ -273,12 +321,35 @@ export const builtInDesktopPanels: readonly (LeftPanelContribution | RightPanelC
     factory: () => <ExtensionsPanel />
   },
   {
+    // History inspects the active file, so it belongs to the document
+    // inspector on the right — the first thing in it.
+    id: "history",
+    label: "Version history",
+    icon: "history",
+    side: "right",
+    availability: ({ documentPath }) => documentPath !== null,
+    factory: ({
+      rootPath,
+      documentPath,
+      documentContents,
+      onCompareVersion,
+      onRestoreVersion
+    }) => (
+      <HistoryPanel
+        rootPath={rootPath}
+        note={documentPath}
+        currentContents={documentContents}
+        onCompare={onCompareVersion}
+        onRestore={onRestoreVersion}
+      />
+    )
+  },
+  {
     id: "outline",
     label: "Outline",
     icon: "outline",
     side: "right",
     keepMounted: true,
-    availability: () => true,
     factory: ({ documentContents }) => <OutlinePanel contents={documentContents} />
   },
   {
@@ -286,11 +357,12 @@ export const builtInDesktopPanels: readonly (LeftPanelContribution | RightPanelC
     label: "Backlinks",
     icon: "backlinks",
     side: "right",
-    availability: () => false,
-    factory: () => (
-      <Unavailable
-        title="Backlinks unavailable"
-        description="This inspector activates after the workspace link index is available."
+    availability: ({ documentPath }) => documentPath !== null,
+    factory: ({ rootPath, documentPath, onOpenNote }) => (
+      <BacklinksPanel
+        rootPath={rootPath}
+        relativePath={documentPath}
+        onOpenNote={onOpenNote}
       />
     )
   },
@@ -300,7 +372,6 @@ export const builtInDesktopPanels: readonly (LeftPanelContribution | RightPanelC
     icon: "properties",
     side: "right",
     keepMounted: true,
-    availability: () => true,
     factory: ({ documentContents }) => <PropertiesPanel contents={documentContents} />
   },
   {
@@ -309,7 +380,6 @@ export const builtInDesktopPanels: readonly (LeftPanelContribution | RightPanelC
     icon: "assistant",
     side: "right",
     keepMounted: true,
-    availability: () => true,
     factory: () => <AssistantPanelSurface />
   }
 ];

@@ -1,76 +1,78 @@
-import { ArrowLeft, Menu as MenuIcon, MoreHorizontal } from "lucide-react";
+import { ArrowLeft, ArrowRight, Menu } from "lucide-react";
 
-import type { SyncStatus } from "../../sync/historyTypes";
-import { SyncPill } from "../../sync/SyncPill";
+import { CountBadge } from "@thinkbrain/ui";
+
+import { PhoneBreadcrumb } from "./PhoneBreadcrumb";
 
 /**
- * Universal phone header.
+ * Universal phone header — browser chrome.
+ *
+ * Back stays dimmed at the stack root; Forward appears only while the
+ * navigation history has a forward entry. Between the navigation controls
+ * and the right-hand controls sits the location pill: a breadcrumb that
+ * keeps the current file visible and opens the full scrollable path on tap.
  *
  * The two right-hand controls open different surfaces: the count opens the tab
- * switcher, `⋯` opens the inspector sheet. Only the left slot and the hub's Menu
- * slot open the navigation drawer.
- *
- * It also carries the sync pill, because `StatusBar` does not render in phone
- * chrome and this is the only place someone learns their notes stopped being
- * saved. It is the same `SyncPill` the footer renders — the status has no
- * `label` of its own, and a second phrasing of it would be a second thing to
- * keep true.
+ * switcher, `☰` opens the navigation drawer; the floating bubbles carry the
+ * document-level actions (New note, action items).
  */
 export function PhoneHeader({
-  title,
+  breadcrumbs,
   canGoBack,
+  canGoForward,
   tabCount,
-  syncStatus,
+  mainMenuOpen,
+  badge = 0,
   onBack,
-  onOpenNavigation,
+  onForward,
   onOpenTabs,
-  onOpenInspector,
-  onOpenSyncPanel
+  onToggleMainMenu
 }: {
-  readonly title: string;
+  readonly breadcrumbs: readonly string[];
   readonly canGoBack: boolean;
+  readonly canGoForward: boolean;
   readonly tabCount: number;
-  readonly syncStatus: SyncStatus;
+  readonly mainMenuOpen: boolean;
+  /** Undismissed-conflict count shown on the menu button, hidden at zero. */
+  readonly badge?: number;
   readonly onBack: () => void;
-  readonly onOpenNavigation: () => void;
+  readonly onForward: () => void;
   readonly onOpenTabs: () => void;
-  readonly onOpenInspector: () => void;
-  readonly onOpenSyncPanel: (panel: "conflicts" | "history") => void;
+  readonly onToggleMainMenu: () => void;
 }) {
   const button =
-    "flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-small border-0 bg-transparent text-titlebar-foreground tn-focus-ring";
+    "flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-small border-0 bg-transparent text-titlebar-foreground tn-focus-ring active:bg-accent disabled:cursor-default disabled:opacity-40";
   return (
     // `min-h-14` (not `h-14`) so the safe-area inset is added *on top of* the
     // 56px content area, not carved out of it. With `box-sizing: border-box`
     // a fixed `h-14` includes the padding, so a 24px status-bar inset would
     // squeeze the buttons into 32px.
     <header className="flex min-h-14 shrink-0 items-center justify-between gap-1 border-b border-border bg-titlebar px-1 pt-[env(safe-area-inset-top)] text-titlebar-foreground">
-      {canGoBack ? (
-        <button type="button" aria-label="Back" className={button} onClick={onBack}>
-          <ArrowLeft aria-hidden="true" className="size-5" />
-        </button>
-      ) : (
+      <div className="flex shrink-0 items-center">
         <button
           type="button"
-          aria-label="Open navigation"
+          aria-label="Back"
+          disabled={!canGoBack}
           className={button}
-          onClick={onOpenNavigation}
+          onClick={onBack}
         >
-          <MenuIcon aria-hidden="true" className="size-5" />
+          <ArrowLeft aria-hidden="true" className="size-5" />
         </button>
-      )}
+        {canGoForward && (
+          <button
+            type="button"
+            aria-label="Forward"
+            className={button}
+            onClick={onForward}
+          >
+            <ArrowRight aria-hidden="true" className="size-5" />
+          </button>
+        )}
+      </div>
 
-      <h1 className="min-w-0 flex-1 truncate text-center text-sm font-semibold">{title}</h1>
+      <PhoneBreadcrumb segments={breadcrumbs} />
 
       <div className="flex min-w-0 items-center gap-0.5">
-        {/* On a phone the sync pill shows its symbol only — the full sentence
-            ("Versions not saved here", "Git sync healthy · Today 9:31 AM")
-            is designed for the desktop footer and eats the title's space here.
-            The symbol (✓ ↻ ⚠ —) is enough; the detail is one tap away and
-            stays in the tooltip / accessible name. */}
-        <span className="flex min-w-0 shrink items-center justify-center [&>button]:min-w-0 pointer-coarse:[&>button]:min-h-11 pointer-coarse:[&>button]:min-w-11">
-          <SyncPill status={syncStatus} onOpen={onOpenSyncPanel} compact />
-        </span>
         <button
           type="button"
           aria-label={`Open tabs (${tabCount})`}
@@ -86,11 +88,18 @@ export function PhoneHeader({
         </button>
         <button
           type="button"
-          aria-label="Document tools"
-          className={button}
-          onClick={onOpenInspector}
+          // The badge chip is aria-hidden, so the conflict count rides the
+          // accessible name — otherwise a counted badge reads as a bare menu.
+          aria-label={badge > 0 ? `Main menu, ${badge} conflicts` : "Main menu"}
+          aria-haspopup="dialog"
+          aria-expanded={mainMenuOpen}
+          className={`relative ${button} aria-expanded:bg-accent`}
+          onClick={onToggleMainMenu}
         >
-          <MoreHorizontal aria-hidden="true" className="size-5" />
+          <Menu aria-hidden="true" className="size-5" />
+          {badge > 0 && (
+            <CountBadge count={badge} className="absolute top-1 right-1 leading-3.5" />
+          )}
         </button>
       </div>
     </header>

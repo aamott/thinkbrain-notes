@@ -1,6 +1,8 @@
 /**
  * A navigable Markdown heading in its original document location.
  */
+import { parseFrontmatter } from "@thinkbrain/core";
+
 export type Heading = {
   readonly level: number;
   readonly text: string;
@@ -8,7 +10,6 @@ export type Heading = {
 };
 
 const ATX_HEADING_PATTERN = /^(#{1,6})\s+(.+)$/;
-const FRONTMATTER_FENCE_PATTERN = /^---[ \t]*$/;
 
 /**
  * Extracts ATX headings from a Markdown document without changing its contents.
@@ -19,18 +20,12 @@ const FRONTMATTER_FENCE_PATTERN = /^---[ \t]*$/;
  */
 export function extractHeadings(markdown: string): readonly Heading[] {
   const lines = markdown.split(/\r?\n/);
-  const firstLine = lines[0]?.replace(/^\uFEFF/, "") ?? "";
-  let bodyStartIndex = 0;
-
-  if (FRONTMATTER_FENCE_PATTERN.test(firstLine)) {
-    const closingFenceIndex = lines.findIndex(
-      (line, index) => index > 0 && FRONTMATTER_FENCE_PATTERN.test(line),
-    );
-
-    if (closingFenceIndex !== -1) {
-      bodyStartIndex = closingFenceIndex + 1;
-    }
-  }
+  const frontmatter = parseFrontmatter(markdown).frontmatter;
+  // `endOffset` is a character offset; the body's first line is the line count
+  // of everything the fence block consumed (its trailing newline included).
+  const bodyStartIndex = frontmatter
+    ? markdown.slice(0, frontmatter.endOffset).split(/\r?\n/).length - 1
+    : 0;
 
   const headings: Heading[] = [];
   for (let index = bodyStartIndex; index < lines.length; index += 1) {

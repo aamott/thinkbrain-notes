@@ -12,12 +12,13 @@ import { subscribeToSyncEvent } from "./syncEvents";
 import type {
   ConflictRate,
   HistoryCleanup,
+  HistoryPage,
   HistoryUsage,
-  RecordedChange,
   SavedSignIn,
   SignInStatus,
   Synced,
-  SyncStatus
+  SyncStatus,
+  VersionDiff
 } from "./historyTypes";
 
 /** Fired when what the status footer would say about a workspace has changed. */
@@ -30,8 +31,9 @@ const SYNC_SETUP_EVENT = "sync://setup";
  *
  * A page rather than everything: a vault years old has thousands of recorded
  * changes, and nobody scrolls past the first screen looking for last Tuesday.
+ * Exported so the history panel can ask for its next page at the same size.
  */
-const HISTORY_PAGE = 60;
+export const HISTORY_PAGE = 60;
 
 export function readSyncStatus(rootPath: string): Promise<SyncStatus> {
   return invokeNativeCommand("sync_status", { rootPath });
@@ -97,18 +99,24 @@ export function forgetSignIn(profileId: string): Promise<void> {
 }
 
 /**
- * The most recent recorded changes, newest first.
+ * One page of the most recent recorded changes, newest first.
  *
  * `notePath` narrows the list to the changes that left content for one note,
  * which is exactly that note's list of restorable versions — the same reader,
  * asked a narrower question, so the two lists cannot disagree.
+ *
+ * `cursor` continues a page already read into the older part of the same
+ * timeline. The native side ties it to the roots that first page saw, so an
+ * invalid or expired cursor comes back as an actionable failure rather than
+ * a silently shifted page — the recovery is a fresh first page.
  */
 export function readHistory(
   rootPath: string,
   notePath: string | null,
-  limit: number = HISTORY_PAGE
-): Promise<readonly RecordedChange[]> {
-  return invokeNativeCommand("sync_history", { rootPath, notePath, limit });
+  limit: number = HISTORY_PAGE,
+  cursor: string | null = null
+): Promise<HistoryPage> {
+  return invokeNativeCommand("sync_history", { rootPath, notePath, limit, cursor });
 }
 
 /** Puts the version of `notePath` recorded in `change` back into the vault. */
@@ -118,6 +126,23 @@ export function restoreVersion(
   change: string
 ): Promise<void> {
   return invokeNativeCommand("restore_version", { rootPath, notePath, change }).then(() => undefined);
+}
+
+/**
+ * Reads the complete-text comparison between the current note and an earlier version.
+ */
+export function readVersionDiff(
+  rootPath: string,
+  notePath: string,
+  change: string,
+  buffer?: string | null
+): Promise<VersionDiff> {
+  return invokeNativeCommand("read_version_diff", {
+    rootPath,
+    notePath,
+    change,
+    buffer: buffer ?? null
+  });
 }
 
 export function readConflictRate(rootPath: string): Promise<ConflictRate> {

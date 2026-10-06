@@ -13,6 +13,14 @@ type OverlayEntry = {
 const overlayStack: OverlayEntry[] = [];
 let keyListenerBound = false;
 
+/** Dismisses the most recently registered transient overlay, when present. */
+export function dismissTopOverlay(): boolean {
+  const top = overlayStack.at(-1);
+  if (!top) return false;
+  top.dismiss();
+  return true;
+}
+
 function onDocumentKeyDown(event: KeyboardEvent): void {
   const top = overlayStack[overlayStack.length - 1];
   if (!top) return;

@@ -21,7 +21,7 @@ hybrid rank balances exact-match strength with meaning similarity.
 
 ## References
 
-- `plans/wip-indexing-search-med-med.md` — indexing-search epic and FTS5 query foundation
+- `plans/indexing-search/` — indexing-search epic and FTS5 query foundation
 - `apps/desktop/src-tauri/src/commands/search.rs` — shipped native `search_index` backend and result shape
 - A future typed frontend bridge remains planned for native search commands; no bridge file is assigned yet.
-- `plans/pending-semantic-search-low-hard.md` — Architecture Decisions (hybrid ranking)
+- `plans/semantic-search/` — Architecture Decisions (hybrid ranking)

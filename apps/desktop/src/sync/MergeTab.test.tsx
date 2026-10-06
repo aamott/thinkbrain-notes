@@ -1,22 +1,49 @@
 // @vitest-environment happy-dom
-import { act } from "react";
+import { act, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ConflictComparison } from "./conflictTypes";
+import { useEditorCommands, type EditorCommands } from "../tabs/editorCommands";
 
-const readConflict = vi.fn<() => Promise<ConflictComparison>>();
+const TAB_ID = "merge-test-tab";
+
+const readConflict = vi.fn<
+  (rootPath: string, copyPath: string, buffer?: string | null) => Promise<ConflictComparison>
+>();
 const resolveConflict = vi.fn<() => Promise<unknown>>();
 
 vi.mock("./conflictService", () => ({
-  readConflict: () => readConflict(),
+  readConflict,
   resolveConflict: (...args: unknown[]) => resolveConflict(...(args as []))
+}));
+
+// The side-by-side surface is CodeMirror's, not this screen's behavior: what
+// the tests owe is that it is mounted with the right texts and that edits to
+// its result reach "Save merged note". A stub stands in and records the props.
+const lastDiff = vi.hoisted(() => ({ props: null as Record<string, unknown> | null }));
+
+vi.mock("./CodeMirrorDiff", () => ({
+  CodeMirrorDiff: (props: Record<string, unknown>) => {
+    lastDiff.props = props;
+    return (
+      <section aria-label={props.ariaLabel as string} data-testid="codemirror-diff">
+        <p>{props.beforeLabel as string}</p>
+        <p>{props.afterLabel as string}</p>
+        <pre data-testid="before">{props.before as string}</pre>
+        <pre data-testid="after">{props.after as string}</pre>
+      </section>
+    );
+  }
 }));
 
 const { MergeTab } = await import("./MergeTab");
 
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
+
+const OURS_TEXT = "# Q3 sync\nattendees\nfollow up with design\nnext check-in Aug 18\n";
+const THEIRS_TEXT = "# Q3 sync\nattendees\nsync directly with design\nnext check-in Aug 18\n";
 
 const COMPARISON: ConflictComparison = {
   kind: "text",
@@ -34,14 +61,11 @@ const COMPARISON: ConflictComparison = {
     changedAt: null,
     fingerprint: "theirs"
   },
-  chunks: [
-    { kind: "common", text: "# Q3 sync\nattendees\n" },
-    { kind: "choice", ours: "follow up with design\n", theirs: "sync directly with design\n" },
-    { kind: "common", text: "next check-in Aug 18\n" }
-  ]
+  text: { incoming: THEIRS_TEXT, current: OURS_TEXT }
 };
 
 beforeEach(() => {
+  lastDiff.props = null;
   readConflict.mockReset().mockResolvedValue(COMPARISON);
   resolveConflict.mockReset().mockResolvedValue({ note: "Meeting Notes.md", keptAs: null, checkpoint: "a" });
 });
@@ -53,12 +77,34 @@ afterEach(async () => {
   container = null;
 });
 
+// Reads the merge tab's registered commands through the same hook the header
+// bar uses, so the tests exercise the public subscription.
+const captured: { commands: EditorCommands | null } = { commands: null };
+const CommandsProbe = () => {
+  const commands = useEditorCommands(TAB_ID);
+  useEffect(() => {
+    captured.commands = commands;
+  }, [commands]);
+  return null;
+};
+const editorCommands = () => captured.commands;
+
 const render = async (): Promise<HTMLDivElement> => {
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
   await act(async () =>
-    root?.render(<MergeTab rootPath="/notes" copyPath={COMPARISON.theirs.path} buffer={null} />)
+    root?.render(
+      <>
+        <CommandsProbe />
+        <MergeTab
+          rootPath="/notes"
+          copyPath={COMPARISON.theirs.path}
+          tabId={TAB_ID}
+          buffer={null}
+        />
+      </>
+    )
   );
   return container;
 };
@@ -71,89 +117,176 @@ const button = (host: HTMLElement, text: string): HTMLButtonElement => {
   return found;
 };
 
-const result = (host: HTMLElement): string =>
-  host.querySelector('[aria-label="Result"] pre')?.textContent ?? "";
-
 describe("comparing two versions", () => {
   it("opens with both sides named the way the user knows them", async () => {
     const host = await render();
 
-    expect(host.textContent).toContain("Two versions of this note exist");
     expect(host.textContent).toContain("This computer");
     expect(host.textContent).toContain("OneDrive");
   });
 
-  // The whole reason the screen is bearable: the parts nobody has to think
-  // about are one quiet line, not a wall of text to scroll past.
-  it("collapses the stretches both versions agree on", async () => {
+  it("tells the story of the conflict behind a help button, off the screen's space", async () => {
     const host = await render();
+    // The explanation takes no vertical room until it is asked for — a fixed
+    // line under the bar is space the panes could have.
+    expect(host.textContent).not.toContain("Two versions of this note exist");
 
-    expect(host.textContent).toContain("2 identical lines");
-    expect(host.textContent).toContain("1 identical line");
+    const help = host.querySelector<HTMLButtonElement>('[aria-label="About this comparison"]');
+    expect(help).not.toBeNull();
+    await act(async () => help?.click());
+
+    expect(host.textContent).toContain("Two versions of this note exist");
+    expect(host.textContent).toContain("arrows between the panes");
+    expect(host.textContent).toContain("Version history");
   });
 
-  it("names each choice after where the version came from", async () => {
+  // CodeMirror aligns the two versions; this surface owes it both complete
+  // documents, rebuilt exactly from the comparison the native side sent.
+  it("asks the native side for this copy's comparison", async () => {
+    await render();
+
+    expect(readConflict).toHaveBeenCalledWith("/notes", COMPARISON.theirs.path, null);
+    expect(readConflict).toHaveBeenCalledTimes(1);
+  });
+
+  it("hands the comparison both whole versions, incoming on the left", async () => {
     const host = await render();
 
-    expect(() => button(host, "Keep this computer's")).not.toThrow();
-    expect(() => button(host, "Keep OneDrive's")).not.toThrow();
-    expect(() => button(host, "Keep both")).not.toThrow();
+    expect(host.querySelector('[data-testid="codemirror-diff"]')).not.toBeNull();
+    expect(lastDiff.props?.before).toBe(THEIRS_TEXT);
+    expect(lastDiff.props?.after).toBe(OURS_TEXT);
+    expect(lastDiff.props?.beforeLabel).toBe("OneDrive");
+    expect(lastDiff.props?.afterLabel).toContain("This computer");
+    expect(lastDiff.props?.relativePath).toBe("Meeting Notes.md");
+    expect(lastDiff.props?.editableAfter).toBe(true);
+    expect(lastDiff.props?.transferBeforeToAfter).toBe(true);
+  });
+
+  it("forwards an open editor's unsaved buffer as this computer's side", async () => {
+    const dirty = "# Q3 sync\nstill typing\n";
+    container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
+    await act(async () =>
+      root?.render(
+        <MergeTab
+          rootPath="/notes"
+          copyPath={COMPARISON.theirs.path}
+          tabId={TAB_ID}
+          buffer={dirty}
+        />
+      )
+    );
+
+    expect(readConflict).toHaveBeenCalledWith("/notes", COMPARISON.theirs.path, dirty);
+  });
+
+  it("explains how to work the comparison, without restore preview copy", async () => {
+    const host = await render();
+    const help = host.querySelector<HTMLButtonElement>('[aria-label="About this comparison"]');
+    await act(async () => help?.click());
+
+    expect(host.textContent).toContain("edit the result");
+    // The restore preview's own wording and legend belong to that screen —
+    // a conflict is not a restore, and they must not leak into this one.
+    expect(host.textContent).not.toContain("Preview restore");
+    expect(host.textContent).not.toContain("Added by restore");
+    expect(host.textContent).not.toContain("Removed by restore");
+    expect(host.querySelector('[aria-label="Restore preview legend"]')).toBeNull();
   });
 });
 
-describe("the result pane", () => {
-  it("starts as a real document rather than a form with holes", async () => {
+describe("choosing what to keep", () => {
+  it("offers the whole-file choices; the merged save registers as a command", async () => {
     const host = await render();
 
-    expect(result(host)).toBe("# Q3 sync\nattendees\nfollow up with design\nnext check-in Aug 18\n");
+    expect(() => button(host, "Keep current")).not.toThrow();
+    expect(() => button(host, "Use incoming")).not.toThrow();
+    expect(() => button(host, "Keep both files")).not.toThrow();
+    // Save lives in the workspace header with every other tab's — the tab
+    // registers what it means here, labelled for the merge.
+    const commands = editorCommands();
+    expect(commands?.saveLabel).toBe("Save merged note");
+    expect(commands?.save).toBeInstanceOf(Function);
   });
 
-  it("follows each choice as it is made", async () => {
+  it("keeps this computer's version", async () => {
     const host = await render();
 
-    await act(async () => button(host, "Keep OneDrive's").click());
+    await act(async () => button(host, "Keep current").click());
 
-    expect(result(host)).toBe(
-      "# Q3 sync\nattendees\nsync directly with design\nnext check-in Aug 18\n"
-    );
+    expect(resolveConflict).toHaveBeenCalledWith("/notes", COMPARISON, { kind: "keepOurs" });
   });
 
-  /// The promise the screen is built on: what is previewed is what is written.
-  it("is exactly what gets saved", async () => {
+  it("takes the incoming version", async () => {
     const host = await render();
-    await act(async () => button(host, "Keep both").click());
-    const previewed = result(host);
 
-    await act(async () => button(host, "Done").click());
+    await act(async () => button(host, "Use incoming").click());
+
+    expect(resolveConflict).toHaveBeenCalledWith("/notes", COMPARISON, { kind: "keepTheirs" });
+  });
+
+  it("keeps both versions as separate files", async () => {
+    const host = await render();
+
+    await act(async () => button(host, "Keep both files").click());
+
+    expect(resolveConflict).toHaveBeenCalledWith("/notes", COMPARISON, { kind: "keepBoth" });
+  });
+
+  // The promise the screen is built on: the right pane's text is the note.
+  it("saves this computer's version when the result was left untouched", async () => {
+    await render();
+
+    await act(async () => editorCommands()?.save?.());
 
     expect(resolveConflict).toHaveBeenCalledWith("/notes", COMPARISON, {
       kind: "merged",
-      contents: previewed
+      contents: OURS_TEXT
+    });
+  });
+
+  it("saves the edited result, whatever made the edit", async () => {
+    await render();
+    const edited = "# Q3 sync\nattendees\nmerged by hand\nnext check-in Aug 18\n";
+    await act(async () => {
+      (lastDiff.props?.onAfterChange as (contents: string) => void)(edited);
+    });
+
+    await act(async () => editorCommands()?.save?.());
+
+    expect(resolveConflict).toHaveBeenCalledWith("/notes", COMPARISON, {
+      kind: "merged",
+      contents: edited
     });
   });
 });
 
-describe("saving", () => {
-  // Saving with a section undecided would accept a side the user never looked
-  // at, which in this screen means throwing away somebody's writing.
-  it("waits until every section has been decided", async () => {
+describe("while a decision is being written", () => {
+  it("disables every action so nothing races the write", async () => {
+    let settle: (value: unknown) => void = () => undefined;
+    resolveConflict.mockReturnValue(new Promise((resolve) => { settle = resolve; }));
     const host = await render();
 
-    expect(button(host, "still to choose").disabled).toBe(true);
+    await act(async () => button(host, "Keep current").click());
 
-    await act(async () => button(host, "Keep this computer's").click());
+    for (const label of ["Keep current", "Use incoming", "Keep both files"]) {
+      expect(button(host, label).disabled).toBe(true);
+    }
+    // The header's Save reads `canSave` — while the write is in flight it
+    // must not offer a second one.
+    expect(editorCommands()?.canSave?.()).toBe(false);
 
-    expect(button(host, "Done").disabled).toBe(false);
+    await act(async () => settle({ note: "Meeting Notes.md", keptAs: null, checkpoint: "a" }));
   });
 
   it("says what happened, and that it can be undone", async () => {
     const host = await render();
-    await act(async () => button(host, "Keep this computer's").click());
 
-    await act(async () => button(host, "Done").click());
+    await act(async () => button(host, "Keep current").click());
 
     expect(host.textContent).toContain("Saved");
-    expect(host.textContent).toContain("Saved versions");
+    expect(host.textContent).toContain("Version history");
   });
 
   /// The native side refuses a write whose versions have moved. That refusal is
@@ -161,9 +294,8 @@ describe("saving", () => {
   it("shows a refusal rather than pretending the note was saved", async () => {
     resolveConflict.mockRejectedValue(new Error("One of these versions changed."));
     const host = await render();
-    await act(async () => button(host, "Keep this computer's").click());
 
-    await act(async () => button(host, "Done").click());
+    await act(async () => button(host, "Keep current").click());
 
     expect(host.textContent).toContain("Could not compare these versions");
     expect(host.textContent).not.toContain("Saved");
@@ -171,11 +303,19 @@ describe("saving", () => {
 });
 
 describe("a file that cannot be compared piece by piece", () => {
-  it("says so instead of showing an empty comparison", async () => {
-    readConflict.mockResolvedValue({ ...COMPARISON, kind: "binary", chunks: [] });
+  it("keeps the whole-file choices but mounts no comparison", async () => {
+    readConflict.mockResolvedValue({ ...COMPARISON, kind: "binary", text: null });
 
     const host = await render();
 
-    expect(host.textContent).toContain("can't be compared piece by piece");
+    expect(host.textContent).toContain("can't be compared");
+    expect(host.querySelector('[data-testid="codemirror-diff"]')).toBeNull();
+    expect(lastDiff.props).toBeNull();
+    expect(() => button(host, "Keep current")).not.toThrow();
+    expect(() => button(host, "Use incoming")).not.toThrow();
+    expect(() => button(host, "Keep both files")).not.toThrow();
+    // The three choices, plus the always-there help button — no layout
+    // toggle, since there is nothing to lay out.
+    expect(host.querySelectorAll("button")).toHaveLength(4);
   });
 });

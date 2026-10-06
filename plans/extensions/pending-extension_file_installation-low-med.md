@@ -69,6 +69,6 @@ No URL install, registry/marketplace, signing, auto-update, hostile-code isolati
 
 ## References
 
-- `plans/extensions/pending-extension_packaging_format-low-easy.md`
-- `plans/extensions/pending-extension_deferred_distribution-low-med.md`
-- `plans/extensions/pending-extension_settings-low-med.md`
+- `extensions/extension_packaging_format`
+- `extensions/extension_deferred_distribution`
+- `extensions/extension_settings`

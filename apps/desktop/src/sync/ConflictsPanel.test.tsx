@@ -59,7 +59,7 @@ describe("the list of things waiting on you", () => {
   it("says so plainly when there is nothing", async () => {
     const { host } = await render(<ConflictsPanel rootPath="/notes" onReview={() => undefined} />);
 
-    expect(host.textContent).toContain("Nothing waiting on a decision");
+    expect(host.textContent).toContain("No sync conflicts");
   });
 
   it("names each note and who else has a version of it", async () => {
@@ -67,8 +67,11 @@ describe("the list of things waiting on you", () => {
 
     const { host } = await render(<ConflictsPanel rootPath="/notes" onReview={() => undefined} />);
 
-    expect(host.querySelector('section[aria-label="Decisions needed"]')).not.toBeNull();
-    expect(host.querySelector("h3")?.textContent).toBe("Decisions needed");
+    expect(host.querySelector('section[aria-label="Sync conflicts"]')).not.toBeNull();
+    // The popout's PanelTitle names the panel and hosts its options menu —
+    // the body keeps only the explainer line and the cards.
+    expect(host.querySelector("h3")).toBeNull();
+    expect(host.textContent).toContain("Choose what to keep. Nothing is deleted until you decide.");
     expect(host.textContent).toContain("Meeting Notes.md");
     expect(host.textContent).toContain("Syncthing");
   });

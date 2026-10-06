@@ -6,14 +6,14 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use notify::{RecommendedWatcher, RecursiveMode};
-use notify_debouncer_full::{new_debouncer, DebounceEventResult, Debouncer, RecommendedCache};
+use notify_debouncer_full::{DebounceEventResult, Debouncer, RecommendedCache, new_debouncer};
 use tauri::{Emitter, Manager};
 
 use crate::commands::workspace::resolve_workspace_root;
-use crate::error::{lock_or_recover, NativeError};
+use crate::error::{NativeError, lock_or_recover};
 
 use super::{
-    announce_conflicts, collect_changes, Changes, WorkspaceChangedPayload, WORKSPACE_CHANGED_EVENT,
+    Changes, WORKSPACE_CHANGED_EVENT, WorkspaceChangedPayload, announce_conflicts, collect_changes,
 };
 
 /// How long to let a burst settle before reporting it.

@@ -1,4 +1,5 @@
 import type { JournalFieldDefinition, JournalFieldValue } from "@thinkbrain/core";
+import { useDismissable } from "@thinkbrain/ui";
 import { useEffect, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
@@ -39,8 +40,6 @@ export interface MetadataBottomSheetProps {
   readonly onAddOption?: (fieldId: string, option: string) => void;
 }
 
-const FOCUSABLE = 'button, input, select, textarea, [href], [tabindex]:not([tabindex="-1"])';
-
 export function MetadataBottomSheet({
   title,
   definitions,
@@ -53,43 +52,25 @@ export function MetadataBottomSheet({
   onDefineField,
   onAddOption
 }: MetadataBottomSheetProps) {
-  const sheetRef = useRef<HTMLDivElement>(null);
+  // Capture during render: useDismissable moves focus in an effect before the
+  // sheet's own effects run, so waiting until mount would capture the dialog.
+  const openerRef = useRef<HTMLElement | null>(
+    document.activeElement instanceof HTMLElement ? document.activeElement : null
+  );
+  const { containerRef } = useDismissable({ open: true, onDismiss });
   const swipeStart = useRef<number | null>(null);
   const inset = useKeyboardInset();
 
-  // Captured on mount and restored on unmount, so the sheet hands focus back to
-  // whatever opened it however it was dismissed (D78).
   useEffect(() => {
-    const opener = document.activeElement;
-    const first = sheetRef.current?.querySelector<HTMLElement>(FOCUSABLE);
-    (first ?? sheetRef.current)?.focus();
+    const background = document.getElementById("root");
+    const wasInert = background?.inert ?? false;
+    const opener = openerRef.current;
+    if (background) background.inert = true;
     return () => {
-      if (opener instanceof HTMLElement) opener.focus();
+      if (background) background.inert = wasInert;
+      opener?.focus();
     };
   }, []);
-
-  const onKeyDown = (event: React.KeyboardEvent): void => {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      onDismiss();
-      return;
-    }
-    if (event.key !== "Tab") return;
-    // Trapped: a phone dialog with focus loose behind it is unusable with a
-    // screen reader, which reads the note it is covering.
-    const focusable = [...(sheetRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? [])];
-    if (focusable.length === 0) return;
-    const first = focusable[0]!;
-    const last = focusable.at(-1)!;
-    const active = document.activeElement;
-    if (event.shiftKey && active === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && active === last) {
-      event.preventDefault();
-      first.focus();
-    }
-  };
 
   // Portalled to the body: a fixed element inside a transformed ancestor is
   // positioned against that ancestor instead of the viewport, and the sheet
@@ -105,12 +86,11 @@ export function MetadataBottomSheet({
         aria-hidden="true"
       />
       <div
-        ref={sheetRef}
+        ref={containerRef}
         role="dialog"
         aria-modal="true"
         aria-label={title}
         tabIndex={-1}
-        onKeyDown={onKeyDown}
         style={{ bottom: `${inset}px` }}
         className="fixed inset-x-0 z-50 flex flex-col gap-3 rounded-t-large border-t border-border bg-panel px-4 pb-6 pt-2 text-panel-foreground"
       >

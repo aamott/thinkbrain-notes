@@ -14,8 +14,9 @@
 
 import { useEffect, type Dispatch, type RefObject } from "react";
 
+import { appEvents } from "../events/appEvents";
 import { subscribeToNoteChanges } from "../events/noteChangeSubscription";
-import { editorTabId, type DesktopTabAction, type DesktopTabState } from "../tabs/tabModel";
+import { documentTabId, editorTabId, fileTabId, type DesktopTabAction, type DesktopTabState } from "../tabs/tabModel";
 import { planDocumentSync, type OpenDocument } from "./externalDocumentSync";
 
 /** Props for {@link useExternalDocumentSync}. */
@@ -59,20 +60,37 @@ export function useExternalDocumentSync({
     if (!workspacePath) return;
     const rootPath = workspacePath;
 
-    return subscribeToNoteChanges(
+    // A tab is identified by the path of its file, so a rename moves the tab
+    // rather than changing what it holds. Markdown files keep `editor:` tabs
+    // and everything else keeps `file:` tabs, so either id may be the match.
+    // This is not only about outside renames: renaming from the explorer left
+    // the tab pointing at a path nothing lived at, and saving it recreated
+    // the old file.
+    const retargetOpenTab = (oldRelativePath: string, newRelativePath: string) => {
+      const from = { rootPath, relativePath: oldRelativePath };
+      const to = { rootPath, relativePath: newRelativePath };
+      const open = tabStateRef.current.tabs.find(
+        (tab) => tab.id === editorTabId(from) || tab.id === fileTabId(from)
+      );
+      if (!open) return;
+      // The destination's own inferred kind decides the new id — an
+      // extension-changing rename moves the document to the other id scheme.
+      moveDocument(open.id, documentTabId(to));
+      dispatchTabs({ type: "retarget", from, to });
+    };
+
+    // `file.renamed` carries non-Markdown moves; it runs the same retarget but
+    // stays off `subscribeToNoteChanges` so note indexes never observe it.
+    const fileRenamed = appEvents.on("file.renamed", (event) => {
+      if (event.rootPath !== rootPath) return;
+      retargetOpenTab(event.oldRelativePath, event.newRelativePath);
+    });
+
+    const unsubscribeNotes = subscribeToNoteChanges(
       () => rootPath,
       (change) => {
-        // A tab is identified by the path of its file, so a rename moves the
-        // tab rather than changing what it holds. This is not only about
-        // outside renames: renaming from the explorer left the tab pointing at
-        // a path nothing lived at, and saving it recreated the old file.
         if (change.kind === "renamed") {
-          const from = { rootPath, relativePath: change.oldRelativePath };
-          const to = { rootPath, relativePath: change.newRelativePath };
-          const fromTabId = editorTabId(from);
-          if (!tabStateRef.current.tabs.some((tab) => tab.id === fromTabId)) return;
-          moveDocument(fromTabId, editorTabId(to));
-          dispatchTabs({ type: "retarget", from, to });
+          retargetOpenTab(change.oldRelativePath, change.newRelativePath);
           return;
         }
 
@@ -98,5 +116,10 @@ export function useExternalDocumentSync({
         }
       }
     );
+
+    return () => {
+      unsubscribeNotes();
+      void fileRenamed.dispose();
+    };
   }, [workspacePath, tabStateRef, dispatchTabs, moveDocument, markDocumentConflict, reloadDocumentInPlace]);
 }

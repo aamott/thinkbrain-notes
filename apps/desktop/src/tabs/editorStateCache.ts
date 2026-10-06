@@ -47,10 +47,6 @@ export function recallEditorState(key: string): RememberedEditor | undefined {
   return remembered.get(key);
 }
 
-/** Forgets a tab. A closed tab is gone, not parked. */
-export function releaseEditorState(key: string): void {
-  remembered.delete(key);
-}
 
 /**
  * Forgets every tab that is no longer open.

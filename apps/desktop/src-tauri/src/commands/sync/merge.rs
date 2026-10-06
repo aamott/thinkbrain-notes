@@ -1,10 +1,11 @@
-//! Turning two versions of a note into something a person can choose between.
+//! Deciding whether two versions of a note can be compared as text at all.
 //!
-//! The merge UI never sees a conflict marker. It is handed an ordered list of
-//! chunks — stretches both versions agree on, and stretches where they differ —
-//! and picking a side is picking one string over another. Markers are a
-//! serialisation format for a text editor; they are not a data structure, and
-//! parsing them back out of a merged buffer would be inventing one.
+//! The merge UI never sees a conflict marker, and the native side never sends
+//! one: for text it hands over the two complete documents and lets the
+//! frontend's own differ align them, and for anything else it hands over
+//! nothing but the verdict. Markers and segmented chunks are both a second
+//! representation of the same pair — one more thing to get wrong on the way
+//! to the write.
 //!
 //! Nothing here touches a disk or a repository, which is what lets every
 //! interesting case be a three-line test.
@@ -28,39 +29,24 @@ pub enum Kind {
     Binary,
 }
 
-/// One stretch of the comparison.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(tag = "kind", rename_all = "camelCase")]
-pub enum Chunk {
-    /// Both versions have this, unchanged.
-    Common { text: String },
-    /// The versions disagree. Either side may be empty — that is an insertion
-    /// on one side rather than a rewrite on both.
-    Choice { ours: String, theirs: String },
-}
-
-/// Segments two versions of a file into chunks.
+/// The two versions as text, in the order they were given.
 ///
-/// Line terminators stay inside the chunks, so concatenating one side's text
-/// across every chunk reproduces that version byte for byte. That is what makes
-/// "keep the left side of this chunk and the right of that one" a safe
-/// operation rather than an approximation — and it is the property the
-/// resolution write depends on.
-pub fn compare(ours: &[u8], theirs: &[u8]) -> (Kind, Vec<Chunk>) {
-    let (Some(ours), Some(theirs)) = (as_text(ours), as_text(theirs)) else {
-        return (Kind::Binary, Vec::new());
-    };
-    (Kind::Text, segment(ours, theirs))
+/// `None` when either side is not text — which is also the answer `kind_of`
+/// reports, so the classifier and the comparison can never disagree about
+/// whether a pair was readable.
+pub fn text_pair<'a>(first: &'a [u8], second: &'a [u8]) -> Option<(&'a str, &'a str)> {
+    Some((as_text(first)?, as_text(second)?))
 }
 
-/// Whether these two can be compared line by line, without doing it.
+/// Whether these two can be compared line by line.
 ///
 /// For the resolution write, which needs the answer to refuse assembled text
-/// over a pair of images and has no use for the chunks.
-pub fn kind_of(ours: &[u8], theirs: &[u8]) -> Kind {
-    match (as_text(ours), as_text(theirs)) {
-        (Some(_), Some(_)) => Kind::Text,
-        _ => Kind::Binary,
+/// over a pair of images and has no use for the documents themselves.
+pub fn kind_of(first: &[u8], second: &[u8]) -> Kind {
+    if text_pair(first, second).is_some() {
+        Kind::Text
+    } else {
+        Kind::Binary
     }
 }
 
@@ -77,216 +63,74 @@ fn as_text(bytes: &[u8]) -> Option<&str> {
     std::str::from_utf8(bytes).ok()
 }
 
-fn segment(ours: &str, theirs: &str) -> Vec<Chunk> {
-    use gix::diff::blob::{Algorithm, Diff, InternedInput};
-
-    let input = InternedInput::new(ours, theirs);
-    let mut diff = Diff::compute(Algorithm::Histogram, &input);
-    // Slides the hunk boundaries the way git does, so a chunk starts where a
-    // person would say the change starts rather than at the first byte the
-    // algorithm happened to notice.
-    diff.postprocess_lines(&input);
-
-    let mut chunks = Vec::new();
-    // Only our side is tracked: between hunks the two versions agree, so the
-    // run of lines is the same one on either side, and after the last hunk the
-    // rest of the file is common too.
-    let mut ours_at = 0u32;
-    for hunk in diff.hunks() {
-        push_common(
-            &mut chunks,
-            join(&input, Side::Ours, ours_at..hunk.before.start),
-        );
-        push_choice(
-            &mut chunks,
-            join(&input, Side::Ours, hunk.before.clone()),
-            join(&input, Side::Theirs, hunk.after.clone()),
-        );
-        ours_at = hunk.before.end;
-    }
-    push_common(
-        &mut chunks,
-        join(&input, Side::Ours, ours_at..input.before.len() as u32),
-    );
-    chunks
-}
-
-#[derive(Clone, Copy)]
-enum Side {
-    Ours,
-    Theirs,
-}
-
-fn join(
-    input: &gix::diff::blob::InternedInput<&str>,
-    side: Side,
-    range: std::ops::Range<u32>,
-) -> String {
-    let tokens = match side {
-        Side::Ours => &input.before,
-        Side::Theirs => &input.after,
-    };
-    tokens[range.start as usize..range.end as usize]
-        .iter()
-        .map(|token| input.interner[*token])
-        .collect()
-}
-
-/// Adds a common stretch, unless there is nothing in it.
-///
-/// Two adjacent hunks, or a change at the very start of the file, would
-/// otherwise leave an empty chunk for the UI to render as a blank row.
-fn push_common(chunks: &mut Vec<Chunk>, text: String) {
-    if !text.is_empty() {
-        chunks.push(Chunk::Common { text });
-    }
-}
-
-fn push_choice(chunks: &mut Vec<Chunk>, ours: String, theirs: String) {
-    if !ours.is_empty() || !theirs.is_empty() {
-        chunks.push(Chunk::Choice { ours, theirs });
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// One side of the whole comparison, as the panel assembles it from the
-    /// user's picks. Lives here because the panel is the only thing that does
-    /// this for real; the tests do it to hold the round-trip property.
-    fn side_text(chunks: &[Chunk], side_is_ours: bool) -> String {
-        chunks
-            .iter()
-            .map(|chunk| match chunk {
-                Chunk::Common { text } => text.as_str(),
-                Chunk::Choice { ours, theirs } => {
-                    if side_is_ours {
-                        ours.as_str()
-                    } else {
-                        theirs.as_str()
-                    }
-                }
-            })
-            .collect()
-    }
-
-    fn chunks(ours: &str, theirs: &str) -> Vec<Chunk> {
-        let (kind, chunks) = compare(ours.as_bytes(), theirs.as_bytes());
-        assert_eq!(kind, Kind::Text, "the versions were not treated as text");
-        chunks
-    }
-
-    fn common(text: &str) -> Chunk {
-        Chunk::Common {
-            text: text.to_string(),
-        }
-    }
-
-    fn choice(ours: &str, theirs: &str) -> Chunk {
-        Chunk::Choice {
-            ours: ours.to_string(),
-            theirs: theirs.to_string(),
-        }
-    }
-
+    /// The comparison hands the frontend both complete documents, exactly as
+    /// they were read — anything less and "put the recorded version back"
+    /// would restore something other than what was shown.
     #[test]
-    fn two_identical_versions_are_all_agreement() {
+    fn text_versions_come_through_complete_and_in_order() {
+        let (first, second) =
+            text_pair(b"# Note\nmine\nend\n", b"# Note\ntheirs\nend\n").expect("text is text");
+
+        assert_eq!(first, "# Note\nmine\nend\n");
+        assert_eq!(second, "# Note\ntheirs\nend\n");
         assert_eq!(
-            chunks("# Note\nbody\n", "# Note\nbody\n"),
-            [common("# Note\nbody\n")]
+            kind_of(b"# Note\nmine\nend\n", b"# Note\ntheirs\nend\n"),
+            Kind::Text
         );
     }
 
+    /// Two empty files are still text — there is simply nothing to show.
     #[test]
-    fn a_changed_line_is_a_choice_between_the_lines_around_it() {
-        assert_eq!(
-            chunks("# Note\nmine\nend\n", "# Note\ntheirs\nend\n"),
-            [
-                common("# Note\n"),
-                choice("mine\n", "theirs\n"),
-                common("end\n")
-            ]
-        );
+    fn two_empty_versions_are_still_text() {
+        assert_eq!(text_pair(b"", b""), Some(("", "")));
+        assert_eq!(kind_of(b"", b""), Kind::Text);
     }
 
-    /// A line only one side has is still a choice — with an empty option, which
-    /// is how "leave it out" is offered.
+    /// Text beyond ASCII is still text, byte for byte.
     #[test]
-    fn a_line_one_side_added_is_a_choice_against_nothing() {
-        assert_eq!(
-            chunks("# Note\nend\n", "# Note\nextra\nend\n"),
-            [common("# Note\n"), choice("", "extra\n"), common("end\n")]
-        );
-    }
+    fn text_beyond_ascii_is_text() {
+        let (first, second) = text_pair(
+            "# ノート\ncafé\n".as_bytes(),
+            "# ノート\nemoji ☕️\n".as_bytes(),
+        )
+        .expect("utf-8 is text");
 
-    #[test]
-    fn a_change_at_the_very_start_leaves_no_empty_chunk_before_it() {
-        assert_eq!(
-            chunks("mine\nend\n", "theirs\nend\n"),
-            [choice("mine\n", "theirs\n"), common("end\n")]
-        );
-    }
-
-    /// The property everything else rests on: a side of the chunks is that
-    /// version, exactly. Anything less and picking "keep mine" would rewrite
-    /// the file the user asked to keep.
-    #[test]
-    fn each_side_of_the_chunks_rebuilds_that_version_exactly() {
-        for (ours, theirs) in [
-            ("a\nb\nc\n", "a\nB\nc\n"),
-            ("", "new\n"),
-            ("only mine\n", ""),
-            ("no trailing newline", "no trailing newline!"),
-            ("windows\r\nlines\r\n", "windows\nlines\n"),
-            ("héllo\n— dash —\n", "héllo\n— em —\n"),
-            ("one\n\n\nthree\n", "one\nthree\n"),
-        ] {
-            let (kind, chunks) = compare(ours.as_bytes(), theirs.as_bytes());
-            assert_eq!(kind, Kind::Text, "{ours:?} vs {theirs:?} was not text");
-            assert_eq!(side_text(&chunks, true), ours, "our side did not rebuild");
-            assert_eq!(
-                side_text(&chunks, false),
-                theirs,
-                "their side did not rebuild"
-            );
-        }
-    }
-
-    /// The UI asks again every time it is opened, and a comparison that moved
-    /// between two looks at the same files would move the user's selections.
-    #[test]
-    fn the_same_two_versions_always_segment_the_same_way() {
-        let ours = "intro\nalpha\nbeta\nshared\ngamma\n";
-        let theirs = "intro\nALPHA\nbeta\nshared\nGAMMA\ndelta\n";
-
-        assert_eq!(chunks(ours, theirs), chunks(ours, theirs));
+        assert_eq!(first, "# ノート\ncafé\n");
+        assert_eq!(second, "# ノート\nemoji ☕️\n");
     }
 
     /// A line diff of a PNG is noise at best and a corrupted file at worst, so
     /// binary versions are compared as whole files and nothing else.
     #[test]
     fn a_file_with_a_nul_byte_is_never_diffed() {
-        let (kind, chunks) = compare(b"PNG\x00\x01\x02mine", b"PNG\x00\x01\x02theirs");
-
-        assert_eq!(kind, Kind::Binary);
-        assert!(chunks.is_empty(), "a binary file was segmented");
+        assert_eq!(
+            text_pair(b"PNG\x00\x01\x02mine", b"PNG\x00\x01\x02theirs"),
+            None
+        );
+        assert_eq!(
+            kind_of(b"PNG\x00\x01\x02mine", b"PNG\x00\x01\x02theirs"),
+            Kind::Binary
+        );
     }
 
     /// Text in an encoding that is not UTF-8 cannot survive being turned into a
     /// `String` and written back, so it is offered as a whole-file choice too.
     #[test]
     fn a_file_that_is_not_utf8_is_treated_as_binary() {
-        let (kind, _) = compare(&[0xC3, 0x28, b'\n'], b"fine\n");
-
-        assert_eq!(kind, Kind::Binary);
+        assert_eq!(text_pair(&[0xC3, 0x28, b'\n'], b"fine\n"), None);
+        assert_eq!(kind_of(&[0xC3, 0x28, b'\n'], b"fine\n"), Kind::Binary);
     }
 
     /// One side being binary is enough: whatever the other side is, there is no
     /// line-by-line comparison to offer between them.
     #[test]
     fn one_binary_side_makes_the_whole_comparison_binary() {
-        assert_eq!(compare(b"plain text\n", b"PNG\x00data").0, Kind::Binary);
+        assert_eq!(kind_of(b"plain text\n", b"PNG\x00data"), Kind::Binary);
+        assert_eq!(kind_of(b"PNG\x00data", b"plain text\n"), Kind::Binary);
     }
 
     /// A NUL past the sniff window is a file we call text. That is git's
@@ -297,11 +141,6 @@ mod tests {
         let mut long = vec![b'a'; BINARY_SNIFF];
         long.push(0);
 
-        assert_eq!(compare(&long, &long).0, Kind::Text);
-    }
-
-    #[test]
-    fn two_empty_versions_have_nothing_to_choose_between() {
-        assert_eq!(chunks("", ""), []);
+        assert_eq!(kind_of(&long, &long), Kind::Text);
     }
 }

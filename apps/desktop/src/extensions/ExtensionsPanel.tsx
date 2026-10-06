@@ -1,4 +1,5 @@
 import { useCallback, useState, useSyncExternalStore } from "react";
+import { getErrorMessage } from "@thinkbrain/core";
 
 import { pickDirectoryPath } from "../native/dialogs";
 import { getExtensionBootstrap, type BootstrapEntry } from "./bootstrapRef";
@@ -9,6 +10,30 @@ const EMPTY: readonly BootstrapEntry[] = [];
 const NO_FAILURES: readonly StartupFailure[] = [];
 
 const noop = (): void => undefined;
+
+/** Anything in the extensions layer that publishes a slice by subscription. */
+interface SubscribedSliceSource {
+  subscribe(listener: () => void): () => void;
+}
+
+/**
+ * Subscribes to a lazily-available source (absent until bootstrap wires it) and
+ * reads `empty` while it is missing.
+ */
+function useSubscribedSlice<S extends SubscribedSliceSource, T>(
+  getSource: () => S | null | undefined,
+  read: (source: S) => T,
+  empty: T
+): T {
+  return useSyncExternalStore(
+    (listener: () => void): (() => void) => getSource()?.subscribe(listener) ?? noop,
+    () => {
+      const source = getSource();
+      return source ? read(source) : empty;
+    },
+    () => empty
+  );
+}
 
 export interface ExtensionsPanelProps {
   /** Injected by tests; defaults to the app-wide bootstrap. */
@@ -33,18 +58,16 @@ const STATUS_LABELS: Record<BootstrapEntry["status"], string> = {
  * panel, and this list must not keep claiming it has not started.
  */
 export function ExtensionsPanel({ entries }: ExtensionsPanelProps) {
-  const live = useSyncExternalStore(
-    (listener: () => void): (() => void) =>
-      getExtensionBootstrap()?.subscribe(listener) ?? noop,
-    (): readonly BootstrapEntry[] => getExtensionBootstrap()?.entries() ?? EMPTY,
-    (): readonly BootstrapEntry[] => getExtensionBootstrap()?.entries() ?? EMPTY
+  const live = useSubscribedSlice(
+    getExtensionBootstrap,
+    (bootstrap) => bootstrap.entries(),
+    EMPTY
   );
   const resolved = entries ?? live;
-  const startupFailures = useSyncExternalStore(
-    (listener: () => void): (() => void) =>
-      getLocalExtensions()?.subscribe(listener) ?? noop,
-    (): readonly StartupFailure[] => getLocalExtensions()?.startupFailures() ?? NO_FAILURES,
-    (): readonly StartupFailure[] => getLocalExtensions()?.startupFailures() ?? NO_FAILURES
+  const startupFailures = useSubscribedSlice(
+    getLocalExtensions,
+    (local) => local.startupFailures(),
+    NO_FAILURES
   );
   const [errors, setErrors] = useState<readonly string[]>([]);
   const [busy, setBusy] = useState(false);
@@ -74,7 +97,7 @@ export function ExtensionsPanel({ entries }: ExtensionsPanelProps) {
         if (outcome) report(outcome);
         else setErrors([]);
       } catch (error: unknown) {
-        setErrors([error instanceof Error ? error.message : String(error)]);
+        setErrors([getErrorMessage(error)]);
       } finally {
         setBusy(false);
       }
@@ -133,7 +156,7 @@ export function ExtensionsPanel({ entries }: ExtensionsPanelProps) {
           <p className="m-0 text-muted-foreground text-xs">No extensions are installed.</p>
         </div>
       ) : (
-        <ul className="m-0 list-none overflow-y-auto p-2" aria-label="Installed extensions">
+        <ul data-phone-scroll-clearance className="m-0 list-none overflow-y-auto p-2" aria-label="Installed extensions">
           {resolved.map((entry) => (
             <li key={entry.id} className="rounded-small px-2 py-2">
               <div className="flex items-baseline justify-between gap-2">

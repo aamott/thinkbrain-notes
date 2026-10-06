@@ -8,18 +8,17 @@
 use std::path::Path;
 #[cfg(not(test))]
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::sync::atomic::AtomicU64;
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::lock_or_recover;
 use crate::NativeError;
+use crate::error::lock_or_recover;
 
 use super::credentials::{
-    delete_profile, get_legacy, get_profile, is_clean_https_url, storage_status, store_profile,
-    StorageKind,
+    StorageKind, delete_profile, get_legacy, get_profile, is_clean_https_url, storage_status,
+    store_profile,
 };
 
 /// Workspace setting naming which saved sign-in this folder uses.
@@ -210,10 +209,7 @@ pub(super) fn upsert_profile(
     label: Option<String>,
 ) -> Result<SignInProfile, NativeError> {
     if !is_clean_https_url(destination) {
-        return Err(NativeError::new(
-            "sync.credentials_need_https",
-            "Paste a secret-free HTTPS git link before saving a sign-in.",
-        ));
+        return Err(credentials_need_https());
     }
     if username.is_empty() {
         return Err(NativeError::new(
@@ -227,12 +223,7 @@ pub(super) fn upsert_profile(
             "Enter an access token.",
         ));
     }
-    let host = host_of(destination).ok_or_else(|| {
-        NativeError::new(
-            "sync.credentials_need_https",
-            "Paste a secret-free HTTPS git link before saving a sign-in.",
-        )
-    })?;
+    let host = host_of(destination).ok_or_else(credentials_need_https)?;
     let _update = lock_or_recover(&CATALOG_UPDATE);
     let mut catalog = load_catalog()?;
     let existing_id = profile_id
@@ -241,10 +232,7 @@ pub(super) fn upsert_profile(
         .filter(|id| !id.is_empty());
     let profile = if let Some(id) = existing_id {
         let Some(index) = catalog.iter().position(|profile| profile.id == id) else {
-            return Err(NativeError::new(
-                "sync.sign_in_missing",
-                "The selected sign-in is no longer saved on this computer.",
-            ));
+            return Err(sign_in_missing());
         };
         if catalog[index].host != host {
             return Err(wrong_host());
@@ -326,22 +314,28 @@ pub(super) fn require_saved_profile(
     let profile = catalog
         .into_iter()
         .find(|profile| profile.id == id)
-        .ok_or_else(|| {
-            NativeError::new(
-                "sync.sign_in_missing",
-                "The selected sign-in is no longer saved on this computer.",
-            )
-        })?;
+        .ok_or_else(sign_in_missing)?;
     if get_profile(id)?.is_none() {
-        return Err(NativeError::new(
-            "sync.sign_in_missing",
-            "The selected sign-in is no longer saved on this computer.",
-        ));
+        return Err(sign_in_missing());
     }
     if profile.host != host {
         return Err(wrong_host());
     }
     Ok(profile)
+}
+
+fn sign_in_missing() -> NativeError {
+    NativeError::new(
+        "sync.sign_in_missing",
+        "The selected sign-in is no longer saved on this computer.",
+    )
+}
+
+fn credentials_need_https() -> NativeError {
+    NativeError::new(
+        "sync.credentials_need_https",
+        "Paste a secret-free HTTPS git link before saving a sign-in.",
+    )
 }
 
 fn wrong_host() -> NativeError {
@@ -401,12 +395,7 @@ fn migrate_legacy(
     username: &str,
     secret: &str,
 ) -> Result<SignInProfile, NativeError> {
-    let host = host_of(destination).ok_or_else(|| {
-        NativeError::new(
-            "sync.credentials_need_https",
-            "Paste a secret-free HTTPS git link before saving a sign-in.",
-        )
-    })?;
+    let host = host_of(destination).ok_or_else(credentials_need_https)?;
     let _update = lock_or_recover(&CATALOG_UPDATE);
     let mut catalog = load_catalog()?;
     let id = new_profile_id();
@@ -440,7 +429,9 @@ fn schedule_setup(
     };
     let key = root.to_string_lossy().to_string();
     let Some(engine) = super::registry::engine(&key) else {
-        eprintln!("[sync] git link saved; this folder's history is not being kept, so it was not checked yet");
+        eprintln!(
+            "[sync] git link saved; this folder's history is not being kept, so it was not checked yet"
+        );
         return;
     };
     super::registry::start_setup_round(
@@ -454,12 +445,7 @@ fn schedule_setup(
 }
 
 fn new_profile_id() -> String {
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|elapsed| elapsed.as_nanos() as u64)
-        .unwrap_or(0);
-    let n = NEXT_ID.fetch_add(1, Ordering::Relaxed);
-    format!("p{now:016x}{n:08x}")
+    super::unique_id("p", &NEXT_ID)
 }
 
 fn load_catalog() -> Result<Vec<SignInProfile>, NativeError> {

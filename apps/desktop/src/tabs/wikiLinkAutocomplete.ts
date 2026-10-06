@@ -3,6 +3,8 @@ import type { Extension } from "@codemirror/state";
 import { ViewPlugin, type ViewUpdate } from "@codemirror/view";
 import type { NoteIndexEntry } from "@thinkbrain/core";
 
+import { noteTitle } from "../lib/utils";
+
 /**
  * Maximum number of completions returned in one popup.
  *
@@ -26,7 +28,7 @@ function baseName(fileName: string): string {
  * otherwise the file name without extension.
  */
 function labelFor(note: NoteIndexEntry): string {
-  return note.title?.trim() ? note.title.trim() : baseName(note.fileName);
+  return noteTitle(note.title, note.fileName);
 }
 
 interface RankedCompletion extends Completion {

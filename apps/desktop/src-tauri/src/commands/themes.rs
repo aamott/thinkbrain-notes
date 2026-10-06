@@ -3,10 +3,10 @@
 //! Discovers and lists `.tbtheme.json` theme files available to the desktop app.
 //!
 //! Themes live in `<app_data_dir>/themes/`. On first run (empty directory), the
-//! bundled preset themes (shipped via `tauri.conf.json > bundle.resources`) are
-//! copied into the directory so users immediately see a starter set. The
-//! directory is then self-managed: users can drop additional `.tbtheme.json`
-//! files in by hand, or import them via the settings UI.
+//! preset themes embedded in the binary are written into the directory so
+//! users immediately see a starter set. The directory is then self-managed:
+//! users can drop additional `.tbtheme.json` files in by hand, or import them
+//! via the settings UI.
 //!
 //! The `list_themes` command returns one entry per discovered file, with the
 //! theme's display `name` (parsed from the JSON `name` field) and absolute
@@ -14,29 +14,57 @@
 //! file is still selectable (and the frontend's parser will surface the error
 //! when the user picks it).
 
-use crate::error::{failed, NativeError};
+use crate::commands::workspace::ContainedPathFailure;
+use crate::error::{NativeError, failed};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
-use tauri::path::BaseDirectory;
 use tauri::Manager;
 
 /// File extension for theme files (without the leading dot).
 const THEME_EXTENSION: &str = "tbtheme.json";
 
-/// Filenames of the preset themes bundled via `tauri.conf.json > bundle.resources`.
+/// Preset themes embedded in the binary, seeded on first run.
 ///
-/// These are copied into the user's themes directory on first run. The list must
-/// match the glob in `tauri.conf.json` (`presets/themes/*.tbtheme.json`).
-const PRESET_THEME_FILES: &[&str] = &[
-    "forest-dark.tbtheme.json",
-    "forest-gray.tbtheme.json",
-    "solarized-light.tbtheme.json",
-    "one-dark-pro.tbtheme.json",
-    "gruvbox-light.tbtheme.json",
-    "nord-light.tbtheme.json",
-    "catppuccin-latte.tbtheme.json",
-    "pastel-pink.tbtheme.json",
+/// `include_str!` bakes each file in at compile time so seeding does not
+/// depend on the bundle's resource directory — which cannot be resolved the
+/// same way on Android, where the picker otherwise comes back empty — and so
+/// `cargo test` and unbundled dev runs behave identically to packaged ones.
+/// The file list still matches the glob in `tauri.conf.json`
+/// (`presets/themes/*.tbtheme.json`); keep the two in sync when adding one.
+const PRESET_THEMES: &[(&str, &str)] = &[
+    (
+        "forest-dark.tbtheme.json",
+        include_str!("../../presets/themes/forest-dark.tbtheme.json"),
+    ),
+    (
+        "forest-gray.tbtheme.json",
+        include_str!("../../presets/themes/forest-gray.tbtheme.json"),
+    ),
+    (
+        "solarized-light.tbtheme.json",
+        include_str!("../../presets/themes/solarized-light.tbtheme.json"),
+    ),
+    (
+        "one-dark-pro.tbtheme.json",
+        include_str!("../../presets/themes/one-dark-pro.tbtheme.json"),
+    ),
+    (
+        "gruvbox-light.tbtheme.json",
+        include_str!("../../presets/themes/gruvbox-light.tbtheme.json"),
+    ),
+    (
+        "nord-light.tbtheme.json",
+        include_str!("../../presets/themes/nord-light.tbtheme.json"),
+    ),
+    (
+        "catppuccin-latte.tbtheme.json",
+        include_str!("../../presets/themes/catppuccin-latte.tbtheme.json"),
+    ),
+    (
+        "pastel-pink.tbtheme.json",
+        include_str!("../../presets/themes/pastel-pink.tbtheme.json"),
+    ),
 ];
 
 /// One discovered theme file returned by `list_themes`.
@@ -67,7 +95,7 @@ pub fn list_themes(app: tauri::AppHandle) -> Result<Vec<ThemeEntry>, NativeError
     let themes_dir = themes_dir(&app)?;
     // Ensure the directory exists, then seed presets on first run.
     ensure_themes_directory(&themes_dir)?;
-    seed_missing_presets(&app, &themes_dir)?;
+    seed_missing_presets(&themes_dir)?;
     // List and parse the discovered files.
     let entries = list_theme_entries(&themes_dir)?;
     Ok(entries)
@@ -111,28 +139,23 @@ pub fn ensure_themes_directory(themes_dir: &Path) -> Result<(), NativeError> {
     })
 }
 
-/// Copies any missing bundled preset themes into the themes directory.
+/// Writes any missing embedded preset themes into the themes directory.
 ///
 /// On every launch, each preset that does not already exist in the destination
-/// is copied in. User edits to a preset are never overwritten (the per-file
+/// is written. User edits to a preset are never overwritten (the per-file
 /// `exists()` check guards this), and user-added themes are untouched. This
 /// ensures new presets shipped in an app update appear without requiring the
-/// user to wipe their themes directory. Missing preset resources (e.g. dev mode
-/// before bundling) are logged and skipped rather than failing the whole
-/// command — the picker still works, just without those presets.
+/// user to wipe their themes directory.
 ///
-/// Copy failures (disk full, permissions) are collected across all presets so
-/// every copy is attempted, then surfaced as a typed `NativeError` listing the
-/// failed filenames. Resource-resolution failures (dev mode without bundling)
-/// are still logged and skipped, since they are expected in `cargo test` and
-/// unbundled dev runs.
+/// Write failures (disk full, permissions) are collected across all presets so
+/// every write is attempted, then surfaced as a typed `NativeError` listing
+/// the failed filenames.
 ///
 /// Args:
-///   app: Tauri handle used to resolve bundled resource paths.
 ///   themes_dir: Destination directory (already created).
-pub fn seed_missing_presets(app: &tauri::AppHandle, themes_dir: &Path) -> Result<(), NativeError> {
-    let mut copy_failures: Vec<String> = Vec::new();
-    for preset_file_name in PRESET_THEME_FILES {
+pub fn seed_missing_presets(themes_dir: &Path) -> Result<(), NativeError> {
+    let mut write_failures: Vec<String> = Vec::new();
+    for (preset_file_name, contents) in PRESET_THEMES {
         let destination = themes_dir.join(preset_file_name);
         // Never overwrite an existing file — preserves user edits to a preset
         // and user-added themes that happen to share a preset filename.
@@ -140,56 +163,21 @@ pub fn seed_missing_presets(app: &tauri::AppHandle, themes_dir: &Path) -> Result
             continue;
         }
 
-        // Resolve the bundled resource path. In dev mode (before bundling), the
-        // resource may not exist at the bundled location; fall back to the
-        // source directory so newly added presets are immediately seeded.
-        let resource_path = app
-            .path()
-            .resolve(
-                format!("presets/themes/{preset_file_name}"),
-                BaseDirectory::Resource,
-            )
-            .ok()
-            .filter(|p| p.exists())
-            .or_else(|| {
-                let dev_path = PathBuf::from("presets/themes").join(preset_file_name);
-                if dev_path.exists() {
-                    Some(dev_path)
-                } else {
-                    None
-                }
-            })
-            .or_else(|| {
-                let dev_path =
-                    PathBuf::from("apps/desktop/src-tauri/presets/themes").join(preset_file_name);
-                if dev_path.exists() {
-                    Some(dev_path)
-                } else {
-                    None
-                }
-            });
-
-        let Some(resource_path) = resource_path else {
-            // Resource not found in bundle or dev sources. Skip.
-            eprintln!("[themes] resource path not found for {preset_file_name}");
-            continue;
-        };
-
-        // Copy the file. A failure on one preset does not abort the others, but
-        // is collected and surfaced after the loop instead of swallowed.
-        if let Err(error) = fs::copy(&resource_path, &destination) {
-            eprintln!("[themes] failed to copy preset {preset_file_name}: {error}");
-            copy_failures.push(format!("{preset_file_name}: {error}"));
+        // A failure on one preset does not abort the others, but is collected
+        // and surfaced after the loop instead of swallowed.
+        if let Err(error) = fs::write(&destination, contents) {
+            eprintln!("[themes] failed to write preset {preset_file_name}: {error}");
+            write_failures.push(format!("{preset_file_name}: {error}"));
         }
     }
 
-    if copy_failures.is_empty() {
+    if write_failures.is_empty() {
         Ok(())
     } else {
         Err(failed(
-            "themes.preset_copy_failed",
-            "One or more bundled preset themes could not be copied into the themes directory.",
-            copy_failures.join("; "),
+            "themes.preset_write_failed",
+            "One or more preset themes could not be written into the themes directory.",
+            write_failures.join("; "),
         ))
     }
 }
@@ -258,29 +246,23 @@ pub fn read_theme_file(app: tauri::AppHandle, path: String) -> Result<Option<Str
 
 /// Resolves an existing theme file and rejects paths outside the themes directory.
 fn resolve_theme_file_path(themes_dir: &Path, path: &Path) -> Result<PathBuf, NativeError> {
-    let canonical_themes_dir = themes_dir.canonicalize().map_err(|error| {
-        failed(
+    match super::workspace::resolve_contained_existing_path(themes_dir, path) {
+        Ok((_, canonical_path)) => Ok(canonical_path),
+        Err(ContainedPathFailure::Base(error)) => Err(failed(
             "themes.read_failed",
             "Failed to resolve the themes directory.",
             error,
-        )
-    })?;
-    let canonical_path = path.canonicalize().map_err(|error| {
-        failed(
+        )),
+        Err(ContainedPathFailure::Target(error)) => Err(failed(
             "themes.read_failed",
             "Failed to resolve the theme file.",
             error,
-        )
-    })?;
-
-    if !canonical_path.starts_with(&canonical_themes_dir) {
-        return Err(NativeError::new(
+        )),
+        Err(ContainedPathFailure::Outside) => Err(NativeError::new(
             "themes.path_outside_themes_dir",
             "Theme file path must stay inside the themes directory.",
-        ));
+        )),
     }
-
-    Ok(canonical_path)
 }
 
 /// Returns true if the path has the `.tbtheme.json` extension (case-sensitive).

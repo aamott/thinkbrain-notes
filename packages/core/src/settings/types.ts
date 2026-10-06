@@ -53,6 +53,14 @@ export interface SettingDefinitionBase {
   readonly control?: string;
   /** Whether the value is safe to export/import across machines. */
   readonly portable?: boolean;
+  /**
+   * Hides the row behind the settings screen's "Show advanced settings"
+   * toggle. Advanced means "most people never need this", not "dangerous" or
+   * "unsupported": the setting validates, exports and imports like any other,
+   * and the UI reveals it anyway when a search lands on it or when its value
+   * is no longer the default.
+   */
+  readonly advanced?: boolean;
   /** Inclusive lower bound for `number` settings. */
   readonly min?: number;
   /** Inclusive upper bound for `number` settings. */

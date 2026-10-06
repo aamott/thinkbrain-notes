@@ -8,17 +8,19 @@
 //! for free — our repository lives in app data and the walk skips every
 //! dot-directory, `.git` included — while the second cost the whole feature to
 //! the people most likely to have a notes folder under version control.
-//! So a vault with its own `.git` is recorded like any other, and told so.
+//! So a vault with its own `.git` is recorded like any other, and told so —
+//! and when no git link is configured, that `.git` is also imported read-only
+//! as a source of established history (see `history_ingest`).
 
 use std::path::{Path, PathBuf};
 
-use crate::commands::workspace::{
-    is_ignored_entry_name, stable_workspace_hash, MAX_WORKSPACE_ENTRIES,
-};
 use crate::NativeError;
+use crate::commands::workspace::{
+    MAX_WORKSPACE_ENTRIES, is_ignored_entry_name, stable_workspace_hash,
+};
 
 use super::failed;
-use super::{hidden_repo, snapshot};
+use super::{hidden_repo, history_ingest, snapshot};
 
 /// A vault Auto Sync keeps history for.
 pub struct ManagedWorkspace {
@@ -35,9 +37,10 @@ pub struct ManagedWorkspace {
     pub took_first_snapshot: bool,
     /// Whether the vault is also a git repository of the user's own.
     ///
-    /// Carried so a window can say so. It changes nothing about what we do:
-    /// our repository is elsewhere, and their `.git` is a dot-directory, which
-    /// the walk already skips along with every other.
+    /// Carried so a window can say so. The user's `.git` stays read-only:
+    /// without a configured link its history is imported into ours as a
+    /// source ref, but it never becomes the repository sync writes to — that
+    /// lives in app data, and `.git` is a dot-directory the note walk skips.
     pub has_own_git: bool,
 }
 
@@ -95,12 +98,33 @@ pub fn hidden_repo_path(app_data_dir: &Path, canonical_root: &str) -> PathBuf {
 
 /// Opens or creates the hidden repository for `vault`, taking the first
 /// snapshot if there is nothing recorded yet.
-pub fn bootstrap(app_data_dir: &Path, vault: &Path) -> Result<ManagedWorkspace, NativeError> {
+///
+/// A vault's own `.git` is imported read-only into the hidden repository —
+/// unless `git_link_configured`, in which case the configured link is the
+/// canonical source and its history arrives through the network fetch, not
+/// from the local clone.
+pub fn bootstrap(
+    app_data_dir: &Path,
+    vault: &Path,
+    git_link_configured: bool,
+) -> Result<ManagedWorkspace, NativeError> {
     let has_own_git = vault.join(".git").exists();
 
     let git_dir = hidden_repo_path(app_data_dir, &vault.to_string_lossy());
     let repo = hidden_repo::open_or_create(&git_dir, vault)?;
     write_exclude_file(&git_dir)?;
+
+    if !git_link_configured {
+        // A detached checkout is the one import failure that pauses rather
+        // than aborts: nothing about the vault is broken, the user just needs
+        // to pick a branch before history import or sync can resume. Local
+        // recording and previously imported history carry on meanwhile.
+        if own_git_detached(vault) {
+            eprintln!("[sync] .git is not on a branch; history import paused until it is");
+        } else if let Some(imported) = history_ingest::ingest_workspace_git(&repo, vault)? {
+            super::history_source::activate(&repo, &imported.reference)?;
+        }
+    }
 
     let took_first_snapshot = snapshot::head_commit(&repo)?.is_none();
     if took_first_snapshot {
@@ -118,6 +142,24 @@ pub fn bootstrap(app_data_dir: &Path, vault: &Path) -> Result<ManagedWorkspace, 
         took_first_snapshot,
         has_own_git,
     })
+}
+
+/// Whether the vault's own repository exists and points at no branch.
+///
+/// `false` covers "no `.git` at all" and "cannot open it" alike: a `.git`
+/// that fails to open still reaches [`history_ingest::ingest_workspace_git`],
+/// where the same failure is a loud import error instead of a silent skip.
+fn own_git_detached(vault: &Path) -> bool {
+    if std::fs::symlink_metadata(vault.join(".git")).is_err() {
+        return false;
+    }
+    match gix::open(vault) {
+        Ok(source) => source
+            .head()
+            .map(|head| head.is_detached())
+            .unwrap_or(false),
+        Err(_) => false,
+    }
 }
 
 /// Writes the ignore rules into the repository rather than the vault.

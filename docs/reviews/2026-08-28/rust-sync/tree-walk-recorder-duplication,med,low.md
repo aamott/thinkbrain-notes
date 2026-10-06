@@ -1,0 +1,7 @@
+- name: Consolidate repeated Git tree recording
+- file: /media/adam/extex/projects/thinkbrain-notes/apps/desktop/src-tauri/src/commands/sync/apply.rs
+- file: /media/adam/extex/projects/thinkbrain-notes/apps/desktop/src-tauri/src/commands/sync/snapshot.rs
+- file: /media/adam/extex/projects/thinkbrain-notes/apps/desktop/src-tauri/src/commands/sync/maintain.rs
+- lines: apply.rs 359-411; snapshot.rs 370-389; maintain.rs 268-293
+- description: These three paths each resolve a Git tree, traverse it breadth-first into `gix::traverse::tree::Recorder`, and filter `recorder.records`. Extract a shared recorder helper while preserving each caller's error code and filter. `apply.rs` can then replace three identical `history_read_failed` mappings as part of the same change. Expected reduction is roughly 25-30 lines. Keep this deferred because error semantics differ (`history_read_failed` versus `cleanup_failed`) and all three history/maintenance paths must be changed and tested together.
+- verification: Run `apply_tests`, `round_tests`, `snapshot_tests`, and `maintain_tests`, then `pnpm qa`. Confirm the helper preserves breadth-first record ordering and each caller's existing error code.

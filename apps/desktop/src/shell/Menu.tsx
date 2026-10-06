@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type CSSProperties,
@@ -8,6 +9,7 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
+import { createPortal } from "react-dom";
 
 import { cn } from "../lib/utils";
 import { handleMenuKeyDown } from "./menuKeyboard";
@@ -61,7 +63,9 @@ export function Menu({
   readonly id?: string;
   /**
    * Where the pointer was, for a menu that belongs to a place rather than to a
-   * control. Clamped so a right-click near an edge still opens on screen.
+   * control. Rendered there — measured before paint and flipped onto the other
+   * side of the pointer only when it would otherwise run off the window, so it
+   * can never paint and then jump.
    */
   readonly at?: MenuPosition;
   /** Placement for a menu that hangs off a control. Ignored when `at` is set. */
@@ -80,15 +84,20 @@ export function Menu({
 }) {
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // Keep a pointer-placed menu inside the viewport.
-  const [position, setPosition] = useState<MenuPosition | null>(at ?? null);
-  useEffect(() => {
-    const element = menuRef.current;
-    if (!at || !element) return;
-    const rect = element.getBoundingClientRect();
-    const x = Math.min(at.x, window.innerWidth - rect.width - 8);
-    const y = Math.min(at.y, window.innerHeight - rect.height - 8);
-    setPosition({ x: Math.max(8, x), y: Math.max(8, y) });
+  // Where the menu actually lands. It starts at the pointer; a layout effect —
+  // which runs before the browser paints — measures the mounted menu and flips
+  // it to open upward (bottom edge at the pointer) or leftward only when it
+  // would overflow the window, so the wrong position is never seen.
+  const [position, setPosition] = useState(at);
+  useLayoutEffect(() => {
+    if (!at) return;
+    const rect = menuRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const next: MenuPosition = {
+      x: at.x + rect.width > window.innerWidth ? Math.max(0, at.x - rect.width) : at.x,
+      y: at.y + rect.height > window.innerHeight ? Math.max(0, at.y - rect.height) : at.y,
+    };
+    setPosition((prev) => (prev?.x === next.x && prev?.y === next.y ? prev : next));
   }, [at]);
 
   // The item to land on: whichever one is already the answer, or the first.
@@ -135,11 +144,11 @@ export function Menu({
   const placement: { className: string; style?: CSSProperties } = at
     ? {
         className: "fixed z-50",
-        style: { left: `${(position ?? at).x}px`, top: `${(position ?? at).y}px` },
+        style: { left: `${position?.x ?? at.x}px`, top: `${position?.y ?? at.y}px` },
       }
     : { className: className ?? "" };
 
-  return (
+  const surface = (
     <div
       ref={menuRef}
       id={id}
@@ -156,10 +165,24 @@ export function Menu({
       {children}
     </div>
   );
+  // A pointer-placed menu mounts at the root: a `fixed` element under a
+  // transformed, filtered, or scrolling ancestor is contained by it — which
+  // is how a dock's scrollbar ended up painted over a right-click menu.
+  return at ? createPortal(surface, document.body) : surface;
 }
 
-const ITEM =
+/**
+ * The shared menu-item styling, exported for compound rows — e.g. the action
+ * items ⋯ menu, where an open-button and a pin-toggle sit side by side as two
+ * `menuitem`s in one visual row.
+ */
+export const MENU_ITEM =
   "flex w-full min-w-0 items-center gap-2 border-0 px-3 py-[0.4rem] bg-transparent cursor-pointer font-inherit text-xs text-left hover:bg-accent focus-visible:bg-accent focus-visible:outline-none";
+
+/** The hairline between menu sections. */
+export function MenuSeparator() {
+  return <hr aria-hidden="true" className="my-1 border-0 border-t border-border" />;
+}
 
 /**
  * A single menu item rendered as a full-width button.
@@ -174,7 +197,9 @@ export function MenuButton({
   icon,
   danger = false,
   current = false,
+  disabled = false,
   title,
+  className,
   onClick,
 }: {
   readonly label: string;
@@ -183,18 +208,27 @@ export function MenuButton({
   readonly icon?: ReactNode;
   readonly danger?: boolean;
   readonly current?: boolean;
+  readonly disabled?: boolean;
   /** The whole of what the label may have had to truncate. */
   readonly title?: string;
+  /** Extra classes — e.g. `flex-1` when the item shares a row with a second control. */
+  readonly className?: string;
   readonly onClick: (event: ReactMouseEvent) => void;
 }) {
   return (
     <button
       type="button"
-      className={cn(ITEM, danger ? "text-danger" : "text-foreground")}
+      className={cn(
+        MENU_ITEM,
+        danger ? "text-danger" : "text-foreground",
+        "disabled:cursor-not-allowed disabled:opacity-50",
+        className
+      )}
       role="menuitem"
       aria-current={current ? "true" : undefined}
       aria-label={ariaLabel}
       title={title}
+      disabled={disabled}
       onClick={onClick}
     >
       {icon && (
@@ -220,16 +254,18 @@ export function MenuButton({
 export function MenuCheckbox({
   label,
   checked,
+  className,
   onClick,
 }: {
   readonly label: string;
   readonly checked: boolean;
+  readonly className?: string;
   readonly onClick: (event: ReactMouseEvent) => void;
 }) {
   return (
     <button
       type="button"
-      className={cn(ITEM, "text-foreground")}
+      className={cn(MENU_ITEM, "text-foreground", className)}
       role="menuitemcheckbox"
       aria-checked={checked}
       aria-label={label}

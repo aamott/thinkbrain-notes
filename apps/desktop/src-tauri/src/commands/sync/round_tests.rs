@@ -4,8 +4,8 @@ use crate::commands::sync::snapshot;
 use crate::tests::make_temp_test_dir;
 use std::fs;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 /// One device: a notes folder and the hidden repository that records it.
@@ -26,6 +26,10 @@ pub(super) fn device(name: &str) -> Device {
 pub(super) fn shared(name: &str) -> String {
     let path = make_temp_test_dir(&format!("{name}-remote"), "round", true);
     gix::init_bare(&path).expect("the destination is created");
+    // HEAD names `main` rather than the platform's configured default branch
+    // (master on a stock Windows gitconfig): sync discovery binds whatever the
+    // destination's HEAD advertises, and every test here pushes to main.
+    fs::write(path.join("HEAD"), "ref: refs/heads/main\n").expect("HEAD names main");
     path.to_string_lossy().into_owned()
 }
 
@@ -135,6 +139,32 @@ fn a_token_embedded_in_the_link_never_leaves_with_the_destination() {
     assert!(
         !stored.contains("s3cret"),
         "the token was left in the settings file"
+    );
+}
+
+/// The sibling of the test above, for the form that actually leaked.
+///
+/// `https://TOKEN@host/repo.git` has no password half, and it used to be
+/// treated as "no credential here" and written through to the settings file
+/// untouched. Because `destination` rewrites the file whenever redaction
+/// changes the URL, fixing the parser also cleans up tokens already sitting on
+/// disk from before the fix — which is the only migration this needs.
+#[test]
+fn a_token_that_is_the_whole_userinfo_is_also_scrubbed_from_the_settings() {
+    let (app_data, root) = with_setting(
+        "round-token-only",
+        Some(r#"{"sync.destination": "https://ghp_leakedtoken@example.test/notes.git"}"#),
+    );
+
+    let named = destination(&app_data, &root).expect("a destination is set");
+    assert_eq!(named, "https://example.test/notes.git");
+    let stored = fs::read_to_string(crate::commands::settings::workspace_settings_path(
+        &app_data, &root,
+    ))
+    .expect("the settings are still there");
+    assert!(
+        !stored.contains("ghp_leakedtoken"),
+        "a token already on disk was left there: {stored}"
     );
 }
 
@@ -727,10 +757,12 @@ fn an_incoming_gitlink_is_reported_and_other_notes_still_arrive() {
     assert_eq!(read(&two, "kept.md"), "stays\n");
     assert_eq!(read(&two, "later.md"), "also arrives\n");
     assert!(!two.vault.join("nested").exists());
-    assert!(synced
-        .skipped
-        .iter()
-        .any(|note| note.code == "sync.submodule_skipped" && note.path == "nested"));
+    assert!(
+        synced
+            .skipped
+            .iter()
+            .any(|note| note.code == "sync.submodule_skipped" && note.path == "nested")
+    );
 }
 
 /// Leaving the unsupported entry in the tree means this device does not

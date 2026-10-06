@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 
+import { noteName } from "../lib/utils";
 import { Unavailable } from "../shell/Unavailable";
-import { describeSize, describeWhen, noteName, treatmentOf } from "./conflictCard";
+import { describeSize, describeWhen, treatmentOf } from "./conflictCard";
 import { listConflicts, resolveConflict } from "./conflictService";
 import type { ConflictResolution, ConflictSummary } from "./conflictTypes";
 import { failureMessage, recoveryFor } from "./syncCopy";
@@ -80,23 +81,24 @@ export function ConflictsPanel({ rootPath, onReview }: ConflictsPanelProps) {
     return <Unavailable title="No workspace open" description="Open a workspace to see anything waiting for you." />;
   }
 
+  // The popout's PanelTitle already names this panel and hosts its ⋯ menu —
+  // the only header content that belongs here is the explainer line.
   if (conflicts.length === 0 && stuck.length === 0 && !error) {
     return (
-      <Unavailable
-        title="Nothing waiting on a decision"
-        description="When git sync or a cloud folder leaves a note that needs a choice, it shows up here."
-      />
+      <section data-phone-scroll-clearance className="@container flex min-h-0 flex-1 flex-col overflow-y-auto" aria-label="Sync conflicts">
+        <Unavailable
+          title="No sync conflicts"
+          description="When git sync or a cloud folder leaves a note that needs a choice, it shows up here."
+        />
+      </section>
     );
   }
 
   return (
-    <section className="@container flex min-h-0 flex-1 flex-col overflow-y-auto" aria-label="Decisions needed">
-      <header className="border-b border-border px-3 py-3">
-        <h3 className="m-0 text-sm font-semibold text-foreground">Decisions needed</h3>
-        <p className="mb-0 mt-1 text-xs leading-relaxed text-muted-foreground">
-          Choose what to keep. Nothing is deleted until you decide.
-        </p>
-      </header>
+    <section data-phone-scroll-clearance className="@container flex min-h-0 flex-1 flex-col overflow-y-auto" aria-label="Sync conflicts">
+      <p className="m-0 px-3 pt-3 text-xs leading-relaxed text-muted-foreground">
+        Choose what to keep. Nothing is deleted until you decide.
+      </p>
 
       {error !== null && (
         <p role="alert" className="m-3 rounded-small border border-danger px-2 py-1.5 text-xs text-danger">

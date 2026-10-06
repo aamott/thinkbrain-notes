@@ -8,7 +8,7 @@
  *
  * So the state lives here and the chromes are consumers. `DesktopShell` renders
  * the rail and the docks from this; `PhoneShell` renders a header, a drawer and
- * a hub from the same object. Anything that is a decision — which panel is
+ * floating bubbles from the same object. Anything that is a decision — which panel is
  * open, which tab is active, what a command does — belongs in this hook.
  * Anything that is a measurement of a rendered box belongs in the chrome.
  *
@@ -23,127 +23,40 @@ import {
   useMemo,
   useReducer,
   useRef,
-  useState,
-  type Dispatch,
-  type SetStateAction
+  useState
 } from "react";
 
-import {
-  useDesktopCommands,
-  type DesktopCommand,
-  type DesktopCommandContext
-} from "../commands/commandRegistry";
-import type { NativeMarkdownFileEntry } from "../native/commands";
-import { isBuiltInLeftPanel } from "../panels/panelRegistryModel";
 import { useSettingsQuarantineAdapter } from "../settings/settingsQuarantineAdapter";
-import { useSettingsStore } from "../settings/settingsStore";
+import { selectIsDirty, useSettingsStore } from "../settings/settingsStore";
 import { useTheme } from "../settings/ThemeProvider";
-import type { SyncStatus } from "../sync/historyTypes";
 import { useSyncSurfaces } from "../sync/useSyncSurfaces";
 import {
-  createConflictTab,
-  createStaticTab,
   desktopTabReducer,
-  editorTabId,
-  initialDesktopTabState,
-  type DesktopTab,
-  type DesktopTabAction,
-  type DesktopTabState
+  documentTabId,
+  initialDesktopTabState
 } from "../tabs/tabModel";
 import { useWikiLinkIndexStore } from "../wikiLinks/wikiLinkIndexStore";
-import type { NoteIndexEntry } from "@thinkbrain/core";
 import type { WorkspaceExplorerProps } from "../workspace/WorkspaceExplorer";
 import { checkForUpdate, relaunchApp } from "./appUpdater";
-import { useAppUpdate, type AppUpdate } from "./useAppUpdate";
+import type { ShellState } from "./shellStateTypes";
+import type { RightPanel } from "./shellTypes";
+import { useAppUpdate } from "./useAppUpdate";
 import { useDocumentViews } from "./useDocumentViews";
 import { useExternalDocumentSync } from "./useExternalDocumentSync";
-import { usePanelResize, type PanelResize } from "./usePanelResize";
+import { usePanelResize } from "./usePanelResize";
+import { useShellCommands } from "./useShellCommands";
 import { useShellShortcuts } from "./useShellShortcuts";
+import { useSyncActions } from "./useSyncActions";
 import { useWorkspaceLifecycle } from "./useWorkspaceLifecycle";
-import {
-  isSelectableRightPanel,
-  type BottomPanel,
-  type DocumentViewState,
-  type LeftPanel,
-  type PanelSide,
-  type RightPanel
-} from "./shellTypes";
 
-/** The shell's whole state, as both chromes consume it. */
-export interface ShellState {
-  // tabs & documents
-  readonly tabState: DesktopTabState;
-  readonly dispatchTabs: Dispatch<DesktopTabAction>;
-  readonly activeTab: DesktopTab | null;
-  readonly activeDocument: DocumentViewState | undefined;
-  readonly documents: Readonly<Record<string, DocumentViewState>>;
-  readonly conflicts: ReadonlySet<string>;
-  readonly unsavedNoteContents: string | null;
-  readonly saveDocument: (tab: DesktopTab) => Promise<boolean>;
-  readonly updateDocument: (tabId: string, contents: string) => void;
-  readonly loadDocumentIntoView: (tabId: string, rootPath: string, relativePath: string) => void;
-  readonly openMarkdownDocument: (rootPath: string, relativePath: string) => void;
-  readonly keepMyVersion: (tab: DesktopTab) => void;
-  readonly loadDiskVersion: (tab: DesktopTab) => void;
-  readonly dismissEmptied: (tabId: string) => void;
-  readonly onOpenNote: (relativePath: string) => void;
-
-  // panels
-  readonly leftPanel: LeftPanel | null;
-  readonly rightPanel: RightPanel | null;
-  readonly setRightPanel: Dispatch<SetStateAction<RightPanel | null>>;
-  /** Sets the left panel without toggling. Prefer {@link selectLeftPanel} for user toggles. */
-  readonly setLeftPanel: Dispatch<SetStateAction<LeftPanel | null>>;
-  readonly selectLeftPanel: (panel: LeftPanel) => void;
-  /** Reveals a right panel, or closes it when it is already the open one. */
-  readonly toggleRightPanel: (panel: RightPanel) => void;
-  readonly bottomPanel: BottomPanel | null;
-  readonly updateBottomPanel: (panel: BottomPanel | null) => void;
-  readonly toggleBottomPanel: () => void;
-
-  // workspace
-  readonly workspaceName: string | null;
-  readonly restoredWorkspacePath: string | null;
-  readonly workspaceFiles: readonly NativeMarkdownFileEntry[];
-  readonly recentWorkspacePaths: readonly string[];
-  readonly stateRestored: boolean;
-  /** The explorer's whole prop bag, assembled once so both chromes agree. */
-  readonly explorerProps: WorkspaceExplorerProps;
-  readonly versionsOf: string | null;
-  readonly showVersionsOf: (rootPath: string, relativePath: string) => void;
-  /** Clears the history panel's note filter, so it shows the whole workspace. */
-  readonly clearVersions: () => void;
-  readonly openSyncPanel: (panel: "conflicts" | "history") => void;
-  readonly reviewConflict: (copyPath: string, notePath: string) => void;
-
-  // chrome-agnostic services
-  readonly paletteOpen: boolean;
-  readonly openPalette: () => void;
-  readonly closePalette: (restoreFocus?: boolean) => void;
-  readonly paletteCommands: readonly DesktopCommand[];
-  readonly runCommand: (command: DesktopCommand) => void;
-  readonly openSettingsTab: () => void;
-  readonly syncStatus: SyncStatus;
-  readonly conflictBadges: Readonly<Record<string, number>>;
-  readonly noteIndex: readonly NoteIndexEntry[];
-  readonly update: AppUpdate;
-
-  // desktop-only, ignored by PhoneShell
-  readonly leftWidth: number;
-  readonly rightWidth: number;
-  readonly resize: PanelResize;
-  readonly resetPanelWidth: (side: PanelSide) => void;
-}
+export type { ShellState } from "./shellStateTypes";
 
 export function useShellState(): ShellState {
-  const paletteCommands = useDesktopCommands();
   const [tabState, dispatchTabs] = useReducer(desktopTabReducer, initialDesktopTabState);
   // Read by the outside-change subscription, which outlives any one set of
   // tabs and must not be rebuilt every time one opens or closes.
   const tabStateRef = useRef(tabState);
-  const paletteRestoreFocusRef = useRef<HTMLElement | null>(null);
   const [rightPanel, setRightPanel] = useState<RightPanel | null>(null);
-  const [paletteOpen, setPaletteOpen] = useState(false);
   const { theme, setTheme } = useTheme();
 
   // Looks once per window for a newer version. Silent when there is none,
@@ -153,7 +66,7 @@ export function useShellState(): ShellState {
   // Subscribe to the settings store's dirty flag so the settings tab shows the
   // dirty dot when staged changes exist. This re-renders the shell when
   // isDirty changes, which is acceptable (infrequent, boolean toggle).
-  const settingsIsDirty = useSettingsStore((s) => s.isDirty);
+  const settingsIsDirty = useSettingsStore(selectIsDirty);
 
   // Wiki-link note index for resolving `[[Target]]` links in the editor.
   const noteIndex = useWikiLinkIndexStore((s) => s.noteIndex);
@@ -183,6 +96,8 @@ export function useShellState(): ShellState {
     conflicts,
     loadDocumentIntoView,
     openMarkdownDocument,
+    openFileDocument,
+    openNewTab,
     reloadDocumentInPlace,
     updateDocument,
     saveDocument,
@@ -190,7 +105,8 @@ export function useShellState(): ShellState {
     loadDiskVersion,
     moveDocument,
     markDocumentConflict,
-    dismissEmptied
+    dismissEmptied,
+    renameDocument
   } = useDocumentViews({ tabState, dispatchTabs });
 
   const {
@@ -205,7 +121,6 @@ export function useShellState(): ShellState {
     leftWidth,
     leftWidthRef,
     newNoteFocusRequest,
-    persistDesktopState,
     recentWorkspacePaths,
     resetPanelWidth,
     requestNewNoteFocus,
@@ -221,136 +136,85 @@ export function useShellState(): ShellState {
     updatePanelWidth,
     workspaceFiles,
     workspaceName
-  } = useWorkspaceLifecycle({ tabState, dispatchTabs, loadDocumentIntoView, openMarkdownDocument });
+  } = useWorkspaceLifecycle({ tabState, dispatchTabs, loadDocumentIntoView, openMarkdownDocument, openFileDocument });
 
   // Cancel deferred writes if the shell unmounts. An in-flight drag is the
   // resize hook's own to clean up.
   useEffect(() => () => cancelDeferredPersistence(), [cancelDeferredPersistence]);
 
-  const openPalette = useCallback(() => {
-    paletteRestoreFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    setPaletteOpen(true);
-  }, []);
-
-  const closePalette = useCallback((restoreFocus = true) => {
-    setPaletteOpen(false);
-    if (restoreFocus) queueMicrotask(() => paletteRestoreFocusRef.current?.focus());
-  }, []);
-
-  const openSettingsTab = useCallback(() => {
-    dispatchTabs({ type: "open", tab: createStaticTab("settings", "Settings") });
-  }, []);
+  // Tab-activation history is per-workspace: a switch rebases it on the
+  // active tab so Back can never walk into the previous vault's visits.
+  // The reducer returns the state untouched while it is already reset, so
+  // the mount-time fire on a still-empty history costs nothing.
+  useEffect(() => {
+    dispatchTabs({ type: "resetHistory" });
+  }, [restoredWorkspacePath]);
 
   /**
    * Reveals a right panel, or closes it when it is already showing.
    *
    * Both chromes need this — the desktop title bar's inspector buttons and the
-   * phone's hub shortcuts — so it lives here rather than as an inline setter
+   * phone's floating bubbles — so it lives here rather than as an inline setter
    * in one of them.
    */
   const toggleRightPanel = useCallback((panel: RightPanel) => {
     setRightPanel((current) => (current === panel ? null : panel));
   }, []);
 
+  // The palette's open state, focus restore and command dispatch.
+  const {
+    closePalette,
+    openPalette,
+    openSettingsTab,
+    paletteCommands,
+    paletteOpen,
+    runCommand
+  } = useShellCommands({
+    dispatchTabs,
+    theme,
+    setTheme,
+    showExplorer,
+    requestNewNoteFocus,
+    selectLeftPanel,
+    setLeftPanel,
+    setRightPanel,
+    toggleRightPanel,
+    updateBottomPanel,
+    toggleBottomPanel
+  });
+
   // Opens a note by vault-relative path when a wiki link is clicked. Delegates
   // to `openMarkdownDocument` with the current workspace root.
   const onOpenNote = useCallback(
     (relativePath: string) => {
       if (!restoredWorkspacePath) return;
-      openMarkdownDocument(restoredWorkspacePath, relativePath);
+      openMarkdownDocument(restoredWorkspacePath, relativePath, "preview");
     },
     [restoredWorkspacePath, openMarkdownDocument]
   );
 
-  // Opens the side-by-side comparison for a conflict. Named by the copy the
-  // sync daemon left behind, which is what identifies a conflict everywhere
-  // else; the note's own path rides along so the tab can be titled after it and
-  // can find an editor open on it.
-  const reviewConflict = useCallback(
-    (copyPath: string, notePath: string) => {
-      if (!restoredWorkspacePath) return;
-      dispatchTabs({
-        type: "open",
-        tab: createConflictTab({ rootPath: restoredWorkspacePath, relativePath: copyPath }, notePath)
-      });
-    },
-    [restoredWorkspacePath]
-  );
-
-  /**
-   * Flips `editor.livePreview` and persists it straight away.
-   *
-   * Read through the store's one-shot getter rather than a subscription: the
-   * shell only needs the value at the moment the command fires.
-   */
-  const toggleLivePreview = useCallback(() => {
-    const store = useSettingsStore.getState();
-    const current = store.getEffectiveValue("editor.livePreview") !== false;
-    void store.setSettingImmediately("editor.livePreview", !current);
-  }, []);
-
-  /** Executes a registered command with shell effects, keeping the registry canonical. */
-  const runCommand = useCallback((command: DesktopCommand) => {
-    const context: DesktopCommandContext = {
-      showExplorer,
-      focusNewNote: requestNewNoteFocus,
-      openSearch: () => {
-        setLeftPanel("search");
-        persistDesktopState({ explorerOpen: false });
-      },
-      toggleTheme: () => setTheme(theme === "dark" ? "light" : "dark"),
-      toggleExplorer: () => selectLeftPanel("explorer"),
-      toggleOutline: () => toggleRightPanel("outline"),
-      toggleAssistant: () => toggleRightPanel("assistant"),
-      toggleBottomPanel,
-      toggleLivePreview,
-      // `panelId` is an unconstrained string at this boundary (see
-      // `DesktopCommandContext`) so any extension can reveal a panel it
-      // registered; narrow it against the live registry before it reaches
-      // `RightPanel` shell state, so a typo or a stale id from a deactivated
-      // extension is dropped instead of persisting as an id nothing renders.
-      revealPanel: (panelId: string) => {
-        if (isSelectableRightPanel(panelId)) setRightPanel(panelId);
-      },
-      // Narrow the unconstrained string against the live left-panel registry
-      // before it reaches shell state, mirroring `revealPanel`'s guard for the
-      // right side. A typo or stale id from a deactivated extension is dropped
-      // instead of persisting as an id nothing renders.
-      revealLeftPanel: (panelId: string) => {
-        if (isBuiltInLeftPanel(panelId)) selectLeftPanel(panelId);
-      },
-      openSettings: openSettingsTab,
-      rebuildIndex: () => updateBottomPanel("terminal"),
-      closePalette
-    };
-    void Promise.resolve()
-      .then(() => command.handler(context))
-      .catch((error: unknown) => {
-        console.error(`[commandRegistry] Command "${command.id}" failed.`, error);
-      });
-  }, [closePalette, openSettingsTab, persistDesktopState, requestNewNoteFocus, selectLeftPanel, setLeftPanel, setTheme, showExplorer, theme, toggleBottomPanel, toggleLivePreview, toggleRightPanel, updateBottomPanel]);
+  // Conflict review and version-history actions for the sync surfaces.
+  const {
+    compareVersion,
+    openSyncPanel,
+    openSyncSettings,
+    restoreVersionSafely,
+    reviewConflict,
+    showVersionsOf
+  } = useSyncActions({
+    restoredWorkspacePath,
+    dispatchTabs,
+    tabStateRef,
+    setRightPanel,
+    selectLeftPanel,
+    openMarkdownDocument,
+    openFileDocument,
+    saveDocument,
+    loadDocumentIntoView,
+    openSettingsTab
+  });
 
   const activeTab = tabState.tabs.find((tab) => tab.id === tabState.activeTabId) ?? null;
-
-  // Which note the history panel is about. Set by "Previous versions…" in the
-  // file tree and cleared by the panel itself, so opening History from the
-  // footer is always the whole workspace rather than whatever was last asked.
-  const [versionsOf, setVersionsOf] = useState<string | null>(null);
-  const showVersionsOf = useCallback(
-    (_rootPath: string, relativePath: string) => {
-      setVersionsOf(relativePath);
-      selectLeftPanel("history");
-    },
-    [selectLeftPanel]
-  );
-  const clearVersions = useCallback(() => setVersionsOf(null), []);
-  const openSyncPanel = useCallback(
-    (panel: "conflicts" | "history") => {
-      if (panel === "history") setVersionsOf(null);
-      selectLeftPanel(panel);
-    },
-    [selectLeftPanel]
-  );
 
   useExternalDocumentSync({
     workspacePath: restoredWorkspacePath,
@@ -372,15 +236,19 @@ export function useShellState(): ShellState {
     onReview: openSyncPanel
   });
 
-  // The unsaved text of an editor open on the note a merge tab is comparing.
-  // "This computer's version" has to be what the user is looking at; offering
-  // them the last save would be offering a version they can see is out of date.
+  // The unsaved text of a document open on the file a comparison tab is
+  // about — a merge's "this computer's version", a version-diff's "current
+  // version". It has to be what the user is looking at; offering them the
+  // last save would be offering a version they can see is out of date.
   const unsavedNoteContents = useMemo(() => {
-    const notePath = activeTab?.kind === "merge" ? activeTab.comparedNotePath : undefined;
+    const notePath =
+      activeTab?.kind === "merge" || activeTab?.kind === "version-diff"
+        ? activeTab.comparedNotePath
+        : undefined;
     if (!notePath || !restoredWorkspacePath) return null;
-    const editorId = editorTabId({ rootPath: restoredWorkspacePath, relativePath: notePath });
-    const editorTab = tabState.tabs.find((tab) => tab.id === editorId);
-    return editorTab?.isDirty ? documents[editorId]?.contents ?? null : null;
+    const sourceId = documentTabId({ rootPath: restoredWorkspacePath, relativePath: notePath });
+    const sourceTab = tabState.tabs.find((tab) => tab.id === sourceId);
+    return sourceTab?.isDirty ? documents[sourceId]?.contents ?? null : null;
   }, [activeTab, documents, restoredWorkspacePath, tabState.tabs]);
 
   const activeDocument = activeTab ? documents[activeTab.id] : undefined;
@@ -398,7 +266,13 @@ export function useShellState(): ShellState {
       initialWorkspacePath: stateRestored ? restoredWorkspacePath : null,
       onWorkspaceOpened: handleWorkspaceOpened,
       onWorkspaceUnavailable: handleWorkspaceUnavailable,
-      onMarkdownFileSelected: openMarkdownDocument,
+      // Explorer clicks browse provisionally: each one takes over the
+      // preview tab until an edit makes it permanent. The phone chrome
+      // overrides these with its own always-replace wrappers.
+      onMarkdownFileSelected: (rootPath: string, relativePath: string) =>
+        openMarkdownDocument(rootPath, relativePath, "preview"),
+      onFileSelected: (rootPath: string, relativePath: string) =>
+        openFileDocument(rootPath, relativePath, "preview"),
       onMarkdownFileCreated: handleMarkdownFileCreated,
       onNewNoteFocusHandled: acknowledgeNewNoteFocus,
       newNoteFocusRequest,
@@ -412,6 +286,7 @@ export function useShellState(): ShellState {
       handleWorkspaceOpened,
       handleWorkspaceUnavailable,
       openMarkdownDocument,
+      openFileDocument,
       handleMarkdownFileCreated,
       acknowledgeNewNoteFocus,
       newNoteFocusRequest,
@@ -433,16 +308,6 @@ export function useShellState(): ShellState {
     saveDocument
   });
 
-  // Keep the width refs level with the width state. The refs are what a drag
-  // reads at pointer-down; the state is what a chrome renders from. This is
-  // bookkeeping, not layout, so it stays out of the chrome — only the CSS
-  // custom properties, which are written onto a chrome's own root element,
-  // remain there.
-  useEffect(() => {
-    leftWidthRef.current = leftWidth;
-    rightWidthRef.current = rightWidth;
-  }, [leftWidthRef, leftWidth, rightWidthRef, rightWidth]);
-
   return {
     tabState,
     dispatchTabs,
@@ -455,9 +320,12 @@ export function useShellState(): ShellState {
     updateDocument,
     loadDocumentIntoView,
     openMarkdownDocument,
+    openFileDocument,
+    openNewTab,
     keepMyVersion,
     loadDiskVersion,
     dismissEmptied,
+    renameDocument,
     onOpenNote,
 
     leftPanel,
@@ -476,10 +344,11 @@ export function useShellState(): ShellState {
     recentWorkspacePaths,
     stateRestored,
     explorerProps,
-    versionsOf,
     showVersionsOf,
-    clearVersions,
     openSyncPanel,
+    compareVersion,
+    restoreVersionSafely,
+    openSyncSettings,
     reviewConflict,
 
     paletteOpen,

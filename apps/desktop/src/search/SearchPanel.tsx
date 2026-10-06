@@ -1,14 +1,27 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Search } from "lucide-react";
+import { getErrorMessage } from "@thinkbrain/core";
 import { Unavailable } from "../shell/Unavailable";
 import { cn } from "../lib/utils";
 import { searchService, type SearchResult } from "./searchService";
 import { useSearchIndexStore } from "./searchIndexStore";
+import { createDebounced } from "../lib/debounce";
 
 /** Module-scoped search service singleton backing the panel. */
 
 /** Debounce delay (ms) before firing a search after the query stops changing. */
 const SEARCH_DEBOUNCE_MS = 300;
+
+/** One scheduled search: the request it answers for, where, and what for. */
+interface SearchCall {
+  readonly requestId: number;
+  readonly root: string;
+  readonly trimmed: string;
+}
+
+// Monotonic request id for stale-result suppression. Module-scope: ids only
+// need to be unique and increasing, not per panel instance.
+let requestSeq = 0;
 
 /** Props for the search panel. */
 export interface SearchPanelProps {
@@ -35,66 +48,53 @@ export function SearchPanel({ rootPath, onOpenFile }: SearchPanelProps) {
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
 
-  // Debounce timer + monotonic request id for stale-result suppression.
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const requestIdRef = useRef(0);
+  const [debouncedSearch] = useState(() =>
+    createDebounced(async ({ requestId, root, trimmed }: SearchCall) => {
+      setIsSearching(true);
+      setSearchError(null);
+      try {
+        const hits = await searchService.search(root, trimmed);
+        if (requestId !== requestSeq) return;
+        setResults(hits);
+      } catch (error) {
+        if (requestId !== requestSeq) return;
+        const message = getErrorMessage(error);
+        setSearchError(message);
+      } finally {
+        if (requestId === requestSeq) {
+          setIsSearching(false);
+        }
+      }
+    }, SEARCH_DEBOUNCE_MS)
+  );
 
   // Debounced search: re-runs when the query or index readiness changes.
-  // All setState calls happen inside the setTimeout callback to avoid the
+  // All setState calls happen inside the scheduled callback to avoid the
   // cascading-render anti-pattern of synchronous setState in effect bodies.
   useEffect(() => {
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current);
-      debounceRef.current = null;
-    }
+    debouncedSearch.cancel();
 
     if (status.kind !== "ready" || !rootPath) {
       return;
     }
 
     const trimmed = query.trim();
-    const requestId = ++requestIdRef.current;
-    const delay = trimmed === "" ? 0 : SEARCH_DEBOUNCE_MS;
-
-    debounceRef.current = setTimeout(async () => {
-      // Ignore stale callbacks from a superseded query or workspace switch.
-      if (requestId !== requestIdRef.current) return;
-
-      if (trimmed === "") {
+    const requestId = ++requestSeq;
+    if (trimmed === "") {
+      // An empty box answers on the next tick, not after the debounce delay.
+      const timer = setTimeout(() => {
+        // Ignore stale callbacks from a superseded query or workspace switch.
+        if (requestId !== requestSeq) return;
         setResults([]);
         setSearchError(null);
         setIsSearching(false);
-        return;
-      }
+      }, 0);
+      return () => clearTimeout(timer);
+    }
 
-      setIsSearching(true);
-      setSearchError(null);
-      try {
-        const hits = await searchService.search(rootPath, trimmed);
-        if (requestId !== requestIdRef.current) return;
-        setResults(hits);
-      } catch (error) {
-        if (requestId !== requestIdRef.current) return;
-        const message = error instanceof Error ? error.message : String(error);
-        setSearchError(message);
-      } finally {
-        if (requestId === requestIdRef.current) {
-          setIsSearching(false);
-        }
-      }
-    }, delay);
-
-    return () => {
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current);
-        debounceRef.current = null;
-      }
-    };
-  }, [query, status.kind, rootPath]);
-
-  const handleResultClick = (relativePath: string) => {
-    onOpenFile(relativePath);
-  };
+    debouncedSearch({ requestId, root: rootPath, trimmed });
+    return () => debouncedSearch.cancel();
+  }, [query, status.kind, rootPath, debouncedSearch]);
 
   if (status.kind === "no-workspace") {
     return (
@@ -141,7 +141,7 @@ export function SearchPanel({ rootPath, onOpenFile }: SearchPanelProps) {
         </p>
       )}
 
-      <div className="flex-1 overflow-y-auto px-3 pb-2">
+      <div data-phone-scroll-clearance className="flex-1 overflow-y-auto px-3 pb-2">
         {results.length === 0 ? (
           <p className="text-muted-foreground text-xs py-4 text-center">
             {query
@@ -154,7 +154,7 @@ export function SearchPanel({ rootPath, onOpenFile }: SearchPanelProps) {
               <li key={hit.relativePath}>
                 <button
                   type="button"
-                  onClick={() => handleResultClick(hit.relativePath)}
+                  onClick={() => onOpenFile(hit.relativePath)}
                   className={cn(
                     "w-full text-left rounded px-1 py-1 hover:bg-accent/60 cursor-pointer pointer-coarse:min-h-11 pointer-coarse:px-2 pointer-coarse:py-2"
                   )}

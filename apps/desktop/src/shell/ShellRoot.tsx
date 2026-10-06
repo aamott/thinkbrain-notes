@@ -1,4 +1,4 @@
-import { useCoarsePointer } from "../journal/useCoarsePointer";
+import { useMediaQuery } from "../lib/useMediaQuery";
 import { useSettingsStore } from "../settings/settingsStore";
 import { DesktopShell } from "./DesktopShell";
 import { PhoneShell } from "./phone/PhoneShell";
@@ -8,12 +8,12 @@ import { useShellState } from "./useShellState";
 /**
  * Whether to render phone chrome.
  *
- * Both hooks are called unconditionally — `useCoarsePointer() && useNarrowViewport()`
+ * Both hooks are called unconditionally — `useMediaQuery(...) && useNarrowViewport()`
  * would short-circuit and skip a hook call.
  */
 // eslint-disable-next-line react-refresh/only-export-components -- gate hook belongs beside the chrome that consumes it
 export function usePhoneChrome(): boolean {
-  const coarse = useCoarsePointer();
+  const coarse = useMediaQuery("(pointer: coarse)");
   const narrow = useNarrowViewport();
   return coarse && narrow;
 }

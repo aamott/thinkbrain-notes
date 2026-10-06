@@ -8,7 +8,7 @@ import { ResizeHandle } from "./ResizeHandle";
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
 
-async function renderResizeHandle() {
+async function renderResizeHandle(className?: string) {
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -21,6 +21,7 @@ async function renderResizeHandle() {
     root?.render(
       <ResizeHandle
         label="Resize left panel"
+        className={className}
         onPointerDown={onPointerDown}
         onPointerCancel={onPointerCancel}
         onDoubleClick={onDoubleClick}
@@ -73,5 +74,12 @@ describe("ResizeHandle", () => {
     });
 
     expect(onKeyDown).toHaveBeenCalledOnce();
+  });
+
+  it("merges an optional className for a wider hide breakpoint", async () => {
+    const { handle } = await renderResizeHandle("max-[900px]:hidden");
+
+    expect(handle.className).toContain("max-[900px]:hidden");
+    expect(handle.className).toContain("max-[760px]:hidden");
   });
 });

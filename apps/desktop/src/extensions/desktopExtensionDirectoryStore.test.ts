@@ -9,7 +9,6 @@ const gateway = (stored: readonly string[]) => ({
       [DESKTOP_STATE_KEY]: { version: 3, developmentExtensionDirectories: stored }
     })
   ),
-  writeAppSettings: vi.fn(async () => undefined),
   updateDesktopState: vi.fn(async (update: unknown) =>
     JSON.stringify({ [DESKTOP_STATE_KEY]: { version: 3, ...(update as object) } })
   )

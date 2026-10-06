@@ -1,10 +1,9 @@
 // @vitest-environment happy-dom
-import { act } from "react";
-import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SettingDefinition } from "@thinkbrain/core";
 import { NativeCommandError } from "../../native/commands";
 import { useSettingsStore } from "../settingsStore";
+import { createSettingsTestHarness } from "../settingsTestHelpers";
 
 const readHistoryUsage = vi.fn<(rootPath: string) => Promise<{ bytes: number }>>();
 const freeSyncSpace = vi.fn<(rootPath: string) => Promise<{ bytesBefore: number; bytesAfter: number; reclaimed: number }>>();
@@ -18,8 +17,7 @@ vi.mock("../../sync/syncService", () => ({
 
 const { HistoryPolicyControl } = await import("./HistoryPolicyControl");
 
-let root: Root | null = null;
-let host: HTMLDivElement | null = null;
+const harness = createSettingsTestHarness();
 
 const definition: SettingDefinition = {
   key: "sync.historyPolicy",
@@ -33,15 +31,9 @@ const definition: SettingDefinition = {
 };
 
 async function renderControl() {
-  host = document.createElement("div");
-  document.body.append(host);
-  root = createRoot(host);
-  await act(async () =>
-    root?.render(
-      <HistoryPolicyControl definition={definition} value="" onChange={() => undefined} />
-    )
+  return harness.render(
+    <HistoryPolicyControl definition={definition} value="" onChange={() => undefined} />
   );
-  return host;
 }
 
 function button(host: HTMLElement, text: string, exact = false): HTMLButtonElement {
@@ -60,10 +52,7 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
-  await act(async () => root?.unmount());
-  host?.remove();
-  root = null;
-  host = null;
+  await harness.unmount();
   useSettingsStore.setState({ workspaceRootPath: null });
 });
 
@@ -106,7 +95,7 @@ describe("HistoryPolicyControl", () => {
     const free = [...rendered.querySelectorAll("button")].find((button) =>
       button.textContent?.includes("Free space now")
     );
-    await act(async () => free?.click());
+    await harness.click(free!);
 
     expect(freeSyncSpace).toHaveBeenCalledWith("/notes");
     expect(rendered.textContent).toMatch(/Freed/);
@@ -116,7 +105,7 @@ describe("HistoryPolicyControl", () => {
     freeSyncSpace.mockRejectedValueOnce(new Error("disk full"));
     const rendered = await renderControl();
 
-    await act(async () => button(rendered, "Free space now").click());
+    await harness.click(button(rendered, "Free space now"));
 
     expect(rendered.querySelector('[role="alert"]')?.textContent).toBe(
       "Could not free space. Check this computer has room, then try again."
@@ -129,7 +118,7 @@ describe("HistoryPolicyControl", () => {
     const clear = [...rendered.querySelectorAll("button")].find((button) =>
       button.textContent === "Clear undo history"
     );
-    await act(async () => clear?.click());
+    await harness.click(clear!);
 
     expect(clearUndoHistory).not.toHaveBeenCalled();
     expect(rendered.textContent).toMatch(/cannot be undone/i);
@@ -138,7 +127,7 @@ describe("HistoryPolicyControl", () => {
     const confirm = [...rendered.querySelectorAll("button")].find((button) =>
       button.textContent === "Clear undo history"
     );
-    await act(async () => confirm?.click());
+    await harness.click(confirm!);
 
     expect(clearUndoHistory).toHaveBeenCalledWith("/notes");
   });
@@ -147,8 +136,8 @@ describe("HistoryPolicyControl", () => {
     clearUndoHistory.mockRejectedValueOnce(new Error("disk full"));
     const rendered = await renderControl();
 
-    await act(async () => button(rendered, "Clear undo history", true).click());
-    await act(async () => button(rendered, "Clear undo history", true).click());
+    await harness.click(button(rendered, "Clear undo history", true));
+    await harness.click(button(rendered, "Clear undo history", true));
 
     expect(rendered.querySelector('[role="alert"]')?.textContent).toBe(
       "Could not clear undo history. Check this computer has room, then try again."

@@ -1,0 +1,36 @@
+# Throwaway probe for the keyring v3 -> v4 migration.
+#
+# Deliberately NOT a member of any workspace and not part of `pnpm qa`: it
+# exists to be run by hand, once, on each platform we ship to. Delete it once
+# macOS and Windows read-back are both recorded in the migration story.
+#
+# It depends on BOTH keyring generations at once, which is possible only
+# because v3 is the crate `keyring` and v4 is `keyring-core` plus a store.
+# That is what lets one binary write with v3 and read with v4 — the point of
+# the exercise.
+[package]
+name = "keyring-migration-probe"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+# The exact v3 feature set the shipped build used (was Cargo.toml:59 at 9ad5386).
+keyring = { version = "3", features = [
+  "apple-native",
+  "windows-native",
+  "linux-native-sync-persistent",
+  "crypto-rust",
+] }
+keyring-core = "1"
+
+# One store per platform, matching src-tauri/src/credential_store.rs exactly.
+# If these ever diverge, the probe stops testing what we ship.
+[target.'cfg(target_os = "linux")'.dependencies]
+dbus-secret-service-keyring-store = { version = "1", features = ["crypto-rust"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+apple-native-keyring-store = { version = "1", features = ["keychain"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-native-keyring-store = "1"

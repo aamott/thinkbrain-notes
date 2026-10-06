@@ -1,23 +1,14 @@
-//! Workspace + Markdown tests: shell status, `NativeError` shape, relative-path
+//! Workspace + Markdown tests: `NativeError` shape, relative-path
 //! normalization, markdown/hidden-name detection, workspace entry CRUD (file,
 //! folder, rename, delete), path-security (escape + symlink escape), note
 //! backup/restore, and note-write preconditions (conflict detection, atomic
 //! replacement).
 
-use crate::commands::{backup::*, markdown::*, workspace::*};
 use crate::NativeError;
+use crate::commands::{backup::*, markdown::*, workspace::*};
 use std::{fs, path::Path};
 
 use super::temp_test_dir;
-
-#[test]
-fn shell_status_reports_ready_desktop_shell() {
-    let status = desktop_shell_status().expect("shell status should succeed");
-
-    assert_eq!(status.app_name, "Thinkbrain Notes");
-    assert_eq!(status.shell_version, env!("CARGO_PKG_VERSION"));
-    assert!(status.ready);
-}
 
 #[test]
 fn native_error_shape_supports_optional_details() {
@@ -138,7 +129,16 @@ fn rename_workspace_entry_moves_files_and_creates_destination_parents() {
     )
     .expect("rename succeeds");
 
-    assert_eq!(renamed.relative_path, "Archive/draft.md");
+    assert_eq!(renamed.entry.relative_path, "Archive/draft.md");
+    assert_eq!(
+        renamed.file_moves,
+        vec![WorkspacePathMove {
+            old_relative_path: "draft.md".to_string(),
+            new_relative_path: "Archive/draft.md".to_string(),
+            was_markdown: true,
+            is_markdown: true,
+        }]
+    );
     assert!(!root.join("draft.md").exists());
     assert!(root.join("Archive").join("draft.md").is_file());
 
@@ -299,13 +299,239 @@ fn rename_workspace_entry_treats_source_equal_destination_as_a_noop() {
         "draft.md".to_string(),
     )
     .expect("no-op rename succeeds");
-    assert_eq!(result.relative_path, "draft.md");
+    assert_eq!(result.entry.relative_path, "draft.md");
+    assert!(result.file_moves.is_empty());
     assert_eq!(
         fs::read_to_string(root.join("draft.md")).expect("file is unchanged"),
         "body"
     );
 
     fs::remove_dir_all(root).expect("temp rename-noop directory is cleaned up");
+}
+
+#[test]
+fn rename_workspace_entry_maps_every_descendant_file_of_a_moved_folder() {
+    let root = temp_test_dir("rename-folder-map");
+    create_workspace_file(
+        root.to_string_lossy().to_string(),
+        "Folder/note.md".to_string(),
+        Some("body".to_string()),
+    )
+    .expect("nested markdown is created");
+    create_workspace_file(
+        root.to_string_lossy().to_string(),
+        "Folder/data.txt".to_string(),
+        None,
+    )
+    .expect("nested text file is created");
+    create_workspace_file(
+        root.to_string_lossy().to_string(),
+        "Folder/sub/deep.md".to_string(),
+        None,
+    )
+    .expect("deep markdown is created");
+
+    let moved = rename_workspace_entry_for_test(
+        root.to_string_lossy().to_string(),
+        "Folder".to_string(),
+        "Archive/Folder".to_string(),
+    )
+    .expect("folder move succeeds");
+
+    assert_eq!(moved.entry.relative_path, "Archive/Folder");
+    assert_eq!(moved.entry.kind, "directory");
+    let expected = [
+        ("Folder/data.txt", "Archive/Folder/data.txt", false, false),
+        ("Folder/note.md", "Archive/Folder/note.md", true, true),
+        (
+            "Folder/sub/deep.md",
+            "Archive/Folder/sub/deep.md",
+            true,
+            true,
+        ),
+    ];
+    let mut actual: Vec<(String, String, bool, bool)> = moved
+        .file_moves
+        .iter()
+        .map(|moved| {
+            (
+                moved.old_relative_path.clone(),
+                moved.new_relative_path.clone(),
+                moved.was_markdown,
+                moved.is_markdown,
+            )
+        })
+        .collect();
+    actual.sort();
+    let mut expected: Vec<(String, String, bool, bool)> = expected
+        .iter()
+        .map(|(old, new, was, is)| (old.to_string(), new.to_string(), *was, *is))
+        .collect();
+    expected.sort();
+    assert_eq!(actual, expected);
+    assert!(root.join("Archive/Folder/sub/deep.md").is_file());
+    assert!(!root.join("Folder").exists());
+
+    fs::remove_dir_all(root).expect("temp rename-folder-map directory is cleaned up");
+}
+
+#[test]
+fn rename_workspace_entry_rejects_moving_a_folder_into_itself() {
+    let root = temp_test_dir("rename-folder-into-self");
+    create_workspace_file(
+        root.to_string_lossy().to_string(),
+        "Folder/sub/note.md".to_string(),
+        None,
+    )
+    .expect("nested file is created");
+
+    // A folder cannot land inside one of its own subfolders.
+    let descendant = rename_workspace_entry_for_test(
+        root.to_string_lossy().to_string(),
+        "Folder".to_string(),
+        "Folder/sub/Folder".to_string(),
+    );
+    assert!(descendant.is_err());
+    assert_eq!(descendant.unwrap_err().code, "workspace.invalid_move");
+
+    // A same-named sibling (`Folderx`) is not a descendant and must still move.
+    let sibling = rename_workspace_entry_for_test(
+        root.to_string_lossy().to_string(),
+        "Folder".to_string(),
+        "Folderx".to_string(),
+    );
+    assert!(sibling.is_ok(), "sibling move should succeed: {sibling:?}");
+    assert!(root.join("Folderx/sub/note.md").is_file());
+    assert!(!root.join("Folder").exists());
+
+    fs::remove_dir_all(root).expect("temp rename-folder-into-self directory is cleaned up");
+}
+
+#[test]
+fn rename_workspace_entry_moves_a_nested_file_to_the_root() {
+    let root = temp_test_dir("rename-to-root");
+    create_workspace_file(
+        root.to_string_lossy().to_string(),
+        "Folder/data.txt".to_string(),
+        Some("body".to_string()),
+    )
+    .expect("nested file is created");
+
+    let moved = rename_workspace_entry_for_test(
+        root.to_string_lossy().to_string(),
+        "Folder/data.txt".to_string(),
+        "data.txt".to_string(),
+    )
+    .expect("move to root succeeds");
+
+    assert_eq!(moved.entry.relative_path, "data.txt");
+    assert_eq!(
+        moved.file_moves,
+        vec![WorkspacePathMove {
+            old_relative_path: "Folder/data.txt".to_string(),
+            new_relative_path: "data.txt".to_string(),
+            was_markdown: false,
+            is_markdown: false,
+        }]
+    );
+    assert!(root.join("data.txt").is_file());
+    assert!(!root.join("Folder/data.txt").exists());
+
+    fs::remove_dir_all(root).expect("temp rename-to-root directory is cleaned up");
+}
+
+#[test]
+fn rename_workspace_entry_classifies_extension_changes_independently() {
+    let root = temp_test_dir("rename-type-change");
+    create_workspace_file(
+        root.to_string_lossy().to_string(),
+        "note.md".to_string(),
+        Some("body".to_string()),
+    )
+    .expect("markdown source is created");
+    create_workspace_file(
+        root.to_string_lossy().to_string(),
+        "data.txt".to_string(),
+        Some("body".to_string()),
+    )
+    .expect("text source is created");
+
+    // Markdown -> plain text: was Markdown, is not now.
+    let to_text = rename_workspace_entry_for_test(
+        root.to_string_lossy().to_string(),
+        "note.md".to_string(),
+        "note.txt".to_string(),
+    )
+    .expect("markdown-to-text rename succeeds");
+    assert_eq!(
+        to_text.file_moves,
+        vec![WorkspacePathMove {
+            old_relative_path: "note.md".to_string(),
+            new_relative_path: "note.txt".to_string(),
+            was_markdown: true,
+            is_markdown: false,
+        }]
+    );
+
+    // Plain text -> Markdown: was not, is now.
+    let to_markdown = rename_workspace_entry_for_test(
+        root.to_string_lossy().to_string(),
+        "data.txt".to_string(),
+        "data.md".to_string(),
+    )
+    .expect("text-to-markdown rename succeeds");
+    assert_eq!(
+        to_markdown.file_moves,
+        vec![WorkspacePathMove {
+            old_relative_path: "data.txt".to_string(),
+            new_relative_path: "data.md".to_string(),
+            was_markdown: false,
+            is_markdown: true,
+        }]
+    );
+
+    fs::remove_dir_all(root).expect("temp rename-type-change directory is cleaned up");
+}
+
+#[test]
+fn collect_moved_files_fails_loudly_at_the_workspace_limit() {
+    let root = temp_test_dir("move-limit");
+    create_workspace_file(
+        root.to_string_lossy().to_string(),
+        "Folder/note.md".to_string(),
+        None,
+    )
+    .expect("nested file is created");
+
+    // A collector already at the listing ceiling cannot promise a complete
+    // mapping, so it refuses instead of returning a partial one.
+    let full = vec![
+        WorkspaceEntry {
+            relative_path: "filler.md".to_string(),
+            name: "filler.md".to_string(),
+            parent_path: String::new(),
+            kind: "file".to_string(),
+            is_markdown: true,
+            byte_size: 0,
+            updated_at: None,
+        };
+        MAX_WORKSPACE_ENTRIES
+    ];
+    let mut saturated = full;
+    let refused = collect_moved_files(&root, &root.join("Folder"), &mut saturated);
+    assert!(refused.is_err());
+    assert_eq!(refused.unwrap_err().code, "workspace.too_many_entries");
+    // Nothing was moved: the folder still exists untouched.
+    assert!(root.join("Folder/note.md").is_file());
+
+    // A normal folder collects fine.
+    let mut collected = Vec::new();
+    collect_moved_files(&root, &root.join("Folder"), &mut collected)
+        .expect("small folder collects");
+    assert_eq!(collected.len(), 1);
+    assert_eq!(collected[0].relative_path, "Folder/note.md");
+
+    fs::remove_dir_all(root).expect("temp move-limit directory is cleaned up");
 }
 
 #[cfg(unix)]
@@ -323,7 +549,7 @@ fn markdown_commands_reject_symlink_escapes_from_the_workspace() {
     // workspace would read and overwrite files the workspace never covered.
     symlink(&secret, root.join("innocent.md")).expect("symlink is created");
 
-    let read_escape = read_note(&root.to_string_lossy(), "innocent.md", None);
+    let read_escape = read_note(&root.to_string_lossy(), "innocent.md");
     assert!(
         read_escape.is_err(),
         "reading through a symlink must be refused"
@@ -393,6 +619,46 @@ fn restoring_a_version_keeps_the_one_it_replaced() {
     fs::remove_dir_all(&app_data).ok();
 }
 
+/// `write_text_file` keeps backups too, so the restore picks its writer by
+/// the file's extension — assuming Markdown would bounce every non-note
+/// restore off the `.md` check.
+#[test]
+fn restoring_a_version_works_for_plain_text_files() {
+    let root = temp_test_dir("restore-text");
+    let app_data = temp_test_dir("restore-text-appdata");
+    let file = root.join("config.txt");
+
+    fs::write(&file, "the good version\n").expect("the file is written");
+    write_document(
+        &root.to_string_lossy(),
+        "config.txt",
+        "the damaged version\n".to_string(),
+        None,
+        Some(&app_data),
+        DocumentKind::Text,
+    )
+    .expect("the damaging save goes through");
+
+    let kept = list_note_backups(&app_data, &root, "config.txt");
+    assert_eq!(kept.len(), 1, "the good version was not kept");
+
+    restore_note_version(
+        &root.to_string_lossy(),
+        "config.txt",
+        &kept[0].to_string_lossy(),
+        &app_data,
+    )
+    .expect("the text restore succeeds");
+
+    assert_eq!(
+        fs::read_to_string(&file).expect("the file is readable"),
+        "the good version\n"
+    );
+
+    fs::remove_dir_all(&root).ok();
+    fs::remove_dir_all(&app_data).ok();
+}
+
 /// A restore may only read from this workspace's own backup folder.
 ///
 /// The path comes from the frontend, so it is not trusted: without this, a
@@ -437,8 +703,8 @@ fn a_note_that_cannot_be_decoded_is_reported_as_damaged() {
     // A lone 0xFF is not valid UTF-8 in any position.
     fs::write(root.join("note.md"), [b'#', b' ', 0xFF, b'\n']).expect("the note is written");
 
-    let failure = read_note(&root.to_string_lossy(), "note.md", None)
-        .expect_err("an undecodable note is refused");
+    let failure =
+        read_note(&root.to_string_lossy(), "note.md").expect_err("an undecodable note is refused");
 
     assert_eq!(failure.code, "workspace.note_unreadable");
     fs::remove_dir_all(&root).ok();
@@ -457,8 +723,8 @@ fn an_empty_note_with_nothing_kept_opens_normally() {
     let app_data = temp_test_dir("read-empty-new-appdata");
     fs::write(root.join("fresh.md"), "").expect("the note is written");
 
-    let read = read_note(&root.to_string_lossy(), "fresh.md", Some(&app_data))
-        .expect("a genuinely new empty note opens");
+    let read =
+        read_note(&root.to_string_lossy(), "fresh.md").expect("a genuinely new empty note opens");
 
     assert_eq!(read.contents, "");
     fs::remove_dir_all(&root).ok();

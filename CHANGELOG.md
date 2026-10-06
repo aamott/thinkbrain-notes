@@ -3,6 +3,80 @@
 Newest first. Versions follow [semver](https://semver.org), except that before
 1.0 a minor bump may still change behaviour.
 
+## 0.3.0-4 — 2026-10-04
+
+Prerelease fixing Android release builds, which could not reach any git link
+over HTTPS.
+
+- **Android** — release APKs failed every clone and sync with "Could not reach
+  the place these notes sync to": minification stripped the certificate
+  verifier the Rust side loads by name over JNI. A ProGuard keep rule retains
+  it.
+- **Sync** — version history no longer needs a git identity configured on the
+  device; the hidden repository carries the app's own.
+
+## 0.3.0-3 — 2026-10-04
+
+Prerelease for preview-style file tabs, the audio/video playback fix, and a
+broad architecture consolidation of the shell, settings, and sync layers.
+
+- **Tabs** — clicking a file now reuses the clean preview tab instead of
+  stacking a tab per file (editing or double-clicking keeps it); on the
+  phone every file opens in the same tab. Both shells get an explicit "+"
+  new-tab button — the phone's sits as a card where the new tab would go,
+  browser-style — opening a landing page with new-note and open-file entry
+  points. New-tab pages are never restored after a restart.
+- **Media fix** — audio and video tabs play again: WebKitGTK/GStreamer and
+  Android's webview could not stream the `asset://` scheme, so media now
+  loads over IPC and plays from a `blob:` URL.
+- **Shell navigation** — tab-activation Back/Forward in the title bar,
+  menus and sheets kept out of phone navigation history.
+- **Explorer** — native HTML5 drags (drag files out to a file manager, drag
+  folders to move them), shared drag-session handling, edge-aware menus.
+- **Interface size** — a setting plus Ctrl+=/-/0 zoom on desktop and mobile.
+- **Under the hood** — a consolidation pass over the largest seams: the
+  shell state hook and workspace lifecycle are split by concern; Markdown
+  and code editors share one CodeMirror mount lifecycle; notes and text
+  files share one native read/write path; extensions, themes and media all
+  reuse the same workspace path containment; dead IPC commands, the legacy
+  settings layer, and four unused dependencies are gone.
+- **Sync** — credential-bearing URLs parse correctly when the password or
+  path contains `@`; synced settings writes take the same lock as the
+  renderer's.
+
+## 0.3.0-2 — 2026-10-03
+
+Prerelease for the conflict-merge UI, document version history, and file-history
+adoption work merged since 0.3.0-1.
+
+- **Merge and conflicts** — CodeMirror merge view with a slim two-bar chrome:
+  resolution actions (Keep current / Use incoming / Keep both files) and an
+  Inline / Side-by-side toggle on the merge bar, shared Undo / Redo / Save in
+  the header for every editor, a help popover replacing the persistent
+  explainer, and a tab error boundary so a tab crash no longer blanks the app.
+- **Version history** — document history view with inline compare, restore
+  previews, and adoption of an existing `.git` history into file history.
+- **Workspace** — explorer drag-and-drop, new notes default to Markdown,
+  shared backlinks inspector panel.
+- **Mobile** — Journal added to New-note actions, workspace actions fixed on
+  Android, journal accessibility gaps closed.
+
+## 0.3.0-1 — 2026-09-20
+
+Prerelease for the mobile navigation, file viewer, and sync work merged since
+0.2.0.
+
+- **Phone navigation** — browser-style Back/Forward history, breadcrumbs,
+  action-items menu, New note popup, and hub-driven drawer and tab flows.
+- **Workspace selector** — moved into the Explorer panel and shared across
+  desktop and phone layouts.
+- **File viewing** — generic file tabs, CodeEditor syntax highlighting, and
+  filename titles where notes need them.
+- **Sync and settings** — scheduled sync hardening, lifecycle-aware mobile
+  triggers, advanced settings gating, and Android credential groundwork.
+- **Extensions and IPC** — generated command/path registration keeps the Tauri
+  contract in one place.
+
 ## 0.2.0 — 2026-08-27
 
 Phone shell, overlay accessibility, platform capability gating, and settings polish.

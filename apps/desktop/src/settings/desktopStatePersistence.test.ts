@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { resetNotificationStore, useNotificationStore } from "../notifications/notificationStore";
-import { DEFAULT_DESKTOP_STATE, type DesktopStateGateway } from "./desktopState";
+import { DEFAULT_DESKTOP_STATE } from "./desktopState";
 
 /**
  * `desktopStatePersistence` wraps `saveDesktopState` / `loadDesktopState` with
@@ -27,13 +27,13 @@ vi.mock("./desktopState", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./desktopState")>();
   return {
     ...actual,
-    saveDesktopState: vi.fn(async (update: unknown, gateway?: DesktopStateGateway) => {
-      saveSpy(update, gateway);
+    saveDesktopState: vi.fn(async (update: unknown) => {
+      saveSpy(update);
       if (saveShouldFail) throw new Error("disk full");
       return DEFAULT_DESKTOP_STATE;
     }),
-    loadDesktopState: vi.fn(async (gateway?: DesktopStateGateway) => {
-      loadSpy(gateway);
+    loadDesktopState: vi.fn(async () => {
+      loadSpy();
       if (loadShouldFail) throw new Error("permission denied");
       return DEFAULT_DESKTOP_STATE;
     })
@@ -60,7 +60,7 @@ describe("persistDesktopState", () => {
     const result = persistDesktopState({ explorerOpen: false });
     expect(result).toBeUndefined();
     expect(saveSpy).toHaveBeenCalledTimes(1);
-    expect(saveSpy).toHaveBeenCalledWith({ explorerOpen: false }, undefined);
+    expect(saveSpy).toHaveBeenCalledWith({ explorerOpen: false });
   });
 
   it("reports a sticky error notification on save failure without throwing", async () => {

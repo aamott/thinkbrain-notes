@@ -18,6 +18,32 @@ import type { SettingsModule } from "../types";
 export const DEFAULT_SETTLE_AUTOMATICALLY = true;
 
 /**
+ * Defaults for the sync schedule. Mirrored on the native side as the
+ * `DEFAULT_*` constants in
+ * `apps/desktop/src-tauri/src/commands/sync/schedule.rs`, because native
+ * answers these questions before any window is listening. Changing one means
+ * changing the other.
+ */
+export const DEFAULT_SYNC_AUTOMATICALLY = true;
+export const DEFAULT_SYNC_INTERVAL_SECONDS = 60;
+export const DEFAULT_SYNC_QUIET_SECONDS = 30;
+export const DEFAULT_SYNC_ON_OPEN = true;
+export const DEFAULT_SYNC_ON_LEAVE = true;
+
+/**
+ * Bounds on the two intervals, mirrored in `schedule.rs` as `MIN_*`/`MAX_*`.
+ *
+ * The floor is not arbitrary. Each round trip is a git fetch *and* a push, so
+ * thirty seconds is already a hundred and twenty fetches an hour against
+ * someone's host. The ceiling is where "sync automatically" stops meaning
+ * anything; past it, turning it off is the honest choice.
+ */
+export const SYNC_INTERVAL_SECONDS_MIN = 30;
+export const SYNC_INTERVAL_SECONDS_MAX = 3600;
+export const SYNC_QUIET_SECONDS_MIN = 5;
+export const SYNC_QUIET_SECONDS_MAX = 300;
+
+/**
  * How long private undo copies are kept. Repeated on the native side as
  * `RETENTION_DAYS` in `apps/desktop/src-tauri/src/commands/sync/maintain.rs`.
  */
@@ -115,7 +141,7 @@ export const syncModule: SettingsModule = {
           section: "sync.conflicts",
           label: "Settle obvious conflicts without asking",
           description:
-            "If this folder is in OneDrive, Google Drive, or Syncthing, those apps sometimes leave an extra copy beside a note. When that copy is identical to yours, or holds a version yours has already been through, keep yours and tidy the copy away. It still shows up under Decisions needed until then. Earlier versions stay in Saved versions either way. Turn this off to be asked about every copy."
+            "If this folder is in OneDrive, Google Drive, or Syncthing, those apps sometimes leave an extra copy beside a note. When that copy is identical to yours, or holds a version yours has already been through, keep yours and tidy the copy away. It still shows up under Sync conflicts until then. Earlier versions stay in Version history either way. Turn this off to be asked about every copy."
         }
       ]
     },
@@ -148,7 +174,7 @@ export const syncModule: SettingsModule = {
           section: "sync.destination",
           label: "Git link",
           description:
-            "An https:// link to GitHub, GitLab, or similar — or a folder path to a bare git repo on this computer or a NAS. Leave empty for this device only. Choose a saved sign-in below, or add a username and access token; the token is saved in this computer's keychain, never in this link.",
+            "An https:// link to GitHub, GitLab, or similar — or a folder path to a bare git repo on this computer or a NAS. Leave empty for this device only. Choose a saved sign-in below, or add a username and access token; the token is saved only to this device, never in this link.",
           control: "sync-git-link",
           portable: false,
           validation: validateSyncDestination
@@ -162,6 +188,70 @@ export const syncModule: SettingsModule = {
           label: "Saved sign-in",
           description: "Which saved sign-in this folder uses. Shown with the git link.",
           portable: false
+        }
+      ]
+    },
+    {
+      id: "sync.when",
+      label: "When to sync",
+      settings: [
+        {
+          key: "automatically",
+          type: "boolean",
+          default: DEFAULT_SYNC_AUTOMATICALLY,
+          scope: "app",
+          section: "sync.when",
+          label: "Sync automatically",
+          description:
+            "Send and fetch changes on their own once you stop typing. Turn this off and nothing goes to your git link until you press Sync now — your notes and their saved versions are still kept on this device exactly as before."
+        },
+        {
+          key: "intervalSeconds",
+          type: "number",
+          default: DEFAULT_SYNC_INTERVAL_SECONDS,
+          min: SYNC_INTERVAL_SECONDS_MIN,
+          max: SYNC_INTERVAL_SECONDS_MAX,
+          scope: "app",
+          section: "sync.when",
+          label: "How often to sync (seconds)",
+          advanced: true,
+          description:
+            "The shortest gap between two automatic syncs. Also how long after a sync this device waits before syncing again when you open a folder."
+        },
+        {
+          key: "quietSeconds",
+          type: "number",
+          default: DEFAULT_SYNC_QUIET_SECONDS,
+          min: SYNC_QUIET_SECONDS_MIN,
+          max: SYNC_QUIET_SECONDS_MAX,
+          scope: "app",
+          section: "sync.when",
+          label: "Wait after you stop typing (seconds)",
+          advanced: true,
+          description:
+            "How still a folder has to be before an automatic sync starts, so a sync never lands in the middle of a sentence."
+        },
+        {
+          key: "onOpen",
+          type: "boolean",
+          default: DEFAULT_SYNC_ON_OPEN,
+          scope: "app",
+          section: "sync.when",
+          label: "Sync when you open a folder",
+          advanced: true,
+          description:
+            "Fetch as soon as a folder opens, unless it already synced within the interval above. This is also where a broken git link or sign-in first shows itself."
+        },
+        {
+          key: "onLeave",
+          type: "boolean",
+          default: DEFAULT_SYNC_ON_LEAVE,
+          scope: "app",
+          section: "sync.when",
+          label: "Send changes when you leave the app",
+          advanced: true,
+          description:
+            "On a phone, push what you wrote as the app goes into the background, before the system freezes it. On a computer this happens when the window is minimised, and rarely matters: automatic syncing keeps running while the app is open."
         }
       ]
     }

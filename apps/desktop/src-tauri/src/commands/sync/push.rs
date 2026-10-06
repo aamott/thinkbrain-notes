@@ -14,13 +14,14 @@ use std::collections::BTreeSet;
 use std::io::{BufRead, Write};
 
 use gix::protocol::transport;
+use transport::Service;
 use transport::client::blocking_io::Transport as _;
 use transport::client::{MessageKind, WriteMode};
-use transport::Service;
 
 use crate::error::NativeError;
 
 use super::failed;
+use super::history_read_failed;
 use super::remote_failure;
 use super::remote_unreachable;
 use super::snapshot;
@@ -40,6 +41,20 @@ pub enum Landed {
     /// the answer is to fetch, merge and come back — which the caller can only
     /// decide to do if this arrives as something other than an error.
     Refused { reason: String },
+    /// The push could not be made at all, and the caller chose to carry on.
+    ///
+    /// Distinct from `Refused`, which is the remote answering. This is the push
+    /// never landing — no write access, no credentials, no route — while
+    /// everything before it succeeded. Only an import asks for this; a sync
+    /// treats a failed push as a failure, because the user asked to send.
+    ///
+    /// Reachable only through [`super::round::PushPolicy::Optional`]. The
+    /// frontend's `SyncLanded` union (`sync/historyTypes.ts`) deliberately
+    /// models only `moved` and `refused`, which is accurate because `sync_now`
+    /// always requires a push. If a command that returns `Synced` to the
+    /// frontend ever opts into `Optional`, that union has to grow this variant
+    /// first.
+    NotSent { reason: String },
 }
 
 /// What one push carried and what became of it.
@@ -66,15 +81,11 @@ pub struct Sent {
 /// `already` is a hint, not a promise. A remote can advertise a commit this
 /// repository has never seen — that is precisely what a diverged remote looks
 /// like — and there is nothing to exclude from a walk that cannot reach it.
-pub fn carried(
+pub(super) fn carried(
     repo: &gix::Repository,
     tip: gix::ObjectId,
     already: Option<gix::ObjectId>,
 ) -> Result<Vec<gix::ObjectId>, NativeError> {
-    fn history(message: &'static str, error: impl std::fmt::Display) -> NativeError {
-        failed("sync.history_unreadable", message, error)
-    }
-
     let known = already.filter(|id| repo.find_commit(*id).is_ok());
     let mut walk = repo.rev_walk(Some(tip));
     if let Some(known) = known {
@@ -82,7 +93,7 @@ pub fn carried(
     }
     let commits = walk
         .all()
-        .map_err(|error| history("Could not read this vault's history.", error))?;
+        .map_err(|error| history_read_failed("Could not read this vault's history.", error))?;
 
     let mut seen = BTreeSet::new();
     let mut carried = Vec::new();
@@ -90,14 +101,14 @@ pub fn carried(
 
     for commit in commits {
         let commit = commit
-            .map_err(|error| history("Could not read this vault's history.", error))?
+            .map_err(|error| history_read_failed("Could not read this vault's history.", error))?
             .id;
         let object = repo
             .find_commit(commit)
-            .map_err(|error| history("Could not read this vault's history.", error))?;
+            .map_err(|error| history_read_failed("Could not read this vault's history.", error))?;
         let tree = object
             .tree_id()
-            .map_err(|error| history("Could not read a recorded state.", error))?
+            .map_err(|error| history_read_failed("Could not read a recorded state.", error))?
             .detach();
         let parent = object.parent_ids().next().map(|id| id.detach());
 
@@ -158,7 +169,10 @@ fn newly_reachable(
 /// first push hold a pack of similar size in RAM. Streaming the pack to the
 /// transport, the way git does, is the hardening path if that ever becomes the
 /// target.
-pub fn pack(repo: &gix::Repository, objects: &[gix::ObjectId]) -> Result<Vec<u8>, NativeError> {
+pub(super) fn pack(
+    repo: &gix::Repository,
+    objects: &[gix::ObjectId],
+) -> Result<Vec<u8>, NativeError> {
     let count = u32::try_from(objects.len()).map_err(|error| {
         failed(
             "sync.pack_failed",
@@ -264,8 +278,9 @@ pub fn send(
     )
     .map_err(handshake_failure)?;
 
-    let dest_ref =
-        advertised_head(greeting.refs.as_deref()).unwrap_or_else(|| reference.to_string());
+    // The caller names the exact remote branch this workspace is bound to;
+    // push sends to it even when it is not the remote's advertised default.
+    let dest_ref = reference.to_string();
     let null = gix::ObjectId::null(repo.object_hash());
     let old = greeting
         .refs
@@ -331,22 +346,6 @@ pub fn send(
     })
 }
 
-/// The branch HEAD names on the remote, so a nonstandard default is updated.
-fn advertised_head(refs: Option<&[gix::protocol::handshake::Ref]>) -> Option<String> {
-    refs?.iter().find_map(|known| match known {
-        gix::protocol::handshake::Ref::Symbolic {
-            full_ref_name,
-            target,
-            ..
-        }
-        | gix::protocol::handshake::Ref::Unborn {
-            full_ref_name,
-            target,
-        } if full_ref_name == "HEAD" => Some(target.to_string()),
-        _ => None,
-    })
-}
-
 /// Whether what the remote holds is something this history already contains.
 ///
 /// git's own client asks this rather than leaving it to the server, and so must
@@ -363,7 +362,7 @@ fn handshake_failure(error: gix::protocol::handshake::Error) -> NativeError {
     match error {
         gix::protocol::handshake::Error::Credentials(_) => failed(
             "sync.credentials_unavailable",
-            "Could not read the saved sign-in from this computer's keychain.",
+            "Could not read your saved sign-in.",
             error,
         ),
         gix::protocol::handshake::Error::EmptyCredentials

@@ -1,212 +1,278 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { noteName } from "../lib/utils";
-import { useSettingsStore } from "../settings/settingsStore";
 import { Unavailable } from "../shell/Unavailable";
-import type { ChangedNote, ConflictRate, RecordedChange, Synced } from "./historyTypes";
-import {
-  describeConflictRate,
-  failureMessage,
-  describeMoment,
-  describePill,
-  describeSync,
-  describeWhatChanged
-} from "./syncCopy";
-import {
-  readConflictRate,
-  readHistory,
-  restoreVersion,
-  syncNow
-} from "./syncService";
+import type { HistoryPage, RecordedChange, VersionDiff } from "./historyTypes";
+import { lineDelta } from "./mergeModel";
+import { describeMoment, failureMessage, restoreFailureMessage } from "./syncCopy";
+import { HISTORY_PAGE, readHistory, readVersionDiff } from "./syncService";
 import { useSyncStatus } from "./useSyncStatus";
 
 /**
- * Everything this workspace has saved, and the way back to any of it.
+ * The recorded versions of the file being looked at, newest first.
  *
- * Two surfaces in one, because they are two questions about one list. Opened
- * from the footer it is the whole history; opened from a note it is that note's
- * earlier versions — which is the same walk, asked a narrower question, so the
- * two can never disagree about what happened.
- *
- * Nothing here is destructive. Putting a version back saves what it replaced
- * first, so the way out of a restore is another restore.
+ * A document inspector rather than a workspace ledger: there is one question
+ * here — "what did this file look like before?" — and two ways to answer it.
+ * Compare opens a read-only side-by-side in a tab; Restore asks the shell to
+ * put a version back, which saves any unsaved edits first so nothing written
+ * is lost under it.
  */
 
 interface HistoryPanelProps {
   readonly rootPath: string | null;
-  /** When set, only this note's earlier versions are listed. */
+  /** The file whose earlier versions are listed, or `null` when none is open. */
   readonly note: string | null;
-  /** Leaves a single note's versions for the whole workspace's history. */
-  readonly onShowEverything: () => void;
+  /**
+   * Ready contents of the open document, or `null` when there is no text to
+   * compare against — a file still loading, or one that isn't text at all.
+   */
+  readonly currentContents: string | null;
+  /** Opens a read-only comparison of the file with one recorded version. */
+  readonly onCompare: (notePath: string, changeId: string, versionAt?: number | null) => void;
+  /**
+   * Puts a recorded version back. Shell-owned: an open dirty file is saved
+   * first, and a save that cannot happen aborts the restore loudly.
+   */
+  readonly onRestore: (notePath: string, changeId: string) => Promise<void>;
 }
-/** One read of the panel: what it holds, or why it could not be read. */
+
+/** One first-page read: what it found, or why it could not be read. */
 interface Read {
-  readonly changes: readonly RecordedChange[] | null;
-  readonly rate: ConflictRate | null;
+  readonly page: HistoryPage | null;
   readonly error: string | null;
 }
 
-export function HistoryPanel({ rootPath, note, onShowEverything }: HistoryPanelProps) {
-  const queryKey = `${rootPath ?? ""}\0${note ?? ""}`;
+export function HistoryPanel({
+  rootPath,
+  note,
+  currentContents,
+  onCompare,
+  onRestore
+}: HistoryPanelProps) {
+  if (!rootPath) {
+    return (
+      <Unavailable
+        title="No workspace open"
+        description="Open a workspace to see a file's earlier versions."
+      />
+    );
+  }
+  if (!note) {
+    return (
+      <Unavailable
+        title="No file open"
+        description="Open a file to see the versions recorded of it."
+      />
+    );
+  }
+  // A different file is a different session: the key remounts rather than an
+  // effect resetting state, so a restore or read still in flight for the
+  // previous file resolves onto an unmounted component and can leak neither
+  // its list nor its notice into this file's timeline.
+  return (
+    <HistorySession
+      key={`${rootPath}\0${note}`}
+      rootPath={rootPath}
+      note={note}
+      currentContents={currentContents}
+      onCompare={onCompare}
+      onRestore={onRestore}
+    />
+  );
+}
+
+function HistorySession({
+  rootPath,
+  note,
+  currentContents,
+  onCompare,
+  onRestore
+}: {
+  readonly rootPath: string;
+  readonly note: string;
+  readonly currentContents: string | null;
+  readonly onCompare: (notePath: string, changeId: string, versionAt?: number | null) => void;
+  readonly onRestore: (notePath: string, changeId: string) => Promise<void>;
+}) {
   const [changes, setChanges] = useState<readonly RecordedChange[]>([]);
-  const [rate, setRate] = useState<ConflictRate | null>(null);
-  const [opened, setOpened] = useState<ReadonlySet<string>>(() => new Set());
-  const [busy, setBusy] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [syncing, setSyncing] = useState(false);
-  const [loadedKey, setLoadedKey] = useState<string | null>(null);
-  const restoring = useRef(false);
-  const reloadId = useRef(0);
-  const loading = loadedKey !== queryKey;
-  // Native manual sync reads the saved workspace document. Do not enable this
-  // from a staged link that the native side cannot see yet.
-  const destination = useSettingsStore((state) => state.workspaceValues?.["sync.destination"]);
-  const syncConfigured = typeof destination === "string" && destination.trim() !== "";
+  const [loaded, setLoaded] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  /** Reads the list, changing nothing. {@link apply} is the only writer. */
-  const read = useCallback(async (): Promise<Read | null> => {
-    if (!rootPath) return null;
+  // Every first-page read bumps the generation. Any answer — a first page or
+  // an older page — that resolves with a stale number predates the latest
+  // refresh and is dropped: an older page may only ever append to the first
+  // page its cursor was cut from.
+  const generation = useRef(0);
+  // The ticket of a first-page read still out, or 0. While one is pending the
+  // cursor on screen still belongs to the previous list, so "load older" must
+  // refuse — including in the tick before `refreshing` has rendered.
+  const pendingFirstPage = useRef(0);
+  // Blocks a second "load older" click before the disabled state has even
+  // rendered — a ref because a rapid click still reads the stale closure.
+  const olderInFlight = useRef(false);
+  // Results that resolve after this session unmounted must not write.
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+
+  // Per-revision comparison results, fetched lazily as cards scroll into
+  // view. A recorded version never changes, so the fetched "theirs" side
+  // stays right as the current file is edited — the badge recomputes its
+  // +/− against the live contents rather than refetching per keystroke. The
+  // session's keyed remount is what keeps another file's reads out of it.
+  const diffCache = useMemo<DiffCache>(() => new Map(), []);
+
+  /** Reads the first page, changing nothing. `refresh` is the only writer. */
+  const read = useCallback(async (): Promise<Read> => {
     try {
-      const [changes, rate] = await Promise.all([
-        readHistory(rootPath, note),
-        readConflictRate(rootPath)
-      ]);
-      return { changes, rate, error: null };
+      return { page: await readHistory(rootPath, note), error: null };
     } catch (cause) {
-      return { changes: null, rate: null, error: failureMessage(cause, "This folder's saved versions could not be read.", true) };
+      return {
+        page: null,
+        error: failureMessage(cause, "This file's earlier versions could not be read.", true)
+      };
     }
   }, [note, rootPath]);
 
-  const apply = useCallback((result: Read | null) => {
-    if (!result) return;
-    if (result.changes) setChanges(result.changes);
-    if (result.rate) setRate(result.rate);
+  /**
+   * A fresh first page. Status changes, the Refresh action, and the re-read
+   * a restore is owed all land here — and every one of them retires whatever
+   * was still in flight for the previous first page, so a late answer can
+   * never overwrite or append to the newer list.
+   */
+  const refresh = useCallback(async () => {
+    const ticket = ++generation.current;
+    pendingFirstPage.current = ticket;
+    setRefreshing(true);
+    const result = await read();
+    // A newer refresh owns the pending flag now: a stale answer leaves the
+    // list, the cursor and the flag itself untouched. A failed read likewise
+    // keeps the previously accepted rows and cursor so a retry still works.
+    if (!alive.current || ticket !== generation.current) return;
+    pendingFirstPage.current = 0;
+    setRefreshing(false);
+    if (result.page) {
+      setChanges(result.page.changes);
+      setNextCursor(result.page.nextCursor);
+    }
     setError(result.error);
-    setLoadedKey(queryKey);
-  }, [queryKey]);
+    setLoaded(true);
+  }, [read]);
 
   const reload = useCallback(() => {
-    const id = ++reloadId.current;
-    void read().then((result) => {
-      if (id === reloadId.current) apply(result);
-    });
-  }, [apply, read]);
-  useEffect(() => () => {
-    reloadId.current++;
-  }, [queryKey]);
+    void refresh();
+  }, [refresh]);
+
+  // Live status keeps the list fresh when a record lands (or a restore writes
+  // one); the alongside-git sentence is owed to anyone whose folder already
+  // keeps its own history.
   const status = useSyncStatus(rootPath, undefined, reload);
-  const { alongsideOwnGit } = status;
-  // Live status covers background trips; local `syncing` covers the click until
-  // the first status event arrives, so the button never looks idle mid-request.
-  const bringingInStep = syncing || status.state === "syncing";
-  const syncButtonLabel = bringingInStep
-    ? describePill({
-        ...status,
-        state: "syncing",
-        phase: status.state === "syncing" ? status.phase : null
-      }).text
-    : "Bring these notes in step now";
+
+  /**
+   * The next older page, asked for with the cursor the last accepted page
+   * left. Rows already shown are never touched by it: a failure leaves both
+   * the list and the cursor standing, so the same button retries the same
+   * cursor — and Refresh remains the way out of a cursor that has expired.
+   */
+  const loadOlder = useCallback(async () => {
+    const cursor = nextCursor;
+    if (cursor === null || olderInFlight.current || pendingFirstPage.current !== 0) return;
+    olderInFlight.current = true;
+    setLoadingOlder(true);
+    const ticket = generation.current;
+    try {
+      const page = await readHistory(rootPath, note, HISTORY_PAGE, cursor);
+      if (!alive.current || ticket !== generation.current) return;
+      setChanges((shown) => [...shown, ...page.changes]);
+      setNextCursor(page.nextCursor);
+      setError(null);
+    } catch (cause) {
+      if (!alive.current || ticket !== generation.current) return;
+      setError(failureMessage(cause, "Older versions of this file could not be read.", true));
+    } finally {
+      olderInFlight.current = false;
+      if (alive.current) setLoadingOlder(false);
+    }
+  }, [nextCursor, note, rootPath]);
 
   const putBack = useCallback(
-    async (change: RecordedChange, path: string) => {
-      if (!rootPath || restoring.current) return;
-      restoring.current = true;
-      setBusy(true);
+    async (change: RecordedChange) => {
+      if (busyId !== null) return;
+      setBusyId(change.id);
       setNotice(null);
       let failure: string | null = null;
       try {
-        await restoreVersion(rootPath, path, change.id);
+        await onRestore(note, change.id);
       } catch (cause) {
-        failure = failureMessage(cause, "That version could not be put back. Nothing was changed.", true);
+        failure = restoreFailureMessage(cause);
       }
-      try {
-        // Always after the attempt, and the report last: the re-read clears the
-        // previous message, and a failure the list overwrote would be a failure
-        // nobody was told about.
-        apply(await read());
-        if (failure) setError(failure);
-        else setNotice(`"${noteName(path)}" is back to how it was ${describeMoment(change.at).toLowerCase()}.`);
-      } finally {
-        restoring.current = false;
-        setBusy(false);
-      }
+      // Always re-read, and the report last: a restore writes a new recorded
+      // change, and a failure the list overwrote would be a failure nobody saw.
+      await refresh();
+      if (!alive.current) return;
+      if (failure) setError(failure);
+      else setNotice(`"${noteName(note)}" is back to how it was ${describeMoment(change.at).toLowerCase()}.`);
+      setBusyId(null);
     },
-    [apply, read, rootPath]
+    [busyId, note, onRestore, refresh]
   );
 
-  /** Brings this folder in step with wherever it syncs to, and says what moved. */
-  const bringInStep = useCallback(async () => {
-    if (!rootPath) return;
-    setSyncing(true);
-    setNotice(null);
-    setError(null);
-    let failure: string | null = null;
-    let done: Synced | null = null;
-    try {
-      done = await syncNow(rootPath);
-    } catch (cause) {
-      failure = failureMessage(cause, "These notes could not be brought in step. Nothing was changed.", true);
-    }
-    // The re-read first, the report last, for the same reason a restore does
-    // it that way: the list overwrites the message it was told to show.
-    apply(await read());
-    if (failure) setError(failure);
-    else if (done) setNotice(describeSync(done));
-    setSyncing(false);
-  }, [apply, read, rootPath]);
-
-  const toggle = useCallback((id: string) => {
-    setOpened((current) => {
-      const next = new Set(current);
-      if (!next.delete(id)) next.add(id);
-      return next;
-    });
-  }, []);
-
-  if (!rootPath) {
-    return <Unavailable title="No workspace open" description="Open a workspace to see what it has saved." />;
-  }
+  // A source label is only owed when one timeline mixes this app's records
+  // with versions imported from git — a configured link's or the folder's own.
+  const mixedSources = useMemo(
+    () =>
+      changes.some((change) => change.source === "local") &&
+      changes.some((change) => change.source === "git"),
+    [changes]
+  );
 
   return (
-    <section className="@container flex min-h-0 flex-1 flex-col overflow-y-auto" aria-label="Saved versions">
+    <section
+      data-phone-scroll-clearance
+      className="@container flex min-h-0 flex-1 flex-col overflow-y-auto"
+      aria-label="Version history"
+    >
       <header className="border-b border-border px-3 py-3">
-        <h3 className="m-0 text-sm font-semibold text-foreground">
-          {note ? `Earlier versions of ${noteName(note)}` : "Saved versions"}
-        </h3>
+        {/* The surrounding popout already names the panel — the heading names
+            the file, so the two never read the same words twice. */}
+        <h3 className="m-0 text-sm font-semibold text-foreground">{noteName(note)}</h3>
         <p className="mb-0 mt-1 text-xs leading-relaxed text-muted-foreground">
-          {note
-            ? "Every version of this note that was saved. Putting one back saves what it replaces, so you can change your mind again."
-            : "Everything saved in this folder, newest first. Open one to see which notes changed and to put any of them back."}
+          Every recorded version of {noteName(note)}, newest first. Putting one back saves what it
+          replaces first, so you can always change your mind again.
         </p>
-        {alongsideOwnGit && (
+        {status.alongsideOwnGit && (
           <p className="mb-0 mt-2 text-[0.7rem] leading-relaxed text-muted-foreground">
-            This folder also keeps its own version history. That one is left exactly as it is —
-            what you see here is a second, separate record kept outside your notes.
+            This folder also has its own git history, which is left exactly as it is — versions
+            shown from it are copies kept outside your notes.
           </p>
-        )}
-        {note ? (
-          <button type="button" className={QUIET_BUTTON + " mt-2"} onClick={onShowEverything}>
-            Show everything instead
-          </button>
-        ) : (
-          syncConfigured && (
-            <button
-              type="button"
-              className={QUIET_BUTTON + " mt-2"}
-              disabled={bringingInStep}
-              onClick={() => void bringInStep()}
-            >
-              {syncButtonLabel}
-            </button>
-          )
         )}
       </header>
 
       {error !== null && (
-        <p role="alert" className="m-3 rounded-small border border-danger px-2 py-1.5 text-xs text-danger">
-          {error}
-        </p>
+        <div
+          role="alert"
+          className="m-3 flex items-start justify-between gap-2 rounded-small border border-danger px-2 py-1.5 text-xs text-danger"
+        >
+          <span>{error}</span>
+          {/* A fresh first page — also the way past a cursor that has expired,
+              since a retry of the failed page itself is one button below. */}
+          <button
+            type="button"
+            className="shrink-0 rounded-small border border-danger px-1.5 py-0.5"
+            onClick={() => void refresh()}
+          >
+            Refresh
+          </button>
+        </div>
       )}
       {notice !== null && (
         <p role="status" className="m-3 rounded-small border border-border px-2 py-1.5 text-xs text-muted-foreground">
@@ -214,116 +280,222 @@ export function HistoryPanel({ rootPath, note, onShowEverything }: HistoryPanelP
         </p>
       )}
 
-      {!loading && changes.length === 0 && error === null ? (
-        <Unavailable
-          title={note ? "No earlier versions yet" : "Nothing saved yet"}
-          description={
-            note
-              ? "This note has only ever been saved once. Later versions will show up here as you edit it."
-              : "As you edit your notes, every few seconds of work is saved here so you can go back to it."
-          }
-        />
+      {!loaded ? (
+        <p className="m-3 text-xs text-muted-foreground">Loading versions…</p>
+      ) : changes.length === 0 ? (
+        // The alert above is already the whole story when a read failed.
+        error === null ? (
+          <Unavailable
+            title="No versions available yet"
+            description="Versions recorded for this file will show up here as it changes."
+          />
+        ) : null
       ) : (
-        <ol className="m-0 flex list-none flex-col gap-2 p-3">
-          {changes.map((change) => (
-            <Entry
-              key={change.id}
-              change={change}
-              open={opened.has(change.id) || note !== null}
-              collapsible={note === null}
-              busy={busy}
-              onToggle={() => toggle(change.id)}
-              onRestore={(path) => void putBack(change, path)}
-            />
-          ))}
-        </ol>
-      )}
-
-      {rate !== null && rate.recorded > 0 && (
-        <p className="m-0 border-t border-border px-3 py-2 text-[0.7rem] text-muted-foreground">
-          {describeConflictRate(rate)}
-        </p>
+        <>
+          <p className="m-0 px-3 pt-3 text-[0.7rem] text-muted-foreground">
+            {changes.length} {changes.length === 1 ? "version" : "versions"}{" "}
+            {nextCursor === null ? "recorded" : "loaded"}
+          </p>
+          <ol className="m-0 flex list-none flex-col gap-2 p-3">
+            {changes.map((change) => (
+              <RevisionCard
+                key={change.id}
+                rootPath={rootPath}
+                note={note}
+                change={change}
+                currentContents={currentContents}
+                cache={diffCache}
+                busy={busyId !== null}
+                provenance={
+                  mixedSources ? (change.source === "git" ? "Git history" : "Recorded here") : null
+                }
+                onCompare={() => onCompare(note, change.id, change.at)}
+                onRestore={() => void putBack(change)}
+              />
+            ))}
+          </ol>
+          {nextCursor !== null && (
+            <div className="px-3 pb-3">
+              <button
+                type="button"
+                className={ACTION_BUTTON + " w-full"}
+                disabled={loadingOlder || refreshing}
+                onClick={() => void loadOlder()}
+              >
+                {loadingOlder ? "Loading older versions…" : "Load older versions"}
+              </button>
+            </div>
+          )}
+        </>
       )}
     </section>
   );
 }
 
-const QUIET_BUTTON =
+const ACTION_BUTTON =
   "rounded-small border border-border bg-surface px-2 py-1 text-xs text-foreground disabled:opacity-50";
+const COMPARE_BUTTON =
+  "rounded-small border border-primary bg-primary px-2 py-1 text-xs text-primary-foreground disabled:opacity-50";
 
-interface EntryProps {
+type DiffCache = Map<string, VersionDiff | null>;
+
+interface RevisionCardProps {
+  readonly rootPath: string;
+  readonly note: string;
   readonly change: RecordedChange;
-  readonly open: boolean;
-  /** A single note's versions are always open — there is nothing to fold away. */
-  readonly collapsible: boolean;
+  readonly currentContents: string | null;
+  readonly cache: DiffCache;
   readonly busy: boolean;
-  readonly onToggle: () => void;
-  readonly onRestore: (path: string) => void;
+  /** "Recorded here" / "Git history" — `null` when the timeline has one source. */
+  readonly provenance: string | null;
+  readonly onCompare: () => void;
+  readonly onRestore: () => void;
 }
 
-function Entry({ change, open, collapsible, busy, onToggle, onRestore }: EntryProps) {
-  const summary = `${describeMoment(change.at)} — ${describeWhatChanged(change.notes)}`;
+function RevisionCard({
+  rootPath,
+  note,
+  change,
+  currentContents,
+  cache,
+  busy,
+  provenance,
+  onCompare,
+  onRestore
+}: RevisionCardProps) {
+  // A change that deleted this file left no version of it behind — there is
+  // nothing to compare or put back, and the version before it is further down.
+  const restorable = change.notes.find((entry) => entry.path === note)?.change !== "removed";
 
   return (
     <li className="rounded-small border border-border bg-card p-3">
-      {collapsible ? (
-        <button
-          type="button"
-          aria-expanded={open}
-          className="m-0 w-full cursor-pointer border-0 bg-transparent p-0 text-left text-xs font-semibold text-card-foreground"
-          onClick={onToggle}
-        >
-          {summary}
-        </button>
-      ) : (
-        <p className="m-0 text-xs font-semibold text-card-foreground">{summary}</p>
-      )}
-
-      {open && (
-        <>
-          <ul className="m-0 mt-2 flex list-none flex-col gap-1.5 p-0">
-            {change.notes.map((note) => (
-              <NoteRow
-                key={note.path}
-                note={note}
-                busy={busy}
-                onRestore={() => onRestore(note.path)}
-              />
-            ))}
-          </ul>
-          {/* The escape hatch: exactly what was written down, for anyone who
-              would rather read the record than our rendering of it. */}
-          <details className="mt-2 text-[0.68rem] text-muted-foreground">
-            <summary className="cursor-pointer">What was written down</summary>
-            <p className="m-0 mt-1 break-words font-mono">{change.message}</p>
-          </details>
-        </>
+      <div className="flex items-center justify-between gap-2">
+        <p className="m-0 text-xs font-semibold text-card-foreground">
+          {describeMoment(change.at)}
+        </p>
+        <span className="flex shrink-0 items-center gap-1">
+          {provenance !== null && <span className={BADGE + " " + BADGE_LOADED}>{provenance}</span>}
+          {restorable && (
+            <RevisionBadge
+              rootPath={rootPath}
+              note={note}
+              changeId={change.id}
+              currentContents={currentContents}
+              cache={cache}
+            />
+          )}
+        </span>
+      </div>
+      <p className="mb-0 mt-1 text-[0.7rem] leading-relaxed text-muted-foreground">
+        {change.message}
+      </p>
+      {restorable && (
+        <div className="mt-2 flex gap-1.5">
+          <button
+            type="button"
+            className={COMPARE_BUTTON + " flex-1"}
+            disabled={busy}
+            onClick={onCompare}
+          >
+            Compare Diff
+          </button>
+          <button type="button" className={ACTION_BUTTON} disabled={busy} onClick={onRestore}>
+            Restore
+          </button>
+        </div>
       )}
     </li>
   );
 }
-function NoteRow({
-  note,
-  busy,
-  onRestore
-}: {
-  readonly note: ChangedNote;
-  readonly busy: boolean;
-  readonly onRestore: () => void;
-}) {
+
+interface RevisionBadgeProps {
+  readonly rootPath: string;
+  readonly note: string;
+  readonly changeId: string;
+  readonly currentContents: string | null;
+  readonly cache: DiffCache;
+}
+
+const BADGE = "rounded px-1 text-[0.6rem] leading-4";
+const BADGE_LOADED = "bg-surface text-muted-foreground";
+const BADGE_PENDING = "bg-surface/50 text-muted-foreground/60";
+
+/**
+ * How many lines restoring a revision would add and remove — the same
+ * comparison `CodeMirrorDiff` draws for "Preview restore", counted rather
+ * than drawn, so the badge and the preview can never disagree.
+ *
+ * The diff is fetched lazily, once, when the card scrolls into view (plain
+ * environments fetch straight away): what changes afterwards is only the
+ * count, recomputed locally from the live contents.
+ */
+function RevisionBadge({ rootPath, note, changeId, currentContents, cache }: RevisionBadgeProps) {
+  const hostRef = useRef<HTMLSpanElement | null>(null);
+  const [visible, setVisible] = useState(false);
+  const cacheKey = `${note}\0${changeId}`;
+  const [diff, setDiff] = useState<VersionDiff | null | undefined>(() => cache.get(cacheKey));
+
+  useEffect(() => {
+    if (visible) return;
+    const host = hostRef.current;
+    // IntersectionObserver may be absent (tests); fetch eagerly then, the
+    // badge is small and the timeline is short.
+    if (!host || typeof IntersectionObserver === "undefined") {
+      setVisible(true);
+      return;
+    }
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        setVisible(true);
+        observer.disconnect();
+      }
+    });
+    observer.observe(host);
+    return () => observer.disconnect();
+  }, [visible]);
+
+  // The buffer handed to the native diff is read once at fetch time: it only
+  // decides what `text.current` comes back as, and the badge compares against
+  // the live contents below rather than that snapshot.
+  const contentsAtFetch = useRef(currentContents);
+
+  useEffect(() => {
+    // A cached entry was already picked up by the state initializer — no
+    // fetch and no write-back is owed. Only `undefined` means "not asked yet".
+    if (!visible || cache.get(cacheKey) !== undefined) return;
+    let cancelled = false;
+    readVersionDiff(rootPath, note, changeId, contentsAtFetch.current)
+      .then((result) => {
+        cache.set(cacheKey, result);
+        if (!cancelled) setDiff(result);
+      })
+      .catch(() => {
+        cache.set(cacheKey, null);
+        if (!cancelled) setDiff(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, rootPath, note, changeId, cacheKey, cache]);
+
+  // Restore direction: "added" is what putting the recorded version back
+  // would add, "removed" what it would take out — the recorded version is the
+  // destination, so it is the delta's `after`.
+  const delta = useMemo(() => {
+    if (!diff || diff.kind !== "text") return null;
+    const current = currentContents ?? diff.text.current;
+    return lineDelta(current, diff.text.recorded);
+  }, [diff, currentContents]);
+
   return (
-    <li className="flex flex-col gap-1 @xs:flex-row @xs:items-center @xs:justify-between">
-      <span className="break-words text-[0.7rem] text-muted-foreground">
-        {noteName(note.path)}
-        {note.change === "removed" && " — deleted"}
-      </span>
-      {/* A deletion left no text behind, so there is nothing here to put back;
-          the version before it is the one to restore, and it is further down. */}
-      {note.change !== "removed" && (
-        <button type="button" className={QUIET_BUTTON} onClick={onRestore} disabled={busy}>
-          Put this version back
-        </button>
+    <span ref={hostRef} className="shrink-0" aria-hidden={diff === undefined}>
+      {diff === undefined ? (
+        <span className={BADGE + " " + BADGE_PENDING}>…</span>
+      ) : diff === null ? null : delta === null ? (
+        <span className={BADGE + " " + BADGE_LOADED}>not text</span>
+      ) : (
+        <span className={BADGE + " " + BADGE_LOADED}>+{delta.added} -{delta.removed}</span>
       )}
-    </li>
+    </span>
   );
 }

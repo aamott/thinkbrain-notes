@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Merge tab — layout mockup</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0f111a; --panel:#161925; --panel-2:#12141d; --editor:#1a1d29;
+    --border:#262b3d; --border-soft:#1f2333;
+    --text:#e6e8f0; --text-dim:#9aa0b4; --text-faint:#6b7288;
+    --accent:#5fb9c9; --accent-2:#7dd3e0; --accent-soft:rgba(95,185,201,0.14);
+    --left:#7aa2f7; --left-soft:rgba(122,162,247,0.10);
+    --right:#c48fef; --right-soft:rgba(196,143,239,0.10);
+    --good:#6bd08f; --good-soft:rgba(107,208,143,0.13);
+    --warn:#e8b85f; --warn-soft:rgba(232,184,95,0.13);
+    --mono:'JetBrains Mono',monospace; --ui:'Inter',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:#0a0b12;color:var(--text);font-family:var(--ui);font-size:13px;padding:40px 24px;}
+  .page{max-width:1100px;margin:0 auto;}
+  h1{font-size:20px;margin-bottom:4px;}
+  .lede{color:var(--text-dim);font-size:13px;margin-bottom:28px;max-width:720px;}
+  .sec{margin-bottom:44px;}
+  .sec h2{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--accent-2);margin-bottom:10px;}
+  .cap{color:var(--text-faint);font-size:12px;margin-top:10px;line-height:1.5;}
+  .cap b{color:var(--text-dim);}
+
+  .win{background:var(--bg);border:1px solid var(--border);border-radius:12px;overflow:hidden;}
+  .frame-label{font-size:11px;color:var(--text-faint);margin-bottom:6px;}
+
+  /* ---- the two header bars ---- */
+  .bar{display:flex;align-items:center;gap:10px;padding:7px 12px;border-bottom:1px solid var(--border);background:var(--panel-2);}
+  .bar.crumbs{font-size:12px;color:var(--text-faint);}
+  .bar.crumbs .file{color:var(--text);font-weight:600;}
+  .bar.crumbs .sep{color:var(--border);}
+  .bar.crumbs .merge-tag{font-size:10.5px;font-weight:700;color:var(--accent-2);background:var(--accent-soft);border-radius:5px;padding:2px 7px;}
+  .bar .spacer{flex:1;}
+  .seg{display:flex;border:1px solid var(--border);border-radius:6px;overflow:hidden;}
+  .seg span{padding:3px 9px;font-size:11px;color:var(--text-faint);cursor:pointer;}
+  .seg span.on{background:var(--accent-soft);color:var(--accent-2);}
+  .btn{font:600 11.5px var(--ui);color:var(--text);background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:5px 10px;cursor:pointer;white-space:nowrap;}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#0b0d14;}
+  .btn.icon{padding:5px 7px;font-size:12px;line-height:1;color:var(--text-dim);}
+  .vdiv{width:1px;height:16px;background:var(--border);}
+
+  /* ---- CM panes ---- */
+  .cm-head{display:flex;font-size:11px;color:var(--text-dim);border-bottom:1px solid var(--border-soft);background:var(--panel);}
+  .cm-head span{flex:1;padding:4px 12px;}
+  .cm-head .gapcol{width:1.7em;flex:0 0 1.7em;}
+  .cm{display:flex;height:290px;}
+  .pane{flex:1;min-width:0;font:11.5px/1.7 var(--mono);padding:8px 0;overflow:hidden;background:var(--editor);}
+  .ln{display:flex;gap:10px;padding:0 12px;white-space:nowrap;}
+  .ln i{font-style:normal;color:var(--text-faint);width:14px;text-align:right;flex-shrink:0;user-select:none;}
+  .ln.addl{background:var(--left-soft);}
+  .ln.addl b{color:var(--left);font-weight:400;background:rgba(122,162,247,0.18);border-radius:2px;padding:0 2px;}
+  .pane.right .ln.addl{background:var(--right-soft);}
+  .pane.right .ln.addl b{color:var(--right);background:rgba(196,143,239,0.2);}
+  .ln.mergedl{background:var(--good-soft);}
+  .ln.mergedl b{color:var(--good);background:rgba(107,208,143,0.16);font-weight:400;border-radius:2px;padding:0 2px;}
+  .collapse{flex:1;text-align:center;color:var(--text-faint);font-size:10.5px;padding:4px 0;border-top:1px dashed var(--border-soft);border-bottom:1px dashed var(--border-soft);margin:4px 0;}
+  .arrowcol{width:1.7em;flex:0 0 1.7em;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:2px;background:var(--panel-2);border-left:1px solid var(--border-soft);}
+  .arrowcol span{font-size:11px;color:var(--text-faint);cursor:pointer;}
+  .arrowcol span:hover{color:var(--accent-2);}
+  .editcursor{border-left:2px solid var(--accent);margin-left:-2px;}
+
+  /* mobile frame */
+  .phone{width:340px;}
+  .phone .cm{height:220px;flex-direction:column;}
+  .phone .ln{font-size:10.5px;}
+
+  /* options strip */
+  .opts{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;}
+  .opt{border:1px solid var(--border);border-radius:10px;padding:12px 14px;background:var(--panel);}
+  .opt.rec{border-color:rgba(107,208,143,0.45);}
+  .opt .name{font-size:12px;font-weight:700;margin-bottom:6px;}
+  .opt .name .tag{font-size:9.5px;color:var(--good);border:1px solid rgba(107,208,143,0.5);border-radius:4px;padding:1px 5px;margin-left:6px;vertical-align:1px;}
+  .opt .mini{background:var(--bg);border:1px solid var(--border-soft);border-radius:6px;padding:8px;font:10.5px/1.6 var(--mono);color:var(--text-dim);margin-bottom:8px;}
+  .opt .mini .hl{background:var(--left-soft);padding:0 2px;border-radius:2px;}
+  .opt .mini .hl2{background:var(--good-soft);padding:0 2px;border-radius:2px;color:var(--good);}
+  .opt .mini .hlw{background:var(--warn-soft);padding:0 2px;border-radius:2px;color:var(--warn);}
+  .opt .why{font-size:11.5px;color:var(--text-dim);line-height:1.5;}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <h1>Merge tab — layout cleanup</h1>
+  <p class="lede">The real merge UI is CodeMirror's diff view (<code>@codemirror/merge</code>, already a dependency) — not the chunk-card mockup. So this is what surrounds it: two thin bars, the diff, and as little chrome as a phone can afford.</p>
+
+  <!-- ================= DESKTOP ================= -->
+  <div class="sec">
+    <h2>Desktop — everything above the diff is two bars + CM's own labels</h2>
+    <div class="win">
+      <div class="bar crumbs">
+        <span>Explorer</span><span class="sep">›</span><span>notes</span><span class="sep">›</span>
+        <span class="file">Meeting Notes.md</span>
+        <span class="merge-tag">MERGE</span>
+        <span class="spacer"></span>
+        <button class="btn icon" title="Undo (Ctrl+Z)">↶</button>
+        <button class="btn icon" title="Redo (Ctrl+Y)">↷</button>
+        <button class="btn primary">Save</button>
+      </div>
+      <div class="bar">
+        <button class="btn">Keep current</button>
+        <button class="btn">Use incoming</button>
+        <button class="btn">Keep both files</button>
+        <span class="spacer"></span>
+        <div class="seg"><span>Inline</span><span class="on">Side by side</span></div>
+      </div>
+      <div class="cm-head">
+        <span>From OneDrive · today 9:12 AM · read only</span>
+        <span class="gapcol"></span>
+        <span>This computer — what will be saved</span>
+      </div>
+      <div class="cm">
+        <div class="pane">
+          <div class="collapse">· · · 14 identical lines · · ·</div>
+          <div class="ln addl"><i>15</i>Marcus to <b>sync directly</b> with design</div>
+          <div class="collapse">· · · 6 identical lines · · ·</div>
+          <div class="ln addl"><i>23</i>- legal review before <b>going public</b>?</div>
+        </div>
+        <div class="arrowcol"><span title="Use this part">⇝</span><span title="Use the original" style="font-size:9px;">⟲</span></div>
+        <div class="pane right">
+          <div class="collapse">· · · 14 identical lines · · ·</div>
+          <div class="ln mergedl"><i>15</i>Marcus to <b>sync directly</b> with design <b>before next Wed</b></div>
+          <div class="collapse">· · · 6 identical lines · · ·</div>
+          <div class="ln addl editcursor"><i>23</i>- legal review before <b>the partner announcement</b>?</div>
+        </div>
+      </div>
+    </div>
+    <div class="cap">Bar 1 is the same <b>WorkspaceHeaderBar</b> every note gets — breadcrumbs left, <b>↶ ↷ Save</b> right. Bar 2 is merge-only: whole-version choices left, layout toggle right. The old big label cards are gone — the slim pane-label row is CodeMirror's own header. <b>Green</b> lines = merged themselves; ⇝ pulls a chunk across, <b>⟲</b> (only on real conflicts, when an original exists) puts back what it said before either device. No bottom bar.</div>
+  </div>
+
+  <!-- ================= NORMAL NOTE, FOR CONTEXT ================= -->
+  <div class="sec">
+    <h2>For context — a normal note gets the same bar 1, and no bar 2</h2>
+    <div class="win">
+      <div class="bar crumbs">
+        <span>Explorer</span><span class="sep">›</span><span>notes</span><span class="sep">›</span>
+        <span class="file">Meeting Notes.md</span>
+        <span class="spacer"></span>
+        <button class="btn icon" title="Undo (Ctrl+Z)">↶</button>
+        <button class="btn icon" title="Redo (Ctrl+Y)">↷</button>
+        <button class="btn">Save</button>
+      </div>
+      <div class="cm" style="height:90px;">
+        <div class="pane">
+          <div class="ln"><i>1</i># Q3 Roadmap Sync — Aug 11</div>
+          <div class="ln"><i>2</i>Attendees: Adam, Priya, Marcus.</div>
+          <div class="ln editcursor"><i>3</i>## Action items</div>
+        </div>
+      </div>
+    </div>
+    <div class="cap">Undo/redo buttons aren't merge-specific — they sit next to Save on every editor tab, calling the same CM6 <code>undo</code>/<code>redo</code> commands the keyboard shortcuts already reach. On a merge tab they act on the result pane (the only editable one).</div>
+  </div>
+
+  <!-- ================= MOBILE ================= -->
+  <div class="sec">
+    <h2>Phone — same two bars, the rest is merge</h2>
+    <div class="frame-label">375px — inline presentation (CodeMirror switches automatically below ~720px)</div>
+    <div class="win phone">
+      <div class="bar crumbs" style="font-size:11px;">
+        <span class="file">Meeting Notes.md</span>
+        <span class="merge-tag">MERGE</span>
+        <span class="spacer"></span>
+        <button class="btn icon">↶</button><button class="btn icon">↷</button>
+        <button class="btn primary">Save</button>
+      </div>
+      <div class="bar" style="gap:6px;flex-wrap:wrap;">
+        <button class="btn">Keep current</button>
+        <button class="btn">Use incoming</button>
+        <span class="spacer"></span>
+        <div class="seg"><span class="on">Inline</span><span>Side</span></div>
+      </div>
+      <div class="cm-head"><span>vs OneDrive's version — tap ⇤/⇥ per change</span></div>
+      <div class="cm">
+        <div class="pane">
+          <div class="collapse">· · · 14 same · · ·</div>
+          <div class="ln"><i>15</i>Marcus to sync with design</div>
+          <div class="ln addl"><i>16</i>+ before next Wed <b>⇤</b></div>
+          <div class="ln"><i>17</i>&nbsp;</div>
+          <div class="collapse">· · · 6 same · · ·</div>
+          <div class="ln addl"><i>23</i>- before <b>going public</b> <b>⇤</b></div>
+          <div class="ln mergedl"><i>24</i>- before <b>announcement</b></div>
+        </div>
+      </div>
+    </div>
+    <div class="cap">Two ~38px bars and CM's label row: the merge gets roughly three quarters of the screen. Bar 1 keeps undo/redo/save — the same controls every note has. "Keep both files" drops off the phone bar (it fits on the conflict card instead); the pane header doubles as the instruction line.</div>
+  </div>
+
+  <!-- ================= OPTIONS ================= -->
+  <div class="sec">
+    <h2>Options compared</h2>
+    <div class="opts">
+
+      <div class="opt rec">
+        <div class="name">Layout toggle — end of the actions bar <span class="tag">RECOMMENDED</span></div>
+        <div class="mini">[Keep current · Use incoming · Keep both ·· Inline|Side]</div>
+        <div class="why">Merge-only controls live together in bar 2; bar 1 stays identical to every other editor's. The toggle is a view preference, not a decision — right end is the quiet spot.</div>
+      </div>
+      <div class="opt">
+        <div class="name">Layout toggle — in the header bar</div>
+        <div class="mini">[crumbs ·· ↶ ↷ Save] &nbsp;+&nbsp; [Inline|Side]</div>
+        <div class="why">Pushes ↶ ↷ Save and a segmented control into one row — crowded at phone width, and it leaks a merge-only control into the universal bar. Rejected.</div>
+      </div>
+
+      <div class="opt rec">
+        <div class="name">"Original" choice — second arrow per chunk <span class="tag">RECOMMENDED</span></div>
+        <div class="mini">│ ⇝ pull theirs &nbsp; ⟲ put back original │</div>
+        <div class="why">Same mechanism as the existing ⇝ (<code>renderRevertControl</code>) — one more control in the arrow strip, only rendered on real conflicts when a base exists. No new layout.</div>
+      </div>
+      <div class="opt">
+        <div class="name">"Original" — third label/pane</div>
+        <div class="mini">[ theirs | <b>original</b> | yours ]</div>
+        <div class="why">CodeMirror has no three-pane merge view — this would be custom editor work for a third option most chunks won't need. Rejected.</div>
+      </div>
+
+      <div class="opt rec">
+        <div class="name">Auto-merged parts — tinted lines in result <span class="tag">RECOMMENDED</span></div>
+        <div class="mini">15 │ Marcus to <span class="hl2">sync directly … before next Wed</span></div>
+        <div class="why">CM line decorations over the ranges Rust's three-way returns — already accepted, still visible, still overridable with ⇝. Nothing hides.</div>
+      </div>
+      <div class="opt">
+        <div class="name">Auto-merged parts — collapsed summary above the diff</div>
+        <div class="mini">✓ Merged itself — 3 parts · tap to expand</div>
+        <div class="why">Cleaner-looking but hides accepted text behind a click — the thing the green tint exists to avoid. Rejected.</div>
+      </div>
+
+      <div class="opt rec">
+        <div class="name">Mobile bars — keep two, slim <span class="tag">RECOMMENDED</span></div>
+        <div class="mini">[file · MERGE ·· ↶ ↷ Save]<br>[Keep current Use incoming ·· Inline|Side]</div>
+        <div class="why">Two ~38px rows ≈ 76px of chrome. Predictable, no hidden menu.</div>
+      </div>
+      <div class="opt">
+        <div class="name">Mobile bars — one row + overflow menu</div>
+        <div class="mini">[file · MERGE ·· ↶ ↷ ·· Save ⋯]</div>
+        <div class="why">~38px saved, but "Keep current"/"Use incoming" bury in a ⋯ menu — the two most-tapped actions on the screen. Rejected unless space proves tighter than expected.</div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

@@ -2,7 +2,7 @@
 
 **Status:** APPROVED 2026-08-07 (D37, D39, D40) · **Artifact 2+3 of 3** · Cadence per D34
 
-> Discovery artifact for [Journal Discovery, Moodboards & Wireframes](../pending-journal_discovery_and_wireframes-low-med.md).
+> Discovery artifact for [Journal Discovery, Moodboards & Wireframes](journal_discovery_and_wireframes).
 > Visual direction is governed by the approved moodboard (D35). Decision reasoning lives
 > in the discovery log; this file records the alternatives, what was chosen, and what the
 > drawings deliberately left open.

@@ -6,6 +6,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { NativeWorkspaceAccessCapabilities, NativeWorkspaceSnapshot } from "../native/commands";
 import { WorkspaceExplorer, WorkspaceSelector } from "./WorkspaceExplorer";
+import { WorkspaceSelectorOutlet, WorkspaceSelectorProvider } from "./WorkspaceSelectorPortal";
 import { WorkspaceFileIcon } from "./WorkspaceFileIcon";
 import { workspaceDesktopApi, type WorkspaceDesktopApi } from "./workspaceAdapter";
 import { readWorkspaceSettings, type WorkspaceSettings } from "./workspaceSettings";
@@ -48,6 +49,7 @@ async function renderSelector(capabilities = desktopCapabilities) {
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
+  const onAction = vi.fn();
   const onSelect = vi.fn();
   const onAdd = vi.fn();
   const onCreateManaged = vi.fn();
@@ -56,9 +58,11 @@ async function renderSelector(capabilities = desktopCapabilities) {
   await act(async () => {
     root?.render(
       <WorkspaceSelector
+        variant="panel"
         capabilities={capabilities}
         currentPath="/notes/current"
         paths={["/notes/previous", "/notes/current"]}
+        onAction={onAction}
         onSelect={onSelect}
         onAdd={onAdd}
         onCreateManaged={onCreateManaged}
@@ -67,7 +71,7 @@ async function renderSelector(capabilities = desktopCapabilities) {
     );
   });
 
-  return { onAdd, onCreateManaged, onImportFromGit, onSelect };
+  return { onAction, onAdd, onCreateManaged, onImportFromGit, onSelect };
 }
 
 async function renderExplorer(
@@ -81,11 +85,14 @@ async function renderExplorer(
   const resolvedApi = { ...api, workspaceAccessCapabilities: async () => capabilities };
   await act(async () => {
     root?.render(
-      <WorkspaceExplorer
-        api={resolvedApi}
-        initialWorkspacePath={initialWorkspacePath}
-        recentWorkspacePaths={["/notes/previous"]}
-      />
+      <WorkspaceSelectorProvider>
+        <WorkspaceSelectorOutlet variant="panel" />
+        <WorkspaceExplorer
+          api={resolvedApi}
+          initialWorkspacePath={initialWorkspacePath}
+          recentWorkspacePaths={["/notes/previous"]}
+        />
+      </WorkspaceSelectorProvider>
     );
   });
 }
@@ -114,8 +121,77 @@ describe("WorkspaceExplorer presentation", () => {
     expect(new Set(markup).size).toBe(5);
   });
 
+  it("portals the selector into the outlet instead of the explorer content", async () => {
+    await renderExplorer(workspaceDesktopApi);
+
+    const outlet = container?.querySelector('[data-workspace-selector-outlet="panel"]');
+    const explorer = container?.querySelector('section[aria-label="Workspace explorer"]');
+    expect(outlet?.querySelector('button[aria-haspopup="menu"]')).not.toBeNull();
+    expect(explorer?.querySelector('button[aria-haspopup="menu"]')).toBeNull();
+  });
+
+  it("renders the selector inside its own header row when it lives in panel headers", async () => {
+    // The popout mounts no outlet for the explorer — the selector trigger is
+    // the chrome row's title, drawn by the explorer itself.
+    container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
+    const api = { ...workspaceDesktopApi, workspaceAccessCapabilities: async () => desktopCapabilities };
+    await act(async () => {
+      root?.render(
+        <WorkspaceSelectorProvider>
+          <WorkspaceExplorer
+            api={api}
+            workspaceSelectorInPanel
+            recentWorkspacePaths={["/notes/previous"]}
+          />
+        </WorkspaceSelectorProvider>
+      );
+    });
+
+    const header = container.querySelector('section[aria-label="Workspace explorer"] header');
+    const trigger = header?.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]');
+    expect(trigger).not.toBeNull();
+    expect(trigger?.textContent).toContain("Choose workspace");
+    // Without an outlet the selector must not also appear through the portal.
+    expect(container.querySelector('[data-workspace-selector-outlet]')).toBeNull();
+  });
+
+  it("shows the Files label and create/overflow actions once a workspace is ready", async () => {
+    const snapshot: NativeWorkspaceSnapshot = {
+      workspace: { root_path: "/notes/current", name: "current" },
+      files: []
+    };
+    const api = {
+      ...workspaceDesktopApi,
+      openWorkspace: vi.fn(async () => snapshot),
+      listWorkspaceEntries: vi.fn(async () => [])
+    };
+    await renderExplorer(api, "/notes/current");
+    await act(async () => undefined);
+
+    const explorer = container?.querySelector('section[aria-label="Workspace explorer"]');
+    expect(explorer?.querySelector("header h2")?.textContent).toBe("Files");
+    expect(explorer?.querySelector('button[aria-label="New note"]')).not.toBeNull();
+    expect(explorer?.querySelector('button[aria-label="New folder"]')).not.toBeNull();
+
+    const more = explorer?.querySelector<HTMLButtonElement>('button[aria-label="More actions"]');
+    if (!more) throw new Error("More actions button missing");
+    await click(more);
+
+    const items = Array.from(explorer?.querySelectorAll("[role='menuitem'], [role='menuitemcheckbox']") ?? []);
+    const labels = items.map((item) => item.textContent);
+    expect(labels).toEqual([
+      "Show hidden files",
+      "New file",
+      "Refresh",
+      "Open workspace…"
+    ]);
+    expect(explorer?.querySelector('[role="menuitemcheckbox"]')?.getAttribute("aria-checked")).toBe("false");
+  });
+
   it("uses a menu-shaped workspace selector that opens a new workspace without changing its source", async () => {
-    const { onAdd, onSelect } = await renderSelector();
+    const { onAction, onAdd, onSelect } = await renderSelector();
     const trigger = container?.querySelector<HTMLButtonElement>("button");
     if (!trigger) throw new Error("Workspace selector trigger was not rendered.");
 
@@ -132,12 +208,16 @@ describe("WorkspaceExplorer presentation", () => {
     await click(previous);
 
     expect(onSelect).toHaveBeenCalledWith("/notes/previous");
+    // The outlet's pre-action hook runs first, so the phone can swap the
+    // drawer for Files before the owner opens anything.
+    expect(onAction).toHaveBeenCalledOnce();
+    expect(onAction.mock.invocationCallOrder[0]!).toBeLessThan(onSelect.mock.invocationCallOrder[0]!);
     expect(container?.querySelector("[role='menu']")).toBeNull();
     expect(onAdd).not.toHaveBeenCalled();
   });
 
   it("closes the selector menu with Escape and exposes Open folder and Bring in from Git link", async () => {
-    const { onAdd, onImportFromGit } = await renderSelector();
+    const { onAction, onAdd, onImportFromGit } = await renderSelector();
     const trigger = container?.querySelector<HTMLButtonElement>("button");
     if (!trigger) throw new Error("Workspace selector trigger was not rendered.");
     await click(trigger);
@@ -154,18 +234,25 @@ describe("WorkspaceExplorer presentation", () => {
     expect(actions.at(-1)?.textContent).toContain("Bring in from Git link");
     await click(actions.at(-2)!);
     expect(onAdd).toHaveBeenCalledOnce();
+    expect(onAction).toHaveBeenCalledOnce();
+    expect(onAction.mock.invocationCallOrder[0]!).toBeLessThan(onAdd.mock.invocationCallOrder[0]!);
     expect(onImportFromGit).not.toHaveBeenCalled();
 
     await click(trigger);
     const again = Array.from(container?.querySelectorAll<HTMLButtonElement>("[role='menuitem']") ?? []);
     await click(again.at(-1)!);
     expect(onImportFromGit).toHaveBeenCalledOnce();
+    expect(onAction).toHaveBeenCalledTimes(2);
+    expect(onAction.mock.invocationCallOrder[1]!).toBeLessThan(
+      onImportFromGit.mock.invocationCallOrder[0]!
+    );
     expect(container?.querySelector("[role='menu']")).toBeNull();
     expect(document.activeElement).toBe(trigger);
   });
 
   it("offers managed vault creation and Git import without Open folder on Android", async () => {
-    const { onAdd, onCreateManaged, onImportFromGit } = await renderSelector(managedCapabilities);
+    const { onAction, onAdd, onCreateManaged, onImportFromGit, onSelect } =
+      await renderSelector(managedCapabilities);
     const trigger = container?.querySelector<HTMLButtonElement>("button[aria-haspopup='menu']");
     if (!trigger) throw new Error("Workspace selector trigger was not rendered.");
     await click(trigger);
@@ -180,10 +267,25 @@ describe("WorkspaceExplorer presentation", () => {
     await click(create!);
     expect(onCreateManaged).toHaveBeenCalledOnce();
     expect(onAdd).not.toHaveBeenCalled();
+    // Every action — not just the dialog openers — runs the outlet's hook
+    // first so the phone lands on Files before the owner reacts.
+    expect(onAction.mock.invocationCallOrder[0]!).toBeLessThan(
+      onCreateManaged.mock.invocationCallOrder[0]!
+    );
     await click(trigger);
     await click(Array.from(container?.querySelectorAll<HTMLButtonElement>("[role='menuitem']") ?? [])
       .find((button) => button.textContent?.includes("Bring in from Git link"))!);
     expect(onImportFromGit).toHaveBeenCalledOnce();
+    expect(onAction.mock.invocationCallOrder[1]!).toBeLessThan(
+      onImportFromGit.mock.invocationCallOrder[0]!
+    );
+
+    await click(trigger);
+    await click(Array.from(container?.querySelectorAll<HTMLButtonElement>("[role='menuitem']") ?? [])
+      .find((button) => button.textContent?.includes("previous"))!);
+    expect(onSelect).toHaveBeenCalledWith("/notes/previous");
+    expect(onAction).toHaveBeenCalledTimes(3);
+    expect(onAction.mock.invocationCallOrder[2]!).toBeLessThan(onSelect.mock.invocationCallOrder[0]!);
   });
 
   it("focuses the current workspace and supports menu keyboard navigation", async () => {
@@ -300,6 +402,7 @@ describe("WorkspaceExplorer presentation", () => {
     await act(async () => {
       root?.render(
         <WorkspaceSelector
+          variant="panel"
           capabilities={desktopCapabilities}
           currentPath="/notes/git-linked-vault"
           paths={["/notes/plain-notes", "/notes/git-linked-vault"]}
@@ -344,7 +447,12 @@ describe("WorkspaceExplorer presentation", () => {
       workspaceAccessCapabilities: () => Promise.reject(new Error("no such command"))
     };
     await act(async () => {
-      root?.render(<WorkspaceExplorer api={failing} recentWorkspacePaths={[]} />);
+      root?.render(
+        <WorkspaceSelectorProvider>
+          <WorkspaceSelectorOutlet variant="panel" />
+          <WorkspaceExplorer api={failing} recentWorkspacePaths={[]} />
+        </WorkspaceSelectorProvider>
+      );
     });
 
     const choose = container.querySelector<HTMLButtonElement>('[aria-label="Choose workspace"]');

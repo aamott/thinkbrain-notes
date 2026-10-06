@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { DocumentViewState } from "../shellTypes";
-import type { DesktopTab } from "../../tabs/tabModel";
+import { createVersionDiffTab, type DesktopTab } from "../../tabs/tabModel";
 import { TabSwitcherSheet } from "./TabSwitcherSheet";
 
 let root: Root | null = null;
@@ -50,6 +50,7 @@ const sheet = (overrides: Record<string, unknown> = {}): React.ReactElement => (
     onDismiss={() => undefined}
     onSelect={() => undefined}
     onClose={() => undefined}
+    onNewTab={() => undefined}
     {...overrides}
   />
 );
@@ -78,7 +79,8 @@ describe("TabSwitcherSheet", () => {
 
     const list = grid(host)?.querySelector("ul");
     expect(list?.className).toContain("grid-cols-2");
-    expect(list?.querySelectorAll("li")).toHaveLength(3);
+    // Three tab cards plus the trailing new-tab card.
+    expect(list?.querySelectorAll("li")).toHaveLength(4);
   });
 
   it("previews a note's opening prose with frontmatter stripped", async () => {
@@ -135,7 +137,11 @@ describe("TabSwitcherSheet", () => {
     ).toBeNull();
   });
 
-  it("selects a tab and dismisses itself", async () => {
+  // Selection is a pure navigation: PhoneShell's onSelect replaces this
+  // sheet's history entry with the chosen tab route, which is what closes
+  // the sheet. Calling onDismiss here would take an extra step back through
+  // content history, so the card no longer fires it.
+  it("selects a tab without firing onDismiss", async () => {
     const onSelect = vi.fn();
     const onDismiss = vi.fn();
     const host = await render(sheet({ onSelect, onDismiss }));
@@ -145,7 +151,7 @@ describe("TabSwitcherSheet", () => {
     });
 
     expect(onSelect).toHaveBeenCalledWith("b");
-    expect(onDismiss).toHaveBeenCalledOnce();
+    expect(onDismiss).not.toHaveBeenCalled();
   });
 
   // The ✕ is a sibling of the select button, never a child of it: a nested
@@ -181,12 +187,64 @@ describe("TabSwitcherSheet", () => {
     expect(onDismiss).not.toHaveBeenCalled();
   });
 
-  // Closing the last tab leaves the sheet open over an empty workspace. An empty
-  // grid is a blank rectangle with no explanation, so the sheet says so instead.
-  it("explains itself when the last tab has been closed", async () => {
-    const host = await render(sheet({ tabs: [], activeTabId: null }));
+  // Two restores of the same file show the same visible title; the
+  // accessible name and tooltip carry the version date so they stay apart.
+  it("distinguishes restore tabs by version date in name, tooltip, and close label", async () => {
+    const earlier = createVersionDiffTab(
+      { rootPath: "/vault", relativePath: "notes/hello.md" },
+      "chg-1",
+      Date.UTC(2026, 7, 18, 12, 0, 0)
+    );
+    const later = createVersionDiffTab(
+      { rootPath: "/vault", relativePath: "notes/hello.md" },
+      "chg-2",
+      Date.UTC(2026, 7, 19, 12, 0, 0)
+    );
+    const host = await render(sheet({ tabs: [earlier, later], activeTabId: earlier.id }));
 
-    expect(grid(host)?.querySelector("ul")).toBeNull();
-    expect(grid(host)?.textContent).toContain("No open tabs");
+    const cards = [...grid(host)!.querySelectorAll<HTMLButtonElement>("li > button")].filter(
+      (button) => !button.getAttribute("aria-label")?.startsWith("Close ")
+    );
+    const card = cards.find((button) => button.getAttribute("aria-label")?.includes("version from"));
+    expect(card).toBeDefined();
+    expect(card?.textContent).toContain("Restore: hello.md");
+    expect(card?.getAttribute("title")).toBe(card?.getAttribute("aria-label"));
+    expect(card?.getAttribute("aria-label")).toContain("Restore: hello.md");
+    expect(card?.getAttribute("aria-label")).toContain("2026");
+
+    const labels = cards.map((button) => button.getAttribute("aria-label"));
+    expect(labels[0]).not.toBe(labels[1]);
+
+    const close = grid(host)?.querySelector<HTMLButtonElement>(
+      `[aria-label="Close ${card?.getAttribute("aria-label")}"]`
+    );
+    expect(close).not.toBeNull();
+  });
+
+  // Closing the last tab leaves the sheet open over an empty workspace; the
+  // new-tab card is still the way forward, just like a browser's grid.
+  it("still offers a new tab when the last tab has been closed", async () => {
+    const onNewTab = vi.fn();
+    const host = await render(sheet({ tabs: [], activeTabId: null, onNewTab }));
+
+    const card = grid(host)?.querySelector<HTMLButtonElement>('[aria-label="New tab"]');
+    expect(card).not.toBeNull();
+    await act(async () => card?.click());
+    expect(onNewTab).toHaveBeenCalledOnce();
+  });
+
+  it("opens a new tab from the trailing card without firing onDismiss", async () => {
+    const onNewTab = vi.fn();
+    const onDismiss = vi.fn();
+    const onSelect = vi.fn();
+    const host = await render(sheet({ onNewTab, onDismiss, onSelect }));
+
+    await act(async () => {
+      grid(host)?.querySelector<HTMLButtonElement>('[aria-label="New tab"]')?.click();
+    });
+
+    expect(onNewTab).toHaveBeenCalledOnce();
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(onDismiss).not.toHaveBeenCalled();
   });
 });

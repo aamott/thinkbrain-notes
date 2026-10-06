@@ -8,7 +8,7 @@
 
 import { NativeCommandError } from "../native/commands";
 import { describeWhen } from "./conflictCard";
-import type { ChangedNote, ConflictRate, Synced, SyncPhase, SyncStatus } from "./historyTypes";
+import type { SyncPhase, SyncStatus } from "./historyTypes";
 
 /** How loudly the footer should say it. */
 export type PillTone = "quiet" | "busy" | "warn";
@@ -20,11 +20,6 @@ export interface PillCopy {
   /** The whole of it, for the tooltip and for screen readers. */
   readonly detail: string;
   readonly tone: PillTone;
-}
-
-/** `${n} ${n === 1 ? singular : plural}`, with plural defaulting to singular + "s". */
-function plural(n: number, singular: string, pluralForm: string = `${singular}s`): string {
-  return `${n} ${n === 1 ? singular : pluralForm}`;
 }
 
 function clockOf(at: number): string {
@@ -52,14 +47,6 @@ export function describeMoment(at: number | null, now: Date = new Date()): strin
   return describeWhen(at);
 }
 
-/** How much one recorded change touched. */
-export function describeWhatChanged(notes: readonly ChangedNote[]): string {
-  const kind = new Set(notes.map((note) => note.change));
-  const description =
-    kind.size !== 1 ? "changed" : kind.has("removed") ? "deleted" : kind.has("added") ? "added" : "updated";
-  return `${plural(notes.length, "note")} ${description}`;
-}
-
 /**
  * What to do about a failure to record.
  *
@@ -77,7 +64,7 @@ export function recoveryFor(code: string): string {
     case "sync.credentials_forbidden":
       return "Give this token access to the repository, then save the sign-in again.";
     case "sync.credentials_unavailable":
-      return "Unlock this computer's keychain, then save the sign-in again.";
+      return "Your saved sign-ins are locked. Unlock them, then save the sign-in again.";
     case "sync.sign_in_missing":
     case "sync.sign_in_wrong_host":
       return "Choose another saved sign-in, or add a username and access token.";
@@ -132,25 +119,19 @@ export function failureMessage(
 }
 
 /**
- * How often this folder has needed something of its user, and how often it
- * did not.
+ * What a failed restore says, including the shell's own refusals.
  *
- * The second number is the point: someone who sees "47 tidied away, none for
- * you" learns that the app is absorbing the noise, which is the whole promise
- * of settling the obvious ones.
+ * `failureMessage` treats a non-native error as unexpected and hides its
+ * text; a refused pre-restore save is the opposite — its message ("save the
+ * current file first") is exactly what the user needs, so it passes through.
  */
-export function describeConflictRate(rate: ConflictRate): string {
-  const versions = plural(rate.recorded, "saved version");
-  const tidied =
-    rate.settled === 0
-      ? ""
-      : ` ${rate.settled} duplicate cop${rate.settled === 1 ? "y was" : "ies were"} tidied away without asking.`;
-
-  if (rate.decisions === 0) {
-    return `${versions}, and you have never had to choose what to keep.${tidied}`;
+export function restoreFailureMessage(cause: unknown): string {
+  if (cause instanceof NativeCommandError) {
+    return `${cause.message} ${recoveryFor(cause.code)}`;
   }
-  const asked = `${rate.decisions} of them needed you to decide what to keep.`;
-  return `${versions}. ${asked}${tidied}`;
+  if (cause instanceof Error) return cause.message;
+  console.error("[sync] restore failed:", cause);
+  return "That version could not be put back. Nothing was changed.";
 }
 
 /**
@@ -242,7 +223,7 @@ function pillFor(status: SyncStatus, now: Date): PillCopy {
       return {
         symbol: "⚠",
         text,
-        detail: `${text}. Open Decisions needed to choose what to keep.`,
+        detail: `${text}. Open Sync conflicts to choose what to keep.`,
         tone: "warn"
       };
     }
@@ -292,30 +273,4 @@ function pillFor(status: SyncStatus, now: Date): PillCopy {
   }
 }
 
-/**
- * What one round trip did, in a sentence someone can act on.
- *
- * A refusal is not a failure to report as one: it means another device got
- * there first, and the only thing to do is wait a moment. Saying "rejected"
- * would send someone looking for a problem that is not theirs.
- */
-export function describeSync(done: Synced): string {
-  if (done.landed.state === "refused") {
-    // The reason is carried across IPC for diagnostics; the UI gives a stable
-    // message, but leave a trail so a refusal can be traced if it persists.
-    console.debug("[sync] refused:", done.landed.reason);
-    return "Another device was sending its own changes at the same time. Try again in a moment.";
-  }
 
-  const arrived =
-    done.broughtDown > 0
-      ? `${plural(done.broughtDown, "note")} arrived from another device.`
-      : null;
-  const toChoose =
-    done.askedAbout > 0
-      ? `${plural(done.askedAbout, "note needs", "notes need")} you to decide what to keep.`
-      : null;
-
-  if (!arrived && !toChoose) return "Everything here is already in step with your other devices.";
-  return [arrived, toChoose].filter(Boolean).join(" ");
-}

@@ -4,13 +4,13 @@
 //! a single child only; it never receives authority to construct an app-data
 //! path or escape the dedicated `vaults` directory.
 
-use crate::error::{failed, NativeError};
+use crate::error::{NativeError, failed};
 use serde::Serialize;
 use std::fs;
 use std::path::{Path, PathBuf};
 use tauri::Manager;
 
-use super::workspace_paths::{describe_workspace, WorkspaceDescriptor};
+use super::workspace_paths::{WorkspaceDescriptor, describe_workspace};
 
 const MANAGED_VAULTS_DIR: &str = "vaults";
 const MAX_MANAGED_VAULT_NAME_BYTES: usize = 120;
@@ -63,6 +63,9 @@ pub struct PlatformCapabilities {
     pub opens_workspace_in_new_window: bool,
     /// Can spawn a child process (terminal, ACP agent host).
     pub can_spawn_process: bool,
+    /// Can place files on the system clipboard for file-manager paste.
+    /// Android has no file clipboard, so the explorer hides the item there.
+    pub can_copy_files_to_clipboard: bool,
     /// Can store credentials in the OS keychain.
     pub has_keychain: bool,
 }
@@ -78,13 +81,13 @@ pub fn platform_capabilities() -> PlatformCapabilities {
         // Process spawning (terminal, ACP) is desktop-only. Android does not
         // expose `Command::new` in the way the terminal/ACP host expects.
         can_spawn_process: desktop,
-        // `keyring` has no Android backend; sync credentials stub to
-        // `unsupported!` on non-desktop-OS targets (see `sync/credentials.rs`).
-        has_keychain: cfg!(any(
-            target_os = "linux",
-            target_os = "macos",
-            target_os = "windows"
-        )),
+        // A file clipboard is a desktop concept; the command is stubbed on
+        // mobile and this flag hides the menu item there.
+        can_copy_files_to_clipboard: desktop,
+        // Reports whether a credential store was actually registered at
+        // startup, not which targets ought to have one. A keychain that failed
+        // to start therefore reads as absent rather than present-but-broken.
+        has_keychain: crate::credential_store::is_available(),
     }
 }
 
@@ -301,9 +304,13 @@ mod tests {
 
     #[test]
     fn workspace_access_commands_are_registered() {
-        assert!(crate::commands::APP_COMMAND_PATHS
-            .contains(&"workspace::workspace_access_capabilities"));
+        assert!(
+            crate::commands::APP_COMMAND_PATHS
+                .contains(&"workspace::workspace_access_capabilities")
+        );
         assert!(crate::commands::APP_COMMAND_PATHS.contains(&"workspace::list_managed_workspaces"));
-        assert!(crate::commands::APP_COMMAND_PATHS.contains(&"workspace::create_managed_workspace"));
+        assert!(
+            crate::commands::APP_COMMAND_PATHS.contains(&"workspace::create_managed_workspace")
+        );
     }
 }

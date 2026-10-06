@@ -2,8 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   aggregateCalendarDays,
-  filterEntriesByDay,
-  filterEntries,
   type CalendarEntry,
   type CalendarFilter,
   type CalendarRange
@@ -390,54 +388,5 @@ describe("purity", () => {
 
     expect(() => aggregateCalendarDays(entries, august, NO_FILTER)).not.toThrow();
     expect(entries).toEqual([note]);
-  });
-});
-
-describe("filterEntriesByDay", () => {
-  const morning = entry("2026-08-07-0900.md");
-  const evening = entry("2026-08-07-1800.md");
-  const other = entry("2026-08-08-0900.md");
-  const undated = entry("thoughts.md");
-
-  it("returns the day's entries chronologically", () => {
-    expect(filterEntriesByDay([evening, other, morning, undated], date("2026-08-07"))).toEqual([
-      morning,
-      evening
-    ]);
-  });
-
-  it("returns nothing for a day with no entries", () => {
-    expect(filterEntriesByDay([other], date("2026-08-07"))).toEqual([]);
-  });
-});
-
-describe("filterEntries", () => {
-  const morning = entry("2026-08-07-0900.md", { context: ["running"] });
-  const evening = entry("2026-08-07-1800.md", { context: ["reading"] });
-  const nextDay = entry("2026-08-08-0900.md", { context: ["running"] });
-  const entries = [morning, evening, nextDay];
-
-  it("applies the predicates alone when no day is selected", () => {
-    const filter: CalendarFilter = {
-      selectedDay: null,
-      predicates: [{ field: "context", values: ["running"] }]
-    };
-
-    expect(filterEntries(entries, filter)).toEqual([morning, nextDay]);
-  });
-
-  it("narrows to the selected day as well", () => {
-    // The day chip and the metadata chips clear independently (D60), so each
-    // one has to stand on its own here.
-    const filter: CalendarFilter = {
-      selectedDay: date("2026-08-07"),
-      predicates: [{ field: "context", values: ["running"] }]
-    };
-
-    expect(filterEntries(entries, filter)).toEqual([morning]);
-  });
-
-  it("returns everything when nothing is filtered", () => {
-    expect(filterEntries(entries, NO_FILTER)).toEqual(entries);
   });
 });

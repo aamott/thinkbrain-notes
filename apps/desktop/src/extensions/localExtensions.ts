@@ -15,7 +15,7 @@
  * directory.
  */
 
-import type { ManifestDiagnostic } from "@thinkbrain/core";
+import { getErrorMessage, type ManifestDiagnostic } from "@thinkbrain/core";
 
 import type { ExtensionBootstrap } from "./bootstrapRef";
 import type { LocalDirectoryLoader } from "./localDirectoryLoader";
@@ -96,7 +96,7 @@ export function createLocalExtensions(options: LocalExtensionsOptions): LocalExt
       // `addLocalExtension` throws synchronously on a duplicate id. Convert the
       // throw into a failed outcome so the caller sees a clear message instead
       // of a raw "already registered" error escaping `add`.
-      const message = error instanceof Error ? error.message : String(error);
+      const message = getErrorMessage(error);
       return { loaded: false, diagnostics: [{ code: "extension_already_registered", message, severity: "error" }] };
     }
     return { loaded: true, diagnostics: result.diagnostics };
@@ -153,7 +153,7 @@ export function createLocalExtensions(options: LocalExtensionsOptions): LocalExt
         const outcome = await load(directory);
         if (!outcome.loaded) found.push({ directory, diagnostics: outcome.diagnostics });
       }
-      if (found.length > 0) setFailures(found);
+      setFailures(found);
     },
 
     startupFailures: () => failures,

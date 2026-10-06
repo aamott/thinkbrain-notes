@@ -1,15 +1,12 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { vi } from "vitest";
 
 import { useSettingsStore, type SettingsStoreState } from "./settingsStore";
 
 /**
- * Shared test helpers for settings component and logic tests.
- *
- * Extracts the `SEEDED_APP_VALUES` constant, store-seeding boilerplate, and the
- * `createRoot` + `act` render/click/unmount harness duplicated across 7+ test
- * files. Each file previously declared its own copy of these; the duplication
- * was flagged as a maintenance burden in the settings audit.
+ * Shared test helpers for settings component and logic tests — extracted from
+ * duplicated boilerplate across 13+ test files (settings audit finding).
  */
 
 /** Default app values seeded into the store for most settings tests. */
@@ -21,14 +18,28 @@ export const SEEDED_APP_VALUES: Record<string, unknown> = {
   "settings.autosave": false
 };
 
+/** Real action implementations captured at module load, before any test
+ *  mutates the singleton. Restored by `seedSettingsStore` to clear spies. */
+const INITIAL_ACTIONS: Partial<SettingsStoreState> = (() => {
+  const s = useSettingsStore.getState();
+  return {
+    loadSettings: s.loadSettings,
+    stageChange: s.stageChange,
+    saveSettings: s.saveSettings,
+    resetStaged: s.resetStaged,
+    resetSection: s.resetSection,
+    setActiveSection: s.setActiveSection,
+    setSearchQuery: s.setSearchQuery,
+    getEffectiveValue: s.getEffectiveValue,
+    setSettingImmediately: s.setSettingImmediately
+  };
+})();
+
 /**
- * Resets the singleton settings store to a clean, loaded state.
- *
- * The 12 standard fields are always set; `overrides` merges on top. If
- * `overrides.appValues` is provided it is merged with {@link SEEDED_APP_VALUES}
- * (extra keys added, existing keys replaced) rather than replacing the whole
- * map. Pass action mocks (e.g. `saveSettings: vi.fn(...)`) via `overrides` to
- * spy on store actions.
+ * Resets the store to a clean, loaded state. `overrides.appValues` merges with
+ * {@link SEEDED_APP_VALUES}; other overrides apply on top. Actions are restored
+ * to real implementations before overrides, so a bare call clears any spy from
+ * a prior test. Pass action mocks via `overrides` to spy on store actions.
  */
 export function seedSettingsStore(
   overrides: Partial<SettingsStoreState> = {}
@@ -39,40 +50,54 @@ export function seedSettingsStore(
     workspaceValues: null,
     workspaceRootPath: null,
     stagedChanges: {},
-    isDirty: false,
-    dirtyCount: 0,
     activeSection: null,
     searchQuery: "",
     loadError: null,
     saveError: null,
     validationDiagnostics: [],
     loaded: true,
+    ...INITIAL_ACTIONS,
     ...rest
   });
 }
 
 /**
- * Encapsulates the `createRoot` + `act` render lifecycle used across settings
- * component tests. Each test file creates one harness instance and calls
- * `unmount()` in `afterEach`.
+ * Installs a `stageChange` spy. When `replicateStoreUpdates` is true, the spy
+ * mirrors the real action (updates `stagedChanges`).
+ * When false, it's a no-op spy for call-assertion-only tests.
  */
+export function installStageChangeSpy(
+  replicateStoreUpdates = false
+): ReturnType<typeof vi.fn> {
+  const spy = vi.fn();
+  if (replicateStoreUpdates) {
+    spy.mockImplementation((key: string, value: unknown) => {
+      useSettingsStore.setState((s) => ({
+        stagedChanges: { ...s.stagedChanges, [key]: value }
+      }));
+    });
+  }
+  useSettingsStore.setState({ stageChange: spy });
+  return spy;
+}
+
+/** Drains microtasks/macrotasks via `setTimeout(0)` inside `act`. Replaces
+ *  the fragile double-`Promise.resolve()` flush. */
+export async function flushPromises(): Promise<void> {
+  await act(async () => {
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  });
+}
+
+/** `createRoot` + `act` render/click/dispatch/unmount harness. No
+ *  `@testing-library/react` dependency; call `unmount()` in `afterEach`. */
 export interface SettingsTestHarness {
-  /** Renders a component into a fresh container and flushes initial effects. */
   render(component: React.ReactElement): Promise<HTMLDivElement>;
-  /** Dispatches a click and flushes resulting React updates. */
   click(element: Element): Promise<void>;
-  /** Unmounts the root and removes the container from the DOM. */
+  dispatch(element: Element, event: Event): Promise<void>;
   unmount(): Promise<void>;
 }
 
-/**
- * Creates a render/click/unmount harness backed by `createRoot` + `act`.
- *
- * The project does not depend on `@testing-library/react`, so settings
- * component tests follow this convention instead. The harness owns the
- * `root` and `container` references internally; call `unmount()` in
- * `afterEach` to clean up.
- */
 export function createSettingsTestHarness(): SettingsTestHarness {
   let root: Root | null = null;
   let container: HTMLDivElement | null = null;
@@ -82,18 +107,18 @@ export function createSettingsTestHarness(): SettingsTestHarness {
       container = document.createElement("div");
       document.body.append(container);
       root = createRoot(container);
-      await act(async () => {
-        root?.render(component);
-      });
+      await act(async () => { root?.render(component); });
       return container;
     },
 
     async click(element: Element): Promise<void> {
       await act(async () => {
-        element.dispatchEvent(
-          new MouseEvent("click", { bubbles: true, cancelable: true })
-        );
+        element.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
       });
+    },
+
+    async dispatch(element: Element, event: Event): Promise<void> {
+      await act(async () => { element.dispatchEvent(event); });
     },
 
     async unmount(): Promise<void> {

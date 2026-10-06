@@ -3,7 +3,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { createDebounced } from "../lib/debounce";
 import { JournalPanel } from "./JournalPanel";
 import {
-  intersectPaths,
   predicateChips,
   predicateId,
   togglePredicate,
@@ -12,9 +11,10 @@ import {
   type JournalPredicate
 } from "./journalFacets";
 import { selectJournalDay, useJournalFilter } from "./journalFilterStore";
-import { buildJournalView, type JournalStatus } from "./journalViewModel";
+import { buildJournalView } from "./journalViewModel";
 import { formatJournalDate } from "@thinkbrain/core";
-import { JournalError, type JournalListing, type JournalService } from "./journalService";
+import { type JournalListing, type JournalService } from "./journalService";
+import { useJournalEntriesQuery } from "./useJournalEntriesQuery";
 
 /**
  * Holds the popout's state and drives the service.
@@ -31,12 +31,6 @@ import { JournalError, type JournalListing, type JournalService } from "./journa
  * flood the IPC bridge and hold up whatever else wants it.
  */
 const PREVIEW_CONCURRENCY = 8;
-
-/** A pause long enough to mean "done typing", short enough not to feel laggy. */
-const SEARCH_DEBOUNCE_MS = 200;
-
-/** One identity for "no predicates", so a render with none is not a new question. */
-const EMPTY_PREDICATES: readonly JournalPredicate[] = [];
 
 export interface JournalPanelContainerProps {
   readonly service: JournalService;
@@ -93,12 +87,30 @@ export function JournalPanelContainer({
   onChooseFolder,
   onOpenCalendar
 }: JournalPanelContainerProps) {
-  const [status, setStatus] = useState<JournalStatus>("loading");
-  const [listing, setListing] = useState<JournalListing | null>(null);
+  const {
+    status,
+    listing,
+    reload,
+    retry,
+    search,
+    setSearch,
+    searchAvailable,
+    filtersAvailable,
+    facets,
+    active,
+    setPredicates,
+    searchPaths,
+    matchingPaths
+  } = useJournalEntriesQuery({
+    service,
+    indexAvailable,
+    searchEntries,
+    loadFacets,
+    matchEntries
+  });
   const [ownCollapsed, setOwnCollapsed] = useState<ReadonlySet<string>>(new Set());
   const collapsed = controlledCollapsed ?? ownCollapsed;
   const [expandedUndated, setExpandedUndated] = useState(false);
-  const [reloadToken, setReloadToken] = useState(0);
   const [visibleEntries, setVisibleEntries] = useState<readonly string[]>([]);
   /**
    * First lines already read, kept with the listing they were read from.
@@ -113,7 +125,6 @@ export function JournalPanelContainer({
     readonly listing: JournalListing | null;
     readonly previews: ReadonlyMap<string, string | null>;
   }>({ listing: null, previews: new Map() });
-  const [search, setSearch] = useState("");
   // A transient action-error banner: shown when a rename/delete/create fails so
   // the user knows why the reload undid their action, then cleared after a
   // pause. Errors used to vanish into `console.error` only.
@@ -124,54 +135,7 @@ export function JournalPanelContainer({
     clearActionError();
   }, [clearActionError]);
   useEffect(() => () => clearActionError.cancel(), [clearActionError]);
-  // The answer is kept with the question it answered, so a result for a query
-  // the user has already moved on from is ignored rather than shown as a filter
-  // of the new one. Deriving it also keeps the effect from setting state
-  // synchronously, which `react-hooks/set-state-in-effect` rightly rejects.
-  const [matches, setMatches] = useState<{
-    readonly query: string;
-    readonly paths: ReadonlySet<string>;
-  } | null>(null);
-  const [facets, setFacets] = useState<readonly JournalFacet[]>([]);
-  const [predicates, setPredicates] = useState<readonly JournalPredicate[]>([]);
-  // Keyed by the predicate list it answered, compared by identity — which is
-  // exactly what `active` below preserves across renders.
-  const [metadataMatches, setMetadataMatches] = useState<{
-    readonly of: readonly JournalPredicate[];
-    readonly paths: ReadonlySet<string>;
-  } | null>(null);
   const { selectedDay } = useJournalFilter();
-
-  /** Reads the folder without touching state, so the effect owns when to apply it. */
-  const read = useCallback(async (): Promise<{
-    readonly status: JournalStatus;
-    readonly listing: JournalListing | null;
-  }> => {
-    try {
-      return { status: "ready", listing: await service.listEntries() };
-    } catch (error: unknown) {
-      // The service already turned this into approved copy (D63); the panel
-      // only needs to know which state to draw.
-      return {
-        status: error instanceof JournalError ? error.code : "unreadable",
-        listing: null
-      };
-    }
-  }, [service]);
-
-  useEffect(() => {
-    // A workspace switch can land while a read is in flight; the stale result
-    // must not overwrite the newer one.
-    let cancelled = false;
-    void read().then((next) => {
-      if (cancelled) return;
-      setStatus(next.status);
-      setListing(next.listing);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [read, reloadToken]);
 
   // A re-read folder is a different set of files, so what was read from the last
   // one is dropped. Adjusted during render rather than in an effect: an effect
@@ -220,98 +184,6 @@ export function JournalPanelContainer({
       cancelled = true;
     };
   }, [visibleEntries, previews, service, listing]);
-
-  const filtersAvailable =
-    indexAvailable && loadFacets !== undefined && matchEntries !== undefined;
-  /**
-   * The predicates actually in force.
-   *
-   * Empty while the index cannot answer them: a chip claiming to filter by a
-   * value nothing is checking is a lie the user cannot see through. They come
-   * back with the index, because the panel never threw them away.
-   */
-  const active = useMemo(
-    () => (filtersAvailable ? predicates : EMPTY_PREDICATES),
-    [filtersAvailable, predicates]
-  );
-
-  // Re-asked when the folder is re-read: a new entry can carry a value no entry
-  // had before, and a deleted one can take the last of its own.
-  useEffect(() => {
-    if (!filtersAvailable || loadFacets === undefined || listing === null) return;
-    let cancelled = false;
-    void loadFacets()
-      .then((found) => {
-        if (!cancelled) setFacets(found);
-      })
-      .catch((error: unknown) => {
-        console.error("[journal] Reading filter values failed.", error);
-        // Offering nothing is honest; offering a stale vocabulary is not.
-        if (!cancelled) setFacets([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [filtersAvailable, loadFacets, listing]);
-
-  // `listing` is a dependency without being read: a re-read folder can hold a
-  // new entry that satisfies the filter, and nothing else would ask again.
-  useEffect(() => {
-    if (active.length === 0 || matchEntries === undefined) return;
-    let cancelled = false;
-    void matchEntries(active)
-      .then((paths) => {
-        if (!cancelled) setMetadataMatches({ of: active, paths });
-      })
-      .catch((error: unknown) => {
-        // As with search: fail loudly, but never strand the list behind a
-        // filter that could not be computed.
-        console.error("[journal] Filtering by metadata failed.", error);
-        if (!cancelled) setMetadataMatches(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [active, matchEntries, listing]);
-
-  const query = search.trim();
-  const searching = indexAvailable && searchEntries !== undefined && query !== "";
-  // `null` means no content filter at all, which is not the same as a query
-  // that matched nothing — that one has to read as "no matches" (D52). A query
-  // still in flight also filters nothing, rather than showing the last one's.
-  const searchPaths = searching && matches?.query === query ? matches.paths : null;
-  const metadataPaths =
-    active.length > 0 && metadataMatches?.of === active ? metadataMatches.paths : null;
-  // D16: the search runs inside the filter, not beside it.
-  const matchingPaths = intersectPaths(searchPaths, metadataPaths);
-
-  // Typing is not a query. Each one is a round trip to the index, so the panel
-  // waits for a pause before asking, and drops an answer that arrives after the
-  // query moved on.
-  useEffect(() => {
-    if (!searching || searchEntries === undefined) return;
-
-    let cancelled = false;
-    const timer = setTimeout(() => {
-      void searchEntries(query)
-        .then((paths) => {
-          if (!cancelled) setMatches({ query, paths });
-        })
-        .catch((error: unknown) => {
-          // Fail loudly, but do not strand the list behind a filter it could
-          // not compute: showing everything is the honest fallback.
-          console.error("[journal] Search failed.", error);
-          if (!cancelled) setMatches(null);
-        });
-    }, SEARCH_DEBOUNCE_MS);
-
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [query, searching, searchEntries]);
-
-  const reload = (): void => setReloadToken((token) => token + 1);
 
   const view = buildJournalView({
     status,
@@ -375,7 +247,7 @@ export function JournalPanelContainer({
     <JournalPanel
       view={view}
       search={search}
-      searchAvailable={indexAvailable && searchEntries !== undefined}
+      searchAvailable={searchAvailable}
       actionError={actionError}
       chips={chips}
       facets={facets}
@@ -398,10 +270,7 @@ export function JournalPanelContainer({
         else setPredicates((current) => current.filter((one) => predicateId(one) !== id));
       }}
       onClearFilters={clearFilters}
-      onRetry={() => {
-        setStatus("loading");
-        reload();
-      }}
+      onRetry={retry}
       onChooseFolder={onChooseFolder}
       onOpenSettings={onOpenSettings}
       onCreateFolder={() => run(() => service.createEntry())}

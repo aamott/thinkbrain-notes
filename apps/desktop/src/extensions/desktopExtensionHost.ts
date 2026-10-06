@@ -96,28 +96,9 @@ export interface DesktopExtensionSettings {
   onDidChange(key: string, listener: DesktopSettingChangeListener): Disposable;
 }
 
-/** Scoped contribution registration APIs exposed to one desktop extension. */
-export interface DesktopExtensionContributions {
-  register(command: DesktopExtensionCommand): Disposable;
-}
-
-export interface DesktopExtensionPanelContributions {
-  register(panel: DesktopExtensionPanel): Disposable;
-}
-
-export interface DesktopExtensionEditorHookContributions {
-  register(hook: DesktopExtensionEditorHook): Disposable;
-}
-
-/**
- * Editor-header contributions (D44).
- *
- * Separate from `editorHooks`, which stays limited to CodeMirror extensions and
- * keybindings: a header is a React surface, and overloading one surface with
- * both would tie a component's lifetime to CodeMirror's.
- */
-export interface DesktopExtensionEditorHeaderContributions {
-  register(header: DesktopExtensionEditorHeader): Disposable;
+/** Scoped contribution registration API exposed to one desktop extension. */
+export interface Registrar<T> {
+  register(item: T): Disposable;
 }
 
 export type DesktopExtensionEditorHeader = Omit<
@@ -125,8 +106,7 @@ export type DesktopExtensionEditorHeader = Omit<
   "id"
 > & { readonly id: string };
 
-export interface DesktopExtensionTabContributions {
-  register(tab: DesktopExtensionTab): Disposable;
+export interface DesktopExtensionTabContributions extends Registrar<DesktopExtensionTab> {
   /**
    * Opens a tab of a kind this extension registered.
    *
@@ -147,10 +127,17 @@ export interface DesktopExtensionEvents {
 
 /** The desktop context layered over the platform-neutral core context. */
 export interface DesktopExtensionContext extends ExtensionContext {
-  readonly commands: DesktopExtensionContributions;
-  readonly panels: DesktopExtensionPanelContributions;
-  readonly editorHooks: DesktopExtensionEditorHookContributions;
-  readonly editorHeaders: DesktopExtensionEditorHeaderContributions;
+  readonly commands: Registrar<DesktopExtensionCommand>;
+  readonly panels: Registrar<DesktopExtensionPanel>;
+  readonly editorHooks: Registrar<DesktopExtensionEditorHook>;
+  /**
+   * Editor-header contributions (D44).
+   *
+   * Separate from `editorHooks`, which stays limited to CodeMirror extensions
+   * and keybindings: a header is a React surface, and overloading one surface
+   * with both would tie a component's lifetime to CodeMirror's.
+   */
+  readonly editorHeaders: Registrar<DesktopExtensionEditorHeader>;
   readonly tabs: DesktopExtensionTabContributions;
   readonly settings: DesktopExtensionSettings;
   /** Notifies about app events such as notes being saved or created. */
@@ -171,7 +158,6 @@ export interface DesktopExtensionDefinition
 
 export interface DesktopExtensionHost extends Omit<ExtensionHost, "register"> {
   register(extension: DesktopExtensionDefinition): Disposable;
-  registerAndActivate(extension: DesktopExtensionDefinition): Promise<Disposable>;
 }
 
 const DOTTED_IDENTIFIER_PATTERN = /^[A-Za-z][A-Za-z0-9_-]*(?:\.[A-Za-z][A-Za-z0-9_-]*)*$/;
@@ -435,27 +421,8 @@ export function createDesktopExtensionHost(
     return coreHost.register(coreDefinition);
   };
 
-  const registerAndActivate = async (
-    extension: DesktopExtensionDefinition
-  ): Promise<Disposable> => {
-    const registration = register(extension);
-    try {
-      await coreHost.activate(extension.id);
-      return registration;
-    } catch (error: unknown) {
-      try {
-        await registration.dispose();
-      } catch {
-        // The activation error is the useful failure; core activation already
-        // reports any cleanup failure on its typed error object.
-      }
-      throw error;
-    }
-  };
-
   return {
     register,
-    registerAndActivate,
     activate: coreHost.activate,
     deactivate: coreHost.deactivate,
     status: (id: string): ExtensionStatus | undefined => coreHost.status(id),
