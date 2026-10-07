@@ -1,10 +1,10 @@
 name: nightly
 
-# Builds downloadable artifacts from the `dev` branch on a nightly schedule
+# Builds downloadable artifacts from the `main` branch on a nightly schedule
 # and publishes them to a rolling "Nightly" prerelease. The release is
 # clobbered each night so there's always one URL for the latest dev build.
 #
-# Only runs if `dev` has new commits in the last 24 hours — skip the build
+# Only runs if `main` has new commits in the last 24 hours — skip the build
 # entirely on quiet days to save CI minutes.
 #
 # The nightly release is separate from versioned releases (v0.2.0, etc.) so
@@ -22,7 +22,7 @@ permissions:
 
 jobs:
   # ───────────────────────────── Check for changes ────────────────────────
-  # Skip the build entirely if dev hasn't had new commits since the last
+  # Skip the build entirely if main hasn't had new commits since the last
   # nightly run. This saves ~40 CI minutes per day on quiet days.
   check:
     name: Check for changes
@@ -31,15 +31,15 @@ jobs:
       should-build: ${{ steps.check.outputs.should-build }}
       sha: ${{ steps.check.outputs.sha }}
     steps:
-      - name: Checkout dev
+      - name: Checkout main
         uses: actions/checkout@v4
         with:
-          ref: dev
+          ref: main
 
       - name: Check for recent commits
         id: check
         run: |
-          # Get the latest commit SHA and its timestamp on dev.
+          # Get the latest commit SHA and its timestamp on main.
           sha=$(git rev-parse HEAD)
           commit_time=$(git log -1 --format='%ct' HEAD)
           now=$(date +%s)
@@ -49,10 +49,10 @@ jobs:
           age=$((now - commit_time))
           if [[ $age -lt $window ]]; then
             echo "should-build=true" >> "$GITHUB_OUTPUT"
-            echo "Latest commit on dev is $((age / 3600))h old — building."
+            echo "Latest commit on main is $((age / 3600))h old — building."
           else
             echo "should-build=false" >> "$GITHUB_OUTPUT"
-            echo "Latest commit on dev is $((age / 3600))h old — skipping."
+            echo "Latest commit on main is $((age / 3600))h old — skipping."
           fi
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
 
@@ -80,10 +80,10 @@ jobs:
 
     runs-on: ${{ matrix.platform }}
     steps:
-      - name: Checkout dev
+      - name: Checkout main
         uses: actions/checkout@v4
         with:
-          ref: dev
+          ref: main
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
@@ -140,10 +140,10 @@ jobs:
           # Always use the fixed `nightly` tag — clobbers the previous
           # nightly release so there's only ever one.
           tagName: nightly
-          releaseName: "Nightly (dev)"
+          releaseName: "Nightly (main)"
           releaseBody: |
-            Automated nightly build from the `dev` branch. This is a rolling
-            release — it is overwritten each night that `dev` has new commits,
+            Automated nightly build from the `main` branch. This is a rolling
+            release — it is overwritten each night that `main` has new commits,
             so it always reflects the latest development state.
 
             **Commit:** ${{ needs.check.outputs.sha }}
@@ -181,10 +181,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout dev
+      - name: Checkout main
         uses: actions/checkout@v4
         with:
-          ref: dev
+          ref: main
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
