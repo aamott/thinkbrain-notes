@@ -8,6 +8,7 @@ import { WorkspaceTreeItem, CreateNameInput } from "./WorkspaceTree";
 import { DeleteConfirmDialog, WorkspaceContextMenu } from "./WorkspaceExplorerMenus";
 import { CreateFileTypeConfirmDialog } from "./CreateFileTypeConfirmDialog";
 import { useWorkspaceSelectorOutlet } from "./WorkspaceSelectorPortalModel";
+import { CREATE_MANAGED_WORKSPACE_LABEL, IMPORT_FROM_GIT_LABEL, OPEN_FOLDER_LABEL } from "./gitLinkImportCopy";
 import { WorkspaceSwitching, WorkspaceSwitchingSelector } from "./WorkspaceSwitching";
 import type { WorkspaceSwitchingController } from "./useWorkspaceSwitching";
 import { type ContextMenuState, type CreateState, type PendingExtensionConfirm, type RenameState, type WorkspaceExplorerActions } from "./workspaceExplorerTypes";
@@ -250,7 +251,7 @@ export function WorkspaceExplorerView({
       {state.phase !== "ready" && errorBanner}
       {state.phase === "empty" && (
         switching.accessCapabilities
-          ? <EmptyState managed={switching.accessCapabilities.canCreateManagedWorkspace} />
+          ? <EmptyState switching={switching} />
           : <StatusState message="Checking workspace access…" />
       )}
       {state.phase === "opening" && <StatusState message="Reading workspace entries…" />}
@@ -346,6 +347,12 @@ export function WorkspaceExplorerView({
 
 // Shared chrome-row action button: 26px on fine pointers, grows to a
 // touch-friendly 36px on coarse ones.
+const EMPTY_ACTION_CLASSES = cn(
+  "min-h-9 rounded-small border border-border bg-surface px-3 text-[0.6875rem] text-sidebar-foreground cursor-pointer font-inherit",
+  "hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring focus-visible:-outline-offset-1",
+  "pointer-coarse:min-h-11"
+);
+
 const HEADER_ACTION_CLASSES = cn(
   "flex flex-none items-center justify-center size-[1.6rem] border-0 rounded-small text-muted-foreground bg-transparent cursor-pointer font-inherit",
   "focus-visible:outline-2 focus-visible:outline-ring focus-visible:-outline-offset-1 [&>svg]:stroke-current [&>svg]:size-[0.95rem]",
@@ -354,17 +361,66 @@ const HEADER_ACTION_CLASSES = cn(
   "pointer-coarse:size-9"
 );
 
-function EmptyState({ managed }: { readonly managed: boolean }) {
+function EmptyState({ switching }: { readonly switching: WorkspaceSwitchingController }) {
+  const capabilities = switching.accessCapabilities;
+  const managed = capabilities?.canCreateManagedWorkspace === true;
   return (
-    <div className="my-auto p-5 text-muted-foreground text-xs leading-normal text-center">
-      <strong className="block mb-1 text-sidebar-foreground text-[0.8125rem]">
-        {managed ? "Create or clone a vault to begin" : "Choose a folder to begin"}
-      </strong>
-      <p className="m-0">
-        {managed
-          ? "ThinkBrain keeps Android vaults in managed app storage."
-          : "ThinkBrain will show the current folder hierarchy without changing any files."}
-      </p>
+    <div className="my-auto flex flex-col items-center gap-3 p-5 text-muted-foreground text-xs leading-normal text-center">
+      <div>
+        <strong className="block mb-1 text-sidebar-foreground text-[0.8125rem]">
+          {managed ? "Create or bring in a vault to begin" : "Choose a folder to begin"}
+        </strong>
+        <p className="m-0">
+          {managed
+            ? "ThinkBrain keeps Android vaults in managed app storage."
+            : "ThinkBrain shows the folder hierarchy without changing any files."}
+        </p>
+      </div>
+      <div className="flex flex-col items-stretch gap-1.5 self-stretch">
+        {capabilities?.canCreateManagedWorkspace && (
+          <button
+            type="button"
+            className={EMPTY_ACTION_CLASSES}
+            onClick={() => switching.setCreateManagedWorkspaceOpen(true)}
+          >
+            {CREATE_MANAGED_WORKSPACE_LABEL}
+          </button>
+        )}
+        {capabilities?.canOpenFolder && (
+          <button
+            type="button"
+            className={EMPTY_ACTION_CLASSES}
+            onClick={() => void switching.openWorkspace()}
+          >
+            {OPEN_FOLDER_LABEL}
+          </button>
+        )}
+        {(capabilities?.canOpenFolder || capabilities?.canCreateManagedWorkspace) && (
+          <button
+            type="button"
+            className={EMPTY_ACTION_CLASSES}
+            onClick={switching.openGitLinkImport}
+          >
+            {IMPORT_FROM_GIT_LABEL}
+          </button>
+        )}
+      </div>
+      {switching.availableWorkspacePaths.length > 0 && (
+        <div className="flex flex-col items-stretch gap-0.5 self-stretch border-t border-border pt-2">
+          <p className="m-0 text-[0.625rem] uppercase tracking-[0.08em]">Recent vaults</p>
+          {switching.availableWorkspacePaths.map((path) => (
+            <button
+              key={path}
+              type="button"
+              className="truncate rounded-small px-2 py-1.5 text-left text-[0.6875rem] text-sidebar-foreground hover:bg-accent pointer-coarse:min-h-11"
+              title={path}
+              onClick={() => void switching.launchWorkspace(path)}
+            >
+              {path.split(/[\\/]/).at(-1) ?? path}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

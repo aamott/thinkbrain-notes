@@ -246,6 +246,23 @@ describe("what a window restores", () => {
 
     expect(openedNotes(await openWindow())).toEqual(["a.md"]);
   });
+
+  it("opens a single Welcome tab when there is no workspace and nothing to restore", async () => {
+    storedState = { ...DEFAULT_DESKTOP_STATE };
+    windowRoot = null;
+
+    const opens = (await openWindow()).filter((action) => action.type === "open");
+    expect(opens.map((action) => [action.tab.kind, action.tab.title])).toEqual([
+      ["new-tab", "Welcome"]
+    ]);
+  });
+
+  it("does not open the Welcome tab when a workspace was restored", async () => {
+    storedState = { ...DEFAULT_DESKTOP_STATE };
+    windowRoot = "/vault-b";
+
+    expect((await openWindow()).filter((action) => action.type === "open")).toEqual([]);
+  });
 });
 
 describe("what a window persists", () => {

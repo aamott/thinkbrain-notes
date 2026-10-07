@@ -8,7 +8,7 @@
  */
 
 import { useEffect, useMemo, useRef } from "react";
-import { FilePlus2, FolderOpen, Search } from "lucide-react";
+import { FilePlus2, Folder, FolderOpen, FolderPlus, Link, Search } from "lucide-react";
 import { CommandPalette, type WorkspaceFileResult } from "../commands/CommandPalette";
 import { BottomPanel as BottomPanelContent } from "../panels/BottomPanel";
 import { LeftPopout } from "../panels/LeftPopout";
@@ -23,12 +23,15 @@ import { useNoteTitle } from "./useNoteTitle";
 import { NoteTitleRow } from "./phone/NoteTitleRow";
 import { useSettingsStore } from "../settings/settingsStore";
 import { StatusBar } from "./StatusBar";
+import { type NewTabAction } from "../tabs/NewTabView";
 import { TabBoundary } from "./TabBoundary";
 import { TabCloseRequest } from "./TabCloseRequest";
 import { TabContent } from "./TabContent";
 import { canGoBackInTabs, canGoForwardInTabs, inspectableRelativePath } from "../tabs/tabModel";
 import { TitleBar } from "./TitleBar";
 import { WorkspaceHeaderBar } from "./WorkspaceHeaderBar";
+import { CREATE_MANAGED_WORKSPACE_LABEL, IMPORT_FROM_GIT_LABEL, OPEN_FOLDER_LABEL } from "../workspace/gitLinkImportCopy";
+import { useWorkspaceOnboardingStore } from "../workspace/workspaceOnboardingStore";
 import { WorkspaceSelectorProvider } from "../workspace/WorkspaceSelectorPortal";
 import type { ShellState } from "./useShellState";
 
@@ -86,8 +89,32 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
   // The new-tab page's entry points, wired to the desktop's own surfaces:
   // commands run through the palette's context, files through the palette's
   // quick-open. The phone chrome supplies the same three routed its own way.
-  const { paletteCommands, runCommand, openPalette, workspaceName } = shell;
+  const { paletteCommands, runCommand, openPalette, setLeftPanel, workspaceName } = shell;
+  // With no workspace open, the landing tab's job is direction — the same
+  // create/open entry points the explorer's empty state offers. Explorer-owned
+  // dialogs render inside the explorer, so its panel is surfaced first.
+  const onboarding = useWorkspaceOnboardingStore((s) => s.actions);
   const newTab = useMemo(() => {
+    if (workspaceName === null) {
+      const viaExplorer = (run: () => void) => () => {
+        setLeftPanel("explorer");
+        run();
+      };
+      const actions: NewTabAction[] = [];
+      if (onboarding?.capabilities?.canCreateManagedWorkspace) {
+        actions.push({ id: "create-vault", label: CREATE_MANAGED_WORKSPACE_LABEL, icon: <FolderPlus aria-hidden="true" className="size-4" />, onSelect: viaExplorer(onboarding.createManagedVault) });
+      }
+      if (onboarding?.capabilities?.canOpenFolder) {
+        actions.push({ id: "open-folder", label: OPEN_FOLDER_LABEL, icon: <FolderOpen aria-hidden="true" className="size-4" />, onSelect: viaExplorer(onboarding.openFolder) });
+      }
+      if (onboarding) {
+        actions.push({ id: "import-git", label: IMPORT_FROM_GIT_LABEL, icon: <Link aria-hidden="true" className="size-4" />, onSelect: viaExplorer(onboarding.importFromGit) });
+        for (const path of onboarding.paths) {
+          actions.push({ id: `open:${path}`, label: path.split(/[\\/]/).at(-1) ?? path, icon: <Folder aria-hidden="true" className="size-4" />, onSelect: () => onboarding.openPath(path) });
+        }
+      }
+      return { workspaceName, actions };
+    }
     const runById = (id: string) => {
       const command = paletteCommands.find((candidate) => candidate.id === id);
       if (command) runCommand(command);
@@ -100,7 +127,7 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
         { id: "search", label: "Search workspace", icon: <Search aria-hidden="true" className="size-4" />, onSelect: () => runById("search") }
       ]
     };
-  }, [paletteCommands, runCommand, openPalette, workspaceName]);
+  }, [paletteCommands, runCommand, openPalette, workspaceName, onboarding, setLeftPanel]);
 
   const leftPopout = (
     <LeftPopout

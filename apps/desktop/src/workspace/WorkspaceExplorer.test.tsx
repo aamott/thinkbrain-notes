@@ -360,6 +360,40 @@ describe("WorkspaceExplorer presentation", () => {
     expect(openWorkspaceWindow).toHaveBeenCalledWith("/notes/new");
   });
 
+  it("shows open/create actions and recents in the empty state instead of inert copy", async () => {
+    const pickWorkspaceDirectory = vi.fn(() => Promise.resolve<string | null>("/notes/new"));
+    const openWorkspaceWindow = vi.fn(() => Promise.resolve());
+    const api = { ...workspaceDesktopApi, pickWorkspaceDirectory, openWorkspaceWindow };
+    await renderExplorer(api);
+
+    const openFolder = Array.from(container?.querySelectorAll<HTMLButtonElement>("button") ?? [])
+      .find((button) => button.textContent?.includes("Open folder"));
+    expect(openFolder).toBeDefined();
+    await click(openFolder!);
+    expect(pickWorkspaceDirectory).toHaveBeenCalledOnce();
+    expect(openWorkspaceWindow).toHaveBeenCalledWith("/notes/new");
+
+    const recent = Array.from(container?.querySelectorAll<HTMLButtonElement>("button") ?? [])
+      .find((button) => button.textContent === "previous");
+    expect(recent).toBeDefined();
+    await click(recent!);
+    expect(openWorkspaceWindow).toHaveBeenCalledWith("/notes/previous");
+  });
+
+  it("offers managed vault creation from the empty state on Android", async () => {
+    const api = {
+      ...workspaceDesktopApi,
+      listManagedWorkspaces: vi.fn(async () => [])
+    };
+    await renderExplorer(api, undefined, managedCapabilities);
+
+    const create = Array.from(container?.querySelectorAll<HTMLButtonElement>("button") ?? [])
+      .find((button) => button.textContent?.includes("Create vault"));
+    expect(create).toBeDefined();
+    await click(create!);
+    expect(container?.querySelector("[role='dialog'] input")).not.toBeNull();
+  });
+
   it("creates and opens a managed vault in the current window with a one-time storage notice", async () => {
     const descriptor = { root_path: "/app/vaults/Personal Notes", name: "Personal Notes" };
     const snapshot: NativeWorkspaceSnapshot = { workspace: descriptor, files: [] };

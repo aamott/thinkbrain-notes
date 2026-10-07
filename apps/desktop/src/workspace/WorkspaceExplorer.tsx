@@ -23,6 +23,7 @@ import {
   workspaceMoveDestination
 } from "./workspaceMove";
 import { joinPath, isValidName, type RenameState, type WorkspaceExplorerActions } from "./workspaceExplorerTypes";
+import { publishWorkspaceOnboarding } from "./workspaceOnboardingStore";
 
 export interface WorkspaceExplorerProps {
   readonly api?: WorkspaceDesktopApi;
@@ -246,6 +247,21 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
     endOperation,
     setActionError
   });
+
+  // The explorer is keepMounted, so this surface is live even while its panel
+  // is hidden — letting the welcome tab and other chrome offer the same
+  // create/open entry points without owning the dialogs.
+  useEffect(() => {
+    publishWorkspaceOnboarding({
+      capabilities: switching.accessCapabilities,
+      paths: switching.availableWorkspacePaths,
+      openFolder: () => void switching.openWorkspace(),
+      createManagedVault: () => switching.setCreateManagedWorkspaceOpen(true),
+      importFromGit: switching.openGitLinkImport,
+      openPath: (rootPath) => void switching.launchWorkspace(rootPath)
+    });
+    return () => publishWorkspaceOnboarding(null);
+  }, [switching]);
 
   /**
    * Toggles the "show hidden entries" preference, persists it to the current

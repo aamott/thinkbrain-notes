@@ -100,9 +100,9 @@ describe("one-tab file opening on the phone", () => {
     const newTab = shell().tabState.tabs.find((tab) => tab.kind === "new-tab");
     expect(newTab).toBeDefined();
     expect(shell().tabState.activeTabId).toBe(newTab?.id);
-    // The landing page's entry points rendered.
-    expect(host.textContent).toContain("New note");
-    expect(host.textContent).toContain("Browse files");
+    // The landing page rendered — with no workspace open it carries workspace
+    // entry points rather than note actions (covered by the onboarding tests).
+    expect(host.querySelector(".bg-editor")).not.toBeNull();
   });
 
   it("the new-tab page's file action reaches the Files route", async () => {

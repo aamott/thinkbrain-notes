@@ -18,6 +18,7 @@ import {
 import { useSettingsStore } from "../settings/settingsStore";
 import {
   createFileTab,
+  createNewTab,
   createStaticTab,
   isDocumentBackedKind,
   type DesktopTab,
@@ -109,7 +110,7 @@ export function useWorkspaceLifecycle({
       // same tabs, each pointing at the other's notes.
       const rootPath = windowRoot ?? desktopState.lastWorkspacePath;
       const restoring = workspaceTabs(desktopState, rootPath);
-      if (!tabsRestoredRef.current && restoring.openTabs.length > 0) {
+      if (!tabsRestoredRef.current) {
         tabsRestoredRef.current = true;
         for (const persisted of restoring.openTabs) {
           const tab = restoreTab(persisted, rootPath);
@@ -126,6 +127,12 @@ export function useWorkspaceLifecycle({
         }
         if (restoring.activeTabId) {
           dispatchTabs({ type: "activate", tabId: restoring.activeTabId });
+        }
+        // With no workspace and no restored tabs the strip would sit empty
+        // over static text; open the landing tab so it carries the workspace
+        // entry points instead. New-tab pages are never persisted.
+        if (!rootPath && restoring.openTabs.length === 0) {
+          dispatchTabs({ type: "open", tab: { ...createNewTab(), title: "Welcome" } });
         }
       }
     }).finally(() => {
