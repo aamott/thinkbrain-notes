@@ -59,6 +59,12 @@ examples/extensions/  # Sample extension (hello-notes)
 - To run the Tauri desktop app in development mode, use `pnpm desktop:tauri dev` in the project root. Note: `pnpm dev` only launches the web UI, so always use `pnpm desktop:tauri dev` to test native functionality.
 - Android builds must be initiated from the terminal via `pnpm android:dev` or `pnpm android:build`. Android Studio's build button calls Gradle directly, which panics because the Tauri CLI's WebSocket coordination server isn't running. Use Android Studio only for the emulator, Logcat, and native debugging.
 
+## Branching & Releases
+- `main` is the development head and is protected — all changes land via PR (even small fixes; direct pushes are rejected) with CI checks green.
+- Feature branches come off `main` and PR back into it.
+- Releases are `v*` tags; the release workflow builds and drafts the release. `nightly` is a rolling prerelease built from `main`.
+- "Stable" is the newest non-prerelease release tag — to hotfix an old release, branch from its tag.
+
 
 ## Plans
 List relevant folder to see task status. Status lives in the filename — `pending`, `wip`, `done`, etc. — and the filename and reality must agree. When you finish work, change the filename in the same commit as the work. An epic does not track story status internally. Only refer to epic/story by slug, without status, instead of by filename to avoid having to update every reference to it whenever the status changes. Add action items from findings as stories unless they are immediately fixable. Plans should be concise. Avoid duplicating info in files and long worklogs. Compare file layouts and architectures before starting work.
