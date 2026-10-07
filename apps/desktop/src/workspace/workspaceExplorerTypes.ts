@@ -59,10 +59,7 @@ export interface WorkspaceExplorerActions {
   /** Lists one file's earlier versions, in the history panel. */
   readonly showVersions: (entry: NativeWorkspaceEntry) => void;
   readonly refreshEntries: () => Promise<void>;
-  readonly createManagedWorkspace: (name: string) => Promise<boolean>;
   readonly openWorkspace: () => Promise<void>;
-  readonly openGitLinkImport: () => void;
-  readonly launchWorkspace: (rootPath: string) => Promise<void>;
   readonly confirmDelete: () => Promise<void>;
   /** Clears the inline create-field error as the draft is edited. */
   readonly setInlineCreateError: (value: string | null) => void;
@@ -74,9 +71,6 @@ export interface WorkspaceExplorerActions {
   readonly setRenaming: (value: RenameState | null) => void;
   readonly setCreating: (value: CreateState | null) => void;
   readonly setPendingDelete: (value: NativeWorkspaceEntry | null) => void;
-  readonly setCreateManagedWorkspaceOpen: Dispatch<SetStateAction<boolean>>;
-  readonly setImportFromGitOpen: Dispatch<SetStateAction<boolean>>;
-  readonly setManagedStorageNoticeOpen: Dispatch<SetStateAction<boolean>>;
   readonly dismissError: () => void;
 }
 

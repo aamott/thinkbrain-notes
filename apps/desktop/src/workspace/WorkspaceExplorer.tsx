@@ -1,5 +1,5 @@
-import { memo, useCallback, useEffect, useMemo, useReducer, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
-import type { NativeWorkspaceAccessCapabilities, NativeWorkspaceEntry, NativeWorkspaceSnapshot } from "../native/commands";
+import { memo, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import type { NativeWorkspaceEntry, NativeWorkspaceSnapshot } from "../native/commands";
 import {
   buildWorkspaceTree,
   initialWorkspaceExplorerState,
@@ -10,7 +10,11 @@ import { workspaceDesktopApi, type WorkspaceDesktopApi } from "./workspaceAdapte
 import { subscribeExplorerToNoteChanges } from "./workspaceExplorerRefresh";
 import { DEFAULT_WORKSPACE_SETTINGS, readWorkspaceSettings, writeWorkspaceSettings } from "./workspaceSettings";
 import { WorkspaceExplorerView } from "./WorkspaceExplorerView";
-export { WorkspaceSelector } from "./WorkspaceExplorerView";
+export { WorkspaceSelector } from "./WorkspaceSelector";
+import { useWorkspaceSwitching } from "./useWorkspaceSwitching";
+import { useWorkspaceContextMenu } from "./useWorkspaceContextMenu";
+import { useWorkspaceInlineCreate } from "./useWorkspaceInlineCreate";
+import { useWorkspaceTreeNavigation } from "./useWorkspaceTreeNavigation";
 import {
   isInvalidWorkspaceMove,
   remapExpandedFolders,
@@ -18,26 +22,7 @@ import {
   WORKSPACE_INVALID_MOVE_MESSAGE,
   workspaceMoveDestination
 } from "./workspaceMove";
-import {
-  joinPath,
-  isMarkdownName,
-  isNewNoteCreate,
-  isValidFolderPath,
-  isValidName,
-  visibleWorkspacePaths,
-  type ContextMenuState,
-  type ContextMenuTarget,
-  type CreateState,
-  type PendingExtensionConfirm,
-  type RenameState,
-  type WorkspaceExplorerActions
-} from "./workspaceExplorerTypes";
-
-const DESKTOP_WORKSPACE_ACCESS: NativeWorkspaceAccessCapabilities = {
-  canOpenFolder: true,
-  canCreateManagedWorkspace: false,
-  opensWorkspaceInNewWindow: true
-};
+import { joinPath, isValidName, type RenameState, type WorkspaceExplorerActions } from "./workspaceExplorerTypes";
 
 export interface WorkspaceExplorerProps {
   readonly api?: WorkspaceDesktopApi;
@@ -86,33 +71,29 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
   workspaceSelectorInPanel = false
 }: WorkspaceExplorerProps) {
   const [state, dispatch] = useReducer(workspaceExplorerReducer, initialWorkspaceExplorerState);
-  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const { contextMenu, setContextMenu, showContextMenu, showContextMenuAt, closeContextMenu } = useWorkspaceContextMenu();
   const [renaming, setRenaming] = useState<RenameState | null>(null);
-  const [creating, setCreating] = useState<CreateState | null>(null);
   const [pendingDelete, setPendingDelete] = useState<NativeWorkspaceEntry | null>(null);
-  const [pendingExtensionConfirm, setPendingExtensionConfirm] = useState<PendingExtensionConfirm | null>(null);
-  const [inlineCreateError, setInlineCreateError] = useState<string | null>(null);
-  const [extensionConfirmError, setExtensionConfirmError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [expandedFolders, setExpandedFolders] = useState<ReadonlySet<string>>(new Set());
   // Whether dot-prefixed entries (`.git`, `.obsidian`, …) are listed in the
   // tree. Persisted per-workspace via `readWorkspaceSettings`/`writeWorkspaceSettings`
   // and restored when a workspace opens.
   const [showHidden, setShowHidden] = useState<boolean>(DEFAULT_WORKSPACE_SETTINGS.showHidden);
   // Open state for the header "..." (more actions) dropdown popover.
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
-  const [accessCapabilities, setAccessCapabilities] = useState<NativeWorkspaceAccessCapabilities | null>(null);
-  const [managedWorkspacePaths, setManagedWorkspacePaths] = useState<readonly string[]>([]);
-  const [createManagedWorkspaceOpen, setCreateManagedWorkspaceOpen] = useState(false);
-  const [managedStorageNoticeOpen, setManagedStorageNoticeOpen] = useState(false);
-  const [importFromGitOpen, setImportFromGitOpen] = useState(false);
   const tree = useMemo(() => buildWorkspaceTree(state.entries), [state.entries]);
   const workspaceRootPath = state.snapshot?.workspace.root_path;
-  const availableWorkspacePaths = useMemo(
-    () => [...new Set([...managedWorkspacePaths, ...recentWorkspacePaths])],
-    [managedWorkspacePaths, recentWorkspacePaths]
-  );
+  const {
+    expandedFolders,
+    setExpandedFolders,
+    activePath,
+    setActivePath,
+    expandFolder,
+    toggleFolder,
+    collapseFolder,
+    handleTreeKeyDown
+  } = useWorkspaceTreeNavigation(tree);
 
   // Refs holding the latest state/props so async helpers never read stale
   // closures after an `await`. The workspace root captured before an operation
@@ -132,15 +113,6 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
     callbacksRef.current = { onMarkdownFileCreated, onMarkdownFileSelected, onFileSelected, onWorkspaceLaunched };
   });
 
-  // While the non-Markdown confirmation is open the inline create input loses
-  // focus to the dialog; its blur-must-cancel rule must not fire or the draft
-  // it asks about would be unmounted mid-question.
-  const suppressInlineCancelRef = useRef(false);
-  const createFocusRequestRef = useRef(0);
-  // Identifies the confirmation currently creating. Object identity blocks a
-  // double tap without letting an older workspace operation block a new one.
-  const extensionCreateInFlightRef = useRef<PendingExtensionConfirm | null>(null);
-
   // In-flight operation counter so overlapping CRUD calls do not clobber the
   // `busy` flag or erase each other's errors prematurely.
   const inFlightRef = useRef(0);
@@ -153,53 +125,66 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
     if (inFlightRef.current === 0) setBusy(false);
   }, []);
 
-  useEffect(() => {
-    let active = true;
-    if (typeof api.workspaceAccessCapabilities !== "function") {
-      setAccessCapabilities(DESKTOP_WORKSPACE_ACCESS);
-      return () => {
-        active = false;
-      };
+  // ---- CRUD operations ----
+
+  /**
+   * Runs a CRUD operation, refreshes the entry list, and reports success.
+   * Reads the latest state from refs so a workspace switch mid-operation
+   * aborts the refresh instead of dispatching stale data. Returns `true` on
+   * success so callers (delete dialog, inline inputs) can close only on
+   * success and keep the user's input visible on failure.
+   */
+  const runWithRefresh = useCallback(async (operation: () => Promise<unknown>, options?: { selectMarkdown?: string }): Promise<boolean> => {
+    const rootPath = rootPathRef.current;
+    const snapshot = stateRef.current.snapshot;
+    if (!rootPath || !snapshot) return false;
+    startOperation();
+    // Only clear a previous error when no other operation is in flight, so a
+    // concurrent failure is not erased before the user reads it.
+    if (inFlightRef.current === 1) setActionError(null);
+    try {
+      await operation();
+      if (rootPathRef.current !== rootPath) return true;
+      const entries = await apiRef.current.listWorkspaceEntries(rootPath, showHiddenRef.current);
+      if (rootPathRef.current !== rootPath) return true;
+      dispatch({ type: "opened", snapshot, entries });
+      if (options?.selectMarkdown) {
+        callbacksRef.current.onMarkdownFileCreated?.(rootPath, options.selectMarkdown);
+        callbacksRef.current.onFileSelected?.(rootPath, options.selectMarkdown);
+      }
+      return true;
+    } catch (error) {
+      if (rootPathRef.current === rootPath) setActionError(workspaceErrorMessage(error));
+      return false;
+    } finally {
+      endOperation();
     }
-    void api.workspaceAccessCapabilities()
-      .then(async (capabilities) => {
-        if (!active) return;
-        setAccessCapabilities(capabilities);
-        if (!capabilities.canCreateManagedWorkspace) return;
-        const workspaces = await api.listManagedWorkspaces();
-        if (active) setManagedWorkspacePaths(workspaces.map((workspace) => workspace.root_path));
-      })
-      .catch((error: unknown) => {
-        if (!active) return;
-        setActionError(workspaceErrorMessage(error));
-        // Fall back to the same answer the absent-method branch gives. A
-        // rejection used to leave `accessCapabilities` null forever, which is
-        // not "we don't know yet" to the view — it renders "Checking workspace
-        // access…" and keeps "Choose workspace" disabled, so a host whose
-        // command is missing or merely failed locks the user out of opening a
-        // vault at all. Saying "desktop rules" and showing the error is worse
-        // only if the host really had stricter rules to report, and it could
-        // not report them.
-        setAccessCapabilities(DESKTOP_WORKSPACE_ACCESS);
-      });
-    return () => {
-      active = false;
-    };
-  }, [api]);
+  }, [endOperation, startOperation]);
+
+  const {
+    creating,
+    pendingExtensionConfirm,
+    inlineCreateError,
+    extensionConfirmError,
+    setInlineCreateError,
+    resetCreate,
+    focusNewNote,
+    submitCreate,
+    dismissExtensionConfirm,
+    confirmExtensionCreate,
+    startCreate,
+    setCreatingGuarded
+  } = useWorkspaceInlineCreate({ stateRef, rootPathRef, apiRef, runWithRefresh, setActionError, closeContextMenu, expandFolder });
 
   const clearWorkspaceState = useCallback(() => {
     setContextMenu(null);
     setRenaming(null);
-    setCreating(null);
+    resetCreate();
     setPendingDelete(null);
-    setPendingExtensionConfirm(null);
-    setInlineCreateError(null);
-    setExtensionConfirmError(null);
-    suppressInlineCancelRef.current = false;
     setActionError(null);
     setExpandedFolders(new Set());
     setShowHidden(DEFAULT_WORKSPACE_SETTINGS.showHidden);
-  }, []);
+  }, [resetCreate, setContextMenu, setExpandedFolders]);
 
   const loadWorkspace = useCallback(async (rootPath: string, restoring = false) => {
     // Invalidate operations and transient UI associated with the previous
@@ -251,18 +236,16 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
     }
   }, []);
 
-  const launchWorkspace = useCallback(async (rootPath: string) => {
-    try {
-      if (accessCapabilities?.opensWorkspaceInNewWindow !== false) {
-        await apiRef.current.openWorkspaceWindow(rootPath);
-        callbacksRef.current.onWorkspaceLaunched?.(rootPath);
-      } else {
-        await loadWorkspace(rootPath);
-      }
-    } catch (error) {
-      setActionError(workspaceErrorMessage(error));
-    }
-  }, [accessCapabilities, loadWorkspace]);
+  const switching = useWorkspaceSwitching({
+    api,
+    apiRef,
+    onWorkspaceLaunchedRef: callbacksRef,
+    recentWorkspacePaths,
+    loadWorkspace,
+    startOperation,
+    endOperation,
+    setActionError
+  });
 
   /**
    * Toggles the "show hidden entries" preference, persists it to the current
@@ -285,37 +268,6 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
     }
     await refreshEntries();
   }, [refreshEntries]);
-
-  const createManagedWorkspace = useCallback(async (name: string): Promise<boolean> => {
-    startOperation();
-    setActionError(null);
-    try {
-      const workspace = await apiRef.current.createManagedWorkspace(name);
-      setManagedWorkspacePaths((paths) => [...new Set([...paths, workspace.root_path])]);
-      setCreateManagedWorkspaceOpen(false);
-      setManagedStorageNoticeOpen(true);
-      await loadWorkspace(workspace.root_path);
-      return true;
-    } catch (error) {
-      setActionError(workspaceErrorMessage(error));
-      return false;
-    } finally {
-      endOperation();
-    }
-  }, [endOperation, loadWorkspace, startOperation]);
-
-  const openGitLinkImport = useCallback(() => {
-    setImportFromGitOpen(true);
-  }, []);
-
-  const openWorkspace = useCallback(async () => {
-    try {
-      const rootPath = await apiRef.current.pickWorkspaceDirectory();
-      if (rootPath) await launchWorkspace(rootPath);
-    } catch (error) {
-      setActionError(workspaceErrorMessage(error));
-    }
-  }, [launchWorkspace]);
 
   useEffect(() => {
     if (initialWorkspacePath) {
@@ -354,11 +306,9 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
     const request = pendingNewNoteRef.current;
     if (!request || state.phase !== "ready") return;
     pendingNewNoteRef.current = 0;
-    setInlineCreateError(null);
-    createFocusRequestRef.current += 1;
-    setCreating({ parentPath: "", kind: "file", source: "new-note", focusRequest: createFocusRequestRef.current });
+    focusNewNote();
     onNewNoteFocusHandled?.();
-  }, [state.phase, onNewNoteFocusHandled, newNoteFocusRequest]);
+  }, [state.phase, focusNewNote, onNewNoteFocusHandled, newNoteFocusRequest]);
 
   const handleFileSelected = useCallback((relativePath: string) => {
     if (!workspaceRootPath) return;
@@ -367,98 +317,6 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
     if (onFileSelected) onFileSelected(workspaceRootPath, relativePath);
     else onMarkdownFileSelected?.(workspaceRootPath, relativePath);
   }, [onFileSelected, onMarkdownFileSelected, workspaceRootPath]);
-
-  // ---- CRUD operations ----
-
-  /**
-   * Runs a CRUD operation, refreshes the entry list, and reports success.
-   * Reads the latest state from refs so a workspace switch mid-operation
-   * aborts the refresh instead of dispatching stale data. Returns `true` on
-   * success so callers (delete dialog, inline inputs) can close only on
-   * success and keep the user's input visible on failure.
-   */
-  const runWithRefresh = useCallback(async (operation: () => Promise<unknown>, options?: { selectMarkdown?: string }): Promise<boolean> => {
-    const rootPath = rootPathRef.current;
-    const snapshot = stateRef.current.snapshot;
-    if (!rootPath || !snapshot) return false;
-    startOperation();
-    // Only clear a previous error when no other operation is in flight, so a
-    // concurrent failure is not erased before the user reads it.
-    if (inFlightRef.current === 1) setActionError(null);
-    try {
-      await operation();
-      if (rootPathRef.current !== rootPath) return true;
-      const entries = await apiRef.current.listWorkspaceEntries(rootPath, showHiddenRef.current);
-      if (rootPathRef.current !== rootPath) return true;
-      dispatch({ type: "opened", snapshot, entries });
-      if (options?.selectMarkdown) {
-        callbacksRef.current.onMarkdownFileCreated?.(rootPath, options.selectMarkdown);
-        callbacksRef.current.onFileSelected?.(rootPath, options.selectMarkdown);
-      }
-      return true;
-    } catch (error) {
-      if (rootPathRef.current === rootPath) setActionError(workspaceErrorMessage(error));
-      return false;
-    } finally {
-      endOperation();
-    }
-  }, [endOperation, startOperation]);
-
-  const submitCreate = useCallback(async (target: CreateState, name: string): Promise<boolean> => {
-    const rootPath = stateRef.current.snapshot?.workspace.root_path;
-    if (!rootPath) return false;
-    const trimmed = name.trim();
-    const isNote = isNewNoteCreate(target);
-    // A New note never cancels silently: an empty or extension-only draft is a
-    // mistake worth naming inline rather than a dismissal.
-    if (isNote && !trimmed) {
-      setInlineCreateError("Give your note a name.");
-      return false;
-    }
-    if (isNote) {
-      const extensionOnly = /^\.(md|markdown)$/i.test(trimmed);
-      if (extensionOnly) {
-        setInlineCreateError(`Give your note a name before ${trimmed.toLowerCase()}.`);
-        return false;
-      }
-    }
-    if (!trimmed) {
-      setCreating(null);
-      return true;
-    }
-    setInlineCreateError(null);
-    // Folders may use forward-slash-separated nested paths (e.g. `a/b/c`)
-    // since the backend creates intermediate directories via `create_dir_all`.
-    // Files still reject path separators so a single leaf entry is produced.
-    if (target.kind === "folder") {
-      if (!isValidFolderPath(trimmed)) {
-        setActionError("Folder paths cannot contain '\\' or empty/`.`/`..` segments.");
-        return false;
-      }
-    } else if (!isValidName(trimmed)) {
-      setActionError("Names cannot contain path separators (/ or \\).");
-      return false;
-    }
-    // Notes must end in `.md`/`.markdown`. Anything else is a deliberate file
-    // type choice, so it is confirmed — never created — before running.
-    if (isNote && !isMarkdownName(trimmed)) {
-      suppressInlineCancelRef.current = true;
-      setPendingExtensionConfirm({ target, name: trimmed });
-      return false;
-    }
-    const relativePath = joinPath(target.parentPath, trimmed);
-    const ok = await runWithRefresh(async () => {
-      if (target.kind === "file") {
-        await apiRef.current.createWorkspaceFile(rootPath, relativePath);
-      } else {
-        await apiRef.current.createWorkspaceFolder(rootPath, relativePath);
-      }
-    }, { selectMarkdown: target.kind === "file" && isMarkdownName(trimmed) ? relativePath : undefined });
-    // Clear the inline input only on success; keep it open on failure so
-    // the user can correct the name and retry.
-    if (ok) setCreating(null);
-    return ok;
-  }, [runWithRefresh]);
 
   const submitRename = useCallback(async (target: RenameState, newName: string): Promise<boolean> => {
     const rootPath = stateRef.current.snapshot?.workspace.root_path;
@@ -510,7 +368,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
       );
     }
     return ok;
-  }, [runWithRefresh]);
+  }, [runWithRefresh, setActivePath, setExpandedFolders]);
 
   const confirmDelete = useCallback(async () => {
     const rootPath = stateRef.current.snapshot?.workspace.root_path;
@@ -522,149 +380,6 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
     // Keep the confirmation dialog open on failure so the user can retry.
     if (ok) setPendingDelete(null);
   }, [pendingDelete, runWithRefresh]);
-
-  /**
-   * Every safe dismissal of the extension confirmation — Escape, scrim,
-   * Android Back, the Keep editing button — returns to the inline draft. The
-   * input was never unmounted, so nothing about the draft was lost.
-   */
-  const dismissExtensionConfirm = useCallback(() => {
-    if (pendingExtensionConfirm && extensionCreateInFlightRef.current === pendingExtensionConfirm) return;
-    suppressInlineCancelRef.current = false;
-    setPendingExtensionConfirm(null);
-    setExtensionConfirmError(null);
-  }, [pendingExtensionConfirm]);
-
-  /**
-   * Runs the saved, already-validated name through the same create/refresh
-   * path — exactly once per confirmation. A non-Markdown result is never
-   * selected as a note, and a failure keeps the dialog open for retry.
-   */
-  const confirmExtensionCreate = useCallback(async (): Promise<void> => {
-    const pending = pendingExtensionConfirm;
-    const rootPath = stateRef.current.snapshot?.workspace.root_path;
-    if (!pending || !rootPath || extensionCreateInFlightRef.current === pending) return;
-    extensionCreateInFlightRef.current = pending;
-    setExtensionConfirmError(null);
-    let message = "The file could not be created.";
-    try {
-      const relativePath = joinPath(pending.target.parentPath, pending.name);
-      const ok = await runWithRefresh(async () => {
-        try {
-          await apiRef.current.createWorkspaceFile(rootPath, relativePath);
-        } catch (error) {
-          message = workspaceErrorMessage(error);
-          throw error;
-        }
-      });
-      if (rootPathRef.current !== rootPath) return;
-      if (ok) {
-        suppressInlineCancelRef.current = false;
-        setPendingExtensionConfirm((current) => current === pending ? null : current);
-        setCreating((current) => current === pending.target ? null : current);
-      } else {
-        setExtensionConfirmError(message);
-      }
-    } finally {
-      if (extensionCreateInFlightRef.current === pending) extensionCreateInFlightRef.current = null;
-    }
-  }, [pendingExtensionConfirm, runWithRefresh]);
-
-  // ---- Folder expansion ----
-
-  const expandFolder = useCallback((relativePath: string) => {
-    setExpandedFolders((current) => current.has(relativePath) ? current : new Set(current).add(relativePath));
-  }, []);
-  const toggleFolder = useCallback((relativePath: string) => {
-    setExpandedFolders((current) => {
-      const next = new Set(current);
-      if (next.has(relativePath)) next.delete(relativePath);
-      else next.add(relativePath);
-      return next;
-    });
-  }, []);
-  const collapseFolder = useCallback((relativePath: string) => {
-    setExpandedFolders((current) => {
-      if (!current.has(relativePath)) return current;
-      const next = new Set(current);
-      next.delete(relativePath);
-      return next;
-    });
-  }, []);
-
-  const [activePath, setActivePath] = useState<string | null>(null);
-
-  const visiblePaths = useMemo(() => visibleWorkspacePaths(tree, expandedFolders), [tree, expandedFolders]);
-
-  const handleTreeKeyDown = useCallback((event: ReactKeyboardEvent<HTMLUListElement>) => {
-    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-      event.preventDefault();
-      if (visiblePaths.length === 0) return;
-      const currentPath = activePath ?? visiblePaths[0];
-      if (!currentPath) return;
-      const currentIndex = visiblePaths.indexOf(currentPath);
-      if (currentIndex === -1) return;
-
-      if (event.key === "ArrowDown") {
-        const nextIndex = Math.min(currentIndex + 1, visiblePaths.length - 1);
-        const nextPath = visiblePaths[nextIndex];
-        if (nextPath) setActivePath(nextPath);
-      } else {
-        const prevIndex = Math.max(currentIndex - 1, 0);
-        const prevPath = visiblePaths[prevIndex];
-        if (prevPath) setActivePath(prevPath);
-      }
-    } else if (event.key === "Home") {
-      event.preventDefault();
-      const firstPath = visiblePaths[0];
-      if (firstPath) setActivePath(firstPath);
-    } else if (event.key === "End") {
-      event.preventDefault();
-      const lastPath = visiblePaths[visiblePaths.length - 1];
-      if (lastPath) setActivePath(lastPath);
-    }
-  }, [visiblePaths, activePath]);
-
-  // ---- Context menu ----
-
-  const showContextMenuAt = useCallback((x: number, y: number, target: ContextMenuTarget) => {
-    setContextMenu({ x, y, target });
-  }, []);
-
-  const showContextMenu = useCallback((event: ReactMouseEvent, target: ContextMenuTarget) => {
-    event.preventDefault();
-    event.stopPropagation();
-    showContextMenuAt(event.clientX, event.clientY, target);
-  }, [showContextMenuAt]);
-
-  const closeContextMenu = useCallback(() => {
-    setContextMenu(null);
-  }, []);
-
-  // Only the resize. Clicking elsewhere and pressing Escape are the menu's own
-  // business now — see `shell/Menu` — but a menu pinned to where the pointer
-  // was has nothing to stay pinned to once the window changes shape.
-  useEffect(() => {
-    if (!contextMenu) return;
-    const onResize = () => setContextMenu(null);
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, [contextMenu]);
-
-  const startCreate = useCallback((parentPath: string, kind: "file" | "folder", source: "new-file" | "new-note" = "new-file") => {
-    closeContextMenu();
-    // Expand the target folder so the inline input is visible. Creating at the
-    // workspace root (empty parentPath) needs no expansion.
-    if (parentPath) expandFolder(parentPath);
-    setInlineCreateError(null);
-    createFocusRequestRef.current += 1;
-    const focusRequest = createFocusRequestRef.current;
-    setCreating(
-      kind === "file"
-        ? { parentPath, kind, source, focusRequest }
-        : { parentPath, kind, focusRequest }
-    );
-  }, [closeContextMenu, expandFolder]);
 
   const startRename = useCallback((entry: NativeWorkspaceEntry) => {
     closeContextMenu();
@@ -683,15 +398,6 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
   }, [closeContextMenu]);
 
   const dismissError = useCallback(() => dispatch({ type: "dismiss" }), []);
-
-  // The blur-cancel path in InlineNameInput reaches the explorer through this
-  // setter. While the extension confirmation holds the draft open, a null
-  // write is the blur talking — not a real cancel.
-  const setCreatingGuarded = useCallback((value: CreateState | null) => {
-    if (value === null && suppressInlineCancelRef.current) return;
-    if (value === null) setInlineCreateError(null);
-    setCreating(value);
-  }, []);
 
   // Memoized, and every member is already a stable callback or state setter.
   // That is load-bearing rather than tidy: `WorkspaceTreeItem` is memoized, and
@@ -717,10 +423,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
       requestDelete,
       showVersions,
       refreshEntries,
-      createManagedWorkspace,
-      openWorkspace,
-      openGitLinkImport,
-      launchWorkspace,
+      openWorkspace: switching.openWorkspace,
       confirmDelete,
       setInlineCreateError,
       dismissExtensionConfirm,
@@ -729,9 +432,6 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
       setRenaming,
       setCreating: setCreatingGuarded,
       setPendingDelete,
-      setCreateManagedWorkspaceOpen,
-      setImportFromGitOpen,
-      setManagedStorageNoticeOpen,
       dismissError
     }),
     [
@@ -741,17 +441,15 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
       moveEntry,
       confirmDelete,
       confirmExtensionCreate,
-      createManagedWorkspace,
       dismissError,
       dismissExtensionConfirm,
       handleFileSelected,
       handleTreeKeyDown,
-      launchWorkspace,
-      openWorkspace,
-      openGitLinkImport,
       refreshEntries,
       requestDelete,
+      setActivePath,
       setCreatingGuarded,
+      setInlineCreateError,
       showContextMenu,
       showContextMenuAt,
       showVersions,
@@ -759,6 +457,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
       startRename,
       submitCreate,
       submitRename,
+      switching.openWorkspace,
       toggleFolder,
       toggleShowHidden
     ]
@@ -783,12 +482,8 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
       moreMenuOpen={moreMenuOpen}
       expandedFolders={expandedFolders}
       activePath={activePath}
-      accessCapabilities={accessCapabilities}
-      recentWorkspacePaths={availableWorkspacePaths}
       actions={actions}
-      createManagedWorkspaceOpen={createManagedWorkspaceOpen}
-      managedStorageNoticeOpen={managedStorageNoticeOpen}
-      importFromGitOpen={importFromGitOpen}
+      switching={switching}
       workspaceSelectorInPanel={workspaceSelectorInPanel}
     />
   );
