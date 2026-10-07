@@ -107,6 +107,13 @@ fn new_commits_do_not_shift_an_existing_page() {
     let ws = fixture.vault.to_string_lossy().to_string();
     let first =
         super::super::history_page::page(&fixture.repo, &ws, Some("note.md"), 4, None).unwrap();
+    // Pin the pre-mutation stream: deriving the expectation from a read after
+    // the new commits would test the pipeline against itself.
+    let baseline: Vec<_> = read_all(&fixture.repo, &ws, Some("note.md"), 500)
+        .iter()
+        .map(|c| c.id.clone())
+        .collect();
+    assert_eq!(baseline.len(), 10, "fixture sanity: one event per commit");
 
     // More recording after the cursor was minted.
     let mut tip = snapshot::head_commit(&fixture.repo).unwrap().unwrap();
@@ -128,21 +135,15 @@ fn new_commits_do_not_shift_an_existing_page() {
         first.next_cursor.as_deref(),
     )
     .unwrap();
-    let fresh: Vec<_> = read_all(&fixture.repo, &ws, Some("note.md"), 500)
-        .iter()
-        .map(|c| c.id.clone())
-        .collect();
-    // The cursor replayed the original roots: the three new commits collapse
-    // to one event (equal consecutive content), so a fresh read leads with one
-    // extra row and page two still starts exactly where page one ended.
-    let expected: Vec<_> = fresh.iter().skip(1 + 4).take(4).cloned().collect();
+    // The cursor replayed the original roots, so page two is exactly the
+    // next four rows of the stream captured before the new commits landed.
     assert_eq!(
         second
             .changes
             .iter()
             .map(|c| c.id.clone())
             .collect::<Vec<_>>(),
-        expected
+        baseline[4..8]
     );
 }
 
@@ -589,6 +590,19 @@ fn forged_and_malformed_cursors_are_rejected() {
         "roots": {"main": main.clone()},
         "next": 9999
     })));
+    // A cursor naming no roots at all is a forgery, not a page.
+    expect_invalid(encode(serde_json::json!({
+        "v": 1, "ws": ws, "note": "note.md",
+        "roots": {},
+        "next": 0
+    })));
+    // A cursor minted for the whole ledger cannot be replayed as a per-note
+    // page (and vice versa) — the scope is part of what was captured.
+    expect_invalid(encode(serde_json::json!({
+        "v": 1, "ws": ws, "note": null,
+        "roots": {"main": main.clone()},
+        "next": 0
+    })));
     // Unknown fields and wrong root payloads fail strict decoding.
     expect_invalid(encode(serde_json::json!({
         "v": 1, "ws": ws, "note": "note.md",
@@ -669,7 +683,7 @@ fn imported_versions_compare_and_restore_after_reopen_and_removal() {
 
     // Reopen: a fresh repository handle and a fresh engine over it.
     let repo = gix::open(fixture.engine.repository().git_dir()).unwrap();
-    let engine = super::super::engine::Engine::new(repo, true);
+    let engine = super::super::engine::Engine::new(repo, true, false);
     let ws = fixture.vault.to_string_lossy().to_string();
     let versions = read_all(&engine.repository(), &ws, Some("note.md"), 20);
     assert_eq!(versions.len(), 2);

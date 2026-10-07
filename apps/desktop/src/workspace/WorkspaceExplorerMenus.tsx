@@ -1,7 +1,7 @@
-import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { NativeWorkspaceEntry } from "../native/commands";
 import { copyFilesToClipboard } from "../native/clipboard";
 import { usePlatformCapabilities } from "../native/platformCapabilities";
+import { useDismissable } from "@thinkbrain/ui";
 import { Menu, MenuButton, MenuSeparator } from "../shell/Menu";
 import type { ContextMenuState, WorkspaceExplorerActions } from "./workspaceExplorerTypes";
 
@@ -71,44 +71,31 @@ export function WorkspaceContextMenu({ menu, actions, rootPath }: {
 
 // ---- Delete confirmation ----
 
+/**
+ * Modal "are you sure" for file/folder deletion. Escape, Tab trapping and
+ * focus save/restore come from `useDismissable`, the overlay stack every
+ * sheet and menu registers with; the first button (Cancel) takes focus. A
+ * scrim tap cancels — "keep" is the answer every dismissal lands on.
+ */
 export function DeleteConfirmDialog({ entry, onCancel, onConfirm }: {
   readonly entry: NativeWorkspaceEntry;
   readonly onCancel: () => void;
   readonly onConfirm: () => void;
 }) {
   const isFolder = entry.kind === "directory";
-  const dialogRef = useRef<HTMLElement>(null);
-  const cancelButtonRef = useRef<HTMLButtonElement>(null);
+  const { containerRef } = useDismissable({ open: true, onDismiss: onCancel });
   const descriptionId = "delete-dialog-description";
-
-  useEffect(() => {
-    cancelButtonRef.current?.focus();
-  }, []);
-
-  const handleKeyDown = (event: ReactKeyboardEvent<HTMLElement>) => {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      onCancel();
-      return;
-    }
-    if (event.key !== "Tab") return;
-    const focusable = Array.from(dialogRef.current?.querySelectorAll<HTMLButtonElement>("button:not([disabled])") ?? []);
-    const index = focusable.indexOf(document.activeElement as HTMLButtonElement);
-    event.preventDefault();
-    focusable[(index + (event.shiftKey ? focusable.length - 1 : 1)) % focusable.length]?.focus();
-  };
 
   return (
     <div className="fixed z-30 inset-0 flex items-start justify-center pt-[18vh] bg-overlay" role="presentation" onMouseDown={onCancel}>
       <section
-        ref={dialogRef}
+        ref={containerRef}
         tabIndex={-1}
         className="grid gap-3 w-[min(25rem,calc(100vw-2rem))] p-[1.15rem] border border-border rounded-medium text-foreground bg-popover shadow-soft"
         role="dialog"
         aria-modal="true"
         aria-label="Confirm deletion"
         aria-describedby={descriptionId}
-        onKeyDown={handleKeyDown}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <h2 className="m-0 text-base font-semibold">Delete {isFolder ? "folder" : "file"}?</h2>
@@ -118,7 +105,7 @@ export function DeleteConfirmDialog({ entry, onCancel, onConfirm }: {
             : `"${entry.name}" will be permanently removed.`}
         </p>
         <div className="flex flex-wrap justify-end gap-[0.45rem]">
-          <button ref={cancelButtonRef} type="button" className="border border-border rounded-small px-[0.6rem] py-[0.4rem] text-foreground bg-surface cursor-pointer font-inherit text-xs" onClick={onCancel}>Cancel</button>
+          <button type="button" className="border border-border rounded-small px-[0.6rem] py-[0.4rem] text-foreground bg-surface cursor-pointer font-inherit text-xs" onClick={onCancel}>Cancel</button>
           <button type="button" className="border border-border rounded-small px-[0.6rem] py-[0.4rem] text-destructive-foreground bg-destructive cursor-pointer font-inherit text-xs" onClick={onConfirm}>Delete</button>
         </div>
       </section>

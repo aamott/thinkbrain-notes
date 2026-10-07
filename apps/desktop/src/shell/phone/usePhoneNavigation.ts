@@ -54,9 +54,12 @@ export interface PhoneNavigation {
   readonly push: (route: PhoneRoute) => void;
   /** Replaces the current entry with `route` and no overlay. */
   readonly replace: (route: PhoneRoute) => void;
-  /** Opens `overlay`; menus stay ephemeral, while inspectors are pushed. */
-  readonly openOverlay: (overlay: PhoneOverlay) => void;
-  /** Opens over content, or swaps the currently open overlay in place. */
+  /** Pushes `overlay` as a new history entry — the drill-in used when a surface
+   *  sits on top of another (actions menu → inspector) and Back must step out
+   *  one level at a time. Menus stay ephemeral either way. */
+  readonly pushOverlay: (overlay: PhoneOverlay) => void;
+  /** Opens over content, or swaps the currently open overlay in place —
+   *  peer surfaces never stack. */
   readonly showOverlay: (overlay: PhoneOverlay) => void;
   /** Pops the overlay; `wholeFlow` skips restoring the menu under an inspector. */
   readonly dismissOverlay: (wholeFlow?: boolean) => void;
@@ -311,7 +314,7 @@ export function usePhoneNavigation(workspaceRoot: string | null): PhoneNavigatio
     [openEphemeralMenu]
   );
 
-  const openOverlay = useCallback(
+  const pushOverlay = useCallback(
     (next: PhoneOverlay) => {
       const inspector = present(next);
       if (inspector) pushEntry(entryRef.current.route, inspector);
@@ -369,7 +372,7 @@ export function usePhoneNavigation(workspaceRoot: string | null): PhoneNavigatio
       canGoForward: depth < effectiveTip,
       push,
       replace,
-      openOverlay,
+      pushOverlay,
       showOverlay,
       dismissOverlay,
       back,
@@ -383,7 +386,7 @@ export function usePhoneNavigation(workspaceRoot: string | null): PhoneNavigatio
       effectiveTip,
       push,
       replace,
-      openOverlay,
+      pushOverlay,
       showOverlay,
       dismissOverlay,
       back,

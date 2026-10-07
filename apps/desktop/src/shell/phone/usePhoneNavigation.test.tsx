@@ -183,7 +183,7 @@ describe("usePhoneNavigation overlays", () => {
 
     expect(nav().overlay).toBeNull();
     await act(async () =>
-      nav().openOverlay({ kind: "inspector", panel: "outline", parent: "content" })
+      nav().pushOverlay({ kind: "inspector", panel: "outline", parent: "content" })
     );
 
     expect(nav().overlay).toEqual({ kind: "inspector", panel: "outline", parent: "content" });
@@ -222,8 +222,8 @@ describe("usePhoneNavigation overlays", () => {
 
   it("no-ops when the identical overlay is already current", async () => {
     const nav = await renderNav("/vault");
-    await act(async () => nav().openOverlay({ kind: "tabs" }));
-    await act(async () => nav().openOverlay({ kind: "tabs" }));
+    await act(async () => nav().pushOverlay({ kind: "tabs" }));
+    await act(async () => nav().pushOverlay({ kind: "tabs" }));
 
     expect(nav().overlay).toEqual({ kind: "tabs" });
     expect(nav().depth).toBe(0);
@@ -232,11 +232,11 @@ describe("usePhoneNavigation overlays", () => {
   it("no-ops when the identical inspector is already current", async () => {
     const nav = await renderNav("/vault");
     await act(async () =>
-      nav().openOverlay({ kind: "inspector", panel: "outline", parent: "content" })
+      nav().pushOverlay({ kind: "inspector", panel: "outline", parent: "content" })
     );
     const before = window.history.state;
     await act(async () =>
-      nav().openOverlay({ kind: "inspector", panel: "outline", parent: "content" })
+      nav().pushOverlay({ kind: "inspector", panel: "outline", parent: "content" })
     );
 
     expect(nav().depth).toBe(1);
@@ -247,7 +247,7 @@ describe("usePhoneNavigation overlays", () => {
     const nav = await renderNav("/vault");
     await act(async () => nav().push({ kind: "tab", tabId: "editor:a:b" }));
     await act(async () =>
-      nav().openOverlay({ kind: "inspector", panel: "outline", parent: "content" })
+      nav().pushOverlay({ kind: "inspector", panel: "outline", parent: "content" })
     );
 
     await act(async () => window.history.back());
@@ -258,9 +258,9 @@ describe("usePhoneNavigation overlays", () => {
   it("actions → inspector → back() returns to the actions menu", async () => {
     const nav = await renderNav("/vault");
     await act(async () => nav().push({ kind: "tab", tabId: "editor:a:b" }));
-    await act(async () => nav().openOverlay({ kind: "actions" }));
+    await act(async () => nav().pushOverlay({ kind: "actions" }));
     await act(async () =>
-      nav().openOverlay({ kind: "inspector", panel: "outline", parent: "actions" })
+      nav().pushOverlay({ kind: "inspector", panel: "outline", parent: "actions" })
     );
 
     await act(async () => nav().back());
@@ -271,9 +271,9 @@ describe("usePhoneNavigation overlays", () => {
   it("dismissOverlay(wholeFlow) skips the actions entry under an actions-parent inspector", async () => {
     const nav = await renderNav("/vault");
     await act(async () => nav().push({ kind: "tab", tabId: "editor:a:b" }));
-    await act(async () => nav().openOverlay({ kind: "actions" }));
+    await act(async () => nav().pushOverlay({ kind: "actions" }));
     await act(async () =>
-      nav().openOverlay({ kind: "inspector", panel: "outline", parent: "actions" })
+      nav().pushOverlay({ kind: "inspector", panel: "outline", parent: "actions" })
     );
 
     await act(async () => nav().dismissOverlay(true));
@@ -285,7 +285,7 @@ describe("usePhoneNavigation overlays", () => {
     const nav = await renderNav("/vault");
     await act(async () => nav().push({ kind: "tab", tabId: "editor:a:b" }));
     await act(async () =>
-      nav().openOverlay({ kind: "inspector", panel: "outline", parent: "content" })
+      nav().pushOverlay({ kind: "inspector", panel: "outline", parent: "content" })
     );
 
     await act(async () => nav().dismissOverlay(true));
@@ -296,7 +296,7 @@ describe("usePhoneNavigation overlays", () => {
   it("back() dismisses the overlay before touching content history", async () => {
     const nav = await renderNav("/vault");
     await act(async () => nav().push({ kind: "tab", tabId: "editor:a:b" }));
-    await act(async () => nav().openOverlay({ kind: "navigation" }));
+    await act(async () => nav().pushOverlay({ kind: "navigation" }));
 
     await act(async () => nav().back());
     expect(nav().overlay).toBeNull();
@@ -308,7 +308,7 @@ describe("usePhoneNavigation overlays", () => {
 
   it("push clears the overlay from the new entry", async () => {
     const nav = await renderNav("/vault");
-    await act(async () => nav().openOverlay({ kind: "navigation" }));
+    await act(async () => nav().pushOverlay({ kind: "navigation" }));
     await act(async () => nav().push({ kind: "panel", panel: "search" }));
 
     expect(nav().overlay).toBeNull();
@@ -317,7 +317,7 @@ describe("usePhoneNavigation overlays", () => {
 
   it("replace clears the overlay in place", async () => {
     const nav = await renderNav("/vault");
-    await act(async () => nav().openOverlay({ kind: "navigation" }));
+    await act(async () => nav().pushOverlay({ kind: "navigation" }));
     await act(async () => nav().replace({ kind: "panel", panel: "search" }));
 
     expect(nav().overlay).toBeNull();
@@ -412,7 +412,7 @@ describe("usePhoneNavigation overlays", () => {
 
   it("falls back to Files with no overlay on a foreign popped state", async () => {
     const nav = await renderNav("/vault");
-    await act(async () => nav().openOverlay({ kind: "tabs" }));
+    await act(async () => nav().pushOverlay({ kind: "tabs" }));
 
     await act(async () => {
       window.dispatchEvent(new PopStateEvent("popstate", { state: { foreign: true } }));
@@ -467,7 +467,7 @@ describe("usePhoneNavigation Android Back bridge", () => {
   it("returns true and closes an ephemeral menu without touching history", async () => {
     const nav = await renderNav("/vault");
     await act(async () => nav().push({ kind: "tab", tabId: "editor:a:b" }));
-    await act(async () => nav().openOverlay({ kind: "tabs" }));
+    await act(async () => nav().pushOverlay({ kind: "tabs" }));
     const before = window.history.state;
 
     let consumed = false;
@@ -487,7 +487,7 @@ describe("usePhoneNavigation Android Back bridge", () => {
     const nav = await renderNav("/vault");
     await act(async () => nav().push({ kind: "tab", tabId: "editor:a:b" }));
     await act(async () =>
-      nav().openOverlay({ kind: "inspector", panel: "outline", parent: "content" })
+      nav().pushOverlay({ kind: "inspector", panel: "outline", parent: "content" })
     );
 
     let consumed = false;
@@ -523,7 +523,7 @@ describe("usePhoneNavigation forward", () => {
     const nav = await renderNav("/vault");
     await act(async () => nav().push({ kind: "tab", tabId: "editor:a:b" }));
     await act(async () =>
-      nav().openOverlay({ kind: "inspector", panel: "outline", parent: "content" })
+      nav().pushOverlay({ kind: "inspector", panel: "outline", parent: "content" })
     );
     expect(nav().canGoForward).toBe(false);
 
@@ -551,7 +551,7 @@ describe("usePhoneNavigation forward", () => {
     expect(nav().route).toEqual({ kind: "tab", tabId: "editor:a:second" });
   });
 
-  it.each(["openOverlay", "showOverlay"] as const)(
+  it.each(["pushOverlay", "showOverlay"] as const)(
     "%s of an inspector after Back truncates the forward branch",
     async (method) => {
       const nav = await renderNav("/vault");
@@ -573,7 +573,7 @@ describe("usePhoneNavigation forward", () => {
   it("Forward cannot resurrect a dismissed ephemeral menu", async () => {
     const nav = await renderNav("/vault");
     await act(async () => nav().push({ kind: "tab", tabId: "editor:a:b" }));
-    await act(async () => nav().openOverlay({ kind: "tabs" }));
+    await act(async () => nav().pushOverlay({ kind: "tabs" }));
 
     // Back closes the menu in place — it was never a history entry, so no
     // forward branch exists for Forward to walk.

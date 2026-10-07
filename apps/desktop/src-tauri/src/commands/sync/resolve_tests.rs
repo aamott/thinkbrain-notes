@@ -56,7 +56,11 @@ fn fixture(name: &str, ours: &[u8], theirs: &[u8]) -> Fixture {
     let workspace = bootstrap(&app_data, &vault, false).expect("bootstrap succeeds");
     Fixture {
         vault,
-        engine: Engine::new(workspace.repo, workspace.has_own_git),
+        engine: Engine::new(
+            workspace.repo,
+            workspace.has_own_git,
+            workspace.git_import_paused,
+        ),
     }
 }
 

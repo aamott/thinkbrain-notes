@@ -255,6 +255,12 @@ function HistorySession({
             shown from it are copies kept outside your notes.
           </p>
         )}
+        {status.gitImportPaused && (
+          <p className="mb-0 mt-2 text-[0.7rem] leading-relaxed text-muted-foreground">
+            This folder's git history isn't being read right now because it isn't on a branch —
+            check a branch out there and these versions will be picked up.
+          </p>
+        )}
       </header>
 
       {error !== null && (

@@ -162,6 +162,9 @@ pub struct Engine {
     maintenance_problem: Mutex<Option<NativeError>>,
     /// Whether the vault is also a git repository of the user's own.
     has_own_git: bool,
+    /// Whether importing that repository's history is paused on a detached
+    /// checkout. Recording and prior history are unaffected.
+    git_import_paused: bool,
     /// Last time a note changed, for the idle debounce that fires a round trip.
     last_touched: Mutex<Instant>,
     /// When a round trip was last *started*, in seconds since the epoch.
@@ -177,10 +180,11 @@ pub struct Engine {
 }
 
 impl Engine {
-    pub fn new(repo: gix::Repository, has_own_git: bool) -> Self {
+    pub fn new(repo: gix::Repository, has_own_git: bool, git_import_paused: bool) -> Self {
         Self {
             repo: repo.into_sync(),
             has_own_git,
+            git_import_paused,
             pending: Mutex::new(PendingChanges::default()),
             conflicts: Mutex::new(BTreeMap::new()),
             stuck: Mutex::new(BTreeMap::new()),
@@ -243,6 +247,12 @@ impl Engine {
     /// exists so a window can say two histories are being kept here.
     pub fn alongside_own_git(&self) -> bool {
         self.has_own_git
+    }
+
+    /// Whether the vault's `.git` import is paused on a detached checkout —
+    /// surfaced so the pause reads as a state, not as silence.
+    pub fn git_import_paused(&self) -> bool {
+        self.git_import_paused
     }
 
     /// Drops a conflict from the set, because it has been answered.

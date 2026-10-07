@@ -4,10 +4,8 @@ import { useCallback, useMemo } from "react";
 import type { DesktopCommand } from "../../commands/commandRegistry";
 import { editorTabId, fileTabId, type DesktopTab } from "../../tabs/tabModel";
 import type { WorkspaceExplorerProps } from "../../workspace/WorkspaceExplorer";
-import type { RightPanel } from "../shellTypes";
 import type { ShellState } from "../useShellState";
 import type { PhoneNavigation } from "./usePhoneNavigation";
-import type { Dispatch, SetStateAction } from "react";
 
 /** The shell values {@link usePhoneOpeners} reads, taken as values (never the
  *  `shell` object itself — useShellState returns a new object every render). */
@@ -18,7 +16,6 @@ export interface UsePhoneOpenersParams {
   readonly openFileDocument: ShellState["openFileDocument"];
   readonly openNewTabDocument: ShellState["openNewTab"];
   readonly restoredWorkspacePath: string | null;
-  readonly setRightPanel: Dispatch<SetStateAction<RightPanel | null>>;
   readonly paletteCommands: readonly DesktopCommand[];
   readonly runPaletteCommand: ShellState["runCommand"];
   readonly navigation: PhoneNavigation;
@@ -50,7 +47,6 @@ export function usePhoneOpeners({
   openFileDocument,
   openNewTabDocument,
   restoredWorkspacePath,
-  setRightPanel,
   paletteCommands,
   runPaletteCommand,
   navigation,
@@ -111,10 +107,9 @@ export function usePhoneOpeners({
     (rootPath: string, relativePath: string) => {
       if (inferTabKind(relativePath) === "editor") openMarkdown(rootPath, relativePath);
       else openFile(rootPath, relativePath);
-      setRightPanel("history");
       navigation.showOverlay({ kind: "inspector", panel: "history", parent: "content" });
     },
-    [openMarkdown, openFile, setRightPanel, navigation]
+    [openMarkdown, openFile, navigation]
   );
 
   // The popup's create path runs the canonical command — the existing

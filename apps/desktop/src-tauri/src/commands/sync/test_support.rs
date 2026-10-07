@@ -26,7 +26,11 @@ pub(super) fn engine_fixture(name: &str) -> EngineFixture {
     let workspace = bootstrap(&app_data, &vault, false).expect("bootstrap succeeds");
     EngineFixture {
         vault,
-        engine: Engine::new(workspace.repo, workspace.has_own_git),
+        engine: Engine::new(
+            workspace.repo,
+            workspace.has_own_git,
+            workspace.git_import_paused,
+        ),
     }
 }
 

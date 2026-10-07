@@ -62,7 +62,8 @@ describe("Previous versions… on the phone explorer", () => {
     );
     expect(tab?.kind).toBe("code-editor");
     expect(shell().tabState.activeTabId).toBe(tab?.id);
-    expect(shell().rightPanel).toBe("history");
+    // The inspector carries the panel — phone chrome does not touch the
+    // desktop's rightPanel state.
     expect(inspector(host)).not.toBeNull();
     expect(
       inspector(host)?.querySelector('[aria-label="Version history panel"]')

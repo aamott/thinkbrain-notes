@@ -16,7 +16,7 @@ fn fixture(name: &str) -> Fixture {
     let vault = make_temp_test_dir(&format!("{name}-vault"), "sync", true);
     let git_dir = make_temp_test_dir(&format!("{name}-gitdir"), "sync", true);
     let repo = hidden_repo::open_or_create(&git_dir, &vault).expect("the hidden repository opens");
-    let engine = Engine::new(repo, false);
+    let engine = Engine::new(repo, false, false);
     let repo = engine.repository();
     Fixture {
         vault,

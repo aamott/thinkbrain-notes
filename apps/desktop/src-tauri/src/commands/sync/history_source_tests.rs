@@ -99,6 +99,42 @@ fn a_corrupt_metadata_file_fails_loudly() {
 }
 
 #[test]
+fn a_metadata_file_from_another_version_fails_loudly() {
+    let (repo, _vault, git_dir) = repo();
+    fs::write(
+        git_dir.join(FILE),
+        serde_json::to_vec_pretty(&serde_json::json!({
+            "version": 99,
+            "bindings": {}
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        selected_source(&repo, None)
+            .expect_err("another version is an error")
+            .code,
+        "sync.branch_source_failed"
+    );
+}
+
+#[test]
+fn a_symbolic_head_off_heads_reports_as_not_on_a_branch() {
+    let (path, source) = git_repo("hs-symbolic-tag", false);
+    commit_into(&source, &[("a.md", b"one\n")], None, "one");
+    // `git symbolic-ref HEAD refs/tags/v1` is legal: the checkout is symbolic,
+    // not detached, but the referent names no branch anyone can push.
+    fs::write(path.join(".git").join("HEAD"), "ref: refs/tags/v1\n").unwrap();
+
+    assert_eq!(
+        checkout_branch(&path)
+            .expect_err("a tag-pointing HEAD is not a branch")
+            .code,
+        "sync.branch_detached"
+    );
+}
+
+#[test]
 fn checkout_binding_reads_the_checked_out_branch() {
     let (_path, source) = git_repo("hs-checkout", false);
     commit_into(&source, &[("a.md", b"one\n")], None, "one");
@@ -215,6 +251,19 @@ fn a_bind_with_invalid_names_writes_nothing() {
         bind(&repo, "refs/heads/mine", None, "refs/heads/main",)
             .expect_err("foreign source")
             .code,
+        "sync.branch_source_failed"
+    );
+    // A retained archive ref is not a bindable source either: binding to one
+    // would let archived history become active again.
+    assert_eq!(
+        bind(
+            &repo,
+            "refs/thinkbrain/sources/retained/old/workspace-git",
+            None,
+            "refs/heads/main",
+        )
+        .expect_err("retained source")
+        .code,
         "sync.branch_source_failed"
     );
     assert_eq!(

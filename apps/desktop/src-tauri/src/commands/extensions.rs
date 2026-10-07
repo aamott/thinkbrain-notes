@@ -173,14 +173,11 @@ pub fn read_extension_file(
 mod tests {
     use super::*;
 
-    /// Creates a unique temp directory for a test and returns its path.
-    fn temp_test_dir(name: &str) -> PathBuf {
-        crate::tests::make_temp_test_dir(name, "extensions", false)
-    }
+    use crate::tests::make_temp_test_dir;
 
     #[test]
     fn reads_a_file_inside_the_extension_directory() {
-        let dir = temp_test_dir("read");
+        let dir = make_temp_test_dir("read", "extensions", false);
         fs::write(dir.join("extension.js"), "export function activate() {}")
             .expect("entry is written");
 
@@ -196,7 +193,7 @@ mod tests {
 
     #[test]
     fn reads_a_file_in_a_subdirectory() {
-        let dir = temp_test_dir("subdir");
+        let dir = make_temp_test_dir("subdir", "extensions", false);
         fs::create_dir_all(dir.join("dist")).expect("subdirectory is created");
         fs::write(dir.join("dist/main.js"), "bundled").expect("entry is written");
 
@@ -212,7 +209,7 @@ mod tests {
 
     #[test]
     fn rejects_a_parent_directory_escape() {
-        let dir = temp_test_dir("escape");
+        let dir = make_temp_test_dir("escape", "extensions", false);
         let outside = dir.parent().expect("temp root").join("outside.js");
         fs::write(&outside, "secret").expect("outside file is written");
 
@@ -229,7 +226,7 @@ mod tests {
 
     #[test]
     fn rejects_an_absolute_relative_path() {
-        let dir = temp_test_dir("absolute");
+        let dir = make_temp_test_dir("absolute", "extensions", false);
 
         let error = read_extension_file(
             dir.to_string_lossy().into_owned(),
@@ -251,7 +248,7 @@ mod tests {
 
     #[test]
     fn reports_a_missing_file() {
-        let dir = temp_test_dir("missing");
+        let dir = make_temp_test_dir("missing", "extensions", false);
 
         let error = read_extension_file(
             dir.to_string_lossy().into_owned(),
@@ -265,7 +262,7 @@ mod tests {
 
     #[test]
     fn rejects_a_directory_as_the_entry() {
-        let dir = temp_test_dir("isdir");
+        let dir = make_temp_test_dir("isdir", "extensions", false);
         fs::create_dir_all(dir.join("dist")).expect("subdirectory is created");
 
         let error = read_extension_file(dir.to_string_lossy().into_owned(), "dist".to_string())
@@ -278,7 +275,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn rejects_a_symlink_pointing_outside_the_directory() {
-        let dir = temp_test_dir("symlink");
+        let dir = make_temp_test_dir("symlink", "extensions", false);
         let outside = dir.parent().expect("temp root").join("linked-secret.js");
         fs::write(&outside, "secret").expect("outside file is written");
         std::os::unix::fs::symlink(&outside, dir.join("extension.js")).expect("symlink is created");
@@ -296,7 +293,7 @@ mod tests {
 
     #[test]
     fn rejects_a_file_exceeding_the_size_limit() {
-        let dir = temp_test_dir("oversized");
+        let dir = make_temp_test_dir("oversized", "extensions", false);
         let oversized = dir.join("huge.js");
 
         let mut file = fs::File::create(&oversized).expect("file is created");
@@ -314,7 +311,7 @@ mod tests {
 
     #[test]
     fn rejects_a_non_utf8_file() {
-        let dir = temp_test_dir("invalid-utf8");
+        let dir = make_temp_test_dir("invalid-utf8", "extensions", false);
         let invalid = dir.join("binary.js");
 
         fs::write(&invalid, b"\x80\x81\x82\x83").expect("non-UTF-8 content is written");

@@ -3,6 +3,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::time::Duration;
 
+use gix::bstr::ByteSlice;
 use gix::remote::Direction;
 
 use crate::error::NativeError;
@@ -326,7 +327,7 @@ fn local_head_target(destination: &str) -> Option<String> {
     let path = destination.strip_prefix("file://").unwrap_or(destination);
     let repo = gix::open(path).ok()?;
     let head = repo.head().ok()?;
-    Some(head.referent_name()?.as_bstr().to_string())
+    Some(head.referent_name()?.as_bstr().to_str().ok()?.to_string())
 }
 
 fn timed_out() -> NativeError {

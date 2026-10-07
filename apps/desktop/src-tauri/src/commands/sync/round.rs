@@ -224,13 +224,9 @@ fn trip(
     let fetched = {
         let repo = repo.clone();
         let destination = destination.to_owned();
-        let cancel = Arc::clone(&cancel);
-        let profile = profile_id.clone();
-        let selected = selected.clone();
-        bounded(network::NETWORK, Arc::clone(&cancel), move || {
-            super::credentials::with_profile(profile.as_deref(), || {
-                network::fetch(&repo, &destination, &cancel, selected.as_deref())
-            })
+        let fetch_cancel = Arc::clone(&cancel);
+        network_call(&cancel, profile_id.as_deref(), move || {
+            network::fetch(&repo, &destination, &fetch_cancel, selected.as_deref())
         })
     }?;
     // An unrelated fetched tip is refused before anything remembers it: the
@@ -345,13 +341,9 @@ fn trip(
             let attempt = {
                 let repo = repo.clone();
                 let destination = destination.to_owned();
-                let cancel = Arc::clone(&cancel);
-                let profile = profile_id.clone();
                 let branch = fetched.branch.clone();
-                bounded(network::NETWORK, cancel, move || {
-                    super::credentials::with_profile(profile.as_deref(), || {
-                        push::send(&repo, &destination, &branch, tip)
-                    })
+                network_call(&cancel, profile_id.as_deref(), move || {
+                    push::send(&repo, &destination, &branch, tip)
                 })
             };
             match attempt {
@@ -378,6 +370,20 @@ fn trip(
         landed,
         conflict_copies: copies,
         skipped,
+    })
+}
+
+/// One bounded, credentialed network call: `work` runs on the sync-io lane
+/// under `NETWORK`'s limit with `profile_id`'s credentials in scope. Fetch and
+/// push share this pairing so neither can forget one half of it.
+fn network_call<T: Send + 'static>(
+    cancel: &Arc<AtomicBool>,
+    profile_id: Option<&str>,
+    work: impl FnOnce() -> Result<T, NativeError> + Send + 'static,
+) -> Result<T, NativeError> {
+    let profile = profile_id.map(str::to_owned);
+    bounded(network::NETWORK, Arc::clone(cancel), move || {
+        super::credentials::with_profile(profile.as_deref(), work)
     })
 }
 

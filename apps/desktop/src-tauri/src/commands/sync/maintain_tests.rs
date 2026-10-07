@@ -336,7 +336,7 @@ fn a_stale_restore_id_is_no_longer_available() {
 
     cleanup(&f.repo, NOW, &policy()).expect("cleanup succeeds");
 
-    let engine = Engine::new(f.repo, false);
+    let engine = Engine::new(f.repo, false, false);
     let error = history::restore(&engine, "note.md", &old.to_string())
         .expect_err("a dropped restore point should not write");
     assert_eq!(error.code, "sync.version_missing");

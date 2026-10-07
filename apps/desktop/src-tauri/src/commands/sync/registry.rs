@@ -163,7 +163,11 @@ pub fn attach(app_data_dir: &Path, root: &Path, key: &str, label: &str) -> Resul
     let managed = bootstrap(app_data_dir, root, git_link_configured)
         .map_err(|error| remember_failure(key, error))?;
 
-    let engine = Arc::new(Engine::new(managed.repo, managed.has_own_git));
+    let engine = Arc::new(Engine::new(
+        managed.repo,
+        managed.has_own_git,
+        managed.git_import_paused,
+    ));
     // Conflicts appear while the app is closed. Someone back from a week away
     // should not have to open each note to discover the app noticed nothing —
     // nor to be handed a week of copies that turn out to say nothing.

@@ -135,6 +135,12 @@ export interface SyncStatus {
    */
   readonly alongsideOwnGit: boolean;
   /**
+   * Whether this folder's own-git history import is paused on a detached
+   * checkout. Recording and prior history are unaffected — checking out a
+   * branch resumes the import.
+   */
+  readonly gitImportPaused: boolean;
+  /**
    * A failure to tidy private undo history. Saving versions continues.
    */
   readonly maintenanceProblem: SyncProblem | null;
@@ -152,6 +158,7 @@ export const NOT_RECORDING: SyncStatus = Object.freeze({
   health: "unknown",
   lastCheckedAt: null,
   alongsideOwnGit: false,
+  gitImportPaused: false,
   maintenanceProblem: null
 });
 

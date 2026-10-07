@@ -1,6 +1,6 @@
 import { BottomSheet, FloatingBubbles } from "@thinkbrain/ui";
 import { EllipsisVertical, FilePlus2, FolderOpen, House, Plus, Search } from "lucide-react";
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import { BottomPanel } from "../../panels/BottomPanel";
 import { LeftPopout } from "../../panels/LeftPopout";
@@ -11,7 +11,7 @@ import {
 import { usePanelNotificationCounts } from "../../notifications/usePanelNotificationCounts";
 import { useSettingsStore } from "../../settings/settingsStore";
 import { inspectableRelativePath, isNoteTab } from "../../tabs/tabModel";
-import { isSelectableLeftPanel } from "../shellTypes";
+import { isSelectableLeftPanel, type RightPanel } from "../shellTypes";
 import { TabCloseRequest } from "../TabCloseRequest";
 import { useNoteTitle } from "../useNoteTitle";
 import { TabContent } from "../TabContent";
@@ -69,6 +69,16 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
   const actionsOpen = overlay?.kind === "actions";
   const newNoteOpen = overlay?.kind === "new-note";
   const inspectorPanel = overlay?.kind === "inspector" ? overlay.panel : null;
+  // The sheet animates closed after its overlay entry is already gone, so it
+  // still needs the last panel shown — never the desktop's right-panel state,
+  // which phone chrome does not read. State adjusted during render (the
+  // documented pattern for remembering a previous value).
+  const [lastInspectorPanel, setLastInspectorPanel] = useState<RightPanel>("outline");
+  const [seenInspectorPanel, setSeenInspectorPanel] = useState(inspectorPanel);
+  if (inspectorPanel !== seenInspectorPanel) {
+    setSeenInspectorPanel(inspectorPanel);
+    if (inspectorPanel !== null) setLastInspectorPanel(inspectorPanel);
+  }
 
   // Callbacks and effects must take these as values, never `shell` itself:
   // useShellState returns a new object every render.
@@ -78,7 +88,6 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
     saveDocument,
     dispatchTabs,
     setLeftPanel,
-    setRightPanel,
     openMarkdownDocument,
     openFileDocument,
     openNewTab: openNewTabDocument,
@@ -112,7 +121,6 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
     openFileDocument,
     openNewTabDocument,
     restoredWorkspacePath: shell.restoredWorkspacePath,
-    setRightPanel,
     paletteCommands,
     runPaletteCommand,
     navigation,
@@ -458,8 +466,7 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
           context={rightContext}
           onDismiss={() => navigation.dismissOverlay()}
           onSelect={(panel) => {
-            setRightPanel(panel);
-            navigation.openOverlay({ kind: "inspector", panel, parent: "actions" });
+            navigation.pushOverlay({ kind: "inspector", panel, parent: "actions" });
           }}
         />
 
@@ -467,7 +474,7 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
             drawer re-renders it rather than stranding it on the previous note. */}
         <InspectorSheet
           open={inspectorPanel !== null}
-          panel={inspectorPanel ?? shell.rightPanel ?? "outline"}
+          panel={inspectorPanel ?? lastInspectorPanel}
           context={rightContext}
           // Scrim tap closes the whole flow — under the actions menu that skips
           // the menu entry too; only the header Back steps one level.

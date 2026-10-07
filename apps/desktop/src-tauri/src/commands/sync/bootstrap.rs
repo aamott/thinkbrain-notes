@@ -42,6 +42,10 @@ pub struct ManagedWorkspace {
     /// source ref, but it never becomes the repository sync writes to — that
     /// lives in app data, and `.git` is a dot-directory the note walk skips.
     pub has_own_git: bool,
+    /// Whether the vault's `.git` history import is paused on a detached
+    /// checkout — the pause is real work held back, so the status surface
+    /// says so rather than letting silence read as "nothing to import".
+    pub git_import_paused: bool,
 }
 
 /// Names Auto Sync never records, in `.gitignore` syntax.
@@ -114,14 +118,14 @@ pub fn bootstrap(
     let repo = hidden_repo::open_or_create(&git_dir, vault)?;
     write_exclude_file(&git_dir)?;
 
-    if !git_link_configured {
-        // A detached checkout is the one import failure that pauses rather
-        // than aborts: nothing about the vault is broken, the user just needs
-        // to pick a branch before history import or sync can resume. Local
-        // recording and previously imported history carry on meanwhile.
-        if own_git_detached(vault) {
-            eprintln!("[sync] .git is not on a branch; history import paused until it is");
-        } else if let Some(imported) = history_ingest::ingest_workspace_git(&repo, vault)? {
+    // A detached checkout is the one import failure that pauses rather than
+    // aborts: nothing about the vault is broken, the user just needs to pick
+    // a branch before history import or sync can resume. Local recording and
+    // previously imported history carry on meanwhile — and the flag rides to
+    // the status surface so the pause is said, not silent.
+    let git_import_paused = !git_link_configured && own_git_detached(vault);
+    if !git_link_configured && !git_import_paused {
+        if let Some(imported) = history_ingest::ingest_workspace_git(&repo, vault)? {
             super::history_source::activate(&repo, &imported.reference)?;
         }
     }
@@ -141,6 +145,7 @@ pub fn bootstrap(
         repo,
         took_first_snapshot,
         has_own_git,
+        git_import_paused,
     })
 }
 

@@ -63,6 +63,9 @@ pub struct SyncStatus {
     /// Two histories are being kept here, and someone should learn that from
     /// the app rather than from noticing it.
     pub alongside_own_git: bool,
+    /// Whether the vault's own-git history import is paused on a detached
+    /// checkout — the panel can say what is held back and how to resume it.
+    pub git_import_paused: bool,
     /// A failure to tidy private undo history. Recording ignores it.
     pub maintenance_problem: Option<NativeError>,
 }
@@ -135,6 +138,7 @@ pub fn of(recording: Recording<'_>) -> Result<SyncStatus, NativeError> {
         health,
         last_checked_at,
         alongside_own_git: engine.alongside_own_git(),
+        git_import_paused: engine.git_import_paused(),
         maintenance_problem: engine.maintenance_problem(),
     })
 }
