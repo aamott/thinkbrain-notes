@@ -149,20 +149,20 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
 
   const runCommand = useCallback(
     (commandId: string) => {
-      // New note is a toggle, not a fire-and-forget action: the bubble opens a
-      // popup offering create-or-reopen, and a second tap dismisses it.
+      // "new-note" means create, the same as in the palette and the popup's
+      // own Create row — one meaning for the id. The open-or-dismiss toggle
+      // is the bubble's alone and lives on its onSelect.
       if (commandId === "new-note") {
-        if (newNoteOpen) navigation.dismissOverlay();
-        else navigation.showOverlay({ kind: "new-note" });
-        return;
+        createNewNote();
+      } else {
+        const command = paletteCommands.find((candidate) => candidate.id === commandId);
+        if (command) runPaletteCommand(command);
       }
-      const command = paletteCommands.find((candidate) => candidate.id === commandId);
-      if (command) runPaletteCommand(command);
       // Dismiss only a real overlay — with none open, dismissOverlay would
       // still Back-navigate the content route out from under the command.
       if (overlay !== null) navigation.dismissOverlay();
     },
-    [paletteCommands, runPaletteCommand, navigation, newNoteOpen, overlay]
+    [paletteCommands, runPaletteCommand, navigation, createNewNote, overlay]
   );
 
   // The new-tab page's entry points, routed through phone navigation the same
@@ -286,7 +286,8 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
         variant: "primary" as const,
         hasPopup: true,
         active: newNoteOpen,
-        onSelect: () => runCommand("new-note")
+        onSelect: () =>
+          newNoteOpen ? navigation.dismissOverlay() : navigation.showOverlay({ kind: "new-note" })
       },
       actions: {
         key: "actions",
@@ -304,7 +305,7 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
       left: bubbleLayout.left.map((id) => byId[id]),
       right: bubbleLayout.right.map((id) => byId[id])
     };
-  }, [bubbleLayout, conflictCount, newNoteOpen, actionsOpen, actionsBadge, runCommand, navigation]);
+  }, [bubbleLayout, conflictCount, newNoteOpen, actionsOpen, actionsBadge, navigation]);
 
   return (
     // `overflow-clip`, not `overflow-hidden`: closed always-mounted sheets
@@ -408,15 +409,7 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
             // Actions are pointers to canonical commands; run through the same
             // path as every other command, never a bespoke execution.
             const commandId = newNoteMenuActions.commandIdFor(id);
-            if (!commandId) return;
-            // A row pointing at the canonical new-note command means create —
-            // the open-or-dismiss toggle in runCommand is only for the bubble.
-            if (commandId === "new-note") {
-              createNewNote();
-              navigation.dismissOverlay();
-              return;
-            }
-            runCommand(commandId);
+            if (commandId) runCommand(commandId);
           }}
           onDismiss={() => navigation.dismissOverlay()}
         />
