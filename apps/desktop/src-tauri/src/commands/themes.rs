@@ -311,9 +311,7 @@ fn stem_name(path: &Path) -> String {
 mod tests {
     use super::*;
 
-    fn temp_test_dir(name: &str) -> PathBuf {
-        crate::tests::make_temp_test_dir(name, "themes", false)
-    }
+    use crate::tests::make_temp_test_dir;
 
     #[test]
     fn themes_dir_path_lives_under_app_data() {
@@ -323,7 +321,7 @@ mod tests {
 
     #[test]
     fn ensure_themes_directory_creates_missing_dir() {
-        let temp = temp_test_dir("ensure");
+        let temp = make_temp_test_dir("ensure", "themes", false);
         let themes = temp.join("themes");
 
         ensure_themes_directory(&themes).expect("directory is created");
@@ -338,7 +336,7 @@ mod tests {
 
     #[test]
     fn list_theme_entries_returns_empty_for_empty_directory() {
-        let temp = temp_test_dir("empty");
+        let temp = make_temp_test_dir("empty", "themes", false);
         let themes = temp.join("themes");
         fs::create_dir_all(&themes).expect("themes dir created");
 
@@ -350,7 +348,7 @@ mod tests {
 
     #[test]
     fn list_theme_entries_parses_name_and_path() {
-        let temp = temp_test_dir("parse");
+        let temp = make_temp_test_dir("parse", "themes", false);
         let themes = temp.join("themes");
         fs::create_dir_all(&themes).expect("themes dir created");
 
@@ -381,7 +379,7 @@ mod tests {
 
     #[test]
     fn list_theme_entries_ignores_non_theme_json_files() {
-        let temp = temp_test_dir("ignore");
+        let temp = make_temp_test_dir("ignore", "themes", false);
         let themes = temp.join("themes");
         fs::create_dir_all(&themes).expect("themes dir created");
 
@@ -411,7 +409,7 @@ mod tests {
 
     #[test]
     fn resolve_theme_file_path_rejects_traversal() {
-        let temp = temp_test_dir("path-traversal");
+        let temp = make_temp_test_dir("path-traversal", "themes", false);
         let themes = temp.join("themes");
         fs::create_dir_all(&themes).expect("themes dir created");
         let outside = temp.join("secret.tbtheme.json");
@@ -439,7 +437,7 @@ mod tests {
 
     #[test]
     fn read_theme_name_returns_trimmed_name() {
-        let temp = temp_test_dir("name");
+        let temp = make_temp_test_dir("name", "themes", false);
         let path = temp.join("theme.tbtheme.json");
         fs::write(
             &path,
@@ -454,7 +452,7 @@ mod tests {
 
     #[test]
     fn read_theme_name_returns_none_for_missing_or_empty_name() {
-        let temp = temp_test_dir("name-missing");
+        let temp = make_temp_test_dir("name-missing", "themes", false);
         let no_name = temp.join("no-name.tbtheme.json");
         fs::write(&no_name, r#"{"base":"dark","version":1}"#).expect("written");
         let empty_name = temp.join("empty-name.tbtheme.json");

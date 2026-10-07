@@ -77,3 +77,17 @@ Pass 2 (medium/high-priority findings, with new tests):
 - **State ordering vs corruption:** the round.rs publication-ordering finding does not corrupt state (retries re-fire the refusal), but it contradicts the module's stated invariant and exposes a rejected foreign graph to the history panel.
 - **Pre-existing:** README's reference to `plans/ai.md` (actual file `pending-ai-med-hard.md`) is broken but untouched by this diff.
 - **Verified by parent:** all medium-urgency findings were re-verified by reading the cited code directly.
+
+## Disposition (post-triage)
+
+All ten remaining findings were validated against the code and closed:
+
+- **Fixed:** symbolic-HEAD errors, non-UTF8 branch names, detached-checkout
+  pause (now surfaced via `gitImportPaused`), parent-tree re-decode, and the
+  history page/source test-coverage gaps.
+- **Converted to pending stories:** stream memoization (`auto-sync/
+  pending-history_page_stream_memoization`), symlink/gitlink history reads
+  (`pending-history_read_symlink_transitions`), rename following
+  (`pending-timeline_rename_following`).
+- **Dropped as invalid:** populated-remote branch-missing — the claimed gap
+  was already unit-tested and the proposed test could not distinguish the arms.

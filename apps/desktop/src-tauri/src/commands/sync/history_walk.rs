@@ -275,15 +275,6 @@ fn tree_at(repo: &gix::Repository, tree: gix::ObjectId) -> Result<gix::Tree<'_>,
     repo.find_tree(tree).map_err(unreadable)
 }
 
-/// The blob `path` names in the tree `commit` recorded.
-fn blob_at_commit(
-    repo: &gix::Repository,
-    commit: gix::ObjectId,
-    path: &Path,
-) -> Result<Option<gix::ObjectId>, NativeError> {
-    blob_at(repo, snapshot::tree_of(repo, Some(commit))?, path)
-}
-
 /// One note's versions across `nodes`, newest first.
 ///
 /// A commit only becomes a version when its blob for the path differs from
@@ -302,11 +293,19 @@ pub fn note_events(
 ) -> Result<Vec<Recorded>, NativeError> {
     let mut events = Vec::new();
     let mut last_blob: Option<gix::ObjectId> = None;
+    // Every gathered node already carries its decoded tree, so parents inside
+    // the gathered closure are free; only a parent outside it re-decodes.
+    let trees: HashMap<gix::ObjectId, gix::ObjectId> =
+        nodes.iter().map(|node| (node.id, node.tree)).collect();
     for node in nodes {
         let blob = blob_at(repo, node.tree, note)?;
         let mut parent_blobs = Vec::with_capacity(node.parents.len());
         for parent in &node.parents {
-            parent_blobs.push(blob_at_commit(repo, *parent, note)?);
+            let tree = match trees.get(parent) {
+                Some(&tree) => tree,
+                None => snapshot::tree_of(repo, Some(*parent))?,
+            };
+            parent_blobs.push(blob_at(repo, tree, note)?);
         }
         let Some(blob) = blob else {
             // A real deletion resets dedupe so a recreate of even identical

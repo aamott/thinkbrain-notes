@@ -11,6 +11,7 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
+use gix::bstr::ByteSlice;
 use serde::{Deserialize, Serialize};
 
 use crate::NativeError;
@@ -258,7 +259,22 @@ pub fn checkout_branch(vault: &Path) -> Result<Option<String>, NativeError> {
     let Some(name) = head.referent_name() else {
         return Ok(None);
     };
-    Ok(Some(name.as_bstr().to_string()))
+    // A symbolic HEAD is legal outside refs/heads (`git symbolic-ref HEAD
+    // refs/tags/v1`), but such a checkout cannot be fetched or pushed as a
+    // branch -- same actionable block as a detached HEAD.
+    let name = name.as_bstr().to_str().map_err(|_| {
+        NativeError::new(
+            "sync.branch_unknown",
+            "This workspace's Git repository is on a branch name this build cannot read. Check out a differently named branch.",
+        )
+    })?;
+    if !name.starts_with("refs/heads/") {
+        return Err(NativeError::new(
+            "sync.branch_detached",
+            "This workspace's Git repository is not on a branch. Check out its branch before syncing.",
+        ));
+    }
+    Ok(Some(name.to_string()))
 }
 
 /// Whether the vault's own checkout still matches `expected`, the branch this
@@ -297,13 +313,16 @@ pub fn remote_branch_for(vault: &Path, destination: &str) -> Result<String, Nati
     let upstream = config
         .string(&format!("branch.{short}.remote"))
         .and_then(|remote| {
-            let url = config.string(&format!("remote.{}.url", remote.to_string()))?;
+            // Config values are bytes: a non-UTF-8 remote or merge name is not
+            // this link's upstream, so it is skipped rather than lossy-mangled
+            // into a refspec it never named.
+            let url = config.string(&format!("remote.{}.url", remote.to_str().ok()?))?;
             (super::normalize_destination(&url.to_string())
                 == super::normalize_destination(destination))
             .then(|| {
                 config
                     .string(&format!("branch.{short}.merge"))
-                    .map(|merge| merge.to_string())
+                    .and_then(|merge| merge.to_str().ok().map(str::to_owned))
             })
             .flatten()
         });

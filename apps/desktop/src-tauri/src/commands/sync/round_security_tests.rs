@@ -82,6 +82,7 @@ fn concurrent_syncs_on_one_vault_agree_on_history() {
     let engine = std::sync::Arc::new(super::super::engine::Engine::new(
         gix::open(one.repo.path()).expect("the hidden repository reopens"),
         false,
+        false,
     ));
     let key = one.vault.to_string_lossy().to_string();
 
@@ -126,6 +127,7 @@ fn a_sync_waits_for_the_workspace_lane_before_entering_the_trip() {
     write(&one, "note.md", "first\n");
     let engine = std::sync::Arc::new(super::super::engine::Engine::new(
         gix::open(one.repo.path()).expect("the hidden repository reopens"),
+        false,
         false,
     ));
     let key = one.vault.to_string_lossy().to_string();

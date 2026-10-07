@@ -8,7 +8,11 @@ fn engine_for(name: &str) -> Arc<Engine> {
     let app_data = make_temp_test_dir(&format!("{name}-appdata"), "sync", true);
     let vault = make_temp_test_dir(&format!("{name}-vault"), "sync", true);
     let managed = bootstrap(&app_data, &vault, false).expect("bootstrap succeeds");
-    Arc::new(Engine::new(managed.repo, managed.has_own_git))
+    Arc::new(Engine::new(
+        managed.repo,
+        managed.has_own_git,
+        managed.git_import_paused,
+    ))
 }
 
 /// Two windows on one vault share one engine, and it survives until the
@@ -396,7 +400,11 @@ fn syncable(name: &str) -> (String, Arc<Engine>) {
     let app_data = make_temp_test_dir(&format!("{name}-appdata"), "sync", true);
     let vault = make_temp_test_dir(&format!("{name}-vault"), "sync", true);
     let managed = bootstrap(&app_data, &vault, false).expect("bootstrap succeeds");
-    let engine = Arc::new(Engine::new(managed.repo, managed.has_own_git));
+    let engine = Arc::new(Engine::new(
+        managed.repo,
+        managed.has_own_git,
+        managed.git_import_paused,
+    ));
 
     settle::remember_settings_home(&app_data);
     let home = settle::settings_home().expect("a settings home is remembered");

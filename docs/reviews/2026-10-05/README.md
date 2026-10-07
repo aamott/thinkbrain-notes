@@ -36,3 +36,12 @@ out; the deletion was complete.
 The availability-triplication point is folded into
 `plans/ui-shell/pending-contextual_action_items-med-hard.md` rather than a
 separate finding — that story exists to unify it.
+
+## Disposition (post-triage)
+
+- **Fixed:** inspector right-panel shadow state (a shell-local last-panel ref
+  now) and the `openOverlay`/`showOverlay` split (renamed `pushOverlay`, the
+  push-vs-replace semantic now in the name). The `new-note` special-casing was
+  fixed earlier in `fix/bubbles-after-keyboard`.
+- **Dropped:** the badge finding is one bullet of `plans/ui-shell/
+  pending-contextual_action_items-med-hard.md`, which owns the fix.

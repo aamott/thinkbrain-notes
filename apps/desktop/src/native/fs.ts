@@ -7,6 +7,13 @@
  * without importing Tauri APIs themselves. Non-Tauri contexts (tests, web
  * preview) are guarded so the helpers resolve to `null` / empty instead of
  * crashing.
+ *
+ * The granted capabilities (`fs:allow-read-text-file` /
+ * `fs:allow-write-text-file` in `capabilities/desktop.json`) carry no path
+ * scope, so these may only ever receive paths the user just picked in a
+ * system open/save dialog. Anything derived from workspace content,
+ * extension input or any other untrusted source must go through the
+ * workspace-scoped Rust commands, which do enforce path checks.
  */
 
 import { isTauri } from "@tauri-apps/api/core";

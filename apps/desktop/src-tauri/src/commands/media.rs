@@ -65,14 +65,11 @@ pub fn read_media_file_bytes(
 mod tests {
     use super::*;
 
-    /// Creates a unique canonicalized temp directory for a test.
-    fn temp_test_dir(name: &str) -> std::path::PathBuf {
-        crate::tests::make_temp_test_dir(name, "media", true)
-    }
+    use crate::tests::make_temp_test_dir;
 
     #[test]
     fn reads_a_media_file_as_raw_bytes() {
-        let dir = temp_test_dir("read");
+        let dir = make_temp_test_dir("read", "media", true);
         fs::write(dir.join("clip.mp3"), b"\x00\x01\x02not-really-mp3").expect("file is written");
 
         let bytes = read_media_file_bytes(&dir.to_string_lossy(), "clip.mp3", MAX_MEDIA_BYTES)
@@ -84,7 +81,7 @@ mod tests {
 
     #[test]
     fn refuses_a_parent_directory_escape() {
-        let dir = temp_test_dir("escape");
+        let dir = make_temp_test_dir("escape", "media", true);
         let outside = dir.parent().expect("temp root").join("outside.mp3");
         fs::write(&outside, b"secret").expect("outside file is written");
 
@@ -99,7 +96,7 @@ mod tests {
 
     #[test]
     fn refuses_a_file_larger_than_the_cap() {
-        let dir = temp_test_dir("oversize");
+        let dir = make_temp_test_dir("oversize", "media", true);
         fs::write(dir.join("big.mp4"), vec![0u8; 64]).expect("file is written");
 
         // A tiny cap stands in for MAX_MEDIA_BYTES so the fixture stays small.
