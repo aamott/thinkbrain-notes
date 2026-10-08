@@ -8,7 +8,7 @@
  */
 
 import { useEffect, useMemo, useRef } from "react";
-import { FilePlus2, Folder, FolderOpen, FolderPlus, Link, Search } from "lucide-react";
+import { FilePlus2, Folder, FolderCog, FolderOpen, FolderPlus, Link, Search } from "lucide-react";
 import { CommandPalette, type WorkspaceFileResult } from "../commands/CommandPalette";
 import { BottomPanel as BottomPanelContent } from "../panels/BottomPanel";
 import { LeftPopout } from "../panels/LeftPopout";
@@ -30,7 +30,7 @@ import { TabContent } from "./TabContent";
 import { canGoBackInTabs, canGoForwardInTabs, inspectableRelativePath } from "../tabs/tabModel";
 import { TitleBar } from "./TitleBar";
 import { WorkspaceHeaderBar } from "./WorkspaceHeaderBar";
-import { CREATE_MANAGED_WORKSPACE_LABEL, IMPORT_FROM_GIT_LABEL, OPEN_FOLDER_LABEL } from "../workspace/gitLinkImportCopy";
+import { CREATE_MANAGED_WORKSPACE_LABEL, IMPORT_FROM_GIT_LABEL, MANAGE_WORKSPACES_LABEL, OPEN_FOLDER_LABEL } from "../workspace/gitLinkImportCopy";
 import { useWorkspaceOnboardingStore } from "../workspace/workspaceOnboardingStore";
 import { WorkspaceSelectorProvider } from "../workspace/WorkspaceSelectorPortal";
 import type { ShellState } from "./useShellState";
@@ -109,9 +109,11 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
       }
       if (onboarding) {
         actions.push({ id: "import-git", label: IMPORT_FROM_GIT_LABEL, icon: <Link aria-hidden="true" className="size-4" />, onSelect: viaExplorer(onboarding.importFromGit) });
-        for (const path of onboarding.paths) {
-          actions.push({ id: `open:${path}`, label: path.split(/[\\/]/).at(-1) ?? path, icon: <Folder aria-hidden="true" className="size-4" />, onSelect: () => onboarding.openPath(path) });
+        for (const workspace of onboarding.workspaces) {
+          if (workspace.missing) continue;
+          actions.push({ id: `open:${workspace.rootPath}`, label: workspace.name, icon: <Folder aria-hidden="true" className="size-4" />, onSelect: () => onboarding.openPath(workspace.rootPath) });
         }
+        actions.push({ id: "manage-workspaces", label: MANAGE_WORKSPACES_LABEL, icon: <FolderCog aria-hidden="true" className="size-4" />, onSelect: viaExplorer(onboarding.manageWorkspaces) });
       }
       return { workspaceName, actions };
     }

@@ -45,6 +45,6 @@ describe("workspace onboarding on the phone", () => {
     });
 
     expect(filesVisible(host)).toBe(true);
-    expect(host.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
   });
 });

@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { ChevronDown, Folder, FolderGit2, FolderPlus, Link } from "lucide-react";
-import type { NativeWorkspaceAccessCapabilities } from "../native/commands";
+import { ChevronDown, Folder, FolderCog, FolderGit2, FolderPlus, Link } from "lucide-react";
+import type { NativeKnownWorkspace, NativeWorkspaceAccessCapabilities } from "../native/commands";
 import { cn } from "../lib/utils";
-import { Menu, MenuButton } from "../shell/Menu";
-import { CREATE_MANAGED_WORKSPACE_LABEL, IMPORT_FROM_GIT_LABEL, OPEN_FOLDER_LABEL } from "./gitLinkImportCopy";
+import { Menu, MenuButton, MenuSeparator } from "../shell/Menu";
+import { CREATE_MANAGED_WORKSPACE_LABEL, IMPORT_FROM_GIT_LABEL, MANAGE_WORKSPACES_LABEL, OPEN_FOLDER_LABEL } from "./gitLinkImportCopy";
 import { isWorkspaceGitLinked } from "./workspaceSettings";
 import type { WorkspaceSelectorVariant } from "./WorkspaceSelectorPortalModel";
 
@@ -29,37 +29,55 @@ export function WorkspaceSelector({
   variant,
   capabilities,
   currentPath,
-  paths,
+  workspaces,
   onAction,
   onSelect,
   onAdd,
   onCreateManaged,
-  onImportFromGit
+  onImportFromGit,
+  onManage,
+  onMenuOpen
 }: {
   readonly variant: WorkspaceSelectorVariant;
   readonly capabilities: NativeWorkspaceAccessCapabilities | null;
   readonly currentPath?: string;
-  readonly paths: readonly string[];
+  /**
+   * The known-workspace list. Entries whose folder is missing are hidden here —
+   * the manager is where missing folders get flagged and cleaned up.
+   */
+  readonly workspaces: readonly NativeKnownWorkspace[];
   readonly onAction?: () => void;
   readonly onSelect: (path: string) => void;
   readonly onAdd: () => void;
   readonly onCreateManaged: () => void;
   readonly onImportFromGit: () => void;
+  readonly onManage: () => void;
+  /** Runs when the menu opens so the caller can refresh the list it renders. */
+  readonly onMenuOpen?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [gitLinkedPaths, setGitLinkedPaths] = useState<ReadonlySet<string>>(new Set());
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuId = useId();
-  const options = useMemo(
-    () => [...new Set(currentPath ? [currentPath, ...paths] : paths)],
-    [currentPath, paths]
-  );
+  // The current workspace leads the list, as it always has — the menu opens
+  // focused on the `current` item, and the top slot is where it sits.
+  const options = useMemo(() => {
+    const listed = workspaces.filter((entry) => !entry.missing);
+    if (!currentPath) return listed;
+    const current = listed.find((entry) => entry.rootPath === currentPath) ?? {
+      rootPath: currentPath,
+      name: currentPath.split(/[\\/]/).at(-1) ?? currentPath,
+      kind: "external" as const,
+      missing: false
+    };
+    return [current, ...listed.filter((entry) => entry.rootPath !== currentPath)];
+  }, [currentPath, workspaces]);
   const closeMenu = useCallback((restoreFocus = false) => {
     setOpen(false);
     if (restoreFocus) triggerRef.current?.focus();
   }, []);
 
-  const optionsKey = options.join("\0");
+  const optionsKey = options.map((entry) => entry.rootPath).join("\0");
   // The current workspace's Git-linked badge shows on the closed trigger, so
   // it is probed eagerly; the per-option icons inside the menu only matter
   // once it opens, and each probe is a settings-file read.
@@ -84,9 +102,9 @@ export function WorkspaceSelector({
     if (!open) return;
     let cancelled = false;
     Promise.all(
-      options.map(async (path) => {
-        const linked = await isWorkspaceGitLinked(path);
-        return linked ? path : null;
+      options.map(async (entry) => {
+        const linked = await isWorkspaceGitLinked(entry.rootPath);
+        return linked ? entry.rootPath : null;
       })
     ).then((results) => {
       if (!cancelled) {
@@ -101,7 +119,10 @@ export function WorkspaceSelector({
   }, [open, optionsKey, options]);
 
   const currentIsGitLinked = currentPath ? gitLinkedPaths.has(currentPath) : false;
-  const currentFolderName = currentPath?.split(/[\\/]/).at(-1) ?? "Choose workspace";
+  const currentFolderName =
+    workspaces.find((entry) => entry.rootPath === currentPath)?.name ??
+    currentPath?.split(/[\\/]/).at(-1) ??
+    "Choose workspace";
 
   return (
     <div className={selectorRootClasses[variant]}>
@@ -117,7 +138,12 @@ export function WorkspaceSelector({
         aria-haspopup="menu"
         aria-label={currentIsGitLinked ? `${currentFolderName} (Git-linked workspace)` : currentFolderName}
         disabled={capabilities === null}
-        onClick={() => setOpen((value) => !value)}
+        // The refresh runs outside the updater — updaters must stay pure
+        // (StrictMode double-invokes them, which would repeat the IPC).
+        onClick={() => {
+          if (!open) onMenuOpen?.();
+          setOpen(!open);
+        }}
       >
         {currentIsGitLinked ? <FolderGit2 aria-hidden="true" /> : <Folder aria-hidden="true" />}
         <span className="truncate">{currentFolderName}</span>
@@ -133,21 +159,20 @@ export function WorkspaceSelector({
           // somewhere else has already decided where focus belongs.
           onClose={(reason) => closeMenu(reason === "escape")}
         >
-          {options.map((path) => {
-            const isLinked = gitLinkedPaths.has(path);
-            const folderName = path.split(/[\\/]/).at(-1) ?? path;
+          {options.map((entry) => {
+            const isLinked = gitLinkedPaths.has(entry.rootPath);
             return (
               <MenuButton
-                key={path}
+                key={entry.rootPath}
                 icon={isLinked ? <FolderGit2 /> : <Folder />}
-                label={folderName}
-                ariaLabel={isLinked ? `${folderName} (Git-linked workspace)` : folderName}
-                title={isLinked ? `${path} (Git-linked workspace)` : path}
-                current={path === currentPath}
+                label={entry.name}
+                ariaLabel={isLinked ? `${entry.name} (Git-linked workspace)` : entry.name}
+                title={isLinked ? `${entry.rootPath} (Git-linked workspace)` : entry.rootPath}
+                current={entry.rootPath === currentPath}
                 onClick={() => {
                   closeMenu(true);
                   onAction?.();
-                  onSelect(path);
+                  onSelect(entry.rootPath);
                 }}
               />
             );
@@ -185,6 +210,16 @@ export function WorkspaceSelector({
               }}
             />
           )}
+          <MenuSeparator />
+          <MenuButton
+            icon={<FolderCog />}
+            label={MANAGE_WORKSPACES_LABEL}
+            onClick={() => {
+              closeMenu(true);
+              onAction?.();
+              onManage();
+            }}
+          />
         </Menu>
       )}
     </div>

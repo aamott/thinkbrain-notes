@@ -54,6 +54,14 @@ export interface NativeCommandMap {
     readonly args: { readonly name: string };
     readonly result: NativeWorkspaceDescriptor;
   };
+  readonly delete_managed_workspace: {
+    readonly args: { readonly rootPath: string };
+    readonly result: null;
+  };
+  readonly list_known_workspaces: {
+    readonly args: undefined;
+    readonly result: readonly NativeKnownWorkspace[];
+  };
   readonly open_workspace: {
     readonly args: { readonly rootPath: string };
     readonly result: NativeWorkspaceSnapshot;
@@ -435,6 +443,17 @@ export type NativeCommandName = keyof NativeCommandMap;
 export interface NativeWorkspaceDescriptor {
   readonly root_path: string;
   readonly name: string;
+}
+
+/** One workspace entry for the workspace manager list. */
+export interface NativeKnownWorkspace {
+  /** Canonical path when the folder resolves; the remembered path verbatim when it does not. */
+  readonly rootPath: string;
+  readonly name: string;
+  /** "managed" = inside app-private storage (Android vaults); "external" = anywhere else. */
+  readonly kind: "managed" | "external";
+  /** The folder is not currently a directory — flagged, not dropped. */
+  readonly missing: boolean;
 }
 
 export interface NativeWorkspaceAccessCapabilities {

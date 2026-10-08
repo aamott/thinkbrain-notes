@@ -64,7 +64,6 @@ export interface ShellState {
   readonly workspaceName: string | null;
   readonly restoredWorkspacePath: string | null;
   readonly workspaceFiles: readonly NativeMarkdownFileEntry[];
-  readonly recentWorkspacePaths: readonly string[];
   readonly stateRestored: boolean;
   /** The explorer's whole prop bag, assembled once so both chromes agree. */
   readonly explorerProps: WorkspaceExplorerProps;

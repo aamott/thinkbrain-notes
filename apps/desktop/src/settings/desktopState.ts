@@ -93,6 +93,12 @@ export interface DesktopStateUpdate {
   readonly collapsedGroups?: CollapsedGroupsUpdate;
   /** Targeted for the same reason `collapsedGroups` is. */
   readonly workspaceTabs?: WorkspaceTabsUpdate;
+  /**
+   * One workspace path to forget: removed from the recents and from
+   * `lastWorkspacePath`. Targeted because recents are a union merge across
+   * windows — sending a whole list would only re-add what another window wrote.
+   */
+  readonly forgetWorkspacePath?: string;
 }
 
 export interface DesktopStateGateway {
@@ -141,6 +147,20 @@ export async function saveDesktopState(
   gateway: DesktopStateGateway = nativeDesktopStateGateway
 ): Promise<DesktopState> {
   return parseDesktopState(await gateway.updateDesktopState(update));
+}
+
+/**
+ * Forgets one workspace: removes it from the recents and clears it as the
+ * last-opened workspace, pruning its stored tabs and collapsed groups too.
+ *
+ * Goes through `updateDesktopState` directly — not a debounced path — because
+ * a forget coalesced into a later write could resurrect the path it removed.
+ */
+export async function forgetWorkspace(
+  rootPath: string,
+  gateway: DesktopStateGateway = nativeDesktopStateGateway
+): Promise<DesktopState> {
+  return saveDesktopState({ forgetWorkspacePath: rootPath }, gateway);
 }
 
 /**

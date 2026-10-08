@@ -9,6 +9,7 @@ import { recoveryFor } from "../sync/syncCopy";
 export const OPEN_FOLDER_LABEL = "Open folder…";
 export const CREATE_MANAGED_WORKSPACE_LABEL = "Create vault…";
 export const IMPORT_FROM_GIT_LABEL = "Bring in from Git link…";
+export const MANAGE_WORKSPACES_LABEL = "Manage workspaces…";
 export const IMPORT_DIALOG_TITLE = "Bring in workspace from Git link";
 export const NO_PROFILE_LABEL = "No sign-in (public or local)";
 export const NEW_PROFILE_LABEL = "New sign-in";

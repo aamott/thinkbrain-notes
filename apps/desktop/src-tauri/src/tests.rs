@@ -14,6 +14,8 @@
 //! - [`workspace_markdown`] — shell status, path normalization, markdown
 //!   detection, workspace entry CRUD, symlink escapes, backup/restore, note
 //!   write preconditions.
+//! - [`workspace_managed`] — managed-vault delete: vault + hash-keyed metadata
+//!   removal, and the direct-child-of-`vaults/` guard.
 //! - [`watcher_events`] — watcher event classification (audiences, batches,
 //!   rename, ignored folders).
 //! - [`watcher_lifecycle`] — self-write suppression, live OS-notification
@@ -27,6 +29,7 @@ mod search;
 mod settings;
 mod watcher_events;
 mod watcher_lifecycle;
+mod workspace_managed;
 mod workspace_markdown;
 
 use std::{fs, path::PathBuf, time::SystemTime};

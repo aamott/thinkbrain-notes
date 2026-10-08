@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-import type { NativeWorkspaceAccessCapabilities } from "../native/commands";
+import type { NativeKnownWorkspace, NativeWorkspaceAccessCapabilities } from "../native/commands";
 
 /**
  * The create/open entry points a surface can offer when no workspace is open.
@@ -15,11 +15,12 @@ import type { NativeWorkspaceAccessCapabilities } from "../native/commands";
 export interface WorkspaceOnboardingActions {
   /** Platform capabilities, or null while the probe is in flight. */
   readonly capabilities: NativeWorkspaceAccessCapabilities | null;
-  /** Managed vaults then recents — the selector's quick-open list. */
-  readonly paths: readonly string[];
+  /** Recents then managed vaults — the selector's list, missing folders included. */
+  readonly workspaces: readonly NativeKnownWorkspace[];
   readonly openFolder: () => void;
   readonly createManagedVault: () => void;
   readonly importFromGit: () => void;
+  readonly manageWorkspaces: () => void;
   readonly openPath: (rootPath: string) => void;
 }
 

@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     fs,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{Arc, Mutex},
 };
 use tauri::Manager;
@@ -253,9 +253,35 @@ pub fn resolve_index_db_path(
         )
     })?;
 
-    let workspace_key = stable_workspace_hash(&canonical_root.to_string_lossy());
+    Ok(search_index_file(
+        &app_data_dir,
+        &canonical_root.to_string_lossy(),
+    ))
+}
 
-    Ok(index_dir.join(format!("workspace-{workspace_key:016x}.sqlite3")))
+/// The index database file for a canonical workspace root.
+///
+/// Named from the same stable hash the workspace settings, hidden repo and
+/// backups use, so everything app-side about one vault is keyed the same way.
+/// Pure path math — nothing is created, which is what lets the managed-vault
+/// delete call it for a path it is about to remove.
+pub fn search_index_file(app_data_dir: &Path, canonical_root: &str) -> PathBuf {
+    let workspace_key = stable_workspace_hash(canonical_root);
+    app_data_dir
+        .join("index")
+        .join(format!("workspace-{workspace_key:016x}.sqlite3"))
+}
+
+/// Drops a workspace's pooled index connection so its file can be removed.
+///
+/// A live `Connection` holds the SQLite file open; without this a delete could
+/// unlink the database while the pool still writes to the handle (or, on
+/// Windows, fail outright). Keyed by canonical root, the same as the pool.
+pub fn release_search_connection(canonical_root: &str) {
+    let mut lock = lock_or_recover(&SEARCH_CONNECTIONS);
+    if let Some(pool) = lock.as_mut() {
+        pool.remove(canonical_root);
+    }
 }
 
 /// Creates the FTS5 virtual table backing search. Idempotent.

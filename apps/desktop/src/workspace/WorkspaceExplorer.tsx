@@ -39,7 +39,6 @@ export interface WorkspaceExplorerProps {
   /** Request that the explorer begin creating a note at the workspace root. */
   readonly newNoteFocusRequest?: number;
   readonly onNewNoteFocusHandled?: () => void;
-  readonly recentWorkspacePaths?: readonly string[];
   readonly onWorkspaceLaunched?: (rootPath: string) => void;
   /** Asked for one file's earlier versions from the right-click menu. */
   readonly onShowVersions?: (rootPath: string, relativePath: string) => void;
@@ -66,7 +65,6 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
   onMarkdownFileCreated,
   newNoteFocusRequest = 0,
   onNewNoteFocusHandled,
-  recentWorkspacePaths = [],
   onWorkspaceLaunched,
   onShowVersions,
   workspaceSelectorInPanel = false
@@ -241,7 +239,6 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
     api,
     apiRef,
     onWorkspaceLaunchedRef: callbacksRef,
-    recentWorkspacePaths,
     loadWorkspace,
     startOperation,
     endOperation,
@@ -254,10 +251,11 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
   useEffect(() => {
     publishWorkspaceOnboarding({
       capabilities: switching.accessCapabilities,
-      paths: switching.availableWorkspacePaths,
+      workspaces: switching.knownWorkspaces,
       openFolder: () => void switching.openWorkspace(),
       createManagedVault: () => switching.setCreateManagedWorkspaceOpen(true),
       importFromGit: switching.openGitLinkImport,
+      manageWorkspaces: switching.openManageWorkspaces,
       openPath: (rootPath) => void switching.launchWorkspace(rootPath)
     });
     return () => publishWorkspaceOnboarding(null);

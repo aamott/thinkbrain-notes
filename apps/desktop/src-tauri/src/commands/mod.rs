@@ -40,6 +40,7 @@ pub mod text_files;
 pub mod themes;
 pub mod watcher;
 pub mod workspace;
+pub mod workspace_known;
 
 /// Every command this app registers, named exactly once.
 ///
@@ -59,6 +60,8 @@ macro_rules! app_command_list {
         workspace::platform_capabilities,
         workspace::list_managed_workspaces,
         workspace::create_managed_workspace,
+        workspace::delete_managed_workspace,
+        workspace_known::list_known_workspaces,
         workspace::open_workspace,
         workspace::list_workspace_entries,
         markdown::read_markdown_file,
@@ -183,7 +186,7 @@ mod tests {
         );
         assert_eq!(
             APP_COMMAND_PATHS.len(),
-            58,
+            60,
             "the number of registered commands changed; update this count if it was deliberate"
         );
     }

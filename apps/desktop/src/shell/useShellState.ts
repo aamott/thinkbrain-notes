@@ -121,7 +121,6 @@ export function useShellState(): ShellState {
     leftWidth,
     leftWidthRef,
     newNoteFocusRequest,
-    recentWorkspacePaths,
     resetPanelWidth,
     requestNewNoteFocus,
     restoredWorkspacePath,
@@ -276,7 +275,6 @@ export function useShellState(): ShellState {
       onMarkdownFileCreated: handleMarkdownFileCreated,
       onNewNoteFocusHandled: acknowledgeNewNoteFocus,
       newNoteFocusRequest,
-      recentWorkspacePaths,
       onWorkspaceLaunched: handleWorkspaceLaunched,
       onShowVersions: showVersionsOf
     }),
@@ -290,7 +288,6 @@ export function useShellState(): ShellState {
       handleMarkdownFileCreated,
       acknowledgeNewNoteFocus,
       newNoteFocusRequest,
-      recentWorkspacePaths,
       handleWorkspaceLaunched,
       showVersionsOf
     ]
@@ -341,7 +338,6 @@ export function useShellState(): ShellState {
     workspaceName,
     restoredWorkspacePath,
     workspaceFiles,
-    recentWorkspacePaths,
     stateRestored,
     explorerProps,
     showVersionsOf,

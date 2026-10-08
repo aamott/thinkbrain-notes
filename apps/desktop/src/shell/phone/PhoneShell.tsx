@@ -1,5 +1,5 @@
 import { BottomSheet, FloatingBubbles } from "@thinkbrain/ui";
-import { EllipsisVertical, FilePlus2, Folder, FolderOpen, FolderPlus, House, Link, Plus, Search } from "lucide-react";
+import { EllipsisVertical, FilePlus2, Folder, FolderCog, FolderOpen, FolderPlus, House, Link, Plus, Search } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 
 import { BottomPanel } from "../../panels/BottomPanel";
@@ -32,7 +32,7 @@ import { phoneBreadcrumbs } from "./phoneBreadcrumbs";
 import { usePhoneOpeners } from "./usePhoneOpeners";
 import { usePhoneRouteSync } from "./usePhoneRouteSync";
 import { useRecentNote } from "./useRecentNote";
-import { CREATE_MANAGED_WORKSPACE_LABEL, IMPORT_FROM_GIT_LABEL, OPEN_FOLDER_LABEL } from "../../workspace/gitLinkImportCopy";
+import { CREATE_MANAGED_WORKSPACE_LABEL, IMPORT_FROM_GIT_LABEL, MANAGE_WORKSPACES_LABEL, OPEN_FOLDER_LABEL } from "../../workspace/gitLinkImportCopy";
 import { useWorkspaceOnboardingStore } from "../../workspace/workspaceOnboardingStore";
 import { WorkspaceSelectorProvider } from "../../workspace/WorkspaceSelectorPortal";
 import type { NewTabAction } from "../../tabs/NewTabView";
@@ -198,9 +198,11 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
       }
       if (onboarding) {
         actions.push({ id: "import-git", label: IMPORT_FROM_GIT_LABEL, icon: <Link aria-hidden="true" className="size-4" />, onSelect: viaFiles(onboarding.importFromGit) });
-        for (const path of onboarding.paths) {
-          actions.push({ id: `open:${path}`, label: path.split(/[\\/]/).at(-1) ?? path, icon: <Folder aria-hidden="true" className="size-4" />, onSelect: () => onboarding.openPath(path) });
+        for (const workspace of onboarding.workspaces) {
+          if (workspace.missing) continue;
+          actions.push({ id: `open:${workspace.rootPath}`, label: workspace.name, icon: <Folder aria-hidden="true" className="size-4" />, onSelect: () => onboarding.openPath(workspace.rootPath) });
         }
+        actions.push({ id: "manage-workspaces", label: MANAGE_WORKSPACES_LABEL, icon: <FolderCog aria-hidden="true" className="size-4" />, onSelect: viaFiles(onboarding.manageWorkspaces) });
       }
       return { workspaceName: shell.workspaceName, actions };
     }

@@ -29,7 +29,6 @@ const explorerProps: DesktopPanelContext["explorerProps"] = {
   onMarkdownFileCreated: () => undefined,
   onNewNoteFocusHandled: () => undefined,
   newNoteFocusRequest: 0,
-  recentWorkspacePaths: [],
   onWorkspaceLaunched: () => undefined
 };
 

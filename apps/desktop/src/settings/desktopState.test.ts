@@ -5,6 +5,7 @@ import {
   workspaceTabs,
   DEFAULT_DESKTOP_STATE,
   DESKTOP_STATE_KEY,
+  forgetWorkspace,
   loadDesktopState,
   parseDesktopState,
   saveDesktopState,
@@ -185,6 +186,15 @@ describe("desktop state persistence", () => {
       leftPanelWidth: 352,
       rightPanelWidth: 304,
       bottomPanelOpen: true
+    });
+  });
+
+  it("forgets a workspace through a targeted, non-debounced update", async () => {
+    const gateway = createGateway(null);
+
+    await expect(forgetWorkspace("/notes/old", gateway)).resolves.toBeDefined();
+    expect(gateway.updateDesktopState).toHaveBeenCalledWith({
+      forgetWorkspacePath: "/notes/old"
     });
   });
 

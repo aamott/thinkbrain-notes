@@ -405,18 +405,20 @@ function EmptyState({ switching }: { readonly switching: WorkspaceSwitchingContr
           </button>
         )}
       </div>
-      {switching.availableWorkspacePaths.length > 0 && (
+      {switching.knownWorkspaces.some((entry) => !entry.missing) && (
         <div className="flex flex-col items-stretch gap-0.5 self-stretch border-t border-border pt-2">
           <p className="m-0 text-[0.625rem] uppercase tracking-[0.08em]">Recent vaults</p>
-          {switching.availableWorkspacePaths.map((path) => (
+          {switching.knownWorkspaces
+            .filter((entry) => !entry.missing)
+            .map((entry) => (
             <button
-              key={path}
+              key={entry.rootPath}
               type="button"
               className="truncate rounded-small px-2 py-1.5 text-left text-[0.6875rem] text-sidebar-foreground hover:bg-accent pointer-coarse:min-h-11"
-              title={path}
-              onClick={() => void switching.launchWorkspace(path)}
+              title={entry.rootPath}
+              onClick={() => void switching.launchWorkspace(entry.rootPath)}
             >
-              {path.split(/[\\/]/).at(-1) ?? path}
+              {entry.name}
             </button>
           ))}
         </div>

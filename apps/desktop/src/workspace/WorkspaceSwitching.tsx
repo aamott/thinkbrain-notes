@@ -1,5 +1,7 @@
-import { useId, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
+import { ModalDialog } from "../shell/ModalDialog";
 import { GitLinkImportDialog } from "./GitLinkImportDialog";
+import { WorkspaceManagerDialog } from "./WorkspaceManagerDialog";
 import { WorkspaceSelector } from "./WorkspaceSelector";
 import { WorkspaceSelectorPortal } from "./WorkspaceSelectorPortal";
 import type { WorkspaceSelectorVariant } from "./WorkspaceSelectorPortalModel";
@@ -27,11 +29,13 @@ export function WorkspaceSwitchingSelector({
       onAction={onAction}
       capabilities={switching.accessCapabilities}
       currentPath={currentPath}
-      paths={switching.availableWorkspacePaths}
+      workspaces={switching.knownWorkspaces}
       onAdd={switching.openWorkspace}
       onCreateManaged={() => switching.setCreateManagedWorkspaceOpen(true)}
       onImportFromGit={switching.openGitLinkImport}
       onSelect={switching.launchWorkspace}
+      onManage={switching.openManageWorkspaces}
+      onMenuOpen={switching.refreshKnownWorkspaces}
     />
   );
 }
@@ -70,6 +74,22 @@ export function WorkspaceSwitching({
           onCreate={switching.createManagedWorkspace}
         />
       )}
+      {switching.manageWorkspacesOpen && (
+        <WorkspaceManagerDialog
+          workspaces={switching.knownWorkspaces}
+          capabilities={accessCapabilities}
+          currentPath={currentPath ?? null}
+          error={switching.manageWorkspacesError}
+          onClearError={switching.clearManageWorkspacesError}
+          onClose={() => switching.setManageWorkspacesOpen(false)}
+          onOpenFolder={() => void switching.openWorkspace()}
+          onCreateWorkspace={() => switching.setCreateManagedWorkspaceOpen(true)}
+          onImportFromGit={switching.openGitLinkImport}
+          onOpenWorkspace={(rootPath) => void switching.launchWorkspace(rootPath)}
+          onForgetWorkspace={(rootPath) => void switching.forgetWorkspaceEntry(rootPath)}
+          onDeleteWorkspace={(workspace) => switching.deleteManagedWorkspace(workspace.rootPath)}
+        />
+      )}
       {switching.importFromGitOpen && (
         <GitLinkImportDialog
           managedDestination={accessCapabilities?.canCreateManagedWorkspace === true}
@@ -103,36 +123,29 @@ function CreateManagedWorkspaceDialog({
   readonly onCancel: () => void;
   readonly onCreate: (name: string) => Promise<boolean>;
 }) {
-  const titleId = useId();
   const [name, setName] = useState("");
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!busy && name.trim()) void onCreate(name);
   };
   return (
-    <div className="fixed inset-0 z-40 flex items-start justify-center bg-overlay pt-[18vh]" role="presentation">
-      <form
-        className="grid w-[min(26rem,calc(100vw-2rem))] gap-3 rounded-medium border border-border bg-popover p-4 shadow-soft"
-        aria-labelledby={titleId}
-        aria-busy={busy}
-        role="dialog"
-        onKeyDown={(event) => {
-          if (event.key === "Escape" && !busy) onCancel();
-        }}
-        onSubmit={submit}
-      >
-        <h2 id={titleId} className="m-0 text-base font-semibold">Create managed vault</h2>
+    <ModalDialog
+      title="Create managed vault"
+      description="The vault is stored privately by the app and is removed if Android uninstalls it."
+      busy={busy}
+      onDismiss={onCancel}
+    >
+      <form className="grid gap-3" onSubmit={submit}>
         <label className="grid gap-1 text-xs">
           Vault name
           <input autoFocus className="min-h-11 rounded-small border border-border bg-surface px-2 py-1.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" disabled={busy} maxLength={120} value={name} onChange={(event) => setName(event.target.value)} />
         </label>
-        <p className="m-0 text-xs leading-relaxed text-muted-foreground">The vault is stored privately by the app and is removed if Android uninstalls it.</p>
         {error && <p className="m-0 text-xs text-danger" role="alert">{error}</p>}
         <div className="flex justify-end gap-2">
           <button type="button" className="min-h-11 rounded-small border border-border px-3 text-xs" disabled={busy} onClick={onCancel}>Cancel</button>
           <button type="submit" className="min-h-11 rounded-small bg-primary px-3 text-xs text-primary-foreground disabled:opacity-50" disabled={busy || !name.trim()}>Create</button>
         </div>
       </form>
-    </div>
+    </ModalDialog>
   );
 }

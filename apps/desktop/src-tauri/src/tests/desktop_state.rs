@@ -429,6 +429,11 @@ fn tabs_are_kept_per_workspace() {
 
 /// The stored views follow the recent-workspace list rather than carrying a
 /// bound of their own, so a vault the app has forgotten stops costing anything.
+///
+/// This used to forget by sending an empty recents list; since recents now
+/// keep missing folders (an unmounted drive must not erase the entry), the
+/// only way to forget is the targeted `forgetWorkspacePath` update exercised
+/// here.
 #[test]
 fn collapsed_groups_are_dropped_for_a_workspace_no_longer_remembered() {
     let root = temp_test_dir("collapse_forgotten");
@@ -451,14 +456,11 @@ fn collapsed_groups_are_dropped_for_a_workspace_no_longer_remembered() {
     let settings: Value = serde_json::from_str(&stored).expect("serialized settings are valid");
     assert!(settings["desktopState"]["workspaceViews"][&path].is_object());
 
-    // Forgetting the vault takes what was collapsed in it: there is no panel
-    // left to restore, and one policy is easier to reason about than two.
     fs::remove_dir_all(&root).ok();
     let forgotten = update_desktop_state_contents(
         Some(&stored),
         DesktopStateUpdate {
-            last_workspace_path: Some(None),
-            recent_workspace_paths: Some(Vec::new()),
+            forget_workspace_path: Some(path.clone()),
             ..Default::default()
         },
     )
@@ -469,4 +471,212 @@ fn collapsed_groups_are_dropped_for_a_workspace_no_longer_remembered() {
         settings["desktopState"]["workspaceViews"],
         serde_json::json!({})
     );
+}
+
+/// A vault on an unmounted drive still exists as far as the user is concerned;
+/// dropping it from recents on read would erase the entry for what may be a
+/// temporary absence.
+#[test]
+fn recents_keep_absolute_paths_whose_folder_is_missing() {
+    let missing = "/definitely/not/mounted/vault";
+
+    let stored = update_desktop_state_contents(
+        None,
+        DesktopStateUpdate {
+            recent_workspace_paths: Some(vec![missing.to_string()]),
+            ..Default::default()
+        },
+    )
+    .expect("desktop-state update succeeds");
+
+    let settings: Value = serde_json::from_str(&stored).expect("serialized settings are valid");
+    assert_eq!(
+        settings["desktopState"]["recentWorkspacePaths"],
+        serde_json::json!([missing])
+    );
+
+    // And a stored missing path is still there on the next read.
+    let read_again = update_desktop_state_contents(Some(&stored), DesktopStateUpdate::default())
+        .expect("unrelated update succeeds");
+    let settings: Value = serde_json::from_str(&read_again).expect("serialized settings are valid");
+    assert_eq!(
+        settings["desktopState"]["recentWorkspacePaths"],
+        serde_json::json!([missing])
+    );
+
+    // A path that is not absolute at all is still not a workspace path.
+    let stored = update_desktop_state_contents(
+        None,
+        DesktopStateUpdate {
+            recent_workspace_paths: Some(vec!["not/absolute".to_string()]),
+            ..Default::default()
+        },
+    )
+    .expect("desktop-state update succeeds");
+    let settings: Value = serde_json::from_str(&stored).expect("serialized settings are valid");
+    assert_eq!(
+        settings["desktopState"]["recentWorkspacePaths"],
+        serde_json::json!([])
+    );
+}
+
+/// A `lastWorkspacePath`-only update still promotes the path into the recents —
+/// the renderer no longer sends the whole list on every open, and the merge on
+/// the Rust side is what keeps the MRU complete.
+#[test]
+fn opening_a_workspace_without_a_recents_list_still_remembers_it() {
+    let root = temp_test_dir("promote_opened");
+    let path = root.to_string_lossy().to_string();
+
+    let stored = update_desktop_state_contents(
+        None,
+        DesktopStateUpdate {
+            last_workspace_path: Some(Some(path.clone())),
+            ..Default::default()
+        },
+    )
+    .expect("desktop-state update succeeds");
+
+    let settings: Value = serde_json::from_str(&stored).expect("serialized settings are valid");
+    assert_eq!(
+        settings["desktopState"]["recentWorkspacePaths"],
+        serde_json::json!([path])
+    );
+
+    fs::remove_dir_all(&root).ok();
+}
+
+/// Forgetting a workspace removes it from the recents, clears it as the
+/// last-opened workspace, and drops its per-workspace state (views and tabs).
+#[test]
+fn forget_workspace_removes_recents_last_path_and_workspace_state() {
+    let keep = temp_test_dir("forget_keep");
+    let drop = temp_test_dir("forget_drop");
+    let keep_path = keep.to_string_lossy().to_string();
+    let drop_path = drop.to_string_lossy().to_string();
+
+    let stored = update_desktop_state_contents(
+        None,
+        DesktopStateUpdate {
+            last_workspace_path: Some(Some(drop_path.clone())),
+            workspace_tabs: Some(WorkspaceTabsUpdate {
+                workspace_path: drop_path.clone(),
+                open_tabs: vec![PersistedTab {
+                    id: "editor:note".to_string(),
+                    title: "note".to_string(),
+                    kind: "editor".to_string(),
+                    root_path: Some(drop_path.clone()),
+                    relative_path: Some("note.md".to_string()),
+                }],
+                active_tab_id: Some("editor:note".to_string()),
+            }),
+            ..Default::default()
+        },
+    )
+    .expect("desktop-state update succeeds");
+    let stored = update_desktop_state_contents(
+        Some(&stored),
+        DesktopStateUpdate {
+            last_workspace_path: Some(Some(drop_path.clone())),
+            collapsed_groups: Some(CollapsedGroupsUpdate {
+                workspace_path: drop_path.clone(),
+                view_id: "explorer".to_string(),
+                collapsed: vec!["notes".to_string()],
+            }),
+            ..Default::default()
+        },
+    )
+    .expect("desktop-state update succeeds");
+    // A second workspace that stays, to prove the forget is surgical.
+    let stored = update_desktop_state_contents(
+        Some(&stored),
+        DesktopStateUpdate {
+            last_workspace_path: Some(Some(keep_path.clone())),
+            ..Default::default()
+        },
+    )
+    .expect("desktop-state update succeeds");
+
+    // `keep` is the last-opened workspace, so promotion does not fight the
+    // forget; recency order puts it ahead of `drop`.
+    let forgotten = update_desktop_state_contents(
+        Some(&stored),
+        DesktopStateUpdate {
+            forget_workspace_path: Some(drop_path.clone()),
+            ..Default::default()
+        },
+    )
+    .expect("forget update succeeds");
+
+    let settings: Value = serde_json::from_str(&forgotten).expect("serialized settings are valid");
+    let desktop = &settings["desktopState"];
+    assert_eq!(
+        desktop["recentWorkspacePaths"],
+        serde_json::json!([keep_path])
+    );
+    assert_eq!(desktop["lastWorkspacePath"], serde_json::json!(keep_path));
+    assert_eq!(desktop["workspaceViews"], serde_json::json!({}));
+    assert_eq!(desktop["workspaceTabs"], serde_json::json!({}));
+
+    // Forgetting the workspace that is still the last-opened one clears it
+    // too — remembering it as last while denying it as recent would restore a
+    // forgotten vault on the next launch.
+    let forgotten_last = update_desktop_state_contents(
+        Some(&forgotten),
+        DesktopStateUpdate {
+            forget_workspace_path: Some(keep_path.clone()),
+            ..Default::default()
+        },
+    )
+    .expect("forget update succeeds");
+    let settings: Value =
+        serde_json::from_str(&forgotten_last).expect("serialized settings are valid");
+    let desktop = &settings["desktopState"];
+    assert_eq!(desktop["recentWorkspacePaths"], serde_json::json!([]));
+    assert_eq!(desktop["lastWorkspacePath"], Value::Null);
+
+    fs::remove_dir_all(&keep).ok();
+    fs::remove_dir_all(&drop).ok();
+}
+
+/// A recent whose folder is missing stays stored verbatim — and can still be
+/// forgotten. This is the whole reason `remembered_workspace_path` keeps
+/// unresolvable absolute paths: `nonempty_workspace_path` here would make the
+/// forget a silent no-op.
+#[test]
+fn forget_workspace_removes_a_missing_folder_entry_verbatim() {
+    let keep = temp_test_dir("forget_missing_keep");
+    let keep_path = keep.to_string_lossy().to_string();
+    let missing = format!("/definitely/not/mounted/vault-{}", std::process::id());
+
+    let stored = update_desktop_state_contents(
+        None,
+        DesktopStateUpdate {
+            recent_workspace_paths: Some(vec![missing.clone(), keep_path.clone()]),
+            ..Default::default()
+        },
+    )
+    .expect("desktop-state update succeeds");
+    let settings: Value = serde_json::from_str(&stored).expect("serialized settings are valid");
+    // The missing entry is kept verbatim, not dropped on write.
+    assert_eq!(
+        settings["desktopState"]["recentWorkspacePaths"],
+        serde_json::json!([missing, keep_path])
+    );
+
+    let forgotten = update_desktop_state_contents(
+        Some(&stored),
+        DesktopStateUpdate {
+            forget_workspace_path: Some(missing.clone()),
+            ..Default::default()
+        },
+    )
+    .expect("forget update succeeds");
+    let settings: Value = serde_json::from_str(&forgotten).expect("serialized settings are valid");
+    assert_eq!(
+        settings["desktopState"]["recentWorkspacePaths"],
+        serde_json::json!([keep_path])
+    );
+
+    fs::remove_dir_all(&keep).ok();
 }

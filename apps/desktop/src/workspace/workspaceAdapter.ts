@@ -1,6 +1,8 @@
+import { isTauri } from "@tauri-apps/api/core";
 import {
   invokeNativeCommand,
   NativeCommandError,
+  type NativeKnownWorkspace,
   type NativeWorkspaceAccessCapabilities,
   type NativeWorkspaceDescriptor,
   type NativeWorkspaceEntry,
@@ -12,8 +14,11 @@ import { appEvents } from "../events/appEvents";
 
 export interface WorkspaceDesktopApi {
   workspaceAccessCapabilities(): Promise<NativeWorkspaceAccessCapabilities>;
-  listManagedWorkspaces(): Promise<readonly NativeWorkspaceDescriptor[]>;
   createManagedWorkspace(name: string): Promise<NativeWorkspaceDescriptor>;
+  /** Every workspace the app knows how to open: recents first, then managed vaults. */
+  listKnownWorkspaces(): Promise<readonly NativeKnownWorkspace[]>;
+  /** Deletes a managed vault and its app-side metadata. Android-only. */
+  deleteManagedWorkspace(rootPath: string): Promise<null>;
   pickWorkspaceDirectory(): Promise<string | null>;
   openWorkspace(rootPath: string): Promise<NativeWorkspaceSnapshot>;
   listWorkspaceEntries(rootPath: string, includeHidden: boolean): Promise<readonly NativeWorkspaceEntry[]>;
@@ -41,11 +46,18 @@ export const workspaceDesktopApi: WorkspaceDesktopApi = {
   workspaceAccessCapabilities() {
     return invokeNativeCommand("workspace_access_capabilities");
   },
-  listManagedWorkspaces() {
-    return invokeNativeCommand("list_managed_workspaces");
-  },
   createManagedWorkspace(name) {
     return invokeNativeCommand("create_managed_workspace", { name });
+  },
+  listKnownWorkspaces() {
+    // Guard non-Tauri contexts (tests, web-only dev): a workspace list does
+    // not exist there and the rejected invoke would only be noise. Called on
+    // every window focus, so this matters.
+    if (!isTauri()) return Promise.resolve([]);
+    return invokeNativeCommand("list_known_workspaces");
+  },
+  deleteManagedWorkspace(rootPath) {
+    return invokeNativeCommand("delete_managed_workspace", { rootPath });
   },
   pickWorkspaceDirectory() {
     return pickDirectoryPath("Open workspace");

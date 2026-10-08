@@ -167,7 +167,11 @@ describe("PhoneShell", () => {
 
     expect(visibleDialog(host, "Navigation")).toBeNull();
     expect(filesVisible(host)).toBe(true);
-    const heading = [...host.querySelectorAll("h2")].find((h) => h.textContent === dialogTitle);
+    // Explorer-owned dialogs portal to <body>, so they can never mount under
+    // the Files branch's `aria-hidden` ancestor the way they once could.
+    const heading = [...document.querySelectorAll('[role="dialog"] h2')].find(
+      (h) => h.textContent === dialogTitle
+    );
     expect(heading).toBeTruthy();
     expect(heading?.closest('[aria-hidden="true"]')).toBeNull();
   });
