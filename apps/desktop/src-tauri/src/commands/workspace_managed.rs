@@ -110,6 +110,110 @@ pub fn create_managed_workspace(
     create_managed_workspace_in(&app_data, &name)
 }
 
+/// Deletes one managed vault and every byte of app-side metadata it earned.
+///
+/// Managed vaults only exist where the app owns their storage, so the command
+/// declines elsewhere rather than trusting the renderer's capability check.
+#[tauri::command]
+pub fn delete_managed_workspace(
+    app: tauri::AppHandle,
+    root_path: String,
+) -> Result<(), NativeError> {
+    if !cfg!(target_os = "android") {
+        return Err(NativeError::new(
+            "workspace.delete_unsupported",
+            "Managed workspaces can only be deleted where the app manages their storage.",
+        ));
+    }
+    let app_data = app_data_dir(&app)?;
+    delete_managed_workspace_in(&app_data, &root_path)
+}
+
+/// The testable body of `delete_managed_workspace`: takes the app-data
+/// directory directly so tests never need an `AppHandle`.
+pub(crate) fn delete_managed_workspace_in(
+    app_data: &Path,
+    root_path: &str,
+) -> Result<(), NativeError> {
+    let root = managed_vaults_root(app_data)?;
+    let target = Path::new(root_path).canonicalize().map_err(|error| {
+        if error.kind() == std::io::ErrorKind::NotFound {
+            NativeError::new(
+                "workspace.managed_missing",
+                "That managed workspace no longer exists.",
+            )
+        } else {
+            failed(
+                "workspace.managed_delete_failed",
+                "Could not resolve the managed workspace.",
+                error,
+            )
+        }
+    })?;
+
+    // Only a direct child of the managed root may be deleted — anything else,
+    // including the root itself, is a caller bug or an attack, not a vault.
+    if target == root || target.parent() != Some(root.as_path()) {
+        return Err(NativeError::new(
+            "workspace.managed_path_invalid",
+            "Only a vault inside managed workspace storage can be deleted.",
+        ));
+    }
+
+    let canonical = target.to_string_lossy().into_owned();
+    // Metadata paths are computed before the vault disappears: every one of
+    // them is keyed by the canonical root string, which is still known.
+    let settings_file = crate::commands::settings::workspace_settings_path(app_data, &target);
+    let index_file = crate::commands::search::search_index_file(app_data, &canonical);
+    let hidden_repo = crate::commands::sync::bootstrap::hidden_repo_path(app_data, &canonical);
+    let backups = crate::commands::backup::workspace_backups_dir(app_data, &target);
+
+    // The pooled connection must go first: it holds the index file open.
+    crate::commands::search::release_search_connection(&canonical);
+
+    // The vault is deleted before its metadata, deliberately: if a later
+    // removal fails we would rather leave orphaned history than a workspace
+    // that survives on disk while its file history and backups are gone.
+    fs::remove_dir_all(&target).map_err(|error| {
+        failed(
+            "workspace.managed_delete_failed",
+            "Could not delete the managed workspace.",
+            error,
+        )
+    })?;
+
+    // From here the vault is already gone; a metadata path that resists is
+    // logged, not fatal.
+    remove_file_if_present(&settings_file);
+    // The index uses rollback journaling, so `-journal` (mid-transaction or
+    // crash leftover) is the sibling that can exist; `-wal`/`-shm` are covered
+    // too in case the journal mode ever changes.
+    for suffix in ["", "-journal", "-wal", "-shm"] {
+        let mut sibling = index_file.clone().into_os_string();
+        sibling.push(suffix);
+        remove_file_if_present(&PathBuf::from(sibling));
+    }
+    remove_dir_if_present(&hidden_repo);
+    remove_dir_if_present(&backups);
+    Ok(())
+}
+
+fn remove_file_if_present(path: &Path) {
+    match fs::remove_file(path) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => eprintln!("[workspace] failed to remove {path:?}: {error}"),
+    }
+}
+
+fn remove_dir_if_present(path: &Path) {
+    match fs::remove_dir_all(path) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => eprintln!("[workspace] failed to remove {path:?}: {error}"),
+    }
+}
+
 /// Ensures and canonicalizes the dedicated managed-vault directory.
 pub fn managed_vaults_root(app_data: &Path) -> Result<PathBuf, NativeError> {
     let root = app_data.join(MANAGED_VAULTS_DIR);
@@ -139,7 +243,9 @@ fn app_data_dir(app: &tauri::AppHandle) -> Result<PathBuf, NativeError> {
     })
 }
 
-fn list_managed_workspaces_in(app_data: &Path) -> Result<Vec<WorkspaceDescriptor>, NativeError> {
+pub(crate) fn list_managed_workspaces_in(
+    app_data: &Path,
+) -> Result<Vec<WorkspaceDescriptor>, NativeError> {
     let root = managed_vaults_root(app_data)?;
     let entries = fs::read_dir(&root).map_err(|error| {
         failed(
@@ -182,7 +288,7 @@ fn list_managed_workspaces_in(app_data: &Path) -> Result<Vec<WorkspaceDescriptor
     Ok(workspaces)
 }
 
-fn create_managed_workspace_in(
+pub(crate) fn create_managed_workspace_in(
     app_data: &Path,
     requested_name: &str,
 ) -> Result<WorkspaceDescriptor, NativeError> {
@@ -311,6 +417,12 @@ mod tests {
         assert!(crate::commands::APP_COMMAND_PATHS.contains(&"workspace::list_managed_workspaces"));
         assert!(
             crate::commands::APP_COMMAND_PATHS.contains(&"workspace::create_managed_workspace")
+        );
+        assert!(
+            crate::commands::APP_COMMAND_PATHS.contains(&"workspace::delete_managed_workspace")
+        );
+        assert!(
+            crate::commands::APP_COMMAND_PATHS.contains(&"workspace_known::list_known_workspaces")
         );
     }
 }

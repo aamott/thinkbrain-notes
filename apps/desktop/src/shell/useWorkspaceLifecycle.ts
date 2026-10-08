@@ -5,19 +5,17 @@ import { createDebounced } from "../lib/debounce";
 import type { NativeMarkdownFileEntry, NativeWorkspaceSnapshot } from "../native/commands";
 import {
   DEFAULT_DESKTOP_STATE,
-  loadDesktopState,
-  promoteRecentWorkspace,
   workspaceTabs,
   type PersistedTab
 } from "../settings/desktopState";
 import {
   persistDesktopState,
-  readDesktopState,
-  reportDesktopStateReadFailure
+  readDesktopState
 } from "../settings/desktopStatePersistence";
 import { useSettingsStore } from "../settings/settingsStore";
 import {
   createFileTab,
+  createNewTab,
   createStaticTab,
   isDocumentBackedKind,
   type DesktopTab,
@@ -68,17 +66,9 @@ export function useWorkspaceLifecycle({
   const [restoredWorkspacePath, setRestoredWorkspacePath] = useState<string | null>(null);
   const [workspaceName, setWorkspaceName] = useState<string | null>(null);
   const [workspaceFiles, setWorkspaceFiles] = useState<readonly NativeMarkdownFileEntry[]>([]);
-  const [recentWorkspacePaths, setRecentWorkspacePaths] = useState<readonly string[]>([]);
-  const recentWorkspacePathsRef = useRef<readonly string[]>([]);
   const [newNoteFocusRequest, setNewNoteFocusRequest] = useState(0);
   const [stateRestored, setStateRestored] = useState(!isTauri());
   const tabsRestoredRef = useRef(false);
-  const updateRecentWorkspacePaths = useCallback((rootPath: string): readonly string[] => {
-    const next = promoteRecentWorkspace(recentWorkspacePathsRef.current, rootPath);
-    recentWorkspacePathsRef.current = next;
-    setRecentWorkspacePaths(next);
-    return next;
-  }, []);
 
   // Restore the persisted desktop state (last workspace, recents, explorer
   // visibility) plus the workspace root the native window was launched with.
@@ -93,12 +83,7 @@ export function useWorkspaceLifecycle({
       // `allSettled` type narrowing `windowWorkspaceRoot` requires.
       const desktopState = desktopResult.status === "fulfilled" ? desktopResult.value : DEFAULT_DESKTOP_STATE;
       const windowRoot = rootResult.status === "fulfilled" ? rootResult.value : null;
-      const recentPaths = windowRoot
-        ? promoteRecentWorkspace(desktopState.recentWorkspacePaths, windowRoot)
-        : desktopState.recentWorkspacePaths;
       setRestoredWorkspacePath(windowRoot ?? desktopState.lastWorkspacePath);
-      recentWorkspacePathsRef.current = recentPaths;
-      setRecentWorkspacePaths(recentPaths);
       restorePanels(desktopState);
 
       // Restore this workspace's tabs once. Guarded by a ref because StrictMode
@@ -109,7 +94,7 @@ export function useWorkspaceLifecycle({
       // same tabs, each pointing at the other's notes.
       const rootPath = windowRoot ?? desktopState.lastWorkspacePath;
       const restoring = workspaceTabs(desktopState, rootPath);
-      if (!tabsRestoredRef.current && restoring.openTabs.length > 0) {
+      if (!tabsRestoredRef.current) {
         tabsRestoredRef.current = true;
         for (const persisted of restoring.openTabs) {
           const tab = restoreTab(persisted, rootPath);
@@ -127,6 +112,12 @@ export function useWorkspaceLifecycle({
         if (restoring.activeTabId) {
           dispatchTabs({ type: "activate", tabId: restoring.activeTabId });
         }
+        // With no workspace and no restored tabs the strip would sit empty
+        // over static text; open the landing tab so it carries the workspace
+        // entry points instead. New-tab pages are never persisted.
+        if (!rootPath && restoring.openTabs.length === 0) {
+          dispatchTabs({ type: "open", tab: { ...createNewTab(), title: "Welcome" } });
+        }
       }
     }).finally(() => {
       if (active) setStateRestored(true);
@@ -136,27 +127,6 @@ export function useWorkspaceLifecycle({
       active = false;
     };
   }, [dispatchTabs, loadDocumentIntoView, restorePanels]);
-
-  // Other windows can append to the recent workspace list, so refresh it
-  // whenever this window regains focus.
-  useEffect(() => {
-    if (!isTauri()) return;
-
-    let active = true;
-    const refreshRecentWorkspacePaths = () => {
-      void loadDesktopState().then((desktopState) => {
-        if (!active) return;
-        recentWorkspacePathsRef.current = desktopState.recentWorkspacePaths;
-        setRecentWorkspacePaths(desktopState.recentWorkspacePaths);
-      }).catch(reportDesktopStateReadFailure);
-    };
-
-    window.addEventListener("focus", refreshRecentWorkspacePaths);
-    return () => {
-      active = false;
-      window.removeEventListener("focus", refreshRecentWorkspacePaths);
-    };
-  }, []);
 
   /**
    * Debounced tab persistence: writes the open tab list and active tab id
@@ -196,10 +166,12 @@ export function useWorkspaceLifecycle({
     setRestoredWorkspacePath(rootPath);
     setWorkspaceName(snapshot.workspace.name);
     setWorkspaceFiles(snapshot.files);
-    const recentPaths = updateRecentWorkspacePaths(rootPath);
     indexWorkspaceStores(rootPath, snapshot.files);
-    persistDesktopState({ lastWorkspacePath: rootPath, recentWorkspacePaths: recentPaths });
-  }, [updateRecentWorkspacePaths]);
+    // Only `lastWorkspacePath` is sent: Rust promotes it into the recents
+    // itself. Persisting this window's in-memory list would let a stale
+    // window resurrect a path another window just forgot.
+    persistDesktopState({ lastWorkspacePath: rootPath });
+  }, []);
 
   const handleWorkspaceUnavailable = useCallback(() => {
     setRestoredWorkspacePath(null);
@@ -210,13 +182,14 @@ export function useWorkspaceLifecycle({
   }, []);
 
   const handleWorkspaceLaunched = useCallback((rootPath: string) => {
-    const recentPaths = updateRecentWorkspacePaths(rootPath);
     // Persist `lastWorkspacePath` so a fresh window (or a window whose native
     // root query returns null) can restore to the most recently launched
     // workspace. In multi-window Tauri sessions, `window_workspace_root`
-    // takes precedence over this fallback on reload.
-    persistDesktopState({ lastWorkspacePath: rootPath, recentWorkspacePaths: recentPaths });
-  }, [updateRecentWorkspacePaths]);
+    // takes precedence over this fallback on reload. The recents list stays
+    // local: Rust promotes this path itself, and sending the list would let a
+    // stale window resurrect a path another window forgot.
+    persistDesktopState({ lastWorkspacePath: rootPath });
+  }, []);
 
   const acknowledgeNewNoteFocus = useCallback(() => {
     setNewNoteFocusRequest(0);
@@ -292,7 +265,6 @@ export function useWorkspaceLifecycle({
     leftWidthRef,
     newNoteFocusRequest,
     persistDesktopState,
-    recentWorkspacePaths,
     resetPanelWidth,
     requestNewNoteFocus,
     restoredWorkspacePath,

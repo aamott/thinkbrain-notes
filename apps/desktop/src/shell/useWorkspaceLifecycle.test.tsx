@@ -25,6 +25,8 @@ let storedState: DesktopState;
 let windowRoot: string | null = null;
 /** Every targeted tab update the hook persisted. */
 let savedTabs: WorkspaceTabsUpdate[] = [];
+/** Every desktop-state update the hook persisted. */
+let savedUpdates: Record<string, unknown>[] = [];
 
 vi.mock("@tauri-apps/api/core", () => ({
   isTauri: () => true,
@@ -38,6 +40,7 @@ vi.mock("../settings/desktopState", async (importOriginal) => {
     ...actual,
     loadDesktopState: () => Promise.resolve(storedState),
     saveDesktopState: (update: { workspaceTabs?: WorkspaceTabsUpdate }) => {
+      savedUpdates.push(update);
       if (update.workspaceTabs) savedTabs.push(update.workspaceTabs);
       return Promise.resolve(storedState);
     }
@@ -99,11 +102,15 @@ const tab = (root: string, note: string) => ({
 
 let root: Root | null = null;
 let host: HTMLDivElement | null = null;
+/** The mounted hook's return, for tests that drive its callbacks directly. */
+let lifecycle: ReturnType<typeof useWorkspaceLifecycle> | null = null;
 
 beforeEach(() => {
   storedState = DEFAULT_DESKTOP_STATE;
   windowRoot = null;
   savedTabs = [];
+  savedUpdates = [];
+  lifecycle = null;
 });
 
 /** The hook's tab-persist debounce, so a test can outwait it. */
@@ -143,7 +150,7 @@ async function openWindow(tabState: DesktopTabState = NO_TABS): Promise<DesktopT
   const loadDocumentIntoView = () => {};
   const openMarkdownDocument = () => {};
   function Host() {
-    useWorkspaceLifecycle({
+    lifecycle = useWorkspaceLifecycle({
       tabState,
       dispatchTabs,
       loadDocumentIntoView,
@@ -246,6 +253,23 @@ describe("what a window restores", () => {
 
     expect(openedNotes(await openWindow())).toEqual(["a.md"]);
   });
+
+  it("opens a single Welcome tab when there is no workspace and nothing to restore", async () => {
+    storedState = { ...DEFAULT_DESKTOP_STATE };
+    windowRoot = null;
+
+    const opens = (await openWindow()).filter((action) => action.type === "open");
+    expect(opens.map((action) => [action.tab.kind, action.tab.title])).toEqual([
+      ["new-tab", "Welcome"]
+    ]);
+  });
+
+  it("does not open the Welcome tab when a workspace was restored", async () => {
+    storedState = { ...DEFAULT_DESKTOP_STATE };
+    windowRoot = "/vault-b";
+
+    expect((await openWindow()).filter((action) => action.type === "open")).toEqual([]);
+  });
 });
 
 describe("what a window persists", () => {
@@ -275,5 +299,36 @@ describe("what a window persists", () => {
       expect(saved.workspacePath).toBe("/vault-b");
     }
     expect(savedTabs.at(-1)?.openTabs.map((t) => t.relativePath)).toEqual(["b.md"]);
+  });
+
+  it("persists only the last path on open — recents are promoted natively, not from a stale list", async () => {
+    storedState = { ...DEFAULT_DESKTOP_STATE };
+    windowRoot = null;
+
+    await openWindow();
+    await act(async () => {
+      lifecycle?.handleWorkspaceOpened("/vault-b", {
+        workspace: { root_path: "/vault-b", name: "b" },
+        files: []
+      });
+    });
+
+    // A window that had never heard of another window's recents must not send
+    // its own list: the Rust side promotes `lastWorkspacePath`, and sending
+    // this window's copy would resurrect a path another window just forgot.
+    const last = savedUpdates.at(-1);
+    expect(last).toEqual({ lastWorkspacePath: "/vault-b" });
+  });
+
+  it("persists only the last path on launch too", async () => {
+    storedState = { ...DEFAULT_DESKTOP_STATE };
+    windowRoot = null;
+
+    await openWindow();
+    await act(async () => {
+      lifecycle?.handleWorkspaceLaunched("/vault-c");
+    });
+
+    expect(savedUpdates.at(-1)).toEqual({ lastWorkspacePath: "/vault-c" });
   });
 });

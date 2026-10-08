@@ -107,6 +107,14 @@ pub struct DesktopStateUpdate {
     pub collapsed_groups: Option<CollapsedGroupsUpdate>,
     #[serde(default)]
     pub workspace_tabs: Option<WorkspaceTabsUpdate>,
+    /// One workspace path to forget: removed from the recents and, if it is
+    /// the last-opened one, from `last_workspace_path` too.
+    ///
+    /// Targeted for the same reason `collapsed_groups` is: recents are a union
+    /// merge across windows, so the only way to express "remove this one" is
+    /// to name it rather than send a list others would re-add.
+    #[serde(default)]
+    pub forget_workspace_path: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -387,13 +395,38 @@ pub fn apply_desktop_state_update(
         Some(path) => path.as_deref().and_then(nonempty_workspace_path),
         None => current.last_workspace_path.clone(),
     };
-    let recent_workspace_paths = match update.recent_workspace_paths {
+    let mut recent_workspace_paths = match update.recent_workspace_paths {
         Some(paths) => merge_recent_workspace_paths(
             &current.recent_workspace_paths,
             normalize_workspace_paths(paths, None),
         ),
         None => promote_recent_workspace(current.recent_workspace_paths, recent_path.as_deref()),
     };
+    let mut last_workspace_path = last_workspace_path;
+    // Forget runs after the merge so an update that both lists and forgets
+    // still forgets, and before the views/tabs pruning so the forgotten
+    // workspace's per-workspace state goes with it.
+    if let Some(forget) = update.forget_workspace_path.as_deref() {
+        // Match both spellings: the path as sent and its canonical form, so a
+        // caller holding either still forgets the workspace that was stored.
+        let remembered = remembered_workspace_path(forget);
+        let before = recent_workspace_paths.len();
+        recent_workspace_paths
+            .retain(|path| path != forget && Some(path.as_str()) != remembered.as_deref());
+        // A forget that removed nothing almost always means the caller forgot
+        // a path spelling the store never held — silent success would hide it.
+        if recent_workspace_paths.len() == before
+            && last_workspace_path.as_deref() != Some(forget)
+            && last_workspace_path.as_deref() != remembered.as_deref()
+        {
+            eprintln!("[workspace] forget matched no remembered workspace: {forget}");
+        }
+        if last_workspace_path.as_deref() == Some(forget)
+            || last_workspace_path.as_deref() == remembered.as_deref()
+        {
+            last_workspace_path = None;
+        }
+    }
     let workspace_views = apply_collapsed_groups(
         current.workspace_views,
         update.collapsed_groups,
@@ -595,6 +628,13 @@ fn read_workspace_views(value: Option<&Value>) -> WorkspaceViews {
         .collect()
 }
 
+impl DesktopState {
+    /// The remembered workspaces, most-recent first.
+    pub fn recent_workspace_paths(&self) -> &[String] {
+        &self.recent_workspace_paths
+    }
+}
+
 pub fn default_desktop_state() -> DesktopState {
     DesktopState {
         version: DESKTOP_STATE_VERSION,
@@ -637,6 +677,27 @@ pub fn nonempty_workspace_path(path: &str) -> Option<String> {
         .ok()
 }
 
+/// The stored form of a recent-workspace entry, keeping folders that are gone.
+///
+/// Unlike `nonempty_workspace_path`, an absolute path whose folder cannot be
+/// canonicalized — a vault on an unmounted drive, a renamed parent — is kept
+/// verbatim rather than dropped: forgetting it on read would erase the entry
+/// permanently for what may be a temporary absence, and the UI can flag it as
+/// missing instead. Anything that is not absolute at all is still not a
+/// workspace path and is dropped.
+pub fn remembered_workspace_path(path: &str) -> Option<String> {
+    if path.is_empty() {
+        return None;
+    }
+    if let Ok(canonical) = resolve_workspace_root(path) {
+        return Some(canonical.to_string_lossy().to_string());
+    }
+    if Path::new(path).is_absolute() {
+        return Some(path.to_owned());
+    }
+    None
+}
+
 pub fn clamp_panel_width(width: f64) -> f64 {
     width.clamp(MIN_PANEL_WIDTH, MAX_PANEL_WIDTH)
 }
@@ -650,9 +711,13 @@ pub fn read_panel_width(value: Option<&Value>, fallback: f64) -> f64 {
 }
 
 pub fn normalize_workspace_paths(paths: Vec<String>, fallback: Option<&str>) -> Vec<String> {
+    // List entries keep absolute paths whose folder is missing (see
+    // `remembered_workspace_path`); the fallback still requires the folder to
+    // resolve, since a last-opened workspace that does not exist cannot be
+    // restored anyway.
     let resolved_paths: Vec<String> = paths
         .into_iter()
-        .filter_map(|p| nonempty_workspace_path(&p))
+        .filter_map(|p| remembered_workspace_path(&p))
         .collect();
     let resolved_fallback = fallback.and_then(nonempty_workspace_path);
     promote_recent_workspace(resolved_paths, resolved_fallback.as_deref())

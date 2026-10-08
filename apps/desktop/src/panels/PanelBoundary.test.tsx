@@ -17,7 +17,6 @@ const context: LeftPanelContext = {
     onMarkdownFileCreated: () => undefined,
     onNewNoteFocusHandled: () => undefined,
     newNoteFocusRequest: 0,
-    recentWorkspacePaths: [],
     onWorkspaceLaunched: () => undefined
   },
   onOpenSearchResult: () => undefined,

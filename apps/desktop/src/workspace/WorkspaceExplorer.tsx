@@ -23,6 +23,7 @@ import {
   workspaceMoveDestination
 } from "./workspaceMove";
 import { joinPath, isValidName, type RenameState, type WorkspaceExplorerActions } from "./workspaceExplorerTypes";
+import { publishWorkspaceOnboarding } from "./workspaceOnboardingStore";
 
 export interface WorkspaceExplorerProps {
   readonly api?: WorkspaceDesktopApi;
@@ -38,7 +39,6 @@ export interface WorkspaceExplorerProps {
   /** Request that the explorer begin creating a note at the workspace root. */
   readonly newNoteFocusRequest?: number;
   readonly onNewNoteFocusHandled?: () => void;
-  readonly recentWorkspacePaths?: readonly string[];
   readonly onWorkspaceLaunched?: (rootPath: string) => void;
   /** Asked for one file's earlier versions from the right-click menu. */
   readonly onShowVersions?: (rootPath: string, relativePath: string) => void;
@@ -65,7 +65,6 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
   onMarkdownFileCreated,
   newNoteFocusRequest = 0,
   onNewNoteFocusHandled,
-  recentWorkspacePaths = [],
   onWorkspaceLaunched,
   onShowVersions,
   workspaceSelectorInPanel = false
@@ -240,12 +239,27 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
     api,
     apiRef,
     onWorkspaceLaunchedRef: callbacksRef,
-    recentWorkspacePaths,
     loadWorkspace,
     startOperation,
     endOperation,
     setActionError
   });
+
+  // The explorer is keepMounted, so this surface is live even while its panel
+  // is hidden — letting the welcome tab and other chrome offer the same
+  // create/open entry points without owning the dialogs.
+  useEffect(() => {
+    publishWorkspaceOnboarding({
+      capabilities: switching.accessCapabilities,
+      workspaces: switching.knownWorkspaces,
+      openFolder: () => void switching.openWorkspace(),
+      createManagedVault: () => switching.setCreateManagedWorkspaceOpen(true),
+      importFromGit: switching.openGitLinkImport,
+      manageWorkspaces: switching.openManageWorkspaces,
+      openPath: (rootPath) => void switching.launchWorkspace(rootPath)
+    });
+    return () => publishWorkspaceOnboarding(null);
+  }, [switching]);
 
   /**
    * Toggles the "show hidden entries" preference, persists it to the current

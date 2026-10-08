@@ -14,6 +14,8 @@
 //! - [`workspace_markdown`] — shell status, path normalization, markdown
 //!   detection, workspace entry CRUD, symlink escapes, backup/restore, note
 //!   write preconditions.
+//! - [`workspace_managed`] — managed-vault delete: vault + hash-keyed metadata
+//!   removal, and the direct-child-of-`vaults/` guard.
 //! - [`watcher_events`] — watcher event classification (audiences, batches,
 //!   rename, ignored folders).
 //! - [`watcher_lifecycle`] — self-write suppression, live OS-notification
@@ -27,6 +29,7 @@ mod search;
 mod settings;
 mod watcher_events;
 mod watcher_lifecycle;
+mod workspace_managed;
 mod workspace_markdown;
 
 use std::{fs, path::PathBuf, time::SystemTime};
@@ -63,6 +66,19 @@ pub(crate) fn make_temp_test_dir(name: &str, prefix: &str, canonicalize: bool) -
 /// `super::temp_test_dir`.
 fn temp_test_dir(name: &str) -> PathBuf {
     make_temp_test_dir(name, "notes", true)
+}
+
+/// An absolute path that does not exist, for tests that need a "missing
+/// folder". Built under the temp dir because a bare `/x/...` is only absolute
+/// on Unix — Windows needs a drive prefix.
+pub(crate) fn missing_temp_path(name: &str) -> String {
+    let path =
+        std::env::temp_dir().join(format!("thinkbrain-missing-{name}-{}", std::process::id()));
+    assert!(
+        !path.exists(),
+        "missing-path fixture must not exist: {path:?}"
+    );
+    path.to_string_lossy().to_string()
 }
 
 /// Gives `repo` an in-memory committer so tests can move refs.

@@ -1,5 +1,5 @@
 import { BottomSheet, FloatingBubbles } from "@thinkbrain/ui";
-import { EllipsisVertical, FilePlus2, FolderOpen, House, Plus, Search } from "lucide-react";
+import { EllipsisVertical, FilePlus2, Folder, FolderCog, FolderOpen, FolderPlus, House, Link, Plus, Search } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 
 import { BottomPanel } from "../../panels/BottomPanel";
@@ -32,7 +32,10 @@ import { phoneBreadcrumbs } from "./phoneBreadcrumbs";
 import { usePhoneOpeners } from "./usePhoneOpeners";
 import { usePhoneRouteSync } from "./usePhoneRouteSync";
 import { useRecentNote } from "./useRecentNote";
+import { CREATE_MANAGED_WORKSPACE_LABEL, IMPORT_FROM_GIT_LABEL, MANAGE_WORKSPACES_LABEL, OPEN_FOLDER_LABEL } from "../../workspace/gitLinkImportCopy";
+import { useWorkspaceOnboardingStore } from "../../workspace/workspaceOnboardingStore";
 import { WorkspaceSelectorProvider } from "../../workspace/WorkspaceSelectorPortal";
+import type { NewTabAction } from "../../tabs/NewTabView";
 
 /**
  * Phone chrome over the shared shell state.
@@ -155,6 +158,11 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
     navigation.replace({ kind: "files" });
   }, [navigation]);
 
+  // With no workspace open, the landing tab's job is direction: the same
+  // create/open entry points the explorer's empty state shows, published by
+  // the explorer's switching controller.
+  const onboarding = useWorkspaceOnboardingStore((s) => s.actions);
+
   const runCommand = useCallback(
     (commandId: string) => {
       // "new-note" means create, the same as in the palette and the popup's
@@ -175,17 +183,38 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
 
   // The new-tab page's entry points, routed through phone navigation the same
   // way the bubbles and drawer reach those surfaces.
-  const newTab = useMemo(
-    () => ({
+  const newTab = useMemo(() => {
+    if (shell.workspaceName === null) {
+      const viaFiles = (run: () => void) => () => {
+        showFilesForWorkspaceAction();
+        run();
+      };
+      const actions: NewTabAction[] = [];
+      if (onboarding?.capabilities?.canCreateManagedWorkspace) {
+        actions.push({ id: "create-vault", label: CREATE_MANAGED_WORKSPACE_LABEL, icon: <FolderPlus aria-hidden="true" className="size-4" />, onSelect: viaFiles(onboarding.createManagedVault) });
+      }
+      if (onboarding?.capabilities?.canOpenFolder) {
+        actions.push({ id: "open-folder", label: OPEN_FOLDER_LABEL, icon: <FolderOpen aria-hidden="true" className="size-4" />, onSelect: viaFiles(onboarding.openFolder) });
+      }
+      if (onboarding) {
+        actions.push({ id: "import-git", label: IMPORT_FROM_GIT_LABEL, icon: <Link aria-hidden="true" className="size-4" />, onSelect: viaFiles(onboarding.importFromGit) });
+        for (const workspace of onboarding.workspaces) {
+          if (workspace.missing) continue;
+          actions.push({ id: `open:${workspace.rootPath}`, label: workspace.name, icon: <Folder aria-hidden="true" className="size-4" />, onSelect: () => onboarding.openPath(workspace.rootPath) });
+        }
+        actions.push({ id: "manage-workspaces", label: MANAGE_WORKSPACES_LABEL, icon: <FolderCog aria-hidden="true" className="size-4" />, onSelect: viaFiles(onboarding.manageWorkspaces) });
+      }
+      return { workspaceName: shell.workspaceName, actions };
+    }
+    return {
       workspaceName: shell.workspaceName,
       actions: [
         { id: "new-note", label: "New note", icon: <FilePlus2 aria-hidden="true" className="size-4" />, onSelect: createNewNote },
         { id: "files", label: "Browse files", icon: <FolderOpen aria-hidden="true" className="size-4" />, onSelect: () => navigation.push({ kind: "files" }) },
         { id: "search", label: "Search", icon: <Search aria-hidden="true" className="size-4" />, onSelect: () => navigation.push({ kind: "panel", panel: "search" }) }
       ]
-    }),
-    [shell.workspaceName, createNewNote, navigation]
-  );
+    };
+  }, [shell.workspaceName, createNewNote, navigation, onboarding, showFilesForWorkspaceAction]);
 
   // The panel LeftPopout renders: the route's panel, or explorer underneath
   // every tab route so Files is the base surface, not a blank space.

@@ -3,6 +3,25 @@
 Newest first. Versions follow [semver](https://semver.org), except that before
 1.0 a minor bump may still change behaviour.
 
+## 0.3.2-1 — 2026-10-07
+
+Prerelease adding workspace management and first-run workspace guidance.
+
+- **Manage workspaces** — a new "Manage workspaces…" entry in the workspace
+  switcher (and the welcome page) opens a dialog listing every known
+  workspace: name, path, Git badge, and a "Folder missing" badge for folders
+  that are temporarily unavailable. Filter by name or path; open folders,
+  create a managed vault, or import from a git link from the header. External
+  folders are removed from the list only — files on disk are never touched —
+  and removal offers an Undo notification. On Android, managed vaults can be
+  deleted permanently (type the vault's name to confirm), which also removes
+  its file history, search index, settings and backups.
+- **Recents on missing folders are kept** — a recent workspace whose folder
+  doesn't exist (an unmounted drive, say) no longer silently vanishes from
+  the list; it shows "Folder missing" and can be removed explicitly.
+- **First run** — a fresh install no longer opens on an empty editor: the
+  shell guides you to create or open a workspace.
+
 ## 0.3.0-4 — 2026-10-04
 
 Prerelease fixing Android release builds, which could not reach any git link

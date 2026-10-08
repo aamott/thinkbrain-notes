@@ -10,6 +10,10 @@ vi.mock("../native/commands", async (importOriginal) => ({
 vi.mock("../native/dialogs", () => ({
   pickDirectoryPath: vi.fn(async () => null)
 }));
+vi.mock("@tauri-apps/api/core", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@tauri-apps/api/core")>()),
+  isTauri: () => true
+}));
 
 import { invokeNativeCommand } from "../native/commands";
 import { pickDirectoryPath } from "../native/dialogs";
@@ -35,6 +39,25 @@ describe("workspace access", () => {
 
     await expect(workspaceDesktopApi.createManagedWorkspace("Notes")).resolves.toEqual(workspace);
     expect(invokeNativeCommand).toHaveBeenCalledWith("create_managed_workspace", { name: "Notes" });
+  });
+
+  it("lists known workspaces", async () => {
+    const known = [
+      { rootPath: "/vault", name: "vault", kind: "external", missing: false }
+    ];
+    vi.mocked(invokeNativeCommand).mockResolvedValueOnce(known as never);
+
+    await expect(workspaceDesktopApi.listKnownWorkspaces()).resolves.toEqual(known);
+    expect(invokeNativeCommand).toHaveBeenCalledWith("list_known_workspaces");
+  });
+
+  it("deletes a managed workspace by root path", async () => {
+    vi.mocked(invokeNativeCommand).mockResolvedValueOnce(null as never);
+
+    await expect(workspaceDesktopApi.deleteManagedWorkspace("/app/vaults/Notes")).resolves.toBeNull();
+    expect(invokeNativeCommand).toHaveBeenCalledWith("delete_managed_workspace", {
+      rootPath: "/app/vaults/Notes"
+    });
   });
 });
 
