@@ -1,11 +1,11 @@
 import {
   createExtensionHost,
+  EXTENSION_ID_PATTERN,
   type Disposable,
+  type EventSubscriber,
   type ExtensionContext,
   type ExtensionDefinition,
   type ExtensionHost,
-  type ExtensionStatus,
-  type ExtensionStatusEntry,
   type SettingDefinition,
   type SettingSection,
   type SettingsModule
@@ -116,14 +116,14 @@ export interface DesktopExtensionTabContributions extends Registrar<DesktopExten
   open(kind: string, title: string): void;
 }
 
-/** App-event subscriptions scoped to one extension's activation. */
-export interface DesktopExtensionEvents {
-  /** Subscribes until disposed or the extension deactivates. */
-  on<Name extends keyof AppEvents & string>(
-    event: Name,
-    listener: (payload: AppEvents[Name]) => void
-  ): Disposable;
-}
+/**
+ * App-event subscriptions scoped to one extension's activation.
+ *
+ * The shape is `EventSubscriber` verbatim; the scoping lives in the host,
+ * which owns each returned disposable in the activation's subscription store,
+ * so deactivation removes the listener.
+ */
+export type DesktopExtensionEvents = EventSubscriber<AppEvents>;
 
 /** The desktop context layered over the platform-neutral core context. */
 export interface DesktopExtensionContext extends ExtensionContext {
@@ -161,10 +161,9 @@ export interface DesktopExtensionHost extends Omit<ExtensionHost, "register"> {
 }
 
 const DOTTED_IDENTIFIER_PATTERN = /^[A-Za-z][A-Za-z0-9_-]*(?:\.[A-Za-z][A-Za-z0-9_-]*)*$/;
-const RELATIVE_ID_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 
 function assertRelativeId(kind: string, id: string): void {
-  if (typeof id !== "string" || !RELATIVE_ID_PATTERN.test(id)) {
+  if (typeof id !== "string" || !EXTENSION_ID_PATTERN.test(id)) {
     throw new Error(
       `${kind} id "${id}" must be a lowercase kebab-case relative identifier.`
     );
@@ -397,21 +396,40 @@ export function createDesktopExtensionHost(
 
   const register = (extension: DesktopExtensionDefinition): Disposable => {
     let active = false;
+    /**
+     * One desktop context per activation, shared by `activate` and
+     * `deactivate`: the core host hands both the same `ExtensionContext`, and
+     * a deactivate hook must see what this activation registered — including
+     * the tab kinds `open` is scoped to.
+     */
+    let scoped:
+      | { readonly core: ExtensionContext; readonly desktop: DesktopExtensionContext }
+      | undefined;
+    const contextFor = (core: ExtensionContext): DesktopExtensionContext => {
+      if (scoped?.core !== core) {
+        scoped = { core, desktop: createDesktopExtensionContext(core, () => active, resolved) };
+      }
+      return scoped.desktop;
+    };
     const coreDefinition: ExtensionDefinition = {
       ...extension,
       activate: async (context) => {
         active = true;
         try {
-          return await extension.activate(createDesktopExtensionContext(context, () => active, resolved));
+          return await extension.activate(contextFor(context));
         } catch (error: unknown) {
           active = false;
           throw error;
         }
       },
       deactivate: async (context) => {
+        // `active` is raised again for the hook: the core host calls
+        // deactivate to clean up a "failed" record too, and a cleanup hook
+        // that follows a failed activation must still have a live context.
+        active = true;
         try {
           if (extension.deactivate) {
-            await extension.deactivate(createDesktopExtensionContext(context, () => active, resolved));
+            await extension.deactivate(contextFor(context));
           }
         } finally {
           active = false;
@@ -425,8 +443,8 @@ export function createDesktopExtensionHost(
     register,
     activate: coreHost.activate,
     deactivate: coreHost.deactivate,
-    status: (id: string): ExtensionStatus | undefined => coreHost.status(id),
-    statuses: (): readonly ExtensionStatusEntry[] => coreHost.statuses(),
+    status: coreHost.status,
+    statuses: coreHost.statuses,
     dispose: coreHost.dispose
   };
 }

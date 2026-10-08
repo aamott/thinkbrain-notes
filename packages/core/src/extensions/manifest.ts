@@ -201,7 +201,7 @@ function readContributions(
       })
     );
     if (!panel) return;
-    if (entry && isRecord(entry) && entry.side !== "left" && entry.side !== "right") {
+    if (isRecord(entry) && entry.side !== "left" && entry.side !== "right") {
       diagnostics.push(
         error("manifest_invalid_field", `contributes.panels[${index}].side must be "left" or "right".`)
       );

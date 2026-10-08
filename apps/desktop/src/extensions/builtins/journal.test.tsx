@@ -146,9 +146,9 @@ describe("journal built-in", () => {
     const tabs = await activate();
     useSettingsStore.getState().stageChange(VIEW_KEY, "week");
 
-    const host = await mount(tabs);
+    const dom = await mount(tabs);
 
-    expect(host.querySelector('[role="radio"][aria-checked="true"]')?.getAttribute("aria-label"))
+    expect(dom.querySelector('[role="radio"][aria-checked="true"]')?.getAttribute("aria-label"))
       .toBe("Week");
   });
 
@@ -156,9 +156,9 @@ describe("journal built-in", () => {
     const tabs = await activate();
     // Workspace-scoped (D80), so the write needs a workspace to land in.
     useSettingsStore.setState({ workspaceRootPath: "/vault", workspaceValues: {} });
-    const host = await mount(tabs);
+    const dom = await mount(tabs);
 
-    const week = host.querySelector<HTMLButtonElement>('button[aria-label="Week"]');
+    const week = dom.querySelector<HTMLButtonElement>('button[aria-label="Week"]');
     await act(async () => week?.click());
 
     expect(useSettingsStore.getState().getEffectiveValue(VIEW_KEY)).toBe("week");
@@ -202,8 +202,8 @@ describe("the metadata widget and the settings behind it", () => {
    */
   it("picks up a field added while a note is open", async () => {
     await activate();
-    const host = await mountHeader();
-    expect(host.textContent).not.toContain("Mood");
+    const dom = await mountHeader();
+    expect(dom.textContent).not.toContain("Mood");
 
     await act(async () => {
       useSettingsStore.getState().stageChange(
@@ -214,9 +214,9 @@ describe("the metadata widget and the settings behind it", () => {
 
     // The affordance only exists once there is a field to fill in, and the
     // label itself appears when it is expanded.
-    const add = host.querySelector<HTMLButtonElement>("button");
+    const add = dom.querySelector<HTMLButtonElement>("button");
     expect(add?.textContent).toBe("Info Tracker");
     await act(async () => add?.click());
-    expect(host.textContent).toContain("Mood");
+    expect(dom.textContent).toContain("Mood");
   });
 });

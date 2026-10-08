@@ -138,8 +138,12 @@ export function createLocalExtensions(options: LocalExtensionsOptions): LocalExt
 
     remove: async (id) => {
       const directory = directoryOf(id);
+      // This controller only manages directory-loaded extensions. Without the
+      // guard, `remove("some-builtin")` would dispose a built-in's
+      // registrations — `removeLocalExtension` removes any registered id.
+      if (directory === undefined) return;
       await bootstrap.removeLocalExtension(id);
-      if (directory !== undefined && stored.includes(directory)) {
+      if (stored.includes(directory)) {
         await persist(stored.filter((entry) => entry !== directory));
       }
     },

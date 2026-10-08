@@ -354,6 +354,58 @@ describe("workspace and tab contributions", () => {
   });
 });
 
+describe("deactivation context", () => {
+  it("runs deactivate with a live context even when activation failed", async () => {
+    const seen: string[] = [];
+    const host = createDesktopExtensionHost();
+    host.register(definition("broken",
+      () => {
+        throw new Error("boom");
+      },
+      (context) => {
+        // The core host calls deactivate to clean up a failed activation; the
+        // context must not report "no longer active" while the hook runs.
+        context.events.on("note.saved", () => undefined);
+        seen.push(context.extensionId);
+      }));
+
+    await expect(host.activate("broken")).rejects.toBeInstanceOf(ExtensionActivationError);
+    await host.deactivate("broken");
+
+    expect(seen).toEqual(["broken"]);
+    expect(host.status("broken")).toBe("inactive");
+  });
+
+  it("gives deactivate the same scoped context, so registered tab kinds resolve", async () => {
+    const tabs = createDesktopTabRegistry([]);
+    const opened: [string, string][] = [];
+    setWorkspaceBridge({
+      rootPath: "/vault",
+      openNote: () => undefined,
+      openTab: (kind, title) => opened.push([kind, title])
+    });
+    const host = createDesktopExtensionHost({ tabs });
+    host.register(definition("calendars",
+      (context) => {
+        context.tabs.register({
+          kind: "calendar",
+          label: "Calendar",
+          isAvailable: true,
+          factory: () => null
+        });
+      },
+      (context) => {
+        context.tabs.open("calendar", "closing");
+      }));
+
+    await host.activate("calendars");
+    await host.deactivate("calendars");
+
+    expect(opened).toEqual([["calendars.calendar", "closing"]]);
+    setWorkspaceBridge(null);
+  });
+});
+
 describe("editor header contributions", () => {
   const dateline = {
     id: "metadata-widget",

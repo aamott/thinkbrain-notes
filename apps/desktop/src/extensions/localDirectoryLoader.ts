@@ -13,6 +13,7 @@
 
 import {
   evaluateCompatibility,
+  getErrorMessage,
   parseExtensionManifest,
   resolveEntryPath,
   validateExtensionModule,
@@ -73,9 +74,6 @@ const failure = (...diagnostics: ManifestDiagnostic[]): LoadExtensionResult => (
   diagnostics
 });
 
-const describe = (cause: unknown): string =>
-  cause instanceof Error ? cause.message : String(cause);
-
 /** Joins a directory and a relative path into a `file://` url for stack traces. */
 function sourceUrlFor(directory: string, relativePath: string): string {
   const normalized = directory.replace(/\\/g, "/").replace(/\/$/, "");
@@ -100,7 +98,7 @@ export function createLocalDirectoryLoader(
       manifestSource = await options.readFile(directory, MANIFEST_FILE);
     } catch (cause: unknown) {
       return failure(
-        error("manifest_unreadable", `Could not read ${MANIFEST_FILE}: ${describe(cause)}`)
+        error("manifest_unreadable", `Could not read ${MANIFEST_FILE}: ${getErrorMessage(cause)}`)
       );
     }
 
@@ -109,7 +107,7 @@ export function createLocalDirectoryLoader(
       manifestValue = JSON.parse(manifestSource);
     } catch (cause: unknown) {
       return failure(
-        error("manifest_invalid_json", `${MANIFEST_FILE} is not valid JSON: ${describe(cause)}`)
+        error("manifest_invalid_json", `${MANIFEST_FILE} is not valid JSON: ${getErrorMessage(cause)}`)
       );
     }
 
@@ -133,7 +131,7 @@ export function createLocalDirectoryLoader(
     } catch (cause: unknown) {
       return failure(
         ...diagnostics,
-        error("entry_unreadable", `Could not read ${entry.path}: ${describe(cause)}`)
+        error("entry_unreadable", `Could not read ${entry.path}: ${getErrorMessage(cause)}`)
       );
     }
 
@@ -143,7 +141,7 @@ export function createLocalDirectoryLoader(
     } catch (cause: unknown) {
       return failure(
         ...diagnostics,
-        error("entry_import_failed", `${entry.path} failed to load: ${describe(cause)}`)
+        error("entry_import_failed", `${entry.path} failed to load: ${getErrorMessage(cause)}`)
       );
     }
 

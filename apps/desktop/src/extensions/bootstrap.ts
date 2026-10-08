@@ -37,14 +37,6 @@ import {
 const toReasons = (diagnostics: readonly ManifestDiagnostic[]): readonly BootstrapReason[] =>
   diagnostics.map((d) => ({ code: d.code, message: d.message, severity: d.severity }));
 
-export type {
-  BootstrapEntry,
-  BootstrapEntryStatus,
-  BootstrapReason,
-  ExtensionBootstrap
-} from "./bootstrapRef";
-export { getExtensionBootstrap } from "./bootstrapRef";
-
 /**
  * Registers built-in extensions and activates them lazily.
  *
@@ -350,6 +342,10 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
       if (getExtensionBootstrapInternal() === bootstrap) setExtensionBootstrap(null);
       for (const state of states.values()) await disposeEntry(state);
       states.clear();
+      // Empty the published snapshot too: a cached `entries()` must not keep
+      // reporting extensions whose registrations are all gone.
+      failedManifests.length = 0;
+      rebuildSnapshot();
     }
   };
 

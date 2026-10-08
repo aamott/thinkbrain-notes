@@ -146,6 +146,30 @@ describe("createLocalExtensions", () => {
     expect(outcome.loaded).toBe(false);
     expect(outcome.diagnostics[0]?.message).toMatch(/not loaded/i);
   });
+
+  /**
+   * `remove` must only act on directory-loaded extensions: it resolves the
+   * directory through `bootstrap.entries()`, which a built-in never populates,
+   * so the guard must stop the call before `removeLocalExtension` can dispose
+   * the built-in's registrations.
+   */
+  it("leaves a built-in extension alone when asked to remove it", async () => {
+    const commands = createDesktopCommandRegistry([]);
+    const panels = createDesktopPanelRegistry([]);
+    const host = createDesktopExtensionHost({ commands, panels });
+    const boot = bootstrapExtensions({
+      host,
+      commands,
+      panels,
+      extensions: [{ manifest: manifest("builtin"), activate: vi.fn() }]
+    });
+    const local = createLocalExtensions({ loader: loaderFor({}), bootstrap: boot });
+
+    await local.remove("builtin");
+
+    expect(boot.entries().map((entry) => entry.id)).toEqual(["builtin"]);
+    expect(commands.get("builtin.go")?.title).toBe("Go");
+  });
 });
 
 describe("directory persistence", () => {

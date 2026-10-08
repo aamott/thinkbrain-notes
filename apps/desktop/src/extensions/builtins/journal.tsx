@@ -7,7 +7,7 @@ import { useCallback, useMemo, useSyncExternalStore } from "react";
 
 import { JournalPanelContainer } from "../../journal/JournalPanelContainer";
 import { createJournalService } from "../../journal/journalService";
-import { journalSettingsSchema } from "../../journal/journalSettings";
+import { journalSettingsSchema, parseFieldDefinitions } from "../../journal/journalSettings";
 import { registerJournalControls } from "../../journal/JournalFieldDefinitionsControl";
 import { CalendarTabContainer } from "../../journal/CalendarTabContainer";
 import {
@@ -22,7 +22,6 @@ import { searchService } from "../../search/searchService";
 import type { JournalFacet, JournalPredicate } from "../../journal/journalFacets";
 import { useCollapsedGroups } from "../../journal/journalCollapse";
 import { MetadataWidgetContainer } from "../../journal/MetadataWidgetContainer";
-import { parseFieldDefinitions } from "../../journal/journalSettings";
 import type { DesktopExtensionContext } from "../desktopExtensionHost";
 
 /**
@@ -161,6 +160,16 @@ export function activateJournal(context: DesktopExtensionContext): void {
   const useDefinitions = () =>
     useWatchedSetting<string, string>("fieldDefinitions", (raw) => raw ?? "[]");
 
+  /**
+   * The watched raw definitions, parsed and validated once per settings
+   * change rather than on every re-render (which happens on every keystroke
+   * in an open editor).
+   */
+  const useParsedDefinitions = () => {
+    const raw = useDefinitions();
+    return useMemo(() => parseFieldDefinitions(raw).definitions, [raw]);
+  };
+
   function MetadataHeader({
     relativePath,
     contents,
@@ -170,13 +179,7 @@ export function activateJournal(context: DesktopExtensionContext): void {
     readonly contents: string;
     readonly applyEdit?: (next: string) => void;
   }) {
-    const raw = useDefinitions();
-    // Parse and validate field definitions once per settings change, not on
-    // every editor re-render (which happens on every keystroke).
-    const parsedDefinitions = useMemo(
-      () => parseFieldDefinitions(raw).definitions,
-      [raw]
-    );
+    const parsedDefinitions = useParsedDefinitions();
 
     return (
       <MetadataWidgetContainer
@@ -265,8 +268,7 @@ export function activateJournal(context: DesktopExtensionContext): void {
 
     // The fields the user configured decide what there is to filter by; the
     // index decides which values those fields actually hold.
-    const configured = useDefinitions();
-    const parsed = useMemo(() => parseFieldDefinitions(configured).definitions, [configured]);
+    const parsed = useParsedDefinitions();
     const loadFacets = useCallback(
       (): Promise<readonly JournalFacet[]> =>
         journalFacetValues(queryMetadata, indexRoot, journalRoot(), parsed),

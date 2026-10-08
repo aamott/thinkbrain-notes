@@ -4,7 +4,7 @@ import { getErrorMessage } from "@thinkbrain/core";
 import { pickDirectoryPath } from "../native/dialogs";
 import { getExtensionBootstrap, type BootstrapEntry } from "./bootstrapRef";
 import { getLocalExtensions } from "./localExtensionsRef";
-import type { LoadOutcome, StartupFailure } from "./localExtensions";
+import type { LoadOutcome, LocalExtensions, StartupFailure } from "./localExtensions";
 
 const EMPTY: readonly BootstrapEntry[] = [];
 const NO_FAILURES: readonly StartupFailure[] = [];
@@ -105,6 +105,19 @@ export function ExtensionsPanel({ entries }: ExtensionsPanelProps) {
     [report]
   );
 
+  // Same guard as `onAdd`, but loud: a missing controller with a clickable
+  // Reload/Remove is a wiring bug, so surface it as an error rather than
+  // silently no-op or throw a bare "cannot read properties of null".
+  const runLocal = useCallback(
+    (action: (local: LocalExtensions) => Promise<LoadOutcome | void>): Promise<void> =>
+      run(() => {
+        const local = getLocalExtensions();
+        if (!local) throw new Error("Local extension management is not available.");
+        return action(local);
+      }),
+    [run]
+  );
+
   const onAdd = useCallback(async (): Promise<void> => {
     const local = getLocalExtensions();
     if (!local) return;
@@ -142,9 +155,11 @@ export function ExtensionsPanel({ entries }: ExtensionsPanelProps) {
       </div>
 
       {allErrors.length > 0 && (
-        <ul className="m-0 list-none border-b border-border p-2" aria-label="Extension load errors">
-          {allErrors.map((message) => (
-            <li key={message} className="text-[0.6875rem] text-danger">
+        // role="alert" so a failure that appears after an action is announced;
+        // index in the key because two diagnostics may share a message.
+        <ul role="alert" className="m-0 list-none border-b border-border p-2" aria-label="Extension load errors">
+          {allErrors.map((message, index) => (
+            <li key={`${index}-${message}`} className="text-[0.6875rem] text-danger">
               {message}
             </li>
           ))}
@@ -179,7 +194,7 @@ export function ExtensionsPanel({ entries }: ExtensionsPanelProps) {
                     <button
                       type="button"
                       className="cursor-pointer border-0 bg-transparent p-0 text-[0.6875rem] text-accent underline disabled:opacity-50"
-                      onClick={() => void run(() => getLocalExtensions()!.reload(entry.id))}
+                      onClick={() => void runLocal((local) => local.reload(entry.id))}
                       disabled={busy}
                     >
                       Reload {entry.name}
@@ -187,7 +202,7 @@ export function ExtensionsPanel({ entries }: ExtensionsPanelProps) {
                     <button
                       type="button"
                       className="cursor-pointer border-0 bg-transparent p-0 text-[0.6875rem] text-accent underline disabled:opacity-50"
-                      onClick={() => void run(() => getLocalExtensions()!.remove(entry.id))}
+                      onClick={() => void runLocal((local) => local.remove(entry.id))}
                       disabled={busy}
                     >
                       Remove {entry.name}
