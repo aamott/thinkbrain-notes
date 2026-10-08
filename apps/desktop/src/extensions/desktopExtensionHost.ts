@@ -162,6 +162,30 @@ export interface DesktopExtensionHost extends Omit<ExtensionHost, "register"> {
 
 const DOTTED_IDENTIFIER_PATTERN = /^[A-Za-z][A-Za-z0-9_-]*(?:\.[A-Za-z][A-Za-z0-9_-]*)*$/;
 
+/**
+ * Qualifies an extension-local contribution id into its registry-wide
+ * `extensionId.localId` form.
+ *
+ * The single constructor for the convention: a bootstrap stub and the real
+ * registration that replaces it must agree byte-for-byte, so both build the id
+ * here rather than concatenating inline.
+ */
+export function qualifyContributionId(extensionId: string, localId: string): string {
+  return `${extensionId}.${localId}`;
+}
+
+/**
+ * Splits a qualified contribution id back into its extension and local parts,
+ * or `null` when `fullId` is not in `extensionId.localId` form.
+ */
+export function splitContributionId(
+  fullId: string
+): { readonly extensionId: string; readonly localId: string } | null {
+  const dot = fullId.indexOf(".");
+  if (dot <= 0 || dot === fullId.length - 1) return null;
+  return { extensionId: fullId.slice(0, dot), localId: fullId.slice(dot + 1) };
+}
+
 function assertRelativeId(kind: string, id: string): void {
   if (typeof id !== "string" || !EXTENSION_ID_PATTERN.test(id)) {
     throw new Error(
@@ -172,7 +196,7 @@ function assertRelativeId(kind: string, id: string): void {
 
 function prefixId(extensionId: string, kind: string, id: string): string {
   assertRelativeId(kind, id);
-  return `${extensionId}.${id}`;
+  return qualifyContributionId(extensionId, id);
 }
 
 /** Resolves either panel form to the single contribution shape the registry stores. */
@@ -194,7 +218,15 @@ function toPanelContribution(
   return { ...panel, id };
 }
 
-function settingsModuleId(extensionId: string): string {
+/**
+ * The settings module namespace one extension's schema is registered under,
+ * `extension-${extensionId}`.
+ *
+ * Exported so a lookup of an extension's setting key — like
+ * `extension-journal-calendar.root` — does not have to hand-concatenate the
+ * prefix and risk drifting from it.
+ */
+export function extensionSettingsModuleId(extensionId: string): string {
   return `extension-${extensionId}`;
 }
 
@@ -206,7 +238,7 @@ function assertLocalKey(key: string): void {
 
 function fullSettingKey(extensionId: string, key: string): { fullKey: string; definition: SettingDefinition } {
   assertLocalKey(key);
-  const moduleId = settingsModuleId(extensionId);
+  const moduleId = extensionSettingsModuleId(extensionId);
   const fullKey = `${moduleId}.${key}`;
   const definition = appSettingsRegistry.getDefinition(fullKey);
   if (!definition) {
@@ -283,7 +315,7 @@ function createDesktopExtensionContext(
   isActive: () => boolean,
   registries: DesktopExtensionHostRegistries
 ): DesktopExtensionContext {
-  const moduleId = settingsModuleId(context.extensionId);
+  const moduleId = extensionSettingsModuleId(context.extensionId);
   /** Tab kinds this activation registered, so `open` cannot reach another's. */
   const ownKinds = new Set<string>();
   const assertActive = (): void => {

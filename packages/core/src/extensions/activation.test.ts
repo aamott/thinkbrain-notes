@@ -24,4 +24,11 @@ describe("parseActivationEvent", () => {
     expect(parseActivationEvent("onCommand:")).toBeNull();
     expect(parseActivationEvent("onCommand")).toBeNull();
   });
+
+  it("rejects ids that are not lowercase kebab-case", () => {
+    // The manifest validator defers to this parser, so these must stay null.
+    expect(parseActivationEvent("onCommand:show-")).toBeNull();
+    expect(parseActivationEvent("onCommand:a--b")).toBeNull();
+    expect(parseActivationEvent("onView:Stats")).toBeNull();
+  });
 });

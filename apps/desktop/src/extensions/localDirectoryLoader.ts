@@ -74,11 +74,17 @@ const failure = (...diagnostics: ManifestDiagnostic[]): LoadExtensionResult => (
   diagnostics
 });
 
-/** Joins a directory and a relative path into a `file://` url for stack traces. */
+/**
+ * Joins a directory and a relative path into a `file://` url for stack traces.
+ * Each segment is percent-encoded so `#`, `%`, spaces, or control characters
+ * cannot corrupt the `//# sourceURL=` comment it is appended to.
+ */
 function sourceUrlFor(directory: string, relativePath: string): string {
   const normalized = directory.replace(/\\/g, "/").replace(/\/$/, "");
   const prefix = normalized.startsWith("/") ? "file://" : "file:///";
-  return `${prefix}${normalized}/${relativePath}`;
+  const encode = (path: string): string =>
+    path.split("/").map((segment) => encodeURIComponent(segment)).join("/");
+  return `${prefix}${encode(normalized)}/${encode(relativePath)}`;
 }
 
 /**
@@ -123,7 +129,7 @@ export function createLocalDirectoryLoader(
     diagnostics.push(...compatibility.reasons);
 
     const entry = resolveEntryPath(parsed.manifest.main);
-    if (!entry.path) return failure(...diagnostics, entry.diagnostic!);
+    if (entry.path === null) return failure(...diagnostics, entry.diagnostic);
 
     let entrySource: string;
     try {
@@ -149,7 +155,9 @@ export function createLocalDirectoryLoader(
       DesktopExtensionActivation,
       (context: DesktopExtensionContext) => void | Promise<void>
     >(namespace);
-    if (!validated.module) return failure(...diagnostics, validated.diagnostic!);
+    if (validated.module === null) {
+      return failure(...diagnostics, validated.diagnostic);
+    }
 
     return {
       extension: {

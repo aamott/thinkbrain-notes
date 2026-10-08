@@ -58,7 +58,6 @@ macro_rules! app_command_list {
         $crate::$expand! {
         workspace::workspace_access_capabilities,
         workspace::platform_capabilities,
-        workspace::list_managed_workspaces,
         workspace::create_managed_workspace,
         workspace::delete_managed_workspace,
         workspace_known::list_known_workspaces,
@@ -186,7 +185,7 @@ mod tests {
         );
         assert_eq!(
             APP_COMMAND_PATHS.len(),
-            60,
+            59,
             "the number of registered commands changed; update this count if it was deliberate"
         );
     }

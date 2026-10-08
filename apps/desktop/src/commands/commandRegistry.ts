@@ -18,7 +18,6 @@ export type DesktopCommandId =
   | "toggle-bottom-panel"
   | "toggle-live-preview"
   | "open-settings"
-  | "rebuild-index"
   | "open-graph"
   | "open-extensions"
   | (string & {});
@@ -34,12 +33,11 @@ export interface DesktopCommandContext {
   readonly toggleAssistant: () => void;
   readonly toggleBottomPanel: () => void;
   readonly toggleLivePreview: () => void;
-  /** Reveals a panel by its fully-qualified id, opening its side popout. */
+  /** Reveals a panel by its fully-qualified id, opening its side popout — either dock. */
   readonly revealPanel: (panelId: string) => void;
-  /** Reveals a left-side panel (explorer, search, extensions). */
+  /** Reveals a left-side panel by id; admits registered extension panels too. */
   readonly revealLeftPanel: (panelId: string) => void;
   readonly openSettings: () => void;
-  readonly rebuildIndex: () => void;
   readonly closePalette: (restoreFocus?: boolean) => void;
 }
 
@@ -163,12 +161,6 @@ export const builtInDesktopCommands: readonly DesktopCommand[] = [
     title: "Open settings",
     keywords: ["preferences", "configuration"],
     handler: withClosePalette("openSettings")
-  }),
-  available({
-    id: "rebuild-index",
-    title: "Rebuild workspace index",
-    keywords: ["search", "index", "refresh"],
-    handler: withClosePalette("rebuildIndex")
   }),
   unavailable({
     id: "open-graph",

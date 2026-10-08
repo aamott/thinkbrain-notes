@@ -199,9 +199,18 @@ function mountPanel(element, panel, context) {
       status.textContent = "Open a workspace to capture notes.";
       status.className = "hn-status hn-status--empty";
     }
+    // No workspace means nowhere to write, so the button is honest about it
+    // instead of letting a click fail after the fact.
+    captureBtn.disabled = !state.rootPath;
   };
-  renderStatus(panel.state);
-  panel.onDidChange(renderStatus);
+
+  /** Shows a failure where the user is already looking, and logs it. */
+  const reportFailure = (what, error) => {
+    const message = error instanceof Error ? error.message : String(error);
+    status.textContent = `${what}: ${message}`;
+    status.className = "hn-status hn-status--empty";
+    console.error(`[hello-notes] ${what}`, error);
+  };
 
   // --- Inline capture input ---------------------------------------------
   const inputRow = doc.createElement("div");
@@ -221,14 +230,22 @@ function mountPanel(element, panel, context) {
   captureBtn.setAttribute("aria-label", "Capture typed text");
   inputRow.append(captureBtn);
 
+  // Initial paint and live updates (a workspace opened while the panel is
+  // up). Called only after captureBtn exists because renderStatus reads it.
+  renderStatus(panel.state);
+  panel.onDidChange(renderStatus);
+
   /** Captures the textarea content and clears the input. */
   const captureFromInput = async () => {
     const body = input.value.trim();
-    if (!body) return;
+    if (!body || captureBtn.disabled) return;
     captureBtn.disabled = true;
     try {
       await capture(context, body);
       input.value = "";
+    } catch (error) {
+      // Fail loudly: a rejected capture must be visible, not silent.
+      reportFailure("Capture failed", error);
     } finally {
       captureBtn.disabled = false;
       input.focus();
@@ -287,8 +304,11 @@ function mountPanel(element, panel, context) {
         event.stopPropagation();
         try {
           await context.workspace.deleteNote(relativePath);
-        } catch {
-          // If the file is already gone, just remove it from the list.
+        } catch (error) {
+          // The note survived — keep the row and say why. Removing it anyway
+          // would make a permission failure look exactly like success.
+          reportFailure(`Delete failed for ${relativePath}`, error);
+          return;
         }
         paths.delete(relativePath);
         renderList();
@@ -296,7 +316,11 @@ function mountPanel(element, panel, context) {
       item.append(del);
 
       item.addEventListener("click", () => {
-        context.workspace.openNote(relativePath);
+        // openNote returns a promise; without a catch a failed open is an
+        // unhandled rejection no one ever sees.
+        context.workspace.openNote(relativePath).catch((error) => {
+          reportFailure(`Could not open ${relativePath}`, error);
+        });
       });
 
       list.append(item);
@@ -348,8 +372,10 @@ export function activate(context) {
     title: "Capture a note",
     availability: "available",
     handler: async ({ closePalette }) => {
-      await capture(context);
+      // Close first: the shell reports a rejected handler, so a failed capture
+      // is already loud — and the palette shouldn't wait on it staying open.
       closePalette();
+      await capture(context);
     }
   });
 

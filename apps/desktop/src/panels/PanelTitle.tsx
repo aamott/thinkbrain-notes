@@ -157,6 +157,23 @@ function PanelMenuEntry({
   readonly item: PanelMenuItem;
   readonly onRun: (close: boolean) => void;
 }) {
+  /**
+   * A checkbox item keeps the menu open after a toggle, but `item.checked` is
+   * static contribution data — without a local copy the still-open menu would
+   * keep announcing the pre-toggle state until the contribution re-resolved.
+   * The optimistic copy wins until a genuinely different `checked` arrives,
+   * at which point the prop takes over again.
+   */
+  const [optimistic, setOptimistic] = useState<boolean | undefined>(undefined);
+  const [seenChecked, setSeenChecked] = useState(item.checked);
+  if (seenChecked !== item.checked) {
+    // Render-phase adjustment: the contribution produced a new value, so the
+    // optimistic copy has done its job.
+    setSeenChecked(item.checked);
+    setOptimistic(undefined);
+  }
+  const checked = optimistic ?? item.checked;
+
   const separator = item.separatorBefore && (
     <MenuSeparator />
   );
@@ -179,7 +196,14 @@ function PanelMenuEntry({
     return (
       <>
         {separator}
-        <MenuCheckbox label={item.label} checked={item.checked} onClick={() => onRun(false)} />
+        <MenuCheckbox
+          label={item.label}
+          checked={checked ?? false}
+          onClick={() => {
+            setOptimistic(!checked);
+            onRun(false);
+          }}
+        />
       </>
     );
   }

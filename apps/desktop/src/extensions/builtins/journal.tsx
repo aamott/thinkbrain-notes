@@ -83,15 +83,21 @@ export function activateJournal(context: DesktopExtensionContext): void {
   context.subscriptions.add(registerJournalControls());
 
   /**
-   * Read on every call rather than captured: the folder is workspace-scoped
-   * (D45), so it changes under a running panel when the vault changes.
+   * The configured root, read on every call rather than captured: the folder
+   * is workspace-scoped (D45), so it changes under a running panel when the
+   * vault changes. Raw — normalization is the caller's job, because a bad
+   * value must reach `requireRoot` in the service to become an
+   * `invalid-root` JournalError rather than a bare throw.
    */
-  const journalRoot = (): string =>
-    normalizeRoot(context.settings.get<string>("root") ?? DEFAULT_ROOT);
+  const configuredRoot = (): string =>
+    context.settings.get<string>("root") ?? DEFAULT_ROOT;
+
+  /** The configured root in canonical form. Throws on a value that escapes or is empty. */
+  const journalRoot = (): string => normalizeRoot(configuredRoot());
 
   const service = createJournalService({
     workspace: context.workspace,
-    root: journalRoot,
+    root: configuredRoot,
     now: () => new Date()
   });
 
@@ -108,13 +114,30 @@ export function activateJournal(context: DesktopExtensionContext): void {
   const definitions = () => cachedDefinitions;
 
   /**
+   * `journalRoot` for the render path. `belongsHere` runs as `applies` inside
+   * `EditorHeaderSlot`'s `useMemo`, so a `normalizeRoot` throw on an unusable
+   * `root` setting (blank, or escaping the workspace) would take every open
+   * editor tab down via `TabBoundary`. The service maps the same condition to
+   * an `invalid-root` JournalError; here the safe answer is "not under the
+   * journal folder" until the setting is fixed.
+   */
+  const safeJournalRoot = (): string | null => {
+    try {
+      return journalRoot();
+    } catch {
+      return null;
+    }
+  };
+
+  /**
    * D28: the widget belongs on a note in the journal folder, or on any note
    * that already carries one of the user's configured fields — those notes are
    * journal entries in every sense that matters, wherever they live.
    */
   const belongsHere = (relativePath: string | null, contents: string): boolean => {
     if (relativePath === null) return false;
-    if (relativePath.startsWith(`${journalRoot()}/`)) return true;
+    const root = safeJournalRoot();
+    if (root !== null && relativePath.startsWith(`${root}/`)) return true;
     const configured = definitions();
     if (configured.length === 0) return false;
     const metadata = parseFrontmatter(contents).metadata;
@@ -338,7 +361,14 @@ export function activateJournal(context: DesktopExtensionContext): void {
     keywords: ["journal", "diary", "entry"],
     availability: "available",
     handler: ({ closePalette }) => {
-      void service.createEntry();
+      // Fail loudly: the service rejects with a JournalError (no workspace,
+      // invalid root, unreadable folder) whose copy the journal panel already
+      // renders — a discarded promise would only surface as console noise.
+      // Revealing the panel to show that copy needs a left-panel reveal the
+      // command context cannot express yet (see the open-calendar route).
+      service.createEntry().catch((error: unknown) => {
+        console.error("[journal] New journal entry failed.", error);
+      });
       closePalette();
     }
   });
@@ -349,7 +379,10 @@ export function activateJournal(context: DesktopExtensionContext): void {
     keywords: ["journal", "today", "diary"],
     availability: "available",
     handler: ({ closePalette }) => {
-      void service.openToday();
+      // See `new-entry` above: the rejection is reported, never swallowed.
+      service.openToday().catch((error: unknown) => {
+        console.error("[journal] Open today's journal entry failed.", error);
+      });
       closePalette();
     }
   });

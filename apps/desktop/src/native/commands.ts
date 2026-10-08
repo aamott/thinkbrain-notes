@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke, isTauri } from "@tauri-apps/api/core";
 
 import type { DesktopStateUpdate } from "../settings/desktopState";
 import type {
@@ -45,10 +45,6 @@ export interface NativeCommandMap {
   readonly platform_capabilities: {
     readonly args: undefined;
     readonly result: NativePlatformCapabilities;
-  };
-  readonly list_managed_workspaces: {
-    readonly args: undefined;
-    readonly result: readonly NativeWorkspaceDescriptor[];
   };
   readonly create_managed_workspace: {
     readonly args: { readonly name: string };
@@ -688,4 +684,49 @@ function isNativeErrorShape(error: unknown): error is NativeCommandErrorShape {
     typeof candidate.message === "string" &&
     (candidate.details === undefined || typeof candidate.details === "string")
   );
+}
+
+// ---------------------------------------------------------------------------
+// App updater plugins
+//
+// `plugin-updater`/`plugin-process` are IPC calls like the commands above, but
+// reached through their plugin JS APIs rather than the `invokeNativeCommand`
+// map, so they are wrapped here — UI code must never import Tauri plugins
+// directly (the native/ boundary rule). The plugins load lazily so builds
+// without them (web dev, and the updater on mobile) never pay for them at
+// startup.
+// ---------------------------------------------------------------------------
+
+/**
+ * An update the updater plugin found and can install.
+ *
+ * Structurally what `@tauri-apps/plugin-updater`'s `check()` resolves to,
+ * declared here so this module — and its callers — never import the plugin's
+ * types eagerly.
+ */
+export interface NativeAppUpdate {
+  readonly version: string;
+  downloadAndInstall(): Promise<void>;
+}
+
+/**
+ * Asks the updater plugin for a newer version.
+ *
+ * Returns `null` when there is no updater to talk to — a browser dev run, or
+ * a build where the plugin is not wired in.
+ */
+export async function checkForAppUpdate(): Promise<NativeAppUpdate | null> {
+  if (!isTauri()) return null;
+  const { check } = await import("@tauri-apps/plugin-updater");
+  return await check();
+}
+
+/**
+ * Restarts the app after a successful install. Only reachable once an update
+ * exists, which is only where the plugins are real — a failure to reach the
+ * process plugin propagates to the caller rather than no-op'ing.
+ */
+export async function relaunchApp(): Promise<void> {
+  const { relaunch } = await import("@tauri-apps/plugin-process");
+  await relaunch();
 }

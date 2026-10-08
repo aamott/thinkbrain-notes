@@ -8,6 +8,7 @@
 
 import { EXTENSION_ID_PATTERN } from "../lifecycle";
 import { isRecord } from "../settings/internal";
+import { parseActivationEvent } from "./activation";
 
 /** Platforms an extension can declare support for. */
 export type ExtensionPlatform = "desktop" | "mobile";
@@ -69,7 +70,6 @@ export interface ManifestParseResult {
 // mistake.
 const REQUIRED_FIELDS = ["name", "version", "apiVersion"] as const;
 const KNOWN_PLATFORMS = new Set<string>(["desktop", "mobile"]);
-const KNOWN_ACTIVATION_EVENTS = /^(onStartup|onCommand:[a-z][a-z0-9-]*|onView:[a-z][a-z0-9-]*)$/;
 const DEFAULT_PLATFORMS: readonly ExtensionPlatform[] = ["desktop", "mobile"];
 
 const error = (code: string, message: string): ManifestDiagnostic => ({
@@ -110,7 +110,13 @@ function readPlatforms(
   raw: unknown,
   diagnostics: ManifestDiagnostic[]
 ): readonly ExtensionPlatform[] {
-  if (!isRecord(raw)) return DEFAULT_PLATFORMS;
+  if (raw === undefined) return DEFAULT_PLATFORMS;
+  if (!isRecord(raw)) {
+    // Present but malformed must not silently widen to every platform:
+    // `evaluateCompatibility` gates on this field.
+    diagnostics.push(error("manifest_invalid_field", `"engines" must be an object.`));
+    return DEFAULT_PLATFORMS;
+  }
   const declared = readStringArray(raw.platform, "engines.platform", diagnostics);
   if (declared.length === 0) return DEFAULT_PLATFORMS;
 
@@ -164,6 +170,48 @@ function readContribution<T>(
   return build(raw);
 }
 
+/** Reads one `contributes` list, reporting a present-but-non-array field. */
+function readContributionList(
+  raw: unknown,
+  field: "commands" | "panels",
+  diagnostics: ManifestDiagnostic[]
+): unknown[] {
+  if (raw === undefined) return [];
+  if (!Array.isArray(raw)) {
+    diagnostics.push(
+      error("manifest_invalid_field", `"contributes.${field}" must be an array.`)
+    );
+    return [];
+  }
+  return raw;
+}
+
+/**
+ * Rejects an already-used id within one contribution kind. Registration
+ * downstream throws on a duplicate full id, so repeats must fail here, at
+ * parse time, rather than halfway through stub registration. Ids are deduped
+ * per kind only: the same relative id for a command and a panel is legitimate.
+ */
+function rejectDuplicateId(
+  seen: Set<string>,
+  id: string,
+  index: number,
+  kind: "commands" | "panels",
+  diagnostics: ManifestDiagnostic[]
+): boolean {
+  if (!seen.has(id)) {
+    seen.add(id);
+    return false;
+  }
+  diagnostics.push(
+    error(
+      "manifest_duplicate_contribution_id",
+      `contributes.${kind}[${index}].id "${id}" duplicates an earlier ${kind.slice(0, -1)} id.`
+    )
+  );
+  return true;
+}
+
 function readContributions(
   raw: unknown,
   diagnostics: ManifestDiagnostic[]
@@ -175,18 +223,20 @@ function readContributions(
   }
 
   const commands: ManifestCommand[] = [];
-  const rawCommands = Array.isArray(raw.commands) ? raw.commands : [];
-  rawCommands.forEach((entry, index) => {
+  const commandIds = new Set<string>();
+  readContributionList(raw.commands, "commands", diagnostics).forEach((entry, index) => {
     const command = readContribution(entry, index, "commands", ["title"], diagnostics, (record) => ({
       id: record.id as string,
       title: record.title as string
     }));
-    if (command) commands.push(command);
+    if (!command) return;
+    if (rejectDuplicateId(commandIds, command.id, index, "commands", diagnostics)) return;
+    commands.push(command);
   });
 
   const panels: ManifestPanel[] = [];
-  const rawPanels = Array.isArray(raw.panels) ? raw.panels : [];
-  rawPanels.forEach((entry, index) => {
+  const panelIds = new Set<string>();
+  readContributionList(raw.panels, "panels", diagnostics).forEach((entry, index) => {
     const panel = readContribution(
       entry,
       index,
@@ -207,6 +257,7 @@ function readContributions(
       );
       return;
     }
+    if (rejectDuplicateId(panelIds, panel.id, index, "panels", diagnostics)) return;
     panels.push(panel);
   });
 
@@ -253,7 +304,9 @@ export function parseExtensionManifest(value: unknown): ManifestParseResult {
 
   const activationEvents = readStringArray(value.activationEvents, "activationEvents", diagnostics);
   for (const event of activationEvents) {
-    if (!KNOWN_ACTIVATION_EVENTS.test(event)) {
+    // `parseActivationEvent` is the source of truth for what this host can
+    // trigger, so validation and parsing can never drift apart.
+    if (parseActivationEvent(event) === null) {
       // A warning, not an error: the epic lists activation events this host does
       // not implement yet, and adding one later must not break older manifests.
       diagnostics.push(

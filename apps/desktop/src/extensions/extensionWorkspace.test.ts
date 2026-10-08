@@ -79,6 +79,13 @@ describe("createExtensionWorkspace", () => {
     expect(host.openNote).toHaveBeenCalledWith("notes/a.md");
   });
 
+  it("rejects openNote when no workspace is open, like its siblings", async () => {
+    const { host, workspace } = setup(null);
+
+    await expect(workspace.openNote("notes/a.md")).rejects.toThrow(/no workspace/i);
+    expect(host.openNote).not.toHaveBeenCalled();
+  });
+
   /**
    * Every path an extension supplies is workspace-relative. Rejecting escapes
    * here means a mistake names the offending path instead of surfacing as an
@@ -93,6 +100,28 @@ describe("createExtensionWorkspace", () => {
       expect(api.readMarkdownDocument).not.toHaveBeenCalled();
     }
   );
+
+  /**
+   * These shapes pass a naive `..` check but the native normalizer rejects
+   * them: a whitespace-only segment is an `EmptySegment`, a path that names no
+   * segment at all is `Empty`, and `C:file` is a drive `Prefix` component on
+   * Windows. Checking them here keeps the error message about the bad path.
+   */
+  it.each(["a/ /b", ".", "./", "C:file"])("rejects %s like the native normalizer", async (path) => {
+    const { api, workspace } = setup();
+
+    await expect(workspace.readNote(path)).rejects.toThrow();
+    expect(api.readMarkdownDocument).not.toHaveBeenCalled();
+  });
+
+  it("accepts collapsed separators and `.` segments like the native normalizer", async () => {
+    const { api, workspace } = setup();
+
+    await workspace.readNote("notes//a.md");
+    await workspace.readNote("./b.md");
+
+    expect(api.readMarkdownDocument).toHaveBeenCalledTimes(2);
+  });
 
   it("rejects an empty path", async () => {
     const { workspace } = setup();

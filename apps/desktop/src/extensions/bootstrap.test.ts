@@ -1,11 +1,12 @@
 // @vitest-environment happy-dom
-import type { ExtensionManifest } from "@thinkbrain/core";
-import { describe, expect, it, vi } from "vitest";
+import { DisposableError, type ExtensionManifest } from "@thinkbrain/core";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createDesktopCommandRegistry, type DesktopCommandContext } from "../commands/commandRegistry";
 import { createMobileNewNoteActionRegistry } from "../commands/mobileNewNoteActionRegistry";
 import { createDesktopPanelRegistry } from "../panels/panelRegistryModel";
 import { bootstrapExtensions } from "./bootstrap";
+import { getExtensionBootstrap, setExtensionBootstrap } from "./bootstrapRef";
 import type { BuiltInExtension } from "./builtins";
 import { createDesktopExtensionHost, type DesktopExtensionContext } from "./desktopExtensionHost";
 
@@ -428,6 +429,52 @@ describe("locally loaded extensions", () => {
     expect(() => boot.addLocalExtension(local(), [])).toThrow(/already/i);
   });
 
+  /**
+   * The compatibility gate lives at the registry boundary, not only in the
+   * loader: a `LoadedExtension` produced any other way is still checked.
+   */
+  it("lists an incompatible local extension but registers nothing for it", () => {
+    const { commands, boot } = empty();
+    const activate = vi.fn();
+
+    boot.addLocalExtension(local(activate, { apiVersion: "^9.0.0" }), []);
+
+    expect(commands.get("sample.go")).toBeUndefined();
+    expect(activate).not.toHaveBeenCalled();
+    expect(boot.entries()[0]).toMatchObject({
+      id: "sample",
+      status: "incompatible",
+      source: "local-directory"
+    });
+    expect(boot.entries()[0]?.reasons.some((reason) => reason.code === "api-version")).toBe(true);
+  });
+
+  /**
+   * A throw during stub registration — here a manifest declaring the same
+   * command id twice — must roll back the whole entry. Otherwise `entries()`
+   * never lists the extension while `states` still blocks a retry.
+   */
+  it("leaves no unreachable entry when stub registration throws", () => {
+    const { commands, boot } = empty();
+    const duplicated = local(vi.fn(), {
+      contributes: {
+        commands: [
+          { id: "go", title: "Go" },
+          { id: "go", title: "Go again" }
+        ],
+        panels: []
+      }
+    });
+
+    expect(() => boot.addLocalExtension(duplicated, [])).toThrow(/already registered/i);
+
+    expect(boot.entries()).toEqual([]);
+    expect(commands.get("sample.go")).toBeUndefined();
+
+    boot.addLocalExtension(local(), []);
+    expect(commands.get("sample.go")?.title).toBe("Go");
+  });
+
   it("disposes locally loaded extensions on shutdown", async () => {
     const { commands, boot } = empty();
     boot.addLocalExtension(local(), []);
@@ -435,6 +482,95 @@ describe("locally loaded extensions", () => {
     await boot.dispose();
 
     expect(commands.get("sample.go")).toBeUndefined();
+  });
+});
+
+describe("missing declared contributions", () => {
+  /**
+   * A stub activates its extension, which is expected to re-register the
+   * declared contribution under the same id. When it does not, the miss is an
+   * authoring bug that must be diagnosed, not swallowed.
+   */
+  it("logs a diagnostic when activation never registers a declared command", async () => {
+    const activate = vi.fn();
+    const { commands } = setup({ manifest: manifest(), activate });
+    const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    try {
+      await commands.get("sample.go")?.handler(commandContext);
+      expect(activate).toHaveBeenCalledTimes(1);
+      expect(spy).toHaveBeenCalledWith(
+        expect.stringContaining("never registered declared command")
+      );
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});
+
+describe("bootstrap dispose", () => {
+  /**
+   * Shutdown is best-effort across entries: one extension whose teardown
+   * rejects must not leave later extensions registered.
+   */
+  it("disposes every extension and reports the failures afterwards", async () => {
+    const commands = createDesktopCommandRegistry([]);
+    const panels = createDesktopPanelRegistry([]);
+    const host = createDesktopExtensionHost({ commands, panels });
+    const boot = bootstrapExtensions({ host, commands, panels, extensions: [] });
+    const activate = vi.fn((context: DesktopExtensionContext) => {
+      context.commands.register({
+        id: "go",
+        title: "Go",
+        availability: "available",
+        handler: vi.fn()
+      });
+    });
+    const failingDeactivate = vi.fn(() => {
+      throw new Error("teardown boom");
+    });
+    boot.addLocalExtension(
+      { directory: "/ext/good", manifest: manifest({ id: "good" }), activate, deactivate: undefined },
+      []
+    );
+    boot.addLocalExtension(
+      { directory: "/ext/bad", manifest: manifest({ id: "bad" }), activate, deactivate: failingDeactivate },
+      []
+    );
+    const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    try {
+      await commands.get("bad.go")?.handler(commandContext);
+      await expect(boot.dispose()).rejects.toBeInstanceOf(DisposableError);
+    } finally {
+      spy.mockRestore();
+    }
+
+    expect(commands.get("good.go")).toBeUndefined();
+    expect(commands.get("bad.go")).toBeUndefined();
+    expect(boot.entries()).toEqual([]);
+  });
+});
+
+describe("publication as the app-wide bootstrap", () => {
+  afterEach(() => {
+    setExtensionBootstrap(null);
+  });
+
+  /**
+   * Publication is explicit, not inferred: an injected-registry bootstrap can
+   * opt in, and a default-configured one can opt out.
+   */
+  it("honours publish over the injected-registries heuristic", () => {
+    const commands = createDesktopCommandRegistry([]);
+    const panels = createDesktopPanelRegistry([]);
+
+    const injected = bootstrapExtensions({ commands, panels, extensions: [], publish: true });
+    expect(getExtensionBootstrap()).toBe(injected);
+
+    setExtensionBootstrap(null);
+    bootstrapExtensions({ extensions: [], publish: false });
+    expect(getExtensionBootstrap()).toBeNull();
   });
 });
 

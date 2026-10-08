@@ -34,14 +34,18 @@ interface UseWorkspaceLifecycleOptions {
   readonly dispatchTabs: Dispatch<DesktopTabAction>;
   readonly loadDocumentIntoView: (tabId: string, rootPath: string, relativePath: string, kind?: string) => void;
   readonly openMarkdownDocument: (rootPath: string, relativePath: string) => void;
+  /**
+   * Kept in the signature because `useShellState` still passes it; no longer
+   * consumed here since the workspace bridge's `openFile` member was removed
+   * (nothing ever read it).
+   */
   readonly openFileDocument?: (rootPath: string, relativePath: string) => void;
 }
 export function useWorkspaceLifecycle({
   tabState,
   dispatchTabs,
   loadDocumentIntoView,
-  openMarkdownDocument,
-  openFileDocument
+  openMarkdownDocument
 }: UseWorkspaceLifecycleOptions) {
   // Panel layout — which docks are open, how wide they are, and their
   // debounced persistence — is its own hook; the lifecycle keeps the names
@@ -210,18 +214,12 @@ export function useWorkspaceLifecycle({
         if (!restoredWorkspacePath) return;
         openMarkdownDocument(restoredWorkspacePath, relativePath);
       },
-      openFile: openFileDocument
-        ? (relativePath) => {
-            if (!restoredWorkspacePath) return;
-            openFileDocument(restoredWorkspacePath, relativePath);
-          }
-        : undefined,
       openTab: (kind, title) => {
         dispatchTabs({ type: "open", tab: createStaticTab(kind, title) });
       }
     });
     return () => setWorkspaceBridge(null);
-  }, [restoredWorkspacePath, openMarkdownDocument, openFileDocument, dispatchTabs]);
+  }, [restoredWorkspacePath, openMarkdownDocument, dispatchTabs]);
 
   // Reload settings whenever the workspace root changes so the settings store
   // knows the workspace root path. Without this, workspace-scoped settings

@@ -91,6 +91,21 @@ describe("createLocalExtensions", () => {
     expect(outcome.diagnostics[0]?.message).toMatch(/already/i);
   });
 
+  /**
+   * Directory identity is filesystem identity, not string identity: a trailing
+   * slash or different separator style still names the same directory and must
+   * not double-load it.
+   */
+  it.each(["/ext/a/", "/ext/a//"])("refuses the alias %s of a loaded directory", async (alias) => {
+    const { local } = setup({ "/ext/a": ok("/ext/a") });
+    await local.add("/ext/a");
+
+    const outcome = await local.add(alias);
+
+    expect(outcome.loaded).toBe(false);
+    expect(outcome.diagnostics[0]?.code).toBe("directory_already_loaded");
+  });
+
   it("removes an extension and its contributions", async () => {
     const { commands, local, boot } = setup({ "/ext/a": ok("/ext/a") });
     await local.add("/ext/a");
@@ -254,6 +269,55 @@ describe("directory persistence", () => {
 
     expect(local.startupFailures()).toEqual([]);
     expect(store.saved()).toEqual(["/ext/a"]);
+  });
+
+  /**
+   * Persistence is not part of the load outcome: the extension is already
+   * registered when `save` runs, so a store failure must surface as a warning
+   * on a still-successful add rather than a rejection the user cannot retry.
+   */
+  it("reports a persist failure as a warning on an otherwise loaded extension", async () => {
+    const store: ExtensionDirectoryStore = {
+      load: async () => [],
+      save: async () => {
+        throw new Error("disk full");
+      }
+    };
+    const { local, commands } = setup({ "/ext/a": ok("/ext/a") }, store);
+    const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    try {
+      const outcome = await local.add("/ext/a");
+      expect(outcome.loaded).toBe(true);
+      expect(outcome.diagnostics.at(-1)).toMatchObject({
+        code: "directory_persist_failed",
+        severity: "warning"
+      });
+    } finally {
+      spy.mockRestore();
+    }
+    expect(commands.get("sample.go")?.title).toBe("Go");
+  });
+
+  it("does not reject remove when forgetting the directory fails", async () => {
+    let directories: readonly string[] = [];
+    const store: ExtensionDirectoryStore = {
+      load: async () => directories,
+      save: async (next) => {
+        if (next.length === 0) throw new Error("disk full");
+        directories = next;
+      }
+    };
+    const { local, boot } = setup({ "/ext/a": ok("/ext/a") }, store);
+    await local.add("/ext/a");
+    const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    try {
+      await expect(local.remove("sample")).resolves.toBeUndefined();
+    } finally {
+      spy.mockRestore();
+    }
+    expect(boot.entries()).toEqual([]);
   });
 
   it("works without a directory store", async () => {

@@ -13,12 +13,12 @@ import {
   type DesktopCommand,
   type DesktopCommandContext
 } from "../commands/commandRegistry";
-import { isBuiltInLeftPanel } from "../panels/panelRegistryModel";
 import { persistDesktopState } from "../settings/desktopStatePersistence";
 import { useSettingsStore } from "../settings/settingsStore";
 import type { AppTheme } from "../settings/ThemeProvider";
 import { createStaticTab, type DesktopTabAction } from "../tabs/tabModel";
 import {
+  isSelectableLeftPanel,
   isSelectableRightPanel,
   type BottomPanel,
   type LeftPanel,
@@ -35,6 +35,11 @@ interface UseShellCommandsOptions {
   readonly setLeftPanel: Dispatch<SetStateAction<LeftPanel | null>>;
   readonly setRightPanel: Dispatch<SetStateAction<RightPanel | null>>;
   readonly toggleRightPanel: (panel: RightPanel) => void;
+  /**
+   * Bottom-dock setter, accepted for callers that already hold it (the shell's
+   * layout hook hands over its whole panel API). The command context no longer
+   * sets a bottom surface directly — the one it pinned was never available.
+   */
   readonly updateBottomPanel: (panel: BottomPanel | null) => void;
   readonly toggleBottomPanel: () => void;
 }
@@ -49,7 +54,6 @@ export function useShellCommands({
   setLeftPanel,
   setRightPanel,
   toggleRightPanel,
-  updateBottomPanel,
   toggleBottomPanel
 }: UseShellCommandsOptions) {
   const paletteCommands = useDesktopCommands();
@@ -84,6 +88,14 @@ export function useShellCommands({
 
   /** Executes a registered command with shell effects, keeping the registry canonical. */
   const runCommand = useCallback((command: DesktopCommand) => {
+    // Reveal means select, not toggle: `selectLeftPanel` flips an already-open
+    // panel shut, while a command saying "reveal" must leave the panel open no
+    // matter how often it runs. The `explorerOpen` persistence mirrors
+    // `selectLeftPanel`'s, minus the toggle.
+    const revealLeft = (panelId: LeftPanel) => {
+      setLeftPanel(panelId);
+      persistDesktopState({ explorerOpen: panelId === "explorer" });
+    };
     const context: DesktopCommandContext = {
       showExplorer,
       focusNewNote: requestNewNoteFocus,
@@ -100,20 +112,21 @@ export function useShellCommands({
       // `panelId` is an unconstrained string at this boundary (see
       // `DesktopCommandContext`) so any extension can reveal a panel it
       // registered; narrow it against the live registry before it reaches
-      // `RightPanel` shell state, so a typo or a stale id from a deactivated
-      // extension is dropped instead of persisting as an id nothing renders.
+      // shell state, so a typo or a stale id from a deactivated extension is
+      // dropped instead of persisting as an id nothing renders. The registry
+      // answers which dock the panel lives on, so one call serves both sides —
+      // an extension's left panel (e.g. `journal-calendar.journal`) is revealed
+      // by the same `revealPanel` a right panel is.
       revealPanel: (panelId: string) => {
-        if (isSelectableRightPanel(panelId)) setRightPanel(panelId);
+        if (isSelectableLeftPanel(panelId)) revealLeft(panelId);
+        else if (isSelectableRightPanel(panelId)) setRightPanel(panelId);
       },
-      // Narrow the unconstrained string against the live left-panel registry
-      // before it reaches shell state, mirroring `revealPanel`'s guard for the
-      // right side. A typo or stale id from a deactivated extension is dropped
-      // instead of persisting as an id nothing renders.
+      // Same live-registry guard, left dock only — the check admits registered
+      // extension panels, not just the first-party ids.
       revealLeftPanel: (panelId: string) => {
-        if (isBuiltInLeftPanel(panelId)) selectLeftPanel(panelId);
+        if (isSelectableLeftPanel(panelId)) revealLeft(panelId);
       },
       openSettings: openSettingsTab,
-      rebuildIndex: () => updateBottomPanel("terminal"),
       closePalette
     };
     void Promise.resolve()
@@ -121,7 +134,7 @@ export function useShellCommands({
       .catch((error: unknown) => {
         console.error(`[commandRegistry] Command "${command.id}" failed.`, error);
       });
-  }, [closePalette, openSettingsTab, requestNewNoteFocus, selectLeftPanel, setLeftPanel, setRightPanel, setTheme, showExplorer, theme, toggleBottomPanel, toggleLivePreview, toggleRightPanel, updateBottomPanel]);
+  }, [closePalette, openSettingsTab, requestNewNoteFocus, selectLeftPanel, setLeftPanel, setRightPanel, setTheme, showExplorer, theme, toggleBottomPanel, toggleLivePreview, toggleRightPanel]);
 
   return {
     closePalette,

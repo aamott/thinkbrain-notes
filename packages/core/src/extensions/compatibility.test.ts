@@ -39,6 +39,32 @@ describe("evaluateCompatibility", () => {
     expect(evaluateCompatibility(manifest({ apiVersion: "~1.3.0" }), host).compatible).toBe(false);
   });
 
+  it("pins the minor (and 0.0.x the patch) for caret ranges on a 0.x floor", () => {
+    // npm semver semantics: 0.x bumps may break, so ^0.1.2 excludes 0.2.0.
+    const hostZero = { ...host, apiVersion: "0.1.5" };
+    expect(evaluateCompatibility(manifest({ apiVersion: "^0.1.2" }), hostZero).compatible).toBe(
+      true
+    );
+    expect(
+      evaluateCompatibility(manifest({ apiVersion: "^0.1.2" }), {
+        ...host,
+        apiVersion: "0.2.0"
+      }).compatible
+    ).toBe(false);
+    expect(
+      evaluateCompatibility(manifest({ apiVersion: "^0.0.3" }), {
+        ...host,
+        apiVersion: "0.0.4"
+      }).compatible
+    ).toBe(false);
+    expect(
+      evaluateCompatibility(manifest({ apiVersion: "^0.0.3" }), {
+        ...host,
+        apiVersion: "0.0.3"
+      }).compatible
+    ).toBe(true);
+  });
+
   it("rejects an unsupported range syntax rather than guessing", () => {
     const result = evaluateCompatibility(manifest({ apiVersion: ">=1.0.0 <2" }), host);
     expect(result.compatible).toBe(false);

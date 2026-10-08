@@ -26,7 +26,8 @@ An extension is a folder with two files:
    app's `--tn-color-*` theme tokens. The **＋** button in the panel header
    is an action the extension contributed. Inside the panel you can:
    - Type text and hit **Capture** (or `Ctrl+Enter`) to create a note with
-     that content.
+     that content. The button stays disabled while no workspace is open, and
+     failures are reported in the status line rather than swallowed.
    - See a list of recent captures — loaded from `listNotes("captures")` on
      mount and updated live via `note.created` events.
    - Click a capture to open it (`openNote`).

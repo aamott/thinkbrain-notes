@@ -43,13 +43,14 @@ export interface ExtensionPanelMountContext {
  * Fills an element with panel content.
  *
  * @returns An optional cleanup for anything that outlives the element itself,
- *   such as timers or listeners. The element's own children are discarded by
- *   the host.
+ *   such as timers or listeners — a teardown function, a `Disposable` (the
+ *   shape every other extension API hands back), or a list of them. The
+ *   element's own children are discarded by the host.
  */
 export type ExtensionPanelMount = (
   element: HTMLElement,
   context: ExtensionPanelMountContext
-) => void | (() => void);
+) => void | (() => void) | Disposable | readonly Disposable[];
 
 export interface ExtensionPanelMountPointProps {
   readonly mount: ExtensionPanelMount;
@@ -125,7 +126,9 @@ export function ExtensionPanelMountPoint({
       }
     };
 
-    let cleanup: (() => void) | void;
+    // `unknown` because a disk-loaded extension is plain JavaScript: nothing
+    // enforces the return type, so whatever it hands back is normalized below.
+    let cleanup: unknown;
     try {
       cleanup = mount(element, context);
     } catch (error: unknown) {
@@ -137,10 +140,24 @@ export function ExtensionPanelMountPoint({
 
     return () => {
       listeners.clear();
-      try {
-        cleanup?.();
-      } catch (error: unknown) {
-        onErrorRef.current(error);
+      // Accept the natural shapes — a teardown function, a Disposable, or a
+      // list of either — rather than calling the return blind and reporting a
+      // spurious "panel failed" when a `{ dispose() {} }` comes back.
+      const teardowns = Array.isArray(cleanup) ? cleanup : [cleanup];
+      for (const teardown of teardowns as readonly unknown[]) {
+        if (teardown === undefined || teardown === null) continue;
+        try {
+          if (typeof teardown === "function") (teardown as () => void)();
+          else if (typeof (teardown as Disposable).dispose === "function") {
+            (teardown as Disposable).dispose();
+          } else {
+            throw new TypeError(
+              "A panel mount cleanup must be a function, a Disposable, or a list of them."
+            );
+          }
+        } catch (error: unknown) {
+          onErrorRef.current(error);
+        }
       }
       element.replaceChildren();
     };

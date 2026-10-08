@@ -12,11 +12,12 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, Search, X } from "lucide-react";
-import type {
-  SettingDefinition,
-  SettingScope,
-  SettingSection,
-  SettingsModule
+import {
+  getModuleIdFromKey,
+  type SettingDefinition,
+  type SettingScope,
+  type SettingSection,
+  type SettingsModule
 } from "@thinkbrain/core";
 import { cn } from "../lib/utils";
 import { createDebounced } from "../lib/debounce";
@@ -204,7 +205,7 @@ function ScopeGroup({
  *   A string like "Editor > Display".
  */
 function buildSectionPath(definition: SettingDefinition): string {
-  const moduleId = definition.key.slice(0, definition.key.indexOf("."));
+  const moduleId = getModuleIdFromKey(definition.key);
   const module = appSettingsRegistry.getModule(moduleId);
   const moduleLabel = module?.label ?? moduleId;
   const sectionLabel = module

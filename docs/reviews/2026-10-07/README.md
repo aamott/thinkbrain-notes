@@ -1,128 +1,107 @@
 # Review: 2026-10-07 — extension subsystem deep pass
 
-Scope: the whole extension surface on a clean branch off `main`
-(`chore/extensions-review-compaction`) — `packages/core/src/extensions/`,
-`apps/desktop/src/extensions/` (host, bootstrap, local loaders, workspace
-bridge, panel UI, builtins), `src-tauri/src/commands/extensions.rs` +
-capabilities + `native/` bridge, panel mounting/registry, and a
-cross-cutting integration pass over shell/settings/commands consumers.
-Seven `routine` reviewers in three batches (core model; desktop host +
-local loading; Rust + UI + builtins; then one integration sweep).
+Scope: the whole extension surface on `chore/extensions-review-compaction` —
+`packages/core/src/extensions/`, `apps/desktop/src/extensions/` (host,
+bootstrap, local loaders, workspace bridge, panel UI, builtins),
+`src-tauri/src/commands/extensions.rs` + capabilities + `native/` bridge,
+panel mounting/registry, and a cross-cutting integration pass over
+shell/settings/commands consumers. Seven `routine` reviewers in three
+batches, then four `routine` fixers on disjoint file scopes.
 
-**Result:** no critical/high findings. 49 findings — 16 med, 33 low —
-mostly easy/trivial. The registry layer (ContributionRegistry +
-`useSyncExternalStore`) is the strongest part; defects cluster at seams
-where a second mechanism bypasses the registry contract.
+**Result:** 49 findings — 0 critical/high, 16 med, 33 low. 37 addressed in
+this branch (fixed or resolved as duplicates); 12 remain below.
 
-## Fixed in the same change set (not listed as findings)
+## Fixed in this change set (finding files deleted)
 
-- `desktopExtensionHost.ts` — deactivate hook now receives the same scoped
-  context as activate (cached per core context) and `active` is raised for
-  it, so a cleanup hook after a *failed* activation doesn't hit a dead
-  context. Two new tests pin this.
-- `desktopExtensionHost.ts` — `DesktopExtensionEvents` is now an alias of
-  core's `EventSubscriber<AppEvents>`; dropped the duplicate
-  `RELATIVE_ID_PATTERN` in favor of `EXTENSION_ID_PATTERN`; removed the
-  redundant `status`/`statuses` wrappers.
-- `bootstrap.ts` — removed dead re-exports already covered by
-  `bootstrapRef`; `dispose()` clears `failedManifests` and rebuilds the
-  snapshot so `entries()` doesn't report disposed extensions.
-- `localExtensions.ts` — `remove()` no-ops on non-directory ids; previously
-  it could silently dispose a built-in's registrations. Regression test
-  added.
-- `localDirectoryLoader.ts` — deleted a byte-identical duplicate of core's
-  `getErrorMessage`.
-- `extensions.rs` — the 8 MB cap is now enforced by bounded
-  `take(MAX+1).read_to_end` instead of a pre-read `metadata.len()` check,
-  closing the grow-between-check-and-read hole.
-- `ExtensionsPanel.tsx` — `runLocal` helper replaces `getLocalExtensions()!`
-  non-null assertions (clear error instead of a raw TypeError);
-  `role="alert"` on the error list; duplicate-key fix for identical
-  diagnostics.
-- `PanelTitle.tsx` — `runPanelAction` wraps results in
-  `Promise.resolve(...).catch` so non-Promise thenables from plain-JS
-  extensions can't produce unhandled rejections; menu keys survive
-  duplicate labels.
-- `journal.tsx` — merged duplicate `journalSettings` imports; extracted
-  shared `useParsedDefinitions()` hook.
-- `journal.test.tsx` — renamed DOM-container locals shadowing the `host`
-  module variable.
+### Reviewer pass 1 fixes (pre-commit)
+
+- `desktopExtensionHost.ts` — deactivate hook gets the same scoped context
+  as activate (cached per core context) and `active` is raised for it;
+  `DesktopExtensionEvents` aliased to core's `EventSubscriber<AppEvents>`;
+  dropped duplicate `RELATIVE_ID_PATTERN`; removed redundant
+  `status`/`statuses` wrappers.
+- `bootstrap.ts` — removed dead re-exports covered by `bootstrapRef`;
+  `dispose()` clears `failedManifests` and rebuilds the snapshot.
+- `localExtensions.ts` — `remove()` no-ops on non-directory ids (it could
+  dispose built-in registrations); regression test added.
+- `localDirectoryLoader.ts` — deleted a duplicate of `getErrorMessage`.
+- `extensions.rs` — 8 MB cap enforced by bounded `take(MAX+1)` read
+  instead of pre-read metadata check.
+- `ExtensionsPanel.tsx` — `runLocal` helper replaces `!` assertions;
+  `role="alert"`; duplicate-key fix.
+- `PanelTitle.tsx` — `Promise.resolve().catch` for non-Promise thenables;
+  index-stable menu keys.
+- `journal.tsx` — merged duplicate imports; extracted
+  `useParsedDefinitions()`.
 - `manifest.ts` — removed a redundant truthiness guard.
 
-## Deferred findings
+### Fixer pass (findings addressed)
 
-### Medium urgency
+- **Core/manifest:** duplicate contribution ids rejected at parse;
+  malformed `engines`/`contributes` emit `manifest_invalid_field`;
+  manifest activation events validated against `parseActivationEvent`
+  (single source of truth); `^0.x.y` caret ranges pin minor/patch per npm
+  semver; event-bus error reporter guarded; loader results are
+  discriminated unions (no more `!` assertions); `resolveEntryPath`
+  rejects control chars and `sourceURL` percent-encodes path segments.
+- **Host/bootstrap:** `registerStubs` runs inside the transactional
+  try/catch with full rollback; `addLocalExtension` evaluates
+  compatibility itself; `dispose` aggregates errors instead of aborting;
+  explicit `publish` option replaces the options-inference heuristic;
+  missing declared contributions log a diagnostic; shared
+  `qualifyContributionId`/`splitContributionId` replace inline
+  `extid.relid` construction; capabilities derive from context keys at
+  compile time; host tests restore mutated globals.
+- **Workspace/local:** `openNote` throws "No workspace is open" like its
+  siblings; `assertRelativePath` mirrors the Rust normalizer (backslashes,
+  drive-relative, whitespace/collapsed segments); `add` survives persist
+  failure with a warning diagnostic; directory identity normalizes
+  separators/trailing slashes; dead `openFile` bridge wiring removed.
+- **Builtins/UI:** journal degrades gracefully on invalid `root` instead
+  of crashing the editor; journal palette commands report `JournalError`;
+  noteStats panel watches settings live; `noteStatsModel.ts` rename;
+  hello-notes handles rejections properly; mount-point teardown supports
+  Disposable/array returns with per-item error reporting; PanelTitle menu
+  keeps optimistic checked state; ExtensionsPanel re-follows a
+  late-published local-extensions ref.
+- **Shell/Rust:** extension commands can reveal left panels via the live
+  registry (`revealPanel` is side-aware); `isBuiltInLeftPanel` parity is
+  pinned by test; dead `rebuild-index` command removed; appUpdater routes
+  through `native/`; `read_media_file_bytes` enforces its cap at read
+  time; `list_managed_workspaces` command removed (helper kept for
+  `list_known_workspaces`); `useNoteTitle` reads the journal root key and
+  default from the journal schema instead of hardcoding;
+  control-registry docs corrected; sync-settings anchor uses
+  `sectionAnchorId()` with a loud miss.
 
-| Finding | Difficulty |
-|---|---|
-| [Persisted extension settings invisible until schema registers + reload](lazy-extension-settings-values-unseen-med-med.md) | med |
-| [Settings registry is the one registry without `subscribe`](settings-registry-not-reactive-med-med.md) | med |
-| [`settings.set` flushes all staged changes, not just the extension's key](extension-settings-set-flushes-unrelated-staging-med-med.md) | med |
-| [Persisted extension tab kinds silently dropped at restore](extension-tab-kind-dropped-on-restore-med-med.md) | med |
-| [Command-context effects are desktop-only; no-op on PhoneShell](command-context-effects-desktop-only-med-med.md) | med |
-| [Lazy panel placeholder unmounts itself — "not registered" flashes](lazy-panel-placeholder-unreachable-med-med.md) | med |
-| [`fs:allow-read/write-text-file` granted unscoped to every window](unscoped-fs-plugin-permissions-med-med.md) | med |
-| [Stuck startup-failure extension has no removal path](localextensions-stuck-startup-failure-med-med.md) | med |
-| [Panel `availability` honored inconsistently across surfaces](panel-availability-inconsistent-med-easy.md) | easy |
-| [`open-calendar` calls `revealPanel` on a left panel — dead call](journal-open-calendar-reveal-noop-med-easy.md) | easy |
-| [Invalid journal `root` crashes the editor via `applies` in render](journal-invalid-root-crashes-editor-med-easy.md) | easy |
-| [noteStats panel reads settings once; never re-renders](notestats-panel-settings-stale-med-easy.md) | easy |
-| [Manifest accepts ids `parseActivationEvent` then silently rejects](activation-event-id-pattern-divergence-med-easy.md) | easy |
-| [No dup check within `contributes`; half-registered on throw](manifest-duplicate-contribution-ids-med-easy.md) | easy |
-| [Malformed `engines`/`contributes` silently default](manifest-silent-malformed-containers-med-easy.md) | easy |
-| [`registerStubs` outside transactional catch → stuck entry](addlocal-extension-throw-leaves-stuck-entry-med-easy.md) | easy |
+## Remaining findings
 
-### Low urgency
-
-| Finding | Difficulty |
-|---|---|
-| [Canonicalize/open race lets a swap escape the extension dir](extension-file-canonicalize-open-swap-low-hard.md) | hard |
-| [Test-host injection omits settings/events/workspace singletons](host-injection-stops-at-five-registries-low-med.md) | med |
-| [PanelTitle checkbox reads stale state](paneltitle-checkbox-stale-state-low-med.md) | med |
-| [`onCommand:`/`onView:` activation kinds parsed but never consumed](activation-events-command-view-unconsumed-low-easy.md) | easy |
-| [`addLocalExtension` trusts the loader; compatibility gate skippable](addlocal-extension-skips-compatibility-gate-low-easy.md) | easy |
-| [appUpdater is the only IPC site bypassing `native/`](appupdater-bypasses-native-bridge-low-easy.md) | easy |
-| [First `disposeEntry` rejection aborts shutdown cleanup](bootstrap-dispose-first-error-aborts-cleanup-low-easy.md) | easy |
-| [Global publication inferred from passed options, not a flag](bootstrap-publish-heuristic-low-easy.md) | easy |
-| [Builtin left-panel list can drift from registry](builtin-left-panel-list-drift-low-easy.md) | easy |
-| [`^0.x.y` doesn't pin minor unlike npm semver](caret-range-zero-major-semver-low-easy.md) | easy |
-| [`extid.relid` convention rebuilt inline at four sites](contribution-id-prefix-built-inline-low-easy.md) | easy |
-| [Activated extension missing declared contribution no-ops silently](declared-contribution-missing-after-activation-low-easy.md) | easy |
-| [desktopExtensionHost tests leak mutated globals](desktop-host-tests-leak-globals-low-easy.md) | easy |
-| [Extension custom controls documented but unreachable](extension-custom-controls-unreachable-low-easy.md) | easy |
-| [Late source subscription in ExtensionsPanel](extensions-panel-late-source-subscription-low-easy.md) | easy |
-| [`openNote` silently no-ops with no workspace; siblings throw](extensionworkspace-opennote-silent-noop-low-easy.md) | easy |
-| [Renderer path check weaker than the Rust normalizer](extensionworkspace-path-check-weaker-than-native-low-easy.md) | easy |
-| [hello-notes teaches silent-failure habits](hello-notes-unhandled-errors-low-easy.md) | easy |
-| [Capability list can drift from `DesktopExtensionContext` keys](host-capability-list-can-drift-from-context-low-easy.md) | easy |
-| [Journal palette commands drop `JournalError` rejections](journal-commands-drop-journalerror-low-easy.md) | easy |
-| [`list_managed_workspaces` never invoked; superseded](list-managed-workspaces-unused-command-low-easy.md) | easy |
-| [Loader result types force non-null assertions](loader-result-non-null-assertion-low-easy.md) | easy |
-| [`sourceURL` comment interpolates unencoded paths](localdirectoryloader-sourceurl-unencoded-low-easy.md) | easy |
-| [Persist failure rejects `add` after successful load](localextensions-add-persist-failure-low-easy.md) | easy |
-| [Directory identity is raw string equality](localextensions-directory-identity-string-compare-low-easy.md) | easy |
-| [media.rs stat+read TOCTOU; 256 MiB cap advisory](media-file-stat-read-toctou-low-easy.md) | easy |
-| [Mounted-panel disposable cleanup gap](mounted-panel-disposable-cleanup-low-easy.md) | easy |
-| [`noteStats.ts`/`.tsx` shared basename forces `.tsx` import specifier](notestats-shared-basename-low-easy.md) | easy |
-| ["Rebuild workspace index" opens an always-unavailable terminal](rebuild-index-opens-unavailable-terminal-low-easy.md) | easy |
-| [Shell hook hardcodes `extension-journal-calendar.root` + default](usenotetitle-hardcodes-journal-setting-low-easy.md) | easy |
-| [Event-bus error reporter itself unguarded](event-bus-reporter-throw-low-trivial.md) | trivial |
-| [`settings-section-${id}` anchor rebuilt inline](opensyncsettings-anchor-id-handbuilt-low-trivial.md) | trivial |
-| [`openFile` in workspaceBridge is wired but never consumed](workspace-bridge-openfile-never-consumed-low-trivial.md) | trivial |
+| Finding | Urgency | Difficulty | Note |
+|---|---|---|---|
+| [Settings registry is the one registry without `subscribe`](settings-registry-not-reactive-med-med.md) | med | med | Highest-leverage pair with the next row — one fix covers both |
+| [Persisted extension settings invisible until schema registers + reload](lazy-extension-settings-values-unseen-med-med.md) | med | med | Journal can write into the wrong folder for the session |
+| [Persisted extension tab kinds silently dropped at restore](extension-tab-kind-dropped-on-restore-med-med.md) | med | med | Needs a `contributes.tabs` stub path or deferred restore |
+| [`settings.set` flushes all staged changes](extension-settings-set-flushes-unrelated-staging-med-med.md) | med | med | Needs a scoped write path in settingsStore |
+| [Lazy panel placeholder unmounts itself](lazy-panel-placeholder-unreachable-med-med.md) | med | med | Needs atomic stub→real swap in registry/bootstrap |
+| [Command-context effects are desktop-only](command-context-effects-desktop-only-med-med.md) | med | med | PhoneShell ignores dock setters; needs per-chrome effects |
+| [Stuck startup-failure extension has no removal path](localextensions-stuck-startup-failure-med-med.md) | med | med | Panel + store work |
+| [`fs:allow-read/write-text-file` unscoped in capabilities](unscoped-fs-plugin-permissions-med-med.md) | med | med | Real hardening; needs scoped commands or `fs:scope` |
+| [Panel `availability` honored inconsistently](panel-availability-inconsistent-med-easy.md) | med | easy | Skipped by fixer — needs DesktopShell/ActivityBar wiring, not fabricable context |
+| [Test-host injection omits settings/events/workspace](host-injection-stops-at-five-registries-low-med.md) | low | med | |
+| [`onCommand:`/`onView:` activation kinds parsed but unconsumed](activation-events-command-view-unconsumed-low-easy.md) | low | easy | Product decision: implement lazy activation or drop the kinds |
+| [Canonicalize/open swap can escape the extension dir](extension-file-canonicalize-open-swap-low-hard.md) | low | hard | Defense-in-depth; `directory` root is already renderer-chosen (tracked in `plans/other_tasks/pending-ipc_hardening-low-med.md`) |
 
 ## Notes
 
-- **Highest-leverage fix:** make `SettingsRegistry` subscribable and
-  re-extract persisted values on `registerSchema` — resolves
-  `lazy-extension-settings-values-unseen` and `settings-registry-not-reactive`
-  together and removes the activate-before-render sequencing.
-- **Already tracked elsewhere:** `read_extension_file`'s
-  renderer-chosen `directory` root (`plans/other_tasks/pending-ipc_hardening-low-med.md`)
-  and `listNotes` full-vault filtering (`pending-extension_listnotes_prefix-low-med.md`)
+- **Already tracked elsewhere:** `read_extension_file`'s renderer-chosen
+  `directory` root (`pending-ipc_hardening-low-med.md`) and `listNotes`
+  full-vault filtering (`pending-extension_listnotes_prefix-low-med.md`)
   were deliberately not re-filed.
-- **Security posture:** extension code is deliberately trusted same-realm JS
-  (documented in loader/panel). The remaining real primitives are the two
-  findings above plus `unscoped-fs-plugin-permissions`.
-- Two duplicate findings were merged/deleted during triage
-  (`loader-result-*`, `event-subscriber-unused-duplicate` — the latter was
-  fixed in this change set).
+- **Security posture:** extension code is deliberately trusted same-realm
+  JS (documented). The remaining real primitives are
+  `unscoped-fs-plugin-permissions` plus the already-tracked IPC gap.
+- **Known stragglers:** `PhoneShell.testHarness.tsx:71` still has a dead
+  mock branch for the removed `list_managed_workspaces` (string-typed,
+  compiles fine).
+- Two duplicate findings were merged during triage
+  (`loader-result-*`, `event-subscriber-unused-duplicate` — both fixed).

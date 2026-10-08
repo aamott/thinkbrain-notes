@@ -39,6 +39,17 @@ describe("resolveEntryPath", () => {
     expect(result.path).toBeNull();
     expect(result.diagnostic?.severity).toBe("error");
   });
+
+  it("rejects a main containing control characters", () => {
+    // A newline would terminate a `//# sourceURL=` comment early when a host
+    // annotates the module source.
+    for (const main of ["ok\nBAD.js", "ok\r\ninject.js", "ok\ts.js"]) {
+      const result = resolveEntryPath(main);
+
+      expect(result.path).toBeNull();
+      expect(result.diagnostic?.code).toBe("entry_invalid_main");
+    }
+  });
 });
 
 describe("validateExtensionModule", () => {

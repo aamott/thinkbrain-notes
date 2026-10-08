@@ -17,7 +17,10 @@ import {
 import { builtInExtensions } from "./index";
 import { createDesktopExtensionHost } from "../desktopExtensionHost";
 import { createDesktopTabRegistry } from "../../tabs/tabRegistry";
-import { desktopCommandRegistry } from "../../commands/commandRegistry";
+import {
+  desktopCommandRegistry,
+  type DesktopCommandContext
+} from "../../commands/commandRegistry";
 import { desktopPanelRegistry } from "../../panels/panelRegistryModel";
 import { desktopEditorHeaderRegistry } from "../../tabs/editorHeaderRegistry.ts";
 import { appSettingsRegistry, useSettingsStore } from "../../settings/settingsStore";
@@ -164,6 +167,25 @@ describe("journal built-in", () => {
     expect(useSettingsStore.getState().getEffectiveValue(VIEW_KEY)).toBe("week");
   });
 
+  it("reports the JournalError a palette command hits with no workspace open", async () => {
+    const reported = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    await activate();
+
+    const today = desktopCommandRegistry.get("journal-calendar.today");
+    const closePalette = vi.fn();
+    // openToday rejects with JournalError("no-workspace"); the handler must
+    // surface it, not leave an unhandled rejection pretending nothing happened.
+    today?.handler({ closePalette } as unknown as DesktopCommandContext);
+    await act(async () => Promise.resolve());
+
+    expect(closePalette).toHaveBeenCalledTimes(1);
+    expect(reported).toHaveBeenCalledWith(
+      expect.stringContaining("[journal]"),
+      expect.objectContaining({ name: "JournalError" })
+    );
+    reported.mockRestore();
+  });
+
   it("hands everything back when it deactivates", async () => {
     await activate();
     await host?.deactivate(journalManifest.id);
@@ -218,5 +240,48 @@ describe("the metadata widget and the settings behind it", () => {
     expect(add?.textContent).toBe("Info Tracker");
     await act(async () => add?.click());
     expect(dom.textContent).toContain("Mood");
+  });
+
+  /**
+   * `applies` runs inside `EditorHeaderSlot`'s `useMemo` during render, so a
+   * `root` setting `normalizeRoot` rejects (".." escapes the workspace, and a
+   * hand-edited settings file can carry it) must degrade to "not under the
+   * journal folder" — not crash every open editor tab through `TabBoundary`.
+   */
+  it("answers false from `applies` rather than throwing on an invalid root", async () => {
+    await activate();
+    useSettingsStore.getState().stageChange("extension-journal-calendar.root", "..");
+
+    const header = desktopEditorHeaderRegistry.get("journal-calendar.metadata-widget");
+    const context = {
+      rootPath: "/vault",
+      relativePath: "notes/anything.md",
+      contents: "No frontmatter here.\n"
+    };
+
+    expect(() => header?.applies?.(context)).not.toThrow();
+    expect(header?.applies?.(context)).toBe(false);
+  });
+
+  /**
+   * A bad root only invalidates the folder check — a note that carries one of
+   * the user's configured fields is a journal entry wherever it lives (D28).
+   */
+  it("still honors the configured-fields check while the root is invalid", async () => {
+    await activate();
+    useSettingsStore.getState().stageChange("extension-journal-calendar.root", "..");
+    useSettingsStore.getState().stageChange(
+      FIELDS_KEY,
+      JSON.stringify([{ id: "mood", label: "Mood", type: "text" }])
+    );
+
+    const header = desktopEditorHeaderRegistry.get("journal-calendar.metadata-widget");
+    const applies = header?.applies?.({
+      rootPath: "/vault",
+      relativePath: "notes/anything.md",
+      contents: "---\nmood: ok\n---\n\nBody.\n"
+    });
+
+    expect(applies).toBe(true);
   });
 });

@@ -1,4 +1,5 @@
 import {
+  DisposableError,
   evaluateCompatibility,
   hasStartupActivation,
   parseExtensionManifest,
@@ -17,6 +18,7 @@ import { desktopPanelRegistry, type DesktopPanelContext } from "../panels/panelR
 import { builtInExtensions, type BuiltInExtension } from "./builtins";
 import {
   desktopExtensionHost,
+  qualifyContributionId,
   type DesktopExtensionActivation,
   type DesktopExtensionContext,
   type DesktopExtensionHost
@@ -59,6 +61,17 @@ export interface BootstrapOptions {
   readonly panels?: typeof desktopPanelRegistry;
   readonly mobileNewNoteActions?: MobileNewNoteActionRegistry;
   readonly compatibilityHost?: CompatibilityHost;
+  /**
+   * Whether this bootstrap becomes the app-wide singleton the Extensions
+   * panel reads.
+   *
+   * When omitted, the historical convention holds: only a bootstrap built
+   * entirely from the module defaults (no injected host or registries)
+   * publishes itself. Passing `publish` explicitly opts a partially injected
+   * bootstrap in — or a default-configured one out — without guessing from
+   * which other options happened to be set.
+   */
+  readonly publish?: boolean;
 }
 
 interface EntryState {
@@ -142,7 +155,7 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
    */
   const registerStubs = (state: EntryState): void => {
     for (const command of state.manifest.contributes.commands) {
-      const fullId = `${state.manifest.id}.${command.id}`;
+      const fullId = qualifyContributionId(state.manifest.id, command.id);
       state.stubs.push(
         commands.register({
           id: fullId,
@@ -151,14 +164,23 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
           handler: async (context: DesktopCommandContext): Promise<void> => {
             await ensureActive(state);
             const real = commands.get(fullId);
-            if (real) await real.handler(context);
+            if (real) {
+              await real.handler(context);
+              return;
+            }
+            // The extension activated but never registered a command its
+            // manifest declared — an authoring bug that deserves a diagnostic,
+            // not a silent no-op.
+            console.error(
+              `[extensions] "${state.manifest.id}" activated but never registered declared command "${fullId}".`
+            );
           }
         })
       );
     }
 
     for (const panel of state.manifest.contributes.panels) {
-      const fullId = `${state.manifest.id}.${panel.id}`;
+      const fullId = qualifyContributionId(state.manifest.id, panel.id);
       state.stubs.push(
         panels.register({
           id: fullId,
@@ -171,7 +193,18 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
               // Only ever called after activation resolves, by which point the
               // stub has been disposed and `get` returns the extension's real
               // panel. Calling it earlier would re-enter this same factory.
-              resolve: (resolveContext) => panels.get(fullId)?.factory(resolveContext) ?? null,
+              resolve: (resolveContext) => {
+                const real = panels.get(fullId);
+                if (!real) {
+                  // Same authoring bug as a missing command: the manifest
+                  // promised this panel and activation did not provide it.
+                  console.error(
+                    `[extensions] "${state.manifest.id}" activated but never registered declared panel "${fullId}".`
+                  );
+                  return null;
+                }
+                return real.factory(resolveContext);
+              },
               context: panelContext
             })
         })
@@ -193,8 +226,8 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
       for (const action of newNoteActionsForEntry ?? []) {
         state.mobileNewNoteActionRegistrations.push(
           newNoteActions.register({
-            id: `${state.manifest.id}.${action.id}`,
-            commandId: `${state.manifest.id}.${action.commandId}`,
+            id: qualifyContributionId(state.manifest.id, action.id),
+            commandId: qualifyContributionId(state.manifest.id, action.commandId),
             label: action.label,
             icon: action.icon,
             requiresWorkspace: action.requiresWorkspace
@@ -202,16 +235,31 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
         );
       }
       state.registration = host.register({ id: state.manifest.id, activate, deactivate });
+      if (!hasStartupActivation(state.manifest)) {
+        registerStubs(state);
+      }
     } catch (error) {
-      // Transactional: a duplicate or a failed host registration must not
-      // leave earlier action rows orphaned in the registry.
+      // Transactional: a duplicate or a failed registration anywhere in the
+      // sequence must not leave stubs, action rows, or the host registration
+      // behind — the caller either drops the whole entry or aborts bootstrap.
+      disposeStubs(state);
       disposeActionRegistrations(state);
+      const registration = state.registration;
+      state.registration = null;
+      if (registration) {
+        // Nothing was ever activated, so disposal only unregisters — but it is
+        // still async, and this rollback runs inside a sync signature.
+        void Promise.resolve(registration.dispose()).catch((disposeError: unknown) => {
+          console.error(
+            `[extensions] Failed to roll back registration for "${state.manifest.id}".`,
+            disposeError
+          );
+        });
+      }
       throw error;
     }
     if (hasStartupActivation(state.manifest)) {
       void ensureActive(state).catch(() => undefined);
-    } else {
-      registerStubs(state);
     }
   };
 
@@ -264,7 +312,22 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
       continue;
     }
 
-    registerAndStub(state, extension.activate, undefined, extension.mobileNewNoteActions);
+    try {
+      registerAndStub(state, extension.activate, undefined, extension.mobileNewNoteActions);
+    } catch (error) {
+      // Bootstrap is about to throw, so there will be no bootstrap object to
+      // dispose through. Tear down every earlier extension's stubs and host
+      // registrations before rethrowing or they stay live in the global
+      // registries forever.
+      for (const earlier of states.values()) {
+        disposeStubs(earlier);
+        disposeActionRegistrations(earlier);
+        void Promise.resolve(earlier.registration?.dispose()).catch(() => undefined);
+        earlier.registration = null;
+      }
+      states.clear();
+      throw error;
+    }
   }
 
   // A cached snapshot keeps `entries()` referentially stable between changes,
@@ -309,14 +372,18 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
         throw new Error(`Extension "${extension.manifest.id}" is already registered.`);
       }
 
+      // The gate lives here, not only in the loader: `addLocalExtension` is
+      // the registry boundary, so any future producer of a `LoadedExtension`
+      // that skips the loader is still held to the platform/apiVersion check.
+      const compatibility = evaluateCompatibility(extension.manifest, compatibilityHost);
       const state: EntryState = {
         manifest: extension.manifest,
         source: "local-directory",
         directory: extension.directory,
-        status: "registered",
+        status: compatibility.compatible ? "registered" : "incompatible",
         // Load diagnostics ride along as reasons so the Extensions panel shows
         // an author why, for example, a declared panel did not appear.
-        reasons: toReasons(diagnostics),
+        reasons: [...toReasons(diagnostics), ...compatibility.reasons],
         stubs: [],
         mobileNewNoteActionRegistrations: [],
         registration: null,
@@ -324,7 +391,23 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
       };
       states.set(state.manifest.id, state);
 
-      registerAndStub(state, extension.activate, extension.deactivate);
+      if (!compatibility.compatible) {
+        // Same rule as a built-in: listed with its reasons, but contributes
+        // nothing — an incompatible extension must not put dead entries in
+        // the palette or activity bar.
+        rebuildSnapshot();
+        return;
+      }
+
+      try {
+        registerAndStub(state, extension.activate, extension.deactivate);
+      } catch (error) {
+        // Roll the entry back out so a retry after the user fixes the
+        // extension is not blocked by an invisible half-registration
+        // `entries()` never listed.
+        states.delete(state.manifest.id);
+        throw error;
+      }
 
       rebuildSnapshot();
     },
@@ -340,18 +423,40 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
 
     dispose: async () => {
       if (getExtensionBootstrapInternal() === bootstrap) setExtensionBootstrap(null);
-      for (const state of states.values()) await disposeEntry(state);
-      states.clear();
-      // Empty the published snapshot too: a cached `entries()` must not keep
-      // reporting extensions whose registrations are all gone.
-      failedManifests.length = 0;
-      rebuildSnapshot();
+      // One extension's failed teardown must not strand the rest: every entry
+      // is disposed in order, errors are collected, and the aggregate is
+      // thrown only after cleanup has run to completion.
+      const errors: unknown[] = [];
+      try {
+        for (const state of states.values()) {
+          try {
+            await disposeEntry(state);
+          } catch (error) {
+            errors.push(error);
+            console.error(`[extensions] Failed to dispose "${state.manifest.id}".`, error);
+          }
+        }
+      } finally {
+        states.clear();
+        // Empty the published snapshot too: a cached `entries()` must not keep
+        // reporting extensions whose registrations are all gone.
+        failedManifests.length = 0;
+        rebuildSnapshot();
+      }
+      if (errors.length > 0) {
+        throw new DisposableError(errors);
+      }
     }
   };
 
-  // Only the default (app-wide) bootstrap is published; an injected-registry
-  // bootstrap in a test must not become the one the Extensions panel reads.
-  if (!options.commands && !options.panels && !options.host && !options.mobileNewNoteActions) {
+  // Publication is explicit: a bootstrap is the app-wide singleton only when
+  // asked (or, by convention, when built entirely from the module defaults).
+  // An injected-registry bootstrap in a test must not become the one the
+  // Extensions panel reads.
+  const publish =
+    options.publish ??
+    (!options.commands && !options.panels && !options.host && !options.mobileNewNoteActions);
+  if (publish) {
     setExtensionBootstrap(bootstrap);
   }
 

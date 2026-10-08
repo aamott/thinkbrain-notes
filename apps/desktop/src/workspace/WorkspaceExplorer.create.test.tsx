@@ -623,7 +623,6 @@ describe("desktop canonical New note command integration", () => {
         revealPanel: vi.fn(),
         revealLeftPanel: vi.fn(),
         openSettings: vi.fn(),
-        rebuildIndex: vi.fn(),
         closePalette
       };
       return (

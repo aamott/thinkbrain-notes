@@ -9,7 +9,16 @@ import type { LoadOutcome, LocalExtensions, StartupFailure } from "./localExtens
 const EMPTY: readonly BootstrapEntry[] = [];
 const NO_FAILURES: readonly StartupFailure[] = [];
 
-const noop = (): void => undefined;
+/**
+ * How often and how long a missing source is re-checked. The bootstrap and
+ * controller refs are module globals published during startup; a panel that
+ * mounts before that attaches to nothing, and without a re-check it would
+ * show `empty` forever — a `useSyncExternalStore` listener attached to no
+ * source gives React no reason to re-render. The budget is bounded so a
+ * source that never arrives costs a handful of timers, not a permanent poll.
+ */
+const LATE_SOURCE_CHECK_MS = 100;
+const LATE_SOURCE_CHECKS = 100;
 
 /** Anything in the extensions layer that publishes a slice by subscription. */
 interface SubscribedSliceSource {
@@ -25,8 +34,50 @@ function useSubscribedSlice<S extends SubscribedSliceSource, T>(
   read: (source: S) => T,
   empty: T
 ): T {
+  // Memoized on the (stable module-level) getter: a fresh subscribe identity
+  // every render would make useSyncExternalStore detach and re-attach on
+  // every render.
+  const subscribe = useCallback(
+    (listener: () => void): (() => void) => {
+      let detach: (() => void) | undefined;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      let checks = 0;
+
+      const attach = (): void => {
+        const source = getSource();
+        if (source === null || source === undefined) {
+          if (checks < LATE_SOURCE_CHECKS) {
+            checks += 1;
+            timer = setTimeout(attach, LATE_SOURCE_CHECK_MS);
+          }
+          return;
+        }
+        detach = source.subscribe(() => {
+          if (getSource() !== source) {
+            // The ref was republished under us — drop the stale subscription
+            // and follow the new source.
+            detach?.();
+            attach();
+            return;
+          }
+          listener();
+        });
+        // The source may already hold a slice worth showing; re-reading now
+        // beats waiting for its next notification.
+        listener();
+      };
+
+      attach();
+      return () => {
+        detach?.();
+        if (timer !== undefined) clearTimeout(timer);
+      };
+    },
+    [getSource]
+  );
+
   return useSyncExternalStore(
-    (listener: () => void): (() => void) => getSource()?.subscribe(listener) ?? noop,
+    subscribe,
     () => {
       const source = getSource();
       return source ? read(source) : empty;

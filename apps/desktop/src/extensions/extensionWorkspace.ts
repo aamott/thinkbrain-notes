@@ -15,6 +15,14 @@ import type { WorkspaceDocumentApi } from "../workspace/workspaceDocumentAdapter
 import type { WorkspaceBridge } from "./workspaceBridge";
 import { WINDOWS_ABSOLUTE } from "@thinkbrain/core";
 
+/**
+ * Matches a Windows drive-relative path, e.g. `C:file` — not absolute (no
+ * separator after the colon, so `WINDOWS_ABSOLUTE` misses it), but on Windows
+ * it still parses as a drive `Prefix` component the native normalizer rejects
+ * as an escape.
+ */
+const WINDOWS_DRIVE_RELATIVE = /^[A-Za-z]:(?!\/)/;
+
 /** A note found by {@link DesktopExtensionWorkspace.listNotes}. */
 export interface ExtensionNote {
   readonly relativePath: string;
@@ -53,20 +61,42 @@ export interface ExtensionWorkspaceOptions {
   readonly entries: Pick<WorkspaceDesktopApi, "listWorkspaceEntries" | "renameWorkspaceEntry" | "deleteWorkspaceEntry">;
 }
 
-/** Rejects anything that is not a path inside the workspace. */
+/**
+ * Rejects anything that is not a path inside the workspace.
+ *
+ * Mirrors the native normalizer (`normalize_relative_path_parts`): separators
+ * are unified first, `.` segments and repeated separators collapse to nothing,
+ * a whitespace-only segment is rejected, `..` escapes, and a drive-letter
+ * prefix — absolute *or* drive-relative — is not a relative path.
+ */
 function assertRelativePath(relativePath: string): void {
   if (typeof relativePath !== "string" || relativePath.trim().length === 0) {
     throw new Error("A note path must be a non-empty workspace-relative path.");
   }
+  const normalized = relativePath.replace(/\\/g, "/");
   if (
-    relativePath.startsWith("/") ||
-    relativePath.startsWith("\\") ||
-    WINDOWS_ABSOLUTE.test(relativePath)
+    normalized.startsWith("/") ||
+    WINDOWS_ABSOLUTE.test(normalized) ||
+    WINDOWS_DRIVE_RELATIVE.test(normalized)
   ) {
     throw new Error(`Note path "${relativePath}" must be relative to the workspace.`);
   }
-  if (relativePath.split(/[\\/]/).includes("..")) {
-    throw new Error(`Note path "${relativePath}" must stay inside the workspace.`);
+  let hasSegment = false;
+  for (const segment of normalized.split("/")) {
+    // `Path::components` collapses repeated separators and skips `.`, so the
+    // native side accepts `a//b` and `./a`; only a segment that is all
+    // whitespace is an `EmptySegment` rejection there.
+    if (segment === "" || segment === ".") continue;
+    if (segment === "..") {
+      throw new Error(`Note path "${relativePath}" must stay inside the workspace.`);
+    }
+    if (segment.trim().length === 0) {
+      throw new Error(`Note path "${relativePath}" contains an empty segment.`);
+    }
+    hasSegment = true;
+  }
+  if (!hasSegment) {
+    throw new Error("A note path must be a non-empty workspace-relative path.");
   }
 }
 
@@ -87,7 +117,9 @@ export function createExtensionWorkspace(
   /** Validates a path and resolves the root it is relative to. */
   const resolve = (relativePath: string): string => {
     assertRelativePath(relativePath);
-    const root = getBridge()?.rootPath ?? null;
+    // `bridge()` first so "shell not mounted" stays distinguishable from "no
+    // workspace open" here, as it already is for `openNote` and `tabs.open`.
+    const root = bridge().rootPath;
     if (!root) {
       throw new Error("No workspace is open.");
     }
@@ -119,7 +151,11 @@ export function createExtensionWorkspace(
 
     openNote: async (relativePath) => {
       assertRelativePath(relativePath);
-      bridge().openNote(relativePath);
+      const current = bridge();
+      if (!current.rootPath) {
+        throw new Error("No workspace is open.");
+      }
+      current.openNote(relativePath);
     },
 
     renameNote: async (relativePath, newRelativePath) => {
@@ -134,7 +170,7 @@ export function createExtensionWorkspace(
     },
 
     listNotes: async (prefix) => {
-      const root = getBridge()?.rootPath ?? null;
+      const root = bridge().rootPath;
       if (!root) throw new Error("No workspace is open.");
 
       // A folder prefix, not a string prefix: asking for "journal" must not
