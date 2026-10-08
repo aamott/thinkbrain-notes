@@ -309,12 +309,14 @@ jobs:
 
       # Collect every APK and AAB the two builds produced into one staging
       # directory with clear names so a downloader knows what to grab.
+      # The app version names the assets — GITHUB_REF_NAME is a branch on
+      # dispatch runs (e.g. `feature/x` → a slash → unwritable filenames).
       - name: Stage Android bundles
         run: |
           set -euo pipefail
           out="apps/desktop/src-tauri/gen/android/app/build/outputs"
           mkdir -p staging
-          version="${GITHUB_REF_NAME#v}"
+          version="$(jq -r .version apps/desktop/src-tauri/tauri.conf.json)"
           # AAB for Play Store distribution
           find "$out/bundle" -name '*.aab' -exec cp {} "staging/ThinkbrainNotes-${version}-android.aab" \;
           # Universal APK for sideloading
