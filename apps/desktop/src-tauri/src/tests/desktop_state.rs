@@ -478,7 +478,7 @@ fn collapsed_groups_are_dropped_for_a_workspace_no_longer_remembered() {
 /// temporary absence.
 #[test]
 fn recents_keep_absolute_paths_whose_folder_is_missing() {
-    let missing = "/definitely/not/mounted/vault";
+    let missing = super::missing_temp_path("recents_keep");
 
     let stored = update_desktop_state_contents(
         None,
@@ -647,7 +647,7 @@ fn forget_workspace_removes_recents_last_path_and_workspace_state() {
 fn forget_workspace_removes_a_missing_folder_entry_verbatim() {
     let keep = temp_test_dir("forget_missing_keep");
     let keep_path = keep.to_string_lossy().to_string();
-    let missing = format!("/definitely/not/mounted/vault-{}", std::process::id());
+    let missing = super::missing_temp_path("forget_missing");
 
     let stored = update_desktop_state_contents(
         None,

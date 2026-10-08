@@ -68,6 +68,19 @@ fn temp_test_dir(name: &str) -> PathBuf {
     make_temp_test_dir(name, "notes", true)
 }
 
+/// An absolute path that does not exist, for tests that need a "missing
+/// folder". Built under the temp dir because a bare `/x/...` is only absolute
+/// on Unix — Windows needs a drive prefix.
+pub(crate) fn missing_temp_path(name: &str) -> String {
+    let path =
+        std::env::temp_dir().join(format!("thinkbrain-missing-{name}-{}", std::process::id()));
+    assert!(
+        !path.exists(),
+        "missing-path fixture must not exist: {path:?}"
+    );
+    path.to_string_lossy().to_string()
+}
+
 /// Gives `repo` an in-memory committer so tests can move refs.
 ///
 /// A ref's reflog entry needs a committer from git config, and CI runners
