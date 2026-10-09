@@ -203,11 +203,18 @@ jobs:
         with:
           targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
 
-      - name: Set up JDK 17
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: "21"
+
+      # gen/android/gradle/gradle-daemon-jvm.properties (Tauri-generated) pins
+      # the Gradle daemon to a JetBrains JDK provisioned via api.foojay.io.
+      # Those generated download URLs rot and foojay outages break CI, so
+      # remove the criteria and run the daemon on the JDK installed above.
+      - name: Use installed JDK for the Gradle daemon
+        run: rm apps/desktop/src-tauri/gen/android/gradle/gradle-daemon-jvm.properties
 
       - name: Ensure pnpm is on PATH for Gradle
         run: echo "$PNPM_HOME" >> "$GITHUB_PATH"
